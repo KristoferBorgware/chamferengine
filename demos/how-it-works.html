@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How the Grid Is Built</title>
+<style>
+  :root {
+    --paper:#f5f7fa; --card:#ffffff; --ink:#131720; --muted:#5c6577; --rule:#d8dee8;
+    --accent:#2f6fd0; --accent-bg:#e8effb; --gold:#9c6d0c; --gold-bg:#fbf3e0;
+    --gold-rule:#d9b45e; --code-bg:#eef1f6; --fill:#dbe5f5; --fill2:#f2e6c9;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --paper:#0d1117; --card:#131922; --ink:#e4e8f0; --muted:#99a2b5; --rule:#242d3c;
+    --accent:#6aa2f0; --accent-bg:#14203a; --gold:#e0b355; --gold-bg:#241d0e;
+    --gold-rule:#6b5520; --code-bg:#171e29; --fill:#1c2a44; --fill2:#332a12;
+  }}
+  :root[data-theme="dark"] {
+    --paper:#0d1117; --card:#131922; --ink:#e4e8f0; --muted:#99a2b5; --rule:#242d3c;
+    --accent:#6aa2f0; --accent-bg:#14203a; --gold:#e0b355; --gold-bg:#241d0e;
+    --gold-rule:#6b5520; --code-bg:#171e29; --fill:#1c2a44; --fill2:#332a12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+    font-size:18px;line-height:1.72;-webkit-text-size-adjust:100%}
+  .wrap{max-width:46rem;margin:0 auto;padding:3rem 1.25rem 6rem;
+    display:flex;flex-direction:column;gap:1.3rem}
+  .eyebrow{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.74rem;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+  h1{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:clamp(2rem,5.5vw,2.9rem);line-height:1.08;letter-spacing:-.028em;
+    font-weight:650;margin:0;text-wrap:balance}
+  .standfirst{color:var(--muted);font-size:1.06rem;margin:0;text-wrap:pretty}
+  h2{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:1.42rem;font-weight:640;letter-spacing:-.018em;line-height:1.25;
+    margin:2.4rem 0 0;padding-top:1.4rem;border-top:1px solid var(--rule);text-wrap:balance}
+  h3{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:1.05rem;font-weight:640;margin:1.5rem 0 0;text-wrap:balance}
+  h2 .step{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:.5rem}
+  p{margin:0;text-wrap:pretty}
+  a{color:var(--accent);text-underline-offset:2px}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+  ul{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:.5rem}
+  li::marker{color:var(--muted)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;
+    background:var(--code-bg);padding:.1em .34em;border-radius:3px}
+
+  figure{margin:.6rem 0;padding:1.1rem 1rem .9rem;background:var(--card);
+    border:1px solid var(--rule);border-radius:8px;
+    display:flex;flex-direction:column;gap:.75rem;align-items:center}
+  figure svg{max-width:100%;height:auto;display:block}
+  figcaption{font-size:.88rem;color:var(--muted);text-align:center;max-width:34rem;
+    text-wrap:pretty;line-height:1.5}
+  figcaption b{color:var(--ink);font-weight:600}
+
+  /* diagram ink */
+  .fig{color:var(--ink)}
+  .ln{stroke:currentColor;stroke-width:1;fill:none;opacity:.30}
+  .ln2{stroke:currentColor;stroke-width:1.5;fill:none;opacity:.75}
+  .hex{stroke:currentColor;stroke-width:1.2;fill:none;opacity:.45}
+  .acc{stroke:var(--accent);stroke-width:2;fill:none}
+  .accf{fill:var(--fill);stroke:var(--accent);stroke-width:2}
+  .gold{stroke:var(--gold);stroke-width:2;fill:none}
+  .goldf{fill:var(--fill2);stroke:var(--gold);stroke-width:1.8}
+  .dot{fill:var(--accent)}
+  .dotm{fill:currentColor;opacity:.5}
+  .t{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:12px;fill:currentColor}
+  .tm{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11.5px;fill:currentColor;opacity:.62}
+  .ta{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;fill:var(--accent)}
+  .tg{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;fill:var(--gold)}
+
+  .tw{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;background:var(--card);width:100%}
+  table{border-collapse:collapse;width:100%;
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:.87rem;font-variant-numeric:tabular-nums}
+  th,td{text-align:left;padding:.55rem .8rem;border-bottom:1px solid var(--rule)}
+  thead th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);
+    font-weight:620;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td.n{text-align:right}
+
+  .key{background:var(--accent-bg);border:1px solid var(--accent);border-radius:8px;
+    padding:1rem 1.2rem;display:flex;flex-direction:column;gap:.55rem}
+  .key .lbl{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  footer{color:var(--muted);font-size:.9rem;padding-top:1.4rem;border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow">Chamfer · A walkthrough</div>
+<h1>How the grid is built</h1>
+<p class="standfirst">The whole design rests on one geometric trick, applied four times. Once you can see it, the addressing, the meshing and the level-of-detail scheme all follow from it — and none of them need any more cleverness.</p>
+
+<div class="key">
+  <div class="lbl">What we are trying to achieve</div>
+  <p>A planet made of blocks, like Minecraft, but round. You can walk in any
+  direction forever and come back to where you started, and nowhere on the way
+  does the ground go strange — no stretched blocks, no seam, no pole.</p>
+  <p>Everything below is in service of that one sentence.</p>
+</div>
+
+<h2><span class="step">1</span>Start with a shape that is nearly a ball</h2>
+
+<p>A sphere cannot be tiled evenly by any regular shape, so we start with the
+closest thing that <em>is</em> even: an <strong>icosahedron</strong> — twenty
+identical triangles arranged into a ball-ish solid. Twenty is the most faces any
+perfectly regular solid can have, which makes it the most even starting point
+that exists.</p>
+
+<p>It is lumpy. That is fine. Everything from here is about making it less lumpy
+without ever making it uneven.</p>
+
+<h2><span class="step">2</span>Split every triangle into four, over and over</h2>
+
+<p>Take one triangle. Mark the middle of each of its three edges. Join those
+three marks. You now have four smaller triangles inside the original, and they
+fit it <strong>exactly</strong> — no gaps, no overlap, nothing left over.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 430 128" role="img" aria-label="One triangle split into four, then each of those split again into four, giving sixteen">
+  <polygon class="ln2" points="70.0,-2.7 14.0,94.3 126.0,94.3" transform="translate(0,14)"/>
+  <polygon class="ln2" points="215.0,-2.7 159.0,94.3 271.0,94.3" transform="translate(0,14)"/>
+  <polygon class="ln2" points="360.0,-2.7 304.0,94.3 416.0,94.3" transform="translate(0,14)"/>
+  <g transform="translate(0,14)">
+    <polygon class="accf" points="187.0,45.8 243.0,45.8 215.0,94.3"/>
+    <path class="ln" d="M215.0 -2.7L187.0 45.8M215.0 -2.7L243.0 45.8M187.0 45.8L243.0 45.8M187.0 45.8L159.0 94.3M187.0 45.8L215.0 94.3M243.0 45.8L215.0 94.3M243.0 45.8L271.0 94.3M215.0 94.3L271.0 94.3"/>
+    <text class="tm" x="215" y="33" text-anchor="middle">0</text>
+    <text class="tm" x="187" y="82" text-anchor="middle">1</text>
+    <text class="tm" x="243" y="82" text-anchor="middle">2</text>
+    <text class="ta" x="215" y="70" text-anchor="middle">3</text>
+    <path class="ln" d="M360.0 -2.7L346.0 21.6M360.0 -2.7L374.0 21.6M346.0 21.6L374.0 21.6M346.0 21.6L332.0 45.8M346.0 21.6L360.0 45.8M332.0 45.8L360.0 45.8M374.0 21.6L360.0 45.8M374.0 21.6L388.0 45.8M360.0 45.8L388.0 45.8M332.0 45.8L318.0 70.1M332.0 45.8L346.0 70.1M318.0 70.1L346.0 70.1M360.0 45.8L346.0 70.1M360.0 45.8L374.0 70.1M346.0 70.1L374.0 70.1M388.0 45.8L374.0 70.1M388.0 45.8L402.0 70.1M374.0 70.1L402.0 70.1M318.0 70.1L304.0 94.3M318.0 70.1L332.0 94.3M304.0 94.3L332.0 94.3M346.0 70.1L332.0 94.3M346.0 70.1L360.0 94.3M332.0 94.3L360.0 94.3M374.0 70.1L360.0 94.3M374.0 70.1L388.0 94.3M360.0 94.3L388.0 94.3M402.0 70.1L388.0 94.3M402.0 70.1L416.0 94.3M388.0 94.3L416.0 94.3"/>
+  </g>
+  <text class="tm" x="70" y="126" text-anchor="middle">level 0 — 1</text>
+  <text class="tm" x="215" y="126" text-anchor="middle">level 1 — 4</text>
+  <text class="tm" x="360" y="126" text-anchor="middle">level 2 — 16</text>
+</svg>
+<figcaption>Each split turns one triangle into four. Child <b>3</b>, in the middle, comes out <b>upside down</b> — that flip is real, it never goes away, and about 46% of the world ends up inside one.</figcaption>
+</figure>
+
+<p>Do that to all twenty faces, then do it again to every triangle you just made,
+and again. The count goes 20 → 80 → 320 → 1,280, multiplying by four every time.
+Each round is called a <strong>level</strong>.</p>
+
+<p>The thing to notice: <strong>a small triangle is always completely inside
+exactly one bigger triangle.</strong> Nothing straddles a boundary, ever, at any
+level. That single property is what later makes chunks, streaming and
+level-of-detail all work without special cases.</p>
+
+<h2><span class="step">3</span>Push the corners out onto the ball</h2>
+
+<p>Splitting a flat triangle keeps it flat. So after each split, every corner
+point is pushed straight outward from the centre until it sits exactly on the
+sphere's surface.</p>
+
+<p>This is one line of arithmetic — <code>normalize(position)</code>, meaning
+"keep the direction, set the length to the radius". The solid gets rounder every
+level. By level 5 or 6 it looks like a ball; by level 11 you could not tell it
+from one.</p>
+
+<h2><span class="step">4</span>The blocks are the corners, not the triangles</h2>
+
+<p>Here is the trick the whole design turns on, and it is the one thing people
+expect to be the other way round.</p>
+
+<p>You might assume each little triangle is a block. It isn't. <strong>Each
+corner point is a block.</strong> The triangles are only scaffolding — a filing
+system for finding things. What the player walks on is the territory around each
+corner point, and that territory is a <strong>hexagon</strong>.</p>
+
+<figure class="fig">
+<svg viewBox="24 28 262 148" role="img" aria-label="A triangular lattice with a hexagon drawn around each corner point, showing that cells are the corners and not the triangles">
+  <g>
+    <path class="ln" d="M-42.0 34.0L-8.0 34.0M-8.0 34.0L-25.0 63.4M-25.0 63.4L9.0 63.4M9.0 63.4L-8.0 34.0M-8.0 34.0L26.0 34.0M26.0 34.0L9.0 63.4M9.0 63.4L43.0 63.4M43.0 63.4L26.0 34.0M26.0 34.0L60.0 34.0M60.0 34.0L43.0 63.4M43.0 63.4L77.0 63.4M77.0 63.4L60.0 34.0M60.0 34.0L94.0 34.0M94.0 34.0L77.0 63.4M77.0 63.4L111.0 63.4M111.0 63.4L94.0 34.0M94.0 34.0L128.0 34.0M128.0 34.0L111.0 63.4M111.0 63.4L145.0 63.4M145.0 63.4L128.0 34.0M128.0 34.0L162.0 34.0M162.0 34.0L145.0 63.4M145.0 63.4L179.0 63.4M179.0 63.4L162.0 34.0M162.0 34.0L196.0 34.0M196.0 34.0L179.0 63.4M179.0 63.4L213.0 63.4M213.0 63.4L196.0 34.0M196.0 34.0L230.0 34.0M230.0 34.0L213.0 63.4M213.0 63.4L247.0 63.4M247.0 63.4L230.0 34.0M9.0 63.4L-8.0 92.9M-8.0 92.9L26.0 92.9M26.0 92.9L9.0 63.4M43.0 63.4L26.0 92.9M26.0 92.9L60.0 92.9M60.0 92.9L43.0 63.4M77.0 63.4L60.0 92.9M60.0 92.9L94.0 92.9M94.0 92.9L77.0 63.4M111.0 63.4L94.0 92.9M94.0 92.9L128.0 92.9M128.0 92.9L111.0 63.4M145.0 63.4L128.0 92.9M128.0 92.9L162.0 92.9M162.0 92.9L145.0 63.4M179.0 63.4L162.0 92.9M162.0 92.9L196.0 92.9M196.0 92.9L179.0 63.4M213.0 63.4L196.0 92.9M196.0 92.9L230.0 92.9M230.0 92.9L213.0 63.4M247.0 63.4L230.0 92.9M230.0 92.9L264.0 92.9M264.0 92.9L247.0 63.4M26.0 92.9L9.0 122.3M9.0 122.3L43.0 122.3M43.0 122.3L26.0 92.9M60.0 92.9L43.0 122.3M43.0 122.3L77.0 122.3M77.0 122.3L60.0 92.9M94.0 92.9L77.0 122.3M77.0 122.3L111.0 122.3M111.0 122.3L94.0 92.9M128.0 92.9L111.0 122.3M111.0 122.3L145.0 122.3M145.0 122.3L128.0 92.9M162.0 92.9L145.0 122.3M145.0 122.3L179.0 122.3M179.0 122.3L162.0 92.9M196.0 92.9L179.0 122.3M179.0 122.3L213.0 122.3M213.0 122.3L196.0 92.9M230.0 92.9L213.0 122.3M213.0 122.3L247.0 122.3M247.0 122.3L230.0 92.9M264.0 92.9L247.0 122.3M247.0 122.3L281.0 122.3M281.0 122.3L264.0 92.9M43.0 122.3L26.0 151.8M26.0 151.8L60.0 151.8M60.0 151.8L43.0 122.3M77.0 122.3L60.0 151.8M60.0 151.8L94.0 151.8M94.0 151.8L77.0 122.3M111.0 122.3L94.0 151.8M94.0 151.8L128.0 151.8M128.0 151.8L111.0 122.3M145.0 122.3L128.0 151.8M128.0 151.8L162.0 151.8M162.0 151.8L145.0 122.3M179.0 122.3L162.0 151.8M162.0 151.8L196.0 151.8M196.0 151.8L179.0 122.3M213.0 122.3L196.0 151.8M196.0 151.8L230.0 151.8M230.0 151.8L213.0 122.3M247.0 122.3L230.0 151.8M230.0 151.8L264.0 151.8M264.0 151.8L247.0 122.3M281.0 122.3L264.0 151.8M264.0 151.8L298.0 151.8M298.0 151.8L281.0 122.3M60.0 151.8L43.0 181.2M43.0 181.2L77.0 181.2M77.0 181.2L60.0 151.8M94.0 151.8L77.0 181.2M77.0 181.2L111.0 181.2M111.0 181.2L94.0 151.8M128.0 151.8L111.0 181.2M111.0 181.2L145.0 181.2M145.0 181.2L128.0 151.8M162.0 151.8L145.0 181.2M145.0 181.2L179.0 181.2M179.0 181.2L162.0 151.8M196.0 151.8L179.0 181.2M179.0 181.2L213.0 181.2M213.0 181.2L196.0 151.8M230.0 151.8L213.0 181.2M213.0 181.2L247.0 181.2M247.0 181.2L230.0 151.8M264.0 151.8L247.0 181.2M247.0 181.2L281.0 181.2M281.0 181.2L264.0 151.8"/>
+    <g class="hex">
+      <polygon points="60.0,53.6 77.0,43.8 94.0,53.6 94.0,73.3 77.0,83.1 60.0,73.3"/>
+      <polygon points="94.0,53.6 111.0,43.8 128.0,53.6 128.0,73.3 111.0,83.1 94.0,73.3"/>
+      <polygon points="128.0,53.6 145.0,43.8 162.0,53.6 162.0,73.3 145.0,83.1 128.0,73.3"/>
+      <polygon points="162.0,53.6 179.0,43.8 196.0,53.6 196.0,73.3 179.0,83.1 162.0,73.3"/>
+      <polygon points="77.0,83.1 94.0,73.3 111.0,83.1 111.0,102.7 94.0,112.5 77.0,102.7"/>
+      <polygon points="111.0,83.1 128.0,73.3 145.0,83.1 145.0,102.7 128.0,112.5 111.0,102.7"/>
+      <polygon points="145.0,83.1 162.0,73.3 179.0,83.1 179.0,102.7 162.0,112.5 145.0,102.7"/>
+      <polygon points="179.0,83.1 196.0,73.3 213.0,83.1 213.0,102.7 196.0,112.5 179.0,102.7"/>
+      <polygon points="60.0,112.5 77.0,102.7 94.0,112.5 94.0,132.1 77.0,142.0 60.0,132.1"/>
+      <polygon points="94.0,112.5 111.0,102.7 128.0,112.5 128.0,132.1 111.0,142.0 94.0,132.1"/>
+      <polygon points="128.0,112.5 145.0,102.7 162.0,112.5 162.0,132.1 145.0,142.0 128.0,132.1"/>
+      <polygon points="162.0,112.5 179.0,102.7 196.0,112.5 196.0,132.1 179.0,142.0 162.0,132.1"/>
+      <polygon points="196.0,112.5 213.0,102.7 230.0,112.5 230.0,132.1 213.0,142.0 196.0,132.1"/>
+      <polygon points="77.0,142.0 94.0,132.1 111.0,142.0 111.0,161.6 94.0,171.4 77.0,161.6"/>
+      <polygon points="111.0,142.0 128.0,132.1 145.0,142.0 145.0,161.6 128.0,171.4 111.0,161.6"/>
+      <polygon points="145.0,142.0 162.0,132.1 179.0,142.0 179.0,161.6 162.0,171.4 145.0,161.6"/>
+      <polygon points="179.0,142.0 196.0,132.1 213.0,142.0 213.0,161.6 196.0,171.4 179.0,161.6"/>
+    </g>
+    <polygon class="accf" points="111.0,83.1 128.0,73.3 145.0,83.1 145.0,102.7 128.0,112.5 111.0,102.7"/>
+    <g class="dotm">
+      <circle cx="77" cy="63.4" r="2.4"/><circle cx="111" cy="63.4" r="2.4"/>
+      <circle cx="145" cy="63.4" r="2.4"/><circle cx="179" cy="63.4" r="2.4"/>
+      <circle cx="94" cy="92.9" r="2.4"/><circle cx="162" cy="92.9" r="2.4"/>
+      <circle cx="196" cy="92.9" r="2.4"/><circle cx="77" cy="122.3" r="2.4"/>
+      <circle cx="111" cy="122.3" r="2.4"/><circle cx="145" cy="122.3" r="2.4"/>
+      <circle cx="179" cy="122.3" r="2.4"/><circle cx="213" cy="122.3" r="2.4"/>
+      <circle cx="94" cy="151.8" r="2.4"/><circle cx="128" cy="151.8" r="2.4"/>
+      <circle cx="162" cy="151.8" r="2.4"/><circle cx="196" cy="151.8" r="2.4"/>
+    </g>
+    <circle class="dot" cx="128" cy="92.9" r="3.6"/>
+  </g>
+</svg>
+<figcaption>Faint lines are the triangles — the scaffolding. Dots are the corner points, and <b>each dot is one block</b>. The hexagon around a dot is the ground that belongs to it: the territory closer to that dot than to any other.</figcaption>
+</figure>
+
+<p>Why is that territory a hexagon? Because six triangles meet at every interior
+corner. Walk around a corner point and you pass through six triangles, so the
+patch of ground nearer to it than to any neighbour has six sides.</p>
+
+<p>This is the payoff. <strong>Hexagons never fit inside bigger hexagons</strong>
+— that is a real mathematical obstacle, and it is why other hex grid systems
+(like Uber's H3) only get approximate nesting. But <em>triangles</em> nest
+perfectly. So we put the filing system on the triangles, and the gameplay on the
+hexagons, and neither has to compromise.</p>
+
+<h2>Where the twelve pentagons come from</h2>
+
+<p>At the twelve original corners of the icosahedron, only <strong>five</strong>
+triangles meet instead of six. So those twelve cells have five sides, not six.
+No amount of subdividing changes this — split forever and there are still exactly
+twelve, in exactly those places.</p>
+
+<figure class="fig">
+<svg viewBox="10 8 360 152" role="img" aria-label="Six triangles meeting at a point make a hexagon; five triangles meeting at a point make a pentagon">
+  <g>
+    <path class="ln" d="M95.0 78.0L95.0 22.0M95.0 78.0L143.5 50.0M95.0 78.0L143.5 106.0M95.0 78.0L95.0 134.0M95.0 78.0L46.5 106.0M95.0 78.0L46.5 50.0"/>
+    <path class="ln" d="M95.0 22.0L143.5 50.0M143.5 50.0L143.5 106.0M143.5 106.0L95.0 134.0M95.0 134.0L46.5 106.0M46.5 106.0L46.5 50.0M46.5 50.0L95.0 22.0"/>
+    <polygon class="accf" points="111.2,50.0 127.3,78.0 111.2,106.0 78.8,106.0 62.7,78.0 78.8,50.0"/>
+    <circle class="dot" cx="95" cy="78" r="3.6"/>
+    <text class="t" x="95" y="152" text-anchor="middle">6 triangles → hexagon</text>
+    <text class="tm" x="95" y="14" text-anchor="middle">everywhere else</text>
+  </g>
+  <g>
+    <path class="ln" d="M285.0 78.0L285.0 22.0M285.0 78.0L338.3 60.7M285.0 78.0L317.9 123.3M285.0 78.0L252.1 123.3M285.0 78.0L231.7 60.7"/>
+    <path class="ln" d="M285.0 22.0L338.3 60.7M338.3 60.7L317.9 123.3M317.9 123.3L252.1 123.3M252.1 123.3L231.7 60.7M231.7 60.7L285.0 22.0"/>
+    <polygon class="goldf" points="302.8,53.6 313.7,87.3 285.0,108.2 256.3,87.3 267.2,53.6"/>
+    <circle cx="285" cy="78" r="3.6" fill="var(--gold)"/>
+    <text class="t" x="285" y="152" text-anchor="middle">5 triangles → pentagon</text>
+    <text class="tg" x="285" y="14" text-anchor="middle">12 places, forever</text>
+  </g>
+</svg>
+<figcaption>The twelve pentagons are not a bug or a rounding error. A closed ball <b>must</b> carry exactly 720° of "missing corner" somewhere, and spreading it over twelve pentagons is the gentlest way to pay it. A cube dumps the same 720° into eight corners, 90° each — which is why cube-based planets visibly pinch.</figcaption>
+</figure>
+
+<h2>Chunks are just triangles, and the address is the route</h2>
+
+<p>Because triangles nest exactly, a <strong>chunk</strong> — the piece of world
+that gets loaded, saved and drawn as a unit — is simply "one triangle, at
+whatever level you choose to cut". Nothing else is needed.</p>
+
+<p>And a cell's address is literally the route you took to reach it: which of
+the 20 faces, then which quarter, then which quarter of that, and so on. Each
+step is one digit from 0 to 3.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 430 156" role="img" aria-label="Selecting a face, then a quarter, then a quarter of that quarter, with the address growing by one digit each time">
+  <g transform="translate(0,14)">
+    <polygon class="accf" points="70.0,-2.7 14.0,94.3 126.0,94.3"/>
+    <polygon class="ln2" points="215.0,-2.7 159.0,94.3 271.0,94.3"/>
+    <path class="ln" d="M215.0 -2.7L187.0 45.8M215.0 -2.7L243.0 45.8M187.0 45.8L243.0 45.8M187.0 45.8L159.0 94.3M187.0 45.8L215.0 94.3M243.0 45.8L215.0 94.3M243.0 45.8L271.0 94.3M215.0 94.3L271.0 94.3"/>
+    <polygon class="accf" points="187.0,45.8 159.0,94.3 215.0,94.3"/>
+    <polygon class="ln2" points="360.0,-2.7 304.0,94.3 416.0,94.3"/>
+    <path class="ln" d="M360.0 -2.7L346.0 21.6M360.0 -2.7L374.0 21.6M346.0 21.6L374.0 21.6M346.0 21.6L332.0 45.8M346.0 21.6L360.0 45.8M332.0 45.8L360.0 45.8M374.0 21.6L360.0 45.8M374.0 21.6L388.0 45.8M360.0 45.8L388.0 45.8M332.0 45.8L318.0 70.1M332.0 45.8L346.0 70.1M318.0 70.1L346.0 70.1M360.0 45.8L346.0 70.1M360.0 45.8L374.0 70.1M346.0 70.1L374.0 70.1M388.0 45.8L374.0 70.1M388.0 45.8L402.0 70.1M374.0 70.1L402.0 70.1M318.0 70.1L304.0 94.3M318.0 70.1L332.0 94.3M304.0 94.3L332.0 94.3M346.0 70.1L332.0 94.3M346.0 70.1L360.0 94.3M332.0 94.3L360.0 94.3M374.0 70.1L360.0 94.3M374.0 70.1L388.0 94.3M360.0 94.3L388.0 94.3M402.0 70.1L388.0 94.3M402.0 70.1L416.0 94.3M388.0 94.3L416.0 94.3"/>
+    <polygon class="accf" points="332.0,45.8 318.0,70.1 346.0,70.1"/>
+  </g>
+  <text class="ta" x="70" y="132" text-anchor="middle">7</text>
+  <text class="ta" x="215" y="132" text-anchor="middle">7 · 1</text>
+  <text class="ta" x="360" y="132" text-anchor="middle">7 · 1 · 0</text>
+  <text class="tm" x="70" y="150" text-anchor="middle">face</text>
+  <text class="tm" x="215" y="150" text-anchor="middle">+ one digit</text>
+  <text class="tm" x="360" y="150" text-anchor="middle">+ one more</text>
+</svg>
+<figcaption>Zooming out is <b>deleting digits off the end</b>. No search, no lookup table, no tree to walk — the address already contains every ancestor it has. This is what makes chunk streaming and hierarchical pathfinding nearly free.</figcaption>
+</figure>
+
+<h2>Turning one cell into triangles</h2>
+
+<p>Graphics cards only draw triangles. So every hexagon has to become triangles
+before it can appear on screen. A hexagon needs <strong>four</strong>: pick one
+corner, and fan out to the non-adjacent ones.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 420 172" role="img" aria-label="A hexagon fanned into four triangles from one corner, and a corner point shared by three neighbouring hexagons">
+  <g>
+    <polygon class="acc" points="90.0,22.0 140.2,51.0 140.2,109.0 90.0,138.0 39.8,109.0 39.8,51.0"/>
+    <path class="ln2" d="M90.0 22.0L140.2 109.0M90.0 22.0L90.0 138.0M90.0 22.0L39.8 109.0"/>
+    <circle class="dot" cx="90" cy="22" r="4"/>
+    <text class="tm" x="118" y="70">1</text>
+    <text class="tm" x="105" y="98">2</text>
+    <text class="tm" x="70" y="98">3</text>
+    <text class="tm" x="58" y="70">4</text>
+    <text class="t" x="90" y="163" text-anchor="middle">4 triangles per hexagon</text>
+  </g>
+  <g>
+    <polygon class="hex" points="300,76 329.4,93 329.4,127 300,144 270.6,127 270.6,93"/>
+    <polygon class="hex" points="358.9,76 388.3,93 388.3,127 358.9,144 329.4,127 329.4,93"/>
+    <polygon class="hex" points="329.4,25 358.9,42 358.9,76 329.4,93 300,76 300,42"/>
+    <circle class="dotm" cx="300" cy="110" r="2.8"/>
+    <circle class="dotm" cx="358.9" cy="110" r="2.8"/>
+    <circle class="dotm" cx="329.4" cy="59" r="2.8"/>
+    <circle class="dot" cx="329.4" cy="93" r="5.5"/>
+    <text class="t" x="329" y="163" text-anchor="middle">each corner serves 3 cells</text>
+  </g>
+</svg>
+<figcaption>Four triangles per cell, and because every corner is shared by three neighbouring hexagons, only <b>two vertices per cell</b> are actually new. That is the real cost: <b>2 vertices and 4 triangles per block</b> — exactly twice a cube world, and no worse.</figcaption>
+</figure>
+
+<p>A block is not flat, though — it is a <strong>hexagonal prism</strong>, a
+hexagon with depth, running down toward the planet's core. It has a top, a
+bottom, and six sides: eight faces to a cube's six.</p>
+
+<p>You only ever draw a face if there is air on the other side of it. The top of
+a buried block is never drawn. And the six sides have a useful property:</p>
+
+<figure class="fig">
+<svg viewBox="0 0 420 168" role="img" aria-label="Three stacked blocks drawn as three separate side quads on the left, merged into one tall quad on the right">
+  <g>
+    <path class="ln2" d="M40 30 L110 30 L110 62 L40 62 Z M40 62 L110 62 L110 94 L40 94 Z M40 94 L110 94 L110 126 L40 126 Z"/>
+    <text class="tm" x="75" y="50" text-anchor="middle">quad</text>
+    <text class="tm" x="75" y="82" text-anchor="middle">quad</text>
+    <text class="tm" x="75" y="114" text-anchor="middle">quad</text>
+    <text class="t" x="75" y="150" text-anchor="middle">3 quads · 6 triangles</text>
+  </g>
+  <path class="acc" d="M170 78 L232 78" marker-end="url(#ar)"/>
+  <text class="tm" x="201" y="70" text-anchor="middle">merge</text>
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker></defs>
+  <g>
+    <path class="accf" d="M280 30 L350 30 L350 126 L280 126 Z"/>
+    <text class="ta" x="315" y="82" text-anchor="middle">one quad</text>
+    <text class="t" x="315" y="150" text-anchor="middle">1 quad · 2 triangles</text>
+  </g>
+</svg>
+<figcaption>Stacked blocks share the same flat plane down their side, so a run of exposed side faces collapses into <b>a single tall rectangle</b>. This merge is exact — verified to 15 decimal places — and costs nothing. It is the one piece of classic "greedy meshing" that carries over from cube worlds unchanged.</figcaption>
+</figure>
+
+<h2>Turning a chunk into triangles</h2>
+
+<p>A chunk is one triangle's worth of surface, all the way down. Meshing it is
+three passes:</p>
+
+<ul>
+  <li><strong>Tops.</strong> For every cell whose ceiling is air, emit 4 triangles.</li>
+  <li><strong>Sides.</strong> For each of the 6 directions, walk down the column
+  and merge every unbroken run of exposed faces into one rectangle.</li>
+  <li><strong>Skirt.</strong> Around the chunk's rim, hang a short vertical apron
+  downward — the reason is on the next diagram.</li>
+</ul>
+
+<p>Sideways merging, on the other hand, does not work. In a hex grid, the
+same-facing sides of neighbouring cells are parallel but staggered — they zigzag
+instead of lining up, so there is no straight run to collapse. That is the piece
+of cube-world meshing that genuinely does not transfer.</p>
+
+<h2>Level of detail, and why it is resampling</h2>
+
+<p>Far-away ground does not need full resolution. In a cube world you handle this
+by dropping every other block. <strong>Here you cannot</strong> — because
+hexagons at one level are not made of hexagons from the next, the coarse grid is
+a genuinely different set of cells, not a subset.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 360 158" role="img" aria-label="A coarse hexagon grid drawn over a fine one, showing that coarse cell boundaries cut straight through fine cells rather than following them">
+  <defs><clipPath id="lodclip"><rect x="15" y="14" width="330" height="100" rx="4"/></clipPath></defs>
+  <g clip-path="url(#lodclip)">
+    <g class="hex" opacity=".55"><polygon points="15.0,1.0 26.3,7.5 26.3,20.5 15.0,27.0 3.7,20.5 3.7,7.5"/><polygon points="37.5,1.0 48.8,7.5 48.8,20.5 37.5,27.0 26.3,20.5 26.3,7.5"/><polygon points="60.0,1.0 71.3,7.5 71.3,20.5 60.0,27.0 48.8,20.5 48.8,7.5"/><polygon points="82.5,1.0 93.8,7.5 93.8,20.5 82.5,27.0 71.3,20.5 71.3,7.5"/><polygon points="105.1,1.0 116.3,7.5 116.3,20.5 105.1,27.0 93.8,20.5 93.8,7.5"/><polygon points="127.6,1.0 138.8,7.5 138.8,20.5 127.6,27.0 116.3,20.5 116.3,7.5"/><polygon points="150.1,1.0 161.4,7.5 161.4,20.5 150.1,27.0 138.8,20.5 138.8,7.5"/><polygon points="172.6,1.0 183.9,7.5 183.9,20.5 172.6,27.0 161.4,20.5 161.4,7.5"/><polygon points="195.1,1.0 206.4,7.5 206.4,20.5 195.1,27.0 183.9,20.5 183.9,7.5"/><polygon points="217.6,1.0 228.9,7.5 228.9,20.5 217.6,27.0 206.4,20.5 206.4,7.5"/><polygon points="240.2,1.0 251.4,7.5 251.4,20.5 240.2,27.0 228.9,20.5 228.9,7.5"/><polygon points="262.7,1.0 273.9,7.5 273.9,20.5 262.7,27.0 251.4,20.5 251.4,7.5"/><polygon points="285.2,1.0 296.5,7.5 296.5,20.5 285.2,27.0 273.9,20.5 273.9,7.5"/><polygon points="307.7,1.0 319.0,7.5 319.0,20.5 307.7,27.0 296.5,20.5 296.5,7.5"/><polygon points="330.2,1.0 341.5,7.5 341.5,20.5 330.2,27.0 319.0,20.5 319.0,7.5"/><polygon points="352.7,1.0 364.0,7.5 364.0,20.5 352.7,27.0 341.5,20.5 341.5,7.5"/><polygon points="3.7,20.5 15.0,27.0 15.0,40.0 3.7,46.5 -7.5,40.0 -7.5,27.0"/><polygon points="26.3,20.5 37.5,27.0 37.5,40.0 26.3,46.5 15.0,40.0 15.0,27.0"/><polygon points="48.8,20.5 60.0,27.0 60.0,40.0 48.8,46.5 37.5,40.0 37.5,27.0"/><polygon points="71.3,20.5 82.5,27.0 82.5,40.0 71.3,46.5 60.0,40.0 60.0,27.0"/><polygon points="93.8,20.5 105.1,27.0 105.1,40.0 93.8,46.5 82.5,40.0 82.5,27.0"/><polygon points="116.3,20.5 127.6,27.0 127.6,40.0 116.3,46.5 105.1,40.0 105.1,27.0"/><polygon points="138.8,20.5 150.1,27.0 150.1,40.0 138.8,46.5 127.6,40.0 127.6,27.0"/><polygon points="161.4,20.5 172.6,27.0 172.6,40.0 161.4,46.5 150.1,40.0 150.1,27.0"/><polygon points="183.9,20.5 195.1,27.0 195.1,40.0 183.9,46.5 172.6,40.0 172.6,27.0"/><polygon points="206.4,20.5 217.6,27.0 217.6,40.0 206.4,46.5 195.1,40.0 195.1,27.0"/><polygon points="228.9,20.5 240.2,27.0 240.2,40.0 228.9,46.5 217.6,40.0 217.6,27.0"/><polygon points="251.4,20.5 262.7,27.0 262.7,40.0 251.4,46.5 240.2,40.0 240.2,27.0"/><polygon points="273.9,20.5 285.2,27.0 285.2,40.0 273.9,46.5 262.7,40.0 262.7,27.0"/><polygon points="296.5,20.5 307.7,27.0 307.7,40.0 296.5,46.5 285.2,40.0 285.2,27.0"/><polygon points="319.0,20.5 330.2,27.0 330.2,40.0 319.0,46.5 307.7,40.0 307.7,27.0"/><polygon points="341.5,20.5 352.7,27.0 352.7,40.0 341.5,46.5 330.2,40.0 330.2,27.0"/><polygon points="15.0,40.0 26.3,46.5 26.3,59.5 15.0,66.0 3.7,59.5 3.7,46.5"/><polygon points="37.5,40.0 48.8,46.5 48.8,59.5 37.5,66.0 26.3,59.5 26.3,46.5"/><polygon points="60.0,40.0 71.3,46.5 71.3,59.5 60.0,66.0 48.8,59.5 48.8,46.5"/><polygon points="82.5,40.0 93.8,46.5 93.8,59.5 82.5,66.0 71.3,59.5 71.3,46.5"/><polygon points="105.1,40.0 116.3,46.5 116.3,59.5 105.1,66.0 93.8,59.5 93.8,46.5"/><polygon points="127.6,40.0 138.8,46.5 138.8,59.5 127.6,66.0 116.3,59.5 116.3,46.5"/><polygon points="150.1,40.0 161.4,46.5 161.4,59.5 150.1,66.0 138.8,59.5 138.8,46.5"/><polygon points="172.6,40.0 183.9,46.5 183.9,59.5 172.6,66.0 161.4,59.5 161.4,46.5"/><polygon points="195.1,40.0 206.4,46.5 206.4,59.5 195.1,66.0 183.9,59.5 183.9,46.5"/><polygon points="217.6,40.0 228.9,46.5 228.9,59.5 217.6,66.0 206.4,59.5 206.4,46.5"/><polygon points="240.2,40.0 251.4,46.5 251.4,59.5 240.2,66.0 228.9,59.5 228.9,46.5"/><polygon points="262.7,40.0 273.9,46.5 273.9,59.5 262.7,66.0 251.4,59.5 251.4,46.5"/><polygon points="285.2,40.0 296.5,46.5 296.5,59.5 285.2,66.0 273.9,59.5 273.9,46.5"/><polygon points="307.7,40.0 319.0,46.5 319.0,59.5 307.7,66.0 296.5,59.5 296.5,46.5"/><polygon points="330.2,40.0 341.5,46.5 341.5,59.5 330.2,66.0 319.0,59.5 319.0,46.5"/><polygon points="352.7,40.0 364.0,46.5 364.0,59.5 352.7,66.0 341.5,59.5 341.5,46.5"/><polygon points="3.7,59.5 15.0,66.0 15.0,79.0 3.7,85.5 -7.5,79.0 -7.5,66.0"/><polygon points="26.3,59.5 37.5,66.0 37.5,79.0 26.3,85.5 15.0,79.0 15.0,66.0"/><polygon points="48.8,59.5 60.0,66.0 60.0,79.0 48.8,85.5 37.5,79.0 37.5,66.0"/><polygon points="71.3,59.5 82.5,66.0 82.5,79.0 71.3,85.5 60.0,79.0 60.0,66.0"/><polygon points="93.8,59.5 105.1,66.0 105.1,79.0 93.8,85.5 82.5,79.0 82.5,66.0"/><polygon points="116.3,59.5 127.6,66.0 127.6,79.0 116.3,85.5 105.1,79.0 105.1,66.0"/><polygon points="138.8,59.5 150.1,66.0 150.1,79.0 138.8,85.5 127.6,79.0 127.6,66.0"/><polygon points="161.4,59.5 172.6,66.0 172.6,79.0 161.4,85.5 150.1,79.0 150.1,66.0"/><polygon points="183.9,59.5 195.1,66.0 195.1,79.0 183.9,85.5 172.6,79.0 172.6,66.0"/><polygon points="206.4,59.5 217.6,66.0 217.6,79.0 206.4,85.5 195.1,79.0 195.1,66.0"/><polygon points="228.9,59.5 240.2,66.0 240.2,79.0 228.9,85.5 217.6,79.0 217.6,66.0"/><polygon points="251.4,59.5 262.7,66.0 262.7,79.0 251.4,85.5 240.2,79.0 240.2,66.0"/><polygon points="273.9,59.5 285.2,66.0 285.2,79.0 273.9,85.5 262.7,79.0 262.7,66.0"/><polygon points="296.5,59.5 307.7,66.0 307.7,79.0 296.5,85.5 285.2,79.0 285.2,66.0"/><polygon points="319.0,59.5 330.2,66.0 330.2,79.0 319.0,85.5 307.7,79.0 307.7,66.0"/><polygon points="341.5,59.5 352.7,66.0 352.7,79.0 341.5,85.5 330.2,79.0 330.2,66.0"/><polygon points="15.0,79.0 26.3,85.5 26.3,98.5 15.0,105.0 3.7,98.5 3.7,85.5"/><polygon points="37.5,79.0 48.8,85.5 48.8,98.5 37.5,105.0 26.3,98.5 26.3,85.5"/><polygon points="60.0,79.0 71.3,85.5 71.3,98.5 60.0,105.0 48.8,98.5 48.8,85.5"/><polygon points="82.5,79.0 93.8,85.5 93.8,98.5 82.5,105.0 71.3,98.5 71.3,85.5"/><polygon points="105.1,79.0 116.3,85.5 116.3,98.5 105.1,105.0 93.8,98.5 93.8,85.5"/><polygon points="127.6,79.0 138.8,85.5 138.8,98.5 127.6,105.0 116.3,98.5 116.3,85.5"/><polygon points="150.1,79.0 161.4,85.5 161.4,98.5 150.1,105.0 138.8,98.5 138.8,85.5"/><polygon points="172.6,79.0 183.9,85.5 183.9,98.5 172.6,105.0 161.4,98.5 161.4,85.5"/><polygon points="195.1,79.0 206.4,85.5 206.4,98.5 195.1,105.0 183.9,98.5 183.9,85.5"/><polygon points="217.6,79.0 228.9,85.5 228.9,98.5 217.6,105.0 206.4,98.5 206.4,85.5"/><polygon points="240.2,79.0 251.4,85.5 251.4,98.5 240.2,105.0 228.9,98.5 228.9,85.5"/><polygon points="262.7,79.0 273.9,85.5 273.9,98.5 262.7,105.0 251.4,98.5 251.4,85.5"/><polygon points="285.2,79.0 296.5,85.5 296.5,98.5 285.2,105.0 273.9,98.5 273.9,85.5"/><polygon points="307.7,79.0 319.0,85.5 319.0,98.5 307.7,105.0 296.5,98.5 296.5,85.5"/><polygon points="330.2,79.0 341.5,85.5 341.5,98.5 330.2,105.0 319.0,98.5 319.0,85.5"/><polygon points="352.7,79.0 364.0,85.5 364.0,98.5 352.7,105.0 341.5,98.5 341.5,85.5"/><polygon points="3.7,98.5 15.0,105.0 15.0,118.0 3.7,124.5 -7.5,118.0 -7.5,105.0"/><polygon points="26.3,98.5 37.5,105.0 37.5,118.0 26.3,124.5 15.0,118.0 15.0,105.0"/><polygon points="48.8,98.5 60.0,105.0 60.0,118.0 48.8,124.5 37.5,118.0 37.5,105.0"/><polygon points="71.3,98.5 82.5,105.0 82.5,118.0 71.3,124.5 60.0,118.0 60.0,105.0"/><polygon points="93.8,98.5 105.1,105.0 105.1,118.0 93.8,124.5 82.5,118.0 82.5,105.0"/><polygon points="116.3,98.5 127.6,105.0 127.6,118.0 116.3,124.5 105.1,118.0 105.1,105.0"/><polygon points="138.8,98.5 150.1,105.0 150.1,118.0 138.8,124.5 127.6,118.0 127.6,105.0"/><polygon points="161.4,98.5 172.6,105.0 172.6,118.0 161.4,124.5 150.1,118.0 150.1,105.0"/><polygon points="183.9,98.5 195.1,105.0 195.1,118.0 183.9,124.5 172.6,118.0 172.6,105.0"/><polygon points="206.4,98.5 217.6,105.0 217.6,118.0 206.4,124.5 195.1,118.0 195.1,105.0"/><polygon points="228.9,98.5 240.2,105.0 240.2,118.0 228.9,124.5 217.6,118.0 217.6,105.0"/><polygon points="251.4,98.5 262.7,105.0 262.7,118.0 251.4,124.5 240.2,118.0 240.2,105.0"/><polygon points="273.9,98.5 285.2,105.0 285.2,118.0 273.9,124.5 262.7,118.0 262.7,105.0"/><polygon points="296.5,98.5 307.7,105.0 307.7,118.0 296.5,124.5 285.2,118.0 285.2,105.0"/><polygon points="319.0,98.5 330.2,105.0 330.2,118.0 319.0,124.5 307.7,118.0 307.7,105.0"/><polygon points="341.5,98.5 352.7,105.0 352.7,118.0 341.5,124.5 330.2,118.0 330.2,105.0"/></g>
+    <g class="gold" opacity=".95" fill="none"><polygon points="24.0,-5.0 46.5,8.0 46.5,34.0 24.0,47.0 1.5,34.0 1.5,8.0"/><polygon points="69.0,-5.0 91.5,8.0 91.5,34.0 69.0,47.0 46.5,34.0 46.5,8.0"/><polygon points="114.1,-5.0 136.6,8.0 136.6,34.0 114.1,47.0 91.5,34.0 91.5,8.0"/><polygon points="159.1,-5.0 181.6,8.0 181.6,34.0 159.1,47.0 136.6,34.0 136.6,8.0"/><polygon points="204.1,-5.0 226.6,8.0 226.6,34.0 204.1,47.0 181.6,34.0 181.6,8.0"/><polygon points="249.2,-5.0 271.7,8.0 271.7,34.0 249.2,47.0 226.6,34.0 226.6,8.0"/><polygon points="294.2,-5.0 316.7,8.0 316.7,34.0 294.2,47.0 271.7,34.0 271.7,8.0"/><polygon points="339.2,-5.0 361.7,8.0 361.7,34.0 339.2,47.0 316.7,34.0 316.7,8.0"/><polygon points="1.5,34.0 24.0,47.0 24.0,73.0 1.5,86.0 -21.0,73.0 -21.0,47.0"/><polygon points="46.5,34.0 69.0,47.0 69.0,73.0 46.5,86.0 24.0,73.0 24.0,47.0"/><polygon points="91.5,34.0 114.1,47.0 114.1,73.0 91.5,86.0 69.0,73.0 69.0,47.0"/><polygon points="136.6,34.0 159.1,47.0 159.1,73.0 136.6,86.0 114.1,73.0 114.1,47.0"/><polygon points="181.6,34.0 204.1,47.0 204.1,73.0 181.6,86.0 159.1,73.0 159.1,47.0"/><polygon points="226.6,34.0 249.2,47.0 249.2,73.0 226.6,86.0 204.1,73.0 204.1,47.0"/><polygon points="271.7,34.0 294.2,47.0 294.2,73.0 271.7,86.0 249.2,73.0 249.2,47.0"/><polygon points="316.7,34.0 339.2,47.0 339.2,73.0 316.7,86.0 294.2,73.0 294.2,47.0"/><polygon points="361.7,34.0 384.3,47.0 384.3,73.0 361.7,86.0 339.2,73.0 339.2,47.0"/><polygon points="24.0,73.0 46.5,86.0 46.5,112.0 24.0,125.0 1.5,112.0 1.5,86.0"/><polygon points="69.0,73.0 91.5,86.0 91.5,112.0 69.0,125.0 46.5,112.0 46.5,86.0"/><polygon points="114.1,73.0 136.6,86.0 136.6,112.0 114.1,125.0 91.5,112.0 91.5,86.0"/><polygon points="159.1,73.0 181.6,86.0 181.6,112.0 159.1,125.0 136.6,112.0 136.6,86.0"/><polygon points="204.1,73.0 226.6,86.0 226.6,112.0 204.1,125.0 181.6,112.0 181.6,86.0"/><polygon points="249.2,73.0 271.7,86.0 271.7,112.0 249.2,125.0 226.6,112.0 226.6,86.0"/><polygon points="294.2,73.0 316.7,86.0 316.7,112.0 294.2,125.0 271.7,112.0 271.7,86.0"/><polygon points="339.2,73.0 361.7,86.0 361.7,112.0 339.2,125.0 316.7,112.0 316.7,86.0"/><polygon points="1.5,112.0 24.0,125.0 24.0,151.0 1.5,164.0 -21.0,151.0 -21.0,125.0"/><polygon points="46.5,112.0 69.0,125.0 69.0,151.0 46.5,164.0 24.0,151.0 24.0,125.0"/><polygon points="91.5,112.0 114.1,125.0 114.1,151.0 91.5,164.0 69.0,151.0 69.0,125.0"/><polygon points="136.6,112.0 159.1,125.0 159.1,151.0 136.6,164.0 114.1,151.0 114.1,125.0"/><polygon points="181.6,112.0 204.1,125.0 204.1,151.0 181.6,164.0 159.1,151.0 159.1,125.0"/><polygon points="226.6,112.0 249.2,125.0 249.2,151.0 226.6,164.0 204.1,151.0 204.1,125.0"/><polygon points="271.7,112.0 294.2,125.0 294.2,151.0 271.7,164.0 249.2,151.0 249.2,125.0"/><polygon points="316.7,112.0 339.2,125.0 339.2,151.0 316.7,164.0 294.2,151.0 294.2,125.0"/><polygon points="361.7,112.0 384.3,125.0 384.3,151.0 361.7,164.0 339.2,151.0 339.2,125.0"/></g>
+  </g>
+  <rect x="15" y="14" width="330" height="100" rx="4" fill="none" stroke="currentColor" stroke-width="1" opacity=".25"/>
+  <text class="tm" x="15" y="136">thin — level L</text>
+  <text class="tg" x="345" y="136" text-anchor="end">thick — level L−1</text>
+</svg>
+<figcaption>The coarser grid does not contain whole fine cells — its boundaries cut straight through them. The two levels are simply <b>different sets of cells</b>, so a coarse mesh cannot be made by throwing fine cells away. It is built by <b>asking the terrain function again</b> at the wider spacing, which works only because terrain is a pure function of world position with no memory of any grid.</figcaption>
+</figure>
+
+<p>The level to use is chosen by <strong>altitude</strong>, not by distance. On a
+1,700 m planet the ground curves away only 76 m in front of a standing player, so
+at eye height the entire visible world is about 21,000 cells — nothing at all.
+Climb, and it grows fast:</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Your altitude</th><th class="n">You can see</th><th class="n">Cells in view</th><th class="n">Detail level</th></tr></thead>
+  <tbody>
+    <tr><td>1.7 m — standing</td><td class="n">76 m</td><td class="n">20,951</td><td class="n">full</td></tr>
+    <tr><td>50 m — a tower</td><td class="n">407 m</td><td class="n">599,186</td><td class="n">−1</td></tr>
+    <tr><td>200 m — flying</td><td class="n">787 m</td><td class="n">2,207,529</td><td class="n">−2</td></tr>
+    <tr><td>1,700 m — orbit-ish</td><td class="n">1.8 km</td><td class="n">10,485,761</td><td class="n">−3</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Which is why the seams need skirts</h3>
+
+<p>When two neighbouring chunks pick different levels, they sample the terrain at
+different spacings, so their edges land at slightly different heights. That leaves
+a crack you can see straight through to the sky.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 420 178" role="img" aria-label="Two terrain profiles at different detail levels leaving a visible gap, then the same gap closed by a vertical skirt">
+  <g>
+    <path class="ln2" d="M20 70 L44 60 L68 76 L92 66 L116 80"/>
+    <path class="ln2" d="M116 112 L164 100 L188 116"/>
+    <path class="ln2" d="M20 70 L20 132 M116 80 L116 132 M188 116 L188 132"/>
+    <path class="ln" d="M20 132 L188 132"/>
+    <line x1="116" y1="80" x2="116" y2="112" stroke="var(--gold)" stroke-width="3.5"/>
+    <text class="tg" x="122" y="100">gap</text>
+    <text class="tm" x="68" y="48" text-anchor="middle">fine chunk</text>
+    <text class="tm" x="152" y="84" text-anchor="middle">coarse chunk</text>
+    <text class="t" x="104" y="162" text-anchor="middle">sky shows through</text>
+  </g>
+  <g>
+    <path class="ln2" d="M232 70 L256 60 L280 76 L304 66 L328 80"/>
+    <path class="ln2" d="M328 112 L376 100 L400 116"/>
+    <path class="ln2" d="M232 70 L232 132 M400 116 L400 132"/>
+    <path class="ln" d="M232 132 L400 132"/>
+    <rect x="325.5" y="80" width="5" height="36" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <text class="ta" x="338" y="96">skirt</text>
+    <text class="tm" x="280" y="48" text-anchor="middle">same two chunks</text>
+    <text class="t" x="316" y="162" text-anchor="middle">2 triangles per edge cell</text>
+  </g>
+</svg>
+<figcaption>A <b>skirt</b> is a short vertical curtain hanging down from a chunk's rim. It does not have to match the neighbour, or even know what level the neighbour chose — it just has to hang deeper than the worst possible mismatch, which is <b>one coarse cell</b>. Cheap, and it never needs a special case.</figcaption>
+</figure>
+
+<h2>One last limit: you cannot flatten too much at once</h2>
+
+<p>It is tempting to merge a big field of identical blocks into one huge flat
+polygon. On a flat world that is free. On a ball it is not: a flat patch cuts
+across the curve, so the middle of the patch sinks below where the ground should
+actually be.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 400 132" role="img" aria-label="A flat chord drawn across a curved ground surface, with the vertical gap between them marked as the sag">
+  <path class="ln2" d="M40 100 Q200 25 360 100"/>
+  <line class="acc" x1="78.4" y1="84.2" x2="321.6" y2="84.2"/>
+  <line class="acc" x1="78.4" y1="79" x2="78.4" y2="89"/>
+  <line class="acc" x1="321.6" y1="79" x2="321.6" y2="89"/>
+  <line x1="200" y1="62.5" x2="200" y2="84.2" stroke="var(--gold)" stroke-width="3"/>
+  <text class="tg" x="208" y="100">sag = s² / 8R</text>
+  <text class="tm" x="200" y="48" text-anchor="middle">the ground's true curve</text>
+  <text class="ta" x="200" y="120" text-anchor="middle">flat merged patch, span s</text>
+</svg>
+<figcaption>On a 1,700 m planet with 1 m blocks, a patch may span about <b>37 m</b> before it sinks a tenth of a block below the real surface. Merging is limited by the planet's curvature, not by the algorithm — and a chunk is already about that wide, so the rule is simply: <b>never merge across a chunk</b>.</figcaption>
+</figure>
+
+<h2>The whole thing in one breath</h2>
+
+<ul>
+  <li>Start with <strong>20 triangles</strong>. Split each into 4, repeatedly. Push corners onto the ball.</li>
+  <li>The <strong>corners are the blocks</strong>; each one owns a hexagon. Triangles are only the filing system.</li>
+  <li>Twelve corners have five neighbours instead of six. Those are the <strong>twelve pentagons</strong>, and they are unavoidable.</li>
+  <li>An address is the <strong>route down the splits</strong>, so chopping digits off gives you the containing chunk for free.</li>
+  <li>A cell costs <strong>2 vertices and 4 triangles</strong>. Sides merge vertically for free; nothing merges sideways.</li>
+  <li>Detail level follows <strong>altitude</strong>. Coarse meshes re-ask the terrain function rather than dropping cells, and <strong>skirts</strong> hide the seams.</li>
+</ul>
+
+<footer>
+  Everything above is drawn from the Chamfer specification, where each claim is
+  checked by a script before it is written down. The full documents, the
+  verification scripts and the runnable demos go into far more depth than this
+  page does.
+</footer>
+
+</div>
+</body>
+</html>

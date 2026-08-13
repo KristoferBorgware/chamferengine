@@ -9,6 +9,7 @@ and duplicates information found there.
 - Documentation and demos only. No engine source code exists yet.
 - `docs/` — prose specification, ordered 00 through 14.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
+  `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
   mathematical claims made in `docs/`.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`

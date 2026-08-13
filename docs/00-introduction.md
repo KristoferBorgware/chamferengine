@@ -67,7 +67,12 @@ geometry; doc 03 onwards is the design proper.
 Every non-trivial idea in this documentation has a runnable demo. They are
 standalone HTML files with no build step — open them directly.
 
-Start with [`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html),
+If you are meeting this design for the first time, start with
+[`demos/how-it-works.html`](../demos/how-it-works.html) — an illustrated
+walkthrough of the construction in nine diagrams, which covers in pictures what
+docs 02, 03 and 14 cover in prose.
+
+After that, [`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html),
 which shows the geometric options side by side with the curvature defect
 colour-coded, and
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html), which

@@ -1,11 +1,30 @@
 # Demos
 
-Seventeen self-contained HTML files. No build step, no `npm install`, no server
+Eighteen self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
 The 3D demos load Three.js r128 from a CDN and need an internet connection. The
 2D ones are fully offline.
+
+---
+
+## Start here
+
+### [`how-it-works.html`](how-it-works.html)
+An illustrated walkthrough of the whole construction, for someone meeting it for
+the first time: start with twenty triangles, split each into four, push the
+corners onto a ball, and put the blocks **on the corners rather than in the
+triangles**. Nine diagrams, no interaction, no dependencies.
+
+It then carries that one idea through to the parts it decides — why there are
+exactly twelve pentagons, why an address is just the route down the splits, what
+a cell costs to draw, and why level of detail has to resample rather than
+decimate.
+
+**Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md),
+[03 — Addressing](../docs/03-addressing.md),
+[14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
 
 ---
 
