@@ -1,6 +1,6 @@
 # Demos
 
-Sixteen self-contained HTML files. No build step, no `npm install`, no server
+Seventeen self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -145,6 +145,23 @@ The violet dots are the twelve pentagons; the two gold ones are the antipodal
 pair carrying the lat/long poles.
 
 **Docs:** [13 — Gravity and orientation](../docs/13-gravity-and-orientation.md)
+
+---
+
+## Rendering
+
+### [`mesh-lod.html`](mesh-lod.html)
+The tiling at five resolutions, reporting its own vertex and triangle counts.
+Watch them converge on exactly **2 vertices and 4 triangles per cell** — the real
+cost of an unmerged hex surface, twice a cube's and no worse.
+
+The altitude slider is the argument. It draws the true horizon ring and colours
+the cells inside it; at eye height that is **one hexagon on the whole planet**,
+0.05% of the surface. The readout gives the figures for a real level-11 world and
+the level that fits a 2M-triangle budget.
+
+**Docs:** [14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
+
 
 ---
 

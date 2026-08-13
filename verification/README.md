@@ -135,6 +135,34 @@ Five checks, covering the local frame and where the 720° lands in it.
 
 ---
 
+## `mesh.js` — meshing and LOD
+
+Six checks, covering what a hex surface costs and where LOD actually breaks.
+
+**Verifies:**
+
+1. **Mesh cost.** A fully exposed hex surface converges on exactly **2 vertices
+   and 4 triangles per cell** — `2V − 4` dual vertices and `4V − 12` fan
+   triangles. An unmerged square grid costs 1 and 2, so hexes are a flat 2×.
+2. **Vertical merging is exact.** The side faces of stacked cells lie in one
+   radial plane to **1.5e-16** radii, so a run down a column collapses to a
+   single quad at no geometric cost.
+3. **Flat-patch sag.** Merging drops vertices that were following the sphere;
+   the patch sags by `s²/8R`. On the doc-06 planet a tenth of a block of sag
+   allows a **37 m** patch, a quarter allows 58 m.
+4. **LOD geometry barely matters.** Coarse hexagon corners land within
+   **0.72% mean, 0.97% max** of a fine corner, as a fraction of cell spacing.
+5. **LOD seams are terrain, not geometry.** The same terrain sampled one level
+   apart differs by up to 1.5 m at level 11 with 60 m of relief, and a skirt one
+   coarse cell deep covers the worst case at every level tested.
+6. **What is on screen.** Visible cells by altitude, and the finest level that
+   fits a 2M-triangle budget: full detail at eye height, dropping about one level
+   per doubling of altitude above 50 m.
+
+**Used in:** [doc 14](../docs/14-meshing-and-lod.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a

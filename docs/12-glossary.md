@@ -12,6 +12,9 @@ Used for lat/long, maps and sun position. See [doc 13](13-gravity-and-orientatio
 **Barycentric coordinates** — three mixing ratios summing to 1, describing a
 point as a blend of a triangle's three corners. See [doc 04](04-position-lookup.md).
 
+**Cap** — the top or bottom face of a hexagonal prism. Four triangles on a
+hexagon, three on a pentagon, fanned from one of its own corners.
+
 **Chamfer** — the polyhedron operation taking `GP(m,n)` to `GP(2m,2n)`. Iterated
 chamfering of a dodecahedron generates exactly this project's subdivision
 sequence, and is the source of the project's name.
@@ -73,6 +76,10 @@ Together with the face, these form the chunk ID.
 **`(q, r)`** — lattice coordinates within a chunk. The leftover after path digits
 are stripped from `(i, j)`.
 
+**Skirt** — a vertical apron hanging from a chunk's boundary cells, one coarse
+cell deep, that hides the gap where two LOD levels meet. Two triangles per
+boundary cell, and indifferent to which level the neighbour chose.
+
 **Subdivision depth (`D`)** — how many times triangles are split. Sets horizontal
 grid fineness. **Unrelated to crust depth.**
 
@@ -109,6 +116,9 @@ Camera and controller state only; never a stored coordinate.
 | Pentagon deflection | 36.07° | a straight line cannot pass through one |
 | Pentagon antipodal pairs | 6 | so poles can be placed on two of them |
 | Holonomy of a closed walk | enclosed area / R² | rotation of a carried heading |
+| Mesh cost, unmerged | 2 verts, 4 tris per cell | exactly 2× a cube surface |
+| Flat-patch sag | `s² / 8R` | why merging is bounded |
+| Max merge span, 0.1 m sag | 37 m | on a 1,700 m planet |
 
 ## Orientation reference — 1,700 m planet
 

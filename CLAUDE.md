@@ -7,7 +7,7 @@ and duplicates information found there.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 13.
+- `docs/` — prose specification, ordered 00 through 14.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
 - `verification/` — plain Node scripts, zero dependencies, that check the
   mathematical claims made in `docs/`.
@@ -60,6 +60,10 @@ Violating any of these breaks the design. They are not tunable.
 | pentagon antipodal pairs | 6 | poles can sit on two pentagons | `frame.js` |
 | horizon, 1.7 m eye, R 1700 m | `76 m` | `R·acos(R/(R+h))` | `frame.js` |
 | tilt between two points | `s / R` | 3.37° at 100 m on R 1700 m | `frame.js` |
+| mesh cost, unmerged | `2` verts, `4` tris per cell | exactly 2× a cube surface | `mesh.js` |
+| flat-patch sag | `s² / 8R` | bounds how far merging may reach | `mesh.js` |
+| max merge span | `37 m` | at 0.1 m sag, R 1700 m | `mesh.js` |
+| visible cells at eye height | `≈ 21,000` | 84k triangles, D 11, R 1700 m | `mesh.js` |
 
 ## Established results
 
@@ -86,6 +90,15 @@ Violating any of these breaks the design. They are not tunable.
 - There are **three** local frames, for three jobs, and they must not be
   interconverted casually: axis (coordinates), transported (camera), grid
   (machinery). See `docs/13-gravity-and-orientation.md`.
+- Meshing is **not** the disaster doc 11 originally implied (`mesh.js`). Unmerged,
+  a hex surface costs 2 verts and 4 tris per cell — a flat 2× a cube surface.
+  Run-length merging down a column is exact and free; only the rectangle-growing
+  half of greedy meshing has no hex equivalent. Cap merging is bounded by
+  curvature (37 m at 0.1 m sag), not by the algorithm.
+- LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
+  coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
+  seams come from terrain sampled at two spacings, not from geometry; skirts one
+  coarse cell deep cover them and do not care what level the neighbour chose.
 
 ## Naming conventions
 
@@ -111,10 +124,8 @@ Violating any of these breaks the design. They are not tunable.
 
 Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
 
-- Meshing strategy; greedy meshing does not transfer from cube worlds — highest
-  impact. LOD must key on **altitude**, not distance: the ground-level horizon on
-  a 1,700 m planet is 76 m
-- Floating-point precision at planet scale; floating origin needed
+- Floating-point precision at planet scale; floating origin needed — highest
+  impact, and both doc 13 and doc 14 depend on the rebasing rule
 - Lighting propagation with 8 neighbours and radial sky light
 - Six-state block rotation for directional blocks
 - Pentagon handling as a *gameplay* problem, not just a maths one

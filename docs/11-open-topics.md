@@ -21,16 +21,20 @@ should be read before deciding the pentagon question below.
 
 ---
 
-## Meshing
+## ~~Meshing~~ — designed, see [doc 14](14-meshing-and-lod.md)
 
-Hex prisms have **8 faces** to a cube's 6. Greedy meshing mostly does not apply:
-you cannot merge hexagons into larger rectangles the way you merge cube faces.
+Closed, and the pessimism above was overstated. An unmerged hex surface costs
+**2 vertices and 4 triangles per cell** — exactly twice a cube surface, a flat
+factor, not a blow-up. What does not transfer is the rectangle-growing half of
+greedy meshing; run-length merging down a column is exact and free.
 
-Expect meaningfully more vertices per chunk than a cube world, and plan
-level-of-detail earlier than you otherwise would.
+The scheme is: naive mesher, skirts one coarse cell deep at chunk boundaries,
+altitude-driven LOD by resampling the terrain function. Cap merging is optional
+and bounded to a 37 m patch by curvature rather than by the algorithm.
 
-Open questions: what LOD scheme, at which subdivision levels, and how to stitch
-between LOD boundaries without cracks.
+The reason it lands so cheaply is the horizon from
+[doc 13](13-gravity-and-orientation.md): a standing player sees about **21,000
+cells**, 84,000 triangles. The 76 m horizon is the greedy mesher.
 
 ---
 
@@ -119,9 +123,12 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Meshing and LOD.** With gravity settled, it is now the largest unknown, and
-[doc 13](13-gravity-and-orientation.md) hands it two constraints it did not have
-before: LOD must be driven by *altitude* rather than distance, because the
-ground-level horizon on a 1,700 m planet is only 76 m; and chunk-local `up` is
-accurate to about 1° at `C = 6`, which decides whether a chunk can be meshed in a
-single frame or needs a per-cell one.
+**Floating-point precision**, and the floating origin it implies. It is now the
+last item that touches every system holding a position, and both closed
+documents lean on it: [doc 13](13-gravity-and-orientation.md) wants orientation
+rebased per chunk alongside position, and [doc 14](14-meshing-and-lod.md) wants
+meshes built in chunk-local space. Neither can be finished until the rebasing
+rule exists.
+
+**Lighting** is the alternative, and it is more self-contained: 8 neighbours,
+radial sky light, and a sun direction that gives a real terminator for free.

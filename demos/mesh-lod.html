@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meshing cost and LOD</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:#0b0e14; color:#e6e8ee;
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  header { padding:14px 16px 10px; }
+  h1 { font-size:17px; font-weight:650; letter-spacing:-0.01em; }
+  .sub { font-size:12.5px; color:#8b93a7; margin-top:3px; }
+
+  .stage { position:relative; flex:1; min-height:52vh; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+  .hud {
+    position:absolute; top:10px; left:12px;
+    font-size:12px; line-height:1.6; color:#c7ccd9;
+    background:rgba(11,14,20,.76); border:1px solid #222839;
+    padding:9px 12px; border-radius:8px; backdrop-filter:blur(6px);
+    max-width:min(330px,86vw);
+  }
+  .hud b { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; }
+  .hud .big { font-size:15px; }
+  .sep { height:1px; background:#222839; margin:7px 0; }
+  .note { color:#8b93a7; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .d-v { background:#ffc44d; } .d-h { background:#2f4a7a; }
+  .warn { color:#f2a33d; }
+
+  .panel {
+    padding:12px 16px 16px; border-top:1px solid #1b2130; background:#0e121b;
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  }
+  button {
+    font:inherit; font-size:13px; font-weight:550;
+    padding:8px 12px; border-radius:8px; cursor:pointer;
+    background:#1a2130; color:#dfe3ec; border:1px solid #2a3245;
+  }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  .lbl { font-size:12px; color:#8b93a7; }
+  .grp { display:flex; gap:6px; align-items:center; }
+  .grp + .grp { border-left:1px solid #1b2130; padding-left:10px; }
+  input[type=range] { width:170px; accent-color:#4f8ef7; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Meshing cost and level of detail</h1>
+  <div class="sub">An unmerged hex surface costs 2 vertices and 4 triangles per cell — and at eye height you can see almost none of them.</div>
+</header>
+
+<div class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div>tiling level <b id="lvl">3</b> · <b id="cells">—</b> cells</div>
+    <div>mesh <b id="verts">—</b> vertices · <b id="tris">—</b> triangles</div>
+    <div class="note">that is <b id="vpc">—</b> vertices and <b id="tpc">—</b> triangles per cell</div>
+    <div class="sep"></div>
+    <div><span class="dot d-v"></span>inside the horizon from <b id="alt">1.7</b> m up</div>
+    <div>horizon <b class="big" id="hor">—</b></div>
+    <div>you can see <b id="frac">—</b> of the planet</div>
+    <div class="note">on the real world (D 11, 41.9M cells) that is<br><b id="realcells">—</b> cells · <b id="realtris">—</b> triangles</div>
+    <div class="sep"></div>
+    <div class="note">budget 2M triangles → render at level <b id="rec">—</b> <span id="recnote"></span></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">tiling</span>
+    <button data-lvl="1">1</button>
+    <button data-lvl="2">2</button>
+    <button data-lvl="3" class="on">3</button>
+    <button data-lvl="4">4</button>
+    <button data-lvl="5">5</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">altitude</span>
+    <input id="altSlider" type="range" min="0" max="100" value="0">
+  </div>
+  <div class="grp">
+    <button id="bWire">Wireframe</button>
+    <button id="bSpin" class="on">Spin</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const V3 = THREE.Vector3;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
+const root = new THREE.Group(); scene.add(root);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(3,4,5); scene.add(key);
+
+const R = 1700, D = 11, BUDGET = 2e6;          // doc 06 planet, doc 14 budget
+const N = L => 10 * 4**L + 2;
+const VIEWPOINT = new V3(0, 0, 1);             // where the observer stands
+
+// the horizon ring, so the visible patch stays findable when it is sub-cell
+const horizon = new THREE.LineLoop(
+  new THREE.BufferGeometry().setFromPoints(Array.from({length:129}, () => new V3())),
+  new THREE.LineBasicMaterial({color:0xffc44d}));
+root.add(horizon);
+
+// ---- the grid: cells are geodesic vertices, hexagon corners are its centroids
+const PHI = (1+Math.sqrt(5))/2;
+const IV = [[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],[0,-1,-PHI],
+            [0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]].map(v=>new V3(...v).normalize());
+const IF = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+            [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+
+function geodesic(L){
+  const n = 1 << L, pts = [], idx = new Map(), inc = [], tris = [];
+  const put = p => {
+    const k = [p.x,p.y,p.z].map(x => Math.round(x*1e7)).join(',');
+    if (!idx.has(k)) { idx.set(k, pts.length); pts.push(p); inc.push([]); }
+    return idx.get(k);
+  };
+  for (const f of IF){
+    const [A,B,C] = f.map(i => IV[i]), P = [];
+    for (let i=0;i<=n;i++){
+      const row = [];
+      for (let j=0;j<=i;j++){
+        const a=(n-i)/n, b=(i-j)/n, c=j/n;
+        row.push(put(new V3(A.x*a+B.x*b+C.x*c, A.y*a+B.y*b+C.y*c, A.z*a+B.z*b+C.z*c).normalize()));
+      }
+      P.push(row);
+    }
+    for (let i=0;i<n;i++) for (let j=0;j<=i;j++){
+      tris.push([P[i][j],P[i+1][j],P[i+1][j+1]]);
+      if (j<i) tris.push([P[i][j],P[i+1][j+1],P[i][j+1]]);
+    }
+  }
+  // centroid of each triangle == one hexagon corner
+  const corner = tris.map(t => pts[t[0]].clone().add(pts[t[1]]).add(pts[t[2]]).normalize());
+  tris.forEach((t,ti) => t.forEach(v => inc[v].push(ti)));
+  // order each cell's corners counter-clockwise around it
+  const ring = pts.map((u,v) => {
+    const e1 = corner[inc[v][0]].clone().addScaledVector(u, -corner[inc[v][0]].dot(u)).normalize();
+    const e2 = new V3().crossVectors(u, e1);
+    return inc[v].map(ti => {
+      const d = corner[ti].clone().addScaledVector(u, -corner[ti].dot(u));
+      return [ti, Math.atan2(d.dot(e2), d.dot(e1))];
+    }).sort((a,b) => a[1]-b[1]).map(a => a[0]);
+  });
+  return {pts, corner, ring};
+}
+
+// ---- build the renderable mesh ---------------------------------------------
+let grid = null, mesh = null, wire = null, level = 3, wireOn = false, spin = true;
+let cellStart = [];                              // first vertex index of each cell
+
+function rebuild(L){
+  level = L;
+  grid = geodesic(L);
+  if (mesh) { root.remove(mesh); mesh.geometry.dispose(); }
+  if (wire) { root.remove(wire); wire.geometry.dispose(); }
+
+  const pos = [], col = [], idxs = [];
+  cellStart = [];
+  let sharedTris = 0;
+  grid.pts.forEach((u, v) => {
+    const r = grid.ring[v];
+    sharedTris += r.length - 2;
+    cellStart.push(pos.length / 3);
+    for (const ti of r){
+      const c = grid.corner[ti];
+      pos.push(c.x, c.y, c.z);
+      col.push(1,1,1);
+    }
+    // fan from the cell's own first corner: r.length - 2 triangles
+    const base = cellStart[v];
+    for (let k=1; k<r.length-1; k++) idxs.push(base, base+k, base+k+1);
+  });
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idxs);
+  g.computeVertexNormals();
+  mesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({
+    vertexColors:true, shininess:4, flatShading:true }));
+  root.add(mesh);
+
+  wire = new THREE.LineSegments(new THREE.WireframeGeometry(g),
+    new THREE.LineBasicMaterial({color:0x8fb6ef, transparent:true, opacity:0.35}));
+  wire.visible = wireOn; root.add(wire);
+
+  // the counts that matter are the SHARED ones: one corner serves three cells
+  const sharedVerts = grid.corner.length, cells = grid.pts.length;
+  set('lvl', L); set('cells', cells.toLocaleString('en-US'));
+  set('verts', sharedVerts.toLocaleString('en-US'));
+  set('tris', sharedTris.toLocaleString('en-US'));
+  set('vpc', (sharedVerts/cells).toFixed(2));
+  set('tpc', (sharedTris/cells).toFixed(2));
+  paint();
+}
+
+const set = (id, v) => document.getElementById(id).textContent = v;
+
+// ---- altitude: horizon, visible fraction, recommended level -----------------
+function altitude(){
+  const t = +document.getElementById('altSlider').value / 100;
+  return 1.7 * Math.pow(1700/1.7, t);           // 1.7 m to 1700 m, logarithmic
+}
+
+function paint(){
+  const h = altitude();
+  const cosA = R/(R+h), alpha = Math.acos(cosA);
+  const frac = (1-cosA)/2;                       // fraction of the sphere in view
+
+  // colour the cells inside the horizon
+  const col = mesh.geometry.attributes.color;
+  let seen = 0;
+  grid.pts.forEach((u, v) => {
+    const inside = u.dot(VIEWPOINT) > cosA;
+    if (inside) seen++;
+    const n = grid.ring[v].length;
+    for (let k=0; k<n; k++){
+      const i = cellStart[v] + k;
+      if (inside) col.setXYZ(i, 1.0, 0.77, 0.30);
+      else        col.setXYZ(i, 0.18, 0.29, 0.48);
+    }
+  });
+  col.needsUpdate = true;
+
+  const realCells = N(D) * frac, realTris = realCells * 4;
+  let rec = D; while (rec > 0 && N(rec)*frac*4 > BUDGET) rec--;
+
+  set('alt', h < 10 ? h.toFixed(1) : Math.round(h).toLocaleString('en-US'));
+  set('hor', R*alpha < 1000 ? (R*alpha).toFixed(0)+' m' : (R*alpha/1000).toFixed(2)+' km');
+  set('frac', frac < 0.001 ? (frac*100).toFixed(4)+'%' : (frac*100).toFixed(2)+'%');
+  set('realcells', Math.round(realCells).toLocaleString('en-US'));
+  set('realtris', realTris > 1e6 ? (realTris/1e6).toFixed(2)+' M' : Math.round(realTris).toLocaleString('en-US'));
+  set('rec', rec);
+  document.getElementById('recnote').className = rec === D ? 'note' : 'warn';
+  document.getElementById('recnote').textContent =
+    rec === D ? '(full detail)' : `(drop ${D-rec} level${D-rec>1?'s':''})`;
+
+  // draw the horizon ring at its true angular radius
+  {
+    const e1 = new V3().crossVectors(VIEWPOINT, new V3(0,1,0)).normalize();
+    const e2 = new V3().crossVectors(VIEWPOINT, e1).normalize();
+    const a = horizon.geometry.attributes.position;
+    for (let i=0;i<=128;i++){
+      const t = 2*Math.PI*i/128;
+      const q = VIEWPOINT.clone().multiplyScalar(Math.cos(alpha))
+        .addScaledVector(e1, Math.sin(alpha)*Math.cos(t))
+        .addScaledVector(e2, Math.sin(alpha)*Math.sin(t)).normalize().multiplyScalar(1.004);
+      a.setXYZ(i, q.x, q.y, q.z);
+    }
+    a.needsUpdate = true;
+  }
+
+  // pull the camera back with altitude so the visible cap stays meaningful
+  camDist = 3.1 + 2.2 * (h/R);
+}
+
+// ---- interaction ------------------------------------------------------------
+let camRot = {x:0.25, y:0}, camDist = 3.1, drag = null;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); drag = {x:e.clientX, y:e.clientY};
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  camRot.y += (e.clientX-drag.x)*0.006; camRot.x += (e.clientY-drag.y)*0.006;
+  camRot.x = Math.max(-1.4, Math.min(1.4, camRot.x));
+  drag.x = e.clientX; drag.y = e.clientY;
+});
+addEventListener('pointerup', () => drag = null);
+
+document.querySelectorAll('[data-lvl]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-lvl]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  rebuild(+b.dataset.lvl);
+}));
+document.getElementById('altSlider').addEventListener('input', paint);
+document.getElementById('bWire').addEventListener('click', e => {
+  wireOn = !wireOn; wire.visible = wireOn; e.target.classList.toggle('on', wireOn);
+});
+document.getElementById('bSpin').addEventListener('click', e => {
+  spin = !spin; e.target.classList.toggle('on', spin);
+});
+
+function resize(){
+  const s = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(s.width, s.height, false);
+  camera.aspect = s.width/s.height; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+function loop(){
+  requestAnimationFrame(loop);
+  if (spin && !drag) camRot.y += 0.0022;
+  camera.position.set(
+    camDist*Math.cos(camRot.x)*Math.sin(camRot.y),
+    camDist*Math.sin(camRot.x),
+    camDist*Math.cos(camRot.x)*Math.cos(camRot.y));
+  camera.lookAt(0,0,0);
+  renderer.render(scene, camera);
+}
+resize(); rebuild(3); loop();
+</script>
+</body>
+</html>
