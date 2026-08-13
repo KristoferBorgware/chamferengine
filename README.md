@@ -66,6 +66,24 @@ and naming conventions in a compact form intended for machine consumption.
 
 ---
 
+## Reading it as a site
+
+The Markdown is written to be read on GitHub, but there is a generator for a
+linked, cross-referenced HTML version — sidebar, per-page contents, prev/next,
+`[verified]` claims rendered as callouts that link to the script that proves
+them:
+
+```bash
+node tools/build-docs.js            # build once, into site/
+node tools/build-docs.js --serve    # rebuild on save and serve with live reload
+```
+
+Zero dependencies, like everything else here. `site/` is generated and ignored
+by git; the Markdown is the source of truth. The build fails loudly on a dead
+link, a dead heading anchor, or any Markdown the generator does not understand.
+
+---
+
 ## Demos
 
 Sixteen self-contained HTML files. No build step, no dependencies to install —

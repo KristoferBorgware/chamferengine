@@ -7,10 +7,14 @@ and duplicates information found there.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 12.
+- `docs/` — prose specification, ordered 00 through 13.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
 - `verification/` — plain Node scripts, zero dependencies, that check the
   mathematical claims made in `docs/`.
+- `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
+  (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
+  source of truth. It fails the build on dead links and dead heading anchors,
+  so run it after editing docs.
 
 ## Hard invariants
 
