@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barycentric coordinates</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 10px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:none; }
+  .bars { margin-top:12px; }
+  .brow { display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+  .bname { font-size:12px; font-weight:700; width:16px; }
+  .btrack { flex:1; height:9px; background:#1a2130; border-radius:5px; overflow:hidden; }
+  .bfill { height:100%; border-radius:5px; }
+  .bpct { font-size:12px; font-variant-numeric:tabular-nums; width:52px; text-align:right;
+          font-family:ui-monospace,Menlo,monospace; }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px; padding:13px 13px 11px; margin-top:14px; }
+  table { width:100%; border-collapse:collapse; font-family:ui-monospace,Menlo,monospace;
+          font-size:13px; font-variant-numeric:tabular-nums; }
+  th { text-align:right; font-size:9.5px; color:#6d768c; text-transform:uppercase; letter-spacing:.05em;
+       font-weight:600; padding-bottom:6px; font-family:inherit; }
+  th:first-child, td:first-child { text-align:left; font-family:ui-sans-serif,sans-serif; font-size:11px; color:#7d879c; }
+  td { text-align:right; padding:6px 0; border-top:1px solid #182032; }
+  .ok { color:#3fb8af; } .bad { color:#e0913a; }
+  .msg { font-size:12.5px; color:#a9b2c6; line-height:1.6; margin-top:12px; }
+  .msg b { color:#fff; } .msg .hi { color:#ffd166; }
+  .bar2 { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+</style>
+</head>
+<body>
+
+<h1>Barycentric coordinates</h1>
+<div class="sub">Drag the white dot. Three mixing ratios, always summing to 1.</div>
+
+<svg id="svg" viewBox="0 0 360 320"></svg>
+
+<div class="bars" id="bars"></div>
+
+<div class="out">
+  <table>
+    <thead><tr><th></th><th>k → A</th><th>i → B</th><th>j → C</th><th>sum</th></tr></thead>
+    <tbody id="tbl"></tbody>
+  </table>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="bar2">
+  <button id="grid" class="on">Lattice</button>
+  <button id="areas" class="on">Areas</button>
+  <button id="hex" class="on">Cell</button>
+</div>
+
+<script>
+const A=[32,286], B=[328,286], Cc=[180,30], N=8;
+const COL={A:'#4f8ef7', B:'#3fb8af', C:'#e0913a'};
+let P=[168,190], showGrid=true, showAreas=true, showHex=true;
+
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const mul=(a,s)=>[a[0]*s,a[1]*s];
+const pt = (i,j) => add(A, add(mul(sub(B,A), i/N), mul(sub(Cc,A), j/N)));
+const poly = p => p.map(q=>q.map(n=>n.toFixed(1)).join(',')).join(' ');
+
+function bary(p){
+  const u=sub(B,A), v=sub(Cc,A), w=sub(p,A);
+  const det=u[0]*v[1]-u[1]*v[0];
+  const wb=(w[0]*v[1]-w[1]*v[0])/det;
+  const wc=(u[0]*w[1]-u[1]*w[0])/det;
+  return {wa:1-wb-wc, wb, wc};
+}
+function hexRound(k,i,j){
+  let rk=Math.round(k), ri=Math.round(i), rj=Math.round(j);
+  const dk=Math.abs(rk-k), di=Math.abs(ri-i), dj=Math.abs(rj-j);
+  if (dk>di && dk>dj) rk=N-ri-rj;
+  else if (di>dj)     ri=N-rk-rj;
+  else                rj=N-rk-ri;
+  return {rk,ri,rj, naive:[Math.round(k),Math.round(i),Math.round(j)]};
+}
+const hexPath = (c) => {
+  const r = (296/N)/Math.sqrt(3);
+  return Array.from({length:6},(_,k)=>{
+    const a=(30+60*k)*Math.PI/180;
+    return (k?'L':'M')+(c[0]+r*Math.cos(a)).toFixed(1)+' '+(c[1]+r*Math.sin(a)).toFixed(1);
+  }).join(' ')+' Z';
+};
+
+function draw(){
+  const {wa,wb,wc}=bary(P);
+  const k=wa*N, i=wb*N, j=wc*N;
+  const R=hexRound(k,i,j);
+  let s='';
+
+  if (showAreas){
+    s += `<polygon points="${poly([P,B,Cc])}" fill="${COL.A}" fill-opacity="${Math.max(0,wa)*.55}"/>`;
+    s += `<polygon points="${poly([A,P,Cc])}" fill="${COL.B}" fill-opacity="${Math.max(0,wb)*.55}"/>`;
+    s += `<polygon points="${poly([A,B,P])}" fill="${COL.C}" fill-opacity="${Math.max(0,wc)*.55}"/>`;
+  }
+
+  if (showGrid){
+    for(let jj=0;jj<=N;jj++) for(let ii=0;ii+jj<=N;ii++){
+      for (const [di,dj] of [[1,0],[0,1],[-1,1]]){
+        const a2=ii+di, b2=jj+dj;
+        if (a2<0||b2<0||a2+b2>N) continue;
+        const p1=pt(ii,jj), p2=pt(a2,b2);
+        s += `<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p2[0].toFixed(1)}"
+               y2="${p2[1].toFixed(1)}" stroke="#2b3448" stroke-width="1"/>`;
+      }
+    }
+  }
+
+  s += `<polygon points="${poly([A,B,Cc])}" fill="none" stroke="#46536e" stroke-width="2"/>`;
+
+  if (showGrid) for(let jj=0;jj<=N;jj++) for(let ii=0;ii+jj<=N;ii++){
+    const p=pt(ii,jj);
+    s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="#4a5674"/>`;
+  }
+
+  const snap = pt(R.ri, R.rj);
+  if (showHex){
+    s += `<path d="${hexPath(snap)}" fill="#ffd166" fill-opacity=".16" stroke="#ffd166" stroke-width="2"/>`;
+    s += `<circle cx="${snap[0].toFixed(1)}" cy="${snap[1].toFixed(1)}" r="4" fill="#ffd166"/>`;
+  }
+
+  // lines from P to each corner
+  for (const [c,col] of [[A,COL.A],[B,COL.B],[Cc,COL.C]])
+    s += `<line x1="${P[0].toFixed(1)}" y1="${P[1].toFixed(1)}" x2="${c[0]}" y2="${c[1]}"
+           stroke="${col}" stroke-width="1.2" stroke-opacity=".55" stroke-dasharray="3 3"/>`;
+
+  s += `<circle cx="${P[0].toFixed(1)}" cy="${P[1].toFixed(1)}" r="8" fill="#fff"/>`;
+
+  const lab=(p,t,col,dx,dy)=>`<text x="${p[0]+dx}" y="${p[1]+dy}" fill="${col}" font-size="15"
+    font-weight="700" text-anchor="middle">${t}</text>`;
+  s += lab(A,'A',COL.A,-14,6) + lab(B,'B',COL.B,14,6) + lab(Cc,'C',COL.C,0,-12);
+
+  document.getElementById('svg').innerHTML=s;
+
+  const rows=[['A',wa,COL.A],['B',wb,COL.B],['C',wc,COL.C]];
+  document.getElementById('bars').innerHTML = rows.map(([n,w,c])=>
+    `<div class="brow"><div class="bname" style="color:${c}">${n}</div>
+      <div class="btrack"><div class="bfill" style="width:${Math.max(0,Math.min(1,w))*100}%;background:${c}"></div></div>
+      <div class="bpct" style="color:${w<0?'#e0913a':c}">${(w*100).toFixed(1)}%</div></div>`).join('');
+
+  const sumN = R.naive[0]+R.naive[1]+R.naive[2];
+  const good = sumN===N;
+  document.getElementById('tbl').innerHTML =
+    `<tr><td>exact</td><td>${k.toFixed(2)}</td><td>${i.toFixed(2)}</td><td>${j.toFixed(2)}</td>
+       <td class="ok">${N}</td></tr>
+     <tr><td>rounded</td><td>${R.naive[0]}</td><td>${R.naive[1]}</td><td>${R.naive[2]}</td>
+       <td class="${good?'ok':'bad'}">${sumN}${good?'':' ✗'}</td></tr>
+     <tr><td>fixed</td><td>${R.rk}</td><td>${R.ri}</td><td>${R.rj}</td><td class="ok">${N}</td></tr>`;
+
+  const outside = wa<0||wb<0||wc<0;
+  document.getElementById('msg').innerHTML = outside
+    ? `A weight went <b class="hi">negative</b> — the point is outside the triangle. That single sign
+       test is the whole "am I still on this face?" check.`
+    : good
+    ? `Rounding happened to land clean this time. Keep dragging — most positions don't.`
+    : `Rounding broke the sum: <b class="hi">${sumN}</b> instead of ${N}. The coordinate that moved
+       furthest gets recomputed from the other two, giving <b>${R.rk}, ${R.ri}, ${R.rj}</b>.
+       You store <b>i=${R.ri}, j=${R.rj}</b> and drop k — but you needed it to catch the error.`;
+}
+
+const svg=document.getElementById('svg');
+function toSvg(e){
+  const r=svg.getBoundingClientRect();
+  const vb=svg.viewBox.baseVal;
+  return [(e.clientX-r.left)/r.width*vb.width, (e.clientY-r.top)/r.height*vb.height];
+}
+let drag=false;
+svg.addEventListener('pointerdown',e=>{drag=true; svg.setPointerCapture(e.pointerId); P=toSvg(e); draw();});
+svg.addEventListener('pointermove',e=>{ if(drag){ P=toSvg(e); draw(); }});
+svg.addEventListener('pointerup',()=>drag=false);
+svg.addEventListener('pointercancel',()=>drag=false);
+
+const tog=(id,set)=>document.getElementById(id).addEventListener('click',e=>{
+  set(); e.target.classList.toggle('on'); draw(); });
+tog('grid',()=>showGrid=!showGrid);
+tog('areas',()=>showAreas=!showAreas);
+tog('hex',()=>showHex=!showHex);
+draw();
+</script>
+</body>
+</html>

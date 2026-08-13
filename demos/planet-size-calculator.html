@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planet size calculator</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 34px; }
+  h1 { font-size:17px; font-weight:650; letter-spacing:-.01em; }
+  .sub { font-size:12.5px; color:#8b93a7; margin-top:3px; margin-bottom:16px; }
+
+  .field { margin-bottom:15px; }
+  .flabel { display:flex; align-items:baseline; font-size:12px; color:#8b93a7;
+            text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; }
+  .fval { margin-left:auto; font-size:15px; color:#fff; font-weight:650;
+          text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; height:26px; background:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-moz-range-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px;
+    border-radius:50%; background:#4f8ef7; margin-top:-8.5px; border:2px solid #0b0e14; }
+  input[type=range]::-moz-range-thumb { width:22px; height:22px; border-radius:50%;
+    background:#4f8ef7; border:2px solid #0b0e14; }
+  .segs { display:flex; gap:6px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+
+  .result { background:#101725; border:1px solid #223049; border-radius:12px;
+            padding:15px 15px 13px; margin:20px 0 14px; }
+  .big { display:flex; align-items:baseline; gap:9px; }
+  .big .lvl { font-size:34px; font-weight:700; color:#4f8ef7; line-height:1;
+              font-variant-numeric:tabular-nums; }
+  .big .lbl { font-size:12.5px; color:#8b93a7; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:11px 14px; margin-top:15px; }
+  .cellv { font-size:16px; font-weight:640; color:#fff; font-variant-numeric:tabular-nums; }
+  .cellk { font-size:11px; color:#7d879c; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+  .drift { margin-top:13px; padding-top:12px; border-top:1px solid #1e293c;
+           font-size:12.5px; color:#a9b2c6; line-height:1.55; }
+  .drift b { color:#ffd166; font-weight:600; }
+
+  table { width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  th { text-align:right; font-size:10.5px; color:#6d768c; text-transform:uppercase;
+       letter-spacing:.05em; font-weight:600; padding:0 0 7px; }
+  th:first-child, td:first-child { text-align:left; }
+  td { text-align:right; padding:7px 0; border-top:1px solid #182032; color:#c2c9d8; }
+  tr.here td { color:#fff; font-weight:650; }
+  tr.here td:first-child::after { content:' ←'; color:#4f8ef7; }
+  .cap { font-size:11.5px; color:#6d768c; margin-top:9px; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<h1>Planet size calculator</h1>
+<div class="sub">Block size and travel time in — level, radius and cell count out.</div>
+
+<div class="field">
+  <div class="flabel">Block size <span class="fval" id="bsOut">1.00 m</span></div>
+  <input type="range" id="bs" min="0.1" max="4" step="0.05" value="1">
+</div>
+
+<div class="field">
+  <div class="flabel">Time to go all the way around <span class="fval" id="tOut">2.0 h</span></div>
+  <input type="range" id="t" min="0.25" max="12" step="0.25" value="2">
+</div>
+
+<div class="field">
+  <div class="flabel">Travelling how?</div>
+  <div class="segs" id="speed">
+    <button data-v="1.4" class="on">Walk</button>
+    <button data-v="5.6">Sprint</button>
+    <button data-v="15">Vehicle</button>
+    <button data-v="60">Flying</button>
+  </div>
+</div>
+
+<div class="field">
+  <div class="flabel">Playable crust depth <span class="fval" id="dOut">64 blocks</span></div>
+  <input type="range" id="depth" min="8" max="512" step="8" value="64">
+</div>
+
+<div class="field">
+  <div class="flabel">Chunk size</div>
+  <div class="segs" id="chunk">
+    <button data-c="4">Small</button>
+    <button data-c="3" class="on">Medium</button>
+    <button data-c="2">Large</button>
+  </div>
+</div>
+
+<div class="result">
+  <div class="big"><span class="lvl" id="lvl">—</span><span class="lbl">subdivision level</span></div>
+  <div class="grid">
+    <div><div class="cellv" id="rad">—</div><div class="cellk">planet radius</div></div>
+    <div><div class="cellv" id="circ">—</div><div class="cellk">circumference</div></div>
+    <div><div class="cellv" id="cells">—</div><div class="cellk">surface cells</div></div>
+    <div><div class="cellv" id="voxels">—</div><div class="cellk">total voxels</div></div>
+    <div><div class="cellv" id="actual">—</div><div class="cellk">actual travel time</div></div>
+    <div><div class="cellv" id="taper">—</div><div class="cellk">cell size at crust floor</div></div>
+    <div><div class="cellv" id="chunks">—</div><div class="cellk">chunks</div></div>
+    <div><div class="cellv" id="percell">—</div><div class="cellk">cells per chunk</div></div>
+  </div>
+  <div class="drift" id="drift"></div>
+</div>
+
+<table>
+  <thead><tr><th>Level</th><th>Radius</th><th>Cells</th><th>Travel</th></tr></thead>
+  <tbody id="tbl"></tbody>
+</table>
+<div class="cap">Block size is measured flat-to-flat; a hexagon that wide covers ~0.87× the footprint of a square block of the same size, and is ~1.15× wider corner-to-corner. Each level up doubles the radius but quadruples the cell count. Voxel totals assume a full crust — with on-demand generation you only store what players change.</div>
+
+<script>
+const K = Math.sqrt(8*Math.PI/(10*Math.sqrt(3)));   // block = K · radius / 2^level
+let v = 1.4, chunkLvl = 3;
+
+const fmtLen = m => m < 1 ? (m*100).toFixed(0)+' cm'
+                 : m < 1000 ? m.toFixed(m<10?2:0)+' m'
+                 : (m/1000).toFixed(m<100000?2:0)+' km';
+const fmtN = n => n < 10000 ? Math.round(n).toLocaleString('en-US')
+               : n < 1e6 ? (n/1e3).toFixed(1)+'K'
+               : n < 1e9 ? (n/1e6).toFixed(1)+'M'
+               : n < 1e12 ? (n/1e9).toFixed(2)+'B'
+               : (n/1e12).toFixed(2)+'T';
+const fmtT = h => h < 1 ? Math.round(h*60)+' min'
+               : h < 48 ? h.toFixed(1)+' h'
+               : (h/24).toFixed(1)+' days';
+
+function update(){
+  const block = +document.getElementById('bs').value;
+  const hours = +document.getElementById('t').value;
+  document.getElementById('bsOut').textContent = block.toFixed(2)+' m';
+  document.getElementById('tOut').textContent  = fmtT(hours);
+
+  const targetR = hours*3600*v / (2*Math.PI);
+  const exactL  = Math.log2(K*targetR/block);
+  const L       = Math.max(0, Math.min(24, Math.round(exactL)));
+  const snapR   = block * 2**L / K;
+  const N       = 10*4**L + 2;
+  const circ    = 2*Math.PI*snapR;
+  const travel  = circ/v/3600;
+
+  const nChunks = 20*4**chunkLvl;
+  const perChunk = N/nChunks;
+
+  const layers = +document.getElementById('depth').value;
+  document.getElementById('dOut').textContent = layers+' blocks';
+  const crust = layers*block;
+  const taper = Math.max(0, (snapR-crust)/snapR);
+
+  document.getElementById('lvl').textContent    = L;
+  document.getElementById('rad').textContent    = fmtLen(snapR);
+  document.getElementById('circ').textContent   = fmtLen(circ);
+  document.getElementById('cells').textContent  = fmtN(N);
+  document.getElementById('voxels').textContent = fmtN(N*layers);
+  document.getElementById('actual').textContent = fmtT(travel);
+  document.getElementById('taper').textContent  = crust >= snapR
+    ? 'reaches the core' : (taper*100).toFixed(0)+'%';
+  document.getElementById('chunks').textContent = fmtN(nChunks);
+  document.getElementById('percell').textContent= fmtN(perChunk)+' ('+Math.round(Math.sqrt(perChunk))+' across)';
+
+  const drift = (snapR/targetR - 1)*100;
+  const dir = drift >= 0 ? 'bigger' : 'smaller';
+  let msg = Math.abs(drift) < 1.5
+    ? `Your target lands almost exactly on level ${L} — no rounding to absorb.`
+    : `Level came out at <b>${exactL.toFixed(2)}</b>, rounded to <b>${L}</b>. That makes the planet
+       <b>${Math.abs(drift).toFixed(0)}% ${dir}</b> than you asked for. Radius absorbed it, block size didn't —
+       which is the right way round.`;
+  if (crust >= snapR)
+    msg += ` The crust is deeper than the radius — cells collapse to nothing before you reach the bottom.`;
+  else if (taper < 0.85)
+    msg += ` Cells at the crust floor are only <b>${(taper*100).toFixed(0)}%</b> the width of surface cells —
+             deep enough that the taper is visible. Consider merging layers below that point.`;
+  document.getElementById('drift').innerHTML = msg;
+
+  const rows = [];
+  for (let l = Math.max(0,L-2); l <= L+2; l++){
+    const r = block*2**l/K;
+    rows.push(`<tr class="${l===L?'here':''}"><td>${l}</td><td>${fmtLen(r)}</td>
+      <td>${fmtN(10*4**l+2)}</td><td>${fmtT(2*Math.PI*r/v/3600)}</td></tr>`);
+  }
+  document.getElementById('tbl').innerHTML = rows.join('');
+}
+
+document.getElementById('bs').addEventListener('input', update);
+document.getElementById('t').addEventListener('input', update);
+document.getElementById('depth').addEventListener('input', update);
+document.querySelectorAll('#speed button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#speed button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); v = +b.dataset.v; update();
+}));
+document.querySelectorAll('#chunk button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#chunk button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); chunkLvl = +b.dataset.c; update();
+}));
+update();
+</script>
+</body>
+</html>

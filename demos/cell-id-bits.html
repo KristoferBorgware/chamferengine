@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inside a cell ID</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 34px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 18px; line-height:1.5; }
+
+  .field { margin-bottom:14px; }
+  .flabel { display:flex; align-items:baseline; font-size:11.5px; color:#8b93a7;
+            text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+  .fval { margin-left:auto; font-size:14px; color:#fff; font-weight:650;
+          text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; height:26px; background:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-moz-range-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px;
+    border-radius:50%; background:#4f8ef7; margin-top:-8.5px; border:2px solid #0b0e14; }
+  input[type=range]::-moz-range-thumb { width:22px; height:22px; border-radius:50%;
+    background:#4f8ef7; border:2px solid #0b0e14; }
+
+  .bar { display:flex; height:38px; border-radius:8px; overflow:hidden; margin-top:6px;
+         border:1px solid #223049; }
+  .seg { display:flex; align-items:center; justify-content:center; font-size:10.5px;
+         font-weight:650; color:#0b0e14; overflow:hidden; white-space:nowrap; }
+  .brackets { display:flex; margin-top:5px; font-size:10.5px; color:#7d879c; }
+  .brk { text-align:center; border-top:1px solid #2a3245; padding-top:4px; }
+
+  .bits { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:13px; line-height:1.85;
+          word-break:break-all; background:#0e131d; border:1px solid #1c2434; border-radius:9px;
+          padding:11px 12px; margin-top:14px; }
+  .bits span { padding:1px 0; }
+  .off { color:#39415a !important; text-decoration:line-through; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:11px 14px; margin-top:16px; }
+  .cellv { font-size:15.5px; font-weight:640; color:#fff; font-variant-numeric:tabular-nums; }
+  .cellk { font-size:10.5px; color:#7d879c; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+
+  .segs { display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 11px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+
+  .msg { font-size:12.5px; color:#a9b2c6; line-height:1.6; margin-top:12px;
+         background:#101725; border:1px solid #223049; border-radius:10px; padding:12px 13px; }
+  .msg b { color:#ffd166; font-weight:600; }
+  .key { display:flex; gap:13px; flex-wrap:wrap; font-size:11.5px; color:#8b93a7; margin-top:12px; }
+  .kdot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+
+<h1>Inside a cell ID</h1>
+<div class="sub">One integer holds the whole address. The chunk ID isn't a separate number — it's the front of this one.</div>
+
+<div class="field">
+  <div class="flabel">World depth · block level <span class="fval" id="dOut">13</span></div>
+  <input type="range" id="d" min="4" max="26" step="1" value="13">
+</div>
+<div class="field">
+  <div class="flabel">Chunk level · where you cut <span class="fval" id="cOut">6</span></div>
+  <input type="range" id="c" min="0" max="26" step="1" value="6">
+</div>
+
+<div class="bar" id="bar"></div>
+<div class="brackets" id="brk"></div>
+
+<div class="key">
+  <span><i class="kdot" style="background:#4f8ef7"></i>face 0–19</span>
+  <span><i class="kdot" style="background:#3fb8af"></i>path digits</span>
+  <span><i class="kdot" style="background:#e0913a"></i>local q</span>
+  <span><i class="kdot" style="background:#a56cf0"></i>local r</span>
+  <span><i class="kdot" style="background:#2a3245"></i>spare</span>
+</div>
+
+<div class="bits" id="bits"></div>
+
+<div class="field" style="margin-top:16px">
+  <div class="flabel">Truncate to level</div>
+  <div class="segs" id="trunc"></div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div class="grid">
+  <div><div class="cellv" id="used">—</div><div class="cellk">bits used</div></div>
+  <div><div class="cellv" id="chunkbits">—</div><div class="cellk">of which chunk ID</div></div>
+  <div><div class="cellv" id="cells">—</div><div class="cellk">cells addressed</div></div>
+  <div><div class="cellv" id="chunks">—</div><div class="cellk">chunks</div></div>
+  <div><div class="cellv" id="per">—</div><div class="cellk">cells per chunk</div></div>
+  <div><div class="cellv" id="eff">—</div><div class="cellk">code space used</div></div>
+</div>
+
+<div class="msg" style="color:#8b93a7">
+  The encoding is deliberately sparse: only 20 of 32 face codes exist, and the local
+  <b>q,r</b> square is half wasted because a triangle isn't a square. That costs about
+  1.7 bits and buys you addressing that's pure shifts and masks — no lookup tables anywhere.
+</div>
+
+<script>
+const COL = { face:'#4f8ef7', path:'#3fb8af', q:'#e0913a', r:'#a56cf0', spare:'#2a3245' };
+let D = 13, C = 6, truncAt = null;
+
+// a stable example cell
+const rnd = (seed) => { let x = seed; return () => (x = (x*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; };
+let sample = { face: 7, path: [], q: 0, r: 0 };
+function resample(){
+  const g = rnd(20260812);
+  sample.face = Math.floor(g()*20);
+  sample.path = Array.from({length:26}, () => Math.floor(g()*4));
+  sample.qBits = Array.from({length:26}, () => g() < .5 ? 0 : 1);
+  sample.rBits = Array.from({length:26}, () => g() < .5 ? 0 : 1);
+}
+resample();
+
+const fmtN = n => n < 10000 ? Math.round(n).toLocaleString('en-US')
+               : n < 1e6 ? (n/1e3).toFixed(1)+'K' : n < 1e9 ? (n/1e6).toFixed(1)+'M'
+               : n < 1e12 ? (n/1e9).toFixed(2)+'B' : (n/1e12).toFixed(2)+'T';
+
+function update(){
+  D = +document.getElementById('d').value;
+  const cEl = document.getElementById('c');
+  cEl.max = D;
+  C = Math.min(+cEl.value, D);
+  cEl.value = C;
+  document.getElementById('dOut').textContent = D;
+  document.getElementById('cOut').textContent = C;
+
+  const nPath = 2*C, nLocal = D - C, used = 5 + nPath + 2*nLocal, spare = 64 - used;
+
+  // proportional bar
+  const segs = [
+    ['face', 5, 'face'], ['path', nPath, 'path'],
+    ['q', nLocal, 'q'], ['r', nLocal, 'r'], ['spare', spare, '']
+  ].filter(s => s[1] > 0);
+  document.getElementById('bar').innerHTML = segs.map(([k,n,label]) =>
+    `<div class="seg" style="flex:${n};background:${COL[k]}">${n>=4?label:''}</div>`).join('');
+  document.getElementById('brk').innerHTML =
+    `<div class="brk" style="flex:${5+nPath}">chunk ID · ${5+nPath} bits</div>
+     <div class="brk" style="flex:${2*nLocal}">position in chunk · ${2*nLocal} bits</div>` +
+     (spare>0?`<div class="brk" style="flex:${spare}">${spare}</div>`:'');
+
+  // binary string
+  const put = (bits, col, from) => bits.map((b,i) =>
+    `<span style="color:${col}" class="${truncAt!==null && from+i >= 5+2*truncAt ? 'off':''}">${b}</span>`).join('');
+  const faceBits = sample.face.toString(2).padStart(5,'0').split('').map(Number);
+  const pathBits = sample.path.slice(0,C).flatMap(d => [d>>1, d&1]);
+  const qBits = sample.qBits.slice(0,nLocal), rBits = sample.rBits.slice(0,nLocal);
+  document.getElementById('bits').innerHTML =
+    put(faceBits, COL.face, 0) + ' ' +
+    (pathBits.length ? sample.path.slice(0,C).map((d,i) =>
+        `<span style="color:${COL.path}" class="${truncAt!==null && i>=truncAt ? 'off':''}">${(d>>1)}${(d&1)}</span>`
+      ).join(' ') + ' ' : '') +
+    put(qBits, COL.q, 999) + ' ' + put(rBits, COL.r, 999) +
+    (spare>0 ? ' <span style="color:#39415a">' + '0'.repeat(Math.min(spare,20)) + (spare>20?'…':'') + '</span>' : '');
+
+  // truncation buttons
+  const btns = [];
+  for (let l=0; l<=C; l++)
+    btns.push(`<button data-t="${l}" class="${truncAt===l?'on':''}">${l}</button>`);
+  btns.push(`<button data-t="none" class="${truncAt===null?'on':''}">full cell</button>`);
+  document.getElementById('trunc').innerHTML = btns.join('');
+  document.querySelectorAll('#trunc button').forEach(b => b.addEventListener('click', () => {
+    truncAt = b.dataset.t === 'none' ? null : +b.dataset.t; update();
+  }));
+
+  // message
+  const msg = document.getElementById('msg');
+  if (truncAt === null){
+    msg.innerHTML = `The full ID names one hexagon. Face <b>${sample.face}</b>, then ${C} path digits
+      down the triangle tree, then its <b>q,r</b> spot inside that chunk.`;
+  } else {
+    const nChunksAt = 20*4**truncAt;
+    const share = 100/nChunksAt;
+    msg.innerHTML = `Mask off everything after level <b>${truncAt}</b> and you have the ancestor chunk —
+      one of <b>${fmtN(nChunksAt)}</b>, covering <b>${share < 0.01 ? share.toExponential(1) : share.toFixed(2)}%</b>
+      of the planet. Zooming out is deleting digits: no lookup, no search, just a shift.`;
+  }
+
+  const N = 10*4**D + 2, nChunks = 20*4**C;
+  document.getElementById('used').textContent = used + ' / 64';
+  document.getElementById('chunkbits').textContent = (5+nPath) + ' bits';
+  document.getElementById('cells').textContent = fmtN(N);
+  document.getElementById('chunks').textContent = fmtN(nChunks);
+  document.getElementById('per').textContent = fmtN(N/nChunks);
+  document.getElementById('eff').textContent = (100*N/(32*4**D)).toFixed(0) + '%';
+}
+
+document.getElementById('d').addEventListener('input', () => { truncAt=null; update(); });
+document.getElementById('c').addEventListener('input', () => { truncAt=null; update(); });
+update();
+</script>
+</body>
+</html>

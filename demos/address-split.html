@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One address, cut in two</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 12px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:manipulation; }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px;
+         padding:14px 14px 12px; margin-top:14px; }
+  .line { display:flex; align-items:baseline; gap:8px; margin-bottom:9px; flex-wrap:wrap; }
+  .tag { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#7d879c; min-width:96px; }
+  .val { font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600;
+         font-variant-numeric:tabular-nums; }
+  .eq { border-top:1px solid #1e293c; margin-top:11px; padding-top:11px;
+        font-size:13px; color:#a9b2c6; line-height:1.6; }
+  .eq b { color:#fff; }
+  .flip { margin-top:9px; font-size:12.5px; line-height:1.55; }
+  .flip.yes { color:#e0913a; } .flip.no { color:#3fb8af; }
+  .segs { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  .hint { font-size:11.5px; color:#6d768c; margin-top:10px; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<h1>One address, cut in two</h1>
+<div class="sub">Tap any dot. Watch the same numbers get split.</div>
+
+<svg id="svg" viewBox="-18 -18 360 316"></svg>
+
+<div class="out">
+  <div class="line"><span class="tag">full address</span>
+    <span class="val" id="ij" style="color:#dfe6f5">—</span></div>
+  <div class="line"><span class="tag">path digits</span>
+    <span class="val" id="path" style="color:#3fb8af">—</span></div>
+  <div class="line"><span class="tag">local q, r</span>
+    <span class="val" id="qr" style="color:#e0913a">—</span></div>
+  <div class="eq" id="eq"></div>
+  <div class="flip" id="flip"></div>
+</div>
+
+<div class="segs">
+  <button id="rand">Random cell</button>
+  <button id="findflip">Find a flipped one</button>
+</div>
+<div class="hint">Teal outline = the level-1 piece your cell fell in. Orange = the level-2 piece, its chunk. Those two choices are the path digits; whatever is left over inside the orange triangle is q, r.</div>
+
+<script>
+const N = 16, C = 2, U = 20, H = Math.sqrt(3)/2;
+const px = (i,j) => [i*U + j*U/2, j*U*H];
+const mid = (a,b) => [(a[0]+b[0])/2, (a[1]+b[1])/2];
+const poly = p => p.map(q => q.map(n=>n.toFixed(1)).join(',')).join(' ');
+
+function walk(i0, j0){
+  let i=i0, j=j0, n=N, flip=0, path=[];
+  let P0=px(0,0), P1=px(N,0), P2=px(0,N);
+  const tris=[];
+  for (let l=0; l<C; l++){
+    const half = n>>1;
+    const m01=mid(P0,P1), m12=mid(P1,P2), m02=mid(P0,P2);
+    let d;
+    if      (i >= half){ d=1; i-=half; [P0,P1,P2]=[m01,P1,m12]; }
+    else if (j >= half){ d=2; j-=half; [P0,P1,P2]=[m02,m12,P2]; }
+    else if (i+j < half){ d=0; [P0,P1,P2]=[P0,m01,m02]; }
+    else { d=3; i=half-i; j=half-j; [P0,P1,P2]=[m12,m02,m01]; flip^=1; }
+    path.push(d); n=half; tris.push([P0,P1,P2]);
+  }
+  return {path, q:i, r:j, flip, tris};
+}
+
+let sel = [11,3];
+
+function draw(){
+  const {path,q,r,flip,tris} = walk(...sel);
+  let s = '';
+
+  s += `<polygon points="${poly(tris[1])}" fill="#e0913a" fill-opacity=".16"/>`;
+
+  for (let j=0;j<=N;j++) for (let i=0;i+j<=N;i++){
+    for (const [di,dj] of [[1,0],[0,1],[-1,1]]){
+      const a=i+di, b=j+dj;
+      if (a<0 || b<0 || a+b>N) continue;
+      const [x1,y1]=px(i,j), [x2,y2]=px(a,b);
+      s += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+             stroke="#2b3448" stroke-width="1"/>`;
+    }
+  }
+
+  s += `<polygon points="${poly(tris[0])}" fill="none" stroke="#3fb8af" stroke-width="2.6" stroke-linejoin="round"/>`;
+  s += `<polygon points="${poly(tris[1])}" fill="none" stroke="#e0913a" stroke-width="2.6" stroke-linejoin="round"/>`;
+
+  for (let j=0;j<=N;j++) for (let i=0;i+j<=N;i++){
+    const [x,y]=px(i,j), on = i===sel[0] && j===sel[1];
+    s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${on?6:2.6}"
+           fill="${on?'#fff':'#4a5674'}" data-i="${i}" data-j="${j}"/>`;
+  }
+
+  const O = tris[1][0];
+  s += `<circle cx="${O[0].toFixed(1)}" cy="${O[1].toFixed(1)}" r="4.5" fill="none"
+         stroke="#e0913a" stroke-width="2"/>`;
+  s += `<text x="${(O[0]+8).toFixed(1)}" y="${(O[1]-7).toFixed(1)}" fill="#e0913a"
+         font-size="11" font-weight="700">0,0</text>`;
+
+  document.getElementById('svg').innerHTML = s;
+
+  document.getElementById('ij').textContent   = `i=${sel[0]}  j=${sel[1]}`;
+  document.getElementById('path').textContent = path.join(' \u2192 ');
+  document.getElementById('qr').textContent   = `q=${q}  r=${r}`;
+  document.getElementById('eq').innerHTML =
+    `Nothing was added. <b>${sel[0]},${sel[1]}</b> is just the path <b>${path.join('')}</b>
+     plus the leftover <b>${q},${r}</b> — the same address with a line drawn through it.`;
+  const f = document.getElementById('flip');
+  f.className = 'flip ' + (flip ? 'yes' : 'no');
+  f.innerHTML = flip
+    ? `\u26a0 This chunk is <b>upside down</b> — the path went through a middle piece. Its 0,0 corner
+       is the ringed one, pointing the opposite way to the big triangle. Read q,r from there.`
+    : `This chunk points the <b>same way</b> as the big triangle, so q,r read normally
+       from the ringed corner.`;
+}
+
+document.getElementById('svg').addEventListener('click', e => {
+  const t = e.target;
+  if (t.tagName === 'circle' && t.dataset.i !== undefined){
+    sel = [+t.dataset.i, +t.dataset.j]; draw();
+  }
+});
+document.getElementById('rand').addEventListener('click', () => {
+  do { sel = [Math.floor(Math.random()*(N+1)), Math.floor(Math.random()*(N+1))]; }
+  while (sel[0]+sel[1] > N);
+  draw();
+});
+document.getElementById('findflip').addEventListener('click', () => {
+  for (let k=0;k<400;k++){
+    const i=Math.floor(Math.random()*(N+1)), j=Math.floor(Math.random()*(N+1));
+    if (i+j>N) continue;
+    if (walk(i,j).flip){ sel=[i,j]; break; }
+  }
+  draw();
+});
+draw();
+</script>
+</body>
+</html>

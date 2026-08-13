@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sphere Tilings &amp; Lattice Cells</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:13px 16px 9px; }
+  h1 { font-size:16px; font-weight:650; letter-spacing:-.01em; }
+  .sub { font-size:12px; color:#8b93a7; margin-top:3px; }
+
+  .stage { position:relative; flex:1; min-height:56vh; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+  .hud { position:absolute; top:10px; left:12px; right:12px; pointer-events:none;
+         font-size:12px; line-height:1.5; }
+  .card { display:inline-block; background:rgba(11,14,20,.78); border:1px solid #222839;
+          padding:8px 11px; border-radius:8px; backdrop-filter:blur(6px); max-width:min(340px,80%); }
+  .card b { color:#fff; font-weight:600; }
+  .card .note { color:#8b93a7; margin-top:5px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+
+  .panel { padding:11px 14px 15px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; flex-direction:column; gap:9px; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .lbl { font-size:11px; color:#6d768c; text-transform:uppercase; letter-spacing:.06em;
+         width:100%; margin-bottom:1px; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 11px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:disabled { opacity:.32; cursor:default; }
+  .spacer { flex:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sphere tilings &amp; space-filling cells</h1>
+  <div class="sub">Every shape below is generated from first principles, not hardcoded.</div>
+</header>
+
+<div class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud"><div class="card" id="hud"></div></div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <span class="lbl">Sphere tilings</span>
+    <button data-mode="gold" class="on">Hex + 12 pent</button>
+    <button data-mode="geo">Triangles</button>
+    <button data-mode="cube">Quads · cube</button>
+    <button data-mode="rt">Quads · rhombic 30</button>
+  </div>
+  <div class="row">
+    <span class="lbl">Space-filling cells (for depth)</span>
+    <button data-mode="rd">Rhombic dodeca</button>
+    <button data-mode="to">Truncated octa</button>
+  </div>
+  <div class="row">
+    <span class="lbl">Resolution</span>
+    <button data-res="0">1</button>
+    <button data-res="1">2</button>
+    <button data-res="2" class="on">3</button>
+    <button data-res="3">4</button>
+    <span class="spacer"></span>
+    <button id="gap" class="on">Gaps</button>
+    <button id="spin" class="on">Spin</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const V3 = THREE.Vector3;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0e14);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+camera.position.set(0,0,4.4);
+scene.add(new THREE.AmbientLight(0xffffff,.42));
+const k1 = new THREE.DirectionalLight(0xffffff,.85); k1.position.set(4,5,6); scene.add(k1);
+const k2 = new THREE.DirectionalLight(0x86a8ff,.45); k2.position.set(-5,-2,-4); scene.add(k2);
+const root = new THREE.Group(); root.rotation.set(.35,.6,0); scene.add(root);
+
+/* ---------------- shared helpers ---------------- */
+function ringSort(pts, n){
+  const nn = n.clone().normalize();
+  const helper = Math.abs(nn.z) < .9 ? new V3(0,0,1) : new V3(1,0,0);
+  const t = helper.clone().cross(nn).normalize();
+  const b = nn.clone().cross(t);
+  return pts.map(p => ({p, a: Math.atan2(p.dot(b), p.dot(t))}))
+            .sort((x,y) => x.a - y.a).map(o => o.p);
+}
+// bilinear point on a quad, projected to the unit sphere
+function quadPt(p00,p10,p11,p01,u,v){
+  const a = p00.clone().lerp(p10,u), b = p01.clone().lerp(p11,u);
+  return a.lerp(b,v).normalize();
+}
+
+/* ---------------- icosahedron ---------------- */
+const PHI = (1+Math.sqrt(5))/2;
+const ICO_V = [[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],
+               [0,-1,-PHI],[0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]]
+              .map(v => new V3(...v).normalize());
+const ICO_F = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],
+               [10,7,6],[7,1,8],[3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],
+               [2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+
+function geodesic(level){
+  let verts = ICO_V.map(v => v.clone());
+  let faces = ICO_F.map(f => f.slice());
+  for (let s=0; s<level; s++){
+    const cache = new Map();
+    const mid = (a,b) => {
+      const key = a<b ? a+'_'+b : b+'_'+a;
+      if (cache.has(key)) return cache.get(key);
+      verts.push(verts[a].clone().add(verts[b]).normalize());
+      cache.set(key, verts.length-1); return verts.length-1;
+    };
+    const next = [];
+    for (const [a,b,c] of faces){
+      const ab=mid(a,b), bc=mid(b,c), ca=mid(c,a);
+      next.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);
+    }
+    faces = next;
+  }
+  return {verts, faces};
+}
+
+/* ---------------- A. Goldberg: hexes + 12 pentagons ---------------- */
+function cellsGoldberg(res){
+  const {verts, faces} = geodesic(res);
+  const cen = faces.map(([a,b,c]) => verts[a].clone().add(verts[b]).add(verts[c]).normalize());
+  const inc = verts.map(()=>[]);
+  faces.forEach((f,fi) => f.forEach(vi => inc[vi].push(fi)));
+  return verts.map((v,vi) => {
+    const ring = ringSort(inc[vi].map(fi => cen[fi]), v);
+    return {ring, center:v.clone(), kind: ring.length===5 ? 1 : 0};
+  });
+}
+
+/* ---------------- B. Geodesic: all triangles ---------------- */
+function cellsGeodesic(res){
+  const {verts, faces} = geodesic(res);
+  return faces.map(f => {
+    const ring = f.map(i => verts[i].clone());
+    const center = ring[0].clone().add(ring[1]).add(ring[2]).normalize();
+    // the 12 original icosahedron vertices keep indices 0..11 and stay 5-valent
+    return {ring, center, kind: f.some(i => i < 12) ? 1 : 0};
+  });
+}
+
+/* ---------------- C. Cube sphere: quads, 8 corners ---------------- */
+function cellsCube(res){
+  const n = 1 << res, cells = [];
+  const axes = [[0,1,2],[0,2,1],[1,0,2]];
+  for (const [ax,ay,az] of axes) for (const s of [1,-1]){
+    const corner = (u,v) => { const p=[0,0,0]; p[ax]=u; p[ay]=v; p[az]=s; return new V3(...p); };
+    for (let i=0;i<n;i++) for (let j=0;j<n;j++){
+      const u0=-1+2*i/n, u1=-1+2*(i+1)/n, v0=-1+2*j/n, v1=-1+2*(j+1)/n;
+      const ring = [corner(u0,v0),corner(u1,v0),corner(u1,v1),corner(u0,v1)].map(p=>p.normalize());
+      const center = ring.reduce((a,p)=>a.add(p), new V3()).normalize();
+      const atCorner = (i===0||i===n-1) && (j===0||j===n-1);
+      cells.push({ring: ringSort(ring,center), center, kind: atCorner?1:0});
+    }
+  }
+  return cells;
+}
+
+/* ---------------- D. Rhombic triacontahedron: 30 golden rhombi ---------------- */
+function rhombi(){
+  const em = new Map();
+  ICO_F.forEach((f,fi) => { for (let i=0;i<3;i++){
+    const a=f[i], b=f[(i+1)%3], key = Math.min(a,b)+'_'+Math.max(a,b);
+    if (!em.has(key)) em.set(key,{v:[Math.min(a,b),Math.max(a,b)], f:[]});
+    em.get(key).f.push(fi);
+  }});
+  return [...em.values()].map(e => {
+    const v1 = ICO_V[e.v[0]], v2 = ICO_V[e.v[1]];
+    const c = e.f.map(fi => ICO_F[fi].reduce((s,i)=>s.add(ICO_V[i]), new V3()).multiplyScalar(1/3));
+    const m = v1.clone().add(v2).multiplyScalar(.5);
+    const s = m.length() / c[0].clone().add(c[1]).multiplyScalar(.5).length();
+    // [5-valent, 3-valent, 5-valent, 3-valent] around the rhombus
+    return [v1.clone(), c[0].clone().multiplyScalar(s), v2.clone(), c[1].clone().multiplyScalar(s)];
+  });
+}
+function cellsRT(res){
+  const n = 1 << res, cells = [];
+  for (const [p00,p10,p11,p01] of rhombi()){
+    for (let i=0;i<n;i++) for (let j=0;j<n;j++){
+      const ring = [ quadPt(p00,p10,p11,p01, i/n,     j/n),
+                     quadPt(p00,p10,p11,p01,(i+1)/n,  j/n),
+                     quadPt(p00,p10,p11,p01,(i+1)/n, (j+1)/n),
+                     quadPt(p00,p10,p11,p01, i/n,    (j+1)/n) ];
+      const center = ring.reduce((a,p)=>a.add(p), new V3()).normalize();
+      const lo=(x)=>x===0, hi=(x)=>x===n-1;
+      let kind = 0;
+      if ((lo(i)&&lo(j)) || (hi(i)&&hi(j))) kind = 1;        // touches a 5-valent vertex
+      else if ((hi(i)&&lo(j)) || (lo(i)&&hi(j))) kind = 2;   // touches a 3-valent vertex
+      cells.push({ring: ringSort(ring,center), center, kind});
+    }
+  }
+  return cells;
+}
+
+/* ---------------- shell geometry (all sphere modes) ---------------- */
+function shellGeometry(cells, inset, rOut, rIn){
+  const pos = [];
+  const P = v => pos.push(v.x,v.y,v.z);
+  for (const {ring, center} of cells){
+    const s   = ring.map(p => p.clone().lerp(center, inset).normalize());
+    const top = s.map(p => p.clone().multiplyScalar(rOut));
+    const bot = s.map(p => p.clone().multiplyScalar(rIn));
+    const cT = center.clone().multiplyScalar(rOut), cB = center.clone().multiplyScalar(rIn);
+    for (let i=0;i<s.length;i++){
+      const j = (i+1)%s.length;
+      P(cT); P(top[i]); P(top[j]);
+      P(cB); P(bot[j]); P(bot[i]);
+      P(top[i]); P(bot[i]); P(bot[j]);
+      P(top[i]); P(bot[j]); P(top[j]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos),3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/* ---------------- E/F. space-filling cells ---------------- */
+// faces of a convex solid, found from its vertex set + known face normals
+function facesFrom(verts, normals){
+  return normals.map(nRaw => {
+    const n = nRaw.clone().normalize();
+    let d = -Infinity;
+    verts.forEach(v => d = Math.max(d, v.dot(n)));
+    return ringSort(verts.filter(v => Math.abs(v.dot(n)-d) < 1e-6), n);
+  });
+}
+function perms(fn){ const out=[]; for (const s1 of [1,-1]) for (const s2 of [1,-1]) out.push(...fn(s1,s2)); return out; }
+
+function rhombicDodeca(){
+  const verts = [];
+  for (const x of [1,-1]) for (const y of [1,-1]) for (const z of [1,-1]) verts.push(new V3(x,y,z));
+  for (const s of [2,-2]) verts.push(new V3(s,0,0), new V3(0,s,0), new V3(0,0,s));
+  const normals = [];
+  for (const a of [1,-1]) for (const b of [1,-1])
+    normals.push(new V3(a,b,0), new V3(a,0,b), new V3(0,a,b));
+  // FCC packing
+  const shifts = [new V3(0,0,0)];
+  for (const a of [2,-2]) for (const b of [2,-2])
+    shifts.push(new V3(a,b,0), new V3(a,0,b), new V3(0,a,b));
+  return {faces: facesFrom(verts, normals), shifts, scale:.42, label:'Rhombic dodecahedron', faceCount:12,
+          note:'12 identical rhombic faces. Fills space in an FCC packing — the shape of a cell in the densest sphere packing.'};
+}
+function truncatedOcta(){
+  const verts = [];
+  const base = [[0,1,2],[0,2,1],[1,0,2],[2,0,1],[1,2,0],[2,1,0]];
+  for (const [a,b,c] of base) for (const sb of [1,-1]) for (const sc of [1,-1]){
+    const v = new V3(a*(a?1:1), b*sb, c*sc);
+    v.set(a===0?0:a, b===0?0:b*sb, c===0?0:c*sc);
+    verts.push(v);
+  }
+  // dedupe
+  const uniq = []; verts.forEach(v => { if (!uniq.some(u => u.distanceTo(v) < 1e-9)) uniq.push(v); });
+  const normals = [new V3(1,0,0),new V3(-1,0,0),new V3(0,1,0),new V3(0,-1,0),new V3(0,0,1),new V3(0,0,-1)];
+  for (const x of [1,-1]) for (const y of [1,-1]) for (const z of [1,-1]) normals.push(new V3(x,y,z));
+  // BCC packing
+  const shifts = [new V3(0,0,0), new V3(4,0,0), new V3(-4,0,0), new V3(0,4,0),
+                  new V3(0,-4,0), new V3(0,0,4), new V3(0,0,-4)];
+  for (const x of [2,-2]) for (const y of [2,-2]) for (const z of [2,-2]) shifts.push(new V3(x,y,z));
+  return {faces: facesFrom(uniq, normals), shifts, scale:.30, label:'Truncated octahedron', faceCount:14,
+          note:'8 hexagons + 6 squares. Fills space in a BCC packing — the most sphere-like single cell that tiles 3D perfectly.'};
+}
+function latticeGeometry(solid, shrink){
+  const pos = [], P = v => pos.push(v.x,v.y,v.z);
+  for (const shift of solid.shifts){
+    for (const face of solid.faces){
+      const c = face.reduce((a,p)=>a.add(p), new V3()).multiplyScalar(1/face.length);
+      const ring = face.map(p => p.clone().multiplyScalar(shrink).add(shift).multiplyScalar(solid.scale));
+      const cc = c.clone().multiplyScalar(shrink).add(shift).multiplyScalar(solid.scale);
+      for (let i=0;i<ring.length;i++){ P(cc); P(ring[i]); P(ring[(i+1)%ring.length]); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos),3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/* ---------------- render ---------------- */
+const MAT = [
+  new THREE.MeshPhongMaterial({color:0x4f8ef7, shininess:26, flatShading:true, side:THREE.DoubleSide}),
+  new THREE.MeshPhongMaterial({color:0xf2543d, shininess:26, flatShading:true, side:THREE.DoubleSide}),
+  new THREE.MeshPhongMaterial({color:0xf5a524, shininess:26, flatShading:true, side:THREE.DoubleSide})
+];
+const INFO = {
+  gold: {name:'Goldberg — hexagons + 12 pentagons',
+         note:'Every cell has 6 (or 5) equidistant neighbours. No diagonals, no ambiguity. Curvature lives in the 12 red pentagons.'},
+  geo:  {name:'Geodesic — all triangles',
+         note:'Cell shape is perfectly uniform, but triangles alternate orientation. Red = the 12 vertices where only 5 triangles meet instead of 6.'},
+  cube: {name:'Cube sphere — quads',
+         note:'Simplest indexing, worst distribution: all 720° of curvature is jammed into 8 corners (red), 90° each.'},
+  rt:   {name:'Rhombic 30 — quads',
+         note:'Same 720°, spread over 32 vertices instead of 8: 42.8° at each red, 10.3° at each amber. Quad indexing, far gentler than a cube.'}
+};
+let mode = 'gold', res = 2, gaps = true, spin = true;
+
+function rebuild(){
+  while (root.children.length){ const m = root.children.pop(); m.geometry.dispose(); }
+  const hud = document.getElementById('hud');
+
+  if (mode === 'rd' || mode === 'to'){
+    const solid = mode === 'rd' ? rhombicDodeca() : truncatedOcta();
+    root.add(new THREE.Mesh(latticeGeometry(solid, gaps ? .88 : .995), MAT[0]));
+    hud.innerHTML = `<b>${solid.label}</b> · ${solid.faceCount} faces
+      <div class="note">${solid.note}</div>
+      <div class="note">Shown as one cell plus its neighbours. This solves <i>depth</i>, not wrapping.</div>`;
+    return;
+  }
+
+  const cells = ({gold:cellsGoldberg, geo:cellsGeodesic, cube:cellsCube, rt:cellsRT})[mode](res);
+  const inset = gaps ? .10 : .004;
+  for (let k=0;k<3;k++){
+    const group = cells.filter(c => c.kind === k);
+    if (group.length) root.add(new THREE.Mesh(shellGeometry(group, inset, 1.0, .80), MAT[k]));
+  }
+  const n0 = cells.filter(c=>c.kind===0).length,
+        n1 = cells.filter(c=>c.kind===1).length,
+        n2 = cells.filter(c=>c.kind===2).length;
+  const info = INFO[mode];
+  let legend = `<div><span class="dot" style="background:#4f8ef7"></span><b>${n0}</b> regular cells</div>`;
+  if (n1) legend += `<div><span class="dot" style="background:#f2543d"></span><b>${n1}</b> ${mode==='gold'?'pentagons':'at defect points'}</div>`;
+  if (n2) legend += `<div><span class="dot" style="background:#f5a524"></span><b>${n2}</b> at minor defect points</div>`;
+  hud.innerHTML = `<b>${info.name}</b>${legend}<div class="note">${info.note}</div>`;
+}
+
+/* ---------------- ui ---------------- */
+let drag=false, lx=0, ly=0;
+canvas.addEventListener('pointerdown', e => { drag=true; lx=e.clientX; ly=e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointerup',   () => drag=false);
+canvas.addEventListener('pointercancel',()=> drag=false);
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  root.rotation.y += (e.clientX-lx)*.006; root.rotation.x += (e.clientY-ly)*.006;
+  lx=e.clientX; ly=e.clientY;
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  camera.position.z = Math.min(11, Math.max(1.7, camera.position.z + e.deltaY*.0022));
+}, {passive:false});
+
+function syncRes(){
+  const lattice = (mode==='rd'||mode==='to');
+  document.querySelectorAll('[data-res]').forEach(b => b.disabled = lattice);
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); mode = b.dataset.mode; syncRes(); rebuild();
+}));
+document.querySelectorAll('[data-res]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-res]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); res = +b.dataset.res; rebuild();
+}));
+document.getElementById('gap').addEventListener('click', e => {
+  gaps = !gaps; e.target.classList.toggle('on', gaps); rebuild();
+});
+document.getElementById('spin').addEventListener('click', e => {
+  spin = !spin; e.target.classList.toggle('on', spin);
+});
+
+function resize(){
+  const s = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(s.width, s.height, false);
+  camera.aspect = s.width/s.height; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+(function loop(){ requestAnimationFrame(loop);
+  if (spin && !drag) root.rotation.y += .0022;
+  renderer.render(scene, camera);
+})();
+resize(); syncRes(); rebuild();
+</script>
+</body>
+</html>

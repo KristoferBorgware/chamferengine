@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pathfinding — hex vs square</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 10px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:manipulation; }
+  .bar { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+  .spacer { flex:1; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:14px;
+          font-variant-numeric:tabular-nums; }
+  th { text-align:right; font-size:9.5px; color:#6d768c; text-transform:uppercase;
+       letter-spacing:.05em; font-weight:600; padding-bottom:6px; }
+  th:first-child, td:first-child { text-align:left; }
+  td { text-align:right; padding:8px 0; border-top:1px solid #182032; color:#c2c9d8; }
+  tr.sel td { color:#fff; font-weight:650; }
+  .bad { color:#f2543d; font-weight:700; }
+  .good { color:#3fb8af; }
+  .msg { font-size:12.5px; color:#a9b2c6; line-height:1.6; margin-top:13px;
+         background:#101725; border:1px solid #223049; border-radius:10px; padding:12px 13px; }
+  .msg b { color:#fff; } .msg .hi { color:#ffd166; } .msg .red { color:#f2543d; }
+</style>
+</head>
+<body>
+
+<h1>Pathfinding — hex vs square</h1>
+<div class="sub">Same map, same start and goal. Tap a cell to move the goal.</div>
+
+<svg id="svg" viewBox="0 0 360 300"></svg>
+
+<div class="bar">
+  <button data-m="hex" class="on">Hex · 6-way</button>
+  <button data-m="sq">Square · 8-way</button>
+  <span class="spacer"></span>
+  <button id="hier">Chunks</button>
+  <button id="map">New map</button>
+</div>
+
+<table>
+  <thead><tr><th>Grid</th><th>Explored</th><th>Path len</th><th>Illegal cuts</th></tr></thead>
+  <tbody id="tbl"></tbody>
+</table>
+
+<div class="msg" id="msg"></div>
+
+<script>
+const W=16, H=14, CH=4;
+const SPX = 360/(W+0.5), Rh = SPX/Math.sqrt(3), SPY = 1.5*Rh;
+const SQ = Math.min(360/W, 296/H);
+let mode='hex', hier=false;
+let blocked = new Set();
+let start=[1,7], goal=[14,6];
+
+const key=(c,r)=>c+','+r;
+const inb=(c,r)=>c>=0&&r>=0&&c<W&&r<H;
+const free=(c,r)=>inb(c,r)&&!blocked.has(key(c,r));
+
+function newMap(){
+  blocked=new Set();
+  for (let k=0;k<9;k++){
+    const cx=Math.random()*W, cy=Math.random()*H, rad=1.1+Math.random()*2.1;
+    for (let r=0;r<H;r++) for (let c=0;c<W;c++)
+      if (Math.hypot(c-cx, r-cy) < rad) blocked.add(key(c,r));
+  }
+  blocked.delete(key(...start)); blocked.delete(key(...goal));
+}
+newMap();
+
+/* ---------- geometry ---------- */
+const hexC = (c,r) => [SPX*(c + (r&1?0.5:0)) + SPX/2, Rh + r*SPY];
+const sqC  = (c,r) => [c*SQ + SQ/2, r*SQ + SQ/2];
+const cen  = (c,r) => mode==='hex' ? hexC(c,r) : sqC(c,r);
+const hexPath = p => Array.from({length:6},(_,k)=>{
+  const a=(60*k-90)*Math.PI/180;
+  return (k?'L':'M')+(p[0]+Rh*Math.cos(a)).toFixed(1)+' '+(p[1]+Rh*Math.sin(a)).toFixed(1);
+}).join(' ')+' Z';
+
+/* ---------- neighbours ---------- */
+const HEX_EVEN=[[1,0],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1]];
+const HEX_ODD =[[1,0],[1,-1],[0,-1],[-1,0],[0,1],[1,1]];
+function neighbours(c,r){
+  if (mode==='hex')
+    return (r&1?HEX_ODD:HEX_EVEN).map(([dc,dr])=>[c+dc,r+dr,1,false]);
+  const out=[];
+  for (const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]) out.push([c+dc,r+dr,1,false]);
+  for (const [dc,dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
+    const cut = !free(c+dc,r) && !free(c,r+dr);
+    out.push([c+dc,r+dr,Math.SQRT2,cut]);
+  }
+  return out;
+}
+/* ---------- heuristics ---------- */
+const cube = (c,r) => { const x=c-((r-(r&1))/2); return [x, -x-r, r]; };
+function heur(a,b){
+  if (mode==='hex'){
+    const p=cube(...a), q=cube(...b);
+    return (Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+Math.abs(p[2]-q[2]))/2;
+  }
+  const dx=Math.abs(a[0]-b[0]), dy=Math.abs(a[1]-b[1]);
+  return (dx+dy) + (Math.SQRT2-2)*Math.min(dx,dy);
+}
+/* ---------- A* ---------- */
+function astar(allow){
+  const g={}, f={}, prev={}, open=[key(...start)], closed=new Set();
+  const cuts={};
+  g[key(...start)]=0; f[key(...start)]=heur(start,goal);
+  let explored=0;
+  while(open.length){
+    let bi=0; for(let i=1;i<open.length;i++) if(f[open[i]]<f[open[bi]]) bi=i;
+    const cur=open.splice(bi,1)[0];
+    if (closed.has(cur)) continue;
+    closed.add(cur); explored++;
+    if (cur===key(...goal)) break;
+    const [cc,cr]=cur.split(',').map(Number);
+    for (const [nc,nr,w,cut] of neighbours(cc,cr)){
+      if (!free(nc,nr)) continue;
+      const nk=key(nc,nr);
+      if (allow && !allow.has(nk)) continue;
+      const ng=g[cur]+w;
+      if (g[nk]===undefined || ng<g[nk]){
+        g[nk]=ng; f[nk]=ng+heur([nc,nr],goal); prev[nk]=cur; cuts[nk]=cut;
+        open.push(nk);
+      }
+    }
+  }
+  const gk=key(...goal);
+  if (g[gk]===undefined) return {explored, path:null, cuts:0, len:0, closed};
+  const path=[]; let n=gk, nCuts=0;
+  while(n){ path.unshift(n); if(cuts[n]) nCuts++; n=prev[n]; }
+  let len=0;
+  for(let i=1;i<path.length;i++){
+    const a=cen(...path[i-1].split(',').map(Number)), b=cen(...path[i].split(',').map(Number));
+    len+=Math.hypot(b[0]-a[0],b[1]-a[1]);
+  }
+  return {explored, path, cuts:nCuts, len:len/(mode==='hex'?SPX:SQ), closed};
+}
+/* ---------- chunk corridor ---------- */
+function corridor(){
+  const CW=Math.ceil(W/CH), CHt=Math.ceil(H/CH);
+  const pass=(cc,cr)=>{ for(let r=cr*CH;r<Math.min(H,(cr+1)*CH);r++)
+      for(let c=cc*CH;c<Math.min(W,(cc+1)*CH);c++) if(free(c,r)) return true; return false; };
+  const sc=[Math.floor(start[0]/CH), Math.floor(start[1]/CH)];
+  const gc=[Math.floor(goal[0]/CH),  Math.floor(goal[1]/CH)];
+  const gg={}, pv={}, open=[sc.join(',')]; gg[sc.join(',')]=0;
+  const seen=new Set();
+  while(open.length){
+    let bi=0; for(let i=1;i<open.length;i++){
+      const [a,b]=open[i].split(',').map(Number), [x,y]=open[bi].split(',').map(Number);
+      if (gg[open[i]]+Math.abs(a-gc[0])+Math.abs(b-gc[1]) < gg[open[bi]]+Math.abs(x-gc[0])+Math.abs(y-gc[1])) bi=i;
+    }
+    const cur=open.splice(bi,1)[0];
+    if (seen.has(cur)) continue; seen.add(cur);
+    if (cur===gc.join(',')) break;
+    const [a,b]=cur.split(',').map(Number);
+    for (const [da,db] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const na=a+da, nb=b+db;
+      if (na<0||nb<0||na>=CW||nb>=CHt||!pass(na,nb)) continue;
+      const nk=na+','+nb;
+      if (gg[nk]===undefined || gg[cur]+1<gg[nk]){ gg[nk]=gg[cur]+1; pv[nk]=cur; open.push(nk); }
+    }
+  }
+  if (gg[gc.join(',')]===undefined) return null;
+  const chunks=[]; let n=gc.join(',');
+  while(n){ chunks.push(n); n=pv[n]; }
+  const allow=new Set(), chunkSet=new Set(chunks);
+  for (const ck of chunks){
+    const [a,b]=ck.split(',').map(Number);
+    for(let r=b*CH;r<Math.min(H,(b+1)*CH);r++) for(let c=a*CH;c<Math.min(W,(a+1)*CH);c++) allow.add(key(c,r));
+  }
+  return {allow, chunkSet};
+}
+
+/* ---------- draw ---------- */
+function draw(){
+  const corr = hier ? corridor() : null;
+  const res = astar(corr ? corr.allow : null);
+  const other = (()=>{ const m=mode; mode = m==='hex'?'sq':'hex';
+                       const r=astar(hier&&corr?corr.allow:null); mode=m; return r; })();
+  const pathSet = new Set(res.path||[]);
+  let s='';
+
+  for (let r=0;r<H;r++) for (let c=0;c<W;c++){
+    const p=cen(c,r), k=key(c,r), bl=blocked.has(k);
+    const on = pathSet.has(k), ex = res.closed.has(k);
+    const inCorr = !corr || corr.allow.has(k);
+    const fill = bl ? '#2c3648' : on ? '#ffd166' : ex ? '#20563f' : inCorr ? '#141b28' : '#0e1320';
+    const shape = mode==='hex'
+      ? `<path d="${hexPath(p)}" fill="${fill}" stroke="#232c3d" stroke-width="1"/>`
+      : `<rect x="${(p[0]-SQ/2).toFixed(1)}" y="${(p[1]-SQ/2).toFixed(1)}" width="${(SQ-1).toFixed(1)}"
+           height="${(SQ-1).toFixed(1)}" rx="2" fill="${fill}" stroke="#232c3d" stroke-width="1"/>`;
+    s += shape;
+  }
+
+  if (hier){
+    const step = mode==='hex' ? SPX*CH : SQ*CH;
+    for (let x=0;x<=W;x+=CH){
+      const px = mode==='hex' ? x*SPX : x*SQ;
+      s += `<line x1="${px}" y1="0" x2="${px}" y2="${mode==='hex'?H*SPY+Rh:H*SQ}" stroke="#4f8ef7" stroke-width="1.4" stroke-opacity=".5"/>`;
+    }
+    for (let y=0;y<=H;y+=CH){
+      const py = mode==='hex' ? y*SPY : y*SQ;
+      s += `<line x1="0" y1="${py}" x2="360" y2="${py}" stroke="#4f8ef7" stroke-width="1.4" stroke-opacity=".5"/>`;
+    }
+  }
+
+  // path line + illegal cuts
+  if (res.path){
+    const pts = res.path.map(k=>cen(...k.split(',').map(Number)));
+    s += `<polyline points="${pts.map(p=>p.map(n=>n.toFixed(1)).join(',')).join(' ')}"
+           fill="none" stroke="#ffd166" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (mode==='sq') for(let i=1;i<res.path.length;i++){
+      const [c1,r1]=res.path[i-1].split(',').map(Number), [c2,r2]=res.path[i].split(',').map(Number);
+      if (c1!==c2 && r1!==r2 && !free(c2,r1) && !free(c1,r2)){
+        const a=cen(c1,r1), b=cen(c2,r2);
+        s += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"
+               stroke="#f2543d" stroke-width="4.5" stroke-linecap="round"/>`;
+      }
+    }
+  }
+  for (const [p,col] of [[start,'#fff'],[goal,'#f2543d']]){
+    const q=cen(...p);
+    s += `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="6.5" fill="${col}"/>`;
+  }
+  document.getElementById('svg').innerHTML=s;
+
+  const rows = mode==='hex' ? [['Hex · 6-way',res,true],['Square · 8-way',other,false]]
+                            : [['Hex · 6-way',other,false],['Square · 8-way',res,true]];
+  document.getElementById('tbl').innerHTML = rows.map(([n,r,selRow])=>
+    `<tr class="${selRow?'sel':''}"><td>${n}</td><td>${r.explored}</td>
+     <td>${r.path?r.len.toFixed(1):'—'}</td>
+     <td class="${n[0]==='S' ? (r.cuts?'bad':'good') : 'good'}">${n[0]==='S' ? (r.cuts||0) : '0'}</td></tr>`).join('');
+
+  const m=document.getElementById('msg');
+  if (!res.path){
+    m.innerHTML = hier
+      ? `No route through the chunk corridor. <span class="hi">Fall back to a full search</span> —
+         corridor-restricted A* trades guaranteed optimality for speed, so it needs this escape hatch.`
+      : `No route exists. Tap a reachable cell.`;
+  } else if (mode==='sq' && res.cuts){
+    m.innerHTML = `<span class="red">${res.cuts} illegal corner cut${res.cuts>1?'s':''}</span> — the thick red
+      segments slip diagonally between two blocked cells through a gap with zero width. Naive 8-way search
+      does this constantly. <b>Hexes can't: every neighbour shares a full edge.</b>`;
+  } else {
+    m.innerHTML = hier
+      ? `Only chunks on the coarse route are searched — the dark cells were never even considered.
+         Same structure as your streaming hierarchy, reused: <b>truncate the ID, search the coarse graph,
+         refine inside.</b>`
+      : mode==='hex'
+      ? `Six neighbours, every one a shared edge, all the same distance. <span class="hi">One uniform
+         step cost</span> — no √2, no corner cases. Switch to squares and watch the cut counter.`
+      : `No cuts on this map — try <b>New map</b> or move the goal. They appear whenever the route
+         squeezes past a diagonal pinch.`;
+  }
+}
+
+document.getElementById('svg').addEventListener('click', e=>{
+  const rect=e.currentTarget.getBoundingClientRect();
+  const x=(e.clientX-rect.left)/rect.width*360, y=(e.clientY-rect.top)/rect.height*300;
+  let best=null, bd=1e9;
+  for(let r=0;r<H;r++) for(let c=0;c<W;c++){
+    const p=cen(c,r), d=Math.hypot(p[0]-x,p[1]-y);
+    if(d<bd && free(c,r)){ bd=d; best=[c,r]; }
+  }
+  if (best){ goal=best; draw(); }
+});
+document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-m]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); mode=b.dataset.m; draw(); }));
+document.getElementById('hier').addEventListener('click',e=>{
+  hier=!hier; e.target.classList.toggle('on',hier); draw(); });
+document.getElementById('map').addEventListener('click',()=>{ newMap(); draw(); });
+draw();
+</script>
+</body>
+</html>

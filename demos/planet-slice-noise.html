@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planet slice — the density field</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 10px; line-height:1.5; }
+  canvas { width:100%; height:auto; display:block; border-radius:12px; background:#070a10; }
+  .field { margin-top:11px; }
+  .flabel { display:flex; align-items:baseline; font-size:11px; color:#8b93a7;
+            text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; }
+  .fval { margin-left:auto; font-size:13px; color:#fff; font-weight:650;
+          text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; height:24px; background:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-moz-range-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:20px; height:20px;
+    border-radius:50%; background:#4f8ef7; margin-top:-7.5px; border:2px solid #0b0e14; }
+  input[type=range]::-moz-range-thumb { width:20px; height:20px; border-radius:50%;
+    background:#4f8ef7; border:2px solid #0b0e14; }
+  .bar { display:flex; gap:6px; margin-top:13px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+  .key { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:#8b93a7; margin-top:12px; }
+  .kd { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .msg { font-size:12.5px; color:#a9b2c6; line-height:1.6; margin-top:13px;
+         background:#101725; border:1px solid #223049; border-radius:10px; padding:12px 13px; }
+  .msg b { color:#fff; }
+</style>
+</head>
+<body>
+
+<h1>Planet slice — the density field</h1>
+<div class="sub">A cross-section. Every cell decided by one function of its position.</div>
+
+<canvas id="cv"></canvas>
+
+<div class="key">
+  <span><i class="kd" style="background:#4a7c3f"></i>grass</span>
+  <span><i class="kd" style="background:#c9b07a"></i>sand</span>
+  <span><i class="kd" style="background:#e8eef5"></i>snow</span>
+  <span><i class="kd" style="background:#6b4c34"></i>dirt</span>
+  <span><i class="kd" style="background:#59616e"></i>stone</span>
+  <span><i class="kd" style="background:#2a5c8a"></i>water</span>
+</div>
+
+<div class="field">
+  <div class="flabel">Mountain height <span class="fval" id="ampO">0.10</span></div>
+  <input type="range" id="amp" min="0" max="0.3" step="0.005" value="0.10">
+</div>
+<div class="field">
+  <div class="flabel">Terrain scale <span class="fval" id="freqO">2.5</span></div>
+  <input type="range" id="freq" min="0.6" max="8" step="0.1" value="2.5">
+</div>
+<div class="field">
+  <div class="flabel">Cave carving <span class="fval" id="caveO">0.30</span></div>
+  <input type="range" id="cave" min="0" max="1" step="0.02" value="0.30">
+</div>
+<div class="field">
+  <div class="flabel">Sea level <span class="fval" id="seaO">1.00</span></div>
+  <input type="range" id="sea" min="0.85" max="1.15" step="0.005" value="1.00">
+</div>
+
+<div class="bar">
+  <button id="seed">New seed</button>
+  <button id="grid" class="on">Cell grid</button>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const COLS = 200, LAYERS = 46, R0 = 0.42;   // R0 = inner core cutoff, fraction of surface radius
+
+/* ---------- value noise ---------- */
+let SEED = 1337;
+function hash(x,y,z){
+  let n = Math.imul(x,374761393) ^ Math.imul(y,668265263) ^ Math.imul(z,1442695041) ^ Math.imul(SEED,362437);
+  n = Math.imul(n ^ (n>>>13), 1274126177);
+  return ((n ^ (n>>>16)) >>> 0) / 4294967296;
+}
+const fade = t => t*t*(3-2*t);
+function noise3(x,y,z){
+  const xi=Math.floor(x), yi=Math.floor(y), zi=Math.floor(z);
+  const xf=x-xi, yf=y-yi, zf=z-zi;
+  const u=fade(xf), v=fade(yf), w=fade(zf);
+  const L=(a,b,t)=>a+(b-a)*t;
+  const c=(dx,dy,dz)=>hash(xi+dx, yi+dy, zi+dz);
+  return L(L(L(c(0,0,0),c(1,0,0),u), L(c(0,1,0),c(1,1,0),u), v),
+           L(L(c(0,0,1),c(1,0,1),u), L(c(0,1,1),c(1,1,1),u), v), w)*2-1;
+}
+function fbm(x,y,z,oct){
+  let s=0, a=0.5, f=1, norm=0;
+  for(let i=0;i<oct;i++){ s+=a*noise3(x*f,y*f,z*f); norm+=a; a*=0.5; f*=2; }
+  return s/norm;
+}
+
+/* ---------- the generator ---------- */
+let amp=0.10, freq=2.5, caveAmt=0.30, sea=1.00, showGrid=true;
+
+// surface radius for a direction — sampled in world space, so no seams anywhere
+const surfaceR = (dx,dy) => 1 + amp*fbm(dx*freq, dy*freq, 0.5, 5);
+
+function material(px,py,r,surf){
+  // density: positive inside the planet, noise carves into it
+  let density = (surf - r) + caveAmt*0.20*fbm(px*11, py*11, 3.7, 3);
+  if (density <= 0) return r < sea ? 'water' : 'air';
+  const depth = surf - r;
+  if (depth < 0.012){
+    const temp = fbm(px*1.7, py*1.7, 9.1, 3);
+    if (r < sea + 0.012) return 'sand';
+    if (temp + (r-1)*3.5 > 0.42) return 'snow';
+    return 'grass';
+  }
+  if (depth < 0.05) return 'dirt';
+  return 'stone';
+}
+const COLOR = { grass:'#4a7c3f', sand:'#c9b07a', snow:'#e8eef5', dirt:'#6b4c34',
+                stone:'#59616e', water:'#2a5c8a', air:'#0a0f18' };
+
+function draw(){
+  const dpr = Math.min(devicePixelRatio,2);
+  const size = cv.parentElement.clientWidth;
+  cv.width = size*dpr; cv.height = size*dpr;
+  cv.style.height = size+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,size,size);
+
+  const cx=size/2, cy=size/2, SC=size*0.44;
+  let counts={};
+
+  for (let c=0;c<COLS;c++){
+    const a0 = c/COLS*Math.PI*2, a1 = (c+1)/COLS*Math.PI*2, am=(a0+a1)/2;
+    const dx=Math.cos(am), dy=Math.sin(am);
+    const surf = surfaceR(dx,dy);
+    const outer = Math.max(surf, sea) + 0.03;
+
+    let runMat=null, runStart=0;
+    for (let l=0; l<=LAYERS; l++){
+      const t = l/LAYERS;
+      const r = R0 + t*(outer-R0);
+      const mat = l===LAYERS ? null : material(dx*r, dy*r, r, surf);
+      if (mat!==runMat){
+        if (runMat && runMat!=='air'){
+          const rA = R0 + runStart/LAYERS*(outer-R0), rB = r;
+          ctx.beginPath();
+          ctx.arc(cx,cy, rB*SC, a0, a1);
+          ctx.arc(cx,cy, rA*SC, a1, a0, true);
+          ctx.closePath();
+          ctx.fillStyle = COLOR[runMat];
+          ctx.fill();
+          if (showGrid){ ctx.strokeStyle='rgba(0,0,0,.30)'; ctx.lineWidth=0.6; ctx.stroke(); }
+        }
+        if (runMat) counts[runMat]=(counts[runMat]||0)+(l-runStart);
+        runMat=mat; runStart=l;
+      }
+    }
+  }
+  // core
+  ctx.beginPath(); ctx.arc(cx,cy,R0*SC,0,Math.PI*2);
+  ctx.fillStyle='#3a3038'; ctx.fill();
+
+  const solid=(counts.stone||0)+(counts.dirt||0)+(counts.grass||0)+(counts.sand||0)+(counts.snow||0);
+  const tot=solid+(counts.water||0)+(counts.air||0);
+  document.getElementById('msg').innerHTML =
+    `<b>${(100*(counts.water||0)/tot).toFixed(0)}%</b> of sampled cells came out water,
+     <b>${(100*solid/tot).toFixed(0)}%</b> solid. Nothing here is stored — every cell was decided by
+     one function of its own position, so the same seed rebuilds it identically forever.
+     ${caveAmt>0.45?'<br><br>At this cave strength the noise is overpowering the radial bias, which is how you get overhangs and floating islands — and, past a point, swiss cheese.':''}`;
+}
+
+const bind=(id,out,set,fmt)=>{
+  const el=document.getElementById(id);
+  el.addEventListener('input',()=>{ set(+el.value);
+    document.getElementById(out).textContent=fmt(+el.value); draw(); });
+};
+bind('amp','ampO',v=>amp=v,v=>v.toFixed(2));
+bind('freq','freqO',v=>freq=v,v=>v.toFixed(1));
+bind('cave','caveO',v=>caveAmt=v,v=>v.toFixed(2));
+bind('sea','seaO',v=>sea=v,v=>v.toFixed(2));
+document.getElementById('seed').addEventListener('click',()=>{
+  SEED=Math.floor(Math.random()*1e6); draw(); });
+document.getElementById('grid').addEventListener('click',e=>{
+  showGrid=!showGrid; e.target.classList.toggle('on',showGrid); draw(); });
+addEventListener('resize',draw);
+draw();
+</script>
+</body>
+</html>

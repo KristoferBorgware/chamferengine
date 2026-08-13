@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ray traversal — block picking</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 10px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:none; }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px;
+         padding:13px; margin-top:13px; font-size:12.5px; color:#a9b2c6; line-height:1.6; }
+  .out b { color:#fff; } .out .hi { color:#ffd166; } .out .no { color:#7d879c; }
+  .stats { display:flex; gap:18px; margin-top:11px; padding-top:11px; border-top:1px solid #1e293c; }
+  .sv { font-size:17px; font-weight:700; color:#3fb8af; font-variant-numeric:tabular-nums; }
+  .sk { font-size:10px; color:#7d879c; text-transform:uppercase; letter-spacing:.05em; margin-top:1px; }
+  .bar { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+</style>
+</head>
+<body>
+
+<h1>Ray traversal — block picking</h1>
+<div class="sub">Drag the white eye or the gold aim point.</div>
+
+<svg id="svg" viewBox="0 0 360 330"></svg>
+
+<div class="out" id="msg"></div>
+<div class="out" style="display:flex" id="statsbox">
+  <div class="stats" style="border:none;margin:0;padding:0">
+    <div><div class="sv" id="sSteps">—</div><div class="sk">cells walked</div></div>
+    <div><div class="sv" id="sTested">—</div><div class="sk">occupancy tests</div></div>
+    <div><div class="sv" id="sCells">—</div><div class="sk">cells in field</div></div>
+  </div>
+</div>
+
+<div class="bar">
+  <button id="nums" class="on">Step numbers</button>
+  <button id="terr">New terrain</button>
+</div>
+
+<script>
+const A=[26,296], B=[334,296], Cc=[180,28], N=12;
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1]];
+const mul=(a,s)=>[a[0]*s,a[1]*s];
+const len=a=>Math.hypot(a[0],a[1]);
+const SP = len(sub(B,A))/N, R = SP/Math.sqrt(3);
+const ctr = (i,j) => add(A, add(mul(sub(B,A), i/N), mul(sub(Cc,A), j/N)));
+
+function bary(p){
+  const u=sub(B,A), v=sub(Cc,A), w=sub(p,A);
+  const det=u[0]*v[1]-u[1]*v[0];
+  const i=(w[0]*v[1]-w[1]*v[0])/det*N;
+  const j=(u[0]*w[1]-u[1]*w[0])/det*N;
+  return [N-i-j, i, j];
+}
+function hexRound(k,i,j){
+  let rk=Math.round(k), ri=Math.round(i), rj=Math.round(j);
+  const dk=Math.abs(rk-k), di=Math.abs(ri-i), dj=Math.abs(rj-j);
+  if (dk>di && dk>dj) rk=N-ri-rj; else if (di>dj) ri=N-rk-rj; else rj=N-rk-ri;
+  return [rk,ri,rj];
+}
+const hexPath = c => Array.from({length:6},(_,k)=>{
+    const a=(30+60*k)*Math.PI/180;
+    return (k?'L':'M')+(c[0]+R*Math.cos(a)).toFixed(1)+' '+(c[1]+R*Math.sin(a)).toFixed(1);
+  }).join(' ')+' Z';
+
+let seed = 4;
+let solid = new Set();
+function terrain(){
+  solid = new Set();
+  const w1 = 0.7+Math.random()*0.6, w2 = 1.4+Math.random(), ph = Math.random()*6;
+  for (let i=0;i<=N;i++){
+    const h = Math.max(0, Math.round(3 + 1.6*Math.sin(i*w1+ph) + 1.1*Math.sin(i*w2)));
+    for (let j=0;j<=h && i+j<=N;j++) solid.add(i+','+j);
+  }
+}
+terrain();
+
+let eye=[95,90], aim=[250,235], showNums=true;
+
+// walk the ray: find every boundary crossing analytically, then round at each midpoint
+function traverse(P0, P1){
+  const b0 = bary(P0), b1 = bary(P1);
+  const d = [b1[0]-b0[0], b1[1]-b0[1], b1[2]-b0[2]];
+  const ts = [0,1];
+  for (let a=0; a<3; a++){
+    if (Math.abs(d[a]) < 1e-9) continue;
+    const lo = Math.min(b0[a], b1[a]), hi = Math.max(b0[a], b1[a]);
+    for (let h = Math.floor(lo-0.5)+0.5; h <= hi+0.5; h += 1){
+      if (h < lo || h > hi) continue;
+      ts.push((h - b0[a]) / d[a]);
+    }
+  }
+  ts.sort((x,y)=>x-y);
+  const out=[], seen=new Set();
+  for (let s=0; s<ts.length-1; s++){
+    const t = (ts[s]+ts[s+1])/2;
+    if (t<0 || t>1) continue;
+    const c = hexRound(b0[0]+d[0]*t, b0[1]+d[1]*t, b0[2]+d[2]*t);
+    if (c[0]<0 || c[1]<0 || c[2]<0) return {cells:out, escaped:true};
+    const key = c[1]+','+c[2];
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(c);
+    if (solid.has(key)) return {cells:out, hit:c, escaped:false};
+  }
+  return {cells:out, escaped:false};
+}
+
+function draw(){
+  const res = traverse(eye, aim);
+  const walked = new Set(res.cells.map(c=>c[1]+','+c[2]));
+  let s='';
+
+  // all cells
+  for (let j=0;j<=N;j++) for (let i=0;i+j<=N;i++){
+    const key=i+','+j, c=ctr(i,j), sol=solid.has(key);
+    s += `<path d="${hexPath(c)}" fill="${sol?'#2c3648':'#141b28'}"
+           stroke="#232c3d" stroke-width="1"/>`;
+  }
+  // walked cells
+  res.cells.forEach((cc,n)=>{
+    const c=ctr(cc[1],cc[2]), t=n/Math.max(1,res.cells.length-1);
+    const col = `hsl(${172-52*t}, 62%, ${44+8*t}%)`;
+    s += `<path d="${hexPath(c)}" fill="${col}" fill-opacity=".55" stroke="${col}" stroke-width="1.6"/>`;
+    if (showNums) s += `<text x="${c[0].toFixed(1)}" y="${(c[1]+4).toFixed(1)}" fill="#08101c"
+      font-size="11" font-weight="700" text-anchor="middle">${n+1}</text>`;
+  });
+  // hit cell + entry face
+  if (res.hit){
+    const c=ctr(res.hit[1],res.hit[2]);
+    s += `<path d="${hexPath(c)}" fill="#f2543d" fill-opacity=".45" stroke="#f2543d" stroke-width="2.6"/>`;
+    const prev = res.cells[res.cells.length-2];
+    if (prev){
+      const p=ctr(prev[1],prev[2]), m=mul(add(c,p),0.5), dv=sub(c,p);
+      const perp=mul([-dv[1],dv[0]], R/len(dv));
+      s += `<line x1="${(m[0]-perp[0]).toFixed(1)}" y1="${(m[1]-perp[1]).toFixed(1)}"
+             x2="${(m[0]+perp[0]).toFixed(1)}" y2="${(m[1]+perp[1]).toFixed(1)}"
+             stroke="#fff" stroke-width="4" stroke-linecap="round"/>`;
+    }
+  }
+  // triangle border + ray
+  s += `<polygon points="${[A,B,Cc].map(p=>p.join(',')).join(' ')}" fill="none" stroke="#46536e" stroke-width="2"/>`;
+  s += `<line x1="${eye[0]}" y1="${eye[1]}" x2="${aim[0]}" y2="${aim[1]}"
+         stroke="#ffd166" stroke-width="1.8" stroke-dasharray="5 4"/>`;
+  s += `<circle cx="${aim[0]}" cy="${aim[1]}" r="7" fill="#ffd166"/>`;
+  s += `<circle cx="${eye[0]}" cy="${eye[1]}" r="8.5" fill="#fff"/>`;
+
+  document.getElementById('svg').innerHTML=s;
+
+  const total = (N+1)*(N+2)/2;
+  document.getElementById('sSteps').textContent  = res.cells.length;
+  document.getElementById('sTested').textContent = res.cells.length;
+  document.getElementById('sCells').textContent  = total;
+
+  document.getElementById('msg').innerHTML = res.escaped
+    ? `The ray walked <b>off the face</b> — a barycentric coordinate went negative. On the real planet
+       the adjacency table kicks in here, the direction is re-expressed in the neighbour's frame, and
+       the walk continues. <span class="no">The great circle is still the same straight line.</span>`
+    : res.hit
+    ? `Hit after <b class="hi">${res.cells.length}</b> cells. The white bar is the edge the ray entered
+       through — that's the face you'd place a new block against, and the walk hands it to you for free.
+       <span class="no">No collision mesh was built, no physics was consulted.</span>`
+    : `No hit — the ray ran out before reaching anything solid. <span class="no">Drag the gold point
+       into the terrain.</span>`;
+}
+
+const svg=document.getElementById('svg');
+function toSvg(e){
+  const r=svg.getBoundingClientRect(), vb=svg.viewBox.baseVal;
+  return [(e.clientX-r.left)/r.width*vb.width, (e.clientY-r.top)/r.height*vb.height];
+}
+let grab=null;
+svg.addEventListener('pointerdown',e=>{
+  const p=toSvg(e);
+  grab = len(sub(p,eye)) < len(sub(p,aim)) ? 'eye' : 'aim';
+  svg.setPointerCapture(e.pointerId);
+  if (grab==='eye') eye=p; else aim=p;
+  draw();
+});
+svg.addEventListener('pointermove',e=>{
+  if(!grab) return;
+  const p=toSvg(e);
+  if (grab==='eye') eye=p; else aim=p;
+  draw();
+});
+svg.addEventListener('pointerup',()=>grab=null);
+svg.addEventListener('pointercancel',()=>grab=null);
+
+document.getElementById('nums').addEventListener('click',e=>{
+  showNums=!showNums; e.target.classList.toggle('on',showNums); draw(); });
+document.getElementById('terr').addEventListener('click',()=>{ terrain(); draw(); });
+draw();
+</script>
+</body>
+</html>

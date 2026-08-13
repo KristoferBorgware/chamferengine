@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data structures</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 14px; line-height:1.5; }
+  .tabs { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+  svg { width:100%; height:auto; display:block; }
+  .cap { font-size:12.5px; color:#a9b2c6; line-height:1.6; margin-top:14px;
+         background:#101725; border:1px solid #223049; border-radius:10px; padding:12px 13px; }
+  .cap b { color:#fff; font-weight:600; }
+  .cap .warn { color:#ffd166; }
+</style>
+</head>
+<body>
+
+<h1>The data structures</h1>
+<div class="sub">Four layers, and only one of them grows.</div>
+
+<div class="tabs">
+  <button data-t="0" class="on">What lives where</button>
+  <button data-t="1">Inside a chunk</button>
+  <button data-t="2">Lookup path</button>
+</div>
+
+<div id="diagram"></div>
+<div class="cap" id="cap"></div>
+
+<script>
+const C = { blue:'#4f8ef7', teal:'#3fb8af', amber:'#e0913a', purple:'#a56cf0',
+            bg:'#101725', line:'#223049', dim:'#7d879c', text:'#dfe6f5' };
+
+const box = (x,y,w,h,col,r=9) =>
+  `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${col}22"
+     stroke="${col}" stroke-width="1.3"/>`;
+const txt = (x,y,s,o={}) =>
+  `<text x="${x}" y="${y}" fill="${o.fill||C.text}" font-size="${o.size||11.5}"
+     font-weight="${o.w||500}" text-anchor="${o.a||'start'}"
+     font-family="${o.mono?'ui-monospace,Menlo,monospace':'inherit'}">${s}</text>`;
+const arrow = (x1,y1,x2,y2,col=C.dim) =>
+  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="1.4"
+     marker-end="url(#a)"/>`;
+const DEFS = `<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5"
+  markerHeight="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${C.dim}"/></marker></defs>`;
+
+/* ---------- view 0 ---------- */
+function viewLayers(){
+  const rows = [
+    [C.blue,   'Constant tables',   ['12 icosahedron vertices, 20 faces',
+                                     'face adjacency 20 × 3 + edge rotations',
+                                     'the 12 pentagon cell IDs'], 'a few KB · never changes'],
+    [C.teal,   'Pure functions',    ['encode / decode ID ↔ face, path, q, r, layer',
+                                     'ID → 3D position (walk the path digits)',
+                                     'neighbour(ID, direction)'], 'no storage at all'],
+    [C.amber,  'RAM · chunk cache', ['HashMap<chunkId, Chunk>',
+                                     'LRU eviction list',
+                                     'per-chunk mesh + LOD handle'], 'bounded by view distance'],
+    [C.purple, 'Disk · deltas',     ['sorted map: cellID → block state',
+                                     'side table: chests, signs, entities'], 'the only thing that grows']
+  ];
+  let y = 8, s = DEFS;
+  for (const [col,title,items,tag] of rows){
+    const h = 30 + items.length*15;
+    s += box(2, y, 356, h, col);
+    s += txt(14, y+20, title, {fill:col, w:700, size:12.5});
+    s += txt(354, y+20, tag, {fill:C.dim, size:10, a:'end'});
+    items.forEach((it,i) => s += txt(20, y+38+i*15, '· ' + it, {size:11, fill:C.text}));
+    y += h + 9;
+  }
+  return `<svg viewBox="0 0 360 ${y}">${s}</svg>`;
+}
+
+/* ---------- view 1 ---------- */
+function viewChunk(){
+  let s = DEFS;
+  s += box(2, 8, 356, 40, C.blue);
+  s += txt(14, 26, 'chunkId', {fill:C.blue, w:700, size:12.5});
+  s += txt(14, 41, 'the key — face + path bits, nothing else stored', {fill:C.dim, size:10.5});
+
+  s += box(2, 58, 356, 66, C.teal);
+  s += txt(14, 76, 'palette', {fill:C.teal, w:700, size:12.5});
+  s += txt(14, 91, 'which block types appear in THIS chunk', {fill:C.dim, size:10.5});
+  ['air','stone','dirt','grass'].forEach((n,i) => {
+    s += `<rect x="${14+i*85}" y="99" width="78" height="18" rx="4" fill="${C.teal}33" stroke="${C.teal}" stroke-width="1"/>`;
+    s += txt(53+i*85, 112, i + ' · ' + n, {size:10, a:'middle', mono:true});
+  });
+
+  s += box(2, 134, 356, 92, C.amber);
+  s += txt(14, 152, 'blocks', {fill:C.amber, w:700, size:12.5});
+  s += txt(14, 167, '2-bit indices into the palette — grows only if the palette does',
+           {fill:C.dim, size:10.5});
+  const vals = [0,0,1,1,2,3,3,1,0,2,2,1,1,0,0,3,2,1];
+  vals.forEach((v,i) => {
+    s += `<rect x="${14+i*19}" y="176" width="16" height="18" rx="3" fill="${C.amber}2a" stroke="${C.amber}55"/>`;
+    s += txt(22+i*19, 189, v, {size:10, a:'middle', mono:true, fill:C.amber});
+  });
+  s += txt(14, 212, 'index = layer × cellsPerLayer + rank(q, r)', {size:11, mono:true, fill:C.text});
+
+  s += box(2, 236, 356, 62, C.purple);
+  s += txt(14, 254, 'stored in canonical order', {fill:C.purple, w:700, size:12.5});
+  s += txt(14, 270, 'no IDs in the array — position implies the address,', {fill:C.dim, size:10.5});
+  s += txt(14, 284, 'the same way a Minecraft chunk is a flat array.', {fill:C.dim, size:10.5});
+  return `<svg viewBox="0 0 360 308">${s}</svg>`;
+}
+
+/* ---------- view 2 ---------- */
+function viewFlow(){
+  let s = DEFS;
+  const step = (y,h,col,title,sub) => {
+    let o = box(40, y, 280, h, col);
+    o += txt(180, y+19, title, {fill:col, w:700, size:12, a:'middle'});
+    if (sub) o += txt(180, y+35, sub, {fill:C.dim, size:10.5, a:'middle'});
+    return o;
+  };
+  s += step(8, 44, C.blue, 'player position', 'x, y, z in the world');
+  s += arrow(180, 56, 180, 72);
+  s += step(76, 44, C.blue, 'cellID', 'nearest hexagon + layer');
+  s += arrow(180, 124, 180, 140);
+  s += step(144, 44, C.teal, 'chunkID = cellID >> localBits', 'one shift');
+  s += arrow(180, 192, 180, 208);
+  s += step(212, 44, C.amber, 'chunk cache lookup', 'HashMap hit?');
+
+  // branch
+  s += arrow(110, 260, 70, 282);
+  s += arrow(250, 260, 292, 282);
+  s += box(2, 286, 150, 76, C.amber);
+  s += txt(77, 305, 'HIT', {fill:C.amber, w:700, size:11.5, a:'middle'});
+  s += txt(77, 322, 'use it', {fill:C.dim, size:10.5, a:'middle'});
+  s += txt(77, 337, 'zero I/O', {fill:C.dim, size:10.5, a:'middle'});
+
+  s += box(208, 286, 150, 76, C.purple);
+  s += txt(283, 305, 'MISS', {fill:C.purple, w:700, size:11.5, a:'middle'});
+  s += txt(283, 322, 'generate from seed,', {fill:C.dim, size:10.5, a:'middle'});
+  s += txt(283, 337, 'then apply deltas', {fill:C.dim, size:10.5, a:'middle'});
+  s += txt(283, 352, 'for this ID range', {fill:C.dim, size:10.5, a:'middle'});
+
+  s += arrow(283, 366, 283, 384);
+  s += arrow(77, 366, 77, 384);
+  s += step(388, 44, C.blue, 'chunk in RAM', 'mesh it, render it');
+  return `<svg viewBox="0 0 360 444">${s}</svg>`;
+}
+
+const VIEWS = [viewLayers, viewChunk, viewFlow];
+const CAPS = [
+  `Only the bottom band grows with play. The tables are fixed at build time, the addressing is
+   arithmetic with no backing store, and the cache is capped by view distance. <b>Your save file
+   is a list of what players changed</b> — nothing else is ever written.`,
+  `The palette trick matters: most chunks contain three or four block types, so two bits per cell
+   beats sixteen. A chunk of 4,096 cells × 64 layers costs <b>64 KB at 2 bits</b> where a naive
+   16-bit type field would cost 512 KB. Widen the packing only when a chunk earns it.`,
+  `<b class="warn">The whole point of the ID scheme is the third box.</b> Finding the chunk is one
+   shift; loading its edits is one range query, because every cell inside it shares the same
+   prefix. No spatial index, no quadtree walk, no lookup table.`
+];
+
+let tab = 0;
+function draw(){
+  document.getElementById('diagram').innerHTML = VIEWS[tab]();
+  document.getElementById('cap').innerHTML = CAPS[tab];
+}
+document.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-t]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); tab = +b.dataset.t; draw();
+}));
+draw();
+</script>
+</body>
+</html>

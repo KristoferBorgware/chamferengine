@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S2 vs H3 — seams &amp; indexing</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:13px 16px 8px; }
+  h1 { font-size:16px; font-weight:650; letter-spacing:-.01em; }
+  .sub { font-size:12px; color:#8b93a7; margin-top:3px; }
+  .stage { position:relative; flex:1; min-height:54vh; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  .hud { position:absolute; top:10px; left:12px; right:12px; font-size:12px; line-height:1.5;
+         pointer-events:none; }
+  .card { pointer-events:auto; background:rgba(11,14,20,.86); border:1px solid #222839;
+          border-radius:9px; backdrop-filter:blur(8px); max-width:min(360px,90%);
+          overflow:hidden; }
+  .cardhead { display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+              background:none; border:none; padding:8px 11px; border-radius:0;
+              font:inherit; font-size:12px; color:#fff; font-weight:600; cursor:pointer; }
+  .cardhead:active { transform:none; }
+  .chev { margin-left:auto; color:#6d768c; font-size:10px; transition:transform .18s;
+          transform:rotate(180deg); }
+  .card.collapsed .chev { transform:rotate(0deg); }
+  .cardbody { padding:0 11px 9px; }
+  .card.collapsed .cardbody { display:none; }
+  .card .note { color:#8b93a7; margin-top:5px; }
+  .card .metric { color:#ffd166; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .panel { padding:11px 14px 15px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; flex-direction:column; gap:8px; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .lbl { font-size:11px; color:#6d768c; text-transform:uppercase; letter-spacing:.06em; width:100%; margin-bottom:1px; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 11px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:disabled { opacity:.3; cursor:default; }
+  .spacer { flex:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>S2 seams vs. H3 structure</h1>
+  <div class="sub">Cell areas measured live with l'Huilier's formula — not quoted.</div>
+</header>
+
+<div class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="card" id="card">
+      <button class="cardhead" id="cardhead"><span id="hudTitle">—</span><span class="chev">▾</span></button>
+      <div class="cardbody" id="hudBody"></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <span class="lbl">System</span>
+    <button data-sys="s2" class="on">S2 · cube sphere</button>
+    <button data-sys="h3">H3 family · icosahedron</button>
+  </div>
+  <div class="row">
+    <span class="lbl">S2 projection (u,v) → (s,t)</span>
+    <button data-proj="lin">Linear</button>
+    <button data-proj="quad" class="on">Quadratic</button>
+    <button data-proj="tan">Tangent</button>
+  </div>
+  <div class="row">
+    <span class="lbl">Resolution</span>
+    <button data-res="1">1</button>
+    <button data-res="2">2</button>
+    <button data-res="3" class="on">3</button>
+    <button data-res="4">4</button>
+    <span class="spacer"></span>
+    <button id="curve" class="on">Hilbert</button>
+    <button id="spin" class="on">Spin</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const V3 = THREE.Vector3;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0b0e14);
+const camera = new THREE.PerspectiveCamera(45,1,.1,200); camera.position.set(0,0,4.3);
+scene.add(new THREE.AmbientLight(0xffffff,.45));
+const k1=new THREE.DirectionalLight(0xffffff,.85); k1.position.set(4,5,6); scene.add(k1);
+const k2=new THREE.DirectionalLight(0x86a8ff,.4); k2.position.set(-5,-2,-4); scene.add(k2);
+const root = new THREE.Group(); root.rotation.set(.35,.6,0); scene.add(root);
+
+/* ================= S2 ================= */
+const PROJ = {
+  lin:  s => 2*s-1,
+  quad: s => s>=0.5 ? (1/3)*(4*s*s-1) : (1/3)*(1-4*(1-s)*(1-s)),
+  tan:  s => Math.tan(Math.PI/4*(2*s-1))
+};
+function faceXYZ(f,u,v){
+  let p;
+  switch(f){
+    case 0: p=[1,u,v]; break;   case 1: p=[-u,1,v]; break;  case 2: p=[-u,-v,1]; break;
+    case 3: p=[-1,-v,-u]; break; case 4: p=[v,-1,-u]; break; case 5: p=[v,u,-1]; break;
+  }
+  return new V3(...p).normalize();
+}
+// S2's Hilbert traversal tables
+const POS_IJ  = [[0,1,3,2],[0,2,3,1],[3,2,0,1],[3,1,0,2]];
+const POS_ORI = [1,0,0,3];
+function hilbertIJ(level,pos){
+  let i=0,j=0,ori=0;
+  for (let k=level-1;k>=0;k--){
+    const q=(pos>>(2*k))&3, ij=POS_IJ[ori][q];
+    i=(i<<1)|(ij>>1); j=(j<<1)|(ij&1);
+    ori^=POS_ORI[q];
+  }
+  return [i,j];
+}
+const angBetween=(a,b)=>Math.acos(Math.min(1,Math.max(-1,a.dot(b))));
+function sphTri(A,B,C){                       // l'Huilier
+  const a=angBetween(B,C), b=angBetween(A,C), c=angBetween(A,B), s=(a+b+c)/2;
+  const t=Math.tan(s/2)*Math.tan((s-a)/2)*Math.tan((s-b)/2)*Math.tan((s-c)/2);
+  return 4*Math.atan(Math.sqrt(Math.max(0,t)));
+}
+function s2Cells(res, projKey){
+  const n=1<<res, P=PROJ[projKey], cells=[];
+  for (let f=0;f<6;f++) for (let i=0;i<n;i++) for (let j=0;j<n;j++){
+    const ring=[[i,j],[i+1,j],[i+1,j+1],[i,j+1]]
+      .map(([a,b]) => faceXYZ(f, P(a/n), P(b/n)));
+    const center = ring.reduce((a,p)=>a.add(p.clone()), new V3()).normalize();
+    const corner = (i===0||i===n-1) && (j===0||j===n-1);
+    cells.push({ring, center, group: corner ? 6 : f,
+                area: sphTri(ring[0],ring[1],ring[2])+sphTri(ring[0],ring[2],ring[3])});
+  }
+  return cells;
+}
+function s2Curve(res, projKey){
+  const n=1<<res, P=PROJ[projKey], pts=[];
+  for (let f=0;f<6;f++) for (let pos=0; pos<n*n; pos++){
+    const [i,j]=hilbertIJ(res,pos);
+    pts.push(faceXYZ(f, P((i+.5)/n), P((j+.5)/n)).multiplyScalar(1.055));
+  }
+  return pts;
+}
+
+/* ================= icosahedron / Goldberg (H3 family) ================= */
+const PHI=(1+Math.sqrt(5))/2;
+const ICO_V=[[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],[0,-1,-PHI],
+             [0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]].map(v=>new V3(...v).normalize());
+const ICO_F=[[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+             [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+function ringSort(pts,n){
+  const nn=n.clone().normalize();
+  const h = Math.abs(nn.z)<.9 ? new V3(0,0,1) : new V3(1,0,0);
+  const t = h.clone().cross(nn).normalize(), b = nn.clone().cross(t);
+  return pts.map(p=>({p,a:Math.atan2(p.dot(b),p.dot(t))})).sort((x,y)=>x.a-y.a).map(o=>o.p);
+}
+function goldberg(level){
+  let verts=ICO_V.map(v=>v.clone()), faces=ICO_F.map(f=>f.slice());
+  for (let s=0;s<level;s++){
+    const cache=new Map();
+    const mid=(a,b)=>{ const k=a<b?a+'_'+b:b+'_'+a;
+      if(cache.has(k))return cache.get(k);
+      verts.push(verts[a].clone().add(verts[b]).normalize());
+      cache.set(k,verts.length-1); return verts.length-1; };
+    const nx=[];
+    for (const [a,b,c] of faces){ const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a);
+      nx.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]); }
+    faces=nx;
+  }
+  const cen=faces.map(([a,b,c])=>verts[a].clone().add(verts[b]).add(verts[c]).normalize());
+  const inc=verts.map(()=>[]); faces.forEach((f,fi)=>f.forEach(vi=>inc[vi].push(fi)));
+  return verts.map((v,vi)=>{
+    const ring=ringSort(inc[vi].map(fi=>cen[fi]), v);
+    return {ring, center:v.clone(), group: ring.length===5 ? 6 : 0,
+            area: ring.slice(1,-1).reduce((s,_,k)=>s+sphTri(ring[0],ring[k+1],ring[k+2]),0)};
+  });
+}
+function icoEdgeArcs(){
+  const seen=new Set(), arcs=[];
+  ICO_F.forEach(f=>{ for(let i=0;i<3;i++){
+    const a=f[i], b=f[(i+1)%3], k=Math.min(a,b)+'_'+Math.max(a,b);
+    if(seen.has(k))return; seen.add(k);
+    const A=ICO_V[a], B=ICO_V[b], pts=[];
+    for(let s=0;s<=24;s++) pts.push(A.clone().lerp(B,s/24).normalize().multiplyScalar(1.045));
+    arcs.push(pts);
+  }});
+  return arcs;
+}
+
+/* ================= geometry ================= */
+function shellGeometry(cells, inset, rOut, rIn){
+  const pos=[], P=v=>pos.push(v.x,v.y,v.z);
+  for (const {ring,center} of cells){
+    const s=ring.map(p=>p.clone().lerp(center,inset).normalize());
+    const top=s.map(p=>p.clone().multiplyScalar(rOut)), bot=s.map(p=>p.clone().multiplyScalar(rIn));
+    const cT=center.clone().multiplyScalar(rOut), cB=center.clone().multiplyScalar(rIn);
+    for(let i=0;i<s.length;i++){ const j=(i+1)%s.length;
+      P(cT);P(top[i]);P(top[j]);  P(cB);P(bot[j]);P(bot[i]);
+      P(top[i]);P(bot[i]);P(bot[j]);  P(top[i]);P(bot[j]);P(top[j]); }
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(pos),3));
+  g.computeVertexNormals(); return g;
+}
+const FACE_COL=[0x4f8ef7,0x3fb8af,0x7c6cf0,0x2f9ee0,0x5ec5a0,0x9a6ce0,0xf2543d];
+const MATS=FACE_COL.map(c=>new THREE.MeshPhongMaterial({color:c,shininess:24,flatShading:true,side:THREE.DoubleSide}));
+const LINE_MAT=new THREE.LineBasicMaterial({color:0xffd166});
+const TUBE_MAT=new THREE.MeshBasicMaterial({color:0xffd166});
+
+/* ================= build ================= */
+let sys='s2', proj='quad', res=3, showCurve=true, spin=true;
+
+const card=document.getElementById('card');
+if (innerWidth < 700) card.classList.add('collapsed');
+document.getElementById('cardhead').addEventListener('click',()=>card.classList.toggle('collapsed'));
+function setHud(title, body){
+  document.getElementById('hudTitle').textContent=title;
+  document.getElementById('hudBody').innerHTML=body;
+}
+
+function rebuild(){
+  while(root.children.length){ const m=root.children.pop(); if(m.geometry) m.geometry.dispose(); }
+
+  if (sys==='s2'){
+    const cells=s2Cells(res,proj);
+    for (let g=0;g<7;g++){
+      const sub=cells.filter(c=>c.group===g);
+      if (sub.length) root.add(new THREE.Mesh(shellGeometry(sub,.07,1,.84),MATS[g]));
+    }
+    if (showCurve){
+      const pts=s2Curve(res,proj);
+      const g=new THREE.BufferGeometry().setFromPoints(pts);
+      root.add(new THREE.Line(g,LINE_MAT));
+    }
+    const areas=cells.map(c=>c.area);
+    const ratio=Math.max(...areas)/Math.min(...areas);
+    const label={lin:'Linear',quad:'Quadratic (S2 default)',tan:'Tangent'}[proj];
+    setHud(`S2 · ${6*(1<<res)*(1<<res)} cells · ratio ${ratio.toFixed(2)}:1`,
+      `<div class="note">6 cube faces, each a quadtree. ${label} projection.</div>
+       <div class="metric">measured area ratio ${ratio.toFixed(2)} : 1</div>
+       <div class="note"><span style="color:#f2543d">Red</span> = the 8 cube corners: 3 quads meet where 4 should.
+       The colour boundaries are the 12 face seams — neighbour lookups are special-cased there.
+       ${showCurve?'The gold thread is the Hilbert order that makes cell IDs spatially local.':''}</div>`);
+  } else {
+    const cells=goldberg(res);
+    for (const g of [0,6]){
+      const sub=cells.filter(c=>c.group===g);
+      if (sub.length) root.add(new THREE.Mesh(shellGeometry(sub,.09,1,.84),MATS[g]));
+    }
+    if (showCurve) for (const pts of icoEdgeArcs()){
+      const curve=new THREE.CatmullRomCurve3(pts);
+      root.add(new THREE.Mesh(new THREE.TubeGeometry(curve,24,.009,5,false),TUBE_MAT));
+    }
+    const areas=cells.filter(c=>c.group===0).map(c=>c.area);
+    const ratio=Math.max(...areas)/Math.min(...areas);
+    const hex=cells.filter(c=>c.group===0).length;
+    setHud(`H3 family · ${hex} hexes + 12 pentagons · ratio ${ratio.toFixed(2)}:1`,
+      `<div class="note">Hexagons laid on the 20 faces of an icosahedron; pentagons sit exactly on its 12 vertices.</div>
+       <div class="metric">measured hexagon area ratio ${ratio.toFixed(2)} : 1</div>
+       <div class="note">Gold lines = the icosahedron face edges, where H3's per-face gnomonic projections meet.
+       Cells cross them freely — that's the difference from S2.
+       <i>Structurally accurate; real H3 uses aperture-7 subdivision, so its cells are rotated relative to these.</i></div>`);
+  }
+}
+
+/* ================= ui ================= */
+let drag=false,lx=0,ly=0;
+canvas.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointerup',()=>drag=false);
+canvas.addEventListener('pointercancel',()=>drag=false);
+canvas.addEventListener('pointermove',e=>{ if(!drag)return;
+  root.rotation.y+=(e.clientX-lx)*.006; root.rotation.x+=(e.clientY-ly)*.006;
+  lx=e.clientX; ly=e.clientY; });
+canvas.addEventListener('wheel',e=>{ e.preventDefault();
+  camera.position.z=Math.min(11,Math.max(1.7,camera.position.z+e.deltaY*.0022)); },{passive:false});
+
+function sync(){
+  document.querySelectorAll('[data-proj]').forEach(b=>b.disabled=(sys!=='s2'));
+  document.getElementById('curve').textContent = sys==='s2' ? 'Hilbert' : 'Ico edges';
+}
+document.querySelectorAll('[data-sys]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-sys]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); sys=b.dataset.sys; sync(); rebuild(); }));
+document.querySelectorAll('[data-proj]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-proj]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); proj=b.dataset.proj; rebuild(); }));
+document.querySelectorAll('[data-res]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-res]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); res=+b.dataset.res; rebuild(); }));
+document.getElementById('curve').addEventListener('click',e=>{
+  showCurve=!showCurve; e.target.classList.toggle('on',showCurve); rebuild(); });
+document.getElementById('spin').addEventListener('click',e=>{
+  spin=!spin; e.target.classList.toggle('on',spin); });
+
+function resize(){ const s=canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(s.width,s.height,false);
+  camera.aspect=s.width/s.height; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize);
+(function loop(){ requestAnimationFrame(loop);
+  if(spin&&!drag) root.rotation.y+=.0022;
+  renderer.render(scene,camera); })();
+resize(); sync(); rebuild();
+</script>
+</body>
+</html>
