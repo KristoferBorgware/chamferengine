@@ -61,7 +61,7 @@ a runnable demo where one exists.
 | 12 | [Glossary](docs/12-glossary.md) | Terms and constants |
 | 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
 
-**For agents:** [`AGENTS.md`](AGENTS.md) holds invariants, verified constants,
+**For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
 and naming conventions in a compact form intended for machine consumption.
 
 ---

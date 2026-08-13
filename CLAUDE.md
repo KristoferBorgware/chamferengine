@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 Compact reference for automated agents working on this repository. Humans should
 read [`README.md`](README.md) and `docs/` instead; this file is deliberately terse
