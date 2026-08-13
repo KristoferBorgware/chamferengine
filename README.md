@@ -59,6 +59,7 @@ a runnable demo where one exists.
 | 10 | [Pathfinding](docs/10-pathfinding.md) | A* on hexes, hierarchical search |
 | 11 | [Open topics](docs/11-open-topics.md) | Identified but not yet designed |
 | 12 | [Glossary](docs/12-glossary.md) | Terms and constants |
+| 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
 
 **For agents:** [`AGENTS.md`](AGENTS.md) holds invariants, verified constants,
 and naming conventions in a compact form intended for machine consumption.
@@ -67,7 +68,7 @@ and naming conventions in a compact form intended for machine consumption.
 
 ## Demos
 
-Fifteen self-contained HTML files. No build step, no dependencies to install —
+Sixteen self-contained HTML files. No build step, no dependencies to install —
 open any of them directly in a browser. All are mobile-friendly.
 
 See [`demos/README.md`](demos/README.md) for the annotated index.
@@ -90,6 +91,7 @@ node verification/adj.js       # face adjacency table is complete and consistent
 node verification/order.js     # no continuous curve through 4-way triangle children
 node verification/calc.js      # sizing formula matches exact cell-area maths
 node verification/scale.js     # cell counts and spacings per level
+node verification/frame.js     # holonomy == enclosed area; the 720° in two forms
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.
@@ -108,7 +110,8 @@ Claims in the documentation marked **[verified]** have a corresponding script.
 | Terrain generation | Approach chosen, prototype only |
 | Ray traversal | Approach chosen, 2D prototype only |
 | Pathfinding | Approach chosen, 2D prototype only |
-| Gravity, meshing, lighting, precision | **Not yet designed** — see doc 11 |
+| Gravity and orientation | Decided, verified |
+| Meshing, lighting, precision | **Not yet designed** — see doc 11 |
 
 ## Licence
 

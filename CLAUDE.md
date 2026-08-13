@@ -30,6 +30,11 @@ Violating any of these breaks the design. They are not tunable.
 6. The delta store distinguishes *never modified* from *modified to air*. An
    explicit "air" entry is meaningful.
 7. Block size is fixed at world creation. Radius absorbs level rounding.
+8. Up is `normalize(position)`. There is no global up and no global north — the
+   hairy ball theorem forbids one. Never store a heading as a world vector.
+9. Direction indices are ordered **counter-clockwise as seen from outside**,
+   never derived from `(q, r)` sign. Deriving them from local coordinates leaks
+   the middle-child mirror into ~46% of chunks and reverses every rail in them.
 
 ## Verified constants
 
@@ -45,6 +50,12 @@ Violating any of these breaks the design. They are not tunable.
 | RT defect split | `20 × 10.3°` + `12 × 42.8°` = `720°` | rhombic triacontahedron | `check.js` |
 | cube defect split | `8 × 90°` = `720°` | why cube spheres pinch | — |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
+| holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
+| pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
+| pentagon deflection | `36.07°` | no straight exit exists | `frame.js` |
+| pentagon antipodal pairs | 6 | poles can sit on two pentagons | `frame.js` |
+| horizon, 1.7 m eye, R 1700 m | `76 m` | `R·acos(R/(R+h))` | `frame.js` |
+| tilt between two points | `s / R` | 3.37° at 100 m on R 1700 m | `frame.js` |
 
 ## Established results
 
@@ -62,6 +73,15 @@ Violating any of these breaks the design. They are not tunable.
 - Hexagons in a Goldberg polyhedron are **near-regular, not congruent**. Area
   varies roughly 1.3:1 across the sphere. Do not write code assuming uniform
   cell area.
+- The 720° shows up **twice**, and the two forms behave oppositely under
+  refinement (`frame.js`). The *geometric* defect at a pentagon shrinks ~4× per
+  level (15.69° at L1 → 0.042° at L5); the *combinatorial* deficit is 1 direction
+  index = 60° at every level, forever. Raising subdivision depth hides pentagons
+  from terrain and walking players, and does **nothing** for rails, pipes or any
+  other directional machinery. Do not propose depth as a fix for the second.
+- There are **three** local frames, for three jobs, and they must not be
+  interconverted casually: axis (coordinates), transported (camera), grid
+  (machinery). See `docs/13-gravity-and-orientation.md`.
 
 ## Naming conventions
 
@@ -77,6 +97,8 @@ Violating any of these breaks the design. They are not tunable.
 | `(q, r)` | lattice coordinates within a chunk |
 | `cell` | one hexagon (or one of the 12 pentagons) at one layer |
 | `chunk` | one triangle at `chunkLevel`, the load/store unit |
+| `direction index` | 0–5 (0–4 on a pentagon) into a cell's CCW neighbour ring |
+| `holonomy` | rotation a carried heading gains around a closed loop |
 
 `depth` is overloaded in casual speech. In code and docs, always qualify:
 `subdivisionDepth` versus `crustDepth`.
@@ -85,8 +107,9 @@ Violating any of these breaks the design. They are not tunable.
 
 Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
 
-- Gravity and orientation (`up = normalize(position)`) — highest impact
-- Meshing strategy; greedy meshing does not transfer from cube worlds
+- Meshing strategy; greedy meshing does not transfer from cube worlds — highest
+  impact. LOD must key on **altitude**, not distance: the ground-level horizon on
+  a 1,700 m planet is 76 m
 - Floating-point precision at planet scale; floating origin needed
 - Lighting propagation with 8 neighbours and radial sky light
 - Six-state block rotation for directional blocks

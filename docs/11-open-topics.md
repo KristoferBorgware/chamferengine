@@ -5,21 +5,19 @@ implementation. Ordered roughly by how much they force changes elsewhere.
 
 ---
 
-## Gravity and "up" — highest impact
+## ~~Gravity and "up"~~ — designed, see [doc 13](13-gravity-and-orientation.md)
 
-There is no global up vector. **Up is `normalize(position)`.**
+Closed. Three frames rather than one: an axis frame for coordinates, a
+transported quaternion for the camera, and a discrete grid frame for directional
+machinery. Gravity itself is one `normalize`; the hard half was the horizontal
+frame, and there is provably no global one.
 
-This ripples into:
-
-- **Camera orientation** — use quaternions, not Euler angles. There is no
-  well-defined yaw/pitch relative to a fixed world axis.
-- **Player controllers** — every movement calculation is relative to a local
-  frame that rotates as you walk.
-- **Entity physics** — gravity is a vector toward the core, different everywhere.
-- **Visual consequence** — two buildings a kilometre apart are visibly tilted
-  relative to each other. Players notice this immediately.
-
-Most people underestimate this one. **Design it before writing a controller.**
+The finding that reaches furthest back into the rest of the design: the 720°
+appears **twice**, and the two behave oppositely under refinement. The geometric
+defect at a pentagon shrinks ~4× per level; the combinatorial deficit is
+**60° at every level, forever**. Raising subdivision depth hides pentagons from
+walkers and terrain, and does nothing at all for rails, pipes and roads. That
+should be read before deciding the pentagon question below.
 
 ---
 
@@ -83,6 +81,14 @@ Options:
 This is a **design decision**, not a technical one, and it should be made
 explicitly rather than by default.
 
+[Doc 13](13-gravity-and-orientation.md) quantifies what is actually being
+decided. A line entering a pentagon deflects **36.07°** either way — there is no
+opposite direction to leave by — and a circuit encircling one returns rotated by
+exactly one direction index. Neither shrinks with subdivision depth. Only the
+first option removes the problem rather than relocating it. Doc 13 also notes
+that the twelve pentagons form **six antipodal pairs**, so one pair can be made
+to carry the lat/long poles — which turns two of them into places worth naming.
+
 ---
 
 ## Player-facing coordinates
@@ -113,5 +119,9 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Gravity.** It is the one most likely to force changes in the rest of the
-design, and every other system inherits its choices.
+**Meshing and LOD.** With gravity settled, it is now the largest unknown, and
+[doc 13](13-gravity-and-orientation.md) hands it two constraints it did not have
+before: LOD must be driven by *altitude* rather than distance, because the
+ground-level horizon on a 1,700 m planet is only 76 m; and chunk-local `up` is
+accurate to about 1° at `C = 6`, which decides whether a chunk can be meshed in a
+single frame or needs a per-cell one.

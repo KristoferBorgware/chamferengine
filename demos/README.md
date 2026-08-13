@@ -1,6 +1,6 @@
 # Demos
 
-Fifteen self-contained HTML files. No build step, no `npm install`, no server
+Sixteen self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -124,6 +124,27 @@ seam or pentagon, because the generator samples 3D world space and never sees th
 addressing scheme.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+---
+
+## Orientation
+
+### [`local-frame.html`](local-frame.html)
+Why there is no global north, made physical. Drag the walker and the two frames
+separate: the blue one is carried and updated, the red one recomputed from the
+pole axis — watch it go undefined as the walker crosses a pole.
+
+The four loop presets are the point. Each walks a closed path and reports the
+heading rotation beside the area enclosed; they agree to two decimals every time
+— 0.65°, 90°, 180°, and a full turn for the equator. That is holonomy, and it is
+why a carried heading is a camera state and never a stored coordinate.
+
+The gold ring is the true horizon for a 1.7 m eye, drawn to scale: **76 m** on
+the doc-06 planet. Switch the planet to Earth and it shrinks below drawable.
+The violet dots are the twelve pentagons; the two gold ones are the antipodal
+pair carrying the lat/long poles.
+
+**Docs:** [13 — Gravity and orientation](../docs/13-gravity-and-orientation.md)
 
 ---
 

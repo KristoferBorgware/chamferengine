@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Local Frame — up, north, and holonomy</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:#0b0e14; color:#e6e8ee;
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  header { padding:14px 16px 10px; }
+  h1 { font-size:17px; font-weight:650; letter-spacing:-0.01em; }
+  .sub { font-size:12.5px; color:#8b93a7; margin-top:3px; }
+
+  .stage { position:relative; flex:1; min-height:54vh; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+  .hud {
+    position:absolute; top:10px; left:12px; right:12px;
+    font-size:12px; line-height:1.6; color:#c7ccd9;
+    background:rgba(11,14,20,.74); border:1px solid #222839;
+    padding:8px 11px; border-radius:8px; backdrop-filter:blur(6px);
+    max-width:320px;
+  }
+  .hud b { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .d-t { background:#4f8ef7; } .d-a { background:#f2543d; }
+  .d-p { background:#a78bfa; } .d-g { background:#ffc44d; }
+  .sep { height:1px; background:#222839; margin:6px 0; }
+  .note { color:#8b93a7; }
+
+  .flash {
+    position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    background:#132033; border:1px solid #2f6fd0; color:#dfe9fb;
+    padding:9px 14px; border-radius:9px; font-size:12.5px; line-height:1.55;
+    opacity:0; transition:opacity .25s; pointer-events:none; text-align:center;
+    max-width:min(420px,92vw);
+  }
+  .flash.on { opacity:1; }
+  .flash b { color:#fff; }
+
+  .panel {
+    padding:12px 16px 16px; border-top:1px solid #1b2130; background:#0e121b;
+    display:flex; flex-wrap:wrap; gap:9px; align-items:center;
+  }
+  button, select {
+    font:inherit; font-size:13px; font-weight:550;
+    padding:8px 12px; border-radius:8px; cursor:pointer;
+    background:#1a2130; color:#dfe3ec; border:1px solid #2a3245;
+  }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  .lbl { font-size:12px; color:#8b93a7; }
+  .grp { display:flex; gap:6px; align-items:center; }
+  .grp + .grp { border-left:1px solid #1b2130; padding-left:9px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>The local frame — up, north, and holonomy</h1>
+  <div class="sub">There is no global north. Walk a closed loop and your heading comes back rotated by the area you enclosed.</div>
+</header>
+
+<div class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div><span class="dot d-t"></span>transported frame — carried, never re-derived</div>
+    <div><span class="dot d-a"></span>axis frame — <span id="axisState">recomputed from the pole axis</span></div>
+    <div><span class="dot d-p"></span>twelve pentagons &nbsp;<span class="dot d-g"></span>the antipodal pair carrying the poles</div>
+    <div class="sep"></div>
+    <div>lat <b id="lat">—</b> · lon <b id="lon">—</b></div>
+    <div>area swept <b id="area">0.00</b>&deg; &nbsp;<span class="note">(of 720&deg; total)</span></div>
+    <div>tilt vs start <b id="tilt">0.00</b>&deg;</div>
+    <div>horizon <b id="hor">—</b> <span class="note" id="horNote">at 1.7 m eye height</span></div>
+    <div class="sep"></div>
+    <div class="note" id="hint">Drag on the planet to walk. Return to the white pin to close the loop.</div>
+  </div>
+  <div class="flash" id="flash"></div>
+</div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">drag</span>
+    <button id="mWalk" class="on">Walk</button>
+    <button id="mOrbit">Orbit</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">loop</span>
+    <button data-loop="tiny">Tiny</button>
+    <button data-loop="c60">60&deg; circle</button>
+    <button data-loop="octant">Octant</button>
+    <button data-loop="equator">Equator</button>
+  </div>
+  <div class="grp">
+    <button id="bAxis" class="on">Axis frame</button>
+    <button id="bHor">Horizon</button>
+    <button id="bReset">Reset</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">planet</span>
+    <select id="radius">
+      <option value="1700">1,700 m (doc 06)</option>
+      <option value="10000">10 km</option>
+      <option value="6371000">Earth</option>
+    </select>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const V3 = THREE.Vector3, DEG = 180/Math.PI;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 100);
+const root = new THREE.Group(); scene.add(root);
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.85); key.position.set(3,4,5); scene.add(key);
+
+// ---- the planet, and the icosahedron it is built on -------------------------
+const PHI = (1+Math.sqrt(5))/2;
+const IV = [[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],[0,-1,-PHI],
+            [0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]].map(v=>new V3(...v).normalize());
+const IF = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+            [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+// vertices 0 and 3 are antipodal (verification/frame.js, section 4): put the
+// lat/long axis through that pentagon pair so both poles land ON pentagons.
+const NORTH = IV[0].clone();
+
+root.add(new THREE.Mesh(new THREE.SphereGeometry(0.995, 72, 54),
+  new THREE.MeshPhongMaterial({color:0x1b2740, shininess:6, flatShading:false})));
+
+const slerp = (a,b,t) => {                       // great-circle interpolation
+  const d = Math.min(1, Math.max(-1, a.dot(b))), th = Math.acos(d);
+  if (th < 1e-9) return a.clone();
+  return a.clone().multiplyScalar(Math.sin((1-t)*th)/Math.sin(th))
+          .addScaledVector(b, Math.sin(t*th)/Math.sin(th)).normalize();
+};
+{ // icosahedron edges, drawn along great circles
+  const seen = new Set(), pts = [];
+  for (const f of IF) for (let i=0;i<3;i++){
+    const a = f[i], b = f[(i+1)%3], k = Math.min(a,b)+'_'+Math.max(a,b);
+    if (seen.has(k)) continue; seen.add(k);
+    for (let s=0;s<24;s++){
+      pts.push(slerp(IV[a],IV[b],s/24).multiplyScalar(1.001));
+      pts.push(slerp(IV[a],IV[b],(s+1)/24).multiplyScalar(1.001));
+    }
+  }
+  root.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:0x3a4156})));
+}
+// the twelve pentagons; the two on the lat/long axis in gold
+IV.forEach((v,i) => {
+  const pole = (i===0 || i===3);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(pole?0.042:0.026, 16, 12),
+    new THREE.MeshBasicMaterial({color: pole?0xffc44d:0xa78bfa}));
+  m.position.copy(v).multiplyScalar(1.005); root.add(m);
+});
+
+// ---- walker state -----------------------------------------------------------
+let pos = new V3(0.3,0.25,1).normalize();        // where the walker is
+let head;                                        // transported heading (tangent)
+let start, headStart, area, pathLen, base;
+const TRAIL_MAX = 60000;
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_MAX*3), 3));
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({color:0x6ee7ff}));
+trail.frustumCulled = false; root.add(trail);
+let trailN = 0;
+
+const walker = new THREE.Mesh(new THREE.SphereGeometry(0.022,16,12),
+  new THREE.MeshBasicMaterial({color:0xffffff})); root.add(walker);
+const pin = new THREE.Mesh(new THREE.SphereGeometry(0.018,12,10),
+  new THREE.MeshBasicMaterial({color:0xaab2c5})); root.add(pin);
+
+const mkArrow = (c,l) => { const a = new THREE.ArrowHelper(new V3(0,1,0), new V3(), l, c, l*0.3, l*0.16);
+  root.add(a); return a; };
+const aUp   = mkArrow(0x8b93a7, 0.30);
+const aHead = mkArrow(0x4f8ef7, 0.34);
+const aAxis = mkArrow(0xf2543d, 0.34);
+
+const horizon = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+  Array.from({length:129}, () => new V3())), new THREE.LineBasicMaterial({color:0xffc44d}));
+horizon.visible = false; root.add(horizon);
+
+function axisFrame(u){                            // stateless reference frame
+  const e = new V3().crossVectors(NORTH, u), s = e.length();
+  if (s < 1e-6) return {n:null, s};               // singular: u is a pole
+  e.divideScalar(s);
+  return {n:new V3().crossVectors(u, e).normalize(), s};
+}
+function reset(keepPos){
+  if (!keepPos) pos = new V3(0.3,0.25,1).normalize();
+  const f = axisFrame(pos);
+  head = (f.n || new V3(1,0,0)).clone();
+  start = pos.clone(); headStart = head.clone();
+  // Fan the swept area from a point 90 deg along the initial heading — which is
+  // the heading vector itself. Basing it at `start` would make every triangle
+  // degenerate for a loop that runs along a great circle through the start.
+  base = headStart.clone();
+  area = 0; pathLen = 0; trailN = 0; pushTrail(pos);
+  pin.position.copy(start).multiplyScalar(1.01);
+  closed = false; flash('');
+}
+function pushTrail(p){
+  if (trailN >= TRAIL_MAX) return;
+  trailGeo.attributes.position.setXYZ(trailN++, p.x*1.004, p.y*1.004, p.z*1.004);
+  trailGeo.attributes.position.needsUpdate = true;
+  trailGeo.setDrawRange(0, trailN);
+}
+// signed spherical excess of triangle (a,b,c) — Van Oosterom & Strackee
+function excess(a,b,c){
+  const num = a.dot(new V3().crossVectors(b,c));
+  const den = 1 + a.dot(b) + b.dot(c) + c.dot(a);
+  return 2*Math.atan2(num, den);
+}
+let closed = false, preset = false;
+function step(to){                                // move the walker one increment
+  const from = pos.clone();
+  if (from.distanceTo(to) < 1e-7) return;
+  const q = new THREE.Quaternion().setFromUnitVectors(from, to);
+  head.applyQuaternion(q).normalize();            // swing transport: no twist
+  area += excess(base, from, to);
+  pathLen += from.angleTo(to);
+  pos = to.clone(); pushTrail(pos);
+  if (!closed && !preset && pathLen > 0.35 && pos.angleTo(start) < 0.05) closeLoop();
+}
+function closeLoop(){
+  closed = true;
+  // shut the polygon along the geodesic back to the start, in BOTH quantities:
+  // the sliver's area, and the heading transported over the same shortcut.
+  area += excess(base, pos, start);
+  const q = new THREE.Quaternion().setFromUnitVectors(pos, start);
+  const h = head.clone().applyQuaternion(q).normalize();
+  const sgn = Math.atan2(new V3().crossVectors(headStart, h).dot(start), headStart.dot(h));
+  // the measured rotation is only known mod 360; the swept area is accumulated,
+  // so pick the branch of the rotation nearest it and let the two be compared
+  const raw = sgn*DEG, encl = area*DEG;
+  const rot = raw + 360*Math.round((encl - raw)/360);
+  const k = Math.round(rot/360), full = k !== 0 && Math.abs(rot - 360*k) < 1;
+  flash(`Loop closed. Heading rotated <b>${rot.toFixed(2)}&deg;</b>` +
+        ` &nbsp;·&nbsp; area enclosed <b>${encl.toFixed(2)}&deg;</b>` +
+        (full ? `<br>${Math.abs(k)} full turn${Math.abs(k)>1?'s':''} — so the heading is`
+                + ` back exactly where it started.`
+              : `<br>Same number. That is the holonomy — and it is not a bug.`));
+}
+let flashT = 0;
+function flash(html){
+  const el = document.getElementById('flash');
+  el.innerHTML = html; el.classList.toggle('on', !!html);
+  clearTimeout(flashT); if (html) flashT = setTimeout(()=>el.classList.remove('on'), 9000);
+}
+
+// ---- preset loops -----------------------------------------------------------
+const LOOPS = {
+  tiny:    {c:new V3(0.3,0.25,1).normalize(), r:0.06},
+  c60:     {c:NORTH.clone(), r:Math.PI/3},
+  equator: {c:NORTH.clone(), r:Math.PI/2},
+};
+let anim = null;
+function runLoop(name){
+  let path;
+  if (name === 'octant'){
+    const A = new V3(1,0,0), B = new V3(0,1,0), C = new V3(0,0,1), n = 90;
+    path = []; const legs = [[A,B],[B,C],[C,A]];
+    for (const [p,q] of legs) for (let i=0;i<n;i++) path.push(slerp(p,q,i/n));
+    path.push(A.clone());
+  } else {
+    const {c,r} = LOOPS[name];
+    let e1 = new V3().crossVectors(c, new V3(0,0,1));
+    if (e1.length() < 1e-6) e1 = new V3().crossVectors(c, new V3(1,0,0));
+    e1.normalize();
+    const e2 = new V3().crossVectors(c, e1).normalize(), n = 360;
+    path = Array.from({length:n+1}, (_,i) => {
+      const t = 2*Math.PI*i/n;
+      return c.clone().multiplyScalar(Math.cos(r))
+        .addScaledVector(e1, Math.sin(r)*Math.cos(t))
+        .addScaledVector(e2, Math.sin(r)*Math.sin(t)).normalize();
+    });
+  }
+  pos = path[0].clone(); reset(true); preset = true;
+  let i = 1;
+  clearInterval(anim);
+  anim = setInterval(() => {
+    for (let k=0;k<4 && i<path.length;k++) step(path[i++]);
+    if (i >= path.length){ clearInterval(anim); preset = false; if (!closed) closeLoop(); }
+  }, 16);
+}
+
+// ---- interaction ------------------------------------------------------------
+let mode = 'walk', drag = null, camRot = {x:0.25, y:0.4}, dist = 3.4;
+const ray = new THREE.Raycaster();
+function hitSphere(cx, cy){                       // analytic ray/unit-sphere hit
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1), camera);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const o = ray.ray.origin.clone().applyMatrix4(inv);
+  const d = ray.ray.direction.clone().transformDirection(inv).normalize();
+  const b = o.dot(d), c = o.dot(o) - 1, disc = b*b - c;
+  if (disc < 0) return null;
+  const t = -b - Math.sqrt(disc);
+  return t < 0 ? null : o.addScaledVector(d, t).normalize();
+}
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  const hit = mode === 'walk' ? hitSphere(e.clientX, e.clientY) : null;
+  if (hit){
+    clearInterval(anim); preset = false; drag = {walk:true};
+    // starting a drag away from the walker re-anchors the walk there rather
+    // than teleporting across the planet and counting the jump as distance
+    if (hit.angleTo(pos) > 0.03){ pos = hit.clone(); reset(true); } else step(hit);
+  }
+  else drag = {walk:false, x:e.clientX, y:e.clientY};
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (drag.walk){ const hit = hitSphere(e.clientX, e.clientY); if (hit) step(hit); }
+  else {
+    camRot.y += (e.clientX - drag.x)*0.006; camRot.x += (e.clientY - drag.y)*0.006;
+    camRot.x = Math.max(-1.4, Math.min(1.4, camRot.x));
+    drag.x = e.clientX; drag.y = e.clientY;
+  }
+});
+addEventListener('pointerup', () => drag = null);
+canvas.addEventListener('wheel', e => {
+  e.preventDefault(); dist = Math.max(1.6, Math.min(7, dist * (1 + Math.sign(e.deltaY)*0.1)));
+}, {passive:false});
+
+const btn = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+btn('mWalk',  e => { mode='walk';  e.target.classList.add('on'); document.getElementById('mOrbit').classList.remove('on'); });
+btn('mOrbit', e => { mode='orbit'; e.target.classList.add('on'); document.getElementById('mWalk').classList.remove('on'); });
+btn('bAxis',  e => { aAxis.visible = !aAxis.visible; e.target.classList.toggle('on', aAxis.visible); });
+btn('bHor',   e => { horizon.visible = !horizon.visible; e.target.classList.toggle('on', horizon.visible); });
+btn('bReset', () => { clearInterval(anim); reset(true); });
+document.querySelectorAll('[data-loop]').forEach(b =>
+  b.addEventListener('click', () => runLoop(b.dataset.loop)));
+
+// ---- frame ------------------------------------------------------------------
+function tick(){
+  requestAnimationFrame(tick);
+  const R = +document.getElementById('radius').value;
+
+  walker.position.copy(pos).multiplyScalar(1.012);
+  const f = axisFrame(pos);
+  aUp.position.copy(pos);   aUp.setDirection(pos);
+  aHead.position.copy(pos).multiplyScalar(1.002); aHead.setDirection(head);
+  aAxis.position.copy(pos).multiplyScalar(1.002);
+  if (f.n) aAxis.setDirection(f.n);
+  document.getElementById('axisState').textContent =
+    f.s < 0.02 ? 'UNDEFINED — you are on a pole' : 'recomputed from the pole axis';
+
+  // horizon circle for a 1.7 m eye on a planet of radius R, drawn TO SCALE --
+  // the whole point is how small it is. Clamped only so it never vanishes.
+  const trueAlpha = Math.acos(R/(R+1.7));
+  if (horizon.visible){
+    const alpha = Math.max(trueAlpha, 0.006);
+    let e1 = new V3().crossVectors(pos, new V3(0,0,1));
+    if (e1.length() < 1e-6) e1 = new V3().crossVectors(pos, new V3(1,0,0));
+    e1.normalize();
+    const e2 = new V3().crossVectors(pos, e1).normalize(), a = horizon.geometry.attributes.position;
+    for (let i=0;i<=128;i++){
+      const t = 2*Math.PI*i/128;
+      const p = pos.clone().multiplyScalar(Math.cos(alpha))
+        .addScaledVector(e1, Math.sin(alpha)*Math.cos(t))
+        .addScaledVector(e2, Math.sin(alpha)*Math.sin(t)).normalize().multiplyScalar(1.003);
+      a.setXYZ(i, p.x, p.y, p.z);
+    }
+    a.needsUpdate = true;
+  }
+
+  const lat = Math.asin(Math.max(-1, Math.min(1, pos.dot(NORTH))))*DEG;
+  const eRef = new V3().crossVectors(NORTH, new V3(0,0,1)).normalize();
+  const nRef = new V3().crossVectors(NORTH, eRef).normalize();
+  const t = pos.clone().addScaledVector(NORTH, -pos.dot(NORTH));
+  const lon = t.length() < 1e-6 ? 0 : Math.atan2(t.dot(nRef), t.dot(eRef))*DEG;
+  const set = (id,v) => document.getElementById(id).textContent = v;
+  set('lat', lat.toFixed(2)+'°'); set('lon', lon.toFixed(2)+'°');
+  set('area', (area*DEG).toFixed(2));
+  set('tilt', (pos.angleTo(start)*DEG).toFixed(2));
+  const hd = R*trueAlpha;
+  set('hor', hd < 1000 ? hd.toFixed(0)+' m' : (hd/1000).toFixed(1)+' km');
+  set('horNote', `at 1.7 m eye height · ${(trueAlpha*DEG).toFixed(2)}°`
+    + (trueAlpha < 0.006 ? ' — ring drawn at minimum size' : ''));
+
+  camera.position.set(
+    dist*Math.cos(camRot.x)*Math.sin(camRot.y),
+    dist*Math.sin(camRot.x),
+    dist*Math.cos(camRot.x)*Math.cos(camRot.y));
+  camera.lookAt(0,0,0);
+  renderer.render(scene, camera);
+}
+function resize(){
+  const s = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(s.width, s.height, false);
+  camera.aspect = s.width/s.height; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize(); reset(); tick();
+</script>
+</body>
+</html>

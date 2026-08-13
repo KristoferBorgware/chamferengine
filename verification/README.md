@@ -106,6 +106,35 @@ Prints cell counts and block sizes per subdivision level for an Earth-sized and 
 
 ---
 
+## `frame.js` — gravity and orientation
+
+Five checks, covering the local frame and where the 720° lands in it.
+
+**Verifies:**
+
+1. **Holonomy = enclosed area.** Parallel-transports a tangent vector around
+   circles of colatitude 10°–120° in 200,000 steps; the accumulated rotation
+   matches `2π(1 − cos θ)` to better than 1e-8 degrees at every radius.
+2. **The 720°, two ways.** Builds the real grid at levels 1–5. The *geometric*
+   defect at a pentagon shrinks ~4× per level (15.69° → 0.042°); the
+   *combinatorial* deficit `6 − degree` is **1 index at every level**. Both total
+   720.000°.
+3. **Direction-index transport.** Walks the neighbour ring of every cell whose
+   neighbours are all hexagons at level 4: slip is **0** around all 2,490
+   pentagon-free hexagons and **exactly 1 index (60°)** around each of the 12
+   pentagons. Measures the pentagon interior angle at 71.965°, so a line entering
+   one deflects **36.07°** either way.
+4. **Antipodal pentagons.** The icosahedron is centrally symmetric, so the twelve
+   pentagons form **6 antipodal pairs** — a lat/long axis can be run through one,
+   putting both coordinate poles on pentagons.
+5. **Planet-scale consequences.** Tilt `s/R` between two builds, horizon
+   `R·acos(R/(R+h))` (**76 m** for a standing player on the doc-06 planet, against
+   4.7 km on Earth), and how far `up` swings across a chunk at each chunk level.
+
+**Used in:** [doc 13](../docs/13-gravity-and-orientation.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a

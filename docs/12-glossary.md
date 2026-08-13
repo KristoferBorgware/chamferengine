@@ -5,6 +5,10 @@
 **Aperture** — the ratio by which cell count grows per subdivision step. This
 project uses aperture 4 (triangles split into four). H3 uses aperture 7.
 
+**Axis frame** — the stateless local frame `east = normalize(cross(N, up))`,
+`north = cross(up, east)`, for a chosen pole axis `N`. Singular at two points.
+Used for lat/long, maps and sun position. See [doc 13](13-gravity-and-orientation.md).
+
 **Barycentric coordinates** — three mixing ratios summing to 1, describing a
 point as a blend of a triangle's three corners. See [doc 04](04-position-lookup.md).
 
@@ -48,6 +52,17 @@ exact.
 **Goldberg polyhedron** — hexagons plus exactly twelve pentagons; the dual of a
 geodesic sphere. The chosen tiling.
 
+**Grid frame** — a direction expressed as an index into a cell's neighbour ring,
+ordered counter-clockwise as seen from outside. Discrete, stateless, defined
+everywhere. The frame directional blocks and rails must use.
+
+**Hairy ball theorem** — every continuous tangent vector field on a sphere
+vanishes somewhere. Why no global "north" exists. The same 720° as Gauss–Bonnet,
+since 4π steradians is χ · 2π.
+
+**Holonomy** — the rotation a parallel-transported heading picks up around a
+closed loop, equal to the solid angle the loop encloses. Not an error.
+
 **`(i, j)`** — lattice coordinates across a whole face.
 
 **Layer** — radial index, counted downward from the crust top.
@@ -60,6 +75,14 @@ are stripped from `(i, j)`.
 
 **Subdivision depth (`D`)** — how many times triangles are split. Sets horizontal
 grid fineness. **Unrelated to crust depth.**
+
+**Swing rotation** — the minimal, twist-free rotation carrying one unit vector to
+another. How a carried orientation is updated as the player walks and `up`
+changes. Also called parallel transport.
+
+**Transported frame** — orientation held as a quaternion and updated by swing
+rotation rather than recomputed. No singularity anywhere, but path-dependent.
+Camera and controller state only; never a stored coordinate.
 
 ---
 
@@ -82,6 +105,20 @@ grid fineness. **Unrelated to crust depth.**
 | Adjacency table | 60 entries, 180 bytes | 20 × 3 × 3 bytes |
 | Flipped-frame cells | ≈ 46% | descended through a middle child |
 | Border cells needing ownership rule | ~6% at D3/C0 | falls as chunks grow |
+| Pentagon direction deficit | 1 index = 60° | never shrinks with depth |
+| Pentagon deflection | 36.07° | a straight line cannot pass through one |
+| Pentagon antipodal pairs | 6 | so poles can be placed on two of them |
+| Holonomy of a closed walk | enclosed area / R² | rotation of a carried heading |
+
+## Orientation reference — 1,700 m planet
+
+| Quantity | Value |
+|---|---|
+| Horizon, 1.7 m eye | 76 m (Earth: 4.7 km) |
+| Horizon, 50 m eye | 407 m |
+| Tilt between builds 100 m apart | 3.37° |
+| `up` variation across a chunk, D 11 / C 6 | 1.08° |
+| Gravity at a 64-block crust floor | 96.2% of surface |
 
 ## Defect distribution by tiling
 
