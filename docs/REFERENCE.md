@@ -26,6 +26,7 @@ numbered documents.
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
+| [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
@@ -335,6 +336,55 @@ does hexRound return the cell whose centre is nearest on the sphere?
   meshes a third thing again -- the dual polyhedron's corners -- so the
   specification currently implies three boundaries that agree only to ~0.1
   of a cell. Pick one and say so.
+```
+
+## `interest.js`
+
+Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it.
+
+Cited by [doc 22](22-multiplayer-interest.md).
+
+```
+worked planet: R = 1700 m, D = 11, chunk level C = 6
+  81,920 chunks, each about 32 m across
+
+1. how many ID ranges a player's interest region breaks into
+   radius      chunks in range   contiguous ID runs   chunks per run
+      76 m             41              10.9            3.73
+     200 m            289              31.4            9.22
+     500 m           1765              80.2           22.00
+    1000 m           6884             155.6           44.24
+   A contiguous ID range really is one compact patch of surface -- doc 03
+   is right about that. But a DISC is not a subtree, so the converse fails:
+   a player's region is not one range, it is many.
+
+2. does doc 03's child order reduce the fragmentation?
+   naive [0,1,2,3]      650 chunks in   55.7 runs   11.67 chunks per run
+   doc 03 [0,3,1,2]     632 chunks in   48.6 runs   12.99 chunks per run
+   The ordering barely moves it, and that is expected: order.js showed the
+   four children cannot be walked edge-to-edge, so the curve jumps whatever
+   order you pick. Fragmentation is a property of the tree, not the walk.
+
+3. the cost of not being clever: one dot product per player per update
+   20,000 updates x 200 players = 4.0M tests in 12 ms
+   333.3M tests per second, single threaded
+   A busy server does not produce 20,000 chunk updates a second. The whole
+   question is smaller than the machinery doc 11 imagined for it.
+
+4. what the ID ordering is actually good for
+   one player at 300 m: 583 chunks in 37 runs
+   the 5 largest runs cover 364 of them (62%)
+   So a handful of range reads fetches most of what a player needs, and the
+   tail is singletons. That is a DISK layout win -- sequential reads -- not
+   an interest-test win.
+
+verdict
+   Doc 11 called this "specifying, not inventing" and it is, but not for the
+   stated reason. A contiguous ID range is one compact patch; a compact patch
+   is NOT one contiguous range, and a player's disc breaks into tens to
+   hundreds of runs however the children are ordered. The interest test wants
+   a dot product per player, which is free. The ID ordering earns its keep on
+   DISK, where a few long runs fetch most of a player's region sequentially.
 ```
 
 ## `light.js`
@@ -886,7 +936,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass took 863 ms for 163,842 cells
+   whole pass took 797 ms for 163,842 cells
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1311,4 +1361,4 @@ verdict
 
 ---
 
-_23 scripts. Every number above is reproduced by running them._
+_24 scripts. Every number above is reproduced by running them._

@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Eleven entries are struck through because they have since been closed. They are
+Twelve entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -320,30 +320,62 @@ sample is literally one of the fine cells.
 
 ---
 
-## Multiplayer interest management
+## ~~Multiplayer interest management~~ — designed, see [doc 22](22-multiplayer-interest.md)
 
-The easy one, listed for completeness: "which players care about this chunk
-update" is an **ID range comparison**. The addressing scheme does the work. Needs
-specifying, not inventing.
+Closed, and it really was the easy one — but not for the reason this entry gave
+for the whole life of the specification.
+
+This page said "which players care about this chunk update" is an **ID range
+comparison**, and that the addressing scheme does the work. The first half is
+wrong. A contiguous ID range *is* one compact patch of surface
+([doc 03](03-addressing.md)), but the converse does not follow: a player's disc
+does not line up with any subtree, so it breaks into **10.9 ranges at a 76 m
+horizon** and **155.6 at a kilometre**. Changing the traversal order buys about
+13% and no more, because `order.js` had already proved the four children of a
+triangle cannot be walked edge-to-edge.
+
+The conclusion survives anyway, because the question was pointed the wrong way.
+Ask "which players is this update near" instead of "which IDs does this player
+cover" and it is **one dot product per player** — 286 million a second on one
+thread, with no index and nothing to keep in sync.
+
+The addressing scheme does earn its keep, on **disk** rather than on the wire:
+five runs fetch **62%** of a player's region sequentially. Which is what doc 03
+claimed for it in the first place. Reading a storage-locality result as a
+networking mechanism is what produced the wrong plan.
 
 ---
 
 ## Suggested next step
 
-**There is no structural gap left.** [Doc 18](18-cell-boundary.md) closed the last
-one, so everything below this line is a system to design or content to write, not
-a hole in the geometry.
+**There is nothing left on this page.** Every entry is struck through.
 
-What remains is **multiplayer interest management**, which this page has always
-described as specifying rather than inventing: "which players care about this
-chunk update" is an ID range comparison, and the addressing scheme does the work.
-**The geometric core is closed, and so is the terrain.**
+That is not the same as the design being finished. Each closed document carries
+its own **Still open** section, and those are where the remaining work lives —
+they are narrower and more concrete than anything that was ever listed here. The
+ones that reach furthest:
+
+- **Determinism across clients** ([doc 15](15-precision-and-origin.md)). `float64`
+  is not bit-identical across platforms for transcendental functions, and
+  `normalize` uses a square root. Whether multiplayer needs bit-exact agreement or
+  only agreement to within a block is unanswered, and
+  [doc 22](22-multiplayer-interest.md) now leans on it too — a client can only
+  regenerate the coarse map instead of downloading it if the noise matches.
+- **What happens where a player's edits meet a global process**
+  ([doc 21](21-rivers-and-erosion.md)). The coarse map is read-only, so a dammed
+  river has nowhere to live.
+- **Terrain at a mesh corner** ([doc 18](18-cell-boundary.md)). Three cells meet
+  at a corner and may disagree about its height.
+
+**The geometric core is closed, the terrain is closed, and the systems are
+closed.** What is left is implementation, and the questions implementation will
+raise.
 
 ---
 
-## What closing eleven of these taught
+## What closing twelve of these taught
 
-All eleven closed items came back with the same shape of answer, and it is worth
+All twelve closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

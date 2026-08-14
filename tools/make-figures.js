@@ -439,6 +439,108 @@ const made = [];
 
 
 // =============================================================================
+// 22 — patch-is-not-a-range: a subtree is a patch, a patch is not a subtree
+// =============================================================================
+{
+  // subdivide a triangle three times, walk it depth-first in doc 03's order,
+  // and mark the ones a disc covers -- then show where they land on the ID line
+  const T3 = tri(120, 122, 190);
+  const order = [0,3,1,2], rank = []; order.forEach((d,k) => rank[d]=k);
+  const leaves = [];
+  const rec = (A,B,C,depth,idx) => {
+    if (depth === 3){ leaves.push({ idx, tri:[A,B,C],
+      c:[(A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3] }); return; }
+    const ab=[(A[0]+B[0])/2,(A[1]+B[1])/2], bc=[(B[0]+C[0])/2,(B[1]+C[1])/2],
+          ca=[(C[0]+A[0])/2,(C[1]+A[1])/2];
+    const kids=[[A,ab,ca],[ab,B,bc],[ca,bc,C],[ab,bc,ca]];
+    for (let d=0;d<4;d++) rec(...kids[d], depth+1, idx*4+rank[d]);
+  };
+  rec(T3.A, T3.B, T3.C, 0, 0);
+  leaves.sort((a,b)=>a.idx-b.idx);
+  const centre = [126, 132], rad = 52;
+  const inside = leaves.map(l => Math.hypot(l.c[0]-centre[0], l.c[1]-centre[1]) < rad);
+  let cells = '';
+  leaves.forEach((l,k) => {
+    cells += `<polygon class="${inside[k]?'cf-af':'cf-l'}" points="${pts(l.tri)}"/>`;
+  });
+  // the ID line
+  const bx = 236, bw = 182, cw = bw/leaves.length;
+  let bar = '';
+  leaves.forEach((l,k) => {
+    bar += `<rect class="${inside[k]?'cf-af':'cf-fill'}" x="${f(bx+k*cw)}" y="120"`
+        +  ` width="${f(cw-0.4)}" height="20"/>`;
+  });
+  let runs = 1;
+  for (let k=1;k<leaves.length;k++) if (inside[k] && !inside[k-1]) runs++;
+  runs = inside.filter((v,k)=>v && !inside[k-1]).length;
+  made.push(svg('patch-is-not-a-range', 440, 214, `
+  ${cells}
+  <circle class="cf-g" cx="${centre[0]}" cy="${centre[1]}" r="${rad}" stroke-dasharray="5 4"/>
+  <text class="cf-d" x="120" y="30" text-anchor="middle">what the player can see</text>
+  <text class="cf-c" x="${bx}" y="30">the same chunks, on the ID line</text>
+  ${bar}
+  <text class="cf-d" x="${bx}" y="112">low IDs</text>
+  <text class="cf-d" x="${f(bx+bw)}" y="112" text-anchor="end">high IDs</text>
+  <text class="cf-gd" x="${bx}" y="166">${runs} separate runs, not one</text>
+  <text class="cf-d" x="${bx}" y="188">a range is always a patch.</text>
+  <text class="cf-d" x="${bx}" y="206">a patch is not always a range.</text>`));
+}
+
+// =============================================================================
+// 22 — runs-follow-the-rim: chunks grow with area, runs with perimeter
+// =============================================================================
+{
+  const x0 = 62, y0 = 158, W = 322, H = 116;
+  const rows = [[76,41,10.9],[200,289,31.4],[500,1765,80.2],[1000,6884,155.6]];
+  const X = r => x0 + W*(r-76)/924;
+  const Yc = v => y0 - H*Math.sqrt(v/6884);
+  const Yr = v => y0 - H*(v/155.6);
+  const line = (fy, key, cls) => `<path class="${cls}" fill="none" d="M`
+    + rows.map(r => `${f(X(r[0]))} ${f(fy(r[key]))}`).join('L') + `"/>`;
+  const dots = (fy, key, cls) => rows.map(r =>
+    `<circle class="${cls}" cx="${f(X(r[0]))}" cy="${f(fy(r[key]))}" r="3.5"/>`).join('');
+  made.push(svg('runs-follow-the-rim', 440, 214, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  ${line(Yc,1,'cf-g')}${dots(Yc,1,'cf-gf')}
+  ${line(Yr,2,'cf-a')}${dots(Yr,2,'cf-af')}
+  <text class="cf-gd" x="${f(X(1000)+6)}" y="${f(Yc(6884)+4)}">chunks</text>
+  <text class="cf-c" x="${f(X(1000)+6)}" y="${f(Yr(155.6)+18)}">runs</text>
+  <text class="cf-d" x="${f(x0+W/2)}" y="${y0+20}" text-anchor="middle">interest radius &#8594;  76 m to 1,000 m</text>
+  <text class="cf-c" x="14" y="26">chunks grow with the AREA of the region</text>
+  <text class="cf-gd" x="14" y="46">runs grow with its RIM &#8212; about 0.156 per metre</text>
+  <text class="cf-d" x="14" y="200">so the bigger the region, the better a range does: 3.7 chunks per run at</text>
+  <text class="cf-d" x="14" y="212">76 m, 44 per run at a kilometre</text>`));
+}
+
+// =============================================================================
+// 22 — ask-the-other-question: invert it and the problem disappears
+// =============================================================================
+{
+  const AR = `<defs><marker id="aq1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>`;
+  let players = '', links = '';
+  const hub = [318, 116];
+  const ps = [[236,54],[248,150],[300,186],[392,72],[404,158],[352,36]];
+  ps.forEach((p,k) => {
+    const near = k < 3;
+    players += `<circle class="${near?'cf-af':'cf-fill'}" cx="${p[0]}" cy="${p[1]}" r="7"/>`;
+    links += `<path class="${near?'cf-a':'cf-l'}" d="M${hub[0]} ${hub[1]}L${p[0]} ${p[1]}"`
+          + (near ? ` marker-end="url(#aq1)"` : ` stroke-dasharray="3 4"`) + `/>`;
+  });
+  made.push(svg('ask-the-other-question', 440, 214, `${AR}
+  <text class="cf-c" x="14" y="30">instead of &#8220;which IDs does this player cover?&#8221;</text>
+  <text class="cf-c" x="14" y="52">ask &#8220;which players is this update near?&#8221;</text>
+  <text class="cf-d" x="14" y="82">one dot product each &#8212;</text>
+  <text class="cf-d" x="14" y="100">no ranges, no tree walk,</text>
+  <text class="cf-d" x="14" y="118">nothing to keep in sync</text>
+  <text class="cf-c" x="14" y="150">286M tests a second</text>
+  <text class="cf-d" x="14" y="172">on one thread</text>
+  ${links}
+  <polygon class="cf-gf" points="${pts(hexPts(hub[0], hub[1], 16))}"/>
+  <text class="cf-gd" x="${hub[0]}" y="${hub[1]+40}" text-anchor="middle">one chunk update</text>`));
+}
+
+// =============================================================================
 // 21 — rivers. A shared 1D profile, generated rather than drawn, so the
 // cross-sections come from a real noise function.
 // =============================================================================

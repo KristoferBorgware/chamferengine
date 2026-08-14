@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 214" width="440" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+<defs><marker id="aq1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-c" x="14" y="30">instead of &#8220;which IDs does this player cover?&#8221;</text>
+  <text class="cf-c" x="14" y="52">ask &#8220;which players is this update near?&#8221;</text>
+  <text class="cf-d" x="14" y="82">one dot product each &#8212;</text>
+  <text class="cf-d" x="14" y="100">no ranges, no tree walk,</text>
+  <text class="cf-d" x="14" y="118">nothing to keep in sync</text>
+  <text class="cf-c" x="14" y="150">286M tests a second</text>
+  <text class="cf-d" x="14" y="172">on one thread</text>
+  <path class="cf-a" d="M318 116L236 54" marker-end="url(#aq1)"/><path class="cf-a" d="M318 116L248 150" marker-end="url(#aq1)"/><path class="cf-a" d="M318 116L300 186" marker-end="url(#aq1)"/><path class="cf-l" d="M318 116L392 72" stroke-dasharray="3 4"/><path class="cf-l" d="M318 116L404 158" stroke-dasharray="3 4"/><path class="cf-l" d="M318 116L352 36" stroke-dasharray="3 4"/>
+  <polygon class="cf-gf" points="318.0,100.0 331.9,108.0 331.9,124.0 318.0,132.0 304.1,124.0 304.1,108.0"/>
+  <text class="cf-gd" x="318" y="156" text-anchor="middle">one chunk update</text>
+</svg>

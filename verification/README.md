@@ -423,6 +423,36 @@ prices both sides.
 
 ---
 
+## `interest.js` — is a player's region an ID range?
+
+Doc 11 called multiplayer interest "an ID range comparison; the addressing scheme
+does the work". Doc 03 does prove a contiguous range is one compact patch — but
+this needed the converse, and the converse of a true statement is not free.
+
+**Verifies:**
+
+1. **It is not one range.** On the doc-06 planet at `D` 11 / `C` 6, a player's
+   disc covers **10.9** contiguous ID runs at a 76 m horizon, 31.4 at 200 m, 80.2
+   at 500 m and **155.6** at a kilometre. A disc is not a subtree.
+2. **The walk order cannot save it.** Doc 03's `[0,3,1,2]` gives 48.6 runs against
+   the naive `[0,1,2,3]`'s 55.7 — about **13%**. Expected, since `order.js` proved
+   the four children cannot be walked edge-to-edge, so the curve jumps whatever
+   order is chosen. Fragmentation belongs to the tree, not the walk.
+3. **Runs follow the rim, chunks follow the area.** Runs come out at about
+   **0.156 per metre** of radius — linear — while chunks go as the square. So
+   ranges improve with size: 3.7 chunks per run at the horizon, 44.2 at a
+   kilometre.
+4. **Inverting the question makes it free.** Testing each update against each
+   player is one dot product: 20,000 updates × 200 players = 4.0M tests in
+   **14 ms**, or **286M tests per second** single threaded.
+5. **The ordering earns its keep on disk.** One player at 300 m: 583 chunks in 37
+   runs, and the **five largest runs cover 62%** of them. A storage-locality win,
+   which is what doc 03 claimed for it — not a networking one.
+
+**Used in:** [doc 22](../docs/22-multiplayer-interest.md)
+
+---
+
 ## `rivers.js` — rivers, erosion and continents
 
 The three things fBm cannot make, because all three are global. Doc 08 sketched a

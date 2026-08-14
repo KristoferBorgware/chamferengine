@@ -68,6 +68,7 @@ a runnable demo where one exists.
 | 19 | [Directional blocks](docs/19-directional-blocks.md) | Six states, placing by facing, and the circuit that does not close |
 | 20 | [Player-facing coordinates](docs/20-player-coordinates.md) | Latitude, longitude and altitude, with the poles on two pentagons |
 | 21 | [Rivers, erosion and continents](docs/21-rivers-and-erosion.md) | The one stored map, flow routing, and why continents come first |
+| 22 | [Multiplayer interest management](docs/22-multiplayer-interest.md) | Who to tell about an edit, and why it is not an ID range |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -80,7 +81,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all twenty-three verification scripts and fails the build if
+`make-reference.js` runs all twenty-four verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a

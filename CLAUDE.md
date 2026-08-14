@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 21 carry the hardest material in the specification and are the ones
+13 through 22 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 21.
+- `docs/` — prose specification, ordered 00 through 22.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -174,6 +174,7 @@ script owns its numbers.
 | [19](docs/19-directional-blocks.md) | 6-state rotation, placing by facing, the loop that does not close | `rotation.js` |
 | [20](docs/20-player-coordinates.md) | lat/long/altitude, the axis through a pentagon pair, what to share | `coords.js` |
 | [21](docs/21-rivers-and-erosion.md) | the one stored map, flow routing, pit filling, why continents come first | `rivers.js` |
+| [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -439,6 +440,13 @@ Violating any of these breaks the design. They are not tunable.
   routing gives a 31-cell river on small blobs and 86 on a large landmass, so
   build the continent tier first. The coarse lookup is masking the low bits of
   **`(i, j)`**, not the path digits — those give a triangle, not a cell.
+- **A patch is not an ID range** (`interest.js`, doc 22). A contiguous range IS
+  one compact patch (doc 03), but the converse fails: a player's disc breaks into
+  **10.9** runs at a 76 m horizon and **155.6** at a kilometre, and the child
+  order buys 13% at most because `order.js` already proved the four children
+  cannot be walked edge-to-edge. Runs scale with the region's **rim**, chunks with
+  its **area**. So interest is **one dot product per player** (286M/s), and the ID
+  ordering earns its keep on **disk** — 5 runs fetch 62% of a region.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -466,9 +474,17 @@ Violating any of these breaks the design. They are not tunable.
 
 ## Known gaps
 
-Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
+**Doc 11 is fully struck through** — every entry on it is closed. The remaining
+work lives in each document's own **Still open** section, and is narrower than
+anything doc 11 ever listed. The ones that reach furthest:
 
-- ~~Layer merging~~ — **struck** (`taper.js`, doc 06). Cap the crust; do not
-  reopen this without reading the price
+- **Determinism across clients** (doc 15) — `float64` is not bit-identical across
+  platforms for transcendentals and `normalize` uses a square root. Doc 22 now
+  leans on it: a client can only regenerate the coarse map instead of downloading
+  it if the noise matches bit for bit
+- **Player edits versus global processes** (doc 21) — the coarse map is read-only,
+  so a dammed river has nowhere to live
+- **Terrain height at a mesh corner** (doc 18) — three cells meet there and may
+  disagree about it
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
   geometry; a flood fill propagates inward, so the rule may not transfer
