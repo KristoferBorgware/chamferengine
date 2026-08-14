@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 234" width="430" height="234">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs>
+    <marker id="lt1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="lt2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  <polygon class="cf-l" points="132.0,26.9 155.9,40.7 155.9,68.3 132.0,82.1 108.1,68.3 108.1,40.7"/><polygon class="cf-l" points="190.5,69.4 214.4,83.2 214.4,110.8 190.5,124.6 166.6,110.8 166.6,83.2"/><polygon class="cf-l" points="168.1,138.2 192.1,152.0 192.1,179.6 168.1,193.4 144.2,179.6 144.2,152.0"/><polygon class="cf-l" points="95.9,138.2 119.8,152.0 119.8,179.6 95.9,193.4 71.9,179.6 71.9,152.0"/><polygon class="cf-l" points="73.5,69.4 97.4,83.2 97.4,110.8 73.5,124.6 49.6,110.8 49.6,83.2"/>
+  <polygon class="cf-gf" points="132.0,94.4 152.5,109.3 144.7,133.5 119.3,133.5 111.5,109.3"/>
+  <path class="cf-a" stroke-width="3" fill="none" d="M132.0 54.5L190.5 97.0L168.1 165.8L95.9 165.8L73.5 97.0L132.0 54.5"/>
+  <path class="cf-a" d="M132.0 54.5l34 0" marker-end="url(#lt1)"/>
+  <path class="cf-g" d="M132.0 54.5l17 -29" marker-end="url(#lt2)"/>
+  <text class="cf-c" x="172.0" y="72.5">set off</text>
+  <text class="cf-gd" x="158.0" y="18.5">came back</text>
+  <text class="cf-c" x="262" y="64">go all the way round making turns</text>
+  <text class="cf-c" x="262" y="84">that add up to nothing&#8230;</text>
+  <text class="cf-gd" x="262" y="116">&#8230;and you are 60&#176; off</text>
+  <text class="cf-d" x="262" y="146">the loop needs one EXTRA turn to close,</text>
+  <text class="cf-d" x="262" y="164">and only because a pentagon is inside it</text>
+  <text class="cf-d" x="14" y="212">move the loop so the pentagon is outside and it closes perfectly.</text>
+  <text class="cf-d" x="14" y="230">the width of the loop and where it is centred make no difference at all.</text>
+</svg>

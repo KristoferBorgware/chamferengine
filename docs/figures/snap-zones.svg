@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 226" width="430" height="226">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="sz1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <path class="cf-gf" opacity="0.35" d="M140 116L204.1 79.0 A 74 74 0 0 1 204.1 153.0Z"/><path class="cf-af" opacity="0.35" d="M140 116L204.1 153.0 A 74 74 0 0 1 140.0 190.0Z"/><path class="cf-gf" opacity="0.35" d="M140 116L140.0 190.0 A 74 74 0 0 1 75.9 153.0Z"/><path class="cf-af" opacity="0.35" d="M140 116L75.9 153.0 A 74 74 0 0 1 75.9 79.0Z"/><path class="cf-gf" opacity="0.35" d="M140 116L75.9 79.0 A 74 74 0 0 1 140.0 42.0Z"/><path class="cf-af" opacity="0.35" d="M140 116L140.0 42.0 A 74 74 0 0 1 204.1 79.0Z"/><path class="cf-a" d="M140 116L200.7 116.0" marker-end="url(#sz1)"/><text class="cf-c" x="227.0" y="120.0" text-anchor="middle">0</text><path class="cf-a" d="M140 116L170.3 168.6" marker-end="url(#sz1)"/><text class="cf-c" x="183.5" y="195.3" text-anchor="middle">1</text><path class="cf-a" d="M140 116L109.7 168.6" marker-end="url(#sz1)"/><text class="cf-c" x="96.5" y="195.3" text-anchor="middle">2</text><path class="cf-a" d="M140 116L79.3 116.0" marker-end="url(#sz1)"/><text class="cf-c" x="53.0" y="120.0" text-anchor="middle">3</text><path class="cf-a" d="M140 116L109.7 63.4" marker-end="url(#sz1)"/><text class="cf-c" x="96.5" y="44.7" text-anchor="middle">4</text><path class="cf-a" d="M140 116L170.3 63.4" marker-end="url(#sz1)"/><text class="cf-c" x="183.5" y="44.7" text-anchor="middle">5</text>
+  <circle class="cf-fill" cx="140" cy="116" r="9"/>
+  <text class="cf-c" x="256" y="60">aim anywhere in a wedge</text>
+  <text class="cf-d" x="256" y="82">and the block takes that direction</text>
+  <text class="cf-c" x="256" y="118">tightest wedge measured: 54&#176;</text>
+  <text class="cf-d" x="256" y="140">so &#177;27&#176; of slack, everywhere</text>
+  <text class="cf-d" x="256" y="168">on a perfect hexagon it would be 60&#176;;</text>
+  <text class="cf-d" x="256" y="186">the sphere costs six degrees of it</text>
+  <text class="cf-d" x="14" y="212">a mouse aims far better than 27&#176;, so snapping never feels ambiguous</text>
+</svg>

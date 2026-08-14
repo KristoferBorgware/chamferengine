@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 18 carry the hardest material in the specification and are the ones
+13 through 19 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 18.
+- `docs/` — prose specification, ordered 00 through 19.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -171,6 +171,7 @@ script owns its numbers.
 | [16](docs/16-lighting.md) | 8 neighbours, sky light, the free terminator, light storage | `light.js` |
 | [17](docs/17-pentagons.md) | the pentagon decision: protected landmarks, and why | `pentagon.js` |
 | [18](docs/18-cell-boundary.md) | which curve a cell edge is; the mesh and the lookup reconciled | `boundary.js` |
+| [19](docs/19-directional-blocks.md) | 6-state rotation, placing by facing, the loop that does not close | `rotation.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -241,8 +242,14 @@ Violating any of these breaks the design. They are not tunable.
     case into rails, pipes or conveyors; write the placement refusal instead.
 16. A heading carried along a path **must not be assumed to close** when the path
     does. A loop enclosing an odd number of pentagons returns rotated by one
-    direction index **at any radius** — the slip is topological, so no exclusion
-    zone, ocean or distance fixes it. Recompute headings from the grid per step.
+    direction index — measured at **any radius and any offset** (`rotation.js`),
+    so the slip depends only on what is **inside** the loop, not its width or its
+    centre. No exclusion zone, ocean or distance fixes it. Recompute headings
+    from the grid per step, and never carry one round a loop.
+17. A block rotation is a **direction index into the cell's own neighbour ring**,
+    6 states in 3 bits (doc 19). Never a world vector, never derived from
+    `(q, r)` sign — 46% of chunks are turned half a turn, so a stored value would
+    mean the opposite direction in half the world, on disk as well as on screen.
 
 ## Verified constants
 
@@ -454,6 +461,5 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
   reopen this without reading the price
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
   geometry; a flood fill propagates inward, so the rule may not transfer
-- Six-state block rotation for directional blocks
 - Player-facing coordinates (latitude / longitude / altitude)
 - Rivers, erosion, and plate-scale continents — all global processes

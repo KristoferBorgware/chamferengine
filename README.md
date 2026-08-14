@@ -65,6 +65,7 @@ a runnable demo where one exists.
 | 16 | [Lighting](docs/16-lighting.md) | 8 neighbours, sky light down a column, the free terminator |
 | 17 | [Pentagons as a place](docs/17-pentagons.md) | The gameplay decision: protected landmarks, and the loop that no option fixes |
 | 18 | [The cell boundary](docs/18-cell-boundary.md) | Which curve a cell edge is, and why the mesh and the lookup now draw the same one |
+| 19 | [Directional blocks](docs/19-directional-blocks.md) | Six states, placing by facing, and the circuit that does not close |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -77,7 +78,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all twelve verification scripts and fails the build if
+`make-reference.js` runs all twenty-one verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a

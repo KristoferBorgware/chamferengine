@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Eight entries are struck through because they have since been closed. They are
+Nine entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -223,25 +223,32 @@ cell — **32× smaller** — which needs columns to be straight, which is invar
 
 ---
 
-## Block rotation
+## ~~Block rotation~~ — designed, see [doc 19](19-directional-blocks.md)
 
-Hexagons have **6 orientations**, not 4. Any directional block — rails, pipes,
-conveyors, machines — needs a 6-state rotation field and 6-way logic.
+Closed, and it was mostly already paid for by two earlier documents.
+[Doc 17](17-pentagons.md) had removed the degree-5 case by making the twelve
+pentagon columns unbuildable, and [doc 13](13-gravity-and-orientation.md) had
+fixed the ordering rule. What was left was smaller than "budget design time"
+suggested.
 
-Hex is arguably *better* for these, but no existing recipe or tutorial will
-transfer. Budget design time.
+**Six states in three bits**, inside the 4 rotation bits
+[doc 03](03-addressing.md) already reserved beside a 41-bit address — so 4,096
+block types, six orientations, and a spare bit, with no ID layout change at all.
 
-**Two of the three hard parts are now gone.** [Doc 17](17-pentagons.md) makes the
-twelve pentagon columns unbuildable, so a directional block can never sit on a
-degree-5 cell and the rotation field is a clean 6 states with no exceptions. And
-[doc 13](13-gravity-and-orientation.md) already fixed the ordering rule: index
-into the cell's neighbour ring, counter-clockwise seen from outside, never
-derived from `(q, r)` sign.
+**Placement follows the player's facing**, snapped to the nearest of the six. That
+only works if the six stay evenly enough spread to aim at, and they do: the
+tightest wedge anywhere on the planet is **54°**, never more than 11.53° from an
+even 60°, giving **±27°** of slack. A tool can override or cycle it.
 
-What is left is genuinely just the 6-way logic — plus one rule that no design
-choice can remove: **a heading carried along a path must not be assumed to close
-when the path does.** A circuit enclosing an odd number of pentagons returns
-rotated by one index, at any radius ([doc 17](17-pentagons.md)).
+**Placement is refused on a pentagon** and the player routes around, for the
+2–10 m doc 17 priced. A 200 m build contains a pentagon under **1%** of the time.
+
+The finding worth carrying away is about the loop rule, which doc 17 established
+for circuits drawn *around* a pentagon. Measured on **off-centre** loops, the slip
+depends only on whether the pentagon is **inside** the loop — not on its width and
+not on where it is centred. That is what makes "topological" more than a word, and
+it is why the rule is stated as code discipline: **recompute a heading from the
+grid at every step, never carry one round a loop.**
 
 ---
 
@@ -299,24 +306,18 @@ specifying, not inventing.
 one, so everything below this line is a system to design or content to write, not
 a hole in the geometry.
 
-**Block rotation** is the largest of them, and it is now unblocked and much easier than it looked, because
-[doc 17](17-pentagons.md) removed its hard case: directional machinery may assume
-six neighbours, since it can never be placed on a five. What is left is a 6-state
-rotation field and 6-way logic, plus the loop rule from doc 17 — a heading carried
-along a path must not be assumed to close.
-
-**Player-facing coordinates** are also unblocked and now more attractive: doc 17
-puts the lat/long poles on two protected, standable landmarks, so the coordinate
-system has somewhere to point at.
+**Player-facing coordinates** is the obvious next one, and it is unblocked and
+more attractive than it was: doc 17 puts the lat/long poles on two protected,
+standable landmarks, so the coordinate system has somewhere to point at.
 
 After those, what remains is **content** rather than structure — rivers and
 erosion, and multiplayer interest management. **The geometric core is closed.**
 
 ---
 
-## What closing eight of these taught
+## What closing nine of these taught
 
-All eight closed items came back with the same shape of answer, and it is worth
+All nine closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

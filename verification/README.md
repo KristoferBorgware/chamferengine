@@ -423,6 +423,37 @@ prices both sides.
 
 ---
 
+## `rotation.js` — directional blocks
+
+Rails, pipes and conveyors store a rotation, and here that has to be an index into
+a cell's own neighbour ring rather than a direction in the world. Three things
+decide whether that is workable.
+
+**Verifies:**
+
+1. **Aiming at one of six is comfortable everywhere.** Over all 40,950 hexagons at
+   level 6, the angular gap between neighbouring directions runs **54.00°** to
+   **71.53°**, never more than **11.53°** from an even 60°. So the tightest snap
+   wedge on the planet is 54° — **±27° of slack** — and no tolerance needs tuning
+   per region.
+2. **Most builds never meet a pentagon.** The chance a build of radius `r`
+   contains one: **0.009%** at 10 cells, **0.219%** at 50, **0.867%** at 100 (a
+   200 m factory), rising to 21.5% at 500. Placement is refused there
+   ([doc 17](../docs/17-pentagons.md)) and the detour costs 2–10 m.
+3. **The loop slip depends on enclosure alone.** Doc 17 measured circuits drawn
+   *around* a pentagon. This carries a heading around **off-centre** loops too: a
+   loop of radius 3 or 4 slips **1 index** whenever the pentagon is inside it — at
+   centre offsets 1 and 2 — and **0** when it is outside, at offsets 5 and 9. Not
+   the width, not the centre, only what is inside. That is the measurement that
+   makes "topological" more than a word.
+4. **Storage costs nothing new.** Six orientations need 3 bits, and
+   [doc 03](../docs/03-addressing.md) already reserves 4 beside a 41-bit address —
+   4,096 block types, six orientations, one spare bit, no ID layout change.
+
+**Used in:** [doc 19](../docs/19-directional-blocks.md)
+
+---
+
 ## `winding.js` — is the middle-child flip a mirror?
 
 Doc 03 called a middle-descended chunk a "mirrored frame" from the first draft.

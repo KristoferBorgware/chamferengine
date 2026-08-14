@@ -53,6 +53,7 @@ ${body}
 
 // ---- geometry helpers -------------------------------------------------------
 const f = n => (+n).toFixed(1);
+const norm2 = v => { const l = Math.hypot(v[0], v[1]); return [v[0]/l, v[1]/l]; };
 const pts = a => a.map(p => `${f(p[0])},${f(p[1])}`).join(' ');
 const pathOf = segs => segs.map(([a,b]) => `M${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}`).join('');
 
@@ -436,6 +437,121 @@ const made = [];
   <text class="cf-d" x="165" y="190" text-anchor="middle">the ground track is a straight line, exactly -- not approximately</text>`));
 }
 
+
+// =============================================================================
+// 19 — same-number-different-way: a rotation is an index, never a heading
+// =============================================================================
+{
+  const O = [215, 250], R = 176;
+  const at = d => [O[0] + R*Math.sin(d*Math.PI/180), O[1] - R*Math.cos(d*Math.PI/180)];
+  const cellAt = (deg, label) => {
+    const p = at(deg), up = norm2([p[0]-O[0], p[1]-O[1]]);
+    const rt = [-up[1], up[0]];
+    const H = hexPts(p[0], p[1], 22);
+    return `<polygon class="cf-af" points="${pts(H)}"/>`
+      + `<path class="cf-a" d="M${f(p[0])} ${f(p[1])}L${f(p[0]+rt[0]*40)} ${f(p[1]+rt[1]*40)}" marker-end="url(#sn1)"/>`
+      + `<text class="cf-c" x="${f(p[0]+rt[0]*54+up[0]*10)}" y="${f(p[1]+rt[1]*54+up[1]*10+4)}" text-anchor="middle">${label}</text>`;
+  };
+  made.push(svg('same-number-different-way', 430, 250, `
+  <defs><marker id="sn1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  ${cellAt(-58, 'rotation 0')}
+  ${cellAt(6,  'rotation 0')}
+  ${cellAt(62, 'rotation 0')}
+  <text class="cf-c" x="14" y="26">three rails, all storing the same number</text>
+  <text class="cf-d" x="14" y="46">and all pointing different ways in the world</text>
+  <text class="cf-d" x="14" y="228">that is correct, not a bug &#8212; there is no global compass to point at,</text>
+  <text class="cf-d" x="14" y="246">so a rotation has to mean &#8220;the nth way out of THIS cell&#8221;</text>`));
+}
+
+// =============================================================================
+// 19 — snap-zones: aiming picks a direction, and the tolerance never gets tight
+// =============================================================================
+{
+  const cx = 140, cy = 116, R = 74;
+  let wedges = '', arrows = '';
+  for (let k=0;k<6;k++){
+    const a0 = (-30 + k*60) * Math.PI/180, a1 = (30 + k*60) * Math.PI/180;
+    const p0 = [cx + R*Math.cos(a0), cy + R*Math.sin(a0)], p1 = [cx + R*Math.cos(a1), cy + R*Math.sin(a1)];
+    wedges += `<path class="${k%2?'cf-af':'cf-gf'}" opacity="0.35" d="M${cx} ${cy}L${f(p0[0])} ${f(p0[1])}`
+           +  ` A ${R} ${R} 0 0 1 ${f(p1[0])} ${f(p1[1])}Z"/>`;
+    const am = k*60*Math.PI/180;
+    arrows += `<path class="cf-a" d="M${cx} ${cy}L${f(cx+R*0.82*Math.cos(am))} ${f(cy+R*0.82*Math.sin(am))}" marker-end="url(#sz1)"/>`;
+    arrows += `<text class="cf-c" x="${f(cx+(R+13)*Math.cos(am))}" y="${f(cy+(R+13)*Math.sin(am)+4)}" text-anchor="middle">${k}</text>`;
+  }
+  made.push(svg('snap-zones', 430, 226, `
+  <defs><marker id="sz1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  ${wedges}${arrows}
+  <circle class="cf-fill" cx="${cx}" cy="${cy}" r="9"/>
+  <text class="cf-c" x="256" y="60">aim anywhere in a wedge</text>
+  <text class="cf-d" x="256" y="82">and the block takes that direction</text>
+  <text class="cf-c" x="256" y="118">tightest wedge measured: 54&#176;</text>
+  <text class="cf-d" x="256" y="140">so &#177;27&#176; of slack, everywhere</text>
+  <text class="cf-d" x="256" y="168">on a perfect hexagon it would be 60&#176;;</text>
+  <text class="cf-d" x="256" y="186">the sphere costs six degrees of it</text>
+  <text class="cf-d" x="14" y="212">a mouse aims far better than 27&#176;, so snapping never feels ambiguous</text>`));
+}
+
+// =============================================================================
+// 19 — route-around: placement is refused, and the detour is trivial
+// =============================================================================
+{
+  const R = 21, dx = Math.sqrt(3)*R;
+  const cell = (c, r) => [70 + c*dx + (r%2 ? dx/2 : 0), 96 + r*R*1.5];
+  let field = '';
+  for (let r=0;r<4;r++) for (let c=0;c<8;c++)
+    field += `<polygon class="cf-l" points="${pts(hexPts(...cell(c,r), R))}"/>`;
+  const pent = cell(4,1);
+  const track = [[0,1],[1,1],[2,1],[3,1],[3,0],[4,0],[5,0],[5,1],[6,1],[7,1]];
+  let rail = `<path class="cf-a" stroke-width="3" fill="none" d="M`
+    + track.map(([c,r]) => `${f(cell(c,r)[0])} ${f(cell(c,r)[1])}`).join('L') + `"/>`;
+  made.push(svg('route-around', 430, 214, `
+  ${field}
+  <polygon class="cf-gf" points="${pts(Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
+    return [pent[0]+R*0.8*Math.cos(a), pent[1]+R*0.8*Math.sin(a)];}))}"/>
+  ${rail}
+  <text class="cf-gd" x="${f(pent[0])}" y="${f(pent[1]+R+22)}" text-anchor="middle">placement refused</text>
+  <text class="cf-c" x="14" y="26">the rail goes round, and the player finds out by trying</text>
+  <text class="cf-d" x="14" y="188">two extra cells &#8212; doc 17 measures the detour at 2 to 10 m</text>
+  <text class="cf-d" x="14" y="206">in exchange, no rail anywhere in the game ever has five neighbours</text>`));
+}
+
+// =============================================================================
+// 19 — loop-needs-a-turn: a circuit round a pentagon comes back one over
+// =============================================================================
+{
+  const cx = 132, cy = 116, R = 30;
+  const ringPos = k => { const a = -Math.PI/2 + 2*Math.PI*k/5;
+    return [cx + 2.05*R*Math.cos(a), cy + 2.05*R*Math.sin(a)]; };
+  let cells = '';
+  for (let k=0;k<5;k++) cells += `<polygon class="cf-l" points="${pts(hexPts(...ringPos(k), R*0.92))}"/>`;
+  let loop = `<path class="cf-a" stroke-width="3" fill="none" d="M`
+    + [0,1,2,3,4,0].map(k => `${f(ringPos(k)[0])} ${f(ringPos(k)[1])}`).join('L') + `"/>`;
+  made.push(svg('loop-needs-a-turn', 430, 234, `
+  <defs>
+    <marker id="lt1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="lt2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  ${cells}
+  <polygon class="cf-gf" points="${pts(Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
+    return [cx+R*0.72*Math.cos(a), cy+R*0.72*Math.sin(a)];}))}"/>
+  ${loop}
+  <path class="cf-a" d="M${f(ringPos(0)[0])} ${f(ringPos(0)[1])}l34 0" marker-end="url(#lt1)"/>
+  <path class="cf-g" d="M${f(ringPos(0)[0])} ${f(ringPos(0)[1])}l17 -29" marker-end="url(#lt2)"/>
+  <text class="cf-c" x="${f(ringPos(0)[0]+40)}" y="${f(ringPos(0)[1]+18)}">set off</text>
+  <text class="cf-gd" x="${f(ringPos(0)[0]+26)}" y="${f(ringPos(0)[1]-36)}">came back</text>
+  <text class="cf-c" x="262" y="64">go all the way round making turns</text>
+  <text class="cf-c" x="262" y="84">that add up to nothing&#8230;</text>
+  <text class="cf-gd" x="262" y="116">&#8230;and you are 60&#176; off</text>
+  <text class="cf-d" x="262" y="146">the loop needs one EXTRA turn to close,</text>
+  <text class="cf-d" x="262" y="164">and only because a pentagon is inside it</text>
+  <text class="cf-d" x="14" y="212">move the loop so the pentagon is outside and it closes perfectly.</text>
+  <text class="cf-d" x="14" y="230">the width of the loop and where it is centred make no difference at all.</text>`));
+}
 
 // =============================================================================
 // 03 — half-turn-not-mirror: what the middle-child flip does to a direction

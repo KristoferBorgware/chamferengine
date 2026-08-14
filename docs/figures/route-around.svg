@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 214" width="430" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <polygon class="cf-l" points="70.0,75.0 88.2,85.5 88.2,106.5 70.0,117.0 51.8,106.5 51.8,85.5"/><polygon class="cf-l" points="106.4,75.0 124.6,85.5 124.6,106.5 106.4,117.0 88.2,106.5 88.2,85.5"/><polygon class="cf-l" points="142.7,75.0 160.9,85.5 160.9,106.5 142.7,117.0 124.6,106.5 124.6,85.5"/><polygon class="cf-l" points="179.1,75.0 197.3,85.5 197.3,106.5 179.1,117.0 160.9,106.5 160.9,85.5"/><polygon class="cf-l" points="215.5,75.0 233.7,85.5 233.7,106.5 215.5,117.0 197.3,106.5 197.3,85.5"/><polygon class="cf-l" points="251.9,75.0 270.1,85.5 270.1,106.5 251.9,117.0 233.7,106.5 233.7,85.5"/><polygon class="cf-l" points="288.2,75.0 306.4,85.5 306.4,106.5 288.2,117.0 270.1,106.5 270.1,85.5"/><polygon class="cf-l" points="324.6,75.0 342.8,85.5 342.8,106.5 324.6,117.0 306.4,106.5 306.4,85.5"/><polygon class="cf-l" points="88.2,106.5 106.4,117.0 106.4,138.0 88.2,148.5 70.0,138.0 70.0,117.0"/><polygon class="cf-l" points="124.6,106.5 142.7,117.0 142.7,138.0 124.6,148.5 106.4,138.0 106.4,117.0"/><polygon class="cf-l" points="160.9,106.5 179.1,117.0 179.1,138.0 160.9,148.5 142.7,138.0 142.7,117.0"/><polygon class="cf-l" points="197.3,106.5 215.5,117.0 215.5,138.0 197.3,148.5 179.1,138.0 179.1,117.0"/><polygon class="cf-l" points="233.7,106.5 251.9,117.0 251.9,138.0 233.7,148.5 215.5,138.0 215.5,117.0"/><polygon class="cf-l" points="270.1,106.5 288.2,117.0 288.2,138.0 270.1,148.5 251.9,138.0 251.9,117.0"/><polygon class="cf-l" points="306.4,106.5 324.6,117.0 324.6,138.0 306.4,148.5 288.2,138.0 288.2,117.0"/><polygon class="cf-l" points="342.8,106.5 361.0,117.0 361.0,138.0 342.8,148.5 324.6,138.0 324.6,117.0"/><polygon class="cf-l" points="70.0,138.0 88.2,148.5 88.2,169.5 70.0,180.0 51.8,169.5 51.8,148.5"/><polygon class="cf-l" points="106.4,138.0 124.6,148.5 124.6,169.5 106.4,180.0 88.2,169.5 88.2,148.5"/><polygon class="cf-l" points="142.7,138.0 160.9,148.5 160.9,169.5 142.7,180.0 124.6,169.5 124.6,148.5"/><polygon class="cf-l" points="179.1,138.0 197.3,148.5 197.3,169.5 179.1,180.0 160.9,169.5 160.9,148.5"/><polygon class="cf-l" points="215.5,138.0 233.7,148.5 233.7,169.5 215.5,180.0 197.3,169.5 197.3,148.5"/><polygon class="cf-l" points="251.9,138.0 270.1,148.5 270.1,169.5 251.9,180.0 233.7,169.5 233.7,148.5"/><polygon class="cf-l" points="288.2,138.0 306.4,148.5 306.4,169.5 288.2,180.0 270.1,169.5 270.1,148.5"/><polygon class="cf-l" points="324.6,138.0 342.8,148.5 342.8,169.5 324.6,180.0 306.4,169.5 306.4,148.5"/><polygon class="cf-l" points="88.2,169.5 106.4,180.0 106.4,201.0 88.2,211.5 70.0,201.0 70.0,180.0"/><polygon class="cf-l" points="124.6,169.5 142.7,180.0 142.7,201.0 124.6,211.5 106.4,201.0 106.4,180.0"/><polygon class="cf-l" points="160.9,169.5 179.1,180.0 179.1,201.0 160.9,211.5 142.7,201.0 142.7,180.0"/><polygon class="cf-l" points="197.3,169.5 215.5,180.0 215.5,201.0 197.3,211.5 179.1,201.0 179.1,180.0"/><polygon class="cf-l" points="233.7,169.5 251.9,180.0 251.9,201.0 233.7,211.5 215.5,201.0 215.5,180.0"/><polygon class="cf-l" points="270.1,169.5 288.2,180.0 288.2,201.0 270.1,211.5 251.9,201.0 251.9,180.0"/><polygon class="cf-l" points="306.4,169.5 324.6,180.0 324.6,201.0 306.4,211.5 288.2,201.0 288.2,180.0"/><polygon class="cf-l" points="342.8,169.5 361.0,180.0 361.0,201.0 342.8,211.5 324.6,201.0 324.6,180.0"/>
+  <polygon class="cf-gf" points="233.7,110.7 249.7,122.3 243.6,141.1 223.8,141.1 217.7,122.3"/>
+  <path class="cf-a" stroke-width="3" fill="none" d="M88.2 127.5L124.6 127.5L160.9 127.5L197.3 127.5L179.1 96.0L215.5 96.0L251.9 96.0L270.1 127.5L306.4 127.5L342.8 127.5"/>
+  <text class="cf-gd" x="233.7" y="170.5" text-anchor="middle">placement refused</text>
+  <text class="cf-c" x="14" y="26">the rail goes round, and the player finds out by trying</text>
+  <text class="cf-d" x="14" y="188">two extra cells &#8212; doc 17 measures the detour at 2 to 10 m</text>
+  <text class="cf-d" x="14" y="206">in exchange, no rail anywhere in the game ever has five neighbours</text>
+</svg>

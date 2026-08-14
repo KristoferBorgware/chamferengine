@@ -32,6 +32,7 @@ numbered documents.
 | [`pentagon.js`](../verification/pentagon.js) | The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs. | [17](17-pentagons.md) |
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
+| [`rotation.js`](../verification/rotation.js) | Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close. | [19](19-directional-blocks.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
 | [`seam.js`](../verification/seam.js) | What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, and what does close the remaining holes. | [14](14-meshing-and-lod.md) |
@@ -769,6 +770,67 @@ leftover q,r range 0..16  (chunk side = 16)
 15104 of 33153 points sit in a flipped (middle-child) frame
 ```
 
+## `rotation.js`
+
+Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close.
+
+Cited by [doc 19](19-directional-blocks.md).
+
+```
+1. angular spread of a cell's six directions
+   40950 hexagons at level 6
+   gap between neighbouring directions: min 54.00 deg, max 71.53 deg
+   worst deviation from an even 60 deg: 11.53 deg
+   so aiming within +/-27.0 deg of a direction always picks it.
+   A player aims with a mouse. Half of the tightest gap is the tolerance,
+   and it never falls below that anywhere on the planet.
+
+2. how often a build of radius r contains a pentagon
+   radius (cells)   cells in the disc   chance it holds a pentagon
+       10                 331       0.009%
+       25                1951       0.056%
+       50                7651       0.219%
+      100               30301       0.867%
+      250              188251       5.386%
+      500              751501       21.501%
+   On the doc-06 planet a cell is 1 m, so a 100-cell radius is a 200 m
+   factory. Under half a percent of those contain a pentagon at all.
+
+3. carrying a heading around a closed loop
+   loop centred ON a pentagon:
+     radius 2:  10 cells, slip 1 index
+     radius 3:  15 cells, slip 1 index
+     radius 4:  20 cells, slip 1 index
+     radius 5:  25 cells, slip 1 index
+   loop centred AWAY from it -- does the slip follow the pentagon or the centre?
+     radius 3, centre 1 from the pentagon (encloses it ): slip 1 index
+     radius 3, centre 2 from the pentagon (encloses it ): slip 1 index
+     radius 3, centre 5 from the pentagon (does not   ): slip 0 index
+     radius 3, centre 9 from the pentagon (does not   ): slip 0 index
+     radius 4, centre 1 from the pentagon (encloses it ): slip 1 index
+     radius 4, centre 2 from the pentagon (encloses it ): slip 1 index
+     radius 4, centre 5 from the pentagon (does not   ): slip 0 index
+     radius 4, centre 9 from the pentagon (does not   ): slip 0 index
+   The slip tracks whether the pentagon is INSIDE the loop, not where the
+   loop is centred or how wide it is. That is what "topological" means here,
+   and it is why no exclusion zone fixes it.
+
+4. storage
+   6 orientations need ceil(log2 6) = 3 bits.
+   Doc 03 packs block state as 16 bits beside a 41-bit address:
+     12 bits type + 4 bits rotation = 16, leaving one spare rotation bit
+   4,096 block types and 6 orientations, with a bit left for a flag such as
+   powered or reversed. No change to the ID layout is needed.
+
+verdict
+   Six states, three bits, and a snap tolerance that never drops below
+   half the tightest gap measured above. Placement is refused on the twelve
+   pentagons, which under 0.5% of a 200 m build would ever meet. The one
+   thing no decision removes is the loop: a circuit enclosing an odd number
+   of pentagons comes back one index over, so recompute a heading from the
+   grid at every step and never carry one round a loop.
+```
+
 ## `s2.js`
 
 Cited by [doc 01](01-prior-art.md).
@@ -1108,4 +1170,4 @@ verdict
 
 ---
 
-_20 scripts. Every number above is reproduced by running them._
+_21 scripts. Every number above is reproduced by running them._
