@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 216" width="430" height="216">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <circle class="cf-fill" cx="112" cy="100" r="76"/><circle class="cf-l" cx="135.3" cy="105.7" r="10.0"/><circle class="cf-l" cx="126.5" cy="117.8" r="13.0"/><circle class="cf-l" cx="108.5" cy="122.9" r="16.0"/><circle class="cf-l" cx="89.2" cy="117.0" r="7.0"/><circle class="cf-l" cx="78.6" cy="101.4" r="10.0"/><circle class="cf-l" cx="92.6" cy="88.3" r="13.0"/><circle class="cf-l" cx="106.0" cy="79.3" r="16.0"/><circle class="cf-l" cx="125.1" cy="79.4" r="7.0"/><circle class="cf-l" cx="140.7" cy="90.3" r="10.0"/><circle class="cf-af" cx="132.7" cy="63.6" r="11"/><circle class="cf-af" cx="137.6" cy="103.1" r="11"/><circle class="cf-af" cx="115.7" cy="145.6" r="11"/><circle class="cf-af" cx="79.8" cy="114.7" r="11"/><circle class="cf-af" cx="70.1" cy="69.8" r="11"/><text class="cf-d" x="112" y="198" text-anchor="middle">seed 4823</text>
+  <circle class="cf-fill" cx="300" cy="100" r="76"/><circle class="cf-l" cx="315.3" cy="115.1" r="16.0"/><circle class="cf-l" cx="299.5" cy="124.9" r="7.0"/><circle class="cf-l" cx="282.5" cy="116.1" r="10.0"/><circle class="cf-l" cx="267.0" cy="104.2" r="13.0"/><circle class="cf-l" cx="275.2" cy="88.1" r="16.0"/><circle class="cf-l" cx="292.1" cy="81.6" r="7.0"/><circle class="cf-l" cx="311.2" cy="76.7" r="10.0"/><circle class="cf-l" cx="323.3" cy="89.7" r="13.0"/><circle class="cf-l" cx="332.8" cy="105.1" r="16.0"/><circle class="cf-af" cx="320.7" cy="63.6" r="11"/><circle class="cf-af" cx="325.6" cy="103.1" r="11"/><circle class="cf-af" cx="303.7" cy="145.6" r="11"/><circle class="cf-af" cx="267.8" cy="114.7" r="11"/><circle class="cf-af" cx="258.1" cy="69.8" r="11"/><text class="cf-d" x="300" y="198" text-anchor="middle">seed 91170</text>
+  <text class="cf-c" x="215" y="24" text-anchor="middle">different terrain, identical seas</text>
+  <text class="cf-d" x="215" y="204" text-anchor="middle">1% of the surface is affordable &#183; the same map in every world is not</text>
+</svg>

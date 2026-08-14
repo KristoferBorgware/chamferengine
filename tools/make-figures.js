@@ -438,6 +438,113 @@ const made = [];
 
 
 // =============================================================================
+// 17 — never-far-from-one: pentagons 1,882 m apart, cover radius 1,109 m
+// =============================================================================
+{
+  // Locally the twelve sit on a triangular arrangement: each has five nearest
+  // neighbours at the same distance. Cover discs of the circumradius just close.
+  const D = 108, cov = D/Math.sqrt(3);          // 1882 m -> D px, 1086 m -> cov px
+  const base = [[120,64],[120+D,64],[120+D/2,64+D*Math.sqrt(3)/2],
+                [120-D/2,64+D*Math.sqrt(3)/2],[120+D*1.5,64+D*Math.sqrt(3)/2]];
+  const discs = base.map(p => `<circle class="cf-gf" cx="${f(p[0])}" cy="${f(p[1])}" r="${f(cov)}" opacity="0.34"/>`).join('');
+  const dots  = base.map(p => `<polygon class="cf-gf" points="${pts(
+    Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
+      return [p[0]+9*Math.cos(a), p[1]+9*Math.sin(a)];}))}"/>`).join('');
+  const mid = [120+D/2, 64+D/Math.sqrt(3)];      // the worst point: a circumcentre
+  made.push(svg('never-far-from-one', 430, 244, `
+  ${discs}
+  <path class="cf-l" d="${pathOf([[base[0],base[1]],[base[0],base[2]],[base[1],base[2]],
+                                  [base[0],base[3]],[base[2],base[3]],[base[1],base[4]],[base[2],base[4]]])}"/>
+  ${dots}
+  <path class="cf-a" d="M${f(base[0][0])} ${f(base[0][1])}L${f(base[1][0])} ${f(base[1][1])}"/>
+  <text class="cf-c" x="${f(120+D/2)}" y="56" text-anchor="middle">1,882 m</text>
+  <circle class="cf-af" cx="${f(mid[0])}" cy="${f(mid[1])}" r="4"/>
+  <text class="cf-c" x="${f(mid[0]+10)}" y="${f(mid[1]+16)}">1,109 m &#8212; as far away as you can get</text>
+  <text class="cf-d" x="14" y="212">typical distance to the nearest one: 663 m</text>
+  <text class="cf-d" x="14" y="230">on a planet that is 10,681 m around, and 2 hours to walk</text>`));
+}
+
+// =============================================================================
+// 17 — protected-column: the rule covers the whole column, not the top cell
+// =============================================================================
+{
+  const col = (x, cls, n, label) => {
+    let out = '';
+    for (let k = 0; k < n; k++)
+      out += `<rect class="${cls}" x="${x}" y="${f(52 + k*17)}" width="46" height="17"/>`;
+    return out + `<text class="cf-d" x="${x+23}" y="42" text-anchor="middle">${label}</text>`;
+  };
+  made.push(svg('protected-column', 430, 214, `
+  ${col(60,  'cf-fill', 8, 'ordinary')}
+  ${col(130, 'cf-gf',   8, 'pentagon')}
+  ${col(200, 'cf-fill', 8, 'ordinary')}
+  <path class="cf-g" d="M120 52 L120 188" stroke-dasharray="4 3"/>
+  <path class="cf-g" d="M186 52 L186 188" stroke-dasharray="4 3"/>
+  <text class="cf-gd" x="300" y="76">protected all the way down</text>
+  <text class="cf-d" x="300" y="98">not just the cell you can see</text>
+  <text class="cf-d" x="300" y="126">otherwise a player tunnels underneath</text>
+  <text class="cf-d" x="300" y="144">and the landmark is left floating</text>
+  <text class="cf-c" x="300" y="172">768 cells out of 2.7 billion</text>
+  <text class="cf-d" x="14" y="204">12 columns &#215; the crust depth &#8212; the entire cost of the rule</text>`));
+}
+
+// =============================================================================
+// 17 — not-intervisible: no tower reaches the next pentagon
+// =============================================================================
+{
+  const O = [214, 470], R = 400;                       // R = 1700 m -> 400 px
+  const S = R/1700;                                    // px per metre
+  const at = (deg, r) => [O[0] + r*Math.sin(deg*Math.PI/180), O[1] - r*Math.cos(deg*Math.PI/180)];
+  const half = (1882/1700) * 180/Math.PI / 2;          // half the gap, in degrees
+  const A = at(-half, R), B = at(half, R);
+  const towerH = 400*S, top = at(-half, R + towerH);
+  const reachDeg = -half + (1143/1700) * 180/Math.PI;  // 400 m tower sees 1,143 m
+  const reach = at(reachDeg, R);
+  made.push(svg('not-intervisible', 430, 248, `
+  <path class="cf-m" d="M${f(at(-half*1.5,R)[0])} ${f(at(-half*1.5,R)[1])} A ${R} ${R} 0 0 1 ${f(at(half*1.5,R)[0])} ${f(at(half*1.5,R)[1])}"/>
+  <path class="cf-a" d="M${f(A[0])} ${f(A[1])}L${f(top[0])} ${f(top[1])}"/>
+  <path class="cf-g" d="M${f(top[0])} ${f(top[1])}L${f(reach[0])} ${f(reach[1])}"/>
+  <circle class="cf-gf" cx="${f(reach[0])}" cy="${f(reach[1])}" r="4"/>
+  <polygon class="cf-gf" points="${pts(Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
+    return [A[0]+8*Math.cos(a), A[1]+8*Math.sin(a)];}))}"/>
+  <polygon class="cf-gf" points="${pts(Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
+    return [B[0]+8*Math.cos(a), B[1]+8*Math.sin(a)];}))}"/>
+  <path class="cf-l" d="M${f(reach[0])} ${f(reach[1]-10)}L${f(B[0])} ${f(B[1]-10)}" stroke-dasharray="3 3"/>
+  <text class="cf-c" x="${f(top[0]-6)}" y="${f(top[1]-8)}" text-anchor="middle">a 400 m tower</text>
+  <text class="cf-gd" x="${f(reach[0]-4)}" y="${f(reach[1]+20)}" text-anchor="middle">sees 1,143 m</text>
+  <text class="cf-d" x="${f(B[0]+10)}" y="${f(B[1]-4)}">next pentagon,</text>
+  <text class="cf-d" x="${f(B[0]+10)}" y="${f(B[1]+12)}">1,882 m away</text>
+  <text class="cf-c" x="14" y="26">to see one pentagon from the next</text>
+  <text class="cf-c" x="14" y="46">you would need a 1,793 m tower</text>
+  <text class="cf-d" x="14" y="70">which is taller than the planet&#8217;s radius</text>`));
+}
+
+// =============================================================================
+// 17 — ocean-lock: burial is affordable and still costs every world its map
+// =============================================================================
+{
+  const planet = (cx, cy, r, seed, label) => {
+    let land = '';
+    for (let k = 0; k < 9; k++){                       // terrain that differs by seed
+      const a = (k*40 + seed*17) * Math.PI/180, rr = r*(0.32 + 0.12*((k*seed)%5)/4);
+      land += `<circle class="cf-l" cx="${f(cx + rr*Math.cos(a))}" cy="${f(cy + rr*Math.sin(a)*0.8)}" r="${f(7+((k+seed)%4)*3)}"/>`;
+    }
+    let seas = '';
+    for (const [a, e] of [[-64,0.62],[8,0.34],[86,0.70],[152,0.48],[-140,0.72]]){
+      const t = a*Math.PI/180;                         // the SAME twelve places, always
+      seas += `<circle class="cf-af" cx="${f(cx + r*e*Math.cos(t))}" cy="${f(cy + r*e*Math.sin(t)*0.86)}" r="11"/>`;
+    }
+    return `<circle class="cf-fill" cx="${cx}" cy="${cy}" r="${r}"/>${land}${seas}`
+      + `<text class="cf-d" x="${cx}" y="${cy+r+22}" text-anchor="middle">${label}</text>`;
+  };
+  made.push(svg('ocean-lock', 430, 216, `
+  ${planet(112, 100, 76, 1, 'seed 4823')}
+  ${planet(300, 100, 76, 3, 'seed 91170')}
+  <text class="cf-c" x="215" y="24" text-anchor="middle">different terrain, identical seas</text>
+  <text class="cf-d" x="215" y="204" text-anchor="middle">1% of the surface is affordable &#183; the same map in every world is not</text>`));
+}
+
+// =============================================================================
 // 13 — up-is-local: one shared up on a flat world, one per place on a round one
 // =============================================================================
 {

@@ -19,14 +19,15 @@ and records what it does and does not buy.
 
 ## First, the part that was never a choice
 
-Measuring the options turned up something that changes what any of them can
-achieve, and it is worth putting before the decision rather than after it.
+Before weighing any option, one measurement rules out the thing everyone reaches
+for first — so it goes before the decision rather than after it.
 
-[Doc 13](13-gravity-and-orientation.md) measured the direction-index slip around
-a pentagon's own neighbour ring: exactly one index, 60°. The obvious hope is that
-keeping machinery at a distance avoids it.
+[Doc 13](13-gravity-and-orientation.md) showed that a heading carried right around
+a pentagon's own ring of neighbours comes back turned by one index, 60°. The
+natural hope is that this is a *local* problem: keep your rails a few cells away
+and it goes away.
 
-It does not.
+It does not go away. It does not even get smaller.
 
 > **[verified]** `verification/pentagon.js`. Walk a closed loop at graph distance
 > `k` around one pentagon, carrying a direction index the way a rail carries
@@ -42,18 +43,19 @@ It does not.
 > | 12 | 60 | **1 index = 60°** |
 > | 16 | 80 | **1 index = 60°** |
 
-**The slip is topological.** It counts the pentagons a loop encloses, not the
-distance the loop kept from them. A conveyor loop drawn at eighty cells' radius
-comes back rotated exactly as much as one drawn at five.
-
 ![Three concentric loops around a pentagon at increasing radius, each labelled with the same one-index slip](figures/pentagon-loops.svg)
 
-*Distance buys nothing. What matters is only whether the pentagon is inside the
-loop or outside it.*
+*Eighty cells out is the same as five cells out. Distance buys nothing at all —
+the only thing that matters is whether the pentagon is inside your loop or outside
+it.*
 
-So **no option on the table removes this**, including burying the pentagons under
-an ocean — a loop around the ocean still encircles the pentagon. That makes it a
-code invariant rather than a design choice:
+**The slip is topological.** It counts the pentagons a loop encloses, not the
+distance the loop kept from them.
+
+Which means **no option on the table removes this** — including burying the
+pentagons under an ocean, because a loop drawn around the ocean still has the
+pentagon inside it. So this stops being a design choice and becomes a rule the
+code has to obey whatever else is decided:
 
 > Any system that carries a heading along a path must not assume the heading
 > closes when the path does. Recompute it from the grid at each step, or accept
@@ -67,10 +69,11 @@ option is a choice about the cell itself. Nothing is a choice about the loop.
 
 ---
 
-## How often a player actually meets one
+## Twelve on a whole planet sounds rare. It isn't.
 
-The decision only makes sense against how common these are, and on a small planet
-they are much more common than "twelve on a whole world" suggests.
+Twelve cells out of forty-two million reads like something a player will never
+encounter. On a planet this small, that intuition is wrong, and the decision only
+makes sense once you see by how much.
 
 > **[verified]** `verification/pentagon.js`, on the [doc 06](06-world-sizing.md)
 > worked planet: R = 1,700 m, 1 m cells, 10,681 m around.
@@ -81,11 +84,17 @@ they are much more common than "twelve on a whole world" suggests.
 > | Furthest you can stand from all twelve | **1,109 m** |
 > | Typical distance to the nearest one | **663 m** |
 
-**You are never more than about a kilometre from a pentagon**, and usually much
-closer. On a planet you can walk around in two hours they are roughly as common as
-villages. Whatever is decided here will be visible to players, repeatedly.
+![Five pentagons in a triangular arrangement 1,882 m apart, each with a shaded disc around it; the discs overlap and cover everything, with the worst-case point between three of them marked at 1,109 m](figures/never-far-from-one.svg)
 
-But the defect itself is *one cell*, and a route rarely lands on it:
+*Stand anywhere and pick the worst possible spot — the point equally far from three
+pentagons — and you are still only 1,109 m from one. On a world you can walk
+around in two hours, that makes them about as common as villages.*
+
+**You are never more than about a kilometre from a pentagon**, and usually much
+closer. Whatever is decided here will be visible to players, repeatedly.
+
+But being *near* one and *landing on* one are very different things, because the
+defect itself is a single cell:
 
 > **[verified]** Random great-circle routes, with the closest approach solved
 > exactly rather than sampled along the line.
@@ -102,21 +111,21 @@ But the defect itself is *one cell*, and a route rarely lands on it:
 > only **six** independent chances, not twelve: `6 × sin(1/1700) = 0.353%`, against
 > 0.378% measured. Twelve would predict twice the observed rate.
 
-**Rare to hit, common to meet.** A rail laid right around the planet lands on a
-pentagon under half a percent of the time, and passes within fifty cells of one
-about a sixth of the time.
+**Rare to hit, common to meet.** Lay a rail right around the planet and it lands
+on a pentagon under half a percent of the time, while passing within fifty cells
+of one about a sixth of the time.
 
-And avoidance is always possible:
+And if you want to avoid them, you always can:
 
 > **[verified]** Searching great circles for the one furthest from all twelve
 > vertices: the best keeps **788 cells** of clearance the whole way round. Routing
 > around a pentagon costs **2–10 m** of extra track.
 
-So the cost was never distance. **The cost is that an automated system has to
-contain the special case at all** — one cell in forty-two million that every rail
-router, conveyor and pipe network must nevertheless handle correctly.
+Two metres. So the cost was never the detour.
 
-That is what this decision removes.
+**The cost is that an automated system has to contain the special case at all** —
+one cell in forty-two million that every rail router, conveyor and pipe network
+must nevertheless get right. That is what this decision removes.
 
 ---
 
@@ -128,15 +137,21 @@ That is what this decision removes.
 isProtected(id) = isPentagon(id)          // one predicate, no table
 ```
 
-`isPentagon` is already free — the twelve pentagon cell IDs are in the constant
-table from [doc 07](07-data-structures.md), sitting beside the 180-byte adjacency
-table as part of the few hundred bytes where all the sphere's irregularity lives.
+`isPentagon` is already free. The twelve pentagon cell IDs sit in the constant
+table from [doc 07](07-data-structures.md), beside the 180-byte adjacency table,
+in the few hundred bytes where all of the sphere's irregularity lives.
+
+Note the word **column**. The rule protects the whole thing, top to bottom.
+
+![Three columns of stacked cells side by side; the middle one is a pentagon and is marked protected from the surface all the way down to the crust floor](figures/protected-column.svg)
+
+*Protect only the surface cell and a player tunnels underneath it, leaving the
+landmark standing on nothing. Twelve columns at the full crust depth is 768 cells
+out of 2.7 billion — the entire cost of the rule.*
 
 Three consequences, and the second is the whole point:
 
-- **The whole column, not just the surface cell.** Otherwise a player tunnels
-  underneath and the landmark is left floating. Twelve columns of `crustDepth`
-  cells — 768 cells on the worked planet, out of 2.7 billion.
+- **The whole column, not just the surface cell**, for the reason above.
 - **Directional machinery may now assume degree 6.** Not "handles degree 5
   gracefully" — *may assume it does not occur*. A rail, pipe or conveyor cannot be
   placed on a pentagon, so no directional block ever has five neighbours. The
@@ -156,8 +171,8 @@ not go. No warning system, no tutorial, no error message needed.
 
 ## The twelve as places
 
-Protection alone would leave twelve inexplicable no-build zones. The decision was
-to go further and make them intentional.
+Protection on its own would leave twelve inexplicable no-build zones. The decision
+goes further and makes them intentional.
 
 ### What is already true about them, for free
 
@@ -179,11 +194,14 @@ to go further and make them intentional.
 > twelve exists, for example `0→1→5→4→2→3→9→8→6→7→10→11→0`. It runs **22,586 m**,
 > which is **2.11×** around the world, or about **4.5 hours** of walking.
 
-A "visit all twelve" objective is therefore a genuine world-scale goal on the
-worked planet: twice around the world, an afternoon of travel, with twelve fixed
-destinations that every player's world shares.
+So "visit all twelve" is a genuine world-scale objective: twice around the world,
+an afternoon of travel, with twelve fixed destinations that every player's world
+shares.
 
 ### And you cannot see one from the next
+
+You might expect to navigate between them by eye — build something tall on each
+and sight from one to the next. The planet is too small and too round for that.
 
 > **[verified]** The eye horizon is 76 m ([doc 13](13-gravity-and-orientation.md)),
 > so a tower of height `h` is visible from `76 + R·acos(R/(R+h))`.
@@ -197,6 +215,11 @@ destinations that every player's world shares.
 >
 > A landmark would have to be **1,793 m** tall to be seen from the next one —
 > taller than the planet's radius.
+
+![Two pentagons 1,882 m apart on a strongly curved horizon, with a 400 m tower on one whose sight line falls well short of the other](figures/not-intervisible.svg)
+
+*A 400 m tower — a quarter of the planet's radius — sees 1,143 m and still does not
+reach. The ground curves away faster than any tower can climb.*
 
 **The twelve are not inter-visible, and cannot be made so.** Travel between them
 needs a coordinate readout rather than line of sight, which is exactly the
@@ -240,16 +263,24 @@ rather than structure. What the geometry supports:
 > That last row is a useful check on the first section: 1,109 m is the covering
 > radius, so discs that size necessarily cover everything.
 
-At 1% of the surface this is affordable, and it removes the local problem
-thoroughly — nobody lays rail on a seabed. It was rejected for two reasons.
+At 1% of the surface the price in *land* is affordable, and it removes the local
+problem thoroughly — nobody lays rail on a seabed. It was rejected for two other
+reasons.
 
-It **locks the macro map**. Twelve seas at fixed positions 1,882 m apart, which no
-seed can move, means every world shares the same large-scale geography: an
-archipelago planet by construction. For a game whose entire persistence model is
-"a seed and a delta store" ([doc 07](07-data-structures.md)), giving up world
-variety to hide twelve cells is a poor trade.
+It **locks the macro map.** Twelve seas at fixed positions 1,882 m apart, which no
+seed can move, means every world shares the same large-scale geography.
 
-And it **is not reversible**. A placement rule can be relaxed later if it turns
+![Two planets generated from different seeds, with different terrain but the same five visible seas in exactly the same places](figures/ocean-lock.svg)
+
+*Change the seed and the terrain changes completely — except for twelve seas that
+sit in the same places in every world that will ever be generated. An archipelago
+planet by construction, whether or not anyone wanted one.*
+
+For a game whose entire persistence model is "a seed and a delta store"
+([doc 07](07-data-structures.md)), giving up world variety to hide twelve cells is
+a poor trade.
+
+And it **is not reversible.** A placement rule can be relaxed later if it turns
 out to be unnecessary. Twelve oceans baked into the terrain generator cannot be
 removed without changing every existing world.
 

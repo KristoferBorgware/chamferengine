@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 244" width="430" height="244">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <circle class="cf-gf" cx="120.0" cy="64.0" r="62.4" opacity="0.34"/><circle class="cf-gf" cx="228.0" cy="64.0" r="62.4" opacity="0.34"/><circle class="cf-gf" cx="174.0" cy="157.5" r="62.4" opacity="0.34"/><circle class="cf-gf" cx="66.0" cy="157.5" r="62.4" opacity="0.34"/><circle class="cf-gf" cx="282.0" cy="157.5" r="62.4" opacity="0.34"/>
+  <path class="cf-l" d="M120.0 64.0L228.0 64.0M120.0 64.0L174.0 157.5M228.0 64.0L174.0 157.5M120.0 64.0L66.0 157.5M174.0 157.5L66.0 157.5M228.0 64.0L282.0 157.5M174.0 157.5L282.0 157.5"/>
+  <polygon class="cf-gf" points="120.0,55.0 128.6,61.2 125.3,71.3 114.7,71.3 111.4,61.2"/><polygon class="cf-gf" points="228.0,55.0 236.6,61.2 233.3,71.3 222.7,71.3 219.4,61.2"/><polygon class="cf-gf" points="174.0,148.5 182.6,154.7 179.3,164.8 168.7,164.8 165.4,154.7"/><polygon class="cf-gf" points="66.0,148.5 74.6,154.7 71.3,164.8 60.7,164.8 57.4,154.7"/><polygon class="cf-gf" points="282.0,148.5 290.6,154.7 287.3,164.8 276.7,164.8 273.4,154.7"/>
+  <path class="cf-a" d="M120.0 64.0L228.0 64.0"/>
+  <text class="cf-c" x="174.0" y="56" text-anchor="middle">1,882 m</text>
+  <circle class="cf-af" cx="174.0" cy="126.4" r="4"/>
+  <text class="cf-c" x="184.0" y="142.4">1,109 m &#8212; as far away as you can get</text>
+  <text class="cf-d" x="14" y="212">typical distance to the nearest one: 663 m</text>
+  <text class="cf-d" x="14" y="230">on a planet that is 10,681 m around, and 2 hours to walk</text>
+</svg>

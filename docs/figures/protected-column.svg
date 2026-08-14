@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 214" width="430" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <rect class="cf-fill" x="60" y="52.0" width="46" height="17"/><rect class="cf-fill" x="60" y="69.0" width="46" height="17"/><rect class="cf-fill" x="60" y="86.0" width="46" height="17"/><rect class="cf-fill" x="60" y="103.0" width="46" height="17"/><rect class="cf-fill" x="60" y="120.0" width="46" height="17"/><rect class="cf-fill" x="60" y="137.0" width="46" height="17"/><rect class="cf-fill" x="60" y="154.0" width="46" height="17"/><rect class="cf-fill" x="60" y="171.0" width="46" height="17"/><text class="cf-d" x="83" y="42" text-anchor="middle">ordinary</text>
+  <rect class="cf-gf" x="130" y="52.0" width="46" height="17"/><rect class="cf-gf" x="130" y="69.0" width="46" height="17"/><rect class="cf-gf" x="130" y="86.0" width="46" height="17"/><rect class="cf-gf" x="130" y="103.0" width="46" height="17"/><rect class="cf-gf" x="130" y="120.0" width="46" height="17"/><rect class="cf-gf" x="130" y="137.0" width="46" height="17"/><rect class="cf-gf" x="130" y="154.0" width="46" height="17"/><rect class="cf-gf" x="130" y="171.0" width="46" height="17"/><text class="cf-d" x="153" y="42" text-anchor="middle">pentagon</text>
+  <rect class="cf-fill" x="200" y="52.0" width="46" height="17"/><rect class="cf-fill" x="200" y="69.0" width="46" height="17"/><rect class="cf-fill" x="200" y="86.0" width="46" height="17"/><rect class="cf-fill" x="200" y="103.0" width="46" height="17"/><rect class="cf-fill" x="200" y="120.0" width="46" height="17"/><rect class="cf-fill" x="200" y="137.0" width="46" height="17"/><rect class="cf-fill" x="200" y="154.0" width="46" height="17"/><rect class="cf-fill" x="200" y="171.0" width="46" height="17"/><text class="cf-d" x="223" y="42" text-anchor="middle">ordinary</text>
+  <path class="cf-g" d="M120 52 L120 188" stroke-dasharray="4 3"/>
+  <path class="cf-g" d="M186 52 L186 188" stroke-dasharray="4 3"/>
+  <text class="cf-gd" x="300" y="76">protected all the way down</text>
+  <text class="cf-d" x="300" y="98">not just the cell you can see</text>
+  <text class="cf-d" x="300" y="126">otherwise a player tunnels underneath</text>
+  <text class="cf-d" x="300" y="144">and the landmark is left floating</text>
+  <text class="cf-c" x="300" y="172">768 cells out of 2.7 billion</text>
+  <text class="cf-d" x="14" y="204">12 columns &#215; the crust depth &#8212; the entire cost of the rule</text>
+</svg>

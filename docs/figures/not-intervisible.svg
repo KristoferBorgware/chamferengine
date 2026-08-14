@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 248" width="430" height="248">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" d="M-81.3 200.1 A 400 400 0 0 1 509.3 200.1"/>
+  <path class="cf-a" d="M3.7 129.7L-45.8 49.7"/>
+  <path class="cf-g" d="M-45.8 49.7L261.4 72.8"/>
+  <circle class="cf-gf" cx="261.4" cy="72.8" r="4"/>
+  <polygon class="cf-gf" points="3.7,121.7 11.3,127.3 8.4,136.2 -1.0,136.2 -3.9,127.3"/>
+  <polygon class="cf-gf" points="424.3,121.7 431.9,127.3 429.0,136.2 419.6,136.2 416.7,127.3"/>
+  <path class="cf-l" d="M261.4 62.8L424.3 119.7" stroke-dasharray="3 3"/>
+  <text class="cf-c" x="-51.8" y="41.7" text-anchor="middle">a 400 m tower</text>
+  <text class="cf-gd" x="257.4" y="92.8" text-anchor="middle">sees 1,143 m</text>
+  <text class="cf-d" x="434.3" y="125.7">next pentagon,</text>
+  <text class="cf-d" x="434.3" y="141.7">1,882 m away</text>
+  <text class="cf-c" x="14" y="26">to see one pentagon from the next</text>
+  <text class="cf-c" x="14" y="46">you would need a 1,793 m tower</text>
+  <text class="cf-d" x="14" y="70">which is taller than the planet&#8217;s radius</text>
+</svg>
