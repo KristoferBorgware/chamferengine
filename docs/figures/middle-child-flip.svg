@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 196" width="400" height="196">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <polygon class="cf-fill" points="120.0,5.4 45.0,135.3 195.0,135.3"/>
+  <path class="cf-l" d="M120.0 5.4L82.5 70.3M120.0 5.4L157.5 70.3M82.5 70.3L157.5 70.3M82.5 70.3L45.0 135.3M82.5 70.3L120.0 135.3M45.0 135.3L120.0 135.3M157.5 70.3L120.0 135.3M157.5 70.3L195.0 135.3M120.0 135.3L195.0 135.3"/>
+  <polygon class="cf-gf" points="82.5,70.3 157.5,70.3 120.0,135.3"/>
+  <path class="cf-a" d="M120.0 5.4L90.0 57.4" marker-end="url(#ah)"/>
+  <path class="cf-a" d="M120.0 5.4L150.0 57.4" marker-end="url(#ah)"/>
+  <circle cx="120.0" cy="5.4" r="3.5" fill="#2f6fd0"/>
+  <path class="cf-g" d="M120.0 135.3L150.0 83.3" marker-end="url(#ag)"/>
+  <path class="cf-g" d="M120.0 135.3L90.0 83.3" marker-end="url(#ag)"/>
+  <circle cx="120.0" cy="135.3" r="3.5" fill="#b0800f"/>
+  <text class="cf-c" x="228" y="60">corner child</text>
+  <text class="cf-d" x="228" y="76">origin at the top,</text>
+  <text class="cf-d" x="228" y="90">axes as expected</text>
+  <text class="cf-gd" x="228" y="120">middle child</text>
+  <text class="cf-d" x="228" y="136">origin at the bottom,</text>
+  <text class="cf-d" x="228" y="150">both axes mirrored</text>
+  <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit inside a mirrored frame</text>
+</svg>

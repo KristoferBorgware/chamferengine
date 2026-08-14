@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 152" width="430" height="152">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <polygon class="cf-af" points="70.0,1.3 14.0,98.3 126.0,98.3"/>
+  <polygon class="cf-fill" points="215.0,1.3 159.0,98.3 271.0,98.3"/>
+  <polygon class="cf-fill" points="360.0,1.3 304.0,98.3 416.0,98.3"/>
+  <polygon class="cf-af" points="187.0,49.8 159.0,98.3 215.0,98.3"/>
+  <polygon class="cf-af" points="332.0,49.8 318.0,74.1 346.0,74.1"/>
+  <path class="cf-l" d="M215.0 1.3L187.0 49.8M215.0 1.3L243.0 49.8M187.0 49.8L243.0 49.8M187.0 49.8L159.0 98.3M187.0 49.8L215.0 98.3M159.0 98.3L215.0 98.3M243.0 49.8L215.0 98.3M243.0 49.8L271.0 98.3M215.0 98.3L271.0 98.3"/>
+  <path class="cf-l" d="M360.0 1.3L346.0 25.6M360.0 1.3L374.0 25.6M346.0 25.6L374.0 25.6M346.0 25.6L332.0 49.8M346.0 25.6L360.0 49.8M332.0 49.8L360.0 49.8M374.0 25.6L360.0 49.8M374.0 25.6L388.0 49.8M360.0 49.8L388.0 49.8M332.0 49.8L318.0 74.1M332.0 49.8L346.0 74.1M318.0 74.1L346.0 74.1M360.0 49.8L346.0 74.1M360.0 49.8L374.0 74.1M346.0 74.1L374.0 74.1M388.0 49.8L374.0 74.1M388.0 49.8L402.0 74.1M374.0 74.1L402.0 74.1M318.0 74.1L304.0 98.3M318.0 74.1L332.0 98.3M304.0 98.3L332.0 98.3M346.0 74.1L332.0 98.3M346.0 74.1L360.0 98.3M332.0 98.3L360.0 98.3M374.0 74.1L360.0 98.3M374.0 74.1L388.0 98.3M360.0 98.3L388.0 98.3M402.0 74.1L388.0 98.3M402.0 74.1L416.0 98.3M388.0 98.3L416.0 98.3"/>
+  <text class="cf-c" x="70"  y="128" text-anchor="middle">7</text>
+  <text class="cf-c" x="215" y="128" text-anchor="middle">7 &#183; 1</text>
+  <text class="cf-c" x="360" y="128" text-anchor="middle">7 &#183; 1 &#183; 0</text>
+  <text class="cf-d" x="70"  y="146" text-anchor="middle">face</text>
+  <text class="cf-d" x="215" y="146" text-anchor="middle">+ one digit</text>
+  <text class="cf-d" x="360" y="146" text-anchor="middle">+ one more</text>
+</svg>

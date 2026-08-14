@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 236" width="400" height="236">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <g>
+    <polygon class="cf-fill" points="100.0,96.0 142.0,96.0 142.0,138.0 100.0,138.0"/><polygon class="cf-fill" points="100.0,96.0 100.0,138.0 58.0,138.0 58.0,96.0"/><polygon class="cf-fill" points="100.0,96.0 58.0,96.0 58.0,54.0 100.0,54.0"/>
+    <path class="cf-g" d="M142 96 A 42 42 0 0 0 100 54" stroke-dasharray="4 3"/>
+    <text class="cf-gd" x="127" y="71">gap</text>
+    <circle cx="100" cy="96" r="4" fill="#b0800f"/>
+    <text class="cf-d" x="100" y="26" text-anchor="middle">a cube corner</text>
+    <text x="100" y="172" text-anchor="middle">3 x 90&#176; = 270&#176;</text>
+    <text class="cf-gd" x="100" y="192" text-anchor="middle">90&#176; short, at 8 corners</text>
+  </g>
+  <g>
+    <path class="cf-l" d="M300.0 96.0L300.0 52.0M300.0 96.0L341.8 82.4M300.0 96.0L325.9 131.6M300.0 96.0L274.1 131.6M300.0 96.0L258.2 82.4"/>
+    <path class="cf-m" d="M300.0 52.0L341.8 82.4M341.8 82.4L325.9 131.6M325.9 131.6L274.1 131.6M274.1 131.6L258.2 82.4M258.2 82.4L300.0 52.0"/>
+    <polygon class="cf-af" points="313.9,76.8 322.6,103.3 300.0,119.7 277.4,103.3 286.1,76.8"/>
+    <circle cx="300" cy="96" r="4" fill="#2f6fd0"/>
+    <text class="cf-d" x="300" y="26" text-anchor="middle">a pentagon cell</text>
+    <text x="300" y="172" text-anchor="middle">5 x 60&#176; = 300&#176;</text>
+    <text class="cf-c" x="300" y="192" text-anchor="middle">60&#176; short, at 12 pentagons</text>
+  </g>
+  <text class="cf-d" x="200" y="224" text-anchor="middle">8 x 90&#176; = 12 x 60&#176; = 720&#176;, either way</text>
+</svg>
