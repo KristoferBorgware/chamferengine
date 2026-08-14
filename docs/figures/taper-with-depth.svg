@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 226" width="430" height="226">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M140.8 74.5L215 396"/><path class="cf-l" d="M165.3 69.8L215 396"/><path class="cf-l" d="M190.1 66.9L215 396"/><path class="cf-l" d="M215.0 66.0L215 396"/><path class="cf-l" d="M239.9 66.9L215 396"/><path class="cf-l" d="M264.7 69.8L215 396"/><path class="cf-l" d="M289.2 74.5L215 396"/>
+  <path class="cf-m" d="M140.8 74.5 A 330.0 330.0 0 0 1 289.2 74.5"/>
+  <path class="cf-a" d="M143.6 86.6 A 317.6 317.6 0 0 1 286.4 86.6"/>
+  <path class="cf-g" d="M159.8 156.8 A 245.5 245.5 0 0 1 270.2 156.8"/>
+  <text class="cf-c" x="14" y="78.5">surface &#183; 1.00 wide</text>
+  <text class="cf-c" x="14" y="102.6">64 layers down &#183; 0.962 wide &#8212; the crust in use</text>
+  <text class="cf-gd" x="14" y="160.8">435 layers &#183; 0.744 wide &#8212; the cap</text>
+  <text class="cf-d" x="14" y="178.8">as narrow as the narrowest cell already on the surface</text>
+  <text class="cf-d" x="215" y="216" text-anchor="middle">the columns meet at the centre, so a crust deeper than the cap has nowhere to go</text>
+</svg>

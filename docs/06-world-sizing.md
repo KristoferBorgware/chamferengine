@@ -2,13 +2,15 @@
 
 ## What has to be decided
 
-Block size, planet radius, and subdivision level. They are not independent — fix
-any two and the third follows. This document is about which one to fix first, and
-why the usual instinct is backwards.
+Three numbers: block size, planet radius, and subdivision level. They are locked
+together — fix any two and the third is decided for you.
+
+So the only real question is **which one you fix first**, and the usual instinct
+gets it backwards.
 
 ## A warning before the numbers
 
-**"Depth" means two unrelated things**, and confusing them will cost you an
+**"Depth" means two unrelated things here**, and confusing them will cost you an
 afternoon. Always qualify:
 
 - **Subdivision depth** (`D`) — purely *horizontal*. How many times triangles are
@@ -23,33 +25,41 @@ blockSize  ≈  K · radius / 2^level        where K = sqrt(8π / (10√3)) = 1.
 cells      =  10 · 4^level + 2
 ```
 
-Where `K` comes from: the sphere has area `4πR²` shared between `N` cells, so
-each cell covers `A = 4πR² / N`. A hexagon with centre-to-centre spacing `d` has
-area `(√3/2)d²`. Set those equal and solve for the spacing:
+`K` is not a magic number — it falls out in two lines. The sphere's surface is
+`4πR²`, shared between `N` cells, so one cell covers `A = 4πR² / N`. A hexagon
+whose centres sit `d` apart covers `(√3/2)d²`. Set those equal, solve for `d`:
 
 ```
 d = sqrt(2A/√3)
 ```
 
-which rearranges into the constant above.
+and rearranging gives the constant above.
 
 > **[verified]** `verification/calc.js` checks the closed form against exact
 > cell-area maths at three radii: agreement to three decimals.
 
 ---
 
-## Which knob is rigid
+## Fix the block size, and let the radius move
 
-**Block size is rigid.** It is what the player feels: how tall a door is, how
-thick a wall is, how many blocks a tree costs. Change it later and every
-building, recipe, and terrain generator breaks. Decide it first and freeze it.
+**Block size is rigid.** It is the number the player actually feels — how tall a
+door is, how thick a wall is, how many blocks a tree costs. Change it later and
+every building, every recipe and the terrain generator all break at once. Decide
+it first and freeze it.
 
-**Radius is elastic**, because the level is an integer. Rounding to the nearest
-level shifts things by up to ~40%. **Let the radius absorb that, never the block
-size.** Snap the radius to whatever the rounded level gives.
+**Radius is elastic**, and it has to be, because the level is a whole number.
+
+![A number line of subdivision levels 10, 11 and 12 with their radii; a requested radius lands between two of them and is snapped up to the nearer whole level](figures/level-is-an-integer.svg)
+
+*You ask for a planet and get a fractional level, which does not exist. Something
+has to give. Round the level and the radius shifts by up to 40% — round the block
+size instead and every door in the game changes width.*
+
+So: **let the radius absorb the rounding, never the block size.** Snap the radius
+to whatever the rounded level gives.
 
 And the instinct that is usually backwards: **do not pick radius directly — pick
-travel time.** That is the number players experience; radius is just its unit
+travel time.** That is the number players experience. Radius is just its unit
 conversion.
 
 ## Worked example
@@ -110,11 +120,17 @@ The surface count is only half the story. Total voxels = `surface cells × layer
 At the worked example above with a 64-block crust: 42M surface cells becomes
 **2.7 billion voxels**. That multiplier sizes your storage and generation budget.
 
-### Taper
+### Cells get narrower as you dig
 
-Layers shrink toward the core, because a smaller radius leaves less room for the
-same number of cells. At depth `h` on a planet of radius `R`, cell spacing scales
-by `(R − h) / R`.
+Every column runs toward the planet's centre, and the columns are converging.
+Same number of cells, less room to put them in — so a cell at depth `h` is
+`(R − h) / R` as wide as it was at the surface.
+
+![A wedge cut from the planet's centre to its surface, with the columns converging inward and arcs marking the surface, 64 layers down, and the cap at 435 layers](figures/taper-with-depth.svg)
+
+*Dig far enough and the columns run into each other. The 64-layer crust the design
+actually uses barely registers; the cap sits far below it, and the core is where
+the width reaches zero.*
 
 - 64 blocks into a 1,700 m planet → cells at the crust floor are **96%** of
   surface width. Imperceptible.
@@ -126,12 +142,14 @@ Earlier drafts put the threshold at roughly 85% of surface width and admitted it
 was a guess with no script behind it. There is a measured anchor available
 instead, and it is more permissive than the guess.
 
-The surface is **not uniform to begin with** ([doc 02](02-geometry-choice.md)):
-the narrowest cell anywhere on it, next to a pentagon, is **0.744** of nominal
-spacing. A taper that stays above that has not produced a cell narrower than one
-the player has already walked across at the surface. That puts the budget at
-**25.6% of the radius** — and confirms the old 85% guess was conservative, so
-nothing built on it was wrong.
+The trick is to stop asking "when does a cell look narrow?" and ask "when is it
+narrower than cells the player has *already walked across*?" Because the surface
+is **not uniform to begin with** ([doc 02](02-geometry-choice.md)): the narrowest
+cell anywhere on it, next to a pentagon, is **0.744** of nominal spacing.
+
+Taper down to that and you have produced nothing the surface does not already
+have. That puts the budget at **25.6% of the radius** — and it confirms the old
+85% guess was conservative, so nothing built on it was wrong.
 
 Converting to layers gives a result worth stating on its own:
 
@@ -158,10 +176,10 @@ headroom**. Capping is not a constraint on it; it is a ceiling nobody is near.
 
 ### Merging layers is declined, and now priced
 
-The obvious alternative to capping — **merging layers**, dropping the horizontal
-resolution by one level at a chosen depth — is *not* recommended, though earlier
+There is an obvious alternative to capping: when cells get too narrow, drop the
+horizontal resolution by one level and carry on down. **Merging layers.** Earlier
 drafts of this document suggested it in passing. It used to be declined on
-principle. It can now be declined on arithmetic.
+principle; it can now be declined on arithmetic.
 
 **What it buys.** One merge doubles cell width, so the taper budget restarts:
 reach goes from 25.6% of the radius to 62.8%. But the ID layout sizes the layer
@@ -170,7 +188,13 @@ at `D` 11 is already 435. So the first merge buys **77 addressable layers — 18
 more crust** — and every merge after it buys **nothing at all**, because the ID
 cannot address the result.
 
-**What it costs.** An interior LOD seam that wraps the entire planet.
+**What it costs.** Here is the part that decides it.
+
+![Eight fine columns meeting two coarse ones at a horizontal seam; one column in four passes straight through and the rest stop dead against the boundary](figures/merge-shell.svg)
+
+*Cell centres nest exactly, so one fine column in four lines up with a coarse one
+below and carries on. The other three stop against a cell they only partly
+overlap. This happens to every column on the planet, at one depth, permanently.*
 
 > **[verified]** `verification/taper.js` — cell *centres* nest exactly, since
 > `oneShot(n/2, i, j)` equals `oneShot(n, 2i, 2j)`; cell *areas* do not, because a
@@ -208,10 +232,14 @@ The calculator reports the taper live.
   the nominal spacing, which on the worked planet means 1 m blocks that are
   anywhere from 74 cm to 1.10 m wide. Cells near the twelve pentagons are the
   small ones.
-- **Hexagons are not cubes.** Block size is measured flat-to-flat. A hexagon that
-  wide covers **0.87×** the footprint of a square block of the same size, and is
-  **1.15×** wider corner-to-corner. Everything is about 13% smaller than the same
-  number would suggest in Minecraft.
+- **Hexagons are not cubes**, so the same number buys less ground.
+
+![A hexagon and a square of the same flat-to-flat width side by side, the hexagon covering 0.87 of the square's area but reaching 1.15 times as far corner to corner](figures/hexagon-vs-cube.svg)
+
+*Block size is measured flat-to-flat. A hexagon that wide covers **0.87×** the
+footprint of a square block of the same size, and reaches **1.15×** as far corner
+to corner. Everything is about 13% smaller than the same number would suggest in
+Minecraft — worth knowing before you promise players a "1 metre block".*
 
 ---
 

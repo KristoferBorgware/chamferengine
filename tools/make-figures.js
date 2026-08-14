@@ -438,6 +438,123 @@ const made = [];
 
 
 // =============================================================================
+// 06 — level-is-an-integer: the radius moves so the block size never has to
+// =============================================================================
+{
+  const y = 96, x0 = 56, dx = 96;
+  const L = [10, 11, 12];
+  let ticks = '';
+  L.forEach((l, i) => {
+    const x = x0 + i*dx;
+    ticks += `<path class="cf-m" d="M${x} ${y-9}L${x} ${y+9}"/>`
+          +  `<text class="cf-big" x="${x}" y="${y-18}" text-anchor="middle">${l}</text>`
+          +  `<text class="cf-d" x="${x}" y="${y+26}" text-anchor="middle">${(1*2**l/1.20459).toFixed(0)} m</text>`;
+  });
+  const want = x0 + 0.92*dx;                    // level 10.92 -- what the target asks for
+  made.push(svg('level-is-an-integer', 430, 208, `
+  <path class="cf-l" d="M28 ${y}L${x0+2*dx+28} ${y}"/>
+  ${ticks}
+  <path class="cf-g" d="M${f(want)} ${y+52}L${f(want)} ${y+14}" marker-end="url(#li1)"/>
+  <defs><marker id="li1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <text class="cf-gd" x="${f(want)}" y="${y+70}" text-anchor="middle">you asked for 1,604 m</text>
+  <text class="cf-gd" x="${f(want)}" y="${y+88}" text-anchor="middle">= level 10.92</text>
+  <path class="cf-a" d="M${f(want+6)} ${y+42}L${f(x0+dx-8)} ${y+22}" marker-end="url(#li2)"/>
+  <defs><marker id="li2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-c" x="14" y="26">the level is a whole number &#8212; there is no 10.92</text>
+  <text class="cf-d" x="14" y="46">so round it, and let the RADIUS take the difference</text>
+  <text class="cf-c" x="${f(x0+dx)}" y="${y+112}" text-anchor="middle">you get 1,700 m, and 1 m blocks exactly</text>
+  <text class="cf-d" x="215" y="196" text-anchor="middle">rounding can move the radius up to 40%. it must never move the block.</text>`));
+}
+
+// =============================================================================
+// 06 — taper-with-depth: cells narrow toward the core, and by how much
+// =============================================================================
+{
+  const O = [215, 396], R = 330, halfW = 13;    // wedge half-angle, degrees
+  const arc = (r, cls) => {
+    const a = halfW*Math.PI/180;
+    return `<path class="${cls}" d="M${f(O[0]-r*Math.sin(a))} ${f(O[1]-r*Math.cos(a))}`
+      + ` A ${f(r)} ${f(r)} 0 0 1 ${f(O[0]+r*Math.sin(a))} ${f(O[1]-r*Math.cos(a))}"/>`;
+  };
+  let cols = '';
+  for (let k=-3;k<=3;k++){
+    const a = (k*halfW/3)*Math.PI/180;
+    cols += `<path class="cf-l" d="M${f(O[0]+R*Math.sin(a))} ${f(O[1]-R*Math.cos(a))}L${O[0]} ${O[1]}"/>`;
+  }
+  const yAt = r => O[1]-r*Math.cos(halfW*Math.PI/180);
+  made.push(svg('taper-with-depth', 430, 226, `
+  ${cols}
+  ${arc(R, 'cf-m')}
+  ${arc(R*(1-64/1700), 'cf-a')}
+  ${arc(R*0.744, 'cf-g')}
+  <text class="cf-c" x="14" y="${f(yAt(R)+4)}">surface &#183; 1.00 wide</text>
+  <text class="cf-c" x="14" y="${f(yAt(R*(1-64/1700))+16)}">64 layers down &#183; 0.962 wide &#8212; the crust in use</text>
+  <text class="cf-gd" x="14" y="${f(yAt(R*0.744)+4)}">435 layers &#183; 0.744 wide &#8212; the cap</text>
+  <text class="cf-d" x="14" y="${f(yAt(R*0.744)+22)}">as narrow as the narrowest cell already on the surface</text>
+  <text class="cf-d" x="215" y="216" text-anchor="middle">the columns meet at the centre, so a crust deeper than the cap has nowhere to go</text>`));
+}
+
+// =============================================================================
+// 06 — merge-shell: three columns in four dead-end at a resolution change
+// =============================================================================
+{
+  const yTop = 44, ySeam = 118, yBot = 186, x0 = 74, w = 34;
+  let fine = '', coarse = '', marks = '';
+  for (let k = 0; k < 8; k++){
+    const x = x0 + k*w;
+    fine += `<rect class="cf-fill" x="${x}" y="${yTop}" width="${w-3}" height="${ySeam-yTop}"/>`;
+  }
+  for (let k = 0; k < 2; k++){
+    const x = x0 + k*w*4;
+    coarse += `<rect class="cf-gf" x="${x}" y="${ySeam+6}" width="${w*4-3}" height="${yBot-ySeam-6}"/>`;
+  }
+  for (let k = 0; k < 8; k++){
+    const cx = x0 + k*w + (w-3)/2;
+    const through = (k % 4 === 0);              // one in four lines up
+    marks += through
+      ? `<path class="cf-a" d="M${f(cx)} ${yTop+8}L${f(cx)} ${yBot-8}" marker-end="url(#ms1)"/>`
+      : `<path class="cf-l" d="M${f(cx)} ${yTop+8}L${f(cx)} ${ySeam-2}"/>`
+        + `<path class="cf-g" d="M${f(cx-7)} ${ySeam+1}l14 0"/>`;
+  }
+  made.push(svg('merge-shell', 430, 232, `
+  <defs><marker id="ms1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  ${fine}${coarse}${marks}
+  <text class="cf-d" x="46" y="${f((yTop+ySeam)/2)}" text-anchor="end">fine</text>
+  <text class="cf-d" x="46" y="${f((ySeam+yBot)/2+6)}" text-anchor="end">coarse</text>
+  <text class="cf-c" x="14" y="26">one column in four carries straight on</text>
+  <text class="cf-gd" x="14" y="212">three in four stop dead at the shell</text>
+  <text class="cf-d" x="14" y="${yBot+18}">cell centres nest exactly; cell areas never do</text>
+  <text class="cf-d" x="416" y="212" text-anchor="end">on the worked planet that is 41,943,042 columns</text>`));
+}
+
+// =============================================================================
+// 06 — hexagon-vs-cube: the same "block size" buys less ground
+// =============================================================================
+{
+  const W = 104, cy = 104;
+  const hx = 118, sx = 292;
+  const H = Array.from({length:6},(_,i)=>{        // flat-to-flat width W
+    const a = Math.PI/6 + Math.PI*i/3;
+    return [hx + (W/Math.sqrt(3))*Math.cos(a), cy + (W/Math.sqrt(3))*Math.sin(a)];
+  });
+  made.push(svg('hexagon-vs-cube', 430, 214, `
+  <rect class="cf-fill" x="${f(sx-W/2)}" y="${f(cy-W/2)}" width="${W}" height="${W}"/>
+  <polygon class="cf-af" points="${pts(H)}"/>
+  <path class="cf-a" d="M${f(hx-W/2)} ${f(cy+W/2+14)}L${f(hx+W/2)} ${f(cy+W/2+14)}"/>
+  <path class="cf-m" d="M${f(sx-W/2)} ${f(cy+W/2+14)}L${f(sx+W/2)} ${f(cy+W/2+14)}"/>
+  <text class="cf-d" x="${hx}" y="${f(cy+W/2+32)}" text-anchor="middle">same width</text>
+  <text class="cf-d" x="${sx}" y="${f(cy+W/2+32)}" text-anchor="middle">same width</text>
+  <text class="cf-c" x="${hx}" y="${f(cy+4)}" text-anchor="middle">0.87&#215; the area</text>
+  <text class="cf-d" x="${sx}" y="${f(cy+4)}" text-anchor="middle">1.00&#215;</text>
+  <path class="cf-g" d="M${f(H[5][0])} ${f(H[5][1])}L${f(H[2][0])} ${f(H[2][1])}" stroke-dasharray="4 3"/>
+  <text class="cf-gd" x="${hx}" y="${f(cy-W/2-16)}" text-anchor="middle">but 1.15&#215; corner to corner</text>
+  <text class="cf-d" x="215" y="200" text-anchor="middle">a &#8220;1 m block&#8221; covers about 13% less ground than the same number in Minecraft</text>`));
+}
+
+// =============================================================================
 // 17 — never-far-from-one: pentagons 1,882 m apart, cover radius 1,109 m
 // =============================================================================
 {

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 208" width="430" height="208">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M28 96L276 96"/>
+  <path class="cf-m" d="M56 87L56 105"/><text class="cf-big" x="56" y="78" text-anchor="middle">10</text><text class="cf-d" x="56" y="122" text-anchor="middle">850 m</text><path class="cf-m" d="M152 87L152 105"/><text class="cf-big" x="152" y="78" text-anchor="middle">11</text><text class="cf-d" x="152" y="122" text-anchor="middle">1700 m</text><path class="cf-m" d="M248 87L248 105"/><text class="cf-big" x="248" y="78" text-anchor="middle">12</text><text class="cf-d" x="248" y="122" text-anchor="middle">3400 m</text>
+  <path class="cf-g" d="M144.3 148L144.3 110" marker-end="url(#li1)"/>
+  <defs><marker id="li1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <text class="cf-gd" x="144.3" y="166" text-anchor="middle">you asked for 1,604 m</text>
+  <text class="cf-gd" x="144.3" y="184" text-anchor="middle">= level 10.92</text>
+  <path class="cf-a" d="M150.3 138L144.0 118" marker-end="url(#li2)"/>
+  <defs><marker id="li2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-c" x="14" y="26">the level is a whole number &#8212; there is no 10.92</text>
+  <text class="cf-d" x="14" y="46">so round it, and let the RADIUS take the difference</text>
+  <text class="cf-c" x="152.0" y="208" text-anchor="middle">you get 1,700 m, and 1 m blocks exactly</text>
+  <text class="cf-d" x="215" y="196" text-anchor="middle">rounding can move the radius up to 40%. it must never move the block.</text>
+</svg>
