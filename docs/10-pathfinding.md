@@ -1,7 +1,8 @@
 # 10 — Pathfinding
 
 Hex grids are meaningfully better for pathfinding than square ones, and the
-hierarchy adds a second, larger win.
+hierarchy adds a second, larger win. Both are consequences of choices already
+made, collected here.
 
 ---
 
@@ -15,7 +16,9 @@ On a square grid you pick your poison:
 
 Hexes have neither problem. **Six neighbours, all at identical distance, every
 adjacency a shared edge, never a bare corner.** An entire class of corner-cutting
-bugs simply does not exist.
+bugs simply does not exist — not "is handled", does not exist.
+
+This is design goal 3 from [doc 00](00-introduction.md) being collected.
 
 **Demo:** [`demos/pathfinding.html`](../demos/pathfinding.html) — the same map on
 both grids, with an *Illegal cuts* column. On squares it goes red regularly and
@@ -43,6 +46,9 @@ lookup.
 
 A pentagon is a node of degree 5. A face crossing is handled inside
 `neighbour()`. **The pathfinder never learns the world is a sphere.**
+
+That is the payoff of putting all the irregularity in one 180-byte table
+([doc 05](05-face-adjacency.md)).
 
 ---
 
@@ -85,3 +91,16 @@ simplification is what makes the demo small, not what makes it correct.
 - **Step costs are not perfectly uniform.** Cells vary ~1.3:1 in area across the
   sphere and shrink with depth. Irrelevant for gameplay, but if true travel times
   are needed, weight each edge by actual centre-to-centre distance.
+
+---
+
+## In one breath
+
+- Six equidistant neighbours, every one a shared edge: **corner-cutting bugs do
+  not exist**, rather than being handled.
+- The heuristic is exact within a face and great-circle across faces, both from
+  the ID alone.
+- Pentagons are degree-5 nodes and seams live inside `neighbour()` — **the
+  pathfinder never learns it is on a sphere**.
+- Hierarchical search is free: **truncate the ID** and the coarse graph is
+  already there.

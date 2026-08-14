@@ -1,8 +1,8 @@
 # 09 — Ray traversal
 
-## The problem
+## The question
 
-The player looks somewhere and clicks. Which cell do they want to mutate?
+The player looks somewhere and clicks. **Which cell do they want to mutate?**
 
 ## It is a grid walk, not a physics query
 
@@ -11,8 +11,9 @@ technique is **voxel DDA** (Amanatides & Woo): step cell to cell along the ray,
 checking occupancy as you go.
 
 With a 5-block reach you touch about 5 cells. A physics raycast, by contrast,
-needs collision meshes generated for every chunk. The DDA needs nothing but the
-ray and the addressing scheme.
+needs collision meshes generated for every chunk — for a world where nothing is
+meshed until it is seen, that is an enormous amount of work to answer a question
+about five cells.
 
 **Walk cost depends on reach, not on world size.** This is the whole argument.
 
@@ -20,15 +21,24 @@ ray and the addressing scheme.
 
 ## The property that makes it elegant here
 
+You would expect that walking a straight line across a *sphere* means following a
+curve, and re-projecting at every step. It does not, and the reason is worth
+following.
+
 Finding the face uses central projection from the planet's centre onto the flat
 face plane — that is the **gnomonic projection**, and gnomonic projection maps
 great circles to straight lines. Meanwhile, a straight 3D ray plus the origin
 defines a plane, so the ray's radial shadow on the sphere is always a great
 circle.
 
-Therefore: **the ray's ground track is a perfectly straight line in face
+Put those together: **the ray's ground track is a perfectly straight line in face
 barycentric coordinates.** Not approximately — exactly. No curve following, no
 re-projection per step.
+
+![A straight ray crossing a field of hexagons, stopping at the first solid cell](figures/ray-is-straight.svg)
+
+*The same straight-line walk a flat voxel game does, on a sphere, with no
+correction term anywhere.*
 
 ---
 
@@ -89,3 +99,15 @@ is what makes it exact.
 
 The same traversal is the line-of-sight test that any-angle pathfinding needs —
 see [doc 10](10-pathfinding.md). Build it once.
+
+---
+
+## In one breath
+
+- Block picking is a **grid walk**, not a physics query, and it costs about five
+  cells whatever the planet's size.
+- Gnomonic projection maps great circles to straight lines, so **the ground track
+  is exactly straight** in face coordinates.
+- Four boundary families: three horizontal, one radial. Step the nearest.
+- Walking off a face is the adjacency table's job; the line does not bend.
+- The entry boundary is the **placement face**, for free.

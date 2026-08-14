@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-d" x="100" y="30" text-anchor="middle">height field</text>
+  <path class="cf-fill" d="M20 78 L52 66 L84 84 L116 70 L148 86 L180 74 L180 150 L20 150 Z"/>
+  <path class="cf-m" d="M20 78 L52 66 L84 84 L116 70 L148 86 L180 74"/>
+  <text class="cf-c" x="100" y="176" text-anchor="middle">one surface per column</text>
+  <text class="cf-d" x="100" y="192" text-anchor="middle">no caves, ever</text>
+
+  <text class="cf-d" x="300" y="30" text-anchor="middle">density field</text>
+  <path class="cf-fill" d="M220 78 L252 66 L284 84 L316 70 L348 86 L380 74 L380 150 L220 150 Z"/>
+  <path class="cf-m" d="M220 78 L252 66 L284 84 L316 70 L348 86 L380 74"/>
+  <ellipse class="cf-void" cx="268" cy="112" rx="26" ry="11"/>
+  <ellipse class="cf-void" cx="340" cy="122" rx="20" ry="9"/>
+  <text class="cf-c" x="300" y="176" text-anchor="middle">solid where density &gt; 0</text>
+  <text class="cf-d" x="300" y="192" text-anchor="middle">caves, overhangs, islands</text>
+</svg>

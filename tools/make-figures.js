@@ -366,5 +366,75 @@ const made = [];
   <text class="cf-d" x="176" y="142">-- the table closes that gap</text>`));
 }
 
+
+// =============================================================================
+// 07 — four layers, and only one of them grows
+// =============================================================================
+{
+  const rows = [
+    ['constant tables', 'a few KB, fixed at build time', 'cf-af'],
+    ['pure functions',  'no storage at all',             'cf-af'],
+    ['chunk cache',     'bounded by view distance',      'cf-fill'],
+    ['delta store',     'the only thing that grows',     'cf-gf'],
+  ];
+  const W=210, H=34, X=24;
+  let body='';
+  rows.forEach((r,i)=>{
+    const y = 26 + i*(H+12);
+    body += `<rect class="${r[2]}" x="${X}" y="${y}" width="${W}" height="${H}" rx="4"/>`
+         +  `<text x="${X+12}" y="${y+22}">${r[0]}</text>`
+         +  `<text class="cf-d" x="${X+W+14}" y="${y+22}">${r[1]}</text>`;
+  });
+  made.push(svg('four-layers', 460, 210, body + `
+  <path class="cf-g" d="M${X-10} ${26+3*(H+12)} L${X-10} ${26+3*(H+12)+H}"/>
+  <text class="cf-gd" x="14" y="${26+3*(H+12)+22}" text-anchor="middle"></text>`));
+}
+
+// =============================================================================
+// 08 — height field against density field
+// =============================================================================
+{
+  // A radial slice. The height field gives one surface per column; the density
+  // field lets noise fight the radial bias, which opens caves and overhangs.
+  const groundA = 'M20 78 L52 66 L84 84 L116 70 L148 86 L180 74';
+  const box = (x,label) => `<text class="cf-d" x="${x}" y="30" text-anchor="middle">${label}</text>`;
+  made.push(svg('height-field-vs-density', 400, 200, `
+  ${box(100,'height field')}
+  <path class="cf-fill" d="${groundA} L180 150 L20 150 Z"/>
+  <path class="cf-m" d="${groundA}"/>
+  <text class="cf-c" x="100" y="176" text-anchor="middle">one surface per column</text>
+  <text class="cf-d" x="100" y="192" text-anchor="middle">no caves, ever</text>
+
+  ${box(300,'density field')}
+  <path class="cf-fill" d="M220 78 L252 66 L284 84 L316 70 L348 86 L380 74 L380 150 L220 150 Z"/>
+  <path class="cf-m" d="M220 78 L252 66 L284 84 L316 70 L348 86 L380 74"/>
+  <ellipse class="cf-void" cx="268" cy="112" rx="26" ry="11"/>
+  <ellipse class="cf-void" cx="340" cy="122" rx="20" ry="9"/>
+  <text class="cf-c" x="300" y="176" text-anchor="middle">solid where density &gt; 0</text>
+  <text class="cf-d" x="300" y="192" text-anchor="middle">caves, overhangs, islands</text>`));
+}
+
+// =============================================================================
+// 09 — a ray's ground track is straight in face coordinates
+// =============================================================================
+{
+  const D=26, OX=44, OY=44;
+  const pos=(q,r)=>[OX+(q+r/2)*D, OY+r*D*Math.sqrt(3)/2];
+  const cells=[]; for(let r=0;r<5;r++) for(let q=0;q<8;q++) cells.push(pos(q,r));
+  const hexes = cells.map(c=>`<polygon class="cf-l" points="${pts(hexPts(c[0],c[1],D/Math.sqrt(3)))}"/>`).join('');
+  const eye=[36,150], aim=[268,40];
+  const hit=[218,66];
+  made.push(svg('ray-is-straight', 330, 200, `
+  <defs><marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  ${hexes}
+  <polygon class="cf-gf" points="${pts(hexPts(hit[0],hit[1],D/Math.sqrt(3)))}"/>
+  <path class="cf-a" d="M${eye[0]} ${eye[1]} L${aim[0]} ${aim[1]}" marker-end="url(#ra)"/>
+  <circle cx="${eye[0]}" cy="${eye[1]}" r="4" fill="#2f6fd0"/>
+  <text class="cf-c" x="14" y="168">eye</text>
+  <text class="cf-gd" x="234" y="60">hit</text>
+  <text class="cf-d" x="165" y="190" text-anchor="middle">the ground track is a straight line, exactly -- not approximately</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

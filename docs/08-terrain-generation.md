@@ -2,8 +2,9 @@
 
 ## Where it fits
 
-Noise slots into exactly one place: **the cache miss.** Everything else in this
-design is addressing; this is the only step that invents content.
+Everything before this document is addressing — ways of naming a cell. This is
+the only step that **invents content**, and it happens in exactly one place: the
+cache miss.
 
 ```
 chunkID
@@ -14,7 +15,8 @@ chunkID
 ```
 
 **Delta application is last and it wins.** That ordering is the whole persistence
-model.
+model: the generator produces a pristine world, and the delta store records every
+divergence from it.
 
 ---
 
@@ -25,12 +27,16 @@ model.
 This is where most spherical worlds go wrong. Feeding face-local coordinates into
 2D noise produces visible discontinuities at all 30 face edges, because
 neighbouring faces have unrelated coordinate frames — the same problem the
-adjacency table exists to paper over.
+adjacency table in [doc 05](05-face-adjacency.md) exists to paper over.
 
 3D noise takes a position vector, and a cell's position is a position regardless
 of which face's bookkeeping found it. **Terrain generated from 3D noise has no
 idea faces or pentagons exist.** All of that structure vanishes from the
 generator entirely.
+
+That is not a small convenience. It is also what makes level-of-detail possible
+at all in [doc 14](14-meshing-and-lod.md), because a function of position can be
+asked at any spacing, by any grid.
 
 **Demo:** [`demos/planet-3d-noise.html`](../demos/planet-3d-noise.html) — spin it
 and hunt for the twelve pentagons or the twenty face seams in the terrain. They
@@ -40,6 +46,12 @@ by shape) but no mountain range, coastline, or biome boundary lines up with them
 ---
 
 ## Two levels of ambition
+
+![A radial slice: a height field gives one surface per column, a density field opens caves and overhangs](figures/height-field-vs-density.svg)
+
+*The height field asks one question per column and gets one answer. The density
+field asks at every cell, and lets noise fight the radial bias — which is what
+opens a void.*
 
 ### Height field
 
@@ -68,6 +80,12 @@ everything deeper be solid by default.
 radial bias. Low values give pockets and tunnels; higher values give overhangs,
 then detached floating chunks, then swiss cheese.
 
+And watch it in the right units. The bias grows by 1 per metre of depth, so
+**enclosed voids only appear when the noise gradient beats that** — amplitude
+divided by feature size must exceed 1. Raising `strength` alone, without raising
+frequency, buys a rougher surface and a much larger triangle bill while carving
+nothing at all. [Doc 14](14-meshing-and-lod.md) measures both.
+
 **Demo:** [`demos/planet-slice-noise.html`](../demos/planet-slice-noise.html) — a
 cross-section through a planet with live sliders. The *Cave carving* slider is
 literally the `strength` term; watching it lose the fight against the bias term
@@ -92,7 +110,7 @@ Surface material comes from two more low-frequency 3D fields — temperature and
 humidity — sampled on the direction vector.
 
 **Sea level is a radius, not a height.** And "up" is `normalize(position)`. Both
-of these ripple far beyond terrain — see [doc 11](11-open-topics.md).
+of these ripple far beyond terrain — see [doc 13](13-gravity-and-orientation.md).
 
 ---
 
@@ -130,11 +148,12 @@ addressing.
 
 ## Do you need heightmaps?
 
-The term means two different things.
+The term means two different things, and the answer differs for each.
 
 **As stored authoring data: no.** You do not need a painted texture. The
 `surfaceRadius(direction)` function *is* the heightmap, evaluated lazily. That is
-the whole point of the seed-based approach.
+the whole point of the seed-based approach, and the reason a fresh planet is
+under a hundred bytes ([doc 07](07-data-structures.md)).
 
 **As a cached intermediate: yes, and you already have it.** Compute the surface
 radius once per column and reuse it for layers, meshing, water, spawn placement,
@@ -173,5 +192,23 @@ level 8, so finding a cell's coarse height is masking its ID. No second spatial
 structure, no interpolation scheme to invent — the hierarchy built for streaming
 does this job unchanged.
 
+This is the **only** stored terrain the design contemplates, and it is an *input*
+to the height-field term rather than a mesh.
+
 **Recommendation:** start with pure noise, ship something, and add the coarse tier
 when the terrain starts looking like fractal lumps instead of a world.
+
+---
+
+## In one breath
+
+- Terrain is invented at exactly one moment: the **cache miss**. Deltas are
+  applied last and win.
+- **Sample in 3D world space**, never in face coordinates — otherwise all 30 face
+  seams show, and level-of-detail becomes impossible.
+- **Height field** = one evaluation per column, no caves. **Density field** = one
+  per cell, caves and overhangs, and **51×** the cost.
+- Enclosed voids need the noise gradient to beat the bias; more `strength` alone
+  gives roughness, not caves.
+- **There is no stored heightmap** — the function is the heightmap. The one
+  exception is a coarse level-8 map for rivers and erosion, at 2.6 MB.

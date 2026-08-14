@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 330 200" width="330" height="200">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <polygon class="cf-l" points="44.0,29.0 57.0,36.5 57.0,51.5 44.0,59.0 31.0,51.5 31.0,36.5"/><polygon class="cf-l" points="70.0,29.0 83.0,36.5 83.0,51.5 70.0,59.0 57.0,51.5 57.0,36.5"/><polygon class="cf-l" points="96.0,29.0 109.0,36.5 109.0,51.5 96.0,59.0 83.0,51.5 83.0,36.5"/><polygon class="cf-l" points="122.0,29.0 135.0,36.5 135.0,51.5 122.0,59.0 109.0,51.5 109.0,36.5"/><polygon class="cf-l" points="148.0,29.0 161.0,36.5 161.0,51.5 148.0,59.0 135.0,51.5 135.0,36.5"/><polygon class="cf-l" points="174.0,29.0 187.0,36.5 187.0,51.5 174.0,59.0 161.0,51.5 161.0,36.5"/><polygon class="cf-l" points="200.0,29.0 213.0,36.5 213.0,51.5 200.0,59.0 187.0,51.5 187.0,36.5"/><polygon class="cf-l" points="226.0,29.0 239.0,36.5 239.0,51.5 226.0,59.0 213.0,51.5 213.0,36.5"/><polygon class="cf-l" points="57.0,51.5 70.0,59.0 70.0,74.0 57.0,81.5 44.0,74.0 44.0,59.0"/><polygon class="cf-l" points="83.0,51.5 96.0,59.0 96.0,74.0 83.0,81.5 70.0,74.0 70.0,59.0"/><polygon class="cf-l" points="109.0,51.5 122.0,59.0 122.0,74.0 109.0,81.5 96.0,74.0 96.0,59.0"/><polygon class="cf-l" points="135.0,51.5 148.0,59.0 148.0,74.0 135.0,81.5 122.0,74.0 122.0,59.0"/><polygon class="cf-l" points="161.0,51.5 174.0,59.0 174.0,74.0 161.0,81.5 148.0,74.0 148.0,59.0"/><polygon class="cf-l" points="187.0,51.5 200.0,59.0 200.0,74.0 187.0,81.5 174.0,74.0 174.0,59.0"/><polygon class="cf-l" points="213.0,51.5 226.0,59.0 226.0,74.0 213.0,81.5 200.0,74.0 200.0,59.0"/><polygon class="cf-l" points="239.0,51.5 252.0,59.0 252.0,74.0 239.0,81.5 226.0,74.0 226.0,59.0"/><polygon class="cf-l" points="70.0,74.0 83.0,81.5 83.0,96.5 70.0,104.0 57.0,96.5 57.0,81.5"/><polygon class="cf-l" points="96.0,74.0 109.0,81.5 109.0,96.5 96.0,104.0 83.0,96.5 83.0,81.5"/><polygon class="cf-l" points="122.0,74.0 135.0,81.5 135.0,96.5 122.0,104.0 109.0,96.5 109.0,81.5"/><polygon class="cf-l" points="148.0,74.0 161.0,81.5 161.0,96.5 148.0,104.0 135.0,96.5 135.0,81.5"/><polygon class="cf-l" points="174.0,74.0 187.0,81.5 187.0,96.5 174.0,104.0 161.0,96.5 161.0,81.5"/><polygon class="cf-l" points="200.0,74.0 213.0,81.5 213.0,96.5 200.0,104.0 187.0,96.5 187.0,81.5"/><polygon class="cf-l" points="226.0,74.0 239.0,81.5 239.0,96.5 226.0,104.0 213.0,96.5 213.0,81.5"/><polygon class="cf-l" points="252.0,74.0 265.0,81.5 265.0,96.5 252.0,104.0 239.0,96.5 239.0,81.5"/><polygon class="cf-l" points="83.0,96.5 96.0,104.0 96.0,119.1 83.0,126.6 70.0,119.1 70.0,104.0"/><polygon class="cf-l" points="109.0,96.5 122.0,104.0 122.0,119.1 109.0,126.6 96.0,119.1 96.0,104.0"/><polygon class="cf-l" points="135.0,96.5 148.0,104.0 148.0,119.1 135.0,126.6 122.0,119.1 122.0,104.0"/><polygon class="cf-l" points="161.0,96.5 174.0,104.0 174.0,119.1 161.0,126.6 148.0,119.1 148.0,104.0"/><polygon class="cf-l" points="187.0,96.5 200.0,104.0 200.0,119.1 187.0,126.6 174.0,119.1 174.0,104.0"/><polygon class="cf-l" points="213.0,96.5 226.0,104.0 226.0,119.1 213.0,126.6 200.0,119.1 200.0,104.0"/><polygon class="cf-l" points="239.0,96.5 252.0,104.0 252.0,119.1 239.0,126.6 226.0,119.1 226.0,104.0"/><polygon class="cf-l" points="265.0,96.5 278.0,104.0 278.0,119.1 265.0,126.6 252.0,119.1 252.0,104.0"/><polygon class="cf-l" points="96.0,119.1 109.0,126.6 109.0,141.6 96.0,149.1 83.0,141.6 83.0,126.6"/><polygon class="cf-l" points="122.0,119.1 135.0,126.6 135.0,141.6 122.0,149.1 109.0,141.6 109.0,126.6"/><polygon class="cf-l" points="148.0,119.1 161.0,126.6 161.0,141.6 148.0,149.1 135.0,141.6 135.0,126.6"/><polygon class="cf-l" points="174.0,119.1 187.0,126.6 187.0,141.6 174.0,149.1 161.0,141.6 161.0,126.6"/><polygon class="cf-l" points="200.0,119.1 213.0,126.6 213.0,141.6 200.0,149.1 187.0,141.6 187.0,126.6"/><polygon class="cf-l" points="226.0,119.1 239.0,126.6 239.0,141.6 226.0,149.1 213.0,141.6 213.0,126.6"/><polygon class="cf-l" points="252.0,119.1 265.0,126.6 265.0,141.6 252.0,149.1 239.0,141.6 239.0,126.6"/><polygon class="cf-l" points="278.0,119.1 291.0,126.6 291.0,141.6 278.0,149.1 265.0,141.6 265.0,126.6"/>
+  <polygon class="cf-gf" points="218.0,51.0 231.0,58.5 231.0,73.5 218.0,81.0 205.0,73.5 205.0,58.5"/>
+  <path class="cf-a" d="M36 150 L268 40" marker-end="url(#ra)"/>
+  <circle cx="36" cy="150" r="4" fill="#2f6fd0"/>
+  <text class="cf-c" x="14" y="168">eye</text>
+  <text class="cf-gd" x="234" y="60">hit</text>
+  <text class="cf-d" x="165" y="190" text-anchor="middle">the ground track is a straight line, exactly -- not approximately</text>
+</svg>

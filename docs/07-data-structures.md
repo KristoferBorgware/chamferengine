@@ -1,6 +1,15 @@
 # 07 — Data structures
 
-Four layers. Only one of them grows.
+## Four layers, and only one of them grows
+
+That sentence is the whole document. Everything a running world holds falls into
+one of four places, and three of them have a ceiling you choose.
+
+![Four stacked layers: constant tables, pure functions, chunk cache, delta store](figures/four-layers.svg)
+
+*Constant tables and pure functions never change size. The chunk cache is bounded
+by view distance. Only the delta store grows, and it grows only with what players
+actually changed.*
 
 **Demo:** [`demos/data-structures.html`](../demos/data-structures.html) — three
 tabbed diagrams: what lives where, inside a chunk, and the lookup path.
@@ -58,6 +67,8 @@ blocks     packed indices into the palette, bit width = ceil(log2(paletteSize))
 
 **Chunks store no IDs.** Cells sit in canonical `q,r,layer` order, so an address
 is implied by array position — the same way a Minecraft chunk is a flat array.
+Storing a 64-bit ID beside a one-byte block type would be 8× overhead for
+something already known from where the byte sits.
 
 **The palette trick matters.** Most chunks contain three or four block types, so
 two bits per cell beats sixteen:
@@ -93,6 +104,9 @@ use it, zero I/O          generate from seed,
 is one shift; loading its edits is one range query, because every cell inside it
 shares the same prefix. No spatial index, no quadtree walk, no lookup table.
 
+That is the payoff for the bit layout in [doc 03](03-addressing.md), collected
+here.
+
 ---
 
 ## What is actually on disk
@@ -106,7 +120,7 @@ chunkLevel, radius             ~16 bytes
 delta log                       empty
 ```
 
-Under a hundred bytes.
+Under a hundred bytes. A whole planet, before anyone has touched it.
 
 ---
 
@@ -114,3 +128,14 @@ Under a hundred bytes.
 
 "Which players care about this chunk update" is an ID range comparison. Interest
 management falls out of the addressing scheme for free.
+
+---
+
+## In one breath
+
+- Four layers: **constant tables, pure functions, chunk cache, delta store**.
+  Only the last one grows.
+- All the sphere's irregularity lives in a few hundred bytes of constant table.
+- A chunk stores **no IDs** — position in the array is the address.
+- Finding a chunk is **one shift**; loading its edits is **one range query**.
+- A fresh planet is **under a hundred bytes** on disk.
