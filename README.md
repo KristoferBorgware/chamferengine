@@ -60,7 +60,7 @@ a runnable demo where one exists.
 | 11 | [Open topics](docs/11-open-topics.md) | Identified but not yet designed |
 | 12 | [Glossary](docs/12-glossary.md) | Terms and constants |
 | 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
-| 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, merge limits, altitude-driven LOD, skirts |
+| 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, skirts |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
 and naming conventions in a compact form intended for machine consumption.
@@ -117,6 +117,7 @@ node verification/calc.js      # sizing formula matches exact cell-area maths
 node verification/scale.js     # cell counts and spacings per level
 node verification/frame.js     # holonomy == enclosed area; the 720° in two forms
 node verification/mesh.js      # 2 verts / 4 tris per cell; sag, seams, LOD budget
+node verification/volume.js    # relief, caves, and what noise generation costs
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.

@@ -64,7 +64,11 @@ Violating any of these breaks the design. They are not tunable.
 | mesh cost, unmerged | `2` verts, `4` tris per cell | exactly 2× a cube surface | `mesh.js` |
 | flat-patch sag | `s² / 8R` | bounds how far merging may reach | `mesh.js` |
 | max merge span | `37 m` | at 0.1 m sag, R 1700 m | `mesh.js` |
-| visible cells at eye height | `≈ 21,000` | 84k triangles, D 11, R 1700 m | `mesh.js` |
+| visible cells at eye height | `≈ 21,000` | 84k triangles, D 11, R 1700 m — a FLOOR | `mesh.js` |
+| range to a peak of height h | `R·acos(R/(R+1.7)) + R·acos(R/(R+h))` | 60 m hill → 521 m, 47× the cells | `volume.js` |
+| triangles per cell, real terrain | `4.0` flat → `9.5` at 120 m relief | saturates; merging absorbs relief | `volume.js` |
+| cave face multiplier | `7–10×` | enclosed, so no draw cost | `volume.js` |
+| density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
 
 ## Established results
 
@@ -96,6 +100,14 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- Terrain is **generated, not stored** — there is no heightmap, so LOD is
+  re-generation and cuts noise cost 4× per level as well as draw cost
+  (`volume.js`). The density term costs 51× the height term over a full crust,
+  so **far chunks run the height field alone**: a coarse mesh cannot represent a
+  cave anyway (a 3 m cave is gone by level 10). That makes a LOD-2 chunk ~330×
+  cheaper to generate.
+- Cave geometry is culled **by enclosure, never by simplification**. It costs
+  build time and memory, not draw time.
 - LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
   seams come from terrain sampled at two spacings, not from geometry; skirts one

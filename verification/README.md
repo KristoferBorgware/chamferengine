@@ -163,6 +163,30 @@ Six checks, covering what a hex surface costs and where LOD actually breaks.
 
 ---
 
+## `volume.js` — terrain as a generated volume
+
+`mesh.js` costs a flat surface on a smooth sphere. This costs the real thing:
+relief, caves, and the noise generator behind them.
+
+**Verifies:**
+
+1. **Relief extends the horizon.** A 60 m hill is visible from **521 m**, not the
+   76 m ground horizon — 47× the cells. The 21,000-cell figure is a floor.
+2. **Relief barely moves the triangle count.** Raw side faces climb 20× from flat
+   to 120 m of relief, but each unbroken run merges to one quad, so triangles go
+   only **4.00 → 9.48 per cell** and then saturate.
+3. **Caves multiply exposed faces 7–10×** at a realistic carve strength — the
+   biggest number in doc 14, and all of it enclosed and invisible until opened.
+4. **Coarse levels cannot hold small features.** A 3 m cave is gone by level 10,
+   a 10 m canyon by level 8. Interior geometry must be culled, never simplified.
+5. **Generation cost by generator and level.** The density term is **51×** the
+   height term over a full crust, **26×** restricted to a band. Running height
+   field only on far chunks makes a LOD-2 chunk **~330× cheaper** to generate.
+
+**Used in:** [doc 14](../docs/14-meshing-and-lod.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a

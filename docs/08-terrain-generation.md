@@ -119,6 +119,13 @@ addressing.
   answer.
 - Generate per chunk in a batch so it can be vectorised.
 
+> **[verified]** `verification/volume.js` measures what those first two are
+> worth. On one chunk at depth 11, chunk level 6, with a 64-layer crust: the
+> density field costs **51×** the height field over the full crust, and **26×**
+> when restricted to a band around the surface. [Doc 14](14-meshing-and-lod.md)
+> takes this further — distant chunks can skip the density term altogether,
+> because a coarse mesh cannot represent a cave in the first place.
+
 ---
 
 ## Do you need heightmaps?

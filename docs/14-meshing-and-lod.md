@@ -52,6 +52,64 @@ the radial axis is easy, the horizontal one is not ([doc 13](13-gravity-and-orie
 
 ---
 
+## It is a volume, not a surface
+
+The 2-and-4 figure above is for a flat, fully exposed surface. A world with
+mountains, cliffs, overhangs and caves is a **volume**, and it costs more. How
+much more is the question, and the answer is: much less than the raw face count
+suggests, because vertical merging absorbs almost all of it.
+
+### Relief
+
+A cell exposes one cap, plus — toward each of its six neighbours — one side face
+per block of height difference. So raw side faces climb steeply with terrain
+relief. But every one of those runs is unbroken, so each collapses to exactly one
+quad.
+
+> **[verified]** `verification/volume.js`, 1 m blocks on the doc-06 planet.
+>
+> | Relief | Raw side faces / cell | Side quads after merge | **Triangles / cell** |
+> |---|---|---|---|
+> | 0 m (flat) | 0.00 | 0.00 | **4.00** |
+> | 10 m | 1.74 | 1.55 | **7.11** |
+> | 30 m | 5.17 | 2.36 | **8.71** |
+> | 60 m | 10.29 | 2.62 | **9.25** |
+> | 120 m | 20.59 | 2.74 | **9.48** |
+
+Raw faces grow 20×; **triangles grow 2.4× and then saturate.** The merged quad
+count cannot exceed six and settles near 2.7, because on average about half a
+cell's neighbours are lower than it whatever the relief.
+
+So the working number is **4 triangles per cell on flat ground, about 9 on
+mountainous ground**. Vertical merging is not a nice-to-have — without it the raw
+face column is the cost, and it is five times worse.
+
+### Caves
+
+The density field from [doc 08](08-terrain-generation.md) carves interior voids,
+and every void wall is exposed surface that a height field never has.
+
+> **[verified]** `verification/volume.js`, 64 layers under 30 m of relief.
+>
+> | Carve strength | Exposed faces / column | vs no carving |
+> |---|---|---|
+> | 0 | 1.0 | 1.00× |
+> | 8 | 4.3 | 4.28× |
+> | 16 | 6.9 | 6.92× |
+> | 26 | 10.1 | 10.05× |
+> | 40 | 14.4 | 14.43× |
+
+A realistic carve multiplies the chunk's face count **seven to ten times**. That
+is the largest single number in this document — and almost all of it is
+**invisible**. Cave walls are enclosed by definition; nothing outside the rock
+can see them until a player opens a way in.
+
+**The rule: cull interior geometry by enclosure, never by simplification.** It
+costs build time and memory, not draw time. And it must never be handed to the
+LOD system, for the reason in the next section.
+
+---
+
 ## Merging caps is limited by curvature, not by the algorithm
 
 You *can* merge coplanar same-material cells: take the union of a patch and
@@ -100,6 +158,26 @@ A standing player can see about **21,000 cells — 84,000 triangles**, at full
 resolution, unmerged, with no cleverness whatsoever. That is a rounding error on
 any GPU made this century.
 
+**But that figure is a floor, not a budget.** It is the count for a perfectly
+smooth sphere. Terrain sticks up, and anything tall is visible from much further
+than the ground is — the range to a peak of height `h` is the ground horizon
+*plus* `R·acos(R/(R+h))`.
+
+> **[verified]** `verification/volume.js`, 1.7 m eye on the doc-06 planet.
+>
+> | Peak height | Visible from | Cells within that range | vs ground only |
+> |---|---|---|---|
+> | 0 m | 76 m | 20,951 | 1× |
+> | 10 m | 260 m | 244,673 | 12× |
+> | 30 m | 393 m | 558,028 | 27× |
+> | 60 m | 521 m | 977,791 | 47× |
+> | 120 m | 697 m | 1,736,972 | 83× |
+
+A 60 m hill is visible from **seven times further** than flat ground. The
+conclusion survives — the near field still needs no merging — but the render
+budget has to be set from the relief-extended range, not from 76 m, and the
+distant part of that range is exactly what LOD is for.
+
 **The 76 m horizon is the greedy mesher.** It has already thrown away
 everything a merge pass would have, and it did it for free, before the mesher
 ran. Build the naive version, ship it, and spend the effort on altitude instead —
@@ -136,6 +214,71 @@ because terrain is a pure function of world position ([doc 08](08-terrain-genera
 so any grid can sample it and no grid is privileged. The rule that keeps seams
 out of terrain is the same rule that makes LOD possible at all — it earns its
 keep twice.
+
+---
+
+## Terrain is generated, not stored — and that changes LOD
+
+Worth stating plainly, because every assumption in this document rests on it.
+**There is no heightmap.** [Doc 08](08-terrain-generation.md) makes terrain two
+pure functions of position — a height-field term giving `surfaceRadius(direction)`,
+and optionally a density term `(surfaceRadius − |p|) + noise3D(p) × strength`
+that carves caves and overhangs into it. Nothing is on disk but the seed and the
+player's edits.
+
+Three consequences that a mesh-simplification mindset gets wrong.
+
+### LOD is cheaper to generate, not just to draw
+
+There is no fine mesh to decimate — there is no mesh at all until something asks
+for one. A coarse chunk is the same function asked again on a wider grid, so a
+LOD step cuts **generation** cost by 4× at the same time as it cuts drawing.
+Distant terrain is cheap twice over. Classical mesh LOD gets neither for free.
+
+### The two terms cost wildly different amounts
+
+The height-field term is one fBm evaluation per *column*, reused down the whole
+column. The density term is one evaluation per *cell* in the band where it could
+change the answer.
+
+> **[verified]** `verification/volume.js`, one chunk at D 11 / C 6, 64 layers,
+> 5 octaves for height and 4 for density.
+>
+> | LOD | Columns | Height field | + density, full crust | + density, band only |
+> |---|---|---|---|---|
+> | −0 | 561 | 2,805 | 146,421 | 74,613 |
+> | −1 | 153 | 765 | 39,933 | 20,349 |
+> | −2 | 45 | 225 | 11,745 | 5,985 |
+> | −3 | 15 | 75 | 3,915 | 1,995 |
+
+The density term is **51× the height term** over a full crust, and **26×** when
+restricted to a band around the surface. Doc 08 already recommends that band;
+this is the number that justifies it.
+
+### The LOD level should choose the generator
+
+A coarse mesh cannot represent a feature narrower than about two of its cells.
+
+> **[verified]** `verification/volume.js` — at level 10 (2 m cells) a 3 m cave is
+> already gone; at level 8 (8 m cells) a 10 m canyon is gone; a 40 m valley
+> survives to level 7.
+
+That is not a defect to engineer around. **A cave you cannot see into does not
+need geometry**, and by the time a chunk is far enough to drop a level, its caves
+are sealed rock as far as the camera is concerned. So:
+
+> **Near chunks run the density field. Far chunks run the height-field term
+> alone.**
+
+Which makes a LOD-2 chunk about **330× cheaper to generate** than a near one —
+16× from the columns, 20× from skipping the density term. It also means the
+expensive cave geometry from the section above is only ever built where a player
+could actually reach it.
+
+The one piece of stored terrain doc 08 contemplates — a coarse global heightmap
+at level 8, for rivers and erosion — does not change any of this. It is an
+*input* to the height-field term, not a mesh, and it is sampled by masking a cell
+ID rather than by any second spatial structure.
 
 ---
 
@@ -203,13 +346,21 @@ both already on the table:
 
 ## What to build, in order
 
-1. **Naive mesher.** 4 triangles per cap, run-length merged side faces, no cap
-   merging at all. The horizon table says this is enough to ship.
+1. **Height field only.** `surfaceRadius(direction)`, one evaluation per column.
+   4 triangles per cap, run-length merged side faces, no cap merging. This is a
+   whole planet with mountains and no caves, and it is cheap.
 2. **Skirts** at chunk boundaries, one coarse cell deep.
-3. **Altitude-driven LOD** by resampling the terrain function at a coarser level.
-4. **Cap merging**, only for high-altitude shells, bounded to a 37 m patch.
+3. **Altitude-driven LOD** by re-evaluating the terrain function at a coarser
+   level — with the render budget set from the relief-extended range, not the
+   76 m ground horizon.
+4. **The density term**, restricted to a band around the surface and to
+   full-detail chunks only. This is where caves, overhangs and most of the
+   triangle count arrive at once.
+5. **Cap merging**, only for high-altitude shells, bounded to a 37 m patch.
 
-Steps 1 and 2 are a working planet. Steps 3 and 4 are for flight.
+Steps 1–3 are a working planet you can fly over. Step 4 is the one that turns it
+into a volume, and it is deliberately last because it is the expensive half of
+the generator and the easiest to get wrong.
 
 ---
 
@@ -225,7 +376,19 @@ Steps 1 and 2 are a working planet. Steps 3 and 4 are for flight.
 - **Water and transparency**, which need sorting and therefore an ordering rule
   on a surface with no global direction.
 - **Remesh or store.** Whether a chunk's mesh is rebuilt on edit or cached, and
-  what that costs when a player mines one cell.
+  what that costs when a player mines one cell. Sharpened by the generation
+  numbers above: rebuilding a near chunk means re-running the density term over
+  the band, which is the expensive path.
+- **Overhangs versus skirts.** A skirt assumes the chunk rim has *one* boundary
+  height to hang from. Under a density field a column can have several separate
+  solid spans, so the rim is a set of intervals, not a line. Probably one skirt
+  per span, but it is unverified and the count matters at chunk borders.
+- **Where the density band should sit** when the surface itself is 60 m of
+  relief — a band that follows `surfaceRadius` is not the same shape as a band
+  at fixed depth, and floating islands sit outside both.
+- **Culling by enclosure**, concretely. The claim that cave geometry costs no
+  draw time assumes something detects that it is sealed. Which structure does
+  that, and what does it cost to keep current when a player breaks through?
 
 ---
 
