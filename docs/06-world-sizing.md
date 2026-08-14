@@ -79,6 +79,10 @@ concrete number.
 
 Level 13–14 lands at roughly Minecraft block scale on a 10 km planet.
 
+> **[verified]** `verification/scale.js` prints the full table, levels 0 to 20,
+> for both an Earth-sized and a 10 km planet, alongside the bit budget and the
+> storage figures below.
+
 **Sanity check:** to match Minecraft's actual playable area you would need a
 planet radius around **17,000 km** — larger than Earth. A 10 km planet is a
 *small* world.

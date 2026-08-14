@@ -61,6 +61,7 @@ a runnable demo where one exists.
 | 12 | [Glossary](docs/12-glossary.md) | Terms and constants |
 | 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
 | 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, skirts |
+| — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
 and naming conventions in a compact form intended for machine consumption.
@@ -78,8 +79,20 @@ them:
 node tools/build-docs.js            # build once, into site/
 node tools/build-docs.js --serve    # rebuild on save and serve with live reload
 node tools/make-figures.js          # regenerate the diagrams in docs/figures/
+node tools/make-reference.js        # rerun every verification script -> docs/REFERENCE.md
 node tools/check-coverage.js        # report any fact an edit dropped
 ```
+
+Regenerate everything after a change to the maths:
+
+```bash
+node tools/make-figures.js && node tools/make-reference.js && node tools/build-docs.js
+```
+
+`make-reference.js` is deliberately *not* part of the doc build — it executes
+every verification script, which is far too slow for `--watch`. It also fails if
+a script stops running, is cited by no document, or is named somewhere but
+missing.
 
 The diagrams are **generated, not drawn** — their geometry comes from the same
 barycentric lattices and duals the text describes, so a figure cannot quietly

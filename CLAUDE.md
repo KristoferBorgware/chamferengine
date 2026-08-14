@@ -16,12 +16,43 @@ and duplicates information found there.
   `tools/make-figures.js`, which computes their geometry from the same
   constructions the docs describe.
 - `tools/make-figures.js` — regenerates every diagram.
+- `tools/make-reference.js` — runs every verification script and writes
+  `docs/REFERENCE.md`. Also fails if a script does not run, is cited by no
+  document, or is named somewhere but missing. Not part of the doc build: it
+  executes everything, so run it when the maths changes.
 - `tools/check-coverage.js` — reports facts (numbers, identifiers, links, bold
   terms) that an edit dropped from the corpus. Run it after rewriting prose.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
   (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
   source of truth. It fails the build on dead links and dead heading anchors,
   so run it after editing docs.
+
+## Where to look
+
+Read one document, not fifteen. This table says what each one decides and which
+script owns its numbers.
+
+| Doc | Decides | Maths in |
+|---|---|---|
+| [00](docs/00-introduction.md) | goals, non-goals, why the 720° forces everything | — |
+| [01](docs/01-prior-art.md) | what to take from S2 and H3, and what not to | `s2.js` |
+| [02](docs/02-geometry-choice.md) | the tiling: Goldberg, dual of a subdivided icosahedron | `check.js` |
+| [03](docs/03-addressing.md) | ID layout, path digits, the flip flag, border ownership | `qr.js`, `order.js` |
+| [04](docs/04-position-lookup.md) | position → cell, exactly and without storage | `lookup.js` |
+| [05](docs/05-face-adjacency.md) | crossing between the 20 faces; the 180-byte table | `adj.js` |
+| [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js` |
+| [07](docs/07-data-structures.md) | what lives in RAM, on disk, and in code | — |
+| [08](docs/08-terrain-generation.md) | the noise model, height vs density term, deltas | `volume.js` |
+| [09](docs/09-ray-traversal.md) | block picking as a grid walk | — |
+| [10](docs/10-pathfinding.md) | A* on hexes, hierarchical search on the triangle tree | — |
+| [11](docs/11-open-topics.md) | what is **not** designed yet | — |
+| [12](docs/12-glossary.md) | terms and constants, as a lookup | — |
+| [13](docs/13-gravity-and-orientation.md) | the three local frames, holonomy, what pentagons cost | `frame.js` |
+| [14](docs/14-meshing-and-lod.md) | mesh cost, merge limits, LOD, chunk seams | `mesh.js`, `volume.js`, `seam.js` |
+
+[`docs/REFERENCE.md`](docs/REFERENCE.md) is every script's actual output in one
+generated page — the fastest way to look a number up without reading the
+argument around it.
 
 ## Hard invariants
 
