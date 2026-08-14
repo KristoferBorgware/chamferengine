@@ -20,6 +20,7 @@ numbered documents.
 | Script | Establishes | Used by |
 |---|---|---|
 | [`adj.js`](../verification/adj.js) | — | [05](05-face-adjacency.md) |
+| [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
@@ -54,6 +55,82 @@ face  edge0            edge1            edge2
 60 entries · every edge matched: true
 all reversed (consistent winding): true
 bytes at 3 fields x 1 byte: 180
+```
+
+## `boundary.js`
+
+Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free.
+
+Cited by [doc 04](04-position-lookup.md), [doc 18](18-cell-boundary.md).
+
+```
+1. was it circumcentre versus centroid?
+   planar lattice edge lengths, max/min: 1.000000000000
+   |circumcentre - centroid| in the face plane: 0.00e+0
+   No. An icosahedron face is equilateral and so is the lattice inside it,
+   so the two coincide EXACTLY. Doc 11 guessed wrong; the difference is
+   somewhere else entirely.
+
+2. average-then-project, against project-then-average
+   L    cells      max gap      mean gap    (in cell spacings)   halving?
+   2       162   1.817e-2   1.463e-2
+   3       642   1.009e-2   7.620e-3        0.5555
+   4      2562   4.983e-3   3.842e-3        0.4937
+   5     10242   2.477e-3   1.925e-3        0.4970
+   6     40962   1.234e-3   9.628e-4        0.4982
+   7    163842   6.158e-4   4.815e-4        0.4990
+   8    655362   3.076e-4   2.407e-4        0.4996
+   The lookup corner averages the FLAT lattice points and then projects.
+   The mesh corner projects each point and then averages. That is the
+   whole difference, and it HALVES with every level -- unlike every other
+   discrepancy in this specification, which plateaus.
+
+3. at the design level, in units a player could notice
+   measured at L=8:            3.076e-4 spacings
+   halving to L=11:            3.845e-5 spacings
+   on the doc-06 planet's 1 m cells: 0.038 mm
+   Doc 11 recorded all three definitions as agreeing "to within about 0.1
+   of a cell". For these two that is out by a factor of about 2,600.
+   The 0.11 figure belongs to a different pair -- hexround.js measured it
+   against nearest-centre-ON-THE-SPHERE, and THAT one plateaus.
+
+4. the sliver between the two outlines, as a share of one cell
+   L     cell area      sliver
+   4   5.7759e-3   4.43e-1% of the cell
+   5   1.4565e-3   1.87e-1% of the cell
+   6   3.6421e-4   9.39e-2% of the cell
+   7   9.1058e-5   4.70e-2% of the cell
+   Halving each level, so about 0.003% of a cell at level 11. A click that
+   lands there is a click within a twentieth of a millimetre of the edge.
+
+5. the fix: a corner is a lattice point of the same construction at 3n
+   worst disagreement over every triangle at L=5: 2.98e-8 rad
+   up-triangle   (i,j) -> lattice point (3i+2, 3j+1) at 3n
+   down-triangle (i,j) -> lattice point (3i+1, 3j+2) at 3n
+   So the exact corner costs one barycentric blend and one normalise from
+   integer indices -- the same call that produces a cell centre. Nothing
+   about doc 14 gets more expensive, and the corner count does not move.
+
+6. what the lookup cell is, in the face plane
+   corner-to-centre: min 0.018970687444  max 0.018970687444
+   edge length:      min 0.018970687444  max 0.018970687444
+   An EXACTLY regular hexagon. Every cell is, in its own face plane. The
+   1.99:1 area spread doc 02 measures is entirely what projection does to
+   it, and none of it is irregularity in the polygon.
+
+7. two things that could have gone wrong, and did not
+   convexity: 351 interior cells, 0 with a reflex corner
+   the 30 face edges: same lattice points from both sides, worst gap 0.00e+0
+   boundary crossing computed in each face's own plane, worst gap 2.11e-8 rad
+   The per-face construction agrees with itself. There is no seam along the
+   30 face edges -- which is where the cost was expected to turn up.
+
+verdict
+   The mesh and the lookup already draw the same curve to 0.04 mm at level 11,
+   and the remaining difference is one ordering of operations. Take the
+   lookup's: average the flat lattice points, then project. It is exact by
+   construction, it is the same cost, and it closes the gap rather than
+   measuring it.
 ```
 
 ## `calc.js`
@@ -967,4 +1044,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_18 scripts. Every number above is reproduced by running them._
+_19 scripts. Every number above is reproduced by running them._

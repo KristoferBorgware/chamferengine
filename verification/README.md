@@ -423,6 +423,45 @@ prices both sides.
 
 ---
 
+## `boundary.js` — which curve is a cell's edge?
+
+Three definitions were in play: what `hexRound` maps to a cell (doc 04), what is
+equidistant on the sphere, and the dual polyhedron's centroid corners (doc 14).
+Doc 11 carried the disagreement as the last structural gap. This measures what
+actually separates the first from the third.
+
+**Verifies:**
+
+1. **The proposed mechanism does not exist.** Doc 11 guessed circumcentre versus
+   centroid. An icosahedron face is equilateral and so is every lattice triangle
+   inside it — longest ÷ shortest edge = **1.000000000000** — so the two coincide
+   **exactly**.
+2. **It is the order of two operations.** The lookup averages the flat lattice
+   points and then projects; the mesh projected each point and then averaged.
+   Projection does not commute with averaging, which is the same distinction that
+   produced `precision.js`'s two-different-spheres finding.
+3. **And it vanishes with depth.** The gap **halves every level** — 1.82e-2 of a
+   spacing at L2 down to 3.08e-4 at L8, ratio 0.500 — reaching **3.85e-5** at
+   L11, or **0.038 mm** on the doc-06 planet. Doc 11's "about 0.1 of a cell" was
+   out by **2,600×**; that figure belongs to spherical Voronoi (`hexround.js`),
+   which plateaus. The disputed sliver is **0.003%** of a cell at L11.
+4. **The fix is free.** A corner is a lattice point of the same construction at
+   `3n`: `(3i+2, 3j+1)` for an up-triangle, `(3i+1, 3j+2)` for a down-triangle,
+   agreeing with the averaged construction to **3e-8 radians**. One blend and one
+   normalise from integers, so doc 14's **2 vertices and 4 triangles per cell**
+   does not move.
+5. **Neither expected failure happened.** **0 reflex corners** over 351 interior
+   cells, and **no seam along the 30 face edges** — the per-face construction
+   agrees with itself to **2e-8 radians**, because both faces share the edge whose
+   midpoint the boundary crosses.
+6. **Every cell is an exactly regular hexagon in its face plane** — corner-to-centre
+   and edge length identical to twelve decimals. All of doc 02's 1.99:1 area
+   spread is projection, none of it irregularity.
+
+**Used in:** [doc 18](../docs/18-cell-boundary.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a

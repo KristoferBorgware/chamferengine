@@ -438,6 +438,114 @@ const made = [];
 
 
 // =============================================================================
+// 18 — click-disagreement: the problem, before the fix
+// =============================================================================
+{
+  const cx = 150, cy = 116, R = 66;
+  const H = hexPts(cx, cy, R), H2 = hexPts(cx + Math.sqrt(3)*R, cy, R);
+  const a = H[1], b = H[2];
+  const click = [f((a[0]+b[0])/2 + 3), f((a[1]+b[1])/2)];
+  made.push(svg('click-disagreement', 430, 232, `
+  <polygon class="cf-l" points="${pts(H)}"/>
+  <polygon class="cf-l" points="${pts(H2)}"/>
+  <path class="cf-a" d="M${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}" stroke-width="3"/>
+  <path class="cf-g" d="M${f(a[0])} ${f(a[1])} Q${f((a[0]+b[0])/2+11)} ${f((a[1]+b[1])/2)} ${f(b[0])} ${f(b[1])}" stroke-width="3"/>
+  <circle class="cf-af" cx="${cx}" cy="${cy}" r="4"/>
+  <circle class="cf-af" cx="${f(cx+Math.sqrt(3)*R)}" cy="${cy}" r="4"/>
+  <circle cx="${click[0]}" cy="${click[1]}" r="5.5" fill="#b0800f"/>
+  <text class="cf-gd" x="${f(+click[0]+12)}" y="${f(+click[1]+4)}">the player clicks here</text>
+  <text class="cf-c" x="14" y="26">the edge the lookup uses</text>
+  <text class="cf-gd" x="14" y="46">the edge the mesh draws</text>
+  <text class="cf-d" x="14" y="200">the click is inside the left cell according to one, the right according to</text>
+  <text class="cf-d" x="14" y="218">the other &#8212; and no document has ever said which one is the cell</text>`));
+}
+
+// =============================================================================
+// 18 — order-of-operations: average then project, or project then average
+// =============================================================================
+{
+  const O = [128, 300], R = 236;
+  const at = d => [O[0] + R*Math.sin(d*Math.PI/180), O[1] - R*Math.cos(d*Math.PI/180)];
+  const A = at(-15), B = at(0), C = at(15);            // three lattice points on the arc
+  const flatA = A, flatB = B, flatC = C;                // (drawn as the chord's points)
+  const chordMid = [ (A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3 ];
+  const proj = p => { const d = Math.hypot(p[0]-O[0], p[1]-O[1]);
+    return [O[0] + (p[0]-O[0])/d*R, O[1] + (p[1]-O[1])/d*R]; };
+  const lookup = proj(chordMid);                        // average flat, then project
+  const meshAvg = [ (A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3 ];   // same here (already on sphere)
+  made.push(svg('order-of-operations', 430, 250, `
+  <path class="cf-m" d="M${f(at(-26)[0])} ${f(at(-26)[1])} A ${R} ${R} 0 0 1 ${f(at(26)[0])} ${f(at(26)[1])}"/>
+  <path class="cf-l" d="M${f(A[0])} ${f(A[1])}L${f(C[0])} ${f(C[1])}" stroke-dasharray="4 3"/>
+  <circle class="cf-fill" cx="${f(A[0])}" cy="${f(A[1])}" r="4.5"/>
+  <circle class="cf-fill" cx="${f(C[0])}" cy="${f(C[1])}" r="4.5"/>
+  <circle class="cf-gf" cx="${f(chordMid[0])}" cy="${f(chordMid[1])}" r="5"/>
+  <path class="cf-l" d="M${O[0]} ${O[1]}L${f(lookup[0])} ${f(lookup[1])}" stroke-dasharray="2 4"/>
+  <circle class="cf-af" cx="${f(lookup[0])}" cy="${f(lookup[1])}" r="5.5"/>
+  <text class="cf-gd" x="${f(chordMid[0]+12)}" y="${f(chordMid[1]+4)}">average the flat points</text>
+  <text class="cf-c" x="${f(lookup[0]+12)}" y="${f(lookup[1]-6)}">then project &#183; the lookup&#8217;s corner</text>
+  <text class="cf-d" x="14" y="26">three lattice points. sag the chord inward, average, push the result out.</text>
+  <text class="cf-d" x="14" y="46">do it the other way round &#8212; project each point first, then average &#8212;</text>
+  <text class="cf-d" x="14" y="66">and you land somewhere else. that is the entire disagreement.</text>
+  <text class="cf-d" x="${O[0]}" y="${f(O[1]+18)}" text-anchor="middle">planet centre</text>`));
+}
+
+// =============================================================================
+// 18 — gap-shrinks: one difference vanishes with depth, the other never does
+// =============================================================================
+{
+  const x0 = 68, y0 = 168, W = 300, H = 122;
+  const X = L => x0 + W*(L-2)/9, Y = v => y0 - H*(Math.log10(v) + 4.6)/3.6;
+  const mesh = [[2,1.817e-2],[3,1.009e-2],[4,4.983e-3],[5,2.477e-3],[6,1.234e-3],[7,6.158e-4],[8,3.076e-4]];
+  const sphv = [[2,0.108],[3,0.088],[4,0.071],[5,0.071],[6,0.063],[7,0.051]];
+  const path = (d,cls) => `<path class="${cls}" d="M` + d.map(p=>`${f(X(p[0]))} ${f(Y(p[1]))}`).join('L') + `" fill="none"/>`;
+  const dots = (d,cls) => d.map(p=>`<circle class="${cls}" cx="${f(X(p[0]))}" cy="${f(Y(p[1]))}" r="3"/>`).join('');
+  // extrapolate the mesh line to L=11
+  let ext = [[8,3.076e-4],[9,1.538e-4],[10,7.69e-5],[11,3.845e-5]];
+  made.push(svg('gap-shrinks', 430, 224, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  ${path(sphv,'cf-g')}${dots(sphv,'cf-gf')}
+  ${path(mesh,'cf-a')}${dots(mesh,'cf-af')}
+  ${path(ext,'cf-a')}
+  <path class="cf-l" d="M${f(X(8))} ${f(Y(3.076e-4))}L${f(X(11))} ${f(Y(3.845e-5))}" stroke-dasharray="3 3"/>
+  <text class="cf-gd" x="${f(X(7)+8)}" y="${f(Y(0.051)+4)}">against &#8220;nearest centre on the sphere&#8221;</text>
+  <text class="cf-gd" x="${f(X(7)+8)}" y="${f(Y(0.051)+22)}">flat at about 0.1 of a cell, forever</text>
+  <text class="cf-c" x="${f(X(6))}" y="${f(Y(3.845e-5)+4)}">against the mesh &#183; halves every level</text>
+  <text class="cf-d" x="${f(x0+W/2)}" y="${y0+20}" text-anchor="middle">subdivision level &#8594;</text>
+  <text class="cf-d" x="${x0-8}" y="${f(y0-H+6)}" text-anchor="end">0.1</text>
+  <text class="cf-d" x="${x0-8}" y="${y0+4}" text-anchor="end">0.00003</text>
+  <text class="cf-c" x="14" y="24">two disagreements, and only one of them matters</text>
+  <text class="cf-d" x="14" y="212">doc 11 filed both as &#8220;about 0.1 of a cell&#8221;. one of them is 2,600&#215; smaller.</text>`));
+}
+
+// =============================================================================
+// 18 — corner-is-a-lattice-point: the fix costs nothing
+// =============================================================================
+{
+  const T3 = tri(150, 118, 176);
+  const fine = latticeEdges(T3, 2);
+  let dots3 = '', cells = '';
+  for (let i=0;i<=2;i++) for (let j=0;j<=i;j++){
+    const p = bary(T3,2,i,j);
+    cells += `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="5"/>`;
+  }
+  for (const [i,j] of [[2,1],[1,2],[5,1],[4,2],[5,4],[4,5]]){
+    const p = bary(T3,6,i,j);
+    dots3 += `<circle class="cf-gf" cx="${f(p[0])}" cy="${f(p[1])}" r="4"/>`;
+  }
+  made.push(svg('corner-is-a-lattice-point', 430, 234, `
+  <path class="cf-l" d="${pathOf(fine)}"/>
+  <polygon class="cf-m" points="${pts([T3.A,T3.B,T3.C])}" fill="none"/>
+  ${cells}${dots3}
+  <text class="cf-c" x="272" y="60">cells &#183; lattice at n</text>
+  <text class="cf-gd" x="272" y="88">corners &#183; the same lattice at 3n</text>
+  <text class="cf-d" x="272" y="122">up-triangle (i, j)</text>
+  <text class="cf-d" x="272" y="140">&#8594; (3i+2, 3j+1)</text>
+  <text class="cf-d" x="272" y="166">down-triangle (i, j)</text>
+  <text class="cf-d" x="272" y="184">&#8594; (3i+1, 3j+2)</text>
+  <text class="cf-d" x="14" y="222">one blend and one normalise from integers &#8212; the same call that places a cell</text>`));
+}
+
+// =============================================================================
 // 10 — no-diagonals: a square grid has a corner problem, a hex grid has none
 // =============================================================================
 {

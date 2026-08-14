@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 17 carry the hardest material in the specification and are the ones
+13 through 18 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 17.
+- `docs/` — prose specification, ordered 00 through 18.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -170,9 +170,11 @@ script owns its numbers.
 | [15](docs/15-precision-and-origin.md) | float budget, the anchor+offset rule, one-shot vs recursive | `precision.js` |
 | [16](docs/16-lighting.md) | 8 neighbours, sky light, the free terminator, light storage | `light.js` |
 | [17](docs/17-pentagons.md) | the pentagon decision: protected landmarks, and why | `pentagon.js` |
+| [18](docs/18-cell-boundary.md) | which curve a cell edge is; the mesh and the lookup reconciled | `boundary.js` |
 
-Doc 04 also owns the **definition of a cell boundary** (`hexround.js`), which is
-load-bearing for docs 07, 09 and 14 — read it before touching position → cell.
+Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
+is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
+them before touching either the lookup or the mesher.
 
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is every script's actual output in one
 generated page — the fastest way to look a number up without reading the
@@ -223,7 +225,10 @@ Violating any of these breaks the design. They are not tunable.
     `float32` **relative to its chunk**. Never cache a world-space position across
     a frame — recompute it from anchor plus offset.
 14. A cell **is** the set of directions `hexRound` maps to it — the radial
-    projection of the planar Voronoi hexagon. Not "the nearest centre on the
+    projection of the planar Voronoi hexagon, and the **mesh draws that same
+    curve** (doc 18): a corner is the lattice point `(3i+2, 3j+1)` at `3n` for an
+    up-triangle, `(3i+1, 3j+2)` for a down-triangle. Average the flat lattice
+    points and then project — never project and then average. Not "the nearest centre on the
     sphere", which differs on ~1% of the sphere. Position → cell must go through
     `hexRound`, never through a nearest-centre search, or the two disagree at
     boundaries.
@@ -306,6 +311,20 @@ Violating any of these breaks the design. They are not tunable.
   of a spacing**. Adopting the projected diagram makes doc 04's rounding and doc
   09's ray walk exact by construction; the alternative makes both ~1% approximate
   and buys nothing.
+- **The mesh and the lookup draw the same curve** (`boundary.js`, doc 18). What
+  separated them was never circumcentre-vs-centroid — a face is equilateral, so
+  inside it those coincide **exactly** — but the order of two operations:
+  **average the flat lattice points, then project**, never project then average.
+  The gap was `3.85e-5` of a cell at L11 (**0.038 mm**) and **halves every level**,
+  the only discrepancy here that does not plateau. Doc 11 had it as "~0.1 of a
+  cell", out by **2,600×**; that 0.1 belongs to spherical Voronoi (`hexround.js`).
+  The fix is free: a corner is the lattice point `(3i+2, 3j+1)` at `3n`
+  (up-triangle) or `(3i+1, 3j+2)` (down), so doc 14's 2-verts-4-tris is untouched.
+  **No seam at the 30 face edges** and **no reflex corners** — both were where the
+  cost was expected.
+- Every cell is an **exactly regular hexagon in its own face plane**
+  (`boundary.js`) — twelve decimal places. So all of the 1.99:1 area spread is
+  what radial projection does, and none of it is irregularity in the polygon.
 - `(i, j)` ↔ `path digits + (q, r)` round-trips exactly (`qr.js`).
 - A 4-way midpoint triangle split admits **no** continuous edge-adjacent
   traversal. The child adjacency graph is a star; best achievable is 2 of 3
@@ -420,12 +439,6 @@ Violating any of these breaks the design. They are not tunable.
 
 Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
 
-- **Which boundary the mesh draws.** Three definitions are now in play and they
-  differ by ~0.1 of a cell: the projected planar Voronoi diagram (doc 04 lookup,
-  doc 09 ray walk — **normative**), spherical Voronoi (nobody, now), and the dual
-  polyhedron's centroid corners (doc 14 meshing). A player clicks the mesh and the
-  lookup answers from a different curve. Small, well-posed, close it before
-  building on the mesh
 - ~~Layer merging~~ — **struck** (`taper.js`, doc 06). Cap the crust; do not
   reopen this without reading the price
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for

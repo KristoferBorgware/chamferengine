@@ -52,6 +52,10 @@ cell — and in exchange this walk is exact rather than approximate.
 So both halves hold: the ground track is straight, and so is every boundary it
 crosses.
 
+And since [doc 18](18-cell-boundary.md), the mesh draws those same boundaries — so
+the cell this walk reports is the cell the player was looking at, with no tolerance
+to tune.
+
 ![A straight ray crossing a field of hexagons, stopping at the first solid cell](figures/ray-is-straight.svg)
 
 *The same straight-line walk a flat voxel game does, on a sphere, with no

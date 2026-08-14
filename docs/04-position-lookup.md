@@ -231,12 +231,23 @@ The cells remain hexagons, still tile the sphere with no gaps, and still meet
 edge-to-edge everywhere — projection is a homeomorphism, so it cannot change any
 of that. Invariant 11 is untouched.
 
-> **Still to reconcile.** [Doc 14](14-meshing-and-lod.md) meshes a *third* thing:
-> the dual polyhedron, whose corners sit at subdivided-triangle centroids. All
-> three definitions agree to within about a tenth of a cell, so nothing visibly
-> breaks — but the mesh a player sees should be the boundary the lookup uses, and
-> saying which is which is unfinished business. See
-> [doc 11](11-open-topics.md).
+> **Reconciled by [doc 18](18-cell-boundary.md).** [Doc 14](14-meshing-and-lod.md)
+> used to mesh a *third* thing — the dual polyhedron, with corners at
+> subdivided-triangle centroids. Measured, that curve sits **3.85e-5 of a cell**
+> from this one at level 11, and the gap **halves with every level**. Doc 18 moves
+> the mesh onto this boundary anyway, for free, so the picture a player clicks and
+> the answer this page computes are now the same curve by construction.
+
+And one property of these cells that is easy to miss:
+
+> **[verified]** `verification/boundary.js` — a cell's six corners are the same
+> distance from its centre and the same distance apart, **to twelve decimal
+> places**. Every cell is an **exactly regular hexagon in its own face plane**.
+
+So the cells are not slightly irregular hexagons scattered over a sphere. They are
+perfect hexagons, and every bit of the 1.99:1 area spread in
+[doc 02](02-geometry-choice.md) is what radial projection does to them on the way
+out.
 
 Note the direction of travel throughout. This concerns **position → cell** only.
 Anything starting from an ID and walking path digits to a position — the

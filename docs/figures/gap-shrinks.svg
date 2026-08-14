@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 224" width="430" height="224">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M68 168L368.0 168M68 168L68 46.0"/>
+  <path class="cf-g" d="M68.0 44.9L101.3 47.9L134.7 51.0L168.0 51.0L201.3 52.8L234.7 55.9" fill="none"/><circle class="cf-gf" cx="68.0" cy="44.9" r="3"/><circle class="cf-gf" cx="101.3" cy="47.9" r="3"/><circle class="cf-gf" cx="134.7" cy="51.0" r="3"/><circle class="cf-gf" cx="168.0" cy="51.0" r="3"/><circle class="cf-gf" cx="201.3" cy="52.8" r="3"/><circle class="cf-gf" cx="234.7" cy="55.9" r="3"/>
+  <path class="cf-a" d="M68.0 71.1L101.3 79.8L134.7 90.1L168.0 100.4L201.3 110.7L234.7 120.9L268.0 131.1" fill="none"/><circle class="cf-af" cx="68.0" cy="71.1" r="3"/><circle class="cf-af" cx="101.3" cy="79.8" r="3"/><circle class="cf-af" cx="134.7" cy="90.1" r="3"/><circle class="cf-af" cx="168.0" cy="100.4" r="3"/><circle class="cf-af" cx="201.3" cy="110.7" r="3"/><circle class="cf-af" cx="234.7" cy="120.9" r="3"/><circle class="cf-af" cx="268.0" cy="131.1" r="3"/>
+  <path class="cf-a" d="M268.0 131.1L301.3 141.3L334.7 151.5L368.0 161.7" fill="none"/>
+  <path class="cf-l" d="M268.0 131.1L368.0 161.7" stroke-dasharray="3 3"/>
+  <text class="cf-gd" x="242.7" y="59.9">against &#8220;nearest centre on the sphere&#8221;</text>
+  <text class="cf-gd" x="242.7" y="77.9">flat at about 0.1 of a cell, forever</text>
+  <text class="cf-c" x="201.3" y="165.7">against the mesh &#183; halves every level</text>
+  <text class="cf-d" x="218.0" y="188" text-anchor="middle">subdivision level &#8594;</text>
+  <text class="cf-d" x="60" y="52.0" text-anchor="end">0.1</text>
+  <text class="cf-d" x="60" y="172" text-anchor="end">0.00003</text>
+  <text class="cf-c" x="14" y="24">two disagreements, and only one of them matters</text>
+  <text class="cf-d" x="14" y="212">doc 11 filed both as &#8220;about 0.1 of a cell&#8221;. one of them is 2,600&#215; smaller.</text>
+</svg>

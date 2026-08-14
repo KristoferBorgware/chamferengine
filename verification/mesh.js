@@ -11,7 +11,12 @@ const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]
 const len=a=>Math.hypot(...a);
 
 // cells are vertices of the subdivided icosahedron; hexagon corners are the
-// triangle centroids, i.e. the vertices of the dual
+// triangle centroids, i.e. the vertices of the dual.
+// NOTE: doc 18 changed where a corner sits -- average the FLAT lattice points and
+// then project, rather than averaging the projected ones. That moves a corner by
+// 3.85e-5 of a cell at level 11 and changes no count on this page, because each
+// triangle still yields one corner and each corner still serves three cells. The
+// corner formula itself is owned by boundary.js; this script owns the cost model.
 function geodesic(L){
   const n=1<<L;
   const V0=[[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],

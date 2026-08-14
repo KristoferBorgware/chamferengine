@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Seven entries are struck through because they have since been closed. They are
+Eight entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -84,35 +84,45 @@ said precisely enough what it meant, and measuring is what exposed it.
 
 ---
 
-## Which boundary does the mesh draw?
+## ~~Which boundary does the mesh draw?~~ — closed, see [doc 18](18-cell-boundary.md)
 
-The leftover from the item above, and the last of the three definitional gaps.
-
-There are now **three** places the specification implies a cell boundary, and
-they are not the same curve:
-
-| Where | Boundary | Used by |
-|---|---|---|
-| Projected planar Voronoi | what `hexRound` maps to the cell | [doc 04](04-position-lookup.md) lookup, [doc 09](09-ray-traversal.md) ray walk |
-| Spherical Voronoi | everywhere equidistant between centres | the intuitive reading, nothing formally |
-| Dual polyhedron | corners at subdivided-triangle centroids | [doc 14](14-meshing-and-lod.md) meshing |
+Closed, and it was the smallest item on this page by a wide margin — which only
+became clear once it was measured, because **both numbers this entry carried were
+wrong**.
 
 ![Two neighbouring hexagons with the boundary between them drawn three times: straight, bowed, and dashed slightly to one side, each labelled with the documents that use it](figures/three-boundaries.svg)
 
 *All three run between the same two cell centres and none of them is wrong. They
-simply are not the same line, and the specification has never said which one a
+simply are not the same line, and the specification had never said which one a
 player is clicking on.*
 
-They agree to within about **0.1 of a cell**, so nothing visibly breaks and no
-number in the specification moves. But a player clicks on the mesh and the lookup
-answers from a different boundary, so the two should be the same curve or the
-difference should be stated deliberately.
+**The guess was wrong.** This entry proposed that the gap was circumcentre versus
+centroid — those coincide on an equilateral triangle and separate on a lopsided
+one. But an icosahedron face *is* equilateral, and so is every triangle of the
+lattice drawn inside it, so the two coincide exactly and the proposed mechanism
+does not exist. The real difference is that **projection does not commute with
+averaging**: the lookup averages the flat lattice points and then projects, the
+mesh projected first and then averaged. The same distinction that produced doc
+15's two-different-spheres finding.
 
-The likely answer is that meshing should draw the projected planar diagram, since
-that is what everything else now keys on — but the dual is what makes doc 14's
-"2 vertices and 4 triangles per cell" count come out, and whether that survives
-the swap is unmeasured. Small, well-posed, and worth closing before anything is
-built on top of the mesh.
+**The size was wrong too.** This entry said all three definitions agree "to within
+about 0.1 of a cell". That figure belongs to one pair — the lookup against
+spherical Voronoi, from `hexround.js`, and it plateaus. For the pair that actually
+mattered it is out by a factor of **2,600**: the mesh and the lookup sit
+**3.85e-5 of a cell** apart at level 11, about **0.038 mm** on the worked planet,
+and the gap **halves with every level** rather than settling.
+
+The decision went the way this entry expected even so. The mesh now draws the
+projected planar diagram, because a corner turns out to be a **lattice point of
+the same construction at `3n`**, so the exact version costs one blend and one
+normalise from integers — and doc 14's **2 vertices and 4 triangles per cell**
+does not move, because the corner count never depended on where the corner sat.
+
+Two things that were expected to hurt did not: no reflex corners anywhere, and
+**no seam along the 30 face edges**, where the per-face construction turns out to
+agree with itself exactly. And one result nobody was looking for: every cell is an
+**exactly regular hexagon in its own face plane**, so the whole 1.99:1 area spread
+is projection and none of it is irregularity.
 
 ---
 
@@ -285,20 +295,11 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Which boundary the mesh draws** is now the last structural gap, and the
-smallest. It should not be left to be discovered during implementation, since it
-is the difference between a player clicking on a cell and being told they clicked
-on its neighbour.
+**There is no structural gap left.** [Doc 18](18-cell-boundary.md) closed the last
+one, so everything below this line is a system to design or content to write, not
+a hole in the geometry.
 
-It also has a candidate answer worth measuring rather than assuming. The planar
-Voronoi vertices of a triangular lattice sit at triangle **circumcentres**;
-[doc 14](14-meshing-and-lod.md) meshes **centroids**. On an equilateral triangle
-those coincide, which is why the difference went unnoticed — and subdivided
-icosahedron faces are near-equilateral but not equilateral. If that accounts for
-the whole ~0.1-cell gap, the fix is one formula, and doc 14's cost model survives
-untouched because moving a corner does not change the dual's combinatorics.
-
-**Block rotation** is now unblocked and much easier than it looked, because
+**Block rotation** is the largest of them, and it is now unblocked and much easier than it looked, because
 [doc 17](17-pentagons.md) removed its hard case: directional machinery may assume
 six neighbours, since it can never be placed on a five. What is left is a 6-state
 rotation field and 6-way logic, plus the loop rule from doc 17 — a heading carried
@@ -313,9 +314,9 @@ erosion, and multiplayer interest management. **The geometric core is closed.**
 
 ---
 
-## What closing seven of these taught
+## What closing eight of these taught
 
-All seven closed items came back with the same shape of answer, and it is worth
+All eight closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was
@@ -342,8 +343,15 @@ expecting again:
   that has paid out five times is not a convenience — and when doc 06's
   suggestion to break it was finally priced, the bill was all five at once for
   18% more crust.
+- **The last one closed by getting smaller, not bigger.** Doc 18 is the only
+  entry on this page that turned out to be a non-problem: the mesh and the lookup
+  were already drawing the same curve to **0.038 mm**, and the difference
+  **halves with every level** instead of plateauing like everything else here.
+  Both numbers this page carried about it were wrong — the proposed mechanism did
+  not exist, and the size was out by 2,600×. Being wrong in the safe direction is
+  still being wrong, and it took a script to find out which direction it was.
 - **An unmeasured number stayed load-bearing longer than anyone noticed.** This
-  is the new one, and it is the least comfortable. Closing layer merging needed a
+  one is the least comfortable. Closing layer merging needed a
   threshold for how uniform cells are, which sent someone to look at the 1.3:1
   area figure — the only load-bearing constant in the specification with no script
   behind it. It is **1.99:1**. It had been read off a level-2 picture, repeated

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 234" width="430" height="234">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M150.0 16.4L106.0 92.6M150.0 16.4L194.0 92.6M106.0 92.6L194.0 92.6M106.0 92.6L62.0 168.8M106.0 92.6L150.0 168.8M62.0 168.8L150.0 168.8M194.0 92.6L150.0 168.8M194.0 92.6L238.0 168.8M150.0 168.8L238.0 168.8"/>
+  <polygon class="cf-m" points="150.0,16.4 62.0,168.8 238.0,168.8" fill="none"/>
+  <circle class="cf-af" cx="150.0" cy="16.4" r="5"/><circle class="cf-af" cx="106.0" cy="92.6" r="5"/><circle class="cf-af" cx="194.0" cy="92.6" r="5"/><circle class="cf-af" cx="62.0" cy="168.8" r="5"/><circle class="cf-af" cx="150.0" cy="168.8" r="5"/><circle class="cf-af" cx="238.0" cy="168.8" r="5"/><circle class="cf-gf" cx="150.0" cy="67.2" r="4"/><circle class="cf-gf" cx="194.0" cy="41.8" r="4"/><circle class="cf-gf" cx="106.0" cy="143.4" r="4"/><circle class="cf-gf" cx="150.0" cy="118.0" r="4"/><circle class="cf-gf" cx="194.0" cy="143.4" r="4"/><circle class="cf-gf" cx="238.0" cy="118.0" r="4"/>
+  <text class="cf-c" x="272" y="60">cells &#183; lattice at n</text>
+  <text class="cf-gd" x="272" y="88">corners &#183; the same lattice at 3n</text>
+  <text class="cf-d" x="272" y="122">up-triangle (i, j)</text>
+  <text class="cf-d" x="272" y="140">&#8594; (3i+2, 3j+1)</text>
+  <text class="cf-d" x="272" y="166">down-triangle (i, j)</text>
+  <text class="cf-d" x="272" y="184">&#8594; (3i+1, 3j+2)</text>
+  <text class="cf-d" x="14" y="222">one blend and one normalise from integers &#8212; the same call that places a cell</text>
+</svg>
