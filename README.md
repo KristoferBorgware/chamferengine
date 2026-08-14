@@ -70,7 +70,13 @@ and naming conventions in a compact form intended for machine consumption.
 
 ## Reading it as a site
 
-The Markdown is written to be read on GitHub, but there is a generator for a
+**Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
+specification, every diagram, every demo and every verification script, rebuilt
+and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
+`make-reference.js` runs all twelve verification scripts and fails the build if
+one stops running, so the site cannot publish unless the maths still holds.
+
+The Markdown is written to be read on GitHub, but the same generator produces a
 linked, cross-referenced HTML version — sidebar, per-page contents, prev/next,
 `[verified]` claims rendered as callouts that link to the script that proves
 them:

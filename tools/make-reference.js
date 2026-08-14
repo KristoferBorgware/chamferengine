@@ -127,11 +127,11 @@ for (const r of results){
 }
 lines.push('---');
 lines.push('');
-lines.push(`_${results.length} scripts, ${(stamp/1000).toFixed(1)} s to reproduce every number on this page._`);
+lines.push(`_${results.length} scripts. Every number above is reproduced by running them._`);
 lines.push('');
 
 fs.writeFileSync(path.join(DDIR, 'REFERENCE.md'), lines.join('\n'));
-console.log(`\nwrote docs/REFERENCE.md (${(fs.statSync(path.join(DDIR,'REFERENCE.md')).size/1024).toFixed(0)} KB)`);
+console.log(`\nwrote docs/REFERENCE.md (${(fs.statSync(path.join(DDIR,'REFERENCE.md')).size/1024).toFixed(0)} KB, ${(stamp/1000).toFixed(1)} s of computation)`);
 
 if (problems.length){
   console.error('\nPROBLEMS:');

@@ -1,0 +1,91 @@
+name: Publish documentation
+
+# Regenerates everything from source and publishes it to GitHub Pages.
+#
+# "Everything" means: the fifteen documents plus the generated reference, all
+# sixteen diagrams, all eighteen demos, and the verification scripts
+# themselves — so a reader can follow a claim to the proof and read the proof.
+#
+# The proofs are not decoration here. make-reference.js runs every verification
+# script and fails if one stops running, so the site does not publish unless the
+# maths still holds.
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deployments race; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Everything below is plain Node with zero dependencies, exactly as it
+      # runs locally. There is no install step because there is nothing to
+      # install.
+
+      - name: Regenerate the diagrams
+        run: node tools/make-figures.js
+
+      - name: Run every proof, and rebuild the reference from its output
+        run: node tools/make-reference.js
+
+      - name: Assemble the site
+        run: node tools/build-docs.js --pages _site
+
+      - name: Report what was published, and any drift from the committed files
+        if: always()
+        run: |
+          {
+            echo "### Published"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| documents | $(ls docs/*.md | wc -l) |"
+            echo "| diagrams | $(ls docs/figures/*.svg | wc -l) |"
+            echo "| demos | $(ls demos/*.html | wc -l) |"
+            echo "| verification scripts | $(ls verification/*.js | wc -l) |"
+            echo "| files in the artifact | $(find _site -type f | wc -l) |"
+            echo ""
+            if git diff --quiet -- docs/figures docs/REFERENCE.md; then
+              echo "Generated files in the repository are up to date."
+            else
+              echo "> **Note:** the published site was rebuilt from source and differs from"
+              echo "> the committed generated files. The site is correct; the repository is"
+              echo "> stale. Run \`node tools/make-figures.js && node tools/make-reference.js\`"
+              echo "> and commit."
+              echo ""
+              echo '```'
+              git diff --stat -- docs/figures docs/REFERENCE.md
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

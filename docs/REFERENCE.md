@@ -392,4 +392,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_12 scripts, 6.7 s to reproduce every number on this page._
+_12 scripts. Every number above is reproduced by running them._
