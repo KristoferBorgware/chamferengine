@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 244" width="430" height="244">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="ao1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-d" x="104" y="24" text-anchor="middle">classic floating origin</text>
+  <path class="cf-l" d="M34.0 40L34.0 176.0"/><path class="cf-l" d="M34 40.0L170.0 40.0"/><path class="cf-l" d="M68.0 40L68.0 176.0"/><path class="cf-l" d="M34 74.0L170.0 74.0"/><path class="cf-l" d="M102.0 40L102.0 176.0"/><path class="cf-l" d="M34 108.0L170.0 108.0"/><path class="cf-l" d="M136.0 40L136.0 176.0"/><path class="cf-l" d="M34 142.0L170.0 142.0"/><path class="cf-l" d="M170.0 40L170.0 176.0"/><path class="cf-l" d="M34 176.0L170.0 176.0"/>
+  <path class="cf-g" d="M40 176 L162 176" stroke-dasharray="5 4" marker-end="url(#ao2)"/>
+  <defs><marker id="ao2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <circle class="cf-af" cx="102" cy="108" r="5"/>
+  <text class="cf-gd" x="104" y="196" text-anchor="middle">the whole world shifts</text>
+  <text class="cf-d" x="104" y="214" text-anchor="middle">one global event, every system told</text>
+  <path class="cf-l" d="M215 34 L215 216" stroke-dasharray="2 5"/>
+  <text class="cf-d" x="326" y="24" text-anchor="middle">anchor plus offset</text>
+  <path class="cf-l" d="M256.0 40L256.0 176.0"/><path class="cf-l" d="M256 40.0L392.0 40.0"/><path class="cf-l" d="M290.0 40L290.0 176.0"/><path class="cf-l" d="M256 74.0L392.0 74.0"/><path class="cf-l" d="M324.0 40L324.0 176.0"/><path class="cf-l" d="M256 108.0L392.0 108.0"/><path class="cf-l" d="M358.0 40L358.0 176.0"/><path class="cf-l" d="M256 142.0L392.0 142.0"/><path class="cf-l" d="M392.0 40L392.0 176.0"/><path class="cf-l" d="M256 176.0L392.0 176.0"/>
+  <rect class="cf-af" x="290" y="74" width="34" height="34" opacity="0.5"/>
+  <rect class="cf-gf" x="324" y="108" width="34" height="34" opacity="0.5"/>
+  <path class="cf-a" d="M290 108 L318 88" marker-end="url(#ao1)"/>
+  <path class="cf-g" d="M324 142 L352 122" marker-end="url(#ao2)"/>
+  <text class="cf-c" x="326" y="196" text-anchor="middle">the anchor changes, the offset resets</text>
+  <text class="cf-d" x="326" y="214" text-anchor="middle">one entity, two numbers, nobody else told</text>
+</svg>

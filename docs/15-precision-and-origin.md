@@ -21,18 +21,21 @@ read that one.
 
 ## What "running out of digits" actually looks like
 
-A `float32` carries about 7 significant digits. That sounds like a lot until you
-notice it is *relative* — 7 digits total, not 7 after the decimal point. A
-position 6,371 km from the centre of a planet spends seven of them just reaching
-the metres column, and has none left below it.
+A `float32` carries about 7 significant digits. That sounds generous until you
+notice the seven are counted from the *front* of the number, not from the decimal
+point. A position 6,371 km from a planet's centre spends all seven just getting
+down to the metres column, and has nothing left below it.
 
-Where the numbers come from, since everything downstream rests on them. A
-`float32` is 1 sign bit, 8 exponent bits and 23 stored mantissa bits; an implicit
+Here is where that comes from, because everything downstream rests on it. A
+`float32` is 1 sign bit, 8 exponent bits and 23 stored mantissa bits. An implicit
 leading 1 makes the significand **24 bits**, and `24 × log₁₀2 = 7.22` decimal
-digits. Every float is `± 1.f × 2^e`, and the mantissa always lies in `[1, 2)` —
-a fixed ladder of rungs that the exponent slides up and down the number line. So
-the *number* of rungs never changes and the *spacing* between them scales with
-the magnitude:
+digits.
+
+Now the shape that matters. Every float is `± 1.f × 2^e`, and the mantissa `1.f`
+always sits between 1 and 2 — `[1, 2)`, including 1 and stopping just short of 2.
+So a float is a **fixed ladder of rungs**, and the
+exponent slides that ladder up and down the number line. The number of rungs never
+changes. The gap between them doubles every time the exponent goes up by one:
 
 ```
 for x in [2^e, 2^(e+1)):    gap = 2^(e − 23)
@@ -77,6 +80,13 @@ representable positions per block — a player's position quantises to half-metr
 steps, and anything sub-block is gone. By Jupiter, eight whole blocks share one
 representable position.
 
+![Three rows at the same scale, each showing 1 m block boundaries with the positions a float32 can hold marked on them: solid at 1,700 m, two per block at Earth, one per eight blocks at Jupiter](figures/float-ladder.svg)
+
+*The same stretch of ground on three planets. On the worked planet a position can
+land essentially anywhere; at Earth radius it can only land on half-metre marks;
+at Jupiter it cannot even tell eight blocks apart. Nothing about the block changed
+— only how far it sits from the centre.*
+
 And the thresholds, which are the numbers to design against:
 
 > **[verified]** Same script, section 2. The radius at which `float32` position
@@ -93,8 +103,13 @@ And the thresholds, which are the numbers to design against:
 Powers of two, exactly as the formula above predicts, and the practical
 consequence is worth stating on its own: **precision does not decay smoothly as a
 world grows — it halves, abruptly, every time the radius crosses a power of two.**
-A 15 km planet and a 17 km planet are a factor of two apart in position
-resolution despite being almost the same size.
+
+![A staircase graph of position spacing against planet radius, flat across each binade and doubling vertically at each power of two, with 15 km and 17 km marked on either side of one step](figures/precision-staircase.svg)
+
+*Not a slope — a staircase. A 15 km planet and a 17 km planet are almost the same
+size and a factor of two apart in position resolution, because a power of two
+happens to fall between them. Growing a world by 1% can cost you half your
+precision, or nothing at all.*
 
 **`float32` holds sub-millimetre precision out to about a 16 km planet and has no
 sub-block detail left at all by Earth radius.** The doc-06 worked example at
@@ -256,6 +271,12 @@ reason is that normalising divides the magnitude out.
 > | Earth | 102 mm | 0.005″ | 142 mm |
 > | Jupiter | 2.396 m | 0.006″ | 2.042 m |
 
+![Two planets of very different size, each with a point on the surface surrounded by a blur showing how far the position could be wrong; the blur is far larger on the big planet but the line from the centre through the point is identical in both](figures/directions-survive.svg)
+
+*The blur is the position error, and it grows with the planet. The line from the
+centre through it — which is all `up` ever asks for — does not move. Normalising
+divides the magnitude out, and the magnitude was the entire problem.*
+
 **The angle is flat across five orders of magnitude of radius.** Position error
 grows linearly with `R`; direction error does not grow at all.
 
@@ -325,12 +346,18 @@ The offset is bounded by construction, so `float32` is enough for it at any
 planet size. **Rebasing is renormalising**: when the offset leaves the anchor's
 extent, fold the excess into the anchor and subtract it from the offset.
 
-That is the whole mechanism, and it is worth noticing what it is *not*. Classic
-floating origin waits until the player is far from the origin, then shifts the
-entire world back and re-expresses everything in it — a global, stop-the-world
-event that has to be scheduled and that every subsystem must be told about. Here
-there is no world to shift. Each entity carries its own anchor and renormalises
-its own offset, independently, whenever it happens to cross a boundary.
+That is the whole mechanism, and it is worth noticing what it is *not*.
+
+![On the left, a whole grid of world cells sliding sideways as one; on the right, a single entity moving from one chunk box to the next with its offset arrow restarting inside the new box](figures/anchor-and-offset.svg)
+
+*Classic floating origin waits until the player is far out, then shifts the entire
+world back and re-expresses everything in it — one global event that has to be
+scheduled and that every subsystem must be told about. On the right, nothing moves
+but one entity's own two numbers, and no other system ever hears about it.*
+
+Here there is no world to shift. Each entity carries its own anchor and
+renormalises its own offset, independently, whenever it happens to cross a
+boundary.
 
 > **[verified]** `verification/precision.js`, section 7. How often a player
 > walking at 1.4 m/s crosses a boundary:

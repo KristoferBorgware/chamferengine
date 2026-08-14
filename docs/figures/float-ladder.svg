@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 224" width="430" height="224">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-d" x="14" y="22">faint lines are 1 m blocks &#183; solid marks are positions a float32 can actually hold</text>
+  <path class="cf-l" d="M96 66L396.0 66"/><path class="cf-l" d="M96.0 52L96.0 80"/><path class="cf-l" d="M126.0 52L126.0 80"/><path class="cf-l" d="M156.0 52L156.0 80"/><path class="cf-l" d="M186.0 52L186.0 80"/><path class="cf-l" d="M216.0 52L216.0 80"/><path class="cf-l" d="M246.0 52L246.0 80"/><path class="cf-l" d="M276.0 52L276.0 80"/><path class="cf-l" d="M306.0 52L306.0 80"/><path class="cf-l" d="M336.0 52L336.0 80"/><path class="cf-l" d="M366.0 52L366.0 80"/><rect class="cf-af" x="96" y="59" width="300" height="14" opacity="0.6"/><text class="cf-d" x="84" y="70" text-anchor="end">R 1,700 m</text><text class="cf-c" x="96" y="96">8,192 positions per block &#8212; solid</text>
+  <path class="cf-l" d="M96 134L396.0 134"/><path class="cf-l" d="M96.0 120L96.0 148"/><path class="cf-l" d="M126.0 120L126.0 148"/><path class="cf-l" d="M156.0 120L156.0 148"/><path class="cf-l" d="M186.0 120L186.0 148"/><path class="cf-l" d="M216.0 120L216.0 148"/><path class="cf-l" d="M246.0 120L246.0 148"/><path class="cf-l" d="M276.0 120L276.0 148"/><path class="cf-l" d="M306.0 120L306.0 148"/><path class="cf-l" d="M336.0 120L336.0 148"/><path class="cf-l" d="M366.0 120L366.0 148"/><path class="cf-a" d="M96.0 125L96.0 143" stroke-width="2.5"/><path class="cf-a" d="M111.0 125L111.0 143" stroke-width="2.5"/><path class="cf-a" d="M126.0 125L126.0 143" stroke-width="2.5"/><path class="cf-a" d="M141.0 125L141.0 143" stroke-width="2.5"/><path class="cf-a" d="M156.0 125L156.0 143" stroke-width="2.5"/><path class="cf-a" d="M171.0 125L171.0 143" stroke-width="2.5"/><path class="cf-a" d="M186.0 125L186.0 143" stroke-width="2.5"/><path class="cf-a" d="M201.0 125L201.0 143" stroke-width="2.5"/><path class="cf-a" d="M216.0 125L216.0 143" stroke-width="2.5"/><path class="cf-a" d="M231.0 125L231.0 143" stroke-width="2.5"/><path class="cf-a" d="M246.0 125L246.0 143" stroke-width="2.5"/><path class="cf-a" d="M261.0 125L261.0 143" stroke-width="2.5"/><path class="cf-a" d="M276.0 125L276.0 143" stroke-width="2.5"/><path class="cf-a" d="M291.0 125L291.0 143" stroke-width="2.5"/><path class="cf-a" d="M306.0 125L306.0 143" stroke-width="2.5"/><path class="cf-a" d="M321.0 125L321.0 143" stroke-width="2.5"/><path class="cf-a" d="M336.0 125L336.0 143" stroke-width="2.5"/><path class="cf-a" d="M351.0 125L351.0 143" stroke-width="2.5"/><path class="cf-a" d="M366.0 125L366.0 143" stroke-width="2.5"/><path class="cf-a" d="M381.0 125L381.0 143" stroke-width="2.5"/><path class="cf-a" d="M396.0 125L396.0 143" stroke-width="2.5"/><text class="cf-d" x="84" y="138" text-anchor="end">Earth</text><text class="cf-c" x="96" y="164">2 per block &#8212; nothing below half a metre</text>
+  <path class="cf-l" d="M96 202L396.0 202"/><path class="cf-l" d="M96.0 188L96.0 216"/><path class="cf-l" d="M126.0 188L126.0 216"/><path class="cf-l" d="M156.0 188L156.0 216"/><path class="cf-l" d="M186.0 188L186.0 216"/><path class="cf-l" d="M216.0 188L216.0 216"/><path class="cf-l" d="M246.0 188L246.0 216"/><path class="cf-l" d="M276.0 188L276.0 216"/><path class="cf-l" d="M306.0 188L306.0 216"/><path class="cf-l" d="M336.0 188L336.0 216"/><path class="cf-l" d="M366.0 188L366.0 216"/><path class="cf-a" d="M96.0 193L96.0 211" stroke-width="2.5"/><path class="cf-a" d="M336.0 193L336.0 211" stroke-width="2.5"/><text class="cf-d" x="84" y="206" text-anchor="end">Jupiter</text><text class="cf-c" x="96" y="232">one position per 8 blocks</text>
+</svg>

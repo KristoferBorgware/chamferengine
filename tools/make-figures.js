@@ -438,6 +438,121 @@ const made = [];
 
 
 // =============================================================================
+// 15 — float-ladder: how many positions a float32 leaves inside one block
+// =============================================================================
+{
+  const PX = 30, x0 = 96, span = 300;             // 30 px to the metre, all three rows
+  const row = (y, label, gapM, note) => {
+    let blocks = '';
+    for (let m = 0; m*PX < span; m++)
+      blocks += `<path class="cf-l" d="M${f(x0+m*PX)} ${y-14}L${f(x0+m*PX)} ${y+14}"/>`;
+    let ticks = '';
+    if (gapM*PX < 1.2){                            // too dense to draw: show it solid
+      ticks = `<rect class="cf-af" x="${x0}" y="${y-7}" width="${span}" height="14" opacity="0.6"/>`;
+    } else {
+      for (let k = 0; k*gapM*PX <= span; k++)
+        ticks += `<path class="cf-a" d="M${f(x0+k*gapM*PX)} ${y-9}L${f(x0+k*gapM*PX)} ${y+9}" stroke-width="2.5"/>`;
+    }
+    return `<path class="cf-l" d="M${x0} ${y}L${f(x0+span)} ${y}"/>${blocks}${ticks}`
+      + `<text class="cf-d" x="${x0-12}" y="${y+4}" text-anchor="end">${label}</text>`
+      + `<text class="cf-c" x="${x0}" y="${y+30}">${note}</text>`;
+  };
+  made.push(svg('float-ladder', 430, 224, `
+  <text class="cf-d" x="14" y="22">faint lines are 1 m blocks &#183; solid marks are positions a float32 can actually hold</text>
+  ${row(66,  'R 1,700 m', 0.000122, '8,192 positions per block &#8212; solid')}
+  ${row(134, 'Earth',     0.5,      '2 per block &#8212; nothing below half a metre')}
+  ${row(202, 'Jupiter',   8,        'one position per 8 blocks')}`));
+}
+
+// =============================================================================
+// 15 — precision-staircase: resolution halves at every power of two
+// =============================================================================
+{
+  const x0 = 62, y0 = 168, W = 336, H = 122;
+  const e0 = 10, e1 = 24;                          // radius 1 km .. 16,000 km
+  const X = e => x0 + W*(e - e0)/(e1 - e0);
+  const Y = g => y0 - H*(Math.log2(g) + 14)/22;    // gap from 2^-14 m up
+  let steps = '';
+  for (let e = e0; e <= e1; e++){
+    const g = 2**(e-23);
+    steps += `<path class="cf-a" d="M${f(X(e))} ${f(Y(g))}L${f(X(e+1))} ${f(Y(g))}"/>`;
+    if (e < e1) steps += `<path class="cf-l" d="M${f(X(e+1))} ${f(Y(g))}L${f(X(e+1))} ${f(Y(g*2))}"/>`;
+  }
+  const mark = (r, txt, cls) => {
+    const e = Math.floor(Math.log2(r));
+    return `<path class="${cls}" d="M${f(X(Math.log2(r)))} ${f(Y(2**(e-23)))}L${f(X(Math.log2(r)))} ${y0+6}" stroke-dasharray="3 3"/>`
+      + `<text class="${cls==='cf-g'?'cf-gd':'cf-c'}" x="${f(X(Math.log2(r)))}" y="${y0+20}" text-anchor="middle">${txt}</text>`;
+  };
+  made.push(svg('precision-staircase', 430, 216, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  ${steps}
+  ${mark(15000, '15 km', 'cf-g')}
+  ${mark(17000, '17 km', 'cf-g')}
+  <text class="cf-d" x="${x0-8}" y="${f(y0-H+6)}" text-anchor="end">1 m</text>
+  <text class="cf-d" x="${x0-8}" y="${y0+4}" text-anchor="end">0.1 mm</text>
+  <text class="cf-d" x="${f(x0+W)}" y="${y0+20}" text-anchor="end">planet radius &#8594;</text>
+  <text class="cf-c" x="14" y="24">precision does not fade. it halves, all at once,</text>
+  <text class="cf-c" x="14" y="42">every time the radius crosses a power of two</text>
+  <text class="cf-gd" x="14" y="200">a 15 km planet and a 17 km planet are a factor of two apart</text>`));
+}
+
+// =============================================================================
+// 15 — anchor-and-offset: nothing moves except one entity's own two numbers
+// =============================================================================
+{
+  const grid = (ox, oy, n, dx, cls) => {
+    let g = '';
+    for (let i=0;i<=n;i++){
+      g += `<path class="${cls}" d="M${f(ox+i*dx)} ${oy}L${f(ox+i*dx)} ${f(oy+n*dx)}"/>`;
+      g += `<path class="${cls}" d="M${ox} ${f(oy+i*dx)}L${f(ox+n*dx)} ${f(oy+i*dx)}"/>`;
+    }
+    return g;
+  };
+  made.push(svg('anchor-and-offset', 430, 244, `
+  <defs><marker id="ao1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-d" x="104" y="24" text-anchor="middle">classic floating origin</text>
+  ${grid(34, 40, 4, 34, 'cf-l')}
+  <path class="cf-g" d="M40 176 L162 176" stroke-dasharray="5 4" marker-end="url(#ao2)"/>
+  <defs><marker id="ao2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <circle class="cf-af" cx="102" cy="108" r="5"/>
+  <text class="cf-gd" x="104" y="196" text-anchor="middle">the whole world shifts</text>
+  <text class="cf-d" x="104" y="214" text-anchor="middle">one global event, every system told</text>
+  <path class="cf-l" d="M215 34 L215 216" stroke-dasharray="2 5"/>
+  <text class="cf-d" x="326" y="24" text-anchor="middle">anchor plus offset</text>
+  ${grid(256, 40, 4, 34, 'cf-l')}
+  <rect class="cf-af" x="290" y="74" width="34" height="34" opacity="0.5"/>
+  <rect class="cf-gf" x="324" y="108" width="34" height="34" opacity="0.5"/>
+  <path class="cf-a" d="M290 108 L318 88" marker-end="url(#ao1)"/>
+  <path class="cf-g" d="M324 142 L352 122" marker-end="url(#ao2)"/>
+  <text class="cf-c" x="326" y="196" text-anchor="middle">the anchor changes, the offset resets</text>
+  <text class="cf-d" x="326" y="214" text-anchor="middle">one entity, two numbers, nobody else told</text>`));
+}
+
+// =============================================================================
+// 15 — directions-survive: the position blurs, the angle does not
+// =============================================================================
+{
+  const one = (cx, cy, R, blur, label, note) => {
+    const a = -58*Math.PI/180;
+    const p = [cx + R*Math.cos(a), cy + R*Math.sin(a)];
+    return `<path class="cf-m" d="M${f(cx-R)} ${cy} A ${R} ${R} 0 0 1 ${f(cx+R)} ${cy}" />`
+      + `<path class="cf-l" d="M${cx} ${cy}L${f(p[0])} ${f(p[1])}"/>`
+      + `<circle class="cf-gf" cx="${f(p[0])}" cy="${f(p[1])}" r="${blur}" opacity="0.55"/>`
+      + `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="3"/>`
+      + `<text class="cf-d" x="${cx}" y="${cy+22}" text-anchor="middle">${label}</text>`
+      + `<text class="cf-c" x="${cx}" y="${cy+42}" text-anchor="middle">${note}</text>`;
+  };
+  made.push(svg('directions-survive', 430, 190, `
+  ${one(106, 126, 74, 2.5, 'small planet', 'position good to 37 &#181;m')}
+  ${one(316, 126, 74, 15, 'Earth-sized', 'position good to 102 mm')}
+  <text class="cf-gd" x="215" y="26" text-anchor="middle">the gold blur is how far the position could be wrong</text>
+  <text class="cf-c" x="215" y="52" text-anchor="middle">the line from the centre is the same line in both</text>
+  <text class="cf-d" x="215" y="74" text-anchor="middle">up is accurate to 0.005&#8243; at every radius &#8212; normalising divides the size out</text>`));
+}
+
+// =============================================================================
 // 06 — level-is-an-integer: the radius moves so the block size never has to
 // =============================================================================
 {

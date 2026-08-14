@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 190" width="430" height="190">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" d="M32.0 126 A 74 74 0 0 1 180.0 126" /><path class="cf-l" d="M106 126L145.2 63.2"/><circle class="cf-gf" cx="145.2" cy="63.2" r="2.5" opacity="0.55"/><circle class="cf-af" cx="145.2" cy="63.2" r="3"/><text class="cf-d" x="106" y="148" text-anchor="middle">small planet</text><text class="cf-c" x="106" y="168" text-anchor="middle">position good to 37 &#181;m</text>
+  <path class="cf-m" d="M242.0 126 A 74 74 0 0 1 390.0 126" /><path class="cf-l" d="M316 126L355.2 63.2"/><circle class="cf-gf" cx="355.2" cy="63.2" r="15" opacity="0.55"/><circle class="cf-af" cx="355.2" cy="63.2" r="3"/><text class="cf-d" x="316" y="148" text-anchor="middle">Earth-sized</text><text class="cf-c" x="316" y="168" text-anchor="middle">position good to 102 mm</text>
+  <text class="cf-gd" x="215" y="26" text-anchor="middle">the gold blur is how far the position could be wrong</text>
+  <text class="cf-c" x="215" y="52" text-anchor="middle">the line from the centre is the same line in both</text>
+  <text class="cf-d" x="215" y="74" text-anchor="middle">up is accurate to 0.005&#8243; at every radius &#8212; normalising divides the size out</text>
+</svg>
