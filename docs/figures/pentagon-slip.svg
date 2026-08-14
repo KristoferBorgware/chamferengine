@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 236" width="430" height="236">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs>
+    <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  <path class="cf-l" d="M112.0 118.0L112.0 58.0M112.0 118.0L164.0 88.0M112.0 118.0L164.0 148.0M112.0 118.0L112.0 178.0M112.0 118.0L60.0 148.0M112.0 118.0L60.0 88.0"/><path class="cf-a" d="M112.0 58.0L164.0 88.0L164.0 148.0L112.0 178.0L60.0 148.0L60.0 88.0L112.0 58.0" fill="none" stroke-dasharray="5 4"/><circle class="cf-fill" cx="112.0" cy="58.0" r="13"/><circle class="cf-fill" cx="164.0" cy="88.0" r="13"/><circle class="cf-fill" cx="164.0" cy="148.0" r="13"/><circle class="cf-fill" cx="112.0" cy="178.0" r="13"/><circle class="cf-fill" cx="60.0" cy="148.0" r="13"/><circle class="cf-fill" cx="60.0" cy="88.0" r="13"/><circle class="cf-af" cx="112" cy="118" r="16"/><text class="cf-d" x="112" y="122" text-anchor="middle">6</text>
+  <path class="cf-a" d="M112 32 l0 -26" marker-end="url(#s1)"/>
+  <text class="cf-c" x="112" y="22" text-anchor="middle">set off &#8593;  came back &#8593;</text>
+  <text class="cf-d" x="112" y="206" text-anchor="middle">six neighbours, six steps</text>
+  <text class="cf-c" x="112" y="228" text-anchor="middle">the ring closes</text>
+  <path class="cf-l" d="M318.0 118.0L318.0 58.0M318.0 118.0L375.1 99.5M318.0 118.0L353.3 166.5M318.0 118.0L282.7 166.5M318.0 118.0L260.9 99.5"/><path class="cf-g" d="M318.0 58.0L375.1 99.5L353.3 166.5L282.7 166.5L260.9 99.5L318.0 58.0" fill="none" stroke-dasharray="5 4"/><circle class="cf-fill" cx="318.0" cy="58.0" r="13"/><circle class="cf-fill" cx="375.1" cy="99.5" r="13"/><circle class="cf-fill" cx="353.3" cy="166.5" r="13"/><circle class="cf-fill" cx="282.7" cy="166.5" r="13"/><circle class="cf-fill" cx="260.9" cy="99.5" r="13"/><circle class="cf-gf" cx="318" cy="118" r="16"/><text class="cf-d" x="318" y="122" text-anchor="middle">5</text>
+  <path class="cf-a" d="M310 32 l0 -22" marker-end="url(#s1)"/>
+  <path class="cf-g" d="M326 34 l11 -19" marker-end="url(#s2)"/>
+  <text class="cf-c" x="256" y="22">set off &#8593;</text>
+  <text class="cf-gd" x="346" y="22">came back &#8599;</text>
+  <text class="cf-d" x="318" y="206" text-anchor="middle">five neighbours, but six directions to account for</text>
+  <text class="cf-gd" x="318" y="228" text-anchor="middle">the ring closes one short &#8212; you are turned 60&#176;</text>
+</svg>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 246" width="430" height="246">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+<defs><marker id="h1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <circle class="cf-fill" cx="140" cy="122" r="96"/>
+  <path class="cf-m" d="M140 26 L44 122"/>
+  <path class="cf-m" d="M44 122 A 96 34.6 0 0 0 140 156.56"/>
+  <path class="cf-m" d="M140 156.56 L140 26"/>
+  <path class="cf-g" d="M136.0 34.0 l-26.0 12.0" marker-end="url(#h1)"/>
+  <path class="cf-g" d="M54.0 128.0 l4.0 28.0" marker-end="url(#h1)"/>
+  <path class="cf-g" d="M134.0 146.6 l-6.0 -28.0" marker-end="url(#h1)"/>
+  <path class="cf-g" d="M146.0 36.0 l26.0 12.0" marker-end="url(#h1)"/>
+  <circle class="cf-af" cx="140" cy="26" r="5"/>
+  <text class="cf-d" x="150" y="18">start and finish</text>
+  <text class="cf-gd" x="256" y="30">1 &#183; set off facing left</text>
+  <text class="cf-gd" x="256" y="52">2 &#183; turn nothing, walk on</text>
+  <text class="cf-gd" x="256" y="74">3 &#183; turn nothing, walk home</text>
+  <text class="cf-c" x="256" y="104">back where you started,</text>
+  <text class="cf-c" x="256" y="122">facing 90&#176; from where you left</text>
+  <text class="cf-d" x="256" y="150">you never turned. the ground did.</text>
+  <text class="cf-d" x="256" y="176">rotation = enclosed area / R&#178;</text>
+  <text class="cf-d" x="256" y="194">1/8 of the sphere = 90&#176;</text>
+  <text class="cf-d" x="256" y="212">a 100 m city block = 0.20&#176;</text>
+</svg>

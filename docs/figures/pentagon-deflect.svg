@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 214" width="430" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+<defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <polygon class="cf-gf" points="150.0,54.0 209.0,96.8 186.4,166.2 113.6,166.2 91.0,96.8"/>
+  <path class="cf-l" d="M150 116 L150.0 54.0"/><path class="cf-l" d="M150 116 L209.0 96.8"/><path class="cf-l" d="M150 116 L186.4 166.2"/><path class="cf-l" d="M150 116 L113.6 166.2"/><path class="cf-l" d="M150 116 L91.0 96.8"/>
+  <path class="cf-a" d="M150 20.0 L150 110.0" marker-end="url(#d1)"/>
+  <path class="cf-a" d="M150 116 L186.4 166.2" stroke-dasharray="4 3" marker-end="url(#d1)"/>
+  <path class="cf-a" d="M150 116 L113.6 166.2" stroke-dasharray="4 3" marker-end="url(#d1)"/>
+  <path class="cf-l" d="M150 116 L150 200.0" stroke-dasharray="2 4"/>
+  <text class="cf-d" x="156" y="212.0">nothing here to leave by</text>
+  <text class="cf-c" x="150" y="10.0" text-anchor="middle">rail arrives</text>
+  <text class="cf-c" x="252" y="46">the two best exits both bend</text>
+  <text class="cf-c" x="252" y="68">36.07&#176;</text>
+  <text class="cf-d" x="252" y="96">adjacent directions sit 71.965&#176; apart,</text>
+  <text class="cf-d" x="252" y="114">so no pair is 180&#176; &#8212; there is no</text>
+  <text class="cf-d" x="252" y="132">&#8220;carry straight on&#8221; on a five</text>
+</svg>

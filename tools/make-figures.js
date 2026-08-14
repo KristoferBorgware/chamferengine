@@ -438,6 +438,218 @@ const made = [];
 
 
 // =============================================================================
+// 13 — up-is-local: one shared up on a flat world, one per place on a round one
+// =============================================================================
+{
+  const AR = `<defs><marker id="u1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>`;
+  // flat: four figures, four identical arrows
+  let flat = '', gy = 118;
+  for (let k = 0; k < 4; k++){
+    const x = 34 + k*36;
+    flat += `<path class="cf-a" d="M${x} ${gy} L${x} ${gy-40}" marker-end="url(#u1)"/>`
+         +  `<circle class="cf-af" cx="${x}" cy="${gy}" r="4"/>`;
+  }
+  // round: four figures on an arc, four arrows that disagree
+  const O = [300, 190], Rr = 92;
+  let round = '';
+  for (let k = 0; k < 4; k++){
+    const a = (-125 + k*36) * Math.PI/180;
+    const px = O[0] + Rr*Math.sin(a), py = O[1] - Rr*Math.cos(a);
+    const qx = O[0] + (Rr+40)*Math.sin(a), qy = O[1] - (Rr+40)*Math.cos(a);
+    round += `<path class="cf-a" d="M${f(px)} ${f(py)} L${f(qx)} ${f(qy)}" marker-end="url(#u1)"/>`
+          +  `<circle class="cf-af" cx="${f(px)}" cy="${f(py)}" r="4"/>`;
+  }
+  made.push(svg('up-is-local', 430, 214, `${AR}
+  <path class="cf-m" d="M20 ${gy} L154 ${gy}"/>
+  ${flat}
+  <text class="cf-d" x="87" y="${gy+22}" text-anchor="middle">flat world</text>
+  <text class="cf-c" x="87" y="24" text-anchor="middle">one up, shared</text>
+  <text class="cf-d" x="87" y="42" text-anchor="middle">a constant in the code</text>
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${Rr}"/>
+  ${round}
+  <text class="cf-c" x="300" y="24" text-anchor="middle">round world</text>
+  <text class="cf-d" x="300" y="42" text-anchor="middle">one up per place &#183; normalize(position)</text>
+  <text class="cf-d" x="300" y="${O[1]+18}" text-anchor="middle">centre</text>`));
+}
+
+// =============================================================================
+// 13 — no-global-north: comb the sphere flat and a cowlick always survives
+// =============================================================================
+{
+  const O = [212, 108], R = 84;
+  // tangent hairs combed around the axis: they shrink to nothing at the two poles
+  let hair = '';
+  for (let ring = 1; ring <= 4; ring++){
+    const colat = ring * 36 * Math.PI/180;
+    const n = 12, rr = R*Math.sin(colat), yy = O[1] - R*Math.cos(colat)*0.55;
+    for (let k = 0; k < n; k++){
+      const t = 2*Math.PI*k/n;
+      const x = O[0] + rr*Math.cos(t), y = yy + rr*0.34*Math.sin(t);
+      const L = 15*Math.sin(colat);                 // hair length dies at the poles
+      hair += `<path class="cf-l" d="M${f(x)} ${f(y)} l${f(-L*Math.sin(t))} ${f(L*0.34*Math.cos(t))}"/>`;
+    }
+  }
+  made.push(svg('no-global-north', 430, 214, `
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  ${hair}
+  <circle class="cf-gf" cx="${O[0]}" cy="${f(O[1]-R)}" r="6"/>
+  <circle class="cf-gf" cx="${O[0]}" cy="${f(O[1]+R)}" r="6"/>
+  <text class="cf-gd" x="${O[0]+14}" y="${f(O[1]-R+4)}">no direction here</text>
+  <text class="cf-gd" x="${O[0]+14}" y="${f(O[1]+R+4)}">or here</text>
+  <text class="cf-c" x="14" y="24">comb every point to face &#8220;north&#8221;</text>
+  <text class="cf-d" x="14" y="42">and two points are left with nowhere to face</text>
+  <text class="cf-d" x="14" y="196">no choice of axis removes them &#8212; only moves them</text>`));
+}
+
+// =============================================================================
+// 13 — holonomy: walk a closed loop, come back turned
+// =============================================================================
+{
+  const O = [140, 122], R = 96;
+  const AR = `<defs><marker id="h1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>`;
+  const arr = (x,y,dx,dy) => `<path class="cf-g" d="M${f(x)} ${f(y)} l${f(dx)} ${f(dy)}" marker-end="url(#h1)"/>`;
+  // one octant: north pole, then a quarter of the equator, then back
+  const P = [O[0], O[1]-R], A = [O[0]-R, O[1]], B = [O[0], O[1]+R*0.36];
+  made.push(svg('holonomy-walk', 430, 246, `${AR}
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  <path class="cf-m" d="M${P[0]} ${P[1]} L${A[0]} ${A[1]}"/>
+  <path class="cf-m" d="M${A[0]} ${A[1]} A ${R} ${f(R*0.36)} 0 0 0 ${B[0]} ${B[1]}"/>
+  <path class="cf-m" d="M${B[0]} ${B[1]} L${P[0]} ${P[1]}"/>
+  ${arr(P[0]-4, P[1]+8, -26, 12)}
+  ${arr(A[0]+10, A[1]+6, 4, 28)}
+  ${arr(B[0]-6, B[1]-10, -6, -28)}
+  ${arr(P[0]+6, P[1]+10, 26, 12)}
+  <circle class="cf-af" cx="${P[0]}" cy="${P[1]}" r="5"/>
+  <text class="cf-d" x="${P[0]+10}" y="${P[1]-8}">start and finish</text>
+  <text class="cf-gd" x="256" y="30">1 &#183; set off facing left</text>
+  <text class="cf-gd" x="256" y="52">2 &#183; turn nothing, walk on</text>
+  <text class="cf-gd" x="256" y="74">3 &#183; turn nothing, walk home</text>
+  <text class="cf-c" x="256" y="104">back where you started,</text>
+  <text class="cf-c" x="256" y="122">facing 90&#176; from where you left</text>
+  <text class="cf-d" x="256" y="150">you never turned. the ground did.</text>
+  <text class="cf-d" x="256" y="176">rotation = enclosed area / R&#178;</text>
+  <text class="cf-d" x="256" y="194">1/8 of the sphere = 90&#176;</text>
+  <text class="cf-d" x="256" y="212">a 100 m city block = 0.20&#176;</text>`));
+}
+
+// =============================================================================
+// 13 — pentagon-slip: the ring closes on a hexagon and does not on a pentagon
+// =============================================================================
+{
+  // A ring of n neighbours around one cell. Set off from the top neighbour
+  // pointing "0"; walk all the way round; see what you are pointing at on return.
+  const ring = (cx, cy, n, R, cls) => {
+    const c = [], sp = [];
+    for (let i=0;i<n;i++){
+      const a = -Math.PI/2 + 2*Math.PI*i/n;
+      c.push([cx + R*Math.cos(a), cy + R*Math.sin(a)]);
+    }
+    for (const p of c) sp.push([[cx,cy],p]);
+    let out = `<path class="cf-l" d="${pathOf(sp)}"/>`;
+    // the walk itself, as an arc just inside the neighbours
+    out += `<path class="${n===6?'cf-a':'cf-g'}" d="M${f(c[0][0])} ${f(c[0][1])}`
+        +  c.slice(1).concat([c[0]]).map(p => `L${f(p[0])} ${f(p[1])}`).join('') + `" fill="none" stroke-dasharray="5 4"/>`;
+    out += c.map(p => `<circle class="cf-fill" cx="${f(p[0])}" cy="${f(p[1])}" r="13"/>`).join('');
+    out += `<circle class="${cls}" cx="${cx}" cy="${cy}" r="16"/>`;
+    out += `<text class="cf-d" x="${cx}" y="${cy+4}" text-anchor="middle">${n===6?'6':'5'}</text>`;
+    return out;
+  };
+  const startArrow = (cx, cy, cls, mk) =>
+    `<path class="${cls}" d="M${cx} ${cy} l0 -26" marker-end="url(#${mk})"/>`;
+  made.push(svg('pentagon-slip', 430, 236, `
+  <defs>
+    <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  ${ring(112, 118, 6, 60, 'cf-af')}
+  ${startArrow(112, 32, 'cf-a', 's1')}
+  <text class="cf-c" x="112" y="22" text-anchor="middle">set off &#8593;  came back &#8593;</text>
+  <text class="cf-d" x="112" y="206" text-anchor="middle">six neighbours, six steps</text>
+  <text class="cf-c" x="112" y="228" text-anchor="middle">the ring closes</text>
+  ${ring(318, 118, 5, 60, 'cf-gf')}
+  <path class="cf-a" d="M310 32 l0 -22" marker-end="url(#s1)"/>
+  <path class="cf-g" d="M326 34 l11 -19" marker-end="url(#s2)"/>
+  <text class="cf-c" x="256" y="22">set off &#8593;</text>
+  <text class="cf-gd" x="346" y="22">came back &#8599;</text>
+  <text class="cf-d" x="318" y="206" text-anchor="middle">five neighbours, but six directions to account for</text>
+  <text class="cf-gd" x="318" y="228" text-anchor="middle">the ring closes one short &#8212; you are turned 60&#176;</text>`));
+}
+
+// =============================================================================
+// 13 — pentagon-deflect: no way to go straight through a pentagon
+// =============================================================================
+{
+  const C = [150, 116], R = 62;
+  let spokes = '', tips = [];
+  for (let i=0;i<5;i++){
+    const a = -Math.PI/2 + 2*Math.PI*i/5;
+    const p = [C[0] + R*Math.cos(a), C[1] + R*Math.sin(a)];
+    tips.push(p);
+    spokes += `<path class="cf-l" d="M${C[0]} ${C[1]} L${f(p[0])} ${f(p[1])}"/>`;
+  }
+  const AR = `<defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>`;
+  made.push(svg('pentagon-deflect', 430, 214, `${AR}
+  <polygon class="cf-gf" points="${pts(tips)}"/>
+  ${spokes}
+  <path class="cf-a" d="M${C[0]} ${f(C[1]-R-34)} L${C[0]} ${f(C[1]-6)}" marker-end="url(#d1)"/>
+  <path class="cf-a" d="M${C[0]} ${C[1]} L${f(tips[2][0])} ${f(tips[2][1])}" stroke-dasharray="4 3" marker-end="url(#d1)"/>
+  <path class="cf-a" d="M${C[0]} ${C[1]} L${f(tips[3][0])} ${f(tips[3][1])}" stroke-dasharray="4 3" marker-end="url(#d1)"/>
+  <path class="cf-l" d="M${C[0]} ${C[1]} L${C[0]} ${f(C[1]+R+22)}" stroke-dasharray="2 4"/>
+  <text class="cf-d" x="${C[0]+6}" y="${f(C[1]+R+34)}">nothing here to leave by</text>
+  <text class="cf-c" x="${C[0]}" y="${f(C[1]-R-44)}" text-anchor="middle">rail arrives</text>
+  <text class="cf-c" x="252" y="46">the two best exits both bend</text>
+  <text class="cf-c" x="252" y="68">36.07&#176;</text>
+  <text class="cf-d" x="252" y="96">adjacent directions sit 71.965&#176; apart,</text>
+  <text class="cf-d" x="252" y="114">so no pair is 180&#176; &#8212; there is no</text>
+  <text class="cf-d" x="252" y="132">&#8220;carry straight on&#8221; on a five</text>`));
+}
+
+// =============================================================================
+// 13 — small-planet: the horizon at eye height, and the lean between builds
+// =============================================================================
+{
+  // left: the horizon at eye height. Angles exaggerated 8x or nothing is visible
+  // at 1.7 m on a 1,700 m planet -- the caption says so.
+  const O = [128, 372], R = 300, EX = 8;
+  const at = (d, r) => [O[0] + r*Math.sin(d*Math.PI/180), O[1] - r*Math.cos(d*Math.PI/180)];
+  const hzDeg = (180/Math.PI) * Math.acos(1700/1701.7) * EX;
+  const top = at(0, R), eye = at(0, R+30), hz = at(hzDeg, R);
+  made.push(svg('small-planet', 430, 232, `
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  <path class="cf-a" d="M${f(top[0])} ${f(top[1])} L${f(eye[0])} ${f(eye[1])}"/>
+  <circle class="cf-af" cx="${f(eye[0])}" cy="${f(eye[1])}" r="4"/>
+  <path class="cf-g" d="M${f(eye[0])} ${f(eye[1])} L${f(hz[0])} ${f(hz[1])}"/>
+  <path class="cf-l" d="M${O[0]} ${O[1]} L${f(hz[0])} ${f(hz[1])}" stroke-dasharray="3 4"/>
+  <circle class="cf-gf" cx="${f(hz[0])}" cy="${f(hz[1])}" r="4.5"/>
+  <text class="cf-c" x="${f(eye[0]-10)}" y="${f(eye[1]-6)}" text-anchor="end">eye, 1.7 m up</text>
+  <text class="cf-gd" x="${f(hz[0]+8)}" y="${f(hz[1]-4)}">horizon</text>
+  <text class="cf-gd" x="${f(hz[0]+8)}" y="${f(hz[1]+12)}">76 m away</text>
+  <text class="cf-d" x="14" y="204">the same eye on Earth sees 4.7 km</text>
+  <text class="cf-d" x="14" y="222">everything a standing player can see is about 21,000 cells</text>
+  <text class="cf-c" x="300" y="30" text-anchor="middle">and the ground leans as you cross it</text>
+  ${(() => {                                   // right: two towers 100 m apart
+    const P = [300, 196], Rr = 620, half = 1.685*EX/2;
+    const foot = d => [P[0] + Rr*Math.sin(d*Math.PI/180), P[1] + Rr - Rr*Math.cos(d*Math.PI/180)];
+    const twr = d => { const b = foot(d);
+      return [b, [b[0] + 62*Math.sin(d*Math.PI/180), b[1] - 62*Math.cos(d*Math.PI/180)]]; };
+    const [b1,t1] = twr(-half), [b2,t2] = twr(half);
+    return `<path class="cf-m" d="M${f(foot(-half*2.4)[0])} ${f(foot(-half*2.4)[1])}`
+      + ` A ${Rr} ${Rr} 0 0 1 ${f(foot(half*2.4)[0])} ${f(foot(half*2.4)[1])}"/>`
+      + `<path class="cf-a" d="M${f(b1[0])} ${f(b1[1])}L${f(t1[0])} ${f(t1[1])}"/>`
+      + `<path class="cf-a" d="M${f(b2[0])} ${f(b2[1])}L${f(t2[0])} ${f(t2[1])}"/>`
+      + `<path class="cf-l" d="M${f(t1[0])} ${f(t1[1])}L${f(b1[0]+(b1[0]-t1[0])*1.1)} ${f(b1[1]+(b1[1]-t1[1])*1.1)}" stroke-dasharray="2 4"/>`
+      + `<path class="cf-l" d="M${f(t2[0])} ${f(t2[1])}L${f(b2[0]+(b2[0]-t2[0])*1.1)} ${f(b2[1]+(b2[1]-t2[1])*1.1)}" stroke-dasharray="2 4"/>`
+      + `<text class="cf-d" x="300" y="188" text-anchor="middle">100 m apart</text>`
+      + `<text class="cf-c" x="300" y="60" text-anchor="middle">3.37&#176; out of parallel</text>`;
+  })()}`));
+}
+
+// =============================================================================
 // 13 — three frames, three jobs
 // =============================================================================
 {
