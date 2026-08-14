@@ -438,6 +438,111 @@ const made = [];
 
 
 // =============================================================================
+// 10 — no-diagonals: a square grid has a corner problem, a hex grid has none
+// =============================================================================
+{
+  const S = 30, ox = 46, oy = 58;
+  let sq = '';
+  for (let r=0;r<3;r++) for (let c=0;c<3;c++)
+    sq += `<rect class="${(r===0&&c===1)||(r===1&&c===0)?'cf-gf':'cf-fill'}" x="${f(ox+c*S)}" y="${f(oy+r*S)}" width="${S-1}" height="${S-1}"/>`;
+  const H = hexPts(316, 104, 30);
+  let ring = '';
+  for (let i=0;i<6;i++){
+    const a = Math.PI/6 + Math.PI*i/3;
+    ring += `<polygon class="cf-fill" points="${pts(hexPts(316 + Math.sqrt(3)*30*Math.cos(a), 104 + Math.sqrt(3)*30*Math.sin(a), 30))}"/>`;
+  }
+  made.push(svg('no-diagonals', 430, 216, `
+  ${sq}
+  <path class="cf-a" d="M${f(ox+S*1.5)} ${f(oy+S*1.5)}L${f(ox+S*0.5)} ${f(oy+S*0.5)}" stroke-width="2.5" marker-end="url(#nd1)"/>
+  <defs><marker id="nd1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-d" x="${f(ox+S*1.5)}" y="34" text-anchor="middle">squares</text>
+  <text class="cf-gd" x="14" y="176">a diagonal step slips between two blocked cells</text>
+  <text class="cf-d" x="14" y="194">and costs 1.414, which every cost function has to special-case</text>
+  ${ring}
+  <polygon class="cf-af" points="${pts(H)}"/>
+  <text class="cf-d" x="316" y="34" text-anchor="middle">hexagons</text>
+  <text class="cf-c" x="416" y="176" text-anchor="end">six neighbours, six shared edges</text>
+  <text class="cf-d" x="416" y="194" text-anchor="end">no diagonal exists, so the bug cannot</text>`));
+}
+
+// =============================================================================
+// 10 — admissible-divisor: dividing by the average overcounts the steps
+// =============================================================================
+{
+  const x0 = 40, y = 84, W = 350;
+  const wide = W/10, nom = W/11;                  // 10 real steps vs 11 nominal
+  let real = '', ticks = '';
+  for (let k=0;k<10;k++)
+    real += `<rect class="cf-af" x="${f(x0+k*wide)}" y="${y-16}" width="${f(wide-2)}" height="32" opacity="0.5"/>`;
+  for (let k=0;k<=11;k++)
+    ticks += `<path class="cf-g" d="M${f(x0+k*nom)} ${y+44}L${f(x0+k*nom)} ${y+68}"/>`;
+  made.push(svg('admissible-divisor', 430, 216, `
+  ${real}
+  <text class="cf-c" x="${f(x0+W+6)}" y="${y+4}">10</text>
+  <text class="cf-d" x="14" y="34">the route really crosses 10 cells, because these are wide ones</text>
+  ${ticks}
+  <path class="cf-l" d="M${x0} ${y+56}L${f(x0+W)} ${y+56}"/>
+  <text class="cf-gd" x="${f(x0+W+6)}" y="${y+60}">11</text>
+  <text class="cf-gd" x="14" y="${y+94}">divide the distance by the AVERAGE cell and you predict 11</text>
+  <text class="cf-d" x="14" y="${y+112}">an estimate that is too high makes A* miss the shortest path &#8212;</text>
+  <text class="cf-c" x="14" y="${y+130}">so divide by the LARGEST cell, 1.098 &#215; nominal, and never by the average</text>`));
+}
+
+// =============================================================================
+// 01 — three-approaches: what S2, H3 and this design put on the sphere
+// =============================================================================
+{
+  const panel = (cx, title, body, note, ncls) =>
+    `<text class="cf-d" x="${cx}" y="28" text-anchor="middle">${title}</text>${body}`
+  + `<text class="${ncls}" x="${cx}" y="192" text-anchor="middle">${note}</text>`;
+  // S2: a quad grid with cells visibly stretched toward one corner
+  let s2 = '';
+  for (let r=0;r<4;r++) for (let c=0;c<4;c++){
+    const w = 13 + c*4, h = 13 + r*4;
+    s2 += `<rect class="cf-fill" x="${f(30 + c*19 - (c*c)*0.6)}" y="${f(52 + r*19 - (r*r)*0.6)}" width="${f(w)}" height="${f(h)}"/>`;
+  }
+  // H3: hexes that cannot nest -- a big one with small ones failing to fill it
+  let h3 = `<polygon class="cf-g" points="${pts(hexPts(215, 104, 44))}" stroke-width="2.5"/>`;
+  for (const [dx,dy] of [[0,0],[26,-15],[26,15],[0,30],[-26,15],[-26,-15],[0,-30]])
+    h3 += `<polygon class="cf-l" points="${pts(hexPts(215+dx, 104+dy, 15))}"/>`;
+  // ours: triangles nesting, dots on the corners
+  let ours = `<polygon class="cf-m" points="${pts([[400,60],[356,140],[444,140]])}"/>`;
+  const T3 = {A:[400,60], B:[356,140], C:[444,140]};
+  ours += `<path class="cf-l" d="${pathOf(latticeEdges(T3, 4))}"/>`;
+  for (let i=0;i<=4;i++) for (let j=0;j<=i;j++){
+    const p = bary(T3,4,i,j);
+    ours += `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="2.6"/>`;
+  }
+  made.push(svg('three-approaches', 470, 212, `
+  ${panel(76, 'S2 &#183; quads on a cube', s2, 'even indexing, uneven cells', 'cf-gd')}
+  ${panel(215, 'H3 &#183; hexes all the way down', h3, 'even cells, no exact nesting', 'cf-gd')}
+  ${panel(400, 'here &#183; both jobs split', ours, 'triangles nest, corners are cells', 'cf-c')}`));
+}
+
+// =============================================================================
+// 11 — three-boundaries: the last structural gap, drawn
+// =============================================================================
+{
+  const cx = 160, cy = 108, R = 62;
+  const H = hexPts(cx, cy, R), H2 = hexPts(cx + Math.sqrt(3)*R, cy, R);
+  const a = H[1], b = H[2], mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+  made.push(svg('three-boundaries', 430, 224, `
+  <polygon class="cf-l" points="${pts(H)}"/>
+  <polygon class="cf-l" points="${pts(H2)}"/>
+  <circle class="cf-af" cx="${cx}" cy="${cy}" r="4"/>
+  <circle class="cf-af" cx="${f(cx+Math.sqrt(3)*R)}" cy="${cy}" r="4"/>
+  <path class="cf-a" d="M${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}" stroke-width="3"/>
+  <path class="cf-g" d="M${f(a[0])} ${f(a[1])} Q${f(mx+10)} ${f(my)} ${f(b[0])} ${f(b[1])}" stroke-width="3"/>
+  <path class="cf-m" d="M${f(a[0]+4)} ${f(a[1]-3)}L${f(b[0]+4)} ${f(b[1]+3)}" stroke-width="3" stroke-dasharray="5 4"/>
+  <text class="cf-c" x="256" y="60">what rounding says &#183; docs 04 and 09</text>
+  <text class="cf-gd" x="256" y="88">equidistant on the sphere &#183; nobody, now</text>
+  <text class="cf-d" x="256" y="116">the dual&#8217;s corners &#183; doc 14 meshing</text>
+  <text class="cf-d" x="14" y="196">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
+  <text class="cf-c" x="14" y="214">a player clicks the mesh and the lookup answers from a different line</text>`));
+}
+
+// =============================================================================
 // 14 — no-sideways-merge: columns merge, neighbours zigzag
 // =============================================================================
 {

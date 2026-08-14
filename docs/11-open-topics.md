@@ -97,6 +97,12 @@ they are not the same curve:
 | Spherical Voronoi | everywhere equidistant between centres | the intuitive reading, nothing formally |
 | Dual polyhedron | corners at subdivided-triangle centroids | [doc 14](14-meshing-and-lod.md) meshing |
 
+![Two neighbouring hexagons with the boundary between them drawn three times: straight, bowed, and dashed slightly to one side, each labelled with the documents that use it](figures/three-boundaries.svg)
+
+*All three run between the same two cell centres and none of them is wrong. They
+simply are not the same line, and the specification has never said which one a
+player is clicking on.*
+
 They agree to within about **0.1 of a cell**, so nothing visibly breaks and no
 number in the specification moves. But a player clicks on the mesh and the lookup
 answers from a different boundary, so the two should be the same curve or the

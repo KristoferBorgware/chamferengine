@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 216" width="430" height="216">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <rect class="cf-fill" x="46.0" y="58.0" width="29" height="29"/><rect class="cf-gf" x="76.0" y="58.0" width="29" height="29"/><rect class="cf-fill" x="106.0" y="58.0" width="29" height="29"/><rect class="cf-gf" x="46.0" y="88.0" width="29" height="29"/><rect class="cf-fill" x="76.0" y="88.0" width="29" height="29"/><rect class="cf-fill" x="106.0" y="88.0" width="29" height="29"/><rect class="cf-fill" x="46.0" y="118.0" width="29" height="29"/><rect class="cf-fill" x="76.0" y="118.0" width="29" height="29"/><rect class="cf-fill" x="106.0" y="118.0" width="29" height="29"/>
+  <path class="cf-a" d="M91.0 103.0L61.0 73.0" stroke-width="2.5" marker-end="url(#nd1)"/>
+  <defs><marker id="nd1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-d" x="91.0" y="34" text-anchor="middle">squares</text>
+  <text class="cf-gd" x="14" y="176">a diagonal step slips between two blocked cells</text>
+  <text class="cf-d" x="14" y="194">and costs 1.414, which every cost function has to special-case</text>
+  <polygon class="cf-fill" points="361.0,100.0 387.0,115.0 387.0,145.0 361.0,160.0 335.0,145.0 335.0,115.0"/><polygon class="cf-fill" points="316.0,126.0 342.0,141.0 342.0,171.0 316.0,186.0 290.0,171.0 290.0,141.0"/><polygon class="cf-fill" points="271.0,100.0 297.0,115.0 297.0,145.0 271.0,160.0 245.0,145.0 245.0,115.0"/><polygon class="cf-fill" points="271.0,48.0 297.0,63.0 297.0,93.0 271.0,108.0 245.0,93.0 245.0,63.0"/><polygon class="cf-fill" points="316.0,22.0 342.0,37.0 342.0,67.0 316.0,82.0 290.0,67.0 290.0,37.0"/><polygon class="cf-fill" points="361.0,48.0 387.0,63.0 387.0,93.0 361.0,108.0 335.0,93.0 335.0,63.0"/>
+  <polygon class="cf-af" points="316.0,74.0 342.0,89.0 342.0,119.0 316.0,134.0 290.0,119.0 290.0,89.0"/>
+  <text class="cf-d" x="316" y="34" text-anchor="middle">hexagons</text>
+  <text class="cf-c" x="416" y="176" text-anchor="end">six neighbours, six shared edges</text>
+  <text class="cf-d" x="416" y="194" text-anchor="end">no diagonal exists, so the bug cannot</text>
+</svg>

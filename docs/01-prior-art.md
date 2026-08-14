@@ -6,6 +6,13 @@ heavily from one and deliberately rejects the other's geometry.
 
 The short version: **we take H3's shape and S2's addressing.**
 
+![Three panels: S2 as a quad grid on a cube face with cells stretching toward the corners, H3 as small hexagons failing to fill a larger hexagon exactly, and this design as a nested triangle lattice with cells marked on its corners](figures/three-approaches.svg)
+
+*Each system is good at one of the two jobs and pays for it in the other. S2's
+addressing is exact and its cells are badly uneven; H3's cells are even and its
+hierarchy only approximate. The way out is to stop asking one shape to do both —
+index the triangles, play on their corners.*
+
 ---
 
 ## Google S2

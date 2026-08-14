@@ -14,6 +14,12 @@ On a square grid you pick your poison:
 - **8-neighbour** gives diagonal moves costing √2 that can illegally squeeze
   between two touching wall corners — through a gap of exactly zero width.
 
+![On the left, a square grid where a diagonal move slips between two blocked cells that touch only at a corner; on the right, a hexagon with its six neighbours, every one sharing a full edge](figures/no-diagonals.svg)
+
+*The two blocked squares touch at a single point, and a diagonal move passes
+straight through that point — a gap of exactly zero width. There is no equivalent
+move on hexagons, because there is no direction that is not a shared edge.*
+
 Hexes have neither problem. **Every adjacency is a shared edge, never a bare
 corner.** An entire class of corner-cutting bugs simply does not exist — not "is
 handled", does not exist.
@@ -53,6 +59,13 @@ than the real step turns it into an undercount, which is safe. Divide by the
 nominal spacing and every step through a tighter-than-average region — near the
 twelve pentagons, where cells run smallest — is overcounted, the heuristic stops
 being admissible, and the search quietly returns paths that are not shortest.
+
+![A route crossing ten wide cells, with a scale of eleven average-sized cells drawn underneath the same distance](figures/admissible-divisor.svg)
+
+*Cells are not all the same size. Cross a stretch of the widest ones and you take
+ten steps — but dividing that distance by an average-sized cell predicts eleven.
+An estimate that is too high is exactly what breaks A*, so the divisor has to be
+the largest cell there is, not the typical one.*
 
 > **[verified]** `verification/uniform.js` measures the largest edge on the real
 > grid against [doc 06](06-world-sizing.md)'s nominal `K·R/2^L`. It settles at

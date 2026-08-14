@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 224" width="430" height="224">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <polygon class="cf-l" points="160.0,46.0 213.7,77.0 213.7,139.0 160.0,170.0 106.3,139.0 106.3,77.0"/>
+  <polygon class="cf-l" points="267.4,46.0 321.1,77.0 321.1,139.0 267.4,170.0 213.7,139.0 213.7,77.0"/>
+  <circle class="cf-af" cx="160" cy="108" r="4"/>
+  <circle class="cf-af" cx="267.4" cy="108" r="4"/>
+  <path class="cf-a" d="M213.7 77.0L213.7 139.0" stroke-width="3"/>
+  <path class="cf-g" d="M213.7 77.0 Q223.7 108.0 213.7 139.0" stroke-width="3"/>
+  <path class="cf-m" d="M217.7 74.0L217.7 142.0" stroke-width="3" stroke-dasharray="5 4"/>
+  <text class="cf-c" x="256" y="60">what rounding says &#183; docs 04 and 09</text>
+  <text class="cf-gd" x="256" y="88">equidistant on the sphere &#183; nobody, now</text>
+  <text class="cf-d" x="256" y="116">the dual&#8217;s corners &#183; doc 14 meshing</text>
+  <text class="cf-d" x="14" y="196">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
+  <text class="cf-c" x="14" y="214">a player clicks the mesh and the lookup answers from a different line</text>
+</svg>
