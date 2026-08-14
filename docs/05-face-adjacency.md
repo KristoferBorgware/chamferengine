@@ -3,9 +3,19 @@
 ## The problem
 
 Each of the 20 icosahedron faces has its own local `(i, j)` grid, with an origin
-corner chosen independently. Walking off one face and onto another means
-re-expressing coordinates in a frame that has no relationship to the one you
-came from.
+corner chosen independently. Nothing coordinates them — the origins come from
+whatever order the icosahedron construction happened to list its vertices in.
+
+So walking off one face and onto another means re-expressing your coordinates in
+a frame that has no relationship to the one you came from.
+
+![Two triangles sharing an edge, each with its own origin and axes, and a single cell sitting on the seam](figures/two-faces-two-frames.svg)
+
+*The two faces meet along a real edge, but their frames do not agree about
+anything. The dot on the seam is **one physical cell** — and it has a different
+`(i, j)` in each face. Closing that gap is the entire job of this document.*
+
+---
 
 ## The table
 
@@ -22,7 +32,8 @@ struct EdgeLink {
 EdgeLink table[20][3];
 ```
 
-**180 bytes** at one byte per field.
+**180 bytes** at one byte per field. That is the entire cost of the sphere's
+irregularity, and it never grows.
 
 ## Construction
 
@@ -64,16 +75,23 @@ It differs for every face and edge. There is no closed-form rule, because the
 face vertex ordering is arbitrary — it comes from whatever icosahedron
 construction you used. Compute once, store, done.
 
-## Why this matters
+---
 
-**This single table is where all the sphere-ness of the world lives.** Everywhere
-else — movement, building, pathfinding, terrain — code just walks a flat hex
-grid. Only `neighbour(id, direction)` ever consults it, and only when a step
-leaves a face.
+## Why this matters more than its size suggests
+
+**This single table is where all the sphere-ness of the world lives.**
+
+Everywhere else — movement, building, pathfinding, terrain — code just walks a
+flat hex grid. Only `neighbour(id, direction)` ever consults it, and only when a
+step leaves a face.
 
 Together with the twelve pentagon IDs, it is the complete set of constant data
 the sphere requires. A few hundred bytes, fixed at build time, never growing no
 matter how deep the subdivision goes.
+
+That is worth sitting with, because it is the payoff for everything in
+[doc 02](02-geometry-choice.md) and [doc 03](03-addressing.md): a planet's worth
+of curvature, reduced to 180 bytes and one function.
 
 **Demo:** [`demos/adjacency-table-2d.html`](../demos/adjacency-table-2d.html) —
 one face laid flat with its three neighbours folded out, the paper-model view.

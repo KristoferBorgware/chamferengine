@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 252" width="400" height="252">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs>
+    <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  <polygon class="cf-fill" points="92.0,26.0 34.0,124.0 150.0,124.0"/>
+  <polygon class="cf-fill" points="34.0,124.0 150.0,124.0 92.0,222.0"/>
+  <path class="cf-m" d="M34.0 124.0L150.0 124.0" stroke-width="2.5"/>
+  <path class="cf-a" d="M92.0 26.0L67.6 67.2" marker-end="url(#m1)"/><path class="cf-a" d="M92.0 26.0L116.4 67.2" marker-end="url(#m1)"/><circle cx="92.0" cy="26.0" r="4.5" fill="none" stroke="#2f6fd0" stroke-width="2"/>
+  <path class="cf-g" d="M92.0 222.0L116.4 180.8" marker-end="url(#m2)"/><path class="cf-g" d="M92.0 222.0L67.6 180.8" marker-end="url(#m2)"/><circle cx="92.0" cy="222.0" r="4.5" fill="none" stroke="#b0800f" stroke-width="2"/>
+  <circle cx="105.9" cy="124.0" r="5" fill="#b0800f" stroke="#fff" stroke-width="1"/>
+  <text class="cf-c" x="176" y="60">face 7</text>
+  <text class="cf-c" x="176" y="76">origin at its apex</text>
+  <text class="cf-gd" x="176" y="196">face 12</text>
+  <text class="cf-gd" x="176" y="212">origin somewhere else</text>
+  <text class="cf-d" x="176" y="124">one cell, two addresses</text>
+  <text class="cf-d" x="176" y="142">-- the table closes that gap</text>
+</svg>

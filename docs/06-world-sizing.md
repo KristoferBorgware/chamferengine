@@ -1,13 +1,15 @@
 # 06 — World sizing
 
-## The problem
+## What has to be decided
 
-Decide block size, planet radius, and subdivision level. They are not
-independent.
+Block size, planet radius, and subdivision level. They are not independent — fix
+any two and the third follows. This document is about which one to fix first, and
+why the usual instinct is backwards.
 
-## Terminology warning
+## A warning before the numbers
 
-**"Depth" means two unrelated things.** Always qualify:
+**"Depth" means two unrelated things**, and confusing them will cost you an
+afternoon. Always qualify:
 
 - **Subdivision depth** (`D`) — purely *horizontal*. How many times triangles are
   split, which sets how fine the hex grid is across the surface. Nothing to do
@@ -21,11 +23,20 @@ blockSize  ≈  K · radius / 2^level        where K = sqrt(8π / (10√3)) = 1.
 cells      =  10 · 4^level + 2
 ```
 
-Derivation: cell area `A = 4πR² / N`; for a hexagon with centre-to-centre spacing
-`d`, area is `(√3/2)d²`, so `d = sqrt(2A/√3)`.
+Where `K` comes from: the sphere has area `4πR²` shared between `N` cells, so
+each cell covers `A = 4πR² / N`. A hexagon with centre-to-centre spacing `d` has
+area `(√3/2)d²`. Set those equal and solve for the spacing:
+
+```
+d = sqrt(2A/√3)
+```
+
+which rearranges into the constant above.
 
 > **[verified]** `verification/calc.js` checks the closed form against exact
 > cell-area maths at three radii: agreement to three decimals.
+
+---
 
 ## Which knob is rigid
 
@@ -37,8 +48,9 @@ building, recipe, and terrain generator breaks. Decide it first and freeze it.
 level shifts things by up to ~40%. **Let the radius absorb that, never the block
 size.** Snap the radius to whatever the rounded level gives.
 
-**Do not pick radius directly — pick travel time.** That is the number players
-experience; radius is just its unit conversion.
+And the instinct that is usually backwards: **do not pick radius directly — pick
+travel time.** That is the number players experience; radius is just its unit
+conversion.
 
 ## Worked example
 
@@ -52,6 +64,9 @@ experience; radius is just its unit conversion.
 ```
 
 > **[verified]** `verification/calc.js` reproduces this example exactly.
+
+This is the planet the rest of the specification uses whenever it needs a
+concrete number.
 
 ## Scale reference
 
@@ -93,8 +108,9 @@ At the worked example above with a 64-block crust: 42M surface cells becomes
 
 ### Taper
 
-Layers shrink toward the core. At depth `h` on a planet of radius `R`, cell
-spacing scales by `(R − h) / R`.
+Layers shrink toward the core, because a smaller radius leaves less room for the
+same number of cells. At depth `h` on a planet of radius `R`, cell spacing scales
+by `(R − h) / R`.
 
 - 64 blocks into a 1,700 m planet → cells at the crust floor are **96%** of
   surface width. Imperceptible.
@@ -122,7 +138,7 @@ The calculator reports the taper live.
 
 ## Bit and storage ceilings
 
-Three separate ceilings on how deep you can go:
+Three separate ceilings on how deep you can go, and only one of them binds:
 
 - **Bits** — 5 for the face plus 2 per level means **29 levels** in a 64-bit ID.
   Not the binding constraint.
@@ -132,3 +148,19 @@ Three separate ceilings on how deep you can go:
   function of its position, so nothing exists until a player visits. Only
   modified cells are written. Under that model the level you pick costs nothing
   up front — it is a coordinate system, not an allocation.
+
+That last point is the one that matters, and [doc 08](08-terrain-generation.md)
+is where it is cashed in.
+
+---
+
+## In one breath
+
+- Fix **block size** first and never move it; let the **radius** absorb the
+  rounding, which can be up to 40%.
+- Pick **travel time**, not radius — that is the number players actually feel.
+- One level up **doubles the radius and quadruples the cells**.
+- The worked planet is **1 m blocks, level 11, radius 1,700 m, 41,943,042
+  cells** — used throughout the rest of the specification.
+- Depth tapers cells by `(R − h)/R`; below **85%** it becomes visible.
+- Storage is the real ceiling, and generating on demand removes even that.

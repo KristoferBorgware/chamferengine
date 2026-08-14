@@ -306,5 +306,65 @@ const made = [];
   <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit inside a mirrored frame</text>`));
 }
 
+
+// =============================================================================
+// 04 — barycentric coordinates are three area fractions
+// =============================================================================
+{
+  const T = tri(112, 106, 158);
+  const P = [104, 118];
+  const A=T.A, B=T.B, C=T.C;
+  const shade = (p1,p2,cls) => `<polygon class="${cls}" points="${pts([P,p1,p2])}"/>`;
+  made.push(svg('barycentric-areas', 400, 200, `
+  ${shade(B,C,'cf-af')}
+  <polygon class="cf-gf" points="${pts([P,C,A])}"/>
+  <polygon class="cf-fill" points="${pts([P,A,B])}" opacity="0.85"/>
+  <polygon class="cf-m" fill="none" points="${pts([A,B,C])}"/>
+  <path class="cf-l" d="${pathOf([[P,A],[P,B],[P,C]])}"/>
+  <circle cx="${f(P[0])}" cy="${f(P[1])}" r="4" fill="#48505f"/>
+  <text class="cf-d" x="${f(A[0])}" y="${f(A[1]-8)}" text-anchor="middle">A</text>
+  <text class="cf-d" x="${f(B[0]-10)}" y="${f(B[1]+6)}" text-anchor="middle">B</text>
+  <text class="cf-d" x="${f(C[0]+10)}" y="${f(C[1]+6)}" text-anchor="middle">C</text>
+  <text class="cf-c" x="232" y="56">a  = area of PBC / total</text>
+  <text class="cf-gd" x="232" y="80">b  = area of PCA / total</text>
+  <text class="cf-d" x="232" y="104">c  = area of PAB / total</text>
+  <text x="232" y="136">a + b + c = 1, always</text>
+  <text class="cf-d" x="232" y="158">each weight is the area of the</text>
+  <text class="cf-d" x="232" y="174">sub-triangle OPPOSITE its corner</text>`));
+}
+
+// =============================================================================
+// 05 — two faces, two frames, one cell on the seam
+// =============================================================================
+{
+  const A=[92,26], B=[34,124], C=[150,124];        // face 1, apex up
+  const A2=[92,222];                                // face 2, mirrored across BC
+  const lerp=(u,v,t)=>[u[0]+(v[0]-u[0])*t, u[1]+(v[1]-u[1])*t];
+  const seam = lerp(B,C,0.62);                      // one physical cell on the shared edge
+  const ax = (o,i,j,cls,mk) =>
+    `<path class="${cls}" d="M${f(o[0])} ${f(o[1])}L${f(lerp(o,i,0.42)[0])} ${f(lerp(o,i,0.42)[1])}" marker-end="url(#${mk})"/>`
+  + `<path class="${cls}" d="M${f(o[0])} ${f(o[1])}L${f(lerp(o,j,0.42)[0])} ${f(lerp(o,j,0.42)[1])}" marker-end="url(#${mk})"/>`
+  + `<circle cx="${f(o[0])}" cy="${f(o[1])}" r="4.5" fill="none" stroke="${cls==='cf-a'?'#2f6fd0':'#b0800f'}" stroke-width="2"/>`;
+  made.push(svg('two-faces-two-frames', 400, 252, `
+  <defs>
+    <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+    <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker>
+  </defs>
+  <polygon class="cf-fill" points="${pts([A,B,C])}"/>
+  <polygon class="cf-fill" points="${pts([B,C,A2])}"/>
+  <path class="cf-m" d="M${f(B[0])} ${f(B[1])}L${f(C[0])} ${f(C[1])}" stroke-width="2.5"/>
+  ${ax(A,B,C,'cf-a','m1')}
+  ${ax(A2,C,B,'cf-g','m2')}
+  <circle cx="${f(seam[0])}" cy="${f(seam[1])}" r="5" fill="#b0800f" stroke="#fff" stroke-width="1"/>
+  <text class="cf-c" x="176" y="60">face 7</text>
+  <text class="cf-c" x="176" y="76">origin at its apex</text>
+  <text class="cf-gd" x="176" y="196">face 12</text>
+  <text class="cf-gd" x="176" y="212">origin somewhere else</text>
+  <text class="cf-d" x="176" y="124">one cell, two addresses</text>
+  <text class="cf-d" x="176" y="142">-- the table closes that gap</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

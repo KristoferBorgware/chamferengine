@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <polygon class="cf-af" points="104.0,118.0 33.0,151.6 191.0,151.6"/>
+  <polygon class="cf-gf" points="104.0,118.0 191.0,151.6 112.0,14.8"/>
+  <polygon class="cf-fill" points="104.0,118.0 112.0,14.8 33.0,151.6" opacity="0.85"/>
+  <polygon class="cf-m" fill="none" points="112.0,14.8 33.0,151.6 191.0,151.6"/>
+  <path class="cf-l" d="M104.0 118.0L112.0 14.8M104.0 118.0L33.0 151.6M104.0 118.0L191.0 151.6"/>
+  <circle cx="104.0" cy="118.0" r="4" fill="#48505f"/>
+  <text class="cf-d" x="112.0" y="6.8" text-anchor="middle">A</text>
+  <text class="cf-d" x="23.0" y="157.6" text-anchor="middle">B</text>
+  <text class="cf-d" x="201.0" y="157.6" text-anchor="middle">C</text>
+  <text class="cf-c" x="232" y="56">a  = area of PBC / total</text>
+  <text class="cf-gd" x="232" y="80">b  = area of PCA / total</text>
+  <text class="cf-d" x="232" y="104">c  = area of PAB / total</text>
+  <text x="232" y="136">a + b + c = 1, always</text>
+  <text class="cf-d" x="232" y="158">each weight is the area of the</text>
+  <text class="cf-d" x="232" y="174">sub-triangle OPPOSITE its corner</text>
+</svg>

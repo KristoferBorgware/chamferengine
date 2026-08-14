@@ -37,12 +37,13 @@ const old = f => {
 // targets carry the cross-references. Bold runs carry the defined terms.
 function facts(md){
   const strip = md.replace(/```[\s\S]*?```/g, m => m);   // keep code blocks: they hold formulae
-  const out = { num: new Set(), code: new Set(), link: new Set(), term: new Set() };
+  const out = { num: new Set(), code: new Set(), link: new Set(), term: new Set(), raw: new Set() };
 
   // numbers, with their unit or symbol so "12" and "12 pentagons" stay distinct
   for (const m of strip.matchAll(/(\d[\d,]*\.?\d*)\s*(°|%|×|x\b|m\b|km\b|bits?\b|bytes?\b|GB\b|MB\b|KB\b)?/g)){
     const n = m[1].replace(/,/g, '');
     if (n.length && !/^0+$/.test(n)) out.num.add(n + (m[2] ? ' ' + m[2].trim() : ''));
+    out.raw.add(m[1]);                       // the number exactly as written
   }
   for (const m of strip.matchAll(/`([^`\n]+)`/g)) out.code.add(m[1].trim());
   for (const m of strip.matchAll(/\]\(([^)\s]+)\)/g)) out.link.add(m[1].split('#')[0]);
@@ -62,7 +63,10 @@ const figures = fs.existsSync(path.join(ROOT, 'docs/figures'))
       .map(f => fs.readFileSync(path.join(ROOT, 'docs/figures', f), 'utf8')).join('\n')
   : '';
 const haystack = corpus + '\n' + figures;
-const haystackLower = haystack.toLowerCase();
+// Markdown wraps lines, so a phrase can be split across two of them. Compare
+// against a whitespace-flattened copy or every wrapped term reads as lost.
+const flat = haystack.replace(/\s+/g, ' ');
+const flatLower = flat.toLowerCase();
 
 let totalMissing = 0, totalChecked = 0;
 const report = [];
@@ -75,18 +79,20 @@ for (const f of FILES){
 
   const a = facts(before);
   const miss = { num: [], code: [], link: [], term: [] };
-  for (const kind of Object.keys(a)){
+  for (const kind of ['num','code','link','term']){
     for (const item of a[kind]){
       totalChecked++;
-      const needle = kind === 'num' ? item.split(' ')[0] : item;
+      const needle = (kind === 'num' ? item.split(' ')[0] : item).replace(/\s+/g, ' ');
       // terms are collected lowercased, so they must be looked up that way
-      const hay = kind === 'term' ? haystackLower : haystack;
-      // numbers may be reformatted with separators; try both
-      const alt = kind === 'num' && needle.length > 3
-        ? needle.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : null;
-      if (!hay.includes(needle) && !(alt && hay.includes(alt))){
-        miss[kind].push(item); totalMissing++;
+      const hay = kind === 'term' ? flatLower : flat;
+      // a number may be reformatted with separators, or written as a list like
+      // [0,1,2] whose commas this strips -- accept any of those spellings
+      const forms = [needle];
+      if (kind === 'num'){
+        if (needle.length > 3) forms.push(needle.replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+        for (const r of a.raw) if (r.replace(/,/g, '') === needle) forms.push(r);
       }
+      if (!forms.some(x => hay.includes(x))){ miss[kind].push(item); totalMissing++; }
     }
   }
   const n = Object.values(miss).reduce((s, x) => s + x.length, 0);

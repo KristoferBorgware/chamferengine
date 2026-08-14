@@ -4,6 +4,8 @@ Two production systems already solve most of this problem, for different
 purposes. Both are worth understanding in detail, because this design borrows
 heavily from one and deliberately rejects the other's geometry.
 
+The short version: **we take H3's shape and S2's addressing.**
+
 ---
 
 ## Google S2
@@ -52,16 +54,19 @@ buys three things almost for free:
   "what is near the player" all reduce to integer comparisons.
 
 This idea is entirely separable from the tiling, and it is the core of what this
-project adopts.
+project adopts. [Doc 03](03-addressing.md) is that idea applied to triangles.
 
 ### Why the geometry is rejected
 
 S2 reduces cube distortion; it does not remove the eight corners. Cells are
 spherical quadrilaterals bounded by geodesics, and at each corner three of them
-meet where four should. S2 is built for indexing and querying regions, not for
-walking a grid — neighbour traversal across face boundaries is special-cased
-rather than uniform. For a world where players move and build cell to cell, that
-asymmetry surfaces constantly.
+meet where four should — the 90° of defect from [doc 00](00-introduction.md),
+sitting in plain sight.
+
+S2 is built for indexing and querying regions, not for walking a grid —
+neighbour traversal across face boundaries is special-cased rather than uniform.
+For a world where players move and build cell to cell, that asymmetry surfaces
+constantly.
 
 **Demo:** [`demos/s2-vs-h3.html`](../demos/s2-vs-h3.html) — switch between the
 three projections and watch the measured area ratio change; the red cells are
@@ -87,11 +92,12 @@ projections** centred on each face, then projected to the sphere.
 
 ### The catch
 
-Hexagons cannot be perfectly subdivided into seven hexagons. Finer cells are
-therefore only **approximately contained** within a parent cell — children rotate
-slightly at each level and spill across parent borders. Identifiers can still be
-truncated to find the ancestor at a coarser resolution, which is what matters for
-most geospatial work.
+Hexagons cannot be perfectly subdivided into seven hexagons — the same fact from
+[doc 03](03-addressing.md), that hexagons never nest into hexagons. Finer cells
+are therefore only **approximately contained** within a parent cell: children
+rotate slightly at each level and spill across parent borders. Identifiers can
+still be truncated to find the ancestor at a coarser resolution, which is what
+matters for most geospatial work.
 
 For a game world it matters more. Level-of-detail and hierarchical pathfinding
 both want a chunk to contain exactly its children. Approximate containment means
@@ -102,7 +108,8 @@ edge cases at every chunk boundary, at every level.
 The grid is oriented so that the twelve pentagons fall over water, and the
 library exposes a function to detect them so that code can take evasive action.
 On a fictional planet the placement is a design decision rather than a
-constraint — see [doc 11](11-open-topics.md).
+constraint — see [doc 11](11-open-topics.md), and
+[doc 13](13-gravity-and-orientation.md) for what the pentagons actually cost.
 
 ---
 
@@ -132,6 +139,10 @@ level but **levels do not nest into each other at all**, whereas H3's levels nes
 approximately. By moving the hierarchy onto the underlying triangles, this design
 gets exact nesting on the structure that needs it, and keeps the hexagons purely
 as the playfield.
+
+That trade has a cost, and it is paid in [doc 14](14-meshing-and-lod.md): because
+the levels genuinely do not nest, level-of-detail cannot drop cells and must
+re-evaluate the terrain function instead.
 
 ---
 
