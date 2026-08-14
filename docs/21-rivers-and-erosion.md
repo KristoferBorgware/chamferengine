@@ -270,7 +270,10 @@ need to know it is drawing a river.
   many gives noise with extra steps.
 - **What the stream-power exponents should be.** `m` and `n` are the shape of
   every valley on the planet and are usually tuned by eye. Nothing here measures
-  what they should be.
+  what they should be — but [doc 23](23-determinism.md) narrows the choice: take
+  them from `{0.5, 1, 1.5, 2}`, which are products of `sqrt` and multiplication
+  and therefore bit-identical on every machine, rather than an arbitrary real
+  exponent that needs `pow`.
 - **Whether lakes should survive.** The fill turns 4.8% of land into lakes, which
   is a lot of lakes. Some of them are real features and some are artefacts of the
   noise; nothing distinguishes them yet.

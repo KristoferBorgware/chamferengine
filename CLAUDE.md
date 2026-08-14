@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 22 carry the hardest material in the specification and are the ones
+13 through 23 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 22.
+- `docs/` — prose specification, ordered 00 through 23.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -175,6 +175,7 @@ script owns its numbers.
 | [20](docs/20-player-coordinates.md) | lat/long/altitude, the axis through a pentagon pair, what to share | `coords.js` |
 | [21](docs/21-rivers-and-erosion.md) | the one stored map, flow routing, pit filling, why continents come first | `rivers.js` |
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
+| [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -440,13 +441,28 @@ Violating any of these breaks the design. They are not tunable.
   routing gives a 31-cell river on small blobs and 86 on a large landmass, so
   build the continent tier first. The coarse lookup is masking the low bits of
   **`(i, j)`**, not the path digits — those give a triangle, not a cell.
+- **The runtime is bit-identical across machines by construction**
+  (`determinism.js`, doc 23). IEEE 754 pins `+ − × ÷ sqrt` and comparisons to the
+  bit — **including `sqrt`, so `normalize` is safe** and doc 15's stated worry is
+  withdrawn. Position → cell, ID → position, gravity, the ray walk and
+  integer-hashed noise are all in that set; transcendentals appear only in display
+  code. A last-bit disagreement is `3.8e-13` of a cell against `1.21e-6` for the
+  closest of 400,000 sampled positions, even after the pipeline's 286× growth.
+  **Flow routing is not the hair trigger it looks like** — one ULP reroutes 0 of
+  40,962 cells and nothing moves until `1e-3`. So the rule is about **function
+  calls, not tolerances**: never call a transcendental where the result is stored
+  or shared, hash noise with integers not `sin`, and take erosion exponents from
+  `{0.5, 1, 1.5, 2}` (products of `sqrt` and multiply). Then doc 22's client
+  regenerates the coarse map instead of downloading it. Also: disable
+  floating-point contraction in the build, and fix reduction order.
 - **A patch is not an ID range** (`interest.js`, doc 22). A contiguous range IS
   one compact patch (doc 03), but the converse fails: a player's disc breaks into
   **10.9** runs at a 76 m horizon and **155.6** at a kilometre, and the child
   order buys 13% at most because `order.js` already proved the four children
   cannot be walked edge-to-edge. Runs scale with the region's **rim**, chunks with
-  its **area**. So interest is **one dot product per player** (286M/s), and the ID
-  ordering earns its keep on **disk** — 5 runs fetch 62% of a region.
+  its **area**. So interest is **one dot product per player** (over 100M/s; the exact
+  rate is a wall-clock timing and moves run to run), and the ID ordering earns its
+  keep on **disk** — 5 runs fetch 62% of a region.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -478,10 +494,9 @@ Violating any of these breaks the design. They are not tunable.
 work lives in each document's own **Still open** section, and is narrower than
 anything doc 11 ever listed. The ones that reach furthest:
 
-- **Determinism across clients** (doc 15) — `float64` is not bit-identical across
-  platforms for transcendentals and `normalize` uses a square root. Doc 22 now
-  leans on it: a client can only regenerate the coarse map instead of downloading
-  it if the noise matches bit for bit
+- **Nothing verifies determinism on two real platforms** (doc 23) — the argument
+  is from the standard and from one machine's arithmetic. A real check runs the
+  generator on genuinely different hardware and compares hashes
 - **Player edits versus global processes** (doc 21) — the coarse map is read-only,
   so a dammed river has nowhere to live
 - **Terrain height at a mesh corner** (doc 18) — three cells meet there and may

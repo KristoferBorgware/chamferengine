@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 224" width="440" height="224">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-c" x="16" y="26">every machine returns the same bits</text>
+  
+    <rect class="cf-af" x="16" y="38" width="150" height="26" rx="4"/>
+    <text class="cf-c" x="91" y="55" text-anchor="middle">+  &#8722;  &#215;  &#247;</text>
+    <text class="cf-d" x="178" y="55">IEEE 754 says exactly what these return</text>
+  
+    <rect class="cf-af" x="16" y="72" width="150" height="26" rx="4"/>
+    <text class="cf-c" x="91" y="89" text-anchor="middle">sqrt</text>
+    <text class="cf-d" x="178" y="89">including this one, which surprises people</text>
+  
+    <rect class="cf-af" x="16" y="106" width="150" height="26" rx="4"/>
+    <text class="cf-c" x="91" y="123" text-anchor="middle">&lt;  =  round</text>
+    <text class="cf-d" x="178" y="123">and comparisons have nothing to round</text>
+  <text class="cf-gd" x="16" y="164">the platform&#8217;s maths library decides</text>
+  
+    <rect class="cf-gf" x="16" y="176" width="150" height="26" rx="4"/>
+    <text class="cf-c" x="91" y="193" text-anchor="middle">sin  cos  atan2  acos  pow  exp</text>
+    <text class="cf-d" x="178" y="193">no standard pins these down</text>
+</svg>

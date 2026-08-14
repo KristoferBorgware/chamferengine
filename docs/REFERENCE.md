@@ -24,6 +24,7 @@ numbered documents.
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
+| [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
@@ -228,6 +229,104 @@ verdict
    which is 27 bits and six base-36 characters.
 ```
 
+## `determinism.js`
+
+Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses.
+
+Cited by [doc 23](23-determinism.md).
+
+```
+1. which operations each path uses
+   IEEE 754 requires + - * / and sqrt to be CORRECTLY ROUNDED, so every
+   conforming machine returns the same bits. It says nothing about sin, cos,
+   atan2, acos, exp or pow -- those come from the platform maths library and
+   differ between them, usually in the last bit or two.
+
+   exact    position -> cell (doc 04)    + - * / compare round    the whole hot path
+   exact    ID -> position (doc 15)      + - * / sqrt             one blend, one normalise
+   exact    up = normalize(pos)          + - * / sqrt             gravity and all three frames
+   exact    value / gradient noise       + - * / integer hash     if written without trig
+   exact    ray walk (doc 09)            + - * / compare          a quadratic and comparisons
+   PLATFORM  lat / long readout (doc 20)  asin atan2               display only
+   PLATFORM  distances, horizon (doc 13)  acos                     display and UI
+   PLATFORM  stream power (doc 21)        pow with a real exponent erosion, offline
+
+   So the entire runtime pipeline -- find the cell, place the block, draw it,
+   walk the ray -- is built from operations the standard pins down. The
+   platform-dependent ones are display, or offline, or both.
+
+2. how near a random position lands to a cell boundary
+   400,000 random positions, margin in cell spacings
+   within        share            implies
+      1e-3     1.72e-2      1 in 5.8e+1
+      1e-4     3.04e-3      1 in 3.3e+2
+      1e-5     3.80e-4      1 in 2.6e+3
+      1e-6     0.00e+0      1 in 4.0e+5
+      1e-7     0.00e+0      1 in 4.0e+5
+   closest approach seen: 1.21e-6 spacings
+   The share falls exactly in step with the threshold, which is what a
+   uniform distribution across the cell does -- so it extrapolates.
+
+   one ULP of a unit direction: 2.22e-16 radians
+   one cell spacing at D=11:    5.88e-4 radians
+   so a last-bit disagreement is 3.8e-13 of a cell,
+   and by the table above it changes the answer about once in 2.6e+12 positions.
+
+3. does a last-bit difference amplify through the pipeline?
+   worst amplification, measured in cell spacings both sides: 286.20x
+   worst absolute displacement: 5.76e-13 of a cell
+   against the 1.21e-6 closest approach seen in section 2
+   It DOES amplify -- a few hundred times -- and it does not matter. A few
+   hundred last bits is still under a millionth of the closest any sampled
+   position came to a boundary, so nothing reaches the edge of a cell.
+
+4. where a last-bit difference does NOT stay small
+   one independent ULP per cell changed the downhill neighbour of
+   0 of 40,962 cells (0.0000%)
+   Zero -- so routing is NOT the hair trigger it looks like. Two neighbours
+   on a continuous height field are essentially never within a last bit of
+   each other, so the comparison has an enormous margin. How enormous:
+
+   perturbation      cells that reroute
+         2e-16           0  (0.000%)
+         1e-12           0  (0.000%)
+          1e-9           0  (0.000%)
+          1e-6           0  (0.000%)
+          1e-3         971  (2.370%)
+   Nothing moves until 1e-3, which is about thirteen orders of magnitude
+   above a last-bit disagreement. The danger was never the size of the
+   difference -- it is only whether a difference is introduced at all.
+
+5. the exponents erosion needs, and whether they cost determinism
+   exponent    written as        deterministic?  why
+   m = 0.5     sqrt(x)           yes             IEEE 754 pins sqrt exactly
+   m = 1       x                 yes             nothing to compute
+   m = 2       x * x             yes             one multiply
+   m = 1.5     x * sqrt(x)       yes             a multiply and a sqrt
+   m = 0.45    pow(x, 0.45)      NO              the platform maths library decides
+   Half-integer exponents are products of sqrt and multiply, both exact.
+   An arbitrary real exponent needs pow, and pow is where platforms differ.
+   So this is a choice, not a constraint: pick m and n from the exact set
+   and the erosion pass is bit-identical everywhere too.
+
+verdict
+   The runtime is safe by construction. Position -> cell, ID -> position, up,
+   the ray walk and integer-hashed noise use only + - * / sqrt and compares,
+   all of which IEEE 754 pins to the bit. Transcendentals appear only where a
+   difference cannot matter: the coordinate readout and distances on screen.
+
+   And the fear about flow routing was misplaced. A last-bit difference
+   reroutes NOTHING -- routing only starts to move seven orders of magnitude
+   higher. The risk was never that differences are amplified; it is only
+   whether a difference is introduced at all.
+
+   Which makes it a rule about function calls, not about tolerances: never
+   call a transcendental anywhere its result feeds a stored or shared value.
+   Choose erosion exponents from {0.5, 1, 1.5, 2}, write noise with an integer
+   hash, and the coarse map can be regenerated client-side after all -- so
+   doc 22 may have its 2.5 MB back.
+```
+
 ## `frame.js`
 
 Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices.
@@ -366,8 +465,8 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
    order you pick. Fragmentation is a property of the tree, not the walk.
 
 3. the cost of not being clever: one dot product per player per update
-   20,000 updates x 200 players = 4.0M tests in 12 ms
-   333.3M tests per second, single threaded
+   20,000 updates x 200 players = 4.0M tests, single threaded
+   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -936,7 +1035,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass took 797 ms for 163,842 cells
+   whole pass took 827 ms for 163,842 cells
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1361,4 +1460,4 @@ verdict
 
 ---
 
-_24 scripts. Every number above is reproduced by running them._
+_25 scripts. Every number above is reproduced by running them._

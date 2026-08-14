@@ -336,8 +336,8 @@ triangle cannot be walked edge-to-edge.
 
 The conclusion survives anyway, because the question was pointed the wrong way.
 Ask "which players is this update near" instead of "which IDs does this player
-cover" and it is **one dot product per player** — 286 million a second on one
-thread, with no index and nothing to keep in sync.
+cover" and it is **one dot product per player** — comfortably over 100 million a
+second on one thread, with no index and nothing to keep in sync.
 
 The addressing scheme does earn its keep, on **disk** rather than on the wire:
 five runs fetch **62%** of a player's region sequentially. Which is what doc 03
@@ -355,12 +355,11 @@ its own **Still open** section, and those are where the remaining work lives —
 they are narrower and more concrete than anything that was ever listed here. The
 ones that reach furthest:
 
-- **Determinism across clients** ([doc 15](15-precision-and-origin.md)). `float64`
-  is not bit-identical across platforms for transcendental functions, and
-  `normalize` uses a square root. Whether multiplayer needs bit-exact agreement or
-  only agreement to within a block is unanswered, and
-  [doc 22](22-multiplayer-interest.md) now leans on it too — a client can only
-  regenerate the coarse map instead of downloading it if the noise matches.
+- **Verifying determinism on real hardware** ([doc 23](23-determinism.md)). That
+  document closes the question by auditing which operations each path uses, and
+  the answer is good — the runtime is built from arithmetic IEEE 754 pins to the
+  bit. But the argument runs from the standard and from one machine. Nobody has
+  run the generator on two genuinely different platforms and compared hashes.
 - **What happens where a player's edits meet a global process**
   ([doc 21](21-rivers-and-erosion.md)). The coarse map is read-only, so a dammed
   river has nowhere to live.

@@ -439,6 +439,68 @@ const made = [];
 
 
 // =============================================================================
+// 23 — two-kinds-of-arithmetic: what the standard pins down and what it does not
+// =============================================================================
+{
+  const row = (y, label, ops, exact) => `
+    <rect class="${exact?'cf-af':'cf-gf'}" x="16" y="${y}" width="150" height="26" rx="4"/>
+    <text class="cf-c" x="91" y="${y+17}" text-anchor="middle">${ops}</text>
+    <text class="cf-d" x="178" y="${y+17}">${label}</text>`;
+  made.push(svg('two-kinds-of-arithmetic', 440, 224, `
+  <text class="cf-c" x="16" y="26">every machine returns the same bits</text>
+  ${row(38,  'IEEE 754 says exactly what these return', '+  &#8722;  &#215;  &#247;', true)}
+  ${row(72,  'including this one, which surprises people', 'sqrt', true)}
+  ${row(106, 'and comparisons have nothing to round', '&lt;  =  round', true)}
+  <text class="cf-gd" x="16" y="164">the platform&#8217;s maths library decides</text>
+  ${row(176, 'no standard pins these down', 'sin  cos  atan2  acos  pow  exp', false)}`));
+}
+
+// =============================================================================
+// 23 — margin-vs-lastbit: how near a position gets to an edge, and how far a
+// last-bit disagreement actually moves it
+// =============================================================================
+{
+  const x0 = 40, y0 = 150, W = 360;
+  // a log scale from 1e-16 to 1e0, in cell spacings
+  const X = e => x0 + W*(e + 16)/16;
+  const tick = (e, txt, cls) => `<path class="cf-l" d="M${f(X(e))} ${y0-6}L${f(X(e))} ${y0+6}"/>`
+    + `<text class="${cls}" x="${f(X(e))}" y="${y0+22}" text-anchor="middle">${txt}</text>`;
+  made.push(svg('margin-vs-lastbit', 440, 214, `
+  <path class="cf-m" d="M${x0} ${y0}L${f(x0+W)} ${y0}"/>
+  ${tick(-16,'1e-16','cf-d')}${tick(-12,'1e-12','cf-d')}${tick(-8,'1e-8','cf-d')}
+  ${tick(-4,'1e-4','cf-d')}${tick(0,'1 cell','cf-d')}
+  <path class="cf-a" d="M${f(X(-12.4))} ${y0-14}L${f(X(-12.4))} ${y0-58}"/>
+  <circle class="cf-af" cx="${f(X(-12.4))}" cy="${f(y0-58)}" r="5"/>
+  <text class="cf-c" x="${f(X(-12.4))}" y="${y0-68}" text-anchor="middle">a last-bit disagreement</text>
+  <text class="cf-d" x="${f(X(-12.4))}" y="${y0-52}" text-anchor="middle"> </text>
+  <path class="cf-g" d="M${f(X(-5.9))} ${y0-14}L${f(X(-5.9))} ${y0-92}"/>
+  <circle class="cf-gf" cx="${f(X(-5.9))}" cy="${f(y0-92)}" r="5"/>
+  <text class="cf-gd" x="${f(X(-5.9))}" y="${y0-102}" text-anchor="middle">closest any of 400,000</text>
+  <text class="cf-gd" x="${f(X(-5.9))}" y="${y0-86}" text-anchor="middle">positions came to an edge</text>
+  <text class="cf-d" x="16" y="196">the gap between them is about a million to one, so a difference in the</text>
+  <text class="cf-d" x="16" y="212">last bit never reaches the edge of a cell</text>`));
+}
+
+// =============================================================================
+// 23 — reroute-threshold: routing is not the hair trigger it looks like
+// =============================================================================
+{
+  const x0 = 64, y0 = 154, W = 320, H = 104;
+  const rows = [[-16,0],[-12,0],[-9,0],[-6,0],[-3,2.37]];
+  const X = e => x0 + W*(e + 16)/13;
+  const Y = v => y0 - H*(v/2.37);
+  made.push(svg('reroute-threshold', 440, 208, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  <path class="cf-a" fill="none" d="M` + rows.map(r => `${f(X(r[0]))} ${f(Y(r[1]))}`).join('L') + `"/>
+  ${rows.map(r => `<circle class="cf-af" cx="${f(X(r[0]))}" cy="${f(Y(r[1]))}" r="4"/>`).join('')}
+  ${rows.map(r => `<text class="cf-d" x="${f(X(r[0]))}" y="${y0+20}" text-anchor="middle">1e${r[0]}</text>`).join('')}
+  <text class="cf-d" x="${f(x0+W/2)}" y="${y0+40}" text-anchor="middle">size of the disagreement &#8594;</text>
+  <text class="cf-c" x="16" y="26">how much of a river network reroutes</text>
+  <text class="cf-gd" x="${f(X(-16)+8)}" y="${f(Y(0)-10)}">nothing, all the way across here</text>
+  <text class="cf-d" x="16" y="192">thirteen orders of magnitude of margin before the first cell changes course</text>`));
+}
+
+// =============================================================================
 // 22 — patch-is-not-a-range: a subtree is a patch, a patch is not a subtree
 // =============================================================================
 {

@@ -114,10 +114,15 @@ console.log('\n3. the cost of not being clever: one dot product per player per u
   const t0 = Date.now();
   let hits = 0;
   for (const u of updates) for (const p of players) if (dot(u,p) > cosT) hits++;
-  const ms = Date.now() - t0;
+  const ms = Math.max(1, Date.now() - t0);
+  // A wall-clock rate is machine-dependent and moves 30% between runs on one
+  // machine, so report the order of magnitude it clears rather than the reading.
+  const rate = updates.length*players.length/ms/1000;
+  const floor = Math.pow(10, Math.floor(Math.log10(rate)));
   console.log(`   ${updates.length.toLocaleString('en-US')} updates x ${players.length} players`
-    + ` = ${(updates.length*players.length/1e6).toFixed(1)}M tests in ${ms} ms`);
-  console.log(`   ${(updates.length*players.length/ms/1000).toFixed(1)}M tests per second, single threaded`);
+    + ` = ${(updates.length*players.length/1e6).toFixed(1)}M tests, single threaded`);
+  console.log(`   comfortably over ${floor}M tests per second`
+    + `  (this run: ${rate.toFixed(0)}M -- a timing, so it moves run to run)`);
   console.log('   A busy server does not produce 20,000 chunk updates a second. The whole');
   console.log('   question is smaller than the machinery doc 11 imagined for it.');
 }

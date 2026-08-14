@@ -107,8 +107,10 @@ if (dot(updateDirection, playerDirection) > cos(interestRadius / R))
 ```
 
 > **[verified]** `verification/interest.js`, section 3. 20,000 updates against 200
-> players — 4.0M tests — in **14 ms**, or **286 million tests per second** on one
-> thread.
+> players — 4.0M tests — clears **100 million tests per second** on one thread.
+> The script reports the rate it actually saw as well, but that is a wall-clock
+> timing: it moves 30% between runs on the same machine, so the order of
+> magnitude is the claim and the reading is not.
 
 A busy server does not produce twenty thousand chunk updates a second. **The whole
 problem is smaller than the machinery doc 11 imagined for it**, and it needs no
@@ -119,8 +121,8 @@ Two things follow that are worth stating plainly:
 - **Interest is per entity, not per chunk.** It uses the same anchor-and-offset
   position [doc 15](15-precision-and-origin.md) already stores, and needs nothing
   new on disk or in RAM.
-- **It degrades the right way.** Ten thousand players would be 2,000M tests a
-  second, at which point you bucket players by coarse chunk and test buckets —
+- **It degrades the right way.** Fifty times the players is fifty times the work,
+  and at that point you bucket players by coarse chunk and test buckets instead —
   the standard fix, reached only when the numbers say so.
 
 ---
@@ -193,11 +195,11 @@ of tens of seconds, not per frame.
   crossing rate above does not apply to them.
 - **Authority and conflict.** Two players editing the same cell is a
   consistency question this document does not touch.
-- **Whether the coarse map is sent or regenerated.** 2.5 MB is small for a
-  download and large for a join handshake. Regenerating it client-side from the
-  seed would be free bandwidth and identical output, provided the noise is
-  bit-identical across platforms — which [doc 15](15-precision-and-origin.md)
-  lists as an open determinism question.
+- ~~Whether the coarse map is sent or regenerated~~ — **answered** by
+  [doc 23](23-determinism.md): **regenerate it.** The generator is built from
+  operations IEEE 754 pins to the bit, so a client reproduces the map exactly,
+  provided the noise uses an integer hash and the erosion exponents come from the
+  exact set. The 2.5 MB never goes on the wire.
 
 ---
 
@@ -215,6 +217,7 @@ of tens of seconds, not per frame.
   better as regions get bigger — 3.7 chunks per run at the horizon, 44 at a
   kilometre.
 - **Turn the question round.** Test each player against each update: one dot
-  product, **286M per second**, no index and nothing to keep in sync.
+  product, comfortably over **100M per second**, no index and nothing to keep in
+  sync.
 - The ID ordering earns its keep on **disk** instead — five runs fetch **62%** of
   a player's region sequentially.

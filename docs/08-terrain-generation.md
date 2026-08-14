@@ -24,6 +24,12 @@ divergence from it.
 
 **Sample noise in 3D world space, never in `(i, j)`.**
 
+And one requirement on how the noise itself is written, which
+[doc 23](23-determinism.md) makes load-bearing: **hash with integers, never with
+`sin`.** Some implementations use a trigonometric function as a cheap hash. That
+one choice makes terrain differ between machines, because no standard pins down
+what `sin` returns.
+
 This is where most spherical worlds go wrong. Feeding face-local coordinates into
 2D noise produces visible discontinuities at all 30 face edges, because
 neighbouring faces have unrelated coordinate frames — the same problem the

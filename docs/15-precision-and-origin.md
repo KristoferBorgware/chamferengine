@@ -432,10 +432,12 @@ mistake, in a different currency, as storing a heading as a world vector
   anchors far apart, and computing the vector between them means going through
   world space. Fine in `float64`; the open question is whether anything needs it
   in `float32`.
-- **Determinism across clients.** `float64` is not bit-identical across
-  platforms for transcendental functions, and `normalize` uses a square root.
-  Whether the design needs bit-exact agreement, or only agreement to within a
-  block, is a multiplayer question that has not been asked yet.
+- ~~Determinism across clients~~ — **closed** by [doc 23](23-determinism.md), and
+  the worry about `normalize` is withdrawn: IEEE 754 requires `sqrt` to be
+  correctly rounded, so `normalize` is bit-identical everywhere. The whole runtime
+  turns out to be — position → cell, ID → position, gravity and the ray walk use
+  only `+ − × ÷ sqrt` and comparisons. Transcendentals appear only in display
+  code, where nothing compares them across machines.
 
 ---
 

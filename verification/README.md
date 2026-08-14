@@ -423,6 +423,44 @@ prices both sides.
 
 ---
 
+## `determinism.js` — do two machines agree?
+
+Doc 15 left this open, noting that `float64` "is not bit-identical across
+platforms for transcendental functions, and `normalize` uses a square root". Doc
+22 then leaned on the answer. This audits which operations each path actually
+uses, and measures how much room there is.
+
+**Verifies:**
+
+1. **Two kinds of arithmetic.** IEEE 754 requires `+ − × ÷` **and `sqrt`** to be
+   correctly rounded, so they are identical on every conforming machine. It says
+   nothing about `sin`, `cos`, `atan2`, `acos`, `exp`, `pow`. **`sqrt` being in
+   the safe group withdraws doc 15's worry about `normalize`.**
+2. **The whole runtime is in the safe group.** Position → cell, ID → position,
+   `up`, the ray walk and integer-hashed noise use only exactly-specified
+   operations. Transcendentals appear in the lat/long readout and in distances —
+   display, where nothing is compared across machines.
+3. **There is a million to one of room.** Over 400,000 random positions the
+   closest any came to a cell boundary was **1.21e−6 of a cell**, while a last-bit
+   disagreement is **3.8e−13 of a cell**. It amplifies by up to **286×** through
+   the pipeline and still never reaches an edge.
+4. **Flow routing is not the hair trigger it looks like.** Perturbing every height
+   independently by one ULP rerouted **0 of 40,962 cells**, and nothing moves
+   until **1e−3** — about thirteen orders of margin. The risk is not that
+   differences amplify; it is only whether one is introduced.
+5. **So erosion is a choice, not a constraint.** Exponents in `{0.5, 1, 1.5, 2}`
+   are products of `sqrt` and multiplication, both exact; only an arbitrary real
+   exponent needs `pow`. Pick from the exact set and the offline pass is
+   bit-identical too, so doc 22's client can regenerate the coarse map.
+
+**Does not verify:** any of this on a second platform. The argument is from the
+standard and from one machine's arithmetic — a real check would run the generator
+on genuinely different hardware and compare hashes, which no single script can do.
+
+**Used in:** [doc 23](../docs/23-determinism.md)
+
+---
+
 ## `interest.js` — is a player's region an ID range?
 
 Doc 11 called multiplayer interest "an ID range comparison; the addressing scheme
