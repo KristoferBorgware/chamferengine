@@ -46,13 +46,13 @@ distance = (|Δk| + |Δi| + |Δj|) / 2
 divided by cell spacing. Both positions come straight from their IDs by walking
 path digits — no lookup.
 
-**Divide by the *largest* spacing on the sphere, not the nominal one.** A*
-is only admissible if the heuristic never overestimates, and a heuristic is an
-estimate of *steps remaining*: dividing an arc by a spacing larger than the real
-step turns it into an undercount, which is safe. Divide by the nominal spacing
-and every step through a tighter-than-average region — the regions near the
-twelve pentagons, where cells run smallest — is overcounted, the heuristic
-becomes inadmissible, and A\* quietly returns paths that are not shortest.
+**Divide by the largest spacing on the sphere, not the nominal one.** The
+search is only admissible if the heuristic never overestimates, and the
+heuristic here estimates *steps remaining*: dividing an arc by a spacing larger
+than the real step turns it into an undercount, which is safe. Divide by the
+nominal spacing and every step through a tighter-than-average region — near the
+twelve pentagons, where cells run smallest — is overcounted, the heuristic stops
+being admissible, and the search quietly returns paths that are not shortest.
 
 Spacing varies about **1.14:1** ([doc 02](02-geometry-choice.md)), so the safe
 divisor is roughly 7% above nominal. The cost of being conservative is a slightly

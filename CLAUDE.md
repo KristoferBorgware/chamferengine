@@ -4,6 +4,20 @@ Compact reference for automated agents working on this repository. Humans should
 read [`README.md`](README.md) and `docs/` instead; this file is deliberately terse
 and duplicates information found there.
 
+## Working agreements
+
+- **Push to `master`.** That is the default and does not need asking for each
+  time. Work may be staged on a feature branch first, but it is not finished
+  until `master` has it, because `master` is what publishes the site.
+- **Run `node tools/build-docs.js` before pushing docs.** It fails on dead links
+  and dead heading anchors, and the Pages workflow runs it — a broken link
+  turns the deploy red. Note the renderer does **not** nest `*italic*` inside
+  `**bold**`; it reports `unconverted bold` when you try.
+- **No engine source yet.** The design is still being closed out. Do not start
+  implementing from these documents without being asked to.
+- Commit as `KristoferBorgware <kristofer@borgware.se>`, with no co-authoring
+  trailer and no model identifier in the message.
+
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
