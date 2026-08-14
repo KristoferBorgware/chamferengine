@@ -23,6 +23,7 @@ numbered documents.
 | [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
+| [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
@@ -160,6 +161,69 @@ edges: 30 each with 2 faces: true
 max non-planarity (should be ~0): 8.095e-18
 diagonal ratio min/max: 1.618034 1.618034  phi = 1.618034
 RT defect: 20*(360-3*116.565) + 12*(360-5*63.435) = 720.00
+```
+
+## `coords.js`
+
+Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share.
+
+Cited by [doc 20](20-player-coordinates.md).
+
+```
+1. choosing the axis: run it through an antipodal pentagon pair
+   antipodal pairs among the twelve: 6  0-3 1-2 4-7 5-6 8-11 9-10
+   with the axis through that pair, the twelve sit at these latitudes:
+       90.000 deg   1 pentagon
+       26.565 deg   5 pentagons
+      -26.565 deg   5 pentagons
+      -90.000 deg   1 pentagon
+   Two poles and two rings of five. The same in every world ever generated,
+   because the positions are geometry and no seed can move them.
+
+2. how fine the readout has to be
+   planet            block   1 cell in degrees   decimals to resolve a cell
+   doc-06 worked      1.00 m      3.37e-2        2
+   10 km              1.47 m      8.43e-3        3
+   100 km moon        1.84 m      1.05e-3        3
+   Earth-sized        1.83 m      1.65e-5        5
+   On the worked planet a cell is 0.0337 deg across, so TWO decimal places
+   resolve 0.30 m -- finer than a 1 m cell. Earth needs five. A small planet
+   is easier to read, not harder: the same block covers more angle.
+
+3. round-tripping a rounded readout back to a cell
+   decimals   lands in the same cell   worst miss
+       1          13.6%             2.04 cells
+       2          87.5%             0.21 cells
+       3          98.8%             0.02 cells
+       4          99.9%             0.00 cells
+   Two decimals land in the right cell seven times in eight, and the worst
+   case is under a cell away -- so it is always you or a neighbour. Fine for
+   TELLING someone where you are, useless as an identity. That is the ID.
+
+4. what a degree of longitude is worth, by latitude (R = 1,700 m)
+   latitude    1 deg of longitude    cells across
+        0 deg      29.67 m          30
+    26.57 deg      26.54 m          27
+       45 deg      20.98 m          21
+       60 deg      14.84 m          15
+       80 deg       5.15 m           5
+       89 deg       0.52 m           1
+   At the two polar pentagons longitude stops meaning anything, which is
+   exactly what every player already expects a compass to do at a pole.
+
+5. sharing an exact location
+   D=11: address is 27 bits  ->  6 characters in base 36,  8 with a 10-bit layer
+   D=13: address is 31 bits  ->  6 characters in base 36,  8 with a 10-bit layer
+   So an exact, lossless "here" is a short code a player can read aloud,
+   and it never needs a decimal point.
+
+verdict
+   Put the axis through an antipodal pentagon pair: both poles land on
+   protected, standable landmarks and the other ten sit on two rings at
+   +/-26.57 deg, identically in every world. Show latitude and longitude to
+   TWO decimals plus altitude in metres -- that resolves 0.30 m on the worked
+   planet. Show it, but do not share it: the shareable form is the cell ID,
+   which is 27 bits and six base-36 characters.
 ```
 
 ## `frame.js`
@@ -1170,4 +1234,4 @@ verdict
 
 ---
 
-_21 scripts. Every number above is reproduced by running them._
+_22 scripts. Every number above is reproduced by running them._

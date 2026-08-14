@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 214" width="430" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M66.0 52L66.0 164"/><path class="cf-l" d="M83.4 52L83.4 164"/><path class="cf-l" d="M100.8 52L100.8 164"/><path class="cf-l" d="M118.2 52L118.2 164"/><path class="cf-l" d="M135.6 52L135.6 164"/><path class="cf-l" d="M153.0 52L153.0 164"/><path class="cf-l" d="M170.4 52L170.4 164"/><path class="cf-l" d="M66 56.0L170 56.0"/><path class="cf-l" d="M66 73.4L170 73.4"/><path class="cf-l" d="M66 90.8L170 90.8"/><path class="cf-l" d="M66 108.2L170 108.2"/><path class="cf-l" d="M66 125.6L170 125.6"/><path class="cf-l" d="M66 143.0L170 143.0"/><path class="cf-l" d="M66 160.4L170 160.4"/>
+  <polygon class="cf-af" points="118.0,78.0 144.0,93.0 144.0,123.0 118.0,138.0 92.0,123.0 92.0,93.0" opacity="0.75"/>
+  <circle cx="118" cy="108" r="3.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="118" y="188" text-anchor="middle">one 1 m cell</text>
+  <text class="cf-d" x="118" y="206" text-anchor="middle">faint grid = 0.01&#176; steps</text>
+  <text class="cf-c" x="238" y="46">a cell is 0.0337&#176; across</text>
+  <text class="cf-d" x="238" y="70">so 0.01&#176; is 0.30 m &#8212; three steps</text>
+  <text class="cf-d" x="238" y="88">across a cell, finer than you need</text>
+  <text class="cf-c" x="238" y="122">lat 41.02&#176;  lon -78.55&#176;</text>
+  <text class="cf-d" x="238" y="144">alt 63 m</text>
+  <text class="cf-gd" x="238" y="176">Earth would need five decimals</text>
+  <text class="cf-gd" x="238" y="194">for the same 1 m block</text>
+</svg>

@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Nine entries are struck through because they have since been closed. They are
+Ten entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -274,13 +274,25 @@ it, ocean included, and heading-carrying code has to handle it regardless. That
 turned the decision into a narrow one about the cell itself, and made the cheap
 answer the right one.
 
-## Player-facing coordinates
+## ~~Player-facing coordinates~~ — designed, see [doc 20](20-player-coordinates.md)
 
-`x: 412, y: 68, z: -190` is meaningless on a sphere. Show **latitude, longitude
-and altitude**.
+Closed, and it came out smaller and friendlier than expected.
 
-Small, but it affects every navigation feature players expect: waypoints, maps,
-sharing locations, compasses.
+The axis runs through an **antipodal pentagon pair**, so both poles land on
+protected, standable landmarks and the other ten pentagons sit on two rings at
+exactly **±26.57°** — identical in every world, because no seed can move them.
+The coordinate singularity and the grid singularity become the same two places.
+
+The number that decides usability went the good way. A cell on the worked planet
+covers **0.0337°**, so **two decimal places** name one — where Earth would need
+five. A small planet is the easy case, not the fiddly one, because the same block
+covers more angle.
+
+And one separation worth carrying: a rounded readout lands in the right cell
+**87.5%** of the time and never more than **0.21 cells** out. That is enough to be
+found by and not enough to be an identity. **Show** latitude, longitude and
+altitude; **send** the cell ID, which is 27 bits — six base-36 characters — and
+exact by construction.
 
 ---
 
@@ -306,18 +318,15 @@ specifying, not inventing.
 one, so everything below this line is a system to design or content to write, not
 a hole in the geometry.
 
-**Player-facing coordinates** is the obvious next one, and it is unblocked and
-more attractive than it was: doc 17 puts the lat/long poles on two protected,
-standable landmarks, so the coordinate system has somewhere to point at.
-
-After those, what remains is **content** rather than structure — rivers and
-erosion, and multiplayer interest management. **The geometric core is closed.**
+What remains is **content** rather than structure — rivers and erosion, and
+multiplayer interest management, which doc 11 has always described as specifying
+rather than inventing. **The geometric core is closed.**
 
 ---
 
-## What closing nine of these taught
+## What closing ten of these taught
 
-All nine closed items came back with the same shape of answer, and it is worth
+All ten closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

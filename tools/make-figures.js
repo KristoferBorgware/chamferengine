@@ -439,6 +439,95 @@ const made = [];
 
 
 // =============================================================================
+// 20 — xyz-says-nothing: the readout a flat world uses stops working
+// =============================================================================
+{
+  const O = [300, 122], R = 88;
+  // a player at some position, and the three numbers that describe it
+  const a = -50*Math.PI/180;
+  const p = [O[0] + R*Math.sin(a), O[1] - R*Math.cos(a)];
+  made.push(svg('xyz-says-nothing', 430, 226, `
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  <path class="cf-l" d="M${O[0]} ${O[1]}L${f(p[0])} ${f(p[1])}" stroke-dasharray="3 4"/>
+  <path class="cf-l" d="M${O[0]} ${O[1]}L${f(O[0]+70)} ${O[1]}"/>
+  <path class="cf-l" d="M${O[0]} ${O[1]}L${O[0]} ${f(O[1]-70)}"/>
+  <text class="cf-d" x="${f(O[0]+76)}" y="${f(O[1]+4)}">x</text>
+  <text class="cf-d" x="${O[0]}" y="${f(O[1]-76)}" text-anchor="middle">y</text>
+  <circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="5"/>
+  <text class="cf-c" x="14" y="34">x: 412   y: 68   z: -190</text>
+  <text class="cf-d" x="14" y="62">which way is north?</text>
+  <text class="cf-d" x="14" y="84">how far to walk home?</text>
+  <text class="cf-d" x="14" y="106">am I above or below the surface?</text>
+  <text class="cf-gd" x="14" y="134">none of them can be read off those</text>
+  <text class="cf-gd" x="14" y="152">three numbers</text>
+  <text class="cf-d" x="14" y="204">the origin is the planet&#8217;s centre, which is a place no player ever goes</text>`));
+}
+
+// =============================================================================
+// 20 — pentagon-poles: the axis has somewhere principled to go
+// =============================================================================
+{
+  const O = [150, 116], R = 92;
+  const D2R = Math.PI/180;
+  // draw the sphere with the two polar pentagons and the two rings of five
+  const at = (lat, lon) => {
+    const y = O[1] - R*Math.sin(lat*D2R);
+    const rr = R*Math.cos(lat*D2R);
+    return [O[0] + rr*Math.sin(lon*D2R), y, Math.cos(lon*D2R)];   // z for front/back
+  };
+  let rings = '';
+  for (const lat of [26.565, -26.565]){
+    const y = O[1] - R*Math.sin(lat*D2R), rr = R*Math.cos(lat*D2R);
+    rings += `<ellipse class="cf-l" cx="${O[0]}" cy="${f(y)}" rx="${f(rr)}" ry="${f(rr*0.26)}"/>`;
+    rings += `<text class="cf-d" x="${f(O[0]+rr+8)}" y="${f(y+4)}">${lat>0?'+':''}${lat.toFixed(2)}&#176;</text>`;
+  }
+  let dots = '';
+  for (const [lat, n, off] of [[26.565,5,0],[-26.565,5,36]]){
+    for (let k=0;k<n;k++){
+      const [x,y,z] = at(lat, off + k*72);
+      dots += `<circle class="${z>0?'cf-gf':'cf-l'}" cx="${f(x)}" cy="${f(y)}" r="${z>0?4.5:3.5}"/>`;
+    }
+  }
+  made.push(svg('pentagon-poles', 430, 226, `
+  <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
+  ${rings}${dots}
+  <path class="cf-a" d="M${O[0]} ${f(O[1]+R+16)}L${O[0]} ${f(O[1]-R-16)}" stroke-dasharray="4 3"/>
+  <circle class="cf-af" cx="${O[0]}" cy="${f(O[1]-R)}" r="6"/>
+  <circle class="cf-af" cx="${O[0]}" cy="${f(O[1]+R)}" r="6"/>
+  <text class="cf-c" x="${f(O[0]+12)}" y="${f(O[1]-R-6)}">north pole</text>
+  <text class="cf-c" x="${f(O[0]+12)}" y="${f(O[1]+R+16)}">south pole</text>
+  <text class="cf-c" x="262" y="42">both poles are pentagons</text>
+  <text class="cf-d" x="262" y="64">protected, standable, named</text>
+  <text class="cf-gd" x="262" y="98">the other ten sit on two rings</text>
+  <text class="cf-gd" x="262" y="120">at exactly &#177;26.57&#176;</text>
+  <text class="cf-d" x="262" y="152">identical in every world &#8212;</text>
+  <text class="cf-d" x="262" y="170">no seed can move them</text>`));
+}
+
+// =============================================================================
+// 20 — two-decimals: the readout resolves a cell, and is still short
+// =============================================================================
+{
+  const R = 30, cx = 118, cy = 108;
+  let grid = '';
+  for (let gx=0; gx<=6; gx++) grid += `<path class="cf-l" d="M${f(cx-52+gx*17.4)} ${cy-56}L${f(cx-52+gx*17.4)} ${cy+56}"/>`;
+  for (let gy=0; gy<=6; gy++) grid += `<path class="cf-l" d="M${cx-52} ${f(cy-52+gy*17.4)}L${cx+52} ${f(cy-52+gy*17.4)}"/>`;
+  made.push(svg('two-decimals', 430, 214, `
+  ${grid}
+  <polygon class="cf-af" points="${pts(hexPts(cx, cy, R))}" opacity="0.75"/>
+  <circle cx="${cx}" cy="${cy}" r="3.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="${cx}" y="${cy+80}" text-anchor="middle">one 1 m cell</text>
+  <text class="cf-d" x="${cx}" y="${cy+98}" text-anchor="middle">faint grid = 0.01&#176; steps</text>
+  <text class="cf-c" x="238" y="46">a cell is 0.0337&#176; across</text>
+  <text class="cf-d" x="238" y="70">so 0.01&#176; is 0.30 m &#8212; three steps</text>
+  <text class="cf-d" x="238" y="88">across a cell, finer than you need</text>
+  <text class="cf-c" x="238" y="122">lat 41.02&#176;  lon -78.55&#176;</text>
+  <text class="cf-d" x="238" y="144">alt 63 m</text>
+  <text class="cf-gd" x="238" y="176">Earth would need five decimals</text>
+  <text class="cf-gd" x="238" y="194">for the same 1 m block</text>`));
+}
+
+// =============================================================================
 // 19 — same-number-different-way: a rotation is an index, never a heading
 // =============================================================================
 {

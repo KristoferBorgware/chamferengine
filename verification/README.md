@@ -423,6 +423,34 @@ prices both sides.
 
 ---
 
+## `coords.js` — player-facing coordinates
+
+`x, y, z` answers nothing useful on a sphere, so the readout has to be latitude,
+longitude and altitude. That raises three questions the design has to settle.
+
+**Verifies:**
+
+1. **The axis has somewhere principled to go.** Run it through an antipodal
+   pentagon pair and all twelve pentagons land at four latitudes: **±90°** (the
+   two poles) and **±26.565°** (two rings of five). Identical in every world,
+   since no seed can move them.
+2. **Two decimals name a cell — on a small planet.** A cell covers `blockSize / R`
+   radians, so a small world needs *fewer* digits, not more: **0.0337°** per cell
+   on the doc-06 planet against **0.0000165°** on an Earth-sized one. Two decimal
+   places against five.
+3. **But a rounded readout is not an identity.** Over 20,000 random positions,
+   rounding to two decimals lands in the same cell **87.5%** of the time, worst
+   miss **0.21 cells** — so always you or a neighbour. Three decimals gives 98.8%.
+   Show lat/long; send the cell ID.
+4. **The exact form is short.** A `D` 11 address is **27 bits** — six characters
+   in base 36, eight with the layer — so a lossless "here" needs no decimal point.
+5. **Longitude degrades toward the poles**, as expected: 1° is 29.67 m at the
+   equator and 0.52 m at 89° on the worked planet.
+
+**Used in:** [doc 20](../docs/20-player-coordinates.md)
+
+---
+
 ## `rotation.js` — directional blocks
 
 Rails, pipes and conveyors store a rotation, and here that has to be an index into
