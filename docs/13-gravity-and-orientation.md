@@ -191,9 +191,11 @@ a pentagon. `neighbour(id, k)` from [doc 07](07-data-structures.md) already
 returns exactly this.
 
 **Order the ring geometrically, not by `(q, r)` sign.** About 46% of
-chunks sit in a mirrored frame ([doc 03](03-addressing.md)), and an index derived
-from local coordinates inherits the mirror — every rail, conveyor and hopper in
-those chunks would be handed back to front. Ordering by outward-facing
+chunks sit in a frame turned half a turn ([doc 03](03-addressing.md)) — a
+rotation, not a mirror, so handedness never changes — and an index derived from
+local coordinates inherits that half turn as a uniform **+3**. Every rail,
+conveyor and hopper in those chunks would run back to front, reversing at chunk
+borders. Ordering by outward-facing
 counter-clockwise absorbs the flip inside `neighbour()`, which is where this
 design already keeps all its sphere-ness.
 

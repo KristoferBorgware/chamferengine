@@ -38,6 +38,7 @@ numbered documents.
 | [`taper.js`](../verification/taper.js) | Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost. | [06](06-world-sizing.md) |
 | [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
 | [`volume.js`](../verification/volume.js) | Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs. | [08](08-terrain-generation.md) [14](14-meshing-and-lod.md) |
+| [`winding.js`](../verification/winding.js) | The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is. | [03](03-addressing.md) |
 
 ---
 
@@ -1042,6 +1043,69 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
    That makes a LOD-2 chunk 332x cheaper to generate than a near one.
 ```
 
+## `winding.js`
+
+The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is.
+
+Cited by [doc 03](03-addressing.md).
+
+```
+1. what the middle-child map actually is
+   doc 04 descends into the middle child with  i -> half-i,  j -> half-j
+   linear part = diag(-1, -1),  determinant = (-1)(-1) = +1
+   A reflection has determinant -1. Negating BOTH axes is a HALF TURN.
+   So handedness is preserved and nothing in the world is mirrored.
+
+2. where a naively (q,r)-derived direction really points
+   parent frame:      k -> bearing
+     k=0    0.0 deg
+     k=1   60.2 deg
+     k=2  120.3 deg
+     k=3  180.0 deg
+     k=4  240.4 deg
+     k=5  300.4 deg
+   middle-child frame reads offset (di,dj) as (-di,-dj):
+     naive k=0 really points at k=3   (+3)
+     naive k=1 really points at k=4   (+3)
+     naive k=2 really points at k=5   (+3)
+     naive k=3 really points at k=0   (+3)
+     naive k=4 really points at k=1   (+3)
+     naive k=5 really points at k=2   (+3)
+   every direction shifts by the SAME amount: yes, +3
+   A uniform shift is a rotation. A reflection would send k -> c-k, which
+   reverses the order and leaves two directions fixed. Nothing is fixed here.
+   ring order preserved (still counter-clockwise from outside): true
+
+3. emitting a child by index pattern
+   child 0  corner listed in rising index order -> outward
+   child 1  corner listed in rising index order -> outward
+   child 2  corner listed in rising index order -> outward
+   child 3  MIDDLE listed in rising index order -> INWARD
+   The middle child comes out inward when its vertices are listed by the
+   same rising-index rule as a corner child. That is a property of the
+   LISTING, not of the geometry -- swap any two of its vertices and it is
+   outward again. It is where a mesher gets a hole, so list deliberately.
+
+4. the two patterns doc 14 emits, over a whole face
+   up   (i,j),(i+1,j),(i+1,j+1):  36 outward, 0 inward
+   down (i,j),(i+1,j+1),(i,j+1):  28 outward, 0 inward
+   Both patterns are already correct -- they are deliberately different, and
+   reusing one for both is what turns half a mesh inside out.
+
+5. how much of the world sits in a rotated frame
+   D=8, C=4: 15104 of 33153 cells = 45.6% sit in a rotated frame
+   (qr.js reports the same 15104 of 33153 from the same descent)
+   So a naive direction index is reversed across nearly half the planet,
+   and it changes at every chunk border -- which is why the symptom looks
+   like rails that reverse when they cross a boundary.
+
+verdict
+   The flip is a HALF TURN, not a mirror. Handedness never changes, the
+   neighbour ring stays counter-clockwise, and the whole error is a uniform
+   +3 on the direction index. Order the ring geometrically inside neighbour()
+   and none of it reaches the rest of the engine.
+```
+
 ---
 
-_19 scripts. Every number above is reproduced by running them._
+_20 scripts. Every number above is reproduced by running them._

@@ -423,6 +423,36 @@ prices both sides.
 
 ---
 
+## `winding.js` — is the middle-child flip a mirror?
+
+Doc 03 called a middle-descended chunk a "mirrored frame" from the first draft.
+That word implies handedness changes, which would reach into meshing, normals and
+everything chirality-dependent. This checks what the flip actually is.
+
+**Verifies:**
+
+1. **It is a half turn, not a mirror.** The descent negates *both* axes —
+   `i → half−i`, `j → half−j` — so the determinant is `(−1)(−1) = +1`. A
+   reflection is −1.
+2. **The direction index shifts by a uniform +3.** Measured on the real grid, all
+   six directions move by the same amount and the ring is still counter-clockwise
+   seen from outside. A reflection would send `k → c − k`, reversing the order and
+   leaving two directions fixed; nothing is fixed here.
+3. **46% of cells are affected** — 15,104 of 33,153 at `D` 8 / `C` 4, agreeing
+   with `qr.js` cell for cell. Note the lattice convention: `qr.js` enumerates
+   `i + j ≤ n` and this script's geometry section uses `j ≤ i`. Mixing the two
+   miscounts the flips, which is worth knowing before trusting either number.
+4. **A second flip that is not geometry at all.** Listed in rising index order,
+   the three corner children come out outward-facing and the **middle one comes
+   out inward** — a property of the vertex listing, not the shape. The two
+   patterns doc 14 actually emits are already right: **36 outward, 0 inward** and
+   **28 outward, 0 inward** over a whole face. Reusing one pattern for both is
+   what turns half a mesh inside out.
+
+**Used in:** [doc 03](../docs/03-addressing.md)
+
+---
+
 ## `boundary.js` — which curve is a cell's edge?
 
 Three definitions were in play: what `hexRound` maps to a cell (doc 04), what is

@@ -166,25 +166,92 @@ i = half - i
 j = half - j
 ```
 
-![A subdivided triangle showing the corner child's axes and the middle child's mirrored axes](figures/middle-child-flip.svg)
+![A subdivided triangle showing the corner child's axes and the middle child's reversed axes](figures/middle-child-flip.svg)
 
 *A corner child keeps its parent's sense of direction. The middle child does not:
-its origin sits at the opposite corner and both axes run backwards. Local
-coordinates in a middle-descended chunk are measured in a mirrored frame.*
+its origin sits at the opposite corner and both axes run backwards.*
 
 > **[verified]** `verification/qr.js` reports 15,104 of 33,153 cells — about
 > **46%** — sitting in a flipped frame. This is the normal case, not an edge
 > case.
 
-**Carry a one-bit orientation flag down the walk**, or `q,r` will be mirrored in
-nearly half of all chunks. The same up/down triangle orientation reappears
-throughout the design; it is intrinsic to subdividing triangles, since one of the
-four children always points the other way.
+**Carry a one-bit orientation flag down the walk**, or `q,r` will be turned around
+in nearly half of all chunks.
 
-This flip is not only a bookkeeping problem. It reaches into gameplay: a
-direction index derived from `(q, r)` sign inherits the mirror and would hand
-every rail and conveyor in those chunks the wrong way round. See
-[doc 13](13-gravity-and-orientation.md).
+### It is a half turn, not a mirror
+
+Earlier drafts of this document called a middle-descended chunk a **mirrored
+frame**. That is the wrong word, and it is worth correcting carefully, because
+"mirror" implies handedness flips somewhere — which would reach into meshing,
+surface normals and everything else that cares which way round the world is.
+
+Look at what the descent actually does: `i → half − i` and `j → half − j`. It
+negates **both** axes. A mirror negates one. Negating both is a rotation by half a
+turn.
+
+![Three hexagons with their six directions numbered: the parent's frame, the same frame after a half turn with every number shifted by three, and a mirrored frame with the order reversed](figures/half-turn-not-mirror.svg)
+
+*After a half turn every direction has moved by the same amount and the ring still
+runs counter-clockwise. A mirror would reverse the order and leave two directions
+sitting still. Only the middle picture happens.*
+
+> **[verified]** `verification/winding.js`. The map's determinant is
+> `(−1)(−1) = +1`, so it preserves handedness — a reflection would be −1. Measured
+> on the real grid, a naively `(q, r)`-derived direction index is shifted by
+> **exactly +3, the same for all six directions**, and the ring is still
+> counter-clockwise seen from outside. A reflection would send `k → c − k`,
+> reversing the order and fixing two directions. Nothing is fixed here.
+
+Three things follow, and they are the reason to get the word right:
+
+- **Nothing in the world is ever mirrored.** No handedness change, so no
+  chirality bugs are possible in meshing, normals or lighting.
+- **The ring stays counter-clockwise** in a flipped chunk. Only its starting point
+  moves.
+- **The whole error is "everything points backwards"** — a uniform half turn, not
+  a scramble.
+
+### What it costs if you get it wrong
+
+This is not only bookkeeping. It reaches into gameplay: a direction index derived
+from `(q, r)` sign inherits the half turn, so every rail, conveyor and hopper in
+those chunks runs **backwards** — and, because the flip is decided per chunk, the
+direction reverses at chunk borders. That is a miserable symptom to debug from the
+outside: track that works, then suddenly does not, at a boundary the player cannot
+see.
+
+The fix is [doc 13](13-gravity-and-orientation.md)'s: order the neighbour ring
+geometrically, counter-clockwise as seen from outside, inside `neighbour()`. Then
+nothing above `neighbour()` ever learns about any of this.
+
+One more consequence worth stating, because it outlives a running session: **a
+stored rotation must be frame-independent.** If a directional block saves a raw
+`(q, r)`-derived index, the same byte means opposite things in flipped and
+unflipped chunks, and the save file is wrong rather than the renderer.
+
+### The other flip, which is about listing and not geometry
+
+There is a second thing that looks like this and is not, and it is where a mesher
+springs a hole.
+
+A face's lattice holds triangles pointing both ways, roughly half each. List a
+downward-pointing one's vertices by the same rising-index rule you use for an
+upward one and it comes out wound **inward** — so it faces away from the player and
+is culled, leaving a hole.
+
+> **[verified]** `verification/winding.js` — of the four children of a split,
+> the three corner children come out outward-facing when listed in rising index
+> order and the **middle one comes out inward**. That is a property of the
+> listing, not of the geometry: swap any two of its vertices and it is outward
+> again.
+>
+> The two patterns [doc 14](14-meshing-and-lod.md) actually emits are already
+> correct — `(i,j),(i+1,j),(i+1,j+1)` and `(i,j),(i+1,j+1),(i,j+1)` come out
+> **36 outward, 0 inward** and **28 outward, 0 inward** over a whole face. They
+> are deliberately different, and reusing one for both is the bug.
+
+So: two different flips, and neither is a mirror. One is a half turn in the
+coordinate frame, and one is a vertex-ordering trap.
 
 **Demo:** [`demos/address-split.html`](../demos/address-split.html) — tap dots to
 watch `(i,j)` get carved into path + `(q,r)`. Use *Find a flipped one* to see the
@@ -317,7 +384,9 @@ address.
   Truncating digits gives the containing chunk, for free.
 - Width is `5 + 2D` bits regardless of where the chunk cut falls, so **chunk size
   stays tunable after launch**.
-- The **middle child is mirrored**, and about 46% of cells live inside one. Carry
+- The **middle child is turned half a turn** — not mirrored — and about 46% of
+  cells live inside one. Handedness never changes; a naive direction index is just
+  shifted by 3. Carry
   an orientation flag.
 - Border cells are owned by the **lowest chunk ID**. Layers ride along as a
   separate field, and vertical neighbours cost nothing.

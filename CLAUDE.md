@@ -155,7 +155,7 @@ script owns its numbers.
 | [00](docs/00-introduction.md) | goals, non-goals, why the 720° forces everything | — |
 | [01](docs/01-prior-art.md) | what to take from S2 and H3, and what not to | `s2.js` |
 | [02](docs/02-geometry-choice.md) | the tiling: Goldberg, dual of a subdivided icosahedron | `check.js`, `uniform.js` |
-| [03](docs/03-addressing.md) | ID layout, path digits, the flip flag, border ownership | `qr.js`, `order.js` |
+| [03](docs/03-addressing.md) | ID layout, path digits, the flip flag, border ownership | `qr.js`, `order.js`, `winding.js` |
 | [04](docs/04-position-lookup.md) | position → cell, exactly and without storage | `lookup.js` |
 | [05](docs/05-face-adjacency.md) | crossing between the 20 faces; the 180-byte table | `adj.js` |
 | [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js`, `taper.js` |
@@ -202,7 +202,10 @@ Violating any of these breaks the design. They are not tunable.
    hairy ball theorem forbids one. Never store a heading as a world vector.
 9. Direction indices are ordered **counter-clockwise as seen from outside**,
    never derived from `(q, r)` sign. Deriving them from local coordinates leaks
-   the middle-child mirror into ~46% of chunks and reverses every rail in them.
+   the middle-child half turn into ~46% of chunks and reverses every rail in
+   them. That flip is a **rotation, not a mirror** (`winding.js`): determinant
+   +1, a uniform **+3** on every direction, ring still CCW. Nothing is ever
+   mirrored, so no chirality bug is possible.
 10. The tessellation is **identical at every layer** — same face, same path,
     same `(q, r)`, evaluated at a smaller radius. This is what makes vertical
     neighbours free, gravity tractable, and vertical face merging exact. Do not
@@ -326,6 +329,14 @@ Violating any of these breaks the design. They are not tunable.
   (`boundary.js`) — twelve decimal places. So all of the 1.99:1 area spread is
   what radial projection does, and none of it is irregularity in the polygon.
 - `(i, j)` ↔ `path digits + (q, r)` round-trips exactly (`qr.js`).
+- **The middle-child flip is a half turn, not a mirror** (`winding.js`). The
+  descent negates *both* axes, so the determinant is **+1** and handedness is
+  never changed — no chirality bug is possible anywhere. A naive `(q, r)`-derived
+  direction is shifted by a uniform **+3**, ring still CCW; a reflection would
+  reverse the order and fix two directions, and nothing is fixed. Docs said
+  "mirrored" until it was measured. Separately, listing a downward triangle by the
+  same rising-index rule as an upward one winds it **inward** — doc 14's two
+  emit patterns are already correct, and reusing one for both holes the mesh.
 - A 4-way midpoint triangle split admits **no** continuous edge-adjacent
   traversal. The child adjacency graph is a star; best achievable is 2 of 3
   steps adjacent (`order.js`). Do not attempt a Sierpiński curve on 4-way

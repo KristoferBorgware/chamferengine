@@ -438,6 +438,44 @@ const made = [];
 
 
 // =============================================================================
+// 03 — half-turn-not-mirror: what the middle-child flip does to a direction
+// =============================================================================
+{
+  // a hexagon with its six directions numbered, drawn three times:
+  // as the parent sees it, after a half turn (what happens), after a mirror (what
+  // does not). The numbers are what a naive (q,r) index would call each bearing.
+  const ring = (cx, cy, label, cls) => {
+    const R = 42;
+    let out = `<polygon class="${cls}" points="${pts(hexPts(cx, cy, 30))}"/>`;
+    for (let k=0;k<6;k++){
+      const a = -Math.PI/2 + Math.PI*k/3 + Math.PI/6;
+      const x = cx + R*Math.cos(a), y = cy + R*Math.sin(a);
+      out += `<path class="cf-l" d="M${f(cx+22*Math.cos(a))} ${f(cy+22*Math.sin(a))}L${f(x-6*Math.cos(a))} ${f(y-6*Math.sin(a))}"/>`;
+      out += `<text class="${label(k)[1]}" x="${f(cx+R*Math.cos(a)+ (Math.cos(a)>0.1?7:Math.cos(a)<-0.1?-7:0))}" y="${f(y+4)}" text-anchor="middle">${label(k)[0]}</text>`;
+    }
+    return out;
+  };
+  const plain = k => [String(k), 'cf-c'];
+  const turned = k => [String((k+3)%6), 'cf-gd'];
+  const mirrored = k => [String((6-k)%6), 'cf-gd'];
+  made.push(svg('half-turn-not-mirror', 470, 232, `
+  <text class="cf-d" x="82" y="26" text-anchor="middle">the parent&#8217;s frame</text>
+  ${ring(82, 108, plain, 'cf-af')}
+  <text class="cf-c" x="82" y="196" text-anchor="middle">0 1 2 3 4 5</text>
+  <text class="cf-d" x="82" y="214" text-anchor="middle">counter-clockwise</text>
+
+  <text class="cf-d" x="235" y="26" text-anchor="middle">a half turn &#183; what happens</text>
+  ${ring(235, 108, turned, 'cf-af')}
+  <text class="cf-gd" x="235" y="196" text-anchor="middle">3 4 5 0 1 2</text>
+  <text class="cf-d" x="235" y="214" text-anchor="middle">still counter-clockwise &#183; every k shifts +3</text>
+
+  <text class="cf-d" x="388" y="26" text-anchor="middle">a mirror &#183; what does NOT</text>
+  ${ring(388, 108, mirrored, 'cf-gf')}
+  <text class="cf-gd" x="388" y="196" text-anchor="middle">0 5 4 3 2 1</text>
+  <text class="cf-d" x="388" y="214" text-anchor="middle">order reversed &#183; 0 and 3 stay put</text>`));
+}
+
+// =============================================================================
 // 18 — click-disagreement: the problem, before the fix
 // =============================================================================
 {
