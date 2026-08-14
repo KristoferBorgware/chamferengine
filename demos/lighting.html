@@ -193,38 +193,56 @@ function drawTerm(){
   const t = +document.getElementById('d').value / 1000;
   const day = 300 * Math.pow(10, t * 2.46);         // 5 min .. ~24 h
   const speed = CIRC / day;
-  const O = [170, 104], Rp = 74;
+  const O = [170, 108], Rp = 76;
 
-  const ux = Math.cos(sunAngle), uy = -Math.sin(sunAngle);   // sun direction
-  const a0 = sunAngle - Math.PI/2, a1 = sunAngle + Math.PI/2;
-  const P = a => [O[0] + Rp*Math.cos(a), O[1] - Rp*Math.sin(a)];
-  const [x0, y0] = P(a0), [x1, y1] = P(a1);
+  // screen coords have y downward, so P() negates sin: increasing `a` runs
+  // counter-clockwise on screen. Everything below is built from sampled points
+  // rather than SVG arc flags, which are easy to get backwards under that flip.
+  const P = (a, d = 0) => [O[0] + (Rp+d)*Math.cos(a), O[1] - (Rp+d)*Math.sin(a)];
+  const U = [Math.cos(sunAngle), -Math.sin(sunAngle)];   // toward the sun
+  const Vp = [Math.sin(sunAngle), Math.cos(sunAngle)];   // perpendicular to it
+  const a0 = sunAngle - Math.PI/2, a1 = sunAngle + Math.PI/2;   // the two terminators
+  const arc = (from, to, n = 48, d = 0) => {
+    const p = [];
+    for (let i = 0; i <= n; i++) p.push(P(from + (to - from)*i/n, d));
+    return p;
+  };
+  const poly = pts => pts.map(q => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(' ');
 
   let s = '';
-  // sunlight arrows, coming from the sun's direction
+  // sunlight, arriving from the sun's side
   for (let k = -3; k <= 3; k++){
-    const px = O[0] + ux*(Rp + 46) - uy*k*22, py = O[1] + uy*(Rp + 46) + ux*k*22;
-    const qx = O[0] + ux*(Rp + 12) - uy*k*22, qy = O[1] + uy*(Rp + 12) + ux*k*22;
-    s += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${qx.toFixed(1)}" y2="${qy.toFixed(1)}"
-           stroke="#e0913a" stroke-width="1.4" opacity=".75"/>`;
+    const p = [0,1].map(i => O[i] + U[i]*(Rp+46) + Vp[i]*k*22);
+    const q = [0,1].map(i => O[i] + U[i]*(Rp+12) + Vp[i]*k*22);
+    s += `<line x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}"
+           stroke="#e0913a" stroke-width="1.4" opacity=".7"/>`;
   }
+  // the planet, then the lit half laid over it -- sampled from a0 THROUGH the
+  // sun bearing to a1, so it is on the sun's side by construction
   s += `<circle cx="${O[0]}" cy="${O[1]}" r="${Rp}" fill="#121a27" stroke="#2b3448" stroke-width="1.2"/>`;
-  s += `<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A ${Rp} ${Rp} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z"
-         fill="#e0913a" fill-opacity=".22" stroke="#e0913a" stroke-width="1.4"/>`;
-  // the twilight band, either side of the terminator
-  for (const sgn of [-1, 1]){
-    const b0 = P(a0 + sgn*0), b1 = P(a0 + TWI/180*Math.PI*sgn);
-    s += `<path d="M${b0[0].toFixed(1)} ${b0[1].toFixed(1)} A ${Rp} ${Rp} 0 0 ${sgn > 0 ? 1 : 0}
-           ${b1[0].toFixed(1)} ${b1[1].toFixed(1)}" fill="none" stroke="#c05a9a" stroke-width="4"/>`;
-  }
-  // a walker on the ground at the terminator
-  const w = P(a0);
-  s += `<circle cx="${w[0].toFixed(1)}" cy="${w[1].toFixed(1)}" r="4" fill="#3fb8af"/>`;
-  s += `<text x="${(w[0] - 10).toFixed(1)}" y="${(w[1] - 9).toFixed(1)}" text-anchor="end"
-         font-size="10.5" fill="#3fb8af">you</text>`;
+  s += `<polygon id="lit" points="${poly(arc(a0, a1))}" fill="#e0913a" fill-opacity=".2"/>`;
+  s += `<line x1="${P(a0)[0].toFixed(1)}" y1="${P(a0)[1].toFixed(1)}"
+         x2="${P(a1)[0].toFixed(1)}" y2="${P(a1)[1].toFixed(1)}"
+         stroke="#e0913a" stroke-width="1.6"/>`;
+  // twilight: TWI degrees of sun elevation, so TWI/2 either side of each terminator
+  const half = TWI/2 / 180 * Math.PI;
+  for (const a of [a0, a1])
+    s += `<polyline points="${poly(arc(a - half, a + half, 12, 1.5))}"
+           fill="none" stroke="#c05a9a" stroke-width="4" stroke-linecap="round"/>`;
+
+  // a walker standing still while the terminator sweeps past
+  const W = Math.PI/2, wLit = Math.cos(W - sunAngle) > 0, w = P(W);
+  const wl = P(W, 15);
+  s += `<circle cx="${w[0].toFixed(1)}" cy="${w[1].toFixed(1)}" r="4.5" fill="#3fb8af"/>`;
+  s += `<text x="${wl[0].toFixed(1)}" y="${(wl[1] - 3).toFixed(1)}" text-anchor="middle"
+         font-size="10.5" fill="#3fb8af">you &#183; ${wLit ? 'day' : 'night'}</text>`;
   s += `<text x="${O[0]}" y="${(O[1] + 4)}" text-anchor="middle" font-size="10.5" fill="#4a5674">1,700 m</text>`;
-  s += `<text x="330" y="16" text-anchor="end" font-size="10.5" fill="#e0913a">day</text>`;
-  s += `<text x="330" y="208" text-anchor="end" font-size="10.5" fill="#5c6577">night</text>`;
+  // labels ride round with the sun instead of sitting in fixed corners
+  const dl = P(sunAngle, 26), nl = P(sunAngle + Math.PI, 26);
+  s += `<text x="${dl[0].toFixed(1)}" y="${(dl[1]+4).toFixed(1)}" text-anchor="middle"
+         font-size="10.5" fill="#e0913a">day</text>`;
+  s += `<text x="${nl[0].toFixed(1)}" y="${(nl[1]+4).toFixed(1)}" text-anchor="middle"
+         font-size="10.5" fill="#5c6577">night</text>`;
   document.getElementById('term').innerHTML = s;
 
   document.getElementById('dv').textContent = fmtTime(day);

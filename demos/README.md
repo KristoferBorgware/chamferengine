@@ -204,11 +204,13 @@ asserted, and the readout gives the pentagon figure — 5/6 of the area for the
 same light.
 
 **Terminator** spins a planet with a live day/night line and a day-length slider.
-It opens on the anchor: a **2.12-hour** day, doc 06's circumnavigation time,
-where the terminator moves at exactly walking pace. Slide it shorter and dawn
-overtakes you; longer and you can outwalk the sunset indefinitely. Twilight is
-marked, and its duration is a fixed fraction of the day whatever the planet's
-size.
+A walker stands still on the surface while the terminator sweeps over them, so
+you watch day and night arrive as a *place* rather than as a clock value. It
+opens on the anchor: a **2.12-hour** day, doc 06's circumnavigation time, where
+the terminator moves at exactly walking pace. Slide it shorter and dawn overtakes
+you; longer and you can outwalk the sunset indefinitely. Twilight is marked on
+both terminators, and its duration is a fixed fraction of the day whatever the
+planet's size.
 
 **Docs:** [16 — Lighting](../docs/16-lighting.md)
 

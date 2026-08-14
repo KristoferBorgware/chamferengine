@@ -329,9 +329,15 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
 
 ---
 
-**Demo:** [`demos/lighting.html`](../demos/lighting.html) — a torch you can drag
-across a hex field with the light levels drawn in, side by side with the same
-torch on a square grid so the 1.5× is visible rather than asserted. Drop the
-torch on the pentagon to watch the disc lose a sixth of its area without losing
-any brightness. The second tab spins a planet with a live terminator and a day
-length slider, marked with the speed a player can walk.
+**Demo:** [`demos/lighting.html`](../demos/lighting.html) — two tabs. **Torch**
+runs the same flood fill on a hex field and a square field side by side, light
+levels drawn into every cell, with a range slider. The counts track `3r²+3r+1`
+against `2r²+2r+1`, so the **1.5×** is visible rather than asserted, and the
+readout carries the pentagon figure alongside — a sixth less area for the same
+brightness.
+
+**Terminator** spins a planet under a fixed sun with a day-length slider. A
+walker stands still on the surface while the terminator sweeps over them, which
+is the point: day and night are a *place* here, not a clock value. It opens on
+the anchor — a 2.12-hour day, where the terminator moves at exactly walking
+pace — and the readout says whether you could have outrun it.
