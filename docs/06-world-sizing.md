@@ -118,24 +118,82 @@ by `(R − h) / R`.
 
 - 64 blocks into a 1,700 m planet → cells at the crust floor are **96%** of
   surface width. Imperceptible.
-- Below roughly **85%**, blocks visibly narrow as you dig. That threshold is a
-  judgement about what a player notices, not a measurement — there is no script
-  behind it, and it should be treated as a place to start looking rather than a
-  number to design against.
-- At that point, **cap the crust.** The worked-example planet never gets near it.
 - If crust depth exceeds the radius, cells collapse to nothing before the bottom.
 
+### How deep is too deep
+
+Earlier drafts put the threshold at roughly 85% of surface width and admitted it
+was a guess with no script behind it. There is a measured anchor available
+instead, and it is more permissive than the guess.
+
+The surface is **not uniform to begin with** ([doc 02](02-geometry-choice.md)):
+the narrowest cell anywhere on it, next to a pentagon, is **0.744** of nominal
+spacing. A taper that stays above that has not produced a cell narrower than one
+the player has already walked across at the surface. That puts the budget at
+**25.6% of the radius** — and confirms the old 85% guess was conservative, so
+nothing built on it was wrong.
+
+Converting to layers gives a result worth stating on its own:
+
+```
+maxCrust = (1 − 0.744) · 2^D / K        layers
+```
+
+**The radius cancels.** Block size and radius scale together, so the crust cap
+depends on subdivision depth alone — the same layer count on a 10 km planet as on
+an Earth-sized one.
+
+> **[verified]** `verification/taper.js`
+>
+> | `D` | Block @ R 1,700 m | Max crust | What binds first |
+> |---|---|---|---|
+> | 9 | 4 m | 109 layers | taper |
+> | 10 | 2 m | 218 layers | taper |
+> | 11 | 1 m | **435 layers** | taper |
+> | 12 | 0.5 m | 870 layers | the ID's 512-layer field |
+> | 13 | 0.25 m | 1,741 layers | the ID's 512-layer field |
+
+The worked planet uses **64** layers against a cap of **435** — **6.8× of
+headroom**. Capping is not a constraint on it; it is a ceiling nobody is near.
+
+### Merging layers is declined, and now priced
+
 The obvious alternative to capping — **merging layers**, dropping the horizontal
-resolution by one level at a chosen depth — is deliberately *not* recommended
-here, though earlier drafts of this document suggested it in passing. It
-contradicts the invariant that the tessellation is identical at every layer
-([doc 03](03-addressing.md)), and three separate results are built on that
-invariant: free vertical neighbours, tractable gravity
-([doc 13](13-gravity-and-orientation.md)), and exact vertical face merging
-([doc 14](14-meshing-and-lod.md)). A resolution change at depth breaks all three
-along an interior boundary that wraps the whole planet, and no seam rule in the
-design covers it. It is listed as an open topic in
-[doc 11](11-open-topics.md), not as a recommendation.
+resolution by one level at a chosen depth — is *not* recommended, though earlier
+drafts of this document suggested it in passing. It used to be declined on
+principle. It can now be declined on arithmetic.
+
+**What it buys.** One merge doubles cell width, so the taper budget restarts:
+reach goes from 25.6% of the radius to 62.8%. But the ID layout sizes the layer
+field for a **512-layer** crust ([doc 03](03-addressing.md)), and the unmerged cap
+at `D` 11 is already 435. So the first merge buys **77 addressable layers — 18%
+more crust** — and every merge after it buys **nothing at all**, because the ID
+cannot address the result.
+
+**What it costs.** An interior LOD seam that wraps the entire planet.
+
+> **[verified]** `verification/taper.js` — cell *centres* nest exactly, since
+> `oneShot(n/2, i, j)` equals `oneShot(n, 2i, 2j)`; cell *areas* do not, because a
+> hexagon is not a union of four hexagons. So **one fine column in four continues
+> through the shell and three in four terminate** against a cell they only partly
+> overlap — and all **41,943,042** of the worked planet's columns cross it.
+
+Compare [doc 14](14-meshing-and-lod.md)'s LOD seam, which costs 2.70 faces per rim
+column and only at chunks bordering a different level. **This seam has no rim.**
+It is the whole planet, at one depth, permanently.
+
+And it breaks the invariant that the tessellation is identical at every layer,
+which four separate results are built on:
+
+| Result | Doc | Becomes |
+|---|---|---|
+| Vertical neighbour is `layer ± 1` | [03](03-addressing.md) | a full doc 04 lookup at the shell |
+| Gravity and the three frames stay cheap | [13](13-gravity-and-orientation.md) | frames rebuilt across the shell |
+| Vertical face merging is exact to 1.5e-16 | [14](14-meshing-and-lod.md) | stacked cells no longer share a radial plane |
+| Sky light stored per column, 32× smaller | [16](16-lighting.md) | columns no longer straight through |
+
+**18% more crust against four broken results and an unrimmed planetary seam. Cap
+the crust.** [Doc 11](11-open-topics.md) records this as closed rather than open.
 
 The calculator reports the taper live.
 
@@ -143,9 +201,13 @@ The calculator reports the taper live.
 
 ## Two things the numbers assume
 
-- **Cell area is not perfectly uniform.** Goldberg hexagons vary about **1.3:1**
-  across the sphere, so block size is an average. Cells near the twelve pentagons
-  run slightly smaller.
+- **Cell area is not perfectly uniform**, and by more than this document used to
+  say. Goldberg hexagons vary **1.99:1** across the sphere — **2.74:1** counting
+  the twelve pentagons — so block size is genuinely an average
+  ([doc 02](02-geometry-choice.md)). Real cells run from **0.744×** to **1.098×**
+  the nominal spacing, which on the worked planet means 1 m blocks that are
+  anywhere from 74 cm to 1.10 m wide. Cells near the twelve pentagons are the
+  small ones.
 - **Hexagons are not cubes.** Block size is measured flat-to-flat. A hexagon that
   wide covers **0.87×** the footprint of a square block of the same size, and is
   **1.15×** wider corner-to-corner. Everything is about 13% smaller than the same
@@ -182,5 +244,9 @@ is where it is cashed in.
 - One level up **doubles the radius and quadruples the cells**.
 - The worked planet is **1 m blocks, level 11, radius 1,700 m, 41,943,042
   cells** — used throughout the rest of the specification.
-- Depth tapers cells by `(R − h)/R`; below **85%** it becomes visible.
+- Depth tapers cells by `(R − h)/R`. The budget is **25.6% of the radius** — the
+  point where a cell gets narrower than the narrowest one already on the surface —
+  which is `(1 − 0.744)·2^D/K` layers and **depends on `D` alone**, not on radius.
+- **Cap the crust; do not merge layers.** Merging buys 18% more addressable crust
+  and costs an unrimmed seam across every column on the planet.
 - Storage is the real ceiling, and generating on demand removes even that.

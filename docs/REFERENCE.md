@@ -34,6 +34,8 @@ numbered documents.
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
 | [`seam.js`](../verification/seam.js) | What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, and what does close the remaining holes. | [14](14-meshing-and-lod.md) |
+| [`taper.js`](../verification/taper.js) | Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost. | [06](06-world-sizing.md) |
+| [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
 | [`volume.js`](../verification/volume.js) | Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs. | [08](08-terrain-generation.md) [14](14-meshing-and-lod.md) |
 
 ---
@@ -769,6 +771,128 @@ Cost of the fine chunk owning the seam:
   1.09 spans and ~12 faces per column the chunk already emits.
 ```
 
+## `taper.js`
+
+Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost.
+
+Cited by [doc 06](06-world-sizing.md).
+
+```
+1. where the taper threshold actually sits
+   narrowest surface cell, from uniform.js : 0.744 of nominal
+   so the taper budget is                  : 25.6% of the radius
+   doc 06's guess was 85% -> 15% of R, which is CONSERVATIVE against this,
+   so nothing built on it was wrong -- but it was a judgement, and this is not.
+
+2. max crust in layers = (1-t) * 2^D / K  -- the radius cancels
+   D    block @ R=1700   max crust (layers)   as metres @ R=1700   ID layer field
+    9       4.000 m              109               435 m   taper binds
+   10       2.000 m              218               435 m   taper binds
+   11       1.000 m              435               435 m   taper binds
+   12       0.500 m              870               435 m   layer field binds (512)
+   13       0.250 m             1741               435 m   layer field binds (512)
+   14       0.125 m             3482               435 m   layer field binds (512)
+   Same layer count on a 10 km planet and on an Earth-sized one: block size and
+   radius scale together, so only D matters. That is worth stating on its own --
+   the crust cap is a property of the grid, not of the world you sized.
+
+3. the doc 06 worked planet: 1 m blocks, D 11, R 1700 m
+   crust in use          : 64 layers  (cells at the floor are 96.2% of surface width)
+   taper cap             : 435 layers
+   headroom              : 6.8x deeper than the design uses
+   Capping costs this planet nothing at all. It is not a constraint, it is a
+   ceiling nobody is near.
+
+4. what merging layers would buy, as a fraction of the radius
+   after 0 merge(s): reach 25.6% of R  = 435 m = 435 layers @ 1 m
+   after 1 merge(s): reach 62.8% of R  = 1068 m = 1068 layers @ 1 m
+   after 2 merge(s): reach 81.4% of R  = 1384 m = 1384 layers @ 1 m
+   after 3 merge(s): reach 90.7% of R  = 1542 m = 1542 layers @ 1 m
+   But the ID layout sizes the layer field for a 512-layer crust (docs 03, 06).
+   Unmerged reach is 435 layers; the field stops at 512. So the first merge
+   buys 77 addressable layers -- 18% more crust -- and every merge after
+   it buys nothing at all, because the ID cannot address the result.
+
+5. what the interior shell would cost
+   L      fine cells   coarse cells   columns continuing   columns dead-ending
+   9    2,621,442        655,362   25.00%                75.00%
+   10   10,485,762      2,621,442   25.00%                75.00%
+   11   41,943,042     10,485,762   25.00%                75.00%
+   Cell CENTRES nest exactly -- oneShot(n/2, i, j) equals oneShot(n, 2i, 2j), so
+   every coarse centre is also a fine centre. Cell AREAS do not: a hexagon is not
+   a union of four hexagons. So one fine column in four continues through the
+   shell and three in four terminate against a cell they only partly overlap.
+
+   Every one of the worked planet's 41,943,042 columns crosses that shell.
+   Compare doc 14's LOD seam, which is a rim: 2.70 faces per rim column, and only
+   at chunks that border a different level. This seam has no rim -- it is the
+   whole planet, at one depth, forever.
+
+6. what the shell breaks (invariant 10: the tessellation is identical at every layer)
+   vertical neighbour is layer +/- 1          doc 03  ->  becomes a full doc 04 lookup at the shell
+   gravity and the three frames stay cheap    doc 13  ->  frames must be rebuilt across the shell
+   vertical face merging is exact (1.5e-16)   doc 14  ->  stacked cells no longer share a radial plane
+   sky light stored per column, 32x smaller   doc 16  ->  columns are no longer straight through
+
+verdict
+   buys : 77 layers of addressable crust on the worked planet, 18%
+   costs: an unrimmed seam across all 41,943,042 columns, and four results
+          that four separate documents are built on
+   Cap the crust. Strike layer merging.
+```
+
+## `uniform.js`
+
+How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to.
+
+Cited by [doc 02](02-geometry-choice.md), [doc 10](10-pathfinding.md).
+
+```
+1. cell AREA variation, measured two independent ways
+   L      cells   sum/4pi   A hex-only   B hex-only   B incl. pentagons
+   2        162  1.0000000   1.1625       1.1673       1.8950
+   3        642  1.0000000   1.5207       1.5258       2.3261
+   4       2562  1.0000000   1.7466       1.7496       2.5404
+   5      10242  1.0000000   1.8679       1.8694       2.6428
+   6      40962  1.0000000   1.9300       1.9307       2.6922
+   7     163842  1.0000000   1.9613       1.9617       2.7164
+   the two methods agree to 4 decimals and both close on 4pi, so the spread is
+   a property of the grid and not of the measurement.
+
+2. the limit, and why it is a constant
+   face angular radius theta_v            = 37.3774 deg
+   predicted area ratio   sec^3(theta_v)  = 1.992806
+   measured, extrapolated from the series = 1.992646
+   predicted linear ratio sec^1.5(theta_v)= 1.411668
+   They agree to four decimals. The ratio does NOT shrink with depth -- a face
+   triangle is scale-free, the same reason hexround.js sees its disagreement
+   plateau. At L=2 the ratio is 1.17 and at L=3 it is 1.53, which is where the
+   documented "1.3:1" came from: it is a low-level reading, and the design runs
+   at level 11.
+
+3. edge length against doc 06 nominal spacing (unit sphere)
+   L      cells   mean/nom   min/nom   max/nom   max:min
+   2        162   0.9944    0.8430    1.0837    1.2856
+   3        642   0.9977    0.7938    1.0947    1.3790
+   4       2562   0.9985    0.7682    1.0975    1.4286
+   5      10242   0.9987    0.7554    1.0982    1.4539
+   6      40962   0.9988    0.7489    1.0984    1.4666
+   7     163842   0.9988    0.7457    1.0984    1.4730
+   8     655362   0.9988    0.7441    1.0984    1.4762
+   mean/nominal settles at 0.9988, so doc 06's K formula is right to 0.12%.
+   max/nominal settles at 1.0984 -- the admissible divisor for doc 10 is
+   10% ABOVE NOMINAL, not the 7% that document derived from 1.14:1.
+   min/nominal settles at 0.744, at a pentagon, which is the narrowest cell
+   that exists anywhere on the surface -- the anchor taper.js uses.
+
+summary
+   hexagon area variation          1.99 : 1   (sec^3 theta_v), NOT 1.3 : 1
+   including the twelve pentagons  2.74 : 1
+   hexagon linear variation        1.41 : 1   (sec^1.5 theta_v), NOT 1.14 : 1
+   edge length variation           1.48 : 1   min at a pentagon
+   safe A* divisor                 1.10 x nominal
+```
+
 ## `volume.js`
 
 Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs.
@@ -843,4 +967,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_16 scripts. Every number above is reproduced by running them._
+_18 scripts. Every number above is reproduced by running them._

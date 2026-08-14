@@ -359,6 +359,70 @@ brute-force search for the nearest cell centre on the sphere.
 
 ---
 
+## `uniform.js` — how uniform are the cells, really?
+
+Doc 02 claimed 1.3:1 in area and 1.14:1 in spacing from the first draft, with no
+script behind either — the only load-bearing constant in the specification that
+had none. Both are used: doc 10 divides by maximum spacing to keep its A*
+heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real
+spread on the one-shot grid.
+
+**Verifies:**
+
+1. **The spread is real and the measurement is sound.** Every cell's area computed
+   two independent ways — a third of each incident triangle, and the exact
+   spherical area of the dual polygon. They agree to four decimals at every level
+   and both sum to exactly 4π.
+2. **It is 1.99:1, not 1.3:1.** Hexagon area ratio rises 1.17 → 1.53 → 1.75 →
+   1.87 → 1.93 → **1.96** over levels 2–7, and **2.72:1** counting the pentagons.
+   It *rises with level and settles*; the documented figure was a level-2 reading,
+   and the design runs at level 11.
+3. **The limit is a closed form.** One-shot barycentric is the gnomonic projection
+   of a flat face triangle, and gnomonic area scales as `cos³` off the face axis,
+   so the ratio is `sec³(θᵥ)` for `θᵥ = 37.3774°`, the angular radius of an
+   icosahedron face. Predicted **1.992806**, extrapolated from measurement
+   **1.992646**. Depth is not a fix — a face triangle is scale-free, the same
+   reason `hexround.js` sees a plateau.
+4. **The number doc 10 actually needs.** Against doc 06's nominal `K·R/2^L`, mean
+   edge settles at **0.9988** (so the `K` formula is right to 0.12%), min at
+   **0.744** at a pentagon, and max at **1.0984**. The admissible A* divisor is
+   **10% above nominal**; doc 10 had derived 7% from the old figure and was
+   therefore inadmissible.
+
+**Used in:** [doc 02](../docs/02-geometry-choice.md)
+
+---
+
+## `taper.js` — cap the crust, or merge layers?
+
+Cells taper as `(R − h)/R` with depth. Doc 06 caps the crust and raised merging
+layers only to decline it; doc 11 carried it as "proposed, never designed". This
+prices both sides.
+
+**Verifies:**
+
+1. **The threshold has a measured anchor.** The narrowest cell already on the
+   surface is 0.744 of nominal (`uniform.js`), so the taper budget is **25.6% of
+   the radius** — doc 06's 85% guess was conservative, so nothing built on it was
+   wrong.
+2. **The crust cap depends on `D` alone.** `maxCrust = (1 − 0.744)·2^D / K`
+   layers — the radius cancels, because block size and radius scale together. At
+   `D` 11 that is **435 layers** against the **64** the worked planet uses, 6.8× of
+   headroom. Beyond `D` 12 the ID's 512-layer field binds first instead.
+3. **Merging buys almost nothing.** One merge lifts reach from 25.6% to 62.8% of
+   the radius, but the ID addresses only 512 layers and the unmerged cap is
+   already 435 — so it buys **77 layers, 18%**, and every merge after it buys zero.
+4. **And costs a seam with no rim.** Cell *centres* nest exactly
+   (`oneShot(n/2, i, j)` = `oneShot(n, 2i, 2j)`) but cell *areas* do not, so **one
+   fine column in four continues through the shell and three in four terminate**.
+   All 41,943,042 of the worked planet's columns cross it, against doc 14's LOD
+   seam which is 2.70 faces per *rim* column. Plus the four results invariant 10
+   pays for, broken at that depth.
+
+**Used in:** [doc 06](../docs/06-world-sizing.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a
@@ -368,3 +432,11 @@ And the converse, which is how the gap above went unnoticed: **a script
 verifying one step of a pipeline does not verify the pipeline.** `lookup.js`
 proving step 1 exact made doc 04 read as verified throughout. Say which step a
 script covers, and mark the ones nothing covers.
+
+And the one that cost the most: **an old number is not a verified number.**
+1.3:1 sat in eight documents for the whole life of the specification, was cited
+between them as though doc 02 had established it, and had never been measured at
+all. It was out by 50%, and it had already made doc 10's heuristic inadmissible.
+Everything with a script attached survived scrutiny; the one thing without a
+script did not. When a document cites another document for a constant, check that
+the chain ends at a script rather than at a draft.

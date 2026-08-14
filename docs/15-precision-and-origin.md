@@ -183,11 +183,18 @@ splitting at midpoints, in index space, exactly — and misleading as descriptio
 of *where the vertices go*. The hierarchy subdivides; the positions do not
 accumulate.
 
-**The honest trade:** recursive subdivision gives slightly more uniform cell
-areas, because equal arcs beat equal chords on a sphere. One-shot gives exact
-addressing and an exact ray walk. This design takes the addressing, which is what
-docs 03, 04 and 09 are all built on, and pays for it with the 1.3:1 area
-variation already recorded in [doc 02](02-geometry-choice.md).
+**The honest trade:** recursive subdivision gives more uniform cell areas, because
+equal arcs beat equal chords on a sphere. One-shot gives exact addressing and an
+exact ray walk. This design takes the addressing, which is what docs 03, 04 and 09
+are all built on, and pays for it with the area variation recorded in
+[doc 02](02-geometry-choice.md) — **1.99:1**, not the 1.3:1 that figure was
+believed to be when this paragraph was first written.
+
+That price is higher than it looked, and it is specifically *this* construction's
+price: one-shot barycentric is the gnomonic projection of a flat triangle, and
+`sec³(θᵥ) = 1.9928` is exactly the gnomonic area distortion across an icosahedron
+face. The trade still goes the same way — approximate addressing would be far
+worse than non-uniform cells — but it should be made with the real number.
 
 ---
 

@@ -54,10 +54,20 @@ nominal spacing and every step through a tighter-than-average region — near th
 twelve pentagons, where cells run smallest — is overcounted, the heuristic stops
 being admissible, and the search quietly returns paths that are not shortest.
 
-Spacing varies about **1.14:1** ([doc 02](02-geometry-choice.md)), so the safe
-divisor is roughly 7% above nominal. The cost of being conservative is a slightly
-weaker heuristic and a few more nodes expanded. The cost of not being is silently
-wrong routes, which is much worse and much harder to notice.
+> **[verified]** `verification/uniform.js` measures the largest edge on the real
+> grid against [doc 06](06-world-sizing.md)'s nominal `K·R/2^L`. It settles at
+> **1.0984** by level 8, and the mean settles at 0.9988 — so nominal really is
+> the mean, and the largest step is **9.84% above it**.
+
+**The safe divisor is 10% above nominal.** Earlier drafts of this document said
+7%, derived from a spacing figure of 1.14:1 that [doc 02](02-geometry-choice.md)
+has since measured and corrected to **1.41:1**. A 7% divisor is *not* admissible:
+every step through the tightest regions is overcounted, which is exactly the
+failure this section warns about, committed by this section.
+
+The cost of being conservative is a slightly weaker heuristic and a few more nodes
+expanded. The cost of not being is silently wrong routes, which is much worse and
+much harder to notice.
 
 ## Pentagons and seams are non-events
 
@@ -105,11 +115,14 @@ simplification is what makes the demo small, not what makes it correct.
   any-angle pathfinding (Theta*) or string-pulling — and the line-of-sight test
   both need is exactly the ray walk from [doc 09](09-ray-traversal.md). That
   traversal is already the pathfinding smoother.
-- **Step costs are not perfectly uniform.** Cells vary ~1.3:1 in area across the
-  sphere — about 1.14:1 in spacing — and shrink with depth. Irrelevant to how
-  gameplay *feels*, but not irrelevant to correctness: it is exactly why the
-  cross-face heuristic above must divide by maximum spacing. If true travel times
-  are needed, weight each edge by actual centre-to-centre distance.
+- **Step costs are not perfectly uniform**, and by more than this document used
+  to say. Cells vary **1.99:1** in area across the sphere — **1.41:1** in spacing,
+  **1.48:1** counting the pentagons ([doc 02](02-geometry-choice.md)) — and shrink
+  with depth. Irrelevant to how gameplay *feels*, but not irrelevant to
+  correctness: it is exactly why the cross-face heuristic above must divide by
+  maximum spacing, and getting the spread wrong is how that heuristic silently
+  stopped being admissible. If true travel times are needed, weight each edge by
+  actual centre-to-centre distance.
 
 ---
 
@@ -119,7 +132,8 @@ simplification is what makes the demo small, not what makes it correct.
   rather than being handled. Six-and-equidistant is the approximation; edge-only
   is the guarantee.
 - The heuristic is exact within a face and great-circle across faces, both from
-  the ID alone — divided by **maximum** spacing, or it is not admissible.
+  the ID alone — divided by **maximum** spacing, which is **1.10× nominal**, or it
+  is not admissible.
 - Pentagons are degree-5 nodes and seams live inside `neighbour()` — **the
   pathfinder never learns it is on a sphere**.
 - Hierarchical search is free: **truncate the ID** and the coarse graph is

@@ -55,8 +55,10 @@ Goldberg polyhedron wins it.
 ## Design goals
 
 1. **Seamless wrapping.** No edge, no pole, no discontinuity in gameplay.
-2. **No distorted cells.** Cells vary in size only mildly and smoothly, never
-   with a visible break.
+2. **No distorted cells.** Cells vary in size smoothly and with no visible break
+   anywhere — which is the property that matters, and is not the same as varying
+   *little*. The spread is about 2:1 in area ([doc 02](02-geometry-choice.md));
+   what a cube sphere gets wrong is the discontinuity, not the magnitude.
 3. **Edge-only adjacency.** Every adjacency is a shared edge — never a bare
    corner. This eliminates an entire class of diagonal-movement and
    corner-cutting bugs, and unlike the two qualifiers below it is exact,
@@ -64,10 +66,12 @@ Goldberg polyhedron wins it.
 
    The two qualifiers: **twelve cells have five neighbours** rather than six,
    which [doc 02](02-geometry-choice.md) shows is forced rather than chosen; and
-   neighbours are equidistant only to about **14%**, since cell area varies
-   1.3:1. Both are small. Neither is zero, and code that assumes otherwise is
+   neighbours are equidistant only to about **41%**, since hexagon area varies
+   1.99:1. The first is small. The second is not — it is a measured 1.41:1 in
+   spacing, not the 1.14:1 earlier drafts claimed. Code that assumes otherwise is
    wrong — see [doc 13](13-gravity-and-orientation.md) for what the first costs
-   and [doc 10](10-pathfinding.md) for what the second costs.
+   and [doc 10](10-pathfinding.md) for what the second costs, which is an
+   inadmissible search heuristic.
 4. **Exact hierarchy.** A chunk must contain its children exactly, not
    approximately, so that level-of-detail, streaming, and hierarchical
    pathfinding are all sound.
@@ -80,8 +84,9 @@ Goldberg polyhedron wins it.
 
 - **Matching Minecraft's exact feel.** Hexagons are not cubes. Buildings,
   recipes, and directional blocks all behave differently. This is accepted.
-- **Perfectly uniform cell area.** Cells vary roughly 1.3:1 across the sphere.
-  Irrelevant for gameplay, but code must not assume uniformity.
+- **Perfectly uniform cell area.** Hexagons vary **1.99:1** across the sphere,
+  2.74:1 counting the pentagons. Irrelevant for gameplay, but code must not assume
+  uniformity, and anything dividing by "the" cell spacing must use the maximum.
 - **A general-purpose geospatial library.** Google S2 and Uber H3 already exist
   and are excellent at that job. This is a game world.
 

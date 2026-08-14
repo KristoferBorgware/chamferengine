@@ -144,8 +144,10 @@ Camera and controller state only; never a stored coordinate.
 | Hexagon area | `(√3/2)·d²` ≈ 0.866 d² | `d` = centre-to-centre spacing |
 | Hexagon vs square footprint | 0.87× | same nominal width |
 | Hexagon corner-to-corner | 1.15× | vs flat-to-flat |
-| Cell area variation | ≈ 1.3 : 1 | across the sphere |
-| Cell spacing variation | ≈ 1.14 : 1 | square root of the area figure |
+| Cell area variation | ≈ 1.99 : 1 | hexagons; `sec³(37.3774°)` |
+| Cell area variation, with pentagons | ≈ 2.74 : 1 | across the sphere |
+| Cell spacing variation | ≈ 1.41 : 1 | hexagons; `sec^1.5(37.3774°)` |
+| Largest edge ÷ nominal spacing | 1.098 | the admissible A* divisor |
 | ID width | `5 + 2D` bits | independent of chunk level |
 | Code space used | ≈ 31.25% | `20/32 × 1/2` |
 | Max levels in 64 bits, no layer field | 29 | `(64 − 5) / 2` |

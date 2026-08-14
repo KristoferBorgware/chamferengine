@@ -88,24 +88,75 @@ Cell counts follow `N(L) = 10 · 4^L + 2`:
 | 4 | 2,562 | 2,550 + 12 |
 
 **Why chosen:** best neighbour ergonomics of any option. Every adjacency is a
-shared edge — no diagonals, no ambiguity, no corner-cutting. Away from the twelve
-pentagons a cell has six neighbours, near enough equidistant to be treated as
-such for movement.
+**shared edge** — no diagonals, no ambiguity, no corner-cutting. That part is
+exact and holds everywhere. Away from the twelve pentagons a cell also has six
+neighbours, near enough equidistant to be treated as such for movement.
 
-"Near enough" is doing real work in that sentence, and the caveat below says how
-much.
+"Near enough" is doing real work in that second sentence, and the caveat below
+says how much — more than earlier drafts of this document claimed. The shared-edge
+guarantee is the one to lean on; equidistance is the approximation.
 
 **Honest caveat:** the hexagons are **near-regular, not congruent**. Edge lengths
-and angles vary slightly, with most distortion clustered near the twelve
-pentagons and fading out. Area varies roughly **1.3:1** across the sphere, so
-centre-to-centre spacing varies about **1.14:1** — area goes as the square of
-spacing. This is small and *smoothly distributed* with no discontinuity, which is
-the real win over a cube map — but "all hexagons are identical" is false, and
-code must not assume it.
+and angles vary, with most distortion clustered near the twelve pentagons and
+fading out. This is *smoothly distributed* with no discontinuity, which is the
+real win over a cube map — but "all hexagons are identical" is false, and code
+must not assume it.
 
-That 14% is the number to reach for whenever something divides by "the" cell
+How false was, until recently, the one load-bearing number in this specification
+with no script behind it. Earlier drafts of this document said 1.3:1 in area and
+1.14:1 in spacing. Measured, it is closer to **2:1**.
+
+> **[verified]** `verification/uniform.js` measures every cell's area two
+> independent ways — a third of each incident triangle, and the exact spherical
+> area of the dual polygon. They agree to four decimals and both sum to exactly
+> 4π.
+>
+> | Level | Cells | Hexagon area ratio | Including pentagons |
+> |---|---|---|---|
+> | 2 | 162 | 1.17 | 1.90 |
+> | 3 | 642 | 1.53 | 2.33 |
+> | 4 | 2,562 | 1.75 | 2.54 |
+> | 5 | 10,242 | 1.87 | 2.64 |
+> | 6 | 40,962 | 1.93 | 2.69 |
+> | 7 | 163,842 | **1.96** | **2.72** |
+
+The ratio **rises with level and settles**, and it settles on a closed form. The
+one-shot construction ([doc 15](15-precision-and-origin.md)) is exactly the
+gnomonic projection of a flat face triangle, and gnomonic area scales as `cos³` of
+the angle off the face axis. So the ratio between a cell at a face's centre and
+one at its corner is `sec³` of the face's angular radius:
+
+```
+θᵥ = 37.3774°        the angular radius of an icosahedron face
+sec³(θᵥ)   = 1.9928  ← hexagon area ratio
+sec^1.5(θᵥ) = 1.4117 ← hexagon spacing ratio
+```
+
+Extrapolated from the measured series: **1.9926**. Agreement to four decimals.
+
+**Depth is not a fix**, and that is the point of the closed form — a face triangle
+is scale-free, so refining shrinks the cells and the distortion together. It is
+the same reason `hexRound`'s disagreement plateaus in
+[doc 04](04-position-lookup.md).
+
+And it explains where 1.3:1 came from: at level 2 the ratio really is 1.17, and at
+level 3 it is 1.53. It was read off a coarse grid. **The design runs at level 11.**
+
+So the figures to use are:
+
+| Quantity | Value |
+|---|---|
+| Hexagon area variation | **1.99 : 1** |
+| Area variation including the twelve pentagons | **2.74 : 1** |
+| Hexagon spacing variation | **1.41 : 1** |
+| Edge length variation, min at a pentagon | **1.48 : 1** |
+| Largest edge ÷ nominal spacing | **1.098** |
+
+That last row is the one to reach for whenever something divides by "the" cell
 spacing. [Doc 10](10-pathfinding.md) is where it has teeth: a heuristic that
-divides by nominal spacing rather than maximum spacing stops being admissible.
+divides by nominal spacing rather than maximum spacing stops being admissible —
+and the safe divisor is **10% above nominal**, not the 7% that document had
+derived from 1.14:1.
 
 **Demo:**
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html) —

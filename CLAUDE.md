@@ -50,11 +50,11 @@ script owns its numbers.
 |---|---|---|
 | [00](docs/00-introduction.md) | goals, non-goals, why the 720° forces everything | — |
 | [01](docs/01-prior-art.md) | what to take from S2 and H3, and what not to | `s2.js` |
-| [02](docs/02-geometry-choice.md) | the tiling: Goldberg, dual of a subdivided icosahedron | `check.js` |
+| [02](docs/02-geometry-choice.md) | the tiling: Goldberg, dual of a subdivided icosahedron | `check.js`, `uniform.js` |
 | [03](docs/03-addressing.md) | ID layout, path digits, the flip flag, border ownership | `qr.js`, `order.js` |
 | [04](docs/04-position-lookup.md) | position → cell, exactly and without storage | `lookup.js` |
 | [05](docs/05-face-adjacency.md) | crossing between the 20 faces; the 180-byte table | `adj.js` |
-| [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js` |
+| [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js`, `taper.js` |
 | [07](docs/07-data-structures.md) | what lives in RAM, on disk, and in code | — |
 | [08](docs/08-terrain-generation.md) | the noise model, height vs density term, deltas | `volume.js` |
 | [09](docs/09-ray-traversal.md) | block picking as a grid walk | — |
@@ -100,12 +100,15 @@ Violating any of these breaks the design. They are not tunable.
 10. The tessellation is **identical at every layer** — same face, same path,
     same `(q, r)`, evaluated at a smaller radius. This is what makes vertical
     neighbours free, gravity tractable, and vertical face merging exact. Do not
-    change horizontal resolution with depth; doc 06 mentions it as a taper
-    remedy, and doc 11 files it as unsolved for exactly this reason.
+    change horizontal resolution with depth; doc 06 raised it as a taper remedy
+    and `taper.js` priced it at 18% more crust against an interior seam crossing
+    every column on the planet, so doc 11 now files it as **struck**, not open.
 11. Every adjacency is a **shared edge**, never a bare corner. That is the exact
     guarantee. "Six neighbours, all equidistant" is the *approximation* — 12
-    cells have five, and spacing varies ~1.14:1. Never state the approximation
+    cells have five, and spacing varies **1.41:1** (1.48:1 counting pentagons),
+    not the 1.14:1 claimed until it was measured. Never state the approximation
     as the guarantee; doc 00's design goal 3 used to, and doc 10 inherited it.
+    Anything dividing by "the" cell spacing divides by **1.098 × nominal**.
 12. Vertex positions come from the **one-shot** construction: `(i, j)` maps to
     `normalize(A·a + B·b + C·c)`, a single barycentric blend evaluated once at
     full depth. **Never** build positions by repeated arc-midpoint subdivision —
@@ -142,7 +145,13 @@ Violating any of these breaks the design. They are not tunable.
 | S2 area ratios | linear `5.20`, quadratic `2.08`, tangent `1.41` | asymptotic | `s2.js` |
 | RT defect split | `20 × 10.3°` + `12 × 42.8°` = `720°` | rhombic triacontahedron | `check.js` |
 | cube defect split | `8 × 90°` = `720°` | why cube spheres pinch | — |
-| cell spacing variation | `≈ 1.14 : 1` | √(1.3:1 area); divide by MAX, not nominal | — |
+| hexagon area variation | `1.99 : 1` | `sec³(θᵥ)`, `θᵥ = 37.3774°`; NOT 1.3:1 | `uniform.js` |
+| area variation with pentagons | `2.74 : 1` | across the whole sphere | `uniform.js` |
+| cell spacing variation | `1.41 : 1` | `sec^1.5(θᵥ)`; 1.48:1 counting pentagons | `uniform.js` |
+| largest edge ÷ nominal | `1.098` | the admissible A* divisor; doc 10 had 1.07 | `uniform.js` |
+| narrowest cell ÷ nominal | `0.744` | at a pentagon; anchors the taper budget | `uniform.js` |
+| taper budget | `25.6%` of `R` | `maxCrust = (1−0.744)·2^D/K` layers; `R` cancels | `taper.js` |
+| max crust at `D` 11 | `435` layers | vs 64 in use — 6.8× headroom | `taper.js` |
 | max levels in 64 bits | `24` with a 10-bit layer, `29` without | layer shares the word | — |
 | float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
 | float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
@@ -200,9 +209,23 @@ Violating any of these breaks the design. They are not tunable.
   refinement — it requires bisection refinement, which destroys the geodesic
   geometry the hexagons depend on. Plain depth-first ordering is correct and
   sufficient.
-- Hexagons in a Goldberg polyhedron are **near-regular, not congruent**. Area
-  varies roughly 1.3:1 across the sphere. Do not write code assuming uniform
-  cell area.
+- Hexagons in a Goldberg polyhedron are **near-regular, not congruent**, and by
+  twice what this file used to say (`uniform.js`). Hexagon area varies
+  **1.99:1**, 2.74:1 counting the pentagons; spacing varies **1.41:1**. The limit
+  is the closed form `sec³(θᵥ)`, `θᵥ = 37.3774°` — one-shot barycentric *is*
+  gnomonic projection, so this is gnomonic area distortion across a face. It
+  **rises with level and settles**; depth is not a fix. The old 1.3:1 was a
+  level-2 reading (the ratio really is 1.17 there), it propagated into eight
+  documents unverified, and it had made doc 10's A* heuristic **inadmissible** —
+  that document divided by nominal + 7% when the true maximum is nominal + 9.84%.
+  Do not write code assuming uniform cell area, and divide by `1.098 × nominal`.
+- **Layer merging is struck, not open** (`taper.js`). The taper budget is 25.6%
+  of the radius — `(1−0.744)·2^D/K` layers, and **the radius cancels**, so the
+  crust cap is a property of `D` alone: 435 layers at `D` 11 against the 64 in
+  use. Merging buys **77 addressable layers, 18%** (the ID's layer field stops at
+  512) and costs an interior seam crossing **every column on the planet** — cell
+  *centres* nest exactly, cell *areas* do not, so 3 of every 4 columns dead-end
+  at the shell — plus all four results invariant 10 pays for. Cap the crust.
 - The 720° shows up **twice**, and the two forms behave oppositely under
   refinement (`frame.js`). The *geometric* defect at a pentagon shrinks ~4× per
   level (15.69° at L1 → 0.042° at L5); the *combinatorial* deficit is 1 direction
@@ -299,8 +322,8 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
   polyhedron's centroid corners (doc 14 meshing). A player clicks the mesh and the
   lookup answers from a different curve. Small, well-posed, close it before
   building on the mesh
-- **Layer merging is proposed but never designed** and contradicts invariant 10.
-  Cap the crust instead unless someone designs the interior seam
+- ~~Layer merging~~ — **struck** (`taper.js`, doc 06). Cap the crust; do not
+  reopen this without reading the price
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
   geometry; a flood fill propagates inward, so the rule may not transfer
 - Six-state block rotation for directional blocks

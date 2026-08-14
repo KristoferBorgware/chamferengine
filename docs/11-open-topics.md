@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Six entries are struck through because they have since been closed. They are
+Seven entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -110,28 +110,43 @@ built on top of the mesh.
 
 ---
 
-## Layer merging — proposed, never designed
+## ~~Layer merging~~ — struck, see [doc 06](06-world-sizing.md)
 
-[Doc 06](06-world-sizing.md) observes that cells taper as `(R − h)/R` with depth,
-and that past roughly 85% of surface width the narrowing becomes visible. There
-are two ways out: cap the crust, or **merge layers** — drop the horizontal
-resolution by one level at a chosen depth. Doc 06 recommends capping and raises
-merging only to decline it; this is where the declining is justified.
+Closed by pricing it. It had never been more than a sentence, and the sentence
+was not worth what it cost.
 
-Capping the crust is fully specified and costs nothing on the worked-example
-planet, whose crust floor sits at 96%. Merging layers has never been more than a
-sentence, and it contradicts an invariant that three closed results are built on. [Doc
-03](03-addressing.md) states the tessellation is *identical at every layer*,
-which is what makes vertical neighbours free (`layer ± 1`, no face crossing, no
-pentagon case). [Doc 13](13-gravity-and-orientation.md) calls that the fact that
-makes gravity tractable. [Doc 14](14-meshing-and-lod.md) measures vertical face
-merging as exact to 1.5e-16 *because* stacked cells share a radial plane.
+The taper it was meant to solve is smaller than the guess it was based on. Doc 06
+put the visibility threshold at 85% of surface width and admitted there was no
+script behind it; the measured anchor is **0.744** — the narrowest cell already on
+the surface, next to a pentagon — which puts the budget at **25.6% of the radius**
+rather than 15%. In layers that is `(1 − 0.744)·2^D/K`, and **the radius cancels**:
+the crust cap depends on subdivision depth alone, the same on a 10 km planet as on
+an Earth-sized one. At `D` 11 it is **435 layers** against the **64** the worked
+planet uses — 6.8× of headroom.
 
-A resolution change at some depth breaks all three at that boundary — and it is
-an interior boundary, wrapped around the whole planet, which no chunk-seam rule
-currently covers. Either design it properly or strike the suggestion. **Do not
-implement it from the sentence in doc 06.** Capping the crust is the safe default
-and costs nothing on the worked-example planet, where the floor sits at 96%.
+So the thing merging was for barely exists. And what it would buy is capped by
+something else entirely: the ID sizes its layer field for a **512-layer** crust,
+and the unmerged cap is already 435, so **the first merge buys 77 addressable
+layers — 18% — and every merge after it buys nothing**, because the ID cannot
+address the result.
+
+Against that, the cost is an interior LOD seam wrapping the entire planet. The
+finding that makes it concrete: **cell centres nest exactly and cell areas do
+not.** `oneShot(n/2, i, j)` equals `oneShot(n, 2i, 2j)`, so every coarse centre is
+also a fine centre — but a hexagon is not a union of four hexagons, so **one fine
+column in four continues through the shell and three in four terminate** against a
+cell they only partly overlap. All 41,943,042 of the worked planet's columns cross
+it. [Doc 14](14-meshing-and-lod.md)'s LOD seam is a *rim*, 2.70 faces per rim
+column at chunks bordering a different level; this one has no rim.
+
+Plus the four results that invariant 10 pays for, all broken at that shell: free
+vertical neighbours ([doc 03](03-addressing.md)), tractable gravity
+([doc 13](13-gravity-and-orientation.md)), exact vertical face merging
+([doc 14](14-meshing-and-lod.md)), and sky light stored per column at 32× smaller
+([doc 16](16-lighting.md)).
+
+**Cap the crust.** That is now doc 06's recommendation rather than its
+provisional one, and this entry is a decision rather than a question.
 
 ---
 
@@ -264,10 +279,18 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Which boundary the mesh draws** is the last structural gap and the smallest. It
-should not be left to be discovered during implementation, since it is the
-difference between a player clicking on a cell and being told they clicked on its
-neighbour.
+**Which boundary the mesh draws** is now the last structural gap, and the
+smallest. It should not be left to be discovered during implementation, since it
+is the difference between a player clicking on a cell and being told they clicked
+on its neighbour.
+
+It also has a candidate answer worth measuring rather than assuming. The planar
+Voronoi vertices of a triangular lattice sit at triangle **circumcentres**;
+[doc 14](14-meshing-and-lod.md) meshes **centroids**. On an equilateral triangle
+those coincide, which is why the difference went unnoticed — and subdivided
+icosahedron faces are near-equilateral but not equilateral. If that accounts for
+the whole ~0.1-cell gap, the fix is one formula, and doc 14's cost model survives
+untouched because moving a corner does not change the dual's combinatorics.
 
 **Block rotation** is now unblocked and much easier than it looked, because
 [doc 17](17-pentagons.md) removed its hard case: directional machinery may assume
@@ -284,9 +307,9 @@ erosion, and multiplayer interest management. **The geometric core is closed.**
 
 ---
 
-## What closing six of these taught
+## What closing seven of these taught
 
-All six closed items came back with the same shape of answer, and it is worth
+All seven closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was
@@ -310,5 +333,16 @@ expecting again:
   layer" made vertical neighbours free (doc 03), gravity tractable (doc 13),
   vertical face merging exact (doc 14), and then in doc 16 it made the sky pass
   as cheap as a flat world's *and* shrank sky-light storage 32×. An invariant
-  that has paid out five times is not a convenience; doc 06's suggestion to
-  break it deserves the scepticism it now gets.
+  that has paid out five times is not a convenience — and when doc 06's
+  suggestion to break it was finally priced, the bill was all five at once for
+  18% more crust.
+- **An unmeasured number stayed load-bearing longer than anyone noticed.** This
+  is the new one, and it is the least comfortable. Closing layer merging needed a
+  threshold for how uniform cells are, which sent someone to look at the 1.3:1
+  area figure — the only load-bearing constant in the specification with no script
+  behind it. It is **1.99:1**. It had been read off a level-2 picture, repeated
+  into eight documents, and had already made [doc 10](10-pathfinding.md)'s A*
+  heuristic **inadmissible by its own argument**: that document correctly insisted
+  on dividing by maximum spacing, then computed the maximum from the wrong spread.
+  Everything with a script attached held up. The one thing without a script did
+  not. **Cite a script or do not state a number.**

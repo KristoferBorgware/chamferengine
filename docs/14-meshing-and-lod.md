@@ -465,8 +465,9 @@ the generator and the easiest to get wrong.
   whether the **2 vertices and 4 triangles per cell** count survives that swap is
   unmeasured. See [doc 11](11-open-topics.md).
 - **Texture coordinates.** Hexagons are near-regular but **not congruent** —
-  area varies about 1.3:1 ([doc 02](02-geometry-choice.md)) — so a tiled texture
-  cannot be identical per cell. Either accept slight per-cell distortion, or use
+  area varies **1.99:1** ([doc 02](02-geometry-choice.md), measured; earlier
+  drafts said 1.3:1) — so a tiled texture cannot be identical per cell, and the
+  per-cell distortion to absorb is twice what this document used to assume. Either accept slight per-cell distortion, or use
   triplanar projection in world space and let the addressing scheme stay out of
   it, which is the same answer terrain generation reached.
 - **Ambient occlusion** with 8 neighbours rather than 6, and what a corner even
