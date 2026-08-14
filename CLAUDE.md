@@ -65,6 +65,9 @@ script owns its numbers.
 | [14](docs/14-meshing-and-lod.md) | mesh cost, merge limits, LOD, chunk seams | `mesh.js`, `volume.js`, `seam.js` |
 | [15](docs/15-precision-and-origin.md) | float budget, the anchor+offset rule, one-shot vs recursive | `precision.js` |
 
+Doc 04 also owns the **definition of a cell boundary** (`hexround.js`), which is
+load-bearing for docs 07, 09 and 14 — read it before touching position → cell.
+
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is every script's actual output in one
 generated page — the fastest way to look a number up without reading the
 argument around it.
@@ -110,6 +113,11 @@ Violating any of these breaks the design. They are not tunable.
 13. Identity is integer, world positions are `float64`, and anything GPU-facing is
     `float32` **relative to its chunk**. Never cache a world-space position across
     a frame — recompute it from anchor plus offset.
+14. A cell **is** the set of directions `hexRound` maps to it — the radial
+    projection of the planar Voronoi hexagon. Not "the nearest centre on the
+    sphere", which differs on ~1% of the sphere. Position → cell must go through
+    `hexRound`, never through a nearest-centre search, or the two disagree at
+    boundaries.
 
 ## Verified constants
 
@@ -132,6 +140,7 @@ Violating any of these breaks the design. They are not tunable.
 | one-shot vs recursive | `38.97 m` = `1.3133°` | fixed in metres; 39 cells at L11 | `precision.js` |
 | ID → position error | flat in depth | path walk is integers; one blend, one normalise | `precision.js` |
 | float32 `up` error | `0.005″` at every radius | directions are precision-robust | `precision.js` |
+| hexRound vs nearest centre | `≈1%` of the sphere, plateaus | always edge-adjacent, ≤ `0.11` spacing | `hexround.js` |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
 | holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
 | pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
@@ -155,9 +164,16 @@ Violating any of these breaks the design. They are not tunable.
 - Nearest face centroid **is** the containing icosahedron face. Exact, not an
   approximation: face boundaries are the perpendicular bisectors between
   adjacent centroids. Checked on 200,000 random directions, 0 mismatches
-  (`lookup.js`). **This covers step 1 of the doc-04 pipeline only.** Step 3 —
-  `hexRound` gives the containing *cell* — has no script and is a working
-  assumption; see Known gaps.
+  (`lookup.js`). That covers step 1 of the doc-04 pipeline; step 3 is below.
+- **A cell is what `hexRound` says it is** (`hexround.js`) — the radial projection
+  of the lattice point's *planar* Voronoi hexagon, adopted as the normative
+  definition. Measured against nearest-centre-on-the-sphere they disagree on
+  **~1%** of the sphere, and the rate **plateaus rather than falling with depth**
+  (3.56% at L2 → ~1% by L5–7), because a face triangle's shape is scale-free.
+  Every disagreement is with an **edge-adjacent** cell and never more than **0.11
+  of a spacing**. Adopting the projected diagram makes doc 04's rounding and doc
+  09's ray walk exact by construction; the alternative makes both ~1% approximate
+  and buys nothing.
 - `(i, j)` ↔ `path digits + (q, r)` round-trips exactly (`qr.js`).
 - A 4-way midpoint triangle split admits **no** continuous edge-adjacent
   traversal. The child adjacency graph is a star; best achievable is 2 of 3
@@ -244,13 +260,12 @@ Violating any of these breaks the design. They are not tunable.
 
 Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
 
-- **`hexRound` on the sphere is unverified** — the cells are spherical Voronoi
-  regions of radially projected lattice points, and gnomonic projection preserves
-  straight lines but not equidistance, so nearest-planar-lattice-point is not
-  provably nearest-cell. Everything going **position → cell** inherits it: doc 09
-  entirely (no verification of its own), doc 07's lookup path, and invariant 5.
-  Cell → position work (doc 10's heuristic, doc 14's corners) does not. Cheapest
-  open item — close it first
+- **Which boundary the mesh draws.** Three definitions are now in play and they
+  differ by ~0.1 of a cell: the projected planar Voronoi diagram (doc 04 lookup,
+  doc 09 ray walk — **normative**), spherical Voronoi (nobody, now), and the dual
+  polyhedron's centroid corners (doc 14 meshing). A player clicks the mesh and the
+  lookup answers from a different curve. Small, well-posed, close it before
+  building on the mesh
 - **Layer merging is proposed but never designed** and contradicts invariant 10.
   Cap the crust instead unless someone designs the interior seam
 - Lighting propagation with 8 neighbours and radial sky light

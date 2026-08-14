@@ -148,45 +148,79 @@ function hexRound(k, i, j, n){
 **This is why the third coordinate earns its keep** — you could not detect or
 repair the error with only two. Store `(i, j)` afterwards and forget `k`.
 
-### Why this step is *not* known to be exact, unlike step 1
+### What this step is exact *about* — the one thing to get straight
 
 On a flat, uniform triangular lattice the Voronoi cell of a lattice point **is**
 the hexagon, so "nearest lattice point" and "which cell am I in" are the same
-question and rounding answers both. That is a theorem, and it is where the
-confidence in this step comes from.
+question and rounding answers both. That is a theorem.
 
-But the cells are not on a flat lattice. They are the Voronoi regions **on the
-sphere** of the lattice points after they have been projected radially outward.
-Gnomonic projection maps great circles to straight lines — which is what
-[doc 09](09-ray-traversal.md) leans on — but it does **not** preserve
-equidistance. Two points that are equally far from a lattice point in the face
-plane are not equally far from it on the sphere. So the spherical Voronoi
-boundary is not the planar one, and near a cell boundary the nearest *planar*
-lattice point need not be the nearest *spherical* cell.
+But the lattice is not flat. Its points get projected radially onto a sphere, and
+gnomonic projection preserves straight lines — which is what
+[doc 09](09-ray-traversal.md) leans on — without preserving *equidistance*. Two
+points equally far from a lattice point in the face plane are not equally far
+from it on the sphere. So "nearest planar lattice point" and "nearest cell centre
+on the sphere" are genuinely different questions, and this was an open item until
+it was measured.
 
-Step 1 is verified exact against 200,000 random directions. **Step 3 is not
-verified at all**, and the two should not be read as carrying the same weight:
+> **[verified]** `verification/hexround.js` builds the real grid at levels 2–7,
+> samples random directions, and compares `hexRound` against a brute-force search
+> for the nearest cell centre on the sphere.
+>
+> | Level | Cells | Disagreement rate | Worst overshoot | Cells apart |
+> |---|---|---|---|---|
+> | 2 | 162 | 3.56% | 0.108 | 1.04 |
+> | 3 | 642 | 2.06% | 0.088 | 1.08 |
+> | 4 | 2,562 | 1.48% | 0.071 | 1.10 |
+> | 5 | 10,242 | 1.14% | 0.071 | 1.08 |
+> | 6 | 40,962 | 1.23% | 0.063 | 1.08 |
+> | 7 | 163,842 | 1.40% | 0.051 | 1.09 |
+>
+> They disagree, on about **1%** of the sphere, and the rate **settles rather
+> than falling to zero** — a face triangle's shape is scale-free, so refining
+> shrinks the cells and the disagreement band together. The last three rows are
+> sampling-limited to ±0.1–0.2 points; read them as a plateau, not a trend.
 
-> **[unverified]** The mismatch is expected to be confined to a thin band along
-> cell boundaries and to shrink with subdivision depth, since the projection
-> distorts less over a smaller triangle. Expected, not measured. What is needed
-> is a script that builds the real grid, samples random directions, compares
-> `hexRound` against true nearest-cell-on-the-sphere, and reports both the
-> mismatch rate and how close to a boundary the mismatches sit. Until that
-> exists, treat "rounding gives the containing cell" as a **working assumption**.
+**So the answer is not "yes" or "no" — it is that the question was underspecified.**
 
-The practical stakes are low and the correctness stakes are not. A cell-boundary
-disagreement means a player standing at the very edge of a hexagon is
-occasionally assigned to the neighbouring one — invisible in play. But the same
-assumption is what makes the ray walk in [doc 09](09-ray-traversal.md) exact
-rather than approximate, and a DDA that steps on the wrong boundary can drift,
-which is not invisible.
+Look at the last two columns. Every disagreement is with an **edge-adjacent**
+cell, and `hexRound`'s answer is at most **0.11 of a cell spacing** further from
+the point than the true nearest centre. A point is only ever handed to a
+neighbour when it sits within about a tenth of a cell of the boundary between
+them. Nothing is ever wildly misplaced.
 
-Note the direction of travel. This affects **position → cell** only. Anything
-that starts from an ID and walks path digits to a position — the pathfinding
-heuristic in [doc 10](10-pathfinding.md), the mesh geometry in
-[doc 14](14-meshing-and-lod.md) — is untouched by it. See
-[doc 11](11-open-topics.md).
+And `hexRound` is a pure function of position, so it **already defines a
+partition** of the sphere: exact, gap-free, overlap-free, edge-adjacent
+everywhere. It is the radial projection of the planar Voronoi diagram. That
+partition is not an approximation of anything — it is a perfectly good definition
+of where the cells are, which happens to differ slightly from the other one.
+
+### The decision: the projected planar diagram is normative
+
+**A cell is the radial projection of its lattice point's planar Voronoi
+hexagon** — that is, a cell is by definition the set of directions `hexRound`
+maps to it.
+
+Adopt that and this step is exact *by construction*, and so is
+[doc 09](09-ray-traversal.md)'s straight-line ray walk, which steps across
+exactly these boundaries. Adopt "nearest centre on the sphere" instead and both
+become approximate by ~1%, buying nothing in exchange. The choice is free and
+only one side of it is exact.
+
+The cells remain hexagons, still tile the sphere with no gaps, and still meet
+edge-to-edge everywhere — projection is a homeomorphism, so it cannot change any
+of that. Invariant 11 is untouched.
+
+> **Still to reconcile.** [Doc 14](14-meshing-and-lod.md) meshes a *third* thing:
+> the dual polyhedron, whose corners sit at subdivided-triangle centroids. All
+> three definitions agree to within about a tenth of a cell, so nothing visibly
+> breaks — but the mesh a player sees should be the boundary the lookup uses, and
+> saying which is which is unfinished business. See
+> [doc 11](11-open-topics.md).
+
+Note the direction of travel throughout. This concerns **position → cell** only.
+Anything starting from an ID and walking path digits to a position — the
+pathfinding heuristic in [doc 10](10-pathfinding.md), the mesh geometry in
+[doc 14](14-meshing-and-lod.md) — is untouched either way.
 
 ---
 
@@ -224,8 +258,10 @@ radius*, not the terrain height at this direction — see
   which is exactly why they suit twenty faces with unrelated origins.
 - Rounding three coordinates independently breaks their sum; **repair the one
   that moved furthest**. The third coordinate exists to make that possible.
-- That rounding gives the *containing cell* is exact on a flat lattice and a
-  **working assumption on the sphere** — the one step in this pipeline with no
-  script behind it.
+- Rounding and "nearest centre on the sphere" disagree on about **1%** of the
+  sphere, always with an edge-adjacent cell and never by more than **0.11 of a
+  cell**. The fix is a definition, not a correction: **a cell is what `hexRound`
+  says it is**, which makes this step and doc 09's ray walk exact by
+  construction.
 - One sign check answers "have I left this face?", "is this inside the triangle?"
   and "is `k` negative?" — they are the same question.

@@ -35,14 +35,22 @@ Put those together: **the ray's ground track is a perfectly straight line in fac
 barycentric coordinates.** Not approximately — exactly. No curve following, no
 re-projection per step.
 
-**One caveat, and it is about the cells rather than the ray.** The track being
-straight is exact. That the *boundaries it crosses* sit at half-integer
-coordinates is inherited from [doc 04](04-position-lookup.md), where it is a
-working assumption rather than a verified result: gnomonic projection preserves
-straight lines but not equidistance, so the gnomonic image of a spherical cell
-boundary is not exactly the planar one. The walk is therefore exact in its
-geometry and assumed-exact in its cell boundaries. Nothing in this document has a
-script behind it yet; see [doc 11](11-open-topics.md).
+**And the boundaries it crosses are straight too — by definition.** This used to
+be the shaky half of the argument. Gnomonic projection preserves straight lines
+but not equidistance, so a cell boundary drawn as "everywhere equidistant between
+two centres on the sphere" would *not* be straight in the face plane, and the
+walk below would be an approximation.
+
+[Doc 04](04-position-lookup.md) settles it by defining a cell as the radial
+projection of its lattice point's **planar** Voronoi hexagon — the set of
+directions `hexRound` maps to it. Those boundaries are straight in the face plane
+because that is where they were drawn. The measured cost of that choice is that
+"which cell am I in" and "which centre is nearest" disagree on about 1% of the
+sphere, always with an edge-adjacent cell and never by more than a tenth of a
+cell — and in exchange this walk is exact rather than approximate.
+
+So both halves hold: the ground track is straight, and so is every boundary it
+crosses.
 
 ![A straight ray crossing a field of hexagons, stopping at the first solid cell](figures/ray-is-straight.svg)
 
@@ -116,9 +124,9 @@ see [doc 10](10-pathfinding.md). Build it once.
 - Block picking is a **grid walk**, not a physics query, and it costs about five
   cells whatever the planet's size.
 - Gnomonic projection maps great circles to straight lines, so **the ground track
-  is exactly straight** in face coordinates. That the boundaries it crosses sit
-  at half-integers is a **working assumption** inherited from doc 04, not a
-  verified one.
+  is exactly straight** in face coordinates — and the boundaries it crosses are
+  straight too, because doc 04 defines cells as the projection of the planar
+  Voronoi diagram. Both halves are exact.
 - Four boundary families: three horizontal, one radial. Step the nearest.
 - Walking off a face is the adjacency table's job; the line does not bend.
 - The entry boundary is the **placement face**, for free.

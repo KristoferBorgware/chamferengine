@@ -23,6 +23,7 @@ numbered documents.
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
+| [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
@@ -132,6 +133,60 @@ Cited by [doc 13](13-gravity-and-orientation.md).
    D=11 C=4: chunk spans 128 cells -> "up" varies 4.314deg across it
    D=11 C=6: chunk spans 32 cells -> "up" varies 1.079deg across it
    D=11 C=8: chunk spans 8 cells -> "up" varies 0.270deg across it
+```
+
+## `hexround.js`
+
+Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do.
+
+Cited by [doc 04](04-position-lookup.md).
+
+```
+does hexRound return the cell whose centre is nearest on the sphere?
+  hexRound finds the nearest lattice point in the FLAT face plane. Whether
+  that is also the nearest ON THE SPHERE is the open question from doc 11,
+  because gnomonic projection keeps straight lines but not equidistance.
+
+   L   cells   samples   mismatches      rate   worst margin   furthest off
+   2     162     40000         1423    3.558%        0.10795       1.043 cells
+   3     642     40000          823    2.058%        0.08750       1.084 cells
+   4    2562     25000          371    1.484%        0.07123       1.095 cells
+   5   10242     15000          171    1.140%        0.07072       1.082 cells
+   6   40962     12000          148    1.233%        0.06305       1.083 cells
+   7  163842      5000           70    1.400%        0.05138       1.088 cells
+
+  margin       = how much further hexRound's cell is than the true nearest,
+                 as a fraction of one cell spacing
+  furthest off = distance between the two cells; 1.0 means edge-adjacent
+
+  RESULT: hexRound and nearest-centre-on-the-sphere DISAGREE, and the rate
+  settles near 1% instead of falling to zero: 3.56% -> 2.06% -> 1.48% -> 1.14% -> 1.23% -> 1.40%
+  (the last three levels are sampling-limited, +/- 0.1 to 0.2 points, so read
+  them as a plateau around 1% rather than as a trend)
+  It plateaus because a face triangle's shape is scale-free: refining shrinks
+  the cells and the disagreement band together, so their ratio holds.
+
+  But every disagreement is small and local:
+    - the two cells are always EDGE-ADJACENT (worst separation 1.095 spacings)
+    - hexRound's cell is at most 0.1079 of a spacing further away
+    - mean overshoot among disagreements is 0.0215 of a spacing
+  So a point is only ever handed to a neighbour when it sits within about a
+  tenth of a cell of the boundary between them.
+
+  READ THIS THE OTHER WAY UP. hexRound is a pure function of position, so it
+  already defines a partition of the sphere: exact, gap-free, overlap-free,
+  and edge-adjacent everywhere. It is the radial projection of the PLANAR
+  Voronoi diagram. That partition is not wrong -- it is simply a different
+  definition of "the cell" from spherical Voronoi, and the two differ by at
+  most 0.108 of a cell.
+
+  The design decision is therefore which one is normative, not which one is
+  correct. Defining cells as the projected planar Voronoi diagram makes doc 04
+  exact by construction and doc 09's straight-line ray walk exact as well.
+  Defining them as spherical Voronoi makes both approximate by ~1%. Doc 14
+  meshes a third thing again -- the dual polyhedron's corners -- so the
+  specification currently implies three boundaries that agree only to ~0.1
+  of a cell. Pick one and say so.
 ```
 
 ## `lookup.js`
@@ -501,4 +556,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_13 scripts. Every number above is reproduced by running them._
+_14 scripts. Every number above is reproduced by running them._

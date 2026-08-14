@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Three entries are struck through because they have since been closed. They are
+Four entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -57,48 +57,56 @@ cells**, 84,000 triangles. The 76 m horizon is the greedy mesher.
 
 ---
 
-## Is `hexRound` exact on the sphere?
+## ~~Is `hexRound` exact on the sphere?~~ — measured, see [doc 04](04-position-lookup.md)
 
-The one place the specification asserts something load-bearing with no script
-behind it, found by reading the corpus against itself rather than by running
-anything.
+Closed, and the answer was neither of the two everyone expected.
 
-[Doc 04](04-position-lookup.md) turns a position into a cell in four steps. Step
-1 — nearest face centroid is the containing face — is verified exact on 200,000
-random directions. Step 3 — round the barycentric triple and you have the
-containing cell — is verified nowhere, and it is **not** the same kind of claim.
-On a flat lattice the Voronoi cell of a lattice point is the hexagon, exactly.
-The real cells are Voronoi regions *on the sphere* of radially projected points,
-and gnomonic projection preserves straight lines but not equidistance, so the two
-Voronoi diagrams are not the same diagram.
+`hexRound` and "nearest cell centre on the sphere" **do** disagree, on about
+**1%** of the sphere, and the rate **settles rather than falling to zero** as the
+grid refines — a face triangle's shape is scale-free, so refinement shrinks the
+cells and the disagreement band together. Depth is not a fix.
 
-What depends on it is everything that goes **position → cell**:
-[doc 09](09-ray-traversal.md) entirely, since its DDA steps across exactly the
-boundaries this assumption places (and it has no verification of its own); the
-lookup path in [doc 07](07-data-structures.md); and invariant 5 — *a cell's ID is
-computed from position* — which is the load-bearing claim of the whole addressing
-scheme.
+But every disagreement is with an **edge-adjacent** cell and never further than
+**0.11 of a cell spacing**. A point is handed to a neighbour only when it sits
+within about a tenth of a cell of the boundary between them.
 
-What does **not** depend on it is anything going cell → position. Doc 10's
-heuristic walks path digits from an ID it already has, and doc 14's LOD corner
-figures come from the dual construction directly. Both are unaffected either way.
+Which reframed the question. `hexRound` is a pure function of position, so it
+already defines a partition of the sphere — exact, gap-free, overlap-free,
+edge-adjacent everywhere. It is not an approximation *of* spherical Voronoi; it
+is a different and equally valid definition of where a cell is. So the design
+adopts it: **a cell is the radial projection of its lattice point's planar
+Voronoi hexagon.** Doc 04's rounding becomes exact by construction, and so does
+doc 09's straight-line ray walk, which steps across exactly those boundaries.
+The alternative would have made both approximate by ~1% and bought nothing.
 
-The work is small: build the real grid, sample random directions, compare
-`hexRound` against true nearest-cell-on-the-sphere, report the mismatch rate and
-the distance-to-boundary distribution, and repeat across levels to see whether it
-shrinks with depth. Three outcomes, and they are not equally likely:
+Same shape as doc 15's finding, one document later: the specification had not
+said precisely enough what it meant, and measuring is what exposed it.
 
-- **Zero mismatches** — the cheapest and most likely-feeling outcome given how
-  little a single face triangle bends. Promote the claim to `[verified]`, done.
-- **Mismatches confined to a thin boundary band, shrinking with depth** — the
-  expected outcome. Document the band width and move on; a player at the exact
-  edge of a hexagon being assigned to its neighbour is invisible in play.
-- **Mismatches that do not shrink** — then the ray walk in doc 09 can step onto
-  the wrong boundary and drift, and doc 04 needs a correction term. Only this
-  outcome costs anything, and it is the reason to measure rather than assume.
+---
 
-Worth doing before the floating-origin work below, because it is an afternoon and
-it sits underneath docs 04, 07 and 09 and one of the eleven invariants.
+## Which boundary does the mesh draw?
+
+The leftover from the item above, and the last of the three definitional gaps.
+
+There are now **three** places the specification implies a cell boundary, and
+they are not the same curve:
+
+| Where | Boundary | Used by |
+|---|---|---|
+| Projected planar Voronoi | what `hexRound` maps to the cell | [doc 04](04-position-lookup.md) lookup, [doc 09](09-ray-traversal.md) ray walk |
+| Spherical Voronoi | everywhere equidistant between centres | the intuitive reading, nothing formally |
+| Dual polyhedron | corners at subdivided-triangle centroids | [doc 14](14-meshing-and-lod.md) meshing |
+
+They agree to within about **0.1 of a cell**, so nothing visibly breaks and no
+number in the specification moves. But a player clicks on the mesh and the lookup
+answers from a different boundary, so the two should be the same curve or the
+difference should be stated deliberately.
+
+The likely answer is that meshing should draw the projected planar diagram, since
+that is what everything else now keys on — but the dual is what makes doc 14's
+"2 vertices and 4 triangles per cell" count come out, and whether that survives
+the swap is unmeasured. Small, well-posed, and worth closing before anything is
+built on top of the mesh.
 
 ---
 
@@ -231,14 +239,7 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**First, the `hexRound` question above** — it is an afternoon's work, it sits
-underneath three documents and an invariant, and it is the only place the
-specification currently asserts something load-bearing without a script. Closing
-[doc 15](15-precision-and-origin.md) sharpened that question rather than
-answering it: now that the construction is pinned to one-shot, "does planar
-rounding find the right spherical cell?" is finally well-posed.
-
-Then **lighting**, now the largest genuinely undesigned system: 8 neighbours
+**Lighting**, now the largest genuinely undesigned system: 8 neighbours
 instead of 6, sky light along the radial direction, and a sun direction that
 gives a real terminator sweeping the planet for free. It is also the most
 self-contained thing left — nothing already written depends on it, so it cannot
@@ -249,11 +250,15 @@ one blocked by nothing at all. Doc 13 supplies every number needed to decide it,
 and deciding it unblocks block rotation, rails, and the "north landmark"
 question. It is a conversation rather than a document.
 
+**Which boundary the mesh draws** is smaller than either and should not be left
+to be discovered during implementation, since it is the difference between a
+player clicking on a cell and being told they clicked on its neighbour.
+
 ---
 
-## What closing three of these taught
+## What closing four of these taught
 
-All three closed items came back with the same shape of answer, and it is worth
+All four closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

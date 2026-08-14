@@ -456,6 +456,14 @@ the generator and the easiest to get wrong.
 
 ## Still open
 
+- **Which boundary this mesh actually draws.** The corners here come from the
+  dual polyhedron — subdivided-triangle centroids. [Doc 04](04-position-lookup.md)
+  now defines a cell as the radial projection of the *planar* Voronoi hexagon,
+  which is a slightly different curve. They agree to about a tenth of a cell, so
+  nothing visibly breaks, but a player clicks the mesh and the lookup answers from
+  the other definition. The mesh should probably move to the projected diagram;
+  whether the **2 vertices and 4 triangles per cell** count survives that swap is
+  unmeasured. See [doc 11](11-open-topics.md).
 - **Texture coordinates.** Hexagons are near-regular but **not congruent** —
   area varies about 1.3:1 ([doc 02](02-geometry-choice.md)) — so a tiled texture
   cannot be identical per cell. Either accept slight per-cell distortion, or use

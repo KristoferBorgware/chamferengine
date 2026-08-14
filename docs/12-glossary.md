@@ -32,6 +32,14 @@ sequence, and is the source of the project's name.
 **Cell** — one hexagon (or one of the twelve pentagons) at one radial layer. The
 equivalent of a Minecraft block.
 
+**Cell boundary** — defined as the radial projection of the lattice point's
+*planar* Voronoi hexagon: a cell **is** the set of directions `hexRound` maps to
+it ([doc 04](04-position-lookup.md)). Deliberately **not** "everywhere
+equidistant between two centres on the sphere", which is a different curve — the
+two disagree on about 1% of the sphere, always with an edge-adjacent cell and
+never by more than 0.11 of a cell spacing. The projected definition is chosen
+because it makes the lookup and the ray walk exact by construction.
+
 **Chunk** — one triangle at the chunk level, spanning all layers beneath it. The
 unit that is loaded, generated, meshed, and stored.
 

@@ -254,29 +254,31 @@ loses accuracy, and how much a chunk-local origin buys back.
 
 ---
 
-## Wanted: `hexround.js` — is rounding the same as containment on a sphere?
-
-The one load-bearing claim in the specification with nothing behind it, and the
-next script anyone should write.
+## `hexround.js` — is rounding the same as containment on a sphere?
 
 Doc 04 rounds a barycentric triple to the nearest lattice point and calls the
-result the containing cell. On a flat triangular lattice that is a theorem: the
-Voronoi cell of a lattice point **is** the hexagon. But the real cells are
-Voronoi regions **on the sphere** of radially projected points, and gnomonic
-projection preserves straight lines without preserving equidistance — so the two
-Voronoi diagrams are not the same diagram, and rounding is not obviously
-containment.
+result the containing cell. On a flat triangular lattice that is a theorem. The
+lattice is projected onto a sphere, though, and gnomonic projection preserves
+straight lines without preserving equidistance — so this builds the real grid at
+levels 2–7, samples random directions, and compares `hexRound` against a
+brute-force search for the nearest cell centre on the sphere.
 
-**What it should measure:** build the real grid at several levels; sample random
-directions; compare `hexRound`'s answer against true nearest-cell-on-the-sphere
-by brute force; report the mismatch rate, the distribution of distance-to-nearest-
-boundary among mismatches, and whether the rate falls with subdivision depth.
+**Verifies:**
 
-**Why it matters more than it looks:** everything going **position → cell** rests
-on it — [doc 09](../docs/09-ray-traversal.md) entirely, since it has no
-verification of its own and its DDA steps across exactly these boundaries; doc
-07's lookup path; and the invariant that a cell's ID is computed from position
-rather than stored. Work going the other way (cell → position) is unaffected.
+1. **They disagree, on about 1% of the sphere.** 3.56% at level 2 falling to a
+   plateau near **1%**, not to zero — a face triangle's shape is scale-free, so
+   refinement shrinks the cells and the disagreement band together. Depth is not
+   a fix. The top three levels are sampling-limited to ±0.1–0.2 points.
+2. **Every disagreement is small and local.** The two cells are always
+   **edge-adjacent** (worst separation 1.10 spacings), and `hexRound`'s cell is
+   at most **0.11 of a spacing** further from the point, mean 0.02. A point goes
+   to a neighbour only within about a tenth of a cell of the boundary.
+3. **Which makes it a definition, not a defect.** `hexRound` is a pure function
+   of position, so it already partitions the sphere — exactly, with no gaps,
+   overlaps, or bare corners. Doc 04 adopts that partition as normative, which
+   makes both the lookup and doc 09's ray walk exact by construction.
+
+**Used in:** [doc 04](../docs/04-position-lookup.md)
 
 ---
 
