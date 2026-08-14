@@ -226,6 +226,12 @@ loses accuracy, and how much a chunk-local origin buys back.
 
 **Verifies:**
 
+0. **Where "about 7 significant digits" comes from.** 1 sign + 8 exponent + 23
+   stored mantissa bits, an implicit leading 1 making the significand 24 bits, and
+   `24 × log₁₀2 = 7.22` decimal digits. Predicts each gap from `2^(e−23)` and
+   checks it against the measured spacing; derives the binade thresholds from
+   `e ≥ 23 + log₂ t` and reaches the same radii the binary search in check 2 finds
+   independently.
 1. **What a float can resolve.** `float32` position spacing is **122 µm** at the
    doc-06 radius and **500 mm** at Earth radius — two representable positions per
    1 m block — against **0.93 nm** for `float64` at the same radius.

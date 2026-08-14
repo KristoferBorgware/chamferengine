@@ -23,8 +23,42 @@ read that one.
 
 A `float32` carries about 7 significant digits. That sounds like a lot until you
 notice it is *relative* — 7 digits total, not 7 after the decimal point. A
-position 6,000 km from the centre of a planet spends all of them on the 6,000 km
-and has nothing left for the metres.
+position 6,371 km from the centre of a planet spends seven of them just reaching
+the metres column, and has none left below it.
+
+Where the numbers come from, since everything downstream rests on them. A
+`float32` is 1 sign bit, 8 exponent bits and 23 stored mantissa bits; an implicit
+leading 1 makes the significand **24 bits**, and `24 × log₁₀2 = 7.22` decimal
+digits. Every float is `± 1.f × 2^e`, and the mantissa always lies in `[1, 2)` —
+a fixed ladder of rungs that the exponent slides up and down the number line. So
+the *number* of rungs never changes and the *spacing* between them scales with
+the magnitude:
+
+```
+for x in [2^e, 2^(e+1)):    gap = 2^(e − 23)
+```
+
+At Earth radius, 6,371,000 lies between `2²² = 4,194,304` and `2²³ = 8,388,608`,
+so `e = 22` and the gap is `2^(22−23)` = **0.5 m**. The representable values
+either side of it really are `6370999.5, 6371000, 6371000.5`. Counting digits
+gives the same answer: `6371000` is exactly seven digits and lands on the metres
+column, `6371000.5` would need eight, and 7.22 is what buys the half.
+
+That formula is also why the thresholds below land on exact powers of two rather
+than round decimal numbers — `gap ≥ t` means `e ≥ 23 + log₂ t`, and `e` is an
+integer, so the crossing always snaps to a binade boundary.
+
+> **[verified]** `verification/precision.js`, section 0 decomposes the bit
+> pattern, predicts each gap from `2^(e−23)`, and checks it against the measured
+> spacing. It also derives the binade thresholds from `e ≥ 23 + log₂ t` and gets
+> the same radii the binary search in section 2 finds independently.
+
+**One thing this does not say.** At 0.5 m a `float32` can still place something to
+the nearest half metre — metres are representable, and the table below counts two
+positions per 1 m block. What has gone is everything *below* a metre. That
+distinction matters, because the failure at Earth scale is not "positions stop
+working", it is "positions quantise to half-metre steps and every sub-block
+detail disappears", which looks like jitter rather than like a crash.
 
 > **[verified]** `verification/precision.js`, section 1. The gap between adjacent
 > representable positions, at distance `R` from the origin.
@@ -56,11 +90,11 @@ And the thresholds, which are the numbers to design against:
 > | 10 cm | 1,049 km |
 > | 1 m | 8,389 km |
 
-Those are powers of two, and that is the correct signature rather than a
-coincidence: `float32` spacing is `2^(e−23)` for `R` in `[2^e, 2^(e+1))`, so it
-is a step function that doubles at each binade boundary. Precision does not decay
-smoothly with planet size; it halves, abruptly, at radii of 1 km, 2 km, 4 km and
-so on.
+Powers of two, exactly as the formula above predicts, and the practical
+consequence is worth stating on its own: **precision does not decay smoothly as a
+world grows — it halves, abruptly, every time the radius crosses a power of two.**
+A 15 km planet and a 17 km planet are a factor of two apart in position
+resolution despite being almost the same size.
 
 **`float32` holds sub-millimetre precision out to about a 16 km planet and has no
 sub-block detail left at all by Earth radius.** The doc-06 worked example at

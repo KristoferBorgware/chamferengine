@@ -403,6 +403,36 @@ Floating-point precision at planet scale: what a float can resolve, where the ID
 Cited by [doc 15](15-precision-and-origin.md).
 
 ```
+0. the arithmetic behind "float32 carries about 7 significant digits"
+   layout: 1 sign + 8 exponent + 23 stored mantissa bits.
+   an implicit leading 1 makes the significand 24 bits, and
+   24 * log10(2) = 7.2247 decimal digits.
+   every float is +/- 1.f x 2^e with 1.f in [1,2), so the exponent slides a
+   FIXED ladder of rungs along the number line: the count never changes and
+   the spacing scales with the magnitude.
+
+        for x in [2^e, 2^(e+1)):   gap = 2^(e-23)
+
+   R              2^e         e    gap = 2^(e-23)   measured
+        1700         1024    10      122.070 um   122.070 um
+       10000         8192    13      976.563 um   976.563 um
+     6371000      4194304    22      500.000 mm   500.000 mm
+
+   at Earth radius: 6371000 lies in [2^22, 2^23) = [4194304, 8388608),
+   so the gap is 2^(22-23) = 0.5 m. The neighbouring representable values are
+   6370999.5, 6371000, 6371000.5
+   Counting digits agrees: 6371000 is 7 digits and lands ON the metres
+   column; 6371000.5 would need 8; 7.22 digits is what buys the half.
+   So it is not that metres are unrepresentable -- it is that nothing BELOW
+   a metre is.
+
+   gap >= t  means  e >= 23 + log2(t), and e is an integer, so every
+   threshold crossing snaps to a binade boundary:
+      gap >= 1 mm   at e = 14  ->  R = 2^14 = 16,384 m
+      gap >= 1 cm   at e = 17  ->  R = 2^17 = 131,072 m
+      gap >= 10 cm  at e = 20  ->  R = 2^20 = 1,048,576 m
+      gap >= 1 m    at e = 23  ->  R = 2^23 = 8,388,608 m
+
 1. spacing between adjacent representable positions, at distance R from the origin
    (a world position IS that distance from the centre, so this is the resolution
     of every position on the surface of a planet of radius R)

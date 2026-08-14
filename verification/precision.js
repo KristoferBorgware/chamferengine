@@ -21,8 +21,45 @@ const m = (x, p = 3) => x >= 1 ? x.toFixed(p) + ' m'
   : x >= 1e-3 ? (x * 1e3).toFixed(p) + ' mm'
   : x >= 1e-6 ? (x * 1e6).toFixed(p) + ' um' : (x * 1e9).toFixed(p) + ' nm';
 
+// ---- 0. where "about 7 digits" comes from, and why it is relative -----------
+console.log('0. the arithmetic behind "float32 carries about 7 significant digits"');
+{
+  const b = new DataView(new ArrayBuffer(4));
+  const parts = x => { b.setFloat32(0, x); const u = b.getUint32(0);
+    return { e: ((u >>> 23) & 0xff) - 127, m: u & 0x7fffff }; };
+  const nudge = (x, k) => { b.setFloat32(0, x); b.setUint32(0, b.getUint32(0) + k); return b.getFloat32(0); };
+  console.log('   layout: 1 sign + 8 exponent + 23 stored mantissa bits.');
+  console.log('   an implicit leading 1 makes the significand 24 bits, and');
+  console.log(`   24 * log10(2) = ${(24 * Math.log10(2)).toFixed(4)} decimal digits.`);
+  console.log('   every float is +/- 1.f x 2^e with 1.f in [1,2), so the exponent slides a');
+  console.log('   FIXED ladder of rungs along the number line: the count never changes and');
+  console.log('   the spacing scales with the magnitude.');
+  console.log('\n        for x in [2^e, 2^(e+1)):   gap = 2^(e-23)\n');
+  console.log('   R              2^e         e    gap = 2^(e-23)   measured');
+  for (const R of [1700, 10000, 6371000]){
+    const { e } = parts(R);
+    console.log(`   ${String(R).padStart(9)} ${String(2**e).padStart(12)} ${String(e).padStart(5)}`
+      + ` ${m(2**(e-23)).padStart(15)}   ${m(ulp32(R))}`);
+  }
+  const E = parts(6371000).e;
+  console.log(`\n   at Earth radius: 6371000 lies in [2^${E}, 2^${E+1}) = [${2**E}, ${2**(E+1)}),`);
+  console.log(`   so the gap is 2^(${E}-23) = ${2**(E-23)} m. The neighbouring representable values are`);
+  console.log(`   ${[-1,0,1].map(k => nudge(6371000, k)).join(', ')}`);
+  console.log('   Counting digits agrees: 6371000 is 7 digits and lands ON the metres');
+  console.log('   column; 6371000.5 would need 8; 7.22 digits is what buys the half.');
+  console.log('   So it is not that metres are unrepresentable -- it is that nothing BELOW');
+  console.log('   a metre is.');
+  // why thresholds land on powers of two
+  console.log('\n   gap >= t  means  e >= 23 + log2(t), and e is an integer, so every');
+  console.log('   threshold crossing snaps to a binade boundary:');
+  for (const [label, t] of [['1 mm', 1e-3], ['1 cm', 1e-2], ['10 cm', 0.1], ['1 m', 1]]){
+    const e = Math.ceil(23 + Math.log2(t));
+    console.log(`      gap >= ${label.padEnd(6)} at e = ${String(e).padStart(2)}  ->  R = 2^${e} = ${(2**e).toLocaleString()} m`);
+  }
+}
+
 // ---- 1. what a float can resolve, by distance from the origin ---------------
-console.log('1. spacing between adjacent representable positions, at distance R from the origin');
+console.log('\n1. spacing between adjacent representable positions, at distance R from the origin');
 console.log('   (a world position IS that distance from the centre, so this is the resolution');
 console.log('    of every position on the surface of a planet of radius R)\n');
 console.log('   planet                       R          float32          float64   f32 vs 1 m block');
