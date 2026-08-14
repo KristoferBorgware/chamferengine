@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 214" width="460" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M66 156L386.0 156M66 156L66 46.0"/>
+  <path class="cf-g" fill="none" d="M66.0 46.0L98.0 60.3L194.0 80.1L386.0 114.2"/><circle class="cf-gf" cx="66.0" cy="46.0" r="3.5"/><circle class="cf-gf" cx="98.0" cy="60.3" r="3.5"/><circle class="cf-gf" cx="194.0" cy="80.1" r="3.5"/><circle class="cf-gf" cx="386.0" cy="114.2" r="3.5"/>
+  <path class="cf-a" fill="none" d="M66.0 46.0L98.0 117.5L194.0 148.3L386.0 151.6"/><circle class="cf-af" cx="66.0" cy="46.0" r="3.5"/><circle class="cf-af" cx="98.0" cy="117.5" r="3.5"/><circle class="cf-af" cx="194.0" cy="148.3" r="3.5"/><circle class="cf-af" cx="386.0" cy="151.6" r="3.5"/>
+  <text class="cf-gd" x="392.0" y="118.2">dammed low down</text>
+  <text class="cf-c" x="392.0" y="155.6">dammed high up</text>
+  <text class="cf-d" x="58" y="52.0" text-anchor="end">100%</text>
+  <text class="cf-d" x="58" y="160" text-anchor="end">0</text>
+  <text class="cf-d" x="226.0" y="176" text-anchor="middle">cells downstream of the dam &#8594;</text>
+  <text class="cf-c" x="14" y="26">how much of the river is still missing</text>
+  <text class="cf-d" x="14" y="196">the same wall, in two places. one is a local change and one is not.</text>
+</svg>

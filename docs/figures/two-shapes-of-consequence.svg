@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 216" width="460" height="216">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" stroke-width="3" fill="none" d="M30 116L430.0 116"/><path class="cf-l" d="M250.0 82L250.0 116"/><circle class="cf-af" cx="250.0" cy="82.0" r="3"/><path class="cf-l" d="M302.0 82L302.0 116"/><circle class="cf-af" cx="302.0" cy="82.0" r="3"/><path class="cf-l" d="M358.0 82L358.0 116"/><circle class="cf-af" cx="358.0" cy="82.0" r="3"/>
+  <path class="cf-af" d="M142.0 103L198.0 103L198.0 129L142.0 129Z" opacity="0.55"/>
+  <path class="cf-g" stroke-width="4" d="M198.0 94L198.0 138"/>
+  <text class="cf-gd" x="198.0" y="158" text-anchor="middle">the wall</text>
+  <text class="cf-c" x="168.0" y="86" text-anchor="middle">the lake</text>
+  <text class="cf-d" x="168.0" y="102" text-anchor="middle"> </text>
+  <text class="cf-c" x="14" y="30">upstream &#183; bounded by the valley</text>
+  <text class="cf-d" x="14" y="50">rises to the lowest lip and stops</text>
+  <text class="cf-gd" x="446" y="30" text-anchor="end">downstream &#183; bounded by nothing</text>
+  <text class="cf-d" x="446" y="50" text-anchor="end">every cell below loses its water</text>
+  <text class="cf-d" x="14" y="190">tributaries put water back, so high up the loss fades within twenty cells &#8212;</text>
+  <text class="cf-d" x="14" y="208">on a main stem there is nothing below big enough, and it runs to the coast</text>
+</svg>

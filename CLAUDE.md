@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 23 carry the hardest material in the specification and are the ones
+13 through 24 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 23.
+- `docs/` — prose specification, ordered 00 through 24.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -176,6 +176,7 @@ script owns its numbers.
 | [21](docs/21-rivers-and-erosion.md) | the one stored map, flow routing, pit filling, why continents come first | `rivers.js` |
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
+| [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -455,6 +456,16 @@ Violating any of these breaks the design. They are not tunable.
   `{0.5, 1, 1.5, 2}` (products of `sqrt` and multiply). Then doc 22's client
   regenerates the coarse map instead of downloading it. Also: disable
   floating-point contraction in the build, and fix reduction order.
+- **The coarse map is read-only, and that is a decision** (`edits.js`, doc 24).
+  It states where water would flow across the **generated** world, never the
+  current one — which keeps it a pure function of the seed, so doc 23's client can
+  still regenerate it. Measured reasons: **one block dams nothing** (a cell has six
+  ways out; 1 cell floods 0, a 5-cell wall floods 29 and reaches 144 m), upstream
+  is **bounded by terrain** while downstream is not, and **where you dam decides
+  whether the change is local at all** — a headwater dam's deficit fades to 4%
+  within 20 cells, a main-stem dam runs to the coast. So there is no radius to
+  partially recompute within. The accepted cost: a dammed river still has water
+  below the dam.
 - **A patch is not an ID range** (`interest.js`, doc 22). A contiguous range IS
   one compact patch (doc 03), but the converse fails: a player's disc breaks into
   **10.9** runs at a 76 m horizon and **155.6** at a kilometre, and the child
@@ -497,8 +508,6 @@ anything doc 11 ever listed. The ones that reach furthest:
 - **Nothing verifies determinism on two real platforms** (doc 23) — the argument
   is from the standard and from one machine's arithmetic. A real check runs the
   generator on genuinely different hardware and compares hashes
-- **Player edits versus global processes** (doc 21) — the coarse map is read-only,
-  so a dammed river has nowhere to live
 - **Terrain height at a mesh corner** (doc 18) — three cells meet there and may
   disagree about it
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for

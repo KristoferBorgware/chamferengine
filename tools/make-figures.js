@@ -439,6 +439,84 @@ const made = [];
 
 
 // =============================================================================
+// 24 — water-goes-round: one block dams nothing on a six-way grid
+// =============================================================================
+{
+  const R2 = 20, dx = Math.sqrt(3)*R2;
+  const cell = (c,r) => [58 + c*dx + (r%2?dx/2:0), 74 + r*R2*1.5];
+  const panel = (ox, wall, label, note, ok) => {
+    let g = '';
+    for (let r=0;r<4;r++) for (let c=0;c<5;c++){
+      const p = cell(c,r), on = wall.some(w => w[0]===c && w[1]===r);
+      g += `<polygon class="${on?'cf-gf':'cf-l'}" points="${pts(hexPts(p[0]+ox, p[1], R2))}"/>`;
+    }
+    // the river: a path that must get from top to bottom
+    const route = ok ? [[2,0],[2,1],[2,2],[2,3]] : [[2,0],[1,1],[1,2],[2,3]];
+    g += `<path class="cf-a" stroke-width="3.5" fill="none" d="M`
+      + route.map(([c,r]) => { const p = cell(c,r); return `${f(p[0]+ox)} ${f(p[1])}`; }).join('L') + `"/>`;
+    return g + `<text class="cf-c" x="${ox+118}" y="30" text-anchor="middle">${label}</text>`
+      + `<text class="${ok?'cf-gd':'cf-d'}" x="${ox+118}" y="196" text-anchor="middle">${note}</text>`;
+  };
+  made.push(svg('water-goes-round', 460, 214, `
+  ${panel(0,  [[2,1]], 'one block', 'the water just goes round it', false)}
+  ${panel(216,[[0,1],[1,1],[2,1],[3,1],[4,1]], 'a wall across the valley', 'now it backs up', true)}
+  <path class="cf-l" d="M225 40L225 180" stroke-dasharray="2 5"/>`));
+}
+
+// =============================================================================
+// 24 — two-shapes-of-consequence: bounded upstream, unbounded downstream
+// =============================================================================
+{
+  const y = 116, x0 = 30, W = 400;
+  // a river running left to right, dam in the middle
+  const river = `<path class="cf-m" stroke-width="3" fill="none" d="M${x0} ${y}L${f(x0+W)} ${y}"/>`;
+  const dam = x0 + W*0.42;
+  let tribs = '';
+  for (const t of [0.55, 0.68, 0.82]){
+    const tx = x0 + W*t;
+    tribs += `<path class="cf-l" d="M${f(tx)} ${y-34}L${f(tx)} ${y}"/>`;
+    tribs += `<circle class="cf-af" cx="${f(tx)}" cy="${f(y-34)}" r="3"/>`;
+  }
+  made.push(svg('two-shapes-of-consequence', 460, 216, `
+  ${river}${tribs}
+  <path class="cf-af" d="M${f(dam-56)} ${y-13}L${f(dam)} ${y-13}L${f(dam)} ${y+13}L${f(dam-56)} ${y+13}Z" opacity="0.55"/>
+  <path class="cf-g" stroke-width="4" d="M${f(dam)} ${y-22}L${f(dam)} ${y+22}"/>
+  <text class="cf-gd" x="${f(dam)}" y="${y+42}" text-anchor="middle">the wall</text>
+  <text class="cf-c" x="${f(dam-30)}" y="${y-30}" text-anchor="middle">the lake</text>
+  <text class="cf-d" x="${f(dam-30)}" y="${y-14}" text-anchor="middle"> </text>
+  <text class="cf-c" x="14" y="30">upstream &#183; bounded by the valley</text>
+  <text class="cf-d" x="14" y="50">rises to the lowest lip and stops</text>
+  <text class="cf-gd" x="446" y="30" text-anchor="end">downstream &#183; bounded by nothing</text>
+  <text class="cf-d" x="446" y="50" text-anchor="end">every cell below loses its water</text>
+  <text class="cf-d" x="14" y="190">tributaries put water back, so high up the loss fades within twenty cells &#8212;</text>
+  <text class="cf-d" x="14" y="208">on a main stem there is nothing below big enough, and it runs to the coast</text>`));
+}
+
+// =============================================================================
+// 24 — deficit-fades: where you dam decides whether it is local
+// =============================================================================
+{
+  const x0 = 66, y0 = 156, W = 320, H = 110;
+  const X = s => x0 + W*s/50, Y = d => y0 - H*d;
+  const head = [[0,1],[5,0.35],[20,0.07],[50,0.04]];
+  const stem = [[0,1],[5,0.87],[20,0.69],[50,0.38]];
+  const line = (d,cls) => `<path class="${cls}" fill="none" d="M`
+    + d.map(p => `${f(X(p[0]))} ${f(Y(p[1]))}`).join('L') + `"/>`;
+  const dots = (d,cls) => d.map(p => `<circle class="${cls}" cx="${f(X(p[0]))}" cy="${f(Y(p[1]))}" r="3.5"/>`).join('');
+  made.push(svg('deficit-fades', 460, 214, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  ${line(stem,'cf-g')}${dots(stem,'cf-gf')}
+  ${line(head,'cf-a')}${dots(head,'cf-af')}
+  <text class="cf-gd" x="${f(X(50)+6)}" y="${f(Y(0.38)+4)}">dammed low down</text>
+  <text class="cf-c" x="${f(X(50)+6)}" y="${f(Y(0.04)+4)}">dammed high up</text>
+  <text class="cf-d" x="${x0-8}" y="${f(y0-H+6)}" text-anchor="end">100%</text>
+  <text class="cf-d" x="${x0-8}" y="${y0+4}" text-anchor="end">0</text>
+  <text class="cf-d" x="${f(x0+W/2)}" y="${y0+20}" text-anchor="middle">cells downstream of the dam &#8594;</text>
+  <text class="cf-c" x="14" y="26">how much of the river is still missing</text>
+  <text class="cf-d" x="14" y="196">the same wall, in two places. one is a local change and one is not.</text>`));
+}
+
+// =============================================================================
 // 23 — two-kinds-of-arithmetic: what the standard pins down and what it does not
 // =============================================================================
 {

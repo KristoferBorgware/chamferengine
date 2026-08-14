@@ -141,9 +141,11 @@ The threshold is the design knob: it decides what is a stream and what is a rive
 and it costs nothing to change because the drainage number is already computed for
 every cell.
 
-The whole pass — noise, routing, filling, accumulation — took **1.2 seconds for
-163,842 cells**. Level 8 is four times that, so a few seconds, once, at world
-creation. **This is not a runtime cost.**
+The whole pass — noise, routing, filling, accumulation — runs in **well under a
+second for 163,842 cells**. The script also prints the reading it saw, but that is
+a wall-clock timing and moves between runs, so the bound is the claim. Level 8 is
+four times the cells, so a few seconds, once, at world creation. **This is not a
+runtime cost.**
 
 ---
 
@@ -281,9 +283,14 @@ need to know it is drawing a river.
   stream narrower than that has nowhere to live in the coarse map, so either the
   fine generator invents small tributaries locally — with no guarantee they
   connect — or small streams simply do not exist.
-- **What happens where a river meets a player's edits.** A dammed river has no
-  representation: the coarse map is read-only, so the delta store would have to
-  carry the change, and the flow field would not know about it.
+- ~~What happens where a river meets a player's edits~~ — settled by
+  [doc 24](24-edits-and-global-processes.md). The coarse map **stays read-only**:
+  it is a statement about the *generated* world, not the current one, which is
+  what keeps it a pure function of the seed for
+  [doc 23](23-determinism.md). Water becomes a local simulation on top of it. The
+  measured reason a partial recompute cannot work: a headwater dam's effect fades
+  within twenty cells while a main-stem dam is felt to the coast, so there is no
+  radius to recompute within.
 
 ---
 

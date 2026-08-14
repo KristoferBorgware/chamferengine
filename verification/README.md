@@ -423,6 +423,33 @@ prices both sides.
 
 ---
 
+## `edits.js` — what a player's dam actually does
+
+Doc 21's coarse map is read only, so it still says a river runs through a wall a
+player built. Before deciding what to do about that, this measures how far one
+edit reaches.
+
+**Verifies:**
+
+1. **Most edits never meet a river.** Cells carrying at least 200 upstream cells
+   are **1.62% of land**; at least 1,000, **0.08%**.
+2. **One block dams nothing.** A cell has six ways out, so the water routes round
+   it: a 1-cell wall floods **0** cells. It takes a wall spanning the channel —
+   5 cells wide floods **29** and backs water up **144 m**.
+3. **Upstream is bounded, downstream is not.** The lake rises to the lowest lip of
+   the valley and stops, which terrain decides. Every cell below the wall has lost
+   the held-back flow, and nothing in the geometry bounds that.
+4. **Where you dam decides whether the change is local.** Deficit remaining after
+   5 / 20 / 50 cells downstream: a dam 74 cells from the sea goes 35% → 7% → **4%**
+   and never reaches the coast; one 50 cells out goes 87% → 69% → **38%** and does.
+   Same wall, opposite answer — so there is no radius to partially recompute in.
+5. **Storage was never the obstacle.** An override layer for a 100 m pond is
+   **1.9 KB**, 0.07% of the level-8 map.
+
+**Used in:** [doc 24](../docs/24-edits-and-global-processes.md)
+
+---
+
 ## `determinism.js` — do two machines agree?
 
 Doc 15 left this open, noting that `float64` "is not bit-identical across

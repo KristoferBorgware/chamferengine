@@ -25,6 +25,7 @@ numbered documents.
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
+| [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
@@ -325,6 +326,72 @@ verdict
    Choose erosion exponents from {0.5, 1, 1.5, 2}, write noise with an integer
    hash, and the coarse map can be regenerated client-side after all -- so
    doc 22 may have its 2.5 MB back.
+```
+
+## `edits.js`
+
+A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all.
+
+Cited by [doc 24](24-edits-and-global-processes.md).
+
+```
+level 7: 163,842 cells, 30% land, one cell 16.0 m across
+
+1. how often an edit lands on flowing water at all
+   upstream cells   cells at or above   share of land
+            10             9343      19.01%
+            50             2717      5.53%
+           200              797      1.62%
+          1000               37      0.08%
+   Most of the land is hillside, not channel. The overwhelming majority of
+   what a player builds never meets a river, so whatever this costs, it is
+   paid rarely.
+
+2. damming a river takes a wall, not a block
+   site carrying 354 upstream cells, wall 2% of the height range tall
+   wall spans   cells raised   cells flooded   lake reaches
+        1 cells              1               0        0 m
+        3 cells              7               1       16 m
+        5 cells             19              29      144 m
+        7 cells             37              32      128 m
+   One block dams nothing -- the water simply goes round it, which is what
+   a hex grid with six ways out should do. A wall has to span the channel
+   before anything backs up, and once it does the lake is bounded by the
+   valley: water rises to the lowest lip and stops.
+
+3. downstream, and the thing a small planet does not give you
+   longest flow path on this world: 84 cells = 1344 m
+   dam at        held back   deficit after 5 / 20 / 50 steps   reaches the sea?
+     74 from sea         31     35%    7%    4%            no
+     50 from sea        499     87%   69%   38%            yes
+     25 from sea         64     86%   25%   --              yes
+      8 from sea        234     93%   --     --              yes
+   The deficit is the share of the flow that is missing. It depends entirely
+   on WHERE you dam. High up, tributaries below refill the river and the
+   deficit fades to a few percent within twenty cells -- the sea never hears
+   about it. On a main stem there is nothing below big enough to make up the
+   difference, so the loss runs to the coast. One of these has a local
+   answer and the other does not, and they are the same edit.
+
+4. if the coarse map could be overridden, what would it cost?
+   the whole level-8 map:            655,362 cells, 2.50 MB
+   a 100 m pond                          491 coarse cells = 1.9 KB  (0.0749% of the map)
+   a 300 m lake                         4418 coarse cells = 17.3 KB  (0.6741% of the map)
+   An override layer is small. The question was never storage -- it is what
+   happens to everything downstream of the cell you changed.
+
+verdict
+   Two different shapes of consequence, and they want different answers.
+   UPSTREAM the effect is bounded by terrain: the lake fills to the lowest
+   lip and stops, a few hundred metres across even on a main stem. That is
+   small enough to simulate locally from the delta store, with no change to
+   the coarse map at all.
+   DOWNSTREAM it depends where. A headwater dam fades to a few percent within
+   twenty cells and the coast never notices. A main-stem dam is felt all the
+   way down, because nothing below it is big enough to refill the river.
+   So the same player action is local in one place and global in another --
+   which is why a single rule cannot cover it, and why the honest answer is
+   to bound what the coarse map is allowed to promise.
 ```
 
 ## `frame.js`
@@ -1035,7 +1102,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass took 827 ms for 163,842 cells
+   whole pass: well under a second for 163,842 cells  (this run 721 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1460,4 +1527,4 @@ verdict
 
 ---
 
-_25 scripts. Every number above is reproduced by running them._
+_26 scripts. Every number above is reproduced by running them._

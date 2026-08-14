@@ -194,7 +194,9 @@ console.log('\n4. filling the pits so every drop reaches the sea');
   console.log(`   the planet is ${(2*Math.PI*1700/1000).toFixed(2)} km around, so that is`
     + ` ${(longest*spacing/(2*Math.PI*1700)).toFixed(2)}x the circumference`);
 }
-console.log(`\n   whole pass took ${Date.now()-t0} ms for ${N.toLocaleString('en-US')} cells`);
+// a wall-clock reading, so state the bound it clears rather than the number
+console.log(`\n   whole pass: well under a second for ${N.toLocaleString('en-US')} cells`
+  + `  (this run ${Date.now()-t0} ms -- a timing, so it moves run to run)`);
 console.log('   At level 8 that is four times the cells and still seconds, once, at world');
 console.log('   creation. This is not a runtime cost.');
 

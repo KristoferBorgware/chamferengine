@@ -70,6 +70,7 @@ a runnable demo where one exists.
 | 21 | [Rivers, erosion and continents](docs/21-rivers-and-erosion.md) | The one stored map, flow routing, and why continents come first |
 | 22 | [Multiplayer interest management](docs/22-multiplayer-interest.md) | Who to tell about an edit, and why it is not an ID range |
 | 23 | [Determinism across machines](docs/23-determinism.md) | Which arithmetic is pinned to the bit, and the one rule that follows |
+| 24 | [Player edits and global processes](docs/24-edits-and-global-processes.md) | What happens when someone dams a river the coarse map still describes |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -82,7 +83,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all twenty-five verification scripts and fails the build if
+`make-reference.js` runs all twenty-six verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a
