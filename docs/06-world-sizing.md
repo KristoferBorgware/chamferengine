@@ -118,11 +118,24 @@ by `(R − h) / R`.
 
 - 64 blocks into a 1,700 m planet → cells at the crust floor are **96%** of
   surface width. Imperceptible.
-- Below roughly **85%**, blocks visibly narrow as you dig. At that point either
-  cap the crust or merge layers — drop the horizontal resolution by one level at
-  a chosen depth, which reintroduces seams but only horizontally, at layer
-  boundaries you control.
+- Below roughly **85%**, blocks visibly narrow as you dig. That threshold is a
+  judgement about what a player notices, not a measurement — there is no script
+  behind it, and it should be treated as a place to start looking rather than a
+  number to design against.
+- At that point, **cap the crust.** The worked-example planet never gets near it.
 - If crust depth exceeds the radius, cells collapse to nothing before the bottom.
+
+The obvious alternative to capping — **merging layers**, dropping the horizontal
+resolution by one level at a chosen depth — is deliberately *not* recommended
+here, though earlier drafts of this document suggested it in passing. It
+contradicts the invariant that the tessellation is identical at every layer
+([doc 03](03-addressing.md)), and three separate results are built on that
+invariant: free vertical neighbours, tractable gravity
+([doc 13](13-gravity-and-orientation.md)), and exact vertical face merging
+([doc 14](14-meshing-and-lod.md)). A resolution change at depth breaks all three
+along an interior boundary that wraps the whole planet, and no seam rule in the
+design covers it. It is listed as an open topic in
+[doc 11](11-open-topics.md), not as a recommendation.
 
 The calculator reports the taper live.
 
@@ -144,8 +157,11 @@ The calculator reports the taper live.
 
 Three separate ceilings on how deep you can go, and only one of them binds:
 
-- **Bits** — 5 for the face plus 2 per level means **29 levels** in a 64-bit ID.
-  Not the binding constraint.
+- **Bits** — 5 for the face plus 2 per level means **29 levels** in a 64-bit ID,
+  *if the word holds nothing else*. It does hold something else:
+  [doc 03](03-addressing.md) puts the layer index in the same word, and a
+  512-layer crust costs 10 bits, which brings the real ceiling to **24 levels**.
+  Either way, not the binding constraint.
 - **Storage** — level 15 at one byte per cell is ~11 GB. This is what actually
   stops you.
 - **Nothing, if you generate on demand.** A cell's terrain comes from a noise

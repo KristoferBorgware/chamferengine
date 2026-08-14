@@ -293,8 +293,10 @@ are sealed rock as far as the camera is concerned. So:
 > **Near chunks run the density field. Far chunks run the height-field term
 > alone.**
 
-Which makes a LOD-2 chunk about **330× cheaper to generate** than a near one —
-16× from the columns, 20× from skipping the density term. It also means the
+Which makes a LOD-2 chunk about **330× cheaper to generate** than a near one:
+**12.5×** from having fewer columns (561 → 45; two levels would quarter twice
+over to 16× but for the rim) and **26.6×** from skipping the density term
+entirely. It also means the
 expensive cave geometry from the section above is only ever built where a player
 could actually reach it.
 

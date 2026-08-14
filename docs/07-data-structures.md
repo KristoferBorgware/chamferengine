@@ -62,13 +62,24 @@ else.
 chunkId    the key — face + path bits, nothing else stored
 palette    which block types appear in THIS chunk: [air, stone, dirt, grass]
 blocks     packed indices into the palette, bit width = ceil(log2(paletteSize))
-           index = layer × cellsPerLayer + rank(q, r)
+           index = rank(q, r) × layerCount + layer
 ```
 
 **Chunks store no IDs.** Cells sit in canonical `q,r,layer` order, so an address
 is implied by array position — the same way a Minecraft chunk is a flat array.
 Storing a 64-bit ID beside a one-byte block type would be 8× overhead for
 something already known from where the byte sits.
+
+**The order is column-major, and that is deliberate.** `layer` varies fastest, so
+one cell's whole vertical column is a contiguous run of bytes. The alternative —
+layer-major, all of layer 0 then all of layer 1 — makes a column a strided walk
+across the entire array, and columns are what everything actually iterates:
+the height field is evaluated once per column and reused down it
+([doc 08](08-terrain-generation.md)), side faces are run-length merged down a
+column ([doc 14](14-meshing-and-lod.md)), and seam ownership compares solidity
+down a rim column. It also matches the ID layout, where
+[doc 03](03-addressing.md) puts the layer bits at the bottom of the word for the
+same reason. Array order and ID order agree, and both favour the column.
 
 **The palette trick matters.** Most chunks contain three or four block types, so
 two bits per cell beats sixteen:

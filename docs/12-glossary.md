@@ -86,9 +86,19 @@ Together with the face, these form the chunk ID.
 **`(q, r)`** — lattice coordinates within a chunk. The leftover after path digits
 are stripped from `(i, j)`.
 
+**Seam ownership** — the rule that at a boundary with a coarser neighbour, the
+**finer** chunk emits a face wherever its own solidity differs from the coarse
+neighbour's, in both directions, and the coarser chunk emits nothing. The only
+thing that closes a cave mouth at a LOD boundary; a skirt does not. Costs 2.7
+faces and one height-field evaluation per rim column. See
+[doc 14](14-meshing-and-lod.md).
+
 **Skirt** — a vertical apron hanging from a chunk's boundary cells, one coarse
-cell deep, that hides the gap where two LOD levels meet. Two triangles per
-boundary cell, and indifferent to which level the neighbour chose.
+cell deep, that hides the **surface step** where two LOD levels meet. Two
+triangles per boundary cell, and indifferent to which level the neighbour chose.
+Closes the surface slit and essentially nothing else — it hangs downward, so it
+cannot cover a cave mouth, which is a horizontal hole. Correctness at a seam is
+seam ownership; the skirt is insurance for the frames in between.
 
 **Subdivision depth (`D`)** — how many times triangles are split. Sets horizontal
 grid fineness. **Unrelated to crust depth.**
@@ -116,12 +126,14 @@ Camera and controller state only; never a stored coordinate.
 | Hexagon vs square footprint | 0.87× | same nominal width |
 | Hexagon corner-to-corner | 1.15× | vs flat-to-flat |
 | Cell area variation | ≈ 1.3 : 1 | across the sphere |
+| Cell spacing variation | ≈ 1.14 : 1 | square root of the area figure |
 | ID width | `5 + 2D` bits | independent of chunk level |
 | Code space used | ≈ 31.25% | `20/32 × 1/2` |
-| Max levels in 64 bits | 29 | `(64 − 5) / 2` |
+| Max levels in 64 bits, no layer field | 29 | `(64 − 5) / 2` |
+| Max levels in 64 bits, 10-bit layer | 24 | `(64 − 5 − 10) / 2` — the real ceiling |
 | Adjacency table | 60 entries, 180 bytes | 20 × 3 × 3 bytes |
 | Flipped-frame cells | ≈ 46% | descended through a middle child |
-| Border cells needing ownership rule | ~6% at D3/C0 | falls as chunks grow |
+| Border cells needing ownership rule | ~6% at D3/C0 | demo-measured, extreme case; falls as chunks grow |
 | Pentagon direction deficit | 1 index = 60° | never shrinks with depth |
 | Pentagon deflection | 36.07° | a straight line cannot pass through one |
 | Pentagon antipodal pairs | 6 | so poles can be placed on two of them |

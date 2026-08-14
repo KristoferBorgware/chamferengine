@@ -35,6 +35,15 @@ Put those together: **the ray's ground track is a perfectly straight line in fac
 barycentric coordinates.** Not approximately — exactly. No curve following, no
 re-projection per step.
 
+**One caveat, and it is about the cells rather than the ray.** The track being
+straight is exact. That the *boundaries it crosses* sit at half-integer
+coordinates is inherited from [doc 04](04-position-lookup.md), where it is a
+working assumption rather than a verified result: gnomonic projection preserves
+straight lines but not equidistance, so the gnomonic image of a spherical cell
+boundary is not exactly the planar one. The walk is therefore exact in its
+geometry and assumed-exact in its cell boundaries. Nothing in this document has a
+script behind it yet; see [doc 11](11-open-topics.md).
+
 ![A straight ray crossing a field of hexagons, stopping at the first solid cell](figures/ray-is-straight.svg)
 
 *The same straight-line walk a flat voxel game does, on a sphere, with no
@@ -107,7 +116,9 @@ see [doc 10](10-pathfinding.md). Build it once.
 - Block picking is a **grid walk**, not a physics query, and it costs about five
   cells whatever the planet's size.
 - Gnomonic projection maps great circles to straight lines, so **the ground track
-  is exactly straight** in face coordinates.
+  is exactly straight** in face coordinates. That the boundaries it crosses sit
+  at half-integers is a **working assumption** inherited from doc 04, not a
+  verified one.
 - Four boundary families: three horizontal, one radial. Step the nearest.
 - Walking off a face is the adjacency table's job; the line does not bend.
 - The entry boundary is the **placement face**, for free.

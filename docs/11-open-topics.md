@@ -35,13 +35,95 @@ Closed, and the pessimism above was overstated. An unmerged hex surface costs
 factor, not a blow-up. What does not transfer is the rectangle-growing half of
 greedy meshing; run-length merging down a column is exact and free.
 
-The scheme is: naive mesher, skirts one coarse cell deep at chunk boundaries,
-altitude-driven LOD by resampling the terrain function. Cap merging is optional
-and bounded to a 37 m patch by curvature rather than by the algorithm.
+The scheme is: naive mesher, altitude-driven LOD by resampling the terrain
+function, and **two** different fixes at chunk boundaries because there are two
+different holes. Cap merging is optional and bounded to a 37 m patch by curvature
+rather than by the algorithm.
+
+The boundary rule is the part worth carrying away, because the obvious answer was
+wrong. A **skirt** — a vertical apron one coarse cell deep — closes the surface
+step where two LOD levels meet, and that is all it closes. Under a density field
+8–24% of columns hold more than one slab of rock, and a skirt cannot reach the
+cave mouths: it hangs *downward*, and a cave mouth is a *horizontal* hole. Doc 14
+measures 961 holes left over 385 rim columns with skirts alone. The fix is
+**seam ownership** — the finer chunk emits a face wherever its solidity differs
+from the coarse neighbour's, in both directions — which leaves **zero**, for 2.7
+faces per rim column. Keep the skirt too, as cover for the frames after a
+neighbour changes level.
 
 The reason it lands so cheaply is the horizon from
 [doc 13](13-gravity-and-orientation.md): a standing player sees about **21,000
 cells**, 84,000 triangles. The 76 m horizon is the greedy mesher.
+
+---
+
+## Is `hexRound` exact on the sphere?
+
+The one place the specification asserts something load-bearing with no script
+behind it, found by reading the corpus against itself rather than by running
+anything.
+
+[Doc 04](04-position-lookup.md) turns a position into a cell in four steps. Step
+1 — nearest face centroid is the containing face — is verified exact on 200,000
+random directions. Step 3 — round the barycentric triple and you have the
+containing cell — is verified nowhere, and it is **not** the same kind of claim.
+On a flat lattice the Voronoi cell of a lattice point is the hexagon, exactly.
+The real cells are Voronoi regions *on the sphere* of radially projected points,
+and gnomonic projection preserves straight lines but not equidistance, so the two
+Voronoi diagrams are not the same diagram.
+
+What depends on it is everything that goes **position → cell**:
+[doc 09](09-ray-traversal.md) entirely, since its DDA steps across exactly the
+boundaries this assumption places (and it has no verification of its own); the
+lookup path in [doc 07](07-data-structures.md); and invariant 5 — *a cell's ID is
+computed from position* — which is the load-bearing claim of the whole addressing
+scheme.
+
+What does **not** depend on it is anything going cell → position. Doc 10's
+heuristic walks path digits from an ID it already has, and doc 14's LOD corner
+figures come from the dual construction directly. Both are unaffected either way.
+
+The work is small: build the real grid, sample random directions, compare
+`hexRound` against true nearest-cell-on-the-sphere, report the mismatch rate and
+the distance-to-boundary distribution, and repeat across levels to see whether it
+shrinks with depth. Three outcomes, and they are not equally likely:
+
+- **Zero mismatches** — the cheapest and most likely-feeling outcome given how
+  little a single face triangle bends. Promote the claim to `[verified]`, done.
+- **Mismatches confined to a thin boundary band, shrinking with depth** — the
+  expected outcome. Document the band width and move on; a player at the exact
+  edge of a hexagon being assigned to its neighbour is invisible in play.
+- **Mismatches that do not shrink** — then the ray walk in doc 09 can step onto
+  the wrong boundary and drift, and doc 04 needs a correction term. Only this
+  outcome costs anything, and it is the reason to measure rather than assume.
+
+Worth doing before the floating-origin work below, because it is an afternoon and
+it sits underneath docs 04, 07 and 09 and one of the eleven invariants.
+
+---
+
+## Layer merging — proposed, never designed
+
+[Doc 06](06-world-sizing.md) observes that cells taper as `(R − h)/R` with depth,
+and that past roughly 85% of surface width the narrowing becomes visible. There
+are two ways out: cap the crust, or **merge layers** — drop the horizontal
+resolution by one level at a chosen depth. Doc 06 recommends capping and raises
+merging only to decline it; this is where the declining is justified.
+
+Capping the crust is fully specified and costs nothing on the worked-example
+planet, whose crust floor sits at 96%. Merging layers has never been more than a
+sentence, and it contradicts an invariant that three closed results are built on. [Doc
+03](03-addressing.md) states the tessellation is *identical at every layer*,
+which is what makes vertical neighbours free (`layer ± 1`, no face crossing, no
+pentagon case). [Doc 13](13-gravity-and-orientation.md) calls that the fact that
+makes gravity tractable. [Doc 14](14-meshing-and-lod.md) measures vertical face
+merging as exact to 1.5e-16 *because* stacked cells share a radial plane.
+
+A resolution change at some depth breaks all three at that boundary — and it is
+an interior boundary, wrapped around the whole planet, which no chunk-seam rule
+currently covers. Either design it properly or strike the suggestion. **Do not
+implement it from the sentence in doc 06.** Capping the crust is the safe default
+and costs nothing on the worked-example planet, where the floor sits at 96%.
 
 ---
 
@@ -130,7 +212,11 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Floating-point precision**, and the floating origin it implies. It is now the
+**First, the `hexRound` question above** — it is an afternoon's work, it sits
+underneath three documents and an invariant, and it is the only place the
+specification currently asserts something load-bearing without a script. Close it before building on it.
+
+Then **floating-point precision**, and the floating origin it implies. It is the
 last item that touches every system holding a position, and both closed
 documents lean on it: [doc 13](13-gravity-and-orientation.md) wants orientation
 rebased per chunk alongside position, and [doc 14](14-meshing-and-lod.md) wants

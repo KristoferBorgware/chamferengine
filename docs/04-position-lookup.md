@@ -148,9 +148,45 @@ function hexRound(k, i, j, n){
 **This is why the third coordinate earns its keep** — you could not detect or
 repair the error with only two. Store `(i, j)` afterwards and forget `k`.
 
-One more thing makes this step correct rather than merely close: the Voronoi cell
-of a lattice point on a triangular lattice **is** the hexagon. So "nearest lattice
-point" and "which cell am I in" are the same question, and rounding answers both.
+### Why this step is *not* known to be exact, unlike step 1
+
+On a flat, uniform triangular lattice the Voronoi cell of a lattice point **is**
+the hexagon, so "nearest lattice point" and "which cell am I in" are the same
+question and rounding answers both. That is a theorem, and it is where the
+confidence in this step comes from.
+
+But the cells are not on a flat lattice. They are the Voronoi regions **on the
+sphere** of the lattice points after they have been projected radially outward.
+Gnomonic projection maps great circles to straight lines — which is what
+[doc 09](09-ray-traversal.md) leans on — but it does **not** preserve
+equidistance. Two points that are equally far from a lattice point in the face
+plane are not equally far from it on the sphere. So the spherical Voronoi
+boundary is not the planar one, and near a cell boundary the nearest *planar*
+lattice point need not be the nearest *spherical* cell.
+
+Step 1 is verified exact against 200,000 random directions. **Step 3 is not
+verified at all**, and the two should not be read as carrying the same weight:
+
+> **[unverified]** The mismatch is expected to be confined to a thin band along
+> cell boundaries and to shrink with subdivision depth, since the projection
+> distorts less over a smaller triangle. Expected, not measured. What is needed
+> is a script that builds the real grid, samples random directions, compares
+> `hexRound` against true nearest-cell-on-the-sphere, and reports both the
+> mismatch rate and how close to a boundary the mismatches sit. Until that
+> exists, treat "rounding gives the containing cell" as a **working assumption**.
+
+The practical stakes are low and the correctness stakes are not. A cell-boundary
+disagreement means a player standing at the very edge of a hexagon is
+occasionally assigned to the neighbouring one — invisible in play. But the same
+assumption is what makes the ray walk in [doc 09](09-ray-traversal.md) exact
+rather than approximate, and a DDA that steps on the wrong boundary can drift,
+which is not invisible.
+
+Note the direction of travel. This affects **position → cell** only. Anything
+that starts from an ID and walks path digits to a position — the pathfinding
+heuristic in [doc 10](10-pathfinding.md), the mesh geometry in
+[doc 14](14-meshing-and-lod.md) — is untouched by it. See
+[doc 11](11-open-topics.md).
 
 ---
 
@@ -188,5 +224,8 @@ radius*, not the terrain height at this direction — see
   which is exactly why they suit twenty faces with unrelated origins.
 - Rounding three coordinates independently breaks their sum; **repair the one
   that moved furthest**. The third coordinate exists to make that possible.
+- That rounding gives the *containing cell* is exact on a flat lattice and a
+  **working assumption on the sphere** — the one step in this pipeline with no
+  script behind it.
 - One sign check answers "have I left this face?", "is this inside the triangle?"
   and "is `k` negative?" — they are the same question.

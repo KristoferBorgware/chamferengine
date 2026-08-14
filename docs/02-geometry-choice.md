@@ -80,16 +80,25 @@ Cell counts follow `N(L) = 10 · 4^L + 2`:
 | 3 | 642 | 630 + 12 |
 | 4 | 2,562 | 2,550 + 12 |
 
-**Why chosen:** best neighbour ergonomics of any option. Every cell has six
-equidistant neighbours, each sharing a full edge. No diagonals, no ambiguity, no
-corner-cutting.
+**Why chosen:** best neighbour ergonomics of any option. Every adjacency is a
+shared edge — no diagonals, no ambiguity, no corner-cutting. Away from the twelve
+pentagons a cell has six neighbours, near enough equidistant to be treated as
+such for movement.
+
+"Near enough" is doing real work in that sentence, and the caveat below says how
+much.
 
 **Honest caveat:** the hexagons are **near-regular, not congruent**. Edge lengths
 and angles vary slightly, with most distortion clustered near the twelve
-pentagons and fading out. Area varies roughly **1.3:1** across the sphere. This
-is small and *smoothly distributed* with no discontinuity, which is the real win
-over a cube map — but "all hexagons are identical" is false, and code must not
-assume it.
+pentagons and fading out. Area varies roughly **1.3:1** across the sphere, so
+centre-to-centre spacing varies about **1.14:1** — area goes as the square of
+spacing. This is small and *smoothly distributed* with no discontinuity, which is
+the real win over a cube map — but "all hexagons are identical" is false, and
+code must not assume it.
+
+That 14% is the number to reach for whenever something divides by "the" cell
+spacing. [Doc 10](10-pathfinding.md) is where it has teeth: a heuristic that
+divides by nominal spacing rather than maximum spacing stops being admissible.
 
 **Demo:**
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html) —

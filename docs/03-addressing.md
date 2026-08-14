@@ -196,6 +196,11 @@ Every cell then has exactly one home and nothing is stored twice. The share of
 cells needing this rule is small and shrinks as chunks grow relative to cells —
 around 6% at depth 3 with chunk level 0, less at realistic settings.
 
+That 6% is read off the demo below rather than produced by a verification script,
+and depth 3 / chunk level 0 is the extreme case rather than a realistic one. It
+is quoted to show the *shape* of the number, not as a figure to size anything
+against.
+
 **Demo:** [`demos/chunk-hierarchy.html`](../demos/chunk-hierarchy.html) — the
 *Hex cells* view reports the exact border-cell count and percentage live.
 
@@ -242,6 +247,12 @@ The tessellation is **identical at every layer** — same face, same path, same
 `q,r`, evaluated at a smaller radius. Each cell is really a hexagonal prism
 running toward the core, and the layer index says how far along that column
 you are.
+
+**Treat that as an invariant, not a convenience.** Three later results are built
+directly on it, and a proposal to change horizontal resolution partway down —
+which [doc 06](06-world-sizing.md) mentions as a way to handle taper — breaks all
+three along an interior boundary wrapping the whole planet. It is filed as an
+open topic in [doc 11](11-open-topics.md) rather than a recommendation.
 
 Two consequences:
 

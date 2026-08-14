@@ -57,9 +57,17 @@ Goldberg polyhedron wins it.
 1. **Seamless wrapping.** No edge, no pole, no discontinuity in gameplay.
 2. **No distorted cells.** Cells vary in size only mildly and smoothly, never
    with a visible break.
-3. **Uniform adjacency.** Every cell has the same number of neighbours, all at
-   the same distance, all sharing a full edge. This eliminates an entire class
-   of diagonal-movement and corner-cutting bugs.
+3. **Edge-only adjacency.** Every adjacency is a shared edge — never a bare
+   corner. This eliminates an entire class of diagonal-movement and
+   corner-cutting bugs, and unlike the two qualifiers below it is exact,
+   everywhere, with no exceptions.
+
+   The two qualifiers: **twelve cells have five neighbours** rather than six,
+   which [doc 02](02-geometry-choice.md) shows is forced rather than chosen; and
+   neighbours are equidistant only to about **14%**, since cell area varies
+   1.3:1. Both are small. Neither is zero, and code that assumes otherwise is
+   wrong — see [doc 13](13-gravity-and-orientation.md) for what the first costs
+   and [doc 10](10-pathfinding.md) for what the second costs.
 4. **Exact hierarchy.** A chunk must contain its children exactly, not
    approximately, so that level-of-detail, streaming, and hierarchical
    pathfinding are all sound.

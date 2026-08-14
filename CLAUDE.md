@@ -77,6 +77,15 @@ Violating any of these breaks the design. They are not tunable.
 9. Direction indices are ordered **counter-clockwise as seen from outside**,
    never derived from `(q, r)` sign. Deriving them from local coordinates leaks
    the middle-child mirror into ~46% of chunks and reverses every rail in them.
+10. The tessellation is **identical at every layer** — same face, same path,
+    same `(q, r)`, evaluated at a smaller radius. This is what makes vertical
+    neighbours free, gravity tractable, and vertical face merging exact. Do not
+    change horizontal resolution with depth; doc 06 mentions it as a taper
+    remedy, and doc 11 files it as unsolved for exactly this reason.
+11. Every adjacency is a **shared edge**, never a bare corner. That is the exact
+    guarantee. "Six neighbours, all equidistant" is the *approximation* — 12
+    cells have five, and spacing varies ~1.14:1. Never state the approximation
+    as the guarantee; doc 00's design goal 3 used to, and doc 10 inherited it.
 
 ## Verified constants
 
@@ -91,6 +100,8 @@ Violating any of these breaks the design. They are not tunable.
 | S2 area ratios | linear `5.20`, quadratic `2.08`, tangent `1.41` | asymptotic | `s2.js` |
 | RT defect split | `20 × 10.3°` + `12 × 42.8°` = `720°` | rhombic triacontahedron | `check.js` |
 | cube defect split | `8 × 90°` = `720°` | why cube spheres pinch | — |
+| cell spacing variation | `≈ 1.14 : 1` | √(1.3:1 area); divide by MAX, not nominal | — |
+| max levels in 64 bits | `24` with a 10-bit layer, `29` without | layer shares the word | — |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
 | holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
 | pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
@@ -114,7 +125,9 @@ Violating any of these breaks the design. They are not tunable.
 - Nearest face centroid **is** the containing icosahedron face. Exact, not an
   approximation: face boundaries are the perpendicular bisectors between
   adjacent centroids. Checked on 200,000 random directions, 0 mismatches
-  (`lookup.js`).
+  (`lookup.js`). **This covers step 1 of the doc-04 pipeline only.** Step 3 —
+  `hexRound` gives the containing *cell* — has no script and is a working
+  assumption; see Known gaps.
 - `(i, j)` ↔ `path digits + (q, r)` round-trips exactly (`qr.js`).
 - A 4-way midpoint triangle split admits **no** continuous edge-adjacent
   traversal. The child adjacency graph is a star; best achievable is 2 of 3
@@ -188,8 +201,17 @@ Violating any of these breaks the design. They are not tunable.
 
 Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topics.md).
 
+- **`hexRound` on the sphere is unverified** — the cells are spherical Voronoi
+  regions of radially projected lattice points, and gnomonic projection preserves
+  straight lines but not equidistance, so nearest-planar-lattice-point is not
+  provably nearest-cell. Everything going **position → cell** inherits it: doc 09
+  entirely (no verification of its own), doc 07's lookup path, and invariant 5.
+  Cell → position work (doc 10's heuristic, doc 14's corners) does not. Cheapest
+  open item — close it first
+- **Layer merging is proposed but never designed** and contradicts invariant 10.
+  Cap the crust instead unless someone designs the interior seam
 - Floating-point precision at planet scale; floating origin needed — highest
-  impact, and both doc 13 and doc 14 depend on the rebasing rule
+  impact after the above, and both doc 13 and doc 14 depend on the rebasing rule
 - Lighting propagation with 8 neighbours and radial sky light
 - Six-state block rotation for directional blocks
 - Pentagon handling as a *gameplay* problem, not just a maths one

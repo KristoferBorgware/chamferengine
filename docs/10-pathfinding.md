@@ -14,9 +14,14 @@ On a square grid you pick your poison:
 - **8-neighbour** gives diagonal moves costing √2 that can illegally squeeze
   between two touching wall corners — through a gap of exactly zero width.
 
-Hexes have neither problem. **Six neighbours, all at identical distance, every
-adjacency a shared edge, never a bare corner.** An entire class of corner-cutting
-bugs simply does not exist — not "is handled", does not exist.
+Hexes have neither problem. **Every adjacency is a shared edge, never a bare
+corner.** An entire class of corner-cutting bugs simply does not exist — not "is
+handled", does not exist.
+
+That property is exact and holds at every cell including the twelve pentagons,
+which is why it is stated on its own. The two convenient-but-approximate
+companions to it — six neighbours, all the same distance apart — are neither, and
+the caveats at the end of this document are where that is paid for.
 
 This is design goal 3 from [doc 00](00-introduction.md) being collected.
 
@@ -38,9 +43,21 @@ distance = (|Δk| + |Δi| + |Δj|) / 2
 ```
 
 **Across faces**, use the great-circle distance between the two cell centres
-divided by cell spacing. Admissible, since a step never covers more arc than one
-spacing. Both positions come straight from their IDs by walking path digits — no
-lookup.
+divided by cell spacing. Both positions come straight from their IDs by walking
+path digits — no lookup.
+
+**Divide by the *largest* spacing on the sphere, not the nominal one.** A*
+is only admissible if the heuristic never overestimates, and a heuristic is an
+estimate of *steps remaining*: dividing an arc by a spacing larger than the real
+step turns it into an undercount, which is safe. Divide by the nominal spacing
+and every step through a tighter-than-average region — the regions near the
+twelve pentagons, where cells run smallest — is overcounted, the heuristic
+becomes inadmissible, and A\* quietly returns paths that are not shortest.
+
+Spacing varies about **1.14:1** ([doc 02](02-geometry-choice.md)), so the safe
+divisor is roughly 7% above nominal. The cost of being conservative is a slightly
+weaker heuristic and a few more nodes expanded. The cost of not being is silently
+wrong routes, which is much worse and much harder to notice.
 
 ## Pentagons and seams are non-events
 
@@ -89,17 +106,20 @@ simplification is what makes the demo small, not what makes it correct.
   both need is exactly the ray walk from [doc 09](09-ray-traversal.md). That
   traversal is already the pathfinding smoother.
 - **Step costs are not perfectly uniform.** Cells vary ~1.3:1 in area across the
-  sphere and shrink with depth. Irrelevant for gameplay, but if true travel times
+  sphere — about 1.14:1 in spacing — and shrink with depth. Irrelevant to how
+  gameplay *feels*, but not irrelevant to correctness: it is exactly why the
+  cross-face heuristic above must divide by maximum spacing. If true travel times
   are needed, weight each edge by actual centre-to-centre distance.
 
 ---
 
 ## In one breath
 
-- Six equidistant neighbours, every one a shared edge: **corner-cutting bugs do
-  not exist**, rather than being handled.
+- **Every adjacency is a shared edge**, so corner-cutting bugs do not exist
+  rather than being handled. Six-and-equidistant is the approximation; edge-only
+  is the guarantee.
 - The heuristic is exact within a face and great-circle across faces, both from
-  the ID alone.
+  the ID alone — divided by **maximum** spacing, or it is not admissible.
 - Pentagons are degree-5 nodes and seams live inside `neighbour()` — **the
   pathfinder never learns it is on a sphere**.
 - Hierarchical search is free: **truncate the ID** and the coarse graph is

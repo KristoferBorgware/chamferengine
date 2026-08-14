@@ -43,6 +43,11 @@ Compares `argmax` over face centroids against a true barycentric containment tes
 **Verifies:** 200,000 / 200,000 random directions agree. Nearest face centroid
 **is** the containing face, exactly.
 
+**Does not verify:** the step *after* it. Doc 04's pipeline is face → barycentric
+→ `hexRound` → path digits, and this script covers only the first arrow. That
+`hexRound` returns the containing **cell** is exact on a flat lattice and
+unproven on the sphere — see the wanted script at the bottom of this file.
+
 **Used in:** [doc 04](../docs/04-position-lookup.md)
 
 ---
@@ -214,7 +219,38 @@ level coarser on the other — and scores what each boundary policy leaves open.
 
 ---
 
+## Wanted: `hexround.js` — is rounding the same as containment on a sphere?
+
+The one load-bearing claim in the specification with nothing behind it, and the
+next script anyone should write.
+
+Doc 04 rounds a barycentric triple to the nearest lattice point and calls the
+result the containing cell. On a flat triangular lattice that is a theorem: the
+Voronoi cell of a lattice point **is** the hexagon. But the real cells are
+Voronoi regions **on the sphere** of radially projected points, and gnomonic
+projection preserves straight lines without preserving equidistance — so the two
+Voronoi diagrams are not the same diagram, and rounding is not obviously
+containment.
+
+**What it should measure:** build the real grid at several levels; sample random
+directions; compare `hexRound`'s answer against true nearest-cell-on-the-sphere
+by brute force; report the mismatch rate, the distribution of distance-to-nearest-
+boundary among mismatches, and whether the rate falls with subdivision depth.
+
+**Why it matters more than it looks:** everything going **position → cell** rests
+on it — [doc 09](../docs/09-ray-traversal.md) entirely, since it has no
+verification of its own and its DDA steps across exactly these boundaries; doc
+07's lookup path; and the invariant that a cell's ID is computed from position
+rather than stored. Work going the other way (cell → position) is unaffected.
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a
 script here that produces it. Add the script before adding the number.
+
+And the converse, which is how the gap above went unnoticed: **a script
+verifying one step of a pipeline does not verify the pipeline.** `lookup.js`
+proving step 1 exact made doc 04 read as verified throughout. Say which step a
+script covers, and mark the ones nothing covers.
