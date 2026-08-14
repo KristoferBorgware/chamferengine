@@ -28,6 +28,7 @@ numbered documents.
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
+| [`pentagon.js`](../verification/pentagon.js) | The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs. | [17](17-pentagons.md) |
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
@@ -396,6 +397,148 @@ T3 -> T0,T1,T2
 best ordering: T0 -> T1 -> T3 -> T2 | adjacent steps: 2 of 3
 ```
 
+## `pentagon.js`
+
+The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs.
+
+Cited by [doc 17](17-pentagons.md).
+
+```
+the twelve pentagons, as something a player runs into
+(doc 06 planet: R = 1700 m, D = 11, cell spacing 1.000 m,
+ circumference 10681 m, ~2.1 h to walk around)
+
+1. where they are
+   nearest pentagon-to-pentagon: 63.435deg = 1882 m = 1882 cells
+   furthest you can stand from all twelve: 37.377deg = 1109 m
+   mean distance to the nearest one: 663 m
+
+   So on this planet you are NEVER more than 1109 m from a pentagon,
+   and typically about 663 m. They are not remote curiosities;
+   they are roughly as common as villages.
+
+2. how much of the world they touch
+   fraction of the surface within k cells of a pentagon:
+
+   k cells   radius      area        one pentagon zone
+         1       1 m     0.0001%           3 m^2
+         3       3 m     0.0009%          28 m^2
+        10      10 m     0.0104%         314 m^2
+        50      50 m     0.2594%        7852 m^2
+       200     200 m     4.1467%      125495 m^2
+
+   The distortion itself is ONE cell. Even a generous 50-cell exclusion
+   zone around each of the twelve costs well under a percent of the world.
+
+3. a rail line, laid straight
+   Random great-circle routes, with the closest approach solved exactly
+   rather than sampled along the line.
+
+   route length   within 1 cell   within 10 cells   within 50 cells
+          100 m          0.005%             0.08%             0.60%
+          500 m          0.029%             0.34%             1.93%
+         1000 m          0.083%             0.70%             3.56%
+         5000 m          0.328%             3.24%            15.91%
+        10681 m          0.378%             3.50%            16.66%
+
+   Sanity check on the last row, which also shows the antipodal pairing
+   from doc 13 doing something. A full circumnavigation is a whole great
+   circle; for a random pole the chance a given vertex lies within 1 m of
+   it is sin(1/1700) = 0.059%. But a great circle is EQUIDISTANT from v
+   and -v, so the twelve pentagons present only SIX independent chances,
+   not twelve: 6 x 0.059% = 0.353%, against the measured value above.
+   Twelve would predict twice the observed rate.
+
+   So a rail laid at random right around the planet lands dead on a
+   pentagon under 1% of the time -- but passes within 50 cells of one
+   about a sixth of the time. Rare to hit, common to meet.
+
+4. the best circumnavigating route
+   Searching great circles for the one furthest from all twelve vertices:
+   best clearance 26.565deg = 788 m = 788 cells
+
+   So a rail CAN circle the planet and stay 788 cells clear of every pentagon.
+   Avoidance is always possible; it is not always convenient.
+   (The opposite extreme: because the twelve form 6 antipodal pairs, a great
+    circle can also be chosen to pass through TWO of them exactly.)
+
+5. the cost of routing around, versus through
+   A line entering a pentagon deflects 36.07deg either way (doc 13): there is
+   no opposite direction to leave by. So "through" is not an option for a
+   rail that must stay straight. Going around it costs:
+
+   detour radius   extra track   as % of a 1 km line
+         1 cells         2.0 m                 0.20%
+         2 cells         4.0 m                 0.40%
+         5 cells        10.0 m                 1.00%
+
+   Trivial. The cost of a pentagon is not distance -- it is that an
+   AUTOMATED system (a rail router, a conveyor, a pipe network) has to
+   contain the special case at all. One cell in 42 million, that every
+   piece of directional machinery must nevertheless handle correctly.
+
+5b. does an exclusion zone fix the loop problem? (level 6 grid)
+   walk a closed loop at graph distance k around one pentagon,
+   carrying a direction index the way a rail carries "straight on":
+
+   k    cells in loop   direction slip on return
+    1               5                        1 index = 60deg
+    2              10                        1 index = 60deg
+    3              15                        1 index = 60deg
+    5              25                        1 index = 60deg
+    8              40                        1 index = 60deg
+   12              60                        1 index = 60deg
+   16              80                        1 index = 60deg
+
+   The slip is 1 index at EVERY radius. It is topological: it counts the
+   pentagons enclosed, not the distance kept from them. So an exclusion
+   zone of any size leaves it exactly where it was.
+
+   This narrows what every option below can actually buy. Keeping machinery
+   off a pentagon removes the LOCAL problem -- five exits instead of six,
+   no straight line through. It does NOT remove the loop problem, because
+   a loop drawn anywhere around the pentagon still encircles it.
+
+5c. the twelve as destinations
+   each pentagon has 5 nearest neighbours at 1882 m -- the icosahedron graph
+   a closed tour visiting all twelve exists: 0->1->5->4->2->3->9->8->6->7->10->11->0
+   length 22586 m = 2.11x around the world
+   at 1.4 m/s that is 4.5 hours of walking
+
+   Can you see one from the next? Eye horizon is 76 m (doc 13), so a
+   tower of height h is visible from 76 m + R*acos(R/(R+h)).
+   height   visible from   reaches the next pentagon (1882 m)?
+     20 m          335 m   no
+     60 m          521 m   no
+    150 m          765 m   no
+    400 m         1143 m   no
+   a landmark would have to be 1793 m tall to be seen from the next one --
+   taller than the planet's radius. On a world this small the twelve are NOT
+   inter-visible, so travelling between them needs coordinates, not line of
+   sight. That is what makes doc 13's "poles on a pentagon pair" worth taking.
+
+6. burying them, as H3 does on Earth
+   Force the height field down at the twelve vertices so each sits under
+   water. Cost, as a share of the whole surface:
+
+   ocean radius    surface given to water   still walkable
+           50 m                    0.26%           99.74%
+          100 m                    1.04%           98.96%
+          200 m                    4.17%           95.83%
+          500 m                   25.81%           74.19%
+          941 m                   89.55%           10.45%   <- discs now overlap
+         1109 m                  100.00%            0.00%   <- discs now overlap
+
+   1.03% for a 100 m sea around each -- far more than enough to hide a
+   one-cell defect. This is the only option that removes the problem
+   rather than relocating it, because it removes the MACHINERY, not the
+   geometry: no rails get built at the bottom of an ocean.
+
+   But note what it does to the map: twelve seas, 1882 m apart, at
+   FIXED positions no seed can move. That is a strong world-design
+   statement, not a neutral one -- an archipelago planet by construction.
+```
+
 ## `precision.js`
 
 Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back.
@@ -700,4 +843,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_15 scripts. Every number above is reproduced by running them._
+_16 scripts. Every number above is reproduced by running them._

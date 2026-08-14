@@ -649,5 +649,39 @@ const made = [];
   <text class="cf-d" x="230" y="228" text-anchor="middle">lit = dot(sunDirection, up) &gt; 0 &#183; and up is already computed for gravity</text>`));
 }
 
+// =============================================================================
+// pentagon-loops -- the slip is topological, so distance buys nothing
+// =============================================================================
+{
+  const O = [128, 128], U = 26;
+  let s = `<circle class="cf-gf" cx="${f(O[0])}" cy="${f(O[1])}" r="6"/>`;
+  // rings at radius k hold 5k cells around a degree-5 cell (doc 16)
+  for (let k = 1; k <= 3; k++){
+    const n = 5 * k;
+    s += `<circle class="cf-a" cx="${f(O[0])}" cy="${f(O[1])}" r="${f(k*U)}" stroke-dasharray="${k === 1 ? '' : '5 4'}"/>`;
+    for (let i = 0; i < n; i++){
+      const a = 2*Math.PI*i/n - Math.PI/2;
+      s += `<circle class="cf-af" cx="${f(O[0] + k*U*Math.cos(a))}" cy="${f(O[1] + k*U*Math.sin(a))}" r="2.8"/>`;
+    }
+    // an arrow showing the carried heading, and where it comes back to
+    const a0 = -Math.PI/2, tip = [O[0] + k*U*Math.cos(a0), O[1] + k*U*Math.sin(a0)];
+    s += `<path class="cf-g" d="M${f(tip[0]-9)} ${f(tip[1]-11)}L${f(tip[0]+9)} ${f(tip[1]-11)}"
+           marker-end="url(#hd)"/>`;
+  }
+  made.push(svg('pentagon-loops', 430, 256, `
+  <defs><marker id="hd" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0 0L7 3.5L0 7Z" fill="#b0800f"/></marker></defs>
+  ${s}
+  <text class="cf-gd" x="${f(O[0])}" y="${f(O[1] + 4)}" text-anchor="middle" font-size="10">5</text>
+  <text class="cf-c" x="266" y="60">loop radius 1 &#183; 5 cells</text>
+  <text class="cf-c" x="266" y="80">loop radius 2 &#183; 10 cells</text>
+  <text class="cf-c" x="266" y="100">loop radius 3 &#183; 15 cells</text>
+  <text class="cf-big" x="266" y="136">every one returns</text>
+  <text class="cf-big" x="266" y="154">rotated 1 index = 60&#176;</text>
+  <text class="cf-d" x="266" y="180">the slip counts the pentagons</text>
+  <text class="cf-d" x="266" y="196">enclosed, not the distance kept</text>
+  <text class="cf-d" x="128" y="240" text-anchor="middle">measured out to radius 16</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

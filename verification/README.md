@@ -260,6 +260,44 @@ loses accuracy, and how much a chunk-local origin buys back.
 
 ---
 
+## `pentagon.js` — the twelve as a gameplay problem
+
+Puts numbers on a decision that is otherwise a matter of taste: how often a player
+meets a pentagon, what each option would cost, and what any of them can actually
+achieve.
+
+**Verifies:**
+
+1. **They are common, not remote.** 1,882 m apart on the doc-06 planet, and you
+   are never more than **1,109 m** from one, typically **663 m** — on a world you
+   can walk around in two hours.
+2. **The affected area is tiny.** The defect is one cell; a 50-cell exclusion zone
+   around all twelve costs 0.26% of the surface.
+3. **Rare to hit, common to meet.** A random great-circle route right around the
+   planet lands on a pentagon **0.378%** of the time and passes within fifty cells
+   **16.7%** of the time. Closest approach is solved exactly rather than sampled
+   along the route, which understates it badly. The rate also confirms the
+   antipodal pairing: a great circle is equidistant from `v` and `−v`, so twelve
+   pentagons present only **six** independent chances.
+4. **Avoidance is always possible.** The best circumnavigating great circle keeps
+   **788 cells** of clearance from every pentagon.
+5. **Detouring is trivial** — 2–10 m of extra track. The cost was never distance.
+6. **The loop slip is topological.** Walking a closed loop at graph distance 1, 2,
+   3, 5, 8, 12 and 16 around a pentagon gives **one index every time**. No
+   exclusion zone of any size changes it, which is what rules out "keep machinery
+   away" as a fix and corrects doc 13's claim about ocean burial.
+7. **The twelve as destinations.** A closed tour of all twelve exists along
+   icosahedron edges, **22,586 m** — 2.11× around the world, about 4.5 hours of
+   walking. And a landmark would have to be **1,793 m** tall to be seen from the
+   next one, taller than the planet's radius, so they are **not inter-visible**.
+8. **What burial would cost**, measured by sampling rather than the small-cap
+   formula, which double-counts once the discs overlap: **1.03%** of the surface
+   for a 100 m sea around each, rising to 100% at the 1,109 m covering radius.
+
+**Used in:** [doc 17](../docs/17-pentagons.md)
+
+---
+
 ## `light.js` — lighting on a hex sphere
 
 Seven checks, covering what 8 neighbours cost, why sky light is still one

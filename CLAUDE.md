@@ -21,7 +21,7 @@ and duplicates information found there.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 16.
+- `docs/` — prose specification, ordered 00 through 17.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -65,6 +65,7 @@ script owns its numbers.
 | [14](docs/14-meshing-and-lod.md) | mesh cost, merge limits, LOD, chunk seams | `mesh.js`, `volume.js`, `seam.js` |
 | [15](docs/15-precision-and-origin.md) | float budget, the anchor+offset rule, one-shot vs recursive | `precision.js` |
 | [16](docs/16-lighting.md) | 8 neighbours, sky light, the free terminator, light storage | `light.js` |
+| [17](docs/17-pentagons.md) | the pentagon decision: protected landmarks, and why | `pentagon.js` |
 
 Doc 04 also owns the **definition of a cell boundary** (`hexround.js`), which is
 load-bearing for docs 07, 09 and 14 — read it before touching position → cell.
@@ -119,6 +120,14 @@ Violating any of these breaks the design. They are not tunable.
     sphere", which differs on ~1% of the sphere. Position → cell must go through
     `hexRound`, never through a nearest-centre search, or the two disagree at
     boundaries.
+15. The **twelve pentagon columns are protected** — no player placement or
+    removal, at any layer (doc 17). In exchange, directional machinery **may
+    assume degree 6**: it can never sit on a five. Do not write the degree-5
+    case into rails, pipes or conveyors; write the placement refusal instead.
+16. A heading carried along a path **must not be assumed to close** when the path
+    does. A loop enclosing an odd number of pentagons returns rotated by one
+    direction index **at any radius** — the slip is topological, so no exclusion
+    zone, ocean or distance fixes it. Recompute headings from the grid per step.
 
 ## Verified constants
 
@@ -148,6 +157,9 @@ Violating any of these breaks the design. They are not tunable.
 | light storage | `4×` the block data | 35 KB vs 9 KB per chunk, D11/C6 | `light.js` |
 | sky light per column | `32×` smaller than per cell | monotone down a column | `light.js` |
 | terminator speed | `circumference / dayLength` | `= 1.4 m/s` at doc 06's 2.12 h walk time | `light.js` |
+| pentagon separation | `1,882 m`, cover radius `1,109 m` | never far from one; mean `663 m` | `pentagon.js` |
+| loop slip around a pentagon | `1` index at **every** radius | topological; no exclusion zone helps | `pentagon.js` |
+| tour of all twelve | `22,586 m` = `2.11×` around | 4.5 h walk; they are NOT inter-visible | `pentagon.js` |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
 | holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
 | pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
@@ -238,6 +250,13 @@ Violating any of these breaks the design. They are not tunable.
   while position error grows linearly with `R`, so gravity and all three frames
   need no precision handling — and doc 04's pipeline is already right, because its
   first line is `dir = normalize(pos)` and every later step works on the direction.
+- **The pentagon loop slip is topological** (`pentagon.js`). Measured at loop radii
+  1 through 16: **one index, every time**. It counts the pentagons enclosed, not
+  the distance kept, so no exclusion zone or ocean removes it — doc 13's claim that
+  burial "removes the problem" is corrected in doc 17. Burial removes only the
+  *local* problem. That is why doc 17 protects the cell (cheap, reversible, keeps
+  seed variety) rather than flooding it (1% of the surface, fixes the macro map of
+  every world, cannot be undone).
 - **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
   so holonomy and the pentagon direction deficit simply do not apply. 8 neighbours
   cost a flat 1.5×; radial sky light is as cheap as a flat world's because
@@ -285,6 +304,5 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
   geometry; a flood fill propagates inward, so the rule may not transfer
 - Six-state block rotation for directional blocks
-- Pentagon handling as a *gameplay* problem, not just a maths one
 - Player-facing coordinates (latitude / longitude / altitude)
 - Rivers, erosion, and plate-scale continents — all global processes

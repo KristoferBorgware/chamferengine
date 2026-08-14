@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Five entries are struck through because they have since been closed. They are
+Six entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -200,32 +200,41 @@ conveyors, machines — needs a 6-state rotation field and 6-way logic.
 Hex is arguably *better* for these, but no existing recipe or tutorial will
 transfer. Budget design time.
 
----
+**Two of the three hard parts are now gone.** [Doc 17](17-pentagons.md) makes the
+twelve pentagon columns unbuildable, so a directional block can never sit on a
+degree-5 cell and the rotation field is a clean 6 states with no exceptions. And
+[doc 13](13-gravity-and-orientation.md) already fixed the ordering rule: index
+into the cell's neighbour ring, counter-clockwise seen from outside, never
+derived from `(q, r)` sign.
 
-## Pentagons as a gameplay problem
-
-The twelve pentagons are solved mathematically, not experientially. A player
-laying a conveyor line will eventually hit a cell with five sides where their
-sixth direction does not exist.
-
-Options:
-
-- Bury them under ocean, as H3 does on Earth
-- Make them unbuildable landmarks — shrines, anomalies, world features
-- Accept the break and let players route around it
-
-This is a **design decision**, not a technical one, and it should be made
-explicitly rather than by default.
-
-[Doc 13](13-gravity-and-orientation.md) quantifies what is actually being
-decided. A line entering a pentagon deflects **36.07°** either way — there is no
-opposite direction to leave by — and a circuit encircling one returns rotated by
-exactly one direction index. Neither shrinks with subdivision depth. Only the
-first option removes the problem rather than relocating it. Doc 13 also notes
-that the twelve pentagons form **six antipodal pairs**, so one pair can be made
-to carry the lat/long poles — which turns two of them into places worth naming.
+What is left is genuinely just the 6-way logic — plus one rule that no design
+choice can remove: **a heading carried along a path must not be assumed to close
+when the path does.** A circuit enclosing an odd number of pentagons returns
+rotated by one index, at any radius ([doc 17](17-pentagons.md)).
 
 ---
+
+## ~~Pentagons as a gameplay problem~~ — decided, see [doc 17](17-pentagons.md)
+
+Closed, and it is the only entry on this page that was a **game design** decision
+rather than a mathematical one.
+
+**The twelve pentagon columns are protected terrain and are landmarks.** Nothing
+is placed or removed on them, so every piece of directional machinery may assume
+six neighbours rather than handling five — the special case is deleted rather than
+managed. Two of the twelve carry the coordinate poles, per this document's own
+note about antipodal pairs.
+
+Burying them under ocean was rejected. It costs an affordable 1% of the surface,
+but it fixes the macro geography of every world at positions no seed can move, and
+it cannot be undone once baked into the generator.
+
+The finding that reframed the choice: **the direction-index slip is topological.**
+Measured at loop radii 1 through 16, it is one index every time — it counts the
+pentagons a loop encloses, not the distance kept from them. So no option removes
+it, ocean included, and heading-carrying code has to handle it regardless. That
+turned the decision into a narrow one about the cell itself, and made the cheap
+answer the right one.
 
 ## Player-facing coordinates
 
@@ -255,27 +264,29 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Pentagons as a gameplay problem** is now the cheapest remaining item and the
-only one blocked by nothing at all. [Doc 13](13-gravity-and-orientation.md)
-supplies every number needed to decide it — 60° forever, a 36.07° deflection, six
-antipodal pairs — and [doc 16](16-lighting.md) has since shown they cost lighting
-nothing, which narrows what is actually being traded. Deciding it unblocks block
-rotation, rails, and the "north landmark" question. It is a conversation rather
-than a document.
+**Which boundary the mesh draws** is the last structural gap and the smallest. It
+should not be left to be discovered during implementation, since it is the
+difference between a player clicking on a cell and being told they clicked on its
+neighbour.
 
-**Which boundary the mesh draws** is small and should not be left to be
-discovered during implementation, since it is the difference between a player
-clicking on a cell and being told they clicked on its neighbour.
+**Block rotation** is now unblocked and much easier than it looked, because
+[doc 17](17-pentagons.md) removed its hard case: directional machinery may assume
+six neighbours, since it can never be placed on a five. What is left is a 6-state
+rotation field and 6-way logic, plus the loop rule from doc 17 — a heading carried
+along a path must not be assumed to close.
 
-After those, the undesigned systems left are all **content** rather than
-structure: rivers and erosion, block rotation, player-facing coordinates, and
-multiplayer interest management. The geometric core is closed.
+**Player-facing coordinates** are also unblocked and now more attractive: doc 17
+puts the lat/long poles on two protected, standable landmarks, so the coordinate
+system has somewhere to point at.
+
+After those, what remains is **content** rather than structure — rivers and
+erosion, and multiplayer interest management. **The geometric core is closed.**
 
 ---
 
-## What closing five of these taught
+## What closing six of these taught
 
-All five closed items came back with the same shape of answer, and it is worth
+All six closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

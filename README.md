@@ -63,6 +63,7 @@ a runnable demo where one exists.
 | 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, seam ownership |
 | 15 | [Precision and the floating origin](docs/15-precision-and-origin.md) | Where floats run out, the anchor-and-offset rule, one-shot vs recursive |
 | 16 | [Lighting](docs/16-lighting.md) | 8 neighbours, sky light down a column, the free terminator |
+| 17 | [Pentagons as a place](docs/17-pentagons.md) | The gameplay decision: protected landmarks, and the loop that no option fixes |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

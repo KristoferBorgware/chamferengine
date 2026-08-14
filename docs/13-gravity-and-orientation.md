@@ -187,11 +187,16 @@ So the 720° shows up twice, and the two behave oppositely:
 
 Raising the subdivision depth is a real fix for the first and no fix at all for
 the second. **You can make pentagons too small for a player to see and still not
-small enough for a conveyor to ignore.** Anyone choosing between the options in
-[doc 11](11-open-topics.md#pentagons-as-a-gameplay-problem) should decide with
-that in front of them: burying the pentagons under ocean is the only listed
-option that actually removes the problem, because it removes the machinery rather
-than the geometry.
+small enough for a conveyor to ignore.**
+
+> **Corrected by [doc 17](17-pentagons.md).** An earlier version of this section
+> said that burying the pentagons under ocean is the only option that actually
+> removes the problem, because it removes the machinery rather than the geometry.
+> That is too strong. Measuring loops at radius 1 through 16 showed the slip is
+> **topological** — one index at every radius — so it counts the pentagons a loop
+> encloses and not the distance it kept from them. A loop drawn around an ocean
+> still encircles the pentagon inside it. Burial removes the *local* problem
+> only; nothing removes the loop. Doc 17 takes the decision on that basis.
 
 ---
 

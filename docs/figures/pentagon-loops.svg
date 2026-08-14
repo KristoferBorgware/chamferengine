@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 256" width="430" height="256">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="hd" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0 0L7 3.5L0 7Z" fill="#b0800f"/></marker></defs>
+  <circle class="cf-gf" cx="128.0" cy="128.0" r="6"/><circle class="cf-a" cx="128.0" cy="128.0" r="26.0" stroke-dasharray=""/><circle class="cf-af" cx="128.0" cy="102.0" r="2.8"/><circle class="cf-af" cx="152.7" cy="120.0" r="2.8"/><circle class="cf-af" cx="143.3" cy="149.0" r="2.8"/><circle class="cf-af" cx="112.7" cy="149.0" r="2.8"/><circle class="cf-af" cx="103.3" cy="120.0" r="2.8"/><path class="cf-g" d="M119.0 91.0L137.0 91.0"
+           marker-end="url(#hd)"/><circle class="cf-a" cx="128.0" cy="128.0" r="52.0" stroke-dasharray="5 4"/><circle class="cf-af" cx="128.0" cy="76.0" r="2.8"/><circle class="cf-af" cx="158.6" cy="85.9" r="2.8"/><circle class="cf-af" cx="177.5" cy="111.9" r="2.8"/><circle class="cf-af" cx="177.5" cy="144.1" r="2.8"/><circle class="cf-af" cx="158.6" cy="170.1" r="2.8"/><circle class="cf-af" cx="128.0" cy="180.0" r="2.8"/><circle class="cf-af" cx="97.4" cy="170.1" r="2.8"/><circle class="cf-af" cx="78.5" cy="144.1" r="2.8"/><circle class="cf-af" cx="78.5" cy="111.9" r="2.8"/><circle class="cf-af" cx="97.4" cy="85.9" r="2.8"/><path class="cf-g" d="M119.0 65.0L137.0 65.0"
+           marker-end="url(#hd)"/><circle class="cf-a" cx="128.0" cy="128.0" r="78.0" stroke-dasharray="5 4"/><circle class="cf-af" cx="128.0" cy="50.0" r="2.8"/><circle class="cf-af" cx="159.7" cy="56.7" r="2.8"/><circle class="cf-af" cx="186.0" cy="75.8" r="2.8"/><circle class="cf-af" cx="202.2" cy="103.9" r="2.8"/><circle class="cf-af" cx="205.6" cy="136.2" r="2.8"/><circle class="cf-af" cx="195.5" cy="167.0" r="2.8"/><circle class="cf-af" cx="173.8" cy="191.1" r="2.8"/><circle class="cf-af" cx="144.2" cy="204.3" r="2.8"/><circle class="cf-af" cx="111.8" cy="204.3" r="2.8"/><circle class="cf-af" cx="82.2" cy="191.1" r="2.8"/><circle class="cf-af" cx="60.5" cy="167.0" r="2.8"/><circle class="cf-af" cx="50.4" cy="136.2" r="2.8"/><circle class="cf-af" cx="53.8" cy="103.9" r="2.8"/><circle class="cf-af" cx="70.0" cy="75.8" r="2.8"/><circle class="cf-af" cx="96.3" cy="56.7" r="2.8"/><path class="cf-g" d="M119.0 39.0L137.0 39.0"
+           marker-end="url(#hd)"/>
+  <text class="cf-gd" x="128.0" y="132.0" text-anchor="middle" font-size="10">5</text>
+  <text class="cf-c" x="266" y="60">loop radius 1 &#183; 5 cells</text>
+  <text class="cf-c" x="266" y="80">loop radius 2 &#183; 10 cells</text>
+  <text class="cf-c" x="266" y="100">loop radius 3 &#183; 15 cells</text>
+  <text class="cf-big" x="266" y="136">every one returns</text>
+  <text class="cf-big" x="266" y="154">rotated 1 index = 60&#176;</text>
+  <text class="cf-d" x="266" y="180">the slip counts the pentagons</text>
+  <text class="cf-d" x="266" y="196">enclosed, not the distance kept</text>
+  <text class="cf-d" x="128" y="240" text-anchor="middle">measured out to radius 16</text>
+</svg>
