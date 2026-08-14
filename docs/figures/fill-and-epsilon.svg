@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 196" width="430" height="196">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="fe1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <path class="cf-m" d="M22 118.3L25.0 115.8L28.0 112.1L31.0 109.3L34.0 105.2L37.0 99.6L40.0 103.9L43.0 105.5L46.0 96.9L49.0 91.3L52.0 86.7L55.0 81.4L58.0 76.4L61.0 75.8L64.0 75.5L67.0 76.4L70.0 78.3L73.0 82.0L76.0 88.0L79.0 90.3L82.0 89.8L85.0 94.5L88.0 100.3L91.0 101.6L94.0 103.8L97.0 108.9L100.0 109.7L103.0 109.7L106.0 109.1L109.0 105.3L112.0 100.9L115.0 99.4L118.0 98.3L121.0 97.7L124.0 94.8L127.0 87.0L130.0 85.9L133.0 87.2L136.0 91.4L139.0 97.9L142.0 100.9L145.0 98.0L148.0 91.2L151.0 83.5L154.0 81.8L157.0 81.8L160.0 85.2L163.0 86.6L166.0 84.6L169.0 84.8L172.0 85.1L175.0 83.6L178.0 84.7L181.0 87.1L184.0 86.3L187.0 83.2L190.0 80.0"/><path class="cf-g" d="M60 90.0L148 90.0"/><path class="cf-af" opacity="0.4" d="M60 90.0L148 90.0L148 122L60 122Z"/><path class="cf-g" d="M142 80.0l12 0"/><text class="cf-c" x="106" y="26" text-anchor="middle">filled flat</text><text class="cf-d" x="106" y="176" text-anchor="middle">no cell has a lower neighbour</text>
+  <path class="cf-m" d="M240 118.3L243.0 115.8L246.0 112.1L249.0 109.3L252.0 105.2L255.0 99.6L258.0 103.9L261.0 105.5L264.0 96.9L267.0 91.3L270.0 86.7L273.0 81.4L276.0 76.4L279.0 75.8L282.0 75.5L285.0 76.4L288.0 78.3L291.0 82.0L294.0 88.0L297.0 90.3L300.0 89.8L303.0 94.5L306.0 100.3L309.0 101.6L312.0 103.8L315.0 108.9L318.0 109.7L321.0 109.7L324.0 109.1L327.0 105.3L330.0 100.9L333.0 99.4L336.0 98.3L339.0 97.7L342.0 94.8L345.0 87.0L348.0 85.9L351.0 87.2L354.0 91.4L357.0 97.9L360.0 100.9L363.0 98.0L366.0 91.2L369.0 83.5L372.0 81.8L375.0 81.8L378.0 85.2L381.0 86.6L384.0 84.6L387.0 84.8L390.0 85.1L393.0 83.6L396.0 84.7L399.0 87.1L402.0 86.3L405.0 83.2L408.0 80.0"/><path class="cf-a" d="M278 90.0L366 81.0"/><path class="cf-af" opacity="0.4" d="M278 90.0L366 81.0L366 122L278 122Z"/><path class="cf-a" d="M360 71.0l26 6" marker-end="url(#fe1)"/><text class="cf-c" x="324" y="26" text-anchor="middle">filled with a slope</text><text class="cf-d" x="324" y="176" text-anchor="middle">the outflow has somewhere to go</text>
+  <path class="cf-l" d="M215 30L215 168" stroke-dasharray="2 5"/>
+</svg>

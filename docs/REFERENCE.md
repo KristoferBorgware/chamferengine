@@ -33,6 +33,7 @@ numbered documents.
 | [`pentagon.js`](../verification/pentagon.js) | The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs. | [17](17-pentagons.md) |
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
+| [`rivers.js`](../verification/rivers.js) | Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river. | [21](21-rivers-and-erosion.md) |
 | [`rotation.js`](../verification/rotation.js) | Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close. | [19](19-directional-blocks.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
@@ -834,6 +835,82 @@ leftover q,r range 0..16  (chunk side = 16)
 15104 of 33153 points sit in a flipped (middle-child) frame
 ```
 
+## `rivers.js`
+
+Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river.
+
+Cited by [doc 21](21-rivers-and-erosion.md).
+
+```
+1. does a coarse cell sit on a fine cell?
+   level 8 point (i,j) against level 11 point (8i, 8j):
+   955 sampled, worst separation 0.00e+0
+   They are the same points. So the coarse samples ARE fine cells -- the
+   ones whose (i, j) are multiples of 8 -- and finding the three
+   that surround a fine cell is masking the low bits of (i, j), then using
+   the remainder as barycentric weights. No second structure, no search.
+   NOTE: it is the (i,j) low bits, not the path digits. Truncating path
+   digits gives the containing TRIANGLE, which is a chunk, not a cell.
+
+2. storage, and what one coarse cell covers on the worked planet
+   level     cells    at 4 bytes   coarse cell size (R = 1,700 m)
+   6      40,962      0.16 MB        32.0 m
+   7     163,842      0.63 MB        16.0 m
+   8     655,362      2.50 MB         8.0 m
+   9   2,621,442     10.00 MB         4.0 m
+   10  10,485,762     40.00 MB         2.0 m
+   Doc 08 proposes level 8: 2.5 MB, and a coarse cell 8 m across. A river
+   channel is therefore about one coarse cell wide before detail is added.
+
+3. routing every cell downhill
+   163,842 cells at level 7, 30.0% above sea level
+   land cells with nowhere lower to go (pits): 683  = 1.39% of land
+   of the 12 pentagons, 0 are pits -- expected 0.2 if they behave like anything else
+   A pentagon picks the lowest of five instead of six. That is the entire
+   difference: flow routing needs no pentagon case at all.
+
+4. filling the pits so every drop reaches the sea
+   cells raised into lakes: 2,369 (4.8% of land)
+   largest single raise: 0.1024 of the height range
+   cells still with nowhere to go: 0
+   The tiny slope added while filling is what makes that last number zero.
+   Fill without it and a lake is perfectly flat, so no cell in it has a
+   lower neighbour and every river stops dead at the first lake it meets.
+
+5. drainage area, and what counts as a river
+   threshold (upstream cells)   cells that qualify   share of land
+          20                       3703        7.53%
+         100                        563        1.15%
+         500                         29        0.06%
+        2000                          0        0.00%
+   longest continuous flow path: 46 cells = 0.74 km
+   the planet is 10.68 km around, so that is 0.07x the circumference
+
+   whole pass took 863 ms for 163,842 cells
+   At level 8 that is four times the cells and still seconds, once, at world
+   creation. This is not a runtime cost.
+
+6. rivers are as long as the continent lets them be
+   noise frequency   biggest landmass   longest river
+           6.0          6206 cells      31 cells = 0.50 km
+           3.0         15352 cells      46 cells = 0.74 km
+           1.5         31615 cells      85 cells = 1.36 km
+           0.8         33433 cells      86 cells = 1.38 km
+   Lower the frequency and the continents grow, and the rivers grow with
+   them. A river cannot be longer than the land it crosses, so the three
+   problems doc 08 lists are NOT independent: continents decide rivers.
+   Plain fBm makes many small blobs, which is why raw noise gives streams
+   and never a river system. Fix the continents first.
+
+verdict
+   Flow routing works on the hex sphere with no pentagon case and no face
+   case, because it only ever compares a cell against its neighbours. The
+   real algorithm is not the routing but the PIT FILLING, without which
+   most land drains into a hole instead of the sea. Store the coarse map at
+   level 8 for 2.5 MB, look it up by masking the low bits of (i, j), and
+   interpolate with the remainder.
+```
+
 ## `rotation.js`
 
 Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close.
@@ -1234,4 +1311,4 @@ verdict
 
 ---
 
-_22 scripts. Every number above is reproduced by running them._
+_23 scripts. Every number above is reproduced by running them._

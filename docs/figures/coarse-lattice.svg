@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 244" width="430" height="244">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M146.0 8.8L133.8 30.1M146.0 8.8L158.3 30.1M133.8 30.1L158.3 30.1M133.8 30.1L121.5 51.3M133.8 30.1L146.0 51.3M121.5 51.3L146.0 51.3M158.3 30.1L146.0 51.3M158.3 30.1L170.5 51.3M146.0 51.3L170.5 51.3M121.5 51.3L109.3 72.5M121.5 51.3L133.8 72.5M109.3 72.5L133.8 72.5M146.0 51.3L133.8 72.5M146.0 51.3L158.3 72.5M133.8 72.5L158.3 72.5M170.5 51.3L158.3 72.5M170.5 51.3L182.8 72.5M158.3 72.5L182.8 72.5M109.3 72.5L97.0 93.7M109.3 72.5L121.5 93.7M97.0 93.7L121.5 93.7M133.8 72.5L121.5 93.7M133.8 72.5L146.0 93.7M121.5 93.7L146.0 93.7M158.3 72.5L146.0 93.7M158.3 72.5L170.5 93.7M146.0 93.7L170.5 93.7M182.8 72.5L170.5 93.7M182.8 72.5L195.0 93.7M170.5 93.7L195.0 93.7M97.0 93.7L84.8 114.9M97.0 93.7L109.3 114.9M84.8 114.9L109.3 114.9M121.5 93.7L109.3 114.9M121.5 93.7L133.8 114.9M109.3 114.9L133.8 114.9M146.0 93.7L133.8 114.9M146.0 93.7L158.3 114.9M133.8 114.9L158.3 114.9M170.5 93.7L158.3 114.9M170.5 93.7L182.8 114.9M158.3 114.9L182.8 114.9M195.0 93.7L182.8 114.9M195.0 93.7L207.3 114.9M182.8 114.9L207.3 114.9M84.8 114.9L72.5 136.1M84.8 114.9L97.0 136.1M72.5 136.1L97.0 136.1M109.3 114.9L97.0 136.1M109.3 114.9L121.5 136.1M97.0 136.1L121.5 136.1M133.8 114.9L121.5 136.1M133.8 114.9L146.0 136.1M121.5 136.1L146.0 136.1M158.3 114.9L146.0 136.1M158.3 114.9L170.5 136.1M146.0 136.1L170.5 136.1M182.8 114.9L170.5 136.1M182.8 114.9L195.0 136.1M170.5 136.1L195.0 136.1M207.3 114.9L195.0 136.1M207.3 114.9L219.5 136.1M195.0 136.1L219.5 136.1M72.5 136.1L60.3 157.4M72.5 136.1L84.8 157.4M60.3 157.4L84.8 157.4M97.0 136.1L84.8 157.4M97.0 136.1L109.3 157.4M84.8 157.4L109.3 157.4M121.5 136.1L109.3 157.4M121.5 136.1L133.8 157.4M109.3 157.4L133.8 157.4M146.0 136.1L133.8 157.4M146.0 136.1L158.3 157.4M133.8 157.4L158.3 157.4M170.5 136.1L158.3 157.4M170.5 136.1L182.8 157.4M158.3 157.4L182.8 157.4M195.0 136.1L182.8 157.4M195.0 136.1L207.3 157.4M182.8 157.4L207.3 157.4M219.5 136.1L207.3 157.4M219.5 136.1L231.8 157.4M207.3 157.4L231.8 157.4M60.3 157.4L48.0 178.6M60.3 157.4L72.5 178.6M48.0 178.6L72.5 178.6M84.8 157.4L72.5 178.6M84.8 157.4L97.0 178.6M72.5 178.6L97.0 178.6M109.3 157.4L97.0 178.6M109.3 157.4L121.5 178.6M97.0 178.6L121.5 178.6M133.8 157.4L121.5 178.6M133.8 157.4L146.0 178.6M121.5 178.6L146.0 178.6M158.3 157.4L146.0 178.6M158.3 157.4L170.5 178.6M146.0 178.6L170.5 178.6M182.8 157.4L170.5 178.6M182.8 157.4L195.0 178.6M170.5 178.6L195.0 178.6M207.3 157.4L195.0 178.6M207.3 157.4L219.5 178.6M195.0 178.6L219.5 178.6M231.8 157.4L219.5 178.6M231.8 157.4L244.0 178.6M219.5 178.6L244.0 178.6"/>
+  <circle class="cf-af" cx="133.8" cy="30.1" r="2.2"/><circle class="cf-af" cx="158.3" cy="30.1" r="2.2"/><circle class="cf-af" cx="121.5" cy="51.3" r="2.2"/><circle class="cf-af" cx="146.0" cy="51.3" r="2.2"/><circle class="cf-af" cx="170.5" cy="51.3" r="2.2"/><circle class="cf-af" cx="109.3" cy="72.5" r="2.2"/><circle class="cf-af" cx="133.8" cy="72.5" r="2.2"/><circle class="cf-af" cx="158.3" cy="72.5" r="2.2"/><circle class="cf-af" cx="182.8" cy="72.5" r="2.2"/><circle class="cf-af" cx="121.5" cy="93.7" r="2.2"/><circle class="cf-af" cx="146.0" cy="93.7" r="2.2"/><circle class="cf-af" cx="170.5" cy="93.7" r="2.2"/><circle class="cf-af" cx="84.8" cy="114.9" r="2.2"/><circle class="cf-af" cx="109.3" cy="114.9" r="2.2"/><circle class="cf-af" cx="133.8" cy="114.9" r="2.2"/><circle class="cf-af" cx="158.3" cy="114.9" r="2.2"/><circle class="cf-af" cx="182.8" cy="114.9" r="2.2"/><circle class="cf-af" cx="207.3" cy="114.9" r="2.2"/><circle class="cf-af" cx="72.5" cy="136.1" r="2.2"/><circle class="cf-af" cx="97.0" cy="136.1" r="2.2"/><circle class="cf-af" cx="121.5" cy="136.1" r="2.2"/><circle class="cf-af" cx="146.0" cy="136.1" r="2.2"/><circle class="cf-af" cx="170.5" cy="136.1" r="2.2"/><circle class="cf-af" cx="195.0" cy="136.1" r="2.2"/><circle class="cf-af" cx="219.5" cy="136.1" r="2.2"/><circle class="cf-af" cx="60.3" cy="157.4" r="2.2"/><circle class="cf-af" cx="84.8" cy="157.4" r="2.2"/><circle class="cf-af" cx="109.3" cy="157.4" r="2.2"/><circle class="cf-af" cx="133.8" cy="157.4" r="2.2"/><circle class="cf-af" cx="158.3" cy="157.4" r="2.2"/><circle class="cf-af" cx="182.8" cy="157.4" r="2.2"/><circle class="cf-af" cx="207.3" cy="157.4" r="2.2"/><circle class="cf-af" cx="231.8" cy="157.4" r="2.2"/><circle class="cf-af" cx="72.5" cy="178.6" r="2.2"/><circle class="cf-af" cx="97.0" cy="178.6" r="2.2"/><circle class="cf-af" cx="121.5" cy="178.6" r="2.2"/><circle class="cf-af" cx="170.5" cy="178.6" r="2.2"/><circle class="cf-af" cx="195.0" cy="178.6" r="2.2"/><circle class="cf-af" cx="219.5" cy="178.6" r="2.2"/><circle class="cf-gf" cx="146.0" cy="8.8" r="5.5"/><circle class="cf-gf" cx="97.0" cy="93.7" r="5.5"/><circle class="cf-gf" cx="195.0" cy="93.7" r="5.5"/><circle class="cf-gf" cx="48.0" cy="178.6" r="5.5"/><circle class="cf-gf" cx="146.0" cy="178.6" r="5.5"/><circle class="cf-gf" cx="244.0" cy="178.6" r="5.5"/>
+  <circle cx="121.5" cy="136.1" r="4" fill="#b0800f"/>
+  <path class="cf-g" d="M121.5 136.1L97.0 93.7M121.5 136.1L48.0 178.6M121.5 136.1L146.0 178.6" stroke-dasharray="3 3"/>
+  <text class="cf-gd" x="272" y="52">stored coarse samples</text>
+  <text class="cf-c" x="272" y="76">every cell in between</text>
+  <text class="cf-d" x="272" y="110">a coarse sample IS a fine cell &#8212;</text>
+  <text class="cf-d" x="272" y="128">the ones whose (i, j) are</text>
+  <text class="cf-d" x="272" y="146">multiples of the step</text>
+  <text class="cf-c" x="272" y="178">so the lookup is masking</text>
+  <text class="cf-c" x="272" y="196">the low bits of (i, j)</text>
+  <text class="cf-d" x="14" y="232">and the bits you masked off are the blend weights between the three</text>
+</svg>

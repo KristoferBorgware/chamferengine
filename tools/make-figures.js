@@ -439,6 +439,114 @@ const made = [];
 
 
 // =============================================================================
+// 21 — rivers. A shared 1D profile, generated rather than drawn, so the
+// cross-sections come from a real noise function.
+// =============================================================================
+const prof = (() => {
+  const h1 = x => { let n = Math.imul(x|0, 374761393); n = (n ^ (n>>>13))>>>0;
+    return ((Math.imul(n, 1274126177) ^ (n>>>16))>>>0) / 4294967296; };
+  const vn = x => { const i = Math.floor(x), fx = x-i, s = fx*fx*(3-2*fx);
+    return (h1(i)*(1-s) + h1(i+1)*s)*2 - 1; };
+  return (x, f, oct) => { let v=0, a=1, tot=0, ff=f;
+    for (let o=0;o<oct;o++){ v += a*vn(x*ff); tot += a; a*=0.5; ff*=2; }
+    return v/tot; };
+})();
+
+// 21 — no-local-rule: a window of terrain cannot tell you where water goes
+{
+  const x0 = 22, W = 386, base = 128, amp = 46;
+  const y = x => base - amp*prof(x*0.055, 1, 4);
+  let path = `M${x0} ${f(y(x0))}`;
+  for (let x=x0+3;x<=x0+W;x+=3) path += `L${f(x)} ${f(y(x))}`;
+  made.push(svg('no-local-rule-for-rivers', 430, 220, `
+  <path class="cf-m" d="${path}"/>
+  <rect class="cf-fill" x="150" y="34" width="128" height="140" opacity="0.16"/>
+  <path class="cf-a" d="M150 34L150 174M278 34L278 174" stroke-dasharray="4 3"/>
+  <text class="cf-c" x="214" y="26" text-anchor="middle">what the generator can see</text>
+  <path class="cf-g" d="M196 ${f(y(196)-6)}l0 -22" marker-end="url(#nl1)"/>
+  <defs><marker id="nl1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <text class="cf-gd" x="196" y="${f(y(196)-34)}" text-anchor="middle">which way does water leave?</text>
+  <text class="cf-d" x="14" y="198">the answer depends on ground outside the window, so no amount of local</text>
+  <text class="cf-d" x="14" y="216">noise can produce it. rivers are not a texture &#8212; they are a global fact.</text>`));
+}
+
+// 21 — fill-and-epsilon: filling makes a lake, and a flat lake stops the river
+{
+  const draw = (ox, tilt, label, note, cls) => {
+    const W = 168, base = 96, amp = 30;
+    const y = x => base - amp*prof((x-ox)*0.05 + 4, 1, 3);
+    let path = `M${ox} ${f(y(ox))}`;
+    for (let x=ox+3;x<=ox+W;x+=3) path += `L${f(x)} ${f(y(x))}`;
+    // a lake surface across the basin, optionally tilted
+    const lx = ox+38, rx = ox+126, ly = base - 6;
+    const water = `<path class="${cls}" d="M${lx} ${f(ly)}L${rx} ${f(ly - tilt)}"/>`
+      + `<path class="cf-af" opacity="0.4" d="M${lx} ${f(ly)}L${rx} ${f(ly-tilt)}L${rx} ${base+26}L${lx} ${base+26}Z"/>`;
+    const arrow = `<path class="${cls}" d="M${ox+120} ${f(ly - tilt - 10)}l${tilt?26:12} ${tilt?6:0}"`
+      + (tilt ? ` marker-end="url(#fe1)"` : ``) + `/>`;
+    return `<path class="cf-m" d="${path}"/>${water}${arrow}`
+      + `<text class="cf-c" x="${ox+W/2}" y="26" text-anchor="middle">${label}</text>`
+      + `<text class="cf-d" x="${ox+W/2}" y="176" text-anchor="middle">${note}</text>`;
+  };
+  made.push(svg('fill-and-epsilon', 430, 196, `
+  <defs><marker id="fe1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  ${draw(22,  0, 'filled flat', 'no cell has a lower neighbour', 'cf-g')}
+  ${draw(240, 9, 'filled with a slope', 'the outflow has somewhere to go', 'cf-a')}
+  <path class="cf-l" d="M215 30L215 168" stroke-dasharray="2 5"/>`));
+}
+
+// 21 — coarse-lattice: the stored samples are fine cells, found by masking
+{
+  const T3 = tri(146, 122, 196);
+  const fineE = latticeEdges(T3, 8);
+  let fine = '', coarse = '';
+  for (let i=0;i<=8;i++) for (let j=0;j<=i;j++){
+    const p = bary(T3,8,i,j);
+    if (i%4===0 && j%4===0) coarse += `<circle class="cf-gf" cx="${f(p[0])}" cy="${f(p[1])}" r="5.5"/>`;
+    else fine += `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="2.2"/>`;
+  }
+  const q = bary(T3,8,6,2);
+  made.push(svg('coarse-lattice', 430, 244, `
+  <path class="cf-l" d="${pathOf(fineE)}"/>
+  ${fine}${coarse}
+  <circle cx="${f(q[0])}" cy="${f(q[1])}" r="4" fill="#b0800f"/>
+  <path class="cf-g" d="M${f(q[0])} ${f(q[1])}L${f(bary(T3,8,4,0)[0])} ${f(bary(T3,8,4,0)[1])}`
+    + `M${f(q[0])} ${f(q[1])}L${f(bary(T3,8,8,0)[0])} ${f(bary(T3,8,8,0)[1])}`
+    + `M${f(q[0])} ${f(q[1])}L${f(bary(T3,8,8,4)[0])} ${f(bary(T3,8,8,4)[1])}" stroke-dasharray="3 3"/>
+  <text class="cf-gd" x="272" y="52">stored coarse samples</text>
+  <text class="cf-c" x="272" y="76">every cell in between</text>
+  <text class="cf-d" x="272" y="110">a coarse sample IS a fine cell &#8212;</text>
+  <text class="cf-d" x="272" y="128">the ones whose (i, j) are</text>
+  <text class="cf-d" x="272" y="146">multiples of the step</text>
+  <text class="cf-c" x="272" y="178">so the lookup is masking</text>
+  <text class="cf-c" x="272" y="196">the low bits of (i, j)</text>
+  <text class="cf-d" x="14" y="232">and the bits you masked off are the blend weights between the three</text>`));
+}
+
+// 21 — continents-decide-rivers: the coupling, measured
+{
+  const panel = (ox, freq, big, riv, cls) => {
+    const W = 168, cy = 104;
+    let land = '';
+    for (let x=0;x<W;x+=2){
+      const h = prof((x+ox)*0.02, freq, 3);
+      if (h > 0) land += `<rect class="${cls}" x="${f(ox+x)}" y="${f(cy-14)}" width="2.4" height="28"/>`;
+    }
+    return `<path class="cf-l" d="M${ox} ${cy}L${f(ox+W)} ${cy}"/>${land}`
+      + `<text class="cf-d" x="${ox+W/2}" y="44" text-anchor="middle">${freq<1?'low':'high'}-frequency noise</text>`
+      + `<text class="cf-c" x="${ox+W/2}" y="152" text-anchor="middle">${big} cells of land</text>`
+      + `<text class="cf-gd" x="${ox+W/2}" y="172" text-anchor="middle">longest river ${riv} cells</text>`;
+  };
+  made.push(svg('continents-decide-rivers', 430, 208, `
+  ${panel(22,  2.4, '6,206',  '31', 'cf-fill')}
+  ${panel(240, 0.5, '33,433', '86', 'cf-af')}
+  <path class="cf-l" d="M215 40L215 180" stroke-dasharray="2 5"/>
+  <text class="cf-d" x="215" y="26" text-anchor="middle">same sea level, same everything else</text>
+  <text class="cf-d" x="215" y="200" text-anchor="middle">a river cannot be longer than the land it crosses</text>`));
+}
+
+// =============================================================================
 // 20 — xyz-says-nothing: the readout a flat world uses stops working
 // =============================================================================
 {

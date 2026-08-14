@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 220" width="430" height="220">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" d="M22 141.9L25.0 137.7L28.0 137.5L31.0 151.9L34.0 164.0L37.0 167.2L40.0 160.2L43.0 149.8L46.0 149.7L49.0 135.4L52.0 124.7L55.0 121.6L58.0 124.6L61.0 134.8L64.0 139.8L67.0 151.3L70.0 158.4L73.0 160.7L76.0 156.3L79.0 149.9L82.0 146.0L85.0 134.6L88.0 136.2L91.0 142.7L94.0 131.5L97.0 120.0L100.0 115.5L103.0 105.8L106.0 98.7L109.0 98.8L112.0 96.9L115.0 99.6L118.0 103.6L121.0 112.9L124.0 121.7L127.0 121.3L130.0 127.6L133.0 135.8L136.0 134.7L139.0 142.1L142.0 147.3L145.0 150.2L148.0 145.9L151.0 142.9L154.0 138.2L157.0 133.8L160.0 129.0L163.0 131.5L166.0 125.9L169.0 113.9L172.0 113.6L175.0 117.1L178.0 125.7L181.0 135.8L184.0 133.0L187.0 124.1L190.0 110.4L193.0 109.2L196.0 107.4L199.0 116.6L202.0 112.7L205.0 110.6L208.0 111.9L211.0 109.1L214.0 111.7L217.0 113.8L220.0 116.1L223.0 108.0L226.0 104.9L229.0 105.2L232.0 98.7L235.0 95.3L238.0 98.1L241.0 95.0L244.0 106.3L247.0 106.2L250.0 103.7L253.0 100.9L256.0 102.5L259.0 107.2L262.0 117.4L265.0 128.8L268.0 131.1L271.0 129.5L274.0 127.5L277.0 140.6L280.0 147.1L283.0 153.6L286.0 150.6L289.0 155.6L292.0 159.9L295.0 149.6L298.0 150.7L301.0 150.6L304.0 148.6L307.0 142.3L310.0 147.1L313.0 144.6L316.0 136.8L319.0 139.2L322.0 139.1L325.0 140.6L328.0 145.8L331.0 136.4L334.0 122.9L337.0 110.0L340.0 101.6L343.0 106.2L346.0 109.4L349.0 110.7L352.0 116.3L355.0 124.7L358.0 139.3L361.0 146.5L364.0 146.7L367.0 143.0L370.0 137.0L373.0 130.0L376.0 119.3L379.0 108.0L382.0 103.1L385.0 103.0L388.0 106.3L391.0 101.7L394.0 112.5L397.0 122.0L400.0 130.1L403.0 122.3L406.0 116.2"/>
+  <rect class="cf-fill" x="150" y="34" width="128" height="140" opacity="0.16"/>
+  <path class="cf-a" d="M150 34L150 174M278 34L278 174" stroke-dasharray="4 3"/>
+  <text class="cf-c" x="214" y="26" text-anchor="middle">what the generator can see</text>
+  <path class="cf-g" d="M196 101.4l0 -22" marker-end="url(#nl1)"/>
+  <defs><marker id="nl1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <text class="cf-gd" x="196" y="73.4" text-anchor="middle">which way does water leave?</text>
+  <text class="cf-d" x="14" y="198">the answer depends on ground outside the window, so no amount of local</text>
+  <text class="cf-d" x="14" y="216">noise can produce it. rivers are not a texture &#8212; they are a global fact.</text>
+</svg>

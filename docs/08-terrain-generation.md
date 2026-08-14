@@ -187,16 +187,23 @@ on top, interpolating between coarse samples.
 
 Two megabytes buys rivers and erosion.
 
-**And the lookup is free:** the coarse map is your own cell grid truncated to
-level 8, so finding a cell's coarse height is masking its ID. No second spatial
-structure, no interpolation scheme to invent — the hierarchy built for streaming
-does this job unchanged.
+**And the lookup is free**, though not quite in the way this document first said.
+Truncating an ID's *path digits* gives the containing triangle — a chunk — not a
+coarse cell. What lines up is the lattice: a level-8 lattice point `(i, j)` and the
+level-11 point `(8i, 8j)` are the **same point**, so a coarse sample is literally
+one of the fine cells. Mask the low bits off `(i, j)` to find the three that
+surround a cell, and the bits you masked off are the blend weights between them.
+No second spatial structure and no interpolation scheme to invent.
+See [doc 21](21-rivers-and-erosion.md).
 
 This is the **only** stored terrain the design contemplates, and it is an *input*
 to the height-field term rather than a mesh.
 
 **Recommendation:** start with pure noise, ship something, and add the coarse tier
 when the terrain starts looking like fractal lumps instead of a world.
+[Doc 21](21-rivers-and-erosion.md) designs that tier, and finds that the three
+problems above are **ordered rather than independent** — continents decide how long
+rivers can be, so that is the one to build first.
 
 ---
 

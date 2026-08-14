@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Ten entries are struck through because they have since been closed. They are
+Eleven entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -296,11 +296,27 @@ exact by construction.
 
 ---
 
-## Rivers, erosion, and continents
+## ~~Rivers, erosion, and continents~~ — designed, see [doc 21](21-rivers-and-erosion.md)
 
-Covered in [doc 08](08-terrain-generation.md) as the limit of pure noise. The
-two-tier coarse-heightmap approach is sketched there but not designed: the
-erosion algorithm, river tracing, and plate assignment are all still open.
+Closed. One coarse map, **2.5 MB at level 8**, computed once at world creation and
+read by the per-chunk generator as an input — so the runtime generator stays a
+pure function of position and nothing about chunks, LOD or determinism moves.
+
+Two findings worth carrying. **Flow routing needs no pentagon case and no face
+case**, because the rule only ever compares a cell against its own neighbours —
+0 of the 12 pentagons came out as pits. The work is not the routing but the
+**pit filling**, and the trap inside that is a flat lake: fill a basin level and
+every river reaching it stops dead. Fill with a tiny slope and there are 0 dead
+ends.
+
+And the one that reorders the work: **continents decide rivers.** The same routing
+gives a 31-cell river on small noise blobs and an 86-cell river on a large
+landmass. The three problems in this entry are not independent — build the
+continent tier first and the rivers follow.
+
+It also corrected doc 08's lookup: masking *path digits* gives a triangle, not a
+coarse cell. Masking the low bits of `(i, j)` is what works, because a coarse
+sample is literally one of the fine cells.
 
 ---
 
@@ -318,15 +334,16 @@ specifying, not inventing.
 one, so everything below this line is a system to design or content to write, not
 a hole in the geometry.
 
-What remains is **content** rather than structure — rivers and erosion, and
-multiplayer interest management, which doc 11 has always described as specifying
-rather than inventing. **The geometric core is closed.**
+What remains is **multiplayer interest management**, which this page has always
+described as specifying rather than inventing: "which players care about this
+chunk update" is an ID range comparison, and the addressing scheme does the work.
+**The geometric core is closed, and so is the terrain.**
 
 ---
 
-## What closing ten of these taught
+## What closing eleven of these taught
 
-All ten closed items came back with the same shape of answer, and it is worth
+All eleven closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

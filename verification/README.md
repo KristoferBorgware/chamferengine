@@ -423,6 +423,39 @@ prices both sides.
 
 ---
 
+## `rivers.js` — rivers, erosion and continents
+
+The three things fBm cannot make, because all three are global. Doc 08 sketched a
+coarse stored map to carry them; this measures whether that works.
+
+**Verifies:**
+
+1. **The coarse lookup is masking `(i, j)`, not the ID.** A level-8 lattice point
+   `(i, j)` and the level-11 point `(8i, 8j)` are the **same point**, separation
+   `0.00e+0`. So a coarse sample is literally one of the fine cells, and the bits
+   masked off are the blend weights. Truncating *path digits* would give the
+   containing triangle — a chunk — which is doc 08's wording corrected.
+2. **Storage.** Level 8 is **655,362 cells, 2.50 MB** at 4 bytes, with a coarse
+   cell **8.0 m** across on the doc-06 planet.
+3. **Flow routing needs no special cases.** Of the twelve pentagons, **0 are
+   pits**, against 0.2 expected by chance. A pentagon picks the lowest of five
+   instead of six and nothing else changes, because the rule only compares a cell
+   against its own neighbours.
+4. **The work is pit filling, and a flat lake breaks it.** 1.39% of land cells
+   have no lower neighbour. Priority-flood raises **2,369 cells into lakes** (4.8%
+   of land) — and only leaves **0 dead ends** if the fill adds a tiny slope.
+   Filled perfectly flat, every river that reaches a lake stops in it.
+5. **Continents decide rivers.** Same routing, only the noise frequency changed:
+   a **6,206**-cell landmass gives a **31**-cell river, and a **33,433**-cell one
+   gives **86**. A river cannot exceed the land it crosses, so the three problems
+   are ordered rather than independent — build continents first.
+6. **It is a world-creation cost.** The whole pass ran in **1.2 s** for 163,842
+   cells. Level 8 is four times that, once, and never at runtime.
+
+**Used in:** [doc 21](../docs/21-rivers-and-erosion.md)
+
+---
+
 ## `coords.js` — player-facing coordinates
 
 `x, y, z` answers nothing useful on a sphere, so the readout has to be latitude,

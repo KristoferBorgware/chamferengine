@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 20 carry the hardest material in the specification and are the ones
+13 through 21 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 20.
+- `docs/` — prose specification, ordered 00 through 21.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -173,6 +173,7 @@ script owns its numbers.
 | [18](docs/18-cell-boundary.md) | which curve a cell edge is; the mesh and the lookup reconciled | `boundary.js` |
 | [19](docs/19-directional-blocks.md) | 6-state rotation, placing by facing, the loop that does not close | `rotation.js` |
 | [20](docs/20-player-coordinates.md) | lat/long/altitude, the axis through a pentagon pair, what to share | `coords.js` |
+| [21](docs/21-rivers-and-erosion.md) | the one stored map, flow routing, pit filling, why continents come first | `rivers.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -429,6 +430,15 @@ Violating any of these breaks the design. They are not tunable.
   gravity's `up`. The twelve pentagons cost **nothing** — a torch there lights 5/6
   as many cells only because a ring holds `5k` instead of `6k`. The real bill is
   storage: 4× the block data, halved again by storing sky light per column.
+- **Rivers, erosion and continents need one stored map** (`rivers.js`, doc 21) —
+  2.5 MB at level 8, computed once at world creation, read as an input so the
+  runtime generator stays a pure function of position. Flow routing needs **no
+  pentagon case and no face case** (0 of 12 pentagons were pits); the work is
+  **pit filling**, and a flat filled lake stops every river reaching it — fill
+  with a tiny slope and 0 dead ends remain. **Continents decide rivers**: the same
+  routing gives a 31-cell river on small blobs and 86 on a large landmass, so
+  build the continent tier first. The coarse lookup is masking the low bits of
+  **`(i, j)`**, not the path digits — those give a triangle, not a cell.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -462,4 +472,3 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
   reopen this without reading the price
 - Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
   geometry; a flood fill propagates inward, so the rule may not transfer
-- Rivers, erosion, and plate-scale continents — all global processes
