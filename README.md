@@ -77,7 +77,18 @@ them:
 ```bash
 node tools/build-docs.js            # build once, into site/
 node tools/build-docs.js --serve    # rebuild on save and serve with live reload
+node tools/make-figures.js          # regenerate the diagrams in docs/figures/
+node tools/check-coverage.js        # report any fact an edit dropped
 ```
+
+The diagrams are **generated, not drawn** — their geometry comes from the same
+barycentric lattices and duals the text describes, so a figure cannot quietly
+disagree with the maths. Each is a standalone theme-aware SVG, so it renders on
+GitHub, in the site, and inlined into the single-file bundle.
+
+`check-coverage.js` compares every document against its committed version and
+reports each number, identifier, link and defined term that no longer appears
+anywhere. It is how the rewrite was kept honest.
 
 Zero dependencies, like everything else here. `site/` is generated and ignored
 by git; the Markdown is the source of truth. The build fails loudly on a dead

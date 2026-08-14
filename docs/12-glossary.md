@@ -1,5 +1,15 @@
 # 12 — Glossary and constants
 
+## What this is
+
+A lookup, not a read. Every term the specification uses in a precise sense, and
+every number it relies on, in one place — so that a word like "depth" or "frame"
+can be checked rather than guessed at.
+
+If you are meeting the design for the first time, this is the wrong door: start
+with [`demos/how-it-works.html`](../demos/how-it-works.html) or
+[doc 00](00-introduction.md).
+
 ## Terms
 
 **Aperture** — the ratio by which cell count grows per subdivision step. This

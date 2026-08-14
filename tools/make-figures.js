@@ -436,5 +436,104 @@ const made = [];
   <text class="cf-d" x="165" y="190" text-anchor="middle">the ground track is a straight line, exactly -- not approximately</text>`));
 }
 
+
+// =============================================================================
+// 13 — three frames, three jobs
+// =============================================================================
+{
+  const panel = (x, title, body, note) =>
+    `<text class="cf-d" x="${x+62}" y="20" text-anchor="middle">${title}</text>${body}`
+  + `<text class="cf-d" x="${x+62}" y="152" text-anchor="middle">${note}</text>`;
+  const globe = (cx,cy,r) => `<circle class="cf-fill" cx="${cx}" cy="${cy}" r="${r}"/>`;
+  // 1: axis frame -- meridians converging on two poles
+  let mer = '';
+  for (let k=-2;k<=2;k++) mer += `<path class="cf-l" d="M64 34 Q${64+k*26} 76 64 118"/>`;
+  // 2: transported frame -- a path with a carried arrow that turns with it
+  const arrow=(x,y,dx,dy)=>`<path class="cf-a" d="M${x} ${y} l${dx} ${dy}" marker-end="url(#f1)"/>`;
+  // 3: grid frame -- a hexagon with its six numbered directions
+  const H=hexPts(316,76,34);
+  let spokes='', nums='';
+  for (let i=0;i<6;i++){
+    const a=-Math.PI/2+Math.PI*i/3+Math.PI/6;
+    const x=316+27*Math.cos(a), y=76+27*Math.sin(a);
+    spokes += `<path class="cf-l" d="M316 76 L${f(x)} ${f(y)}"/>`;
+    nums += `<text class="cf-c" x="${f(316+40*Math.cos(a))}" y="${f(76+40*Math.sin(a)+4)}" text-anchor="middle">${i}</text>`;
+  }
+  made.push(svg('three-frames', 400, 164, `
+  <defs><marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  ${panel(2,'axis frame', globe(64,76,42) + mer
+    + `<circle cx="64" cy="34" r="4" fill="#b0800f"/><circle cx="64" cy="118" r="4" fill="#b0800f"/>`,
+    'breaks at 2 poles')}
+  ${panel(128,'transported', globe(190,76,42)
+    + `<path class="cf-g" d="M158 96 Q190 56 222 92" fill="none" stroke-dasharray="4 3"/>`
+    + arrow(158,96,16,-14) + arrow(214,86,16,10),
+    'never breaks, drifts')}
+  ${panel(254,'grid frame', `<polygon class="cf-af" points="${pts(H)}"/>${spokes}${nums}`,
+    'never breaks, discrete')}`));
+}
+
+// =============================================================================
+// 14 — what one cell costs, and what merges
+// =============================================================================
+{
+  const H = hexPts(74, 78, 46);
+  const R2=30, c1=[248,96], c2=[248+Math.sqrt(3)*R2,96], c3=[248+Math.sqrt(3)*R2/2,96-1.5*R2];
+  const share=[c1,c2,c3].map(c=>`<polygon class="cf-l" points="${pts(hexPts(c[0],c[1],R2))}"/>`).join('');
+  made.push(svg('cell-mesh-cost', 400, 168, `
+  <polygon class="cf-a" points="${pts(H)}"/>
+  <path class="cf-m" d="${pathOf([[H[0],H[2]],[H[0],H[3]],[H[0],H[4]]])}"/>
+  <circle cx="${f(H[0][0])}" cy="${f(H[0][1])}" r="4.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="74" y="148" text-anchor="middle">4 triangles per hexagon</text>
+  ${share}
+  <circle cx="${f(c1[0]+Math.sqrt(3)*R2/2)}" cy="${f(c1[1]-R2/2)}" r="5.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="290" y="148" text-anchor="middle">every corner serves 3 cells</text>
+  <text class="cf-c" x="200" y="26" text-anchor="middle">2 vertices and 4 triangles per cell</text>`));
+
+  made.push(svg('vertical-merge', 400, 150, `
+  <defs><marker id="v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <g>
+    <path class="cf-fill" d="M40 26 L104 26 L104 58 L40 58 Z"/>
+    <path class="cf-fill" d="M40 58 L104 58 L104 90 L40 90 Z"/>
+    <path class="cf-fill" d="M40 90 L104 90 L104 122 L40 122 Z"/>
+    <text class="cf-d" x="72" y="140" text-anchor="middle">3 quads &#183; 6 triangles</text>
+  </g>
+  <path class="cf-a" d="M150 74 L210 74" marker-end="url(#v1)"/>
+  <text class="cf-d" x="180" y="66" text-anchor="middle">merge</text>
+  <g>
+    <path class="cf-af" d="M256 26 L320 26 L320 122 L256 122 Z"/>
+    <text class="cf-c" x="288" y="78" text-anchor="middle">one quad</text>
+    <text class="cf-d" x="288" y="140" text-anchor="middle">1 quad &#183; 2 triangles</text>
+  </g>
+  <text class="cf-d" x="200" y="16" text-anchor="middle">exact to 15 decimal places, and free</text>`));
+}
+
+// =============================================================================
+// 14 — the LOD seam a skirt cannot close
+// =============================================================================
+{
+  const chunkA = (ox, sealed) => {
+    const b = ox + 96;
+    return `
+    <path class="cf-fill" d="M${ox} ${62} L${ox+22} ${52} L${ox+44} ${68} L${ox+66} ${58} L${b} ${72} L${b} ${132} L${ox} ${132} Z"/>
+    <path class="cf-fill" d="M${b} ${104} L${b+48} ${92} L${b+72} ${108} L${b+72} ${132} L${b} ${132} Z"/>
+    <clipPath id="cv${ox}"><rect x="${ox}" y="0" width="96" height="160"/></clipPath>
+    <g clip-path="url(#cv${ox})"><ellipse class="cf-void" cx="${ox+72}" cy="${100}" rx="34" ry="14"/></g>
+    <line class="cf-l" x1="${b}" y1="44" x2="${b}" y2="134" stroke-dasharray="3 3"/>
+    <rect class="cf-af" x="${b-2}" y="62" width="4.5" height="18"/>
+    ${sealed
+      ? `<rect class="cf-af" x="${b-2}" y="88" width="4.5" height="25"/><text class="cf-c" x="${b+8}" y="88">wall</text>`
+      : `<line x1="${b}" y1="88" x2="${b}" y2="113" stroke="#b0800f" stroke-width="4"/><text class="cf-gd" x="${b+8}" y="88">open</text>`}
+    <text class="cf-c" x="${b+8}" y="58">skirt</text>
+    <text class="cf-d" x="${ox+40}" y="102" text-anchor="middle">cave</text>`;
+  };
+  made.push(svg('lod-seam', 420, 178, `
+  ${chunkA(16, false)}
+  ${chunkA(228, true)}
+  <text class="cf-gd" x="100" y="160" text-anchor="middle">skirt alone &#183; 961 holes</text>
+  <text class="cf-c" x="312" y="160" text-anchor="middle">seam owned &#183; 0 holes</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

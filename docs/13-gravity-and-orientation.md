@@ -65,6 +65,12 @@ not looked yet.
 So do not look for *the* frame. There are three, they are good at different jobs,
 and the discipline is never to convert between them casually.
 
+![Three panels: an axis frame with meridians converging on two poles, a transported frame carried along a path, and a hexagon with six numbered directions](figures/three-frames.svg)
+
+*The axis frame is cheap and breaks at two points. The transported frame never
+breaks but drifts, because it depends on the path you took. The grid frame never
+breaks either — it sidesteps the theorem by not being a continuous field at all.*
+
 | | Definition | Stateless | Singular | Continuous | Use it for |
 |---|---|---|---|---|---|
 | **Axis frame** | `east = normalize(cross(N, up))` | yes | at 2 poles | yes | lat/long, maps, sun position |
@@ -307,6 +313,23 @@ place to get right.
 - **Is there an in-world "north" landmark?** If the poles sit on two pentagons,
   those two cells are the obvious candidates — which turns a mathematical
   artefact into a place, and feeds directly into the pentagon gameplay decision.
+
+## In one breath
+
+- **Up is `normalize(position)`**, and gravity is that times a constant. The
+  radial axis never crosses a face or a pentagon, which is what makes it easy.
+- There is **no global north** — the hairy ball theorem forbids it, and that is
+  the same 720° as the twelve pentagons.
+- Use **three frames**: axis for coordinates, a transported quaternion for the
+  camera, a discrete index for machinery. Never interconvert casually.
+- **Holonomy is real**: a closed walk returns your heading rotated by the area
+  enclosed. So a carried heading is camera state, never a stored coordinate.
+- A pentagon costs **one direction index, 60°, forever** — refinement hides them
+  from walkers and does nothing for rails.
+- The horizon on a 1,700 m planet is **76 m**, and two builds 100 m apart lean
+  **3.37°** apart.
+
+---
 
 **Demo:** [`demos/local-frame.html`](../demos/local-frame.html) — drag a walker
 across the planet and watch the three frames disagree: the axis frame spinning as

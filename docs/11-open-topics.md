@@ -1,7 +1,14 @@
 # 11 — Open topics
 
-Identified but **not yet designed**. Each needs its own document before
-implementation. Ordered roughly by how much they force changes elsewhere.
+## What this is
+
+The honest list of what is **not yet designed**. Each item needs its own document
+before implementation, and they are ordered roughly by how much they force
+changes elsewhere.
+
+Two entries are struck through because they have since been closed. They are kept
+rather than deleted, because what they turned out to be worth is the most useful
+thing on this page.
 
 ---
 
@@ -132,3 +139,21 @@ rule exists.
 
 **Lighting** is the alternative, and it is more self-contained: 8 neighbours,
 radial sky light, and a sun direction that gives a real terminator for free.
+
+---
+
+## What closing two of these taught
+
+Both closed items came back with the same shape of answer, and it is worth
+expecting again:
+
+- **The pessimistic estimate was wrong in kind, not degree.** Meshing was
+  supposed to be a blow-up and turned out to be a flat 2×. Gravity was supposed
+  to be hard everywhere and turned out to be one `normalize` plus a genuinely
+  hard horizontal problem.
+- **The real cost showed up somewhere nobody was looking.** Not in the triangle
+  count, but in what a pentagon does to a *direction index* — which no amount of
+  subdivision fixes.
+- **Measuring first changed the design, not just the confidence.** Every
+  recommendation in docs 13 and 14 came out of a number, and several reversed the
+  intuition that preceded them.

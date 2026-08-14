@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 164" width="400" height="164">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-d" x="64" y="20" text-anchor="middle">axis frame</text><circle class="cf-fill" cx="64" cy="76" r="42"/><path class="cf-l" d="M64 34 Q12 76 64 118"/><path class="cf-l" d="M64 34 Q38 76 64 118"/><path class="cf-l" d="M64 34 Q64 76 64 118"/><path class="cf-l" d="M64 34 Q90 76 64 118"/><path class="cf-l" d="M64 34 Q116 76 64 118"/><circle cx="64" cy="34" r="4" fill="#b0800f"/><circle cx="64" cy="118" r="4" fill="#b0800f"/><text class="cf-d" x="64" y="152" text-anchor="middle">breaks at 2 poles</text>
+  <text class="cf-d" x="190" y="20" text-anchor="middle">transported</text><circle class="cf-fill" cx="190" cy="76" r="42"/><path class="cf-g" d="M158 96 Q190 56 222 92" fill="none" stroke-dasharray="4 3"/><path class="cf-a" d="M158 96 l16 -14" marker-end="url(#f1)"/><path class="cf-a" d="M214 86 l16 10" marker-end="url(#f1)"/><text class="cf-d" x="190" y="152" text-anchor="middle">never breaks, drifts</text>
+  <text class="cf-d" x="316" y="20" text-anchor="middle">grid frame</text><polygon class="cf-af" points="316.0,42.0 345.4,59.0 345.4,93.0 316.0,110.0 286.6,93.0 286.6,59.0"/><path class="cf-l" d="M316 76 L329.5 52.6"/><path class="cf-l" d="M316 76 L343.0 76.0"/><path class="cf-l" d="M316 76 L329.5 99.4"/><path class="cf-l" d="M316 76 L302.5 99.4"/><path class="cf-l" d="M316 76 L289.0 76.0"/><path class="cf-l" d="M316 76 L302.5 52.6"/><text class="cf-c" x="336.0" y="45.4" text-anchor="middle">0</text><text class="cf-c" x="356.0" y="80.0" text-anchor="middle">1</text><text class="cf-c" x="336.0" y="114.6" text-anchor="middle">2</text><text class="cf-c" x="296.0" y="114.6" text-anchor="middle">3</text><text class="cf-c" x="276.0" y="80.0" text-anchor="middle">4</text><text class="cf-c" x="296.0" y="45.4" text-anchor="middle">5</text><text class="cf-d" x="316" y="152" text-anchor="middle">never breaks, discrete</text>
+</svg>

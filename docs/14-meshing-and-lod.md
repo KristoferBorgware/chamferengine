@@ -20,6 +20,11 @@ sounds.
 > cells has `2V − 4` vertices and a fan triangulation gives `4V − 12` triangles.
 > An unmerged square grid costs 1 vertex and 2 triangles per cell.
 
+![A hexagon fanned into four triangles, and a corner shared between three hexagons](figures/cell-mesh-cost.svg)
+
+*Four triangles per cap, and because every corner is shared by three cells, only
+two vertices per cell are new.*
+
 So an unmerged hex surface is **exactly 2× an unmerged cube surface**. Not a
 disaster — a flat, predictable factor of two. The whole difference is about
 *merging*, and even there the loss is narrower than expected.
@@ -40,6 +45,11 @@ by three cells, which is where the 2-vertices-per-cell figure comes from.
 > three layers the four corners deviate from a single plane by **1.5e-16**
 > radii. A run of exposed side faces down a column collapses to one quad,
 > exactly, at no geometric cost.
+
+![Three stacked side quads collapsing into one tall quad](figures/vertical-merge.svg)
+
+*A run of exposed side faces down a column collapses into a single rectangle, and
+the merge is exact — the faces genuinely lie in one plane.*
 
 **Side faces, horizontally** — do not merge. In a hex lattice the faces of
 neighbouring cells pointing the same way are parallel but offset; they zigzag
@@ -344,6 +354,11 @@ it does not know a cave is there, so it emits no face; and the fine chunk assume
 its own generator continues past the rim, so it emits none either. Nobody draws
 the wall, and you can see through the rock into the void.
 
+![Two chunk boundaries: with a skirt alone the cave mouth stays open, with the seam owned it is walled](figures/lod-seam.svg)
+
+*The skirt covers the surface step in both. Only the right-hand chunk also walls
+off the cave where it meets the coarser neighbour's rock.*
+
 > **[verified]** `verification/seam.js` builds a real rim — full density field on
 > the fine side, height field one level coarser on the other — and scores three
 > policies over 385 rim columns:
@@ -458,6 +473,24 @@ the generator and the easiest to get wrong.
 - **Culling by enclosure**, concretely. The claim that cave geometry costs no
   draw time assumes something detects that it is sealed. Which structure does
   that, and what does it cost to keep current when a player breaks through?
+
+---
+
+## In one breath
+
+- An unmerged hex surface costs **2 vertices and 4 triangles per cell** — a flat
+  2× a cube, not a blow-up.
+- **Vertical merging is exact and free**; horizontal merging has no hex
+  equivalent. Cap merging is bounded by curvature at **37 m**, not by the
+  algorithm.
+- A standing player sees about **21,000 cells** on smooth ground — but relief
+  extends that far: a 60 m hill is visible from **521 m**, 47× the cells.
+- Relief barely moves the triangle count (**4.0 → 9.5 per cell**, then it
+  saturates). Caves multiply *faces* but stay invisible until opened.
+- **LOD is resampling, not decimation**, because Goldberg levels do not nest.
+  Drive it by **altitude**, not distance.
+- Seams: a **skirt** closes the surface step; only the finer chunk **owning the
+  seam** closes a cave mouth.
 
 ---
 

@@ -12,6 +12,12 @@ and duplicates information found there.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
   mathematical claims made in `docs/`.
+- `docs/figures/` — generated SVG diagrams. Do not hand-edit; they come from
+  `tools/make-figures.js`, which computes their geometry from the same
+  constructions the docs describe.
+- `tools/make-figures.js` — regenerates every diagram.
+- `tools/check-coverage.js` — reports facts (numbers, identifiers, links, bold
+  terms) that an edit dropped from the corpus. Run it after rewriting prose.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
   (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
   source of truth. It fails the build on dead links and dead heading anchors,

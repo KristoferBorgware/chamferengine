@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 168" width="400" height="168">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <polygon class="cf-a" points="74.0,32.0 113.8,55.0 113.8,101.0 74.0,124.0 34.2,101.0 34.2,55.0"/>
+  <path class="cf-m" d="M74.0 32.0L113.8 101.0M74.0 32.0L74.0 124.0M74.0 32.0L34.2 101.0"/>
+  <circle cx="74.0" cy="32.0" r="4.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="74" y="148" text-anchor="middle">4 triangles per hexagon</text>
+  <polygon class="cf-l" points="248.0,66.0 274.0,81.0 274.0,111.0 248.0,126.0 222.0,111.0 222.0,81.0"/><polygon class="cf-l" points="300.0,66.0 325.9,81.0 325.9,111.0 300.0,126.0 274.0,111.0 274.0,81.0"/><polygon class="cf-l" points="274.0,21.0 300.0,36.0 300.0,66.0 274.0,81.0 248.0,66.0 248.0,36.0"/>
+  <circle cx="274.0" cy="81.0" r="5.5" fill="#2f6fd0"/>
+  <text class="cf-d" x="290" y="148" text-anchor="middle">every corner serves 3 cells</text>
+  <text class="cf-c" x="200" y="26" text-anchor="middle">2 vertices and 4 triangles per cell</text>
+</svg>

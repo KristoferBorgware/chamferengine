@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 150" width="400" height="150">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <defs><marker id="v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <g>
+    <path class="cf-fill" d="M40 26 L104 26 L104 58 L40 58 Z"/>
+    <path class="cf-fill" d="M40 58 L104 58 L104 90 L40 90 Z"/>
+    <path class="cf-fill" d="M40 90 L104 90 L104 122 L40 122 Z"/>
+    <text class="cf-d" x="72" y="140" text-anchor="middle">3 quads &#183; 6 triangles</text>
+  </g>
+  <path class="cf-a" d="M150 74 L210 74" marker-end="url(#v1)"/>
+  <text class="cf-d" x="180" y="66" text-anchor="middle">merge</text>
+  <g>
+    <path class="cf-af" d="M256 26 L320 26 L320 122 L256 122 Z"/>
+    <text class="cf-c" x="288" y="78" text-anchor="middle">one quad</text>
+    <text class="cf-d" x="288" y="140" text-anchor="middle">1 quad &#183; 2 triangles</text>
+  </g>
+  <text class="cf-d" x="200" y="16" text-anchor="middle">exact to 15 decimal places, and free</text>
+</svg>
