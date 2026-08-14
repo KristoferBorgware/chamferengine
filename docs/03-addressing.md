@@ -1,6 +1,6 @@
 # 03 — Addressing
 
-## The problem
+## What an address has to do
 
 Give every cell an integer address such that:
 
@@ -9,22 +9,37 @@ Give every cell an integer address such that:
 - no lookup table or spatial index is needed to convert between a position and
   an address
 
-## The structural insight
+## The insight the whole scheme rests on
 
-**Hexagons never nest into hexagons.** This is not an H3 limitation you escape by
-rolling your own — it is why H3 settled for approximate containment. Building the
-hierarchy on the hex cells inherits the same problem.
+**Hexagons never nest into hexagons.** Draw a hexagon, try to fill it exactly
+with smaller hexagons, and it cannot be done — the edges never line up. This is
+not an H3 limitation you escape by rolling your own; it is why H3 settled for
+approximate containment. Building the hierarchy on the hex cells inherits the
+same problem.
 
 The way out: **put the hierarchy on the triangles underneath, and the cells on
 their vertices.**
 
-A geodesic subdivision nests exactly — one triangle splits into four, forever, no
-rotation, no spillover. The Goldberg cells are already the dual of that
-structure: every hexagon is a degree-6 vertex of the geodesic, every pentagon a
-degree-5 one. Indexing the thing the hexagons are derived from gives an exact
-hierarchy for free.
+A triangle *does* nest. Mark the middle of each edge, join the marks, and you
+have four smaller triangles that fill the original exactly — no gaps, no
+overlap, nothing left over. Repeat forever, no rotation, no spillover.
 
-Triangles are the filing system. Hexagons are the floor.
+![One triangle split into four, then into sixteen, with the middle child highlighted](figures/subdivision-steps.svg)
+
+*Each split turns one triangle into four. Child **3**, in the middle, comes out
+upside down — that flip is real and matters later. A small triangle is always
+completely inside exactly one bigger triangle, at every level.*
+
+The Goldberg cells are already the dual of that structure: every hexagon is a
+degree-6 vertex of the geodesic, every pentagon a degree-5 one. Indexing the
+thing the hexagons are derived from gives an exact hierarchy for free.
+
+![A triangular lattice with a hexagon drawn around each corner point](figures/cells-on-corners.svg)
+
+*Faint lines are the triangles — the filing system. Dots are the corner points,
+and **each dot is one cell**. The hexagon around a dot is the ground closer to it
+than to any other dot. **Triangles are the filing system. Hexagons are the
+floor.***
 
 **Demo:** [`demos/chunk-hierarchy.html`](../demos/chunk-hierarchy.html) — raise
 the subdivision depth and watch the colours stay put: children never leave their
@@ -37,7 +52,16 @@ ownership.
 
 ---
 
-## The pieces
+## The address is the route you took
+
+An address is literally the directions for finding the cell: which of the twenty
+faces, then which quarter, then which quarter of that, and so on.
+
+![Selecting a face, then a quarter, then a quarter of that, with the address gaining a digit each time](figures/address-is-a-route.svg)
+
+*Zooming out is **deleting digits off the end**. `7·2·0·3` → `7·2·0` → `7·2` →
+`7`. No search, no lookup table, no tree to walk — the address already contains
+every ancestor it has.*
 
 ### Face
 
@@ -55,8 +79,8 @@ child 2  corner in the j direction
 child 3  the middle triangle — upside down
 ```
 
-Truncating trailing digits yields the ancestor. `7·2·0·3` → `7·2·0` → `7·2` → `7`.
-Zooming out is deleting digits: no lookup, no search, just a shift.
+Truncating trailing digits yields the ancestor. Zooming out is deleting digits:
+no lookup, no search, just a shift.
 
 ### Local coordinates
 
@@ -65,6 +89,8 @@ Within a chunk, a cell is identified by `(q, r)` on a triangular lattice.
 ---
 
 ## Bit layout
+
+![The cell ID as four fields: face, path digits, q and r, with the chunk ID spanning the first two](figures/cell-id-bits.svg)
 
 ```
 [ 5 bits ][ 2 bits × C ][ (D−C) bits ][ (D−C) bits ]
@@ -132,8 +158,11 @@ i = half - i
 j = half - j
 ```
 
-Local coordinates in a middle-descended chunk are therefore measured in a
-mirrored frame.
+![A subdivided triangle showing the corner child's axes and the middle child's mirrored axes](figures/middle-child-flip.svg)
+
+*A corner child keeps its parent's sense of direction. The middle child does not:
+its origin sits at the opposite corner and both axes run backwards. Local
+coordinates in a middle-descended chunk are measured in a mirrored frame.*
 
 > **[verified]** `verification/qr.js` reports 15,104 of 33,153 cells — about
 > **46%** — sitting in a flipped frame. This is the normal case, not an edge
@@ -144,6 +173,11 @@ nearly half of all chunks. The same up/down triangle orientation reappears
 throughout the design; it is intrinsic to subdividing triangles, since one of the
 four children always points the other way.
 
+This flip is not only a bookkeeping problem. It reaches into gameplay: a
+direction index derived from `(q, r)` sign inherits the mirror and would hand
+every rail and conveyor in those chunks the wrong way round. See
+[doc 13](13-gravity-and-orientation.md).
+
 **Demo:** [`demos/address-split.html`](../demos/address-split.html) — tap dots to
 watch `(i,j)` get carved into path + `(q,r)`. Use *Find a flipped one* to see the
 chunk's `0,0` corner jump to the opposite side.
@@ -153,7 +187,8 @@ chunk's `0,0` corner jump to the opposite side.
 ## Cell ownership at chunk boundaries
 
 A cell sits on a triangle **vertex**, and a vertex on a chunk border belongs to
-two or three chunks at once.
+two or three chunks at once. Somebody has to own it, or it gets stored twice and
+the two copies drift apart.
 
 **Rule: the lowest chunk ID wins.**
 
@@ -212,7 +247,9 @@ Two consequences:
 
 - **Vertical neighbours are free.** Above and below are the same address with
   layer ±1. No face crossing, no pentagon case. All awkward geometry is
-  horizontal only.
+  horizontal only. This one fact is what makes gravity tractable
+  ([doc 13](13-gravity-and-orientation.md)) and side-face merging exact
+  ([doc 14](14-meshing-and-lod.md)).
 - **A column is contiguous.** Put the layer bits at the *bottom* of the word and
   one player's whole vertical column is a single ID range.
 
@@ -250,3 +287,18 @@ modification log**, which stores `(which cell, what is there now)` pairs anyway:
 16 bits gives 65,536 block types, or 12 bits of type plus 4 of rotation. Anything
 richer — chest contents, sign text — goes in a side table keyed by the same
 address.
+
+---
+
+## In one breath
+
+- Triangles nest exactly; hexagons never do. So the **hierarchy is on the
+  triangles** and the **cells are on their corners**.
+- An address is the **route down the splits**: face, then one digit per level.
+  Truncating digits gives the containing chunk, for free.
+- Width is `5 + 2D` bits regardless of where the chunk cut falls, so **chunk size
+  stays tunable after launch**.
+- The **middle child is mirrored**, and about 46% of cells live inside one. Carry
+  an orientation flag.
+- Border cells are owned by the **lowest chunk ID**. Layers ride along as a
+  separate field, and vertical neighbours cost nothing.

@@ -1,28 +1,56 @@
 # 00 — Introduction
 
-## The goal
+## What we are trying to build
 
-Build a voxel world in the style of Minecraft, but on a **sphere** rather than a
-flat plane. The world should wrap seamlessly in every direction, so that walking
-in a straight line eventually returns you to your starting point, in any
-direction, with no edge and no discontinuity.
+A voxel world in the style of Minecraft, but on a **sphere** rather than a flat
+plane. You can walk in a straight line in any direction, forever, and come back
+to where you started — and nowhere on the way does the ground go strange. No
+edge, no seam, no pole, no stretched blocks.
+
+Everything in this specification is in service of that one sentence.
+
+**New here?** Start with [`demos/how-it-works.html`](../demos/how-it-works.html)
+— an illustrated walkthrough of the construction in ten diagrams, which covers
+in pictures what docs 02, 03 and 14 cover in prose.
+
+---
 
 ## The constraint that shapes everything
 
-The obvious approach — wrapping a cubic grid onto a sphere — requires distorting
-the cubes near the seams. That distortion is the thing this design exists to
-avoid. A cube is not a good unit cell for a sphere, and no amount of clever
-projection fixes it, only spreads it around.
+The obvious approach is wrapping a cubic grid onto a sphere. It requires
+distorting the cubes near the seams, and that distortion is the thing this design
+exists to avoid. A cube is not a good unit cell for a sphere, and no amount of
+clever projection fixes it — only spreads it around.
 
 The reason is topological rather than a matter of engineering effort. Any closed
 surface topologically equivalent to a sphere carries exactly **720° of angular
-defect** that must be distributed somewhere. You can choose *where* it goes and
-*how finely it is divided*, but you cannot make it zero. Every design decision in
-this project is a choice about where to put that 720°.
+defect** that must be distributed somewhere.
 
-A cube sphere puts 90° into each of 8 corners — concentrated, and visible.
-A Goldberg polyhedron (hexagons plus twelve pentagons) spreads it across twelve
-points that become individually negligible at scale.
+"Defect" is the turn that is *missing* at a point. Lay flat tiles around a corner
+and see how far they fall short of a full 360°: that shortfall is the defect, and
+on a sphere it has to total 720° however you tile it. You can choose *where* it
+goes and *how finely it is divided*, but you cannot make it zero. **Every design
+decision in this project is a choice about where to put that 720°.**
+
+![Three squares around a cube corner leave a 90-degree gap; five triangles around a pentagon cell leave a 60-degree gap](figures/defect-where-it-lands.svg)
+
+*A cube sphere puts 90° into each of 8 corners — concentrated, and visible as a
+pinch. A Goldberg polyhedron (hexagons plus twelve pentagons) spreads it across
+twelve points that become individually negligible at scale.*
+
+A useful way to compare candidates is therefore: how many points does the defect
+land on, and how much lands on the worst one?
+
+| Tiling | Defect points | Worst single point |
+|---|---|---|
+| Cube sphere | 8 | 90° |
+| Rhombic triacontahedron | 32 (20 + 12) | 42.8° |
+| Goldberg (hex + pentagons) | 12 pentagons | small, and shrinks with resolution |
+
+[Doc 02](02-geometry-choice.md) works through the full survey and why the
+Goldberg polyhedron wins it.
+
+---
 
 ## Design goals
 
@@ -49,12 +77,22 @@ points that become individually negligible at scale.
 - **A general-purpose geospatial library.** Google S2 and Uber H3 already exist
   and are excellent at that job. This is a game world.
 
+---
+
 ## What "cell" means here
 
+Two words carry most of the weight in what follows.
+
 A **cell** is one hexagon (or one of the twelve pentagons) at one radial layer —
-a hexagonal prism, the equivalent of a Minecraft block. A **chunk** is a
-triangular patch of the surface at a chosen subdivision level, spanning all
-layers beneath it: the unit that is loaded, generated, meshed, and stored.
+a hexagonal prism, the equivalent of a Minecraft block.
+
+A **chunk** is a triangular patch of the surface at a chosen subdivision level,
+spanning all layers beneath it: the unit that is loaded, generated, meshed, and
+stored.
+
+[Doc 12](12-glossary.md) has the rest of the vocabulary.
+
+---
 
 ## Reading order
 
@@ -62,18 +100,16 @@ The documents are ordered so that each depends only on those before it.
 Doc 01 covers the prior art that shaped these choices; doc 02 explains the
 geometry; doc 03 onwards is the design proper.
 
+Two habits run through all of them. Every non-trivial idea has a **runnable
+demo** — standalone HTML with no build step, opened directly in a browser. And
+every non-obvious number has a **verification script**, plain Node with no
+dependencies; claims marked **[verified]** name the script that produces them.
+
 ## Demos
 
-Every non-trivial idea in this documentation has a runnable demo. They are
-standalone HTML files with no build step — open them directly.
-
-If you are meeting this design for the first time, start with
-[`demos/how-it-works.html`](../demos/how-it-works.html) — an illustrated
-walkthrough of the construction in ten diagrams, which covers in pictures what
-docs 02, 03 and 14 cover in prose.
-
-After that, [`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html),
-which shows the geometric options side by side with the curvature defect
+After the walkthrough above, open
+[`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html), which
+shows the geometric options side by side with the curvature defect
 colour-coded, and
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html), which
 shows the chosen tiling at increasing resolution.

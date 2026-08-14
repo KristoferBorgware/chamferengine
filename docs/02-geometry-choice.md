@@ -1,24 +1,24 @@
 # 02 — Choosing the geometry
 
-## The problem
+## What we have to pick
 
-Pick a unit cell shape that tiles a sphere seamlessly, without distorting the
-cell at the seams.
+A unit cell shape that tiles a sphere seamlessly, without distorting the cell at
+the seams. That is the whole job of this document, and the answer turns out to be
+forced more than chosen.
 
-## The impossibility
-
-You cannot have all three of:
+## Three things you cannot have at once
 
 1. Perfectly uniform cells
 2. A perfect sphere
 3. No distortion at seams
 
-Every closed surface topologically a sphere carries **exactly 720° of angular
-defect**. This is the Gauss–Bonnet theorem, and it is not negotiable. The design
-question is only *where that 720° goes* and *how finely it is subdivided*.
+Pick any two. The reason is the 720° from [doc 00](00-introduction.md): every
+closed surface topologically a sphere carries **exactly 720° of angular defect**.
+This is the Gauss–Bonnet theorem, and it is not negotiable. The design question
+is only *where that 720° goes* and *how finely it is subdivided*.
 
-A useful way to compare candidates is therefore: how many points does the defect
-land on, and how much lands on the worst one?
+So the way to compare candidates is: **how many points does the defect land on,
+and how much lands on the worst one?**
 
 | Tiling | Defect points | Worst single point |
 |---|---|---|
@@ -29,9 +29,15 @@ land on, and how much lands on the worst one?
 ## Why cubes are the worst choice
 
 Six square faces wrapped onto a sphere put the entire 720° into eight corners,
-90° each. That concentration is what produces visible pinching. Warping the
-projection (as S2 does) evens out *cell areas*, but the corners remain: three
-quads meet where four should.
+90° each. That concentration is what produces visible pinching.
+
+![Three squares meet around a cube corner, leaving a 90-degree quadrant empty; five triangles meet around a pentagon cell, leaving 60 degrees](figures/defect-where-it-lands.svg)
+
+*At a cube corner, three squares meet where four would on a flat floor — the
+empty quadrant **is** the 90° of defect. At a pentagon, five triangles meet where
+six would, and the shortfall is only 60°. Warping the projection (as S2 does)
+evens out cell **areas**, but the corners remain: three quads meet where four
+should.*
 
 **Demo:** [`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html)
 — compare *Quads · cube* against *Quads · rhombic 30* at the same resolution.
@@ -46,6 +52,17 @@ Red marks major defect, amber minor.
 Hexagons have zero curvature; they tile a plane and cannot close a sphere alone.
 Pentagons carry positive curvature. Exactly twelve are required, and they are
 not a hack — they are the solution.
+
+The reason twelve is forced becomes obvious once you look at where a cell comes
+from. Build the sphere by subdividing an icosahedron and put a cell on every
+**corner** of the result. Six triangles meet at an ordinary corner, so its cell
+has six sides. At the twelve original icosahedron corners only five meet.
+
+![Six triangles meeting at a point produce a hexagon; five produce a pentagon](figures/hexagon-and-pentagon.svg)
+
+*Twelve corners of the icosahedron survive every subdivision, so twelve cells are
+pentagons at every level, forever. This is the same fact as the 720°, counted a
+different way: 12 × 60° = 720°.*
 
 This is the structure of soccer balls, buckminsterfullerene (C60), and geodesic
 domes. Formally it is a **Goldberg polyhedron**, constructed as the **dual of a
@@ -74,7 +91,7 @@ is small and *smoothly distributed* with no discontinuity, which is the real win
 over a cube map — but "all hexagons are identical" is false, and code must not
 assume it.
 
-**Demos:**
+**Demo:**
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html) —
 the tiling at four resolutions, generated as the dual of a subdivided
 icosahedron. At 2,562 cells the pentagons are hard to spot.
