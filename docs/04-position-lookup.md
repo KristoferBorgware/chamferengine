@@ -23,7 +23,15 @@ coordinates — addressable, not allocated.
 
 ## The pipeline
 
-Four steps, and each one is arithmetic:
+Four steps, and each one is arithmetic.
+
+![Four boxes in a row: which face, where in it, which cell, the address — with an arrow from each to the next](figures/lookup-pipeline.svg)
+
+*Narrow the answer down four times. Which of the twenty faces, then where inside
+that face, then which cell that lands in, then the route to it. Nothing is looked
+up and nothing is stored, so the cost is the same on a planet of any size.*
+
+Here it is in full:
 
 ```
 dir   = normalize(pos)
@@ -134,6 +142,12 @@ which coordinate moved furthest (here `8.6 → 9`, a shift of 0.4) and recompute
 (5, 8, 3)   sums to 16 ✓
 ```
 
+![Three rows of numbers: the measured triple summing to 16, the naively rounded triple summing to 17 and marked wrong, and the repaired triple back at 16](figures/hexround-repair.svg)
+
+*Round all three and the sum drifts off by one, which names a point that does not
+exist. Only one of the three has to be given up — the one that moved furthest,
+because it is the one you know least about.*
+
 ```js
 function hexRound(k, i, j, n){
   let rk = Math.round(k), ri = Math.round(i), rj = Math.round(j);
@@ -181,6 +195,13 @@ it was measured.
 > sampling-limited to ±0.1–0.2 points; read them as a plateau, not a trend.
 
 **So the answer is not "yes" or "no" — it is that the question was underspecified.**
+
+![Two neighbouring hexagons with their shared edge drawn twice: once straight, as rounding defines it, and once slightly bowed, as nearest-centre-on-the-sphere defines it](figures/cell-is-what-rounding-says.svg)
+
+*The two rules agree about where every cell centre is. They disagree only about
+exactly where the line between two cells falls — and by about a tenth of a cell,
+always between neighbours that share an edge. Nothing is ever badly misplaced;
+there are simply two curves and the specification had not said which one it meant.*
 
 Look at the last two columns. Every disagreement is with an **edge-adjacent**
 cell, and `hexRound`'s answer is at most **0.11 of a cell spacing** further from

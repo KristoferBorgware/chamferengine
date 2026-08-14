@@ -438,6 +438,149 @@ const made = [];
 
 
 // =============================================================================
+// 14 — no-sideways-merge: columns merge, neighbours zigzag
+// =============================================================================
+{
+  const R = 26, dx = Math.sqrt(3)*R;
+  let good = '', bad = '';
+  // left: same-facing sides of neighbouring cells are parallel but offset
+  for (let k=0;k<4;k++){
+    const cx = 60 + k*dx, cy = 96 + (k%2 ? R*0.5 : -R*0.5);
+    const H = hexPts(cx, cy, R);
+    bad += `<polygon class="cf-l" points="${pts(H)}"/>`;
+    bad += `<path class="cf-a" d="M${f(H[4][0])} ${f(H[4][1])}L${f(H[5][0])} ${f(H[5][1])}" stroke-width="3"/>`;
+  }
+  // right: a column of stacked cells, all sharing one plane
+  for (let k=0;k<4;k++){
+    good += `<rect class="cf-fill" x="286" y="${f(52+k*30)}" width="72" height="30"/>`;
+    good += `<path class="cf-a" d="M286 ${f(52+k*30)}L286 ${f(82+k*30)}" stroke-width="3"/>`;
+  }
+  made.push(svg('no-sideways-merge', 430, 214, `
+  ${bad}
+  <text class="cf-c" x="118" y="30" text-anchor="middle">sideways</text>
+  <text class="cf-d" x="118" y="176" text-anchor="middle">same direction, parallel,</text>
+  <text class="cf-gd" x="118" y="194" text-anchor="middle">but never in line &#8212; nothing to merge</text>
+  ${good}
+  <text class="cf-c" x="322" y="30" text-anchor="middle">downward</text>
+  <text class="cf-d" x="322" y="194" text-anchor="middle">one flat plane &#8212; four faces become one</text>
+  <path class="cf-l" d="M215 40 L215 200" stroke-dasharray="2 5"/>`));
+}
+
+// =============================================================================
+// 14 — relief-saturates: raw side faces explode, merged quads level off
+// =============================================================================
+{
+  const x0 = 66, y0 = 172, W = 320, H = 128;
+  const rows = [[0,0,4.00],[10,1.74,7.11],[30,5.17,8.71],[60,10.29,9.25],[120,20.59,9.48]];
+  const X = r => x0 + W*r/120, Y = v => y0 - H*v/22;
+  const line = (idx, cls) => `<path class="${cls}" d="M` + rows.map(r=>`${f(X(r[0]))} ${f(Y(r[idx]))}`).join('L') + `" fill="none"/>`;
+  const dots = (idx, cls) => rows.map(r=>`<circle class="${cls}" cx="${f(X(r[0]))}" cy="${f(Y(r[idx]))}" r="3.5"/>`).join('');
+  made.push(svg('relief-saturates', 430, 216, `
+  <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
+  ${line(1,'cf-g')}${dots(1,'cf-gf')}
+  ${line(2,'cf-a')}${dots(2,'cf-af')}
+  <text class="cf-gd" x="${f(X(120)+6)}" y="${f(Y(20.59)+4)}">raw side faces</text>
+  <text class="cf-c" x="${f(X(120)+6)}" y="${f(Y(9.48)+4)}">triangles</text>
+  <text class="cf-d" x="${f(x0+W/2)}" y="${y0+22}" text-anchor="middle">terrain relief &#8594;  0 m to 120 m</text>
+  <text class="cf-c" x="14" y="26">raw faces grow 20&#215;</text>
+  <text class="cf-c" x="14" y="46">triangles grow 2.4&#215; and then stop</text>
+  <text class="cf-d" x="14" y="206">because about half your neighbours are lower than you whatever the terrain does</text>`));
+}
+
+// =============================================================================
+// 14 — lod-is-resampling: the coarse grid is different cells, not fewer
+// =============================================================================
+{
+  const grid = (ox, oy, R, n, cls) => {
+    let g = '', dx = Math.sqrt(3)*R;
+    for (let r=0;r<n;r++) for (let c=0;c<n;c++){
+      const cx = ox + c*dx + (r%2 ? dx/2 : 0), cy = oy + r*R*1.5;
+      g += `<polygon class="${cls}" points="${pts(hexPts(cx, cy, R))}"/>`;
+    }
+    return g;
+  };
+  made.push(svg('lod-is-resampling', 430, 226, `
+  <defs><clipPath id="lodc"><rect x="30" y="44" width="370" height="112"/></clipPath></defs>
+  <g clip-path="url(#lodc)">
+    ${grid(30, 50, 13, 8, 'cf-l')}
+    ${grid(26, 46, 26, 4, 'cf-a')}
+  </g>
+  <text class="cf-c" x="14" y="30">the coarse cells do not contain the fine ones &#8212; their edges cut through</text>
+  <text class="cf-d" x="14" y="184">so a coarse mesh cannot be made by throwing fine cells away</text>
+  <text class="cf-d" x="14" y="202">it is built by asking the terrain function again, at the wider spacing &#8212;</text>
+  <text class="cf-d" x="14" y="220">which is why LOD makes a chunk cheaper to GENERATE as well as to draw</text>`));
+}
+
+// =============================================================================
+// 04 — lookup-pipeline: four steps from a position to a cell ID
+// =============================================================================
+{
+  const box = (x, n, title, sub) =>
+    `<rect class="${n===4?'cf-gf':'cf-af'}" x="${x}" y="60" width="86" height="58" rx="6"/>`
+  + `<text class="cf-big" x="${x+43}" y="52" text-anchor="middle">${n}</text>`
+  + `<text class="cf-c" x="${x+43}" y="84" text-anchor="middle">${title}</text>`
+  + `<text class="cf-d" x="${x+43}" y="102" text-anchor="middle">${sub}</text>`;
+  let arrows = '';
+  for (let k=0;k<3;k++) arrows += `<path class="cf-l" d="M${f(16+86+k*100+4)} 89L${f(16+(k+1)*100-6)} 89" marker-end="url(#lp1)"/>`;
+  made.push(svg('lookup-pipeline', 430, 178, `
+  <defs><marker id="lp1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#9aa3b2"/></marker></defs>
+  ${arrows}
+  ${box(16,  1, 'which face', '20 dot products')}
+  ${box(116, 2, 'where in it', 'barycentric')}
+  ${box(216, 3, 'which cell', 'hexRound')}
+  ${box(316, 4, 'the address', 'walk down')}
+  <text class="cf-d" x="14" y="24">a 3D position in, a cell ID out &#8212; no table, no search, nothing stored</text>
+  <text class="cf-d" x="14" y="146">every step is arithmetic. the whole thing is a few dozen operations,</text>
+  <text class="cf-d" x="14" y="164">and the cost depends on the subdivision depth, never on the world&#8217;s size</text>`));
+}
+
+// =============================================================================
+// 04 — hexround-repair: rounding three numbers breaks their sum
+// =============================================================================
+{
+  const cellRow = (y, vals, sum, ok, note) => {
+    let out = '';
+    vals.forEach((v, i) => {
+      out += `<rect class="${v[1]||'cf-fill'}" x="${f(78+i*74)}" y="${y}" width="66" height="30" rx="4"/>`
+          +  `<text class="cf-c" x="${f(78+i*74+33)}" y="${y+20}" text-anchor="middle">${v[0]}</text>`;
+    });
+    out += `<text class="cf-d" x="66" y="${y+20}" text-anchor="end">${note}</text>`;
+    out += `<text class="${ok?'cf-c':'cf-gd'}" x="308" y="${y+20}">sums to ${sum} ${ok?'&#10003;':'&#10007;'}</text>`;
+    return out;
+  };
+  made.push(svg('hexround-repair', 430, 190, `
+  ${cellRow(30, [['4.7'],['8.6'],['2.7']], 16, true, 'measured')}
+  ${cellRow(78, [['5'],['9','cf-gf'],['3']], 17, false, 'round each')}
+  ${cellRow(126,[['5'],['8','cf-af'],['3']], 16, true, 'repaired')}
+  <text class="cf-gd" x="14" y="176">8.6 moved furthest, so throw that one away and recompute it from the other two</text>`));
+}
+
+// =============================================================================
+// 04 — cell-is-what-rounding-says: two definitions, one thin band of disagreement
+// =============================================================================
+{
+  const cx = 150, cy = 108, R = 46;
+  const H = hexPts(cx, cy, R);
+  const H2 = hexPts(cx + Math.sqrt(3)*R, cy, R);
+  // the "other" boundary: a slightly bowed curve near the shared edge
+  const e0 = H[1], e1 = H[2];
+  made.push(svg('cell-is-what-rounding-says', 430, 214, `
+  <polygon class="cf-af" points="${pts(H)}" opacity="0.5"/>
+  <polygon class="cf-fill" points="${pts(H2)}" opacity="0.5"/>
+  <path class="cf-a" d="M${f(e0[0])} ${f(e0[1])}L${f(e1[0])} ${f(e1[1])}" stroke-width="2.5"/>
+  <path class="cf-g" d="M${f(e0[0])} ${f(e0[1])} Q${f((e0[0]+e1[0])/2+9)} ${f((e0[1]+e1[1])/2)} ${f(e1[0])} ${f(e1[1])}" stroke-width="2.5"/>
+  <circle class="cf-af" cx="${cx}" cy="${cy}" r="4"/>
+  <circle class="cf-af" cx="${f(cx+Math.sqrt(3)*R)}" cy="${cy}" r="4"/>
+  <text class="cf-c" x="14" y="26">what rounding says the edge is</text>
+  <text class="cf-gd" x="14" y="46">what &#8220;nearest centre on the sphere&#8221; says</text>
+  <text class="cf-d" x="14" y="176">they differ on about 1% of the sphere, never by more than a tenth of a cell,</text>
+  <text class="cf-d" x="14" y="194">and always with a neighbour that shares an edge &#8212; so pick one and it is exact</text>
+  <text class="cf-c" x="278" y="${cy+4}">both centres agree</text>
+  <text class="cf-d" x="278" y="${cy+22}">only the line between them is in question</text>`));
+}
+
+// =============================================================================
 // 15 — float-ladder: how many positions a float32 leaves inside one block
 // =============================================================================
 {

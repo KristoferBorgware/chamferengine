@@ -55,6 +55,12 @@ the merge is exact — the faces genuinely lie in one plane.*
 neighbouring cells pointing the same way are parallel but offset; they zigzag
 rather than lining up, so there is no run to collapse.
 
+![On the left, four hexagons in a row with one face of each highlighted, the highlighted faces parallel but staggered; on the right, four stacked cells whose side faces form one continuous flat surface](figures/no-sideways-merge.svg)
+
+*Merging needs faces that lie in one plane. Going down a column they do, exactly.
+Going sideways they never do — each neighbour's matching face is shifted half a
+cell, so there is no run to collapse and no algorithm can invent one.*
+
 That is the honest summary of what transfers: **run-length merging along the
 radial axis is free and exact; the rectangle-growing part of greedy meshing has
 no hex equivalent.** Which is the same shape as everything else in this design —
@@ -85,6 +91,12 @@ quad.
 > | 30 m | 5.17 | 2.36 | **8.71** |
 > | 60 m | 10.29 | 2.62 | **9.25** |
 > | 120 m | 20.59 | 2.74 | **9.48** |
+
+![Two curves against terrain relief: raw side faces climbing steeply and without limit, and triangles per cell rising then flattening out just below ten](figures/relief-saturates.svg)
+
+*The frightening curve is the one that does not matter. Raw faces climb 20× as the
+terrain gets rougher; the triangles you actually draw rise 2.4× and then flatten,
+because vertical merging absorbs the difference.*
 
 Raw faces grow 20×; **triangles grow 2.4× and then saturate.** The merged quad
 count cannot exceed six and settles near 2.7, because on average about half a
@@ -227,6 +239,16 @@ it. A view-distance slider is the wrong control; the right one is a function of
 `|position| − surfaceRadius`.
 
 ### LOD is resampling, not decimation
+
+In a cube world, dropping to a coarser level of detail means throwing away every
+other block. Here you cannot, and the reason is worth seeing rather than being
+told.
+
+![A coarse hexagon grid drawn over a finer one, with the coarse cell edges cutting straight across fine cells instead of following their boundaries](figures/lod-is-resampling.svg)
+
+*The coarse cells do not contain whole fine cells — their edges cut straight
+through. The two levels are simply different sets of cells, so there is nothing to
+discard your way from one to the other.*
 
 Goldberg levels do not nest into each other at all — [doc 01](01-prior-art.md)
 states this as the trade the design accepts. So a coarse mesh is **not** a subset
