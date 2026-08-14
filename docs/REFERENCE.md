@@ -26,6 +26,7 @@ numbered documents.
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
+| [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
@@ -226,6 +227,114 @@ T3 -> T0,T1,T2
 best ordering: T0 -> T1 -> T3 -> T2 | adjacent steps: 2 of 3
 ```
 
+## `precision.js`
+
+Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back.
+
+Cited by [doc 15](15-precision-and-origin.md).
+
+```
+1. spacing between adjacent representable positions, at distance R from the origin
+   (a world position IS that distance from the centre, so this is the resolution
+    of every position on the surface of a planet of radius R)
+
+   planet                       R          float32          float64   f32 vs 1 m block
+   doc-06 worked example       1700 m   122.070 um         0.000 nm   fine (8192 per block)
+   10 km planet               10000 m   976.563 um         0.002 nm   fine (1024 per block)
+   100 km moon               100000 m     7.813 mm         0.015 nm   visible jitter (128 per block)
+   1000 km dwarf            1000000 m    62.500 mm         0.116 nm   coarse (16 per block)
+   Earth                    6371000 m   500.000 mm         0.931 nm   2 positions per block -- no sub-block detail
+   Jupiter                 69911000 m      8.000 m        14.901 nm   ONE position per 8 blocks
+
+2. the radius at which float32 position spacing first exceeds a threshold
+   threshold        radius            i.e.
+    0.1 mm       1.024e+3 m   1 km
+      1 mm       1.638e+4 m   16 km
+      1 cm       1.311e+5 m   131 km
+     10 cm       1.049e+6 m   1049 km
+       1 m       8.389e+6 m   8389 km
+   Thresholds land on powers of two because the spacing is 2^(e-23) for R in
+   [2^e, 2^(e+1)). float32 holds sub-millimetre precision out to a 16 km planet
+   and has no sub-block detail left at all by Earth radius.
+
+3. one-shot barycentric vs recursive midpoint subdivision
+   docs 02 and 03 describe the sphere as a "recursively subdivided icosahedron";
+   docs 04 and 09 require the one-shot lattice (uniform in the face plane).
+   These are different point sets. Deviation as a fraction of cell spacing:
+
+   L    cells    spacing (R=1700)   max deviation   as % of spacing
+   1       42        1023.90 m        0.000 nm             0.0%
+   2      162         511.95 m        38.966 m             7.6%
+   3      642         255.98 m        38.966 m            15.2%
+   4     2562         127.99 m        38.966 m            30.4%
+   5    10242          63.99 m        39.420 m            61.6%
+   6    40962          32.00 m        39.420 m           123.2%
+   7   163842          16.00 m        39.435 m           246.5%
+
+   closed form for the worst point (the quarter point of a base edge):
+   icosahedron edge subtends 63.4349deg; at t = 1/4 the two rules place it at
+   14.5454deg (one-shot, equal chord) vs 15.8587deg (recursive, equal arc)
+   = 1.3133deg apart = 38.966 m on the doc-06 planet.
+
+   The gap is FIXED IN METRES and does not shrink with level, so as a fraction
+   of a cell it GROWS without bound. These are two different tilings, not two
+   roundings of one. At level 11 the two spheres disagree by 39 cells.
+   Doc 04 (hexRound) and doc 09 (gnomonic straightness) both require one-shot,
+   so one-shot is the construction; "recursively subdivided" is loose wording.
+
+4. ID -> position, worst error over 20,000 sampled cells
+   The path walk is integer arithmetic, so the only floating-point work is
+   one barycentric blend and one normalise, at any depth.
+
+   depth    float64 (R=1700)   float32 (R=1700)   float32 on an Earth-sized world
+       4           0.000 nm         155.512 um     582.805 mm
+       8           0.000 nm         212.784 um     797.441 mm
+      11           0.000 nm         206.328 um     773.244 mm
+      13           0.000 nm         211.740 um     793.528 mm
+      16           0.000 nm         205.873 um     771.540 mm
+      20           0.000 nm         197.832 um     741.403 mm
+      23           0.000 nm         192.694 um     722.148 mm
+   Error is flat in depth: the path walk is integers, and the float work is
+   one blend plus one normalise however deep the world goes. Nothing accumulates.
+
+5. "up" is a direction, and directions are precision-robust
+   up = normalize(position). The normalise divides out the magnitude, so the
+   ANGLE survives even where the position itself has collapsed.
+
+   planet             float32 position error   float32 "up" error   as a distance on the surface
+   doc-06 worked example            36.863 um            3.99e-3"      32.849 um
+   10 km planet                 202.922 um            3.99e-3"     193.227 um
+   100 km moon                    3.326 mm            4.98e-3"       2.415 mm
+   1000 km dwarf                 16.902 mm            4.59e-3"      22.234 mm
+   Earth                        101.807 mm            4.59e-3"     141.653 mm
+   Jupiter                         2.396 m            6.03e-3"        2.042 m
+   Position degrades linearly with R. The direction does not degrade at all.
+
+6. chunk-local coordinates, D = 11, 1 m blocks
+   Offsets are bounded by the chunk span, so float32 resolves them finely
+   no matter how big the planet is.
+
+   chunk level   cells across   span      float32 resolution inside the chunk
+   C =  4            128     128 m      15.259 um
+   C =  6             32      32 m       3.815 um
+   C =  8              8       8 m     953.674 nm
+   C = 10              2       2 m     238.419 nm
+
+   the same, for an Earth-sized world at 1 m blocks (D = 23):
+   C = 16            128     128 m      15.259 um
+   C = 18             32      32 m       3.815 um
+   C = 20              8       8 m     953.674 nm
+
+7. rebase frequency for a player walking at 1.4 m/s
+   anchor          span      one crossing every
+   cell (D=11)        1 m   0.7 s
+   chunk C=8          8 m   5.7 s
+   chunk C=6         32 m   22.9 s
+   chunk C=4        128 m   1.5 min
+   Re-anchoring is renormalising an integer and a small offset: no world shift,
+   no traversal of live objects, nothing to schedule.
+```
+
 ## `qr.js`
 
 walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation
@@ -392,4 +501,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_12 scripts. Every number above is reproduced by running them._
+_13 scripts. Every number above is reproduced by running them._

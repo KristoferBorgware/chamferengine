@@ -55,8 +55,19 @@ positive. Produces caves and overhangs.
 **fBm** — fractional Brownian motion. Summed octaves of noise at doubling
 frequency and halving amplitude.
 
-**Geodesic sphere** — a recursively subdivided icosahedron with vertices
-normalised to the sphere. The dual of a Goldberg polyhedron.
+**Geodesic sphere** — an icosahedron subdivided `2^D` times per edge, with
+vertices normalised to the sphere. The dual of a Goldberg polyhedron. The
+subdivision is **one-shot**: a vertex's position is a single barycentric blend of
+its face's three corners, normalised once. It is *not* built by repeatedly
+splitting at arc midpoints, which is a different and incompatible point set — see
+[doc 15](15-precision-and-origin.md).
+
+**One-shot construction** — placing lattice point `(i, j)` at
+`normalize(A·a + B·b + C·c)` in one step, so the lattice is uniform in the flat
+face plane. Required by [doc 04](04-position-lookup.md), which inverts it by
+rounding, and by [doc 09](09-ray-traversal.md), which needs cell boundaries
+straight in that plane. Differs from recursive arc-midpoint subdivision by a
+fixed **38.97 m** on the worked planet, regardless of depth.
 
 **Gnomonic projection** — central projection from the sphere's centre onto a
 plane. Maps great circles to straight lines, which is what makes ray traversal

@@ -535,5 +535,56 @@ const made = [];
   <text class="cf-c" x="312" y="160" text-anchor="middle">seam owned &#183; 0 holes</text>`));
 }
 
+// =============================================================================
+// two-constructions -- dividing the chord is not dividing the arc
+// =============================================================================
+{
+  const D2R = Math.PI / 180, O = [214, 250], Rp = 176;
+  const half = 31.71747;                       // half the icosahedron edge angle
+  const at = d => [O[0] + Rp*Math.sin(d*D2R), O[1] - Rp*Math.cos(d*D2R)];
+  const A = at(-half), B = at(half);
+  const arcQ = at(-half + 2*half*0.25);        // recursive: quarter of the ARC
+  const cq = [A[0] + (B[0]-A[0])*0.25, A[1] + (B[1]-A[1])*0.25];   // quarter of the CHORD
+  const dd = Math.hypot(cq[0]-O[0], cq[1]-O[1]);
+  const chordQ = [O[0] + (cq[0]-O[0])/dd*Rp, O[1] + (cq[1]-O[1])/dd*Rp];
+  made.push(svg('two-constructions', 428, 250, `
+  <path class="cf-m" d="M${f(A[0])} ${f(A[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(B[0])} ${f(B[1])}"/>
+  <path class="cf-l" d="M${f(A[0])} ${f(A[1])}L${f(B[0])} ${f(B[1])}" stroke-dasharray="4 3"/>
+  <path class="cf-l" d="M${f(O[0])} ${f(O[1])}L${f(A[0])} ${f(A[1])}M${f(O[0])} ${f(O[1])}L${f(B[0])} ${f(B[1])}"/>
+  <path class="cf-a" d="M${f(O[0])} ${f(O[1])}L${f(chordQ[0])} ${f(chordQ[1])}" stroke-dasharray="3 3"/>
+  <circle class="cf-fill" cx="${f(A[0])}" cy="${f(A[1])}" r="4.5"/>
+  <circle class="cf-fill" cx="${f(B[0])}" cy="${f(B[1])}" r="4.5"/>
+  <circle class="cf-af" cx="${f(cq[0])}" cy="${f(cq[1])}" r="3.5"/>
+  <circle class="cf-af" cx="${f(chordQ[0])}" cy="${f(chordQ[1])}" r="5"/>
+  <circle class="cf-gf" cx="${f(arcQ[0])}" cy="${f(arcQ[1])}" r="5"/>
+  <text class="cf-big" x="${f(A[0]-14)}" y="${f(A[1]-10)}">A</text>
+  <text class="cf-big" x="${f(B[0]+7)}" y="${f(B[1]-10)}">B</text>
+  <text class="cf-d" x="${f(cq[0]-6)}" y="${f(cq[1]+16)}" text-anchor="middle">&#188; of the chord</text>
+  <text class="cf-c" x="14" y="30">one-shot &#183; divide the chord, then project out</text>
+  <text class="cf-c" x="14" y="46">lands 14.5454&#176; from A</text>
+  <text class="cf-gd" x="14" y="72">recursive &#183; divide the arc</text>
+  <text class="cf-gd" x="14" y="88">lands 15.8587&#176; from A</text>
+  <text class="cf-big" x="414" y="30" text-anchor="end">1.3133&#176; apart</text>
+  <text class="cf-d" x="414" y="46" text-anchor="end">= 38.97 m on a 1,700 m planet</text>
+  <text class="cf-d" x="414" y="62" text-anchor="end">= 39 cells at level 11</text>
+  <text class="cf-d" x="${f(O[0])}" y="${f(O[1]+18)}" text-anchor="middle">planet centre</text>`));
+}
+
+// =============================================================================
+// three-tiers -- which number type holds what
+// =============================================================================
+{
+  const row = (y, tag, kind, note, cls) => `
+    <rect class="${cls}" x="14" y="${y}" width="126" height="42" rx="5"/>
+    <text class="cf-big" x="77" y="${y+20}" text-anchor="middle">${tag}</text>
+    <text class="cf-d" x="77" y="${y+34}" text-anchor="middle">${kind}</text>
+    <text x="156" y="${y+25}">${note}</text>`;
+  made.push(svg('three-tiers', 520, 176, `
+  ${row(12,  'identity',  'integer ID',        'exact at every scale, forever &#8212; never drifts', 'cf-fill')}
+  ${row(66,  'world',     'float64',           'under a nanometre at Earth radius', 'cf-af')}
+  ${row(120, 'GPU',       'float32, local',    'bounded by the chunk span, so radius drops out', 'cf-gf')}
+  <path class="cf-l" d="M77 54L77 66M77 108L77 120" stroke-dasharray="3 3"/>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

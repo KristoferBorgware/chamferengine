@@ -6,9 +6,9 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Two entries are struck through because they have since been closed. They are kept
-rather than deleted, because what they turned out to be worth is the most useful
-thing on this page.
+Three entries are struck through because they have since been closed. They are
+kept rather than deleted, because what they turned out to be worth is the most
+useful thing on this page.
 
 ---
 
@@ -127,14 +127,33 @@ and costs nothing on the worked-example planet, where the floor sits at 96%.
 
 ---
 
-## Floating-point precision
+## ~~Floating-point precision~~ — designed, see [doc 15](15-precision-and-origin.md)
 
-A 1.7 km planet is fine. At Earth scale, float32 positions break down badly far
-from the origin.
+Closed, and like the other two it was smaller than feared in the place everyone
+looks and larger somewhere nobody was looking.
 
-Standard fix is a **floating origin**: rebase world coordinates around the player
-periodically. Worth deciding early, because it touches every system that holds a
-position.
+The fear was justified in the abstract: `float32` holds **500 mm** at Earth
+radius, two representable positions per block, and 8 m at Jupiter. But the fix
+was already built. **A cell ID is entirely integers**, so the world's ground
+truth cannot drift at any scale, and floating point only enters when an ID is
+turned into a position — which can be done relative to any origin. Entities carry
+an anchor ID plus a bounded offset; rebasing is renormalising the two, per
+entity, with no world-shift event to schedule. Velocities, orientations and mesh
+buffers all survive a rebase untouched.
+
+Two findings reach back into the rest of the design. **Directions are
+precision-robust where positions are not** — `up` is accurate to 0.005″ at every
+planet size, so gravity and all three frames of
+[doc 13](13-gravity-and-orientation.md) need no special handling, and doc 04's
+pipeline is already in the right shape because it works on a direction.
+
+And the one that has nothing to do with precision: **the specification was
+describing two different spheres.** One-shot barycentric and recursive
+arc-midpoint subdivision are not two spellings of one construction; they differ
+by a fixed **38.97 m** — 39 cells at level 11 — and the gap does not shrink with
+depth. Docs 04 and 09 both require one-shot, so one-shot it is, and the wording
+in doc 02, doc 03 and the glossary has been corrected. That was found by asking a
+precision question, not a geometry one.
 
 ---
 
@@ -214,32 +233,42 @@ specifying, not inventing.
 
 **First, the `hexRound` question above** — it is an afternoon's work, it sits
 underneath three documents and an invariant, and it is the only place the
-specification currently asserts something load-bearing without a script. Close it before building on it.
+specification currently asserts something load-bearing without a script. Closing
+[doc 15](15-precision-and-origin.md) sharpened that question rather than
+answering it: now that the construction is pinned to one-shot, "does planar
+rounding find the right spherical cell?" is finally well-posed.
 
-Then **floating-point precision**, and the floating origin it implies. It is the
-last item that touches every system holding a position, and both closed
-documents lean on it: [doc 13](13-gravity-and-orientation.md) wants orientation
-rebased per chunk alongside position, and [doc 14](14-meshing-and-lod.md) wants
-meshes built in chunk-local space. Neither can be finished until the rebasing
-rule exists.
+Then **lighting**, now the largest genuinely undesigned system: 8 neighbours
+instead of 6, sky light along the radial direction, and a sun direction that
+gives a real terminator sweeping the planet for free. It is also the most
+self-contained thing left — nothing already written depends on it, so it cannot
+invalidate anything.
 
-**Lighting** is the alternative, and it is more self-contained: 8 neighbours,
-radial sky light, and a sun direction that gives a real terminator for free.
+**Pentagons as a gameplay problem** is the cheapest remaining item and the only
+one blocked by nothing at all. Doc 13 supplies every number needed to decide it,
+and deciding it unblocks block rotation, rails, and the "north landmark"
+question. It is a conversation rather than a document.
 
 ---
 
-## What closing two of these taught
+## What closing three of these taught
 
-Both closed items came back with the same shape of answer, and it is worth
+All three closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was
   supposed to be a blow-up and turned out to be a flat 2×. Gravity was supposed
   to be hard everywhere and turned out to be one `normalize` plus a genuinely
-  hard horizontal problem.
+  hard horizontal problem. Precision was supposed to need a floating origin bolted
+  on, and turned out to have had one all along, because the ID is integers.
 - **The real cost showed up somewhere nobody was looking.** Not in the triangle
   count, but in what a pentagon does to a *direction index* — which no amount of
-  subdivision fixes.
+  subdivision fixes. Not in the floats, but in the discovery that the
+  specification had been describing two different spheres.
 - **Measuring first changed the design, not just the confidence.** Every
-  recommendation in docs 13 and 14 came out of a number, and several reversed the
-  intuition that preceded them.
+  recommendation in docs 13, 14 and 15 came out of a number, and several reversed
+  the intuition that preceded them.
+- **Each closure moved work rather than removing it.** Doc 13 handed the pentagon
+  question a price tag, doc 14 handed doc 08 a reason for the density band, and
+  doc 15 handed the `hexRound` question the precondition that makes it answerable.
+  Expect the next one to do the same.

@@ -219,6 +219,41 @@ level coarser on the other — and scores what each boundary policy leaves open.
 
 ---
 
+## `precision.js` — floating point at planet scale
+
+Seven checks, covering what a float can hold, where the ID → position conversion
+loses accuracy, and how much a chunk-local origin buys back.
+
+**Verifies:**
+
+1. **What a float can resolve.** `float32` position spacing is **122 µm** at the
+   doc-06 radius and **500 mm** at Earth radius — two representable positions per
+   1 m block — against **0.93 nm** for `float64` at the same radius.
+2. **Where the thresholds fall.** Sub-millimetre out to a **16 km** planet, 1 cm
+   at 131 km, 1 m at 8,389 km. All powers of two, because spacing is `2^(e−23)`
+   and therefore a step function that doubles at each binade.
+3. **One-shot and recursive subdivision are different spheres.** Checked two
+   ways — by building both lattices and comparing every point, and in closed
+   form. They differ by a fixed **38.97 m** (1.3133° at the quarter point of a
+   base edge), which does **not** shrink with level, so it grows without bound as
+   a fraction of a cell: **39 cells** at level 11. Docs 04 and 09 both require the
+   one-shot construction.
+4. **ID → position does not accumulate.** Worst error over 20,000 sampled cells
+   is flat from depth 4 to depth 23, because the path walk is integer arithmetic
+   and the float work is one blend plus one normalise at any depth.
+5. **Directions are precision-robust.** `float32` `up` holds **0.005″** across
+   five orders of magnitude of radius while position error grows linearly with
+   `R`. Normalising divides the magnitude out.
+6. **Chunk-local coordinates drop the planet from the budget.** `float32` inside
+   a 128 m chunk resolves 15.3 µm — and gives the *identical* figure on an
+   Earth-sized world at `D = 23`.
+7. **Rebase frequency.** A player at 1.4 m/s crosses a `C = 6` chunk boundary
+   every 22.9 s. Re-anchoring is renormalising an integer and an offset.
+
+**Used in:** [doc 15](../docs/15-precision-and-origin.md)
+
+---
+
 ## Wanted: `hexround.js` — is rounding the same as containment on a sphere?
 
 The one load-bearing claim in the specification with nothing behind it, and the

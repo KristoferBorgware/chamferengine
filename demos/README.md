@@ -182,6 +182,20 @@ the level that fits a 2M-triangle budget.
 
 **Docs:** [14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
 
+### [`precision-scale.html`](precision-scale.html)
+A player taking twenty-four 10 cm steps, on a planet you can resize. Hollow
+outlines are where the steps really are; solid bars are where a `float32` can
+actually put them, and the number on a bar counts how many steps collapsed onto
+it.
+
+Drag the radius. All twenty-four land somewhere different on the worked-example
+planet, on **six** positions at Earth radius, and on a **single** position by
+Jupiter. The same twenty-four steps are drawn again underneath in chunk-local
+coordinates, where nothing moves however far the slider goes — which is the whole
+argument for anchoring positions to a chunk.
+
+**Docs:** [15 — Precision and the floating origin](../docs/15-precision-and-origin.md)
+
 
 ---
 

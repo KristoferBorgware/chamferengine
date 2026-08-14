@@ -21,7 +21,7 @@ and duplicates information found there.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 14.
+- `docs/` — prose specification, ordered 00 through 15.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -63,6 +63,7 @@ script owns its numbers.
 | [12](docs/12-glossary.md) | terms and constants, as a lookup | — |
 | [13](docs/13-gravity-and-orientation.md) | the three local frames, holonomy, what pentagons cost | `frame.js` |
 | [14](docs/14-meshing-and-lod.md) | mesh cost, merge limits, LOD, chunk seams | `mesh.js`, `volume.js`, `seam.js` |
+| [15](docs/15-precision-and-origin.md) | float budget, the anchor+offset rule, one-shot vs recursive | `precision.js` |
 
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is every script's actual output in one
 generated page — the fastest way to look a number up without reading the
@@ -100,6 +101,15 @@ Violating any of these breaks the design. They are not tunable.
     guarantee. "Six neighbours, all equidistant" is the *approximation* — 12
     cells have five, and spacing varies ~1.14:1. Never state the approximation
     as the guarantee; doc 00's design goal 3 used to, and doc 10 inherited it.
+12. Vertex positions come from the **one-shot** construction: `(i, j)` maps to
+    `normalize(A·a + B·b + C·c)`, a single barycentric blend evaluated once at
+    full depth. **Never** build positions by repeated arc-midpoint subdivision —
+    that is a different sphere, off by a fixed 38.97 m on the worked planet (39
+    cells at level 11), and it breaks doc 04's rounding and doc 09's straight-line
+    ray walk. Midpoint splitting is the *index* hierarchy only.
+13. Identity is integer, world positions are `float64`, and anything GPU-facing is
+    `float32` **relative to its chunk**. Never cache a world-space position across
+    a frame — recompute it from anchor plus offset.
 
 ## Verified constants
 
@@ -116,6 +126,12 @@ Violating any of these breaks the design. They are not tunable.
 | cube defect split | `8 × 90°` = `720°` | why cube spheres pinch | — |
 | cell spacing variation | `≈ 1.14 : 1` | √(1.3:1 area); divide by MAX, not nominal | — |
 | max levels in 64 bits | `24` with a 10-bit layer, `29` without | layer shares the word | — |
+| float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
+| float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
+| float64 at Earth radius | `0.93 nm` | never the binding constraint | `precision.js` |
+| one-shot vs recursive | `38.97 m` = `1.3133°` | fixed in metres; 39 cells at L11 | `precision.js` |
+| ID → position error | flat in depth | path walk is integers; one blend, one normalise | `precision.js` |
+| float32 `up` error | `0.005″` at every radius | directions are precision-robust | `precision.js` |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
 | holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
 | pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
@@ -190,6 +206,19 @@ Violating any of these breaks the design. They are not tunable.
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
   seams come from terrain sampled at two spacings, not from geometry; skirts one
   coarse cell deep cover them and do not care what level the neighbour chose.
+- **The ID is already a floating origin** (`precision.js`). Every field is an
+  integer, so identity never drifts at any planet size, and floating point enters
+  only when an ID is turned into a position — against any origin you choose. The
+  rebase is per-entity renormalisation of an anchor and a bounded offset, not a
+  world-shift event. Velocities, orientations and mesh buffers are all unaffected.
+- **Directions survive what positions do not.** `up` holds 0.005″ at every radius
+  while position error grows linearly with `R`, so gravity and all three frames
+  need no precision handling — and doc 04's pipeline is already right, because its
+  first line is `dir = normalize(pos)` and every later step works on the direction.
+- **ID → position does not accumulate error.** Flat across depths 4 to 23: the
+  path walk is integer arithmetic, so the float work is one barycentric blend and
+  one normalise however deep the world goes. A deeper world is not a less accurate
+  one.
 
 ## Naming conventions
 
@@ -224,8 +253,6 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
   open item — close it first
 - **Layer merging is proposed but never designed** and contradicts invariant 10.
   Cap the crust instead unless someone designs the interior seam
-- Floating-point precision at planet scale; floating origin needed — highest
-  impact after the above, and both doc 13 and doc 14 depend on the rebasing rule
 - Lighting propagation with 8 neighbours and radial sky light
 - Six-state block rotation for directional blocks
 - Pentagon handling as a *gameplay* problem, not just a maths one

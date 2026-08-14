@@ -70,6 +70,13 @@ subdivided icosahedron**: every vertex of the geodesic sphere becomes a cell;
 degree-6 vertices become hexagons, and the twelve original icosahedron vertices,
 which have degree 5, become the pentagons.
 
+**"Subdivided" needs pinning down**, because there are two ways to do it and they
+give different spheres. A vertex's position is **one** barycentric blend of its
+face's three corners, normalised once — not the result of repeatedly splitting at
+arc midpoints. The two differ by a fixed 38.97 m on the worked planet, which is
+39 cells at level 11, and [doc 15](15-precision-and-origin.md) shows why the
+one-shot rule is the one this design is committed to.
+
 Cell counts follow `N(L) = 10 · 4^L + 2`:
 
 | Level | Cells | Composition |

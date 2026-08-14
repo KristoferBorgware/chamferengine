@@ -60,7 +60,8 @@ a runnable demo where one exists.
 | 11 | [Open topics](docs/11-open-topics.md) | Identified but not yet designed |
 | 12 | [Glossary](docs/12-glossary.md) | Terms and constants |
 | 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
-| 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, skirts |
+| 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, seam ownership |
+| 15 | [Precision and the floating origin](docs/15-precision-and-origin.md) | Where floats run out, the anchor-and-offset rule, one-shot vs recursive |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

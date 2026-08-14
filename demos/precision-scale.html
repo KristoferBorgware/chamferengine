@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where the digits run out</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 30px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 14px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:manipulation; }
+  .panel { background:#101725; border:1px solid #223049; border-radius:11px;
+           padding:12px 13px 10px; margin-top:12px; }
+  .ptitle { font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+            color:#7d879c; margin-bottom:9px; }
+  .ptitle b { color:#dfe6f5; letter-spacing:0; text-transform:none; font-size:12.5px; }
+  .verdict { font-size:12.5px; line-height:1.55; margin-top:9px; }
+  .ok { color:#3fb8af; } .warn { color:#e0913a; } .bad { color:#e0603a; }
+  .ctl { margin-top:16px; }
+  label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#7d879c;
+          display:block; margin-bottom:7px; }
+  input[type=range] { width:100%; accent-color:#3fb8af; }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px;
+         padding:14px 14px 12px; margin-top:14px; }
+  .line { display:flex; align-items:baseline; gap:8px; margin-bottom:9px; flex-wrap:wrap; }
+  .tag { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#7d879c; min-width:126px; }
+  .val { font-family:ui-monospace,Menlo,monospace; font-size:16px; font-weight:600;
+         font-variant-numeric:tabular-nums; }
+  .segs { display:flex; gap:6px; margin-top:12px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:8px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  .hint { font-size:11.5px; color:#6d768c; margin-top:12px; line-height:1.55; }
+</style>
+</head>
+<body>
+
+<h1>Where the digits run out</h1>
+<div class="sub">A player taking twenty-four 10&nbsp;cm steps, on a planet you can resize.
+Hollow outlines are where they really are. Solid bars are where a <code>float32</code> can
+actually put them &mdash; and the number on a bar counts how many steps landed on it.</div>
+
+<div class="panel">
+  <div class="ptitle"><b>World coordinates</b> &mdash; measured from the planet's centre</div>
+  <svg id="world" viewBox="0 0 340 74"></svg>
+  <div class="verdict" id="wv"></div>
+</div>
+
+<div class="panel">
+  <div class="ptitle"><b>Chunk-local coordinates</b> &mdash; measured from the chunk's corner</div>
+  <svg id="local" viewBox="0 0 340 74"></svg>
+  <div class="verdict ok">Always exact, at every radius. The offset never gets big, so the
+    digits never run out &mdash; drag the slider and watch this panel not move.</div>
+</div>
+
+<div class="ctl">
+  <label for="r">Planet radius</label>
+  <input type="range" id="r" min="0" max="1000" value="205">
+</div>
+
+<div class="out">
+  <div class="line"><span class="tag">planet radius</span>
+    <span class="val" id="rv" style="color:#dfe6f5">&mdash;</span></div>
+  <div class="line"><span class="tag">float32 spacing</span>
+    <span class="val" id="sv" style="color:#e0913a">&mdash;</span></div>
+  <div class="line"><span class="tag">per 1 m block</span>
+    <span class="val" id="pv" style="color:#3fb8af">&mdash;</span></div>
+  <div class="line"><span class="tag">distinct 10 cm steps</span>
+    <span class="val" id="dv" style="color:#dfe6f5">&mdash;</span></div>
+</div>
+
+<div class="segs">
+  <button data-r="1700">Worked example, 1.7 km</button>
+  <button data-r="10000">10 km</button>
+  <button data-r="100000">100 km moon</button>
+  <button data-r="6371000">Earth</button>
+</div>
+
+<div class="hint">The spacing doubles at every power of two, so precision does not fade
+gradually &mdash; it halves, abruptly, as the planet crosses 1&nbsp;km, 2&nbsp;km, 4&nbsp;km and so on.
+That is why the bars snap together in jumps rather than drifting.</div>
+
+<script>
+const N = 24, STEP = 0.1, PX = 12.6, X0 = 8, TOP = 12, H = 26;
+
+// spacing between adjacent float32 values just above x, by bumping the bit pattern
+const dv = new DataView(new ArrayBuffer(4));
+function ulp32(x){ dv.setFloat32(0, x); dv.setUint32(0, dv.getUint32(0) + 1);
+  return dv.getFloat32(0) - Math.fround(x); }
+
+function fmt(x){
+  if (x >= 1) return x.toFixed(x < 10 ? 3 : 0) + ' m';
+  if (x >= 1e-3) return (x*1e3).toFixed(2) + ' mm';
+  if (x >= 1e-6) return (x*1e6).toFixed(2) + ' µm';
+  return (x*1e9).toFixed(1) + ' nm';
+}
+const fmtR = R => R >= 1000 ? (R/1000).toFixed(R < 10000 ? 2 : 0) + ' km' : R.toFixed(0) + ' m';
+
+function bars(offsets){
+  // offsets are in metres; tally how many steps landed on each representable value
+  const tally = new Map();
+  offsets.forEach(o => tally.set(o, (tally.get(o) || 0) + 1));
+  let s = '';
+  // where the steps really are, hollow
+  for (let k = 0; k < N; k++){
+    const x = X0 + k*PX;
+    s += `<rect x="${x.toFixed(2)}" y="${TOP}" width="${(PX-1.6).toFixed(2)}" height="${H}"
+           fill="none" stroke="#2f3a52" stroke-width="1" rx="2"/>`;
+  }
+  // where float32 can put them, solid; hotter where several steps pile up
+  for (const [o, n] of tally){
+    const x = X0 + (o / STEP) * PX;
+    if (x < -PX*2 || x > 340 + PX*2) continue;
+    const col = n === 1 ? '#3fb8af' : n <= 4 ? '#e0913a' : '#e0603a';
+    s += `<rect x="${x.toFixed(2)}" y="${TOP + H + 8}" width="${(PX-1.6).toFixed(2)}" height="${H}"
+           fill="${col}" fill-opacity="${n === 1 ? .85 : .95}" rx="2"/>`;
+    if (n > 1)
+      s += `<text x="${(x + (PX-1.6)/2).toFixed(2)}" y="${TOP + H + 8 + H/2 + 4}"
+             fill="#0b0e14" font-size="10.5" font-weight="700" text-anchor="middle">${n}</text>`;
+  }
+  return s;
+}
+
+function draw(){
+  const t = +document.getElementById('r').value / 1000;
+  const R = 1000 * Math.pow(10, t * 5);          // 1 km .. 100,000 km
+  const sp = ulp32(R);
+
+  // each step is 10 cm further from the centre; ask float32 where it can put it
+  const wOff = [];
+  for (let k = 0; k < N; k++) wOff.push(Math.fround(R + k*STEP) - Math.fround(R));
+  document.getElementById('world').innerHTML = bars(wOff);
+
+  // the same twenty-four steps, as offsets from the chunk corner
+  const lOff = [];
+  for (let k = 0; k < N; k++) lOff.push(Math.fround(k*STEP));
+  document.getElementById('local').innerHTML = bars(lOff);
+
+  const distinct = new Set(wOff).size;
+  const per = 1 / sp;
+
+  document.getElementById('rv').textContent = fmtR(R);
+  document.getElementById('sv').textContent = fmt(sp);
+  document.getElementById('pv').textContent = per >= 1
+    ? (per >= 10 ? Math.round(per).toLocaleString() : per.toFixed(1)) + ' positions'
+    : '1 per ' + Math.round(sp) + ' blocks';
+  document.getElementById('dv').textContent = distinct + ' of 24';
+
+  const v = document.getElementById('wv');
+  if (distinct === N && sp < 0.005){
+    v.className = 'verdict ok';
+    v.innerHTML = `Every step gets its own position, with <b>${Math.round(per).toLocaleString()}</b>
+      to spare inside each block. Nothing here hints at what is coming.`;
+  } else if (distinct === N){
+    v.className = 'verdict warn';
+    v.innerHTML = `Every step still lands somewhere different, but only <b>${Math.round(per)}</b>
+      positions fit inside a block now. A standing player would visibly jitter.`;
+  } else if (distinct > 1){
+    v.className = 'verdict bad';
+    v.innerHTML = `Twenty-four steps, <b>${distinct}</b> distinct positions. The player moves in
+      lurches of <b>${fmt(sp)}</b> &mdash; walking smoothly is no longer representable.`;
+  } else {
+    v.className = 'verdict bad';
+    v.innerHTML = `All twenty-four steps land on <b>the same position</b>. At this radius a
+      <code>float32</code> cannot tell that the player moved at all.`;
+  }
+}
+
+document.getElementById('r').addEventListener('input', draw);
+document.querySelectorAll('button[data-r]').forEach(b =>
+  b.addEventListener('click', () => {
+    const R = +b.dataset.r;
+    document.getElementById('r').value = Math.round(Math.log10(R/1000) / 5 * 1000);
+    draw();
+  }));
+draw();
+</script>
+</body>
+</html>

@@ -30,6 +30,14 @@ overlap, nothing left over. Repeat forever, no rotation, no spillover.
 upside down — that flip is real and matters later. A small triangle is always
 completely inside exactly one bigger triangle, at every level.*
 
+**This picture is the hierarchy, not the geometry.** The splitting is exact and
+repeats forever *in index space* — that is what makes truncation work. Where a
+vertex actually sits on the sphere is a separate question with a separate answer:
+one barycentric blend of the face's three corners, evaluated once at full depth,
+never accumulated level by level. Building the positions by repeated arc-midpoint
+subdivision instead gives a **different sphere**, off by a fixed 38.97 m on the
+worked planet. See [doc 15](15-precision-and-origin.md).
+
 The Goldberg cells are already the dual of that structure: every hexagon is a
 degree-6 vertex of the geodesic, every pentagon a degree-5 one. Indexing the
 thing the hexagons are derived from gives an exact hierarchy for free.
