@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 292" width="520" height="292">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" d="M117.0 112.2 A 196.0 196.0 0 0 1 355.0 112.2"/>
+  <path class="cf-g" d="M236.0 72.0 A 196.0 196.0 0 0 1 265.6 74.2" stroke-width="4"/><path class="cf-a" d="M338.2 100.8 A 196.0 196.0 0 0 1 355.0 112.2" stroke-width="4"/>
+  <path class="cf-l" d="M117.0 112.2L117.0 112.2M140.8 112.2L133.8 100.8M164.6 112.2L154.3 89.8M188.4 112.2L178.7 80.6M212.2 112.2L206.4 74.2M236.0 112.2L236.0 72.0M259.8 112.2L265.6 74.2M283.6 112.2L293.3 80.6M307.4 112.2L317.7 89.8M331.2 112.2L338.2 100.8M355.0 112.2L355.0 112.2" stroke-dasharray="3 3"/>
+  <path class="cf-m" d="M117.0 112.2L355.0 112.2"/>
+  <circle class="cf-af" cx="117.0" cy="112.2" r="3"/><circle class="cf-af" cx="140.8" cy="112.2" r="3"/><circle class="cf-af" cx="164.6" cy="112.2" r="3"/><circle class="cf-af" cx="188.4" cy="112.2" r="3"/><circle class="cf-af" cx="212.2" cy="112.2" r="3"/><circle class="cf-af" cx="236.0" cy="112.2" r="3"/><circle class="cf-af" cx="259.8" cy="112.2" r="3"/><circle class="cf-af" cx="283.6" cy="112.2" r="3"/><circle class="cf-af" cx="307.4" cy="112.2" r="3"/><circle class="cf-af" cx="331.2" cy="112.2" r="3"/><circle class="cf-af" cx="355.0" cy="112.2" r="3"/><circle class="cf-gf" cx="117.0" cy="112.2" r="3.6"/><circle class="cf-gf" cx="133.8" cy="100.8" r="3.6"/><circle class="cf-gf" cx="154.3" cy="89.8" r="3.6"/><circle class="cf-gf" cx="178.7" cy="80.6" r="3.6"/><circle class="cf-gf" cx="206.4" cy="74.2" r="3.6"/><circle class="cf-gf" cx="236.0" cy="72.0" r="3.6"/><circle class="cf-gf" cx="265.6" cy="74.2" r="3.6"/><circle class="cf-gf" cx="293.3" cy="80.6" r="3.6"/><circle class="cf-gf" cx="317.7" cy="89.8" r="3.6"/><circle class="cf-gf" cx="338.2" cy="100.8" r="3.6"/><circle class="cf-gf" cx="355.0" cy="112.2" r="3.6"/>
+  <circle class="cf-fill" cx="117.0" cy="112.2" r="5"/>
+  <circle class="cf-fill" cx="355.0" cy="112.2" r="5"/>
+  <circle cx="236.0" cy="268.0" r="3.5" fill="#48505f"/>
+  <text class="cf-d" x="236.0" y="286.0" text-anchor="middle">planet centre</text>
+  <text class="cf-c" x="14" y="26">flat face &#183; lattice points evenly spaced</text>
+  <text class="cf-gd" x="14" y="46">sphere &#183; the same points, bunched at the corners</text>
+  <text class="cf-big" x="107.0" y="132.2" text-anchor="end">corner</text>
+  <text class="cf-d" x="107.0" y="148.2" text-anchor="end">already on the sphere</text>
+  <text class="cf-big" x="506" y="26" text-anchor="end">middle sits at 79% of R</text>
+  <text class="cf-d" x="506" y="44" text-anchor="end">cos 37.3774&#176; = 0.7947</text>
+  <text class="cf-gd" x="506" y="70" text-anchor="end">widest cell, at the face centre</text>
+  <text class="cf-c" x="506" y="90" text-anchor="end">narrowest cell, at the corner</text>
+  <text class="cf-big" x="506" y="120" text-anchor="end">1 / 0.7947&#179; = 1.99</text>
+</svg>

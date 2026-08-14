@@ -106,6 +106,42 @@ How false was, until recently, the one load-bearing number in this specification
 with no script behind it. Earlier drafts of this document said 1.3:1 in area and
 1.14:1 in spacing. Measured, it is closer to **2:1**.
 
+### Why the cells differ at all
+
+The reason is worth seeing before the numbers, because it also explains why no
+amount of extra subdivision fixes it.
+
+Cells start life as evenly spaced points on a **flat** triangle, and are then
+pushed straight outward from the planet's centre until they land on the sphere
+([doc 15](15-precision-and-origin.md)). The flat triangle's three corners are
+icosahedron vertices, so they are **already on the sphere** and do not move at
+all. Its middle sags inward, to 79% of the radius, so points there have to travel
+a fifth of the way out — and they spread apart as they go.
+
+![A circle in cross-section with a flat chord inside it, evenly divided, and rays from the centre projecting those divisions onto the arc where they bunch toward the ends](figures/why-cells-differ.svg)
+
+*Evenly spaced on the flat face, unevenly spaced once projected. The gaps stay
+wide across the middle and tighten toward the corners, which is why the smallest
+cells on the whole planet sit next to the twelve pentagons.*
+
+Everything follows from that one sag. The middle stretches by `1 / 0.7947` in each
+direction and the corner not at all, so the **area** ratio is that cubed:
+
+```
+θᵥ = 37.3774°           how far a face's corner sits from its centre
+cos θᵥ = 0.7947         so the face's middle sits at 79% of the radius
+
+1 / 0.7947³ = 1.9928    ← area ratio, face centre against face corner
+1 / 0.7947^1.5 = 1.4117 ← the same thing measured as width
+```
+
+Push it further and nothing changes: the sag belongs to the **face**, not to the
+cells inside it. Halving the cells halves the distortion band along with them, so
+the ratio holds at every level. That is the same reason `hexRound`'s disagreement
+stops falling in [doc 04](04-position-lookup.md).
+
+Here is what that predicts, and what measuring finds.
+
 > **[verified]** `verification/uniform.js` measures every cell's area two
 > independent ways — a third of each incident triangle, and the exact spherical
 > area of the dual polygon. They agree to four decimals and both sum to exactly
@@ -120,27 +156,17 @@ with no script behind it. Earlier drafts of this document said 1.3:1 in area and
 > | 6 | 40,962 | 1.93 | 2.69 |
 > | 7 | 163,842 | **1.96** | **2.72** |
 
-The ratio **rises with level and settles**, and it settles on a closed form. The
-one-shot construction ([doc 15](15-precision-and-origin.md)) is exactly the
-gnomonic projection of a flat face triangle, and gnomonic area scales as `cos³` of
-the angle off the face axis. So the ratio between a cell at a face's centre and
-one at its corner is `sec³` of the face's angular radius:
+The measured ratio climbs level by level and settles on **1.9926** — against the
+**1.9928** the sag predicts. Agreement to four decimals, so the picture above is
+the whole explanation and nothing else is going on.
 
-```
-θᵥ = 37.3774°        the angular radius of an icosahedron face
-sec³(θᵥ)   = 1.9928  ← hexagon area ratio
-sec^1.5(θᵥ) = 1.4117 ← hexagon spacing ratio
-```
+That climb is also where 1.3:1 came from. At level 2 the ratio really is 1.17, and
+at level 3 it is 1.53; someone read the number off a coarse grid, before it had
+finished rising. **The design runs at level 11.**
 
-Extrapolated from the measured series: **1.9926**. Agreement to four decimals.
-
-**Depth is not a fix**, and that is the point of the closed form — a face triangle
-is scale-free, so refining shrinks the cells and the distortion together. It is
-the same reason `hexRound`'s disagreement plateaus in
-[doc 04](04-position-lookup.md).
-
-And it explains where 1.3:1 came from: at level 2 the ratio really is 1.17, and at
-level 3 it is 1.53. It was read off a coarse grid. **The design runs at level 11.**
+If you need the formal name for the projection, it is **gnomonic** — the one that
+maps great circles to straight lines, which [doc 09](09-ray-traversal.md) leans on
+for a different reason entirely.
 
 So the figures to use are:
 

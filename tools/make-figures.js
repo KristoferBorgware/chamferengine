@@ -571,6 +571,53 @@ const made = [];
 }
 
 // =============================================================================
+// why-cells-differ -- the face plane sags inward, so pushing its grid out to
+// the sphere stretches the middle and leaves the corners alone
+// =============================================================================
+{
+  const D2R = Math.PI/180, O = [236, 268], Rp = 196;
+  const tv = 37.3774;                            // face angular radius
+  const at = d => [O[0] + Rp*Math.sin(d*D2R), O[1] - Rp*Math.cos(d*D2R)];
+  const A = at(-tv), B = at(tv);
+  const N = 10;
+  const onChord = k => [A[0] + (B[0]-A[0])*k/N, A[1] + (B[1]-A[1])*k/N];
+  const project = p => { const d = Math.hypot(p[0]-O[0], p[1]-O[1]);
+    return [O[0] + (p[0]-O[0])/d*Rp, O[1] + (p[1]-O[1])/d*Rp]; };
+
+  const rays = [], flat = [], curved = [];
+  for (let k = 0; k <= N; k++){
+    const p = onChord(k), q = project(p);
+    rays.push([p, q]);
+    flat.push(`<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="3"/>`);
+    curved.push(`<circle class="cf-gf" cx="${f(q[0])}" cy="${f(q[1])}" r="3.6"/>`);
+  }
+  // the widest gap (across the middle) and the narrowest (at a corner)
+  const gap = (k, cls) => {
+    const a = project(onChord(k)), b = project(onChord(k+1));
+    return `<path class="${cls}" d="M${f(a[0])} ${f(a[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(b[0])} ${f(b[1])}" stroke-width="4"/>`;
+  };
+  made.push(svg('why-cells-differ', 520, 292, `
+  <path class="cf-m" d="M${f(A[0])} ${f(A[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(B[0])} ${f(B[1])}"/>
+  ${gap(N/2, 'cf-g')}${gap(N-1, 'cf-a')}
+  <path class="cf-l" d="${pathOf(rays)}" stroke-dasharray="3 3"/>
+  <path class="cf-m" d="M${f(A[0])} ${f(A[1])}L${f(B[0])} ${f(B[1])}"/>
+  ${flat.join('')}${curved.join('')}
+  <circle class="cf-fill" cx="${f(A[0])}" cy="${f(A[1])}" r="5"/>
+  <circle class="cf-fill" cx="${f(B[0])}" cy="${f(B[1])}" r="5"/>
+  <circle cx="${f(O[0])}" cy="${f(O[1])}" r="3.5" fill="#48505f"/>
+  <text class="cf-d" x="${f(O[0])}" y="${f(O[1]+18)}" text-anchor="middle">planet centre</text>
+  <text class="cf-c" x="14" y="26">flat face &#183; lattice points evenly spaced</text>
+  <text class="cf-gd" x="14" y="46">sphere &#183; the same points, bunched at the corners</text>
+  <text class="cf-big" x="${f(A[0]-10)}" y="${f(A[1]+20)}" text-anchor="end">corner</text>
+  <text class="cf-d" x="${f(A[0]-10)}" y="${f(A[1]+36)}" text-anchor="end">already on the sphere</text>
+  <text class="cf-big" x="506" y="26" text-anchor="end">middle sits at 79% of R</text>
+  <text class="cf-d" x="506" y="44" text-anchor="end">cos 37.3774&#176; = 0.7947</text>
+  <text class="cf-gd" x="506" y="70" text-anchor="end">widest cell, at the face centre</text>
+  <text class="cf-c" x="506" y="90" text-anchor="end">narrowest cell, at the corner</text>
+  <text class="cf-big" x="506" y="120" text-anchor="end">1 / 0.7947&#179; = 1.99</text>`));
+}
+
+// =============================================================================
 // three-tiers -- which number type holds what
 // =============================================================================
 {
