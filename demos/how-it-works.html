@@ -60,6 +60,8 @@
   .ln{stroke:currentColor;stroke-width:1;fill:none;opacity:.30}
   .ln2{stroke:currentColor;stroke-width:1.5;fill:none;opacity:.75}
   .hex{stroke:currentColor;stroke-width:1.2;fill:none;opacity:.45}
+  .rock{fill:var(--fill);stroke:currentColor;stroke-width:1.5;opacity:.9}
+  .void{fill:var(--card);stroke:currentColor;stroke-width:1.5;opacity:.95}
   .acc{stroke:var(--accent);stroke-width:2;fill:none}
   .accf{fill:var(--fill);stroke:var(--accent);stroke-width:2}
   .gold{stroke:var(--gold);stroke-width:2;fill:none}
@@ -430,7 +432,70 @@ a crack you can see straight through to the sky.</p>
     <text class="t" x="316" y="162" text-anchor="middle">2 triangles per edge cell</text>
   </g>
 </svg>
-<figcaption>A <b>skirt</b> is a short vertical curtain hanging down from a chunk's rim. It does not have to match the neighbour, or even know what level the neighbour chose — it just has to hang deeper than the worst possible mismatch, which is <b>one coarse cell</b>. Cheap, and it never needs a special case.</figcaption>
+<figcaption>A <b>skirt</b> is a short vertical curtain hanging down from a chunk's rim. It does not have to match the neighbour, or even know what level the neighbour chose — it just has to hang deeper than the worst possible mismatch, which is <b>one coarse cell</b>. Cheap, and it needs no special case.</figcaption>
+</figure>
+
+<h3>A skirt only closes the surface</h3>
+
+<p>That works while every column is a single slab of rock. Once the ground has
+<strong>caves</strong> in it, a column can hold several separate slabs — and a
+cave that runs up to the chunk's edge opens a hole a skirt can never reach.</p>
+
+<p>Here is why. The far chunk, being far, was built from the cheap generator and
+has no caves: it is solid rock all the way down. It does not know a cave is
+sitting against it, so it draws no wall there. The near chunk assumes its own
+rock simply carries on past the edge, so it draws no wall either.
+<strong>Nobody draws it</strong>, and from inside the cave you look straight
+through solid rock.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 430 206" role="img" aria-label="A cross-section through a chunk boundary. With a skirt alone the surface step is covered but a cave running up to the boundary is left open; with the finer chunk drawing every disagreement, both are closed">
+  <defs>
+    <clipPath id="caveA"><rect x="0" y="0" width="106" height="206"/></clipPath>
+    <clipPath id="caveB"><rect x="212" y="0" width="106" height="206"/></clipPath>
+    <marker id="see" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--gold)"/></marker>
+    <marker id="stop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+  </defs>
+
+  <g>
+    <path class="rock" d="M16 62 L38 56 L60 64 L82 58 L106 66 L106 150 L16 150 Z"/>
+    <path class="rock" d="M106 82 L140 78 L170 86 L196 82 L196 150 L106 150 Z"/>
+    <g clip-path="url(#caveA)"><ellipse class="void" cx="90" cy="110" rx="36" ry="15"/></g>
+    <line x1="106" y1="46" x2="106" y2="152" stroke="currentColor" stroke-width="1"
+      stroke-dasharray="3 3" opacity=".45"/>
+    <rect x="104" y="66" width="4.5" height="18" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <line x1="106" y1="96.6" x2="106" y2="123.4" stroke="var(--gold)" stroke-width="4"/>
+    <line x1="72" y1="118" x2="150" y2="118" stroke="var(--gold)" stroke-width="1.6"
+      stroke-dasharray="4 3" marker-end="url(#see)"/>
+    <text class="ta" x="112" y="60">skirt</text>
+    <text class="tg" x="112" y="92">open</text>
+    <text class="tm" x="76" y="106" text-anchor="middle">cave</text>
+    <text class="tm" x="52" y="42" text-anchor="middle">near · detailed</text>
+    <text class="tm" x="160" y="42" text-anchor="middle">far · no caves</text>
+    <text class="t" x="106" y="176" text-anchor="middle">skirt alone</text>
+    <text class="tg" x="106" y="194" text-anchor="middle">961 holes left</text>
+  </g>
+
+  <g>
+    <path class="rock" d="M228 62 L250 56 L272 64 L294 58 L318 66 L318 150 L228 150 Z"/>
+    <path class="rock" d="M318 82 L352 78 L382 86 L408 82 L408 150 L318 150 Z"/>
+    <g clip-path="url(#caveB)"><ellipse class="void" cx="302" cy="110" rx="36" ry="15"/></g>
+    <line x1="318" y1="46" x2="318" y2="152" stroke="currentColor" stroke-width="1"
+      stroke-dasharray="3 3" opacity=".45"/>
+    <rect x="316" y="66" width="4.5" height="18" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <rect x="316" y="96.6" width="4.5" height="26.8" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <line x1="284" y1="118" x2="314" y2="118" stroke="var(--accent)" stroke-width="1.6"
+      stroke-dasharray="4 3" marker-end="url(#stop)"/>
+    <text class="ta" x="324" y="60">skirt</text>
+    <text class="ta" x="324" y="92">wall</text>
+    <text class="tm" x="288" y="106" text-anchor="middle">cave</text>
+    <text class="t" x="318" y="176" text-anchor="middle">near chunk draws both</text>
+    <text class="ta" x="318" y="194" text-anchor="middle">0 holes</text>
+  </g>
+</svg>
+<figcaption>The skirt hangs <b>downward</b>; the cave mouth is a <b>horizontal</b> hole further down. They never meet — 99% of cave mouths sit deeper than a skirt reaches, so adding more skirts does not help. The fix is that the <b>near, detailed chunk takes charge of the whole boundary</b> and draws a face wherever its own rock-or-air disagrees with the far chunk's — its rock against their air, and their rock against its caves. About 2.7 extra faces per edge cell, and the hole count goes to zero.</figcaption>
 </figure>
 
 <h2>One last limit: you cannot flatten too much at once</h2>

@@ -92,8 +92,7 @@ open any of them directly in a browser. All are mobile-friendly.
 
 **New to this?** Start with
 [`demos/how-it-works.html`](demos/how-it-works.html) — an illustrated walkthrough
-of the whole construction in nine diagrams, from twenty triangles to level of
-detail.
+of the whole construction in ten diagrams, from twenty triangles to chunk seams.
 
 See [`demos/README.md`](demos/README.md) for the annotated index.
 
