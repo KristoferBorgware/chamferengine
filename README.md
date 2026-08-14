@@ -62,6 +62,7 @@ a runnable demo where one exists.
 | 13 | [Gravity and orientation](docs/13-gravity-and-orientation.md) | Local frames, holonomy, horizon, what pentagons cost directions |
 | 14 | [Meshing and LOD](docs/14-meshing-and-lod.md) | Triangle cost, relief and caves, altitude-driven LOD, seam ownership |
 | 15 | [Precision and the floating origin](docs/15-precision-and-origin.md) | Where floats run out, the anchor-and-offset rule, one-shot vs recursive |
+| 16 | [Lighting](docs/16-lighting.md) | 8 neighbours, sky light down a column, the free terminator |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

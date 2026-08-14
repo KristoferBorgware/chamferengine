@@ -21,7 +21,7 @@ and duplicates information found there.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 15.
+- `docs/` — prose specification, ordered 00 through 16.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -64,6 +64,7 @@ script owns its numbers.
 | [13](docs/13-gravity-and-orientation.md) | the three local frames, holonomy, what pentagons cost | `frame.js` |
 | [14](docs/14-meshing-and-lod.md) | mesh cost, merge limits, LOD, chunk seams | `mesh.js`, `volume.js`, `seam.js` |
 | [15](docs/15-precision-and-origin.md) | float budget, the anchor+offset rule, one-shot vs recursive | `precision.js` |
+| [16](docs/16-lighting.md) | 8 neighbours, sky light, the free terminator, light storage | `light.js` |
 
 Doc 04 also owns the **definition of a cell boundary** (`hexround.js`), which is
 load-bearing for docs 07, 09 and 14 — read it before touching position → cell.
@@ -141,6 +142,12 @@ Violating any of these breaks the design. They are not tunable.
 | ID → position error | flat in depth | path walk is integers; one blend, one normalise | `precision.js` |
 | float32 `up` error | `0.005″` at every radius | directions are precision-robust | `precision.js` |
 | hexRound vs nearest centre | `≈1%` of the sphere, plateaus | always edge-adjacent, ≤ `0.11` spacing | `hexround.js` |
+| hex light disc | `3r² + 3r + 1` cells | vs `2r² + 2r + 1` on squares | `light.js` |
+| lighting cost vs a cube | `1.497×` at range 15 | tends to `1.5`; cost grows as range³ | `light.js` |
+| pentagon light disc | `1 + 5r(r+1)/2` = `5/6` area | less world in reach, NOT dimmer | `light.js` |
+| light storage | `4×` the block data | 35 KB vs 9 KB per chunk, D11/C6 | `light.js` |
+| sky light per column | `32×` smaller than per cell | monotone down a column | `light.js` |
+| terminator speed | `circumference / dayLength` | `= 1.4 m/s` at doc 06's 2.12 h walk time | `light.js` |
 | flipped-frame share | `≈ 46%` of cells | middle-child descent | `qr.js` |
 | holonomy | `enclosedArea / R²` | rotation of a carried heading | `frame.js` |
 | pentagon direction deficit | `1` index = `60°` | 12 × 60° = 720° | `frame.js` |
@@ -231,6 +238,13 @@ Violating any of these breaks the design. They are not tunable.
   while position error grows linearly with `R`, so gravity and all three frames
   need no precision handling — and doc 04's pipeline is already right, because its
   first line is `dir = normalize(pos)` and every later step works on the direction.
+- **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
+  so holonomy and the pentagon direction deficit simply do not apply. 8 neighbours
+  cost a flat 1.5×; radial sky light is as cheap as a flat world's because
+  invariant 10 makes a column straight; the terminator is one dot product against
+  gravity's `up`. The twelve pentagons cost **nothing** — a torch there lights 5/6
+  as many cells only because a ring holds `5k` instead of `6k`. The real bill is
+  storage: 4× the block data, halved again by storing sky light per column.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -268,7 +282,8 @@ Do not assume these are solved. See [`docs/11-open-topics.md`](docs/11-open-topi
   building on the mesh
 - **Layer merging is proposed but never designed** and contradicts invariant 10.
   Cap the crust instead unless someone designs the interior seam
-- Lighting propagation with 8 neighbours and radial sky light
+- Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
+  geometry; a flood fill propagates inward, so the rule may not transfer
 - Six-state block rotation for directional blocks
 - Pentagon handling as a *gameplay* problem, not just a maths one
 - Player-facing coordinates (latitude / longitude / altitude)

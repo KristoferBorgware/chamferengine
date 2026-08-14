@@ -254,6 +254,39 @@ loses accuracy, and how much a chunk-local origin buys back.
 
 ---
 
+## `light.js` — lighting on a hex sphere
+
+Seven checks, covering what 8 neighbours cost, why sky light is still one
+downward pass, and what a sun direction buys for free.
+
+**Verifies:**
+
+1. **Neighbour count.** 6 lateral + up + down, so **8**; exactly **12 cells** in
+   the world have 7, at any depth. Light is a scalar, so degree is the only thing
+   that changes — holonomy and the direction-index deficit do not apply.
+2. **A torch costs 1.5×.** 7,471 cells against a cube world's 4,991 at light
+   level 15. Confirmed by BFS on the real level-7 grid, at least 19 cells from any
+   pentagon: **721** cells within 15 steps against a closed form of exactly 721.
+3. **Pentagons cost nothing.** 601 cells against 721, identical at all twelve —
+   which is `1 + 5r(r+1)/2` against `1 + 3r(r+1)`, tending to 5/6. There is one
+   sixth less world within reach; nothing is dimmer and no case is needed.
+4. **Sky light stays one downward pass**, because invariant 10 makes a column a
+   straight line of cells. Light costs **4×** the block data per chunk (35 KB
+   against 9 KB), but sky light is monotone down a column, so storing a depth per
+   column instead of a value per cell is **32× smaller**.
+5. **The terminator is one dot product** against `up`, already computed for
+   gravity. Terminator speed by day length, and the anchor: at **2.12 h** — doc
+   06's circumnavigation time — it moves at exactly walking pace.
+6. **Twilight is an angle, not a distance**, so its duration is a fixed fraction
+   of the day and does not depend on planet size at all.
+7. **Shadows outrun the horizon.** Below about 6° of sun elevation a 10 m tower's
+   shadow is longer than the 76 m visible world, so a shadow scheme never needs
+   to reach further than the horizon.
+
+**Used in:** [doc 16](../docs/16-lighting.md)
+
+---
+
 ## `hexround.js` — is rounding the same as containment on a sphere?
 
 Doc 04 rounds a barycentric triple to the nearest lattice point and calls the

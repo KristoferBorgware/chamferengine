@@ -196,6 +196,22 @@ argument for anchoring positions to a chunk.
 
 **Docs:** [15 — Precision and the floating origin](../docs/15-precision-and-origin.md)
 
+### [`lighting.html`](lighting.html)
+Two tabs. **Torch** puts the same flood fill on a hex field and a square field
+side by side, light levels drawn in each cell, with a range slider. The counts
+track `3r²+3r+1` against `2r²+2r+1`, so the **1.5×** is visible rather than
+asserted, and the readout gives the pentagon figure — 5/6 of the area for the
+same light.
+
+**Terminator** spins a planet with a live day/night line and a day-length slider.
+It opens on the anchor: a **2.12-hour** day, doc 06's circumnavigation time,
+where the terminator moves at exactly walking pace. Slide it shorter and dawn
+overtakes you; longer and you can outwalk the sunset indefinitely. Twilight is
+marked, and its duration is a fixed fraction of the day whatever the planet's
+size.
+
+**Docs:** [16 — Lighting](../docs/16-lighting.md)
+
 
 ---
 

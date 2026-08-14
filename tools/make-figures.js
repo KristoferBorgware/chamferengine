@@ -586,5 +586,68 @@ const made = [];
   <path class="cf-l" d="M77 54L77 66M77 108L77 120" stroke-dasharray="3 3"/>`));
 }
 
+// =============================================================================
+// light-discs -- a ring at radius k holds 6k cells, or 5k at a pentagon
+// =============================================================================
+{
+  const R = 4, U = 19;                            // rings drawn, pixels per ring
+  const disc = (cx, cy, deg) => {
+    let s = `<circle class="${deg === 6 ? 'cf-af' : 'cf-gf'}" cx="${f(cx)}" cy="${f(cy)}" r="5"/>`;
+    let total = 1;
+    for (let k = 1; k <= R; k++){
+      const n = deg * k; total += n;
+      s += `<circle class="cf-l" cx="${f(cx)}" cy="${f(cy)}" r="${f(k*U)}" stroke-dasharray="2 4"/>`;
+      for (let m = 0; m < n; m++){
+        const a = 2*Math.PI*m/n - Math.PI/2;
+        s += `<circle class="${deg === 6 ? 'cf-af' : 'cf-gf'}" cx="${f(cx + k*U*Math.cos(a))}"`
+           + ` cy="${f(cy + k*U*Math.sin(a))}" r="2.6"/>`;
+      }
+    }
+    return { s, total };
+  };
+  const A = disc(104, 108, 6), B = disc(324, 108, 5);
+  made.push(svg('light-discs', 428, 224, `
+  ${A.s}
+  ${B.s}
+  <text class="cf-big" x="104" y="200" text-anchor="middle">hexagon</text>
+  <text class="cf-c" x="104" y="216" text-anchor="middle">ring k holds 6k &#183; ${A.total} cells</text>
+  <text class="cf-big" x="324" y="200" text-anchor="middle">pentagon</text>
+  <text class="cf-gd" x="324" y="216" text-anchor="middle">ring k holds 5k &#183; ${B.total} cells</text>
+  <text class="cf-d" x="214" y="24" text-anchor="middle">same light, same radius &#8212; five sixths the area</text>`));
+}
+
+// =============================================================================
+// terminator -- lit is one dot product against the cell's own up
+// =============================================================================
+{
+  const O = [230, 118], Rp = 84, D2R = Math.PI/180;
+  const at = d => [O[0] + Rp*Math.cos(d*D2R), O[1] - Rp*Math.sin(d*D2R)];
+  // sun to the left: lit hemisphere is the half facing it
+  const arc = `M${f(at(90)[0])} ${f(at(90)[1])} A ${f(Rp)} ${f(Rp)} 0 0 0 ${f(at(270)[0])} ${f(at(270)[1])}`;
+  let rays = '';
+  for (let y = -70; y <= 70; y += 20)
+    rays += `<path class="cf-g" d="M28 ${f(O[1]+y)}L${f(O[0]-Rp-14)} ${f(O[1]+y)}" marker-end="url(#sun)"/>`;
+  const probe = (deg, label, cls) => {
+    const p = at(deg), q = [O[0] + (Rp+30)*Math.cos(deg*D2R), O[1] - (Rp+30)*Math.sin(deg*D2R)];
+    return `<path class="${cls}" d="M${f(p[0])} ${f(p[1])}L${f(q[0])} ${f(q[1])}"/>
+      <circle class="cf-fill" cx="${f(p[0])}" cy="${f(p[1])}" r="3.5"/>
+      <text class="${cls === 'cf-a' ? 'cf-c' : 'cf-gd'}" x="${f(q[0] + (Math.cos(deg*D2R) < 0 ? -6 : 6))}"
+        y="${f(q[1] + 4)}" text-anchor="${Math.cos(deg*D2R) < 0 ? 'end' : 'start'}">${label}</text>`;
+  };
+  made.push(svg('terminator', 460, 236, `
+  <defs><marker id="sun" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0 0L7 3.5L0 7Z" fill="#b0800f"/></marker></defs>
+  ${rays}
+  <circle class="cf-void" cx="${f(O[0])}" cy="${f(O[1])}" r="${f(Rp)}"/>
+  <path class="cf-gf" d="${arc}Z"/>
+  <line class="cf-m" x1="${f(O[0])}" y1="${f(O[1]-Rp)}" x2="${f(O[0])}" y2="${f(O[1]+Rp)}"
+    stroke-dasharray="4 3"/>
+  ${probe(160, 'dot &gt; 0 &#183; day', 'cf-g')}
+  ${probe(90,  'dot = 0 &#183; the terminator', 'cf-m')}
+  ${probe(20,  'dot &lt; 0 &#183; night', 'cf-a')}
+  <text class="cf-gd" x="28" y="26">sunlight</text>
+  <text class="cf-d" x="230" y="228" text-anchor="middle">lit = dot(sunDirection, up) &gt; 0 &#183; and up is already computed for gravity</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

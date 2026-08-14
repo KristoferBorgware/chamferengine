@@ -6,7 +6,7 @@ The honest list of what is **not yet designed**. Each item needs its own documen
 before implementation, and they are ordered roughly by how much they force
 changes elsewhere.
 
-Four entries are struck through because they have since been closed. They are
+Five entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
@@ -165,14 +165,30 @@ precision question, not a geometry one.
 
 ---
 
-## Lighting
+## ~~Lighting~~ — designed, see [doc 16](16-lighting.md)
 
-Flood-fill propagation works, but:
+Closed, and it is the one system where the sphere costs almost nothing.
 
-- Each cell has **8 neighbours** (6 around, 2 vertical) instead of 6.
-- Sky light arrives along the **radial** direction, not straight down.
-- Day/night is a sun direction vector dotted against cell normals — which gives a
-  real terminator sweeping the planet for free.
+All three predictions above held, and none of them hurt. **8 neighbours** costs a
+flat **1.5×** a cube world, because a hex disc holds `3r²+3r+1` cells against
+`2r²+2r+1`. **Radial sky light** turned out to be a distinction without a
+difference: invariant 10 makes a column a straight line of cells sharing one
+address, so the sky pass is exactly as cheap as it is in a flat world. And the
+**terminator** really is free — `dot(sunDirection, up) > 0`, reusing the `up`
+already computed for gravity, with no shadow map anywhere.
+
+Two things that were not predicted. **The twelve pentagons cost nothing at all**
+— a torch there lights 5/6 as many cells, but only because a ring holds `5k`
+instead of `6k`, so there is one sixth less world within reach. Nothing is
+dimmer. That is the same 60° that costs a direction index forever in
+[doc 13](13-gravity-and-orientation.md), and the entire difference is that light
+carries no direction.
+
+And **storage is the real bill**: light costs **4×** the block data it lights,
+35 KB against 9 KB per chunk. Half of it comes back by noticing sky light is
+monotone down a column and storing the depth it reaches rather than a value per
+cell — **32× smaller** — which needs columns to be straight, which is invariant
+10 for the third time in one document.
 
 ---
 
@@ -239,26 +255,27 @@ specifying, not inventing.
 
 ## Suggested next step
 
-**Lighting**, now the largest genuinely undesigned system: 8 neighbours
-instead of 6, sky light along the radial direction, and a sun direction that
-gives a real terminator sweeping the planet for free. It is also the most
-self-contained thing left — nothing already written depends on it, so it cannot
-invalidate anything.
+**Pentagons as a gameplay problem** is now the cheapest remaining item and the
+only one blocked by nothing at all. [Doc 13](13-gravity-and-orientation.md)
+supplies every number needed to decide it — 60° forever, a 36.07° deflection, six
+antipodal pairs — and [doc 16](16-lighting.md) has since shown they cost lighting
+nothing, which narrows what is actually being traded. Deciding it unblocks block
+rotation, rails, and the "north landmark" question. It is a conversation rather
+than a document.
 
-**Pentagons as a gameplay problem** is the cheapest remaining item and the only
-one blocked by nothing at all. Doc 13 supplies every number needed to decide it,
-and deciding it unblocks block rotation, rails, and the "north landmark"
-question. It is a conversation rather than a document.
+**Which boundary the mesh draws** is small and should not be left to be
+discovered during implementation, since it is the difference between a player
+clicking on a cell and being told they clicked on its neighbour.
 
-**Which boundary the mesh draws** is smaller than either and should not be left
-to be discovered during implementation, since it is the difference between a
-player clicking on a cell and being told they clicked on its neighbour.
+After those, the undesigned systems left are all **content** rather than
+structure: rivers and erosion, block rotation, player-facing coordinates, and
+multiplayer interest management. The geometric core is closed.
 
 ---
 
-## What closing four of these taught
+## What closing five of these taught
 
-All four closed items came back with the same shape of answer, and it is worth
+All five closed items came back with the same shape of answer, and it is worth
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was
@@ -274,6 +291,13 @@ expecting again:
   recommendation in docs 13, 14 and 15 came out of a number, and several reversed
   the intuition that preceded them.
 - **Each closure moved work rather than removing it.** Doc 13 handed the pentagon
-  question a price tag, doc 14 handed doc 08 a reason for the density band, and
-  doc 15 handed the `hexRound` question the precondition that makes it answerable.
-  Expect the next one to do the same.
+  question a price tag, doc 14 handed doc 08 a reason for the density band, doc 15
+  handed the `hexRound` question the precondition that makes it answerable, and
+  doc 16 handed doc 07 a storage line four times the size of the blocks. Expect
+  the next one to do the same.
+- **The same invariant keeps paying.** "The tessellation is identical at every
+  layer" made vertical neighbours free (doc 03), gravity tractable (doc 13),
+  vertical face merging exact (doc 14), and then in doc 16 it made the sky pass
+  as cheap as a flat world's *and* shrank sky-light storage 32×. An invariant
+  that has paid out five times is not a convenience; doc 06's suggestion to
+  break it deserves the scepticism it now gets.

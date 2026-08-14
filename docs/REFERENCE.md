@@ -24,6 +24,7 @@ numbered documents.
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
+| [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
@@ -187,6 +188,119 @@ does hexRound return the cell whose centre is nearest on the sphere?
   meshes a third thing again -- the dual polyhedron's corners -- so the
   specification currently implies three boundaries that agree only to ~0.1
   of a cell. Pick one and say so.
+```
+
+## `light.js`
+
+Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free.
+
+Cited by [doc 16](16-lighting.md).
+
+```
+1. neighbour count, and where the sphere shows through
+   lateral neighbours: 2550 cells have 6, 12 cells have 5
+   plus up and down, always -- the radial axis never branches
+   so a cell has 8 neighbours, and exactly 12 cells in the world have 7.
+   A cube voxel has 6. Light is a scalar, so degree is the ONLY thing that
+   changes: no direction is carried, so holonomy and the pentagon direction
+   deficit from doc 13 do not apply to light at all.
+
+2. one torch at full brightness, in open air
+   light level 15, dropping 1 per step
+   hex prism grid: 7,471 cells reached
+   cube grid:      4,991 cells reached
+   ratio: 1.497x  -- the cost of 6 lateral neighbours
+   (a hex disk of radius r holds 3r^2+3r+1 cells against 2r^2+2r+1 on squares,
+    so the ratio tends to 1.5 as the light range grows)
+   BFS on the real level-7 grid, one layer, 19+ cells from any pentagon:
+   721 cells within 15 steps; closed form 3r^2+3r+1 = 721 -- exact match
+
+3. a torch standing on a pentagon
+   from a hexagon:  721 cells lit   (closed form 1 + 3r(r+1) = 721)
+   from a pentagon: 601 cells lit   (closed form 1 + 5r(r+1)/2 = 601)
+   identical at all 12 pentagons: true
+   ratio 0.8336 at range 15, tending to 5/6 = 0.8333 as range grows
+
+   Read that carefully, because the obvious reading is wrong. The light is
+   NOT dimmer at a pentagon and needs no special case. A ring at radius k
+   holds 5k cells instead of 6k, so there is simply 1/6 LESS WORLD within
+   reach. Every cell that exists gets exactly the light level it should.
+   This is Gauss-Bonnet once more: a cone point has less area inside a given
+   radius. Compare doc 13, where the same 60deg costs a direction index
+   forever -- here it costs nothing at all, because light carries no direction.
+
+4. sky light, and why the sphere does not make it harder
+   Sky light travels along -up, which is radial. The tessellation is
+   identical at every layer (invariant 10), so a column IS a straight line
+   of cells sharing one address. Sky light is therefore exactly as cheap as
+   it is in a flat world: one downward pass per column, no face crossing.
+
+   per chunk at D=11 C=6, 64 layers: 561 columns, 35,904 voxels
+   light at 1 byte per cell (4 bits sky + 4 block): 35 KB
+   block data at 2 bits per cell (doc 07):           9 KB
+   light costs 4x the blocks it lights.
+
+   But sky light down a column is MONOTONE -- full until the first solid
+   cell, then attenuating. Store the depth it reaches, one byte per column:
+   sky light per cell:   18 KB
+   sky light per column: 0.5 KB   -- 32x smaller
+   That trick needs columns to be straight, which is invariant 10 again.
+
+5. day and night from one dot product
+   A cell is lit when dot(sunDirection, up) > 0. up is per-cell and already
+   computed for gravity (doc 13), so a real terminator costs one dot product
+   per cell and no shadow map at all.
+
+   R = 1700 m, circumference 10681 m
+   day length      terminator speed   vs a walking player (1.4 m/s)
+     10 min          17.80 m/s   12.7x faster -- dawn overtakes you
+     20 min           8.90 m/s   6.4x faster -- dawn overtakes you
+     1 hour           2.97 m/s   2.1x faster -- dawn overtakes you
+     2.12 h           1.40 m/s   1.0x faster -- dawn overtakes you
+    6 hours           0.49 m/s   2.8x slower -- you can outrun it
+   24 hours           0.12 m/s   11.3x slower -- you can outrun it
+
+   The terminator moves at exactly walking pace when the day lasts
+   2.12 hours -- which is doc 06's circumnavigation time, by construction.
+   That is the natural anchor: pick the day length in units of "how long it
+   takes to walk around", and you have chosen whether players can chase sunset.
+
+   Twilight, taken as 12deg of sun elevation:
+   band width on the ground: 356 m  (3.3% of the circumference)
+   duration with a 20 min   day: 40 s
+   duration with a 2.12 h   day: 4.2 min
+   duration with a 24 hours day: 48.0 min
+   Twilight duration is a fixed FRACTION of the day and does not depend on
+   the planet's size at all -- it is an angle, not a distance.
+
+6. long shadows meet a short horizon
+   Shadow length is h / tan(elevation). On a 1700 m planet the ground horizon
+   from a 1.7 m eye is only 76 m (doc 13), so near sunrise a shadow
+   runs off the edge of the visible world.
+
+   sun elevation   shadow of a 10 m tower   past the 76 m horizon?
+           45deg                     10 m   no
+           20deg                     27 m   no
+           10deg                     57 m   no
+            5deg                    114 m   yes
+            2deg                    286 m   yes
+            1deg                    573 m   yes
+   So a shadow-casting scheme only ever has to reach about 76 m before the
+   curvature hides the rest. The small planet bounds the shadow budget the
+   same way it bounds the render budget.
+
+7. re-lighting after one block changes
+   Worst case is removing a block that was blocking a full-strength light:
+   the flood fill can touch every cell within 15 steps, 7,471 of them.
+   In practice the fill stops at solid cells, and doc 14 already measured
+   that real terrain is mostly solid below the surface.
+
+   light range   cells possibly touched   vs a cube world
+             4                      189 1.465x
+             8                    1,241 1.490x
+            15                    7,471 1.497x
+   Shortening the light range is the cheapest lever: cost grows as the cube
+   of it. Range 8 costs 83% less than range 15.
 ```
 
 ## `lookup.js`
@@ -556,4 +670,4 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
 
 ---
 
-_14 scripts. Every number above is reproduced by running them._
+_15 scripts. Every number above is reproduced by running them._
