@@ -67,7 +67,9 @@ Violating any of these breaks the design. They are not tunable.
 | visible cells at eye height | `≈ 21,000` | 84k triangles, D 11, R 1700 m — a FLOOR | `mesh.js` |
 | range to a peak of height h | `R·acos(R/(R+1.7)) + R·acos(R/(R+h))` | 60 m hill → 521 m, 47× the cells | `volume.js` |
 | triangles per cell, real terrain | `4.0` flat → `9.5` at 120 m relief | saturates; merging absorbs relief | `volume.js` |
-| cave face multiplier | `7–10×` | enclosed, so no draw cost | `volume.js` |
+| density-term face cost | `≈10×`, mostly roughening | caves need gradient > 1 | `volume.js` |
+| multi-span columns with caves | `8–24%` | what the seam rule must handle | `volume.js` |
+| holes at a LOD seam | `1041` naive, `961` skirted, `0` seam-owned | over 385 rim columns | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
 
 ## Established results
@@ -108,6 +110,18 @@ Violating any of these breaks the design. They are not tunable.
   cheaper to generate.
 - Cave geometry is culled **by enclosure, never by simplification**. It costs
   build time and memory, not draw time.
+- The density term only carves **enclosed** voids when its noise gradient
+  (amplitude / feature size) exceeds 1 — the bias grows 1 per metre of depth
+  (`volume.js`). Raising `strength` without raising frequency buys a rougher
+  surface and a 10x face bill and **zero caves**. Caves are what create
+  multi-span columns (8-24% of them); rough surfaces do not.
+- **A skirt does not close a cave mouth** (`seam.js`). At a LOD boundary a skirt
+  closes the surface slit and ~1% of cave mouths; 99% sit deeper than it reaches,
+  because a skirt hangs downward and a cave mouth is a horizontal hole. One skirt
+  per span is NOT the fix. The finer chunk must **own the seam**: emit a face
+  wherever its solidity differs from the coarse neighbour's, both directions,
+  costing 2.7 faces and one height-field evaluation per rim column. Keep the
+  skirt too, as cover for the frames after a neighbour changes level.
 - LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
   seams come from terrain sampled at two spacings, not from geometry; skirts one

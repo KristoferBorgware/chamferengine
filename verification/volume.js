@@ -98,47 +98,56 @@ console.log('   raw side faces explode with relief, but each unbroken run collap
 console.log('   ONE quad, so the triangle count barely moves. Vertical merging is what');
 console.log('   keeps a volume affordable -- without it this table is the cost.');
 
-// ---- 3. caves: interior surface a heightfield never has --------------------
-// doc 08's density field: solid where (surfaceRadius - |p|) + noise*strength > 0
-console.log('\n3. adding doc 08\'s DENSITY FIELD term: (surfaceRadius - |p|) + noise3D*strength');
-console.log('   64 layers deep, 30 m of relief');
-console.log('   carve   solid cells   exposed faces   faces/column   vs no carving   air pockets');
+// ---- 3. caves: interior surface a height field never has -------------------
+// doc 08's density field: solid where (surfaceRadius - |p|) + noise3D*strength > 0.
+// The bias term grows 1 per metre of depth, so ENCLOSED voids need the noise
+// gradient (amplitude / feature size) to beat that. A low frequency only
+// roughens the surface; it never carves.
+console.log("\n3. adding doc 08's DENSITY FIELD term: (surfaceRadius - |p|) + noise3D*strength");
+console.log('   64 layers under 30 m of relief. Feature size = R/freq, and enclosed');
+console.log('   voids need amplitude/feature > 1 -- otherwise the bias term always wins.');
+console.log('   freq  strength  feature  gradient   cave cells   spans/column   faces/column');
 const LAYERS=64;
-const sub=patch.slice(0, 1200);              // keep the volume walk quick
+const sub=patch.slice(0, 1200);
 const subSet=new Set(sub);
-let flatFaces=0;
-for (const strength of [0, 8, 16, 26, 40]){
+function carve(freq, strength){
   const solid=new Map();
   for (const v of sub){
     const dir=g.pts[v], surf=R + 30*fbm(dir,6,5), col=new Uint8Array(LAYERS);
     for (let y=0;y<LAYERS;y++){
       const r=surf - y*BLK;
-      const dens=(surf-r) + (strength ? strength*fbm(mul(dir,r/R),40,4) : 0);
-      col[y] = (r<=surf && dens>=0) ? 1 : 0;
+      const dens=(surf-r) + (strength ? strength*fbm(mul(dir,r/R),freq,4) : 0);
+      col[y] = dens>=0 ? 1 : 0;
     }
     solid.set(v,col);
   }
+  return solid;
+}
+for (const [freq,strength] of [[40,0],[40,26],[140,26],[220,26],[140,40]]){
+  const solid=carve(freq,strength);
   const at=(v,y)=> y<0 ? 0 : y>=LAYERS ? 1 : (solid.get(v)?.[y] ?? 1);
-  let cells=0, faces=0, pockets=0;
+  let faces=0, caveCells=0, spans=0;
   for (const v of sub){
+    let prev=0;
     for (let y=0;y<LAYERS;y++){
-      if (!at(v,y)) continue;
-      cells++;
-      if (!at(v,y-1)) faces++;                       // upward
-      if (!at(v,y+1)) faces++;                       // downward
+      const me=at(v,y);
+      if (me && !prev) spans++;                    // start of a solid run
+      prev=me;
+      if (!me){ if (y>0 && at(v,y-1)) caveCells++; continue; }   // air under rock
+      if (!at(v,y-1)) faces++;
+      if (!at(v,y+1)) faces++;
       for (const w of g.nb[v]) if (subSet.has(w) && !at(w,y)) faces++;
     }
-    // an air cell with solid above it is inside a cave, not open sky
-    for (let y=1;y<LAYERS;y++) if (!at(v,y) && at(v,y-1)) pockets++;
   }
-  if (!strength) flatFaces = faces;
-  console.log(`   ${String(strength).padStart(5)} ${cells.toLocaleString('en-US').padStart(13)}`
-    +` ${faces.toLocaleString('en-US').padStart(15)} ${(faces/sub.length).toFixed(1).padStart(14)}`
-    +` ${(faces/flatFaces).toFixed(2).padStart(16)}x ${pockets.toLocaleString('en-US').padStart(12)}`);
+  const A=strength*0.5, L=R/freq;
+  console.log(`   ${String(freq).padStart(4)} ${String(strength).padStart(9)}`
+    +` ${L.toFixed(1).padStart(8)}m ${(A/L).toFixed(2).padStart(9)}`
+    +` ${caveCells.toLocaleString('en-US').padStart(12)} ${(spans/sub.length).toFixed(3).padStart(14)}`
+    +` ${(faces/sub.length).toFixed(1).padStart(14)}`);
 }
-console.log('   the density field multiplies the face count of the SAME chunk several times,');
-console.log('   and none of it is visible from outside -- it only renders once a player');
-console.log('   has opened a way in.');
+console.log('   freq 40 carves nothing at all -- gradient 0.31, the bias always wins.');
+console.log('   Only the high-frequency rows make real voids, and those are what drive');
+console.log('   both the face count and the multi-span columns the skirt has to handle.');
 
 // ---- 4. what LOD does to a cave -------------------------------------------
 // LOD resamples the terrain function at a coarser spacing. A feature narrower

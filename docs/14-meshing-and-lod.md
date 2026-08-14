@@ -84,29 +84,42 @@ So the working number is **4 triangles per cell on flat ground, about 9 on
 mountainous ground**. Vertical merging is not a nice-to-have — without it the raw
 face column is the cost, and it is five times worse.
 
-### Caves
+### Caves — and a warning about the density term
 
-The density field from [doc 08](08-terrain-generation.md) carves interior voids,
-and every void wall is exposed surface that a height field never has.
+The density field from [doc 08](08-terrain-generation.md) is
+`(surfaceRadius − |p|) + noise3D(p) × strength`. The bias term grows by 1 per
+metre of depth, so **enclosed voids only form when the noise gradient beats
+it** — amplitude divided by feature size must exceed 1. Turn the strength up
+without raising the frequency and you do not get caves; you get a rougher
+surface and a much larger bill for it.
 
 > **[verified]** `verification/volume.js`, 64 layers under 30 m of relief.
+> Feature size is `R / frequency`.
 >
-> | Carve strength | Exposed faces / column | vs no carving |
-> |---|---|---|
-> | 0 | 1.0 | 1.00× |
-> | 8 | 4.3 | 4.28× |
-> | 16 | 6.9 | 6.92× |
-> | 26 | 10.1 | 10.05× |
-> | 40 | 14.4 | 14.43× |
+> | Freq | Strength | Feature | Gradient | Cave cells | Spans/column | Faces/column |
+> |---|---|---|---|---|---|---|
+> | 40 | 0 | 42.5 m | 0.00 | 0 | 1.000 | 1.0 |
+> | 40 | 26 | 42.5 m | 0.31 | **0** | 1.000 | 10.1 |
+> | 140 | 26 | 12.1 m | 1.07 | 64 | 1.084 | 12.0 |
+> | 220 | 26 | 7.7 m | 1.68 | 186 | 1.243 | 11.6 |
+> | 140 | 40 | 12.1 m | 1.65 | 185 | 1.242 | 17.5 |
 
-A realistic carve multiplies the chunk's face count **seven to ten times**. That
-is the largest single number in this document — and almost all of it is
-**invisible**. Cave walls are enclosed by definition; nothing outside the rock
-can see them until a player opens a way in.
+Two things to take from that table.
 
-**The rule: cull interior geometry by enclosure, never by simplification.** It
-costs build time and memory, not draw time. And it must never be handed to the
-LOD system, for the reason in the next section.
+**Most of the density term's cost is not caves.** Going from no carving to
+strength 26 at low frequency multiplies faces **10×** while carving **zero**
+voids — all of it is surface roughening, which section 2 already accounts for.
+Real caves add only about another 20% on top.
+
+**Caves are what create multi-span columns.** With genuine voids, 8% to 24% of
+columns hold more than one separate slab of rock. On flat or merely rough
+terrain every column is a single span. That distinction is what the chunk
+boundary rules below have to cope with.
+
+Cave surface is still **invisible** — enclosed by definition, nothing outside
+the rock can see it until a player opens a way in. **Cull interior geometry by
+enclosure, never by simplification.** It costs build time and memory, not draw
+time, and it must never be handed to the LOD system.
 
 ---
 
@@ -318,6 +331,65 @@ and a stitching scheme has to enumerate the cases. A skirt does not care what th
 neighbour chose. It is also the only option that survives a chunk being remeshed
 after an edit while its neighbour is not.
 
+### But a skirt only closes the surface, and a volume has more than one
+
+That covers a height field, where every rim column has exactly one slab of rock
+and therefore one surface to hang from. Under a density field, 8–24% of columns
+have several — and a skirt cannot reach the others, because **a skirt hangs
+downward and a cave mouth is a horizontal hole in the boundary plane.**
+
+The failure is specific. A cave in the fine chunk runs up to the rim. The coarse
+neighbour ran the height-field term only, so it is solid rock at that depth — but
+it does not know a cave is there, so it emits no face; and the fine chunk assumes
+its own generator continues past the rim, so it emits none either. Nobody draws
+the wall, and you can see through the rock into the void.
+
+> **[verified]** `verification/seam.js` builds a real rim — full density field on
+> the fine side, height field one level coarser on the other — and scores three
+> policies over 385 rim columns:
+>
+> | Policy | Holes left |
+> |---|---|
+> | Each side trusts its own generator past the rim | 1,041 |
+> | The same, plus a skirt one coarse cell deep | **961** |
+> | The finer chunk owns the seam | **0** |
+>
+> The skirt closes every one of the 72 surface-slit layers and **8 of 969 cave
+> mouths**. At a 2 m coarse cell, **99% of cave mouths sit deeper than the skirt
+> reaches**; the deepest is 15 layers below the surface.
+
+**More skirts are not the answer.** One skirt per span was the obvious guess and
+it is wrong: extra skirts hang down into rock from ledges that were never the
+problem, and still do not cover a horizontal hole.
+
+### The finer chunk owns the seam
+
+The rule that does work:
+
+> At a boundary where the neighbour is coarser, the **finer** chunk emits a face
+> wherever its own solidity differs from the coarse neighbour's — in both
+> directions. Its rock facing the neighbour's air, *and* the neighbour's rock
+> facing its own caves. The coarser chunk emits nothing at that rim.
+
+It needs one height-field evaluation per rim column to learn where the coarse
+neighbour put its surface, which is the cheapest query in the generator.
+
+> **[verified]** `verification/seam.js` — **zero holes**, at every coarse cell
+> size tested, for **2.70 boundary faces per rim column** plus that one
+> evaluation. Against the ~12 faces per column the chunk already emits, it is
+> noise.
+
+At a boundary where both sides are at the *same* level the rule costs nothing at
+all: both ran the same generator on the same grid, so there are no disagreements
+to draw and it degenerates to emitting nothing.
+
+**Keep the skirt as well.** Seam ownership is exact but needs the chunk to know
+its neighbours' levels, so a chunk must be remeshed when a neighbour changes
+level. The skirt needs no such knowledge, costs 2 triangles per rim column, and
+covers the most visible failure — the surface slit — during the frames between a
+neighbour changing level and this chunk catching up. One is correctness, the
+other is insurance.
+
 ---
 
 ## Pentagons
@@ -355,7 +427,8 @@ both already on the table:
    76 m ground horizon.
 4. **The density term**, restricted to a band around the surface and to
    full-detail chunks only. This is where caves, overhangs and most of the
-   triangle count arrive at once.
+   triangle count arrive at once — and where **seam ownership** becomes
+   necessary, because until there are caves there is nothing a skirt misses.
 5. **Cap merging**, only for high-altitude shells, bounded to a 37 m patch.
 
 Steps 1–3 are a working planet you can fly over. Step 4 is the one that turns it
@@ -379,10 +452,6 @@ the generator and the easiest to get wrong.
   what that costs when a player mines one cell. Sharpened by the generation
   numbers above: rebuilding a near chunk means re-running the density term over
   the band, which is the expensive path.
-- **Overhangs versus skirts.** A skirt assumes the chunk rim has *one* boundary
-  height to hang from. Under a density field a column can have several separate
-  solid spans, so the rim is a set of intervals, not a line. Probably one skirt
-  per span, but it is unverified and the count matters at chunk borders.
 - **Where the density band should sit** when the surface itself is 60 m of
   relief — a band that follows `surfaceRadius` is not the same shape as a band
   at fixed depth, and floating islands sit outside both.

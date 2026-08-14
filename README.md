@@ -118,6 +118,7 @@ node verification/scale.js     # cell counts and spacings per level
 node verification/frame.js     # holonomy == enclosed area; the 720° in two forms
 node verification/mesh.js      # 2 verts / 4 tris per cell; sag, seams, LOD budget
 node verification/volume.js    # relief, caves, and what noise generation costs
+node verification/seam.js      # a skirt does not close a cave mouth; what does
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.

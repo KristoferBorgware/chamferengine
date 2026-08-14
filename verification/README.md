@@ -175,13 +175,40 @@ relief, caves, and the noise generator behind them.
 2. **Relief barely moves the triangle count.** Raw side faces climb 20× from flat
    to 120 m of relief, but each unbroken run merges to one quad, so triangles go
    only **4.00 → 9.48 per cell** and then saturate.
-3. **Caves multiply exposed faces 7–10×** at a realistic carve strength — the
-   biggest number in doc 14, and all of it enclosed and invisible until opened.
+3. **The density term's cost is mostly not caves.** At low frequency it
+   multiplies faces **10×** while carving **zero** enclosed voids — that is
+   surface roughening. Enclosed voids need noise gradient > 1 (the bias grows
+   1 per metre of depth) and add only ~20% more, but they are what produces
+   multi-span columns: 8–24% of them.
 4. **Coarse levels cannot hold small features.** A 3 m cave is gone by level 10,
    a 10 m canyon by level 8. Interior geometry must be culled, never simplified.
 5. **Generation cost by generator and level.** The density term is **51×** the
    height term over a full crust, **26×** restricted to a band. Running height
    field only on far chunks makes a LOD-2 chunk **~330× cheaper** to generate.
+
+**Used in:** [doc 14](../docs/14-meshing-and-lod.md)
+
+---
+
+## `seam.js` — chunk boundaries with caves on one side
+
+Builds a real rim — full density field on the fine side, height-field term one
+level coarser on the other — and scores what each boundary policy leaves open.
+
+**Verifies:**
+
+1. **Trusting your own generator past the rim leaves 1,041 holes** over 385 rim
+   columns. Neither side emits the wall, because each believes the terrain simply
+   continues.
+2. **A skirt closes the surface slit and almost nothing else.** All 72
+   surface-slit layers, but only **8 of 969 cave mouths** — at a 2 m coarse cell
+   **99% sit deeper than the skirt reaches**, the deepest 15 layers down. A skirt
+   hangs downward; a cave mouth is a horizontal hole. More skirts do not help.
+3. **Seam ownership leaves zero holes.** The finer chunk emits a face wherever
+   its solidity differs from the coarse neighbour's, in both directions, for
+   **2.70 boundary faces per rim column** plus one height-field evaluation per
+   column. At equal levels the rule costs nothing, since there is nothing to
+   disagree about.
 
 **Used in:** [doc 14](../docs/14-meshing-and-lod.md)
 
