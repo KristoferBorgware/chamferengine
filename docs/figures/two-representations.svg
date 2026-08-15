@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 278" width="470" height="278">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-big" x="20" y="30">in memory: a chunk</text>
+  <text class="cf-d" x="20" y="48">a palette, plus one small index per cell</text>
+  <rect class="cf-af" x="20" y="64" width="104" height="19" rx="3"/><text class="cf-c" x="26" y="78">0  air</text><rect class="cf-af" x="20" y="86" width="104" height="19" rx="3"/><text class="cf-c" x="26" y="100">1  stone</text><rect class="cf-af" x="20" y="108" width="104" height="19" rx="3"/><text class="cf-c" x="26" y="122">2  dirt</text><rect class="cf-af" x="20" y="130" width="104" height="19" rx="3"/><text class="cf-c" x="26" y="144">3  grass</text><rect class="cf-fill" x="20" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="27" y="182">1</text><rect class="cf-fill" x="44" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="51" y="182">1</text><rect class="cf-fill" x="68" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="75" y="182">2</text><rect class="cf-fill" x="92" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="99" y="182">3</text><rect class="cf-fill" x="116" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="123" y="182">1</text><rect class="cf-fill" x="140" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="147" y="182">1</text><rect class="cf-fill" x="164" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="171" y="182">1</text><rect class="cf-fill" x="188" y="168" width="21" height="19" rx="3"/><text class="cf-c" x="195" y="182">2</text><rect class="cf-fill" x="20" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="27" y="204">3</text><rect class="cf-fill" x="44" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="51" y="204">3</text><rect class="cf-fill" x="68" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="75" y="204">1</text><rect class="cf-fill" x="92" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="99" y="204">0</text><rect class="cf-fill" x="116" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="123" y="204">1</text><rect class="cf-fill" x="140" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="147" y="204">2</text><rect class="cf-fill" x="164" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="171" y="204">2</text><rect class="cf-fill" x="188" y="190" width="21" height="19" rx="3"/><text class="cf-c" x="195" y="204">3</text><rect class="cf-fill" x="20" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="27" y="226">0</text><rect class="cf-fill" x="44" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="51" y="226">0</text><rect class="cf-fill" x="68" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="75" y="226">1</text><rect class="cf-fill" x="92" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="99" y="226">1</text><rect class="cf-fill" x="116" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="123" y="226">1</text><rect class="cf-fill" x="140" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="147" y="226">3</text><rect class="cf-fill" x="164" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="171" y="226">2</text><rect class="cf-fill" x="188" y="212" width="21" height="19" rx="3"/><text class="cf-c" x="195" y="226">1</text>
+  <text class="cf-d" x="20" y="242">4 states &#8594; 2 bits a cell</text>
+  <text class="cf-d" x="20" y="258">8.8 KB for 35,904 cells</text>
+  <path class="cf-l" d="M232 20L232 266"/>
+  <text class="cf-big" x="252" y="30">on disk: the edits</text>
+  <text class="cf-d" x="252" y="48">one record each, nothing else stored</text>
+  <rect class="cf-gf" x="252" y="64" width="118" height="24" rx="4"/><text class="cf-c" x="258" y="80">0x1A4F…</text><rect class="cf-af" x="374" y="64" width="76" height="24" rx="4"/><text class="cf-c" x="380" y="80">stone</text><rect class="cf-gf" x="252" y="94" width="118" height="24" rx="4"/><text class="cf-c" x="258" y="110">0x1A52…</text><rect class="cf-af" x="374" y="94" width="76" height="24" rx="4"/><text class="cf-c" x="380" y="110">air</text><rect class="cf-gf" x="252" y="124" width="118" height="24" rx="4"/><text class="cf-c" x="258" y="140">0x2B07…</text><rect class="cf-af" x="374" y="124" width="76" height="24" rx="4"/><text class="cf-c" x="380" y="140">grass</text>
+  <text class="cf-gd" x="252" y="176">which cell</text>
+  <text class="cf-c" x="374" y="176">what now</text>
+  <text class="cf-d" x="252" y="208">29 + 10 + 16 = 55 bits,</text>
+  <text class="cf-d" x="252" y="224">one 64-bit word each</text>
+  <text class="cf-d" x="252" y="248">untouched cells are</text>
+  <text class="cf-d" x="252" y="264">simply absent</text>
+</svg>

@@ -2338,6 +2338,50 @@ const prof = (() => {
 }
 
 // =============================================================================
+// 27 — the same block state, in the two shapes it takes: a palette in memory,
+// a list of edit records on disk.
+// =============================================================================
+{
+  const PAL = ['air','stone','dirt','grass'];
+  const idx = [1,1,2,3,1,1,1,2,3,3,1,0,1,2,2,3,0,0,1,1,1,3,2,1];
+  let pal = '', cells = '';
+  PAL.forEach((n,k) => {
+    pal += `<rect class="cf-af" x="20" y="${64+k*22}" width="104" height="19" rx="3"/>`
+        +  `<text class="cf-c" x="26" y="${78+k*22}">${k}  ${n}</text>`;
+  });
+  idx.forEach((v,k) => {
+    const x = 20 + (k % 8) * 24, y = 168 + Math.floor(k/8) * 22;
+    cells += `<rect class="cf-fill" x="${x}" y="${y}" width="21" height="19" rx="3"/>`
+          +  `<text class="cf-c" x="${x+7}" y="${y+14}">${v}</text>`;
+  });
+  let recs = '';
+  const rows = [['0x1A4F…','stone'], ['0x1A52…','air'], ['0x2B07…','grass']];
+  rows.forEach(([a,b],k) => {
+    const y = 64 + k*30;
+    recs += `<rect class="cf-gf" x="252" y="${y}" width="118" height="24" rx="4"/>`
+         +  `<text class="cf-c" x="258" y="${y+16}">${a}</text>`
+         +  `<rect class="cf-af" x="374" y="${y}" width="76" height="24" rx="4"/>`
+         +  `<text class="cf-c" x="380" y="${y+16}">${b}</text>`;
+  });
+  made.push(svg('two-representations', 470, 278, `
+  <text class="cf-big" x="20" y="30">in memory: a chunk</text>
+  <text class="cf-d" x="20" y="48">a palette, plus one small index per cell</text>
+  ${pal}${cells}
+  <text class="cf-d" x="20" y="242">4 states &#8594; 2 bits a cell</text>
+  <text class="cf-d" x="20" y="258">8.8 KB for 35,904 cells</text>
+  <path class="cf-l" d="M232 20L232 266"/>
+  <text class="cf-big" x="252" y="30">on disk: the edits</text>
+  <text class="cf-d" x="252" y="48">one record each, nothing else stored</text>
+  ${recs}
+  <text class="cf-gd" x="252" y="176">which cell</text>
+  <text class="cf-c" x="374" y="176">what now</text>
+  <text class="cf-d" x="252" y="208">29 + 10 + 16 = 55 bits,</text>
+  <text class="cf-d" x="252" y="224">one 64-bit word each</text>
+  <text class="cf-d" x="252" y="248">untouched cells are</text>
+  <text class="cf-d" x="252" y="264">simply absent</text>`));
+}
+
+// =============================================================================
 // 27 — hashing a block name into 12 bits collides almost immediately. The curve
 // is the birthday probability, evaluated here rather than sketched.
 // =============================================================================

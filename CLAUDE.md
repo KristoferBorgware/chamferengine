@@ -282,6 +282,8 @@ Violating any of these breaks the design. They are not tunable.
 | type-name hash | **unusable** — 50% collision at `75` types | registry in the save instead | `blockstate.js` |
 | delta record | `29 + 10 + 16` = `55` of 64 bits | planet implied by the file; 9 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
+| side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
+| entity rekey rate | every `0.71` s = 21 frames | why entities are NOT keyed by cell | `blockstate.js` |
 | planet field | `12` bits = 4,096 worlds | word is 51 of 64 at D11 | `id.js` |
 | code space used | `≈ 31.25%` | `20/32` faces × `1/2` triangle-in-square | — |
 | adjacency table | 60 entries, 180 bytes | 20 faces × 3 edges × 3 bytes | `adj.js` |
@@ -605,6 +607,12 @@ Violating any of these breaks the design. They are not tunable.
   Minecraft's yardstick of 1,159 types and ~26,000 states (quoted from the wiki,
   not measured) the fixed split spends **40–68%** of the type space where a flat
   index spends 40%. It fits with headroom; the space was never the argument.
+  **The side table** is cell ID → a tagged, length-prefixed blob; which types
+  carry one is a property of the **type**, so no flag bit is spent. **Entities do
+  not belong in it** — doc 07 lists them there, but a mob changes cell every
+  **0.71 s**, so keying one by cell is a rekey every 21 frames forever. Entities
+  are held per chunk by containment; the cell a mob stands in is a query, not its
+  address.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

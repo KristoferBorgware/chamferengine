@@ -187,6 +187,37 @@ verdict
    75 types, and a collision corrupts every save holding both blocks.
    A loaded chunk still stores a per-chunk palette, so the common case is
    2 bits a cell. One edit is 55 of 64 bits with 9 spare to grow into.
+
+7. the side table, and the word in it that does not belong
+   things that do not fit in 16 bits, and what they cost:
+     a chest, 27 slots                ~ 108 bytes
+     a sign, 4 lines of text          ~ 240 bytes
+     a furnace: 3 slots + progress    ~  16 bytes
+     a spawner                        ~  32 bytes
+
+   how often a cell has side data, for a heavily built chunk:
+     containers   share of the chunk   side table size
+             10               0.028%           1.2 KB
+            100               0.279%          11.7 KB
+           1000               2.785%         117.2 KB
+   a chunk is 35,904 cells; a thousand containers in one chunk is
+   an absurd build and still costs 117 KB. The side table is not a
+   scaling problem, so it should be designed for clarity, not density.
+
+   HOW A BLOCK KNOWS IT HAS SIDE DATA: it does not need a flag bit.
+   The TYPE says so -- a chest always has contents, stone never does --
+   and the registry already carries a line per type. So no bit is spent,
+   and the spare rotation bit stays spare.
+
+   AND ENTITIES DO NOT BELONG IN IT. Doc 07 lists "chests, signs,
+   entities, keyed by the same cellID". The first two are attached to a
+   cell and stay there. An entity has a POSITION and it MOVES, so keying
+   one by cell means rewriting its key every time it walks:
+     a mob at 1.4 m/s over 1 m cells changes cell every 0.71 s
+     at 30 Hz that is a rekey every 21 frames, per entity, forever
+   Entities are a separate list, held per chunk by CONTAINMENT, not a
+   map keyed by cell. That is one word out of place in doc 07 and it
+   would have become a hash table nobody could keep still.
 ```
 
 ## `boundary.js`
@@ -804,7 +835,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 308M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1650,7 +1681,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 552 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 577 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

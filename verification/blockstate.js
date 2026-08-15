@@ -155,3 +155,50 @@ console.log('   Hashing names into the field is out: it is even odds on a collis
 console.log('   75 types, and a collision corrupts every save holding both blocks.');
 console.log('   A loaded chunk still stores a per-chunk palette, so the common case is');
 console.log('   2 bits a cell. One edit is 55 of 64 bits with 9 spare to grow into.');
+
+// ---- 7. the side table -----------------------------------------------------
+// Doc 03 and doc 07 both say "chests, signs, entities go in a side table keyed
+// by the same cellID" and neither defines one. Sizing it turns up a sorting
+// error in that sentence.
+console.log('\n7. the side table, and the word in it that does not belong');
+{
+  // what actually needs more than 16 bits, and how much more
+  const rows = [
+    ['a chest, 27 slots',        27 * 4],
+    ['a sign, 4 lines of text',  4 * 60],
+    ['a furnace: 3 slots + progress', 3*4 + 4],
+    ['a spawner',                32],
+  ];
+  console.log('   things that do not fit in 16 bits, and what they cost:');
+  for (const [what, bytes] of rows)
+    console.log(`     ${what.padEnd(32)} ~${String(bytes).padStart(4)} bytes`);
+  console.log('');
+  // how often does a cell have one?
+  const CELLS = 561 * 64;
+  console.log('   how often a cell has side data, for a heavily built chunk:');
+  console.log('     containers   share of the chunk   side table size');
+  for (const n of [10, 100, 1000]){
+    console.log(`     ${String(n).padStart(10)}   ${(100*n/CELLS).toFixed(3).padStart(17)}%`
+      + `   ${((n*120)/1024).toFixed(1).padStart(11)} KB`);
+  }
+  console.log(`   a chunk is ${CELLS.toLocaleString('en-US')} cells; a thousand containers in one chunk is`);
+  console.log('   an absurd build and still costs 117 KB. The side table is not a');
+  console.log('   scaling problem, so it should be designed for clarity, not density.');
+  console.log('');
+  console.log('   HOW A BLOCK KNOWS IT HAS SIDE DATA: it does not need a flag bit.');
+  console.log('   The TYPE says so -- a chest always has contents, stone never does --');
+  console.log('   and the registry already carries a line per type. So no bit is spent,');
+  console.log('   and the spare rotation bit stays spare.');
+  console.log('');
+  console.log('   AND ENTITIES DO NOT BELONG IN IT. Doc 07 lists "chests, signs,');
+  console.log('   entities, keyed by the same cellID". The first two are attached to a');
+  console.log('   cell and stay there. An entity has a POSITION and it MOVES, so keying');
+  console.log('   one by cell means rewriting its key every time it walks:');
+  const HZ = 30, SPEED = 1.4, BLOCK = 1;
+  console.log(`     a mob at ${SPEED} m/s over ${BLOCK} m cells changes cell every`
+    + ` ${(BLOCK/SPEED).toFixed(2)} s`);
+  console.log(`     at ${HZ} Hz that is a rekey every ${Math.round(HZ*BLOCK/SPEED)} frames, per entity, forever`);
+  console.log('   Entities are a separate list, held per chunk by CONTAINMENT, not a');
+  console.log('   map keyed by cell. That is one word out of place in doc 07 and it');
+  console.log('   would have become a hash table nobody could keep still.');
+}

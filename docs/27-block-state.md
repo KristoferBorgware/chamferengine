@@ -119,6 +119,44 @@ Three rules, and they are the entire specification:
 That last point is the trade in one line: a few kilobytes of list buys certainty
 where a hash offers only good odds.
 
+### Why a name at all — why not just number them?
+
+This is the obvious next question, and the honest answer is that **you already
+are**. The registry *is* `1: stone, 2: dirt, 3: grass`. Nothing is hashed and
+nothing is computed; the number is a position in a list, exactly as it would be
+if you wrote a plain enum in the source and never thought about it again.
+
+**The name is not how the number is made. It is how you check the number still
+means what you think.**
+
+A plain numbered list works perfectly right up until one of these:
+
+- **A type is deleted.** Everything after it shifts down one, and every existing
+  save now reads dirt where it meant stone.
+- **A type is inserted in the middle**, for tidiness. Same thing.
+- **Two people add a block on separate branches.** Both take 48. The merge is
+  clean and one of the saves is now wrong.
+- **Mods, later.** If load order decides numbers, the same save opens differently
+  depending on what is installed.
+
+The **append only, never reuse** rule above already prevents all four. The names
+are what catches it when somebody breaks that rule anyway, which eventually
+somebody does. What they buy:
+
+1. **A save that explains itself.** Open an old file and it says
+   `47 = chamfer:oak_planks`. Without that, 47 is just 47.
+2. **A migration path.** If the list does get reordered, old save and new build
+   can be matched **by name** and the numbers rewritten. Without names that is
+   unrecoverable.
+3. **A refusal instead of corruption.** A registry that disagrees with the build
+   can be detected and the load refused, rather than silently turning someone's
+   house into dirt.
+
+So: write the enum in code, exactly as you would anyway. Write the names into the
+save beside it. They are never read during play — the numbers do all the work.
+They sit there for the day something goes wrong. **It is insurance, not
+machinery.**
+
 ---
 
 ## Two representations, and only one of them is on disk
@@ -126,6 +164,13 @@ where a hash offers only good odds.
 It is worth being explicit that "block state" appears in two different shapes,
 because [doc 07](07-data-structures.md) introduces both and never says they are
 the same thing seen twice.
+
+![Two panels: a chunk holding a four-entry palette and a grid of small indices, beside a short list of edit records each pairing a cell with a new state](figures/two-representations.svg)
+
+*Left, in memory: the chunk names the four states it actually contains, and every
+cell is a 2-bit index into that list. Right, on disk: nothing but the cells a
+player changed, one 64-bit record each. **The left one is bounded by view
+distance and the right one is the only thing that grows.***
 
 **In a loaded chunk** it is a **palette** — the handful of states this chunk
 actually contains — plus a packed index per cell. The width is decided by that
@@ -152,6 +197,49 @@ repeating it a few million times buys nothing — the same argument
 And the 9 spare bits are not padding. They are room to widen block state later
 **without changing the record size**, which is what a version number in the
 header is for.
+
+---
+
+## The side table, and the word in it that does not belong
+
+A chest has contents. A sign has text. Neither fits in 16 bits, and
+[doc 03](03-addressing.md) and [doc 07](07-data-structures.md) both say they go
+in a "side table keyed by the same cell ID" without either of them defining one.
+
+**The side table is a map from cell ID to a variable-length blob**, stored beside
+the delta store and keyed the same way. Each entry is a tag, a length, and a
+payload — the length so an unknown tag can be skipped rather than crashing an
+older build.
+
+It does not need to be clever, because it is never big:
+
+> **[verified]** `verification/blockstate.js`, section 7. A 27-slot chest is
+> about **108 bytes**, a four-line sign about **240**. A chunk holds
+> **35,904 cells**; a thousand containers in one chunk is an absurd build and
+> still costs **117 KB**. Design it for clarity, not density.
+
+**How does a block know it has side data? It does not need a flag bit.** The
+*type* says so — a chest always has contents, stone never does — and the registry
+already carries a line per type. So no bit is spent on it, and
+[doc 19](19-directional-blocks.md)'s spare rotation bit stays spare.
+
+### Entities are not side-table data, and doc 07 says they are
+
+[Doc 07](07-data-structures.md) lists the side table as "chests, signs,
+**entities**, keyed by the same cellID". The first two belong. The third does not,
+and the reason is that an entity **moves**.
+
+A chest is attached to a cell and stays there for the life of the world. A mob has
+a *position*. Key it by cell and the key is wrong as soon as it takes a step:
+
+> **[verified]** Same section. A mob at 1.4 m/s across 1 m cells changes cell
+> every **0.71 s** — at 30 Hz that is a rekey every **21 frames**, per entity,
+> forever.
+
+That is a hash table nobody could keep still, and it would have been built from
+one word in a list. **Entities are a separate store, held per chunk by
+containment rather than keyed by cell.** Which cell a mob happens to be standing
+in is a query, not its address.
 
 ---
 
@@ -211,9 +299,10 @@ spare bits in the edit record are where the extra type bits come from.
 
 ## Still open
 
-- **The side table.** Chests, signs, entities — named in three documents and
-  defined in none, including this one. It needs a format, and it needs one before
-  the first container exists.
+- **What a slot in a chest actually is.** The side table has a shape now — tag,
+  length, payload — but the payload for an inventory needs an item format, and
+  items are a bigger question than blocks: they stack, they carry durability, and
+  they are not addressed by cell at all.
 - **What happens when a save names a type this build does not have.** Keep the
   number and render a placeholder, or refuse to load? Minecraft's answer is a
   placeholder, which preserves the world if a mod comes back later.
@@ -241,6 +330,17 @@ spare bits in the edit record are where the extra type bits come from.
   record per edit, 9 bits spare to grow into.
 - **The planet is not in the record**, because the file already knows which planet
   it is.
+- **A name is insurance, not machinery.** The registry *is* `1: stone, 2: dirt`;
+  the names are never read during play. They exist so an old save can still say
+  what its own numbers meant, and so a mismatch is a refusal rather than turning
+  someone's house into dirt.
+- **The side table is a cell ID to a tagged blob** — a chest is ~108 bytes, a
+  sign ~240, and a thousand of them in one chunk is 117 KB. **Which types have
+  side data is a property of the type**, so no flag bit is spent.
+- **Entities are not side-table data.** Doc 07 says they are. A mob moves cell
+  every **0.71 s**, so keying it by cell is a rekey every 21 frames forever —
+  entities are held per chunk by containment, and the cell a mob stands in is a
+  query, not its address.
 - **Rotation stays a mask, not a lookup**, because doc 19 reads it per block per
   frame. The 16-variant cap is **not** cheap, though: at Minecraft's ~26,000
   states it spends **40–68%** of the type space against a flat index's 40%. It
