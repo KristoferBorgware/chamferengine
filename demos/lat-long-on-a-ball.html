@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Latitude, longitude, and the poles on two pentagons</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 4px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:13px; color:#8d97ab; padding:2px 16px 8px; }
+  .cap { padding:4px 16px 8px; font-size:13.5px; line-height:1.55; color:#b9c0d0; min-height:56px; }
+  .cap b { color:#fff; }
+  .stage { flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px;
+           touch-action:none; }
+  svg { width:100%; height:auto; max-height:100%; cursor:grab; }
+  svg:active { cursor:grabbing; }
+  .readout { display:flex; gap:16px; flex-wrap:wrap; padding:4px 16px 10px;
+             font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px; }
+  .readout div span { color:#8d97ab; }
+  .readout b { color:#7fd4ff; font-weight:650; }
+  .readout .same { color:#5fd8cd; font-weight:650; }
+  .readout .diff { color:#ff8f96; font-weight:650; }
+  .panel { padding:12px 14px 18px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:550; padding:9px 14px; border-radius:9px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+  .spacer { flex:1; }
+  table { border-collapse:collapse; font-size:12.5px;
+          font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  td, th { padding:3px 10px 3px 0; text-align:right; color:#b9c0d0; }
+  th { color:#8d97ab; font-weight:550; }
+  td:first-child, th:first-child { text-align:left; }
+</style>
+</head>
+<body>
+
+<header><h1>Latitude, longitude, and the poles on two pentagons</h1></header>
+<div class="sub">Drag to spin the planet. The crosshair is where you are standing.</div>
+<div class="cap" id="cap"></div>
+
+<div class="readout" id="read"></div>
+<div class="stage"><svg id="svg" viewBox="-170 -170 340 340" aria-label="a globe with a crosshair"></svg></div>
+
+<div class="panel">
+  <button data-d="11" class="on">Small planet · R 1,700 m</button>
+  <button data-d="22">Earth-sized · R 6,371 km</button>
+  <span class="spacer"></span>
+  <table id="tab"></table>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Doc 04's pipeline, exactly as verification/coords.js runs it: nearest face
+// centroid, then barycentric coordinates on that face, then hexRound. A cell is
+// what hexRound says it is -- never a nearest-centre search (invariant 14).
+// ---------------------------------------------------------------------------
+const T = (1 + Math.sqrt(5)) / 2, DEG = 180/Math.PI;
+const norm  = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+const dot   = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const K = Math.sqrt(8*Math.PI/(10*Math.sqrt(3)));
+
+const V0 = [[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],
+            [T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]].map(norm);
+const F0 = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+            [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+const CENT = F0.map(f => norm(f.map(i => V0[i]).reduce((a,b) => a.map((x,k) => x+b[k]))));
+
+const bary = (A,B,C,d) => {
+  const det = dot(A, cross(B,C));
+  const wa = dot(d, cross(B,C))/det, wb = dot(A, cross(d,C))/det, wc = dot(A, cross(B,d))/det;
+  const s = wa+wb+wc; return [wa/s, wb/s, wc/s];
+};
+function cellOf(d, n){
+  let best=0, bd=-2;
+  for (let i=0;i<20;i++){ const t=dot(d,CENT[i]); if (t>bd){ bd=t; best=i; } }
+  const [A,B,C] = F0[best].map(i => V0[i]);
+  const w = bary(A,B,C,d);
+  const ka=w[0]*n, kb=w[1]*n, kc=w[2]*n;
+  let ra=Math.round(ka), rb=Math.round(kb), rc=Math.round(kc);
+  const da=Math.abs(ra-ka), db=Math.abs(rb-kb), dc=Math.abs(rc-kc);
+  if (da>db && da>dc) ra = n-rb-rc; else if (db>dc) rb = n-ra-rc; else rc = n-ra-rb;
+  return `${best}:${ra},${rb},${rc}`;
+}
+
+// The axis runs through an antipodal pentagon pair, so both poles are pentagons
+// and no seed can move them (doc 20).
+const N = V0[0], E0 = norm(cross(N, V0[1])), E1 = cross(N, E0);
+const toLL = d => [Math.asin(Math.max(-1,Math.min(1,dot(d,N))))*DEG,
+                   Math.atan2(dot(d,E1), dot(d,E0))*DEG];
+const fromLL = (la,lo) => { const cl = Math.cos(la/DEG);
+  return norm([N[0]*Math.sin(la/DEG) + (E0[0]*Math.cos(lo/DEG) + E1[0]*Math.sin(lo/DEG))*cl,
+               N[1]*Math.sin(la/DEG) + (E0[1]*Math.cos(lo/DEG) + E1[1]*Math.sin(lo/DEG))*cl,
+               N[2]*Math.sin(la/DEG) + (E0[2]*Math.cos(lo/DEG) + E1[2]*Math.sin(lo/DEG))*cl]); };
+
+// ---------------------------------------------------------------------------
+// How often does a rounded readout name the right cell? Measured on load.
+// ---------------------------------------------------------------------------
+function survey(n){
+  let seed = 12345;
+  const rnd = () => { seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; };
+  const hits = [0,0,0];
+  const TRIALS = 4000;
+  for (let t=0;t<TRIALS;t++){
+    const z = 2*rnd()-1, ph = 2*Math.PI*rnd(), rr = Math.sqrt(1-z*z);
+    const d = [rr*Math.cos(ph), rr*Math.sin(ph), z];
+    const exact = cellOf(d, n);
+    const [la,lo] = toLL(d);
+    for (let k=1;k<=3;k++){
+      const p = 10**k;
+      if (cellOf(fromLL(Math.round(la*p)/p, Math.round(lo*p)/p), n) === exact) hits[k-1]++;
+    }
+  }
+  return hits.map(h => 100*h/TRIALS);
+}
+
+// ---------------------------------------------------------------------------
+// State and drawing
+// ---------------------------------------------------------------------------
+let D = 11, n = 1 << D, lat = 22, lon = 34, RATE = null;
+const RPX = 132;
+
+function recompute(){ n = 2**D; RATE = survey(n); }
+
+function draw(){
+  const c = fromLL(lat, lon);
+  const east = norm(cross(N, c)), north = cross(c, east);
+  const proj = p => [dot(p,east)*RPX, -dot(p,north)*RPX];
+  const front = p => dot(p,c) > 0;
+  const S = [];
+  S.push(`<circle cx="0" cy="0" r="${RPX}" fill="#101725" stroke="#2a3245" stroke-width="1.5"/>`);
+
+  // graticule every 30 degrees
+  const arc = pts2 => {
+    let d = '', pen = false;
+    for (const p of pts2){
+      if (!front(p)){ pen = false; continue; }
+      const [x,y] = proj(p);
+      d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1); pen = true;
+    }
+    return d;
+  };
+  for (let la=-60; la<=60; la+=30){
+    const pts2 = []; for (let lo=-180; lo<=180; lo+=3) pts2.push(fromLL(la,lo));
+    S.push(`<path d="${arc(pts2)}" fill="none" stroke="#243048" stroke-width="1"/>`);
+  }
+  for (let lo=-180; lo<180; lo+=30){
+    const pts2 = []; for (let la=-90; la<=90; la+=3) pts2.push(fromLL(la,lo));
+    S.push(`<path d="${arc(pts2)}" fill="none" stroke="#243048" stroke-width="1"/>`);
+  }
+  // the equator, drawn stronger
+  { const pts2 = []; for (let lo=-180; lo<=180; lo+=3) pts2.push(fromLL(0,lo));
+    S.push(`<path d="${arc(pts2)}" fill="none" stroke="#33415f" stroke-width="1.8"/>`); }
+
+  // the twelve pentagons -- four latitudes, in every world that will ever exist
+  for (const v of V0){
+    if (!front(v)) continue;
+    const [x,y] = proj(v), [la] = toLL(v);
+    const pole = Math.abs(Math.abs(la) - 90) < 1e-6;
+    S.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${pole?6:4.5}"
+             fill="#f2545b" stroke="#0b0e14" stroke-width="1.2"/>`);
+  }
+
+  // where you are
+  S.push(`<circle cx="0" cy="0" r="9" fill="none" stroke="#ffd166" stroke-width="2"/>`);
+  S.push(`<path d="M-15 0L-4 0M4 0L15 0M0 -15L0 -4M0 4L0 15" stroke="#ffd166" stroke-width="2"/>`);
+  document.getElementById('svg').innerHTML = S.join('');
+
+  // the readout, and whether two decimals would have named this cell
+  const exact = cellOf(c, n);
+  const r2 = cellOf(fromLL(Math.round(lat*100)/100, Math.round(lon*100)/100), n);
+  const ok = r2 === exact;
+  document.getElementById('read').innerHTML =
+    `<div><span>lat</span> <b>${lat.toFixed(2)}°</b></div>
+     <div><span>long</span> <b>${lon.toFixed(2)}°</b></div>
+     <div><span>cell</span> <b>${exact}</b></div>
+     <div><span>from the rounded readout</span>
+       <span class="${ok?'same':'diff'}">${ok ? 'same cell' : 'a neighbour'}</span></div>`;
+
+  const perCell = (K / 2**D) * DEG;
+  document.getElementById('tab').innerHTML =
+    `<tr><th>decimals</th><th>1</th><th>2</th><th>3</th></tr>
+     <tr><td>names the same cell</td>${RATE.map(r => `<td>${r.toFixed(1)}%</td>`).join('')}</tr>`;
+  document.getElementById('cap').innerHTML =
+    `A cell is <b>${perCell < 0.001 ? perCell.toExponential(2) : perCell.toFixed(4)}°</b> across on this
+     planet, so the smaller the world the <b>fewer</b> digits a readout needs — the opposite of the
+     instinct. But a rounded readout is <b>not an identity</b>: it lands in the right cell most of
+     the time and a neighbour the rest, which is why you <b>show lat/long and send the cell ID</b>.
+     The red dots are the twelve pentagons; the axis runs through an antipodal pair, so
+     <b>both poles are pentagons</b> and the other ten sit at exactly ±26.565°.`;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('svg');
+let drag = null;
+svg.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, y: ev.clientY, lat, lon };
+  svg.setPointerCapture(ev.pointerId); });
+svg.addEventListener('pointermove', ev => {
+  if (!drag) return; ev.preventDefault();
+  const r = svg.getBoundingClientRect(), k = 150 / r.width;
+  lat = Math.max(-90, Math.min(90, drag.lat + (ev.clientY - drag.y)*k));
+  lon = ((drag.lon - (ev.clientX - drag.x)*k + 180) % 360 + 360) % 360 - 180;
+  draw();
+});
+svg.addEventListener('pointerup',    () => drag = null);
+svg.addEventListener('pointercancel',() => drag = null);
+document.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-d]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); D = +b.dataset.d; recompute(); draw();
+}));
+recompute(); draw();
+</script>
+</body>
+</html>

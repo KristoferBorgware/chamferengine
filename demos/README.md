@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-four self-contained HTML files. No build step, no `npm install`, no server
+Twenty-six self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -146,6 +146,23 @@ chunk (palette and packed indices), and the lookup path with its hit/miss branch
 
 ---
 
+### [`lat-long-on-a-ball.html`](lat-long-on-a-ball.html)
+Spin the planet; the crosshair is where you are standing. The readout gives
+latitude, longitude and the exact cell, and says whether **the rounded readout
+would have named the same cell** — which is the point of doc 20. It usually does
+and sometimes does not, so you show lat/long and send the ID.
+
+The lookup is doc 04's real pipeline (nearest face centroid → barycentric →
+`hexRound`), not a nearest-centre search, and the survey in the corner is measured
+live on load: two decimals name the right cell **87.5%** of the time, three
+**98.8%** — the same numbers `coords.js` reports. The red dots are the twelve
+pentagons. The axis runs through an antipodal pair, so both poles are pentagons
+and the other ten sit at exactly ±26.565°, in every world that will ever exist.
+
+**Docs:** [20 — Player-facing coordinates](../docs/20-player-coordinates.md)
+
+---
+
 ## Terrain
 
 ### [`planet-slice-noise.html`](planet-slice-noise.html)
@@ -176,6 +193,27 @@ The lake cells are the same cells in both modes. The slope does not change what
 holds water; it changes whether "flow to your lowest neighbour" has an answer.
 
 **Docs:** [21 — Rivers, erosion and continents](../docs/21-rivers-and-erosion.md)
+
+---
+
+### [`dam-a-river.html`](dam-a-river.html)
+Click to build a wall across a river. **Nothing happens** — the river runs where
+it ran, the water above stays, the water below keeps flowing. That is doc 24's
+decision and doc 25's rule seen from the inside: water is a block type, and blocks
+do not move.
+
+Then press the other button and the demo runs the simulation that is *not* being
+built, so you can see what was given up. Two things show up immediately. **One
+block dams nothing**, because a cell has six ways out and the water goes round —
+it takes a wall that spans the channel before anything floods at all. And when it
+does flood, the amber cells are only the upstream half: every cell below the wall
+has lost its flow, and terrain bounds the lake while nothing bounds the deficit.
+
+Level 7, the same resolution `verification/edits.js` measures at — at level 6 a
+river is one cell wide and one block really would dam it.
+
+**Docs:** [24 — Player edits and global processes](../docs/24-edits-and-global-processes.md),
+[21 — Rivers, erosion and continents](../docs/21-rivers-and-erosion.md)
 
 ---
 
