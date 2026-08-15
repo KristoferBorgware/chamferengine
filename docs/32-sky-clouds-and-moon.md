@@ -246,12 +246,85 @@ parallax is free.**
 
 ---
 
+## The atmosphere is the one thing that does not scale
+
+The section above found that the moon **survives** shrinking: scaling preserves
+angles, so a faithfully scaled moon still subtends 0.52°. Atmospheric scattering
+is the mirror image, and earlier drafts of this document got it wrong — they filed
+sky colour under *"art direction and no measurement here constrains it"* and moved
+on. A measurement does constrain it, and quite hard.
+
+**Optical depth is not scale-free.** It is *(a property of air)* × *(a path
+length)* — and when the planet shrinks, only the path shrinks. Air does not
+become more scattering because the world got smaller.
+
+> **[verified]** `verification/sky.js`, section 6. Rayleigh optical depth for blue
+> light, where Earth's zenith value is `0.241` and anything below about `0.01`
+> reads as a black sky:
+>
+> | World | Scale height | Zenith `τ` | Horizon `τ` |
+> |---|---|---|---|
+> | Earth | 8,500 m | **0.241** | 9.3 |
+> | this planet, air scaled with it | **2.27 m** | **6.4e−5** | 2.5e−3 |
+>
+> The scaled sky is **3,748× too thin.**
+
+That is four orders of magnitude, not a tuning problem. **Stand on this planet
+with correctly scaled air and the daytime sky is black with stars in it**, because
+there is barely any air between you and space — which is exactly right, and
+exactly not a game.
+
+So the two ends of the sky fail in opposite directions and land in the same place:
+
+```
+angular size    is scale-free       so the moon survives, and is still too small
+optical depth   is not              so the sky does not survive at all
+```
+
+**Both are art assets**, for opposite reasons. Getting an Earth-like sky here
+would take air **3,748× denser than real air**, or an atmosphere **8,500 m tall on
+a 1,700 m planet** — five times the radius, a pebble suspended inside a ball of
+air. Neither is a physical planet, so neither is a defensible default.
+
+**And the horizon glow has no geometry to work with either.** On Earth the sky is
+bright at the horizon because the grazing sightline crosses **329 km** of air, for
+`τ` = 9.3 — saturated. Here that path is **88 m**, and
+[doc 13](13-gravity-and-orientation.md)'s ground horizon is only **76 m** away in
+any case. There is no long sightline to accumulate colour along, whatever the air
+is made of.
+
+### So the model runs on a planet that does not exist
+
+The recommendation is specific rather than a shrug. **Run whichever scattering
+model you like on a fictional Earth-sized atmosphere.** Preetham, Hosek–Wilkie and
+Bruneton are all parameterised by planet radius and scale height — feed them
+Earth's, not this planet's. **Only the sun direction comes from the real world**,
+and [doc 16](16-lighting.md) already has it as a world vector.
+
+That composes with the skybox rather than fighting it. The gradient depends on the
+angle between the view direction and the sun, and **both of those are real** — so
+sunsets move when the player walks, on the same 2.12 h clock as everything else in
+this document, over an atmosphere that is entirely invented.
+
+*(One thing that does survive: the sky is blue and the sunset red because of the
+`λ⁻⁴` law — zenith `τ` of `0.241` for blue against `0.041` for red. That ratio is a
+property of light and air, not of any planet, so it needs no fiction.)*
+
+---
+
 ## Still open
 
-- **Everything about how they look.** This document settles where the sky is, how
-  clouds are addressed and moved, and how big the moon can be. It says nothing
-  about colour, gradients, cloud shading, star fields, or a sunset. That is art
-  direction and no measurement here constrains it.
+- **Most of how they look.** This document settles where the sky is, how clouds
+  are addressed and moved, how big the moon can be, and **that the atmosphere must
+  be invented** — but not what any of it looks like. Cloud shading, star fields,
+  the actual palette: art direction, and nothing here constrains those.
+  *(An earlier draft put sky colour in this bullet too. It does not belong: the
+  scattering section above is a measurement, not a preference.)*
+- **Which scattering model, and its fictional parameters.** "Feed it Earth's
+  radius and scale height" is a starting point, not a decision. Whether the
+  atmosphere should visibly thin as a player climbs — 600 m is **35%** of this
+  planet's radius, and would be nothing on Earth — is a choice nobody has made,
+  and the answer depends on the fiction rather than on physics.
 - **The day length.** Section 2 gives the number where a player and the sun draw
   level — **2.12 h** — and does not pick a side of it.
 - **Cloud shadows on the ground.** [Doc 16](16-lighting.md)'s sky light is per
@@ -291,6 +364,13 @@ parallax is free.**
   wind, and of the two obvious fields only **rigid rotation is divergence-free**
   (`3.3e−12` against `0.9988`), so only it carries a pattern without stretching it.
   Calm patches are **0.5%** of the surface, at the poles.
+- **The atmosphere is the one sky feature that does not survive scaling.** Optical
+  depth is a path through a medium and only the path shrinks, so correctly scaled
+  air is **3,748× too thin** and the daytime sky is **black**. Run the scattering
+  model on a **fictional Earth-sized atmosphere** and take only the sun direction
+  from the real world.
 - **The moon's angular size is an art decision** — a faithfully scaled one is
   still **0.52°** — but its **distance is not**: walking round the planet shifts
   it **1.9°** against the stars, and a skybox-painted moon loses that.
+- **Angles scale and path lengths do not**, which is why the moon survives
+  shrinking and the sky does not — and why both end up invented anyway.

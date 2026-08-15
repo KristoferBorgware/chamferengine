@@ -111,9 +111,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 394 ns in this JavaScript
+   one solidity(cell) query: 389 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 257 ns)
+    upper bound -- Rust is about 253 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -127,9 +127,9 @@ authority.js -- what the server must know, per cheat, and what it costs
 
      players   queries/s   CPU of one core
           10          20      0.0008%
-         100         200      0.0079%
-        1000        2000      0.0788%
-       10000       20000      0.7885%
+         100         200      0.0078%
+        1000        2000      0.0777%
+       10000       20000      0.7773%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1120,7 +1120,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1361,8 +1361,8 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.69 ms   3.82x
-         JS, one object a vertex   7.26 ms   40.34x
+         JS, typed arrays          0.69 ms   3.81x
+         JS, one object a vertex   7.85 ms   43.59x
 
        THE LANGUAGE GAP IS 3.8x. THE LAYOUT GAP IS 11x.
        Choosing the data layout matters roughly an order of magnitude more
@@ -2251,7 +2251,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 987 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 921 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2576,6 +2576,56 @@ sky.js -- the skybox, clouds and the moon on a 1,700 m planet
    pinned to the stars in a way players read as cheap without knowing why.
    Draw it as an object at a finite distance and the parallax is free.
 
+6. atmospheric scattering: the one sky feature that does not scale
+   Rayleigh optical depth -- how much air the light actually crosses.
+   tau below about 0.01 is a black sky; Earth's zenith blue is 0.24.
+
+   world                       scale height   zenith tau   horizon tau
+   Earth                           8,500 m        0.241           9.3
+   this planet, air scaled too      2.27 m       6.4e-5        2.5e-3
+
+   THE SCALED SKY IS 3748x TOO THIN, and that is not a tuning problem --
+   it is four orders of magnitude. Standing on this planet with correctly
+   scaled air, the daytime sky is BLACK with stars in it, because there is
+   barely any air between you and space.
+
+   Section 5 found the opposite for the moon, and the pair is the point:
+
+     ANGULAR SIZE is scale-free      scale the moon and it looks identical
+     OPTICAL DEPTH is not            it is (a property of air) x (a path),
+                                     and only the path shrinks
+
+   So the two ends of the sky fail in opposite directions and land in the
+   same place: BOTH ARE ART ASSETS. The moon because scaling preserves a
+   number that was never dramatic; the sky because scaling destroys it.
+
+   What it would take to get an Earth-like sky here, pick either:
+     air 3748x denser than real air, or
+     an atmosphere 8,500 m tall on a 1700 m planet -- 5.0x the radius,
+     which is a pebble suspended inside a ball of air.
+   Neither is a physical planet, so neither is a defensible default.
+
+   AND THE HORIZON GLOW HAS NO GEOMETRY TO WORK WITH EITHER. On Earth the
+   sky is bright at the horizon because the grazing path is 329 km of air,
+   giving tau 9.3 -- saturated. Here that path is 88 m, and doc 13's
+   ground horizon is only 76 m away in any case. There is no long sightline
+   to accumulate colour along, whatever the air is made of.
+
+   THE RECOMMENDATION IS THEREFORE SPECIFIC: run whichever scattering model
+   you like on a FICTIONAL EARTH-SIZED ATMOSPHERE. Preetham, Hosek-Wilkie and
+   Bruneton are all parameterised by planet radius and scale height -- feed
+   them Earth's, not this planet's. Only the SUN DIRECTION comes from the
+   real world, and doc 16 already has it as a world vector.
+
+   That composes correctly with section 1 rather than fighting it: the
+   gradient depends on the angle between the view direction and the sun, and
+   both are real. So sunsets move when the player walks -- the same 2.12 h
+   effect -- on an atmosphere that is entirely invented.
+
+   (Red for contrast: zenith tau 0.042 on Earth against 0.241 for blue.
+   That ratio is what makes the sky blue and the sunset red, and it is a
+   property of the lambda^-4 law rather than of any planet, so it survives.)
+
 verdict
    All three are cosmetic, all three are PRESENTATION (doc 29) and therefore
    client-only, free to differ between machines, and allowed the
@@ -2596,6 +2646,12 @@ verdict
    RATE -- rotate the sample point before the lookup -- because the hairy ball
    theorem forbids a uniform wind and rigid rotation puts the two calm points
    at the poles, where an atmosphere puts them anyway.
+
+   ATMOSPHERE: the ONE sky feature that does not survive scaling. Optical
+   depth is a path length through a medium, and only the path shrinks, so
+   correctly scaled air is 3,748x too thin and the daytime sky is BLACK.
+   Run the scattering model on a FICTIONAL EARTH-SIZED atmosphere and take
+   only the sun direction from the real world.
 
    MOON: a scaled-down real moon is still 0.52 deg, so the size is an art
    decision and the moon is a painted disc. Give it a finite distance anyway:

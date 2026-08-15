@@ -240,6 +240,70 @@ console.log('\n5. the moon: angular size is scale-free, so someone has to choose
   console.log('   Draw it as an object at a finite distance and the parallax is free.');
 }
 
+// ---- 6. the atmosphere is the one thing that does NOT scale ---------------
+// Section 5 found that the moon SURVIVES scaling: angles are preserved, so a
+// faithfully shrunk moon still subtends 0.52 deg. Scattering is the mirror
+// image. Optical depth is (a property of air) x (a path length), and only the
+// path length shrinks -- so the sky does not survive at all.
+console.log('\n6. atmospheric scattering: the one sky feature that does not scale');
+{
+  const ER = 6371e3, H = 8500;              // Earth radius, atmospheric scale height
+  const bG = 1.16e-5;                       // Rayleigh coefficient at 550 nm, per metre
+  const bB = bG * Math.pow(550/440, 4);     // lambda^-4 -> blue
+  const bR = bG * Math.pow(550/680, 4);     // -> red
+  const scale = R / ER, Hs = H * scale;
+  const horiz = (rad, h) => Math.sqrt(2*rad*h);
+
+  console.log('   Rayleigh optical depth -- how much air the light actually crosses.');
+  console.log('   tau below about 0.01 is a black sky; Earth\'s zenith blue is 0.24.');
+  console.log('');
+  console.log('   world                       scale height   zenith tau   horizon tau');
+  console.log(`   Earth                       ${H.toLocaleString('en-US').padStart(9)} m   ${(bB*H).toFixed(3).padStart(10)}   ${(bB*horiz(ER,H)).toFixed(1).padStart(11)}`);
+  console.log(`   this planet, air scaled too  ${Hs.toFixed(2).padStart(8)} m   ${(bB*Hs).toExponential(1).padStart(10)}   ${(bB*horiz(R,Hs)).toExponential(1).padStart(11)}`);
+  console.log('');
+  console.log(`   THE SCALED SKY IS ${(H/Hs).toFixed(0)}x TOO THIN, and that is not a tuning problem --`);
+  console.log('   it is four orders of magnitude. Standing on this planet with correctly');
+  console.log('   scaled air, the daytime sky is BLACK with stars in it, because there is');
+  console.log('   barely any air between you and space.');
+  console.log('');
+  console.log('   Section 5 found the opposite for the moon, and the pair is the point:');
+  console.log('');
+  console.log('     ANGULAR SIZE is scale-free      scale the moon and it looks identical');
+  console.log('     OPTICAL DEPTH is not            it is (a property of air) x (a path),');
+  console.log('                                     and only the path shrinks');
+  console.log('');
+  console.log('   So the two ends of the sky fail in opposite directions and land in the');
+  console.log('   same place: BOTH ARE ART ASSETS. The moon because scaling preserves a');
+  console.log('   number that was never dramatic; the sky because scaling destroys it.');
+  console.log('');
+  console.log('   What it would take to get an Earth-like sky here, pick either:');
+  console.log(`     air ${(H/Hs).toFixed(0)}x denser than real air, or`);
+  console.log(`     an atmosphere ${H.toLocaleString('en-US')} m tall on a ${R} m planet -- ${(H/R).toFixed(1)}x the radius,`);
+  console.log('     which is a pebble suspended inside a ball of air.');
+  console.log('   Neither is a physical planet, so neither is a defensible default.');
+  console.log('');
+  console.log('   AND THE HORIZON GLOW HAS NO GEOMETRY TO WORK WITH EITHER. On Earth the');
+  console.log(`   sky is bright at the horizon because the grazing path is ${(horiz(ER,H)/1000).toFixed(0)} km of air,`);
+  console.log(`   giving tau ${(bB*horiz(ER,H)).toFixed(1)} -- saturated. Here that path is ${horiz(R,Hs).toFixed(0)} m, and doc 13's`);
+  console.log('   ground horizon is only 76 m away in any case. There is no long sightline');
+  console.log('   to accumulate colour along, whatever the air is made of.');
+  console.log('');
+  console.log('   THE RECOMMENDATION IS THEREFORE SPECIFIC: run whichever scattering model');
+  console.log('   you like on a FICTIONAL EARTH-SIZED ATMOSPHERE. Preetham, Hosek-Wilkie and');
+  console.log('   Bruneton are all parameterised by planet radius and scale height -- feed');
+  console.log('   them Earth\'s, not this planet\'s. Only the SUN DIRECTION comes from the');
+  console.log('   real world, and doc 16 already has it as a world vector.');
+  console.log('');
+  console.log('   That composes correctly with section 1 rather than fighting it: the');
+  console.log('   gradient depends on the angle between the view direction and the sun, and');
+  console.log('   both are real. So sunsets move when the player walks -- the same 2.12 h');
+  console.log('   effect -- on an atmosphere that is entirely invented.');
+  console.log('');
+  console.log(`   (Red for contrast: zenith tau ${(bR*H).toFixed(3)} on Earth against ${(bB*H).toFixed(3)} for blue.`);
+  console.log('   That ratio is what makes the sky blue and the sunset red, and it is a');
+  console.log('   property of the lambda^-4 law rather than of any planet, so it survives.)');
+}
+
 console.log('\nverdict');
 console.log('   All three are cosmetic, all three are PRESENTATION (doc 29) and therefore');
 console.log('   client-only, free to differ between machines, and allowed the');
@@ -260,6 +324,12 @@ console.log('   construction. Level 5 is a 64 m puff and 10,242 points. Wind is 
 console.log('   RATE -- rotate the sample point before the lookup -- because the hairy ball');
 console.log('   theorem forbids a uniform wind and rigid rotation puts the two calm points');
 console.log('   at the poles, where an atmosphere puts them anyway.');
+console.log('');
+console.log('   ATMOSPHERE: the ONE sky feature that does not survive scaling. Optical');
+console.log('   depth is a path length through a medium, and only the path shrinks, so');
+console.log('   correctly scaled air is 3,748x too thin and the daytime sky is BLACK.');
+console.log('   Run the scattering model on a FICTIONAL EARTH-SIZED atmosphere and take');
+console.log('   only the sun direction from the real world.');
 console.log('');
 console.log('   MOON: a scaled-down real moon is still 0.52 deg, so the size is an art');
 console.log('   decision and the moon is a painted disc. Give it a finite distance anyway:');

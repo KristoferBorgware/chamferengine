@@ -792,7 +792,18 @@ Violating any of these breaks the design. They are not tunable.
   poles. **The moon's angular size is an art decision** — a faithfully scaled real
   moon is still **0.52°**, because scaling preserves angles — **but its distance is
   not**: walking round the planet shifts it **1.9°** against the stars, so a
-  skybox-painted moon loses the parallax. All three are **presentation**, so they
+  skybox-painted moon loses the parallax. **And the atmosphere is the one sky
+  feature that does NOT survive scaling**: optical depth is *(a property of air) ×
+  (a path length)* and only the path shrinks, so correctly scaled air gives a
+  zenith `τ` of **6.4e-5** against Earth's **0.241** — **3,748× too thin**, a
+  **black** daytime sky. An Earth-like sky needs air 3,748× denser or an atmosphere
+  **5× the planet's radius**; neither is physical, so **run the scattering model on
+  a fictional Earth-sized atmosphere** (Preetham / Hosek-Wilkie / Bruneton are all
+  parameterised by radius and scale height — feed them Earth's) and take **only the
+  sun direction** from the real world. Horizon glow has no geometry either: Earth's
+  grazing path is **329 km** of air, here it is **88 m** and doc 13's horizon is
+  76 m. **Angles scale and path lengths do not** — which is why the moon survives
+  shrinking and the sky does not, and why both are invented anyway. All three are **presentation**, so they
   are client-only and may spend the transcendentals doc 23 forbids in the
   generator; doc 32 is the first place that freedom is actually used.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
