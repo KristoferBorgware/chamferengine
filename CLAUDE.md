@@ -191,7 +191,7 @@ script owns its numbers.
 | [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
 | [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
 | [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
-| [29](docs/29-what-runs-where.md) | the three layers; what crosses the wire; Rust → wasm | `language.js` |
+| [29](docs/29-what-runs-where.md) | the four parts; the server generates nothing; Rust → wasm | `language.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -671,6 +671,21 @@ Violating any of these breaks the design. They are not tunable.
   **free** where Rust needs `wasm32` — and the margin is thin enough to say so.
   These are wall-clock timings; read ratios, and note nothing measures a whole
   frame because there is no mesher yet.
+- **The server never generates terrain, and determinism is a client-to-client
+  rule** (doc 29). Doc 22 already said it — "a player position per client, and
+  nothing else" — and doc 29's first draft drew the server holding the whole core
+  anyway. Four parts, not three: **addressing** (both sides, unavoidably — the
+  delta store is keyed by cell ID and interest is a dot product against a chunk
+  direction, so integer shuffling plus one blend and one `normalize`, and **no
+  noise**); **generation** (client only, and the only part that must be
+  bit-identical); **presentation** (client only, deliberately free, and where every
+  transcendental lives — which is why doc 23's rule costs nothing); **world state**
+  (server, the only thing that grows). The two machines that must agree are **two
+  players**, and they exchange no bytes about terrain — so the requirement survives
+  any server shape. **Open, and the biggest question left about the system's
+  shape:** whether the server also generates in order to validate edits and
+  simulate mobs. Doc 22 assumes it does not; that is a trusted-client trade nobody
+  has actually made.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

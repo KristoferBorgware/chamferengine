@@ -40,21 +40,42 @@ reasons rather than four if the answer is no.
 
 ---
 
-## Three layers, and the line between them is drawn by determinism
+## The server never generates terrain, and that is doc 22's own claim
 
-The engine divides in one natural place, and it is not a matter of taste:
-[doc 23](23-determinism.md) demands that some code produce identical bits on
-every machine, and the rest is free. That demand *is* the architecture.
+Earlier drafts of this document drew the server and the client each holding the
+same core, terrain generation included. That is wrong, and
+[doc 22](22-multiplayer-interest.md) says so in one line of its own summary:
 
-![Server and client side by side, both holding the same four core boxes, with the delta store and interest on the server only and meshing and rendering on the client only, and only edits and positions crossing between them](figures/what-runs-where.svg)
+> **The server needs a player position per client**, which it has anyway, **and
+> nothing else.**
 
-*Both sides hold the same core, and it is the same compiled code, not two
-implementations kept in step. What crosses the wire is **edits and player
-positions and nothing else** — no terrain, and not the 2.5 MB coarse map either,
-because the client rebuilds it from the seed. That is the entire return on doc
-23, drawn as a picture. Single player is this diagram running in one process.*
+Nothing else. The server stores what players changed and works out who to tell.
+It never has an opinion about what the ground looks like, because
+[doc 08](08-terrain-generation.md) means what it says — **terrain is generated,
+not stored** — and a server that generated it would be doing work whose only
+possible consumer is a screen it does not have.
 
-### Layer 1 — the core: must be bit-identical
+![A server holding addressing, the delta store and interest, with two clients below it each holding addressing, generation and presentation, and a gold arrow between the two clients marked same bits](figures/what-runs-where.svg)
+
+*The gold arrow is the one that matters and **no data flows along it**. Two
+clients must agree about the terrain to the bit — one sees a hill where the other
+sees a valley, otherwise — and they never exchange a byte about it. The server
+sits above them routing edits and never joins that conversation at all.*
+
+**So determinism is a client-to-client rule, not a client-to-server one.** Doc 23
+opened with "two computers run the same generator on the same seed" and it turns
+out both of those computers are clients. That makes the requirement *stronger*
+rather than weaker: it holds whatever shape the server takes, because the server
+is not a party to it.
+
+---
+
+## Four parts, not three — and the split is not where it looked
+
+The mistake in the earlier draft was lumping two different things together as
+"the core". They have different homes.
+
+### Addressing — both sides, and unavoidably so
 
 | What | Owned by |
 |---|---|
@@ -62,39 +83,34 @@ because the client rebuilds it from the seed. That is the entire return on doc
 | position → cell, and ID → position | [04](04-position-lookup.md), `hexround.js` |
 | `neighbour(id, k)` and face crossing | [05](05-face-adjacency.md), `neighbour.js` |
 | `rank(q, r)` and chunk ownership | [07](07-data-structures.md), `rank.js` |
+
+The server cannot avoid this, and the reason is small and absolute: **the delta
+store is keyed by cell ID**, and interest is one dot product against a *chunk's*
+direction. You cannot store an edit or route it without doing the arithmetic that
+turns a position into an address.
+
+But notice how little this is. It is integer bit-shuffling plus one barycentric
+blend and one `normalize`. **No noise, no height field, no terrain.**
+
+### Generation — the client, and this is the part that must be bit-identical
+
+| What | Owned by |
+|---|---|
 | the noise function | [08](08-terrain-generation.md), `noise.js` |
 | terrain: the height field and the density term | [08](08-terrain-generation.md), `volume.js` |
 | continents, flow routing, erosion — the coarse map | [21](21-rivers-and-erosion.md), `rivers.js` |
 | the ray walk | [09](09-ray-traversal.md) |
 
-Every one of these is a **pure function of the seed and a position**. No I/O, no
-allocation, no GPU, no clock. That is not a style rule — it is what
-[doc 08](08-terrain-generation.md) means by *terrain is generated, not stored*,
-and it is why `language.js`'s kernel allocates nothing in any of six languages.
+Pure functions of the seed and a position. No I/O, no allocation, no GPU, no
+clock — which is why `language.js`'s kernel allocates nothing in any of seven
+targets.
 
-**This is the layer doc 28's determinism argument was about, and it is the whole
-of it.** Everything below is free to differ between machines.
+This is the layer [doc 28](28-language-and-runtime.md)'s determinism argument was
+about, and it is the whole of it. It is also, as you put it, **part of the client
+and not part of the presentation**: it is deterministic where presentation is
+free, and it produces data rather than pixels.
 
-### Layer 2 — world state: server-authoritative, and the only thing that grows
-
-| What | Owned by |
-|---|---|
-| the delta store: cell ID → block state | [07](07-data-structures.md), [27](27-block-state.md) |
-| the side table: cell ID → a tagged blob | [27](27-block-state.md) |
-| the block registry, in the save | [27](27-block-state.md) |
-| entities, per chunk by containment | [27](27-block-state.md) |
-| interest: who to tell about an edit | [22](22-multiplayer-interest.md), `interest.js` |
-
-This is the mutable half of the world, and it is small: doc 07 calls the delta
-store "the only structure that grows", and ten million player edits are
-[76 MB](07-data-structures.md) before compression.
-
-The split between layers 1 and 2 is the one that makes the whole design work.
-**The server knows what the world would be by running layer 1, and what it
-actually is by applying layer 2 on top.** It never stores the terrain, so there is
-no terrain to send.
-
-### Layer 3 — presentation: client only, and deliberately not deterministic
+### Presentation — the client, and deliberately free
 
 | What | Owned by |
 |---|---|
@@ -105,18 +121,53 @@ no terrain to send.
 | drawing water back to front | [25](25-water.md), `water.js` |
 | lat/long readout, the horizon, bearings | [20](20-player-coordinates.md), `coords.js` |
 
-Doc 23 is explicit that this layer is off the hook:
+Doc 23 grants the GPU freedom to differ; the same freedom covers this whole
+layer, because none of it is ever compared between machines. **It is also where
+every transcendental in the design lives** — the lat/long readout, the horizon,
+the compass — which is exactly why doc 23's rule *"never call a transcendental
+where the result is stored or shared"* costs nothing. The calls are all in the
+layer that shares nothing.
 
-> GPU determinism is a separate question and mostly a non-question. Vertex
-> positions are `float32` and chunk-local, and nothing computed on the GPU feeds
-> back into world state — so it may differ freely.
+### World state — the server, and the only thing that grows
 
-The same freedom covers the whole layer. Two clients may mesh differently, light
-differently and round differently, and nothing breaks, because none of it is ever
-compared. **This is also where every transcendental in the design lives** — the
-lat/long readout, the horizon, the compass — which is exactly why doc 23's rule
-*"never call a transcendental where the result is stored or shared"* costs
-nothing: the calls are all in the layer that shares nothing.
+| What | Owned by |
+|---|---|
+| the delta store: cell ID → block state | [07](07-data-structures.md), [27](27-block-state.md) |
+| the side table: cell ID → a tagged blob | [27](27-block-state.md) |
+| the block registry, in the save | [27](27-block-state.md) |
+| entities, per chunk by containment | [27](27-block-state.md) |
+| interest: who to tell about an edit | [22](22-multiplayer-interest.md), `interest.js` |
+
+Doc 07 calls the delta store "the only structure that grows", and ten million
+player edits are [76 MB](07-data-structures.md) before compression. A client
+keeps a copy of the part it can see; the server keeps all of it and owns it.
+
+---
+
+## The one thing this leaves genuinely open
+
+The picture above is a server that **stores and routes and nothing more**. That
+is what doc 22 describes and it is the cheapest thing that works. It also means
+the server takes a client's word for everything: a client that claims to have
+broken a block inside solid rock a kilometre away cannot be contradicted, because
+the server does not know what the rock looks like.
+
+**That is a trade nobody in this specification has made.**
+
+| | Server stores and routes | Server also generates |
+|---|---|---|
+| what it runs | addressing only | addressing **and** generation |
+| edit validation | trusts the client | can check reach and solidity |
+| mobs and pathfinding ([doc 10](10-pathfinding.md)) | client-side, or absent | server-authoritative |
+| cost | matches doc 22 exactly | the generator runs twice per world |
+| suits | co-op with people you know | a public server |
+
+Nothing in docs 00–27 chooses. Doc 22 assumes the first without arguing for it,
+and doc 10's pathfinding never says whose CPU it runs on. **Doc 29 records the
+first as the working assumption** — it is what doc 22 says, and it is the one you
+can start building — and files the choice as open. The good news is that the
+switch is cheap: the server would link the same generation crate the client
+already has, and change nothing else in this document.
 
 ---
 
@@ -125,9 +176,14 @@ nothing: the calls are all in the layer that shares nothing.
 **All of it, and doc 28's reasoning covers about a fifth of it.** Those are both
 worth saying.
 
-- The **determinism** argument (§1–3 of doc 28) constrains **layer 1 only**.
-- The **layout and allocation** argument (§5) is about **layer 3**, the mesher.
-- **Layer 2** is ordinary data structures with no exotic requirement at all.
+- The **determinism** argument (§1–3 of doc 28) constrains **generation only** —
+  which is client-side, and is the smallest of the four parts.
+- The **layout and allocation** argument (§5) is about **presentation**, the
+  mesher — also client-side.
+- **Addressing** needs wrapping `uint32` and IEEE arithmetic and nothing else.
+- **World state** — the server — is ordinary data structures with no exotic
+  requirement at all. On the working assumption above, **the server is the part
+  of this system with the weakest claim on Rust.**
 
 Writing the whole engine in one language is a practical choice, not a derived
 one. The alternative — a Rust core with a client in something else — is a real
@@ -135,9 +191,11 @@ option, and it costs a foreign-function boundary on the hottest path in the
 design plus two build systems. It buys nothing this specification asks for.
 
 What the layering *does* give you is the honest scope of the risk: **if the
-language choice turns out to be wrong, layer 1 is the part that is expensive to
-move**, because it is the part that must not change behaviour by a single bit.
-Layers 2 and 3 are ordinary code and can be rewritten in anything, any time.
+language choice turns out to be wrong, generation is the part that is expensive to
+move**, because it is the part that may not change behaviour by a single bit.
+Everything else is ordinary code and can be rewritten in anything, any time —
+including the server, which on the working assumption above touches no floating
+point at all beyond one dot product.
 
 ---
 
@@ -147,7 +205,7 @@ If there *is* a browser client, this is what the phrase means.
 
 ### What compiles to both targets unchanged
 
-**Layer 1 does, and it is measured, not assumed.**
+**Addressing and generation both do, and it is measured, not assumed.**
 
 > **[verified]** `verification/language.js`, section 1. The same Rust source
 > compiled to `wasm32-unknown-unknown` and run inside node produces
@@ -159,7 +217,7 @@ the same map, to the bit, as the server that never sent it. And it is not slow �
 on the generator kernel the wasm build runs at about **1.2× native Rust**, which
 is still faster than the same algorithm written in JavaScript.
 
-**Layer 3 mostly does too.** The mesher is buffer building and is pure
+**Presentation mostly does too.** The mesher is buffer building and is pure
 computation. Rendering goes through `wgpu`, which targets WebGPU in the browser
 and Vulkan, Metal or DX12 natively from one source.
 
@@ -182,10 +240,12 @@ amount of work, and it is not free, and doc 28 implied it was.
 
 ### Single player is the same picture in one process
 
-Because the client already contains the core, a single-player game is a server
-instance in the same process with the network replaced by a function call. This
-falls out; nobody has to design it. It is also the reason to keep the layer-1/2
-boundary sharp even before multiplayer exists.
+The client already generates the whole world, so a single-player game is the
+delta store and interest running in the same process with the network replaced by
+a function call. This falls out; nobody has to design it. It is also the reason to
+keep the boundary between generation and world state sharp before multiplayer
+exists — single player is the case where forgetting it costs nothing until the day
+it costs everything.
 
 ---
 
@@ -203,7 +263,13 @@ boundary sharp even before multiplayer exists.
   regenerating it pays that cost on join, and nobody has measured how long it
   takes. If it is slow, "regenerate rather than download" is still right but needs
   a loading screen.
-- **Whether layer 1 should be `no_std`.** It has no reason to allocate, and a
+- **Whether the server validates edits, or trusts the client.** The table above
+  lays out the trade and nothing in docs 00–27 chooses. It decides whether the
+  server links the generator, which is the single biggest question left about the
+  shape of this system.
+- **Where mobs are simulated** ([doc 10](10-pathfinding.md)). Pathfinding never
+  says whose CPU it runs on, and the answer follows the row above.
+- **Whether generation should be `no_std`.** It has no reason to allocate, and a
   `no_std` core compiles to a 1.6 KB wasm module against 1.35 MB with the standard
   library linked in. That is a build-shape question, not a design one, but it is
   the kind that gets much harder to change later.
@@ -218,13 +284,20 @@ boundary sharp even before multiplayer exists.
   regenerates the coarse map, which is a claim about determinism, not deployment.
   Doc 28 read that as a browser and made it the deciding reason; that is
   corrected.
-- **Three layers, and determinism draws the lines.** The **core** must be
-  bit-identical and is pure functions of seed and position. **World state** is
-  server-authoritative and the only thing that grows. **Presentation** is
-  client-only and deliberately free to differ — which is where every
-  transcendental in the design lives, and why doc 23's rule costs nothing.
+- **The server never generates terrain.** Doc 22 already said it — "a player
+  position per client, and nothing else" — and this page had it wrong first time.
+  A server that generated the world would be computing something only a screen
+  could use.
+- **Four parts, not three.** **Addressing** is on both sides and unavoidably so,
+  because the delta store is keyed by cell ID. **Generation** is client-side and
+  is the only part that must be bit-identical. **Presentation** is client-side and
+  deliberately free — which is where every transcendental lives, and why doc 23's
+  rule costs nothing. **World state** is the server, and the only thing that grows.
+- **Determinism is a client-to-client rule**, not a client-to-server one. The two
+  machines that must agree are two players, and they never exchange a byte about
+  the terrain.
 - **The wire carries edits and positions.** No terrain, and not the 2.5 MB coarse
-  map, because both sides run the same core on the same seed.
+  map, because every client rebuilds it from the seed.
 - **Rust → wasm is real and measured**: the same source gives the **identical
   digest**, at about **1.2×** native. What does not port is the platform edge —
   sockets, storage, threads — and that needs a trait with two implementations.

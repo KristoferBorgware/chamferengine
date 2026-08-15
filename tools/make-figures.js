@@ -2795,51 +2795,54 @@ const prof = (() => {
 }
 
 // =============================================================================
-// 29 — what runs where. Both sides hold the same core; the wire carries edits
-// and positions and never terrain, which is what determinism bought.
+// 29 — what runs where. The server holds addressing and the deltas and nothing
+// about terrain; both CLIENTS generate, and the pair that has to agree bit for
+// bit is the two clients — which never exchange a byte about it.
 // =============================================================================
 {
-  const W = 520, CW = 190, LX = 20, RX = W - CW - 20, BH = 20;
+  const W = 520, BH = 20, CW = 198, LX = 20, RX = W - CW - 20;
   const stack = (x, y, rows) => rows.map((r, i) =>
     `<rect class="${r[1]}" x="${x}" y="${y + i*(BH+4)}" width="${CW}" height="${BH}" rx="3"/>`
     + `<text class="cf-c" x="${x+8}" y="${y + i*(BH+4) + 14}">${r[0]}</text>`).join('');
-  const core = [
-    ['ID &#183; position &#8596; cell', 'cf-af'],
-    ['neighbour &#183; rank', 'cf-af'],
-    ['noise &#183; terrain', 'cf-af'],
-    ['the coarse map', 'cf-af'],
+  const client = [
+    ['addressing', 'cf-af'],
+    ['generation &#8212; the terrain', 'cf-gf'],
+    ['mesh &#183; light &#183; render', 'cf-fill'],
   ];
-  const srv = [['the delta store', 'cf-gf'], ['interest &#183; authority', 'cf-gf']];
-  const cli = [['mesh &#183; light &#183; LOD', 'cf-fill'], ['render &#183; input', 'cf-fill']];
-  made.push(svg('what-runs-where', W, 340, `
-  <text class="cf-big" x="${LX}" y="24">server</text>
-  <text class="cf-big" x="${RX}" y="24">client</text>
-  <text class="cf-d" x="${LX}" y="44">one per world</text>
-  <text class="cf-d" x="${RX}" y="44">native, or the same code as wasm</text>
-
-  <text class="cf-c" x="${LX}" y="70">the core &#8212; bit-identical, both sides</text>
-  ${stack(LX, 78, core)}
-  ${stack(RX, 78, core)}
-
-  <text class="cf-gd" x="${LX}" y="196">only here</text>
-  ${stack(LX, 204, srv)}
-  <text class="cf-d" x="${RX}" y="196">only here</text>
-  ${stack(RX, 204, cli)}
-
-  <path class="cf-a" d="M${LX+CW+6} 110 L${RX-6} 110" marker-end="url(#wr)"/>
-  <path class="cf-a" d="M${RX-6} 132 L${LX+CW+6} 132" marker-end="url(#wr)"/>
+  const SY = 48, SW = 300, SX = (W - SW)/2;
+  const srvRows = [['addressing', 'cf-af'], ['the delta store', 'cf-fill'], ['interest', 'cf-fill']];
+  const srv = srvRows.map((r, i) =>
+    `<rect class="${r[1]}" x="${SX}" y="${SY + i*(BH+4)}" width="${SW}" height="${BH}" rx="3"/>`
+    + `<text class="cf-c" x="${SX+8}" y="${SY + i*(BH+4) + 14}">${r[0]}</text>`).join('');
+  const CY = 200;
+  made.push(svg('what-runs-where', W, 396, `
   <defs><marker id="wr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
-  <text class="cf-c" x="${(LX+CW+RX)/2}" y="104" text-anchor="middle">edits</text>
-  <text class="cf-c" x="${(LX+CW+RX)/2}" y="148" text-anchor="middle">position</text>
-  <text class="cf-d" x="${(LX+CW+RX)/2}" y="172" text-anchor="middle">and</text>
-  <text class="cf-d" x="${(LX+CW+RX)/2}" y="186" text-anchor="middle">nothing</text>
-  <text class="cf-d" x="${(LX+CW+RX)/2}" y="200" text-anchor="middle">else</text>
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
+  <marker id="wg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
 
-  <path class="cf-l" d="M${LX} 280L${W-LX} 280"/>
-  <text class="cf-d" x="${LX}" y="302">The terrain never crosses the wire, and neither does the 2.5 MB coarse map:</text>
-  <text class="cf-d" x="${LX}" y="318">both sides run the same core on the same seed and get the same bits. That is</text>
-  <text class="cf-d" x="${LX}" y="334">the whole return on doc 23, and single player is this picture in one process.</text>`));
+  <text class="cf-big" x="${SX}" y="26">server &#8212; stores and routes</text>
+  <text class="cf-d" x="${SX}" y="42">no terrain, ever</text>
+  ${srv}
+
+  <path class="cf-a" d="M${SX+50} ${SY+78} L${LX+CW/2} ${CY-10}" marker-end="url(#wr)"/>
+  <path class="cf-a" d="M${SX+SW-50} ${SY+78} L${RX+CW/2} ${CY-10}" marker-end="url(#wr)"/>
+  <text class="cf-c" x="${W/2}" y="${CY-52}" text-anchor="middle">edits &#183; positions</text>
+  <text class="cf-d" x="${W/2}" y="${CY-36}" text-anchor="middle">and nothing else</text>
+
+  <text class="cf-big" x="${LX}" y="${CY-8}">client A</text>
+  <text class="cf-big" x="${RX}" y="${CY-8}">client B</text>
+  ${stack(LX, CY, client)}
+  ${stack(RX, CY, client)}
+
+  <path class="cf-g" d="M${LX+CW+4} ${CY+34} L${RX-4} ${CY+34}" marker-end="url(#wg)"/>
+  <path class="cf-g" d="M${RX-4} ${CY+34} L${LX+CW+4} ${CY+34}" marker-end="url(#wg)"/>
+  <text class="cf-gd" x="${W/2}" y="${CY+22}" text-anchor="middle">same bits</text>
+
+  <path class="cf-l" d="M${LX} 330L${W-LX} 330"/>
+  <text class="cf-d" x="${LX}" y="352">The gold arrow is the one that matters, and no data flows along it. Two</text>
+  <text class="cf-d" x="${LX}" y="368">clients must agree about terrain to the bit and never exchange a byte about</text>
+  <text class="cf-d" x="${LX}" y="384">it &#8212; so determinism is a client-to-client rule, not a client-to-server one.</text>`));
 }
 
 console.log(`wrote ${made.length} figures to docs/figures/`);
