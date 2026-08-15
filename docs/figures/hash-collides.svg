@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 250" width="470" height="250">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-l" d="M56 44L56 194L386 194"/>
+  <path class="cf-l" d="M56 119.0L386 119.0" stroke-dasharray="3 4"/>
+  <text class="cf-d" x="14" y="123.0">50%</text>
+  <text class="cf-d" x="14" y="50">100%</text>
+  <text class="cf-d" x="42" y="210">0</text>
+  <text class="cf-d" x="362.0" y="210">400</text>
+  <text class="cf-d" x="169" y="226">block types defined</text>
+  <path class="cf-a" d="M56.0 194.0L59.3 193.8M59.3 193.8L62.6 193.0M62.6 193.0L65.9 191.6M65.9 191.6L69.2 189.7M69.2 189.7L72.5 187.2M72.5 187.2L75.8 184.2M75.8 184.2L79.1 180.8M79.1 180.8L82.4 176.9M82.4 176.9L85.7 172.6M85.7 172.6L89.0 168.0M89.0 168.0L92.3 163.1M92.3 163.1L95.6 157.9M95.6 157.9L98.9 152.5M98.9 152.5L102.2 147.0M102.2 147.0L105.5 141.4M105.5 141.4L108.8 135.7M108.8 135.7L112.1 130.0M112.1 130.0L115.4 124.4M115.4 124.4L118.7 118.8M118.7 118.8L122.0 113.3M122.0 113.3L125.3 108.0M125.3 108.0L128.6 102.9M128.6 102.9L131.9 98.0M131.9 98.0L135.2 93.3M135.2 93.3L138.5 88.8M138.5 88.8L141.8 84.6M141.8 84.6L145.1 80.6M145.1 80.6L148.4 76.9M148.4 76.9L151.7 73.4M151.7 73.4L155.0 70.2M155.0 70.2L158.3 67.3M158.3 67.3L161.6 64.6M161.6 64.6L164.9 62.2M164.9 62.2L168.2 59.9M168.2 59.9L171.5 57.9M171.5 57.9L174.8 56.1M174.8 56.1L178.1 54.5M178.1 54.5L181.4 53.1M181.4 53.1L184.7 51.8M184.7 51.8L188.0 50.7M188.0 50.7L191.3 49.7M191.3 49.7L194.6 48.9M194.6 48.9L197.9 48.1M197.9 48.1L201.2 47.5M201.2 47.5L204.5 46.9M204.5 46.9L207.8 46.5M207.8 46.5L211.1 46.1M211.1 46.1L214.4 45.7M214.4 45.7L217.7 45.4M217.7 45.4L221.0 45.2M221.0 45.2L224.3 45.0M224.3 45.0L227.6 44.8M227.6 44.8L230.9 44.6M230.9 44.6L234.2 44.5M234.2 44.5L237.5 44.4M237.5 44.4L240.8 44.3M240.8 44.3L244.1 44.3M244.1 44.3L247.4 44.2M247.4 44.2L250.7 44.2M250.7 44.2L254.0 44.1M254.0 44.1L257.3 44.1M257.3 44.1L260.6 44.1M260.6 44.1L263.9 44.1M263.9 44.1L267.2 44.1M267.2 44.1L270.5 44.0M270.5 44.0L273.8 44.0M273.8 44.0L277.1 44.0M277.1 44.0L280.4 44.0M280.4 44.0L283.7 44.0M283.7 44.0L287.0 44.0M287.0 44.0L290.3 44.0M290.3 44.0L293.6 44.0M293.6 44.0L296.9 44.0M296.9 44.0L300.2 44.0M300.2 44.0L303.5 44.0M303.5 44.0L306.8 44.0M306.8 44.0L310.1 44.0M310.1 44.0L313.4 44.0M313.4 44.0L316.7 44.0M316.7 44.0L320.0 44.0M320.0 44.0L323.3 44.0M323.3 44.0L326.6 44.0M326.6 44.0L329.9 44.0M329.9 44.0L333.2 44.0M333.2 44.0L336.5 44.0M336.5 44.0L339.8 44.0M339.8 44.0L343.1 44.0M343.1 44.0L346.4 44.0M346.4 44.0L349.7 44.0M349.7 44.0L353.0 44.0M353.0 44.0L356.3 44.0M356.3 44.0L359.6 44.0M359.6 44.0L362.9 44.0M362.9 44.0L366.2 44.0M366.2 44.0L369.5 44.0M369.5 44.0L372.8 44.0M372.8 44.0L376.1 44.0M376.1 44.0L379.4 44.0M379.4 44.0L382.7 44.0M382.7 44.0L386.0 44.0"/>
+  <path class="cf-g" d="M117.9 194L117.9 119.0"/>
+  <circle class="cf-gf" cx="117.9" cy="119.0" r="5"/>
+  <text class="cf-gd" x="111.9" y="210">75</text>
+  <text class="cf-big" x="14" y="24">a 12-bit hash of a block name</text>
+  <text class="cf-gd" x="129.9" y="109.0">even odds at 75 types</text>
+  <text class="cf-d" x="14" y="226">by 200 types it is 99.2%. A collision is two blocks sharing one</text>
+  <text class="cf-d" x="14" y="242">number, so every save holding both is unreadable.</text>
+</svg>

@@ -134,7 +134,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 26.
+- `docs/` — prose specification, ordered 00 through 27.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -188,6 +188,7 @@ script owns its numbers.
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
 | [25](docs/25-water.md) | water is a block type; drawing a translucent ocean; floating vs colliding | `water.js` |
 | [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
+| [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -276,6 +277,10 @@ Violating any of these breaks the design. They are not tunable.
 | `K` | `sqrt(8π / (10√3))` = `1.20459` | `blockSize ≈ K · radius / 2^L` | `calc.js` |
 | hex area | `(√3 / 2) · d²` ≈ `0.866 d²` | `d` = centre-to-centre spacing | — |
 | ID width | `5 + 2·D + 2` bits | the last 2 name a corner, not a triangle | `id.js` |
+| block state | `12` type + `4` rotation = 16 bits | 4,096 types, 16 variants each | `blockstate.js` |
+| type-name hash | **unusable** — 50% collision at `75` types | registry in the save instead | `blockstate.js` |
+| delta record | `29 + 10 + 16` = `55` of 64 bits | planet implied by the file; 9 spare | `blockstate.js` |
+| chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
 | planet field | `12` bits = 4,096 worlds | word is 51 of 64 at D11 | `id.js` |
 | code space used | `≈ 31.25%` | `20/32` faces × `1/2` triangle-in-square | — |
 | adjacency table | 60 entries, 180 bytes | 20 faces × 3 edges × 3 bytes | `adj.js` |
@@ -588,6 +593,15 @@ Violating any of these breaks the design. They are not tunable.
   describe a different planet (**1.28 m mean, 5.85 m worst** over 60 m of relief);
   their conclusions are statistical and unaffected, but switch them before sizing
   an engine.
+- **A block type number cannot be a hash of its name** (`blockstate.js`, doc 27).
+  In doc 03's 12-bit type field the birthday problem gives **even odds on a
+  collision at 75 types** and 99.2% at 200 — and a collision is two blocks sharing
+  a number, so every save holding both is unreadable. Widening does not fix it:
+  24 bits still collides 2.9% of the time at 1,000 types. **The save carries a
+  registry** — names in order, index is the number, append only, never reuse a
+  slot, 96 KB for a full one. Rotation stays a **mask not a lookup** (doc 19 reads
+  it per block per frame) and the 16-variant cap costs only 4.4% of the type space
+  even for sixty stair-like materials.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

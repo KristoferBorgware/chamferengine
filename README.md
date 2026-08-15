@@ -73,6 +73,7 @@ a runnable demo where one exists.
 | 24 | [Player edits and global processes](docs/24-edits-and-global-processes.md) | What happens when someone dams a river the coarse map still describes |
 | 25 | [Water](docs/25-water.md) | Water as a block type, what a translucent ocean costs to draw, and why you float in it |
 | 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 44 open questions actually block |
+| 27 | [Block state](docs/27-block-state.md) | What a block *is* as bits, why a type number cannot be a hash, and the registry that fixes it |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -85,7 +86,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all thirty verification scripts and fails the build if
+`make-reference.js` runs all thirty-two verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a

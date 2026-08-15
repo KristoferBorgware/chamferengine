@@ -2338,6 +2338,35 @@ const prof = (() => {
 }
 
 // =============================================================================
+// 27 — hashing a block name into 12 bits collides almost immediately. The curve
+// is the birthday probability, evaluated here rather than sketched.
+// =============================================================================
+{
+  const SLOTS = 4096, W = 330, H = 150, X0 = 56, Y0 = 44, NMAX = 400;
+  const p = n => 1 - Math.exp(-n*(n-1)/(2*SLOTS));
+  const px = n => X0 + (n/NMAX)*W, py = v => Y0 + H - v*H;
+  const pts2 = [];
+  for (let n = 0; n <= NMAX; n += 4) pts2.push([px(n), py(p(n))]);
+  const half = Math.round(Math.sqrt(2*SLOTS*Math.log(2)));
+  made.push(svg('hash-collides', 470, 250, `
+  <path class="cf-l" d="M${X0} ${Y0}L${X0} ${Y0+H}L${X0+W} ${Y0+H}"/>
+  <path class="cf-l" d="M${X0} ${f(py(0.5))}L${X0+W} ${f(py(0.5))}" stroke-dasharray="3 4"/>
+  <text class="cf-d" x="${X0-42}" y="${f(py(0.5)+4)}">50%</text>
+  <text class="cf-d" x="${X0-42}" y="${Y0+6}">100%</text>
+  <text class="cf-d" x="${X0-14}" y="${Y0+H+16}">0</text>
+  <text class="cf-d" x="${f(px(NMAX)-24)}" y="${Y0+H+16}">${NMAX}</text>
+  <text class="cf-d" x="${X0+W/2-52}" y="${Y0+H+32}">block types defined</text>
+  <path class="cf-a" d="${pathOf(pts2.slice(0,-1).map((a,i)=>[a,pts2[i+1]]))}"/>
+  <path class="cf-g" d="M${f(px(half))} ${Y0+H}L${f(px(half))} ${f(py(0.5))}"/>
+  <circle class="cf-gf" cx="${f(px(half))}" cy="${f(py(0.5))}" r="5"/>
+  <text class="cf-gd" x="${f(px(half)-6)}" y="${Y0+H+16}">${half}</text>
+  <text class="cf-big" x="14" y="24">a 12-bit hash of a block name</text>
+  <text class="cf-gd" x="${f(px(half)+12)}" y="${f(py(0.5)-10)}">even odds at ${half} types</text>
+  <text class="cf-d" x="14" y="226">by 200 types it is 99.2%. A collision is two blocks sharing one</text>
+  <text class="cf-d" x="14" y="242">number, so every save holding both is unreadable.</text>`));
+}
+
+// =============================================================================
 // 08 — the fade curve: smoothstep kinks in the second derivative, quintic does
 // not. Both curves and both second derivatives are evaluated here, not drawn.
 // =============================================================================

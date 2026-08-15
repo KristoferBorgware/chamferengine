@@ -20,6 +20,7 @@ numbered documents.
 | Script | Establishes | Used by |
 |---|---|---|
 | [`adj.js`](../verification/adj.js) | — | [05](05-face-adjacency.md) |
+| [`blockstate.js`](../verification/blockstate.js) | What a block actually IS, as bits. Doc 03 reserves "16 bits of block state, or 12 bits of type plus 4 of rotation"; doc 19 spends 3 of the 4; doc 07 names a palette and a side table; doc 12 defines the delta store as cellID -> block state. Nobody has ever said what those 12 bits mean, how a type gets its number, or what happens when the list of types changes between versions. This sizes all of it -- and kills the obvious answer to the numbering question. | [27](27-block-state.md) |
 | [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
@@ -67,6 +68,116 @@ face  edge0            edge1            edge2
 60 entries · every edge matched: true
 all reversed (consistent winding): true
 bytes at 3 fields x 1 byte: 180
+```
+
+## `blockstate.js`
+
+What a block actually IS, as bits. Doc 03 reserves "16 bits of block state, or 12 bits of type plus 4 of rotation"; doc 19 spends 3 of the 4; doc 07 names a palette and a side table; doc 12 defines the delta store as cellID -> block state. Nobody has ever said what those 12 bits mean, how a type gets its number, or what happens when the list of types changes between versions. This sizes all of it -- and kills the obvious answer to the numbering question.
+
+Cited by [doc 27](27-block-state.md).
+
+```
+1. what the fields buy
+   type     12 bits -> 4,096 block types
+   rotation 4 bits -> 16 variants of each
+   together 16 bits -> 65,536 distinct block states
+   doc 19 uses 3 of the 4 rotation bits for 6 directions, so one bit
+   is spare -- doc 19 suggests a flag such as powered or reversed.
+   For scale: Minecraft ships on the order of a thousand block types, so
+   4,096 is about four times a full game -- comfortable, not unlimited.
+
+2. can a type number just be a hash of the block's name?
+   4,096 slots. Chance that some two names collide:
+     block types   collision chance
+              50     25.8%
+             100     70.1%
+             200     99.2%
+             500    100.0%
+            1000    100.0%
+   Even odds at about 75 types -- long before a real game.
+   A collision is not a glitch, it is two different blocks sharing a
+   number, so every save containing both is unreadable. Hashing is out.
+   Widening the field does not rescue it either:
+     16-bit hash, 1,000 types:  99.95% chance of collision
+     20-bit hash, 1,000 types:  37.90% chance of collision
+     24-bit hash, 1,000 types:   2.93% chance of collision
+     32-bit hash, 1,000 types:   0.01% chance of collision
+   You would need a 32-bit field to make it merely unlikely, and
+   "unlikely" is the wrong standard for something that corrupts a save.
+
+3. the registry: a list of names, and the index is the number
+   world file header holds the block names in order. The stored number is
+   the position in that list. New blocks APPEND; removed blocks leave a
+   tombstone so no number is ever reused.
+   types    registry size at ~24 bytes a name
+     100       2.3 KB
+     500      11.7 KB
+    1000      23.4 KB
+    4096      96.0 KB
+   Even a full registry is under 100 KB -- next to nothing beside a save,
+   and it makes the numbering exact instead of probabilistic.
+   It also makes the save self-describing: a file from an older build
+   still says what its own numbers meant.
+
+4. inside a loaded chunk: palette width against distinct states
+   a chunk at D 11 / C 6 is 561 slots x 64 layers = 35,904 cells
+   distinct states   bits/cell   chunk size   vs a flat 16-bit field
+                 2           1        4.4 KB      6.3%
+                 4           2        8.8 KB     12.5%
+                 8           3       13.1 KB     18.8%
+                16           4       17.5 KB     25.0%
+                64           6       26.3 KB     37.5%
+               256           8       35.1 KB     50.0%
+              4096          12       52.6 KB     75.0%
+   flat 16-bit would be 70.1 KB. Doc 07 says most chunks hold
+   three or four states, which is 2 bits and 8.8 KB -- 12.5% of flat.
+   The palette is per chunk, so a chunk full of one material costs 1 bit
+   a cell however many types the world defines.
+
+5. on disk: one edit, and a million of them
+   [ address 29 ][ layer 10 ][ block state 16 ] = 55 bits = 9 spare in a 64-bit word
+   the planet is NOT in the record: the file already belongs to one planet,
+   the same reason doc 07 keeps no cell IDs inside a chunk.
+   edits        raw size at 8 bytes each
+     1e+3            0.0 MB
+     1e+5            0.8 MB
+     1e+6            7.6 MB
+     1e+7           76.3 MB
+   A player who places ten million blocks costs 76 MB before any
+   compression, and runs of identical edits compress hard. The delta
+   store is the only thing that grows (doc 07) and it grows slowly.
+   The 9 spare bits are room to widen block state later without
+   changing the record size -- which is what a version field is for.
+
+6. the one real choice: is rotation a FIELD or part of the number?
+   (i) FIXED SPLIT -- 12 type + 4 rotation, as doc 03 drew it.
+       Reading a rotation is a mask. Doc 19 wants exactly that: rails and
+       conveyors read their neighbours' facings constantly.
+       Costs: at most 16 variants per type. A block needing more must
+       spend extra type slots.
+   (ii) FLAT INDEX -- 16 bits is one number into a table of every state.
+       Unlimited variants per type. Reading a rotation becomes a lookup in
+       a 128 KB table -- cache-resident, but a lookup rather than a mask.
+
+   How many type slots does the fixed split actually burn? A stair-like
+   block with 4 facings x 2 halves x 5 join shapes is 40 states:
+     40 states / 16 per type = 3 type slots each.
+     10 such materials -> 30 of 4,096 slots = 0.7%
+     30 such materials -> 90 of 4,096 slots = 2.2%
+     60 such materials -> 180 of 4,096 slots = 4.4%
+   Even sixty stair-like materials spend under 5% of the type space, so
+   the fixed split is not the constraint it looks like.
+   RECOMMENDATION: the fixed split. It keeps doc 19's rotation a mask,
+   which is the one read that happens per block per frame.
+
+verdict
+   16 bits of block state: 12 type + 4 rotation, 4,096 types and 16
+   variants each. Type numbers come from a REGISTRY stored in the save --
+   a list of names, index is the number, append only, never reuse a slot.
+   Hashing names into the field is out: it is even odds on a collision by
+   75 types, and a collision corrupts every save holding both blocks.
+   A loaded chunk still stores a per-chunk palette, so the common case is
+   2 bits a cell. One edit is 55 of 64 bits with 9 spare to grow into.
 ```
 
 ## `boundary.js`
@@ -684,7 +795,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1530,7 +1641,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 599 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 573 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2055,4 +2166,4 @@ verdict
 
 ---
 
-_31 scripts. Every number above is reproduced by running them._
+_32 scripts. Every number above is reproduced by running them._
