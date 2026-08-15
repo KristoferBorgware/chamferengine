@@ -679,6 +679,46 @@ actually separates the first from the third.
 
 ---
 
+## `water.js` — what a translucent ocean costs to draw
+
+Water is a block type: translucent, no collision, written once by the generator
+and never simulated ([doc 24](../docs/24-edits-and-global-processes.md)). Blocks
+are cheap; *translucent* blocks are the ones renderers find hard, because they
+cannot be drawn in any order. Doc 14 carried that as an open question. This
+builds a level-7 world with 60 m of relief, sea level set for 30% land, and doc
+21's priority-flood run so that lakes above sea level exist — then measures how
+much water surface there is and how many layers of it a view crosses.
+
+**Verifies:**
+
+1. **The ocean is a skin, not a solid.** 69.2% of columns hold water and
+   1,589,689 cells are water, but interior faces cull exactly as stone's do:
+   **113,455 faces against 12,717,512 — 0.89%**. And the side count is **0**.
+   Generated water never has an exposed vertical face, because it is always held
+   in by land at or above its own level, or by more water. A wall of water
+   standing in open air exists only where a **player** built one.
+2. **The sea is the flattest surface in the world.** Sea level is a *radius*, so
+   the surface is exactly a sphere — the only one on the planet that is. Doc 14
+   caps a merged flat patch by curvature alone at **37 m**, and terrain never
+   reaches that because terrain has relief. The ocean does not, anywhere, so the
+   largest surface in the world is also the cheapest: **37 cells into one quad**.
+3. **You look through one surface, almost always.** Water fills a column from the
+   floor up, so a sight line entering water leaves through the bottom into rock.
+   Over 3,000 viewpoints, distinct bodies within a standing player's 76 m horizon
+   (`frame.js`): 17.1% see none, **82.3% see one**, 0.6% see two, worst case
+   **3** — out of 58 separate bodies on the planet. So doc 14's transparency
+   question is two draw passes and a sort of one thing.
+4. **An edit costs what a stone edit costs.** One delta per block, no flood fill,
+   no re-route, no cascade, no second system to keep consistent — which is what
+   doc 24's decision buys.
+
+**Does not verify:** anything about light in water, or the view from *under* the
+surface. Both are listed open in doc 25.
+
+**Used in:** [doc 25](../docs/25-water.md)
+
+---
+
 ## Standard for new claims
 
 If a number appears in `docs/`, it should either be trivially derivable or have a

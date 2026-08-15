@@ -13,13 +13,13 @@ But the river is not blocks. It comes from the coarse map in
 **read only**. That map still says the river runs through the wall, and it will
 say so forever.
 
-So the two halves of the persistence model disagree, and this is the only place
-they do. Everything else a player can touch is local: mine a block, place a block,
-light a torch. Water is the first thing where the consequence of an edit is not
-where the edit is.
+So the two halves of the persistence model look like they disagree, and this is
+the only place they do. Everything else a player can touch is local: mine a block,
+place a block, light a torch. Water looks like the first thing where the
+consequence of an edit is not where the edit is.
 
-Before choosing what to do, it is worth knowing how far a single wall actually
-reaches.
+It turns out not to be, and the way out is simpler than the problem. But the
+measurements come first, because they are what rules out the alternative.
 
 ---
 
@@ -66,13 +66,13 @@ stops. That limit comes from the terrain and has nothing to do with how big the
 river was. Downstream, every cell below the wall has lost its water, and nothing
 in the geometry says where that stops.*
 
-**Upstream is bounded by terrain.** The lake fills to the lowest lip and stops —
-29 cells and 144 m in the measurement above. That is a patch, and a patch is
-something a local simulation can own.
+**Upstream would be bounded by terrain.** Water rises to the lowest lip and stops
+— 29 cells and 144 m in the measurement above. That is a patch, and a patch is the
+kind of thing a bounded job could own.
 
-**Downstream is bounded by nothing obvious.** Every cell below has lost the flow
-the wall is holding back. Whether that matters depends entirely on what joins the
-river below the wall, which is why the measurement is the interesting part.
+**Downstream would be bounded by nothing obvious.** Every cell below has lost the
+flow the wall holds back, and what that costs depends entirely on what joins the
+river underneath — which is why the next measurement is the one that matters.
 
 ---
 
@@ -131,58 +131,62 @@ topology of the network above and below the edit.
 
 ---
 
-## What happens instead: bound what the map promises
+## What happens instead: water is blocks, and blocks do not move
 
-If the map cannot change, the fix is to be precise about what it was ever claiming.
+Everything above assumed water is a *process* that a wall interferes with. It is
+not. Water in this design is a **material**, placed once and then as inert as
+stone.
 
-**The coarse map says where water would flow across generated terrain.** It does
-not say where water *is*. Those were the same thing only while nobody had edited
-anything.
+**This is a construction toy, not a planetary simulator.** The nearest thing to
+it is a box of hexagonal Lego. Erosion and flow routing exist to *shape the world
+at creation* — they carve valleys, cut channels, and decide where lakes sit. Once
+that is done they are finished, and what they leave behind is blocks.
 
-So split the two:
+So the rule is one sentence:
 
-- **The channel is generated**, from the coarse map, exactly as
-  [doc 21](21-rivers-and-erosion.md) describes. It is terrain: a valley with a
-  river-shaped floor. A wall built across it is a wall across a valley, and the
-  valley does not care.
-- **The water is a local simulation**, seeded by the channel and bounded by the
-  delta store. Where a player has changed nothing, it fills the channel the coarse
-  map carved and costs nothing to compute. Where a player has built, it does what
-  water does.
+> **Water is a block type: translucent, and with no collision. It is written by
+> the generator at world creation and never moves again.**
 
-That gives the honest answer to the dam. **Upstream fills**, because the lake is
-bounded by terrain and a local simulation can find its rim — 29 cells in the
-measurement. **Downstream keeps flowing**, because the coarse map still says a
-channel is there and the simulation has no way to know the difference is
-permanent.
+Which answers the dam immediately, and not the way the sections above were
+heading. **Nothing happens.** The player gets a wall standing in a river. The
+water blocks upstream of it stay exactly where they were; so do the ones
+downstream. Nothing fills, nothing drains, nothing is recomputed.
 
-Which is wrong, and worth saying plainly rather than dressing up: a dammed river
-in this design still has water below the dam. What the player gets is a lake, not
-a dry riverbed.
+That is not a compromise reached under protest. It is the same rule every other
+block already obeys:
+
+- Mine the base of a mountain and the mountain does not collapse.
+- Remove a supporting beam and the roof stays up.
+- Wall a river and the water stays put.
+
+**The consistency is the feature.** A player who has understood one block has
+understood all of them, and there is no special material with its own physics to
+learn, explain, or be surprised by.
 
 ---
 
-## Why that is the right wrongness
+## What the measurements are worth now
 
-The alternative is a global recompute per edit, and the trade is not close.
+They price the option not taken, which is worth keeping rather than deleting.
 
-| | Coarse map read-only | Writable map |
+If water *were* simulated, the numbers above say what that would cost. Upstream a
+local flood fill would be bounded and affordable — 29 cells, 144 m, a patch a
+chunk-sized job could own. Downstream it would be unbounded and, worse,
+**unboundable**: a headwater dam settles within twenty cells while a main-stem dam
+runs to the coast, so there is no radius to pick.
+
+| | Water as blocks | Water simulated |
 |---|---|---|
-| Client regenerates the map | **yes** ([doc 23](23-determinism.md)) | no — must be sent and merged |
-| Cost per dam | a local flood fill | a planet-wide re-route |
+| Client regenerates the coarse map | **yes** ([doc 23](23-determinism.md)) | only if the sim is deterministic too |
+| Cost per dam | **nothing** | a flood fill, then an unbounded re-route |
 | Bounded work | **yes** | no natural radius |
-| Dam holds back water upstream | **yes** | yes |
-| Riverbed below runs dry | no | yes |
+| Rules a player must learn | **one, shared with every block** | a second physics |
+| Dam holds back water | no | yes |
 
-One row is wrong on the left. Five are wrong on the right, and one of them —
-"no natural radius" — is not a performance problem but a design one: there is no
-correct answer to *how much* to recompute.
-
-And the wrong row is the least visible failure available. A player who dams a
-river sees the lake they built. The riverbed a kilometre downstream, which they
-are not looking at and which
-[doc 13](13-gravity-and-orientation.md)'s 76 m horizon guarantees they cannot see
-from the dam, still has water in it.
+One row is wrong on the left, and it is the row a player is least likely to have
+strong expectations about in a game made of blocks. Four are wrong on the right,
+and "no natural radius" is a design problem rather than a performance one — there
+is no correct answer to *how much* to recompute.
 
 ---
 
@@ -216,31 +220,26 @@ Two more cases it already covers:
   confirmed as the only writable terrain in the design.
 - **[Doc 23](23-determinism.md)**'s regenerate-don't-send conclusion survives,
   because it depends on the map staying a pure function of the seed.
-- **Water needs a local simulation** with a bounded region, which is new work this
-  document creates rather than removes.
-- **[Doc 22](22-multiplayer-interest.md)** is unaffected: a lake forming is a
-  batch of ordinary block deltas, and travels the way every other edit does.
+- **Water becomes a block type** — translucent, non-colliding, written by the
+  generator and never simulated. What that costs to draw is
+  [doc 25](25-water.md), and it closes [doc 14](14-meshing-and-lod.md)'s open
+  question about transparency and sorting.
+- **[Doc 22](22-multiplayer-interest.md)** is unaffected: editing water is editing
+  a block, and travels the way every other edit does.
 
 ---
 
 ## Still open
 
-- **The water simulation itself.** This document decides where the boundary
-  between global and local sits, and does not design what runs inside it. How far
-  water spreads, how fast, and what stops it are all undecided.
-- **How the lake is stored.** A 29-cell lake is 29 block deltas, which is nothing.
-  A player who floods a whole valley writes thousands. Whether that is fine or
-  wants a compressed "region is water to level h" delta is unmeasured.
-- **Whether players should be told.** A dammed river that still flows downstream
-  is a visible inconsistency to anyone who walks down it. Saying nothing risks
-  the same thing doc 19 worried about — players inventing worse explanations.
-- **Erosion from player structures.** Nothing here erodes because of a wall. Real
-  water would cut round it eventually, and the design has no mechanism for terrain
-  changing after world creation.
-- **The one-block finding may not survive a fluid simulation.** Section 2 measures
-  the *coarse map's* routing, which routes around a single blocked cell. A local
-  water simulation at block resolution might behave differently, and nothing here
-  measures that.
+- **Whether a player can place water at all.** Removing a water block is
+  obviously allowed. Whether a bucket exists — and therefore whether players can
+  build lakes by hand — is a game design question this document does not take.
+- **Whether players should be told.** A wall in a river that changes nothing is
+  the sort of thing players explain to themselves, usually wrongly. Saying it
+  once — water is a material, not a fluid — costs a sentence.
+- **Erosion from player structures.** Nothing erodes after world creation. Real
+  water would eventually cut round a wall, and the design has no mechanism for
+  terrain changing later. That is a deliberate omission, not an oversight.
 
 ---
 
@@ -250,14 +249,16 @@ Two more cases it already covers:
   **A dammed river is the one place they disagree.**
 - **One block dams nothing** — a cell has six ways out and the water goes round.
   A wall must span the channel: 1 cell floods **0**, 5 cells floods **29**.
-- **Upstream is bounded by terrain** — the lake rises to the lowest lip and stops,
-  144 m in the measurement. **Downstream is bounded by nothing.**
+- **Upstream would be bounded by terrain** — 144 m in the measurement — and
+  **downstream would be bounded by nothing.** Those price the simulation that is
+  not being built.
 - **Where you dam decides whether the change is local at all.** A headwater dam is
   down to a **4%** deficit within twenty cells; a main-stem dam is felt to the
   coast. Same wall, different answer.
 - **The coarse map stays read-only.** It is a statement about the **generated**
   world, not the current one — which keeps it a pure function of the seed, so
   [doc 23](23-determinism.md)'s client can still regenerate it.
-- The cost is that a dammed river **still has water below the dam**. That is
-  wrong, it is the least visible wrongness available, and the alternative has no
-  natural radius to recompute within.
+- **Water is a block type** — translucent, no collision, written once by the
+  generator and never simulated. So a dam does **nothing**: the water on both
+  sides stays exactly where it was. That is the same rule every other block
+  obeys, and the consistency is the point.

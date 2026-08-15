@@ -92,7 +92,7 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
-13 through 24 carry the hardest material in the specification and are the ones
+13 through 25 carry the hardest material in the specification and are the ones
 most in need of pictures — treat one figure per major claim as the target there,
 not one per document.
 
@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 24.
+- `docs/` — prose specification, ordered 00 through 25.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -177,6 +177,7 @@ script owns its numbers.
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
+| [25](docs/25-water.md) | water is a block type; what a translucent ocean costs to draw | `water.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -310,6 +311,9 @@ Violating any of these breaks the design. They are not tunable.
 | multi-span columns with caves | `8–24%` | what the seam rule must handle | `volume.js` |
 | holes at a LOD seam | `1041` naive, `961` skirted, `0` seam-owned | over 385 rim columns | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
+| water faces drawn | `0.89%` of the naive count | 113,455 of 12,717,512; **0** sides | `water.js` |
+| water surfaces in one view | `82.3%` see one, `0.6%` two | worst 3, over a 76 m horizon | `water.js` |
+| sea-surface merge span | `37` cells into one quad | sea level is a radius, so exactly flat | `water.js` |
 
 ## Established results
 
@@ -474,6 +478,19 @@ Violating any of these breaks the design. They are not tunable.
   its **area**. So interest is **one dot product per player** (over 100M/s; the exact
   rate is a wall-clock timing and moves run to run), and the ID ordering earns its
   keep on **disk** — 5 runs fetch 62% of a region.
+- **Water is a block type, and there is no fluid system** (`water.js`, doc 25) —
+  translucent, no collision, written once by the generator, never simulated.
+  Doc 21's erosion still runs, at world creation, and what it leaves behind is
+  blocks. Transparency turns out to be cheap in three separate ways: interior
+  faces cull like stone's, so 1,589,689 water cells draw **113,455 faces —
+  0.89%**; generated water has **0 exposed sides**, because it is always held in
+  by land at or above its own level (a vertical water face only exists where a
+  player built one); and a view crosses **one** surface **82.3%** of the time,
+  two 0.6%, because water fills a column from the floor up. So doc 14's open
+  transparency question is opaque pass, then water back to front, and the sort is
+  of one thing. Sea level is a **radius**, making the ocean the only exactly flat
+  surface on the planet and doc 14's best merge candidate: **37 cells into one
+  quad**. Editing water costs exactly what editing stone costs.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

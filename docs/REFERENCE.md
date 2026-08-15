@@ -44,6 +44,7 @@ numbered documents.
 | [`taper.js`](../verification/taper.js) | Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost. | [06](06-world-sizing.md) |
 | [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
 | [`volume.js`](../verification/volume.js) | Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs. | [08](08-terrain-generation.md) [14](14-meshing-and-lod.md) |
+| [`water.js`](../verification/water.js) | Water is a block type: translucent, no collision, written once by the generator (doc 24). Blocks are cheap; TRANSLUCENT blocks are the ones that make renderers difficult, because they cannot be drawn in any order. So the questions are how much water surface there is, and how many layers of it a player ever looks through at once. | [25](25-water.md) |
 | [`winding.js`](../verification/winding.js) | The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is. | [03](03-addressing.md) |
 
 ---
@@ -533,7 +534,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1102,7 +1103,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 721 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 529 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1462,6 +1463,65 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
    That makes a LOD-2 chunk 332x cheaper to generate than a near one.
 ```
 
+## `water.js`
+
+Water is a block type: translucent, no collision, written once by the generator (doc 24). Blocks are cheap; TRANSLUCENT blocks are the ones that make renderers difficult, because they cannot be drawn in any order. So the questions are how much water surface there is, and how many layers of it a player ever looks through at once.
+
+Cited by [doc 25](25-water.md).
+
+```
+level 7: 163,842 columns, 60 m of relief, 1 m blocks
+  69.2% of columns hold water, deepest 43 m
+
+1. how much water actually gets drawn
+   water cells in the world:      1,589,689
+   faces if drawn as a volume:    12,717,512 (8 per prism)
+   faces actually drawn:          113,455  = 113,455 tops + 0 sides
+   ratio:                         0.89%
+   The sea is one skin, not a solid. Every ocean cell below the top one is
+   enclosed by other water and emits nothing -- the same rule doc 14 already
+   applies to stone, with no extra work for being transparent.
+   And note the side count. GENERATED water never has an exposed side: it is
+   always held by land at or above its own level, or by more water. A water
+   face that stands in open air only exists where a PLAYER built one.
+
+2. the sea surface merges better than anything else
+   sea level is a constant radius, so the surface has no relief at all
+   doc 14's merge limit is curvature alone: 37 m at 0.1 m of sag
+   that is 37 cells across, merged into one quad
+   Terrain never merges that far because terrain is not flat. The ocean is,
+   everywhere, so the largest surface in the world is also the cheapest.
+
+3. how many water surfaces overlap in one view
+   58 separate bodies of water on the planet
+   distinct bodies within a standing player's 76 m horizon:
+     0 bodies   17.1% of viewpoints
+     1 body    82.3% of viewpoints
+     2 bodies   0.6% of viewpoints
+     3 bodies   0.0% of viewpoints
+   worst seen: 3
+   Water fills a column from the bottom up, so a view crosses one body once.
+   Sorting a handful of surfaces per frame is not a sorting problem -- it is
+   a sort of a handful of things.
+
+4. what it costs when a player touches it
+   remove one water block   -> one delta, 57 bits (doc 03)
+   wall across a river      -> as many deltas as blocks placed, and nothing else
+   drain a lake by hand     -> one delta per block removed, no propagation
+   Because water never moves, an edit to it costs exactly what an edit to
+   stone costs. There is no flood fill, no re-route, no cascade, and no
+   second system to keep consistent.
+
+verdict
+   Water as blocks is cheaper than it sounds in every direction that matters.
+   Interior faces cull like any other material, so the ocean draws as a skin
+   rather than a solid. The surface is at a constant radius, which makes it
+   the only genuinely flat thing on the planet and the best merging candidate
+   there is. And because water fills columns from the bottom, a player almost
+   never looks through more than one surface at a time -- so the transparency
+   sorting doc 14 left open is a sort of very few things.
+```
+
 ## `winding.js`
 
 The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is.
@@ -1527,4 +1587,4 @@ verdict
 
 ---
 
-_26 scripts. Every number above is reproduced by running them._
+_27 scripts. Every number above is reproduced by running them._

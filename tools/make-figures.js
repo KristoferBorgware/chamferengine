@@ -439,6 +439,76 @@ const made = [];
 
 
 // =============================================================================
+// 25 — water-is-a-skin: culling makes the ocean a surface, not a solid
+// =============================================================================
+{
+  const cw = 26, base = 150, top = 62;
+  const col = (ox, k, groundY) => {
+    let g = '';
+    for (let y = groundY; y > top; y -= cw){
+      const isWater = true;
+      g += `<rect class="cf-af" x="${f(ox+k*cw)}" y="${f(y-cw)}" width="${cw-1}" height="${cw-1}" opacity="0.45"/>`;
+    }
+    g += `<rect class="cf-fill" x="${f(ox+k*cw)}" y="${f(groundY)}" width="${cw-1}" height="${f(base-groundY)}"/>`;
+    return g;
+  };
+  const panel = (ox, showAll) => {
+    let g = '';
+    const gy = [124, 150, 150, 150, 124];
+    for (let k=0;k<5;k++) g += col(ox, k, gy[k]);
+    if (showAll){
+      // every face drawn: outline every water cell
+      for (let k=0;k<5;k++) for (let y=gy[k]; y>top; y-=cw)
+        g += `<rect class="cf-a" x="${f(ox+k*cw)}" y="${f(y-cw)}" width="${cw-1}" height="${cw-1}" fill="none"/>`;
+    } else {
+      g += `<path class="cf-a" stroke-width="3" d="M${f(ox)} ${top}L${f(ox+5*cw-1)} ${top}"/>`;
+    }
+    return g;
+  };
+  made.push(svg('water-is-a-skin', 460, 214, `
+  ${panel(20, true)}
+  <text class="cf-d" x="85" y="42" text-anchor="middle">every water cell</text>
+  <text class="cf-gd" x="85" y="186" text-anchor="middle">12.7 M faces</text>
+  ${panel(280, false)}
+  <text class="cf-d" x="345" y="42" text-anchor="middle">after culling, as for stone</text>
+  <text class="cf-c" x="345" y="186" text-anchor="middle">113 K faces &#183; 0.89%</text>
+  <path class="cf-l" d="M230 50L230 196" stroke-dasharray="2 5"/>
+  <text class="cf-d" x="230" y="208" text-anchor="middle">a water cell surrounded by water emits nothing, exactly like rock</text>`));
+}
+
+// =============================================================================
+// 25 — one-surface-deep: what a player actually looks through
+// =============================================================================
+{
+  const O = [230, 330], Rr = 250;
+  const at = d => [O[0] + Rr*Math.sin(d*Math.PI/180), O[1] - Rr*Math.cos(d*Math.PI/180)];
+  // ground profile with a basin, water filling to a level
+  let land = 'M';
+  const gy = d => Rr - 16*Math.max(0, 1 - Math.abs(d/9)) - (Math.abs(d) > 9 ? 0 : 0) + (Math.abs(d) > 9 ? 22 : 0);
+  const pts2 = [];
+  for (let d=-16; d<=16; d+=0.8){
+    const r = Rr + (Math.abs(d) > 8 ? 20 - Math.abs(d-8)*0.5 : -10);
+    const p = [O[0] + r*Math.sin(d*Math.PI/180), O[1] - r*Math.cos(d*Math.PI/180)];
+    pts2.push(p);
+  }
+  land += pts2.map(p => `${f(p[0])} ${f(p[1])}`).join('L');
+  const seaR = Rr + 4;
+  const seaArc = `<path class="cf-a" stroke-width="3" d="M${f(at(-9)[0])} ${f(O[1]-seaR*Math.cos(-9*Math.PI/180))}`
+    + ` A ${seaR} ${seaR} 0 0 1 ${f(at(9)[0])} ${f(O[1]-seaR*Math.cos(9*Math.PI/180))}"/>`;
+  const eye = [O[0] + (Rr+52)*Math.sin(-15*Math.PI/180), O[1] - (Rr+52)*Math.cos(-15*Math.PI/180)];
+  made.push(svg('one-surface-deep', 460, 214, `
+  <path class="cf-m" fill="none" d="${land}"/>
+  ${seaArc}
+  <circle class="cf-af" cx="${f(eye[0])}" cy="${f(eye[1])}" r="5"/>
+  <path class="cf-g" d="M${f(eye[0])} ${f(eye[1])}L${f(at(6)[0])} ${f(O[1]-Rr*Math.cos(6*Math.PI/180))}" stroke-dasharray="4 3"/>
+  <text class="cf-c" x="${f(eye[0]-8)}" y="${f(eye[1]-8)}" text-anchor="end">eye</text>
+  <text class="cf-c" x="14" y="30">the sight line crosses one water surface</text>
+  <text class="cf-d" x="14" y="52">and then hits the bottom</text>
+  <text class="cf-d" x="14" y="186">water fills a column from the floor up, so there is nothing to look</text>
+  <text class="cf-d" x="14" y="204">through except the top of it &#8212; 82.3% of viewpoints see exactly one body</text>`));
+}
+
+// =============================================================================
 // 24 — water-goes-round: one block dams nothing on a six-way grid
 // =============================================================================
 {

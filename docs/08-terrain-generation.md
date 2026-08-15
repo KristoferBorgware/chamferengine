@@ -117,6 +117,11 @@ humidity — sampled on the direction vector.
 
 **Sea level is a radius, not a height.** And "up" is `normalize(position)`. Both
 of these ripple far beyond terrain — see [doc 13](13-gravity-and-orientation.md).
+The first also makes the sea the only exactly flat surface on the planet, which
+[doc 25](25-water.md) cashes in.
+
+Water written here is an ordinary block: translucent, no collision, and never
+simulated afterwards ([doc 24](24-edits-and-global-processes.md)).
 
 ---
 

@@ -496,8 +496,11 @@ the generator and the easiest to get wrong.
   it, which is the same answer terrain generation reached.
 - **Ambient occlusion** with 8 neighbours rather than 6, and what a corner even
   means when three hexagons meet.
-- **Water and transparency**, which need sorting and therefore an ordering rule
-  on a surface with no global direction.
+- ~~Water and transparency~~ — closed by [doc 25](25-water.md). Water is a block
+  type, the ocean culls to a **skin** (0.89% of the naive face count), and a
+  player sees **one** body of water from 82.3% of viewpoints and two from 0.6%.
+  So it is two draw passes and a sort of one thing. The sphere never made it
+  harder: back-to-front is a distance comparison and never needed a global axis.
 - **Remesh or store.** Whether a chunk's mesh is rebuilt on edit or cached, and
   what that costs when a player mines one cell. Sharpened by the generation
   numbers above: rebuilding a near chunk means re-running the density term over

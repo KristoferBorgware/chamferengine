@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 214" width="460" height="214">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <path class="cf-m" fill="none" d="M158.9 82.0L162.3 80.6L165.6 79.3L169.1 78.1L172.5 76.9L175.9 75.7L179.4 74.6L182.9 73.5L186.4 72.5L190.0 71.5L196.6 92.3L199.9 91.9L203.2 91.5L206.6 91.1L209.9 90.8L213.3 90.6L216.6 90.4L219.9 90.2L223.3 90.1L226.6 90.0L230.0 90.0L233.4 90.0L236.7 90.1L240.1 90.2L243.4 90.4L246.7 90.6L250.1 90.8L253.4 91.1L256.8 91.5L260.1 91.9L267.6 62.6L271.2 63.6L274.9 64.6L278.5 65.6L282.1 66.7L285.7 67.9L289.3 69.1L292.8 70.3L296.4 71.6L299.8 72.9"/>
+  <path class="cf-a" stroke-width="3" d="M190.9 79.1 A 254 254 0 0 1 269.1 79.1"/>
+  <circle class="cf-af" cx="151.8" cy="38.3" r="5"/>
+  <path class="cf-g" d="M151.8 38.3L256.1 81.4" stroke-dasharray="4 3"/>
+  <text class="cf-c" x="143.8" y="30.3" text-anchor="end">eye</text>
+  <text class="cf-c" x="14" y="30">the sight line crosses one water surface</text>
+  <text class="cf-d" x="14" y="52">and then hits the bottom</text>
+  <text class="cf-d" x="14" y="186">water fills a column from the floor up, so there is nothing to look</text>
+  <text class="cf-d" x="14" y="204">through except the top of it &#8212; 82.3% of viewpoints see exactly one body</text>
+</svg>
