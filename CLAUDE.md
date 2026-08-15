@@ -277,7 +277,8 @@ Violating any of these breaks the design. They are not tunable.
 | `K` | `sqrt(8π / (10√3))` = `1.20459` | `blockSize ≈ K · radius / 2^L` | `calc.js` |
 | hex area | `(√3 / 2) · d²` ≈ `0.866 d²` | `d` = centre-to-centre spacing | — |
 | ID width | `5 + 2·D + 2` bits | the last 2 name a corner, not a triangle | `id.js` |
-| block state | `12` type + `4` rotation = 16 bits | 4,096 types, 16 variants each | `blockstate.js` |
+| block state | `12` type + `4` rotation = 16 bits | 4,096 types = `3.5x` Minecraft's 1,159 | `blockstate.js` |
+| fixed-split cost | `40–68%` of type slots at MC scale | flat index would be 40%; still fits | `blockstate.js` |
 | type-name hash | **unusable** — 50% collision at `75` types | registry in the save instead | `blockstate.js` |
 | delta record | `29 + 10 + 16` = `55` of 64 bits | planet implied by the file; 9 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
@@ -600,8 +601,10 @@ Violating any of these breaks the design. They are not tunable.
   24 bits still collides 2.9% of the time at 1,000 types. **The save carries a
   registry** — names in order, index is the number, append only, never reuse a
   slot, 96 KB for a full one. Rotation stays a **mask not a lookup** (doc 19 reads
-  it per block per frame) and the 16-variant cap costs only 4.4% of the type space
-  even for sixty stair-like materials.
+  it per block per frame), and the 16-variant cap is **not** cheap: against
+  Minecraft's yardstick of 1,159 types and ~26,000 states (quoted from the wiki,
+  not measured) the fixed split spends **40–68%** of the type space where a flat
+  index spends 40%. It fits with headroom; the space was never the argument.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

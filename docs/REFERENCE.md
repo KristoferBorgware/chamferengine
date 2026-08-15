@@ -83,8 +83,10 @@ Cited by [doc 27](27-block-state.md).
    together 16 bits -> 65,536 distinct block states
    doc 19 uses 3 of the 4 rotation bits for 6 directions, so one bit
    is spare -- doc 19 suggests a flag such as powered or reversed.
-   For scale: Minecraft ships on the order of a thousand block types, so
-   4,096 is about four times a full game -- comfortable, not unlimited.
+   For scale, Minecraft Java: 1,159 block types in the registry, so
+   4,096 is 3.5x a full game -- comfortable, not unlimited.
+   But it also ships roughly 26,000 block STATES, which is 22.4 per type
+   on average -- ABOVE the 16 variants a type gets here. Section 6 prices that.
 
 2. can a type number just be a hash of the block's name?
    4,096 slots. Chance that some two names collide:
@@ -165,8 +167,15 @@ Cited by [doc 27](27-block-state.md).
      10 such materials -> 30 of 4,096 slots = 0.7%
      30 such materials -> 90 of 4,096 slots = 2.2%
      60 such materials -> 180 of 4,096 slots = 4.4%
-   Even sixty stair-like materials spend under 5% of the type space, so
-   the fixed split is not the constraint it looks like.
+   That example is real and it is FLATTERING. Take the yardstick instead:
+     26,000 states over 1,159 types needs at least ceil(states/16) = 1,625 slots,
+     and every type needs one, so realistically 1,625-2,784 of 4,096
+     = 40%-68% of the type space.
+   A flat index would use 26,000 of 65,536 = 40%, so the split's
+   waste is what rounding each type up to a multiple of 16 costs.
+   So the fixed split is NOT nearly free -- at Minecraft scale it spends
+   about half the type space. It still fits, and the deciding argument
+   was never the space anyway.
    RECOMMENDATION: the fixed split. It keeps doc 19's rotation a mask,
    which is the one read that happens per block per frame.
 
@@ -1641,7 +1650,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 573 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 552 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

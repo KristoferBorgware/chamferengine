@@ -41,9 +41,16 @@ this document exists for, and the obvious answer to it is wrong.
 > | rotation | 4 | **16** variants of each |
 > | together | 16 | **65,536** distinct block states |
 
-For scale: Minecraft ships on the order of a thousand block types. **4,096 is
-about four times a full game** — comfortable, not unlimited, and worth knowing
-before anyone plans a thousand kinds of stone.
+For scale, take Minecraft Java as the yardstick. It has **1,159 block types** in
+its registry, so 4,096 is **3.5× a full game** — comfortable, not unlimited.
+
+But it also ships **roughly 26,000 block states**, which is **22 variants per
+type on average** — *above* the 16 a type gets here. That number is the one to
+watch, and it is priced below rather than waved at.
+
+*(Both figures are quoted from the Minecraft wiki, not produced by a script here.
+The type count is exact; the state total is the wiki's "tens of thousands", taken
+as 26,000. They are used as a sense of scale, not as anything to size against.)*
 
 ---
 
@@ -162,15 +169,29 @@ keeps rotation a mask, and caps variants at 16 per type.
 
 The deciding argument is [doc 19](19-directional-blocks.md). A rail reads the
 facing of its neighbours constantly; that is the one block-state read that
-happens per block per frame, and it should not be a table lookup. The cap is the
-thing to check, and it turns out not to bind:
+happens per block per frame, and it should not be a table lookup.
 
-> **[verified]** `verification/blockstate.js`, section 6. A stair-like block with
-> 4 facings × 2 halves × 5 join shapes is 40 states, so **3 type slots** each.
-> Sixty such materials spend **180 of 4,096 slots — 4.4%**.
+The 16-variant cap is the thing to check, and here an earlier draft of this
+document cheated. It priced a stair-like block — 4 facings × 2 halves × 5 join
+shapes, 40 states, 3 type slots — and concluded that sixty such materials spend
+**4.4%** of the type space. That is true, and it is a flattering example.
 
-**Take the fixed split.** A block needing more than 16 variants spends extra type
-numbers, and the type space is nowhere near tight enough for that to matter.
+Price it against the yardstick instead:
+
+> **[verified]** `verification/blockstate.js`, section 6. Roughly 26,000 states
+> over 1,159 types needs at least `ceil(26000/16)` = **1,625 slots**, and every
+> type needs one of its own, so realistically **1,625–2,784 of 4,096 — 40% to
+> 68% of the type space**. A flat index would use 26,000 of 65,536 = **40%**, so
+> the split's waste is exactly what rounding each type up to a multiple of 16
+> costs.
+
+**So the fixed split is not nearly free. At a Minecraft-sized catalogue it spends
+about half the type space.** It still fits, with headroom for a game larger than
+Minecraft — and the deciding argument was never the space. It is that a rail
+reading its neighbour's facing should be a mask.
+
+**Take the fixed split, knowing the price.** If a game ever outgrows it, the nine
+spare bits in the edit record are where the extra type bits come from.
 
 ---
 
@@ -209,7 +230,7 @@ numbers, and the type space is nowhere near tight enough for that to matter.
 ## In one breath
 
 - **12 bits of type, 4 of rotation**: **4,096** block types, **16** variants each,
-  **65,536** states — about four times the size of a full Minecraft.
+  **65,536** states — **3.5×** Minecraft's 1,159 block types.
 - **A type number cannot be a hash of its name.** In 12 bits it is even odds on a
   collision by **75 types** and near-certain by 200, and a collision makes every
   save holding both blocks unreadable. Widening to 24 bits still leaves 2.9%.
@@ -221,5 +242,6 @@ numbers, and the type space is nowhere near tight enough for that to matter.
 - **The planet is not in the record**, because the file already knows which planet
   it is.
 - **Rotation stays a mask, not a lookup**, because doc 19 reads it per block per
-  frame — and the 16-variant cap costs only **4.4%** of the type space even for
-  sixty stair-like materials.
+  frame. The 16-variant cap is **not** cheap, though: at Minecraft's ~26,000
+  states it spends **40–68%** of the type space against a flat index's 40%. It
+  fits; it is not free; and the space was never the deciding argument.

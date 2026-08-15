@@ -6,6 +6,9 @@
 // This sizes all of it -- and kills the obvious answer to the numbering question.
 // Backs docs/27-block-state.md
 const TYPE = 12, ROT = 4, STATE = TYPE + ROT;
+// Quoted from the Minecraft wiki, not measured here: 1,159 registry entries in
+// Java 1.21.11, and "tens of thousands" of block states, taken as ~26,000.
+const MC_TYPES = 1159, MC_STATES = 26000;
 
 console.log('1. what the fields buy');
 {
@@ -14,8 +17,14 @@ console.log('1. what the fields buy');
   console.log(`   together ${STATE} bits -> ${(2**STATE).toLocaleString('en-US')} distinct block states`);
   console.log(`   doc 19 uses 3 of the ${ROT} rotation bits for 6 directions, so one bit`);
   console.log('   is spare -- doc 19 suggests a flag such as powered or reversed.');
-  console.log('   For scale: Minecraft ships on the order of a thousand block types, so');
-  console.log(`   ${(2**TYPE).toLocaleString('en-US')} is about four times a full game -- comfortable, not unlimited.`);
+  // The yardstick. 1,159 is the Minecraft wiki's count of registry entries in
+  // Java 1.21.11; the state total is its "tens of thousands", taken as ~26,000.
+  // Neither is produced by a script here -- they are quoted, and flagged as such.
+  console.log(`   For scale, Minecraft Java: ${MC_TYPES.toLocaleString('en-US')} block types in the registry, so`);
+  console.log(`   ${(2**TYPE).toLocaleString('en-US')} is ${(2**TYPE/MC_TYPES).toFixed(1)}x a full game -- comfortable, not unlimited.`);
+  console.log(`   But it also ships roughly ${MC_STATES.toLocaleString('en-US')} block STATES, which is`
+    + ` ${(MC_STATES/MC_TYPES).toFixed(1)} per type`);
+  console.log(`   on average -- ABOVE the ${2**ROT} variants a type gets here. Section 6 prices that.`);
 }
 
 // ---- 2. the obvious numbering scheme does not work -------------------------
@@ -121,8 +130,19 @@ console.log('\n6. the one real choice: is rotation a FIELD or part of the number
   for (const mats of [10, 30, 60])
     console.log(`     ${String(mats).padStart(2)} such materials -> ${mats*Math.ceil(heavy/2**ROT)} of ${(2**TYPE).toLocaleString('en-US')} slots`
       + ` = ${(100*mats*Math.ceil(heavy/2**ROT)/2**TYPE).toFixed(1)}%`);
-  console.log('   Even sixty stair-like materials spend under 5% of the type space, so');
-  console.log('   the fixed split is not the constraint it looks like.');
+  console.log('   That example is real and it is FLATTERING. Take the yardstick instead:');
+  const lower = Math.ceil(MC_STATES / 2**ROT);
+  console.log(`     ${MC_STATES.toLocaleString('en-US')} states over ${MC_TYPES.toLocaleString('en-US')} types needs at least`
+    + ` ceil(states/${2**ROT}) = ${lower.toLocaleString('en-US')} slots,`);
+  console.log(`     and every type needs one, so realistically ${lower.toLocaleString('en-US')}-${(lower+MC_TYPES).toLocaleString('en-US')}`
+    + ` of ${(2**TYPE).toLocaleString('en-US')}`);
+  console.log(`     = ${(100*lower/2**TYPE).toFixed(0)}%-${(100*(lower+MC_TYPES)/2**TYPE).toFixed(0)}% of the type space.`);
+  console.log(`   A flat index would use ${MC_STATES.toLocaleString('en-US')} of ${(2**STATE).toLocaleString('en-US')}`
+    + ` = ${(100*MC_STATES/2**STATE).toFixed(0)}%, so the split's`);
+  console.log('   waste is what rounding each type up to a multiple of 16 costs.');
+  console.log('   So the fixed split is NOT nearly free -- at Minecraft scale it spends');
+  console.log('   about half the type space. It still fits, and the deciding argument');
+  console.log('   was never the space anyway.');
   console.log('   RECOMMENDATION: the fixed split. It keeps doc 19\'s rotation a mask,');
   console.log('   which is the one read that happens per block per frame.');
 }
