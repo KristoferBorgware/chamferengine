@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-one self-contained HTML files. No build step, no `npm install`, no server
+Twenty-two self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -144,6 +144,20 @@ seam or pentagon, because the generator samples 3D world space and never sees th
 addressing scheme.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+---
+
+### [`rivers-and-lakes.html`](rivers-and-lakes.html)
+Doc 21's flow routing, run live on a real level-6 planet — 40,962 cells, filled,
+routed and accumulated in about half a second. One button, and it is the whole
+argument: **fill lakes flat** and 914 rivers stop dead where they meet the water,
+ringed in red. **Fill with a slope** — a ten-thousandth of a metre per cell — and
+there are none, with a trunk river running out of the lake system to the sea.
+
+The lake cells are the same cells in both modes. The slope does not change what
+holds water; it changes whether "flow to your lowest neighbour" has an answer.
+
+**Docs:** [21 — Rivers, erosion and continents](../docs/21-rivers-and-erosion.md)
 
 ---
 

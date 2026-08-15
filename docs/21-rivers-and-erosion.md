@@ -123,6 +123,13 @@ exists only so the "flow to your lowest neighbour" rule keeps working.*
 Without the slope, every one of those 2,369 lake cells is a dead end. With it,
 the network is connected from every hilltop to the sea.
 
+**Watch it happen:** [`demos/rivers-and-lakes.html`](../demos/rivers-and-lakes.html)
+runs this routing live on a real level-6 planet and switches the fill between flat
+and sloped. Flat leaves **914** dead ends, ringed in red where the rivers stop in
+the lake; sloped leaves **0**, and a trunk river appears running out of the lake
+system to the sea. The lake cells are **the same cells** either way — the slope
+changes nothing about which cells hold water, only whether they can be sorted.
+
 ### Drainage, and what counts as a river
 
 Once every cell has a downhill neighbour, sort by height and accumulate: each cell
