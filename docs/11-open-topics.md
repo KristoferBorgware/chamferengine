@@ -65,20 +65,22 @@ different from anything under *Still open*.
 
 ### Discussed, and in no document at all
 
-Four things have been talked about and **never written down**, so they are neither
-V1 nor V2 — they are unscoped, and this is the only place that records it:
+Four things had been talked about and **never written down**. **Three now have a
+document** — [doc 32](32-sky-clouds-and-moon.md) covers the **skybox**, the
+**clouds** and the **moon**, and none of them turned out to be pure decoration:
+the skybox has to be world-fixed because walking turns your `up` through 360°, a
+wind field cannot be uniform because of the same theorem as invariant 8, and the
+moon's angular size is an art decision while its distance is not.
 
-- **A skybox.**
-- **Clouds**, hexagonal, no collision, a simple wind model, cosmetic.
-- **A moon**, cosmetic. *(The "100 km moon" rows in
-  [doc 15](15-precision-and-origin.md) and [doc 20](20-player-coordinates.md) are a
-  body **size** in a precision table, not this.)*
+One is left, and it is the big one:
+
 - **Space travel to another planet.** [Doc 03](03-addressing.md)'s **12-bit planet
-  field** — 4,096 worlds — was added for it and is the only part that exists.
+  field** — 4,096 worlds — was added for it and is still the only part that
+  exists. Doc 32 deliberately stops at the sky: its moon is a painted disc and its
+  sun is a *direction*, not a place.
 
 The planet field is the pattern worth noticing: a cheap decision taken early
-because it would have been expensive later. The other three are cosmetic and cost
-nothing to defer, but nothing is designed and nobody should assume otherwise.
+because it would have been expensive later.
 
 ### What this does to the rest of this page
 

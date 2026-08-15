@@ -48,6 +48,7 @@ numbered documents.
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
 | [`seam.js`](../verification/seam.js) | What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, and what does close the remaining holes. | [14](14-meshing-and-lod.md) |
+| [`sky.js`](../verification/sky.js) | What is above you, on a planet you can walk around in two hours. node verification/sky.js A skybox, clouds and a moon are the three things this specification has discussed and never written down (doc 11). They look like pure decoration, and on a normal-sized world they are: a cube at infinity, a scrolling texture, a sprite. This planet is 1,700 m across and that changes all three, because the player is the fastest-moving thing in the sky. Everything here is PRESENTATION (doc 29): client-side, never compared between machines, and therefore allowed transcendentals that doc 23 forbids in the generator. That freedom is used, and it is why none of this is expensive. | [32](32-sky-clouds-and-moon.md) |
 | [`taper.js`](../verification/taper.js) | Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost. | [06](06-world-sizing.md) |
 | [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
 | [`volume.js`](../verification/volume.js) | Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs. | [08](08-terrain-generation.md) [14](14-meshing-and-lod.md) |
@@ -110,9 +111,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 292 ns in this JavaScript
+   one solidity(cell) query: 393 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 190 ns)
+    upper bound -- Rust is about 256 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -125,10 +126,10 @@ authority.js -- what the server must know, per cheat, and what it costs
    and doc 27 measured a player acting on a block about 2x a second:
 
      players   queries/s   CPU of one core
-          10          20      0.0006%
-         100         200      0.0058%
-        1000        2000      0.0584%
-       10000       20000      0.5835%
+          10          20      0.0008%
+         100         200      0.0079%
+        1000        2000      0.0787%
+       10000       20000      0.7870%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1119,7 +1120,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 182M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1360,10 +1361,10 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.33 ms   1.85x
-         JS, one object a vertex   4.81 ms   26.71x
+         JS, typed arrays          0.70 ms   3.88x
+         JS, one object a vertex   9.45 ms   52.51x
 
-       THE LANGUAGE GAP IS 1.9x. THE LAYOUT GAP IS 14x.
+       THE LANGUAGE GAP IS 3.9x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
        than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
@@ -2250,7 +2251,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 701 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1010 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2426,6 +2427,167 @@ Cost of the fine chunk owning the seam:
   plus ONE height-field evaluation per rim column to learn where the
   coarse neighbour put its surface. Both are negligible against the
   1.09 spans and ~12 faces per column the chunk already emits.
+```
+
+## `sky.js`
+
+What is above you, on a planet you can walk around in two hours. node verification/sky.js A skybox, clouds and a moon are the three things this specification has discussed and never written down (doc 11). They look like pure decoration, and on a normal-sized world they are: a cube at infinity, a scrolling texture, a sprite. This planet is 1,700 m across and that changes all three, because the player is the fastest-moving thing in the sky. Everything here is PRESENTATION (doc 29): client-side, never compared between machines, and therefore allowed transcendentals that doc 23 forbids in the generator. That freedom is used, and it is why none of this is expensive.
+
+Cited by [doc 32](32-sky-clouds-and-moon.md).
+
+```
+sky.js -- the skybox, clouds and the moon on a 1,700 m planet
+
+1. the sky turns because you walk, not because it moves
+   circumference 10681 m, walked at 1.4 m/s
+
+   walk this far   your "up" turns by   which is
+          10 m          0.34°   a few paces
+         100 m          3.37°   across a clearing
+         500 m         16.85°   a short stroll
+        2670 m         90.00°   a quarter of the way round
+       10681 m        360.00°   all the way round
+
+   Walking 10681 m turns you through a full 360°, so a player who walks
+   round the planet sees the ENTIRE celestial sphere pass overhead -- in
+   2.12 hours, without waiting for anything.
+
+   THE CONSEQUENCE FOR THE SKYBOX IS THE WHOLE DESIGN: it is fixed in WORLD
+   space, not view space. A classic skybox is drawn centred on the camera and
+   never rotates, because in a flat world every player shares one "up". Do
+   that here and the stars follow you around the planet, which reads as the
+   sky being painted on the inside of your helmet.
+
+2. a player outwalks the sun unless the day is short
+   day length   terminator speed   a walking player is
+        0.50 h           5.93 m/s   4.2x slower
+        1.00 h           2.97 m/s   2.1x slower
+        2.12 h           1.40 m/s   exactly matched
+        6.00 h           0.49 m/s   2.8x FASTER -- outwalks it
+       12.00 h           0.25 m/s   5.7x FASTER -- outwalks it
+       24.00 h           0.12 m/s   11.3x FASTER -- outwalks it
+
+   Below about 2.12 h of day length the sun outruns the player and
+   the sky behaves like a normal game sky. Above it, A PLAYER WALKING WEST
+   CAN HOLD THE SUNSET IN PLACE, or walk east into dawn. That is not a bug to
+   design around; it is the most legible way this world says it is small,
+   and it costs nothing because doc 16 already computes lighting per cell
+   from one dot product.
+
+3. wind must have calm points, and only one field earns its shape
+   Both candidate fields, evaluated AT the two points the theorem predicts:
+     project a world vector   |v| at +axis = 0.0e+0,  at -axis = 0.0e+0
+     rigid rotation           |v| at +axis = 0.0e+0,  at -axis = 0.0e+0
+   Exactly two calm points each, and there is no way to have fewer: the
+   hairy ball theorem is the same one invariant 8 cites for "no global
+   north". A wind field tangent to a sphere is zero somewhere.
+
+   How much of the planet is becalmed, by threshold:
+     speed below   share of the surface   band within
+              5%                  0.13%   2.9° of an axis pole
+             10%                  0.50%   5.7° of an axis pole
+             25%                  3.18%   14.5° of an axis pole
+   At a 10% threshold the doldrums are 0.5% of the sky and sit over the
+   poles. A player will not find them by accident.
+
+   AND THE TWO ARE NOT INTERCHANGEABLE. Divergence over 50,000 points --
+   how much the field piles air up or thins it out:
+
+     field                      mean |div|      max |div|
+     project a world vector         0.9988         1.9999
+     rigid rotation                3.3e-12        2.3e-11
+
+   Rigid rotation is DIVERGENCE-FREE to numerical noise -- it is a Killing
+   field, it moves the sphere along itself. The projected vector is not: it
+   pours air out of one pole and into the other, so a cloud texture advected
+   by it stretches at one end and bunches at the other, permanently.
+
+   Speed by latitude falls out right as well:
+     latitude   speed / equatorial
+        0.000°   1.000
+       26.565°   0.894
+       45.000°   0.707
+       60.000°   0.500
+       90.000°   0.000
+   Fastest at the equator, calm at the poles -- what a real atmosphere does,
+   and what a player expects without being told.
+
+   SO WIND IS ONE AXIS AND ONE RATE. Rotate the cloud sample point about that
+   axis by (time x rate) before the noise lookup. No stored vectors, no
+   per-cell field, and nothing that violates invariant 8 -- the axis is a
+   property of the WORLD, never a heading carried by a cell.
+
+4. a cloud sheet is the existing grid, evaluated higher up
+   cell size at a given level, on the surface and at cloud altitude:
+
+   level   surface cell   at 300 m up   cells on the whole sheet
+       3        256.0 m       301.1 m          642
+       4        128.0 m       150.6 m        2,562
+       5         64.0 m        75.3 m       10,242
+       6         32.0 m        37.6 m       40,962
+       7         16.0 m        18.8 m      163,842
+
+   A cloud does not need metre resolution. LEVEL 5 gives a ~64 m puff and
+   10,242 cells for the entire sky -- against 41,943,042 for the surface at
+   D 11. The whole cloud sheet is four thousand times smaller than one
+   layer of the world.
+
+   clouds at 150 m are visible out to   765 m  =  5.0% of the sky sheet
+   clouds at 300 m are visible out to  1019 m  =  8.7% of the sky sheet
+   clouds at 600 m are visible out to  1332 m  = 14.6% of the sky sheet
+
+   An elevated object clears the horizon from much further away than the
+   ground does -- doc 14 already uses R*acos(R/(R+h)) for a distant peak.
+   So the visible cloud sheet is a few hundred cells, not a few thousand,
+   and it is a FLAT-SHADED SHEET rather than a volume: no crust, no layers,
+   no delta store, no collision.
+
+5. the moon: angular size is scale-free, so someone has to choose it
+   Scale the real Earth-Moon system down to R = 1700 m (factor 2.67e-4):
+     moon radius   463 m
+     distance      102.6 km
+     angular size  0.52°  <- UNCHANGED, because scaling preserves angles
+
+   That is the finding: a faithfully scaled moon looks EXACTLY like the real
+   one, which is half a degree -- about the width of a fingernail at arm's
+   length. Every game that wants a moon you notice makes it bigger, and there
+   is no physical size that gets you there. SO THE ANGULAR SIZE IS AN ART
+   DECISION, and once it is, the moon is a painted disc rather than a place.
+
+   drawn at  0.52° -> sits  102.57 km away, shifts  1.90° as you walk round
+   drawn at  2.00° -> sits   26.55 km away, shifts  7.33° as you walk round
+   drawn at  5.00° -> sits   10.62 km away, shifts 18.20° as you walk round
+
+   The parallax column is the one that matters and it is easy to miss. On a
+   planet you can circle in two hours, WALKING MOVES YOU 3,400 m ACROSS the
+   moon's line of sight, so it shifts against the stars by a couple of
+   degrees -- several times its own width. Put the moon in the skybox
+   texture, at infinity, and that shift is missing; the moon will look
+   pinned to the stars in a way players read as cheap without knowing why.
+   Draw it as an object at a finite distance and the parallax is free.
+
+verdict
+   All three are cosmetic, all three are PRESENTATION (doc 29) and therefore
+   client-only, free to differ between machines, and allowed the
+   transcendentals doc 23 forbids in the generator. None of it is expensive.
+   What makes them non-trivial is not cost -- it is that a 1,700 m planet
+   breaks the assumption every one of the standard techniques rests on:
+   that the player does not move far enough to matter.
+
+   SKYBOX: fixed in WORLD space, not view space. Walking rotates you through
+   the whole celestial sphere in 2.12 h, and a camera-locked skybox
+   turns that into stars glued to your head.
+
+   CLOUDS: the same addressing at a bigger radius (invariant 10). Level 5 is
+   a 64 m puff and 10,242 cells for the entire sky. Wind is ONE AXIS AND ONE
+   RATE -- rotate the sample point before the lookup -- because the hairy ball
+   theorem forbids a uniform wind and rigid rotation puts the two calm points
+   at the poles, where an atmosphere puts them anyway.
+
+   MOON: a scaled-down real moon is still 0.52 deg, so the size is an art
+   decision and the moon is a painted disc. Give it a finite distance anyway:
+   walking round the planet shifts it a couple of degrees, and that parallax
+   is the cheapest thing in this file.
 ```
 
 ## `taper.js`
@@ -2778,4 +2940,4 @@ verdict
 
 ---
 
-_34 scripts. Every number above is reproduced by running them._
+_35 scripts. Every number above is reproduced by running them._

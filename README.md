@@ -80,6 +80,7 @@ a runnable demo where one exists.
 | 29 | [What runs where](docs/29-what-runs-where.md) | The four parts, why determinism draws the lines, and what Rust → wasm actually costs |
 | 30 | [Authority and cheating](docs/30-authority-and-cheating.md) | What the server must know per cheat, why mobs are the expensive decision, and intents-not-outcomes |
 | 31 | [Deployment](docs/31-deployment.md) | **Plan, not decision.** V1 is local; the delta store is not a database; the fan-out is the cost |
+| 32 | [The sky, the clouds and the moon](docs/32-sky-clouds-and-moon.md) | Why walking turns the sky, why wind must have calm points, and why a scaled moon is still 0.52° |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -92,7 +93,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all thirty-four verification scripts and fails the build if
+`make-reference.js` runs all thirty-five verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a
@@ -186,7 +187,7 @@ node verification/language.js   # the same kernel in six languages; the digests 
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.
-All thirty-four are run by `make-reference.js`, and
+All thirty-five are run by `make-reference.js`, and
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is their combined output.
 
 ---

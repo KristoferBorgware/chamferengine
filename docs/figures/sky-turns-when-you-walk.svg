@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 336" width="520" height="336">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-big" x="30" y="30">world-fixed sky</text><text class="cf-d" x="30" y="48">one star, and it stays put</text><circle class="cf-fill" cx="134" cy="158" r="58"/><path class="cf-l" d="M40.4 110.1L47.4 110.1M43.9 106.6L43.9 113.6"/><path class="cf-l" d="M116.3 57.0L123.3 57.0M119.8 53.5L119.8 60.5"/><path class="cf-l" d="M162.0 61.0L169.0 61.0M165.5 57.5L165.5 64.5"/><path class="cf-l" d="M220.6 110.1L227.6 110.1M224.1 106.6L224.1 113.6"/><path class="cf-g" d="M69.5 74.4L81.5 74.4M75.5 68.4L75.5 80.4"/><circle class="cf-g" cx="75.5" cy="74.4" r="9" fill="none"/><path class="cf-a" d="M100.7 110.5L82.4 84.3"/><circle cx="100.7" cy="110.5" r="3.5" fill="#48505f"/><text class="cf-c" x="82.7" y="126.5">A</text><path class="cf-a" d="M167.3 110.5L185.6 84.3"/><circle cx="167.3" cy="110.5" r="3.5" fill="#48505f"/><text class="cf-c" x="175.3" y="126.5">B</text>
+  <text class="cf-c" x="30" y="252">A has it overhead.</text>
+  <text class="cf-c" x="30" y="268">B has moved out from under it.</text>
+  <text class="cf-big" x="282" y="30">camera-locked sky</text><text class="cf-d" x="282" y="48">the star comes along</text><circle class="cf-fill" cx="386" cy="158" r="58"/><path class="cf-l" d="M292.4 110.1L299.4 110.1M295.9 106.6L295.9 113.6"/><path class="cf-l" d="M368.3 57.0L375.3 57.0M371.8 53.5L371.8 60.5"/><path class="cf-l" d="M414.0 61.0L421.0 61.0M417.5 57.5L417.5 64.5"/><path class="cf-l" d="M472.6 110.1L479.6 110.1M476.1 106.6L476.1 113.6"/><path class="cf-g" d="M321.5 74.4L333.5 74.4M327.5 68.4L327.5 80.4"/><circle class="cf-g" cx="327.5" cy="74.4" r="9" fill="none"/><path class="cf-g" d="M438.5 74.4L450.5 74.4M444.5 68.4L444.5 80.4"/><circle class="cf-g" cx="444.5" cy="74.4" r="9" fill="none"/><path class="cf-a" d="M352.7 110.5L334.4 84.3"/><circle cx="352.7" cy="110.5" r="3.5" fill="#48505f"/><text class="cf-c" x="334.7" y="126.5">A</text><path class="cf-a" d="M419.3 110.5L437.6 84.3"/><circle cx="419.3" cy="110.5" r="3.5" fill="#48505f"/><text class="cf-c" x="427.3" y="126.5">B</text>
+  <text class="cf-gd" x="282" y="252">Both have it overhead,</text>
+  <text class="cf-gd" x="282" y="268">which is one star in two places.</text>
+  <path class="cf-l" d="M20 286L500 286"/>
+  <text class="cf-d" x="20" y="308">Drawn at 70° so it reads. A real 500 m walk turns "up" by 16.9°, and going</text>
+  <text class="cf-d" x="20" y="324">all the way round turns it by 360° &#8212; in 2.12 hours.</text>
+</svg>

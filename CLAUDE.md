@@ -135,7 +135,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 31.
+- `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -194,6 +194,7 @@ script owns its numbers.
 | [29](docs/29-what-runs-where.md) | the four parts; the server generates nothing; Rust → wasm | `language.js` |
 | [30](docs/30-authority-and-cheating.md) | what the server must know per cheat; mobs; intents not outcomes | `authority.js` |
 | [31](docs/31-deployment.md) | **plan, not decision.** V1 local; DynamoDB; fan-out is the cost | — |
+| [32](docs/32-sky-clouds-and-moon.md) | skybox is world-fixed; clouds are the grid higher up; wind is one axis | `sky.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -766,6 +767,27 @@ Violating any of these breaks the design. They are not tunable.
   blob marked *not authoritative*; (3) **ship the rejection message in V1 unused**,
   because a client that assumes every edit succeeds has to be rewritten when V2
   starts refusing them.
+- **The sky is not decoration on a planet this small** (`sky.js`, doc 32). Walking
+  turns your own `up` by `s/R`: **3.37°** per 100 m and a full **360°** over the
+  10,681 m circumference, in **2.12 h** — so **the skybox is fixed in WORLD space,
+  not view space**, or the stars follow the player around the planet. The same
+  number says **a player outwalks the sun** for any day longer than 2.12 h and can
+  hold a sunset in place by walking west. **Clouds are the same grid at a bigger
+  radius** (invariant 10 going up instead of down): level 5 is a 64 m puff and
+  **10,242 cells for the whole sky** against 41,943,042 for one surface layer, of
+  which under **9%** is in view at 300 m altitude — a sheet, not a volume, with no
+  collision and nothing in a chunk. **Wind is ONE AXIS AND ONE RATE**, rotating the
+  sample point before the noise lookup: the hairy ball theorem (invariant 8's own
+  theorem) forbids a uniform wind, and of the two obvious fields only **rigid
+  rotation is divergence-free** — mean `|div|` **3.3e-12** against **0.9988** for a
+  projected world vector, which would stretch a cloud pattern at one pole and bunch
+  it at the other forever. Calm patches are **0.5%** of the surface, at the axis
+  poles. **The moon's angular size is an art decision** — a faithfully scaled real
+  moon is still **0.52°**, because scaling preserves angles — **but its distance is
+  not**: walking round the planet shifts it **1.9°** against the stars, so a
+  skybox-painted moon loses the parallax. All three are **presentation**, so they
+  are client-only and may spend the transcendentals doc 23 forbids in the
+  generator; doc 32 is the first place that freedom is actually used.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -801,9 +823,10 @@ that stores and routes and validates nothing, inventory client-side and never
 synced. **V2** = edit validation (the point query, `0.06%` of a core at 1,000
 players), server-side simulation and mobs (**158×** that), entity interest,
 AWS hosting, a native desktop client, and any move of a hot path to C/Rust+wasm.
-**Unscoped and in no document at all**: a skybox, clouds, a cosmetic moon, and
-space travel — only doc 03's 12-bit **planet field** exists, added early because
-it would have been expensive later. Doc 26's triage gains a second axis from this:
+**Unscoped and in no document at all**: only **space travel** now — the skybox,
+clouds and the moon are doc 32. Doc 03's 12-bit **planet field** is still the only
+part of space travel that exists, added early because it would have been expensive
+later. Doc 26's triage gains a second axis from this:
 *blocks code* and *in V1* are different questions, and the first build is
 **smaller** than doc 26 assumed — "the server" on its step-4 list is now a file.
 

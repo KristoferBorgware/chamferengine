@@ -2878,5 +2878,45 @@ const prof = (() => {
   <text class="cf-d" x="14" y="292">the bottom bar &#8212; only mobs do that.</text>`));
 }
 
+// =============================================================================
+// 32 — a camera-locked skybox versus a world-fixed one. Drawn at 70° of
+// separation so it reads; the real 500 m walk is s/R = 16.9°, in the caption.
+// =============================================================================
+{
+  const W = 520, PR = 58, RING = PR + 44, cy = 158;
+  const cx1 = 134, cx2 = 386;
+  const A = -35 * Math.PI/180, B = 35 * Math.PI/180;
+  const at = (cx, ang, r) => [cx + r*Math.sin(ang), cy - r*Math.cos(ang)];
+  const star = (cx, ang, cls, big) => {
+    const [x,y] = at(cx, ang, RING), s = big ? 6 : 3.5;
+    return `<path class="${cls}" d="M${f(x-s)} ${f(y)}L${f(x+s)} ${f(y)}M${f(x)} ${f(y-s)}L${f(x)} ${f(y+s)}"/>`
+         + (big ? `<circle class="${cls}" cx="${f(x)}" cy="${f(y)}" r="9" fill="none"/>` : '');
+  };
+  const walker = (cx, ang, tag, cls) => {
+    const [px,py] = at(cx, ang, PR), [ex,ey] = at(cx, ang, RING - 12);
+    return `<path class="${cls}" d="M${f(px)} ${f(py)}L${f(ex)} ${f(ey)}"/>`
+         + `<circle cx="${f(px)}" cy="${f(py)}" r="3.5" fill="#48505f"/>`
+         + `<text class="cf-c" x="${f(px + (ang<0?-18:8))}" y="${f(py+16)}">${tag}</text>`;
+  };
+  const faint = [-62, -8, 18, 62].map(d => d*Math.PI/180);
+  const panel = (cx, title, sub, marked) =>
+    `<text class="cf-big" x="${cx-PR-46}" y="30">${title}</text>`
+    + `<text class="cf-d" x="${cx-PR-46}" y="48">${sub}</text>`
+    + `<circle class="cf-fill" cx="${cx}" cy="${cy}" r="${PR}"/>`
+    + faint.map(a => star(cx, a, 'cf-l')).join('')
+    + marked.map(a => star(cx, a, 'cf-g', true)).join('')
+    + walker(cx, A, 'A', 'cf-a') + walker(cx, B, 'B', 'cf-a');
+  made.push(svg('sky-turns-when-you-walk', W, 336, `
+  ${panel(cx1, 'world-fixed sky', 'one star, and it stays put', [A])}
+  <text class="cf-c" x="${cx1-PR-46}" y="252">A has it overhead.</text>
+  <text class="cf-c" x="${cx1-PR-46}" y="268">B has moved out from under it.</text>
+  ${panel(cx2, 'camera-locked sky', 'the star comes along', [A, B])}
+  <text class="cf-gd" x="${cx2-PR-46}" y="252">Both have it overhead,</text>
+  <text class="cf-gd" x="${cx2-PR-46}" y="268">which is one star in two places.</text>
+  <path class="cf-l" d="M20 286L${W-20} 286"/>
+  <text class="cf-d" x="20" y="308">Drawn at 70° so it reads. A real 500 m walk turns "up" by 16.9°, and going</text>
+  <text class="cf-d" x="20" y="324">all the way round turns it by 360° &#8212; in 2.12 hours.</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');
