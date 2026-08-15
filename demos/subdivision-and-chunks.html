@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two sliders, and only one of them moves a cell</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 34px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 12px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:manipulation;
+        background:#080b11; border:1px solid #1b2537; border-radius:11px; }
+  .row { display:flex; align-items:center; gap:7px; margin-top:11px; flex-wrap:wrap; }
+  .rl { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+        color:#7d879c; min-width:82px; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 11px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#1d3550; border-color:#3d6690; color:#fff; }
+  button:disabled { opacity:.3; cursor:default; }
+  button:active { transform:scale(.97); }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px;
+         padding:13px 14px 12px; margin-top:14px; }
+  .line { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .tag { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+         color:#7d879c; min-width:92px; }
+  .val { font-family:ui-monospace,Menlo,monospace; font-size:15px; font-weight:600;
+         font-variant-numeric:tabular-nums; }
+  .bits { display:flex; height:30px; border-radius:7px; overflow:hidden; margin-top:11px;
+          border:1px solid #223049; }
+  .bits div { display:flex; align-items:center; justify-content:center; font-size:10.5px;
+              font-family:ui-monospace,Menlo,monospace; color:#0b0e14; font-weight:700;
+              overflow:hidden; white-space:nowrap; }
+  .eq { border-top:1px solid #1e293c; margin-top:11px; padding-top:11px;
+        font-size:12.5px; color:#a9b2c6; line-height:1.6; }
+  .eq b { color:#fff; }
+  .note { margin-top:12px; font-size:12.5px; line-height:1.6; color:#a9b2c6;
+          background:#0f1a16; border:1px solid #1d3b33; border-left:3px solid #3fb8af;
+          border-radius:8px; padding:11px 13px; }
+  .note.warn { background:#1a150c; border-color:#3d3218; border-left-color:#e0913a; }
+  .hint { font-size:11.5px; color:#6d768c; margin-top:12px; line-height:1.55; }
+  .stat { font-size:11.5px; color:#7d879c; margin-top:9px; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body>
+
+<h1>Two sliders, and only one of them moves a cell</h1>
+<div class="sub">Icosahedron faces unfolded flat, with the real hexagons on them.
+<b>Subdivision depth</b> decides how many cells there are. <b>Chunk level</b> decides only
+where the filing lines are drawn. Watch which one changes the ground.</div>
+
+<svg id="svg" viewBox="0 0 600 520"></svg>
+
+<div class="row"><span class="rl">Depth D</span><span id="dbtns"></span></div>
+<div class="row"><span class="rl">Chunk level C</span><span id="cbtns"></span></div>
+<div class="row"><span class="rl">Faces</span><span id="fbtns"></span></div>
+<div class="row"><span class="rl">Show</span><span id="vbtns"></span></div>
+<div class="stat" id="stat"></div>
+
+<div class="note" id="note"></div>
+
+<div class="out">
+  <div class="line"><span class="tag">face</span>
+    <span class="val" id="oface" style="color:#7fb2ff">—</span></div>
+  <div class="line"><span class="tag">i, j on face</span>
+    <span class="val" id="oij" style="color:#dfe6f5">—</span></div>
+  <div class="line"><span class="tag">path digits</span>
+    <span class="val" id="opath" style="color:#3fb8af">—</span></div>
+  <div class="line"><span class="tag">local q, r</span>
+    <span class="val" id="oqr" style="color:#e0913a">—</span></div>
+  <div class="line"><span class="tag">surface</span>
+    <span class="val" id="oh" style="color:#9fd88f">—</span></div>
+  <div class="line"><span class="tag">its chunk holds</span>
+    <span class="val" id="ochunk" style="color:#cbb4ff">—</span></div>
+  <div class="bits" id="bits"></div>
+  <div class="eq" id="eq">Tap a hexagon.</div>
+</div>
+
+<div class="hint">Terrain is sampled from each cell's real 3D position on the sphere, with the
+noise function doc 08 pins — so it flows straight across a face seam without knowing one is
+there. Chunk lines are teal; the tapped cell's own chunk is filled, and the nested triangles
+show the path digits that name it, one per level. A cell sitting on a seam has a name in
+each face it touches; doc 03 awards it to the lowest chunk ID, which is what you are shown.</div>
+
+<script>
+// ---- the solid -------------------------------------------------------------
+const T = (1 + Math.sqrt(5)) / 2;
+const norm = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+const V = [[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],
+           [T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]].map(norm);
+const F = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+           [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+const ADJ = F.map((f,fi) => [0,1,2].map(e => {
+  const a=f[e], b=f[(e+1)%3];
+  for (let g=0; g<20; g++){ if (g===fi) continue;
+    for (let e2=0; e2<3; e2++){ const c=F[g][e2], d=F[g][(e2+1)%3];
+      if ((a===c&&b===d)||(a===d&&b===c)) return {face:g, edge:e2}; } }
+}));
+
+// ---- doc 08's pinned noise, exactly ----------------------------------------
+function hash3(x,y,z){
+  let h = (Math.imul(x|0,374761393) + Math.imul(y|0,668265263) + Math.imul(z|0,1274126177)) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 1274126177) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h / 4294967296;
+}
+const fadeq = t => t*t*t*(t*(t*6 - 15) + 10);
+function value3(px,py,pz){
+  const xi=Math.floor(px), yi=Math.floor(py), zi=Math.floor(pz);
+  const u=fadeq(px-xi), v=fadeq(py-yi), w=fadeq(pz-zi);
+  let s=0;
+  for (let c=0;c<8;c++){
+    const dx=c&1, dy=(c>>1)&1, dz=(c>>2)&1;
+    s += (dx?u:1-u)*(dy?v:1-v)*(dz?w:1-w)*hash3(xi+dx, yi+dy, zi+dz);
+  }
+  return s*2-1;
+}
+function fbm(p, freq, oct){
+  let s=0, a=1, tot=0, f=freq;
+  for (let o=0;o<oct;o++){ s += a*value3(p[0]*f, p[1]*f, p[2]*f); tot += a; a*=0.5; f*=2; }
+  return s/tot;
+}
+// One fixed field for every setting -- changing D must resample the SAME world,
+// never a different one. Four octaves keeps the finest feature a couple of cells
+// wide at the depths this demo reaches, so low D reads as coarse rather than noisy.
+const height = d => fbm(d, 1.5, 4);
+
+// ---- unfolding -------------------------------------------------------------
+const BASE = 0, S = 268;
+function layout(count){
+  const p2 = {}, drawn = [];
+  const c0 = F[BASE];
+  p2[c0[0]] = [0,0]; p2[c0[1]] = [S,0]; p2[c0[2]] = [S/2, S*Math.sqrt(3)/2];
+  drawn.push(BASE);
+  const reflect = (p,a,b) => { const dx=b[0]-a[0], dy=b[1]-a[1], L=dx*dx+dy*dy;
+    const t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L;
+    return [2*(a[0]+t*dx)-p[0], 2*(a[1]+t*dy)-p[1]]; };
+  for (let e=0; e<3 && drawn.length<count; e++){
+    const g = ADJ[BASE][e].face;
+    const u = F[BASE][e], v = F[BASE][(e+1)%3], w = F[BASE][(e+2)%3];
+    const q = F[g].find(x => x!==u && x!==v);
+    p2[q] = reflect(p2[w], p2[u], p2[v]);
+    drawn.push(g);
+  }
+  return { p2, drawn };
+}
+
+// ---- doc 03's descent ------------------------------------------------------
+function split(i, j, D, C){
+  let n = 1<<D, path = [], flip = 0;
+  for (let l=0; l<C; l++){
+    const half = n>>1; let d;
+    if      (i >= half){ d=1; i -= half; }
+    else if (j >= half){ d=2; j -= half; }
+    else if (i + j < half){ d=0; }
+    else { d=3; i = half-i; j = half-j; flip ^= 1; }
+    path.push(d); n = half;
+  }
+  return { path, q:i, r:j, flip };
+}
+
+// ---- state -----------------------------------------------------------------
+let D = 4, C = 2, NF = 2, VIEW = 'both', sel = null;
+
+// ---- palettes --------------------------------------------------------------
+const SEA = -0.06;
+function terrainColour(h){
+  if (h < SEA - 0.10) return '#143d63';
+  if (h < SEA)        return '#1d5a86';
+  if (h < SEA + 0.04) return '#b8a171';
+  if (h < 0.10)       return '#3f7a46';
+  if (h < 0.20)       return '#5c8f4a';
+  if (h < 0.30)       return '#7c7f63';
+  if (h < 0.40)       return '#8d8a83';
+  return '#d6dbe4';
+}
+function chunkColour(key){
+  let h = 0;
+  for (let i=0;i<key.length;i++) h = Math.imul(h ^ key.charCodeAt(i), 2654435761) >>> 0;
+  return `hsl(${h % 360} 46% ${34 + (h >> 9) % 16}%)`;
+}
+
+// ---- draw ------------------------------------------------------------------
+const svg = document.getElementById('svg');
+function render(){
+  const n = 1 << D;
+  const { p2, drawn } = layout(NF);
+  const at2 = (g,i,j) => { const [A,B,C2] = F[g].map(v => p2[v]);
+    return [ (A[0]*(n-i-j) + B[0]*i + C2[0]*j)/n, (A[1]*(n-i-j) + B[1]*i + C2[1]*j)/n ]; };
+  const at3 = (g,i,j) => { const [A,B,C2] = F[g].map(v => V[v]);
+    return norm([0,1,2].map(d => (A[d]*(n-i-j) + B[d]*i + C2[d]*j)/n)); };
+
+  // the hexagon around a lattice point: centroids of the six surrounding triangles.
+  // In unfolded coordinates the lattice is uniform, so one shape serves everywhere.
+  const e1 = [ (at2(BASE,1,0)[0]-at2(BASE,0,0)[0]), (at2(BASE,1,0)[1]-at2(BASE,0,0)[1]) ];
+  const e2 = [ (at2(BASE,0,1)[0]-at2(BASE,0,0)[0]), (at2(BASE,0,1)[1]-at2(BASE,0,0)[1]) ];
+  const dirs = [ e1, e2, [e2[0]-e1[0], e2[1]-e1[1]],
+                 [-e1[0],-e1[1]], [-e2[0],-e2[1]], [e1[0]-e2[0], e1[1]-e2[1]] ];
+  const hexOff = dirs.map((d,k) => { const e = dirs[(k+1)%6];
+    return [ (d[0]+e[0])/3, (d[1]+e[1])/3 ]; });
+
+  // A cell on a seam has a name in each face it touches. Doc 03 awards it to the
+  // lowest chunk ID, and the face field dominates that comparison -- so walk the
+  // faces in index order and let the first one to claim a position keep it.
+  const ordered = [...drawn].sort((a,b) => a-b);
+  let cells = '', mates = '', seen = new Set(), count = 0, selHit = null;
+  const chunkKey = (g,i,j) => g + ':' + split(i,j,D,C).path.join('');
+  const selKey = sel ? chunkKey(sel.g, sel.i, sel.j) : null;
+  for (const g of ordered){
+    for (let i=0;i<=n;i++) for (let j=0;i+j<=n;j++){
+      const P = at2(g,i,j);
+      const kk = P[0].toFixed(2)+','+P[1].toFixed(2);
+      if (seen.has(kk)) continue;                 // a seam cell belongs to two faces
+      seen.add(kk); count++;
+      const h = height(at3(g,i,j));
+      const key = chunkKey(g,i,j);
+      const fill = VIEW === 'chunks' ? chunkColour(key) : terrainColour(h);
+      const pts = hexOff.map(o => (P[0]+o[0]).toFixed(1)+','+(P[1]+o[1]).toFixed(1)).join(' ');
+      const isSel = sel && sel.g===g && sel.i===i && sel.j===j;
+      if (isSel) selHit = { P, h, key };
+      // every cell filed under the same chunk gets a wash, so the chunk's real
+      // footprint is visible as hexagons rather than as a triangle drawn over them
+      if (selKey && key === selKey && !isSel)
+        mates += `<polygon points="${pts}" fill="#ffffff" opacity="0.18"/>`;
+      cells += `<polygon points="${pts}" fill="${fill}"`
+             + (isSel ? ' stroke="#fff" stroke-width="2.2"' : ' stroke="#0b0e14" stroke-width="0.35"')
+             + ` data-g="${g}" data-i="${i}" data-j="${j}"/>`;
+    }
+  }
+
+  // chunk outlines: subdivide each drawn face C times and stroke every piece
+  let lines = '';
+  if (VIEW !== 'terrain'){
+    const sub = (a,b,c,lvl) => {
+      if (lvl === 0){
+        lines += `<polygon points="${a[0].toFixed(1)},${a[1].toFixed(1)} `
+              + `${b[0].toFixed(1)},${b[1].toFixed(1)} ${c[0].toFixed(1)},${c[1].toFixed(1)}" `
+              + `fill="none" stroke="#3fb8af" stroke-width="1.4" opacity="0.85"/>`;
+        return;
+      }
+      const ab=[(a[0]+b[0])/2,(a[1]+b[1])/2], bc=[(b[0]+c[0])/2,(b[1]+c[1])/2],
+            ca=[(c[0]+a[0])/2,(c[1]+a[1])/2];
+      sub(a,ab,ca,lvl-1); sub(ab,b,bc,lvl-1); sub(ca,bc,c,lvl-1); sub(ab,bc,ca,lvl-1);
+    };
+    for (const g of drawn){ const [A,B,C2] = F[g].map(v => p2[v]); sub(A,B,C2,C); }
+  }
+
+  // the tapped cell's path, drawn as the nested triangles that name it
+  let nest = '';
+  if (sel && drawn.includes(sel.g)){
+    const s = split(sel.i, sel.j, D, C);
+    let [A,B,C2] = F[sel.g].map(v => p2[v]), lvl = 0;
+    for (const d of s.path){
+      const ab=[(A[0]+B[0])/2,(A[1]+B[1])/2], bc=[(B[0]+C2[0])/2,(B[1]+C2[1])/2],
+            ca=[(C2[0]+A[0])/2,(C2[1]+A[1])/2];
+      if      (d===0){ B=ab; C2=ca; }
+      else if (d===1){ A=ab; C2=bc; }
+      else if (d===2){ A=ca; B=bc; }
+      else           { const t=[ab,bc,ca]; A=t[0]; B=t[1]; C2=t[2]; }
+      lvl++;
+      nest += `<polygon points="${A[0].toFixed(1)},${A[1].toFixed(1)} `
+           + `${B[0].toFixed(1)},${B[1].toFixed(1)} ${C2[0].toFixed(1)},${C2[1].toFixed(1)}" `
+           + `fill="none" stroke="#e0913a" stroke-width="${(1.2 + lvl*0.5).toFixed(1)}" `
+           + `opacity="${(0.45 + lvl*0.16).toFixed(2)}"/>`;
+    }
+  }
+
+  // face outlines last, so the seams stay readable
+  let outline = '';
+  for (const g of drawn){ const [A,B,C2] = F[g].map(v => p2[v]);
+    outline += `<polygon points="${A[0].toFixed(1)},${A[1].toFixed(1)} `
+      + `${B[0].toFixed(1)},${B[1].toFixed(1)} ${C2[0].toFixed(1)},${C2[1].toFixed(1)}" `
+      + `fill="none" stroke="#c9d2e2" stroke-width="2.6"/>`; }
+
+  // fit the view to whatever is drawn
+  const xs = [], ys = [];
+  for (const g of drawn) for (const v of F[g]){ xs.push(p2[v][0]); ys.push(p2[v][1]); }
+  const pad = 26;
+  const x0 = Math.min(...xs)-pad, y0 = Math.min(...ys)-pad;
+  const w = Math.max(...xs)-Math.min(...xs)+2*pad, hgt = Math.max(...ys)-Math.min(...ys)+2*pad;
+  svg.setAttribute('viewBox', `${x0.toFixed(1)} ${y0.toFixed(1)} ${w.toFixed(1)} ${hgt.toFixed(1)}`);
+  // overlays never take a tap, so a finger on a chunk line still picks the cell under it
+  svg.innerHTML = `<g id="cells">${cells}</g>`
+    + `<g pointer-events="none">${mates}${lines}${nest}${outline}</g>`;
+
+  const chunks = new Set(), cseen = new Set();
+  for (const g of ordered) for (let i=0;i<=n;i++) for (let j=0;i+j<=n;j++){
+    const P = at2(g,i,j), kk = P[0].toFixed(2)+','+P[1].toFixed(2);
+    if (cseen.has(kk)) continue; cseen.add(kk); chunks.add(chunkKey(g,i,j)); }
+  document.getElementById('stat').textContent =
+    `${count.toLocaleString('en-US')} cells drawn on ${drawn.length} face${drawn.length>1?'s':''}`
+    + `  ·  ${chunks.size} chunk${chunks.size>1?'s':''} over them`
+    + `  ·  whole planet at D ${D}: ${(10*4**D+2).toLocaleString('en-US')} cells`;
+  readout(selHit);
+}
+
+function readout(hit){
+  const bits = document.getElementById('bits');
+  const pathBits = 2*C, locBits = D - C, total = 5 + 2*D;   // q and r are (D-C) each
+  const seg = (n,c,label) => n === 0 ? '' :
+    `<div style="flex:${n};background:${c}">${n >= 2 ? label : ''}</div>`;
+  bits.innerHTML = seg(5,'#7fb2ff','face 5')
+                 + seg(pathBits,'#3fb8af','path ' + pathBits)
+                 + seg(locBits,'#e0913a','q ' + locBits) + seg(locBits,'#c97c2a','r ' + locBits);
+  document.getElementById('eq').innerHTML =
+    `<b>${total} bits</b> total, and it does not move when C does — the chunk cut only`
+    + ` decides where the teal boundary falls inside the same number.`
+    + ` chunk ID = face + path = <b>${5+pathBits} bits</b>;`
+    + ` what is left over is the cell's place inside it.`
+    + ` The washed hexagons are everything filed under the same chunk — fewer than the`
+    + ` triangle has slots, because the descent hands a chunk's outer edge to its`
+    + ` siblings so that every cell has exactly one home.`;
+  if (!hit || !sel){ ['oface','oij','opath','oqr','oh'].forEach(id =>
+      document.getElementById(id).textContent = '—'); return; }
+  const s = split(sel.i, sel.j, D, C);
+  document.getElementById('oface').textContent = sel.g;
+  document.getElementById('oij').textContent = `${sel.i}, ${sel.j}`;
+  document.getElementById('opath').textContent = s.path.length ? s.path.join(' · ') : '(none — C = 0)';
+  document.getElementById('oqr').textContent = `${s.q}, ${s.r}`;
+  document.getElementById('oh').textContent =
+    (hit.h < SEA ? 'under water' : 'land') + `   h = ${hit.h.toFixed(3)}`;
+  // How many cells does this chunk actually OWN? Counted over the whole face, not
+  // off the screen -- the descent's strict tests hand a chunk's outer edge to its
+  // siblings, so a chunk owns fewer cells than it has slots (doc 07, rank.js).
+  const n2 = 1 << D, m = 1 << (D - C), want = s.path.join('');
+  let owned = 0;
+  for (let i=0;i<=n2;i++) for (let j=0;i+j<=n2;j++)
+    if (split(i,j,D,C).path.join('') === want) owned++;
+  const slots = (m+1)*(m+2)/2;
+  document.getElementById('ochunk').textContent =
+    `${owned} cells, in ${slots} slots`;
+}
+
+// ---- controls --------------------------------------------------------------
+function buttons(host, vals, get, set, label){
+  host.innerHTML = '';
+  for (const v of vals){
+    const b = document.createElement('button');
+    b.textContent = label ? label(v) : v;
+    if (v === get()) b.className = 'on';
+    b.onclick = () => { set(v); build(); };
+    host.appendChild(b);
+  }
+}
+let lastChange = '';
+function build(){
+  if (C > D) C = D;
+  buttons(document.getElementById('dbtns'), [1,2,3,4,5], () => D, v => { D=v; lastChange='D'; });
+  buttons(document.getElementById('cbtns'), Array.from({length:D+1},(_,k)=>k),
+          () => C, v => { C=v; lastChange='C'; });
+  buttons(document.getElementById('fbtns'), [1,2,3,4], () => NF, v => { NF=v; lastChange='F'; });
+  buttons(document.getElementById('vbtns'), ['terrain','chunks','both'], () => VIEW,
+          v => { VIEW=v; lastChange='V'; }, v => v[0].toUpperCase()+v.slice(1));
+  const note = document.getElementById('note');
+  if (lastChange === 'C'){
+    note.className = 'note';
+    note.innerHTML = `<b>Chunk level ${C}.</b> Every hexagon is exactly where it was — `
+      + `only the teal lines moved. That is doc 03's claim you can see: the address is `
+      + `<b>5 + 2D</b> bits whatever C is, and the cut just decides how much of it counts `
+      + `as the chunk. Chunk size stays tunable after launch because no world data depends on it.`;
+  } else if (lastChange === 'D'){
+    note.className = 'note warn';
+    note.innerHTML = `<b>Depth ${D}.</b> This one really does change the world — different `
+      + `cells, four times as many per level, and the terrain is <b>resampled</b> rather than `
+      + `smoothed, so new detail appears that was not there before. Goldberg levels do not `
+      + `nest, which is why doc 14 calls level of detail resampling and not decimation.`;
+  } else {
+    note.className = 'note';
+    note.innerHTML = `Change <b>chunk level</b> and watch the ground: nothing moves. Change `
+      + `<b>depth</b> and everything does. Then put two or more faces on screen and look at `
+      + `the seam — the terrain crosses it without a break, because it is sampled from the `
+      + `cell's 3D position and has never heard of a face.`;
+  }
+  render();
+}
+
+svg.addEventListener('click', e => {
+  const t = e.target;
+  if (t.tagName !== 'polygon' || !t.dataset.g) return;
+  sel = { g:+t.dataset.g, i:+t.dataset.i, j:+t.dataset.j };
+  lastChange = 'tap';
+  render();
+});
+
+build();
+</script>
+</body>
+</html>

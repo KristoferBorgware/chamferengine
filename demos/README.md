@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-six self-contained HTML files. No build step, no `npm install`, no server
+Twenty-seven self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -64,6 +64,27 @@ because of aperture-7 subdivision.
 ---
 
 ## Addressing
+
+### [`subdivision-and-chunks.html`](subdivision-and-chunks.html)
+The two sliders side by side, on real hexagons. Icosahedron faces unfolded flat,
+with terrain sampled from each cell's true 3D position using the noise function
+[doc 08](../docs/08-terrain-generation.md) pins.
+
+**Move chunk level and nothing on the ground moves** — only the teal lines. Move
+subdivision depth and everything does, because level of detail here is resampling
+rather than smoothing. That is doc 03's "chunk size stays tunable after launch",
+visible rather than asserted, with the bit bar re-cutting the same `5 + 2D` width
+underneath.
+
+Tap a hexagon for its face, `(i, j)`, path digits and `(q, r)`, with the nested
+triangles that name it drawn one per level and every cell filed under the same
+chunk washed white. That wash is `rank.js`'s ownership rule on screen: a chunk of
+15 slots owns anywhere from 6 to 15 cells depending on which edges it won. Put two
+or more faces up and the terrain crosses the seam without a break.
+
+**Docs:** [03 — Addressing](../docs/03-addressing.md),
+[07 — Data structures](../docs/07-data-structures.md),
+[08 — Terrain generation](../docs/08-terrain-generation.md)
 
 ### [`chunk-hierarchy.html`](chunk-hierarchy.html)
 Triangles carrying the hierarchy, hexes sitting on their vertices. Raise the

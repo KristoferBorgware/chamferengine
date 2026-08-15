@@ -58,6 +58,12 @@ hexagons, because a cell lives on a vertex shared by up to three triangles.
 same idea flat, in four steps: scaffolding, cells on corners, chunk division,
 ownership.
 
+**Demo:** [`demos/subdivision-and-chunks.html`](../demos/subdivision-and-chunks.html)
+— faces unfolded flat with the real hexagons and real terrain on them, and the two
+controls separated. Move **chunk level** and not one cell moves; move **depth** and
+they all do. Tap a hexagon to see its face, `(i, j)`, path digits and `(q, r)` at
+once, with everything filed under the same chunk washed white.
+
 ---
 
 ## The address is the route you took
