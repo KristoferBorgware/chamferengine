@@ -534,7 +534,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 222M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1103,7 +1103,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 562 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 878 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1169,9 +1169,18 @@ Cited by [doc 19](19-directional-blocks.md).
      radius 4, centre 2 from the pentagon (encloses it ): slip 1 index
      radius 4, centre 5 from the pentagon (does not   ): slip 0 index
      radius 4, centre 9 from the pentagon (does not   ): slip 0 index
+   exhaustively: 427 loops enclose the pentagon, 2135 do not
+     enclosing -> slip 1, not enclosing -> slip 0, exceptions: 0
+     (175 more run through the pentagon itself, where "straight on"
+      is undefined and the number is not the enclosure count)
    The slip tracks whether the pentagon is INSIDE the loop, not where the
    loop is centred or how wide it is. That is what "topological" means here,
    and it is why no exclusion zone fixes it.
+   Note the sphere does not make "inside" ambiguous, though it looks like it
+   should: a loop cuts the sphere in two, and the far side holds the other
+   11 pentagons. Walking it the other way gives 11 indices = 660 deg, which
+   is the same rotation as -1. The two answers agree because all twelve
+   together are 720 deg, a whole turn twice over.
 
 4. storage
    6 orientations need ceil(log2 6) = 3 bits.

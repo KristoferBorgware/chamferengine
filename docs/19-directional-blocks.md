@@ -148,6 +148,30 @@ is centred or how wide it is — only whether the pentagon is inside it.**
 these off-centre loops are what make "topological" more than a word. Move the loop
 so the pentagon falls outside and it closes perfectly, at any radius.
 
+Those are six sampled cases. The same script now checks it exhaustively:
+
+> **[verified]** `verification/rotation.js`, section 3. Every centre within 12
+> cells of a pentagon, at every radius from 2 to 8 that forms a single closed
+> ring — **2,562 loops**:
+>
+> | | |
+> |---|---|
+> | Loops enclosing the pentagon → slip **1** | 427 |
+> | Loops not enclosing it → slip **0** | 2,135 |
+> | Exceptions | **0** |
+
+**Try it yourself:** [`demos/pentagon-loop.html`](../demos/pentagon-loop.html)
+draws the loop on the real grid and lets you drag it around. Watch the slip flip
+from 1 to 0 at the moment the pentagon leaves the loop — and notice the loop is a
+*pentagon* when it wraps the defect and a *hexagon* when it does not.
+
+One thing that looks like a problem and is not. A loop drawn on a sphere cuts it
+into two pieces, so "inside" ought to be ambiguous — and the far piece holds the
+*other eleven* pentagons. Walking the loop the other way therefore counts 11
+indices, or 660°, which is the same rotation as −1. **The two answers agree**,
+because all twelve together come to 720° — a whole turn, twice over. The 720° that
+forces the pentagons to exist is the same 720° that keeps this consistent.
+
 ### What that means for code
 
 > **Never carry a heading around a path and assume it closes.** Recompute the

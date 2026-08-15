@@ -1,6 +1,6 @@
 # Demos
 
-Eighteen self-contained HTML files. No build step, no `npm install`, no server
+Twenty-one self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -165,6 +165,23 @@ The violet dots are the twelve pentagons; the two gold ones are the antipodal
 pair carrying the lat/long poles.
 
 **Docs:** [13 — Gravity and orientation](../docs/13-gravity-and-orientation.md)
+
+---
+
+### [`pentagon-loop.html`](pentagon-loop.html)
+The claim that costs the most elsewhere in the specification, made touchable.
+Carry a heading right around a closed loop of cells and it comes back **turned by
+one direction index — 60°** — but only if a pentagon is inside the loop. Drag the
+loop away and it closes perfectly.
+
+The grid is the real one (a subdivided icosahedron at level 5) and the transport
+rule is lifted from `verification/rotation.js`, so what you see is what the script
+measures. Two things worth watching: the loop is a **pentagon** when it wraps the
+defect and a **hexagon** when it does not, and the flip happens exactly as the
+pentagon crosses the loop — not as it gets further away.
+
+**Docs:** [17 — Pentagons as a place](../docs/17-pentagons.md),
+[19 — Directional blocks](../docs/19-directional-blocks.md)
 
 ---
 

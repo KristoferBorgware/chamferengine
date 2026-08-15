@@ -148,9 +148,33 @@ console.log('\n3. carrying a heading around a closed loop');
         + ` (${encloses ? 'encloses it ' : 'does not   '}): slip ${slipOf(loop)} index`);
     }
   }
+  // Four sampled cases show the pattern; this checks it exhaustively, over every
+  // centre near the pentagon and every radius that forms a single closed ring.
+  let inside = 0, outside = 0, onLoop = 0, wrong = 0;
+  for (let v=0; v<pts.length; v++){
+    if (d0[v] > 12) continue;
+    const d = dist(v);
+    for (let k=2;k<=8;k++){
+      const loop = loopAround(v, k);
+      if (!loop) continue;
+      const s = slipOf(loop);
+      if (d[pents[0]] < k){ inside++;  if (s !== 1) wrong++; }
+      else if (d[pents[0]] > k){ outside++; if (s !== 0) wrong++; }
+      else onLoop++;
+    }
+  }
+  console.log(`   exhaustively: ${inside} loops enclose the pentagon, ${outside} do not`);
+  console.log(`     enclosing -> slip 1, not enclosing -> slip 0, exceptions: ${wrong}`);
+  console.log(`     (${onLoop} more run through the pentagon itself, where "straight on"`);
+  console.log('      is undefined and the number is not the enclosure count)');
   console.log('   The slip tracks whether the pentagon is INSIDE the loop, not where the');
   console.log('   loop is centred or how wide it is. That is what "topological" means here,');
   console.log('   and it is why no exclusion zone fixes it.');
+  console.log('   Note the sphere does not make "inside" ambiguous, though it looks like it');
+  console.log('   should: a loop cuts the sphere in two, and the far side holds the other');
+  console.log('   11 pentagons. Walking it the other way gives 11 indices = 660 deg, which');
+  console.log('   is the same rotation as -1. The two answers agree because all twelve');
+  console.log('   together are 720 deg, a whole turn twice over.');
 }
 
 // ---- 4. what the rotation costs to store -----------------------------------

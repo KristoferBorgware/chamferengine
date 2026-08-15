@@ -50,7 +50,11 @@ the only thing that matters is whether the pentagon is inside your loop or outsi
 it.*
 
 **The slip is topological.** It counts the pentagons a loop encloses, not the
-distance the loop kept from them.
+distance the loop kept from them. [Doc 19](19-directional-blocks.md) pushes the
+same measurement over 2,562 loops at every centre and radius, with **0
+exceptions** — and [`demos/pentagon-loop.html`](../demos/pentagon-loop.html) lets
+you drag the loop around and watch the slip switch off the instant the pentagon
+falls outside it.
 
 Which means **no option on the table removes this** — including burying the
 pentagons under an ocean, because a loop drawn around the ocean still has the

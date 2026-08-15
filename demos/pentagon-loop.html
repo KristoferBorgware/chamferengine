@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The loop that does not close</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 4px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:13px; color:#8d97ab; padding:2px 16px 8px; }
+  .cap { padding:4px 16px 10px; font-size:13.5px; line-height:1.55; color:#b9c0d0; min-height:60px; }
+  .cap b { color:#fff; }
+  .cap .yes { color:#ffd166; font-weight:650; }
+  .cap .no  { color:#3fb8af; font-weight:650; }
+  .stage { flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px;
+           touch-action:none; }
+  svg { width:100%; height:auto; max-height:100%; cursor:crosshair; }
+  .panel { padding:12px 14px 18px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:550; padding:9px 14px; border-radius:9px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  label { font-size:12.5px; color:#8d97ab; display:flex; align-items:center; gap:8px; }
+  input[type=range] { width:118px; accent-color:#4f8ef7; }
+  .val { font-variant-numeric:tabular-nums; color:#dfe3ec; min-width:14px; }
+  .spacer { flex:1; }
+  .slip { font-size:13px; font-weight:650; padding:7px 12px; border-radius:8px;
+          font-variant-numeric:tabular-nums; }
+  .slip.z { background:#123330; color:#5fd8cd; }
+  .slip.n { background:#3a2e10; color:#ffd166; }
+  .slip.q { background:#232a3a; color:#b9c0d0; }
+</style>
+</head>
+<body>
+
+<header><h1>The loop that does not close</h1></header>
+<div class="sub">Drag anywhere to move the loop. The pentagon does not move.</div>
+<div class="cap" id="cap"></div>
+
+<div class="stage"><svg id="svg" viewBox="-330 -330 660 660" aria-label="loop around a pentagon"></svg></div>
+
+<div class="panel">
+  <label>radius <input type="range" id="rad" min="2" max="6" value="3"><span class="val" id="radv">3</span></label>
+  <button id="play">▶ Walk it</button>
+  <button id="home">Centre on the pentagon</button>
+  <span class="spacer"></span>
+  <span class="slip" id="slip"></span>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// The grid, built exactly as verification/rotation.js builds it: cells are the
+// vertices of a subdivided icosahedron, and each cell's neighbours are ordered
+// counter-clockwise seen from outside.
+// ---------------------------------------------------------------------------
+const T = (1 + Math.sqrt(5)) / 2;
+const norm  = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+const sub   = (a,b) => a.map((x,i) => x - b[i]);
+const dot   = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+
+const V0 = [[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],
+            [T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]].map(norm);
+const F0 = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+            [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+
+function grid(L){
+  const n = 1 << L, idx = new Map(), pts = [], nb = [];
+  const put = p => { const k = p.map(x => Math.round(x*1e7)).join(',');
+    if (!idx.has(k)){ idx.set(k, pts.length); pts.push(p); nb.push(new Set()); } return idx.get(k); };
+  const link = (a,b) => { nb[a].add(b); nb[b].add(a); };
+  for (const f of F0){
+    const [A,B,C] = f.map(i => V0[i]), P = [];
+    for (let i=0;i<=n;i++){ const row=[];
+      for (let j=0;j<=i;j++){ const a=(n-i)/n, b=(i-j)/n, c=j/n;
+        row.push(put(norm([A[0]*a+B[0]*b+C[0]*c, A[1]*a+B[1]*b+C[1]*c, A[2]*a+B[2]*b+C[2]*c]))); }
+      P.push(row); }
+    for (let i=0;i<n;i++) for (let j=0;j<=i;j++){
+      link(P[i][j],P[i+1][j]); link(P[i][j],P[i+1][j+1]); link(P[i+1][j],P[i+1][j+1]); }
+  }
+  const ring = pts.map((p,v) => {
+    const e1 = norm(sub(pts[[...nb[v]][0]], p)), e2 = cross(p, e1);
+    return [...nb[v]].sort((a,b) => {
+      const A2 = sub(pts[a],p), B2 = sub(pts[b],p);
+      return Math.atan2(dot(A2,e2),dot(A2,e1)) - Math.atan2(dot(B2,e2),dot(B2,e1));
+    });
+  });
+  return { pts, ring };
+}
+const { pts, ring } = grid(5);
+
+// ---------------------------------------------------------------------------
+// Carrying a heading, and finding a loop. Both lifted from rotation.js.
+// ---------------------------------------------------------------------------
+// Move a heading from cell a to cell b: project the old direction into b's
+// tangent plane and take b's nearest ring direction. That is what a machine
+// does when it tries to keep going "the same way".
+const carry = (a, h, b) => {
+  const va = norm(sub(pts[ring[a][h]], pts[a]));
+  const proj = norm(sub(va, pts[b].map(x => x*dot(va, pts[b]))));
+  let best = 0, bestD = -2;
+  ring[b].forEach((w,k) => { const d = dot(norm(sub(pts[w], pts[b])), proj);
+    if (d > bestD){ bestD = d; best = k; } });
+  return best;
+};
+const dist = src => {
+  const d = new Int32Array(pts.length).fill(-1); d[src] = 0;
+  const q = [src];
+  for (let i=0;i<q.length;i++) for (const w of ring[q[i]]) if (d[w] < 0){ d[w] = d[q[i]]+1; q.push(w); }
+  return d;
+};
+const loopAround = (centre, k, d) => {
+  const shell = [];
+  for (let v=0; v<pts.length; v++) if (d[v] === k) shell.push(v);
+  if (!shell.length) return null;
+  const order = [shell[0]], used = new Set(order);
+  for (;;){
+    const cur = order[order.length-1];
+    const nxt = ring[cur].find(w => d[w] === k && !used.has(w));
+    if (nxt === undefined) break;
+    order.push(nxt); used.add(nxt);
+  }
+  return order.length === shell.length ? order : null;
+};
+
+// ---------------------------------------------------------------------------
+// The view: gnomonic projection onto the tangent plane at the pentagon, which
+// is the same projection the cells themselves are built with.
+// ---------------------------------------------------------------------------
+const pent = pts.findIndex((p,v) => ring[v].length === 5);
+const dPent = dist(pent);
+
+const P = pts[pent];
+let e1 = norm(sub(pts[ring[pent][0]], P));
+e1 = norm(sub(e1, P.map(x => x*dot(e1,P))));
+const e2 = cross(P, e1);
+const gn = v => { const q = pts[v], s = dot(q,P), t = q.map(x => x/s);
+  return [dot(t,e1), dot(t,e2)]; };
+
+// The frame follows the loop. A loop of radius r needs room for the pentagon to
+// sit clearly outside it as well as inside, so the view holds about 2r cells --
+// which keeps the loop a decent fraction of the picture at every radius instead
+// of a speck in a huge grid.
+let view = [], inView = new Set(), edges = [], valid = [];
+let SCALE = 1, PX = 10, EXT = 9, OFFMAX = 5;
+const cache = new Map();
+const xy = v => { let c = cache.get(v);
+  if (!c){ const [a,b] = gn(v); c = [a*SCALE, -b*SCALE]; cache.set(v,c); } return c; };
+
+function reframe(){
+  EXT = 2*radius + 3;                 // cells of grid to draw, out from the pentagon
+  OFFMAX = radius + 2;                // how far the loop centre may be dragged
+  view = [];
+  for (let v=0; v<pts.length; v++) if (dPent[v] <= EXT) view.push(v);
+  inView = new Set(view);
+  SCALE = 300 / Math.max(...view.map(v => Math.hypot(...gn(v))));
+  cache.clear();
+  PX = Math.hypot(...sub(xy(ring[pent][0]), xy(pent)));   // one cell, in screen units
+  edges = [];
+  for (const v of view) for (const w of ring[v]) if (w > v && inView.has(w)) edges.push([v,w]);
+  // Not every cell has a single closed ring at every radius -- a shell can break
+  // into two arcs. Work out which centres do, once, so that dragging can snap to
+  // the nearest one that works instead of silently refusing to move.
+  valid = [];
+  for (const v of view){
+    if (dPent[v] > OFFMAX) continue;
+    if (loopAround(v, radius, dist(v))) valid.push(v);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let centre = pent, radius = 3, anim = null, timer = null;
+let loop = null, dCentre = null, trail = [];
+
+function tryCentre(v){
+  const d = dist(v);
+  const L = loopAround(v, radius, d);
+  if (!L) return false;
+  centre = v; dCentre = d; loop = L;
+  trail = [];
+  let h = 0;
+  for (let i=0;i<loop.length;i++){ trail.push(h); h = carry(loop[i], h, loop[(i+1)%loop.length]); }
+  trail.push(h);                              // the heading as it arrives back
+  return true;
+}
+// after a radius change the old centre may not be a valid one any more
+function refit(){
+  if (valid.includes(centre) && tryCentre(centre)) return;
+  const [cx,cy] = xy(centre);
+  let best = valid[0], bd = Infinity;
+  for (const v of valid){
+    const [x,y] = xy(v), d = (x-cx)**2 + (y-cy)**2;
+    if (d < bd){ bd = d; best = v; }
+  }
+  tryCentre(best);
+}
+
+// an arrow at cell v pointing along heading index h, as a projected segment
+function arrow(v, h, colour, width, frac){
+  if (ring[v][h] === undefined) return '';
+  const [x0,y0] = xy(v), [x1,y1] = xy(ring[v][h]);
+  const dx = (x1-x0)*frac, dy = (y1-y0)*frac;
+  const L = Math.hypot(dx,dy) || 1, ux = dx/L, uy = dy/L;
+  const hx = x0+dx, hy = y0+dy, s = PX*0.30;
+  return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}"
+           stroke="${colour}" stroke-width="${width}" stroke-linecap="round"/>`
+    + `<polygon points="${(hx).toFixed(1)},${(hy).toFixed(1)}
+        ${(hx-s*ux+s*0.55*uy).toFixed(1)},${(hy-s*uy-s*0.55*ux).toFixed(1)}
+        ${(hx-s*ux-s*0.55*uy).toFixed(1)},${(hy-s*uy+s*0.55*ux).toFixed(1)}" fill="${colour}"/>`;
+}
+
+function draw(){
+  const S = [];
+  // the grid itself
+  for (const [v,w] of edges){
+    const [x1,y1] = xy(v), [x2,y2] = xy(w);
+    S.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+             stroke="#2a3245" stroke-width="1"/>`);
+  }
+  // the pentagon: five edges, and it is the only cell that has five
+  const pxy = xy(pent);
+  S.push(`<polygon points="${ring[pent].map(w => xy(w).map(n=>n.toFixed(1)).join(',')).join(' ')}"
+           fill="#f2545b" fill-opacity="0.16" stroke="#f2545b" stroke-width="2"/>`);
+
+  // the loop
+  if (loop){
+    const path = loop.map(v => xy(v).map(n=>n.toFixed(1)).join(',')).join(' ');
+    S.push(`<polygon points="${path}" fill="#4f8ef7" fill-opacity="0.07"
+             stroke="#4f8ef7" stroke-width="2.6" stroke-linejoin="round"/>`);
+    // carried heading at every step, faint; the walker bright
+    for (let i=0;i<loop.length;i++)
+      if (anim === null || i <= anim)
+        S.push(arrow(loop[i], trail[i], '#8d97ab', PX*0.09, 0.55));
+    if (anim !== null && anim < loop.length)
+      S.push(arrow(loop[anim], trail[anim], '#ffffff', PX*0.16, 0.8));
+    // start cell: the heading as it left, and as it came back
+    const st = loop[0];
+    S.push(arrow(st, trail[0], '#4f8ef7', PX*0.19, 0.95));
+    if (anim === null || anim >= loop.length)
+      S.push(arrow(st, trail[loop.length], '#ffd166', PX*0.19, 0.95));
+    const [sx,sy] = xy(st);
+    S.push(`<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${(PX*0.30).toFixed(1)}" fill="none"
+             stroke="#e6e8ee" stroke-width="1.8"/>`);
+  }
+  // cells
+  for (const v of view){
+    const [x,y] = xy(v);
+    const isPent = v === pent, isCentre = v === centre;
+    S.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(PX*(isPent?0.20:0.10)).toFixed(1)}"
+             fill="${isPent ? '#f2545b' : '#5a6580'}"/>`);
+    if (isCentre) S.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(PX*0.20).toFixed(1)}"
+             fill="none" stroke="#4f8ef7" stroke-width="2"/>`);
+  }
+  document.getElementById('svg').innerHTML = S.join('');
+
+  // readout
+  const slip = loop ? (trail[loop.length] - trail[0] + 6) % 6 : 0;
+  const inside = dCentre[pent] < radius;
+  const onLoop = dCentre[pent] === radius;
+  const el = document.getElementById('slip');
+  el.textContent = !loop ? 'no closed ring here'
+    : onLoop ? 'walks through the pentagon'
+    : `slip ${slip} index${slip ? ` · ${slip*60}°` : ''}`;
+  el.className = 'slip ' + (onLoop ? 'q' : slip ? 'n' : 'z');
+  document.getElementById('cap').innerHTML = !loop
+    ? `No single closed ring of cells exists at this radius from this centre. Move the centre or change the radius.`
+    : onLoop
+      ? `The loop runs <b>through the pentagon itself</b>, not around it. A five-neighbour cell has no "straight on" — a path entering one leaves deflected by 36.07° either way — so what comes back here is not the enclosure count. Move the centre a little and the question becomes well posed again.`
+      : inside
+        ? `The pentagon is <span class="yes">inside</span> the loop. Carry a heading all the way round ${loop.length} cells and it comes back <b>turned by one direction index — 60°</b>. The blue arrow is how it left; the amber one is how it returned. Nothing here is broken: the loop closed, the heading did not.`
+        : `The pentagon is <span class="no">outside</span> the loop. The heading comes back <b>exactly as it left</b>, over all ${loop.length} cells — the two arrows sit on top of each other. Ordinary grid, ordinary result.`;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('svg');
+// use the SVG's own transform, so this stays right however the box is letterboxed
+function pick(ev){
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const u = pt.matrixTransform(svg.getScreenCTM().inverse());
+  let best = null, bd = Infinity;
+  for (const v of valid){
+    const [x,y] = xy(v), d = (x-u.x)**2 + (y-u.y)**2;
+    if (d < bd){ bd = d; best = v; }
+  }
+  return best;
+}
+const put = ev => {
+  const v = pick(ev);
+  if (v === null || v === centre) return;
+  stop();
+  if (tryCentre(v)) draw();
+};
+let dragging = false;
+svg.addEventListener('pointerdown', ev => { dragging = true; svg.setPointerCapture(ev.pointerId); put(ev); });
+svg.addEventListener('pointermove', ev => { if (dragging){ ev.preventDefault(); put(ev); } });
+svg.addEventListener('pointerup',    () => dragging = false);
+svg.addEventListener('pointercancel',() => dragging = false);
+
+const radEl = document.getElementById('rad');
+radEl.addEventListener('input', () => {
+  radius = +radEl.value; document.getElementById('radv').textContent = radius;
+  stop(); reframe(); refit(); draw();
+});
+document.getElementById('home').addEventListener('click', () => {
+  stop(); tryCentre(pent); draw();
+});
+function stop(){ if (timer) clearInterval(timer); timer = null; anim = null;
+  document.getElementById('play').classList.remove('on'); }
+document.getElementById('play').addEventListener('click', () => {
+  if (timer){ stop(); draw(); return; }
+  if (!loop) return;
+  anim = 0;
+  document.getElementById('play').classList.add('on');
+  timer = setInterval(() => {
+    anim++;
+    if (anim > loop.length){ stop(); }
+    draw();
+  }, Math.max(40, 900/loop.length));
+  draw();
+});
+
+reframe(); tryCentre(pent); draw();
+</script>
+</body>
+</html>

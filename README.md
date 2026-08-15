@@ -128,12 +128,17 @@ link, a dead heading anchor, or any Markdown the generator does not understand.
 
 ## Demos
 
-Eighteen self-contained HTML files. No build step, no dependencies to install —
+Twenty-one self-contained HTML files. No build step, no dependencies to install —
 open any of them directly in a browser. All are mobile-friendly.
 
 **New to this?** Start with
 [`demos/how-it-works.html`](demos/how-it-works.html) — an illustrated walkthrough
 of the whole construction in ten diagrams, from twenty triangles to chunk seams.
+
+**The one that surprises people:**
+[`demos/pentagon-loop.html`](demos/pentagon-loop.html) — drag a loop of cells
+around and watch a carried heading fail to close, but only when a pentagon is
+inside the loop.
 
 See [`demos/README.md`](demos/README.md) for the annotated index.
 
