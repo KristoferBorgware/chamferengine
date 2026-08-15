@@ -2337,5 +2337,59 @@ const prof = (() => {
   <text class="cf-d" x="128" y="240" text-anchor="middle">measured out to radius 16</text>`));
 }
 
+// =============================================================================
+// 26 — the hollow centre: eight documents call a function nothing defines
+// =============================================================================
+{
+  const AR = `<defs><marker id="hc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>`;
+  const hub = [230, 122], HR = 34;
+  // the eight documents that name neighbour(), laid out around the hub
+  const callers = [
+    ['03', 40,  44], ['05', 40,  92], ['07', 40, 140], ['10', 40, 188],
+    ['13', 384, 44], ['16', 384, 92], ['19', 384, 140], ['21', 384, 188],
+  ];
+  let chips = '', arrows = '';
+  for (const [tag, x, y] of callers){
+    chips += `<rect class="cf-af" x="${x-22}" y="${y-13}" width="44" height="26" rx="5"/>`
+          +  `<text class="cf-c" x="${x}" y="${y+4}" text-anchor="middle">doc ${tag}</text>`;
+    // stop the arrow on the hexagon's rim rather than at its centre
+    const dx = hub[0]-x, dy = hub[1]-y, L = Math.hypot(dx, dy), u = [dx/L, dy/L];
+    const from = [x + u[0]*26, y + u[1]*16], to = [hub[0] - u[0]*(HR+6), hub[1] - u[1]*(HR+6)];
+    arrows += `<path class="cf-a" d="M${f(from[0])} ${f(from[1])}L${f(to[0])} ${f(to[1])}" marker-end="url(#hc)"/>`;
+  }
+  made.push(svg('hollow-centre', 460, 250, `${AR}
+  ${arrows}
+  ${chips}
+  <polygon class="cf-void" points="${pts(hexPts(hub[0], hub[1], HR))}" stroke-dasharray="5 4"/>
+  <text class="cf-c" x="${hub[0]}" y="${hub[1]-2}" text-anchor="middle">neighbour</text>
+  <text class="cf-c" x="${hub[0]}" y="${hub[1]+14}" text-anchor="middle">(id, k)</text>
+  <text class="cf-big" x="230" y="24" text-anchor="middle">eight documents call it</text>
+  <text class="cf-gd" x="230" y="222" text-anchor="middle">no document defines it, and no script has ever called it</text>
+  <text class="cf-d" x="230" y="240" text-anchor="middle">every script builds the whole planet instead, and reads adjacency off the mesh</text>`));
+}
+
+// =============================================================================
+// 26 — what actually blocks the first line of code
+// =============================================================================
+{
+  const bar = (y, n, of, label, note, cls) => {
+    const W = 250, w = Math.max(26, W * n / of);
+    return `<rect class="${cls}" x="150" y="${y}" width="${f(w)}" height="30" rx="5"/>`
+      + `<text class="cf-big" x="${f(150 + w/2)}" y="${y+20}" text-anchor="middle">${n}</text>`
+      + `<text x="14" y="${y+20}">${label}</text>`
+      + `<text class="cf-d" x="${f(150 + w + 10)}" y="${y+20}">${note}</text>`;
+  };
+  made.push(svg('what-actually-blocks', 590, 258, `
+  <text class="cf-c" x="14" y="26">47 open questions across docs 13&#8211;25</text>
+  ${bar(44,  1,  47, 'blocks code',   'which language and runtime', 'cf-gf')}
+  ${bar(86,  25, 47, 'waits on code', 'needs a mesher, a generator, a server', 'cf-af')}
+  ${bar(128, 21, 47, 'neither',       'game design, plus one free decision', 'cf-fill')}
+  <path class="cf-l" d="M14 176L576 176"/>
+  <text class="cf-gd" x="14" y="200">on no list at all &#8212; and every one of them blocks the first line:</text>
+  <text class="cf-c" x="14" y="222">neighbour(id, k)      rank(q, r)      which noise function</text>
+  <text class="cf-d" x="14" y="244">the backlog is not where the blockers are</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

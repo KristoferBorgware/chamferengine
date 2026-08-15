@@ -420,11 +420,18 @@ mistake, in a different currency, as storing a heading as a world vector
 
 ## Still open
 
-- **The `hexRound` question from [doc 11](11-open-topics.md)** is now sharper,
-  not answered. Settling on the one-shot construction is what *makes* the
-  question well-posed: the cells are spherical Voronoi regions of a lattice that
-  is uniform in the face plane, and whether planar rounding finds the right one
-  is still unmeasured.
+- ~~The `hexRound` question from [doc 11](11-open-topics.md)~~ — **measured, and
+  then turned into a definition.** This entry used to say that settling on the
+  one-shot construction made the question well-posed but left it unanswered, and
+  that whether planar rounding finds the right cell was still unmeasured. It is
+  measured. `verification/hexround.js` compares `hexRound` against
+  nearest-centre-on-the-sphere at levels 2–7: they disagree on about **1%** of
+  the sphere, the rate **plateaus** rather than shrinking with depth because a
+  face triangle's shape is scale-free, and every disagreement is with an
+  **edge-adjacent** cell no more than **0.11 of a spacing** further away. Read
+  the other way up — which is what [doc 04](04-position-lookup.md) does — a cell
+  **is** the set of directions `hexRound` maps to, so the lookup is exact by
+  construction and there is nothing left to be approximate about.
 - **Integer versus `float64` for the offset.** A fixed-point offset in
   millimetres would make positions exactly reproducible across machines, which
   matters for multiplayer determinism and does not otherwise. Not decided.

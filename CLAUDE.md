@@ -178,6 +178,7 @@ script owns its numbers.
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
 | [25](docs/25-water.md) | water is a block type; drawing a translucent ocean; floating vs colliding | `water.js` |
+| [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -538,14 +539,38 @@ Violating any of these breaks the design. They are not tunable.
 
 ## Known gaps
 
-**Doc 11 is fully struck through** — every entry on it is closed. The remaining
-work lives in each document's own **Still open** section, and is narrower than
-anything doc 11 ever listed. The ones that reach furthest:
+**Doc 11 is fully struck through** — every entry on it is closed. Doc 26 triages
+what is left: of the **47** open bullets across docs 13–25, **one** blocks code,
+25 are waiting for code to exist, and 21 block nothing.
 
-- **Nothing verifies determinism on two real platforms** (doc 23) — the argument
-  is from the standard and from one machine's arithmetic. A real check runs the
-  generator on genuinely different hardware and compares hashes
-- **Terrain height at a mesh corner** (doc 18) — three cells meet there and may
-  disagree about it
-- Light across a **LOD seam** — doc 14's "finer chunk owns the seam" was for
-  geometry; a flood fill propagates inward, so the rule may not transfer
+**The gaps that actually block the kernel are on no Still open list** (doc 26):
+
+- **`neighbour(id, k)` is defined in no document and called by no script.** Eight
+  documents delegate to it — 03, 05, 07, 10, 13, 16, 19, 21. Doc 05's 180-byte
+  table is proved complete by `adj.js` and has never been used to cross an edge;
+  every verification script builds the whole planet and reads adjacency off the
+  mesh instead. Three decisions hide in it: **where direction index 0 is
+  anchored** (invariant 9 fixes the order, nothing fixes the start, and doc 19
+  puts 3 bits of rotation on disk), **how `(i, j)` re-expresses across a face
+  edge**, and **what a pentagon returns for `k = 5`** — the pathfinder, the light
+  fill and flow routing all walk through pentagons even though placement cannot.
+  Close it the way everything else here closed: a neighbour script that builds
+  `neighbour(id, k)` from the table and integer arithmetic alone and checks it
+  against the geometric graph the other scripts already build.
+- **`rank(q, r)` appears exactly once** (doc 07's chunk index) and is never
+  defined. It depends on doc 03's border rule — lowest chunk ID wins — so a
+  chunk's cell count is not a plain triangular number.
+- **No document names a noise algorithm.** Doc 08 fixes *where* to sample and
+  forbids a `sin` hash; doc 23 makes the exact choice bit-load-bearing. Two
+  implementations of "fBm" are two different planets.
+- **Which language and runtime** (doc 23) — the only open bullet that blocks the
+  first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
+  `Math.sin`; most languages are similar but not identical.
+
+**Free today, expensive forever after:** which of the six antipodal pentagon pairs
+is the polar axis (doc 20). It fixes where the equator falls in every world.
+
+The furthest-reaching items that are waiting on code rather than blocking it:
+**nothing verifies determinism on two real platforms** (doc 23), **terrain height
+at a mesh corner** (doc 18), and light across a **LOD seam** (doc 16) — doc 14's
+"finer chunk owns the seam" was for geometry, and a flood fill propagates inward.

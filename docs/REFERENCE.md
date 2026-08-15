@@ -27,7 +27,7 @@ numbered documents.
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
-| [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) |
+| [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) [15](15-precision-and-origin.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
@@ -455,7 +455,7 @@ Cited by [doc 13](13-gravity-and-orientation.md).
 
 Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do.
 
-Cited by [doc 04](04-position-lookup.md).
+Cited by [doc 04](04-position-lookup.md), [doc 15](15-precision-and-origin.md).
 
 ```
 does hexRound return the cell whose centre is nearest on the sphere?
@@ -534,7 +534,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 222M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1103,7 +1103,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 878 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1064 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 590 258" width="590" height="258">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-c" x="14" y="26">47 open questions across docs 13&#8211;25</text>
+  <rect class="cf-gf" x="150" y="44" width="26.0" height="30" rx="5"/><text class="cf-big" x="163.0" y="64" text-anchor="middle">1</text><text x="14" y="64">blocks code</text><text class="cf-d" x="186.0" y="64">which language and runtime</text>
+  <rect class="cf-af" x="150" y="86" width="133.0" height="30" rx="5"/><text class="cf-big" x="216.5" y="106" text-anchor="middle">25</text><text x="14" y="106">waits on code</text><text class="cf-d" x="293.0" y="106">needs a mesher, a generator, a server</text>
+  <rect class="cf-fill" x="150" y="128" width="111.7" height="30" rx="5"/><text class="cf-big" x="205.9" y="148" text-anchor="middle">21</text><text x="14" y="148">neither</text><text class="cf-d" x="271.7" y="148">game design, plus one free decision</text>
+  <path class="cf-l" d="M14 176L576 176"/>
+  <text class="cf-gd" x="14" y="200">on no list at all &#8212; and every one of them blocks the first line:</text>
+  <text class="cf-c" x="14" y="222">neighbour(id, k)      rank(q, r)      which noise function</text>
+  <text class="cf-d" x="14" y="244">the backlog is not where the blockers are</text>
+</svg>
