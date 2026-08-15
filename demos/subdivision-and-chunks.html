@@ -68,7 +68,7 @@ where the filing lines are drawn. Watch which one changes the ground.</div>
     <span class="val" id="oij" style="color:#dfe6f5">—</span></div>
   <div class="line"><span class="tag">path digits</span>
     <span class="val" id="opath" style="color:#3fb8af">—</span></div>
-  <div class="line"><span class="tag">local q, r</span>
+  <div class="line"><span class="tag">local q, r — computed, not stored</span>
     <span class="val" id="oqr" style="color:#e0913a">—</span></div>
   <div class="line"><span class="tag">surface</span>
     <span class="val" id="oh" style="color:#9fd88f">—</span></div>
@@ -299,17 +299,22 @@ function render(){
 
 function readout(hit){
   const bits = document.getElementById('bits');
-  const pathBits = 2*C, locBits = D - C, total = 5 + 2*D;   // q and r are (D-C) each
-  const seg = (n,c,label) => n === 0 ? '' :
-    `<div style="flex:${n};background:${c}">${n >= 2 ? label : ''}</div>`;
+  // The address is [face 5][path 2D][corner 2] -- the path runs to FULL depth and
+  // the last 2 bits name a corner, because path digits name triangles and a cell
+  // is a vertex. C is not a field: it is where you stop reading the path.
+  const prefix = 2*C, suffix = 2*(D - C), total = 5 + 2*D + 2;
+  const seg = (n,c,label,extra) => n === 0 ? '' :
+    `<div style="flex:${n};background:${c};${extra||''}">${n >= 2 ? label : ''}</div>`;
   bits.innerHTML = seg(5,'#7fb2ff','face 5')
-                 + seg(pathBits,'#3fb8af','path ' + pathBits)
-                 + seg(locBits,'#e0913a','q ' + locBits) + seg(locBits,'#c97c2a','r ' + locBits);
+                 + seg(prefix,'#3fb8af','path ' + prefix, 'border-right:2px dashed #0b0e14')
+                 + seg(suffix,'#2f9089','··· ' + suffix)
+                 + seg(2,'#e0913a','corner 2');
   document.getElementById('eq').innerHTML =
-    `<b>${total} bits</b> total, and it does not move when C does — the chunk cut only`
-    + ` decides where the teal boundary falls inside the same number.`
-    + ` chunk ID = face + path = <b>${5+pathBits} bits</b>;`
-    + ` what is left over is the cell's place inside it.`
+    `<b>${total} bits</b> — and moving C changes <b>none of them</b>. The path runs all the`
+    + ` way down whatever you cut at; the dashed line is just where you stop reading it.`
+    + ` chunk prefix = face + ${prefix} path bits = <b>${5+prefix} bits</b>.`
+    + ` The last two bits say <b>which corner</b> of the smallest triangle, because a path`
+    + ` names a triangle and a cell is a corner of one.`
     + ` The washed hexagons are everything filed under the same chunk — fewer than the`
     + ` triangle has slots, because the descent hands a chunk's outer edge to its`
     + ` siblings so that every cell has exactly one home.`;
@@ -359,8 +364,9 @@ function build(){
     note.className = 'note';
     note.innerHTML = `<b>Chunk level ${C}.</b> Every hexagon is exactly where it was — `
       + `only the teal lines moved. That is doc 03's claim you can see: the address is `
-      + `<b>5 + 2D</b> bits whatever C is, and the cut just decides how much of it counts `
-      + `as the chunk. Chunk size stays tunable after launch because no world data depends on it.`;
+      + `<b>5 + 2D + 2</b> bits and <b>not one of them changes</b> when C does — the cut is `
+      + `a place to stop reading, not a field. Chunk size stays tunable after launch because `
+      + `no stored ID depends on it.`;
   } else if (lastChange === 'D'){
     note.className = 'note warn';
     note.innerHTML = `<b>Depth ${D}.</b> This one really does change the world — different `

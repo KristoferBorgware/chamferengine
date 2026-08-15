@@ -52,8 +52,10 @@ for level in 0..chunkLevel:
 ```
 
 Cost is O(depth) — a few dozen operations, no data structure in memory. The
-`flip` bit at the end is the middle-child mirror from [doc 03](03-addressing.md),
-carried down the walk.
+`flip` bit at the end is the middle-child **half turn** from
+[doc 03](03-addressing.md), carried down the walk. Earlier drafts of this document
+called it a mirror; it negates both axes rather than one, which is a rotation, and
+nothing in the world is ever mirrored.
 
 ---
 

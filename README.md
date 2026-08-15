@@ -161,14 +161,26 @@ node verification/qr.js        # (i,j) <-> path + (q,r) round-trips exactly
 node verification/adj.js       # face adjacency table is complete and consistent
 node verification/order.js     # no continuous curve through 4-way triangle children
 node verification/calc.js      # sizing formula matches exact cell-area maths
-node verification/scale.js     # cell counts and spacings per level
+node verification/scale.js     # cell counts and spacings per level; the bit ceiling
 node verification/frame.js     # holonomy == enclosed area; the 720° in two forms
 node verification/mesh.js      # 2 verts / 4 tris per cell; sag, seams, LOD budget
 node verification/volume.js    # relief, caves, and what noise generation costs
 node verification/seam.js      # a skirt does not close a cave mouth; what does
 ```
 
+The four that closed the pre-code gap list, and the one that stayed open:
+
+```bash
+node verification/neighbour.js  # neighbour(id,k) from the table and integers alone
+node verification/rank.js       # rank(q,r) over a chunk; the border rule partitions
+node verification/noise.js      # the hash, the fade curve and the fBm, pinned
+node verification/id.js         # the ID word: what broke, and why option C holds
+node verification/determinism.js  # which arithmetic is bit-identical; language is open
+```
+
 Claims in the documentation marked **[verified]** have a corresponding script.
+All thirty-two are run by `make-reference.js`, and
+[`docs/REFERENCE.md`](docs/REFERENCE.md) is their combined output.
 
 ---
 
@@ -180,13 +192,17 @@ Claims in the documentation marked **[verified]** have a corresponding script.
 | Addressing scheme | Decided, verified |
 | Position lookup | Decided, verified |
 | World sizing | Decided, tooling exists |
-| Data structures | Specified, not implemented |
-| Terrain generation | Approach chosen, prototype only |
-| Ray traversal | Approach chosen, 2D prototype only |
-| Pathfinding | Approach chosen, 2D prototype only |
+| Data structures | Decided, verified |
+| Block state and the registry | Decided, verified |
+| Terrain generation | Decided; the noise function is pinned |
 | Gravity and orientation | Decided, verified |
 | Meshing and LOD | Decided, verified |
-| Lighting, precision | **Not yet designed** — see doc 11 |
+| Lighting | Decided, verified |
+| Precision and determinism | Decided, verified |
+| Pentagons, water, rivers, coordinates | Decided, verified |
+| Ray traversal | Approach chosen, 2D prototype only |
+| Pathfinding | Approach chosen, 2D prototype only |
+| Language and runtime | **Not chosen** — the one thing blocking code, see [doc 26](docs/26-implementation-readiness.md) |
 
 ## Licence
 

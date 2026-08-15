@@ -40,6 +40,6 @@
   <text class="cf-d" x="228" y="90">axes as expected</text>
   <text class="cf-gd" x="228" y="120">middle child</text>
   <text class="cf-d" x="228" y="136">origin at the bottom,</text>
-  <text class="cf-d" x="228" y="150">both axes mirrored</text>
-  <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit inside a mirrored frame</text>
+  <text class="cf-d" x="228" y="150">both axes negated</text>
+  <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit in a frame turned half a turn</text>
 </svg>

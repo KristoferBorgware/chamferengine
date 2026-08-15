@@ -252,9 +252,17 @@ at a time. The twelve pentagons are marked, so you can watch them sit at ±90° 
 
 And an identity is already available, exactly, for free:
 
-> **[verified]** Same script, section 5. A cell address at `D` 11 is **27 bits**,
-> which is **six characters in base 36** — eight with the layer included. At
-> `D` 13 it is 31 bits and still six characters.
+> **[verified]** Same script, section 5. A cell address at `D` 11 is **29 bits**;
+> with the layer that is 39, which is **eight characters in base 36**, and with
+> [doc 03](03-addressing.md)'s planet field 51, which is **ten**. At `D` 13:
+> nine and eleven.
+
+Earlier drafts of this document said **six base-36 characters**. They were costing
+the address at `5 + 2D` and leaving the layer out — the address is `5 + 2D + 2`
+(doc 03), and a location without a layer is a column, not a place. Eight is the
+number a player reads aloud. Ten only when the code has to cross planets, which
+is [doc 03](03-addressing.md)'s planet field and not something a single-world
+save ever needs to print.
 
 So the rule is:
 
@@ -354,6 +362,6 @@ a number whose meaning depended on where you were standing when you took it.
   underground. Never show the layer index.
 - Two decimals lands in the right cell **87.5%** of the time and never more than
   **0.21 cells** out — so **show** lat/long, and **send** the cell ID, which is
-  **six base-36 characters** and exact.
+  **eight base-36 characters** with its layer and exact.
 - A bearing is a **starting** direction and changes as you walk. Recompute the
   waypoint arrow every frame; never store one.

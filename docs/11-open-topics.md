@@ -629,8 +629,8 @@ covers more angle.
 And one separation worth carrying: a rounded readout lands in the right cell
 **87.5%** of the time and never more than **0.21 cells** out. That is enough to be
 found by and not enough to be an identity. **Show** latitude, longitude and
-altitude; **send** the cell ID, which is 27 bits — six base-36 characters — and
-exact by construction.
+altitude; **send** the cell ID, which is 29 bits plus a 10-bit layer — **eight**
+base-36 characters — and exact by construction.
 
 ---
 

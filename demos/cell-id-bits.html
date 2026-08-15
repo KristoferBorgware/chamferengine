@@ -58,25 +58,28 @@
 <body>
 
 <h1>Inside a cell ID</h1>
-<div class="sub">One integer holds the whole address. The chunk ID isn't a separate number — it's the front of this one.</div>
+<div class="sub">One 64-bit integer holds the whole thing: which planet, which cell, which layer.
+The chunk ID isn't a separate number — it's the front of this one, and the chunk level isn't a field at all.
+Drag it and watch: the dashed line moves, and not one bit does.</div>
 
 <div class="field">
-  <div class="flabel">World depth · block level <span class="fval" id="dOut">13</span></div>
-  <input type="range" id="d" min="4" max="26" step="1" value="13">
+  <div class="flabel">World depth · block level <span class="fval" id="dOut">11</span></div>
+  <input type="range" id="d" min="4" max="20" step="1" value="11">
 </div>
 <div class="field">
   <div class="flabel">Chunk level · where you cut <span class="fval" id="cOut">6</span></div>
-  <input type="range" id="c" min="0" max="26" step="1" value="6">
+  <input type="range" id="c" min="0" max="20" step="1" value="6">
 </div>
 
 <div class="bar" id="bar"></div>
 <div class="brackets" id="brk"></div>
 
 <div class="key">
+  <span><i class="kdot" style="background:#5a6478"></i>planet 0–4095</span>
   <span><i class="kdot" style="background:#4f8ef7"></i>face 0–19</span>
   <span><i class="kdot" style="background:#3fb8af"></i>path digits</span>
-  <span><i class="kdot" style="background:#e0913a"></i>local q</span>
-  <span><i class="kdot" style="background:#a56cf0"></i>local r</span>
+  <span><i class="kdot" style="background:#e0913a"></i>corner 0–2</span>
+  <span><i class="kdot" style="background:#a56cf0"></i>layer</span>
   <span><i class="kdot" style="background:#2a3245"></i>spare</span>
 </div>
 
@@ -91,32 +94,46 @@
 
 <div class="grid">
   <div><div class="cellv" id="used">—</div><div class="cellk">bits used</div></div>
-  <div><div class="cellv" id="chunkbits">—</div><div class="cellk">of which chunk ID</div></div>
-  <div><div class="cellv" id="cells">—</div><div class="cellk">cells addressed</div></div>
+  <div><div class="cellv" id="chunkbits">—</div><div class="cellk">of which chunk prefix</div></div>
+  <div><div class="cellv" id="cells">—</div><div class="cellk">cells per layer</div></div>
   <div><div class="cellv" id="chunks">—</div><div class="cellk">chunks</div></div>
   <div><div class="cellv" id="per">—</div><div class="cellk">cells per chunk</div></div>
   <div><div class="cellv" id="eff">—</div><div class="cellk">code space used</div></div>
 </div>
 
 <div class="msg" style="color:#8b93a7">
-  The encoding is deliberately sparse: only 20 of 32 face codes exist, and the local
-  <b>q,r</b> square is half wasted because a triangle isn't a square. That costs about
-  1.7 bits and buys you addressing that's pure shifts and masks — no lookup tables anywhere.
+  The encoding is deliberately sparse, in three places at once: only <b>20 of 32</b> face codes exist,
+  only <b>3 of 4</b> corner codes exist, and a vertex is a corner of <b>six</b> triangles so five of its
+  six names are thrown away. Multiply those and <b>7.81%</b> of the code space is used — 3.68 bits spent.
+  What it buys is addressing that's pure shifts and masks, with no lookup tables anywhere.
+</div>
+
+<div class="msg" style="color:#8b93a7">
+  <b>An older version of this page</b> drew the layout as <code>face · path · q · r</code>, with the chunk
+  level deciding how many bits went to the path and how many to <code>q,r</code>. That layout keeps a fixed
+  width, which is what it was drawn to show — but the <i>number</i> changes when you move the cut, so the
+  chunk level would be baked into every ID ever written to disk. Path digits name <i>triangles</i>, and a
+  cell is a <i>vertex</i>: hence the 2-bit corner field above, and hence the path running all the way down.
 </div>
 
 <script>
-const COL = { face:'#4f8ef7', path:'#3fb8af', q:'#e0913a', r:'#a56cf0', spare:'#2a3245' };
-let D = 13, C = 6, truncAt = null;
+const COL = { planet:'#5a6478', face:'#4f8ef7', path:'#3fb8af',
+              corner:'#e0913a', layer:'#a56cf0', spare:'#2a3245' };
+const PLANET_BITS = 12, FACE_BITS = 5, CORNER_BITS = 2, LAYER_BITS = 10;
+const FIXED = PLANET_BITS + FACE_BITS + CORNER_BITS + LAYER_BITS;   // 29
+const DMAX_FIT = Math.floor((64 - FIXED) / 2);                      // 17
+let D = 11, C = 6, truncAt = null;
 
 // a stable example cell
 const rnd = (seed) => { let x = seed; return () => (x = (x*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff; };
-let sample = { face: 7, path: [], q: 0, r: 0 };
+let sample = {};
 function resample(){
   const g = rnd(20260812);
-  sample.face = Math.floor(g()*20);
-  sample.path = Array.from({length:26}, () => Math.floor(g()*4));
-  sample.qBits = Array.from({length:26}, () => g() < .5 ? 0 : 1);
-  sample.rBits = Array.from({length:26}, () => g() < .5 ? 0 : 1);
+  sample.planet = Math.floor(g()*4096);
+  sample.face   = Math.floor(g()*20);
+  sample.path   = Array.from({length:26}, () => Math.floor(g()*4));
+  sample.corner = Math.floor(g()*3);          // 0, 1 or 2 -- a triangle has three
+  sample.layer  = Math.floor(g()*64);
 }
 resample();
 
@@ -133,33 +150,45 @@ function update(){
   document.getElementById('dOut').textContent = D;
   document.getElementById('cOut').textContent = C;
 
-  const nPath = 2*C, nLocal = D - C, used = 5 + nPath + 2*nLocal, spare = 64 - used;
+  // The path always runs to full depth. C decides nothing about the layout --
+  // it only says where to stop reading if you want the chunk.
+  const nPath = 2*D, used = FIXED + nPath, spare = 64 - used;
+  const prefix = 2*C, suffix = nPath - prefix;     // the cut, inside the path
 
-  // proportional bar
-  const segs = [
-    ['face', 5, 'face'], ['path', nPath, 'path'],
-    ['q', nLocal, 'q'], ['r', nLocal, 'r'], ['spare', spare, '']
-  ].filter(s => s[1] > 0);
-  document.getElementById('bar').innerHTML = segs.map(([k,n,label]) =>
-    `<div class="seg" style="flex:${n};background:${COL[k]}">${n>=4?label:''}</div>`).join('');
+  // proportional bar; the chunk cut is a divider inside the path field
+  const seg = (k, n, label, extra) => n <= 0 ? '' :
+    `<div class="seg" style="flex:${n};background:${COL[k]};${extra||''}">${n>=4?label:''}</div>`;
+  document.getElementById('bar').innerHTML =
+    seg('planet', PLANET_BITS, 'planet') +
+    seg('face', FACE_BITS, 'face') +
+    seg('path', prefix, 'path', 'border-right:2px dashed #0b0e14') +
+    seg('path', suffix, '···') +
+    seg('corner', CORNER_BITS, '') +
+    seg('layer', LAYER_BITS, 'layer') +
+    seg('spare', Math.max(spare,0), spare > 0 ? 'spare' : '') +
+    (spare < 0 ? `<div class="seg" style="flex:${-spare};background:#7a2b28;color:#ffd9d5">`
+                 + `${-spare >= 4 ? 'over by ' + (-spare) : ''}</div>` : '');
+  document.getElementById('bar').style.borderColor = spare < 0 ? '#a33' : '#223049';
+  const chunkBits = PLANET_BITS + FACE_BITS + prefix;
   document.getElementById('brk').innerHTML =
-    `<div class="brk" style="flex:${5+nPath}">chunk ID · ${5+nPath} bits</div>
-     <div class="brk" style="flex:${2*nLocal}">position in chunk · ${2*nLocal} bits</div>` +
-     (spare>0?`<div class="brk" style="flex:${spare}">${spare}</div>`:'');
+    `<div class="brk" style="flex:${chunkBits}">chunk prefix · ${chunkBits} bits</div>
+     <div class="brk" style="flex:${used - chunkBits}">which cell in it, and which layer</div>` +
+     (spare>0?`<div class="brk" style="flex:${spare}">${spare} spare</div>`:'');
 
-  // binary string
-  const put = (bits, col, from) => bits.map((b,i) =>
-    `<span style="color:${col}" class="${truncAt!==null && from+i >= 5+2*truncAt ? 'off':''}">${b}</span>`).join('');
-  const faceBits = sample.face.toString(2).padStart(5,'0').split('').map(Number);
-  const pathBits = sample.path.slice(0,C).flatMap(d => [d>>1, d&1]);
-  const qBits = sample.qBits.slice(0,nLocal), rBits = sample.rBits.slice(0,nLocal);
+  // binary string, field by field
+  const put = (bits, col, dead) => bits.map(b =>
+    `<span style="color:${col}" class="${dead ? 'off':''}">${b}</span>`).join('');
+  const toBits = (v, n) => v.toString(2).padStart(n,'0').split('').map(Number);
+  const cutAt = truncAt === null ? D : truncAt;    // path digits still live
   document.getElementById('bits').innerHTML =
-    put(faceBits, COL.face, 0) + ' ' +
-    (pathBits.length ? sample.path.slice(0,C).map((d,i) =>
-        `<span style="color:${COL.path}" class="${truncAt!==null && i>=truncAt ? 'off':''}">${(d>>1)}${(d&1)}</span>`
-      ).join(' ') + ' ' : '') +
-    put(qBits, COL.q, 999) + ' ' + put(rBits, COL.r, 999) +
-    (spare>0 ? ' <span style="color:#39415a">' + '0'.repeat(Math.min(spare,20)) + (spare>20?'…':'') + '</span>' : '');
+    put(toBits(sample.planet, PLANET_BITS), COL.planet, false) + ' ' +
+    put(toBits(sample.face, FACE_BITS), COL.face, false) + ' ' +
+    sample.path.slice(0,D).map((d,i) =>
+      `<span style="color:${COL.path}" class="${i >= cutAt ? 'off':''}">${(d>>1)}${(d&1)}</span>`
+    ).join(' ') + ' ' +
+    put(toBits(sample.corner, CORNER_BITS), COL.corner, truncAt !== null) + ' ' +
+    put(toBits(sample.layer, LAYER_BITS), COL.layer, truncAt !== null) +
+    (spare>0 ? ' <span style="color:#39415a">' + '0'.repeat(spare) + '</span>' : '');
 
   // truncation buttons
   const btns = [];
@@ -173,9 +202,16 @@ function update(){
 
   // message
   const msg = document.getElementById('msg');
-  if (truncAt === null){
-    msg.innerHTML = `The full ID names one hexagon. Face <b>${sample.face}</b>, then ${C} path digits
-      down the triangle tree, then its <b>q,r</b> spot inside that chunk.`;
+  if (spare < 0){
+    msg.innerHTML = `<b>Depth ${D} does not fit.</b> ${used} bits needed, 64 available.
+      That is the real ceiling on how fine a world can be: <b>12 + 5 + 2D + 2 + 10 ≤ 64</b>,
+      so <b>D ≤ ${DMAX_FIT}</b>. Doc 06 used to say 29 levels, then 24 — both were
+      computed before anyone packed a word that also held a planet and a corner.`;
+  } else if (truncAt === null){
+    msg.innerHTML = `The full ID names one hexagon on one layer. Planet <b>${sample.planet}</b>,
+      face <b>${sample.face}</b>, then <b>${D}</b> path digits all the way down the triangle tree,
+      then <b>corner ${sample.corner}</b> of the smallest triangle — because a path names a
+      <i>triangle</i> and a cell is a <i>vertex</i>. Then layer <b>${sample.layer}</b>.`;
   } else {
     const nChunksAt = 20*4**truncAt;
     const share = 100/nChunksAt;
@@ -185,12 +221,17 @@ function update(){
   }
 
   const N = 10*4**D + 2, nChunks = 20*4**C;
-  document.getElementById('used').textContent = used + ' / 64';
-  document.getElementById('chunkbits').textContent = (5+nPath) + ' bits';
+  const usedEl = document.getElementById('used');
+  usedEl.textContent = used + ' / 64';
+  usedEl.style.color = spare < 0 ? '#ff8a7a' : '#fff';
+  document.getElementById('chunkbits').textContent = chunkBits + ' bits';
   document.getElementById('cells').textContent = fmtN(N);
   document.getElementById('chunks').textContent = fmtN(nChunks);
   document.getElementById('per').textContent = fmtN(N/nChunks);
-  document.getElementById('eff').textContent = (100*N/(32*4**D)).toFixed(0) + '%';
+  // three sparsities at once: 20/32 faces, 3/4 corners, and 1 canonical name
+  // of the six triangles that share a vertex.
+  document.getElementById('eff').textContent =
+    (100 * N / 2**(FACE_BITS + 2*D + CORNER_BITS)).toFixed(2) + '%';
 }
 
 document.getElementById('d').addEventListener('input', () => { truncAt=null; update(); });

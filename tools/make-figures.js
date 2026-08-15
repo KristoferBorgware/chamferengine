@@ -243,9 +243,10 @@ const made = [];
 }
 
 // =============================================================================
-// 03 — the bit layout, and what truncation does
+// 03 — the bit layout: the draft that did not survive, and the word that did
 // =============================================================================
 {
+  // the superseded draft: [face][path x C][q][r], with the cut inside the number
   const X=20, Y=42, H=30;
   const parts = [
     { w: 52, label: 'face', sub: '5 bits', cls: 'cf-af' },
@@ -261,7 +262,7 @@ const made = [];
     x += p.w + 4;
   }
   const chunkEnd = X + 52 + 4 + 96;
-  made.push(svg('cell-id-bits', 340, 138, `
+  made.push(svg('cell-id-draft', 340, 152, `
   ${boxes}
   <path class="cf-a" d="M${X} ${Y-10} L${chunkEnd} ${Y-10}"/>
   <path class="cf-l" d="M${X} ${Y-14} L${X} ${Y-6} M${chunkEnd} ${Y-14} L${chunkEnd} ${Y-6}"/>
@@ -269,7 +270,42 @@ const made = [];
   <path class="cf-l" d="M${chunkEnd+4} ${Y-10} L${x-4} ${Y-10}"/>
   <path class="cf-l" d="M${chunkEnd+4} ${Y-14} L${chunkEnd+4} ${Y-6} M${x-4} ${Y-14} L${x-4} ${Y-6}"/>
   <text class="cf-d" x="${(chunkEnd+x)/2}" y="${Y-18}" text-anchor="middle">where in the chunk</text>
-  <text class="cf-d" x="170" y="126" text-anchor="middle">total width is 5 + 2D bits, wherever the cut falls</text>`));
+  <text class="cf-d" x="170" y="126" text-anchor="middle">C appears in the layout, so it appears in the number</text>
+  <text class="cf-gd" x="170" y="143" text-anchor="middle">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>`));
+}
+{
+  // the word actually stored, at D = 11: 12 + 5 + 22 + 2 + 10 = 51 of 64
+  const D = 11, W = 476, X = 14, Y = 70, H = 32, SCALE = 7;
+  const parts = [
+    { bits: 12,  label: 'planet', cls: 'cf-fill' },
+    { bits: 5,   label: 'face',   cls: 'cf-af'   },
+    { bits: 2*D, label: 'path digits', cls: 'cf-af' },
+    { bits: 2,   label: 'corner', cls: 'cf-gf'   },
+    { bits: 10,  label: 'layer',  cls: 'cf-fill' },
+    { bits: 13,  label: 'spare',  cls: 'cf-void' },
+  ];
+  // the bit count goes INSIDE the box (a number fits in 14 px, a word does not)
+  // and the field name goes underneath, so face and corner stay readable.
+  let x = X, boxes = '', addrStart = 0, addrEnd = 0;
+  for (const p of parts){
+    const w = p.bits * SCALE;
+    boxes += `<rect class="${p.cls}" x="${f(x)}" y="${Y}" width="${f(w)}" height="${H}" rx="3"/>`
+          +  `<text class="cf-c" x="${f(x+w/2)}" y="${Y+20}" text-anchor="middle">${p.bits}</text>`
+          +  `<text class="cf-d" x="${f(x+w/2)}" y="${Y+H+16}" text-anchor="middle">${p.label}</text>`;
+    if (p.label === 'face') addrStart = x;
+    if (p.label === 'corner') addrEnd = x + w;
+    x += w;
+  }
+  const cut = X + (12 + 5 + 2*6) * SCALE;          // chunk level 6
+  made.push(svg('cell-id-bits', W, 176, `
+  ${boxes}
+  <path class="cf-a" d="M${f(addrStart)} ${Y-12} L${f(addrEnd)} ${Y-12}"/>
+  <path class="cf-l" d="M${f(addrStart)} ${Y-16} L${f(addrStart)} ${Y-8} M${f(addrEnd)} ${Y-16} L${f(addrEnd)} ${Y-8}"/>
+  <text class="cf-c" x="${f((addrStart+addrEnd)/2)}" y="${Y-20}" text-anchor="middle">the address &#8212; 5 + 2D + 2 = 29 bits</text>
+  <path class="cf-g" d="M${f(cut)} ${Y-2} L${f(cut)} ${Y+H+5}" stroke-dasharray="4 3"/>
+  <text class="cf-gd" x="${f(cut)}" y="${Y+H+38}" text-anchor="middle">chunk cut, C = 6</text>
+  <text class="cf-d" x="${W/2}" y="166" text-anchor="middle">the cut is a place to read, not a field &#8212; move it and no bit changes</text>
+  <text class="cf-big" x="${X}" y="24">51 of 64 bits at D = 11</text>`));
 }
 
 // =============================================================================
@@ -303,8 +339,8 @@ const made = [];
   <text class="cf-d" x="228" y="90">axes as expected</text>
   <text class="cf-gd" x="228" y="120">middle child</text>
   <text class="cf-d" x="228" y="136">origin at the bottom,</text>
-  <text class="cf-d" x="228" y="150">both axes mirrored</text>
-  <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit inside a mirrored frame</text>`));
+  <text class="cf-d" x="228" y="150">both axes negated</text>
+  <text class="cf-d" x="200" y="188" text-anchor="middle">~46% of all cells sit in a frame turned half a turn</text>`));
 }
 
 
@@ -2379,6 +2415,94 @@ const prof = (() => {
   <text class="cf-d" x="252" y="224">one 64-bit word each</text>
   <text class="cf-d" x="252" y="248">untouched cells are</text>
   <text class="cf-d" x="252" y="264">simply absent</text>`));
+}
+
+// =============================================================================
+// 27 — one side-table entry: tag, length, payload, repeated. The length is what
+// lets an older build step over a tag it has never heard of.
+// =============================================================================
+{
+  const X = 22, Y = 78, H = 34;
+  const strip = [
+    { w: 44,  cls: 'cf-af', top: 'tag',     bot: 'CHEST' },
+    { w: 44,  cls: 'cf-af', top: 'length',  bot: '108' },
+    { w: 148, cls: 'cf-af', top: 'payload', bot: '27 slots x 4 B' },
+    { w: 44,  cls: 'cf-gf', top: 'tag',     bot: 'NAME' },
+    { w: 44,  cls: 'cf-gf', top: 'length',  bot: '14' },
+    { w: 100, cls: 'cf-gf', top: 'payload', bot: '"Ore stash"' },
+  ];
+  let x = X, boxes = '';
+  for (const s of strip){
+    boxes += `<rect class="${s.cls}" x="${x}" y="${Y}" width="${s.w}" height="${H}" rx="3"/>`
+          +  `<text x="${x+s.w/2}" y="${Y+15}" text-anchor="middle">${s.top}</text>`
+          +  `<text class="cf-c" x="${x+s.w/2}" y="${Y+29}" text-anchor="middle">${s.bot}</text>`;
+    x += s.w + 3;
+  }
+  const end = x - 3;
+  const tag2 = X + (44+3) + (44+3) + (148+3);      // start of the second tag
+  const pay2 = tag2 + (44+3) + (44+3);             // start of the second payload
+  made.push(svg('side-table-entry', 470, 236, `
+  <text class="cf-big" x="${X}" y="26">one entry in the side table</text>
+  <rect class="cf-gf" x="${X}" y="40" width="118" height="22" rx="4"/>
+  <text class="cf-c" x="${X+8}" y="${55}">cell 0x2B07&#8230;</text>
+  <path class="cf-l" d="M${X+124} 51 L${X+150} 51" marker-end="url(#st)"/>
+  <defs><marker id="st" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#9aa3b2"/></marker>
+  <marker id="st2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <text class="cf-d" x="${X+158}" y="55">a blob: one or more of these, back to back</text>
+  ${boxes}
+  <path class="cf-g" d="M${pay2} ${Y+H+8} C${pay2+26} ${Y+H+36} ${end-26} ${Y+H+36} ${end} ${Y+H+10}" marker-end="url(#st2)"/>
+  <text class="cf-gd" x="${(pay2+end)/2}" y="${Y+H+56}" text-anchor="middle">jump 14 bytes</text>
+  <text class="cf-d" x="${X}" y="${Y+H+40}">an older build,</text>
+  <text class="cf-d" x="${X}" y="${Y+H+56}">reading this:</text>
+  <text class="cf-d" x="${X}" y="192">It has never heard of NAME. It does not crash and it does not guess &#8212; it</text>
+  <text class="cf-d" x="${X}" y="208">reads the tag, does not know it, reads the length, and steps over the</text>
+  <text class="cf-d" x="${X}" y="224">payload to whatever comes next. That is the only reason a length is stored.</text>`));
+}
+
+// =============================================================================
+// 27 — who answers "does this cell have side data?". The type-gate leaves an
+// orphan the moment the type changes; asking the table cannot.
+// =============================================================================
+{
+  const W = 470, CW = 104, X = 22, GAP = 8;
+  const steps = [
+    { block: 'chest', cls: 'cf-af',   what: 'place a chest' },
+    { block: 'chest', cls: 'cf-af',   what: 'fill it with ore' },
+    { block: 'air',   cls: 'cf-void', what: 'break it' },
+    { block: 'stone', cls: 'cf-fill', what: 'place stone' },
+  ];
+  const rowA = ['[CHEST]', '[CHEST 108B]', '[CHEST 108B]', '[CHEST 108B]'];
+  const rowC = ['[CHEST]', '[CHEST 108B]', '-', '-'];
+  let top = '';
+  steps.forEach((s, k) => {
+    const x = X + k*(CW+GAP);
+    top += `<text class="cf-d" x="${x+CW/2}" y="46" text-anchor="middle">${k+1}. ${s.what}</text>`
+        +  `<rect class="${s.cls}" x="${x}" y="54" width="${CW}" height="30" rx="4"/>`
+        +  `<text class="cf-c" x="${x+CW/2}" y="73" text-anchor="middle">${s.block}</text>`;
+  });
+  const row = (vals, y, dead) => vals.map((v, k) => {
+    const x = X + k*(CW+GAP);
+    const orphan = dead && k >= 2;
+    return `<rect class="${v === '-' ? 'cf-void' : orphan ? 'cf-gf' : 'cf-fill'}"`
+         + ` x="${x}" y="${y}" width="${CW}" height="26" rx="4"/>`
+         + `<text class="${orphan ? 'cf-gd' : 'cf-c'}" x="${x+CW/2}" y="${y+17}" text-anchor="middle">`
+         + `${v === '-' ? 'not in the map' : v}</text>`;
+  }).join('');
+  const orphanX = X + 2*(CW+GAP);
+  made.push(svg('side-table-orphan', W, 300, `
+  <text class="cf-big" x="${X}" y="26">the same four moves, under two rules</text>
+  ${top}
+  <text class="cf-d" x="${X}" y="112">A &#8212; the TYPE decides whether an entry may exist</text>
+  ${row(rowA, 120, true)}
+  <path class="cf-g" d="M${orphanX} ${152} L${X + 4*CW + 3*GAP} ${152}"/>
+  <text class="cf-gd" x="${orphanX}" y="168">orphaned</text>
+  <text class="cf-d" x="${X}" y="192">Stone says "no side data", so nothing reads the blob and nothing</text>
+  <text class="cf-d" x="${X}" y="208">frees it. A chest placed here later inherits someone else's ore.</text>
+  <text class="cf-d" x="${X}" y="240">C &#8212; the TABLE decides, and writing a block clears its side data</text>
+  ${row(rowC, 248, false)}
+  <text class="cf-d" x="${X}" y="296">One rule, no cases, nothing left behind.</text>`));
 }
 
 // =============================================================================

@@ -247,11 +247,16 @@ Minecraft — worth knowing before you promise players a "1 metre block".*
 
 Three separate ceilings on how deep you can go, and only one of them binds:
 
-- **Bits** — 5 for the face plus 2 per level means **29 levels** in a 64-bit ID,
-  *if the word holds nothing else*. It does hold something else:
-  [doc 03](03-addressing.md) puts the layer index in the same word, and a
-  512-layer crust costs 10 bits, which brings the real ceiling to **24 levels**.
-  Either way, not the binding constraint.
+- **Bits** — the stored word is
+  `[planet 12][face 5][path 2×D][corner 2][layer 10]`
+  ([doc 03](03-addressing.md)), so `12 + 5 + 2D + 2 + 10 ≤ 64` and the ceiling is
+  **`D` = 17**. That is **172 billion** cells a layer — a **1.6 cm** block on the
+  worked planet above — so it is not the binding constraint. But it is lower than
+  the two numbers earlier drafts of this page gave: **29 levels** from
+  `(64 − 5) / 2`, counting the face and the path alone, and then **24 levels**
+  from `(64 − 5 − 10) / 2` once the layer joined them. Both were computed before
+  anyone packed a real word, and neither paid for the planet field or the 2-bit
+  corner that names a vertex.
 - **Storage** — level 15 at one byte per cell is ~11 GB. This is what actually
   stops you.
 - **Nothing, if you generate on demand.** A cell's terrain comes from a noise

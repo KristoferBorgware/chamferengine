@@ -148,10 +148,10 @@ Camera and controller state only; never a stored coordinate.
 | Cell area variation, with pentagons | ≈ 2.74 : 1 | across the sphere |
 | Cell spacing variation | ≈ 1.41 : 1 | hexagons; `sec^1.5(37.3774°)` |
 | Largest edge ÷ nominal spacing | 1.098 | the admissible A* divisor |
-| ID width | `5 + 2D` bits | independent of chunk level |
-| Code space used | ≈ 31.25% | `20/32 × 1/2` |
-| Max levels in 64 bits, no layer field | 29 | `(64 − 5) / 2` |
-| Max levels in 64 bits, 10-bit layer | 24 | `(64 − 5 − 10) / 2` — the real ceiling |
+| Address width | `5 + 2D + 2` bits | 29 at `D` 11; the last 2 name a corner |
+| Stored word | `[planet 12][face 5][path 2×D][corner 2][layer 10]` | 51 of 64 at `D` 11 |
+| Code space used | ≈ 7.81% | `0.625 × 0.75 × 1/6`; was 31.25% under the `q,r` draft |
+| Max levels in 64 bits | 17 | `12 + 5 + 2D + 2 + 10 ≤ 64` — the real ceiling |
 | Adjacency table | 60 entries, 180 bytes | 20 × 3 × 3 bytes |
 | Flipped-frame cells | ≈ 46% | descended through a middle child |
 | Border cells needing ownership rule | ~6% at D3/C0 | demo-measured, extreme case; falls as chunks grow |

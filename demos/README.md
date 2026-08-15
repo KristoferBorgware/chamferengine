@@ -101,9 +101,11 @@ chunk division → ownership. The simplest entry point to the whole design.
 **Docs:** [03 — Addressing](../docs/03-addressing.md)
 
 ### [`cell-id-bits.html`](cell-id-bits.html)
-The bit layout, live. Drag the depth and chunk-level sliders and watch the total
-width stay at `5 + 2D` regardless of where you cut. Tap the truncate buttons to
-see bits vanish and the surviving prefix's surface coverage reported.
+The stored 64-bit word, live: `[planet 12][face 5][path 2×D][corner 2][layer 10]`.
+Drag the chunk-level slider and watch the dashed line move while the binary string
+below it does not change at all — that is the whole of what the encoding buys.
+Drag depth instead and the word runs out of room at `D` 17. Tap the truncate
+buttons to see the tail go dark and the surviving prefix's coverage reported.
 
 **Docs:** [03 — Addressing](../docs/03-addressing.md)
 

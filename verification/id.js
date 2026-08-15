@@ -233,6 +233,46 @@ console.log('\n6. does truncating a canonical name still give the owning chunk?'
   console.log('   the smallest prefix. Nothing new has to be stored or looked up.');
 }
 
+// ---- 7. what option C costs in code space ----------------------------------
+console.log('\n7. how much of the address space actually names a cell?');
+{
+  // Doc 03 has quoted "31.25% of the code space is used" since the q/r draft:
+  // 20 of 32 face codes, times half a square because a triangle is not one.
+  // Option C has different fields, so re-derive it rather than carry it over.
+  console.log('   field           values   used   share');
+  const rows = [
+    ['face      5 bits', 32, 20, 'only 20 icosahedron faces exist'],
+    ['corner    2 bits',  4,  3, 'a triangle has three corners'],
+  ];
+  for (const [name, have, used, why] of rows)
+    console.log(`   ${name}  ${String(have).padStart(6)} ${String(used).padStart(6)}`
+      + `  ${(100*used/have).toFixed(1).padStart(6)}%   ${why}`);
+  console.log('   path   2D bits   4^D    4^D   100.0%   every digit combination is a triangle');
+  console.log('');
+  console.log('   and then the canonical rule throws most of what is left away, because');
+  console.log('   a vertex is a corner of up to six triangles and only one name survives:');
+  console.log('');
+  console.log('     D    address bits        codes       cells   used');
+  for (const D of [3, 5, 11]){
+    const codes = 2 ** (5 + 2*D + 2), cells = 10 * 4**D + 2;
+    console.log(`   ${String(D).padStart(3)} ${String(5+2*D+2).padStart(14)}`
+      + ` ${codes.toLocaleString('en-US').padStart(12)}`
+      + ` ${cells.toLocaleString('en-US').padStart(11)}`
+      + ` ${(100*cells/codes).toFixed(2).padStart(6)}%`);
+  }
+  const share = 10/128;
+  console.log('');
+  console.log(`   The share tends to 10/128 = ${(100*share).toFixed(4)}%, flat in depth:`);
+  console.log('   62.5% of the face field x 75% of the corner field x 1/6 for the six');
+  console.log(`   triangles sharing a vertex = ${(100*0.625*0.75*(1/6)).toFixed(4)}%.`);
+  console.log(`   That is ${(-Math.log2(share)).toFixed(2)} bits spent, against the ${(-Math.log2(0.3125)).toFixed(2)}`
+    + ' bits the q/r draft spent.');
+  console.log('   So doc 03\'s "31.25% of the code space" belongs to the superseded');
+  console.log('   layout. Option C uses 7.81% and costs 2 bits more -- which is exactly');
+  console.log('   the 2-bit corner field, arriving as a wider word rather than as a');
+  console.log('   cleverer one. Still no lookup tables anywhere, which was the trade.');
+}
+
 console.log('\nverdict');
 console.log('   Doc 03 asked for three things at once -- a fixed width, a chunk reachable');
 console.log('   by one shift, and a chunk level that can move after launch -- and the');

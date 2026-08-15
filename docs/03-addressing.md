@@ -104,7 +104,9 @@ Within a chunk, a cell is identified by `(q, r)` on a triangular lattice.
 
 ## Bit layout
 
-![The cell ID as four fields: face, path digits, q and r, with the chunk ID spanning the first two](figures/cell-id-bits.svg)
+Here is the layout this document drew for a long time. **It is wrong**, it was
+wrong in an interesting way, and the next two sections are the repair. Read it
+first anyway — everything that survives is in it.
 
 ```
 [ 5 bits ][ 2 bits × C ][ (D−C) bits ][ (D−C) bits ]
@@ -117,17 +119,17 @@ Within a chunk, a cell is identified by `(q, r)` on a triangular lattice.
 Where `D` is the world's subdivision depth (the block level) and `C` is the chunk
 level (where you cut).
 
-Total width is `5 + 2C + 2(D − C)` = **`5 + 2D` bits, independent of `C`**. Moving
-the chunk boundary does not change the address at all — it only moves where the
-line is drawn through the same number. This is why chunk size remains tunable
-after launch: it does not change world data.
+![The superseded four-field draft: face, path digits, q and r, with the chunk ID spanning the first two](figures/cell-id-draft.svg)
 
-At `D = 13` the whole address fits in **31 bits**. In a 64-bit integer that leaves
-33 bits spare for a layer index, a world version, or resolution tags.
+*The draft, with the claim it was drawn to make: the chunk cut falls **inside**
+the number, so moving it should cost nothing. Two of the three fields on the
+right are the problem — `q` and `r` are what is left of `(i, j)` after `C` digits
+have been taken off, so `C` is in the layout, and therefore in the number.*
 
-**Demo:** [`demos/cell-id-bits.html`](../demos/cell-id-bits.html) — drag the
-depth and chunk-level sliders and watch the total stay fixed; tap the truncate
-buttons to see bits vanish and the surviving prefix's surface coverage reported.
+The claim was that the total is `5 + 2C + 2(D − C)` = `5 + 2D` bits whatever `C`
+is, so moving the chunk boundary moves a line through the same number and chunk
+size stays tunable after launch. **The width part of that is true. The rest is
+not**, and neither is the arithmetic on `q` and `r`.
 
 ### This document asks for three things at once, and the layout above delivers one
 
@@ -229,25 +231,61 @@ and the word, with the planet field that started all this:
 [ planet 12 ][ face 5 ][ path 2×D ][ corner 2 ][ layer 10 ]
 ```
 
-**51 of 64 bits at `D` 11**, 13 spare, for **4,096 worlds** of 41,943,042 cells
-each. Planet on top so one world is a contiguous range; layer at the bottom so one
-column is; the chunk at any level is still **one shift**.
+`12 + 29 + 10 = 51` — **51 of 64 bits at `D` 11**, 13 spare, for **4,096 worlds**
+of 41,943,042 cells each. Planet on top so one world is a contiguous range; layer
+at the bottom so one column is; the chunk at any level is still **one shift**.
 
-Whichever wins, the word has room. At `D` 11 with a **12-bit planet field**:
-`12 + 29 + 10 = 51` of 64 bits, **13 spare**, for **4,096 worlds** of 41,943,042
-cells each.
+![The stored word at depth 11: planet 12 bits, face 5, path digits 22, corner 2, layer 10, and 13 spare, with the chunk cut marked as a dashed line inside the path digits](figures/cell-id-bits.svg)
+
+*The same picture as the draft above, after the repair — and the difference is the
+dashed line. `C` no longer names a field; it names **a place to read**, part way
+along path digits that run to full depth regardless. That is the whole of what
+option C bought: slide the dashed line and not one bit of one stored ID changes.
+The address is the blue span, 29 bits; the planet and the layer are the rest of
+the word.*
+
+Note what the word does **not** contain: `D` itself. Every stored ID in a world is
+written at that world's depth and read at it, so the depth lives in the save
+header, once. And 64 bits is a real ceiling — `12 + 5 + 2D + 2 + 10 ≤ 64` gives
+**`D` ≤ 17**: 172 billion cells a layer, which on
+[doc 06](06-world-sizing.md)'s worked planet is a **1.6 cm** block. Nowhere near
+binding. But it is the number, and it is not the 29 that counting the face and
+the path alone suggests.
+
+**Demo:** [`demos/cell-id-bits.html`](../demos/cell-id-bits.html) — drag the depth
+and chunk-level sliders. The chunk slider moves the dashed line and nothing else,
+which is the claim above made touchable; the depth slider grows the path field
+until the word runs out of room at `D` 17. Tap the truncate buttons to watch the
+tail go dark and the surviving prefix's surface coverage reported.
 
 ### Code space efficiency
 
-The encoding is deliberately sparse. Only 20 of 32 face codes exist, and the
-local `q,r` square is half wasted because a triangle is not a square:
+The encoding is deliberately sparse, and option C is **sparser than the draft
+was**. Three separate wastes, and the third is the big one:
 
 ```
-20/32 × 1/2 ≈ 31.25% of the code space is used
+face     20 of 32 codes exist          62.5%   there are 20 icosahedron faces
+corner    3 of 4  codes exist          75.0%   a triangle has three corners
+path      every digit is a triangle   100.0%
+canonical 1 name survives of 6         16.7%   a vertex is a corner of six triangles
 ```
 
-That costs about 1.7 bits and buys addressing that is pure shifts and masks, with
-no lookup tables anywhere. Accepted.
+Multiply them:
+
+```
+0.625 × 0.75 × 1/6 = 7.8125% of the code space is used
+```
+
+> **[verified]** `verification/id.js`, section 7. **7.84%** at `D` 3, **7.81%** at
+> `D` 5 and `D` 11 — flat in depth, because every factor above is a constant.
+> Earlier drafts of this document said **31.25%** (`20/32 × 1/2`); that number was
+> computed for the `q, r` layout and does not survive the corner field.
+
+That costs **3.68 bits** against the draft's 1.68, and the two extra bits are not
+a subtlety — they are the corner field itself, arriving as a wider word rather
+than as a cleverer one. What it buys is unchanged and is the whole reason:
+addressing that is pure shifts and masks, with no lookup tables anywhere.
+Accepted.
 
 ---
 
@@ -496,8 +534,11 @@ address.
   triangles** and the **cells are on their corners**.
 - An address is the **route down the splits**: face, then one digit per level.
   Truncating digits gives the containing chunk, for free.
-- Width is `5 + 2D` bits regardless of where the chunk cut falls, so **chunk size
-  stays tunable after launch**.
+- The address is **`5 + 2D + 2`** bits — path to full depth, then two bits naming
+  which corner of the smallest triangle, because path digits name triangles and a
+  cell is a **vertex**. The chunk cut is a place to read, not a field, so **chunk
+  size stays tunable after launch**. The stored word is
+  `[planet 12][face 5][path 2×D][corner 2][layer 10]` — 51 of 64 at `D` 11.
 - The **middle child is turned half a turn** — not mirrored — and about 46% of
   cells live inside one. Handedness never changes; a naive direction index is just
   shifted by 3. Carry
