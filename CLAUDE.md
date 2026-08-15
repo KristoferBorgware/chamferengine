@@ -793,6 +793,20 @@ Violating any of these breaks the design. They are not tunable.
 
 ## Known gaps
 
+**The V1 line is drawn, and doc 11 now holds it.** Two states that were being
+written down the same way are now separated: **open** (needs thinking) and
+**deferred** (has an answer, a price, and a decision not to spend it yet).
+**V1** = TypeScript, browser-first with WebGPU, local filesystem storage, a server
+that stores and routes and validates nothing, inventory client-side and never
+synced. **V2** = edit validation (the point query, `0.06%` of a core at 1,000
+players), server-side simulation and mobs (**158×** that), entity interest,
+AWS hosting, a native desktop client, and any move of a hot path to C/Rust+wasm.
+**Unscoped and in no document at all**: a skybox, clouds, a cosmetic moon, and
+space travel — only doc 03's 12-bit **planet field** exists, added early because
+it would have been expensive later. Doc 26's triage gains a second axis from this:
+*blocks code* and *in V1* are different questions, and the first build is
+**smaller** than doc 26 assumed — "the server" on its step-4 list is now a file.
+
 **Doc 11 refilled.** Its original twelve entries are all struck through, and
 **Part 1 of that page is now the kernel gap list** — the four things that block
 the first line of code. Doc 26 triages the rest: of the **46** open bullets across

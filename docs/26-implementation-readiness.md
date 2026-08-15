@@ -257,6 +257,42 @@ of this document.
 
 ---
 
+## The triage now has a second axis: V1
+
+This document sorted 44 open questions by whether they **block code**. That was
+the only axis available at the time, because no scope line existed. One does now
+([doc 11](11-open-topics.md) holds it in full), and it cuts across the triage
+rather than along it.
+
+The two axes answer different questions:
+
+```
+blocks code?   can this be started without more design?
+in V1?         is it being started now?
+```
+
+An item can block nothing and still be V1 — most of the engine is exactly that.
+An item can be fully designed, fully priced and **not V1**, which is a state this
+document had no way to express and was filing under "waits on code".
+
+**Three of the deferrals come from this document's own subject matter**, and each
+removes work from the first build rather than adding it:
+
+- **Edit validation** — the point query on virgin ground.
+  [Doc 30](30-authority-and-cheating.md) prices it at `0.06%` of a core at a
+  thousand players and defers it. V1's server checks nothing.
+- **Server-side simulation** — mobs, a tick loop, chunks resident on the server.
+  **158×** what validation costs, and the only thing that turns the server into a
+  simulator. V2.
+- **Hosting** — [doc 31](31-deployment.md) sketches it and marks itself *plan, not
+  decision*. V1 is the filesystem.
+
+So the honest restatement of this page's headline is: **nothing blocks the first
+line of code, and the first build is smaller than this document assumed.** Step 4
+below used to end with "and the server". It now ends with a file.
+
+---
+
 ## Build it in four steps, and each one settles something no document can
 
 **1. The kernel.** Constant tables, `encode`/`decode`, `idToPosition`,
@@ -281,8 +317,16 @@ height at a mesh corner*, which is currently the furthest-reaching open item in
 the specification and cannot be answered any other way.
 
 **4. Everything else, in any order.** LOD and seam ownership, lighting, water,
-the delta store, the server. Each one has a document, a script and a number
-waiting for it.
+and the delta store. Each one has a document, a script and a number waiting for
+it.
+
+**"The server" used to be on that list and is now a file.**
+[Doc 30](30-authority-and-cheating.md) scopes V1's server to a point of storage —
+it stores edits, routes them, and validates nothing — and
+[doc 31](31-deployment.md) puts V1 on the local filesystem. So step 4's last item
+is a delta store that persists, not a service. The two rules that keep the
+upgrade cheap cost nothing to obey now: **an edit names a cell and a resulting
+block state**, and **inventory never travels client → server**.
 
 **Do not build the coarse map before step 2.** [Doc 21](21-rivers-and-erosion.md)
 already priced the ordering the other way round: continents decide rivers, and
@@ -341,8 +385,15 @@ question nobody on this list has thought of. That is what steps are for.
 - **Nothing now stands between this specification and code.** The language was
   the last of the four, and it closed the same way the others did — by building
   the thing. Six languages, one kernel, **one digest**; determinism eliminated
-  nobody, and **Rust** was chosen on garbage collection and WebAssembly
-  ([doc 28](28-language-and-runtime.md)).
+  nobody, and the decision landed on **TypeScript**, browser-first
+  ([doc 28](28-language-and-runtime.md)) — after first landing on Rust, on a
+  weighing that a stated browser requirement reversed.
+- **And the triage now has a second axis.** *Blocks code* and *in V1* are
+  different questions, and this document only had the first. The first build is
+  **smaller** than this page assumed: V1's server stores and routes and validates
+  nothing, hosting is a filesystem, and mobs are V2. See
+  [doc 11](11-open-topics.md) for the line and [doc 30](30-authority-and-cheating.md)
+  for what it costs to keep the door open.
 - **Of 44 open questions, one blocked code** (which language), 23 are waiting for
   code to exist, and 20 block nothing at all.
 - **The one free-but-unfixable decision is taken**: the polar axis runs through

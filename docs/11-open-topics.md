@@ -26,6 +26,69 @@ way, by writing the kernel in six of them and comparing the bits
 
 ---
 
+## The V1 line, and what it defers
+
+This page has always tracked what was **undesigned**. It now has to track a second
+thing, because the first scope decisions have been made: what is designed,
+understood and **deliberately not being built yet**.
+
+Those are different states and they were being written down the same way. An item
+that is *open* needs thinking. An item that is *deferred* needs nothing — it has an
+answer, a price, and a decision not to spend it yet.
+
+### Decided for V1
+
+| | Decided in |
+|---|---|
+| **TypeScript**, one source tree | [28](28-language-and-runtime.md) |
+| **The browser is the primary client**, rendering with WebGPU | [28](28-language-and-runtime.md), [31](31-deployment.md) |
+| **Local**: filesystem storage, the server in-process or on the same machine | [31](31-deployment.md) |
+| **The server is a point of storage only** — it stores, it routes, it validates nothing | [30](30-authority-and-cheating.md) |
+| **Inventory stays on the client** and is never synced | [30](30-authority-and-cheating.md) |
+| An edit message names **a cell and a resulting block state** | [30](30-authority-and-cheating.md) |
+| The **rejection message ships in V1, unused** | [30](30-authority-and-cheating.md) |
+
+### Deferred to V2 — priced, not open
+
+Each of these has a document, a number and a decision to wait. **None of them
+needs more design before it can be started**, which is exactly what makes them
+different from anything under *Still open*.
+
+| | Priced at | In |
+|---|---|---|
+| **Edit validation** — the point query on virgin ground | `0.06%` of a core at 1,000 players | [30](30-authority-and-cheating.md) |
+| **Server-side simulation**: mobs, a tick loop, resident chunks | **158×** what player validation costs | [30](30-authority-and-cheating.md) |
+| **Entity interest** — [doc 22](22-multiplayer-interest.md)'s own open item | load-bearing only once mobs are server-side | [30](30-authority-and-cheating.md) |
+| **Hosting**: API Gateway, Lambda, DynamoDB, S3 | the cost is fan-out, not storage | [31](31-deployment.md) |
+| **A native desktop client** — the same TypeScript in Tauri or Electron | no second renderer; WebGPU already abstracts Vulkan/Metal/D3D12 | [31](31-deployment.md) |
+| **Moving a hot path to C or Rust for wasm** | 1.5–1.75× available; and a build trap if also compiled natively | [28](28-language-and-runtime.md) |
+
+### Discussed, and in no document at all
+
+Four things have been talked about and **never written down**, so they are neither
+V1 nor V2 — they are unscoped, and this is the only place that records it:
+
+- **A skybox.**
+- **Clouds**, hexagonal, no collision, a simple wind model, cosmetic.
+- **A moon**, cosmetic. *(The "100 km moon" rows in
+  [doc 15](15-precision-and-origin.md) and [doc 20](20-player-coordinates.md) are a
+  body **size** in a precision table, not this.)*
+- **Space travel to another planet.** [Doc 03](03-addressing.md)'s **12-bit planet
+  field** — 4,096 worlds — was added for it and is the only part that exists.
+
+The planet field is the pattern worth noticing: a cheap decision taken early
+because it would have been expensive later. The other three are cosmetic and cost
+nothing to defer, but nothing is designed and nobody should assume otherwise.
+
+### What this does to the rest of this page
+
+Nothing below moves. **Part 1 is still empty and the design still blocks no code.**
+What changes is how to read a *Still open* bullet elsewhere in `docs/`: check this
+table first, because several of them are now answered by *"V2"* rather than by
+thinking harder.
+
+---
+
 ## Part 1 — the four that block the first line of code
 
 Four items. Close these and the kernel can be written; everything else in this
