@@ -38,17 +38,18 @@ on. Take them one at a time and ask what a programmer would have to invent:
 
 | Function | Specified in | Verified by | Ready? |
 |---|---|---|---|
-| `encode` / `decode` — ID ↔ face, path, `(q,r)`, layer | [doc 03](03-addressing.md) | `qr.js`, `id.js` | **reopened** |
+| `encode` / `decode` — ID ↔ planet, face, path, corner, layer | [doc 03](03-addressing.md) | `qr.js`, `id.js` | yes |
 | `idToPosition(id)` | [doc 04](04-position-lookup.md), [doc 15](15-precision-and-origin.md) | `precision.js` | yes |
 | `positionToId(p)` | [doc 04](04-position-lookup.md) | `lookup.js`, `hexround.js` | yes |
 | `neighbour(id, k)` | [doc 05](05-face-adjacency.md) | `neighbour.js` | **now yes** |
 
 Three of the four were specified down to the arithmetic. `qr.js` round-trips
-`(i, j)` against path digits and `(q, r)` exactly — but that is the *re-encoding*,
-not the stored word, and `id.js` has since reopened `encode`/`decode` by packing
-the bits for the first time (see [doc 03](03-addressing.md) and
-[doc 11](11-open-topics.md)): the address is `5 + 2D + 2`, not `5 + 2D`, and the
-layout as drawn bakes the chunk level into every stored ID. `hexround.js` states what a
+`(i, j)` against path digits and `(q, r)` exactly — though that is the
+*re-encoding* and not the stored word. Packing the actual bits, which adding a
+planet field finally forced, reopened `encode`/`decode` and then closed it again:
+the address is **`5 + 2D + 2`**, because path digits name triangles and a cell is
+a vertex, so two bits always remain to say which corner
+([doc 03](03-addressing.md), `id.js`). `hexround.js` states what a
 cell *is* and measures the one place the definition could have gone wrong.
 `precision.js` shows `idToPosition` does not accumulate error at any depth.
 

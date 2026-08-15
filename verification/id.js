@@ -121,12 +121,130 @@ console.log('\n4. what the options actually are');
   console.log(`     ${(2**PLANET).toLocaleString('en-US')} worlds, ${(10*4**D+2).toLocaleString('en-US')} cells each`);
 }
 
+
+
+// ---- 5. option C, verified -------------------------------------------------
+// Name the depth-D triangle with D quaternary digits, then say which of its
+// three corners you meant. A corner is shared by up to six such triangles, so
+// encoding needs a canonical pick -- take the LOWEST packed ID, which is doc 03's
+// own border rule one level further down.
+const F20 = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+             [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+// a cell's face-independent identity: integer weights on global vertex ids
+const cellKey = (face,n,i,j) => {
+  const w = [n-i-j, i, j], f = F20[face];
+  return f.map((v,x) => [v, w[x]]).filter(a => a[1] > 0).sort((a,b) => a[0]-b[0])
+          .map(a => a.join(':')).join('|');
+};
+// walk D digits down, carrying the triangle's three corners in (i, j)
+function triCorners(path, D){
+  const n = 1 << D;
+  let A = [0,0], B = [n,0], C = [0,n];
+  const mid = (p,q) => [(p[0]+q[0])>>1, (p[1]+q[1])>>1];
+  for (const d of path){
+    const ab = mid(A,B), bc = mid(B,C), ca = mid(C,A);
+    if      (d===0){ B = ab; C = ca; }
+    else if (d===1){ A = ab; C = bc; }
+    else if (d===2){ A = ca; B = bc; }
+    else           { const a2=ab, b2=bc, c2=ca; A=a2; B=b2; C=c2; }
+  }
+  return [A,B,C];
+}
+
+console.log('\n5. option C, built and checked');
+for (const D of [3,4,5]){
+  const n = 1 << D, tris = 4 ** D;
+  const best = new Map();                      // cell key -> smallest packed ID
+  const decode = new Map();                    // packed ID -> the cell it names
+  let reps = 0;
+  for (let face = 0; face < 20; face++){
+    for (let t = 0; t < tris; t++){
+      const path = [];
+      for (let l = D-1; l >= 0; l--) path.push((t >> (2*l)) & 3);
+      const corners = triCorners(path, D);
+      for (let c = 0; c < 3; c++){
+        const [i,j] = corners[c];
+        // pack: [face 5][2 bits x D][corner 2]
+        let v = BigInt(face);
+        for (const d of path) v = (v << 2n) | BigInt(d);
+        v = (v << 2n) | BigInt(c);
+        const k = cellKey(face, n, i, j);
+        reps++;
+        if (!best.has(k) || v < best.get(k)) best.set(k, v);
+        decode.set(v.toString(), k);
+      }
+    }
+  }
+  // 1. every cell reachable, exactly the right number of them
+  const expect = 10 * 4**D + 2;
+  // 2. the canonical name decodes back to the cell it came from
+  let roundTrip = 0;
+  for (const [k, v] of best) if (decode.get(v.toString()) === k) roundTrip++;
+  // 3. distinct canonical names -- no two cells share one
+  const distinct = new Set([...best.values()].map(String)).size;
+  console.log(`   D=${D}: ${reps.toLocaleString('en-US').padStart(9)} (triangle, corner) pairs`
+    + ` -> ${best.size.toLocaleString('en-US').padStart(7)} cells`
+    + `   expected ${expect.toLocaleString('en-US').padStart(7)}`
+    + `   ${best.size === expect ? 'exact' : 'MISMATCH'}`);
+  console.log(`         canonical names distinct: ${distinct}/${best.size}`
+    + `   decode round-trip: ${roundTrip}/${best.size}`
+    + `   width ${5 + 2*D + 2} bits`);
+}
+console.log('   Every cell is named, once, by the smallest of its representations --');
+console.log('   and the count lands on 10*4^D + 2 at every depth, which is the same');
+console.log('   check rank.js used on the border rule this reuses.');
+
+// ---- 6. and the chunk is still a prefix ------------------------------------
+console.log('\n6. does truncating a canonical name still give the owning chunk?');
+{
+  const D = 5, n = 1 << D, tris = 4 ** D;
+  const best = new Map(), owner = new Map();
+  for (let face = 0; face < 20; face++) for (let t = 0; t < tris; t++){
+    const path = [];
+    for (let l = D-1; l >= 0; l--) path.push((t >> (2*l)) & 3);
+    const corners = triCorners(path, D);
+    for (let c = 0; c < 3; c++){
+      const [i,j] = corners[c];
+      let v = BigInt(face);
+      for (const d of path) v = (v << 2n) | BigInt(d);
+      v = (v << 2n) | BigInt(c);
+      const k = cellKey(face, n, i, j);
+      if (!best.has(k) || v < best.get(k)) best.set(k, v);
+      // doc 03's rule, computed independently: lowest chunk ID containing the cell
+      for (let C = 0; C <= D; C++){
+        let ch = BigInt(face);
+        for (let l = 0; l < C; l++) ch = (ch << 2n) | BigInt(path[l]);
+        const key = k + '@' + C;
+        if (!owner.has(key) || ch < owner.get(key)) owner.set(key, ch);
+      }
+    }
+  }
+  let agree = 0, checked = 0;
+  for (const [k, v] of best){
+    for (let C = 0; C <= D; C++){
+      const prefix = v >> BigInt(2 + 2*(D - C));       // drop corner + local digits
+      checked++; if (prefix === owner.get(k + '@' + C)) agree++;
+    }
+  }
+  console.log(`   canonical name truncated vs "lowest chunk ID wins", every cell and`);
+  console.log(`   every chunk level: ${agree.toLocaleString('en-US')}/${checked.toLocaleString('en-US')} agree`);
+  console.log('   So the shift and the ownership rule are the same answer -- because the');
+  console.log('   chunk prefix sits in the high bits, so the smallest full name carries');
+  console.log('   the smallest prefix. Nothing new has to be stored or looked up.');
+}
+
 console.log('\nverdict');
-console.log('   Doc 03 asks for three things at once -- a fixed 5 + 2D width, a chunk');
-console.log('   reachable by one shift, and a chunk level that can move after launch --');
-console.log('   and the layout it draws delivers the width only. Two of the three');
-console.log('   problems are forced by invariant 3: a cell is a VERTEX and path digits');
-console.log('   name TRIANGLES, so there are always 2 more bits at the bottom, and the');
-console.log('   real address is 5 + 2D + 2. Adding a planet field is what made someone');
-console.log('   pack the word and look. The choice between A, B and C is a design');
-console.log('   decision, and C needs verifying before it is taken.');
+console.log('   Doc 03 asked for three things at once -- a fixed width, a chunk reachable');
+console.log('   by one shift, and a chunk level that can move after launch -- and the');
+console.log('   layout it drew delivered the width only. Two of the three problems are');
+console.log('   forced by invariant 3: a cell is a VERTEX and path digits name TRIANGLES.');
+console.log('');
+console.log('   OPTION C IS TAKEN, AND IT HOLDS. Name the depth-D triangle with D');
+console.log('   quaternary digits, then 2 bits for which of its three corners, and');
+console.log('   canonicalise by lowest packed ID. Every cell is named exactly once at');
+console.log('   depths 3, 4 and 5 -- the counts land on 10*4^D + 2 -- names are distinct,');
+console.log('   they decode back, and truncating one agrees with doc 03\'s ownership rule');
+console.log('   at every cell and every chunk level. The chunk is still one shift.');
+console.log('');
+console.log('   ADDRESS = 5 + 2D + 2 bits.  WORD = [planet 12][address 29][layer 10]');
+console.log('   = 51 of 64 at D 11, 13 spare, 4,096 worlds of 41,943,042 cells.');

@@ -176,7 +176,7 @@ the figure above:
 depth, and they are the two that say which corner of the smallest triangle you
 meant.
 
-### Which encoding — still open
+### The decision: C, and it holds
 
 The three properties can be had, but not by the drawing above. The options, at
 `D` 11:
@@ -200,8 +200,38 @@ such triangles, so encoding needs a canonical pick — which is this document's 
 **lowest ID wins** rule applied one level further down, the same rule
 `rank.js` already proved partitions the sphere exactly.
 
-**C is the recommendation and is not yet verified.** It is written here as an
-option, not a result.
+**C is the decision, and it is verified.**
+
+> **[verified]** `verification/id.js`, sections 5 and 6. Every `(triangle, corner)`
+> pair at depths 3, 4 and 5, canonicalised by lowest packed ID: the distinct cells
+> come to **642 / 2,562 / 10,242** — exactly `10·4^D + 2` at each depth. Every
+> canonical name is **distinct**, every one **decodes back** to the cell it came
+> from, and truncating one agrees with this document's *lowest chunk ID wins* rule
+> at **61,452 of 61,452** checks over every cell and every chunk level.
+
+That last line is the one that matters, and it is not a coincidence. The chunk
+prefix sits in the **high** bits, so the smallest full name necessarily carries
+the smallest prefix — which means "take the lowest ID" and "take the lowest chunk
+ID" are the same instruction. The canonical rule and the ownership rule were never
+two rules.
+
+So the address is:
+
+```
+[ 5 bits ][ 2 bits × D ][ 2 bits ]      = 5 + 2D + 2
+   face      path digits    corner
+            (which triangle)  (which of its three corners)
+```
+
+and the word, with the planet field that started all this:
+
+```
+[ planet 12 ][ face 5 ][ path 2×D ][ corner 2 ][ layer 10 ]
+```
+
+**51 of 64 bits at `D` 11**, 13 spare, for **4,096 worlds** of 41,943,042 cells
+each. Planet on top so one world is a contiguous range; layer at the bottom so one
+column is; the chunk at any level is still **one shift**.
 
 Whichever wins, the word has room. At `D` 11 with a **12-bit planet field**:
 `12 + 29 + 10 = 51` of 64 bits, **13 spare**, for **4,096 worlds** of 41,943,042

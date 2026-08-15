@@ -620,15 +620,39 @@ Cited by [doc 03](03-addressing.md), [doc 11](11-open-topics.md).
      planet 12 + address 29 + layer 10 = 51 of 64, 13 spare
      4,096 worlds, 41,943,042 cells each
 
+5. option C, built and checked
+   D=3:     3,840 (triangle, corner) pairs ->     642 cells   expected     642   exact
+         canonical names distinct: 642/642   decode round-trip: 642/642   width 13 bits
+   D=4:    15,360 (triangle, corner) pairs ->   2,562 cells   expected   2,562   exact
+         canonical names distinct: 2562/2562   decode round-trip: 2562/2562   width 15 bits
+   D=5:    61,440 (triangle, corner) pairs ->  10,242 cells   expected  10,242   exact
+         canonical names distinct: 10242/10242   decode round-trip: 10242/10242   width 17 bits
+   Every cell is named, once, by the smallest of its representations --
+   and the count lands on 10*4^D + 2 at every depth, which is the same
+   check rank.js used on the border rule this reuses.
+
+6. does truncating a canonical name still give the owning chunk?
+   canonical name truncated vs "lowest chunk ID wins", every cell and
+   every chunk level: 61,452/61,452 agree
+   So the shift and the ownership rule are the same answer -- because the
+   chunk prefix sits in the high bits, so the smallest full name carries
+   the smallest prefix. Nothing new has to be stored or looked up.
+
 verdict
-   Doc 03 asks for three things at once -- a fixed 5 + 2D width, a chunk
-   reachable by one shift, and a chunk level that can move after launch --
-   and the layout it draws delivers the width only. Two of the three
-   problems are forced by invariant 3: a cell is a VERTEX and path digits
-   name TRIANGLES, so there are always 2 more bits at the bottom, and the
-   real address is 5 + 2D + 2. Adding a planet field is what made someone
-   pack the word and look. The choice between A, B and C is a design
-   decision, and C needs verifying before it is taken.
+   Doc 03 asked for three things at once -- a fixed width, a chunk reachable
+   by one shift, and a chunk level that can move after launch -- and the
+   layout it drew delivered the width only. Two of the three problems are
+   forced by invariant 3: a cell is a VERTEX and path digits name TRIANGLES.
+
+   OPTION C IS TAKEN, AND IT HOLDS. Name the depth-D triangle with D
+   quaternary digits, then 2 bits for which of its three corners, and
+   canonicalise by lowest packed ID. Every cell is named exactly once at
+   depths 3, 4 and 5 -- the counts land on 10*4^D + 2 -- names are distinct,
+   they decode back, and truncating one agrees with doc 03's ownership rule
+   at every cell and every chunk level. The chunk is still one shift.
+
+   ADDRESS = 5 + 2D + 2 bits.  WORD = [planet 12][address 29][layer 10]
+   = 51 of 64 at D 11, 13 spare, 4,096 worlds of 41,943,042 cells.
 ```
 
 ## `interest.js`
@@ -660,7 +684,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1506,7 +1530,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 786 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 599 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

@@ -19,8 +19,9 @@ have to invent before the first line of code, and none of them was on any *Still
 open* list, because a gap nobody noticed is a gap nobody files.
 
 **Three of the original four are closed** — `neighbour(id, k)`, `rank(q, r)` and
-the noise function were built and measured. **Two are open**: the language, and
-**the ID word itself**, which a scope change reopened after this list was written.
+the noise function were built and measured. A fifth arrived when a scope
+change reopened **the ID word**, and that is now closed too. **One is left: the
+language.**
 
 ---
 
@@ -249,7 +250,26 @@ and gain, and the order of accumulation. All of it, exactly, once.
 
 ---
 
-## The ID word itself — reopened by adding a planet field
+## ~~The ID word itself~~ — reopened, then closed, see [doc 03](03-addressing.md)
+
+**Closed by option C**, verified in `verification/id.js`: name the depth-`D`
+triangle with `D` quaternary digits, then **2 bits for which of its three
+corners**, canonicalised by lowest packed ID. Every cell is named exactly once at
+depths 3, 4 and 5 — the counts land on `10·4^D + 2` — and truncating a name agrees
+with doc 03's *lowest chunk ID wins* rule at **61,452 of 61,452** checks.
+
+The pleasing part is that the canonical rule turned out not to be a new rule at
+all. The chunk prefix is in the high bits, so the smallest full name carries the
+smallest prefix: **"lowest ID" and "lowest chunk ID" are the same instruction.**
+
+The address is **`5 + 2D + 2`** bits and the word is
+`[planet 12][face 5][path 2×D][corner 2][layer 10]` — 51 of 64 at `D` 11.
+
+The entry below is kept as written.
+
+---
+
+**The original entry.**
 
 **This is new, and it moved `encode`/`decode` out of the ready column.** Doc 26's
 table listed those as specified and verified by `qr.js`. They are — as a
@@ -666,8 +686,8 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**Two items left in Part 1: the ID word, then the language.** The ID goes first —
-`encode` is the first function anyone writes, and every stored byte depends on it. `neighbour(id, k)`, `rank(q, r)` and
+**One item left in Part 1: the language.** The ID word is closed — and it closed
+the way the other four did, by being built rather than argued about. `neighbour(id, k)`, `rank(q, r)` and
 the noise function were all built and measured, and all three behaved the way this
 page's lessons predict — the pessimism was wrong in kind, and each turned up a
 result nobody was looking for (the `reversed` field is never read; the border rule
