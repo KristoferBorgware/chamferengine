@@ -16,7 +16,12 @@ and duplicates information found there.
 - **No engine source yet.** The design is still being closed out. Do not start
   implementing from these documents without being asked to.
 - Commit as `KristoferBorgware <kristofer@borgware.se>`, with no co-authoring
-  trailer and no model identifier in the message.
+  trailer and no model identifier in the message. **Set this in the repo config,
+  once, at the start of a session** — `git config user.name` / `user.email`. Passing
+  `-c user.name=...` per commit is not enough: it sets the committer for that
+  command only, and a later `git rebase` or `git commit --amend` re-stamps the
+  committer from the ambient config. That is how `Claude <noreply@anthropic.com>`
+  ends up in the committer field of a commit whose author is correct.
 
 ## How the documents are written
 
