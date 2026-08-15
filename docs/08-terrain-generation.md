@@ -51,6 +51,133 @@ by shape) but no mountain range, coastline, or biome boundary lines up with them
 
 ---
 
+## Which noise function, exactly
+
+The rule above says what not to do. It does not say what to *do*, and for the
+whole life of this specification neither did anything else — which
+[doc 11](11-open-topics.md) records as the third of the four things blocking the
+first line of code. **Two implementations of "fBm" are two different planets**,
+and the difference is not subtle: it is every coastline.
+
+That was not hypothetical. This repository already contained **two** value hashes
+that call themselves the same thing.
+
+> **[verified]** `verification/noise.js`, section 1. `rivers.js`, `water.js` and
+> `determinism.js` use a `Math.imul` step — a true 32-bit multiply. `volume.js`,
+> `mesh.js` and `seam.js` use a plain float multiply. Over 8,000 lattice points
+> the two **disagree on 98.2%** of them.
+
+### Why the float one loses, and it is not the reason you would guess
+
+The obvious guess is that a float multiply is fine while the coordinates stay
+small and only breaks once `x · 374761393` runs past `2^53`. That is not what
+happens. The **second** multiply takes a value already up to `2^32` and multiplies
+it by `1.27e9` — a product of `2^62`, nine bits past what `float64` carries — and
+then truncates it back to 32 bits.
+
+> **[verified]** `verification/noise.js`, section 2. That second multiply loses
+> bits on **99.1%** of inputs, at every coordinate. Truncating an out-of-range
+> `double` is a defined operation in JavaScript and **undefined behaviour in C and
+> C++**, so those low nine bits are whatever one language happens to round to.
+
+The natural next thought is that a hash throwing away nine bits must mix badly,
+and that this will show as a grid in the terrain. **Measured, it does not.**
+
+> **[verified]** Section 3. Flip one input bit and count the output bits that
+> move: both hashes sit within **0.0014** of the ideal 0.5, and the float one is
+> marginally the closer of the two. Rounding a `2^62` product still scrambles bits
+> perfectly well.
+
+So the case against it is **portability alone** — it has no definition outside one
+language. That is enough on its own, and it is worth stating plainly rather than
+dressing it up as a quality argument it does not support.
+
+### The pinned function
+
+Normative. Every operation is either 32-bit wrapping integer arithmetic — exactly
+specified in every language that has `uint32` — or `float64` `+ − × ÷`, which
+IEEE 754 pins to the bit ([doc 23](23-determinism.md)). No transcendentals, no
+float multiply past `2^53`, no reliance on any language's coercion rules.
+
+```
+hash3(x, y, z) -> [0, 1)          all steps uint32
+    h = x·374761393 + y·668265263 + z·1274126177
+    h = h XOR (h >> 13)
+    h = h · 1274126177
+    h = h XOR (h >> 16)
+    return h / 2^32
+
+fade(t)   = 6t⁵ − 15t⁴ + 10t³
+value3(p) = trilinear blend of hash3 at the 8 surrounding lattice corners,
+            weighted by fade on each axis, mapped to [−1, 1]
+
+fbm(p, frequency, octaves)
+    lacunarity 2, gain 0.5, LOW OCTAVE FIRST,
+    divided by the summed amplitude
+```
+
+**Frequency and octave count are per-field tuning** and belong in the world file
+beside the seed, because changing either changes the planet.
+
+### Why the quintic fade rather than smoothstep
+
+`t²(3 − 2t)` is the cheaper and more familiar curve, and it is smooth in the
+first derivative — which is enough for the surface to have no visible kink. It is
+*not* smooth in the second, and shading reads the second.
+
+![Two fade curves that look identical, above their second derivatives: one ends at plus and minus six, the other ends at zero](figures/fade-curve.svg)
+
+*The two curves are indistinguishable by eye. Their second derivatives are not:
+smoothstep arrives at a lattice plane with a curvature of ±6 and the next cell
+starts at the opposite sign, so curvature **jumps by 12** at every integer plane.
+The quintic reaches zero at both ends, so it matches whatever is next door.*
+
+> **[verified]** `verification/noise.js`, section 5. Worst jump in curvature
+> across a lattice plane, over 40 planes: **7.05** for smoothstep against
+> **0.08** for the quintic — two orders of magnitude, for two extra multiplies per
+> axis, paid once per sample rather than once per octave.
+
+A lit surface displays a curvature discontinuity as a faint regular grid. That is
+exactly the artefact [doc 08](08-terrain-generation.md) exists to avoid, arriving
+by a different route than the face seams.
+
+### Two things that have to be written down or they will differ
+
+**Accumulation order.** Float addition is not associative, so summing the same
+octaves the other way round need not give the same number.
+
+> **[verified]** Section 6. At 4 and 5 octaves the two orders differ by
+> `1.4e-17`; at 6 and 8 they happen to agree exactly. **That is the trap** — an
+> order dependence that shows up only sometimes is one nobody finds by testing.
+> [Doc 23](23-determinism.md) is not about tolerances but about whether a
+> difference is introduced at all, so pin it: **low octave first**.
+
+**What the amplitude means.** Dividing by the summed amplitude keeps the output in
+`[−1, 1]` whatever the octave count — but fBm does not *fill* that range.
+
+> **[verified]** Section 4. Over 200,000 directions the standard deviation is
+> **0.244** of the amplitude. So "60 m of relief" means a typical swing of about
+> 15 m, with the full 60 m only where several octaves happen to align. Worth
+> knowing before anyone tunes a mountain by eye.
+
+### The three scripts still on the old hash
+
+Being honest about what this costs: `volume.js`, `mesh.js` and `seam.js` still use
+the float-multiply variant, so they describe a planet the pinned function does not
+generate.
+
+> **[verified]** Section 7. Over 50,000 directions at 60 m of relief, the two
+> differ by a mean of **1.28 m** and a worst of **5.85 m**. That is a different
+> world, not a rounding difference.
+
+Their conclusions are statistical — face counts, span counts, seam holes, over
+hundreds of thousands of cells — so none of them turns on *which* world it
+measured, and none of the figures in [doc 14](14-meshing-and-lod.md) is in doubt.
+But they should be switched and their numbers regenerated before any of them is
+used to size an engine.
+
+---
+
 ## Two levels of ambition
 
 ![A radial slice: a height field gives one surface per column, a density field opens caves and overhangs](figures/height-field-vs-density.svg)
@@ -224,6 +351,14 @@ rivers can be, so that is the one to build first.
   applied last and win.
 - **Sample in 3D world space**, never in face coordinates — otherwise all 30 face
   seams show, and level-of-detail becomes impossible.
+- **The noise function is pinned**, because doc 23 makes it bit-load-bearing:
+  a `uint32` hash (three wrapping multiplies, two xor-shifts), trilinear value
+  noise with the **quintic** fade, fBm at lacunarity 2 and gain 0.5, **low octave
+  first**. The float-multiply hash this repository also contains is rejected for
+  **portability alone** — it mixes just as well and has no meaning outside
+  JavaScript.
+- Smoothstep would leave a **curvature jump of 12** at every lattice plane, which
+  shading shows as a grid; the quintic ends at **0** and costs two multiplies.
 - **Height field** = one evaluation per column, no caves. **Density field** = one
   per cell, caves and overhangs, and **51×** the cost.
 - Enclosed voids need the noise gradient to beat the bias; more `strength` alone

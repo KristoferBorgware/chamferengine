@@ -18,17 +18,17 @@ found by [doc 26](26-implementation-readiness.md) asking what a programmer would
 have to invent before the first line of code, and none of them was on any *Still
 open* list, because a gap nobody noticed is a gap nobody files.
 
-**Two of the four are already closed** — `neighbour(id, k)` and `rank(q, r)` were
-built and measured — leaving the noise function and the language.
+**Three of the four are already closed** — `neighbour(id, k)`, `rank(q, r)` and
+the noise function were built and measured. **One is left: the language.**
 
 ---
 
 ## Part 1 — the four that block the first line of code
 
 Four items. Close these and the kernel can be written; everything else in this
-specification is either already closed or waiting for code to exist. **Two are
-now closed**, and both closed the way everything in Part 3 closed — by being
-built and measured rather than argued about.
+specification is either already closed or waiting for code to exist. **Three are
+now closed**, and all three closed the way everything in Part 3 closed — by being
+built and measured rather than argued about. What is left is the language.
 
 ---
 
@@ -174,12 +174,45 @@ neither has been written down or counted.
 
 ---
 
-## No document names a noise function — and the repository already has two
+## ~~No document names a noise function~~ — pinned, see [doc 08](08-terrain-generation.md)
 
-[Doc 08](08-terrain-generation.md) is precise about *where* to sample (3D world
-space, never `(i, j)`) and about one thing to avoid (hash with integers, never
-with `sin`). [Doc 23](23-determinism.md) then makes the exact choice
-**load-bearing to the bit**, because a joining client regenerates
+Closed by `verification/noise.js`. The function is now written down exactly: a
+`uint32` hash — three wrapping multiplies and two xor-shifts — trilinear value
+noise with the **quintic** fade `6t⁵ − 15t⁴ + 10t³`, fBm at lacunarity 2 and gain
+0.5, accumulated **low octave first** and divided by the summed amplitude. Every
+operation is `uint32` or IEEE-754 `+ − × ÷`, so [doc 23](23-determinism.md)'s rule
+holds with nothing left to check.
+
+Three results, and the first is the one this page keeps being taught:
+
+- **The expected reason was the wrong reason.** The float-multiply hash was
+  supposed to lose because it throws away nine bits and would therefore mix badly.
+  Measured, it mixes *marginally better* — both sit within **0.0014** of a perfect
+  avalanche. The case against it is **portability alone**: its second multiply
+  produces a `2^62` product and truncating that is defined in JavaScript and
+  **undefined behaviour in C**. That is decisive on its own, and dressing it up as
+  a quality argument would have been wrong.
+- **Smoothstep would have left a grid.** `t²(3−2t)` is smooth in the first
+  derivative and kinked in the second, so curvature **jumps by 12** at every
+  lattice plane — 7.05 measured against 0.08 for the quintic — and shading reads
+  the second derivative. Two extra multiplies per axis removes it.
+- **Accumulation order differs only sometimes**, which is the trap. Low-first and
+  high-first agree exactly at 6 and 8 octaves and differ by `1.4e-17` at 4 and 5.
+  An order dependence nobody can find by testing is exactly the kind doc 23's
+  rule exists to forbid.
+
+And one debt recorded rather than hidden: `volume.js`, `mesh.js` and `seam.js`
+still use the old hash, so they describe a planet the pinned function does not
+generate — **1.28 m mean, 5.85 m worst** over 60 m of relief. Their conclusions are
+statistical and none is in doubt, but they should be switched before any of them
+sizes an engine.
+
+---
+
+**The original entry.** [Doc 08](08-terrain-generation.md) is precise about
+*where* to sample (3D world space, never `(i, j)`) and about one thing to avoid
+(hash with integers, never with `sin`). [Doc 23](23-determinism.md) then makes the
+exact choice **load-bearing to the bit**, because a joining client regenerates
 [doc 21](21-rivers-and-erosion.md)'s coarse map instead of downloading it.
 
 Neither names an algorithm. Two implementations of "fBm" are two different
@@ -600,13 +633,19 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**Two of Part 1 are closed; finish the other two.** `neighbour(id, k)` and
-`rank(q, r)` were built and measured, and both behaved the way this page's
-lessons predict — the pessimism was wrong in kind, and each one turned up a result
-nobody was looking for (the `reversed` field is never read; the border rule had
-never been checked and holds). What is left is **the noise function**, then
-**the language**, and those two are one decision in two halves: the hash has to be
-written in a language that pins the arithmetic it uses.
+**One item left in Part 1: the language.** `neighbour(id, k)`, `rank(q, r)` and
+the noise function were all built and measured, and all three behaved the way this
+page's lessons predict — the pessimism was wrong in kind, and each turned up a
+result nobody was looking for (the `reversed` field is never read; the border rule
+had never been checked and holds; the float hash mixes *better*, and loses on
+portability alone).
+
+The language is now the only thing between this specification and code, and the
+noise function has sharpened what it has to provide: **wrapping `uint32`
+arithmetic**, IEEE-754 `+ − × ÷ sqrt`, and a build that can be told not to
+contract floating-point expressions. That is a short list, and most candidates
+meet it — but doc 23's whole argument depends on the choice being made knowingly
+rather than by default.
 
 Everything else is either closed or waiting for code. Of the **46** open bullets
 across docs 13–25, [doc 26](26-implementation-readiness.md) finds **one** that

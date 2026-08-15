@@ -33,6 +33,7 @@ numbered documents.
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`neighbour.js`](../verification/neighbour.js) | neighbour(id, k) -- the function eight documents delegate to and none defines (doc 11, Part 1). Doc 05 proves its 180-byte table complete and has never used it to cross an edge; every other script here builds the whole planet and reads adjacency off a hash map of rounded positions, which is fine for measuring and unavailable to an engine holding one integer. So this builds the function from the table and INTEGER ARITHMETIC ALONE, then checks it against that geometric graph. It also settles the three decisions hiding inside it: where direction index 0 is anchored, how (i, j) re-expresses across a face edge, and what a pentagon returns for k = 5. | [05](05-face-adjacency.md) [11](11-open-topics.md) |
+| [`noise.js`](../verification/noise.js) | Which noise function, exactly. Doc 08 fixes WHERE to sample (3D world space) and forbids a sin hash; doc 23 makes the exact choice bit-load-bearing, because a joining client regenerates doc 21's coarse map rather than downloading it. Neither names an algorithm -- and this repository already contains two that disagree, which is doc 11 Part 1's third entry. This pins one, and measures why each part of it is the way it is rather than asserting it. | [08](08-terrain-generation.md) [11](11-open-topics.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
 | [`pentagon.js`](../verification/pentagon.js) | The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs. | [17](17-pentagons.md) |
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
@@ -581,7 +582,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -851,6 +852,94 @@ verdict
                (the table supplies the destination face and nothing else)
      pentagon  the ring is FIVE long. k = 5 does not exist, and the twelve
                are the only cells where that is true.
+```
+
+## `noise.js`
+
+Which noise function, exactly. Doc 08 fixes WHERE to sample (3D world space) and forbids a sin hash; doc 23 makes the exact choice bit-load-bearing, because a joining client regenerates doc 21's coarse map rather than downloading it. Neither names an algorithm -- and this repository already contains two that disagree, which is doc 11 Part 1's third entry. This pins one, and measures why each part of it is the way it is rather than asserting it.
+
+Cited by [doc 08](08-terrain-generation.md), [doc 11](11-open-topics.md).
+
+```
+1. the two hashes already in this repository
+   8,000 lattice points compared
+   disagree on 7,857 of them = 98.2%, by up to 2.7e-5
+   Both call themselves a value hash. They are different functions.
+
+2. B is lossy at its second multiply, not at its first
+   first multiply exact in float64: 64000/64000 of small coordinates
+   second multiply loses bits: 4060/4096 of h values = 99.1%
+   h is up to 2^32 and the multiplier is 2^30.2, so the product is 2^62 --
+   nine bits past what float64 carries. B then takes >>> of that, which in
+   JavaScript is a defined truncation of an out-of-range double and in C is
+   undefined behaviour. So B is not a hash with a portable definition: it is
+   a hash whose low nine bits are whatever one language happens to round to.
+
+3. avalanche -- flip one input bit, how many output bits move?
+   A (imul)   mean 0.4986   min 0.125   max 0.813   (ideal 0.5)
+   B (float)  mean 0.4989   min 0.125   max 0.875   (ideal 0.5)
+   Expected: B throws away nine bits, so B should mix visibly worse.
+   Measured: it does not. Both sit within 0.0014 of ideal, and B is the closer of the two.
+   So the case against B is NOT that it is a bad hash. Rounding a 2^62
+   product still scrambles bits perfectly well. The case against it is
+   section 2 alone: it has no definition outside JavaScript. That is
+   enough on its own, and it is the whole of the argument.
+
+4. the pinned function, and what it produces
+   200,000 directions, 5 octaves at frequency 40:
+     range -0.8953 .. 0.8700   mean -0.0013   sd 0.2436
+   Bounded in [-1,1] by construction, because dividing by the summed
+   amplitude makes the octave count a shape control and not a gain.
+   But it does not FILL that range: the standard deviation is 0.244 of
+   the amplitude, so "60 m of relief" in doc 14 means a typical swing of
+   about 15 m and a full 60 m only where several octaves happen to align.
+   Worth knowing before anyone tunes a mountain by eye.
+
+5. quintic against smoothstep, at a lattice plane
+   worst jump in curvature across a lattice plane, over 40 planes:
+     smoothstep  t^2(3-2t)          7.05
+     quintic     6t^5-15t^4+10t^3   0.08
+   Smoothstep is smooth in the first derivative and kinked in the second,
+   so shading -- which reads the normal's rate of change -- shows a faint
+   grid on every integer plane. Quintic removes it for two extra multiplies
+   per axis, evaluated once per sample rather than once per octave.
+
+6. accumulation order, and why it has to be written down
+   4 octaves: low-first 0.05435375526040007
+              high-first 0.05435375526040005   DIFFER by 1.4e-17
+   5 octaves: low-first 0.04329875785448625
+              high-first 0.04329875785448627   DIFFER by 1.4e-17
+   6 octaves: low-first 0.04679853958464157
+              high-first 0.04679853958464157   identical
+   8 octaves: low-first 0.04894811609451433
+              high-first 0.04894811609451433   identical
+   Float addition is not associative, so the same octaves summed the other
+   way round need not give the same number -- and at two of the four counts
+   above they do not, by 1.4e-17. The other two happen to agree, which is
+   the trap: an order dependence that shows up only sometimes is one nobody
+   finds by testing. Doc 23 is not about tolerances but about whether a
+   difference is introduced at all, so pin it: LOW OCTAVE FIRST.
+
+7. what switching the three float-multiply scripts would move
+   height at 50,000 directions, 60 m of relief:
+     mean |difference| 1.28 m   worst 5.85 m
+   This is a DIFFERENT WORLD, not a rounding difference -- the terrain moves
+   by metres, because the two hashes disagree on 98% of lattice points and
+   the interpolation changed too. So the three scripts still on B publish
+   figures about a planet the pinned function does not generate.
+   Their conclusions are statistical -- face counts, span counts, seam holes
+   over hundreds of thousands of cells -- so none of them turns on which
+   world it measured. But they should be switched, and the numbers
+   regenerated, before any of them is used to size an engine.
+
+verdict
+   The noise is pinned: hash3 above (three imul, two xor-shift, /2^32),
+   trilinear value noise with the QUINTIC fade, fBm at lacunarity 2 and
+   gain 0.5, accumulated low octave first and divided by summed amplitude.
+   Octave count and base frequency are per-field tuning and belong in the
+   world file beside the seed, because changing either changes the planet.
+   Every operation is int32 or IEEE-754 + - * /, so doc 23's rule holds with
+   nothing left to check: no transcendental, and no float multiply past 2^53.
 ```
 
 ## `order.js`
@@ -1302,7 +1391,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 976 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 734 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1827,4 +1916,4 @@ verdict
 
 ---
 
-_29 scripts. Every number above is reproduced by running them._
+_30 scripts. Every number above is reproduced by running them._

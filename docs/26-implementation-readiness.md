@@ -16,7 +16,7 @@ then names the things that block code and are on **no list at all**.
 
 [Doc 11](11-open-topics.md)'s original twelve entries are all struck through —
 every structural question it ever raised has been answered, and each answer has a
-script behind it. There are twenty-seven documents and twenty-nine verification
+script behind it. There are twenty-seven documents and thirty verification
 scripts, and [`REFERENCE.md`](REFERENCE.md) is every one of those scripts' output,
 regenerated on each push.
 
@@ -24,9 +24,10 @@ So the honest summary is: **the arguing is done and the typing has not started.*
 That is a good place to be, and it is not the same as being ready. A
 specification is ready for code when someone can implement its core functions
 without making a design decision. **Four things stopped that when this document
-was written, and only one of them appeared on any open-topics list.** Two have
-since been closed by building them; what follows keeps the original diagnosis
-because the reason those gaps went unnoticed is more useful than the fix.
+was written, and only one of them appeared on any open-topics list.** Three have
+since been closed by building them, leaving the language; what follows keeps the
+original diagnosis because the reason those gaps went unnoticed is more useful
+than the fix.
 
 ---
 
@@ -132,8 +133,12 @@ the only appearance of `rank` in the specification. `rank.js` settles it at
 never been checked**. It holds: the owned counts sum to exactly `10·4^D + 2` on
 four different cuts.
 
-**Which noise function** — still open, and now the largest of the four.
-[Doc 08](08-terrain-generation.md) is precise about
+**Which noise function** — **now pinned**, in [doc 08](08-terrain-generation.md):
+a `uint32` hash, trilinear value noise with the quintic fade, fBm at lacunarity 2
+and gain 0.5 accumulated low octave first. The float-multiply variant lost on
+portability rather than quality — both hashes avalanche equally well, but one has
+no definition outside JavaScript. Before that,
+[doc 08](08-terrain-generation.md) was precise about
 *where* to sample — 3D world space, never `(i, j)` — and about one thing to avoid:
 hash with integers, never with `sin`. [Doc 23](23-determinism.md) then makes the
 choice load-bearing to the bit, because the client regenerates the coarse map
@@ -157,8 +162,9 @@ waiting for code to exist before they can be answered at all. The three items
 that genuinely gate the kernel appear on no Still open list, because nobody
 noticed they were missing.*
 
-**Blocks the first line — 1.** [Doc 23](23-determinism.md)'s "which language and
-runtime". It matters more here than in most projects: that document's whole
+**Blocks the first line — 1**, and it is now the *only* thing left in
+[doc 11](11-open-topics.md) Part 1 as well. [Doc 23](23-determinism.md)'s "which
+language and runtime". It matters more here than in most projects: that document's whole
 argument is that `+ − × ÷ sqrt` and comparisons are pinned by IEEE 754 and
 transcendentals are not, and languages differ in exactly how much of that they
 guarantee. JavaScript pins the five and explicitly does not pin `Math.sin`. Pick
@@ -304,7 +310,7 @@ question nobody on this list has thought of. That is what steps are for.
 
 ## In one breath
 
-- **The design is closed and the kernel is not written.** 29 scripts back the
+- **The design is closed and the kernel is not written.** 30 scripts back the
   numbers, and no engine source exists.
 - **All four core functions are now specified and verified.** `neighbour(id, k)`
   was **defined in no document and called by no script** — every script built the
@@ -313,9 +319,11 @@ question nobody on this list has thought of. That is what steps are for.
 - **`rank(q, r)` is counted**, and closing it checked doc 03's border rule for the
   first time: **lowest chunk ID wins is an exact partition**, `10·4^D + 2` on
   every cut.
-- **What is left is the noise function and the language**, and they are one
-  decision in two halves — the hash has to be written in something that pins the
-  arithmetic it uses.
+- **The noise function is pinned** — and the float hash it replaced lost on
+  **portability, not quality**, which is the opposite of what was expected.
+- **One thing now stands between this specification and code: the language.**
+  The noise pin sharpened the requirement to wrapping `uint32`, IEEE-754
+  `+ − × ÷ sqrt`, and a build that can disable floating-point contraction.
 - **Of 46 open questions, one blocks code** (which language), 25 are waiting for
   code to exist, and 20 block nothing at all.
 - **The one free-but-unfixable decision is taken**: the polar axis runs through

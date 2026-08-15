@@ -2338,6 +2338,47 @@ const prof = (() => {
 }
 
 // =============================================================================
+// 08 — the fade curve: smoothstep kinks in the second derivative, quintic does
+// not. Both curves and both second derivatives are evaluated here, not drawn.
+// =============================================================================
+{
+  const smooth = t => t*t*(3-2*t),      smooth2 = t => 6 - 12*t;
+  const quint  = t => t*t*t*(t*(t*6-15)+10), quint2 = t => 60*t*(2*t*t - 3*t + 1);
+  const W = 150, H = 76, N = 120;
+  const curve = (x0, y0, fn, lo, hi, cls) => {
+    const p = [];
+    for (let k = 0; k <= N; k++){
+      const t = k/N;
+      p.push([x0 + t*W, y0 + H - (fn(t)-lo)/(hi-lo)*H]);
+    }
+    return `<path class="${cls}" d="${pathOf(p.slice(0,-1).map((a,i) => [a, p[i+1]]))}"/>`;
+  };
+  // a dot at each end of the second-derivative plot: that value is what the
+  // neighbouring cell has to match, and only one of the two curves reaches zero
+  const ends = (x0, y0, fn, lo, hi) => [0,1].map(t =>
+    `<circle class="cf-gf" cx="${f(x0 + t*W)}" cy="${f(y0 + H - (fn(t)-lo)/(hi-lo)*H)}" r="4.5"/>`
+    + `<text class="cf-gd" x="${f(x0 + t*W - 8)}" y="${f(y0 + H - (fn(t)-lo)/(hi-lo)*H + (fn(t) > 0 ? -9 : 17))}">`
+    + `${fn(t).toFixed(0)}</text>`).join('');
+  const frame = (x0,y0,label,mid) => `
+    <path class="cf-l" d="M${x0} ${y0}L${x0} ${y0+H}M${x0} ${f(y0+H*mid)}L${x0+W} ${f(y0+H*mid)}"/>
+    <text class="cf-d" x="${x0}" y="${y0+H+18}">${label}</text>`;
+  made.push(svg('fade-curve', 470, 276, `
+  <text class="cf-c" x="14" y="24">the fade across one lattice cell, t = 0 to 1</text>
+  ${frame(40, 40, 'smoothstep   t&#178;(3&#8722;2t)', 1)}
+  ${frame(285, 40, 'quintic   6t&#8309;&#8722;15t&#8308;+10t&#179;', 1)}
+  ${curve(40, 40, smooth, 0, 1, 'cf-a')}
+  ${curve(285, 40, quint, 0, 1, 'cf-a')}
+  <text class="cf-d" x="14" y="146">the two look the same. their second derivatives do not:</text>
+  ${frame(40, 162, 'ends at &#177;6, so it jumps 12', 0.5)}
+  ${frame(285, 162, 'ends at 0, so it matches', 0.5)}
+  ${curve(40, 162, smooth2, -14, 14, 'cf-g')}
+  ${curve(285, 162, quint2, -14, 14, 'cf-g')}
+  ${ends(40, 162, smooth2, -14, 14)}
+  ${ends(285, 162, quint2, -14, 14)}
+  <text class="cf-d" x="14" y="266">the gold dots are what the next cell along has to match at the boundary</text>`));
+}
+
+// =============================================================================
 // 05 — crossing a face edge is a reflection, and it is integer arithmetic
 // =============================================================================
 {

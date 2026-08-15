@@ -328,6 +328,9 @@ Violating any of these breaks the design. They are not tunable.
 | depth at the water's edge | `85.3%` one block, `13.9%` two | over 4,189 shore columns | `water.js` |
 | shore you can step out at | `99.9%`; `58/58` bodies | worst bank 1.23 m; nothing traps a swimmer | `water.js` |
 | wade/swim threshold | **one cell**, no chest-deep | 1.8 m player, 1 m blocks | `water.js` |
+| noise hash | 3 wrapping `uint32` multiplies, 2 xor-shifts | `/2^32`; never a float multiply past `2^53` | `noise.js` |
+| fade curve | quintic `6t⁵−15t⁴+10t³` | smoothstep jumps curvature **12** per plane | `noise.js` |
+| fBm | lacunarity 2, gain 0.5, **low octave first** | ÷ summed amplitude; sd is `0.244` of it | `noise.js` |
 | pentagon ring latitude | `atan(1/2)` = `26.565°` | 1 pole + 5 + 5 + 1 pole, every world | `coords.js` |
 | distinct axis choices | `1` of 6 pairs | all six are the same world, rotated | `coords.js` |
 | polar axis | vertices `0`–`3`, north `0`, meridian `v11` | the only pair with contiguous face caps | `coords.js` |
@@ -555,6 +558,20 @@ Violating any of these breaks the design. They are not tunable.
   alternative saves exactly `(3m+2)/2` slots — 49 of 561, **8.7%**, 784 bytes a
   chunk — and costs the uniform stride that made `index = rank × layerCount +
   layer` a single sentence. Take the waste.
+- **The noise function is pinned** (`noise.js`, doc 08): a `uint32` hash, trilinear
+  value noise with the **quintic** fade, fBm at lacunarity 2 / gain 0.5 / **low
+  octave first**, ÷ summed amplitude. Three findings. The float-multiply hash this
+  repo also contains was expected to lose on *quality* and does not — both
+  avalanche within `0.0014` of ideal — so it loses on **portability alone**: its
+  second multiply makes a `2^62` product, and truncating that is defined in JS and
+  **undefined behaviour in C**. Smoothstep would leave a **curvature jump of 12**
+  at every lattice plane (7.05 measured against 0.08), which shading shows as a
+  grid. And accumulation order differs *only sometimes* — exact at 6 and 8 octaves,
+  `1.4e-17` apart at 4 and 5 — which is the kind of bug testing never finds.
+  **Debt:** `volume.js`, `mesh.js` and `seam.js` still use the old hash and so
+  describe a different planet (**1.28 m mean, 5.85 m worst** over 60 m of relief);
+  their conclusions are statistical and unaffected, but switch them before sizing
+  an engine.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -589,20 +606,14 @@ docs 13–25, **one** blocks code, 25 are waiting for code to exist, and 20 bloc
 nothing.
 
 **The gaps that actually block the kernel were on no Still open list** — they are
-doc 11 Part 1, and doc 26 is the triage that found them. **Two of the four are now
-closed**, both by building and measuring rather than arguing:
+doc 11 Part 1, and doc 26 is the triage that found them. **Three of the four are
+now closed**, all by building and measuring rather than arguing. **The language is
+the only one left**, and the noise pin sharpened what it must supply: wrapping
+`uint32`, IEEE-754 `+ − × ÷ sqrt`, and a build that can disable FP contraction:
 
 - ~~`neighbour(id, k)`~~ — **closed** by `neighbour.js`, see doc 05.
 - ~~`rank(q, r)`~~ — **closed** by `rank.js`, see doc 07.
-- **No document names a noise algorithm**, and this repository already has two.
-  Doc 08 fixes *where* to sample and forbids a `sin` hash; doc 23 makes the exact
-  choice bit-load-bearing. Measured: `rivers.js`/`water.js`/`determinism.js` hash
-  with `Math.imul`, while `volume.js`/`mesh.js`/`seam.js` use a float multiply
-  past `2^53` — the two disagree on 98.2% of 8,000 lattice points by up to
-  `2.7e-5` (read off the two functions directly; no script stands behind that
-  figure), and the second relies on JS `ToInt32` semantics that are undefined
-  behaviour in C. Pin the hash, the interpolation, the octaves, the lacunarity,
-  the gain and the accumulation order — all of it, once.
+- ~~`noise`~~ — **closed** by `noise.js`, see doc 08.
 - **Which language and runtime** (doc 23) — the only open bullet that blocks the
   first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
   `Math.sin`; most languages are similar but not identical.
