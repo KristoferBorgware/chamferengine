@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-three self-contained HTML files. No build step, no `npm install`, no server
+Twenty-four self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -263,6 +263,21 @@ planet's size.
 
 **Docs:** [16 — Lighting](../docs/16-lighting.md)
 
+
+---
+
+### [`wade-or-swim.html`](wade-or-swim.html)
+A shoreline in section, at the size the blocks really are. Drag the player into
+the water and watch the states: dry land, then **one block — standing**, then
+**two blocks — swimming**. There is no third state, because at 1 m blocks a 1.8 m
+player has no depth available between 1 and 2.
+
+That is the point. Walking and swimming is a **threshold exactly one cell wide**,
+not a gradient, so the mover never needs a partial-buoyancy case. *Another
+shoreline* reseeds the terrain — the band is one cell wide on every one of them,
+because it is a fact about block size and player height, not about this coastline.
+
+**Docs:** [25 — Water](../docs/25-water.md)
 
 ---
 

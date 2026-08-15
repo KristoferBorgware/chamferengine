@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wade or swim — there is nothing in between</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 4px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:13px; color:#8d97ab; padding:2px 16px 8px; }
+  .cap { padding:4px 16px 10px; font-size:13.5px; line-height:1.55; color:#b9c0d0; min-height:62px; }
+  .cap b { color:#fff; }
+  .cap .w { color:#7fd4ff; font-weight:650; }
+  .stage { flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px;
+           touch-action:none; }
+  svg { width:100%; height:auto; max-height:100%; cursor:ew-resize; }
+  .panel { padding:12px 14px 18px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:550; padding:9px 14px; border-radius:9px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  .spacer { flex:1; }
+  .stat { font-size:13px; font-weight:650; padding:7px 12px; border-radius:8px;
+          font-variant-numeric:tabular-nums; }
+  .stat.walk { background:#243019; color:#a8d977; }
+  .stat.wade { background:#233246; color:#7fd4ff; }
+  .stat.swim { background:#122f3d; color:#4fc3f7; }
+</style>
+</head>
+<body>
+
+<header><h1>Wade or swim — there is nothing in between</h1></header>
+<div class="sub">Drag the player into the water. Blocks are 1 m; the player is 1.8 m.</div>
+<div class="cap" id="cap"></div>
+
+<div class="stage"><svg id="svg" viewBox="0 0 660 330" aria-label="a shoreline in section"></svg></div>
+
+<div class="panel">
+  <button id="next">Another shoreline</button>
+  <span class="spacer"></span>
+  <span class="stat" id="stat"></span>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// A shoreline in section, at the size the blocks really are. The terrain uses
+// the project's integer-hashed value noise -- no Math.sin anywhere, which is
+// what doc 23 requires of anything a generator depends on.
+// ---------------------------------------------------------------------------
+function hash3(x,y,z){
+  let h = x*374761393 + y*668265263 + z*1274126177;
+  h = (h ^ (h >>> 13)) >>> 0; h = Math.imul(h, 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(p){
+  const x=Math.floor(p[0]), y=Math.floor(p[1]), z=Math.floor(p[2]);
+  const fx=p[0]-x, fy=p[1]-y, fz=p[2]-z;
+  const s=t=>t*t*(3-2*t), sx=s(fx), sy=s(fy), sz=s(fz);
+  let v=0;
+  for (let dz=0;dz<2;dz++) for (let dy=0;dy<2;dy++) for (let dx=0;dx<2;dx++)
+    v += (dx?sx:1-sx)*(dy?sy:1-sy)*(dz?sz:1-sz) * hash3(x+dx,y+dy,z+dz);
+  return v*2-1;
+}
+const fbm = (p,f,oct) => { let v=0,a=1,tot=0,ff=f;
+  for (let o=0;o<oct;o++){ v += a*vnoise([p[0]*ff,p[1]*ff,p[2]*ff]); tot+=a; a*=0.5; ff*=2; }
+  return v/tot; };
+
+const W = 44;                       // columns across, one metre each
+const SEA = 9;                      // sea level, in blocks above the frame floor
+const PLAYER = 1.8;                 // metres
+
+// one shoreline: ground height per column, in whole 1 m blocks
+function profile(seed){
+  const g = [];
+  for (let i=0;i<W;i++)
+    g.push(Math.max(0, Math.round(SEA + 13 * fbm([i/14 + seed*3.1, seed*1.7 + 0.3, 0.7], 1, 4))));
+  return g;
+}
+// a shoreline worth showing: land on one side, water at least 3 deep on the other
+function findShore(from){
+  for (let s = from; s < from + 400; s++){
+    const g = profile(s);
+    const dry = g.filter(h => h > SEA).length;
+    const deep = Math.max(...g.map(h => SEA - h));
+    if (dry >= W*0.30 && dry <= W*0.72 && deep >= 3) return { seed: s, g };
+  }
+  return { seed: from, g: profile(from) };
+}
+
+let seed = 1, ground = [], px = 8;
+function reseed(from){ const s = findShore(from); seed = s.seed; ground = s.g; }
+reseed(1);
+
+const depthAt = i => Math.max(0, SEA - ground[i]);
+
+// ---------------------------------------------------------------------------
+// Draw
+// ---------------------------------------------------------------------------
+const CW = 14;
+const X = i => 8 + i*CW;
+let FLOOR = 0, Y = lvl => lvl;
+
+function draw(){
+  // show a few blocks of rock under the lowest point and no more -- the shore is
+  // the subject, not the crust
+  FLOOR = Math.max(0, Math.min(...ground, SEA) - 3);
+  const TOP = Math.max(...ground, SEA) + 2;
+  const H = (TOP - FLOOR)*CW + 14;                 // fit the frame to the terrain
+  Y = lvl => (H - 7) - (lvl - FLOOR)*CW;
+  document.getElementById('svg').setAttribute('viewBox', `0 0 660 ${H}`);
+  const S = [];
+  for (let i=0;i<W;i++){
+    for (let l=FLOOR;l<ground[i];l++){
+      const top = l === ground[i]-1;
+      S.push(`<rect x="${X(i)}" y="${Y(l+1)}" width="${CW}" height="${CW}"
+               fill="${top ? '#4b6b3c' : '#4a4535'}" stroke="#0b0e14" stroke-width="0.6"/>`);
+    }
+    for (let l=ground[i]; l<SEA; l++)
+      S.push(`<rect x="${X(i)}" y="${Y(l+1)}" width="${CW}" height="${CW}"
+               fill="#2f6fd0" fill-opacity="0.62" stroke="#0b0e14" stroke-width="0.6"/>`);
+  }
+  // the water surface, drawn only where there is water. Sea level is a radius
+  // (doc 25), so every one of these segments is at exactly the same height --
+  // but a hill standing above it is land, not sea, and gets no line.
+  for (let i=0;i<W;i++){
+    if (ground[i] >= SEA) continue;
+    let j = i; while (j+1 < W && ground[j+1] < SEA) j++;
+    S.push(`<line x1="${X(i)}" y1="${Y(SEA)}" x2="${X(j)+CW}" y2="${Y(SEA)}"
+             stroke="#7fd4ff" stroke-width="2.5"/>`);
+    i = j;
+  }
+
+  // the player: standing on the floor, or floating with their head out
+  const d = depthAt(px);
+  const swims = d*1 >= PLAYER;
+  const feet = swims ? SEA - PLAYER : ground[px];
+  const cx = X(px) + CW/2, fy = Y(feet);
+  S.push(`<line x1="${cx}" y1="${fy}" x2="${cx}" y2="${(fy - PLAYER*CW*0.68).toFixed(1)}"
+           stroke="#ffd166" stroke-width="3.4" stroke-linecap="round"/>`);
+  S.push(`<circle cx="${cx}" cy="${(fy - PLAYER*CW*0.85).toFixed(1)}" r="${(CW*0.34).toFixed(1)}"
+           fill="#f5ead0" stroke="#b0800f" stroke-width="2"/>`);
+
+  document.getElementById('svg').innerHTML = S.join('');
+
+  const st = document.getElementById('stat');
+  const state = d === 0 ? 'walk' : swims ? 'swim' : 'wade';
+  st.className = 'stat ' + state;
+  st.textContent = d === 0 ? 'on dry land' : `${d} block${d>1?'s':''} of water · ${swims ? 'swimming' : 'standing'}`;
+  document.getElementById('cap').innerHTML = d === 0
+    ? `On dry land. <b>Walk into the water</b> and watch what the states actually are — there
+       are only two of them.`
+    : d === 1
+      ? `<span class="w">One block</span> of water. The player is 1.8 m and the floor is 1 m
+         down, so they are standing, head well clear. This is the whole wading band, and it is
+         <b>one cell wide</b>. On the measured planet — not this sketch — that band is where
+         <b>85.3%</b> of the water's edge sits (<code>verification/water.js</code>).`
+      : `<span class="w">${d} blocks</span>. The floor is ${d} m down and the player is 1.8 m,
+         so their feet are off it: <b>swimming</b>. Notice what did not happen — there was no
+         chest-deep step between the two. At 1 m blocks <b>there is no depth between 1 and 2</b>,
+         so walking and swimming is a threshold, not a gradient, and the mover never needs a
+         partial-buoyancy case.`;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('svg');
+function put(ev){
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const u = pt.matrixTransform(svg.getScreenCTM().inverse());
+  px = Math.max(0, Math.min(W-1, Math.round((u.x - 8 - CW/2)/CW)));
+  draw();
+}
+let dragging = false;
+svg.addEventListener('pointerdown', ev => { dragging = true; svg.setPointerCapture(ev.pointerId); put(ev); });
+svg.addEventListener('pointermove', ev => { if (dragging){ ev.preventDefault(); put(ev); } });
+svg.addEventListener('pointerup',    () => dragging = false);
+svg.addEventListener('pointercancel',() => dragging = false);
+document.getElementById('next').addEventListener('click', () => {
+  reseed(seed + 1);
+  px = ground.findIndex(h => h > SEA); if (px < 0) px = 0;
+  draw();
+});
+draw();
+</script>
+</body>
+</html>

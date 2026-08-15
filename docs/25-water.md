@@ -190,6 +190,12 @@ block in between.
 cell it is in, and gets one of two answers. No partial buoyancy, no waterline
 fraction, no blending between two movement models.
 
+**Walk into it yourself:** [`demos/wade-or-swim.html`](../demos/wade-or-swim.html)
+draws a shoreline at block scale and lets you drag a player across it. Dry land,
+one block standing, two blocks swimming — and no third state on any shoreline it
+generates, because the band's width is a fact about block size against player
+height rather than about any particular coast.
+
 ### Test the step, not the end of it
 
 There is one bug this invites, and it is worth naming because a block with no
