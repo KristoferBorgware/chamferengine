@@ -337,8 +337,26 @@ whatever you do, because there is no instruction to fuse into. So the target you
 develop in, test in and demo from is the one that is **always correct**, and the
 bug lives only in the build you ship to a server.
 
-*The wrong setting is the default*, not an omission. `clang -O2 file.c` on Apple
-Silicon contracts. Nobody forgot anything.
+*The wrong setting is the default*, not an omission — and it is the default on
+some machines and not others.
+
+> **[verified]** Same section, read out of the code generator so it needs no ARM
+> hardware. `a*b + c` at `-O2`, counting fused instructions in the assembly:
+>
+> | Target | Default | With `-ffp-contract=off` |
+> |---|---|---|
+> | `x86_64-linux-gnu` | plain | plain |
+> | `aarch64-linux-gnu` | **fuses** | plain |
+> | `x86_64-apple-darwin` | plain | plain |
+> | `aarch64-apple-darwin` | **fuses** | plain |
+> | `aarch64-pc-windows-msvc` | **fuses** | plain |
+>
+> **Every `aarch64` target fuses by default and every `x86-64` one does not.**
+
+Read the two Darwin rows together. The same source, the same compiler, the same
+default flags, on an Intel Mac and an Apple Silicon Mac, is **two different pieces
+of arithmetic**. That is not a cross-platform problem — it is cross-*machine*
+inside one platform, and nobody changed anything.
 
 *And it is not one flag.* `-ffast-math` **re-associates**, which is a source-level
 transformation with nothing to do with the instruction set — so it breaks the
@@ -424,6 +442,42 @@ Four lines, and they are the whole of what this decision imposes:
   `-ffp-contract=off` on the **native** build, and `-Ofast`/`-ffast-math` on
   **neither** — it breaks wasm too. A wasm-only escape hatch is safe from
   contraction and still not safe from `-ffast-math`.
+
+### And if a native C or C++ client is ever built, per platform
+
+The intent is one sentence — *no contraction, no reassociation, no fast maths* —
+and it is spelled differently by each toolchain. The table is short; the process
+around it is the part that matters.
+
+| Toolchain | Set | Never |
+|---|---|---|
+| gcc / clang — Linux, macOS, MinGW | `-ffp-contract=off` | `-ffast-math`, `-Ofast`, `-funsafe-math-optimizations`, `-fassociative-math`, `-freciprocal-math` |
+| MSVC `cl.exe` | `/fp:precise` **explicitly**, and set contraction explicitly | `/fp:fast` |
+| Emscripten / clang → wasm | contraction is impossible; nothing to set | `-ffast-math`, `-Ofast` |
+
+**The simplest way to avoid two-thirds of that table is to use clang on all three
+platforms** — `clang-cl` on Windows — so there is one flag spelling everywhere
+and no second set of defaults to reason about.
+
+**Honest caveat on the MSVC row:** its contraction default has moved between
+versions and differs by target architecture. This document does not state a
+version-specific spelling, because it has not tested one and a wrong flag here
+fails silently. Check the documentation for the version in use, then verify by
+digest rather than by reading.
+
+**Flags are necessary and not sufficient**, and two things they do not fix:
+
+- **The maths library.** `sin`, `cos`, `pow` and `hypot` come from glibc on Linux,
+  Apple's libm on macOS and the CRT on Windows — three different implementations.
+  Section 3 measured `pow` and `hypot` **one ULP apart between runtimes on a
+  single machine**; across three platforms it can only be worse. No flag repairs
+  this. [Doc 23](23-determinism.md)'s rule does: never call a transcendental where
+  the result is stored or shared. That rule earns its keep here more than anywhere
+  else in the specification.
+- **Knowing you got it right.** Nothing about a build log tells you the arithmetic
+  matches. The only thing that does is **comparing digests across the platforms you
+  actually ship**, which is what `language.js` records `RECORDED` for. Run it in CI
+  on each target and diff one 64-bit number.
 
 ---
 

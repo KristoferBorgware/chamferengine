@@ -110,9 +110,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 298 ns in this JavaScript
+   one solidity(cell) query: 292 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 194 ns)
+    upper bound -- Rust is about 190 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -126,9 +126,9 @@ authority.js -- what the server must know, per cheat, and what it costs
 
      players   queries/s   CPU of one core
           10          20      0.0006%
-         100         200      0.0060%
-        1000        2000      0.0595%
-       10000       20000      0.5953%
+         100         200      0.0058%
+        1000        2000      0.0584%
+       10000       20000      0.5835%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1119,7 +1119,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 308M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1254,6 +1254,23 @@ language.js -- which language and runtime, decided by running the kernel
    deliberately non-deterministic, so that is a did-not-reproduce rather
    than a clearance.
 
+
+   AND WHICH TARGETS DO THIS BY DEFAULT? Ask the code generator. `a*b+c`,
+   -O2, counting fused instructions in the assembly:
+
+     target                       default   with -ffp-contract=off
+     x86_64-linux-gnu             plain     plain
+     aarch64-linux-gnu            FUSES     plain
+     x86_64-apple-darwin          plain     plain
+     aarch64-apple-darwin         FUSES     plain
+     aarch64-pc-windows-msvc      FUSES     plain
+
+   EVERY aarch64 TARGET FUSES BY DEFAULT and every x86-64 one does not.
+   Read the two Darwin rows together: the SAME source, the SAME compiler,
+   the SAME default flags, on an Intel Mac and an Apple Silicon Mac, is
+   two different pieces of arithmetic. This is not cross-platform. It is
+   cross-MACHINE inside one platform, and nobody changed anything.
+
    JavaScript and TypeScript have none of these doors: section 1 measured
    them bit-identical with every other target, and the language
    specification pins the operations with no build step to get wrong.
@@ -1343,10 +1360,10 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.33 ms   1.82x
-         JS, one object a vertex   4.52 ms   25.14x
+         JS, typed arrays          0.33 ms   1.85x
+         JS, one object a vertex   4.81 ms   26.71x
 
-       THE LANGUAGE GAP IS 1.8x. THE LAYOUT GAP IS 14x.
+       THE LANGUAGE GAP IS 1.9x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
        than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
@@ -2233,7 +2250,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 614 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 701 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

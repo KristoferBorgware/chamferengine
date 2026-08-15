@@ -631,6 +631,36 @@ if (TOOLS.clang){
   console.log('   deliberately non-deterministic, so that is a did-not-reproduce rather');
   console.log('   than a clearance.');
   console.log('');
+  // Which targets contract BY DEFAULT -- read straight out of the codegen, so it
+  // needs no ARM machine. This is the one claim doc 28 had been asserting from
+  // the instruction set rather than measuring.
+  console.log('');
+  console.log('   AND WHICH TARGETS DO THIS BY DEFAULT? Ask the code generator. `a*b+c`,');
+  console.log('   -O2, counting fused instructions in the assembly:');
+  console.log('');
+  write('fma.c', 'double f(double a, double b, double c){ return a*b + c; }\n');
+  const targets = ['x86_64-linux-gnu','aarch64-linux-gnu','x86_64-apple-darwin',
+                   'aarch64-apple-darwin','aarch64-pc-windows-msvc'];
+  console.log('     target                       default   with -ffp-contract=off');
+  for (const t of targets){
+    const count = flags => {
+      try {
+        const asm = execFileSync('clang', ['--target='+t,'-O2',...flags,'-S','fma.c','-o','-'],
+          { cwd: DIR, encoding: 'utf8', stdio: ['ignore','pipe','ignore'] });
+        return (asm.match(/\b(fmadd|vfmadd\w*|fmla)\b/g) || []).length;
+      } catch { return null; }
+    };
+    const a = count([]), b = count(['-ffp-contract=off']);
+    if (a === null) continue;
+    console.log(`     ${t.padEnd(28)} ${(a ? 'FUSES' : 'plain').padEnd(9)} ${b ? 'FUSES' : 'plain'}`);
+  }
+  console.log('');
+  console.log('   EVERY aarch64 TARGET FUSES BY DEFAULT and every x86-64 one does not.');
+  console.log('   Read the two Darwin rows together: the SAME source, the SAME compiler,');
+  console.log('   the SAME default flags, on an Intel Mac and an Apple Silicon Mac, is');
+  console.log('   two different pieces of arithmetic. This is not cross-platform. It is');
+  console.log('   cross-MACHINE inside one platform, and nobody changed anything.');
+  console.log('');
   console.log('   JavaScript and TypeScript have none of these doors: section 1 measured');
   console.log('   them bit-identical with every other target, and the language');
   console.log('   specification pins the operations with no build step to get wrong.');

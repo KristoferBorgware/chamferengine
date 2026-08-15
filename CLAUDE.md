@@ -693,7 +693,17 @@ Violating any of these breaks the design. They are not tunable.
   build must set `-ffp-contract=off`, and **neither** build may see
   `-Ofast`/`-ffast-math` — that one re-associates and breaks the **wasm** build
   too, where contraction was impossible. Two rules, and only the second shows up
-  in a wasm-only test.
+  in a wasm-only test. **Which targets contract by default is measured from the
+  codegen** (`language.js` §2b): **every `aarch64` target fuses, every `x86-64`
+  one does not** — so an Intel Mac and an Apple Silicon Mac running the same
+  source with the same compiler and the same default flags do two different
+  pieces of arithmetic. For a native C/C++ client: `-ffp-contract=off` on
+  gcc/clang, `/fp:precise` explicit on MSVC (whose default has moved between
+  versions — verify by digest, not by reading), never `-ffast-math`/`-Ofast`/
+  `/fp:fast` anywhere. Simplest is **clang on all three platforms**. Flags do not
+  fix the **libm** difference (glibc vs Apple vs CRT) — doc 23's transcendental
+  rule does — and nothing but **diffing the digest in CI per target** tells you it
+  worked.
 - **Deployment is sketched and NOT decided** (doc 31). **V1 is local** — browser,
   WebGPU, filesystem. The delta store is **not a database**: it is `chunk ID → a
   blob of deltas`, one `get` and one `put`, and a well-played world is **76 MB**,
