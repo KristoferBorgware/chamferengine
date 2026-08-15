@@ -238,6 +238,13 @@ Two decimals lands in the right cell seven times in eight, and the worst case is
 fifth of a cell away — so it is always you or the cell next door. **Good enough to
 be found by. Not good enough to be an identity.**
 
+**Spin it yourself:** [`demos/lat-long-on-a-ball.html`](../demos/lat-long-on-a-ball.html)
+puts a crosshair on a globe and reads out the latitude, the longitude and the
+cell, then says whether the *rounded* readout names that same cell — it flickers
+between "same cell" and "a neighbour" as you move, which is this table one sample
+at a time. The twelve pentagons are marked, so you can watch them sit at ±90° and
+±26.565° however you turn the planet.
+
 And an identity is already available, exactly, for free:
 
 > **[verified]** Same script, section 5. A cell address at `D` 11 is **27 bits**,

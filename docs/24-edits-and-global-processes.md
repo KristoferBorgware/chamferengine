@@ -159,6 +159,13 @@ block already obeys:
 - Remove a supporting beam and the roof stays up.
 - Wall a river and the water stays put.
 
+**Build one:** [`demos/dam-a-river.html`](../demos/dam-a-river.html) lets you wall
+a real generated river and watch nothing happen — then runs the simulation that is
+*not* being built, so the cost of the decision is visible rather than argued.
+Both measured results above show up in it directly: one block floods nothing
+because the water goes round, and a wall that does span the channel floods only
+the upstream side, with the downstream deficit unbounded and invisible.
+
 **The consistency is the feature.** A player who has understood one block has
 understood all of them, and there is no special material with its own physics to
 learn, explain, or be surprised by.

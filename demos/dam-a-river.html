@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dam a river and nothing happens</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 4px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:13px; color:#8d97ab; padding:2px 16px 8px; }
+  .cap { padding:4px 16px 10px; font-size:13.5px; line-height:1.55; color:#b9c0d0; min-height:78px; }
+  .cap b { color:#fff; }
+  .cap .no { color:#3fb8af; font-weight:650; }
+  .cap .yes { color:#ffd166; font-weight:650; }
+  .stage { flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px;
+           touch-action:none; }
+  svg { width:100%; height:auto; max-height:100%; cursor:crosshair; }
+  .panel { padding:12px 14px 18px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:550; padding:9px 14px; border-radius:9px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  .spacer { flex:1; }
+  .stat { font-size:13px; font-weight:650; padding:7px 12px; border-radius:8px;
+          font-variant-numeric:tabular-nums; background:#232a3a; color:#b9c0d0; }
+  .stat.on { background:#3a2e10; color:#ffd166; }
+</style>
+</head>
+<body>
+
+<header><h1>Dam a river and nothing happens</h1></header>
+<div class="sub">Click to build a wall across the water. Then ask what it should have done.</div>
+<div class="cap" id="cap">Building the world…</div>
+
+<div class="stage"><svg id="svg" viewBox="-320 -320 640 640" aria-label="a river with a dam in it"></svg></div>
+
+<div class="panel">
+  <button id="sim">Show what a simulation would do</button>
+  <button id="clear">Clear the wall</button>
+  <span class="spacer"></span>
+  <span class="stat" id="stat"></span>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// The same world and the same routing as demos/rivers-and-lakes.html and
+// verification/rivers.js, with one addition: the player can raise cells.
+// ---------------------------------------------------------------------------
+const T = (1 + Math.sqrt(5)) / 2;
+const norm  = v => { const l = Math.hypot(...v); return v.map(x => x/l); };
+const sub   = (a,b) => a.map((x,i) => x - b[i]);
+const dot   = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+
+const V0 = [[-1,T,0],[1,T,0],[-1,-T,0],[1,-T,0],[0,-1,T],[0,1,T],[0,-1,-T],[0,1,-T],
+            [T,0,-1],[T,0,1],[-T,0,-1],[-T,0,1]].map(norm);
+const F0 = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+            [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+
+function grid(L){
+  const n = 1 << L, idx = new Map(), pts = [], nb = [];
+  const put = p => { const k = p.map(x => Math.round(x*1e7)).join(',');
+    if (!idx.has(k)){ idx.set(k, pts.length); pts.push(p); nb.push(new Set()); } return idx.get(k); };
+  const link = (a,b) => { nb[a].add(b); nb[b].add(a); };
+  for (const f of F0){
+    const [A,B,C] = f.map(i => V0[i]), P = [];
+    for (let i=0;i<=n;i++){ const row=[];
+      for (let j=0;j<=i;j++){ const a=(n-i)/n, b=(i-j)/n, c=j/n;
+        row.push(put(norm([A[0]*a+B[0]*b+C[0]*c, A[1]*a+B[1]*b+C[1]*c, A[2]*a+B[2]*b+C[2]*c]))); }
+      P.push(row); }
+    for (let i=0;i<n;i++) for (let j=0;j<=i;j++){
+      link(P[i][j],P[i+1][j]); link(P[i][j],P[i+1][j+1]); link(P[i+1][j],P[i+1][j+1]); }
+  }
+  const ring = pts.map((p,v) => {
+    const e1 = norm(sub(pts[[...nb[v]][0]], p)), e2 = cross(p, e1);
+    return [...nb[v]].sort((a,b) => {
+      const A2 = sub(pts[a],p), B2 = sub(pts[b],p);
+      return Math.atan2(dot(A2,e2),dot(A2,e1)) - Math.atan2(dot(B2,e2),dot(B2,e1));
+    });
+  });
+  return { pts, ring };
+}
+function hash3(x,y,z){
+  let h = x*374761393 + y*668265263 + z*1274126177;
+  h = (h ^ (h >>> 13)) >>> 0; h = Math.imul(h, 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(p){
+  const x=Math.floor(p[0]), y=Math.floor(p[1]), z=Math.floor(p[2]);
+  const fx=p[0]-x, fy=p[1]-y, fz=p[2]-z;
+  const s=t=>t*t*(3-2*t), sx=s(fx), sy=s(fy), sz=s(fz);
+  let v=0;
+  for (let dz=0;dz<2;dz++) for (let dy=0;dy<2;dy++) for (let dx=0;dx<2;dx++)
+    v += (dx?sx:1-sx)*(dy?sy:1-sy)*(dz?sz:1-sz) * hash3(x+dx,y+dy,z+dz);
+  return v*2-1;
+}
+const fbm = (p,f,oct) => { let v=0,a=1,tot=0,ff=f;
+  for (let o=0;o<oct;o++){ v += a*vnoise([p[0]*ff,p[1]*ff,p[2]*ff]); tot+=a; a*=0.5; ff*=2; }
+  return v/tot; };
+
+const { pts, ring } = grid(7);   // level 7, as verification/edits.js uses
+const N = pts.length;
+const RELIEF = 60, WALL = 25;              // metres: relief, and how tall a wall block is
+const base = new Float64Array(N);
+for (let v=0;v<N;v++) base[v] = fbm(pts[v], 2.2, 6) * RELIEF;
+const SEA = Float64Array.from(base).sort()[Math.floor(N*0.62)];
+const isSea = v => base[v] <= SEA;
+
+const wall = new Set();
+const heightWith = () => {
+  const g = Float64Array.from(base);
+  for (const v of wall) g[v] += WALL;
+  return g;
+};
+
+function fill(ground){
+  const filled = Float64Array.from(ground), done = new Uint8Array(N), hq = [], EPS = 1e-4;
+  const push = (k,v) => { hq.push([k,v]); let i=hq.length-1;
+    while (i>0){ const p=(i-1)>>1; if (hq[p][0] <= hq[i][0]) break; [hq[p],hq[i]]=[hq[i],hq[p]]; i=p; } };
+  const pop = () => { const top=hq[0], last=hq.pop();
+    if (hq.length){ hq[0]=last; let i=0;
+      for(;;){ const l=2*i+1, r=l+1; let m=i;
+        if (l<hq.length && hq[l][0]<hq[m][0]) m=l;
+        if (r<hq.length && hq[r][0]<hq[m][0]) m=r;
+        if (m===i) break; [hq[m],hq[i]]=[hq[i],hq[m]]; i=m; } }
+    return top; };
+  for (let v=0;v<N;v++) if (isSea(v)){ done[v]=1; push(ground[v], v); }
+  while (hq.length){ const [k,v] = pop();
+    for (const w of ring[v]){ if (done[w]) continue; done[w]=1;
+      if (filled[w] <= k) filled[w] = k + EPS;
+      push(filled[w], w); } }
+  return filled;
+}
+function route(ground, filled){
+  const down = new Int32Array(N).fill(-1);
+  for (let v=0;v<N;v++){
+    if (isSea(v)) continue;
+    let best = -1, bh = filled[v];
+    for (const w of ring[v]) if (filled[w] < bh){ bh = filled[w]; best = w; }
+    down[v] = best;
+  }
+  const order = [...Array(N).keys()].filter(v => !isSea(v)).sort((a,b) => filled[b] - filled[a]);
+  const acc = new Float64Array(N).fill(1);
+  for (const v of order) if (down[v] >= 0) acc[down[v]] += acc[v];
+  return { down, acc };
+}
+
+// the world as the generator made it -- this never changes, whatever is built
+const G0 = base, F_0 = fill(G0), R0 = route(G0, F_0);
+
+// ---- somewhere with a real river in it -------------------------------------
+const dist = src => { const d = new Int32Array(N).fill(-1); d[src]=0; const q=[src];
+  for (let i=0;i<q.length;i++) for (const w of ring[q[i]]) if (d[w]<0){ d[w]=d[q[i]]+1; q.push(w); }
+  return d; };
+let focus = 0, bs = -1;
+for (let v=0; v<N; v+=3){
+  if (isSea(v) || F_0[v] > G0[v] + 1e-9) continue;
+  let nearSea = 0; for (const w of ring[v]) if (isSea(w)) nearSea = 1;
+  const s = R0.acc[v] * (nearSea ? 0.4 : 1);
+  if (s > bs){ bs = s; focus = v; }
+}
+const dF = dist(focus);
+const view = []; for (let v=0;v<N;v++) if (dF[v] <= 20) view.push(v);
+const inView = new Set(view);
+const C = pts[focus];
+let e1 = norm(sub(pts[ring[focus][0]], C));
+e1 = norm(sub(e1, C.map(x => x*dot(e1,C))));
+const e2 = cross(C, e1);
+const gn = v => { const q = pts[v], s = dot(q,C), t = q.map(x => x/s); return [dot(t,e1), dot(t,e2)]; };
+const SCALE = 300 / Math.max(...view.map(v => Math.hypot(...gn(v))));
+const XY = new Map(view.map(v => { const [a,b] = gn(v); return [v, [a*SCALE, -b*SCALE]]; }));
+const PX = Math.hypot(...sub(XY.get(ring[focus][0]), XY.get(focus)));
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let simulate = false, SIM = null, dirty = false;
+function resim(){
+  if (!wall.size){ SIM = null; return; }
+  const g = heightWith(), f = fill(g);
+  const flooded = [];
+  for (let v=0;v<N;v++)
+    if (!isSea(v) && !wall.has(v) && f[v] > Math.max(F_0[v], g[v]) + 1e-6) flooded.push(v);
+  SIM = { g, f, r: route(g, f), flooded };
+}
+
+const lerp = (a,b,t) => a.map((x,i) => Math.round(x + (b[i]-x)*t));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+function draw(){
+  const S = [];
+  const lo = Math.min(...view.map(v => G0[v])), hi = Math.max(...view.map(v => G0[v]));
+  const showSim = simulate && SIM;
+  const F = showSim ? SIM.f : F_0, R = showSim ? SIM.r : R0, G = showSim ? SIM.g : G0;
+  const floodSet = showSim ? new Set(SIM.flooded) : new Set();
+  for (const v of view){
+    const [x,y] = XY.get(v);
+    let col;
+    if (wall.has(v)) col = '#8a8f9c';
+    else if (isSea(v)) col = '#16324f';
+    else if (floodSet.has(v)) col = '#ffd166';
+    else if (F[v] > G[v] + 1e-9) col = '#2f6fd0';
+    else col = rgb(lerp([46,74,52],[122,116,88], (G0[v]-lo)/(hi-lo+1e-9)));
+    S.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(PX*0.60).toFixed(1)}" fill="${col}"/>`);
+  }
+  for (const v of view){
+    if (isSea(v) || R.down[v] < 0 || !inView.has(R.down[v])) continue;
+    if (R.acc[v] < 5) continue;
+    const [x1,y1] = XY.get(v), [x2,y2] = XY.get(R.down[v]);
+    const w = Math.min(PX*0.5, PX*0.11*Math.sqrt(R.acc[v]/5));
+    S.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
+             stroke="#7fd4ff" stroke-width="${w.toFixed(2)}" stroke-linecap="round"/>`);
+  }
+  document.getElementById('svg').innerHTML = S.join('');
+
+  const nFlood = SIM ? SIM.flooded.length : 0;
+  const st = document.getElementById('stat');
+  st.className = 'stat' + (showSim ? ' on' : '');
+  st.textContent = `${wall.size} block${wall.size===1?'':'s'} placed · `
+    + `${nFlood} cell${nFlood===1?'':'s'} would flood`;
+
+  document.getElementById('cap').innerHTML = !wall.size
+    ? `A river, generated once at world creation and then left alone. <b>Click cells in the
+       water</b> to build a wall across it.`
+    : !simulate
+      ? `The wall is built and <span class="no">nothing has changed</span>. The river still runs
+         where it ran, the water above the wall stays where it is, and the water below keeps
+         flowing. That is not a bug — <b>water is a block type</b>, and blocks do not move
+         ([doc 25](../docs/25-water.md)). Mine out a mountain's base and it does not collapse
+         either. <b>Press the other button</b> to see what the alternative would have cost.`
+      : nFlood === 0
+        ? `A simulation would flood <span class="no">nothing</span>. A cell has <b>six ways out</b>,
+           so one block — or a line that does not span the channel — just makes the water go
+           round. This is the measured result behind doc 24: <b>one block dams nothing</b>.
+           Keep building until the wall crosses the whole valley.`
+        : `Now it bites: <span class="yes">${nFlood} cell${nFlood===1?'':'s'}</span> would flood, in amber. And that
+           is only the upstream half — <b>every cell below the wall has lost its flow too</b>, and
+           terrain bounds the lake while nothing bounds the deficit. There is no radius to
+           recompute inside, which is why the coarse map stays <b>read-only</b>.`;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('svg');
+function pick(ev){
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const u = pt.matrixTransform(svg.getScreenCTM().inverse());
+  let best = null, bd = Infinity;
+  for (const v of view){ const [x,y] = XY.get(v), d = (x-u.x)**2 + (y-u.y)**2;
+    if (d < bd){ bd = d; best = v; } }
+  return best;
+}
+let painting = false;
+const put = ev => {
+  const v = pick(ev);
+  if (v === null || isSea(v) || wall.has(v)) return;
+  wall.add(v); if (simulate) dirty = true; draw();
+};
+svg.addEventListener('pointerdown', ev => { painting = true; svg.setPointerCapture(ev.pointerId); put(ev); });
+svg.addEventListener('pointermove', ev => { if (painting){ ev.preventDefault(); put(ev); } });
+svg.addEventListener('pointerup',    () => { painting = false;
+  if (dirty){ dirty = false; resim(); draw(); } });
+svg.addEventListener('pointercancel',() => painting = false);
+
+document.getElementById('sim').addEventListener('click', e => {
+  simulate = !simulate;
+  if (simulate){ resim(); dirty = false; }
+  e.target.classList.toggle('on', simulate);
+  e.target.textContent = simulate ? 'Back to what actually happens' : 'Show what a simulation would do';
+  draw();
+});
+document.getElementById('clear').addEventListener('click', () => {
+  wall.clear(); SIM = null; draw();
+});
+draw();
+</script>
+</body>
+</html>
