@@ -137,7 +137,7 @@ link, a dead heading anchor, or any Markdown the generator does not understand.
 
 ## Demos
 
-Twenty-seven self-contained HTML files. No build step, no dependencies to install —
+Twenty-eight self-contained HTML files. No build step, no dependencies to install —
 open any of them directly in a browser. All are mobile-friendly.
 
 **New to this?** Start with

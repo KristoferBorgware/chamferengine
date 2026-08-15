@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-seven self-contained HTML files. No build step, no `npm install`, no server
+Twenty-eight self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -241,6 +241,16 @@ river is one cell wide and one block really would dam it.
 ---
 
 ## Orientation
+
+### [`sky-on-a-small-planet.html`](sky-on-a-small-planet.html)
+Drag a walker round the planet and watch the sky turn — because `up` is
+`normalize(position)`, and 10,681 m of walking rotates it through a full 360°.
+Switch the sky to *locked to the camera* and the view freezes however far you go,
+which is what a flat-world skybox does for free and why it cannot be used here.
+The moon is drawn **to scale**, so 0.52° really is a speck, and it slides against
+the stars as you move — parallax a skybox at infinity does not have.
+
+**Docs:** [32 — The sky, the clouds and the moon](../docs/32-sky-clouds-and-moon.md)
 
 ### [`local-frame.html`](local-frame.html)
 Why there is no global north, made physical. Drag the walker and the two frames

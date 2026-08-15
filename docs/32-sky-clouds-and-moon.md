@@ -55,6 +55,12 @@ sphere at large radius centred on the *planet*, and the camera's orientation
 within it comes from the player's own frame. That is one matrix, and it is the
 whole design.
 
+**Demo:** [`demos/sky-on-a-small-planet.html`](../demos/sky-on-a-small-planet.html)
+— drag a walker round the planet and watch the sky turn, then switch the sky to
+*locked to the camera* and watch the view freeze however far you go. The moon is
+drawn to scale, so the 0.52° option really is a speck, and it slides against the
+stars as you move.
+
 ### Which means a player can outwalk the sunrise
 
 [Doc 16](16-lighting.md) already gets day and night from one dot product against

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Walk, and the sky moves</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 34px; }
+  h1 { font-size:17px; font-weight:650; }
+  .sub { font-size:12.5px; color:#8b93a7; margin:3px 0 12px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; touch-action:none;
+        background:#080b11; border:1px solid #1b2537; border-radius:11px; }
+  .cap { font-size:11px; color:#6d768c; margin:5px 2px 13px; line-height:1.5; }
+  .row { display:flex; align-items:center; gap:7px; margin-top:11px; flex-wrap:wrap; }
+  .rl { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+        color:#7d879c; min-width:74px; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 11px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#1d3550; border-color:#3d6690; color:#fff; }
+  button.bad.on { background:#3a1d1d; border-color:#8a4444; }
+  button:active { transform:scale(.97); }
+  input[type=range] { flex:1; min-width:150px; accent-color:#4f8ef7; }
+  .out { background:#101725; border:1px solid #223049; border-radius:11px;
+         padding:13px 14px 12px; margin-top:14px; }
+  .line { display:flex; align-items:baseline; gap:8px; margin-bottom:7px; flex-wrap:wrap; }
+  .tag { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+         color:#7d879c; min-width:120px; }
+  .val { font-family:ui-monospace,Menlo,monospace; font-size:15px; font-weight:600;
+         font-variant-numeric:tabular-nums; }
+  .note { margin-top:12px; font-size:12.5px; line-height:1.6; color:#a9b2c6;
+          background:#0f1a16; border:1px solid #1d3b33; border-left:3px solid #3fb8af;
+          border-radius:8px; padding:11px 13px; }
+  .note.warn { background:#1f1214; border-color:#4a2226; border-left-color:#e05a5a; }
+  .note b { color:#fff; }
+  .hint { font-size:11.5px; color:#6d768c; margin-top:12px; line-height:1.55; }
+</style>
+</head>
+<body>
+
+<h1>Walk, and the sky moves</h1>
+<div class="sub">On a planet 1,700 m in radius, <b>up</b> is a different direction at every step.
+Walk far enough and the whole celestial sphere goes past overhead — in 2.12 hours, without waiting
+for anything. Drag the walker and watch the right-hand view.</div>
+
+<svg id="scene" viewBox="0 0 400 300" aria-label="Left: a cross-section of the planet with a walker. Right: what that walker sees."></svg>
+<div class="cap" id="cap"></div>
+
+<div class="row">
+  <span class="rl">Walk</span>
+  <input type="range" id="walk" min="0" max="10681" step="10" value="0">
+</div>
+<div class="row">
+  <span class="rl">The sky is</span>
+  <span id="skybtns"></span>
+</div>
+<div class="row">
+  <span class="rl">Moon drawn at</span>
+  <span id="moonbtns"></span>
+</div>
+
+<div class="out">
+  <div class="line"><span class="tag">walked</span><span class="val" id="od">—</span></div>
+  <div class="line"><span class="tag">your "up" has turned</span><span class="val" id="ot" style="color:#4f8ef7">—</span></div>
+  <div class="line"><span class="tag">moon vs the stars</span><span class="val" id="om" style="color:#e0913a">—</span></div>
+  <div class="line"><span class="tag">time at walking pace</span><span class="val" id="oh">—</span></div>
+</div>
+
+<div class="note" id="note"></div>
+
+<div class="hint">The left panel is a slice through the planet: the blue arrow is the walker's
+own <b>up</b>, which is just <code>normalize(position)</code>. The right panel is what they see —
+the whole visible sky flattened into a dome, so the zenith is the top and both horizons are the
+ends. The moon is drawn <b>to scale</b> — which is why 0.52° is a speck, and why its size has to be
+an art decision. It is at a finite distance, so it slides against the stars as you walk; that shift
+is parallax, and a skybox painted at infinity does not have it.
+<br><br>Backs <a href="../docs/32-sky-clouds-and-moon.md">doc 32</a>, measured in
+<code>verification/sky.js</code>.</div>
+
+<script>
+const R = 1700, CIRC = 2*Math.PI*R, WALK_SPEED = 1.4, DEG = Math.PI/180;
+let s = 0;                       // metres walked
+let worldFixed = true;
+let moonDeg = 2;                 // drawn angular size
+
+// A fixed star field, in WORLD space. Angles are bearings from the planet's
+// "12 o'clock", radius is only for drawing.
+const STARS = (() => {
+  let seed = 20260815;
+  const rnd = () => { seed = (Math.imul(seed,1103515245)+12345)>>>0; return seed/4294967296; };
+  return Array.from({length:60}, () => ({ a: rnd()*Math.PI*2, m: 0.5 + rnd()*0.9 }));
+})();
+
+function buttons(host, vals, get, set, label){
+  host.innerHTML = '';
+  for (const v of vals){
+    const b = document.createElement('button');
+    b.textContent = label ? label(v) : v;
+    if (v === get()) b.className = 'on' + (v === false ? ' bad' : '');
+    if (v === false && v === get()) b.className = 'bad on';
+    b.onclick = () => { set(v); build(); };
+    host.appendChild(b);
+  }
+}
+
+function build(){
+  buttons(document.getElementById('skybtns'), [true, false], () => worldFixed,
+          v => worldFixed = v, v => v ? 'fixed in the world' : 'locked to the camera');
+  buttons(document.getElementById('moonbtns'), [0.52, 2, 5], () => moonDeg,
+          v => moonDeg = v, v => v + '°');
+
+  const turn = s / R;                                    // radians of "up" rotation
+  // The moon sits at a finite distance chosen from its drawn angular size, with a
+  // real-moon radius scaled to this planet (463 m). Parallax follows from geometry.
+  const moonR = 463, moonDist = moonR / Math.tan(moonDeg/2*DEG);
+  // walker position in world space (planet centre at origin, up = +y at s=0)
+  const px = R*Math.sin(turn), py = R*Math.cos(turn);
+  // moon fixed in world space, straight "up" from the start point
+  const mx = 0, my = moonDist;
+  // bearing of the moon as seen by the walker, relative to their own up
+  const dx = mx - px, dy = my - py;
+  const upA = turn;                                      // walker's up, as a bearing
+  let moonBearing = Math.atan2(dx, dy) - upA;            // signed angle from up
+  while (moonBearing > Math.PI) moonBearing -= 2*Math.PI;
+  while (moonBearing < -Math.PI) moonBearing += 2*Math.PI;
+  // a star at infinity, straight up from the start, has bearing -turn from the walker
+  const refStar = -turn;
+  let parallax = moonBearing - refStar;
+  while (parallax > Math.PI) parallax -= 2*Math.PI;
+  while (parallax < -Math.PI) parallax += 2*Math.PI;
+
+  // ---------------- left panel: a slice through the planet ----------------
+  const L = { cx: 100, cy: 168, r: 62 };
+  let g = `<rect x="0" y="0" width="400" height="300" fill="#080b11"/>`;
+  g += `<text x="14" y="22" fill="#8b93a7" font-size="11">a slice through the planet</text>`;
+  // stars on a ring, fixed in world space (or dragged along, if camera-locked)
+  for (const st of STARS){
+    const a = worldFixed ? st.a : st.a + turn;
+    const rr = L.r + 42 + st.m*10;
+    const x = L.cx + rr*Math.sin(a), y = L.cy - rr*Math.cos(a);
+    if (x < 6 || x > 194 || y < 30 || y > 292) continue;
+    g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(st.m*0.9).toFixed(1)}" fill="#c8d2e8" opacity="${(0.35+st.m*0.4).toFixed(2)}"/>`;
+  }
+  g += `<circle cx="${L.cx}" cy="${L.cy}" r="${L.r}" fill="#141c2b" stroke="#2f3f5c" stroke-width="1.5"/>`;
+  // the walker and their up
+  const wx = L.cx + L.r*Math.sin(turn), wy = L.cy - L.r*Math.cos(turn);
+  const ux = Math.sin(turn), uy = -Math.cos(turn);
+  g += `<path d="M${wx.toFixed(1)} ${wy.toFixed(1)}L${(wx+ux*30).toFixed(1)} ${(wy+uy*30).toFixed(1)}" stroke="#4f8ef7" stroke-width="2.5"/>`;
+  g += `<circle cx="${wx.toFixed(1)}" cy="${wy.toFixed(1)}" r="4" fill="#4f8ef7"/>`;
+  // the arc walked
+  if (s > 0){
+    const large = turn > Math.PI ? 1 : 0;
+    g += `<path d="M${L.cx} ${(L.cy-L.r).toFixed(1)} A ${L.r} ${L.r} 0 ${large} 1 ${wx.toFixed(1)} ${wy.toFixed(1)}" fill="none" stroke="#3fb8af" stroke-width="2.5"/>`;
+  }
+  // the moon, in the same slice (clamped inward so it stays on screen)
+  const mDrawR = L.r + 78;
+  const mAngle = worldFixed ? 0 : turn;
+  const mmx = L.cx + mDrawR*Math.sin(mAngle), mmy = L.cy - mDrawR*Math.cos(mAngle);
+  if (mmy > 26) g += `<circle cx="${mmx.toFixed(1)}" cy="${mmy.toFixed(1)}" r="6" fill="#e0c88a"/>`;
+
+  // ---------------- right panel: the whole visible sky, as a dome -------------
+  // Horizon to horizon in one picture: a bearing from the walker's own up maps
+  // to a point on a half-dome, so the zenith is the top and +/-90 deg are the
+  // two horizons. Objects visibly rise and set as the walker moves.
+  const V = { x: 210, y: 30, w: 176, h: 244 };
+  g += `<text x="${V.x}" y="22" fill="#8b93a7" font-size="11">the whole sky, horizon to horizon</text>`;
+  g += `<rect x="${V.x}" y="${V.y}" width="${V.w}" height="${V.h}" rx="7" fill="#070a10" stroke="#1b2537"/>`;
+  const DC = { x: V.x + V.w/2, y: V.y + V.h - 54, r: Math.min(V.w/2 - 10, V.h - 76) };
+  g += `<clipPath id="vp"><rect x="${V.x}" y="${V.y}" width="${V.w}" height="${V.h}" rx="7"/></clipPath>`;
+  g += `<g clip-path="url(#vp)">`;
+  g += `<path d="M${(DC.x-DC.r).toFixed(1)} ${DC.y.toFixed(1)} A ${DC.r.toFixed(1)} ${DC.r.toFixed(1)} 0 0 1 ${(DC.x+DC.r).toFixed(1)} ${DC.y.toFixed(1)} Z" fill="#0a1020" stroke="#182338"/>`;
+  // a bearing d from "up" -> a point on the dome. |d| = 90 deg is the horizon.
+  const dome = d => [DC.x + Math.sin(d)*DC.r, DC.y - Math.cos(d)*DC.r];
+  // one degree of sky, in pixels, along the dome
+  const pxPerDeg = DC.r * Math.PI / 180;
+  for (const st of STARS){
+    let d = worldFixed ? (st.a - upA) : st.a;
+    while (d > Math.PI) d -= 2*Math.PI; while (d < -Math.PI) d += 2*Math.PI;
+    if (Math.abs(d) > Math.PI/2) continue;                 // below the horizon
+    const rr = DC.r * (0.34 + 0.60*(st.m - 0.5)/0.9);      // inside the dome, off the rim
+    const x = DC.x + Math.sin(d)*rr, y = DC.y - Math.cos(d)*rr;
+    g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(st.m*1.1).toFixed(1)}" fill="#dbe4f7" opacity="${(0.4+st.m*0.4).toFixed(2)}"/>`;
+  }
+  // the moon, drawn TO SCALE -- which is the point of the 0.52 deg option
+  const mb = worldFixed ? moonBearing : 0;
+  if (Math.abs(mb) <= Math.PI/2){
+    const [mxp, myp] = dome(mb * 0.86);                    // just inside the rim
+    const rad = Math.max(0.8, moonDeg * pxPerDeg / 2);
+    g += `<circle cx="${mxp.toFixed(1)}" cy="${myp.toFixed(1)}" r="${rad.toFixed(2)}" fill="#e8d5a0"/>`;
+    g += `<circle cx="${mxp.toFixed(1)}" cy="${myp.toFixed(1)}" r="7" fill="none" stroke="#8a7a4a" stroke-width="0.8"/>`;
+  } else {
+    g += `<text x="${V.x+9}" y="${V.y+V.h-12}" fill="#8a7a4a" font-size="10">the moon has set</text>`;
+  }
+  // the ground
+  g += `<rect x="${V.x}" y="${DC.y}" width="${V.w}" height="${V.y+V.h-DC.y}" fill="#16211a"/>`;
+  g += `<path d="M${V.x} ${DC.y.toFixed(1)}L${V.x+V.w} ${DC.y.toFixed(1)}" stroke="#2c4436" stroke-width="1.5"/>`;
+  g += `<circle cx="${DC.x.toFixed(1)}" cy="${DC.y.toFixed(1)}" r="3.5" fill="#4f8ef7"/>`;
+  g += `<text x="${DC.x.toFixed(1)}" y="${(DC.y-DC.r-7).toFixed(1)}" fill="#4a5364" font-size="8" text-anchor="middle">zenith</text>`;
+  g += `</g>`;
+  document.getElementById('scene').innerHTML = g;
+
+  // ---------------- readouts ----------------
+  const hrs = s / WALK_SPEED / 3600;
+  document.getElementById('od').textContent = s.toFixed(0) + ' m';
+  document.getElementById('ot').textContent = (turn/DEG).toFixed(1) + '°';
+  document.getElementById('om').textContent = (parallax/DEG >= 0 ? '+' : '') + (parallax/DEG).toFixed(2) + '°';
+  document.getElementById('oh').textContent = hrs < 1 ? (hrs*60).toFixed(0) + ' min' : hrs.toFixed(2) + ' h';
+  document.getElementById('cap').textContent = worldFixed
+    ? 'The stars stay where they are. Walking slides you out from under them, which is what a sky is for.'
+    : 'The stars are moving with the camera, so the view never changes however far you walk.';
+
+  const note = document.getElementById('note');
+  if (!worldFixed){
+    note.className = 'note warn';
+    note.innerHTML = `<b>This is the bug.</b> A classic skybox is drawn centred on the camera and never
+      translates, because a flat world has one <b>up</b> that everybody shares. Here every cell has its
+      own, so locking the sky to the camera drags the entire celestial sphere around the planet with the
+      player. Walk as far as you like — the right-hand view is frozen. That reads as the sky being
+      painted on the inside of the helmet.`;
+  } else if (s >= CIRC - 20){
+    note.className = 'note';
+    note.innerHTML = `<b>All the way round: 360°.</b> You are back where you started and so is the sky.
+      It took ${hrs.toFixed(2)} hours at walking pace — which is also why a player <b>outwalks the sun</b>
+      for any day longer than 2.12 h, and can hold a sunset in place by walking west.`;
+  } else if (s > 0){
+    note.className = 'note';
+    note.innerHTML = `Your <b>up</b> has turned <b>${(turn/DEG).toFixed(1)}°</b> — that is just
+      <code>s / R</code>, ${s.toFixed(0)} m over a 1,700 m radius. Nothing in the sky moved; you did.
+      The moon has slid <b>${Math.abs(parallax/DEG).toFixed(2)}°</b> against the stars, because it is at a
+      finite distance and you have moved sideways relative to it.`;
+  } else {
+    note.className = 'note';
+    note.innerHTML = `Drag the slider. Watch the right-hand view, then switch the sky to
+      <b>locked to the camera</b> and try again — that is the version a flat-world engine gives you
+      for free, and it is wrong here.`;
+  }
+}
+
+document.getElementById('walk').oninput = e => { s = +e.target.value; build(); };
+build();
+</script>
+</body>
+</html>
