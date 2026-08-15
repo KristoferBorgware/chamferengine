@@ -275,110 +275,122 @@ and they are wall-clock numbers that move run to run.
 
 ---
 
-## The decision: Rust
+## The decision: TypeScript
 
-**Rust, and the reason is not determinism.**
+**TypeScript, for the whole engine, and this document said Rust first.** The
+measurements above are unchanged — every one of them still holds — but they were
+weighed against the wrong requirement, and one of them was missing.
 
-Determinism turned out to be nearly free. What is left is requirements 5 through
-8, which is where the decision should have been made all along:
+Earlier drafts closed with *"Rust, and the reason is not determinism"*, on five
+grounds: no build flag needed, `wrapping_mul` in the language, the fast data layout
+being the default, one source compiling to native and WebAssembly, and `wgpu`.
+That case is kept below, because most of it is still true and only the conclusion
+moves.
 
-1. **It is bit-identical with no build flag at all**, at every optimisation level
-   tested, including `target-cpu=native` and fat LTO. Rust does not contract
-   implicitly; `mul_add` is a function you call on purpose. The guarantee lives in
-   the language rather than in a makefile, so it cannot be lost three years from
-   now by someone adding `-Ofast` to speed up a build.
-2. **`wrapping_mul` is spelled out.** Requirement 1 is a language feature, not a
-   convention about which integer types happen to be safe to overflow.
-3. **The fast data layout is the obvious one.** A `Vec` of a `struct` is
-   contiguous without anyone deciding it should be, so requirement 7 is met by
-   writing ordinary code rather than by remembering to. The measured gap to
-   disciplined JavaScript is only **1.5×** — this is a margin, not a wall.
-4. **One source compiles to native and to WebAssembly** — *if* a browser client
-   is wanted, which no document actually requires (see
-   [doc 29](29-what-runs-where.md)). Where it applies it is real and measured: the
-   same Rust source compiled to `wasm32` produces the **identical digest** as the
-   native build, at about **1.2×** native speed, so a browser regenerating
-   [doc 21](21-rivers-and-erosion.md)'s coarse map gets the same map to the bit as
-   the server that never sent it. What does not port is the platform edge —
-   sockets, storage, threads — and doc 29 prices that.
-5. **`wgpu` is one GPU story** across desktop and browser, which keeps point 4
-   from being true of the generator and false of everything around it.
+Three things move it.
 
-### The runner-up is Java, and it is closer than it looks
+### 1. A browser client is now a requirement, and TypeScript satisfies it for free
 
-Java is **exactly as deterministic** — `strictfp` has been the default since
-Java 17, so there is not even a keyword to remember — its `int` wraps, and
-Minecraft is a rather emphatic existence proof that this genre ships in it.
+[Doc 29](29-what-runs-where.md) established that nothing in docs 00–27 asked for a
+browser, and that this document had inferred one. **That is now a stated goal:
+the game is to be playable in a browser.** With the requirement real rather than
+inferred, TypeScript is the only candidate that meets it with no work at all —
+same file, server and tab. Rust needs a `wasm32` target, a bindings layer and two
+build profiles.
 
-It loses on **one** of the four, not two. The first draft said "a garbage
-collector inside a frame budget, and no credible story for one codebase running
-natively and in a browser" — but section 5 withdraws the first half of that: Java
-is **1.60× C** on the allocation-free generator, ahead of JavaScript, and the
-collector never runs there at all. What is left is the browser, and that is a real
-gap rather than a decisive one.
+### 2. The measured gap is a margin, not a wall
 
-### TypeScript is the strongest case against this decision
+From the sections above: **1.75×** C on the generator, **1.5×** on the mesher
+buffer with typed arrays, and **bit-identical** with every other target. None of
+those is a reason to spend the project's budget on a language nobody writing it
+has used.
 
-It deserves better than the line the first draft of this document gave it, which
-scored it "browser only" and moved on. That is simply wrong: Node, Deno and Bun
-are server runtimes, and TypeScript is the **only** candidate here that satisfies
-requirement 8 with *no work at all*. Rust needs a `wasm32` target, a bindings
-layer and two build profiles. TypeScript needs nothing — the same file runs on
-the server and in the tab.
+That last clause is the argument this document could not make from measurements,
+and it is the strongest one: **a language you cannot write is not a fast
+language.** Rust's 1.14× is worth nothing to a project that does not ship.
 
-**So TypeScript wins one of the two requirements this decision turned on**, and
-it is within **1.5–1.75×** on the other. The determinism table it sits in has it
-agreeing bit for bit with everyone else. It is a genuinely good answer, and the
-honest summary of the margin is:
+### 3. The C escape hatch has a trap in it, and it points the other way
 
-| | Rust | TypeScript |
-|---|---|---|
-| bit-identical (§1) | yes | yes |
-| generator throughput (§5a) | 1.14× C | **1.75× C** |
-| mesher buffer (§5b) | 1.00× | **1.5×**, and 23× if written the obvious way |
-| the fast layout is the default | **yes** | no — hand-packed `ArrayBuffer`s |
-| native **and** browser from one source | yes, via `wasm32` | **yes, for free** |
-| `wrapping_mul` | in the language | `Math.imul`, and easy to forget `>>> 0` |
+The standard reassurance for picking a scripting language is "we can always write
+the hot core in C and compile it to wasm". That plan works. It also carries a
+failure mode that is the exact mirror of this document's main finding:
 
-Rust is chosen on rows 4 and 6 — the fast path being what you get by default, and
-integer wrapping being a type rather than a discipline. **Those are preferences
-about where mistakes get caught, not performance cliffs**, and this table is the
-honest size of the gap.
+> **[verified]** `verification/language.js`, section 2b. **One C source file.**
+> Compiled with `--target=wasm32` it gives the same digest as every other target.
+> Compiled natively with `-march=native` on the same machine it gives a
+> **different** one. `-ffp-contract=off` restores it.
 
-If the goal were a playable prototype this year rather than an engine, TypeScript
-would be the better call, and nothing measured here argues otherwise. That is
-worth writing down, because the reasons above are not strong enough to pretend
-the decision was forced.
+Baseline WebAssembly **has no FMA instruction**, so a C core compiled for the
+browser *cannot* contract — it agrees with everyone by construction. The same
+source compiled for the machine it is sitting on *does*.
 
-### C++ is the only candidate this test caught being wrong
+So the moment a project has **both** a wasm build and a native build of one C core
+— a browser client and a native server, which is exactly why anyone reaches for
+this — **the two generate different planets** unless the flag is set and stays
+set. On `aarch64` the contracting build is the default.
 
-It has the highest performance ceiling and the largest ecosystem, and it is
-genuinely the incumbent for this kind of engine. It is also the one that produced
-four different planets from one file, that gets the *dangerous* default on ARM,
-and whose repair is a flag rather than a property.
+**TypeScript has no such trap**, because section 1 measured it bit-identical with
+every other target and the language specification pins the operations. **Staying
+in the scripting language is the safer option for determinism.** The escape hatch
+is where the risk enters, and it enters at the exact moment it is used for the
+thing it was kept for.
 
-That is not a reason to forbid it. It is a reason not to choose it when a
-candidate in the same performance class does not need the flag at all.
+### What TypeScript costs, stated plainly
 
-### Go, for the record
+- **Data layout is a discipline rather than a default.** Section 5 measured a
+  **15×** gap between typed arrays and one object per vertex. The mesher and the
+  chunk store must be `ArrayBuffer`s, hand-packed. That is the single rule this
+  choice imposes, and breaking it costs more than any language gap in this study.
+- **`wrapping_uint32` is `Math.imul` and `>>> 0`**, and forgetting the `>>> 0` is
+  a real bug rather than a type error. [Doc 08](08-terrain-generation.md)'s hash
+  is the place it matters.
+- **No compiler enforces the frame budget.** Nothing here measures a whole frame,
+  in any language.
 
-Go matched here, on `amd64`. But the Go specification **explicitly permits**
-fusing `x*y + z` into an FMA, and on `arm64` the compiler does emit it. This
-script runs on `amd64` and cannot test that, so Go is a *did-not-reproduce* —
-the same standard applied to `sin` and `cos` above, and it should be applied
-consistently.
+### The case for Rust, kept
+
+It is still the better engine language, and if this project is ever rewritten
+rather than prototyped, this is the argument to re-read:
+
+1. Bit-identical with **no build flag**, at every optimisation level including
+   `target-cpu=native` and fat LTO — the guarantee is in the language rather than
+   the makefile.
+2. `wrapping_mul` is spelled out.
+3. The fast data layout is what you get by writing the obvious thing: a `Vec` of a
+   `struct` is contiguous, where the obvious JavaScript is an array of objects.
+4. One source to native and `wasm32`, measured at the **identical digest** and
+   about **1.2×** native.
+5. `wgpu` is one GPU story across desktop and browser.
+
+Points 1 and 3 are what a scripting language gives up. Point 4 is the one
+TypeScript gets for free instead.
+
+### C++ and Java, for the record
+
+**C++** has the highest ceiling and the largest ecosystem, and it is the only
+candidate this study caught being *wrong* — four planets from one file, the
+dangerous default on ARM, and now the wasm-versus-native trap above.
+
+**Java** is exactly as deterministic — `strictfp` has been the default since 17 —
+and Minecraft is the existence proof that the genre ships in it. It loses on the
+browser, which is now a requirement rather than an inference. (Minecraft is also
+a weaker precedent than it looks: Java was Notch's preference rather than a
+considered choice, and Bedrock, the version on consoles and phones, is C++.)
 
 ---
 
 ## What follows for the build
 
-Three lines, and they are the whole of what this decision imposes:
+Four lines, and they are the whole of what this decision imposes:
 
-- **Rust, stable channel**, native for the server and the desktop client,
-  `wasm32` for the browser client, from one source tree.
-- **`normalize` is `sqrt(x*x + y*y + z*z)`.** Never `hypot`.
-- **No `mul_add` anywhere in the generator.** It is the one call that can
-  reintroduce the entire problem, and unlike C's flags it is visible in a diff.
+- **TypeScript**, one source tree, running in the browser and under Node.
+- **`normalize` is `sqrt(x*x + y*y + z*z)`.** Never `Math.hypot` — section 3
+  measured it one ULP apart between runtimes.
+- **Typed arrays for anything per-cell or per-vertex.** Never an array of objects;
+  section 5 priced that at **15×**.
+- **If a hot path is ever moved to C or Rust for wasm, the native build of that
+  same code must set `-ffp-contract=off` and never see `-Ofast`** — section 2b.
+  A wasm-only escape hatch is safe; a wasm-*and*-native one is not.
 
 ---
 
@@ -431,12 +443,21 @@ Three lines, and they are the whole of what this decision imposes:
   nothing collects; JavaScript is **1.75×** C there and Java **1.60×**. On the
   mesher buffer the **language gap is 1.5× and the layout gap is 15×** — what you
   choose matters ten times less than how you lay the data out.
-- **Rust**, chosen on the requirements that were left: no flag needed,
-  `wrapping_mul` in the language, the fast layout being the *default* one, and one
-  source compiling to native and WebAssembly. **The margin is thin and stated as
-  such** — TypeScript satisfies that last requirement for free and is within
-  1.5–1.75×, and would be the better call for a prototype.
-- **And "Rust" needs a scope**, which this document did not give it.
+- **The C escape hatch has a trap, and it points the other way.** One source at
+  `--target=wasm32` matches everyone, because **baseline wasm has no FMA
+  instruction**; the same source at `-march=native` does not. So a project with
+  *both* a wasm build and a native build of one C core generates **two planets** —
+  which is exactly the configuration the hatch gets reached for.
+- **TypeScript**, decided. A browser client is a stated requirement and TypeScript
+  satisfies it for free; the measured gap is **1.75×** on the generator and 1.5× on
+  the mesher, which is a margin rather than a wall; and it has no escape-hatch trap
+  because the specification pins its arithmetic. **A language you cannot write is
+  not a fast language.**
+- **This document said Rust first**, on no-flag determinism and the fast layout
+  being the default. Both are still true and the Rust case is
+  [kept above](#the-case-for-rust-kept) — the weighing changed, not the
+  measurements.
+- **The decision needs a scope**, which this document did not give it.
   [Doc 29](29-what-runs-where.md) supplies one: the determinism argument above
-  constrains **the core only**, the layout argument constrains **the mesher**, and
-  nothing here constrains the world-state layer at all.
+  constrains **generation only**, the layout argument constrains **the mesher**,
+  and nothing here constrains the world-state layer at all.

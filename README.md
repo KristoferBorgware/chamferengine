@@ -23,7 +23,8 @@ This repository currently contains **documentation and interactive demos only**.
 No engine code has been written yet. Everything here is the reasoning, the
 mathematics, and the verified constants that an implementation should be built
 against — and as of [doc 28](docs/28-language-and-runtime.md), nothing in the
-specification is still blocking that implementation. It is **Rust**.
+specification is still blocking that implementation. It is **TypeScript**,
+playable in a browser — see [doc 28](docs/28-language-and-runtime.md).
 
 ---
 
@@ -78,6 +79,7 @@ a runnable demo where one exists.
 | 28 | [The language and the runtime](docs/28-language-and-runtime.md) | Six languages, one digest — and the compiler flag that makes four planets |
 | 29 | [What runs where](docs/29-what-runs-where.md) | The four parts, why determinism draws the lines, and what Rust → wasm actually costs |
 | 30 | [Authority and cheating](docs/30-authority-and-cheating.md) | What the server must know per cheat, why mobs are the expensive decision, and intents-not-outcomes |
+| 31 | [Deployment](docs/31-deployment.md) | **Plan, not decision.** V1 is local; the delta store is not a database; the fan-out is the cost |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -207,7 +209,8 @@ All thirty-four are run by `make-reference.js`, and
 | Pentagons, water, rivers, coordinates | Decided, verified |
 | Ray traversal | Approach chosen, 2D prototype only |
 | Pathfinding | Approach chosen, 2D prototype only |
-| Language and runtime | **Rust**, decided and verified — see [doc 28](docs/28-language-and-runtime.md) |
+| Language and runtime | **TypeScript**, decided — see [doc 28](docs/28-language-and-runtime.md) |
+| Deployment | Sketched, **not decided** — see [doc 31](docs/31-deployment.md) |
 | **Engine source** | **Not written.** Nothing in the specification blocks it any more |
 
 ## Licence

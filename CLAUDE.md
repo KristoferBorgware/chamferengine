@@ -14,8 +14,8 @@ and duplicates information found there.
   turns the deploy red. Note the renderer does **not** nest `*italic*` inside
   `**bold**`; it reports `unconverted bold` when you try.
 - **No engine source yet.** Nothing in the specification blocks it any more
-  (doc 26 Part 1 is empty, doc 28 picked **Rust**), but do not start implementing
-  from these documents without being asked to.
+  (doc 26 Part 1 is empty, doc 28 picked **TypeScript**), but do not start
+  implementing from these documents without being asked to.
 - Commit as `KristoferBorgware <kristofer@borgware.se>`, with no co-authoring
   trailer and no model identifier in the message. **Set this in the repo config,
   once, at the start of a session** — `git config user.name` / `user.email`. Passing
@@ -135,7 +135,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 30.
+- `docs/` — prose specification, ordered 00 through 31.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -193,6 +193,7 @@ script owns its numbers.
 | [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
 | [29](docs/29-what-runs-where.md) | the four parts; the server generates nothing; Rust → wasm | `language.js` |
 | [30](docs/30-authority-and-cheating.md) | what the server must know per cheat; mobs; intents not outcomes | `authority.js` |
+| [31](docs/31-deployment.md) | **plan, not decision.** V1 local; DynamoDB; fan-out is the cost | — |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -654,9 +655,10 @@ Violating any of these breaks the design. They are not tunable.
   while `sqrt(x*x+y*y+z*z)` agrees everywhere. **`normalize` must be written the
   long way.** So determinism eliminated nobody, and **Rust** was chosen on the
   four requirements left: no flag needed at any `-O`, `wrapping_mul` in the
-  language, the fast data layout being the **default** one, and **one source
-  compiling to native and WebAssembly** — which is what doc 22's client
-  regenerating the coarse map actually requires.
+  language, the fast data layout being the **default** one, and one source
+  compiling to native and WebAssembly. **THAT VERDICT WAS LATER REVERSED — the
+  decision is TypeScript**, see the entry below; every measurement above still
+  holds and only the weighing changed.
 - **"It has a garbage collector" is the wrong test** (`language.js` §5, doc 28).
   Doc 28's first draft made "no GC pause in a frame" a requirement and used it to
   push Java and TypeScript down; it does not survive measurement. **The generator
@@ -672,6 +674,35 @@ Violating any of these breaks the design. They are not tunable.
   **free** where Rust needs `wasm32` — and the margin is thin enough to say so.
   These are wall-clock timings; read ratios, and note nothing measures a whole
   frame because there is no mesher yet.
+- **THE LANGUAGE IS TYPESCRIPT** (doc 28, `language.js` §2b). Doc 28 first chose
+  Rust; the reversal came from three things. A **browser client is now a stated
+  requirement**, which TypeScript satisfies for free and Rust needs `wasm32` plus
+  bindings for. The measured gap is **1.75×** on the generator and **1.5×** on the
+  mesher — a margin, not a wall. And **the C escape hatch has a trap that points
+  the other way**: one C source compiled `--target=wasm32` matches every other
+  target, because **baseline wasm has no FMA instruction and so cannot contract**,
+  while the same source at `-march=native` **disagrees**. So a project with *both*
+  a wasm build and a native build of one C core generates **two planets** — which
+  is exactly the configuration people reach for this hatch to get.
+  **Staying in the scripting language is the safer option for determinism.** What
+  TypeScript costs: data layout is a discipline not a default (**15×**, §5),
+  `wrapping_uint32` is `Math.imul` plus a `>>> 0` you can forget, and no compiler
+  enforces the frame budget. Build rules: `normalize` is
+  `sqrt(x*x+y*y+z*z)` never `Math.hypot`; typed arrays for anything per-cell or
+  per-vertex; and if a hot path is ever moved to C or Rust for wasm, its **native**
+  build must set `-ffp-contract=off` and never see `-Ofast`.
+- **Deployment is sketched and NOT decided** (doc 31). **V1 is local** — browser,
+  WebGPU, filesystem. The delta store is **not a database**: it is `chunk ID → a
+  blob of deltas`, one `get` and one `put`, and a well-played world is **76 MB**,
+  so **DynamoDB** (or S3 for cold chunks) rather than a document store. API Gateway
+  WebSocket → Lambda fits *unusually well* because doc 30 scoped the server to
+  storage, so there is no tick loop. **The cost is fan-out, not storage** —
+  interest management *is* fan-out — so instrument messages/second from day one.
+  Serverless first, box later; **the migration trigger is the same event as V2
+  simulation**, and the insurance is keeping `onMessage` and `send` behind an
+  interface. **WebGPU only** — it is already the abstraction over Vulkan, Metal and
+  D3D12, so a native client is the same TypeScript in Tauri or Electron, never a
+  second renderer.
 - **The server never generates terrain, and determinism is a client-to-client
   rule** (doc 29). Doc 22 already said it — "a player position per client, and
   nothing else" — and doc 29's first draft drew the server holding the whole core

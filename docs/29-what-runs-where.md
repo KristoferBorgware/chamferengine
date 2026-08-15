@@ -34,9 +34,12 @@ at all. Doc 28 read "client", inferred "browser client", and then promoted the
 inference to the deciding argument. Earlier drafts of this document would have
 repeated it; it is corrected here instead, and doc 28 now points at this page.
 
-**Whether there is a browser client is a product decision nobody has made.** It
-is listed as open at the bottom. Rust survives either way — it just has two
-reasons rather than four if the answer is no.
+**Whether there is a browser client was a product decision nobody had made.** It
+has since been made: **there is one, and it is the primary client.** That reverses
+the weighing in doc 28, which now lands on **TypeScript** — the only candidate
+that satisfies the requirement with no work at all. So this correction stands, and
+its conclusion changed: the inference was wrong at the time, and the thing it
+inferred turned out to be wanted anyway.
 
 ---
 
@@ -206,7 +209,12 @@ point at all beyond one dot product.
 
 ## Rust → WebAssembly, concretely
 
-If there *is* a browser client, this is what the phrase means.
+**Superseded as a plan, kept as a measurement.**
+[Doc 28](28-language-and-runtime.md) now chooses TypeScript, which reaches the
+browser without any of this. What follows was written when Rust was the decision;
+the numbers in it are real and are the reason a compiled core remains a credible
+escape hatch, so the section stays. Read it as *what it would cost if a hot path
+were ever moved*, not as the plan.
 
 ### What compiles to both targets unchanged
 
@@ -256,9 +264,9 @@ it costs everything.
 
 ## Still open
 
-- **Whether there is a browser client at all.** This is a product decision and
-  nobody has made it. Doc 28's fourth reason for Rust evaporates if the answer is
-  no — the decision still holds on the other reasons, with a thinner margin.
+- ~~Whether there is a browser client at all.~~ — **decided: yes, and it is the
+  primary client.** See [doc 28](28-language-and-runtime.md), which now lands on
+  TypeScript, and [doc 31](31-deployment.md) for the shape of the hosting.
 - **The protocol.** Doc 22 decides *who* to tell about an edit and says nothing
   about the format, the transport, or the tick rate.
 - **Authority and conflict.** Doc 22 lists this as open and it still is: two
@@ -277,10 +285,10 @@ it costs everything.
   **out of scope for V1**, and no longer an architecture question. Doc 30 prices it
   at **158×** what player validation costs and shows it is the only thing that
   turns the server into a simulator.
-- **Whether generation should be `no_std`.** It has no reason to allocate, and a
-  `no_std` core compiles to a 1.6 KB wasm module against 1.35 MB with the standard
-  library linked in. That is a build-shape question, not a design one, but it is
-  the kind that gets much harder to change later.
+- ~~Whether generation should be `no_std`.~~ — moot under
+  [doc 28](28-language-and-runtime.md)'s decision, which is TypeScript. It returns
+  only if a hot path is ever moved to a compiled language for wasm, and doc 28
+  §2b records the trap waiting there if it is also built natively.
 
 ---
 

@@ -340,6 +340,53 @@ const WASM_KERNEL = RS_KERNEL
            'let r=1700.0f64; let mut seed:u32=20260815; let (n_,nn)=(n_arg, 2048i32);')
   .replace('  println!("{:016x}",acc);\n}', '  acc\n}');
 
+// The same C kernel again, freestanding so clang can take it to wasm32 with no
+// libc, and exporting one function instead of printing. This is the "write the
+// core in C and compile it to wasm for the browser" escape hatch, measured.
+const CWASM_KERNEL = `
+#include <stdint.h>
+static double myfloor(double x){ double t=(double)(long long)x; return t>x ? t-1.0 : t; }
+static double hash3(int32_t x,int32_t y,int32_t z){
+  uint32_t h=(uint32_t)x*374761393u+(uint32_t)y*668265263u+(uint32_t)z*1274126177u;
+  h^=h>>13; h*=1274126177u; h^=h>>16; return (double)h/4294967296.0;
+}
+static double fade(double t){ return t*t*t*(t*(t*6-15)+10); }
+static double value3(double px,double py,double pz){
+  double xi=myfloor(px),yi=myfloor(py),zi=myfloor(pz);
+  double u=fade(px-xi),v=fade(py-yi),w=fade(pz-zi); double s=0;
+  for(int c=0;c<8;c++){int dx=c&1,dy=(c>>1)&1,dz=(c>>2)&1;
+    s+=(dx?u:1-u)*(dy?v:1-v)*(dz?w:1-w)*hash3((int32_t)xi+dx,(int32_t)yi+dy,(int32_t)zi+dz);}
+  return s*2-1;
+}
+static double fbm(double x,double y,double z,double f0,int oct){
+  double sum=0,amp=1,tot=0,f=f0;
+  for(int o=0;o<oct;o++){ sum+=amp*value3(x*f,y*f,z*f); tot+=amp; amp*=0.5; f*=2; }
+  return sum/tot;
+}
+__attribute__((export_name("run")))
+uint64_t run(int n_){
+  const double A[3]={0,1,1.618033988749895},B[3]={1.618033988749895,0,1},C[3]={1,1.618033988749895,0};
+  const double R=1700; uint32_t seed=20260815; const int n=2048; uint64_t acc=0;
+  for(int k=0;k<n_;k++){
+    seed=seed*1103515245u+12345u;
+    uint32_t i=seed%(uint32_t)(n+1), j=(seed>>11)%(uint32_t)(n+1-(int)i);
+    double a=(double)(n-(int)i-(int)j)/n,b2=(double)i/n,c2=(double)j/n;
+    double px=A[0]*a+B[0]*b2+C[0]*c2,py=A[1]*a+B[1]*b2+C[1]*c2,pz=A[2]*a+B[2]*b2+C[2]*c2;
+    double len=__builtin_sqrt(px*px+py*py+pz*pz);
+    px=px/len*R; py=py/len*R; pz=pz/len*R;
+    double vs[4]={px,py,pz,fbm(px,py,pz,0.01,6)};
+    for(int q=0;q<4;q++){ uint64_t b; __builtin_memcpy(&b,&vs[q],8); acc=(acc^b)*1099511628211ull; }
+  }
+  return acc;
+}
+`;
+const CWASM_MAIN = `
+#include <stdio.h>
+#include <stdint.h>
+uint64_t run(int n_);
+int main(void){ printf("%016llx\\n",(unsigned long long)run(20000)); return 0; }
+`;
+
 const PY_KERNEL = `
 import struct, math
 def hash3(x,y,z):
@@ -505,6 +552,62 @@ if (TOOLS.gcc || TOOLS.clang){
 } else {
   skipped.push('gcc and clang (section 2 not run)');
   console.log('   SKIPPED -- no C compiler on this machine.');
+}
+
+// ---- 2b. the escape hatch, and the trap in it ------------------------------
+// "Write the core in C and compile it to wasm for the browser" is the standard
+// plan when a project picks a scripting language and worries about speed later.
+// It works, and it has a failure mode nobody expects, which is the exact mirror
+// of section 2.
+console.log('\n2b. C to wasm, and the trap in the escape hatch');
+if (TOOLS.clang){
+  write('w.c', CWASM_KERNEL);
+  write('wmain.c', CWASM_MAIN);
+  const rows = [];
+  if (build('clang', ['--target=wasm32','-O2','-nostdlib','-Wl,--no-entry',
+                      '-Wl,--export-all','w.c','-o','wc.wasm'])){
+    try {
+      const inst = new WebAssembly.Instance(
+        new WebAssembly.Module(fs.readFileSync(path.join(DIR,'wc.wasm'))), {});
+      rows.push(['clang --target=wasm32 -O2',
+                 BigInt.asUintN(64, inst.exports.run(20000)).toString(16).padStart(16,'0')]);
+    } catch {}
+  }
+  // the same source, natively -- strip the wasm export attribute
+  fs.writeFileSync(path.join(DIR,'wnat.c'),
+    CWASM_KERNEL.replace('__attribute__((export_name("run")))',''));
+  for (const flags of [['-O2','-march=x86-64'], ['-O2','-march=native'],
+                       ['-O2','-march=native','-ffp-contract=off']]){
+    if (build('clang', [...flags,'wnat.c','wmain.c','-o','wx']))
+      rows.push(['clang ' + flags.join(' '), run(path.join(DIR,'wx'), [])]);
+  }
+  console.log('   ONE C source file, compiled for the browser and for the machine:');
+  console.log('');
+  console.log('   build                                       digest             vs the rest');
+  for (const [label, d] of rows){
+    if (!d) continue;
+    console.log(`   ${label.padEnd(41)} ${d}   ${d === REF ? 'SAME' : 'DIFFERENT'}`);
+  }
+  console.log('');
+  console.log('   BASELINE WASM HAS NO FMA INSTRUCTION, so a C core compiled for the');
+  console.log('   browser CANNOT contract -- it agrees with everyone by construction. The');
+  console.log('   same source compiled for the machine it is sitting on DOES contract, and');
+  console.log('   disagrees.');
+  console.log('');
+  console.log('   That is the trap, and it is the opposite way round from the intuition.');
+  console.log('   The moment a project has BOTH a wasm build and a native build of one C');
+  console.log('   core -- a browser client and a native server, which is exactly the');
+  console.log('   reason people reach for this -- THE TWO GENERATE DIFFERENT PLANETS,');
+  console.log('   unless the flag is set and stays set. On aarch64 the contracting build');
+  console.log('   is the default.');
+  console.log('');
+  console.log('   JavaScript and TypeScript have no such trap: section 1 measured them');
+  console.log('   bit-identical with every other target, and the language specification');
+  console.log('   pins the operations. STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER');
+  console.log('   OPTION FOR DETERMINISM. The escape hatch is where the risk enters.');
+} else {
+  skipped.push('clang (section 2b not run)');
+  console.log('   SKIPPED -- no clang on this machine.');
 }
 
 // ---- 3. what is NOT in the safe group --------------------------------------
