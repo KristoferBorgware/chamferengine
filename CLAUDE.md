@@ -690,7 +690,10 @@ Violating any of these breaks the design. They are not tunable.
   enforces the frame budget. Build rules: `normalize` is
   `sqrt(x*x+y*y+z*z)` never `Math.hypot`; typed arrays for anything per-cell or
   per-vertex; and if a hot path is ever moved to C or Rust for wasm, its **native**
-  build must set `-ffp-contract=off` and never see `-Ofast`.
+  build must set `-ffp-contract=off`, and **neither** build may see
+  `-Ofast`/`-ffast-math` — that one re-associates and breaks the **wasm** build
+  too, where contraction was impossible. Two rules, and only the second shows up
+  in a wasm-only test.
 - **Deployment is sketched and NOT decided** (doc 31). **V1 is local** — browser,
   WebGPU, filesystem. The delta store is **not a database**: it is `chunk ID → a
   blob of deltas`, one `get` and one `put`, and a well-played world is **76 MB**,

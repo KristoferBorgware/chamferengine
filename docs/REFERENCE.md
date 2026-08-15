@@ -110,9 +110,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 281 ns in this JavaScript
+   one solidity(cell) query: 298 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 183 ns)
+    upper bound -- Rust is about 194 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -126,9 +126,9 @@ authority.js -- what the server must know, per cheat, and what it costs
 
      players   queries/s   CPU of one core
           10          20      0.0006%
-         100         200      0.0056%
-        1000        2000      0.0562%
-       10000       20000      0.5619%
+         100         200      0.0060%
+        1000        2000      0.0595%
+       10000       20000      0.5953%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1219,6 +1219,8 @@ language.js -- which language and runtime, decided by running the kernel
 
    build                                       digest             vs the rest
    clang --target=wasm32 -O2                 482495611b7ba324   SAME
+   clang --target=wasm32 -msimd128 -mrelaxed-simd 482495611b7ba324   SAME
+   clang --target=wasm32 -O3 -msimd128 -mrelaxed-simd -ffast-math 827411168053f080   DIFFERENT
    clang -O2 -march=x86-64                   482495611b7ba324   SAME
    clang -O2 -march=native                   9ecaa4f71474266b   DIFFERENT
    clang -O2 -march=native -ffp-contract=off 482495611b7ba324   SAME
@@ -1235,10 +1237,27 @@ language.js -- which language and runtime, decided by running the kernel
    unless the flag is set and stays set. On aarch64 the contracting build
    is the default.
 
-   JavaScript and TypeScript have no such trap: section 1 measured them
-   bit-identical with every other target, and the language specification
-   pins the operations. STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER
-   OPTION FOR DETERMINISM. The escape hatch is where the risk enters.
+   BUT WASM IS NOT UNCONDITIONALLY SAFE, and the rows above show it. What
+   wasm cannot do is CONTRACT -- there is no instruction to fuse into. It
+   can still be broken by -ffast-math, which RE-ASSOCIATES: a source-level
+   transformation that has nothing to do with the instruction set, and it
+   breaks the wasm build exactly as it breaks the native one.
+
+   So the rule is TWO rules, not one flag:
+     -ffp-contract=off      needed on the NATIVE build only
+     never -Ofast/-ffast-math   needed on BOTH
+   and only the second is visible in a wasm-only test.
+
+   Relaxed SIMD is a third door and it did NOT open here: -mrelaxed-simd
+   left the digest alone, because nothing auto-vectorised this scalar
+   code into a relaxed madd. The wasm spec makes those operations
+   deliberately non-deterministic, so that is a did-not-reproduce rather
+   than a clearance.
+
+   JavaScript and TypeScript have none of these doors: section 1 measured
+   them bit-identical with every other target, and the language
+   specification pins the operations with no build step to get wrong.
+   STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER OPTION FOR DETERMINISM.
 
 3. sqrt is safe and hypot is not, measured rather than assumed
    the same inputs, 4 runtimes, ONE machine and one libm underneath:
@@ -1324,12 +1343,12 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.32 ms   1.78x
-         JS, one object a vertex   4.69 ms   26.08x
+         JS, typed arrays          0.33 ms   1.82x
+         JS, one object a vertex   4.52 ms   25.14x
 
-       THE LANGUAGE GAP IS 1.8x. THE LAYOUT GAP IS 15x.
+       THE LANGUAGE GAP IS 1.8x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 15x version is the one that
+       than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
@@ -2214,7 +2233,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 637 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 614 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

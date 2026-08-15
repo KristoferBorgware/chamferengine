@@ -573,6 +573,19 @@ if (TOOLS.clang){
                  BigInt.asUintN(64, inst.exports.run(20000)).toString(16).padStart(16,'0')]);
     } catch {}
   }
+  // and the same wasm target with the optimiser let off the leash
+  for (const extra of [['-msimd128','-mrelaxed-simd'],
+                       ['-O3','-msimd128','-mrelaxed-simd','-ffast-math']]){
+    if (build('clang', ['--target=wasm32','-O2',...extra,'-nostdlib','-Wl,--no-entry',
+                        '-Wl,--export-all','w.c','-o','wr.wasm'])){
+      try {
+        const inst = new WebAssembly.Instance(
+          new WebAssembly.Module(fs.readFileSync(path.join(DIR,'wr.wasm'))), {});
+        rows.push(['clang --target=wasm32 ' + extra.join(' '),
+                   BigInt.asUintN(64, inst.exports.run(20000)).toString(16).padStart(16,'0')]);
+      } catch {}
+    }
+  }
   // the same source, natively -- strip the wasm export attribute
   fs.writeFileSync(path.join(DIR,'wnat.c'),
     CWASM_KERNEL.replace('__attribute__((export_name("run")))',''));
@@ -601,10 +614,27 @@ if (TOOLS.clang){
   console.log('   unless the flag is set and stays set. On aarch64 the contracting build');
   console.log('   is the default.');
   console.log('');
-  console.log('   JavaScript and TypeScript have no such trap: section 1 measured them');
-  console.log('   bit-identical with every other target, and the language specification');
-  console.log('   pins the operations. STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER');
-  console.log('   OPTION FOR DETERMINISM. The escape hatch is where the risk enters.');
+  console.log('   BUT WASM IS NOT UNCONDITIONALLY SAFE, and the rows above show it. What');
+  console.log('   wasm cannot do is CONTRACT -- there is no instruction to fuse into. It');
+  console.log('   can still be broken by -ffast-math, which RE-ASSOCIATES: a source-level');
+  console.log('   transformation that has nothing to do with the instruction set, and it');
+  console.log('   breaks the wasm build exactly as it breaks the native one.');
+  console.log('');
+  console.log('   So the rule is TWO rules, not one flag:');
+  console.log('     -ffp-contract=off      needed on the NATIVE build only');
+  console.log('     never -Ofast/-ffast-math   needed on BOTH');
+  console.log('   and only the second is visible in a wasm-only test.');
+  console.log('');
+  console.log('   Relaxed SIMD is a third door and it did NOT open here: -mrelaxed-simd');
+  console.log('   left the digest alone, because nothing auto-vectorised this scalar');
+  console.log('   code into a relaxed madd. The wasm spec makes those operations');
+  console.log('   deliberately non-deterministic, so that is a did-not-reproduce rather');
+  console.log('   than a clearance.');
+  console.log('');
+  console.log('   JavaScript and TypeScript have none of these doors: section 1 measured');
+  console.log('   them bit-identical with every other target, and the language');
+  console.log('   specification pins the operations with no build step to get wrong.');
+  console.log('   STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER OPTION FOR DETERMINISM.');
 } else {
   skipped.push('clang (section 2b not run)');
   console.log('   SKIPPED -- no clang on this machine.');

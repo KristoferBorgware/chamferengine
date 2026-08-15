@@ -329,6 +329,38 @@ So the moment a project has **both** a wasm build and a native build of one C co
 this — **the two generate different planets** unless the flag is set and stays
 set. On `aarch64` the contracting build is the default.
 
+**And "just set the flag" understates it, in three ways the same section
+measures.**
+
+*The flag is only needed on one of the two builds.* The wasm build is right
+whatever you do, because there is no instruction to fuse into. So the target you
+develop in, test in and demo from is the one that is **always correct**, and the
+bug lives only in the build you ship to a server.
+
+*The wrong setting is the default*, not an omission. `clang -O2 file.c` on Apple
+Silicon contracts. Nobody forgot anything.
+
+*And it is not one flag.* `-ffast-math` **re-associates**, which is a source-level
+transformation with nothing to do with the instruction set — so it breaks the
+**wasm** build too, where contraction was impossible:
+
+> **[verified]** Same section. `--target=wasm32 -O3 -msimd128 -mrelaxed-simd
+> -ffast-math` gives a **different digest** from every other target. Plain
+> `-mrelaxed-simd` does not — nothing auto-vectorised this scalar code into a
+> relaxed `madd`, which is a *did-not-reproduce* rather than a clearance, because
+> the wasm specification makes those operations deliberately non-deterministic.
+
+So the rule is **two rules**:
+
+```
+-ffp-contract=off          on the NATIVE build only
+never -Ofast / -ffast-math on BOTH
+```
+
+and only the second of those is visible in a wasm-only test. The first fails
+silently, on a machine you are not looking at, months later — which is the exact
+scenario [doc 23](23-determinism.md) opens with.
+
 **TypeScript has no such trap**, because section 1 measured it bit-identical with
 every other target and the language specification pins the operations. **Staying
 in the scripting language is the safer option for determinism.** The escape hatch
@@ -388,9 +420,10 @@ Four lines, and they are the whole of what this decision imposes:
   measured it one ULP apart between runtimes.
 - **Typed arrays for anything per-cell or per-vertex.** Never an array of objects;
   section 5 priced that at **15×**.
-- **If a hot path is ever moved to C or Rust for wasm, the native build of that
-  same code must set `-ffp-contract=off` and never see `-Ofast`** — section 2b.
-  A wasm-only escape hatch is safe; a wasm-*and*-native one is not.
+- **If a hot path is ever moved to C or Rust for wasm**, then per section 2b:
+  `-ffp-contract=off` on the **native** build, and `-Ofast`/`-ffast-math` on
+  **neither** — it breaks wasm too. A wasm-only escape hatch is safe from
+  contraction and still not safe from `-ffast-math`.
 
 ---
 
