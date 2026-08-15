@@ -236,3 +236,62 @@ for (const [label, span] of [['cell (D=11)', 1], ['chunk C=8', 8], ['chunk C=6',
 }
 console.log('   Re-anchoring is renormalising an integer and a small offset: no world shift,');
 console.log('   no traversal of live objects, nothing to schedule.');
+
+// ---- 8. integer versus float64 for the offset -------------------------------
+// Doc 15 left this open on the grounds that "a fixed-point offset in millimetres
+// would make positions exactly reproducible across machines, which matters for
+// multiplayer determinism". Doc 23 has since answered that half: float64
+// + - * / sqrt are correctly rounded, so a float64 position IS bit-identical
+// everywhere. So the question is no longer determinism. It is precision, and
+// precision turns out not to discriminate either.
+console.log('\n8. integer vs float64 for the chunk-local offset');
+{
+  const SPAN = 32;                       // a C=6 chunk at D=11, in metres
+  const ulp64 = x => { const e = Math.floor(Math.log2(x)); return 2 ** (e - 52); };
+  const rows = [
+    ['float64',                    ulp64(SPAN)],
+    ['int32 fixed-point, mm',      1e-3],
+    ['int32 scoped to the chunk',  2*SPAN / 2**32],
+    ['int64 scoped to the chunk',  2*SPAN / 2**63],
+  ];
+  console.log(`   offset lives in a chunk-local frame, so it is bounded by ${SPAN} m:`);
+  console.log('   representation                  resolution        vs a 1 m block');
+  for (const [label, res] of rows)
+    console.log(`   ${label.padEnd(28)} ${res.toExponential(2).padStart(10)} m`
+      + `   ${(1/res).toExponential(1).padStart(10)} per block`);
+  console.log('   Every one of them resolves a 1 m block hundreds of millions of times over.');
+  console.log('   Precision does not decide this, and the determinism argument that was');
+  console.log('   supposed to has already been answered by doc 23.');
+  console.log('');
+  console.log('   What fixed-point would still buy: protection against a BUILD mistake, not');
+  console.log('   a hardware one. Doc 23 names the residual risk as compiler contraction --');
+  console.log('   fusing a*b + c into an FMA, which is more accurate and therefore different.');
+  console.log('   Integers cannot be contracted. But the flag that disables contraction is a');
+  console.log('   one-line defence, and fixed-point costs the operation this design leans on');
+  console.log('   hardest: there is no integer sqrt, and `normalize` is the most-called');
+  console.log('   function in the whole runtime (docs 04, 13, 15).');
+  console.log('   DECISION: float64 offsets, and set the contraction flag. Doc 15 closed.');
+}
+
+// ---- 9. how far an anchor may be trusted ------------------------------------
+// The other half of doc 15's open pair: two entities in distant chunks have
+// anchors far apart, and the vector between them goes through world space. Fine
+// in float64 -- the question was whether anything needs it in float32.
+console.log('\n9. the vector between two distant entities, in float32');
+{
+  const ulp32 = x => { const e = Math.floor(Math.log2(x)); return 2 ** (e - 23); };
+  console.log('   separation      float32 spacing there     usable for a 1 m block?');
+  for (const d of [10, 76, 400, 1700, 10e3, 100e3, 6.371e6]){
+    const u = ulp32(d);
+    const label = d >= 1e4 ? (d/1000).toFixed(0) + ' km' : d.toLocaleString('en-US') + ' m';
+    console.log(`   ${label.padStart(9)}   ${u.toExponential(2).padStart(12)} m`
+      + `        ${u < 0.01 ? 'yes' : u < 0.5 ? 'marginal' : 'NO'}`);
+  }
+  console.log('   On the doc-06 planet the worst case is the antipode at 1,700 m, where');
+  console.log('   float32 still resolves 0.12 mm -- so nothing on that world needs float64');
+  console.log('   for an inter-entity vector. It breaks on big planets, not on this one.');
+  console.log('   But the rule costs nothing to keep: these vectors are rare and per-entity,');
+  console.log('   while the float32 budget exists for per-VERTEX data. Compute them in');
+  console.log('   float64 and the answer is right at every planet size.');
+  console.log('   ANSWER: nothing needs it in float32; the limit if you tried is ~16 km.');
+}

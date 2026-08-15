@@ -148,16 +148,16 @@ subtle: it is every coastline.
 
 ---
 
-## Forty-six open questions, and exactly one of them blocks you
+## Forty-four open questions, and exactly one of them blocks you
 
-Docs 13 through 25 carry **46** open bullets between them, plus 9 already struck
-through — two of which were struck by this document's own review. Sorted by what
+Docs 13 through 25 carry **44** open bullets between them, plus 11 already struck
+through. Sorted by what
 they actually block:
 
-![Three bars sized by count: 1 blocks code, 25 waits on code, 20 neither; below the rule, three unlisted items that all block the first line](figures/what-actually-blocks.svg)
+![Three bars sized by count: 1 blocks code, 23 waits on code, 20 neither; below the rule, three unlisted items that all block the first line](figures/what-actually-blocks.svg)
 
 *The backlog is not where the blockers are. One open bullet in the whole
-specification stops you writing code — the language choice. Twenty-five are
+specification stops you writing code — the language choice. Twenty-three are
 waiting for code to exist before they can be answered at all. The three items
 that genuinely gate the kernel appear on no Still open list, because nobody
 noticed they were missing.*
@@ -170,7 +170,7 @@ transcendentals are not, and languages differ in exactly how much of that they
 guarantee. JavaScript pins the five and explicitly does not pin `Math.sin`. Pick
 knowing that, and check the build disables floating-point contraction.
 
-**Waits on code — 25.** These cannot be closed by another document, because the
+**Waits on code — 23.** These cannot be closed by another document, because the
 thing they ask about does not exist yet:
 
 - **Generator (6)** — how many plates and how they drift, the stream-power
@@ -185,8 +185,6 @@ thing they ask about does not exist yet:
   ([doc 25](25-water.md)).
 - **Water detail (2)** — how light behaves in water, what a player sees from
   underwater ([doc 25](25-water.md)).
-- **Precision (2)** — integer versus `float64` for the offset, how far an anchor
-  may be trusted ([doc 15](15-precision-and-origin.md)).
 - **Determinism (2)** — nothing verifies the rule on two real platforms, and GPU
   determinism ([doc 23](23-determinism.md)).
 - **Server (3)** — interest radius versus render distance, entities rather than
@@ -276,7 +274,7 @@ and it needs terrain to sit on.
 
 ## Honest caveat
 
-**The triage above is a judgement, not a measurement.** The count of 46 is exact
+**The triage above is a judgement, not a measurement.** The count of 44 is exact
 and reproducible — it is the number of un-struck bullets under a *Still open*
 heading in `docs/`. Which bucket each one goes in is an opinion about what
 "blocks" means, and a reasonable person could move several items between the last
@@ -324,7 +322,7 @@ question nobody on this list has thought of. That is what steps are for.
 - **One thing now stands between this specification and code: the language.**
   The noise pin sharpened the requirement to wrapping `uint32`, IEEE-754
   `+ − × ÷ sqrt`, and a build that can disable floating-point contraction.
-- **Of 46 open questions, one blocks code** (which language), 25 are waiting for
+- **Of 44 open questions, one blocks code** (which language), 23 are waiting for
   code to exist, and 20 block nothing at all.
 - **The one free-but-unfixable decision is taken**: the polar axis runs through
   vertices 0 and 3, north at 0, meridian at 11 — and all six pairs were measured

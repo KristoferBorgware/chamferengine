@@ -2498,10 +2498,10 @@ const prof = (() => {
       + `<text class="cf-d" x="${f(150 + w + 10)}" y="${y+20}">${note}</text>`;
   };
   made.push(svg('what-actually-blocks', 590, 258, `
-  <text class="cf-c" x="14" y="26">46 open questions across docs 13&#8211;25</text>
-  ${bar(44,  1,  46, 'blocks code',   'which language and runtime', 'cf-gf')}
-  ${bar(86,  25, 46, 'waits on code', 'needs a mesher, a generator, a server', 'cf-af')}
-  ${bar(128, 20, 46, 'neither',       'game design, and nothing that gates a build', 'cf-fill')}
+  <text class="cf-c" x="14" y="26">44 open questions across docs 13&#8211;25</text>
+  ${bar(44,  1,  44, 'blocks code',   'which language and runtime', 'cf-gf')}
+  ${bar(86,  23, 44, 'waits on code', 'needs a mesher, a generator, a server', 'cf-af')}
+  ${bar(128, 20, 44, 'neither',       'game design, and nothing that gates a build', 'cf-fill')}
   <path class="cf-l" d="M14 176L576 176"/>
   <text class="cf-gd" x="14" y="200">on no list at all &#8212; and every one of them blocks the first line:</text>
   <text class="cf-c" x="14" y="222">neighbour(id, k)      rank(q, r)      which noise function</text>

@@ -292,6 +292,8 @@ Violating any of these breaks the design. They are not tunable.
 | float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
 | float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
 | float64 at Earth radius | `0.93 nm` | never the binding constraint | `precision.js` |
+| offset representation | **`float64`**, not fixed-point | `7.1e-15 m` over a 32 m chunk | `precision.js` |
+| float32 inter-entity vector | fine to `~16 km`, `0.12 mm` at R 1700 | breaks at Earth radius (`0.5 m`) | `precision.js` |
 | one-shot vs recursive | `38.97 m` = `1.3133°` | fixed in metres; 39 cells at L11 | `precision.js` |
 | ID → position error | flat in depth | path walk is integers; one blend, one normalise | `precision.js` |
 | float32 `up` error | `0.005″` at every radius | directions are precision-robust | `precision.js` |
@@ -446,6 +448,19 @@ Violating any of these breaks the design. They are not tunable.
   only when an ID is turned into a position — against any origin you choose. The
   rebase is per-entity renormalisation of an anchor and a bounded offset, not a
   world-shift event. Velocities, orientations and mesh buffers are all unaffected.
+- **Doc 15's last two entries are closed, and both by removing a reason rather
+  than adding one** (`precision.js` §8–9). **Fixed-point offsets are declined**:
+  the entry rested on them making positions reproducible across machines, and
+  doc 23 had already shown `float64` positions *are* bit-identical, after which
+  precision could not discriminate — over a 32 m chunk `float64` gives `7.1e-15 m`
+  against millimetre fixed-point's `1e-3 m`, and every candidate resolves a 1 m
+  block thousands of times over. Fixed-point would still defend against compiler
+  contraction, but the flag is a one-line defence and integers have no `sqrt` —
+  and `normalize` is the runtime's most-called function. **An anchor may be
+  trusted at any distance the worked planet contains**: `float32` on an
+  inter-entity vector holds `0.12 mm` at the 1,700 m antipode and only fails past
+  **~16 km**. Keep the vectors in `float64` anyway — they are per-entity and rare,
+  while the `float32` budget exists for per-vertex data.
 - **Directions survive what positions do not.** `up` holds 0.005″ at every radius
   while position error grows linearly with `R`, so gravity and all three frames
   need no precision handling — and doc 04's pipeline is already right, because its

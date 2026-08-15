@@ -22,10 +22,10 @@
   }
 </style>
 
-  <text class="cf-c" x="14" y="26">46 open questions across docs 13&#8211;25</text>
+  <text class="cf-c" x="14" y="26">44 open questions across docs 13&#8211;25</text>
   <rect class="cf-gf" x="150" y="44" width="26.0" height="30" rx="5"/><text class="cf-big" x="163.0" y="64" text-anchor="middle">1</text><text x="14" y="64">blocks code</text><text class="cf-d" x="186.0" y="64">which language and runtime</text>
-  <rect class="cf-af" x="150" y="86" width="135.9" height="30" rx="5"/><text class="cf-big" x="217.9" y="106" text-anchor="middle">25</text><text x="14" y="106">waits on code</text><text class="cf-d" x="295.9" y="106">needs a mesher, a generator, a server</text>
-  <rect class="cf-fill" x="150" y="128" width="108.7" height="30" rx="5"/><text class="cf-big" x="204.3" y="148" text-anchor="middle">20</text><text x="14" y="148">neither</text><text class="cf-d" x="268.7" y="148">game design, and nothing that gates a build</text>
+  <rect class="cf-af" x="150" y="86" width="130.7" height="30" rx="5"/><text class="cf-big" x="215.3" y="106" text-anchor="middle">23</text><text x="14" y="106">waits on code</text><text class="cf-d" x="290.7" y="106">needs a mesher, a generator, a server</text>
+  <rect class="cf-fill" x="150" y="128" width="113.6" height="30" rx="5"/><text class="cf-big" x="206.8" y="148" text-anchor="middle">20</text><text x="14" y="148">neither</text><text class="cf-d" x="273.6" y="148">game design, and nothing that gates a build</text>
   <path class="cf-l" d="M14 176L576 176"/>
   <text class="cf-gd" x="14" y="200">on no list at all &#8212; and every one of them blocks the first line:</text>
   <text class="cf-c" x="14" y="222">neighbour(id, k)      rank(q, r)      which noise function</text>

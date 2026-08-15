@@ -432,13 +432,35 @@ mistake, in a different currency, as storing a heading as a world vector
   the other way up — which is what [doc 04](04-position-lookup.md) does — a cell
   **is** the set of directions `hexRound` maps to, so the lookup is exact by
   construction and there is nothing left to be approximate about.
-- **Integer versus `float64` for the offset.** A fixed-point offset in
-  millimetres would make positions exactly reproducible across machines, which
-  matters for multiplayer determinism and does not otherwise. Not decided.
-- **How far an anchor may be trusted.** Two entities in distant chunks have
-  anchors far apart, and computing the vector between them means going through
-  world space. Fine in `float64`; the open question is whether anything needs it
-  in `float32`.
+- ~~Integer versus `float64` for the offset~~ — **decided: `float64`.** This entry
+  rested on fixed-point making positions "exactly reproducible across machines".
+  [Doc 23](23-determinism.md) has since answered that: `+ − × ÷ sqrt` are
+  correctly rounded, so a `float64` position already **is** bit-identical
+  everywhere. With the determinism argument gone the question fell to precision,
+  and precision does not discriminate either — the offset is bounded by a chunk
+  span, and *every* candidate resolves a 1 m block absurdly finely.
+  > **[verified]** `verification/precision.js`, section 8. Over a 32 m chunk:
+  > `float64` **7.1e-15 m**, millimetre fixed-point **1e-3 m**, a chunk-scoped
+  > `int32` **1.5e-8 m**. The narrowest of those is still a thousand steps per
+  > block.
+  What fixed-point would still buy is protection against a **build** mistake
+  rather than a hardware one — integers cannot be contracted into an FMA, which
+  is the one residual risk [doc 23](23-determinism.md) names. But the compiler
+  flag is a one-line defence, and fixed-point costs the operation this design
+  leans on hardest: there is no integer `sqrt`, and `normalize` is the
+  most-called function in the runtime. **Take `float64`, and set the flag.**
+- ~~How far an anchor may be trusted~~ — **measured: nothing needs it in
+  `float32`.** Two entities in distant chunks have anchors far apart, and the
+  vector between them goes through world space.
+  > **[verified]** `verification/precision.js`, section 9. `float32` spacing at
+  > the separation: **7.6 µm** at the 76 m horizon, **0.12 mm** at the 1,700 m
+  > antipode, **0.98 mm** at 10 km, and **0.5 m** at Earth radius. On the worked
+  > planet the worst case on the whole world is a tenth of a millimetre.
+  So `float32` would in fact survive every distance the doc-06 planet contains,
+  and breaks only past about **16 km**. Keep the rule anyway: these vectors are
+  **per-entity and rare**, while the `float32` budget exists for **per-vertex**
+  data. Computing them in `float64` costs nothing and is right at every planet
+  size.
 - ~~Determinism across clients~~ — **closed** by [doc 23](23-determinism.md), and
   the worry about `normalize` is withdrawn: IEEE 754 requires `sqrt` to be
   correctly rounded, so `normalize` is bit-identical everywhere. The whole runtime

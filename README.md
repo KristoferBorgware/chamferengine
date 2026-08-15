@@ -72,7 +72,7 @@ a runnable demo where one exists.
 | 23 | [Determinism across machines](docs/23-determinism.md) | Which arithmetic is pinned to the bit, and the one rule that follows |
 | 24 | [Player edits and global processes](docs/24-edits-and-global-processes.md) | What happens when someone dams a river the coarse map still describes |
 | 25 | [Water](docs/25-water.md) | Water as a block type, what a translucent ocean costs to draw, and why you float in it |
-| 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 46 open questions actually block |
+| 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 44 open questions actually block |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

@@ -582,7 +582,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1235,6 +1235,43 @@ Cited by [doc 15](15-precision-and-origin.md).
    chunk C=4        128 m   1.5 min
    Re-anchoring is renormalising an integer and a small offset: no world shift,
    no traversal of live objects, nothing to schedule.
+
+8. integer vs float64 for the chunk-local offset
+   offset lives in a chunk-local frame, so it is bounded by 32 m:
+   representation                  resolution        vs a 1 m block
+   float64                        7.11e-15 m      1.4e+14 per block
+   int32 fixed-point, mm           1.00e-3 m       1.0e+3 per block
+   int32 scoped to the chunk       1.49e-8 m       6.7e+7 per block
+   int64 scoped to the chunk      6.94e-18 m      1.4e+17 per block
+   Every one of them resolves a 1 m block hundreds of millions of times over.
+   Precision does not decide this, and the determinism argument that was
+   supposed to has already been answered by doc 23.
+
+   What fixed-point would still buy: protection against a BUILD mistake, not
+   a hardware one. Doc 23 names the residual risk as compiler contraction --
+   fusing a*b + c into an FMA, which is more accurate and therefore different.
+   Integers cannot be contracted. But the flag that disables contraction is a
+   one-line defence, and fixed-point costs the operation this design leans on
+   hardest: there is no integer sqrt, and `normalize` is the most-called
+   function in the whole runtime (docs 04, 13, 15).
+   DECISION: float64 offsets, and set the contraction flag. Doc 15 closed.
+
+9. the vector between two distant entities, in float32
+   separation      float32 spacing there     usable for a 1 m block?
+        10 m        9.54e-7 m        yes
+        76 m        7.63e-6 m        yes
+       400 m        3.05e-5 m        yes
+     1,700 m        1.22e-4 m        yes
+       10 km        9.77e-4 m        yes
+      100 km        7.81e-3 m        yes
+     6371 km        5.00e-1 m        NO
+   On the doc-06 planet the worst case is the antipode at 1,700 m, where
+   float32 still resolves 0.12 mm -- so nothing on that world needs float64
+   for an inter-entity vector. It breaks on big planets, not on this one.
+   But the rule costs nothing to keep: these vectors are rare and per-entity,
+   while the float32 budget exists for per-VERTEX data. Compute them in
+   float64 and the answer is right at every planet size.
+   ANSWER: nothing needs it in float32; the limit if you tried is ~16 km.
 ```
 
 ## `qr.js`
@@ -1391,7 +1428,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 734 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 773 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
