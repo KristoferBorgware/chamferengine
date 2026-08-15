@@ -31,27 +31,35 @@ console.log('authority.js -- what the server must know, per cheat, and what it c
 console.log('\n1. what the server can already refuse, holding no terrain at all');
 {
   const rows = [
-    ['reach: the cell is 1 km away',        'addressing', 'ID -> position, one distance against the player position'],
-    ['rate: 400 blocks in one second',      'nothing',    'a counter per player'],
-    ['a protected pentagon column',         'addressing', 'doc 17: is this one of the 12? a property of the address'],
-    ['a cell ID that does not exist',       'addressing', 'decode and range-check'],
-    ['a block type not in the registry',    'the save',   'doc 27: the registry is server-side'],
-    ['breaking a cell someone else edited', 'delta store','the server owns every modification ever made'],
-    ['placing where a player already built','delta store','same'],
-    ['moving faster than a player can',     'nothing',    'positions over time; doc 22 already streams them'],
+    ['reach: the cell is 1 km away',         'addressing', 'ID -> position, one distance against the player position'],
+    ['rate: 400 blocks in one second',       'nothing',    'a counter per player'],
+    ['moving faster than a player can',      'nothing',    'positions over time; doc 22 already streams them'],
+    ['editing a protected pentagon column',  'addressing', 'doc 17: is this one of the 12? a property of the address'],
+    ['a cell ID that does not exist',        'addressing', 'decode and range-check'],
+    ['a block type not in the registry',     'the save',   'doc 27: the registry is server-side'],
+    ['an action a KNOWN cell contradicts',   'delta store','breaking a cell the store says is already air, or'],
+    ['',                                     '',           'placing into one it says is solid'],
   ];
-  console.log('   cheat                                  needs         how');
+  console.log('   refused by                              needs         how');
   for (const [c, n, h] of rows)
-    console.log(`   ${c.padEnd(38)} ${n.padEnd(13)} ${h}`);
+    console.log(`   ${c.padEnd(39)} ${n.padEnd(13)} ${h}`);
   console.log('');
-  console.log(`   ${rows.length} of the crude cheats, and the server pays NOTHING NEW for any of them.`);
-  console.log('   It already has addressing, positions and the delta store. Note especially');
-  console.log('   the last two rows: the server knows every cell a player has ever touched,');
-  console.log('   exactly, which is the part of the world where griefing actually happens.');
+  console.log('   Seven checks, and the server pays NOTHING NEW for any of them: it already');
+  console.log('   has addressing, positions and the delta store.');
   console.log('');
-  console.log('   THE ONLY BLIND SPOT IS AN UNMODIFIED CELL. The server cannot say whether');
-  console.log('   virgin ground is stone or air, because doc 08 generates it and does not');
-  console.log('   store it. That is one question, and section 2 prices answering it.');
+  console.log('   TWO THINGS THAT LAST ROW IS NOT. Earlier drafts of this script claimed the');
+  console.log('   delta store put "the built world under authority" and called it the place');
+  console.log('   where griefing happens. Both were wrong:');
+  console.log('');
+  console.log('     GRIEFING IS NOT CHEATING. Breaking a block someone else placed is a');
+  console.log('     legal move. The server cannot tell it from ordinary mining and no');
+  console.log('     amount of terrain would help -- that needs land claims or permissions,');
+  console.log('     which this specification does not have and this script cannot price.');
+  console.log('');
+  console.log('     WHAT THE DELTA STORE ACTUALLY BUYS IS CONSISTENCY, not authority. It');
+  console.log('     knows the CURRENT STATE of every cell a player has changed, so it can');
+  console.log('     refuse an action that contradicts it. That catches a desynced client');
+  console.log('     and a lazy cheat. It is a modest thing and worth stating modestly.');
 }
 
 // ---- 2. a point query is not a chunk generation ----------------------------
@@ -142,6 +150,25 @@ console.log('\n2. the blind spot costs a POINT QUERY, not a chunk');
   console.log('   event source and each event needs ONE cell, not a chunk. "Does the');
   console.log('   server generate?" is not a binary: validating needs a POINT QUERY and');
   console.log('   nothing else -- no chunk, no cache, no mesh, no layers above or below.');
+  console.log('');
+  console.log('   AND HERE IS WHY THE VIRGIN-GROUND QUESTION IS WORTH ASKING AT ALL, which');
+  console.log('   earlier drafts of this script asserted and never explained.');
+  console.log('');
+  console.log('   It is not mainly about legality. It is about THE DROP. Doc 08\'s generator');
+  console.log('   returns a MATERIAL -- stone, dirt, grass, water -- not just solid or air.');
+  console.log('   Section 4\'s rule says the client sends intents and the SERVER issues what');
+  console.log('   the broken block drops. To do that the server has to know WHAT WAS THERE.');
+  console.log('');
+  console.log('     a cell in the delta store   the server knows the type. Free.');
+  console.log('     a virgin cell               the server knows nothing -- so it must');
+  console.log('                                 either ask the client, which is exactly the');
+  console.log('                                 farming cheat section 4 exists to refuse,');
+  console.log('                                 or generate the cell.');
+  console.log('');
+  console.log('   Almost every cell in a world is virgin, so without the point query the');
+  console.log('   intents rule only works on ground somebody has already dug. THE POINT');
+  console.log('   QUERY IS WHAT MAKES "INTENTS, NEVER OUTCOMES" IMPLEMENTABLE AT ALL.');
+  console.log('   That, and not legality, is what the 0.06% is buying.');
 }
 
 // ---- 3. mobs are the expensive case, and for a different reason ------------

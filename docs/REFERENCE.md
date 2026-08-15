@@ -82,29 +82,37 @@ Cited by [doc 30](30-authority-and-cheating.md).
 authority.js -- what the server must know, per cheat, and what it costs
 
 1. what the server can already refuse, holding no terrain at all
-   cheat                                  needs         how
-   reach: the cell is 1 km away           addressing    ID -> position, one distance against the player position
-   rate: 400 blocks in one second         nothing       a counter per player
-   a protected pentagon column            addressing    doc 17: is this one of the 12? a property of the address
-   a cell ID that does not exist          addressing    decode and range-check
-   a block type not in the registry       the save      doc 27: the registry is server-side
-   breaking a cell someone else edited    delta store   the server owns every modification ever made
-   placing where a player already built   delta store   same
-   moving faster than a player can        nothing       positions over time; doc 22 already streams them
+   refused by                              needs         how
+   reach: the cell is 1 km away            addressing    ID -> position, one distance against the player position
+   rate: 400 blocks in one second          nothing       a counter per player
+   moving faster than a player can         nothing       positions over time; doc 22 already streams them
+   editing a protected pentagon column     addressing    doc 17: is this one of the 12? a property of the address
+   a cell ID that does not exist           addressing    decode and range-check
+   a block type not in the registry        the save      doc 27: the registry is server-side
+   an action a KNOWN cell contradicts      delta store   breaking a cell the store says is already air, or
+                                                         placing into one it says is solid
 
-   8 of the crude cheats, and the server pays NOTHING NEW for any of them.
-   It already has addressing, positions and the delta store. Note especially
-   the last two rows: the server knows every cell a player has ever touched,
-   exactly, which is the part of the world where griefing actually happens.
+   Seven checks, and the server pays NOTHING NEW for any of them: it already
+   has addressing, positions and the delta store.
 
-   THE ONLY BLIND SPOT IS AN UNMODIFIED CELL. The server cannot say whether
-   virgin ground is stone or air, because doc 08 generates it and does not
-   store it. That is one question, and section 2 prices answering it.
+   TWO THINGS THAT LAST ROW IS NOT. Earlier drafts of this script claimed the
+   delta store put "the built world under authority" and called it the place
+   where griefing happens. Both were wrong:
+
+     GRIEFING IS NOT CHEATING. Breaking a block someone else placed is a
+     legal move. The server cannot tell it from ordinary mining and no
+     amount of terrain would help -- that needs land claims or permissions,
+     which this specification does not have and this script cannot price.
+
+     WHAT THE DELTA STORE ACTUALLY BUYS IS CONSISTENCY, not authority. It
+     knows the CURRENT STATE of every cell a player has changed, so it can
+     refuse an action that contradicts it. That catches a desynced client
+     and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 310 ns in this JavaScript
+   one solidity(cell) query: 303 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 202 ns)
+    upper bound -- Rust is about 198 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -118,15 +126,34 @@ authority.js -- what the server must know, per cheat, and what it costs
 
      players   queries/s   CPU of one core
           10          20      0.0006%
-         100         200      0.0062%
-        1000        2000      0.0619%
-       10000       20000      0.6192%
+         100         200      0.0061%
+        1000        2000      0.0607%
+       10000       20000      0.6070%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
    event source and each event needs ONE cell, not a chunk. "Does the
    server generate?" is not a binary: validating needs a POINT QUERY and
    nothing else -- no chunk, no cache, no mesh, no layers above or below.
+
+   AND HERE IS WHY THE VIRGIN-GROUND QUESTION IS WORTH ASKING AT ALL, which
+   earlier drafts of this script asserted and never explained.
+
+   It is not mainly about legality. It is about THE DROP. Doc 08's generator
+   returns a MATERIAL -- stone, dirt, grass, water -- not just solid or air.
+   Section 4's rule says the client sends intents and the SERVER issues what
+   the broken block drops. To do that the server has to know WHAT WAS THERE.
+
+     a cell in the delta store   the server knows the type. Free.
+     a virgin cell               the server knows nothing -- so it must
+                                 either ask the client, which is exactly the
+                                 farming cheat section 4 exists to refuse,
+                                 or generate the cell.
+
+   Almost every cell in a world is virgin, so without the point query the
+   intents rule only works on ground somebody has already dug. THE POINT
+   QUERY IS WHAT MAKES "INTENTS, NEVER OUTCOMES" IMPLEMENTABLE AT ALL.
+   That, and not legality, is what the 0.06% is buying.
 
 3. mobs, which is where the cost actually lands
    a mob at 1.4 m/s crosses a cell every 0.71 s
@@ -1092,7 +1119,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 267M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1271,8 +1298,8 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.34 ms   1.89x
-         JS, one object a vertex   4.80 ms   26.66x
+         JS, typed arrays          0.34 ms   1.88x
+         JS, one object a vertex   4.80 ms   26.69x
 
        THE LANGUAGE GAP IS 1.9x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
@@ -2161,7 +2188,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 637 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 671 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

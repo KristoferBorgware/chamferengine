@@ -15,32 +15,83 @@ magnitude.
 
 ## Most cheating is refused with what the server already has
 
-Doc 29 established that the server holds two things: **addressing**, because the
-delta store is keyed by cell ID, and **the delta store itself**. It turns out
-almost everything crude is answerable from those alone.
+[Doc 29](29-what-runs-where.md) established that the server holds two things:
+**addressing**, because the delta store is keyed by cell ID, and **the delta
+store itself**. Almost everything crude is answerable from those alone.
 
-> **[verified]** `verification/authority.js`, section 1. Eight cheats, and the
+> **[verified]** `verification/authority.js`, section 1. Seven checks, and the
 > server pays **nothing new** for any of them:
 >
-> | Cheat | Needs | How |
+> | Refused by | Needs | How |
 > |---|---|---|
 > | the cell is a kilometre away | addressing | ID → position, one distance |
 > | 400 blocks in one second | nothing | a counter per player |
+> | moving faster than a player can | nothing | positions over time |
 > | editing a protected pentagon column | addressing | [doc 17](17-pentagons.md): is it one of the 12? |
 > | a cell ID that does not exist | addressing | decode and range-check |
 > | a block type not in the registry | the save | [doc 27](27-block-state.md) |
-> | breaking a cell someone else edited | delta store | it owns every modification ever made |
-> | building where someone already built | delta store | same |
-> | moving faster than a player can | nothing | positions over time |
+> | an action a **known** cell contradicts | delta store | breaking a cell the store says is air; placing into one it says is solid |
 
-Two of those rows are worth pausing on. **The server knows every cell any player
-has ever touched, exactly** — that is what the delta store *is*. So the whole of
-the built world, which is where griefing actually happens, is already under
-authority without a single noise evaluation.
+### Two things that last row is not
 
-**The blind spot is exactly one question: is virgin ground solid?** The server
-cannot say, because [doc 08](08-terrain-generation.md) generates terrain and does
-not store it. That is the only thing missing, and it turns out to be cheap.
+Earlier drafts of this document said the delta store put "the built world under
+authority" and called it "where griefing actually happens". Both claims were
+wrong, and they were the kind of wrong that sounds reassuring.
+
+**Griefing is not cheating.** Breaking a block someone else placed is a *legal
+move*. The server cannot tell it from ordinary mining, and no amount of terrain
+knowledge would help — telling them apart needs land claims or permissions, which
+this specification does not have and this document does not design. Nothing here
+protects anyone's house.
+
+**What the delta store actually buys is consistency, not authority.** It knows the
+*current state* of every cell a player has changed, so it can refuse an action
+that contradicts it: you cannot break a cell it knows is already air, and you
+cannot place into one it knows is solid. That catches a desynced client and a lazy
+cheat. It is a modest thing and it is worth stating modestly.
+
+**So the honest summary is: the crude cheats are refused for free, and the free
+checks are all about where and how fast — never about what.** Everything to do
+with what is actually in the ground needs the next section.
+
+---
+
+## The blind spot is virgin ground, and it matters because of the drop
+
+The server cannot say what is in an **unmodified** cell, because
+[doc 08](08-terrain-generation.md) generates terrain and does not store it. That
+is the only gap. But *why anyone should care* is the part the first draft of this
+document asserted and never explained, so here it is.
+
+**It is not mainly about legality.** It is about what the block gives you when you
+break it.
+
+Doc 08's generator does not return "solid or air" — it returns a **material**:
+
+```
+material(seed, position, ...) → stone / dirt / grass / water
+```
+
+Now put that next to the rule from
+[the farming section](#the-farming-cheat-is-not-about-terrain-and-no-amount-of-server-cpu-fixes-it)
+below: the client sends **intents**, and the **server** decides what the broken
+block drops. To do that, the server has to know **what was there**.
+
+| The player breaks… | The server knows the type? |
+|---|---|
+| a cell in the delta store | **yes** — it recorded the change. Free. |
+| a virgin cell | **no** |
+
+And for a virgin cell it has exactly two options. It can **ask the client** what
+it just mined — which is precisely the farming cheat that rule exists to refuse —
+or it can **generate that one cell**: `material(cell)` for the drop, which answers
+`solidity(cellID)` on the way past, since air is one of the materials.
+
+**Almost every cell in a world is virgin.** Nobody has been there. So without the
+point query, "the server issues the drop" only works on ground somebody has
+already dug, which is a rounding error of the planet. **The point query is what
+makes the intents rule implementable at all** — and that, rather than legality, is
+what the cost in the next section is buying.
 
 ---
 
@@ -48,8 +99,8 @@ not store it. That is the only thing missing, and it turns out to be cheap.
 
 Here is the mistake the phrase "an authoritative server has to run the generator"
 smuggles in. It does not have to *run the generator* in the sense of producing
-chunks. It has to answer `solidity(cellID)` for **one cell**, when an edit
-arrives, at the rate a human clicks.
+chunks. It has to answer one question about **one cell**, when an edit arrives, at
+the rate a human clicks.
 
 ![Three bars: stores and routes needs no terrain, adding a point query needs one cell per edit, adding resident chunks needs 35,904 cells — with the note that only mobs need the third](figures/three-tiers-of-authority.svg)
 
@@ -58,11 +109,11 @@ distance between the middle bar and the bottom one is the whole argument: an
 honest server is the middle bar, and wanting one does not commit you to the
 bottom one.*
 
-> **[verified]** `verification/authority.js`, section 2. One `solidity(cell)`
-> query is **310 ns** in JavaScript, so about **200 ns** in Rust by doc 28's
-> measured ratio. A chunk is **561** evaluations for the height field alone and
-> **35,904** for a full crust with caves. And [doc 27](27-block-state.md) measured
-> a player acting on a block about **twice a second**:
+> **[verified]** `verification/authority.js`, section 2. One point query is
+> **310 ns** in JavaScript, so about **200 ns** in Rust by doc 28's measured
+> ratio. A chunk is **561** evaluations for the height field alone and **35,904**
+> for a full crust with caves. And [doc 27](27-block-state.md) measured a player
+> acting on a block about **twice a second**:
 >
 > | Players | Queries/s | CPU of one core |
 > |---|---|---|
@@ -71,16 +122,16 @@ bottom one.*
 > | 1,000 | 2,000 | **0.062%** |
 > | 10,000 | 20,000 | 0.62% |
 
-**A thousand players cost six hundredths of one percent of a core.** Edit
-validation is not expensive and never was. The reason is structural rather than
-lucky: a player is a slow, human-rate event source, and each event needs **one
-cell** — no chunk, no cache, no layers above or below, no mesh.
+**A thousand players cost six hundredths of one percent of a core.** The reason is
+structural rather than lucky: a player is a slow, human-rate event source, and
+each event needs **one cell** — no chunk, no cache, no layers above or below, no
+mesh.
 
 So this is cheap whenever it is wanted. **For V1 it is not wanted** — see
 [the V1 decision](#the-v1-decision-the-server-stores-and-checks-nothing) below,
-which scopes the server down to storage. The point worth keeping is that the
-upgrade is a check inserted before a store, not an architecture change, and that
-its price is a rounding error.
+which scopes the server down to storage. The consequence of that is not abstract,
+and it is spelled out there: a storage-only server cannot issue drops, so **V1's
+inventory has to stay on the client**.
 
 ---
 
@@ -225,13 +276,21 @@ a check before the store, not changing the message.** The upgrade path is free a
 long as nobody invents a shortcut here.
 
 **2. Player inventory must not travel client → server.** This is the trap, and it
-is the one thing that cannot be repaired later. If V1 lets a client write its own
-inventory to the server — even just for persistence — then V2 has no way to make
-that authoritative without throwing the mechanism away and re-deriving every
-player's items from nothing. **Keep inventory client-side in V1 and do not sync
-it.** If it must persist, persist it as an opaque client blob that is explicitly
-not believed, and write "not authoritative" next to it in the save format so
-nobody later mistakes it for truth.
+is the one thing that cannot be repaired later.
+
+It follows directly from the section above. A storage-only server does not run the
+point query, so it does not know the material of a virgin cell, so **it cannot
+issue drops**. Something has to decide what a broken block gives the player, and
+in V1 that something is the client. That is fine — V1 is a trusted-client game by
+this decision — but it means the inventory is a client-side fact.
+
+The mistake would be to *sync* it anyway, for persistence. If V1 lets a client
+write its own inventory to the server, then V2 has no way to make that
+authoritative without throwing the mechanism away and re-deriving every player's
+items from nothing. **Keep inventory client-side in V1 and do not sync it.** If it
+must persist, persist it as an opaque client blob that is explicitly not believed,
+and write "not authoritative" next to it in the save format so nobody later
+mistakes it for truth.
 
 **3. The client must be able to be told "no", even though V1 never says it.** A
 V1 client that assumes every edit succeeds has no code path for rejection, and
@@ -291,12 +350,19 @@ which is the rate limit in section 1 and costs nothing. That is the honest line:
 - **"Does the server generate?" has three answers.** Stores-and-routes,
   plus-point-queries, plus-resident-chunks — and they differ by four orders of
   magnitude.
-- **Most cheating is refused for free.** Reach, rate, protected cells, malformed
-  IDs, unknown types, and anything about a cell a player has already touched, all
-  from addressing and the delta store the server already holds.
-- **The one blind spot is virgin ground, and it costs a point query** — 200 ns in
-  Rust, **0.06% of a core at a thousand players**. Deferred to V2, not because it
-  is expensive but because V1 does not need it.
+- **The free checks are all about where and how fast, never about what.** Reach,
+  rate, movement speed, protected cells, malformed IDs, unknown types — plus one
+  consistency check against cells the delta store already knows. That last one is
+  **consistency, not authority**, and **griefing is not cheating**: breaking
+  someone else's block is a legal move that no amount of terrain would let the
+  server refuse.
+- **The blind spot is virgin ground, and it matters because of the drop.** Doc 08
+  returns a **material**, and the server must know what was there to decide what
+  breaking it gives. For a virgin cell it can either ask the client — the farming
+  cheat — or spend **200 ns**. Almost every cell is virgin, so **the point query is
+  what makes the intents rule work at all**, at 0.06% of a core per thousand
+  players. Deferred to V2 with inventory kept client-side, not because it is
+  expensive but because V1 does not need it.
 - **Mobs are the expensive decision, not honesty.** A pathfinding mob touches
   **3,169** cells; a hundred of them cost **158×** what a thousand players do, and
   they need chunks resident, a tick loop, and doc 22's open entity-interest
