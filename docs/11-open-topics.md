@@ -11,27 +11,65 @@ kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
 **The page then refilled, and the new entries are a different kind of thing.**
-The twelve above were *design* questions — how should the world work. The four
-below are **specification** questions: things the design already relies on, names
-that appear in eight documents, and which nobody ever wrote down. They were found
-by [doc 26](26-implementation-readiness.md) asking what a programmer would have to
-invent before the first line of code, and none of them was on any *Still open*
-list, because a gap nobody noticed is a gap nobody files.
+The twelve in Part 3 were *design* questions — how should the world work. The four
+in Part 1 are **specification** questions: things the design already relies on,
+names that appear in eight documents, and which nobody ever wrote down. They were
+found by [doc 26](26-implementation-readiness.md) asking what a programmer would
+have to invent before the first line of code, and none of them was on any *Still
+open* list, because a gap nobody noticed is a gap nobody files.
+
+**Two of the four are already closed** — `neighbour(id, k)` and `rank(q, r)` were
+built and measured — leaving the noise function and the language.
 
 ---
 
 ## Part 1 — the four that block the first line of code
 
 Four items. Close these and the kernel can be written; everything else in this
-specification is either already closed or waiting for code to exist.
+specification is either already closed or waiting for code to exist. **Two are
+now closed**, and both closed the way everything in Part 3 closed — by being
+built and measured rather than argued about.
 
 ---
 
-## `neighbour(id, k)` — called by eight documents, defined by none
+## ~~`neighbour(id, k)`~~ — built, see [doc 05](05-face-adjacency.md)
 
-**This is the one.** It is the function that hides the sphere from the rest of the
-engine, and it does not exist anywhere in this repository — not as a definition,
-not as pseudocode, not as a script.
+Closed by `verification/neighbour.js`, which builds the function from doc 05's
+table and integer arithmetic alone and checks it against the geometric graph
+every other script here constructs: **every cell at depths 3, 4 and 5, the same
+neighbours and the same direction round the ring, with exactly 12 cells at
+degree 5.**
+
+The three decisions it was hiding all came out smaller than the entry feared, and
+one of them made the table *smaller*:
+
+- **Index 0** is the step from the face's own vertex `A` toward `B`. It is a
+  property of the cell's face, so it never depends on how the cell was reached —
+  which is what [doc 19](19-directional-blocks.md)'s three stored bits needed.
+- **Crossing an edge is a reflection in three additions.** A lattice point is
+  integer weights on *global vertex numbers*, a description that never mentions a
+  face; step outside and exactly one weight goes negative, and
+  `(α, β, γ) → (α+γ, β+γ, −γ)` re-expresses it. The point does not move — only its
+  name changes. **60/60 face edges round-trip, 900/900 steps.** And the table's
+  `reversed` field is **never read**: carrying weights on global vertices makes
+  the edge orientation carry itself.
+- **A pentagon's ring is five long.** `k = 5` is not a direction that exists — the
+  honest return is a short ring, never a duplicate and never a null in the middle
+  of one. That is [doc 13](13-gravity-and-orientation.md)'s missing 60° arriving
+  as a missing array entry.
+
+And the half turn arrives from the other side: over 186,066 steps, a `(q, r)`-derived
+index differs from the true one by **+0 or +3 and nothing else**, `+0` in every
+unflipped chunk and `+3` in every flipped one, with no crossover. `winding.js`
+found that off the mesh; this finds it inside the function.
+
+The entry below is kept as written, because what it was worth is the useful part.
+
+---
+
+**The original entry.** It is the function that hides the sphere from the rest of
+the engine, and it did not exist anywhere in this repository — not as a
+definition, not as pseudocode, not as a script.
 
 Count the callers. [Doc 03](03-addressing.md) fixes how its ring must be ordered.
 [Doc 05](05-face-adjacency.md) says "only `neighbour(id, direction)` ever consults
@@ -93,9 +131,33 @@ come back degree 5.
 
 ---
 
-## `rank(q, r)` — one appearance, no definition
+## ~~`rank(q, r)`~~ — defined, see [doc 07](07-data-structures.md)
 
-[Doc 07](07-data-structures.md) gives a chunk's storage layout as
+Closed by `verification/rank.js`, and it turned up a result nobody had asked for:
+**doc 03's border rule had never been checked, and it holds.** Awarding every cell
+to the lowest chunk ID that contains it sums to exactly `10·4^D + 2` on four
+different `D`/`C` cuts — one home per cell, no cell without one. The whole storage
+model rests on that and nothing had tested it.
+
+`rank(q, r) = q + r·(2m + 3 − r)/2` over the **whole** triangle of side
+`m = 2^(D−C)` — verified a bijection onto `0 … (m+1)(m+2)/2 − 1`. A chunk is
+**561 slots** at `D` 11 / `C` 6, the same for every chunk on the planet, and it
+*owns* `(m−1)(m−2)/2 + e(m−1) + c` of them for `e` edges and `c` corners won. An
+edge is won or lost whole, because every cell along it is shared with the same one
+neighbour.
+
+The choice was between that and a dense rank over owned cells only. The dense one
+loses: the waste under the simple rank is exactly `(3m+2)/2` slots — **49 of 561,
+8.7%, 784 bytes a chunk** — and buying it back costs the uniform stride that made
+`index = rank(q,r) × layerCount + layer` a single sentence with no per-chunk case
+in it.
+
+The entry below is kept as written.
+
+---
+
+**The original entry.** [Doc 07](07-data-structures.md) gives a chunk's storage
+layout as
 `index = rank(q, r) × layerCount + layer`. That is the only time `rank` appears in
 the specification, and it is never defined.
 
@@ -538,11 +600,13 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**Close Part 1, in the order it is written.** `neighbour(id, k)` first, because
-it is the one with three decisions inside it and eight documents waiting on it,
-and because the method is already proven: build it from the table and integer
-arithmetic alone, and check it against the geometric graph every other script
-here constructs. Then `rank(q, r)`, then the noise function, then the language.
+**Two of Part 1 are closed; finish the other two.** `neighbour(id, k)` and
+`rank(q, r)` were built and measured, and both behaved the way this page's
+lessons predict — the pessimism was wrong in kind, and each one turned up a result
+nobody was looking for (the `reversed` field is never read; the border rule had
+never been checked and holds). What is left is **the noise function**, then
+**the language**, and those two are one decision in two halves: the hash has to be
+written in a language that pins the arithmetic it uses.
 
 Everything else is either closed or waiting for code. Of the **46** open bullets
 across docs 13–25, [doc 26](26-implementation-readiness.md) finds **one** that

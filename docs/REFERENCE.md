@@ -32,10 +32,12 @@ numbered documents.
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
+| [`neighbour.js`](../verification/neighbour.js) | neighbour(id, k) -- the function eight documents delegate to and none defines (doc 11, Part 1). Doc 05 proves its 180-byte table complete and has never used it to cross an edge; every other script here builds the whole planet and reads adjacency off a hash map of rounded positions, which is fine for measuring and unavailable to an engine holding one integer. So this builds the function from the table and INTEGER ARITHMETIC ALONE, then checks it against that geometric graph. It also settles the three decisions hiding inside it: where direction index 0 is anchored, how (i, j) re-expresses across a face edge, and what a pentagon returns for k = 5. | [05](05-face-adjacency.md) [11](11-open-topics.md) |
 | [`order.js`](../verification/order.js) | Can the 4 children of a midpoint-split triangle be visited edge-to-edge? children: T0=(A,ab,ca) T1=(ab,B,bc) T2=(ca,bc,C) T3=(ab,bc,ca) | [03](03-addressing.md) |
 | [`pentagon.js`](../verification/pentagon.js) | The twelve pentagons as a GAMEPLAY problem: how often a player meets one, how much of the world would have to change to hide them, and what routing around one actually costs. | [17](17-pentagons.md) |
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
+| [`rank.js`](../verification/rank.js) | rank(q, r) -- doc 07 gives a chunk's storage layout as index = rank(q, r) * layerCount + layer and that is the only time rank appears in the specification. It is never defined, and it is not a plain triangular number, because doc 03's border rule (the lowest chunk ID wins) means a chunk owns some of the cells on its own edges and not others. So two questions wear one name: how many cells does a chunk hold, and which slot does a given (q, r) sit in. This answers both, and prices the only real choice between them. | [07](07-data-structures.md) [11](11-open-topics.md) |
 | [`rivers.js`](../verification/rivers.js) | Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river. | [21](21-rivers-and-erosion.md) |
 | [`rotation.js`](../verification/rotation.js) | Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close. | [19](19-directional-blocks.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
@@ -579,7 +581,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 182M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -788,6 +790,67 @@ Cited by [doc 14](14-meshing-and-lod.md).
      1700 m    1.8 km     10,485,761     41.94M                          8
    at eye height the whole visible world is ~21k cells / 84k triangles.
    the near field needs no merging at all; the horizon already did that job.
+```
+
+## `neighbour.js`
+
+neighbour(id, k) -- the function eight documents delegate to and none defines (doc 11, Part 1). Doc 05 proves its 180-byte table complete and has never used it to cross an edge; every other script here builds the whole planet and reads adjacency off a hash map of rounded positions, which is fine for measuring and unavailable to an engine holding one integer. So this builds the function from the table and INTEGER ARITHMETIC ALONE, then checks it against that geometric graph. It also settles the three decisions hiding inside it: where direction index 0 is anchored, how (i, j) re-expresses across a face edge, and what a pentagon returns for k = 5.
+
+Cited by [doc 05](05-face-adjacency.md), [doc 11](11-open-topics.md).
+
+```
+1. the frame, and where direction index 0 points
+   faces wound counter-clockwise seen from outside: 20/20
+   so A -> B -> C is CCW on every face, and a direction table written
+   in that frame means the same turn everywhere.
+   DIR = (1,0) (0,1) (-1,1) (-1,0) (0,-1) (1,-1)
+   index 0 is the step from vertex A toward vertex B -- the face's own
+   first edge. That is the anchor doc 19 needs, and it is a property of
+   the cell's OWN face, so it never depends on how the cell was reached.
+   Negating an offset is exactly k -> k+3, which is section 5.
+
+2. crossing a face edge, and whether all 60 round-trip
+   (face, edge) pairs actually crossed: 60/60
+   steps taken off an edge and back: 900/900 returned to the start
+   The step out and the step back are k and k+3, so this also checks that
+   the direction table survives the crossing -- the opposite of a direction
+   is still its opposite in the neighbour's frame.
+   Note the `reversed` field is never read: carrying weights on global
+   vertex ids makes the edge orientation carry itself.
+
+3. the pentagon, and what k = 5 returns
+   icosahedron vertices whose face rotation closes after 5 steps: 12/12
+   distinct ring sizes over the twelve: 5
+   So a pentagon has FIVE neighbours and the ring is k = 0..4.
+   k = 5 is not a direction that exists -- it is the 60 degrees doc 13
+   measures as the combinatorial deficit, and the honest return is that
+   the ring is short, never a duplicate or a null in the middle of it.
+
+4. against the graph every other script builds
+   D=3  642 cells:  neighbour set matches geometry 642/642  ·  degree-5 cells 12  ·  CCW order matches 630/630
+   D=4  2,562 cells:  neighbour set matches geometry 2562/2562  ·  degree-5 cells 12  ·  CCW order matches 2550/2550
+   D=5  10,242 cells:  neighbour set matches geometry 10242/10242  ·  degree-5 cells 12  ·  CCW order matches 10230/10230
+   Built from the table and integers only, and it agrees with the mesh at
+   every cell -- including the twelve, and including the ring's direction.
+
+5. the half turn, seen from inside neighbour()
+   15,104 of 33,153 cells (45.6%) sit in a flipped frame
+   186,066 steps compared, naive (q,r) index against the real one:
+     +0  100,538 cases   (unflipped 100,538, flipped 0)
+     +3  85,528 cases   (unflipped 0, flipped 85,528)
+   Two values, 0 and 3, and nothing in between -- a rotation, never a
+   mirror. Order the ring from (i, j) inside neighbour() and the caller
+   never sees it, which is what doc 03 asks for.
+
+verdict
+   neighbour(id, k) is buildable from doc 05's table and integer arithmetic
+   alone, and it agrees with the geometric graph at every cell of every
+   level tested. The three decisions it was hiding:
+     index 0   the step from the face's vertex A toward vertex B
+     crossing  weights on global vertex ids, reflected: a+g, b+g, -g
+               (the table supplies the destination face and nothing else)
+     pentagon  the ring is FIVE long. k = 5 does not exist, and the twelve
+               are the only cells where that is true.
 ```
 
 ## `order.js`
@@ -1097,6 +1160,97 @@ leftover q,r range 0..16  (chunk side = 16)
 15104 of 33153 points sit in a flipped (middle-child) frame
 ```
 
+## `rank.js`
+
+rank(q, r) -- doc 07 gives a chunk's storage layout as index = rank(q, r) * layerCount + layer and that is the only time rank appears in the specification. It is never defined, and it is not a plain triangular number, because doc 03's border rule (the lowest chunk ID wins) means a chunk owns some of the cells on its own edges and not others. So two questions wear one name: how many cells does a chunk hold, and which slot does a given (q, r) sit in. This answers both, and prices the only real choice between them.
+
+Cited by [doc 07](07-data-structures.md), [doc 11](11-open-topics.md).
+
+```
+1. the chunk triangle, before anyone owns anything
+   a chunk at chunk level C on a world of depth D is a triangle of side
+   m = 2^(D-C), holding (m+1)(m+2)/2 lattice points.
+   D   C    m    points   on the border   interior
+   11   4   128      8385      384 =  4.6%      8001
+   11   6    32       561       96 = 17.1%       465
+   11   8     8        45       24 = 53.3%        21
+    6   2    16       153       48 = 31.4%       105
+    5   2     8        45       24 = 53.3%        21
+   The 561 at D 11 / C 6 is the same number doc 14 counts columns with.
+   17.1% of a chunk sits on its own border, which is what the rule below
+   is deciding the fate of -- not a rounding error. And note the C = 8
+   row: cut the chunk small enough and it is more border than interior,
+   which is a reason to keep C well below D quite apart from file count.
+
+2. lowest chunk ID wins -- does it actually partition the planet?
+   D=4 C=1 m=8:  2,562 cells owned  ·  N(L) = 2,562  ·  exact partition
+   D=5 C=2 m=8:  10,242 cells owned  ·  N(L) = 10,242  ·  exact partition
+   D=6 C=2 m=16:  40,962 cells owned  ·  N(L) = 40,962  ·  exact partition
+   D=6 C=3 m=8:  40,962 cells owned  ·  N(L) = 40,962  ·  exact partition
+   Every cell owned exactly once, on four different cuts. The rule works,
+   and this is the first time anything has checked it.
+
+3. what a chunk actually holds, and why it varies
+   D=6 C=2, m=16: full triangle 153, interior 105
+   owned per chunk: min 105, max 153, mean 128.0, 8 distinct values
+   the values: 105 120 135 136 150 151 152 153
+   They are exactly interior + e*(m-1) + c, for e owned edges (0..3) and
+   c owned corners -- an edge is won or lost whole, because every cell
+   along it is shared with the same one neighbour.
+   how many chunks hold each count:
+      105 cells  80 chunks
+      120 cells  77 chunks
+      135 cells  19 chunks
+      136 cells  67 chunks
+      150 cells  4 chunks
+      151 cells  53 chunks
+      152 cells  18 chunks
+      153 cells  2 chunks
+
+4. two ranks, and what the difference costs
+   (A) rank the WHOLE triangle and let unowned border slots go unused:
+         rank(q, r) = q + r*(2m + 3 - r)/2        0 <= q+r <= m
+       one multiply, one shift, no ownership knowledge, and the stride
+       (m+1)(m+2)/2 is the same for every chunk on the planet.
+   (B) rank only the cells this chunk owns: dense, but the array length
+       and the rank function both depend on which of 3 edges and 3
+       corners it won -- 64 variants, and a per-chunk header to say which.
+   rank(A) checked as a bijection onto 0..(m+1)(m+2)/2-1 at every m above.
+
+   And what (A) wastes needs no extrapolating, because the mean is forced:
+   every cell is owned once (section 2), so the mean owned per chunk is
+   just N(D) / chunks = (10*4^D + 2) / (20*4^C), which is m^2/2. Subtract
+   that from the full triangle and the waste is exactly (3m + 2)/2 slots.
+   D   C    m   full   mean owned   wasted   (3m+2)/2   waste
+    4   1     8     45         32.0     13.0         13    28.8%
+    5   2     8     45         32.0     13.0         13    28.9%
+    6   2    16    153        128.0     25.0         25    16.3%
+    6   3     8     45         32.0     13.0         13    28.9%
+   The closed form matches the measurement at every cut, so the worked
+   planet is arithmetic rather than a guess:
+     D 11 / C 6, m = 32:  561 slots, 512 owned, 49 wasted = 8.7%
+     at doc 07's 2-bit palette and 64 layers that is 8,976 bytes a chunk, of which 784 are never used.
+
+5. recommendation
+   Take (A). Two reasons, and neither is the byte count.
+   Doc 07 states the layout as index = rank(q,r) * layerCount + layer, one
+   sentence with no per-chunk case in it. (A) keeps that sentence true for
+   every chunk on the planet; (B) makes it 64 sentences and puts a header
+   in front of an array that doc 07 designed to have no header at all.
+   And doc 03's rule is about AUTHORITY, not about slots: a border cell has
+   exactly one home, so the unowned slot is never written and never read.
+   Leave it as the hole it is, and spend nothing to close it.
+
+verdict
+   rank(q, r) = q + r*(2m + 3 - r)/2, over the whole triangle, m = 2^(D-C).
+   A chunk is (m+1)(m+2)/2 slots -- 561 at D 11 / C 6 -- the same for every
+   chunk, of which it OWNS interior + e*(m-1) + c. Lowest chunk ID wins is
+   an exact partition of the planet, checked on four cuts. The unowned
+   slots are exactly (3m+2)/2 -- 49 of 561, 8.7%, 784 bytes a chunk -- and
+   buying them back costs the uniform stride that made the layout worth
+   having.
+```
+
 ## `rivers.js`
 
 Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river.
@@ -1148,7 +1302,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 910 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 976 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1673,4 +1827,4 @@ verdict
 
 ---
 
-_27 scripts. Every number above is reproduced by running them._
+_29 scripts. Every number above is reproduced by running them._

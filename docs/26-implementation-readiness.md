@@ -14,17 +14,19 @@ then names the things that block code and are on **no list at all**.
 
 ## The design is closed. The kernel is not written.
 
-[Doc 11](11-open-topics.md) is fully struck through — every structural question
-it ever raised has been answered, and each answer has a script behind it. There
-are twenty-seven documents and twenty-seven verification scripts, and
-[`REFERENCE.md`](REFERENCE.md) is every one of those scripts' output, regenerated
-on each push.
+[Doc 11](11-open-topics.md)'s original twelve entries are all struck through —
+every structural question it ever raised has been answered, and each answer has a
+script behind it. There are twenty-seven documents and twenty-nine verification
+scripts, and [`REFERENCE.md`](REFERENCE.md) is every one of those scripts' output,
+regenerated on each push.
 
 So the honest summary is: **the arguing is done and the typing has not started.**
 That is a good place to be, and it is not the same as being ready. A
 specification is ready for code when someone can implement its core functions
-without making a design decision. Four things stop that today, and only one of
-them appears on any open-topics list.
+without making a design decision. **Four things stopped that when this document
+was written, and only one of them appeared on any open-topics list.** Two have
+since been closed by building them; what follows keeps the original diagnosis
+because the reason those gaps went unnoticed is more useful than the fix.
 
 ---
 
@@ -38,30 +40,34 @@ on. Take them one at a time and ask what a programmer would have to invent:
 | `encode` / `decode` — ID ↔ face, path, `(q,r)`, layer | [doc 03](03-addressing.md) | `qr.js` | yes |
 | `idToPosition(id)` | [doc 04](04-position-lookup.md), [doc 15](15-precision-and-origin.md) | `precision.js` | yes |
 | `positionToId(p)` | [doc 04](04-position-lookup.md) | `lookup.js`, `hexround.js` | yes |
-| `neighbour(id, k)` | — | — | **no** |
+| `neighbour(id, k)` | [doc 05](05-face-adjacency.md) | `neighbour.js` | **now yes** |
 
-Three of the four are specified down to the arithmetic. `qr.js` round-trips
+Three of the four were specified down to the arithmetic. `qr.js` round-trips
 `(i, j)` against path digits and `(q, r)` exactly. `hexround.js` states what a
 cell *is* and measures the one place the definition could have gone wrong.
 `precision.js` shows `idToPosition` does not accumulate error at any depth.
 
-The fourth has nothing at all.
+**The fourth had nothing at all, and now does** — `neighbour.js` builds it from
+doc 05's table and integer arithmetic alone and agrees with the geometric graph at
+every cell of every depth tested. The figure below is kept as the picture of what
+was missing, because the reason it went unnoticed for so long is more useful than
+the fix.
 
 ![Eight document chips arranged around a dashed, empty hexagon labelled neighbour(id, k), each with an arrow pointing into it](figures/hollow-centre.svg)
 
 *Docs 03, 05, 07, 10, 13, 16, 19 and 21 all delegate to `neighbour(id, k)` — it
 is where face crossings live, where the half-turn flip is absorbed, where
 pentagons become a degree-5 case, and what the pathfinder and the flood fill
-walk. The hexagon in the middle is drawn empty because that is the accurate
-picture: nothing in this repository says what it returns.*
+walk. The hexagon was drawn empty because that was the accurate picture at the
+time: eight callers, and nothing in the repository saying what it returned.*
 
 ---
 
-## `neighbour(id, k)` has never been called, not even by the scripts
+## Why it hid: `neighbour(id, k)` had never been called, not even by the scripts
 
-That is the part worth sitting with, because it is easy to miss. The
-specification does not merely lack a written definition — **no verification
-script has ever used one.**
+That is the part worth sitting with, because it is easy to miss and it is the
+reason a gap this central survived twenty-six documents. The specification did not
+merely lack a written definition — **no verification script had ever used one.**
 
 Look at how `rivers.js`, `water.js`, `light.js` and `pentagon.js` find a cell's
 neighbours. Every one of them builds the entire planet first: it walks all 20
@@ -75,12 +81,19 @@ scripts are trustworthy. It is not something an engine can do. An engine holds
 one ID and needs its six neighbours in a few nanoseconds, without a planet in
 memory and without a hash map keyed on floating-point coordinates.
 
-So the 180-byte adjacency table from [doc 05](05-face-adjacency.md) is in an odd
+So the 180-byte adjacency table from [doc 05](05-face-adjacency.md) sat in an odd
 position. `adj.js` proves it is **complete and consistent** — all 60 edges match,
 every entry comes out `reversed`, which is the signature of consistent outward
-winding. Nobody has ever used it to cross an edge.
+winding. Nobody had ever used it to cross an edge.
 
-### Three decisions hide inside that one function
+### Three decisions hid inside that one function — all now settled
+
+`neighbour.js` closed all three, and [doc 05](05-face-adjacency.md) records the
+answers: **index 0 is the step from the face's vertex `A` toward `B`**, **crossing
+is a reflection in three integer additions** (`α+γ, β+γ, −γ`, and the table's
+`reversed` field turns out never to be read), and **a pentagon's ring is five
+long** — `k = 5` is not a direction that exists. What each one was, before it had
+an answer:
 
 **Where the neighbour ring starts.** [Invariant 9](../CLAUDE.md) says order the
 six directions counter-clockwise as seen from outside, never from the sign of
@@ -111,15 +124,16 @@ for the direction that is not there.
 
 ## Two more things code needs that no document names
 
-**`rank(q, r)`.** [Doc 07](07-data-structures.md) gives a chunk's storage layout
-as `index = rank(q, r) × layerCount + layer`. That is the only appearance of
-`rank` in the specification. It is not defined, and it is not as simple as a
-triangular number, because [doc 03](03-addressing.md)'s border rule — *the lowest
-chunk ID wins* — means a chunk owns some of its edge cells and not others. The
-chunk's cell count and its array index both fall out of that rule, and neither has
-been written down or counted.
+**`rank(q, r)`** — **now counted**, in [doc 07](07-data-structures.md). It gave a
+chunk's storage layout as `index = rank(q, r) × layerCount + layer` and that was
+the only appearance of `rank` in the specification. `rank.js` settles it at
+`q + r·(2m + 3 − r)/2` over the whole triangle, and finds on the way that
+[doc 03](03-addressing.md)'s border rule — *the lowest chunk ID wins* — **had
+never been checked**. It holds: the owned counts sum to exactly `10·4^D + 2` on
+four different cuts.
 
-**Which noise function.** [Doc 08](08-terrain-generation.md) is precise about
+**Which noise function** — still open, and now the largest of the four.
+[Doc 08](08-terrain-generation.md) is precise about
 *where* to sample — 3D world space, never `(i, j)` — and about one thing to avoid:
 hash with integers, never with `sin`. [Doc 23](23-determinism.md) then makes the
 choice load-bearing to the bit, because the client regenerates the coarse map
@@ -223,15 +237,15 @@ of this document.
 ## Build it in four steps, and each one settles something no document can
 
 **1. The kernel.** Constant tables, `encode`/`decode`, `idToPosition`,
-`positionToId`, `neighbour(id, k)`. Nothing else. This is where the three unlisted
-gaps get closed, and there is an obvious way to close the hard one: the scripts
-already build the whole planet geometrically, so a new `neighbour.js` alongside
-them can implement `neighbour(id, k)` from **the table and integer arithmetic
-alone** and check it against that geometric graph, cell by cell, at several
-levels. Three things it should report: that all 60 face edges round-trip, that
-the flipped chunks come out `+3` and not reversed, and that exactly 12 cells come
-back degree 5. That is the same method every closed question in this repository
-used, and it turns the last structural gap into a measurement.
+`positionToId`, `neighbour(id, k)`. Nothing else. **Its two unlisted gaps are now
+closed**, both by the method every question in this repository closed with:
+`neighbour.js` implements `neighbour(id, k)` from the table and integer arithmetic
+alone and checks it against the geometric graph the other scripts already build —
+60/60 face edges round-tripping, `+0` or `+3` and nothing between, 12 cells at
+degree 5, and the same direction round every ring. `rank.js` does the same for the
+chunk index, and finds that doc 03's border rule — never previously checked — is an
+exact partition. So step 1 needs a language and a noise function, and then it is
+transcription rather than design.
 
 **2. A chunk, and a height field.** `rank(q, r)`, the palette, column-major order,
 the height-field generator only — no caves, no water, no deltas. The first thing
@@ -290,18 +304,24 @@ question nobody on this list has thought of. That is what steps are for.
 
 ## In one breath
 
-- **The design is closed and the kernel is not written.** Doc 11 is fully struck,
-  27 scripts back the numbers, and no engine source exists.
-- **Three of the four core functions are specified and verified.** The fourth,
-  `neighbour(id, k)`, is **defined in no document and called by no script** —
-  every script builds the whole planet and reads adjacency off the mesh instead.
-- **Two more gaps are on no list**: `rank(q, r)` appears exactly once and is never
-  defined, and no document names a noise algorithm even though
-  [doc 23](23-determinism.md) makes the choice bit-load-bearing.
+- **The design is closed and the kernel is not written.** 29 scripts back the
+  numbers, and no engine source exists.
+- **All four core functions are now specified and verified.** `neighbour(id, k)`
+  was **defined in no document and called by no script** — every script built the
+  whole planet and read adjacency off the mesh instead — and is now built from
+  doc 05's table and integers alone, agreeing with that mesh at every cell.
+- **`rank(q, r)` is counted**, and closing it checked doc 03's border rule for the
+  first time: **lowest chunk ID wins is an exact partition**, `10·4^D + 2` on
+  every cut.
+- **What is left is the noise function and the language**, and they are one
+  decision in two halves — the hash has to be written in something that pins the
+  arithmetic it uses.
 - **Of 46 open questions, one blocks code** (which language), 25 are waiting for
   code to exist, and 20 block nothing at all.
 - **The one free-but-unfixable decision is taken**: the polar axis runs through
   vertices 0 and 3, north at 0, meridian at 11 — and all six pairs were measured
   identical first, so the tie was broken on the face table rather than a coin.
-- **Build the kernel first**, and close `neighbour` the way everything else here
-  was closed — by measuring it against the planet the scripts already build.
+- **The gaps that block code are never the ones on the open lists.** All four were
+  found by asking what a programmer would have to type, not by asking what was
+  undesigned — and the two that have been closed since both turned up a result
+  nobody was looking for.

@@ -218,7 +218,8 @@ Violating any of these breaks the design. They are not tunable.
 8. Up is `normalize(position)`. There is no global up and no global north — the
    hairy ball theorem forbids one. Never store a heading as a world vector.
 9. Direction indices are ordered **counter-clockwise as seen from outside**,
-   never derived from `(q, r)` sign. Deriving them from local coordinates leaks
+   starting at the step from the cell's own face vertex **`A` toward `B`** — the
+   `(i, j)` offset `(+1, 0)` (`neighbour.js`) — and never derived from `(q, r)` sign. Deriving them from local coordinates leaks
    the middle-child half turn into ~46% of chunks and reverses every rail in
    them. That flip is a **rotation, not a mirror** (`winding.js`): determinant
    +1, a uniform **+3** on every direction, ring still CCW. Nothing is ever
@@ -330,6 +331,13 @@ Violating any of these breaks the design. They are not tunable.
 | pentagon ring latitude | `atan(1/2)` = `26.565°` | 1 pole + 5 + 5 + 1 pole, every world | `coords.js` |
 | distinct axis choices | `1` of 6 pairs | all six are the same world, rotated | `coords.js` |
 | polar axis | vertices `0`–`3`, north `0`, meridian `v11` | the only pair with contiguous face caps | `coords.js` |
+| direction index 0 | the step from the face's `A` toward `B` | `(i,j)` offset `(+1,0)`; ring CCW from there | `neighbour.js` |
+| face crossing | `(α,β,γ) → (α+γ, β+γ, −γ)` | integer weights on global vertex ids | `neighbour.js` |
+| pentagon ring length | `5`, not 6 with a hole | `k = 5` is not a direction | `neighbour.js` |
+| `rank(q, r)` | `q + r·(2m+3−r)/2`, `m = 2^(D−C)` | over the whole triangle; a bijection | `rank.js` |
+| chunk slots | `(m+1)(m+2)/2` = `561` at D11/C6 | same stride for every chunk | `rank.js` |
+| cells a chunk owns | `(m−1)(m−2)/2 + e(m−1) + c` | `e` edges, `c` corners won | `rank.js` |
+| wasted slots per chunk | `(3m+2)/2` = `49` of 561 | `8.7%`, 784 bytes; buys a uniform stride | `rank.js` |
 
 ## Established results
 
@@ -524,6 +532,29 @@ Violating any of these breaks the design. They are not tunable.
   vertical water face and the only way a view crosses two surfaces, so `water.js`'s
   **0 sides** and **82.3% one surface** describe the **generated** world and do not
   bound what a player builds. Neither changes the renderer's design.
+- **`neighbour(id, k)` is buildable from the table and integers alone**
+  (`neighbour.js`, doc 05), and agrees with the geometric graph at **every cell**
+  of depths 3–5: same neighbours, same direction round the ring, exactly 12 cells
+  at degree 5. Three findings. **Index 0** is the step from the face's `A` toward
+  `B` — a property of the cell's own face, so it never depends on how the cell was
+  reached, which is what doc 19's 3 stored bits needed. **Crossing an edge is a
+  reflection in three additions**, because a lattice point is integer weights on
+  *global vertex ids* — a description that never mentions a face — so
+  `(α,β,γ) → (α+γ, β+γ, −γ)` and the point never moves, only its name does; 60/60
+  edges round-trip over 900/900 steps, and the table's **`reversed` field is never
+  read**. **A pentagon's ring is 5 long**: `k = 5` is not a direction, never a
+  duplicate and never a null mid-ring. The half turn also arrives from inside the
+  function — a `(q,r)`-derived index is **+0 or +3 and nothing else**, +0 in every
+  unflipped chunk and +3 in every flipped one, no crossover.
+- **Doc 03's border rule had never been checked, and it holds** (`rank.js`,
+  doc 07). Awarding each cell to the lowest chunk ID containing it sums to exactly
+  `10·4^D + 2` on four `D`/`C` cuts — one home per cell, none without. `rank` is
+  `q + r·(2m+3−r)/2` over the **whole** triangle: a chunk is a uniform
+  `(m+1)(m+2)/2` slots (**561** at D11/C6) of which it owns
+  `(m−1)(m−2)/2 + e(m−1) + c`, an edge being won or lost whole. The dense
+  alternative saves exactly `(3m+2)/2` slots — 49 of 561, **8.7%**, 784 bytes a
+  chunk — and costs the uniform stride that made `index = rank × layerCount +
+  layer` a single sentence. Take the waste.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -558,25 +589,11 @@ docs 13–25, **one** blocks code, 25 are waiting for code to exist, and 20 bloc
 nothing.
 
 **The gaps that actually block the kernel were on no Still open list** — they are
-doc 11 Part 1, and doc 26 is the triage that found them:
+doc 11 Part 1, and doc 26 is the triage that found them. **Two of the four are now
+closed**, both by building and measuring rather than arguing:
 
-- **`neighbour(id, k)` is defined in no document and called by no script.** Eight
-  documents delegate to it — 03, 05, 07, 10, 13, 16, 19, 21. Doc 05's 180-byte
-  table is proved complete by `adj.js` and has never been used to cross an edge;
-  every verification script builds the whole planet and reads adjacency off the
-  mesh instead. Three decisions hide in it: **where direction index 0 is
-  anchored** (invariant 9 fixes the order, nothing fixes the start, and doc 19
-  puts 3 bits of rotation on disk), **how `(i, j)` re-expresses across a face
-  edge**, and **what a pentagon returns for `k = 5`** — the pathfinder, the light
-  fill and flow routing all walk through pentagons even though placement cannot.
-  Close it the way everything else here closed: a neighbour script that builds
-  `neighbour(id, k)` from the table and integer arithmetic alone and checks it
-  against the geometric graph the other scripts already build. It should report
-  60 face edges round-tripping, flipped chunks coming out **+3**, and exactly 12
-  cells at degree 5.
-- **`rank(q, r)` appears exactly once** (doc 07's chunk index) and is never
-  defined. It depends on doc 03's border rule — lowest chunk ID wins — so a
-  chunk's cell count is not a plain triangular number.
+- ~~`neighbour(id, k)`~~ — **closed** by `neighbour.js`, see doc 05.
+- ~~`rank(q, r)`~~ — **closed** by `rank.js`, see doc 07.
 - **No document names a noise algorithm**, and this repository already has two.
   Doc 08 fixes *where* to sample and forbids a `sin` hash; doc 23 makes the exact
   choice bit-load-bearing. Measured: `rivers.js`/`water.js`/`determinism.js` hash

@@ -2338,6 +2338,52 @@ const prof = (() => {
 }
 
 // =============================================================================
+// 05 — crossing a face edge is a reflection, and it is integer arithmetic
+// =============================================================================
+{
+  const S = 150, h = S*Math.sqrt(3)/2;
+  const u = [130, 120], v = [130+S, 120];          // the shared edge, drawn flat
+  const p = [130+S/2, 120-h];                      // this face's third vertex
+  const q = [130+S/2, 120+h];                      // the neighbour's third vertex
+  // a lattice point one step outside face f: weights (alpha on u, beta on v, -1 on p)
+  const W = 5, a = 2, b = 4, g = -1;               // alpha+beta+gamma = W
+  const at = (A,B,C,wa,wb,wc) => [ (A[0]*wa+B[0]*wb+C[0]*wc)/W, (A[1]*wa+B[1]*wb+C[1]*wc)/W ];
+  // Both namings resolve to the SAME planar point -- that is the whole result, so
+  // the figure draws one dot with two labels rather than two dots.
+  const P = at(u,v,p, a, b, g);
+  const Q = at(u,v,q, a+g, b+g, -g);
+  if (Math.hypot(P[0]-Q[0], P[1]-Q[1]) > 1e-9) throw new Error('reflection moved the point');
+  made.push(svg('reflect-across-an-edge', 470, 300, `
+  <defs><marker id="rx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#b0800f"/></marker></defs>
+  <polygon class="cf-fill" points="${pts([u,v,p])}"/>
+  <polygon class="cf-af" points="${pts([u,v,q])}"/>
+  <path class="cf-m" d="M${f(u[0])} ${f(u[1])}L${f(v[0])} ${f(v[1])}" stroke-width="2.5"/>
+  <circle class="cf-fill" cx="${f(u[0])}" cy="${f(u[1])}" r="5"/>
+  <circle class="cf-fill" cx="${f(v[0])}" cy="${f(v[1])}" r="5"/>
+  <circle class="cf-fill" cx="${f(p[0])}" cy="${f(p[1])}" r="5"/>
+  <circle class="cf-af" cx="${f(q[0])}" cy="${f(q[1])}" r="5"/>
+  <text class="cf-c" x="${f(u[0]-14)}" y="${f(u[1]+4)}">u</text>
+  <text class="cf-c" x="${f(v[0]+8)}" y="${f(v[1]+4)}">v</text>
+  <text class="cf-c" x="${f(p[0]-4)}" y="${f(p[1]-10)}">p</text>
+  <text class="cf-c" x="${f(q[0]-4)}" y="${f(q[1]+18)}">q</text>
+  <circle class="cf-gf" cx="${f(P[0])}" cy="${f(P[1])}" r="6"/>
+  <path class="cf-g" d="M${f(P[0]+52)} ${f(P[1]-26)}L${f(P[0]+12)} ${f(P[1]-6)}" marker-end="url(#rx)"/>
+  <text class="cf-gd" x="${f(P[0]+58)}" y="${f(P[1]-36)}">one dot</text>
+  <text class="cf-gd" x="${f(P[0]+58)}" y="${f(P[1]-20)}">two names</text>
+  <text class="cf-gd" x="14" y="26">step off the face and one weight goes negative</text>
+  <text class="cf-c" x="14" y="54">(${a}, ${b}, ${g})</text>
+  <text class="cf-d" x="14" y="72">on u, v, p &#8212; outside</text>
+  <text class="cf-gd" x="14" y="108">a+g,  b+g,  -g</text>
+  <text class="cf-c" x="14" y="136">(${a+g}, ${b+g}, ${-g})</text>
+  <text class="cf-d" x="14" y="154">on u, v, q &#8212; inside</text>
+  <text class="cf-d" x="14" y="188">the point never moved.</text>
+  <text class="cf-d" x="14" y="204">only its name did</text>
+  <text class="cf-d" x="130" y="272">two faces unfold to mirror images across the shared edge, so the</text>
+  <text class="cf-d" x="130" y="288">re-expression is one add per weight &#8212; integers, no trigonometry</text>`));
+}
+
+// =============================================================================
 // 20 — which pair: the six are identical everywhere except the face table
 // =============================================================================
 {
