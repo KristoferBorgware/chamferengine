@@ -86,6 +86,11 @@ onto any other, so the six worlds you could build are one world seen from six
 angles. No measurement will ever prefer one. The choice genuinely cannot be made
 on merit — it can only be made once and written down.
 
+**See it yourself:** [`demos/lat-long-on-a-ball.html`](../demos/lat-long-on-a-ball.html)
+marks the twelve pentagons and holds them at ±90° and ±26.565° however you spin
+the planet. Turning the globe *is* changing which pair you picked, and the
+readout does not care. That is the measurement above, by hand.
+
 So make it on the only thing that is *not* symmetric: the face table. The twenty
 faces are listed in a fixed order, and that order was written vertex-0-first.
 
