@@ -285,7 +285,9 @@ Violating any of these breaks the design. They are not tunable.
 | side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
 | entity rekey rate | every `0.71` s = 21 frames | why entities are NOT keyed by cell | `blockstate.js` |
 | planet field | `12` bits = 4,096 worlds | word is 51 of 64 at D11 | `id.js` |
-| code space used | `≈ 31.25%` | `20/32` faces × `1/2` triangle-in-square | — |
+| code space used | `≈ 7.81%` | `0.625` face × `0.75` corner × `1/6` canonical | `id.js` |
+| max levels in 64 bits | `17` | `12 + 5 + 2D + 2 + 10 ≤ 64`; 1.6 cm blocks | `scale.js` |
+| share code | `8` base-36 chars | address + layer = 39 bits; 10 with planet | `coords.js` |
 | adjacency table | 60 entries, 180 bytes | 20 faces × 3 edges × 3 bytes | `adj.js` |
 | S2 area ratios | linear `5.20`, quadratic `2.08`, tangent `1.41` | asymptotic | `s2.js` |
 | RT defect split | `20 × 10.3°` + `12 × 42.8°` = `720°` | rhombic triacontahedron | `check.js` |
@@ -297,7 +299,6 @@ Violating any of these breaks the design. They are not tunable.
 | narrowest cell ÷ nominal | `0.744` | at a pentagon; anchors the taper budget | `uniform.js` |
 | taper budget | `25.6%` of `R` | `maxCrust = (1−0.744)·2^D/K` layers; `R` cancels | `taper.js` |
 | max crust at `D` 11 | `435` layers | vs 64 in use — 6.8× headroom | `taper.js` |
-| max levels in 64 bits | `24` with a 10-bit layer, `29` without | layer shares the word | — |
 | float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
 | float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
 | float64 at Earth radius | `0.93 nm` | never the binding constraint | `precision.js` |
@@ -607,12 +608,28 @@ Violating any of these breaks the design. They are not tunable.
   Minecraft's yardstick of 1,159 types and ~26,000 states (quoted from the wiki,
   not measured) the fixed split spends **40–68%** of the type space where a flat
   index spends 40%. It fits with headroom; the space was never the argument.
-  **The side table** is cell ID → a tagged, length-prefixed blob; which types
-  carry one is a property of the **type**, so no flag bit is spent. **Entities do
-  not belong in it** — doc 07 lists them there, but a mob changes cell every
-  **0.71 s**, so keying one by cell is a rekey every 21 frames forever. Entities
-  are held per chunk by containment; the cell a mob stands in is a query, not its
-  address.
+  **The side table** is cell ID → a tagged, length-prefixed blob — the length so
+  an unknown tag is **stepped over** rather than crashing an older build.
+  **Entities do not belong in it** — doc 07 lists them there, but a mob changes
+  cell every **0.71 s**, so keying one by cell is a rekey every 21 frames forever.
+  Entities are held per chunk by containment; the cell a mob stands in is a query,
+  not its address.
+- **The table answers "does this cell have side data", not the type**
+  (`blockstate.js` §8, doc 27). Doc 27 first said the **type** does — cheap, and
+  the wrong shape: it settles a per-**cell** question from a per-**type** fact, so
+  a stone block could never carry a name. **Nothing on the frame path asks the
+  question.** The mesher reads the type for a model, the renderer reads a palette
+  index, lighting and physics and the ray walk read solidity, save/load iterates
+  the **table**; the only asker is a player opening or breaking a block, **twice a
+  second, one cell**. So a **flag bit** is free in width and not in **palette** —
+  three flagged types take a chunk from 4 distinct states to 7, 2 bits a cell to 3,
+  **8.8 → 13.1 KB** — and a **bitmap** is **4.4 KB per chunk resident**, the same
+  whether it holds a thousand chests or none, which almost every chunk does. Worse,
+  the type-gate **orphans the blob**: replace the chest with stone and stone says
+  "no side data", so nothing reads it and nothing frees it, and the next chest
+  there opens full of someone else's ore. One rule instead, no cases: **writing a
+  block clears that cell's side data.** The type still says what a fresh block is
+  **born** with and what a tag **means**. Doc 19's spare rotation bit stays spare.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

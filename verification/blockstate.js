@@ -202,3 +202,98 @@ console.log('\n7. the side table, and the word in it that does not belong');
   console.log('   map keyed by cell. That is one word out of place in doc 07 and it');
   console.log('   would have become a hash table nobody could keep still.');
 }
+
+// ---- 8. how does a cell know it has side data? -----------------------------
+// Section 7 answered "the type says so". That is an answer, but it decides a
+// per-BLOCK question from a per-TYPE fact, and it forbids ever putting a note
+// on a stone block. Price the alternatives properly instead of asserting one.
+console.log('\n8. how a cell knows it has side data: four answers, priced');
+{
+  const SLOTS = 561, LAYERS = 64, CELLS = SLOTS * LAYERS;
+  // (a) WHO ASKS, AND HOW OFTEN. This is the whole argument, so measure it
+  // before comparing storage: a question asked twice a second does not deserve
+  // a data structure.
+  console.log('   who asks "does this cell have side data?", and at what rate:');
+  const askers = [
+    ['the mesher, per cell per rebuild', 0,
+     'a chest\'s MODEL is its type; the contents are not drawn'],
+    ['the renderer, per cell per frame', 0,
+     'never -- the palette index is the whole draw input'],
+    ['lighting, ray walk, physics',      0,
+     'all read solidity, which is the type'],
+    ['chunk save / load',                0,
+     'iterates the TABLE (1,000 entries), never the 35,904 cells'],
+    ['a player opening or breaking one', 2,
+     'human rates, one cell, one probe'],
+  ];
+  console.log('     asker                              per second   why');
+  for (const [who, rate, why] of askers)
+    console.log(`     ${who.padEnd(34)} ${String(rate).padStart(10)}   ${why}`);
+  console.log(`   Nothing on the frame path asks. The question is asked about`);
+  console.log(`   ${askers.reduce((s,a)=>s+a[1],0)} times a second, by a human, about one cell.`);
+  console.log('');
+
+  // (b) the four options
+  console.log('   A  the TYPE says so          registry line per type');
+  console.log('   B  a FLAG BIT in block state doc 19\'s spare rotation bit');
+  console.log('   C  ASK THE TABLE             no marker anywhere; probe on demand');
+  console.log('   D  a per-chunk BITMAP        one bit per cell, resident');
+  console.log('');
+
+  // B: the flag bit is free in WIDTH and not free in PALETTE. A flag is part of
+  // the state value, so "stone" and "stone-with-a-note" are two palette entries.
+  console.log('   B costs nothing in width -- the bit is already spare -- but a flag is');
+  console.log('   part of the state VALUE, so every type that carries data splits into');
+  console.log('   two palette entries. Section 4\'s typical chunk holds 3-4 states:');
+  console.log('     distinct states   palette bits   chunk size   vs 4 states');
+  const base = 4, baseBits = Math.ceil(Math.log2(base));
+  for (const d of [4, 5, 6, 8, 9]){
+    const bits = Math.ceil(Math.log2(d)), kb = CELLS * bits / 8 / 1024;
+    console.log(`     ${String(d).padStart(15)}   ${String(bits).padStart(12)}`
+      + `   ${kb.toFixed(1).padStart(8)} KB`
+      + `   ${(100*bits/baseBits).toFixed(0).padStart(7)}%`);
+  }
+  console.log('   Three flagged types push 4 distinct states to 7, which crosses a power');
+  console.log('   of two: 2 bits a cell becomes 3, and the chunk goes 8.8 KB -> 13.1 KB.');
+  console.log(`   That is +4.4 KB resident, to shortcut a question asked twice a second.`);
+  console.log('');
+
+  // D: the bitmap, priced against the table it is meant to shortcut
+  const bitmapKB = CELLS / 8 / 1024;
+  console.log(`   D is one bit per cell: ${CELLS.toLocaleString('en-US')} bits`
+    + ` = ${bitmapKB.toFixed(1)} KB per chunk -- and it is`);
+  console.log('   the same size whether the chunk holds a thousand chests or none:');
+  console.log('     entries in the chunk   table   bitmap   bitmap / table');
+  for (const n of [0, 1, 10, 1000]){
+    const t = n * 120 / 1024;
+    console.log(`     ${String(n).padStart(20)}   ${t.toFixed(1).padStart(5)} KB`
+      + `   ${bitmapKB.toFixed(1).padStart(4)} KB`
+      + `   ${n === 0 ? '        infinite' : (bitmapKB/t).toFixed(1).padStart(13) + 'x'}`);
+  }
+  console.log('   Almost every chunk on a planet has ZERO entries -- nobody has been');
+  console.log('   there -- and pays 4.4 KB anyway. Doc 22\'s player keeps hundreds of');
+  console.log('   chunks resident, so D is megabytes of zeroes to shortcut a probe.');
+  console.log('');
+
+  // C: the probe, and the rule that keeps the table honest
+  console.log('   C stores nothing and asks the table. One probe, at human rates. And it');
+  console.log('   removes a bug class the other three have to remember not to write:');
+  console.log('     place a chest, fill it, break it, put stone there.');
+  console.log('     A: check the OLD type, then delete    -- two rules, one order-dependent');
+  console.log('     B: clear the flag AND delete the blob -- two writes that can disagree');
+  console.log('     D: clear the bit AND delete the blob  -- same, plus a resident bitmap');
+  console.log('     C: delete the blob                    -- writing a block clears its');
+  console.log('                                              side data. One rule, no cases.');
+  console.log('   Under A a stale blob is INVISIBLE: the new type says "no side data", so');
+  console.log('   nothing ever reads it, nothing ever frees it, and a chest placed there');
+  console.log('   later inherits a dead player\'s inventory. That is the failure the');
+  console.log('   type-gate makes possible and the probe cannot express.');
+  console.log('');
+  console.log('   VERDICT: C. Existence is a property of the CELL, so the table that holds');
+  console.log('   the data is the thing that should answer for it. The type keeps a real');
+  console.log('   job -- it says what a freshly placed block is BORN with, and what a');
+  console.log('   tag MEANS -- but it no longer gates whether an entry may exist. Which');
+  console.log('   is what section 7 got wrong: it decided a per-CELL question from a');
+  console.log('   per-TYPE fact, and that forbids ever naming a stone block.');
+  console.log('   Doc 19\'s spare rotation bit stays spare either way.');
+}

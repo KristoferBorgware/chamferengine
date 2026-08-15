@@ -48,11 +48,20 @@ Bounded by view distance, so it has a ceiling you choose.
 
 ```
 sorted map: cellID → block state
-side table:  chests, signs, entities, keyed by the same cellID
+side table:  cellID → a tagged blob, for chests and signs
 ```
 
 **The only structure that grows.** It holds what players changed and nothing
 else.
+
+Two corrections to what this section used to say, both from
+[doc 27](27-block-state.md), which defined the side table for the first time.
+**Entities were listed here and do not belong** — a mob has a position and moves
+cell every 0.71 s, so keying one by cell is a rekey every 21 frames forever;
+entities are held per chunk by containment. And **whether a cell has an entry is
+the side table's question, not the block type's**: nothing on the frame path ever
+asks it, so there is no marker anywhere and the rule is simply that writing a
+block clears that cell's side data.
 
 ---
 

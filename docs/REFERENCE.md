@@ -218,6 +218,67 @@ verdict
    Entities are a separate list, held per chunk by CONTAINMENT, not a
    map keyed by cell. That is one word out of place in doc 07 and it
    would have become a hash table nobody could keep still.
+
+8. how a cell knows it has side data: four answers, priced
+   who asks "does this cell have side data?", and at what rate:
+     asker                              per second   why
+     the mesher, per cell per rebuild            0   a chest's MODEL is its type; the contents are not drawn
+     the renderer, per cell per frame            0   never -- the palette index is the whole draw input
+     lighting, ray walk, physics                 0   all read solidity, which is the type
+     chunk save / load                           0   iterates the TABLE (1,000 entries), never the 35,904 cells
+     a player opening or breaking one            2   human rates, one cell, one probe
+   Nothing on the frame path asks. The question is asked about
+   2 times a second, by a human, about one cell.
+
+   A  the TYPE says so          registry line per type
+   B  a FLAG BIT in block state doc 19's spare rotation bit
+   C  ASK THE TABLE             no marker anywhere; probe on demand
+   D  a per-chunk BITMAP        one bit per cell, resident
+
+   B costs nothing in width -- the bit is already spare -- but a flag is
+   part of the state VALUE, so every type that carries data splits into
+   two palette entries. Section 4's typical chunk holds 3-4 states:
+     distinct states   palette bits   chunk size   vs 4 states
+                   4              2        8.8 KB       100%
+                   5              3       13.1 KB       150%
+                   6              3       13.1 KB       150%
+                   8              3       13.1 KB       150%
+                   9              4       17.5 KB       200%
+   Three flagged types push 4 distinct states to 7, which crosses a power
+   of two: 2 bits a cell becomes 3, and the chunk goes 8.8 KB -> 13.1 KB.
+   That is +4.4 KB resident, to shortcut a question asked twice a second.
+
+   D is one bit per cell: 35,904 bits = 4.4 KB per chunk -- and it is
+   the same size whether the chunk holds a thousand chests or none:
+     entries in the chunk   table   bitmap   bitmap / table
+                        0     0.0 KB    4.4 KB           infinite
+                        1     0.1 KB    4.4 KB            37.4x
+                       10     1.2 KB    4.4 KB             3.7x
+                     1000   117.2 KB    4.4 KB             0.0x
+   Almost every chunk on a planet has ZERO entries -- nobody has been
+   there -- and pays 4.4 KB anyway. Doc 22's player keeps hundreds of
+   chunks resident, so D is megabytes of zeroes to shortcut a probe.
+
+   C stores nothing and asks the table. One probe, at human rates. And it
+   removes a bug class the other three have to remember not to write:
+     place a chest, fill it, break it, put stone there.
+     A: check the OLD type, then delete    -- two rules, one order-dependent
+     B: clear the flag AND delete the blob -- two writes that can disagree
+     D: clear the bit AND delete the blob  -- same, plus a resident bitmap
+     C: delete the blob                    -- writing a block clears its
+                                              side data. One rule, no cases.
+   Under A a stale blob is INVISIBLE: the new type says "no side data", so
+   nothing ever reads it, nothing ever frees it, and a chest placed there
+   later inherits a dead player's inventory. That is the failure the
+   type-gate makes possible and the probe cannot express.
+
+   VERDICT: C. Existence is a property of the CELL, so the table that holds
+   the data is the thing that should answer for it. The type keeps a real
+   job -- it says what a freshly placed block is BORN with, and what a
+   tag MEANS -- but it no longer gates whether an entry may exist. Which
+   is what section 7 got wrong: it decided a per-CELL question from a
+   per-TYPE fact, and that forbids ever naming a stone block.
+   Doc 19's spare rotation bit stays spare either way.
 ```
 
 ## `boundary.js`
@@ -414,10 +475,12 @@ Cited by [doc 20](20-player-coordinates.md).
    exactly what every player already expects a compass to do at a pole.
 
 5. sharing an exact location
-   D=11: address is 27 bits  ->  6 characters in base 36,  8 with a 10-bit layer
-   D=13: address is 31 bits  ->  6 characters in base 36,  8 with a 10-bit layer
-   So an exact, lossless "here" is a short code a player can read aloud,
-   and it never needs a decimal point.
+   D=11: address 29 bits -> 6 chars,  +10-bit layer 39 -> 8 chars,  +12-bit planet 51 -> 10 chars
+   D=13: address 33 bits -> 7 chars,  +10-bit layer 43 -> 9 chars,  +12-bit planet 55 -> 11 chars
+   So an exact, lossless "here" inside one world is EIGHT base-36
+   characters, and TEN if the code has to say which planet too.
+   Either way a player can read it aloud, and it never needs a
+   decimal point.
 
 verdict
    Put the axis through an antipodal pentagon pair: both poles land on
@@ -428,7 +491,8 @@ verdict
    meridian through v11. Show latitude and longitude to
    TWO decimals plus altitude in metres -- that resolves 0.30 m on the worked
    planet. Show it, but do not share it: the shareable form is the cell ID,
-   which is 27 bits and six base-36 characters.
+   which is 39 bits with its layer -- eight base-36 characters, or ten
+   if the code names the planet as well.
 ```
 
 ## `determinism.js`
@@ -789,6 +853,29 @@ Cited by [doc 03](03-addressing.md), [doc 11](11-open-topics.md).
    chunk prefix sits in the high bits, so the smallest full name carries
    the smallest prefix. Nothing new has to be stored or looked up.
 
+7. how much of the address space actually names a cell?
+   field           values   used   share
+   face      5 bits      32     20    62.5%   only 20 icosahedron faces exist
+   corner    2 bits       4      3    75.0%   a triangle has three corners
+   path   2D bits   4^D    4^D   100.0%   every digit combination is a triangle
+
+   and then the canonical rule throws most of what is left away, because
+   a vertex is a corner of up to six triangles and only one name survives:
+
+     D    address bits        codes       cells   used
+     3             13        8,192         642   7.84%
+     5             17      131,072      10,242   7.81%
+    11             29  536,870,912  41,943,042   7.81%
+
+   The share tends to 10/128 = 7.8125%, flat in depth:
+   62.5% of the face field x 75% of the corner field x 1/6 for the six
+   triangles sharing a vertex = 7.8125%.
+   That is 3.68 bits spent, against the 1.68 bits the q/r draft spent.
+   So doc 03's "31.25% of the code space" belongs to the superseded
+   layout. Option C uses 7.81% and costs 2 bits more -- which is exactly
+   the 2-bit corner field, arriving as a wider word rather than as a
+   cleverer one. Still no lookup tables anywhere, which was the trade.
+
 verdict
    Doc 03 asked for three things at once -- a fixed width, a chunk reachable
    by one shift, and a chunk level that can move after launch -- and the
@@ -835,7 +922,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 308M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1681,7 +1768,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 577 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 588 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1814,7 +1901,10 @@ Cited by [doc 06](06-world-sizing.md).
  19    2.75e+12          14.6 m               2.3 cm
  20    1.10e+13           7.3 m               1.1 cm
 
-bit budget, 64-bit id: 5 bits face + 2 bits/level -> 29 levels max
+bit budget, 64-bit word [planet 12][face 5][path 2D][corner 2][layer 10]
+   -> 17 levels max  (1.72e+11 cells per layer)
+   face + path alone would say 29, which pays for neither
+   the planet field nor the 2-bit corner that names a vertex.
 storage at 1 byte/cell, level 15: 10.7 GB
 ```
 

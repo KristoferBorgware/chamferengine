@@ -207,9 +207,24 @@ A chest has contents. A sign has text. Neither fits in 16 bits, and
 in a "side table keyed by the same cell ID" without either of them defining one.
 
 **The side table is a map from cell ID to a variable-length blob**, stored beside
-the delta store and keyed the same way. Each entry is a tag, a length, and a
-payload — the length so an unknown tag can be skipped rather than crashing an
-older build.
+the delta store and keyed the same way. Cell ID in, a run of bytes out.
+
+Those bytes are not free-form. They are a sequence of **entries**, and each entry
+is three things in a row: a **tag** saying what it is, a **length** saying how
+many bytes it takes, and then that many bytes of **payload**.
+
+![One side-table entry: a cell ID pointing at a run of bytes made of tag, length and payload, twice over, with an arrow showing an older build reading a tag it does not know and jumping over the payload by its length](figures/side-table-entry.svg)
+
+*Read the picture left to right, the way the code does. The length is the whole
+trick: without it, a build that meets a tag it has never heard of has no idea
+where that entry ends, so it cannot get to the next one and has to give up on the
+file. With it, an unknown tag costs three bytes of reading and a jump. That is
+what makes a save from a newer build openable by an older one — which is the only
+reason the length is there at all.*
+
+A cell can hold more than one entry, and they do not have to come from the same
+system. In the picture, `CHEST` is the inventory and `NAME` is a label a player
+typed. Two features, one blob, neither knowing the other exists.
 
 It does not need to be clever, because it is never big:
 
@@ -218,10 +233,73 @@ It does not need to be clever, because it is never big:
 > **35,904 cells**; a thousand containers in one chunk is an absurd build and
 > still costs **117 KB**. Design it for clarity, not density.
 
-**How does a block know it has side data? It does not need a flag bit.** The
-*type* says so — a chest always has contents, stone never does — and the registry
-already carries a line per type. So no bit is spent on it, and
-[doc 19](19-directional-blocks.md)'s spare rotation bit stays spare.
+### How does a cell know it has side data? It asks the table
+
+Earlier drafts of this document answered: **the type says so.** A chest always has
+contents, stone never does, and the registry already carries a line per type, so
+no bit is spent. That was cheap, and it was the wrong shape of answer. It decides
+a per-**cell** question from a per-**type** fact, which quietly forbids ever
+putting a note, an owner or a marker on a block of stone.
+
+There are four ways to answer it, and they are worth pricing rather than
+asserting:
+
+| | Answer | Costs |
+|---|---|---|
+| **A** | the **type** says so | a registry line per type; no per-cell storage |
+| **B** | a **flag bit** in the block state — [doc 19](19-directional-blocks.md)'s spare one | nothing in width; splits palette entries |
+| **C** | **ask the table** — no marker anywhere | one probe, whenever anyone asks |
+| **D** | a per-chunk **bitmap**, one bit per cell | 4.4 KB resident per chunk, always |
+
+The whole argument turns on **who asks and how often**, so measure that first.
+
+> **[verified]** `verification/blockstate.js`, section 8. **Nothing on the frame
+> path asks.** The mesher does not — a chest's *model* is its type, and its
+> contents are not drawn. The renderer does not: the palette index is the entire
+> draw input. Lighting, the ray walk and physics all read **solidity**, which is
+> the type. Chunk save and load iterate the **table**, never the 35,904 cells.
+> The only asker is **a player opening or breaking one block** — about **twice a
+> second**, about **one cell**.
+
+That kills B and D on the spot, because both buy resident storage to shortcut a
+question nobody asks in a hot loop.
+
+> **[verified]** Same section. **B** costs nothing in *width* — the bit really is
+> spare — but a flag is part of the block-state **value**, so every type carrying
+> data splits into two palette entries. Three such types push a typical chunk
+> from 4 distinct states to 7, which crosses a power of two: **2 bits a cell
+> becomes 3**, and the chunk goes **8.8 KB → 13.1 KB**. **D** is
+> **4.4 KB per chunk** whether it holds a thousand chests or **none** — and
+> almost every chunk on a planet holds none, because nobody has been there.
+
+Between A and C the storage is a tie: both store nothing per cell. What separates
+them is what happens when a block is replaced.
+
+![Four steps — place a chest, fill it, break it, place stone — shown twice: under the type rule the blob survives all four and is orphaned, under the table rule it is gone the moment the block is written](figures/side-table-orphan.svg)
+
+*Place a chest, fill it, break it, put stone there. Under **A** the blob is still
+in the map, and it is now **invisible**: stone's registry line says "no side
+data", so nothing ever reads it and nothing ever frees it. Put a chest back on
+that cell and it opens full of someone else's ore. Under **C** the entry went when
+the block did, because there is only one rule and it has no cases.*
+
+**C is the decision.** Existence is a property of the **cell**, so the structure
+holding the data is the thing that answers for it, and the rule is one line:
+
+```
+writing a block clears that cell's side data
+```
+
+The type keeps two real jobs — it says what a freshly placed block is **born**
+with, and it says what a tag **means** — but it no longer gates whether an entry
+may exist. So a stone block *can* carry a name, and nothing in the design has to
+be widened to allow it. [Doc 19](19-directional-blocks.md)'s spare rotation bit
+stays spare, which was the only thing A was protecting.
+
+**Honest caveat:** C makes the probe the only way to find out, so a system that
+genuinely does want to scan — "highlight every container in this chunk" — must
+walk the table, not the cells. That is the right direction anyway: the table has a
+thousand entries at its absurd worst and the chunk has 35,904 cells.
 
 ### Entities are not side-table data, and doc 07 says they are
 
@@ -313,6 +391,12 @@ spare bits in the edit record are where the extra type bits come from.
   obvious win and nothing has measured how much.
 - **The spare rotation bit.** Doc 19 suggests *powered* or *reversed* and leaves
   it; it is still unspent.
+- **What the side table actually is, as a data structure.** Now that the probe is
+  the answer to "does this cell have side data", the probe's shape matters a
+  little more than it did — a hash map, or a sorted array of `(cellID, offset)`
+  binary-searched. Nothing here has measured them, and at a thousand entries and
+  two queries a second it is hard to believe either loses. Worth checking once
+  there is code, not before.
 
 ---
 
@@ -334,9 +418,17 @@ spare bits in the edit record are where the extra type bits come from.
   the names are never read during play. They exist so an old save can still say
   what its own numbers meant, and so a mismatch is a refusal rather than turning
   someone's house into dirt.
-- **The side table is a cell ID to a tagged blob** — a chest is ~108 bytes, a
-  sign ~240, and a thousand of them in one chunk is 117 KB. **Which types have
-  side data is a property of the type**, so no flag bit is spent.
+- **The side table is a cell ID to a tagged blob** — tag, length, payload, and
+  the length is there so an unknown tag can be **stepped over** instead of
+  crashing an older build. A chest is ~108 bytes, a sign ~240, a thousand of them
+  in one chunk 117 KB.
+- **Whether a cell has side data is answered by the table, not by the type.**
+  Nothing on the frame path asks the question — only a player opening or breaking
+  a block, twice a second — so a flag bit (+4.4 KB a chunk in palette width) and a
+  bitmap (4.4 KB a chunk, resident, usually all zeroes) both buy nothing. Gating
+  on the type instead **orphans the blob** when the block is replaced. One rule:
+  **writing a block clears its side data.** So stone can carry a name, and doc
+  19's spare rotation bit stays spare either way.
 - **Entities are not side-table data.** Doc 07 says they are. A mob moves cell
   every **0.71 s**, so keying it by cell is a rekey every 21 frames forever —
   entities are held per chunk by containment, and the cell a mob stands in is a
