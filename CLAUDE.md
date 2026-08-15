@@ -22,6 +22,10 @@ and duplicates information found there.
   command only, and a later `git rebase` or `git commit --amend` re-stamps the
   committer from the ambient config. That is how `Claude <noreply@anthropic.com>`
   ends up in the committer field of a commit whose author is correct.
+- **Never rewrite pushed history.** No rebase, amend or force-push on anything
+  that has left this machine — SHAs are not to change. If `master` has moved under
+  you, **merge it** rather than rebasing onto it: a merge leaves every existing
+  commit's SHA intact, and other sessions may already be working from them.
 
 ## How the documents are written
 
