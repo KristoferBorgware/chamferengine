@@ -551,11 +551,14 @@ Violating any of these breaks the design. They are not tunable.
 
 ## Known gaps
 
-**Doc 11 is fully struck through** — every entry on it is closed. Doc 26 triages
-what is left: of the **46** open bullets across docs 13–25, **one** blocks code,
-25 are waiting for code to exist, and 20 block nothing.
+**Doc 11 refilled.** Its original twelve entries are all struck through, and
+**Part 1 of that page is now the kernel gap list** — the four things that block
+the first line of code. Doc 26 triages the rest: of the **46** open bullets across
+docs 13–25, **one** blocks code, 25 are waiting for code to exist, and 20 block
+nothing.
 
-**The gaps that actually block the kernel are on no Still open list** (doc 26):
+**The gaps that actually block the kernel were on no Still open list** — they are
+doc 11 Part 1, and doc 26 is the triage that found them:
 
 - **`neighbour(id, k)` is defined in no document and called by no script.** Eight
   documents delegate to it — 03, 05, 07, 10, 13, 16, 19, 21. Doc 05's 180-byte
@@ -568,13 +571,21 @@ what is left: of the **46** open bullets across docs 13–25, **one** blocks cod
   fill and flow routing all walk through pentagons even though placement cannot.
   Close it the way everything else here closed: a neighbour script that builds
   `neighbour(id, k)` from the table and integer arithmetic alone and checks it
-  against the geometric graph the other scripts already build.
+  against the geometric graph the other scripts already build. It should report
+  60 face edges round-tripping, flipped chunks coming out **+3**, and exactly 12
+  cells at degree 5.
 - **`rank(q, r)` appears exactly once** (doc 07's chunk index) and is never
   defined. It depends on doc 03's border rule — lowest chunk ID wins — so a
   chunk's cell count is not a plain triangular number.
-- **No document names a noise algorithm.** Doc 08 fixes *where* to sample and
-  forbids a `sin` hash; doc 23 makes the exact choice bit-load-bearing. Two
-  implementations of "fBm" are two different planets.
+- **No document names a noise algorithm**, and this repository already has two.
+  Doc 08 fixes *where* to sample and forbids a `sin` hash; doc 23 makes the exact
+  choice bit-load-bearing. Measured: `rivers.js`/`water.js`/`determinism.js` hash
+  with `Math.imul`, while `volume.js`/`mesh.js`/`seam.js` use a float multiply
+  past `2^53` — the two disagree on 98.2% of 8,000 lattice points by up to
+  `2.7e-5` (read off the two functions directly; no script stands behind that
+  figure), and the second relies on JS `ToInt32` semantics that are undefined
+  behaviour in C. Pin the hash, the interpolation, the octaves, the lacunarity,
+  the gain and the accumulation order — all of it, once.
 - **Which language and runtime** (doc 23) — the only open bullet that blocks the
   first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
   `Math.sin`; most languages are similar but not identical.

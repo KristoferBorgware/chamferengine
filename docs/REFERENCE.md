@@ -45,7 +45,7 @@ numbered documents.
 | [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
 | [`volume.js`](../verification/volume.js) | Meshing terrain that is GENERATED, not stored. Doc 08 makes terrain a pure function of position -- a height-field term, optionally plus a density-field term for caves -- and doc 14's cost model quietly assumed the first, on a smooth sphere. This measures relief, caves, and what generation costs. | [08](08-terrain-generation.md) [14](14-meshing-and-lod.md) |
 | [`water.js`](../verification/water.js) | Water is a block type: translucent, no collision, written once by the generator (doc 24). Blocks are cheap; TRANSLUCENT blocks are the ones that make renderers difficult, because they cannot be drawn in any order. So the questions are how much water surface there is, and how many layers of it a player ever looks through at once. | [25](25-water.md) |
-| [`winding.js`](../verification/winding.js) | The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is. | [03](03-addressing.md) |
+| [`winding.js`](../verification/winding.js) | The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is. | [03](03-addressing.md) [11](11-open-topics.md) |
 
 ---
 
@@ -579,7 +579,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 211M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 182M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1148,7 +1148,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 992 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 910 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1612,7 +1612,7 @@ verdict
 
 The middle child of a triangle split comes out "upside down", and doc 03 has called the frame inside it MIRRORED since the first draft. That word implies a change of handedness, which would reach into meshing, normals and every chirality-dependent thing in the engine. This checks what the flip actually is.
 
-Cited by [doc 03](03-addressing.md).
+Cited by [doc 03](03-addressing.md), [doc 11](11-open-topics.md).
 
 ```
 1. what the middle-child map actually is

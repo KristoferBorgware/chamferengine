@@ -10,6 +10,196 @@ Twelve entries are struck through because they have since been closed. They are
 kept rather than deleted, because what they turned out to be worth is the most
 useful thing on this page.
 
+**The page then refilled, and the new entries are a different kind of thing.**
+The twelve above were *design* questions — how should the world work. The four
+below are **specification** questions: things the design already relies on, names
+that appear in eight documents, and which nobody ever wrote down. They were found
+by [doc 26](26-implementation-readiness.md) asking what a programmer would have to
+invent before the first line of code, and none of them was on any *Still open*
+list, because a gap nobody noticed is a gap nobody files.
+
+---
+
+## Part 1 — the four that block the first line of code
+
+Four items. Close these and the kernel can be written; everything else in this
+specification is either already closed or waiting for code to exist.
+
+---
+
+## `neighbour(id, k)` — called by eight documents, defined by none
+
+**This is the one.** It is the function that hides the sphere from the rest of the
+engine, and it does not exist anywhere in this repository — not as a definition,
+not as pseudocode, not as a script.
+
+Count the callers. [Doc 03](03-addressing.md) fixes how its ring must be ordered.
+[Doc 05](05-face-adjacency.md) says "only `neighbour(id, direction)` ever consults
+[the adjacency table]". [Doc 07](07-data-structures.md) lists it as one of four
+pure functions. [Doc 10](10-pathfinding.md) says "seams live inside `neighbour()`
+— the pathfinder never learns the world is a sphere".
+[Doc 13](13-gravity-and-orientation.md) says it "already returns exactly this".
+[Doc 16](16-lighting.md) adds two radial cases to it.
+[Doc 19](19-directional-blocks.md) stores its output on disk.
+[Doc 21](21-rivers-and-erosion.md) routes water through it. Eight documents, and
+every one of them delegates.
+
+![Eight document chips arranged around a dashed, empty hexagon labelled neighbour(id, k), each with an arrow pointing into it](figures/hollow-centre.svg)
+
+*Every arrow is a document that delegates its hardest case to this function. The
+hexagon is drawn empty because that is the accurate picture — the specification
+has a shape where its most-depended-on function should be, and the shape is what
+the callers assume rather than anything anyone wrote.*
+
+**And no verification script has ever called one.** That is the part that hid it.
+`rivers.js`, `water.js`, `light.js`, `pentagon.js` and the rest all need a cell's
+neighbours, and every one of them gets them the same way: build all 20 faces,
+compute each lattice point's position, round the coordinates, and key a hash map
+on that rounded triple. Two faces that produce the same point collide in the map,
+so the shared edge closes itself and adjacency falls out of the resulting graph.
+
+That is a fine way to *measure* a sphere and it is why those scripts are
+trustworthy. It is not available to an engine, which holds one integer and needs
+six neighbours without a planet in memory and without a hash map keyed on floats.
+So [doc 05](05-face-adjacency.md)'s 180-byte table is in the strange position of
+being **proved complete and never once used to cross an edge**.
+
+**Three decisions are hiding inside it**, and each is load-bearing somewhere else:
+
+- **Where direction index 0 is anchored.** [Invariant 9](../CLAUDE.md) says order
+  the ring counter-clockwise as seen from outside, never from the sign of
+  `(q, r)`. That fixes the *order* and says nothing about the *start*.
+  `pentagon.js` uses whichever neighbour the graph happened to list first, which
+  is fine for counting a ring and useless as a stored value — and
+  [doc 19](19-directional-blocks.md) puts **3 bits of rotation on disk** that must
+  mean the same thing in every chunk of every world, forever.
+- **How `(i, j)` re-expresses across a face edge.** Doc 05's table gives the
+  destination face, the arrival edge, and that the shared edge runs the other way.
+  It does not give the map from your `(i, j)` to theirs — which that document
+  itself calls "the entire job".
+- **What a pentagon returns for `k = 5`.** [Doc 17](17-pentagons.md) protects the
+  twelve columns from *placement*, and [doc 19](19-directional-blocks.md) spends
+  that to let machinery assume degree 6. Neither helps the three systems that
+  still walk *through* a pentagon: the pathfinder, the light flood fill, and flow
+  routing.
+
+**How to close it:** the way everything on this page closed. A neighbour script
+that builds `neighbour(id, k)` from the table and integer arithmetic **alone**,
+then checks it cell by cell against the geometric graph the other scripts already
+construct. Three things it should report: that all **60** face edges round-trip,
+that flipped chunks come out **+3** and not reversed
+([`winding.js`](../verification/winding.js) says +3), and that exactly **12** cells
+come back degree 5.
+
+---
+
+## `rank(q, r)` — one appearance, no definition
+
+[Doc 07](07-data-structures.md) gives a chunk's storage layout as
+`index = rank(q, r) × layerCount + layer`. That is the only time `rank` appears in
+the specification, and it is never defined.
+
+It is not a plain triangular number, either. [Doc 03](03-addressing.md)'s border
+rule — **the lowest chunk ID wins** — means a chunk owns some of the cells on its
+own edges and not others, so both the cell **count** and the **index** depend on
+which of the three edges this particular chunk owns. Doc 03 puts the share of
+affected cells at "around 6% at depth 3 with chunk level 0" and says plainly that
+the figure is read off a demo rather than produced by a script.
+
+So this is two questions wearing one name: how many cells does a chunk hold, and
+which slot does a given `(q, r)` occupy. Both fall out of the ownership rule, and
+neither has been written down or counted.
+
+---
+
+## No document names a noise function — and the repository already has two
+
+[Doc 08](08-terrain-generation.md) is precise about *where* to sample (3D world
+space, never `(i, j)`) and about one thing to avoid (hash with integers, never
+with `sin`). [Doc 23](23-determinism.md) then makes the exact choice
+**load-bearing to the bit**, because a joining client regenerates
+[doc 21](21-rivers-and-erosion.md)'s coarse map instead of downloading it.
+
+Neither names an algorithm. Two implementations of "fBm" are two different
+planets, and that is not hypothetical here:
+
+Six verification scripts carry their own value-noise hash, and they are not all
+the same hash. `rivers.js`, `water.js` and `determinism.js` use a `Math.imul`
+step — a true 32-bit integer multiply. `volume.js`, `mesh.js` and `seam.js` use a
+plain `*` whose product runs past `2^53`. Run the two side by side over 8,000
+lattice points and they **disagree on 98.2%** of them, by up to `2.7e-5`.
+
+That figure comes from comparing the two functions directly, as they appear in
+those files, and **no verification script stands behind it** — it is quoted to
+show the shape of the problem, not as a number to size anything against. The two
+implementations are three lines each and the disagreement is visible by reading
+them.
+
+The size of the disagreement is not the point — it is small, and
+[doc 23](23-determinism.md) measured thirteen orders of margin before flow routing
+notices anything. The point is the *shape* of it. The two are different functions,
+each written by someone reaching for "a value hash", inside one repository, by one
+author, in one language. And the float-multiply version leans on JavaScript's
+`ToInt32` coercion of an out-of-range double, which is well defined in JavaScript
+and **undefined behaviour in C and C++** — so it is the version that does not
+survive the entry below.
+
+What has to be pinned: the hash, the interpolation, the octave count, the lacunarity
+and gain, and the order of accumulation. All of it, exactly, once.
+
+---
+
+## Which language and runtime
+
+The only entry on this page that also appears on a document's own *Still open*
+list ([doc 23](23-determinism.md)), and the only open bullet anywhere in the
+specification that blocks the first line of code.
+
+It matters more here than in most projects. Doc 23's entire argument is that
+`+ − × ÷ sqrt` and comparisons are pinned by IEEE 754 and transcendentals are
+not — so the whole runtime is bit-identical **provided the language makes the same
+promises**. JavaScript pins the five and explicitly does not pin `Math.sin`. Most
+languages are similar and none is identical, and two things travel with the
+choice: the build must disable floating-point contraction (`-ffp-contract=off` or
+the equivalent), and reduction order must be fixed wherever cells are summed in
+parallel.
+
+---
+
+## Part 2 — free now, expensive forever after
+
+## ~~Which pentagon pair carries the polar axis~~ — decided, see [doc 20](20-player-coordinates.md)
+
+Closed, and worth reading as a template for the four above, because it is the
+cheapest decision in the specification and it had been sitting unmade precisely
+*because* it was cheap.
+
+[Doc 20](20-player-coordinates.md) had it as arbitrary. It is — and measuring how
+arbitrary was still worth doing. `coords.js` runs the axis through each of the six
+antipodal pentagon pairs in turn and gets **one distinct latitude signature**: a
+pentagon at each pole and five at `atan(1/2)` either side, every time. They are one
+world seen from six angles, so **no measurement can prefer one**.
+
+The tie broke on the only thing that is not symmetric — the face table, which was
+written vertex-0-first. Pair `0-3` is the **only** one whose polar caps are
+contiguous runs of face indices: north is faces `0–4`, south is faces `10–14`.
+
+And the entry was hiding two further choices it never named: **which end is
+north**, and **where longitude 0 runs**. The second has real content — the ten ring
+pentagons sit at exact multiples of 36°, so anchoring the meridian on one of them
+lands all twelve on round numbers.
+
+**Decided: axis through vertices 0 and 3, north at vertex 0, prime meridian
+through vertex 11.** Never change any of the three; they fix where the equator
+falls in every world this game will ever generate.
+
+---
+
+## Part 3 — the twelve that closed
+
+The original page. Everything below is struck through, and kept because what each
+claim turned out to be worth is the most useful thing here.
+
 ---
 
 ## ~~Gravity and "up"~~ — designed, see [doc 13](13-gravity-and-orientation.md)
@@ -348,27 +538,37 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**There is nothing left on this page.** Every entry is struck through.
+**Close Part 1, in the order it is written.** `neighbour(id, k)` first, because
+it is the one with three decisions inside it and eight documents waiting on it,
+and because the method is already proven: build it from the table and integer
+arithmetic alone, and check it against the geometric graph every other script
+here constructs. Then `rank(q, r)`, then the noise function, then the language.
 
-That is not the same as the design being finished. Each closed document carries
-its own **Still open** section, and those are where the remaining work lives —
-they are narrower and more concrete than anything that was ever listed here. The
-ones that reach furthest:
+Everything else is either closed or waiting for code. Of the **46** open bullets
+across docs 13–25, [doc 26](26-implementation-readiness.md) finds **one** that
+blocks the first line — the language, which is why it appears above as well —
+**25** that cannot be answered until the thing they ask about exists, and **20**
+that are game design and block nothing. The three that reach furthest are all in
+the middle group:
 
 - **Verifying determinism on real hardware** ([doc 23](23-determinism.md)). That
   document closes the question by auditing which operations each path uses, and
   the answer is good — the runtime is built from arithmetic IEEE 754 pins to the
   bit. But the argument runs from the standard and from one machine. Nobody has
-  run the generator on two genuinely different platforms and compared hashes.
-- **What happens where a player's edits meet a global process**
-  ([doc 21](21-rivers-and-erosion.md)). The coarse map is read-only, so a dammed
-  river has nowhere to live.
-- **Terrain at a mesh corner** ([doc 18](18-cell-boundary.md)). Three cells meet
-  at a corner and may disagree about its height.
+  run the generator on two genuinely different platforms and compared hashes,
+  and nobody can until there is a generator to run.
+- **Terrain height at a mesh corner** ([doc 18](18-cell-boundary.md)). Three cells
+  meet at a corner and may disagree about its height. It needs a mesher.
+- **Light across a LOD seam** ([doc 16](16-lighting.md)).
+  [Doc 14](14-meshing-and-lod.md)'s "the finer chunk owns the seam" was a rule
+  about geometry, and a flood fill propagates *inward* rather than being drawn at
+  the boundary. It needs a light.
 
 **The geometric core is closed, the terrain is closed, and the systems are
-closed.** What is left is implementation, and the questions implementation will
-raise.
+closed. The kernel is not written, and four of the pieces it is made of have
+never been specified.** That is a much better position than this page described
+for most of its life — but it is not "nothing left", which is what it said before
+anyone asked what the first line of code would need.
 
 ---
 
@@ -418,3 +618,13 @@ expecting again:
   on dividing by maximum spacing, then computed the maximum from the wrong spread.
   Everything with a script attached held up. The one thing without a script did
   not. **Cite a script or do not state a number.**
+- **And then the page refilled, which is the lesson this round added.** For a
+  while this said "there is nothing left on this page", and it was true of every
+  question anyone had asked. The four entries in Part 1 appeared the moment
+  somebody asked a different question — not "what is undesigned?" but **"what
+  would a programmer have to invent to write the first line?"** Every one of them
+  had been sitting in plain sight, named in up to eight documents, delegated to by
+  everything and specified by nothing. **A gap nobody has noticed is a gap nobody
+  files**, so a *Still open* list is evidence about what was asked, never about
+  what is missing. The check that found them is cheap and worth repeating: take
+  the functions the design says it rests on, and try to write each one.
