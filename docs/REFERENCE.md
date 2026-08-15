@@ -28,6 +28,7 @@ numbered documents.
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) [15](15-precision-and-origin.md) |
+| [`id.js`](../verification/id.js) | The cell ID as an actual 64-bit word. Doc 03 draws the layout, doc 07 says finding a chunk is "one shift", doc 06 says "chunk size remains tunable after launch: it does not change world data", and doc 22 leans on a contiguous range being a compact patch. Nothing had ever packed the bits and checked those together. Packing them turns up three problems, and they are not compatible with each other -- so this measures the problem rather than announcing a fix. Adding a planet field for multiple worlds is what forced the question. | [03](03-addressing.md) [11](11-open-topics.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
@@ -553,6 +554,83 @@ does hexRound return the cell whose centre is nearest on the sphere?
   of a cell. Pick one and say so.
 ```
 
+## `id.js`
+
+The cell ID as an actual 64-bit word. Doc 03 draws the layout, doc 07 says finding a chunk is "one shift", doc 06 says "chunk size remains tunable after launch: it does not change world data", and doc 22 leans on a contiguous range being a compact patch. Nothing had ever packed the bits and checked those together. Packing them turns up three problems, and they are not compatible with each other -- so this measures the problem rather than announcing a fix. Adding a planet field for multiple worlds is what forced the question.
+
+Cited by [doc 03](03-addressing.md), [doc 11](11-open-topics.md).
+
+```
+1. does the drawn packing survive a change of chunk level?
+   doc 03: [ 5 bits ][ 2 bits x C ][ (D-C) ][ (D-C) ]  face, path, q, r
+   and: "moving the chunk boundary does not change the address at all --
+   it only moves where the line is drawn through the same number."
+
+   width is 5 + 2D = 17 bits at every C -- that half of the claim holds
+   cells whose packed VALUE is the same at every C: 1 of 2145
+   e.g. (i,j) = (0,1) at C = 0..6:  28673  28673  28673  28673  28673  28673  28674
+   The value moves because path digits are NOT a bit-slice of (i, j): the
+   descent picks one of four children per level and the middle child flips
+   the frame. Re-cutting at a different C re-encodes the low half.
+   Consequence: under this layout the chunk level is baked into every ID
+   ever written to disk, and doc 06's "tunable after launch" is false.
+
+2. can the path just go all the way down, so C never appears?
+   leftover (q, r) after descending to FULL depth:
+     (0,0)  1429 cells
+     (0,1)  715 cells
+     (1,0)  1 cells
+   3 distinct values, so 2 bits are still needed at the bottom.
+   The reason is invariant 3, and it is not negotiable: a triangle of side
+   1 still has THREE vertices, and a cell IS a vertex. Path digits address
+   TRIANGLES. They cannot address a vertex however deep they go.
+
+3. do q and r fit in (D-C) bits each?
+    D   C   m = 2^(D-C)   max q   max r   bits needed   doc 03 gives   fits?
+    6   0           64      64      64             7              6   NO
+    6   2           16      16      16             5              4   NO
+    6   4            4       4       4             3              2   NO
+    8   2           64      64      64             7              6   NO
+    8   6            4       4       4             3              2   NO
+   11   6           32      32      32             6              5   NO
+   Never. A chunk of side m has lattice coordinates running 0..m INCLUSIVE,
+   which is m+1 values and needs (D-C)+1 bits. Same reason as section 2 --
+   a triangle of side m carries m+1 vertices along each edge, not m.
+   So the address is 5 + 2D + 2 bits, not 5 + 2D. Two bits, everywhere.
+
+4. what the options actually are
+   encoding                              addr bits   C-free   chunk lookup            range = patch
+   A  store (i, j) directly                     29   yes      NO -- needs the descent  NO
+   B  store path + (q, r) at a fixed C          29   NO       yes -- one shift        yes
+   C  path to depth D + 2-bit corner            29   yes      yes -- one shift        yes
+
+   A loses the property doc 03 exists for: with (i, j) packed as two plain
+   numbers a chunk is not a contiguous range, so doc 22's disk locality
+   (5 runs fetch 62% of a region) goes with it.
+   B keeps everything except tunability -- C joins blockSize and D as fixed
+   at world creation, which is a real but small loss.
+   C keeps all three at the SAME bit cost as A, by naming the side-1
+   triangle and then which of its corners. The cost is that a vertex is
+   shared by up to six such triangles, so encoding needs a canonical pick --
+   which is doc 03's "lowest ID wins" applied one level further down, the
+   same rule rank.js already proved partitions the sphere exactly.
+   C is NOT yet verified. It is the recommendation, not a result.
+
+   whichever wins, the word at D 11 with a 12-bit planet field:
+     planet 12 + address 29 + layer 10 = 51 of 64, 13 spare
+     4,096 worlds, 41,943,042 cells each
+
+verdict
+   Doc 03 asks for three things at once -- a fixed 5 + 2D width, a chunk
+   reachable by one shift, and a chunk level that can move after launch --
+   and the layout it draws delivers the width only. Two of the three
+   problems are forced by invariant 3: a cell is a VERTEX and path digits
+   name TRIANGLES, so there are always 2 more bits at the bottom, and the
+   real address is 5 + 2D + 2. Adding a planet field is what made someone
+   pack the word and look. The choice between A, B and C is a design
+   decision, and C needs verifying before it is taken.
+```
+
 ## `interest.js`
 
 Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it.
@@ -582,7 +660,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1428,7 +1506,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 773 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 786 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1953,4 +2031,4 @@ verdict
 
 ---
 
-_30 scripts. Every number above is reproduced by running them._
+_31 scripts. Every number above is reproduced by running them._

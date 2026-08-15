@@ -18,8 +18,9 @@ found by [doc 26](26-implementation-readiness.md) asking what a programmer would
 have to invent before the first line of code, and none of them was on any *Still
 open* list, because a gap nobody noticed is a gap nobody files.
 
-**Three of the four are already closed** — `neighbour(id, k)`, `rank(q, r)` and
-the noise function were built and measured. **One is left: the language.**
+**Three of the original four are closed** — `neighbour(id, k)`, `rank(q, r)` and
+the noise function were built and measured. **Two are open**: the language, and
+**the ID word itself**, which a scope change reopened after this list was written.
 
 ---
 
@@ -28,7 +29,11 @@ the noise function were built and measured. **One is left: the language.**
 Four items. Close these and the kernel can be written; everything else in this
 specification is either already closed or waiting for code to exist. **Three are
 now closed**, and all three closed the way everything in Part 3 closed — by being
-built and measured rather than argued about. What is left is the language.
+built and measured rather than argued about.
+
+**A fifth entry then arrived**, which is the honest way to record it: wanting more
+than one planet forced the ID word to be laid out concretely for the first time,
+and it did not survive the packing. The list is not a burn-down chart.
 
 ---
 
@@ -241,6 +246,34 @@ survive the entry below.
 
 What has to be pinned: the hash, the interpolation, the octave count, the lacunarity
 and gain, and the order of accumulation. All of it, exactly, once.
+
+---
+
+## The ID word itself — reopened by adding a planet field
+
+**This is new, and it moved `encode`/`decode` out of the ready column.** Doc 26's
+table listed those as specified and verified by `qr.js`. They are — as a
+*re-encoding* of `(i, j)`. What had never been done is packing the result into a
+real word and checking the properties the specification claims for it.
+
+> **[verified]** `verification/id.js`. Of 2,145 cells at `D` 6, **2,144 change
+> value** when the chunk level moves, so `C` would be baked into every stored ID;
+> descending to full depth still leaves **three** possible corners, because path
+> digits name triangles and a cell is a vertex; and `q`, `r` need `(D−C)+1` bits
+> rather than `(D−C)`, so the address is **`5 + 2D + 2`**.
+
+See [doc 03](03-addressing.md) for the three encodings and their prices. The
+recommendation is **C** — path to depth `D` plus a 2-bit corner, canonicalised by
+lowest ID — which costs the same bits as storing `(i, j)` and keeps every property
+the specification asks for. **It is not yet verified**, and it should be before
+anyone writes `encode`.
+
+Two things worth noting about how this surfaced. It came from a **scope change**
+rather than from review — wanting more than one planet forced the word to be laid
+out concretely for the first time. And two of the three problems are consequences
+of [invariant 3](../CLAUDE.md), which has been on the front page throughout:
+*cells are vertices, not triangles.* The specification had been addressing
+triangles and calling them cells.
 
 ---
 
@@ -633,7 +666,8 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**One item left in Part 1: the language.** `neighbour(id, k)`, `rank(q, r)` and
+**Two items left in Part 1: the ID word, then the language.** The ID goes first —
+`encode` is the first function anyone writes, and every stored byte depends on it. `neighbour(id, k)`, `rank(q, r)` and
 the noise function were all built and measured, and all three behaved the way this
 page's lessons predict — the pessimism was wrong in kind, and each turned up a
 result nobody was looking for (the `reversed` field is never read; the border rule

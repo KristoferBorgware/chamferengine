@@ -129,6 +129,84 @@ At `D = 13` the whole address fits in **31 bits**. In a 64-bit integer that leav
 depth and chunk-level sliders and watch the total stay fixed; tap the truncate
 buttons to see bits vanish and the surviving prefix's surface coverage reported.
 
+### This document asks for three things at once, and the layout above delivers one
+
+Adding a **planet field** — so a save file can hold more than one world — is what
+finally made someone pack these bits into a real word and look at them. The
+layout does not survive it, and the reasons were there all along.
+
+Three properties are claimed across this specification:
+
+1. the address is a fixed **`5 + 2D` bits**, whatever `C` is (above);
+2. a chunk is reached by **one shift**, so a contiguous range is one compact
+   patch ([doc 07](07-data-structures.md), [doc 22](22-multiplayer-interest.md));
+3. **chunk size stays tunable after launch** because it "does not change world
+   data" ([doc 06](06-world-sizing.md)).
+
+Only the first is true as drawn.
+
+> **[verified]** `verification/id.js`, section 1. Pack `[face][path][q][r]` as
+> the figure above draws it and change `C`: of 2,145 cells at `D` 6, **2,144
+> change value**. Only `(0,0)` is fixed. The width really is `5 + 2D` at every
+> `C` — but the *number* moves, because path digits are not a bit-slice of
+> `(i, j)`. The descent picks one of **four** children per level and the middle
+> child flips the frame, so re-cutting at a different `C` re-encodes the low half.
+
+Stored under that layout, **the chunk level would be baked into every ID ever
+written to disk**, and claim 3 is false.
+
+The obvious repair is to carry the path all the way down so `C` never appears in
+the number. That does not work either, and the reason is
+[invariant 3](../CLAUDE.md) — which is not negotiable.
+
+> **[verified]** Section 2. Descend to full depth and the leftover `(q, r)` is
+> still one of **three** values — `(0,0)`, `(0,1)` or `(1,0)`. A triangle of side
+> 1 has **three vertices**, and a cell *is* a vertex. **Path digits address
+> triangles. They cannot address a vertex, however deep they go.**
+
+And the same fact has a third consequence, which is simply an arithmetic error in
+the figure above:
+
+> **[verified]** Section 3. `q` and `r` are given `(D−C)` bits each and never fit.
+> A chunk of side `m` carries lattice coordinates `0..m` **inclusive** — `m+1`
+> values, needing `(D−C)+1` bits. At `D` 11 / `C` 6 the maximum is **32** in a
+> 5-bit field.
+
+**So the real address is `5 + 2D + 2` bits, not `5 + 2D`.** Two bits, at every
+depth, and they are the two that say which corner of the smallest triangle you
+meant.
+
+### Which encoding — still open
+
+The three properties can be had, but not by the drawing above. The options, at
+`D` 11:
+
+| Encoding | Address bits | `C`-free | Chunk lookup | Range = patch |
+|---|---|---|---|---|
+| **A** store `(i, j)` directly | 29 | yes | no — needs the descent | **no** |
+| **B** store path + `(q, r)` at a fixed `C` | 29 | **no** | yes, one shift | yes |
+| **C** path to depth `D` + a 2-bit corner | 29 | yes | yes, one shift | yes |
+
+**A** costs the property this document exists for: with `(i, j)` as two plain
+numbers a chunk is not a contiguous range, and [doc 22](22-multiplayer-interest.md)'s
+disk locality — five runs fetching 62% of a region — goes with it.
+
+**B** keeps everything except tunability. `C` joins `blockSize` and `D` as fixed
+at world creation, which is a real loss but a small one.
+
+**C** keeps all three at the **same bit cost as A**, by naming the side-1 triangle
+and then which of its corners. Its cost is that a vertex is shared by up to six
+such triangles, so encoding needs a canonical pick — which is this document's own
+**lowest ID wins** rule applied one level further down, the same rule
+`rank.js` already proved partitions the sphere exactly.
+
+**C is the recommendation and is not yet verified.** It is written here as an
+option, not a result.
+
+Whichever wins, the word has room. At `D` 11 with a **12-bit planet field**:
+`12 + 29 + 10 = 51` of 64 bits, **13 spare**, for **4,096 worlds** of 41,943,042
+cells each.
+
 ### Code space efficiency
 
 The encoding is deliberately sparse. Only 20 of 32 face codes exist, and the

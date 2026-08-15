@@ -275,7 +275,8 @@ Violating any of these breaks the design. They are not tunable.
 | `N(L)` | `10 * 4^L + 2` | surface cells at level `L` | `scale.js` |
 | `K` | `sqrt(8π / (10√3))` = `1.20459` | `blockSize ≈ K · radius / 2^L` | `calc.js` |
 | hex area | `(√3 / 2) · d²` ≈ `0.866 d²` | `d` = centre-to-centre spacing | — |
-| ID width | `5 + 2·D` bits | `D` = world subdivision depth | — |
+| ID width | `5 + 2·D + 2` bits | the last 2 name a corner, not a triangle | `id.js` |
+| planet field | `12` bits = 4,096 worlds | word is 51 of 64 at D11 | `id.js` |
 | code space used | `≈ 31.25%` | `20/32` faces × `1/2` triangle-in-square | — |
 | adjacency table | 60 entries, 180 bytes | 20 faces × 3 edges × 3 bytes | `adj.js` |
 | S2 area ratios | linear `5.20`, quadratic `2.08`, tangent `1.41` | asymptotic | `s2.js` |
@@ -629,6 +630,17 @@ the only one left**, and the noise pin sharpened what it must supply: wrapping
 - ~~`neighbour(id, k)`~~ — **closed** by `neighbour.js`, see doc 05.
 - ~~`rank(q, r)`~~ — **closed** by `rank.js`, see doc 07.
 - ~~`noise`~~ — **closed** by `noise.js`, see doc 08.
+- **The ID word — REOPENED** by adding a planet field (`id.js`, doc 03). Packing
+  the bits for the first time broke three claims. `[face][path][q][r]` as doc 03
+  draws it: **2,144 of 2,145** cells change value when `C` moves, so the chunk
+  level would be baked into every stored ID and doc 06's "tunable after launch"
+  is false. Carrying the path to full depth does not fix it — **path digits name
+  triangles and a cell is a vertex** (invariant 3), so three corners always
+  remain. And `q`, `r` need `(D−C)+1` bits, not `(D−C)`, because a side-`m`
+  triangle has `m+1` lattice points per edge. **The address is `5 + 2D + 2`.**
+  Three encodings are priced in doc 03; **C** (path to depth `D` + 2-bit corner,
+  canonicalised by lowest ID) is the recommendation and is **not yet verified**.
+  Word at D11: planet 12 + address 29 + layer 10 = **51 of 64**.
 - **Which language and runtime** (doc 23) — the only open bullet that blocks the
   first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
   `Math.sin`; most languages are similar but not identical.
