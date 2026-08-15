@@ -708,6 +708,20 @@ Violating any of these breaks the design. They are not tunable.
   registry. That is why the wire is a **closed message set, never RPC**. And
   **x-ray is unpreventable by construction** — every client generates the whole
   planet — so this design polices **actions**, never **knowledge**.
+- **V1 SCOPE: the server is a point of storage only** (doc 30). It holds the delta
+  store, routes edits, and validates nothing; server-side simulation and the
+  input-driven authority that goes with it are **V2**. This is the first V1 scope
+  line drawn anywhere in the specification. Doc 30 recommended the point query and
+  the decision went the other way, which is fine — nothing is lost, because every
+  free check stays available and the upgrade is a check inserted *before* a store,
+  not an architecture change. **Three rules keep that door open and cost V1
+  nothing:** (1) an edit message names a **cell and a resulting block state**, so
+  V2 can check reach and solidity without a protocol change; (2) **player inventory
+  never travels client → server** — this is the one thing that cannot be repaired
+  later, so keep it client-side, and if it must persist, persist it as an opaque
+  blob marked *not authoritative*; (3) **ship the rejection message in V1 unused**,
+  because a client that assumes every edit succeeds has to be rewritten when V2
+  starts refusing them.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

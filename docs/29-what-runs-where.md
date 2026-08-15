@@ -268,14 +268,15 @@ it costs everything.
   regenerating it pays that cost on join, and nobody has measured how long it
   takes. If it is slow, "regenerate rather than download" is still right but needs
   a loading screen.
-- ~~Whether the server validates edits, or trusts the client.~~ — **closed** by
-  [doc 30](30-authority-and-cheating.md): it validates, with a point query per
-  edit, because that costs `0.06%` of a core at a thousand players and closes the
-  only blind spot the server has.
-- **Whether mobs run server-side** ([doc 10](10-pathfinding.md), doc 30). Still
-  open, but no longer an architecture question — doc 30 prices it at **158×** what
-  player validation costs and shows it is the only thing that makes the server a
-  simulator.
+- ~~Whether the server validates edits, or trusts the client.~~ — **decided** in
+  [doc 30](30-authority-and-cheating.md): **for V1 it trusts.** The server is a
+  point of storage only. Doc 30 prices the validating version at `0.06%` of a core
+  at a thousand players and keeps it as the V2 upgrade, which is a check inserted
+  before a store rather than an architecture change.
+- **Whether mobs run server-side** ([doc 10](10-pathfinding.md), doc 30) —
+  **out of scope for V1**, and no longer an architecture question. Doc 30 prices it
+  at **158×** what player validation costs and shows it is the only thing that
+  turns the server into a simulator.
 - **Whether generation should be `no_std`.** It has no reason to allocate, and a
   `no_std` core compiles to a 1.6 KB wasm module against 1.35 MB with the standard
   library linked in. That is a build-shape question, not a design one, but it is

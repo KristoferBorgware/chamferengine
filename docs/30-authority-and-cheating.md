@@ -76,9 +76,11 @@ validation is not expensive and never was. The reason is structural rather than
 lucky: a player is a slow, human-rate event source, and each event needs **one
 cell** — no chunk, no cache, no layers above or below, no mesh.
 
-So the design should simply assume it. **The server validates every edit with a
-point query**, and doc 29's "trusted client" working assumption is withdrawn as
-the default. It was never buying anything.
+So this is cheap whenever it is wanted. **For V1 it is not wanted** — see
+[the V1 decision](#the-v1-decision-the-server-stores-and-checks-nothing) below,
+which scopes the server down to storage. The point worth keeping is that the
+upgrade is a check inserted before a store, not an architecture change, and that
+its price is a rounding error.
 
 ---
 
@@ -190,6 +192,58 @@ that list and closes it.
 
 ---
 
+## The V1 decision: the server stores, and checks nothing
+
+**Decided: for V1 the server is a point of storage only.** It holds the delta
+store, it routes edits to interested players, and it validates nothing. Server-side
+simulation — mobs, and the input-driven authority that goes with them — is wanted
+later and is explicitly **out of scope for V1**.
+
+This document recommended the middle bar and the decision is the first one. That
+is a legitimate call and it is worth being precise about what it costs rather than
+arguing it again:
+
+- **Everything in section 1 is still available for free** whenever it is wanted,
+  because it needs nothing the server does not already hold. Reach, rate,
+  protected columns, malformed IDs, unknown types, and the whole edited world.
+  V1 declines to *use* them; it does not lose them.
+- **V1 is a trusted-client game.** That is the right shape for playing with people
+  you know and the wrong shape for a public server, and the difference is a
+  deployment decision rather than a rewrite.
+
+### The one thing V1 must get right anyway
+
+A storage-only server is cheap to build and cheap to upgrade — **provided V1 does
+not ship a wire that forecloses the upgrade.** Two rules, and both cost V1
+nothing:
+
+**1. An edit message names a cell and a resulting block state.** That is what a
+storage-only server needs, and it happens to be exactly what a validating server
+can check later: the cell gives reach against the player's position, and the state
+gives the type check and the solidity query. **Adding authority in V2 is inserting
+a check before the store, not changing the message.** The upgrade path is free as
+long as nobody invents a shortcut here.
+
+**2. Player inventory must not travel client → server.** This is the trap, and it
+is the one thing that cannot be repaired later. If V1 lets a client write its own
+inventory to the server — even just for persistence — then V2 has no way to make
+that authoritative without throwing the mechanism away and re-deriving every
+player's items from nothing. **Keep inventory client-side in V1 and do not sync
+it.** If it must persist, persist it as an opaque client blob that is explicitly
+not believed, and write "not authoritative" next to it in the save format so
+nobody later mistakes it for truth.
+
+**3. The client must be able to be told "no", even though V1 never says it.** A
+V1 client that assumes every edit succeeds has no code path for rejection, and
+adding one in V2 touches every place the client predicts a change. Ship the
+rejection message in V1's closed set, unused. It costs a message type and it saves
+the rollback question ([Still open](#still-open)) from becoming a rewrite.
+
+Those three are the entire cost of keeping the door open, and none of them makes
+V1 bigger.
+
+---
+
 ## What cannot be prevented, by construction
 
 **Every client generates the whole planet.** That is [doc 29](29-what-runs-where.md),
@@ -219,9 +273,9 @@ which is the rate limit in section 1 and costs nothing. That is the honest line:
   to roll back, and that is a whole mechanism nothing here designs.
 - **Entity interest** — doc 22's own open item, promoted to a blocker the moment
   mobs run server-side.
-- **Whether mobs run server-side at all.** This document prices it and does not
-  decide it. It is now a gameplay question rather than an architecture one, which
-  is the useful change.
+- ~~Whether mobs run server-side at all.~~ — **out of scope for V1** by the
+  decision above. Still the right question for V2, and now a gameplay one rather
+  than an architecture one, which is the useful change.
 - **The item format.** [Doc 27](27-block-state.md) lists it open and it stays
   open. The *rule* above works without it — the server issues drops from the
   registry — but the inventory it issues them into has no design yet.
@@ -230,6 +284,10 @@ which is the rate limit in section 1 and costs nothing. That is the honest line:
 
 ## In one breath
 
+- **V1: the server stores and checks nothing.** Decided. Server-side simulation
+  is V2. The cost of keeping that door open is three rules and no extra work:
+  edits name a cell and a state, inventory never travels client → server, and the
+  client ships a rejection path it never uses.
 - **"Does the server generate?" has three answers.** Stores-and-routes,
   plus-point-queries, plus-resident-chunks — and they differ by four orders of
   magnitude.
@@ -237,8 +295,8 @@ which is the rate limit in section 1 and costs nothing. That is the honest line:
   IDs, unknown types, and anything about a cell a player has already touched, all
   from addressing and the delta store the server already holds.
 - **The one blind spot is virgin ground, and it costs a point query** — 200 ns in
-  Rust, **0.06% of a core at a thousand players**. Assume it. Doc 29's
-  trusted-client default is withdrawn.
+  Rust, **0.06% of a core at a thousand players**. Deferred to V2, not because it
+  is expensive but because V1 does not need it.
 - **Mobs are the expensive decision, not honesty.** A pathfinding mob touches
   **3,169** cells; a hundred of them cost **158×** what a thousand players do, and
   they need chunks resident, a tick loop, and doc 22's open entity-interest
