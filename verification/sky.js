@@ -155,16 +155,30 @@ console.log('\n3. wind must have calm points, and only one field earns its shape
   console.log('   property of the WORLD, never a heading carried by a cell.');
 }
 
-// ---- 4. the cloud layer is the same grid at a bigger radius ----------------
-// Invariant 10: the tessellation is identical at every layer -- same face, same
-// path, same (q, r), evaluated at a different radius. Clouds are ABOVE the
-// crust rather than in it, and that costs nothing new.
-console.log('\n4. a cloud sheet is the existing grid, evaluated higher up');
+// ---- 4. the cloud sheet borrows the lattice and is NOT made of cells -------
+// Invariant 10's construction is radius-independent -- same face, same path,
+// same (q, r), evaluated at any radius -- so the hexagons are free above the
+// surface as well as below it. But a cloud is NOT A CELL: it has no ID, no
+// chunk, and no layer, because doc 03's layer field counts DOWNWARD from the
+// crust top and clouds are up. That is not pedantry: an address is what makes a
+// thing storable, and every mechanism this specification has for blocks is keyed
+// by cell ID.
+console.log('\n4. clouds borrow the lattice; they are not cells and have no address');
 {
   const K = 1.20459;                 // doc 06's constant
-  console.log('   cell size at a given level, on the surface and at cloud altitude:');
+  console.log('   what an address would buy, and why clouds decline it:');
+  console.log('     the delta store   keyed by cell ID       doc 07');
+  console.log('     the side table    keyed by cell ID       doc 27');
+  console.log('     interest routing  by the chunk prefix    doc 22');
+  console.log('     an edit message   names a cell ID        doc 30');
+  console.log('   Give clouds IDs and all four become POSSIBLE, which is how a cosmetic');
+  console.log('   sheet ends up in a save file. A cloud is a lattice point indexed by');
+  console.log('   (face, i, j) into a transient buffer -- the way a vertex is indexed,');
+  console.log('   not the way a block is.');
   console.log('');
-  console.log('   level   surface cell   at 300 m up   cells on the whole sheet');
+  console.log('   lattice spacing at a given level, on the surface and at cloud altitude:');
+  console.log('');
+  console.log('   level   at the surface   at 300 m up   points on the whole sheet');
   for (const L of [3, 4, 5, 6, 7]){
     const s0 = K * R / 2**L, s1 = K * (R+300) / 2**L;
     const n = 10 * 4**L + 2;
@@ -172,9 +186,9 @@ console.log('\n4. a cloud sheet is the existing grid, evaluated higher up');
   }
   console.log('');
   console.log('   A cloud does not need metre resolution. LEVEL 5 gives a ~64 m puff and');
-  console.log('   10,242 cells for the entire sky -- against 41,943,042 for the surface at');
-  console.log('   D 11. The whole cloud sheet is four thousand times smaller than one');
-  console.log('   layer of the world.');
+  console.log('   10,242 POINTS for the entire sky -- against 41,943,042 cells for the');
+  console.log('   surface at D 11. Four thousand times smaller than one layer of the');
+  console.log('   world, and ten thousand floats is a buffer rather than a data structure.');
   console.log('');
   // how much of the sheet is in view
   const horizon = h => R * Math.acos(R / (R + h));
@@ -187,9 +201,9 @@ console.log('\n4. a cloud sheet is the existing grid, evaluated higher up');
   console.log('');
   console.log('   An elevated object clears the horizon from much further away than the');
   console.log('   ground does -- doc 14 already uses R*acos(R/(R+h)) for a distant peak.');
-  console.log('   So the visible cloud sheet is a few hundred cells, not a few thousand,');
-  console.log('   and it is a FLAT-SHADED SHEET rather than a volume: no crust, no layers,');
-  console.log('   no delta store, no collision.');
+  console.log('   So the visible sheet is a few hundred points, not a few thousand, and it');
+  console.log('   is a SHEET rather than a volume: no crust, no layers, no chunk, no delta');
+  console.log('   store, no collision, and nothing doc 07 has to make room for.');
 }
 
 // ---- 5. the moon, and why its size is an art decision ----------------------
@@ -238,8 +252,11 @@ console.log('   SKYBOX: fixed in WORLD space, not view space. Walking rotates yo
 console.log(`   the whole celestial sphere in ${(CIRC/WALK/3600).toFixed(2)} h, and a camera-locked skybox`);
 console.log('   turns that into stars glued to your head.');
 console.log('');
-console.log('   CLOUDS: the same addressing at a bigger radius (invariant 10). Level 5 is');
-console.log('   a 64 m puff and 10,242 cells for the entire sky. Wind is ONE AXIS AND ONE');
+console.log('   CLOUDS: the LATTICE is reused, the ADDRESS is not. The construction is');
+console.log('   radius-independent so the hexagons are free; but there is no layer number');
+console.log('   for a cloud -- layers count downward -- and an address is what makes a');
+console.log('   thing storable, so withholding it keeps "never stored" true by');
+console.log('   construction. Level 5 is a 64 m puff and 10,242 points. Wind is ONE AXIS AND ONE');
 console.log('   RATE -- rotate the sample point before the lookup -- because the hairy ball');
 console.log('   theorem forbids a uniform wind and rigid rotation puts the two calm points');
 console.log('   at the poles, where an atmosphere puts them anyway.');

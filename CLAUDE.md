@@ -772,11 +772,18 @@ Violating any of these breaks the design. They are not tunable.
   10,681 m circumference, in **2.12 h** — so **the skybox is fixed in WORLD space,
   not view space**, or the stars follow the player around the planet. The same
   number says **a player outwalks the sun** for any day longer than 2.12 h and can
-  hold a sunset in place by walking west. **Clouds are the same grid at a bigger
-  radius** (invariant 10 going up instead of down): level 5 is a 64 m puff and
-  **10,242 cells for the whole sky** against 41,943,042 for one surface layer, of
-  which under **9%** is in view at 300 m altitude — a sheet, not a volume, with no
-  collision and nothing in a chunk. **Wind is ONE AXIS AND ONE RATE**, rotating the
+  hold a sunset in place by walking west. **Clouds borrow the LATTICE and are NOT
+  cells**: invariant 10's construction is radius-independent so the hexagons are
+  free above the surface, but a cloud has **no address** — no cell ID, no chunk,
+  and **no layer, because `layer` counts downward from the crust top**. That is
+  load-bearing rather than pedantic: the delta store, the side table, interest
+  routing and edit messages are **all keyed by cell ID**, so an address is what
+  makes a thing storable, and withholding it keeps "cosmetic, never stored" true
+  by construction instead of by discipline. A cloud is a lattice point indexed by
+  `(face, i, j)` into a transient buffer — the way a vertex is, not the way a
+  block is. Level 5 is a 64 m puff and **10,242 points for the whole sky** against
+  41,943,042 cells for one surface layer, under **9%** in view at 300 m — a
+  buffer, not a data structure. **Wind is ONE AXIS AND ONE RATE**, rotating the
   sample point before the noise lookup: the hairy ball theorem (invariant 8's own
   theorem) forbids a uniform wind, and of the two obvious fields only **rigid
   rotation is divergence-free** — mean `|div|` **3.3e-12** against **0.9988** for a

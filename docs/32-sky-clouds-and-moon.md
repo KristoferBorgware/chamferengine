@@ -82,44 +82,80 @@ round**, which is what doc 16 suggested without knowing this was the reason.
 
 ---
 
-## Clouds are the same grid, higher up
+## Clouds borrow the lattice and are not cells
 
-The specification already has everything needed, and it is
-[invariant 10](../CLAUDE.md) that supplies it: **the tessellation is identical at
-every layer** — same face, same path, same `(q, r)`, evaluated at a different
-radius. That invariant was written for the crust going *down*. It works just as
-well going *up*.
+Earlier drafts of this document said a cloud was "a cell of the same grid at a
+bigger radius, with no new addressing". That is wrong in a way worth being precise
+about, because it invites exactly the mistake it should be preventing.
 
-**A cloud is a cell of the same grid, evaluated at `R + altitude`.** No new
-addressing, no second coordinate system, no lookup. And a cloud does not need
-metre resolution:
+**Clouds have no address at all.** Not a cell ID, not a chunk, not a layer.
 
-> **[verified]** `verification/sky.js`, section 4. Cell size by level, and the
-> whole-sheet count:
+Two things are being confused when they are described as one:
+
+| | Reused | Why |
+|---|---|---|
+| **the lattice** — the icosahedron, the subdivision, the hexagon corners | **yes** | it is a construction, and it is radius-independent |
+| **the address** — [doc 03](03-addressing.md)'s ID word, the layer field, the chunk, the delta store | **no** | it is an identity, and clouds have none |
+
+The lattice is free to reuse. That is what [invariant 10](../CLAUDE.md) is really
+saying — same face, same path, same `(q, r)`, evaluated at a different radius —
+and the construction does not care whether the radius is smaller or larger than
+the surface. So the hexagons come out right, and
+[doc 18](18-cell-boundary.md)'s corner rule draws them with code that already
+exists.
+
+**The address is not free to reuse, and one field settles it.** The `layer` in
+doc 03's word is *a radial index counting downward from the crust top*
+([doc 12](12-glossary.md)). Clouds are **up**. There is no layer number for a
+cloud, and inventing one — a negative layer, a reserved range, an "altitude mode"
+bit — would mean the addressing had grown a second meaning to carry decoration.
+
+And an address is not a neutral label. **An address is what makes a thing
+storable.** Everything the specification does to blocks, it does *by cell ID*:
+
+- the **delta store** is keyed by it ([doc 07](07-data-structures.md))
+- the **side table** is keyed by it ([doc 27](27-block-state.md))
+- **interest** routes edits by the chunk it truncates to ([doc 22](22-multiplayer-interest.md))
+- an **edit message** names one ([doc 30](30-authority-and-cheating.md))
+
+Give clouds IDs and every one of those becomes *possible*, which means eventually
+someone will do it: a cloud in the delta store, a cloud in an edit message, a
+cloud synced to other players. Withholding the address is what keeps "cosmetic, no
+collision, never stored" true by construction rather than by discipline.
+
+**So a cloud is a lattice point, not a cell.** It is indexed by `(face, i, j)` at
+a coarse level, as an offset into a small transient buffer the renderer owns — the
+way a vertex is indexed, not the way a block is. It is never named to the server
+and never written anywhere.
+
+### And it stays small, which is why a buffer is enough
+
+> **[verified]** `verification/sky.js`, section 4. Lattice spacing by level, and
+> the whole-sheet point count:
 >
-> | Level | Surface cell | At 300 m up | Cells on the whole sheet |
+> | Level | Spacing at the surface | At 300 m up | Points on the whole sheet |
 > |---|---|---|---|
 > | 4 | 128.0 m | 150.6 m | 2,562 |
 > | **5** | **64.0 m** | **75.3 m** | **10,242** |
 > | 6 | 32.0 m | 37.6 m | 40,962 |
 >
-> **Level 5** is a ~64 m puff and **10,242 cells for the entire sky** — against
-> 41,943,042 for one layer of the surface at `D` 11. The cloud sheet is **four
-> thousand times smaller** than the world beneath it.
+> **Level 5** is a ~64 m puff and **10,242 points for the entire sky** — against
+> 41,943,042 cells for one layer of the surface at `D` 11. The cloud sheet is
+> **four thousand times smaller** than the world beneath it.
 
-And only a fraction of it is ever on screen. An elevated object clears the horizon
-from much further away than the ground does — the same `R·acos(R/(R+h))` doc 14
-uses for a distant peak:
+Ten thousand floats is a buffer, not a data structure. And only a fraction is ever
+on screen, because an elevated object clears the horizon from much further away
+than the ground does — the same `R·acos(R/(R+h))` doc 14 uses for a distant peak:
 
 > **[verified]** Same section. Clouds at **150 m** are visible out to 765 m, which
 > is **5.0%** of the sheet; at **300 m**, out to 1,019 m and **8.7%**; at
 > **600 m**, out to 1,332 m and **14.6%**.
 
-So the visible cloud sheet is a few hundred cells. **It is a sheet and not a
-volume**: no crust, no layers, no delta store, no collision, and nothing in
-[doc 07](07-data-structures.md)'s chunk. Coverage is one noise lookup on the
-cell's direction — the same `fbm` [doc 08](08-terrain-generation.md) already pins,
-which costs nothing new to have around.
+So the visible sheet is a few hundred points. **It is a sheet and not a volume**:
+no crust, no layers, no chunk, no delta store, no collision, and nothing that
+[doc 07](07-data-structures.md) has to make room for. Coverage is one noise lookup
+on the point's direction — the same `fbm` [doc 08](08-terrain-generation.md)
+already pins.
 
 ### Wind cannot blow the same way everywhere
 
@@ -245,10 +281,12 @@ parallax is free.**
 - **A player outwalks the sun** for any day longer than **2.12 h**, and can hold a
   sunset in place by walking west. That is the world telling you it is small, for
   free.
-- **Clouds are the same grid at a bigger radius** — invariant 10, going up instead
-  of down. **Level 5** is a 64 m puff and **10,242 cells for the whole sky**, of
-  which under **9%** is ever in view. A sheet, not a volume: no collision, no
-  layers, nothing in a chunk.
+- **Clouds borrow the lattice and are not cells.** The *construction* is
+  radius-independent so the hexagons are free; the **address is not reused at
+  all**. There is no layer number for a cloud — `layer` counts **downward** — and
+  an address is what makes a thing storable, so withholding it keeps "never
+  stored" true by construction. **Level 5** is a 64 m puff and **10,242 points for
+  the whole sky**, under **9%** ever in view: a buffer, not a data structure.
 - **Wind is one axis and one rate.** The hairy ball theorem forbids a uniform
   wind, and of the two obvious fields only **rigid rotation is divergence-free**
   (`3.3e−12` against `0.9988`), so only it carries a pattern without stretching it.

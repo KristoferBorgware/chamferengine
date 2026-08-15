@@ -111,9 +111,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 393 ns in this JavaScript
+   one solidity(cell) query: 394 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 256 ns)
+    upper bound -- Rust is about 257 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -128,8 +128,8 @@ authority.js -- what the server must know, per cheat, and what it costs
      players   queries/s   CPU of one core
           10          20      0.0008%
          100         200      0.0079%
-        1000        2000      0.0787%
-       10000       20000      0.7870%
+        1000        2000      0.0788%
+       10000       20000      0.7885%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1120,7 +1120,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 182M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1361,12 +1361,12 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.70 ms   3.88x
-         JS, one object a vertex   9.45 ms   52.51x
+         JS, typed arrays          0.69 ms   3.82x
+         JS, one object a vertex   7.26 ms   40.34x
 
-       THE LANGUAGE GAP IS 3.9x. THE LAYOUT GAP IS 14x.
+       THE LANGUAGE GAP IS 3.8x. THE LAYOUT GAP IS 11x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 14x version is the one that
+       than choosing the language. And the 11x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
@@ -2251,7 +2251,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1010 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 987 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2517,10 +2517,20 @@ sky.js -- the skybox, clouds and the moon on a 1,700 m planet
    per-cell field, and nothing that violates invariant 8 -- the axis is a
    property of the WORLD, never a heading carried by a cell.
 
-4. a cloud sheet is the existing grid, evaluated higher up
-   cell size at a given level, on the surface and at cloud altitude:
+4. clouds borrow the lattice; they are not cells and have no address
+   what an address would buy, and why clouds decline it:
+     the delta store   keyed by cell ID       doc 07
+     the side table    keyed by cell ID       doc 27
+     interest routing  by the chunk prefix    doc 22
+     an edit message   names a cell ID        doc 30
+   Give clouds IDs and all four become POSSIBLE, which is how a cosmetic
+   sheet ends up in a save file. A cloud is a lattice point indexed by
+   (face, i, j) into a transient buffer -- the way a vertex is indexed,
+   not the way a block is.
 
-   level   surface cell   at 300 m up   cells on the whole sheet
+   lattice spacing at a given level, on the surface and at cloud altitude:
+
+   level   at the surface   at 300 m up   points on the whole sheet
        3        256.0 m       301.1 m          642
        4        128.0 m       150.6 m        2,562
        5         64.0 m        75.3 m       10,242
@@ -2528,9 +2538,9 @@ sky.js -- the skybox, clouds and the moon on a 1,700 m planet
        7         16.0 m        18.8 m      163,842
 
    A cloud does not need metre resolution. LEVEL 5 gives a ~64 m puff and
-   10,242 cells for the entire sky -- against 41,943,042 for the surface at
-   D 11. The whole cloud sheet is four thousand times smaller than one
-   layer of the world.
+   10,242 POINTS for the entire sky -- against 41,943,042 cells for the
+   surface at D 11. Four thousand times smaller than one layer of the
+   world, and ten thousand floats is a buffer rather than a data structure.
 
    clouds at 150 m are visible out to   765 m  =  5.0% of the sky sheet
    clouds at 300 m are visible out to  1019 m  =  8.7% of the sky sheet
@@ -2538,9 +2548,9 @@ sky.js -- the skybox, clouds and the moon on a 1,700 m planet
 
    An elevated object clears the horizon from much further away than the
    ground does -- doc 14 already uses R*acos(R/(R+h)) for a distant peak.
-   So the visible cloud sheet is a few hundred cells, not a few thousand,
-   and it is a FLAT-SHADED SHEET rather than a volume: no crust, no layers,
-   no delta store, no collision.
+   So the visible sheet is a few hundred points, not a few thousand, and it
+   is a SHEET rather than a volume: no crust, no layers, no chunk, no delta
+   store, no collision, and nothing doc 07 has to make room for.
 
 5. the moon: angular size is scale-free, so someone has to choose it
    Scale the real Earth-Moon system down to R = 1700 m (factor 2.67e-4):
@@ -2578,8 +2588,11 @@ verdict
    the whole celestial sphere in 2.12 h, and a camera-locked skybox
    turns that into stars glued to your head.
 
-   CLOUDS: the same addressing at a bigger radius (invariant 10). Level 5 is
-   a 64 m puff and 10,242 cells for the entire sky. Wind is ONE AXIS AND ONE
+   CLOUDS: the LATTICE is reused, the ADDRESS is not. The construction is
+   radius-independent so the hexagons are free; but there is no layer number
+   for a cloud -- layers count downward -- and an address is what makes a
+   thing storable, so withholding it keeps "never stored" true by
+   construction. Level 5 is a 64 m puff and 10,242 points. Wind is ONE AXIS AND ONE
    RATE -- rotate the sample point before the lookup -- because the hairy ball
    theorem forbids a uniform wind and rigid rotation puts the two calm points
    at the poles, where an atmosphere puts them anyway.
