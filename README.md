@@ -71,7 +71,7 @@ a runnable demo where one exists.
 | 22 | [Multiplayer interest management](docs/22-multiplayer-interest.md) | Who to tell about an edit, and why it is not an ID range |
 | 23 | [Determinism across machines](docs/23-determinism.md) | Which arithmetic is pinned to the bit, and the one rule that follows |
 | 24 | [Player edits and global processes](docs/24-edits-and-global-processes.md) | What happens when someone dams a river the coarse map still describes |
-| 25 | [Water](docs/25-water.md) | Water as a block type, and what a translucent ocean costs to draw |
+| 25 | [Water](docs/25-water.md) | Water as a block type, what a translucent ocean costs to draw, and why you float in it |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

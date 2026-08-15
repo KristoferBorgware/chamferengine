@@ -177,7 +177,7 @@ script owns its numbers.
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
-| [25](docs/25-water.md) | water is a block type; what a translucent ocean costs to draw | `water.js` |
+| [25](docs/25-water.md) | water is a block type; drawing a translucent ocean; floating vs colliding | `water.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -314,6 +314,9 @@ Violating any of these breaks the design. They are not tunable.
 | water faces drawn | `0.89%` of the naive count | 113,455 of 12,717,512; **0** sides | `water.js` |
 | water surfaces in one view | `82.3%` see one, `0.6%` two | worst 3, over a 76 m horizon | `water.js` |
 | sea-surface merge span | `37` cells into one quad | sea level is a radius, so exactly flat | `water.js` |
+| depth at the water's edge | `85.3%` one block, `13.9%` two | over 4,189 shore columns | `water.js` |
+| shore you can step out at | `99.9%`; `58/58` bodies | worst bank 1.23 m; nothing traps a swimmer | `water.js` |
+| wade/swim threshold | **one cell**, no chest-deep | 1.8 m player, 1 m blocks | `water.js` |
 
 ## Established results
 
@@ -491,6 +494,23 @@ Violating any of these breaks the design. They are not tunable.
   of one thing. Sea level is a **radius**, making the ocean the only exactly flat
   surface on the planet and doc 14's best merge candidate: **37 cells into one
   quad**. Editing water costs exactly what editing stone costs.
+- **You do not fall through water, and that is a different query from collision**
+  (`water.js`, doc 25). No collision is a **face** test, always yes for water;
+  floating is a **cell** test — doc 04's position → cell lookup plus a block-type
+  read, both of which already exist. The generated world makes it playable without
+  anyone designing it to: **85.3%** of the water's edge is one block deep, you can
+  step out at **99.9%** of shore columns, and **58 of 58** bodies of water have an
+  exit, because water fills a valley and a valley has sides. At 1 m blocks a 1.8 m
+  player stands in one block and swims in two, so walking↔swimming is a
+  **threshold one cell wide** — never write a partial-buoyancy case. The one real
+  trap: a non-colliding block is one a fast mover passes through, and at 30 Hz a
+  falling player crosses 1.67 m per frame, so test the **swept segment** with doc
+  09's ray walk, never the endpoint.
+- **Water is placeable** (doc 25) — a bucket exists, and a placed block stays put,
+  in mid-air if that is where it was put. This is the only source of an exposed
+  vertical water face and the only way a view crosses two surfaces, so `water.js`'s
+  **0 sides** and **82.3% one surface** describe the **generated** world and do not
+  bound what a player builds. Neither changes the renderer's design.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

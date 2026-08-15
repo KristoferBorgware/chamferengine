@@ -509,6 +509,43 @@ const made = [];
 }
 
 // =============================================================================
+// 25 — wade-or-swim: the walking/swimming threshold is one cell wide
+// =============================================================================
+{
+  const C = 20, X0 = 30, BASE = 172, SEA = 3;      // cell px, origin, water level
+  const H = [5,5,4,3,2,1,0,0,0,1,2,3,4,5];         // ground height per column
+  const yOf = lvl => BASE - lvl*C;
+  let ground = '', water = '';
+  H.forEach((h, i) => {
+    const x = X0 + i*C;
+    for (let l=0; l<h; l++)
+      ground += `<rect class="cf-fill" x="${x}" y="${f(yOf(l+1))}" width="${C}" height="${C}"/>`;
+    for (let l=h; l<SEA; l++)
+      water += `<rect class="cf-af" x="${x}" y="${f(yOf(l+1))}" width="${C}" height="${C}" opacity="0.75"/>`;
+  });
+  // a player is 1.8 blocks tall: a head and a body, drawn from the feet up
+  const person = (col, feetLvl, label) => {
+    const x = X0 + col*C + C/2, y = yOf(feetLvl);
+    return `<path class="cf-g" d="M${f(x)} ${f(y)}L${f(x)} ${f(y-1.25*C)}"/>`
+      + `<circle class="cf-gf" cx="${f(x)}" cy="${f(y-1.55*C)}" r="${f(0.3*C)}"/>`
+      + `<text class="cf-gd" x="${f(x)}" y="${f(y-2.1*C)}" text-anchor="middle">${label}</text>`;
+  };
+  made.push(svg('wade-or-swim', 440, 250, `
+  ${ground}${water}
+  <path class="cf-a" stroke-width="2.5" d="M${f(X0+H.findIndex(h=>h<SEA)*C)} ${f(yOf(SEA))}`
+    + `L${f(X0+(H.length-[...H].reverse().findIndex(h=>h<SEA))*C)} ${f(yOf(SEA))}"/>
+  ${person(2, 4, 'walk')}
+  ${person(4, 2, 'wade')}
+  ${person(7, SEA - 1.25, 'swim')}
+  <path class="cf-l" d="M${f(X0+5*C)} ${f(yOf(SEA)+4)}L${f(X0+5*C)} ${f(BASE+14)}" stroke-dasharray="2 4"/>
+  <text class="cf-c" x="14" y="26">one block of water and you stand &#8212; two and your feet leave the floor</text>
+  <text class="cf-d" x="14" y="${f(BASE+34)}">85.3% of the water&#8217;s edge is one block deep, 14.7% is two or more. At 1 m</text>
+  <text class="cf-d" x="14" y="${f(BASE+52)}">blocks a 1.8 m player has no chest-deep state, so the walking/swimming</text>
+  <text class="cf-d" x="14" y="${f(BASE+70)}">threshold is exactly one cell wide &#8212; and the bank out is a single step</text>
+  <text class="cf-gd" x="${f(X0+5*C+6)}" y="${f(BASE+8)}">threshold</text>`));
+}
+
+// =============================================================================
 // 24 — water-goes-round: one block dams nothing on a six-way grid
 // =============================================================================
 {

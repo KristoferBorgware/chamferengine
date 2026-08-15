@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 250" width="440" height="250">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <rect class="cf-fill" x="30" y="152.0" width="20" height="20"/><rect class="cf-fill" x="30" y="132.0" width="20" height="20"/><rect class="cf-fill" x="30" y="112.0" width="20" height="20"/><rect class="cf-fill" x="30" y="92.0" width="20" height="20"/><rect class="cf-fill" x="30" y="72.0" width="20" height="20"/><rect class="cf-fill" x="50" y="152.0" width="20" height="20"/><rect class="cf-fill" x="50" y="132.0" width="20" height="20"/><rect class="cf-fill" x="50" y="112.0" width="20" height="20"/><rect class="cf-fill" x="50" y="92.0" width="20" height="20"/><rect class="cf-fill" x="50" y="72.0" width="20" height="20"/><rect class="cf-fill" x="70" y="152.0" width="20" height="20"/><rect class="cf-fill" x="70" y="132.0" width="20" height="20"/><rect class="cf-fill" x="70" y="112.0" width="20" height="20"/><rect class="cf-fill" x="70" y="92.0" width="20" height="20"/><rect class="cf-fill" x="90" y="152.0" width="20" height="20"/><rect class="cf-fill" x="90" y="132.0" width="20" height="20"/><rect class="cf-fill" x="90" y="112.0" width="20" height="20"/><rect class="cf-fill" x="110" y="152.0" width="20" height="20"/><rect class="cf-fill" x="110" y="132.0" width="20" height="20"/><rect class="cf-fill" x="130" y="152.0" width="20" height="20"/><rect class="cf-fill" x="210" y="152.0" width="20" height="20"/><rect class="cf-fill" x="230" y="152.0" width="20" height="20"/><rect class="cf-fill" x="230" y="132.0" width="20" height="20"/><rect class="cf-fill" x="250" y="152.0" width="20" height="20"/><rect class="cf-fill" x="250" y="132.0" width="20" height="20"/><rect class="cf-fill" x="250" y="112.0" width="20" height="20"/><rect class="cf-fill" x="270" y="152.0" width="20" height="20"/><rect class="cf-fill" x="270" y="132.0" width="20" height="20"/><rect class="cf-fill" x="270" y="112.0" width="20" height="20"/><rect class="cf-fill" x="270" y="92.0" width="20" height="20"/><rect class="cf-fill" x="290" y="152.0" width="20" height="20"/><rect class="cf-fill" x="290" y="132.0" width="20" height="20"/><rect class="cf-fill" x="290" y="112.0" width="20" height="20"/><rect class="cf-fill" x="290" y="92.0" width="20" height="20"/><rect class="cf-fill" x="290" y="72.0" width="20" height="20"/><rect class="cf-af" x="110" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="130" y="132.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="130" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="150" y="152.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="150" y="132.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="150" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="170" y="152.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="170" y="132.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="170" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="190" y="152.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="190" y="132.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="190" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="210" y="132.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="210" y="112.0" width="20" height="20" opacity="0.75"/><rect class="cf-af" x="230" y="112.0" width="20" height="20" opacity="0.75"/>
+  <path class="cf-a" stroke-width="2.5" d="M110.0 112.0L250.0 112.0"/>
+  <path class="cf-g" d="M80.0 92.0L80.0 67.0"/><circle class="cf-gf" cx="80.0" cy="61.0" r="6.0"/><text class="cf-gd" x="80.0" y="50.0" text-anchor="middle">walk</text>
+  <path class="cf-g" d="M120.0 132.0L120.0 107.0"/><circle class="cf-gf" cx="120.0" cy="101.0" r="6.0"/><text class="cf-gd" x="120.0" y="90.0" text-anchor="middle">wade</text>
+  <path class="cf-g" d="M180.0 137.0L180.0 112.0"/><circle class="cf-gf" cx="180.0" cy="106.0" r="6.0"/><text class="cf-gd" x="180.0" y="95.0" text-anchor="middle">swim</text>
+  <path class="cf-l" d="M130.0 116.0L130.0 186.0" stroke-dasharray="2 4"/>
+  <text class="cf-c" x="14" y="26">one block of water and you stand &#8212; two and your feet leave the floor</text>
+  <text class="cf-d" x="14" y="206.0">85.3% of the water&#8217;s edge is one block deep, 14.7% is two or more. At 1 m</text>
+  <text class="cf-d" x="14" y="224.0">blocks a 1.8 m player has no chest-deep state, so the walking/swimming</text>
+  <text class="cf-d" x="14" y="242.0">threshold is exactly one cell wide &#8212; and the bank out is a single step</text>
+  <text class="cf-gd" x="136.0" y="180.0">threshold</text>
+</svg>

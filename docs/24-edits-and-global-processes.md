@@ -144,8 +144,8 @@ that is done they are finished, and what they leave behind is blocks.
 
 So the rule is one sentence:
 
-> **Water is a block type: translucent, and with no collision. It is written by
-> the generator at world creation and never moves again.**
+> **Water is a block type: translucent, placeable, and with no collision. It is
+> written by the generator at world creation and never moves again.**
 
 Which answers the dam immediately, and not the way the sections above were
 heading. **Nothing happens.** The player gets a wall standing in a river. The
@@ -231,9 +231,10 @@ Two more cases it already covers:
 
 ## Still open
 
-- **Whether a player can place water at all.** Removing a water block is
-  obviously allowed. Whether a bucket exists — and therefore whether players can
-  build lakes by hand — is a game design question this document does not take.
+- ~~Whether a player can place water at all~~ — **decided: they can**, in
+  [doc 25](25-water.md). A bucket exists and a placed water block stays where it
+  was put. Which is the same rule as above read forwards instead of backwards:
+  if walling a river changes nothing, then placing water changes nothing either.
 - **Whether players should be told.** A wall in a river that changes nothing is
   the sort of thing players explain to themselves, usually wrongly. Saying it
   once — water is a material, not a fluid — costs a sentence.

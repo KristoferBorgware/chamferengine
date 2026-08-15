@@ -708,12 +708,28 @@ much water surface there is and how many layers of it a view crosses.
    (`frame.js`): 17.1% see none, **82.3% see one**, 0.6% see two, worst case
    **3** — out of 58 separate bodies on the planet. So doc 14's transparency
    question is two draw passes and a sort of one thing.
-4. **An edit costs what a stone edit costs.** One delta per block, no flood fill,
+4. **The shore is a ramp, not a wall.** Water has no collision but you float in
+   it rather than falling through, and that is only playable if shallow water
+   exists and the bank is climbable. Both fall out of water filling a valley:
+   over 4,189 shore columns, **85.3%** are one block deep, you can step out at
+   **99.9%** of them, and all **58** bodies of water have an exit. Nothing traps a
+   swimmer. Also: at 1 m blocks a 1.8 m player stands in one block and swims in
+   two, so the walking/swimming transition is **one cell wide** — a threshold, not
+   a gradient, and no partial-buoyancy case is needed.
+5. **An edit costs what a stone edit costs.** One delta per block, no flood fill,
    no re-route, no cascade, no second system to keep consistent — which is what
-   doc 24's decision buys.
+   doc 24's decision buys. Placement included: a placed water block stays where
+   it was put.
+
+**Note what placement costs the other numbers.** The 0-sides result in section 1
+and the one-surface result in section 3 both describe the **generated** world.
+A player-built aquarium has four sides and can put two surfaces in one view.
+Neither changes the renderer's design, and no measurement of a generated world
+can bound what someone chooses to build.
 
 **Does not verify:** anything about light in water, or the view from *under* the
-surface. Both are listed open in doc 25.
+surface. Both are listed open in doc 25. Nor how a swimmer moves once floating —
+speed, drag and breath are game design, not geometry.
 
 **Used in:** [doc 25](../docs/25-water.md)
 

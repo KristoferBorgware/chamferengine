@@ -1103,7 +1103,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 529 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 562 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -1504,13 +1504,45 @@ level 7: 163,842 columns, 60 m of relief, 1 m blocks
    Sorting a handful of surfaces per frame is not a sorting problem -- it is
    a sort of a handful of things.
 
-4. what it costs when a player touches it
+4. wading in, and getting back out
+   4,189 shore columns (wet, with dry land next to them)
+   depth at the water's edge:
+      1 block   85.3%
+      2 blocks  13.9%
+      3 blocks  0.7%
+   wade in (bottom reachable by a 1.8 m player): 85.3%
+   swimming from the first cell:                  14.7%
+   you can step out (bank <= 1 m) at 99.9% of shore columns
+   bodies of water with at least one exit: 58 of 58
+   worst bank anywhere: 1.23 m
+   Water deepens gradually because it fills a valley, and a valley has
+   sides -- so a shore is a ramp, not a wall, and the wading band exists
+   without anyone designing it. Nothing traps a swimmer.
+   Note there is no chest-deep: at 1 m blocks a 1.8 m player
+   stands in one block of water and swims in two. The transition between
+   walking and swimming is ONE cell wide, so it is a threshold rather than
+   a gradient, and the mover needs no partial-buoyancy case.
+   a player falling at 50 m/s crosses, per frame:
+     144 Hz  0.35 m = 0.3 blocks
+      60 Hz  0.83 m = 0.8 blocks
+      30 Hz  1.67 m = 1.7 blocks  <- skips a cell
+      20 Hz  2.50 m = 2.5 blocks  <- skips a cell
+   So test the swept segment, not the endpoint. Doc 09 already walks a
+   ray cell by cell; entering water is that walk with a different test.
+
+5. what it costs when a player touches it
    remove one water block   -> one delta, 57 bits (doc 03)
+   place one water block    -> one delta, and it stays where it was put
    wall across a river      -> as many deltas as blocks placed, and nothing else
    drain a lake by hand     -> one delta per block removed, no propagation
    Because water never moves, an edit to it costs exactly what an edit to
    stone costs. There is no flood fill, no re-route, no cascade, and no
    second system to keep consistent.
+   Placement is what breaks the 0-sides result in section 1, and only that:
+   GENERATED water has no exposed side, so a player-built one is the only
+   kind there is. Same for the one-surface figure in section 3 -- a built
+   aquarium in front of a lake is two surfaces, and no measurement of the
+   generated world can bound what someone chooses to build.
 
 verdict
    Water as blocks is cheaper than it sounds in every direction that matters.
