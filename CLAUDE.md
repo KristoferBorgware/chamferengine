@@ -652,9 +652,24 @@ Violating any of these breaks the design. They are not tunable.
   while `sqrt(x*x+y*y+z*z)` agrees everywhere. **`normalize` must be written the
   long way.** So determinism eliminated nobody, and **Rust** was chosen on the
   four requirements left: no flag needed at any `-O`, `wrapping_mul` in the
-  language, no GC inside doc 14's remesh, and **one source compiling to native and
-  WebAssembly** — which is what doc 22's client regenerating the coarse map
-  actually requires. **Java is the runner-up** and loses only on the last two.
+  language, the fast data layout being the **default** one, and **one source
+  compiling to native and WebAssembly** — which is what doc 22's client
+  regenerating the coarse map actually requires.
+- **"It has a garbage collector" is the wrong test** (`language.js` §5, doc 28).
+  Doc 28's first draft made "no GC pause in a frame" a requirement and used it to
+  push Java and TypeScript down; it does not survive measurement. **The generator
+  allocates nothing** in any language — scalar maths end to end — so nothing
+  collects, and on it JavaScript is **1.75×** C and Java **1.60×**. On doc 14's
+  84,000-triangle buffer build the **language gap is 1.5×** (Rust `Vec` 0.18 ms,
+  JS typed arrays 0.27 ms) and the **layout gap is 15×** (JS with one object per
+  vertex, 4.13 ms — and that is the version that allocates 42,000 objects a
+  rebuild). **Data layout matters ~10× more than language.** The real difference
+  is which layout you get by writing the obvious thing: a `Vec<struct>` is
+  contiguous, an array of objects is not. **TypeScript is the strongest case
+  against Rust** — it satisfies doc 22's native-and-browser requirement for
+  **free** where Rust needs `wasm32` — and the margin is thin enough to say so.
+  These are wall-clock timings; read ratios, and note nothing measures a whole
+  frame because there is no mesher yet.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

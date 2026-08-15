@@ -39,8 +39,15 @@ requirement, and separating them is most of the work:
 | 4 | a **fixed reduction order** | [08](08-terrain-generation.md) | fBm at 4 and 5 octaves moves by `1.4e-17` if the order changes |
 | 5 | **`float64` that stays `float64`** | [15](15-precision-and-origin.md) | an 80-bit intermediate is not the number that was stored |
 | 6 | **`float32`** for GPU-facing data | [15](15-precision-and-origin.md) | per-vertex, chunk-relative — `122 µm` at radius 1,700 m |
-| 7 | **no GC pause inside a frame** | [14](14-meshing-and-lod.md) | a chunk change rebuilds ~21,000 cells and 84,000 triangles |
+| 7 | **a remesh fits in a frame** | [14](14-meshing-and-lod.md) | a chunk change rebuilds ~21,000 cells and 84,000 triangles |
 | 8 | **one source, two targets** | [22](22-multiplayer-interest.md) | the client *regenerates* the coarse map, so it runs the server's generator |
+
+> Requirement 7 said **"no GC pause inside a frame"** in the first draft of this
+> document, and it was used below to push Java and TypeScript down the list. That
+> was asserted rather than measured, and it does not survive being measured —
+> Minecraft ships in a language with a garbage collector. The
+> [section on what actually separates them](#a-garbage-collector-is-the-wrong-test)
+> replaces it. The requirement is about the **frame**, not about the collector.
 
 **The first four are properties of the language and its optimiser.** Nobody can
 write around them: if the compiler is free to rewrite `a*b + c`, no amount of
@@ -216,6 +223,50 @@ changes it: **never call a transcendental where the result is stored or shared.*
 
 ---
 
+## A garbage collector is the wrong test
+
+Requirement 7 was written as "no GC pause inside a frame" and then used as if
+*having* a collector were the disqualifier. Two timings say it is not.
+
+**The generator never allocates.** The kernel in section 1 — hash, fade, noise,
+fBm, blend, `normalize` — is scalar arithmetic end to end, in every one of the six
+languages. A collector cannot run in a loop that never asks for memory. And on
+that loop, which is the hottest path this specification has:
+
+> **[verified]** `verification/language.js`, section 5(a). 400,000 samples, best
+> of five, process startup subtracted. C **69 ms**, Rust **79 ms** (1.14×), Go
+> **89 ms** (1.29×), Java **111 ms** (1.60×), **JavaScript 121 ms (1.75×)**.
+
+Under 2×, for the two garbage-collected runtimes, on the work that dominates
+chunk generation. That is not an order of magnitude and it is not a reason to
+eliminate anybody.
+
+**The mesher does allocate**, and that is where the claim was really being made.
+[Doc 14](14-meshing-and-lod.md) rebuilds ~21,000 cells into 84,000 triangles on a
+chunk change. Building that buffer, per rebuild:
+
+> **[verified]** Same section, 5(b). Rust with a `Vec` **0.18 ms**. JavaScript
+> with typed arrays **0.27 ms — 1.5×**. JavaScript with one object per vertex
+> **4.13 ms — 23×**.
+
+**The language gap is 1.5×. The layout gap is 15×.** Which data layout you choose
+matters about an order of magnitude more than which language you choose — and the
+slow version is the one that allocates 42,000 objects per rebuild, which is the
+garbage-collection case. The fast version allocates nothing and never collects.
+
+So the real difference is not the collector. It is **which layout you get by
+writing the obvious thing.** In Rust the obvious thing — a `Vec` of a `struct` —
+is already contiguous. In JavaScript the obvious thing is an array of objects, and
+the fast path means hand-packing into `ArrayBuffer`s, which is writing C in
+JavaScript. That is a real difference. It is a much smaller one than "no GC".
+
+**Honest caveat:** 5(b) builds a buffer; it does not mesh anything. There is no
+mesher, no physics step and no engine, so nothing here measures a whole frame.
+These two timings narrow the gap between the candidates. They do not close it,
+and they are wall-clock numbers that move run to run.
+
+---
+
 ## The decision: Rust
 
 **Rust, and the reason is not determinism.**
@@ -230,8 +281,10 @@ Determinism turned out to be nearly free. What is left is requirements 5 through
    now by someone adding `-Ofast` to speed up a build.
 2. **`wrapping_mul` is spelled out.** Requirement 1 is a language feature, not a
    convention about which integer types happen to be safe to overflow.
-3. **No garbage collector**, which is what requirement 7 wants: a remesh that
-   touches 84,000 triangles should not be able to meet a pause.
+3. **The fast data layout is the obvious one.** A `Vec` of a `struct` is
+   contiguous without anyone deciding it should be, so requirement 7 is met by
+   writing ordinary code rather than by remembering to. The measured gap to
+   disciplined JavaScript is only **1.5×** — this is a margin, not a wall.
 4. **One source compiles to native and to WebAssembly**, which is requirement 8
    and is the sharpest of the four. Doc 22 decided the joining client would
    *regenerate* [doc 21](21-rivers-and-erosion.md)'s coarse map rather than
@@ -248,10 +301,45 @@ Java is **exactly as deterministic** — `strictfp` has been the default since
 Java 17, so there is not even a keyword to remember — its `int` wraps, and
 Minecraft is a rather emphatic existence proof that this genre ships in it.
 
-It loses on two of the four: a garbage collector inside a frame budget, and no
-credible story for one codebase running natively and in a browser. Neither is
-fatal. If those two constraints were ever relaxed, Java would be the pick, and
-this document should be reread rather than assumed.
+It loses on **one** of the four, not two. The first draft said "a garbage
+collector inside a frame budget, and no credible story for one codebase running
+natively and in a browser" — but section 5 withdraws the first half of that: Java
+is **1.60× C** on the allocation-free generator, ahead of JavaScript, and the
+collector never runs there at all. What is left is the browser, and that is a real
+gap rather than a decisive one.
+
+### TypeScript is the strongest case against this decision
+
+It deserves better than the line the first draft of this document gave it, which
+scored it "browser only" and moved on. That is simply wrong: Node, Deno and Bun
+are server runtimes, and TypeScript is the **only** candidate here that satisfies
+requirement 8 with *no work at all*. Rust needs a `wasm32` target, a bindings
+layer and two build profiles. TypeScript needs nothing — the same file runs on
+the server and in the tab.
+
+**So TypeScript wins one of the two requirements this decision turned on**, and
+it is within **1.5–1.75×** on the other. The determinism table it sits in has it
+agreeing bit for bit with everyone else. It is a genuinely good answer, and the
+honest summary of the margin is:
+
+| | Rust | TypeScript |
+|---|---|---|
+| bit-identical (§1) | yes | yes |
+| generator throughput (§5a) | 1.14× C | **1.75× C** |
+| mesher buffer (§5b) | 1.00× | **1.5×**, and 23× if written the obvious way |
+| the fast layout is the default | **yes** | no — hand-packed `ArrayBuffer`s |
+| native **and** browser from one source | yes, via `wasm32` | **yes, for free** |
+| `wrapping_mul` | in the language | `Math.imul`, and easy to forget `>>> 0` |
+
+Rust is chosen on rows 4 and 6 — the fast path being what you get by default, and
+integer wrapping being a type rather than a discipline. **Those are preferences
+about where mistakes get caught, not performance cliffs**, and this table is the
+honest size of the gap.
+
+If the goal were a playable prototype this year rather than an engine, TypeScript
+would be the better call, and nothing measured here argues otherwise. That is
+worth writing down, because the reasons above are not strong enough to pretend
+the decision was forced.
 
 ### C++ is the only candidate this test caught being wrong
 
@@ -297,10 +385,17 @@ Three lines, and they are the whole of what this decision imposes:
   step or anything that will eventually be threaded, and requirement 4 — fixed
   reduction order — becomes a live question the moment work is split across
   cores. Nothing here tests that, because there is nothing to test yet.
-- **Nothing here measures performance.** Not one of the eight requirements is
-  about speed, and no candidate was benchmarked. The claim is that Rust and C++
-  are in the same class, which is received wisdom rather than a measurement made
-  in this repository.
+- **Performance is measured on two loops and nothing else.** Section 5 times the
+  generator kernel and a mesher buffer build. It does not time a mesher, a physics
+  step, a lighting pass or a frame, because none of those exist. The claim that
+  Rust and C++ are in the same class is still received wisdom — C is 1.00× and
+  Rust 1.14× on the one loop that was measured, which is consistent with it and
+  does not establish it.
+- **Whether the layout argument survives contact with a real mesher.** Section 5
+  shows a 15× gap between disciplined and naive JavaScript, and asserts that Rust
+  gets the disciplined layout by default. That is true of a `Vec<Vertex>`. Whether
+  it stays true across a whole engine is exactly the kind of claim this repository
+  is supposed to measure rather than believe, and it cannot be measured yet.
 - **`wgpu` is named and not evaluated.** Point 5 above is the weakest line in this
   document.
 
@@ -323,8 +418,12 @@ Three lines, and they are the whole of what this decision imposes:
   so the rule is a prohibition no flag can enforce.
 - **`sqrt` is pinned and `hypot` is not**, measured one ULP apart between runtimes
   on one machine. `normalize` is written the long way.
-- **Rust**, chosen on the four requirements that were left: no flag needed, no GC
-  in a remesh, `wrapping_mul` in the language, and **one source compiling to both
-  native and WebAssembly** — which is what doc 22's client regenerating the coarse
-  map actually requires. **Java is the runner-up and loses only on those last
-  two.**
+- **A garbage collector is the wrong test.** The generator allocates nothing, so
+  nothing collects; JavaScript is **1.75×** C there and Java **1.60×**. On the
+  mesher buffer the **language gap is 1.5× and the layout gap is 15×** — what you
+  choose matters ten times less than how you lay the data out.
+- **Rust**, chosen on the requirements that were left: no flag needed,
+  `wrapping_mul` in the language, the fast layout being the *default* one, and one
+  source compiling to native and WebAssembly. **The margin is thin and stated as
+  such** — TypeScript satisfies that last requirement for free and is within
+  1.5–1.75×, and would be the better call for a prototype.

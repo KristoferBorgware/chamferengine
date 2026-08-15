@@ -923,7 +923,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 400M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 250M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1086,6 +1086,41 @@ language.js -- which language and runtime, decided by running the kernel
    client and a native server only agree if they are THE SAME CODE, and
    "compiles to both native and WebAssembly from one source" is a much
    shorter list than "is deterministic".
+
+5. is the garbage collector the discriminator? (wall-clock, read ratios)
+   (a) the generator kernel -- 400,000 samples, allocation-free
+       measured separately, best of 5, process startup subtracted:
+         C   gcc -O2        69 ms   1.00x
+         Rust  rustc -O     79 ms   1.14x
+         Go  go build       89 ms   1.29x
+         Java  OpenJDK     111 ms   1.61x
+         JS/TS node 22     121 ms   1.75x
+       JavaScript is 1.76x C on the hottest path in the design, and Java
+       is 1.60x. Neither is an order of magnitude, and neither allocates,
+       so the GC never runs here at all.
+
+   (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
+         Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
+         JS, typed arrays          0.31 ms   1.70x
+         JS, one object a vertex   4.33 ms   24.03x
+
+       THE LANGUAGE GAP IS 1.7x. THE LAYOUT GAP IS 14x.
+       Choosing the data layout matters roughly an order of magnitude more
+       than choosing the language. And the 14x version is the one that
+       allocates -- 42,000 objects per rebuild, which IS the GC case.
+       The fast version allocates nothing and never collects.
+
+   SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
+   WHICH LAYOUT YOU GET BY WRITING THE OBVIOUS THING. In Rust the obvious
+   thing -- a Vec of a struct -- is already contiguous. In JavaScript the
+   obvious thing is an array of objects, and the fast path means hand-packing
+   into ArrayBuffers, which is writing C in JavaScript. That is a real
+   difference and it is a much smaller one than section 4 implied.
+
+   HONEST CAVEAT: (b) builds a buffer; it does not mesh anything. There is no
+   mesher, no physics step and no engine, so nothing here measures the whole
+   frame. These two timings narrow the gap between the candidates. They do
+   not close it, and they are not a benchmark of the game.
 
 verdict
    RUST, and the reason is not determinism.
@@ -1956,7 +1991,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 597 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 581 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
