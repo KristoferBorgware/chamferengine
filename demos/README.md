@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-two self-contained HTML files. No build step, no `npm install`, no server
+Twenty-three self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -108,6 +108,24 @@ sum and being repaired. Drag outside and a weight goes negative: that is the
 face-boundary test.
 
 **Docs:** [04 — Position lookup](../docs/04-position-lookup.md)
+
+---
+
+### [`patch-vs-range.html`](patch-vs-range.html)
+Doc 11 claimed multiplayer interest was "an ID range comparison; the addressing
+scheme does the work". This is what that actually looks like. One face, split into
+4,096 chunks, with a player's view drawn over it and **each colour one unbroken
+run of consecutive IDs**. A single range would be a single colour. Drag it
+anywhere and it never is.
+
+The reason is in the second control. Widen the view and the chunk count grows with
+the **area** while the run count grows only with the **rim** — 2.4 chunks per run
+at close range, 26 at long range. So ID ranges get *better* with distance, which
+is why they earn their keep on disk and not on the network. The order toggle shows
+doc 03's `[0,3,1,2]` beating the naive walk by around 10%, and no more.
+
+**Docs:** [22 — Multiplayer interest management](../docs/22-multiplayer-interest.md),
+[03 — Addressing](../docs/03-addressing.md)
 
 ---
 

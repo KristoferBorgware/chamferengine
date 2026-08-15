@@ -48,6 +48,13 @@ separate pieces — and the pieces have other players' chunks in between them.*
 At a standing player's horizon it is **eleven** ranges, not one. At a kilometre it
 is a hundred and fifty.
 
+**See it break up:** [`demos/patch-vs-range.html`](../demos/patch-vs-range.html)
+draws one face split into 4,096 chunks and colours a player's disc by ID run —
+one colour per unbroken range. Drag the circle and it is never one colour. Widen
+it and the two numbers pull apart in front of you, which is the whole finding:
+chunks grow with the **area** you can see and runs only with its **rim**, so the
+demo goes from 2.4 chunks per run at close range to 26 at long range.
+
 ### Changing the walk order does not rescue it
 
 The obvious next move is to blame the traversal order and go looking for a better

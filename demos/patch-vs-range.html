@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A player's patch is not an ID range</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 4px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:13px; color:#8d97ab; padding:2px 16px 8px; }
+  .cap { padding:4px 16px 10px; font-size:13.5px; line-height:1.55; color:#b9c0d0; min-height:60px; }
+  .cap b { color:#fff; }
+  .stage { flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px;
+           touch-action:none; }
+  svg { width:100%; height:auto; max-height:100%; cursor:crosshair; }
+  .panel { padding:12px 14px 18px; border-top:1px solid #1b2130; background:#0e121b;
+           display:flex; gap:9px; align-items:center; flex-wrap:wrap; }
+  button { font:inherit; font-size:13px; font-weight:550; padding:9px 14px; border-radius:9px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button:active { transform:scale(.97); }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  label { font-size:12.5px; color:#8d97ab; display:flex; align-items:center; gap:8px; }
+  input[type=range] { width:130px; accent-color:#4f8ef7; }
+  .spacer { flex:1; }
+  .stat { font-size:13px; font-weight:650; padding:7px 12px; border-radius:8px;
+          font-variant-numeric:tabular-nums; background:#232a3a; color:#dfe3ec; }
+</style>
+</head>
+<body>
+
+<header><h1>A player's patch is not an ID range</h1></header>
+<div class="sub">Drag the circle. Each colour is one unbroken run of consecutive IDs.</div>
+<div class="cap" id="cap"></div>
+
+<div class="stage"><svg id="svg" viewBox="0 0 640 580" aria-label="a disc over ID-ordered chunks"></svg></div>
+
+<div class="panel">
+  <label>view range <input type="range" id="rad" min="14" max="150" value="60"></label>
+  <button data-ord="doc" class="on">Doc 03 order</button>
+  <button data-ord="naive">Naive order</button>
+  <span class="spacer"></span>
+  <span class="stat" id="stat"></span>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// One icosahedron face, split into four again and again. A chunk's ID is the
+// route down those splits -- one quaternary digit per level -- so walking the
+// IDs in order means walking the triangles in depth-first order. That is the
+// whole of doc 03's addressing, drawn flat.
+// ---------------------------------------------------------------------------
+const DEPTH = 6;                                   // 4^6 = 4096 chunks
+const A = [320, 40], B = [615, 545], C = [25, 545];
+
+const ORDERS = {                                   // which child to visit first
+  doc:   [0, 3, 1, 2],                             // doc 03: corner, middle, corner, corner
+  naive: [0, 1, 2, 3],
+};
+const mid = (p,q) => [(p[0]+q[0])/2, (p[1]+q[1])/2];
+
+// depth-first list of the leaf triangles, in ID order
+function chunks(order){
+  const out = [];
+  (function rec(a, b, c, d){
+    if (d === DEPTH){ out.push([a,b,c]); return; }
+    const ab = mid(a,b), bc = mid(b,c), ca = mid(c,a);
+    const kids = [[a,ab,ca], [ab,b,bc], [ca,bc,c], [ab,bc,ca]];
+    for (const k of order) rec(kids[k][0], kids[k][1], kids[k][2], d+1);
+  })(A, B, C, 0);
+  return out;
+}
+const LIST = { doc: chunks(ORDERS.doc), naive: chunks(ORDERS.naive) };
+const centreOf = t => [(t[0][0]+t[1][0]+t[2][0])/3, (t[0][1]+t[1][1]+t[2][1])/3];
+const CENTRES = { doc: LIST.doc.map(centreOf), naive: LIST.naive.map(centreOf) };
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let ord = 'doc', radius = 60, cx = 300, cy = 330;
+
+// which chunks the player can see, and how many unbroken ID runs that is
+function runsOf(){
+  const cs = CENTRES[ord];
+  const inDisc = cs.map(p => (p[0]-cx)**2 + (p[1]-cy)**2 <= radius*radius);
+  const runOf = new Int32Array(cs.length).fill(-1);
+  let runs = 0, count = 0, prev = false;
+  for (let i=0;i<cs.length;i++){
+    if (inDisc[i]){ count++; if (!prev) runs++; runOf[i] = runs-1; }
+    prev = inDisc[i];
+  }
+  return { inDisc, runOf, runs, count };
+}
+
+// hues spaced by the golden angle, so consecutive runs never look alike and the
+// caption's "each colour is one run" stays literally true however many there are
+const runColour = i => `hsl(${(i*137.508) % 360} 62% 58%)`;
+
+function draw(){
+  const { inDisc, runOf, runs, count } = runsOf();
+  const list = LIST[ord];
+  const S = [];
+  // the chunks nobody is looking at
+  S.push('<g stroke="#1e2536" fill="#12172180" stroke-width="0.5">');
+  for (let i=0;i<list.length;i++){
+    if (inDisc[i]) continue;
+    const t = list[i];
+    S.push(`<polygon points="${t.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`);
+  }
+  S.push('</g>');
+  // the ones in view, coloured by which run of consecutive IDs they belong to
+  for (let i=0;i<list.length;i++){
+    if (!inDisc[i]) continue;
+    const t = list[i], col = runColour(runOf[i]);
+    S.push(`<polygon points="${t.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"
+             fill="${col}" fill-opacity="0.85" stroke="${col}" stroke-width="0.4"/>`);
+  }
+  // the player and what they can see
+  S.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${radius.toFixed(1)}"
+           fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="5 4" opacity="0.85"/>`);
+  S.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="#ffffff"/>`);
+  document.getElementById('svg').innerHTML = S.join('');
+
+  document.getElementById('stat').textContent =
+    `${count} chunks · ${runs} runs · ${(count/Math.max(runs,1)).toFixed(1)} per run`;
+  document.getElementById('cap').innerHTML =
+    `The player sees <b>${count}</b> chunks. Sorted by ID those fall into <b>${runs}</b> unbroken
+     runs — each colour is one. A single range would be one colour, and it never is.
+     <b>Drag the circle wider and watch the two numbers pull apart</b>: chunks grow with the
+     <b>area</b> you can see, runs only with its <b>rim</b>, so bigger views are better served by
+     ranges, not worse — ${(count/Math.max(runs,1)).toFixed(1)} chunks per fetch here.`;
+}
+
+// ---------------------------------------------------------------------------
+// Interaction
+// ---------------------------------------------------------------------------
+const svg = document.getElementById('svg');
+function at(ev){
+  const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+let dragging = false;
+const put = ev => { const u = at(ev); cx = u.x; cy = u.y; draw(); };
+svg.addEventListener('pointerdown', ev => { dragging = true; svg.setPointerCapture(ev.pointerId); put(ev); });
+svg.addEventListener('pointermove', ev => { if (dragging){ ev.preventDefault(); put(ev); } });
+svg.addEventListener('pointerup',    () => dragging = false);
+svg.addEventListener('pointercancel',() => dragging = false);
+
+document.getElementById('rad').addEventListener('input', e => { radius = +e.target.value; draw(); });
+document.querySelectorAll('[data-ord]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-ord]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); ord = b.dataset.ord; draw();
+}));
+draw();
+</script>
+</body>
+</html>
