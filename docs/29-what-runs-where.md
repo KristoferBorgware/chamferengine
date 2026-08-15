@@ -152,7 +152,12 @@ the server takes a client's word for everything: a client that claims to have
 broken a block inside solid rock a kilometre away cannot be contradicted, because
 the server does not know what the rock looks like.
 
-**That is a trade nobody in this specification has made.**
+**That is a trade nobody in this specification had made** —
+[doc 30](30-authority-and-cheating.md) now makes it, and finds the question was
+posed wrongly here. It is not a binary. Validating edits needs a **point query
+per edit**, not a chunk: `0.06%` of a core at a thousand players. Only **mobs**
+need resident chunks, and that is a gameplay decision rather than an honesty one.
+The table below is kept because the framing it gets wrong is instructive.
 
 | | Server stores and routes | Server also generates |
 |---|---|---|
@@ -263,12 +268,14 @@ it costs everything.
   regenerating it pays that cost on join, and nobody has measured how long it
   takes. If it is slow, "regenerate rather than download" is still right but needs
   a loading screen.
-- **Whether the server validates edits, or trusts the client.** The table above
-  lays out the trade and nothing in docs 00–27 chooses. It decides whether the
-  server links the generator, which is the single biggest question left about the
-  shape of this system.
-- **Where mobs are simulated** ([doc 10](10-pathfinding.md)). Pathfinding never
-  says whose CPU it runs on, and the answer follows the row above.
+- ~~Whether the server validates edits, or trusts the client.~~ — **closed** by
+  [doc 30](30-authority-and-cheating.md): it validates, with a point query per
+  edit, because that costs `0.06%` of a core at a thousand players and closes the
+  only blind spot the server has.
+- **Whether mobs run server-side** ([doc 10](10-pathfinding.md), doc 30). Still
+  open, but no longer an architecture question — doc 30 prices it at **158×** what
+  player validation costs and shows it is the only thing that makes the server a
+  simulator.
 - **Whether generation should be `no_std`.** It has no reason to allocate, and a
   `no_std` core compiles to a 1.6 KB wasm module against 1.35 MB with the standard
   library linked in. That is a build-shape question, not a design one, but it is

@@ -2845,5 +2845,38 @@ const prof = (() => {
   <text class="cf-d" x="${LX}" y="384">it &#8212; so determinism is a client-to-client rule, not a client-to-server one.</text>`));
 }
 
+// =============================================================================
+// 30 — the three tiers of server knowledge, sized by what they cost. The bars
+// are the real evaluation counts from authority.js, log-scaled.
+// =============================================================================
+{
+  const W = 520, X = 148, BW = 190, Y = 66, H = 26, ROW = 62;
+  const tiers = [
+    ['stores + routes',   0,     'cf-fill', 'no terrain at all',
+     'reach, rate, protected cells, and every cell a player has touched'],
+    ['+ point query',     1,     'cf-af',   '1 cell per edit',
+     'the last blind spot: is virgin ground solid? 0.06% of a core at 1,000 players'],
+    ['+ resident chunks', 35904, 'cf-gf',   '35,904 cells, resident',
+     'mobs only: collision, pathfinding, a tick loop, entity interest'],
+  ];
+  const lg = v => Math.log10(v) / Math.log10(35904);
+  let body = '';
+  tiers.forEach(([label, ev, cls, count, why], i) => {
+    const y = Y + i*ROW;
+    const w = ev === 0 ? 12 : Math.max(16, BW * lg(Math.max(ev, 10)));
+    body += `<text x="14" y="${y+18}">${label}</text>`
+         +  `<rect class="${cls}" x="${X}" y="${y}" width="${f(w)}" height="${H}" rx="4"/>`
+         +  `<text class="cf-c" x="${f(X+w+10)}" y="${y+18}">${count}</text>`
+         +  `<text class="cf-d" x="${X}" y="${y+H+16}">${why}</text>`;
+  });
+  made.push(svg('three-tiers-of-authority', W, 300, `
+  <text class="cf-big" x="14" y="26">what the server has to know</text>
+  <text class="cf-d" x="14" y="46">bars are log-scaled evaluation counts</text>
+  ${body}
+  <path class="cf-l" d="M14 254L${W-14} 254"/>
+  <text class="cf-d" x="14" y="276">An honest server is the middle bar. Wanting one does not commit you to</text>
+  <text class="cf-d" x="14" y="292">the bottom bar &#8212; only mobs do that.</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

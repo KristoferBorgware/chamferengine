@@ -76,7 +76,8 @@ a runnable demo where one exists.
 | 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 44 open questions actually block |
 | 27 | [Block state](docs/27-block-state.md) | What a block *is* as bits, why a type number cannot be a hash, and the registry that fixes it |
 | 28 | [The language and the runtime](docs/28-language-and-runtime.md) | Six languages, one digest — and the compiler flag that makes four planets |
-| 29 | [What runs where](docs/29-what-runs-where.md) | The three layers, why determinism draws the lines, and what Rust → wasm actually costs |
+| 29 | [What runs where](docs/29-what-runs-where.md) | The four parts, why determinism draws the lines, and what Rust → wasm actually costs |
+| 30 | [Authority and cheating](docs/30-authority-and-cheating.md) | What the server must know per cheat, why mobs are the expensive decision, and intents-not-outcomes |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -89,7 +90,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all thirty-three verification scripts and fails the build if
+`make-reference.js` runs all thirty-four verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a
@@ -183,7 +184,7 @@ node verification/language.js   # the same kernel in six languages; the digests 
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.
-All thirty-three are run by `make-reference.js`, and
+All thirty-four are run by `make-reference.js`, and
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is their combined output.
 
 ---

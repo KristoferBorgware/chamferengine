@@ -135,7 +135,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 29.
+- `docs/` — prose specification, ordered 00 through 30.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -192,6 +192,7 @@ script owns its numbers.
 | [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
 | [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
 | [29](docs/29-what-runs-where.md) | the four parts; the server generates nothing; Rust → wasm | `language.js` |
+| [30](docs/30-authority-and-cheating.md) | what the server must know per cheat; mobs; intents not outcomes | `authority.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -686,6 +687,27 @@ Violating any of these breaks the design. They are not tunable.
   shape:** whether the server also generates in order to validate edits and
   simulate mobs. Doc 22 assumes it does not; that is a trusted-client trade nobody
   has actually made.
+- **Most cheating is refused with what the server already holds** (`authority.js`,
+  doc 30). Doc 29 asked "does the server generate?" as a binary; it has **three**
+  answers spanning four orders of magnitude. **Stores-and-routes** already refuses
+  reach, rate, protected pentagon columns, malformed IDs, unknown block types, and
+  anything about a cell a player has touched — the delta store *is* the record of
+  every modification ever made, so the built world is under authority for free.
+  **The one blind spot is virgin ground**, and it costs a **point query**, not a
+  chunk: `solidity(cell)` is `310 ns` in JS / `~200 ns` in Rust against **561**
+  evaluations for a height-field chunk and **35,904** for a full crust — so
+  validating every edit at 1,000 players is **0.062% of one core**. Assume it;
+  doc 29's trusted-client default is withdrawn. **Mobs are the expensive
+  decision, not honesty**: a pathfinding mob touches `3r²+3r+1` = **3,169** cells,
+  100 mobs cost **158×** what 1,000 players do, and they need chunks **resident**
+  plus a tick loop plus doc 22's open entity-interest question. Server-side mobs
+  **remove** a determinism requirement (replicated positions are not recomputed).
+  **The farming cheat is not about terrain** — no server CPU can check "I now have
+  3 iron". **The client sends intents, never outcomes**: it names a cell and an
+  action, the server reads the type it removed and issues the drop from doc 27's
+  registry. That is why the wire is a **closed message set, never RPC**. And
+  **x-ray is unpreventable by construction** — every client generates the whole
+  planet — so this design polices **actions**, never **knowledge**.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

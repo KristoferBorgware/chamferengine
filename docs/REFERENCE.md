@@ -20,6 +20,7 @@ numbered documents.
 | Script | Establishes | Used by |
 |---|---|---|
 | [`adj.js`](../verification/adj.js) | — | [05](05-face-adjacency.md) |
+| [`authority.js`](../verification/authority.js) | What the server has to know, and what each thing it does not know costs. node verification/authority.js Doc 29 left one question open and called it the biggest one left about the shape of the system: does the server generate terrain, so it can validate edits and simulate mobs, or does it only store and route and take the client's word? That question is usually argued as a binary -- "an authoritative server has to run the whole generator" -- and the binary is wrong. What the server needs depends entirely on WHICH cheat it wants to refuse, and the answers span four orders of magnitude. This script prices them. It also separates two things that get muddled: a cheat about the WORLD (I broke a block I could not reach) and a cheat about the PLAYER (I now have three iron). They have completely different answers, and only the first one is about terrain. | [30](30-authority-and-cheating.md) |
 | [`blockstate.js`](../verification/blockstate.js) | What a block actually IS, as bits. Doc 03 reserves "16 bits of block state, or 12 bits of type plus 4 of rotation"; doc 19 spends 3 of the 4; doc 07 names a palette and a side table; doc 12 defines the delta store as cellID -> block state. Nobody has ever said what those 12 bits mean, how a type gets its number, or what happens when the list of types changes between versions. This sizes all of it -- and kills the obvious answer to the numbering question. | [27](27-block-state.md) |
 | [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
@@ -69,6 +70,174 @@ face  edge0            edge1            edge2
 60 entries · every edge matched: true
 all reversed (consistent winding): true
 bytes at 3 fields x 1 byte: 180
+```
+
+## `authority.js`
+
+What the server has to know, and what each thing it does not know costs. node verification/authority.js Doc 29 left one question open and called it the biggest one left about the shape of the system: does the server generate terrain, so it can validate edits and simulate mobs, or does it only store and route and take the client's word? That question is usually argued as a binary -- "an authoritative server has to run the whole generator" -- and the binary is wrong. What the server needs depends entirely on WHICH cheat it wants to refuse, and the answers span four orders of magnitude. This script prices them. It also separates two things that get muddled: a cheat about the WORLD (I broke a block I could not reach) and a cheat about the PLAYER (I now have three iron). They have completely different answers, and only the first one is about terrain.
+
+Cited by [doc 30](30-authority-and-cheating.md).
+
+```
+authority.js -- what the server must know, per cheat, and what it costs
+
+1. what the server can already refuse, holding no terrain at all
+   cheat                                  needs         how
+   reach: the cell is 1 km away           addressing    ID -> position, one distance against the player position
+   rate: 400 blocks in one second         nothing       a counter per player
+   a protected pentagon column            addressing    doc 17: is this one of the 12? a property of the address
+   a cell ID that does not exist          addressing    decode and range-check
+   a block type not in the registry       the save      doc 27: the registry is server-side
+   breaking a cell someone else edited    delta store   the server owns every modification ever made
+   placing where a player already built   delta store   same
+   moving faster than a player can        nothing       positions over time; doc 22 already streams them
+
+   8 of the crude cheats, and the server pays NOTHING NEW for any of them.
+   It already has addressing, positions and the delta store. Note especially
+   the last two rows: the server knows every cell a player has ever touched,
+   exactly, which is the part of the world where griefing actually happens.
+
+   THE ONLY BLIND SPOT IS AN UNMODIFIED CELL. The server cannot say whether
+   virgin ground is stone or air, because doc 08 generates it and does not
+   store it. That is one question, and section 2 prices answering it.
+
+2. the blind spot costs a POINT QUERY, not a chunk
+   one solidity(cell) query: 310 ns in this JavaScript
+   (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
+    upper bound -- Rust is about 202 ns)
+
+   against generating a whole chunk, which is what "the server runs the
+   generator" is usually taken to mean:
+
+     unit                                 evaluations   vs one query
+     one edit, one cell                             1         1x
+     a chunk, height field only (doc 14)          561       561x
+     a chunk, full crust with caves (doc 08)    35,904    35,904x
+
+   and doc 27 measured a player acting on a block about 2x a second:
+
+     players   queries/s   CPU of one core
+          10          20      0.0006%
+         100         200      0.0062%
+        1000        2000      0.0619%
+       10000       20000      0.6192%
+
+   SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
+   a rounding error of one core, because a player is a slow, human-rate
+   event source and each event needs ONE cell, not a chunk. "Does the
+   server generate?" is not a binary: validating needs a POINT QUERY and
+   nothing else -- no chunk, no cache, no mesh, no layers above or below.
+
+3. mobs, which is where the cost actually lands
+   a mob at 1.4 m/s crosses a cell every 0.71 s
+   at 20 Hz that is a cell every 14 ticks -- doc 27's number, and
+   the reason entities are held per chunk by containment rather than keyed
+   by cell.
+
+   what one mob needs resident, by what it is doing:
+     stand still (gravity only)           1 cells   the cell under it
+     walk (collision + step up)           7 cells   its own cell and the six neighbours
+     path 32 cells ahead (doc 10)     3,169 cells   a hex disc of radius 32: 3r^2+3r+1
+
+   A pathfinding mob touches 3,169 cells, and doc 16's light disc formula
+   is the same 3r^2+3r+1 because a hex disc is a hex disc. That is the
+   number that decides this, not the edit rate:
+
+     mobs pathing once a second   cells/s        cores, regenerating
+                             10        31,690                 0.01
+                            100       316,900                 0.06
+                           1000     3,169,000                 0.64
+
+   One path is 3,169 cells = 0.64 ms of generation if nothing is cached.
+   A hundred mobs pathing once a second is 6% of a core -- 158x what a
+   thousand players cost in section 2, from a hundredth of the population.
+
+   A REAL IMPLEMENTATION WOULD NOT RE-GENERATE PER STEP -- it would cache the
+   chunk, which is exactly the thing edit validation was able to avoid. So
+   the honest statement of the trade is:
+
+     validating edits   -> a point query per edit, no cache, no memory
+     simulating mobs    -> generated chunks RESIDENT on the server, plus a
+                           tick loop, plus doc 10 pathfinding, plus entity
+                           interest which doc 22 lists as open
+
+   A chunk cached as block data is doc 07's 8.8 KB at 2 bits a cell.
+   Mobs are what turn the server from a store into a simulator. Edit
+   validation, on its own, does not.
+
+4. the cheat that terrain cannot catch, and the rule that does
+   Two different claims, which get muddled because both arrive as packets:
+
+     A WORLD claim   "I broke cell X"      -> checkable: sections 1 and 2
+     A PLAYER claim  "I now have 3 iron"   -> NOT checkable, at any cost
+
+   The second cannot be validated by generating terrain, by caching chunks,
+   or by any amount of server CPU -- because the server has no independent
+   way to know what a player is holding. It can only know what it ISSUED.
+
+   So the fix is not a check. It is a rule about what the client is allowed
+   to say:
+
+     THE CLIENT SENDS INTENTS, NEVER OUTCOMES.
+       "I act on cell X"        yes -- the server validates and applies it
+       "I now have 3 iron"      never sent, and never believed
+
+   Under that rule the farming cheat has nowhere to live. The sequence is:
+     1. client: I break cell X
+     2. server: reach ok, rate ok, not protected  (section 1, free)
+     3. server: what was there? delta store, or one point query (section 2)
+     4. server: that type drops that item          <- the SERVER decides
+     5. server: your inventory is now this         <- the SERVER tells you
+
+   Step 4 is the whole answer, and it costs nothing: doc 27 already puts the
+   BLOCK REGISTRY in the save, server-side, so the type -> drop table is
+   already where it needs to be. The client never names an item at all.
+
+   This also settles whether the wire needs general RPC. It does not, and
+   it must not: an RPC surface is a list of things the client may ask the
+   server to do, and the moment one of them takes an outcome as an argument
+   the rule above is broken. What crosses the wire is a small closed set:
+
+     client -> server   my position   |   I act on cell X with intent Y
+     server -> client   these cells changed   |   your inventory is this
+                        |   these entities are here
+
+   Doc 22 already named the first and third of those and said the server
+   needs "a player position per client, and nothing else". This adds intents
+   and inventory to that list and closes it.
+
+   HONEST LIMIT: none of this stops a cheat that only needs INFORMATION.
+   Every client generates the whole planet (doc 29), so every client can
+   already see where the ore is without digging. That is not a bug in this
+   design, it is what "terrain is generated, not stored" means -- and it is
+   true of every seed-based world including Minecraft. An x-ray cheat is
+   unpreventable here BY CONSTRUCTION. What is preventable is acting on it
+   faster than a player could, which is section 1, row 2.
+
+verdict
+   "Does the server generate?" is the wrong question because it has three
+   answers, not two, and they differ by four orders of magnitude.
+
+   NO GENERATION -- the server holds addressing and the delta store, which
+   doc 29 already gives it. That is enough to refuse every cheat in section
+   1: reach, rate, protected cells, malformed IDs, unknown block types, and
+   anything about a cell a player has already touched. Free.
+
+   POINT QUERIES -- one solidity(cell) per edit closes the last blind spot,
+   virgin ground. At 1,000 players it is a rounding error of one core, and
+   it needs no cache and no resident chunks. This is a cheap upgrade and
+   the design should assume it.
+
+   RESIDENT CHUNKS -- only mobs need this, and they need it continuously
+   rather than per event. That is what turns the server into a simulator,
+   and it pulls in doc 10 pathfinding and doc 22's open entity-interest
+   question with it. It is a real decision and it is NOT forced by wanting
+   an honest server.
+
+   And the resource-farming cheat is in none of those tiers, because it is
+   not a claim about the world. THE CLIENT SENDS INTENTS, NEVER OUTCOMES --
+   the server reads the block type it just removed and issues the drop
+   itself, from the registry doc 27 already puts in the save.
 ```
 
 ## `blockstate.js`
@@ -923,7 +1092,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 400M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 267M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1102,10 +1271,10 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.30 ms   1.66x
-         JS, one object a vertex   4.26 ms   23.66x
+         JS, typed arrays          0.34 ms   1.89x
+         JS, one object a vertex   4.80 ms   26.66x
 
-       THE LANGUAGE GAP IS 1.7x. THE LAYOUT GAP IS 14x.
+       THE LANGUAGE GAP IS 1.9x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
        than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
@@ -1992,7 +2161,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 599 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 637 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2520,4 +2689,4 @@ verdict
 
 ---
 
-_33 scripts. Every number above is reproduced by running them._
+_34 scripts. Every number above is reproduced by running them._
