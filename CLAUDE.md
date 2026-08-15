@@ -125,7 +125,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 25.
+- `docs/` — prose specification, ordered 00 through 26.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -318,6 +318,9 @@ Violating any of these breaks the design. They are not tunable.
 | depth at the water's edge | `85.3%` one block, `13.9%` two | over 4,189 shore columns | `water.js` |
 | shore you can step out at | `99.9%`; `58/58` bodies | worst bank 1.23 m; nothing traps a swimmer | `water.js` |
 | wade/swim threshold | **one cell**, no chest-deep | 1.8 m player, 1 m blocks | `water.js` |
+| pentagon ring latitude | `atan(1/2)` = `26.565°` | 1 pole + 5 + 5 + 1 pole, every world | `coords.js` |
+| distinct axis choices | `1` of 6 pairs | all six are the same world, rotated | `coords.js` |
+| polar axis | vertices `0`–`3`, north `0`, meridian `v11` | the only pair with contiguous face caps | `coords.js` |
 
 ## Established results
 
@@ -540,8 +543,8 @@ Violating any of these breaks the design. They are not tunable.
 ## Known gaps
 
 **Doc 11 is fully struck through** — every entry on it is closed. Doc 26 triages
-what is left: of the **47** open bullets across docs 13–25, **one** blocks code,
-25 are waiting for code to exist, and 21 block nothing.
+what is left: of the **46** open bullets across docs 13–25, **one** blocks code,
+25 are waiting for code to exist, and 20 block nothing.
 
 **The gaps that actually block the kernel are on no Still open list** (doc 26):
 
@@ -567,8 +570,13 @@ what is left: of the **47** open bullets across docs 13–25, **one** blocks cod
   first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
   `Math.sin`; most languages are similar but not identical.
 
-**Free today, expensive forever after:** which of the six antipodal pentagon pairs
-is the polar axis (doc 20). It fixes where the equator falls in every world.
+**Decided, and it was free only until the first world shipped:** the polar axis
+(doc 20). All six antipodal pentagon pairs give **one** distinct latitude
+signature — the same world seen from six angles — so the choice provably cannot be
+made on merit. Broken on the face table instead: `0-3` is the only pair whose
+polar caps are contiguous runs of face indices. **Axis through vertices 0 and 3,
+north at vertex 0, prime meridian through vertex 11.** That puts all twelve
+pentagons on exact multiples of 36° of longitude. Never change any of the three.
 
 The furthest-reaching items that are waiting on code rather than blocking it:
 **nothing verifies determinism on two real platforms** (doc 23), **terrain height

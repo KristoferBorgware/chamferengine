@@ -2338,6 +2338,36 @@ const prof = (() => {
 }
 
 // =============================================================================
+// 20 — which pair: the six are identical everywhere except the face table
+// =============================================================================
+{
+  const FACES = [[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+                 [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+  const PAIRS = [[0,3],[1,2],[4,7],[5,6],[8,11],[9,10]];
+  const X0 = 96, W = 20, H = 19, GAP = 6;         // one square per icosahedron face
+  let rows = '';
+  PAIRS.forEach(([a,b], k) => {
+    const y = 56 + k*(H+GAP);
+    const north = new Set(FACES.map((f,i) => f.includes(a) ? i : -1));
+    const south = new Set(FACES.map((f,i) => f.includes(b) ? i : -1));
+    const run = s => { const v = [...s].filter(i=>i>=0).sort((p,q)=>p-q);
+                       return v.every((x,i) => i===0 || x === v[i-1]+1); };
+    const solid = run(north) && run(south);
+    for (let i=0;i<20;i++){
+      const cls = north.has(i) ? 'cf-af' : south.has(i) ? 'cf-gf' : 'cf-fill';
+      rows += `<rect class="${cls}" x="${X0 + i*W}" y="${y}" width="${W-2}" height="${H}" rx="2"/>`;
+    }
+    rows += `<text class="cf-c" x="14" y="${y+14}">${a}&#8211;${b}</text>`;
+    if (solid) rows += `<text class="cf-gd" x="${X0 + 20*W + 10}" y="${y+14}">one block each</text>`;
+  });
+  made.push(svg('which-pair', 620, 238, `
+  <text class="cf-big" x="14" y="24">all six axes give the same latitudes &#8212; only the face table differs</text>
+  <text class="cf-d" x="14" y="44">each row is the 20 faces in table order &#183; blue meets the north pole, gold the south</text>
+  ${rows}
+  <text class="cf-d" x="14" y="224">exactly one pair puts both polar caps in a contiguous run, so that is the one to pick</text>`));
+}
+
+// =============================================================================
 // 26 — the hollow centre: eight documents call a function nothing defines
 // =============================================================================
 {
@@ -2381,10 +2411,10 @@ const prof = (() => {
       + `<text class="cf-d" x="${f(150 + w + 10)}" y="${y+20}">${note}</text>`;
   };
   made.push(svg('what-actually-blocks', 590, 258, `
-  <text class="cf-c" x="14" y="26">47 open questions across docs 13&#8211;25</text>
-  ${bar(44,  1,  47, 'blocks code',   'which language and runtime', 'cf-gf')}
-  ${bar(86,  25, 47, 'waits on code', 'needs a mesher, a generator, a server', 'cf-af')}
-  ${bar(128, 21, 47, 'neither',       'game design, plus one free decision', 'cf-fill')}
+  <text class="cf-c" x="14" y="26">46 open questions across docs 13&#8211;25</text>
+  ${bar(44,  1,  46, 'blocks code',   'which language and runtime', 'cf-gf')}
+  ${bar(86,  25, 46, 'waits on code', 'needs a mesher, a generator, a server', 'cf-af')}
+  ${bar(128, 20, 46, 'neither',       'game design, and nothing that gates a build', 'cf-fill')}
   <path class="cf-l" d="M14 176L576 176"/>
   <text class="cf-gd" x="14" y="200">on no list at all &#8212; and every one of them blocks the first line:</text>
   <text class="cf-c" x="14" y="222">neighbour(id, k)      rank(q, r)      which noise function</text>

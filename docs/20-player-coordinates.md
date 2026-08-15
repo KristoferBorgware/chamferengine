@@ -67,6 +67,87 @@ Three things fall out, and none of them cost anything:
 
 ---
 
+## Which pair: you cannot decide this on merit, so decide it on the face table
+
+Earlier drafts of this document left "which of the six pairs" open on the grounds
+that the choice is arbitrary. It is worth knowing *how* arbitrary, because
+"arbitrary" is a claim like any other and this one had no number behind it.
+
+Take each of the six pairs in turn as the axis and ask where the twelve pentagons
+land:
+
+> **[verified]** `verification/coords.js`, section 1(b). All six give the same
+> answer — one pentagon at each pole, five at `+26.565°`, five at `−26.565°`.
+> **One distinct latitude signature among all six.** The ring latitude is
+> `atan(1/2)` exactly.
+
+That is the icosahedron being **vertex-transitive**: a rotation carries any pair
+onto any other, so the six worlds you could build are one world seen from six
+angles. No measurement will ever prefer one. The choice genuinely cannot be made
+on merit — it can only be made once and written down.
+
+So make it on the only thing that is *not* symmetric: the face table. The twenty
+faces are listed in a fixed order, and that order was written vertex-0-first.
+
+> **[verified]** `verification/coords.js`, section 1(b). Of the six pairs,
+> **exactly one has both polar caps as contiguous runs of face indices** — the
+> pair `0-3`, whose north cap is faces `0,1,2,3,4` and whose south cap is faces
+> `10,11,12,13,14`. The other five scatter across the table.
+
+![Six rows of twenty squares, one row per antipodal pair, with the faces meeting each pole coloured; only the first row's colours form two solid blocks](figures/which-pair.svg)
+
+*Each row is the twenty faces in table order, for one choice of axis. The five
+faces touching the north pole are blue and the five touching the south are gold —
+and since every choice gives the same latitudes, this picture is the **only** way
+the six differ. Read down the rows: five of them scatter, and `0-3` puts each cap
+in one solid block, which is the whole of the argument for picking it.*
+
+That is a property of the list, not of the sphere, and it is a weak reason. It is
+also the only reason available, and a weak written reason beats a coin flip: it
+turns "am I in a polar cap" into a range check, and it can be explained to
+whoever asks why later.
+
+### The decision doc 20 used to hide
+
+"Which pair" is one of **three** free choices, and only naming the first leaves
+two of them to be made by accident:
+
+1. **Which pair** — the axis.
+2. **Which end is north** — a sign. Both ends are pentagons; nothing distinguishes
+   them.
+3. **Where longitude 0 runs** — the prime meridian. Picking a pair fixes the axis
+   and the equator. It says nothing about where longitude starts.
+
+The third is the one with visible content, and again the pentagons answer it. Once
+the axis is fixed, the ten ring pentagons sit at **exact multiples of 36°** of
+longitude. Anchor the prime meridian on one of them and every one of the twelve
+lands on a round number.
+
+> **[verified]** `verification/coords.js`, section 1(c). With the meridian
+> anchored on `v11` — the second vertex of face 0, and so the first ring pentagon
+> the face table names after the north pole — the northern five sit at `0°`,
+> `±72°` and `±144°`, and the southern five at `±36°`, `±108°` and `180°`. Every
+> ring longitude is an exact multiple of 36°.
+
+**The decision, in three lines:**
+
+```
+axis            through the antipodal pentagon pair at icosahedron vertices 0 and 3
+north           vertex 0        (north polar cap = faces 0-4)
+prime meridian  through vertex 11, the second vertex of face 0
+```
+
+Nothing about the world changes if a later reader disagrees with the reasoning —
+all six pairs really are equivalent. What must not change is the answer, because
+it fixes where the equator falls in every world, and a player who wrote down
+"43.2° N" expects it to still mean the same hillside next year.
+
+[Doc 17](17-pentagons.md) leaves what the twelve pentagons *are* as content open.
+This narrows it usefully: they are now the only places on the planet with round
+coordinates, which makes them nameable, findable and easy to spot in a bug report.
+
+---
+
 ## How many digits to print
 
 This is the number that decides whether the readout is usable, and the answer is
@@ -203,23 +284,31 @@ a number whose meaning depended on where you were standing when you took it.
 - **The HUD** shows `lat`, `lon` to two decimals and `alt` in metres, all three
   computed from the position each frame. No storage.
 - **Waypoints and shared locations** store a cell ID, never a coordinate string.
-- **The map** uses the axis frame, with the poles on the chosen pentagon pair.
+- **The map** uses the axis frame, with the poles on icosahedron vertices 0 and 3.
 - **The compass** is the axis frame's east vector
   ([doc 13](13-gravity-and-orientation.md)), and it is allowed to spin at the
   poles.
 - **Terrain generation** is untouched. It samples 3D world position
   ([doc 08](08-terrain-generation.md)) and never sees latitude, which is what
   keeps the poles from becoming visible seams in the ground.
-- **The chosen pentagon pair becomes a constant** beside the twelve pentagon IDs
-  in [doc 07](07-data-structures.md)'s table.
+- **Three constants join the twelve pentagon IDs** in
+  [doc 07](07-data-structures.md)'s table: the axis vertices `0` and `3`, north at
+  `0`, and the meridian vertex `11`. Together they are the whole of the coordinate
+  system's configuration, and none of them may ever change.
 
 ---
 
 ## Still open
 
-- **Which of the six pairs.** Any of them works and the choice is arbitrary, but it
-  should be written down once and never changed, because it fixes where the
-  equator falls in every world.
+- ~~Which of the six pairs~~ — **decided above: the pair at vertices 0 and 3,
+  north at vertex 0, prime meridian through vertex 11.** This entry used to say
+  only that any of them works and the choice is arbitrary. Both halves turned out
+  to be worth measuring. *How* arbitrary: `coords.js` puts the axis through each
+  of the six in turn and gets **one distinct latitude signature** — they are one
+  world seen from six angles, so no measurement can prefer one. And the entry was
+  hiding two further choices it never named — which end is north, and where
+  longitude 0 runs — either of which would otherwise have been made by accident
+  by whoever wrote the code first.
 - **Whether to show a grid reference instead.** Two decimals of latitude is
   precise but not memorable; a short alphanumeric code derived from the cell ID
   might be friendlier for speaking aloud. This document commits to the ID as the
@@ -242,6 +331,11 @@ a number whose meaning depended on where you were standing when you took it.
   protected, standable landmarks, the coordinate singularity and the grid
   singularity coincide, and the other ten pentagons sit on two rings at
   **±26.57°** — the same in every world.
+- **Which pair cannot be decided on merit** — all six give **one distinct
+  latitude signature**, the same world rotated. Decided on the face table
+  instead: `0-3` is the only pair whose polar caps are **contiguous runs** of
+  face indices. North is vertex 0, the prime meridian runs through vertex 11,
+  and that puts all twelve pentagons on **exact multiples of 36°**.
 - **Two decimal places** name a cell on the worked planet, because one cell is
   **0.0337°** across. A small planet needs fewer digits than Earth, not more.
 - **Altitude is height above the reference radius**, so it goes negative

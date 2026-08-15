@@ -184,6 +184,48 @@ Cited by [doc 20](20-player-coordinates.md).
       -90.000 deg   1 pentagon
    Two poles and two rings of five. The same in every world ever generated,
    because the positions are geometry and no seed can move them.
+   The ring latitude is atan(1/2) exactly: 26.565 deg.
+
+   (b) do the six pairs differ at all?
+     axis 0-3    90.000x1 26.565x5 -26.565x5 -90.000x1
+     axis 1-2    90.000x1 26.565x5 -26.565x5 -90.000x1
+     axis 4-7    90.000x1 26.565x5 -26.565x5 -90.000x1
+     axis 5-6    90.000x1 26.565x5 -26.565x5 -90.000x1
+     axis 8-11   90.000x1 26.565x5 -26.565x5 -90.000x1
+     axis 9-10   90.000x1 26.565x5 -26.565x5 -90.000x1
+   distinct latitude signatures among all six: 1
+   They are the same world seen from a different angle. No measurement
+   will ever prefer one, so the choice cannot be made on merit -- it can
+   only be made once and written down.
+
+   which faces meet each pole, and whether they are a contiguous run:
+     0-3    north [0,1,2,3,4]  south [10,11,12,13,14]   BOTH CONTIGUOUS
+     1-2    north [1,2,5,9,19]  south [7,11,12,16,17]
+     4-7    north [6,10,11,15,16]  south [2,3,8,9,18]
+     5-6    north [0,1,5,6,15]  south [8,12,13,17,18]
+     8-11   north [9,13,14,18,19]  south [0,4,6,7,16]
+     9-10   north [5,10,14,15,19]  south [3,4,7,8,17]
+   exactly one pair has both caps contiguous: 0-3
+   That is a property of the face LIST, not of the sphere -- but it is the
+   only tiebreaker there is, and a weak written reason beats a coin flip.
+
+   (c) where longitude 0 runs -- a separate free choice
+   anchoring the prime meridian on v11, the second vertex of face 0
+   (the first ring pentagon the face table names after the north pole):
+     v 7   lat   26.565 deg   lon -144.000 deg
+     v10   lat   26.565 deg   lon  -72.000 deg
+     v11   lat   26.565 deg   lon    0.000 deg
+     v 5   lat   26.565 deg   lon   72.000 deg
+     v 1   lat   26.565 deg   lon  144.000 deg
+     v 8   lat  -26.565 deg   lon -180.000 deg
+     v 6   lat  -26.565 deg   lon -108.000 deg
+     v 2   lat  -26.565 deg   lon  -36.000 deg
+     v 4   lat  -26.565 deg   lon   36.000 deg
+     v 9   lat  -26.565 deg   lon  108.000 deg
+   every ring longitude is an exact multiple of 36 deg: true
+   So all twelve pentagons land on round numbers: poles at +/-90, the
+   northern five at 0 and +/-72 and +/-144, the southern five offset by 36.
+   Costs nothing, and makes doc 17's landmarks nameable and greppable.
 
 2. how fine the readout has to be
    planet            block   1 cell in degrees   decimals to resolve a cell
@@ -225,7 +267,10 @@ Cited by [doc 20](20-player-coordinates.md).
 verdict
    Put the axis through an antipodal pentagon pair: both poles land on
    protected, standable landmarks and the other ten sit on two rings at
-   +/-26.57 deg, identically in every world. Show latitude and longitude to
+   +/-26.57 deg, identically in every world. WHICH pair cannot be decided on
+   merit -- all six give the same world rotated -- so decide it by the only
+   asymmetry there is and record it: axis through 0-3, north at v0, prime
+   meridian through v11. Show latitude and longitude to
    TWO decimals plus altitude in metres -- that resolves 0.30 m on the worked
    planet. Show it, but do not share it: the shareable form is the cell ID,
    which is 27 bits and six base-36 characters.
@@ -534,7 +579,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 211M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1103,7 +1148,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1064 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 992 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

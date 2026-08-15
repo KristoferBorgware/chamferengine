@@ -19,6 +19,10 @@ const CENT = F0.map(f => norm(f.map(i => V0[i]).reduce((a,v) => a.map((x,k) => x
 // ---- 1. put the poles on a pentagon pair, and see where the rest land -------
 // Doc 13 found the twelve pentagons form six antipodal pairs. Doc 17 makes them
 // protected landmarks. So the coordinate axis has somewhere principled to go.
+//
+// That leaves WHICH pair, which end is north, and where longitude 0 runs. Doc 20
+// called the first arbitrary; parts (b) and (c) below test whether it really is,
+// and find the only thing that separates the six.
 console.log('1. choosing the axis: run it through an antipodal pentagon pair');
 {
   const pairs = [];
@@ -38,6 +42,76 @@ console.log('1. choosing the axis: run it through an antipodal pentagon pair');
     console.log(`     ${String(l).padStart(8)} deg   ${n} pentagon${n>1?'s':''}`);
   console.log('   Two poles and two rings of five. The same in every world ever generated,');
   console.log('   because the positions are geometry and no seed can move them.');
+  console.log('   The ring latitude is atan(1/2) exactly:'
+    + ` ${(Math.atan(0.5)*DEG).toFixed(3)} deg.`);
+
+  // (b) is any pair a better choice than the others? The icosahedron is
+  // vertex-transitive, so the honest expectation is no -- but "arbitrary" is a
+  // claim like any other and doc 20 states it without a number behind it.
+  console.log('\n   (b) do the six pairs differ at all?');
+  const sig = ([a]) => {
+    const A = V0[a], b = new Map();
+    for (let i=0;i<12;i++){
+      const k = (Math.asin(Math.max(-1,Math.min(1,dot(V0[i],A))))*DEG).toFixed(3);
+      b.set(k, (b.get(k)||0)+1);
+    }
+    return [...b.entries()].sort((x,y)=>y[0]-x[0]).map(([l,n])=>`${l}x${n}`).join(' ');
+  };
+  const sigs = new Set(pairs.map(sig));
+  for (const p of pairs) console.log(`     axis ${p.join('-').padEnd(5)}  ${sig(p)}`);
+  console.log(`   distinct latitude signatures among all six: ${sigs.size}`);
+  console.log('   They are the same world seen from a different angle. No measurement');
+  console.log('   will ever prefer one, so the choice cannot be made on merit -- it can');
+  console.log('   only be made once and written down.');
+
+  // The one thing that is NOT symmetric is the face table, because F0 was
+  // written vertex-0-first. A polar cap that is a contiguous run of face indices
+  // turns "am I near a pole" into a range check.
+  const capOf = v => F0.map((f,i) => f.includes(v) ? i : -1).filter(i => i >= 0);
+  const contiguous = a => a.every((x,i) => i === 0 || x === a[i-1] + 1);
+  console.log('\n   which faces meet each pole, and whether they are a contiguous run:');
+  let winner = null;
+  for (const [a,b] of pairs){
+    const ca = capOf(a), cb = capOf(b), both = contiguous(ca) && contiguous(cb);
+    if (both) winner = [a,b];
+    console.log(`     ${(a+'-'+b).padEnd(6)} north [${ca.join(',')}]  south [${cb.join(',')}]`
+      + (both ? '   BOTH CONTIGUOUS' : ''));
+  }
+  console.log(`   exactly one pair has both caps contiguous: ${winner.join('-')}`);
+  console.log('   That is a property of the face LIST, not of the sphere -- but it is the');
+  console.log('   only tiebreaker there is, and a weak written reason beats a coin flip.');
+
+  // (c) the decision doc 20 does not name: where longitude 0 runs.
+  console.log('\n   (c) where longitude 0 runs -- a separate free choice');
+  const NP = V0[winner[0]];
+  let e1; { const t = Math.abs(NP[0]) < 0.9 ? [1,0,0] : [0,1,0];
+    const d = dot(t, NP); e1 = norm(t.map((x,i) => x - NP[i]*d)); }
+  let e2 = cross(NP, e1);
+  // anchor the meridian on the northern ring pentagon that is nearest it
+  const ring = [];
+  for (let i=0;i<12;i++){
+    const la = Math.asin(Math.max(-1,Math.min(1,dot(V0[i],NP))))*DEG;
+    if (Math.abs(la) < 89) ring.push({ i, la, lo: Math.atan2(dot(V0[i],e2), dot(V0[i],e1))*DEG });
+  }
+  // Anchor on a NAMED vertex rather than whichever one an arbitrary basis put
+  // first: the second vertex of face 0, which is the first ring pentagon the
+  // face table mentions after the north pole. Stable, and derived from data the
+  // engine already has rather than from a choice of basis.
+  const anchorId = F0[0].find(v => v !== winner[0] && v !== winner[1]);
+  const anchor = ring.find(o => o.i === anchorId);
+  const wrap = x => ((x % 360) + 540) % 360 - 180;
+  console.log(`   anchoring the prime meridian on v${anchor.i}, the second vertex of face 0`);
+  console.log('   (the first ring pentagon the face table names after the north pole):');
+  for (const o of ring.sort((a,b) => (+b.la.toFixed(6)) - (+a.la.toFixed(6))
+                                  || wrap(a.lo-anchor.lo) - wrap(b.lo-anchor.lo)))
+    console.log(`     v${String(o.i).padStart(2)}   lat ${o.la.toFixed(3).padStart(8)} deg`
+      + `   lon ${wrap(o.lo - anchor.lo).toFixed(3).padStart(8)} deg`);
+  const lons = ring.map(o => wrap(o.lo - anchor.lo));
+  const round = lons.every(l => Math.abs(l - 36*Math.round(l/36)) < 1e-9);
+  console.log(`   every ring longitude is an exact multiple of 36 deg: ${round}`);
+  console.log('   So all twelve pentagons land on round numbers: poles at +/-90, the');
+  console.log('   northern five at 0 and +/-72 and +/-144, the southern five offset by 36.');
+  console.log('   Costs nothing, and makes doc 17\'s landmarks nameable and greppable.');
 }
 
 // ---- 2. how many decimal places name a cell? -------------------------------
@@ -146,7 +220,10 @@ console.log('\n5. sharing an exact location');
 console.log('\nverdict');
 console.log('   Put the axis through an antipodal pentagon pair: both poles land on');
 console.log('   protected, standable landmarks and the other ten sit on two rings at');
-console.log('   +/-26.57 deg, identically in every world. Show latitude and longitude to');
+console.log('   +/-26.57 deg, identically in every world. WHICH pair cannot be decided on');
+console.log('   merit -- all six give the same world rotated -- so decide it by the only');
+console.log('   asymmetry there is and record it: axis through 0-3, north at v0, prime');
+console.log('   meridian through v11. Show latitude and longitude to');
 console.log('   TWO decimals plus altitude in metres -- that resolves 0.30 m on the worked');
 console.log('   planet. Show it, but do not share it: the shareable form is the cell ID,');
 console.log('   which is 27 bits and six base-36 characters.');

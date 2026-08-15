@@ -129,13 +129,13 @@ subtle: it is every coastline.
 
 ---
 
-## Forty-seven open questions, and exactly one of them blocks you
+## Forty-six open questions, and exactly one of them blocks you
 
-Docs 13 through 25 carry **47** open bullets between them, plus 8 already struck
-through — one of which this document strikes, below. Sorted by what they actually
-block:
+Docs 13 through 25 carry **46** open bullets between them, plus 9 already struck
+through — two of which were struck by this document's own review. Sorted by what
+they actually block:
 
-![Three bars sized by count: 1 blocks code, 25 waits on code, 21 neither; below the rule, three unlisted items that all block the first line](figures/what-actually-blocks.svg)
+![Three bars sized by count: 1 blocks code, 25 waits on code, 20 neither; below the rule, three unlisted items that all block the first line](figures/what-actually-blocks.svg)
 
 *The backlog is not where the blockers are. One open bullet in the whole
 specification stops you writing code — the language choice. Twenty-five are
@@ -174,20 +174,30 @@ thing they ask about does not exist yet:
 - **Block format (1)** — two-ended blocks, and whether they fit the spare rotation
   bit ([doc 19](19-directional-blocks.md)).
 
-**Neither — 21.** Game design, plus one free decision. What the twelve pentagons
-contain, whether players are told about the loop rule, how fast a swimmer sinks,
-whether light is coloured, what happens in creative mode. All real questions.
-None of them is between anyone and a working planet, and none needs a decision
-before the first commit.
+**Neither — 20.** Game design, all of it. What the twelve pentagons contain,
+whether players are told about the loop rule, how fast a swimmer sinks, whether
+light is coloured, what happens in creative mode. All real questions. None of
+them is between anyone and a working planet, and none needs a decision before the
+first commit.
 
-### The one free decision, which gets more expensive every day
+### The one free decision, now taken
 
-[Doc 20](20-player-coordinates.md) needs **which of the six antipodal pentagon
-pairs is the axis**. Its own words: any of them works, the choice is arbitrary,
-and it should be written down once and never changed, *because it fixes where the
-equator falls in every world*. Today it costs one line. After the first world is
-generated and shared, changing it moves every latitude anyone has ever written
-down. Pick a pair, write it in doc 20, and stop thinking about it.
+This document originally listed a fourth category with one member: **which of the
+six antipodal pentagon pairs is the polar axis** ([doc 20](20-player-coordinates.md)).
+Free today, unfixable after the first world ships, and on nobody's critical path —
+exactly the kind of thing that gets decided by accident.
+
+It has since been decided, and measuring it was worth doing. All six pairs give
+**one distinct latitude signature** — they are the same world seen from six
+angles, so the choice provably cannot be made on merit. What broke the tie was
+the face table: `0-3` is the only pair whose polar caps are **contiguous runs** of
+face indices. North is vertex 0, the prime meridian runs through vertex 11, and
+that lands all twelve pentagons on **exact multiples of 36°**.
+
+The lesson generalises to the rest of this list. "Arbitrary" is a claim like any
+other, and the two decisions doc 20 was hiding behind it — which end is north,
+and where longitude 0 runs — would otherwise have been made by whoever typed the
+code first.
 
 ---
 
@@ -246,7 +256,7 @@ and it needs terrain to sit on.
 
 ## Honest caveat
 
-**The triage above is a judgement, not a measurement.** The count of 47 is exact
+**The triage above is a judgement, not a measurement.** The count of 46 is exact
 and reproducible — it is the number of un-struck bullets under a *Still open*
 heading in `docs/`. Which bucket each one goes in is an opinion about what
 "blocks" means, and a reasonable person could move several items between the last
@@ -288,9 +298,10 @@ question nobody on this list has thought of. That is what steps are for.
 - **Two more gaps are on no list**: `rank(q, r)` appears exactly once and is never
   defined, and no document names a noise algorithm even though
   [doc 23](23-determinism.md) makes the choice bit-load-bearing.
-- **Of 47 open questions, one blocks code** (which language), 25 are waiting for
-  code to exist, and 21 block nothing at all.
-- **One decision is free today and expensive forever after**: which pentagon pair
-  is the polar axis.
+- **Of 46 open questions, one blocks code** (which language), 25 are waiting for
+  code to exist, and 20 block nothing at all.
+- **The one free-but-unfixable decision is taken**: the polar axis runs through
+  vertices 0 and 3, north at 0, meridian at 11 — and all six pairs were measured
+  identical first, so the tie was broken on the face table rather than a coin.
 - **Build the kernel first**, and close `neighbour` the way everything else here
   was closed — by measuring it against the planet the scripts already build.
