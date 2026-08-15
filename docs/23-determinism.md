@@ -202,7 +202,11 @@ the restriction:
   — all transcendental, all fine, because nothing compares them across machines.
 - **`normalize` is safe**, so gravity, all three frames of
   [doc 13](13-gravity-and-orientation.md), and doc 04's whole pipeline need no
-  special handling.
+  special handling — **provided it is written as `sqrt(x*x + y*y + z*z)`**.
+  `hypot` is a library routine rather than an IEEE operation, and
+  [doc 28](28-language-and-runtime.md) measured it **one ULP apart** between
+  runtimes on a single machine. So is `pow`. The rule below is about which
+  *function is called*, and `hypot` is on the wrong side of it.
 - **No fixed-point arithmetic is needed**, which is the usual heavy-handed answer
   to this problem and would have cost the design its `float64` world positions.
 
@@ -213,6 +217,14 @@ the restriction:
   usually controlled by a flag (`-ffp-contract=off`, or the language's strict-float
   mode). This is a build-configuration question, not a design one, but it has to be
   set deliberately.
+
+  > This paragraph was written as a caveat and turned out to be the whole story.
+  > [Doc 28](28-language-and-runtime.md) measured it: contraction is the **only**
+  > thing that breaks bit-identity in the entire experiment, one C source gives
+  > **four different digests** under different flags, and on `aarch64` the
+  > contracting build is the **default** because FMA is in that baseline. It also
+  > found the flag is *necessary but not sufficient* — `-Ofast` undoes it. That is
+  > what chose the language.
 - **Reduction order.** Summing the same numbers in a different order gives
   different results, so anything parallelised over cells must accumulate in a fixed
   order. The drainage accumulation in [doc 21](21-rivers-and-erosion.md) sorts by
@@ -237,18 +249,23 @@ the restriction:
 
 ## Still open
 
-- **Nothing verifies the rule.** This document argues from the standard and from
-  a single machine's arithmetic. A real check would run the generator on two
-  genuinely different platforms and compare hashes, which cannot be done from
-  inside one script. Until that exists, this is a well-founded argument rather
-  than a measurement.
+- ~~Nothing verifies the rule.~~ — **mostly closed** by
+  [doc 28](28-language-and-runtime.md). This document said a real check "would run
+  the generator on two genuinely different platforms and compare hashes, which
+  cannot be done from inside one script". It can be done one level down: run the
+  kernel in **six languages** on one machine, and six different compilers, six
+  optimisers and six runtimes all land on **one digest** over 80,000 `float64`s.
+  What remains open is the original wording — two different *platforms*, which
+  still needs an ARM machine and a diff.
 - **GPU determinism is a separate question and mostly a non-question.** Vertex
   positions are `float32` and chunk-local ([doc 15](15-precision-and-origin.md)),
   and nothing computed on the GPU feeds back into world state — so it may differ
   freely. That holds only as long as it stays true.
-- **Which language and runtime.** JavaScript pins `+ − × ÷ sqrt` to IEEE 754 and
-  explicitly does *not* pin `Math.sin` and friends. Most languages are similar but
-  not identical, and the choice should be made knowing this.
+- ~~Which language and runtime.~~ — **closed**: **Rust**, see
+  [doc 28](28-language-and-runtime.md). This document guessed that languages are
+  "similar but not identical" and that the choice should be made knowing it. They
+  turned out to be *identical*, all six of them, and the decision was made on
+  garbage collection and on compiling to WebAssembly instead.
 
 ---
 

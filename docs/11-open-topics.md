@@ -18,10 +18,11 @@ found by [doc 26](26-implementation-readiness.md) asking what a programmer would
 have to invent before the first line of code, and none of them was on any *Still
 open* list, because a gap nobody noticed is a gap nobody files.
 
-**Three of the original four are closed** — `neighbour(id, k)`, `rank(q, r)` and
-the noise function were built and measured. A fifth arrived when a scope
-change reopened **the ID word**, and that is now closed too. **One is left: the
-language.**
+**All of them are closed** — `neighbour(id, k)`, `rank(q, r)` and the noise
+function were built and measured; a fifth arrived when a scope change reopened
+**the ID word**, and that closed too; and **the language** went last and the same
+way, by writing the kernel in six of them and comparing the bits
+([doc 28](28-language-and-runtime.md)). **Part 1 is empty.**
 
 ---
 
@@ -297,20 +298,35 @@ triangles and calling them cells.
 
 ---
 
-## Which language and runtime
+## ~~Which language and runtime~~ — decided, see [doc 28](28-language-and-runtime.md)
 
-The only entry on this page that also appears on a document's own *Still open*
-list ([doc 23](23-determinism.md)), and the only open bullet anywhere in the
-specification that blocks the first line of code.
+Closed. **Rust** — and the argument this entry made turned out to be wrong in a
+way worth keeping on the page.
 
-It matters more here than in most projects. Doc 23's entire argument is that
-`+ − × ÷ sqrt` and comparisons are pinned by IEEE 754 and transcendentals are
-not — so the whole runtime is bit-identical **provided the language makes the same
-promises**. JavaScript pins the five and explicitly does not pin `Math.sin`. Most
-languages are similar and none is identical, and two things travel with the
-choice: the build must disable floating-point contraction (`-ffp-contract=off` or
-the equivalent), and reduction order must be fixed wherever cells are summed in
-parallel.
+The entry said the runtime is bit-identical "**provided the language makes the
+same promises**", that "most languages are similar and none is identical", and
+that the choice therefore had to be made carefully around determinism. So the
+test was to write the pinned pipeline — noise hash, quintic fade, fBm, barycentric
+blend, `normalize` — in six languages and compare the raw bits.
+
+> **[verified]** `verification/language.js`, section 1. JavaScript, C, Rust, Java,
+> Go and Python, over 20,000 samples and 80,000 `float64`s folded into one digest:
+> **6 of 6 identical**. They are not "similar". They are the same.
+
+**Determinism eliminated nobody**, so the decision was made on the requirements
+nobody had been weighing: no garbage collector inside
+[doc 14](14-meshing-and-lod.md)'s remesh, and **one source compiling to both
+native and WebAssembly**, which is what
+[doc 22](22-multiplayer-interest.md)'s client regenerating the coarse map actually
+requires.
+
+The one real hazard turned out to be the throwaway line about
+`-ffp-contract=off`. That flag is the only thing in the whole experiment that
+changes the answer — one C source gives **four distinct digests** — and on
+`aarch64` the contracting build is the **default**, because FMA is in that
+baseline. It is also necessary rather than sufficient: `-Ofast` undoes it. Rust
+does not contract implicitly at any optimisation level, so the guarantee lives in
+the language instead of the makefile.
 
 ---
 
@@ -686,34 +702,35 @@ networking mechanism is what produced the wrong plan.
 
 ## Suggested next step
 
-**One item left in Part 1: the language.** The ID word is closed — and it closed
-the way the other four did, by being built rather than argued about. `neighbour(id, k)`, `rank(q, r)` and
-the noise function were all built and measured, and all three behaved the way this
-page's lessons predict — the pessimism was wrong in kind, and each turned up a
-result nobody was looking for (the `reversed` field is never read; the border rule
-had never been checked and holds; the float hash mixes *better*, and loses on
-portability alone).
+**Part 1 is empty. Write the code.**
 
-The language is now the only thing between this specification and code, and the
-noise function has sharpened what it has to provide: **wrapping `uint32`
-arithmetic**, IEEE-754 `+ − × ÷ sqrt`, and a build that can be told not to
-contract floating-point expressions. That is a short list, and most candidates
-meet it — but doc 23's whole argument depends on the choice being made knowingly
-rather than by default.
+Every one of the five closed the same way — by being built rather than argued
+about — and every one turned up a result nobody was looking for. The `reversed`
+field is never read. The border rule had never been checked and holds. The float
+hash mixes *better* and loses on portability alone. Packing the ID word for the
+first time broke three claims at once. And the language, which was expected to be
+a careful trade against determinism, was not a determinism question at all: six
+languages produced **one digest**, and the only thing that broke it was a C
+compiler flag that is on by default on ARM.
 
-Everything else is either closed or waiting for code. Of the **46** open bullets
-across docs 13–25, [doc 26](26-implementation-readiness.md) finds **one** that
-blocks the first line — the language, which is why it appears above as well —
-**25** that cannot be answered until the thing they ask about exists, and **20**
-that are game design and block nothing. The three that reach furthest are all in
-the middle group:
+That is the page's own lesson landing on the page: **the pessimism was wrong in
+kind every single time.** Not wrong about difficulty — wrong about *what* would
+be difficult.
+
+Everything left is waiting for code. Of the **46** open bullets across docs
+13–25, [doc 26](26-implementation-readiness.md) found **one** that blocked the
+first line — the language, now closed — **25** that cannot be answered until the
+thing they ask about exists, and **20** that are game design and block nothing.
+The three that reach furthest are all in the middle group:
 
 - **Verifying determinism on real hardware** ([doc 23](23-determinism.md)). That
   document closes the question by auditing which operations each path uses, and
   the answer is good — the runtime is built from arithmetic IEEE 754 pins to the
-  bit. But the argument runs from the standard and from one machine. Nobody has
-  run the generator on two genuinely different platforms and compared hashes,
-  and nobody can until there is a generator to run.
+  bit. It then said nobody could run the check until there was a generator to
+  run. **Most of that has since been done**: doc 28 ran the pinned kernel in six
+  languages and got one digest, which is a harder test than two machines running
+  one binary. What is left is the literal version — the same script on an
+  **`aarch64`** machine — and it is a five-minute job whenever one is to hand.
 - **Terrain height at a mesh corner** ([doc 18](18-cell-boundary.md)). Three cells
   meet at a corner and may disagree about its height. It needs a mesher.
 - **Light across a LOD seam** ([doc 16](16-lighting.md)).

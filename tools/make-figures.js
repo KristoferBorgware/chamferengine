@@ -2705,5 +2705,94 @@ const prof = (() => {
   <text class="cf-d" x="14" y="244">the backlog is not where the blockers are</text>`));
 }
 
+// =============================================================================
+// 28 — what a fused multiply-add actually does to a number. The two results are
+// computed here with exact integer arithmetic, not quoted: a = b = 1 + 2^-27,
+// c = -1, which is the smallest tidy case where the fusion is visible.
+// =============================================================================
+{
+  // exact product as a rational: (2^27 + 1)^2 / 2^54
+  const SH = 54n;
+  const P = (2n**27n + 1n) ** 2n;             // = 2^54 + 2^28 + 1, in units of 2^-54
+  const ONE = 1n << SH;
+  // a double holds 53 significant bits. The product's leading bit is 2^54, so
+  // everything below 2^(54-52) = 2^2 in these units is lost to rounding; the
+  // tail here is exactly 1, less than half an ulp, so it rounds away.
+  const rounded = P & ~((1n << 2n) - 1n);
+  // Subtract the 1 in BigInt BEFORE converting. Number(P) would itself round
+  // off the bit this whole figure is about.
+  const toNum = big => Number(big - ONE) / Number(ONE);
+  const mulAdd = toNum(rounded);              // multiply, round, then add c
+  const fused  = toNum(P);                    // add c, then round once
+  const bits = v => { const d = new DataView(new ArrayBuffer(8)); d.setFloat64(0, v);
+                      return d.getBigUint64(0).toString(16).padStart(16,'0'); };
+  const bm = bits(mulAdd), bf = bits(fused);
+  let split = 0; while (split < 16 && bm[split] === bf[split]) split++;
+  const W = 520, X = 20, BW = 340, H = 26, KEPT = Math.round(BW * 53/55);
+  made.push(svg('contraction-changes-the-number', W, 320, `
+  <text class="cf-big" x="${X}" y="24">a &#215; b + c, with a = b = 1 + 2&#8315;&#178;&#8311; and c = &#8722;1</text>
+
+  <text class="cf-d" x="${X}" y="52">a &#215; b, exactly &#8212; 55 significant bits</text>
+  <rect class="cf-af" x="${X}" y="60" width="${BW}" height="${H}" rx="3"/>
+
+  <text class="cf-d" x="${X}" y="112">multiply, round to a double, then add c</text>
+  <rect class="cf-af" x="${X}" y="120" width="${KEPT}" height="${H}" rx="3"/>
+  <rect class="cf-void" x="${X+KEPT}" y="120" width="${BW-KEPT}" height="${H}" rx="3" stroke-dasharray="3 3"/>
+  <path class="cf-g" d="M${X+KEPT+(BW-KEPT)/2} ${120+H+4} L${X+KEPT+(BW-KEPT)/2} ${120+H+14}"/>
+  <text class="cf-gd" x="${X+BW+8}" y="${120+H+18}">gone before c arrives</text>
+
+  <text class="cf-d" x="${X}" y="196">fuse: add c to the whole product, then round &#8212; once</text>
+  <rect class="cf-gf" x="${X}" y="204" width="${BW}" height="${H}" rx="3"/>
+
+  <path class="cf-l" d="M${X} 254L${W-X} 254"/>
+  <text class="cf-c"  x="${X}" y="276">${bm.slice(0,split)}<tspan class="cf-gd">${bm.slice(split)}</tspan>   ${mulAdd.toExponential(16)}</text>
+  <text class="cf-gd" x="${X}" y="294">${bf.slice(0,split)}<tspan class="cf-gd">${bf.slice(split)}</tspan>   ${fused.toExponential(16)}</text>
+  <text class="cf-d"  x="${X}" y="314">Two different numbers. The fused one is more accurate, which is not the same as right.</text>`));
+}
+
+// =============================================================================
+// 28 — the measurement: six languages land on one digest, and one C source
+// lands on four. Digests are from verification/language.js on x86-64 Linux;
+// this figure lays them out, it does not compute them.
+// =============================================================================
+{
+  const AGREE = '482495611b7ba324';
+  const langs = [
+    ['JavaScript', 'node 22',                      AGREE],
+    ['C',          'gcc -O2, baseline ISA',        AGREE],
+    ['Rust',       'rustc -O, target-cpu=native',  AGREE],
+    ['Java',       'javac/java, default',          AGREE],
+    ['Go',         'go build, amd64',              AGREE],
+    ['Python',     'CPython 3',                    AGREE],
+  ];
+  const builds = [
+    ['gcc',   '-O2 -march=x86-64',                    AGREE],
+    ['gcc',   '-O2 -march=haswell',                   '7e508b42b4ccffc9'],
+    ['gcc',   '-O2 -march=haswell -ffp-contract=off', AGREE],
+    ['gcc',   '-Ofast -ffp-contract=off',             '4eca155245ffb1c3'],
+    ['clang', '-O2 -march=x86-64',                    AGREE],
+    ['clang', '-O2 -march=haswell',                   '9ecaa4f71474266b'],
+    ['clang', '-O2 -march=haswell -ffp-contract=off', AGREE],
+  ];
+  const line = (y, a, b, digest) =>
+    `<text x="16" y="${y}">${a}</text>`
+    + `<text class="cf-d" x="106" y="${y}">${b}</text>`
+    + `<text class="${digest === AGREE ? 'cf-c' : 'cf-gd'}" x="334" y="${y}">${digest.slice(0,10)}&#8230;</text>`;
+  const L = langs.map((r,i)  => line(74  + i*20, r[0], r[1], r[2])).join('');
+  const B = builds.map((r,i) => line(280 + i*20, r[0], r[1], r[2])).join('');
+  made.push(svg('one-digest-four-planets', 520, 468, `
+  <text class="cf-big" x="16" y="26">six languages, one kernel</text>
+  <text class="cf-d" x="16" y="46">20,000 samples &#183; 80,000 float64s &#183; one 64-bit digest</text>
+  ${L}
+  <path class="cf-a" d="M326 62L326 178"/>
+  <text class="cf-c" x="16" y="204">all six identical, bit for bit</text>
+  <path class="cf-l" d="M16 224L504 224"/>
+  <text class="cf-big" x="16" y="252">one C source, four planets</text>
+  <text class="cf-d" x="334" y="252">only the flags move</text>
+  ${B}
+  <text class="cf-gd" x="16" y="434">-march=haswell alone changes the world &#8212; and gcc and clang</text>
+  <text class="cf-gd" x="16" y="452">do not even change it the same way.</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

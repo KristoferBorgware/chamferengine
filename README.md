@@ -22,7 +22,8 @@ and no polar singularities.
 This repository currently contains **documentation and interactive demos only**.
 No engine code has been written yet. Everything here is the reasoning, the
 mathematics, and the verified constants that an implementation should be built
-against.
+against — and as of [doc 28](docs/28-language-and-runtime.md), nothing in the
+specification is still blocking that implementation. It is **Rust**.
 
 ---
 
@@ -74,6 +75,7 @@ a runnable demo where one exists.
 | 25 | [Water](docs/25-water.md) | Water as a block type, what a translucent ocean costs to draw, and why you float in it |
 | 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 44 open questions actually block |
 | 27 | [Block state](docs/27-block-state.md) | What a block *is* as bits, why a type number cannot be a hash, and the registry that fixes it |
+| 28 | [The language and the runtime](docs/28-language-and-runtime.md) | Six languages, one digest — and the compiler flag that makes four planets |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
@@ -86,7 +88,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all thirty-two verification scripts and fails the build if
+`make-reference.js` runs all thirty-three verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a
@@ -168,18 +170,19 @@ node verification/volume.js    # relief, caves, and what noise generation costs
 node verification/seam.js      # a skirt does not close a cave mouth; what does
 ```
 
-The four that closed the pre-code gap list, and the one that stayed open:
+The five that closed the pre-code gap list:
 
 ```bash
 node verification/neighbour.js  # neighbour(id,k) from the table and integers alone
 node verification/rank.js       # rank(q,r) over a chunk; the border rule partitions
 node verification/noise.js      # the hash, the fade curve and the fBm, pinned
 node verification/id.js         # the ID word: what broke, and why option C holds
-node verification/determinism.js  # which arithmetic is bit-identical; language is open
+node verification/determinism.js  # which arithmetic is bit-identical to the bit
+node verification/language.js   # the same kernel in six languages; the digests agree
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.
-All thirty-two are run by `make-reference.js`, and
+All thirty-three are run by `make-reference.js`, and
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is their combined output.
 
 ---
@@ -202,7 +205,8 @@ All thirty-two are run by `make-reference.js`, and
 | Pentagons, water, rivers, coordinates | Decided, verified |
 | Ray traversal | Approach chosen, 2D prototype only |
 | Pathfinding | Approach chosen, 2D prototype only |
-| Language and runtime | **Not chosen** — the one thing blocking code, see [doc 26](docs/26-implementation-readiness.md) |
+| Language and runtime | **Rust**, decided and verified — see [doc 28](docs/28-language-and-runtime.md) |
+| **Engine source** | **Not written.** Nothing in the specification blocks it any more |
 
 ## Licence
 

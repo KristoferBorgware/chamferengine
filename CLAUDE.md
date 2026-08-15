@@ -13,8 +13,9 @@ and duplicates information found there.
   and dead heading anchors, and the Pages workflow runs it — a broken link
   turns the deploy red. Note the renderer does **not** nest `*italic*` inside
   `**bold**`; it reports `unconverted bold` when you try.
-- **No engine source yet.** The design is still being closed out. Do not start
-  implementing from these documents without being asked to.
+- **No engine source yet.** Nothing in the specification blocks it any more
+  (doc 26 Part 1 is empty, doc 28 picked **Rust**), but do not start implementing
+  from these documents without being asked to.
 - Commit as `KristoferBorgware <kristofer@borgware.se>`, with no co-authoring
   trailer and no model identifier in the message. **Set this in the repo config,
   once, at the start of a session** — `git config user.name` / `user.email`. Passing
@@ -134,7 +135,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 27.
+- `docs/` — prose specification, ordered 00 through 28.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -189,6 +190,7 @@ script owns its numbers.
 | [25](docs/25-water.md) | water is a block type; drawing a translucent ocean; floating vs colliding | `water.js` |
 | [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
 | [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
+| [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read
@@ -280,6 +282,9 @@ Violating any of these breaks the design. They are not tunable.
 | block state | `12` type + `4` rotation = 16 bits | 4,096 types = `3.5x` Minecraft's 1,159 | `blockstate.js` |
 | fixed-split cost | `40–68%` of type slots at MC scale | flat index would be 40%; still fits | `blockstate.js` |
 | type-name hash | **unusable** — 50% collision at `75` types | registry in the save instead | `blockstate.js` |
+| cross-language digest | `6` of 6 identical | JS, C, Rust, Java, Go, Python; 80,000 float64s | `language.js` |
+| one C source, flags moved | `4` distinct digests | `-march=haswell` alone changes the world | `language.js` |
+| `hypot` vs `sqrt` | `hypot` differs `1` ULP between runtimes | `sqrt(x*x+y*y+z*z)` never does | `language.js` |
 | delta record | `29 + 10 + 16` = `55` of 64 bits | planet implied by the file; 9 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
 | side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
@@ -630,6 +635,26 @@ Violating any of these breaks the design. They are not tunable.
   there opens full of someone else's ore. One rule instead, no cases: **writing a
   block clears that cell's side data.** The type still says what a fresh block is
   **born** with and what a tag **means**. Doc 19's spare rotation bit stays spare.
+- **The language was never a determinism question** (`language.js`, doc 28). Doc
+  23 said a real check "cannot be done from inside one script"; it can, one level
+  down. The pinned kernel — noise hash, quintic fade, fBm, barycentric blend,
+  `normalize` — written in **six languages** and run on one machine gives **one
+  64-bit digest** over 80,000 `float64`s: JavaScript, C, Rust, Java, Go and
+  Python, **6 of 6**. They are not "similar but not identical" as docs 11, 23 and
+  26 all said; they are the same. **The only thing that breaks bit-identity in the
+  whole experiment is a C build with FMA contraction on** — one source, **four
+  distinct digests**, `-march=haswell` alone flips it, and **gcc and clang do not
+  even fuse the same way**. That is the *default* build on `aarch64`, where FMA is
+  baseline, so an x86 server and an ARM client from one source generate two
+  planets. `-ffp-contract=off` is **necessary and not sufficient**: `-Ofast`
+  undoes it. Also measured: **`hypot` is not `sqrt`** — a library routine, not an
+  IEEE operation, **1 ULP** apart between runtimes on one machine, as is `pow`,
+  while `sqrt(x*x+y*y+z*z)` agrees everywhere. **`normalize` must be written the
+  long way.** So determinism eliminated nobody, and **Rust** was chosen on the
+  four requirements left: no flag needed at any `-O`, `wrapping_mul` in the
+  language, no GC inside doc 14's remesh, and **one source compiling to native and
+  WebAssembly** — which is what doc 22's client regenerating the coarse map
+  actually requires. **Java is the runner-up** and loses only on the last two.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
@@ -664,10 +689,9 @@ docs 13–25, **one** blocks code, 25 are waiting for code to exist, and 20 bloc
 nothing.
 
 **The gaps that actually block the kernel were on no Still open list** — they are
-doc 11 Part 1, and doc 26 is the triage that found them. **Three of the four are
-now closed**, all by building and measuring rather than arguing. **The language is
-the only one left**, and the noise pin sharpened what it must supply: wrapping
-`uint32`, IEEE-754 `+ − × ÷ sqrt`, and a build that can disable FP contraction:
+doc 11 Part 1, and doc 26 is the triage that found them. **All five are now
+closed**, every one by building and measuring rather than arguing. **Part 1 is
+empty; nothing in the specification blocks the first line of code.**
 
 - ~~`neighbour(id, k)`~~ — **closed** by `neighbour.js`, see doc 05.
 - ~~`rank(q, r)`~~ — **closed** by `rank.js`, see doc 07.
@@ -681,11 +705,11 @@ the only one left**, and the noise pin sharpened what it must supply: wrapping
   remain. And `q`, `r` need `(D−C)+1` bits, not `(D−C)`, because a side-`m`
   triangle has `m+1` lattice points per edge. **The address is `5 + 2D + 2`.**
   Three encodings are priced in doc 03; **C** (path to depth `D` + 2-bit corner,
-  canonicalised by lowest ID) is the recommendation and is **not yet verified**.
+  canonicalised by lowest ID) is the decision and **is verified** — `id.js` §5–6.
   Word at D11: planet 12 + address 29 + layer 10 = **51 of 64**.
-- **Which language and runtime** (doc 23) — the only open bullet that blocks the
-  first line. JavaScript pins `+ − × ÷ sqrt` and explicitly does not pin
-  `Math.sin`; most languages are similar but not identical.
+- ~~`The ID word`~~ — **closed** by `id.js` §5–6: option C verified, see doc 03.
+- ~~`Which language and runtime`~~ — **closed** by `language.js`, see doc 28.
+  **Rust.**
 
 **Decided, and it was free only until the first world shipped:** the polar axis
 (doc 20). All six antipodal pentagon pairs give **one** distinct latitude
@@ -696,6 +720,7 @@ north at vertex 0, prime meridian through vertex 11.** That puts all twelve
 pentagons on exact multiples of 36° of longitude. Never change any of the three.
 
 The furthest-reaching items that are waiting on code rather than blocking it:
-**nothing verifies determinism on two real platforms** (doc 23), **terrain height
+**nothing verifies determinism on two real `aarch64`-vs-`x86` platforms** (doc 23
+— six *languages* now agree, `language.js`), **terrain height
 at a mesh corner** (doc 18), and light across a **LOD seam** (doc 16) — doc 14's
 "finer chunk owns the seam" was for geometry, and a flood fill propagates inward.

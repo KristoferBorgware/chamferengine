@@ -24,10 +24,13 @@ So the honest summary is: **the arguing is done and the typing has not started.*
 That is a good place to be, and it is not the same as being ready. A
 specification is ready for code when someone can implement its core functions
 without making a design decision. **Four things stopped that when this document
-was written, and only one of them appeared on any open-topics list.** Three have
-since been closed by building them, leaving the language; what follows keeps the
-original diagnosis because the reason those gaps went unnoticed is more useful
-than the fix.
+was written, and only one of them appeared on any open-topics list.**
+
+**All four are now closed.** Three went by building the function and measuring it;
+the fourth — the language — went the same way, by running the kernel in six
+languages and comparing the bits ([doc 28](28-language-and-runtime.md)). What
+follows keeps the original diagnosis, because the reason those gaps went unnoticed
+is more useful than the fix.
 
 ---
 
@@ -167,13 +170,24 @@ waiting for code to exist before they can be answered at all. The three items
 that genuinely gate the kernel appear on no Still open list, because nobody
 noticed they were missing.*
 
-**Blocks the first line — 1**, and it is now the *only* thing left in
-[doc 11](11-open-topics.md) Part 1 as well. [Doc 23](23-determinism.md)'s "which
-language and runtime". It matters more here than in most projects: that document's whole
-argument is that `+ − × ÷ sqrt` and comparisons are pinned by IEEE 754 and
-transcendentals are not, and languages differ in exactly how much of that they
-guarantee. JavaScript pins the five and explicitly does not pin `Math.sin`. Pick
-knowing that, and check the build disables floating-point contraction.
+**Blocks the first line — 1**, and it was the *only* thing left in
+[doc 11](11-open-topics.md) Part 1 as well: [doc 23](23-determinism.md)'s "which
+language and runtime". **It is now closed, and the reasoning in this paragraph
+was wrong.** The paragraph said languages "differ in exactly how much of that
+they guarantee", so the choice had to be made carefully around determinism.
+
+> **[verified]** `verification/language.js`, section 1. The pinned pipeline,
+> written in **six languages** and run on one machine: JavaScript, C, Rust, Java,
+> Go and Python produce **one identical 64-bit digest** over 80,000 `float64`s.
+> They do not differ. The only thing in the whole experiment that breaks
+> bit-identity is a **C build with FMA contraction enabled** — which is the
+> *default* on `aarch64`.
+
+So determinism eliminated nobody, and [doc 28](28-language-and-runtime.md) decided
+on the other four requirements instead — no GC inside a remesh, and one source
+compiling to both native and WebAssembly, which is what
+[doc 22](22-multiplayer-interest.md)'s client regenerating the coarse map actually
+needs. **Rust.**
 
 **Waits on code — 23.** These cannot be closed by another document, because the
 thing they ask about does not exist yet:
@@ -324,10 +338,12 @@ question nobody on this list has thought of. That is what steps are for.
   every cut.
 - **The noise function is pinned** — and the float hash it replaced lost on
   **portability, not quality**, which is the opposite of what was expected.
-- **One thing now stands between this specification and code: the language.**
-  The noise pin sharpened the requirement to wrapping `uint32`, IEEE-754
-  `+ − × ÷ sqrt`, and a build that can disable floating-point contraction.
-- **Of 44 open questions, one blocks code** (which language), 23 are waiting for
+- **Nothing now stands between this specification and code.** The language was
+  the last of the four, and it closed the same way the others did — by building
+  the thing. Six languages, one kernel, **one digest**; determinism eliminated
+  nobody, and **Rust** was chosen on garbage collection and WebAssembly
+  ([doc 28](28-language-and-runtime.md)).
+- **Of 44 open questions, one blocked code** (which language), 23 are waiting for
   code to exist, and 20 block nothing at all.
 - **The one free-but-unfixable decision is taken**: the polar axis runs through
   vertices 0 and 3, north at 0, meridian at 11 — and all six pairs were measured

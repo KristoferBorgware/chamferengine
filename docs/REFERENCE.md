@@ -31,6 +31,7 @@ numbered documents.
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) [15](15-precision-and-origin.md) |
 | [`id.js`](../verification/id.js) | The cell ID as an actual 64-bit word. Doc 03 draws the layout, doc 07 says finding a chunk is "one shift", doc 06 says "chunk size remains tunable after launch: it does not change world data", and doc 22 leans on a contiguous range being a compact patch. Nothing had ever packed the bits and checked those together. Packing them turns up three problems, and they are not compatible with each other -- so this measures the problem rather than announcing a fix. Adding a planet field for multiple worlds is what forced the question. | [03](03-addressing.md) [11](11-open-topics.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
+| [`language.js`](../verification/language.js) | Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check. | [11](11-open-topics.md) [26](26-implementation-readiness.md) [28](28-language-and-runtime.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
@@ -922,7 +923,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 400M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -940,6 +941,193 @@ verdict
    hundreds of runs however the children are ordered. The interest test wants
    a dot product per player, which is free. The ID ordering earns its keep on
    DISK, where a few long runs fetch most of a player's region sequentially.
+```
+
+## `language.js`
+
+Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check.
+
+Cited by [doc 11](11-open-topics.md), [doc 26](26-implementation-readiness.md), [doc 28](28-language-and-runtime.md).
+
+```
+language.js -- which language and runtime, decided by running the kernel
+             in every one of them and comparing the bits
+
+0. what the specification requires of a language, and which doc requires it
+   wrapping uint32 arithmetic   doc 08   noise.js pins a hash of 3 wrapping multiplies and 2 xor-shifts
+   IEEE 754 + - * / and sqrt    doc 23   position -> cell, ID -> position, gravity and the ray walk are all in that set
+   no implicit contraction      doc 23   a*b+c fused into one rounding is a DIFFERENT number
+   a fixed reduction order      doc 08   fBm at 4 and 5 octaves differs by 1.4e-17 if the order moves
+   float64 that stays float64   doc 15   offsets are float64; an x87 80-bit intermediate would not be
+   float32 for GPU-facing data  doc 15   per-vertex, chunk-relative -- 122 um at R 1700
+   no GC pause in a frame       doc 14   ~21,000 cells and 84,000 triangles are rebuilt per chunk change
+   one binary for two targets   doc 22   the client REGENERATES the coarse map, so it runs the server's code
+
+   The first four are the sharp ones: they are properties of the LANGUAGE
+   and its optimiser, not of the code someone writes in it. Sections 1-3
+   measure them. The last four are engineering, and section 5 weighs them.
+
+1. the same kernel in six languages: do the bits agree?
+   20,000 samples, 80,000 float64s folded into one 64-bit digest
+
+   language     build                          digest             vs JS
+   JavaScript   node v22.22.2                  482495611b7ba324   SAME
+   C            gcc -O2, baseline ISA          482495611b7ba324   SAME
+   Rust         rustc -O, target-cpu=native    482495611b7ba324   SAME
+   Java         javac/java, default            482495611b7ba324   SAME
+   Go           go build, amd64                482495611b7ba324   SAME
+   Python       CPython 3                      482495611b7ba324   SAME
+
+   6 of 6 agree, bit for bit, over the whole pipeline.
+   Every one of these has a different compiler, a different optimiser and a
+   different runtime, and they land on the same 64 bits. Doc 23 argued this
+   from the standard; this is the argument actually run.
+
+   recorded digest  482495611b7ba324   measured on
+                    x86-64 Linux, node 22 / gcc 13 / clang 18 / rustc 1.94 / OpenJDK / go 1.24 / CPython 3.11
+   this machine     482495611b7ba324   <- SAME. A different machine, the same bits.
+
+2. the one thing that breaks it, and it is not a language
+   the SAME C source, the SAME machine -- only the flags move:
+
+   build                                          digest             vs JS
+   gcc -O2 -march=x86-64                        482495611b7ba324   SAME
+   gcc -O2 -march=haswell                       7e508b42b4ccffc9   DIFFERENT
+   gcc -O2 -march=haswell -ffp-contract=off     482495611b7ba324   SAME
+   gcc -O3 -flto -ffp-contract=off              482495611b7ba324   SAME
+   gcc -Ofast ... -ffp-contract=off             4eca155245ffb1c3   DIFFERENT
+   clang -O2 -march=x86-64                      482495611b7ba324   SAME
+   clang -O2 -march=haswell                     9ecaa4f71474266b   DIFFERENT
+   clang -O2 -march=haswell -ffp-contract=off   482495611b7ba324   SAME
+
+   4 distinct answers from one source file.
+   -march=haswell alone changes the result, because it makes FMA available
+   and both compilers then fuse "sum += amp*value3(...)" into a single
+   rounding. That is a DIFFERENT number, not a more accurate one -- and
+   gcc and clang do not even fuse the same way, so they disagree with each
+   other as well as with everyone else.
+
+   THIS IS NOT AN EXOTIC BUILD. x86-64 baseline has no FMA, so the plain
+   build here happens to be safe. aarch64 has FMA in the BASELINE -- every
+   Apple Silicon Mac and every phone -- so on those targets the DEFAULT
+   build is the contracting one. An x86 server and an ARM client compiled
+   from the same source would generate two different planets.
+
+   And -ffp-contract=off is necessary, not sufficient: -Ofast turns
+   -ffast-math back on and re-associates regardless, so the rule has to be
+   a prohibition on a family of flags, which no flag can enforce.
+
+3. sqrt is safe and hypot is not, measured rather than assumed
+   the same inputs, 4 runtimes, ONE machine and one libm underneath:
+
+   fn      node              C/glibc           Rust              Java               agree?
+   sin     3fe6a09e667f3bcc  3fe6a09e667f3bcc  3fe6a09e667f3bcc  3fe6a09e667f3bcc   yes
+   cos     3fe6a09e667f3bcd  3fe6a09e667f3bcd  3fe6a09e667f3bcd  3fe6a09e667f3bcd   yes
+   exp     40018bd669471caa  40018bd669471caa  40018bd669471caa  40018bd669471caa   yes
+   pow     3fe645f7c63f2c6a  3fe645f7c63f2c6b  3fe645f7c63f2c6b  3fe645f7c63f2c6b   NO -- 1 ULP apart
+   hypot   3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3a   NO -- 1 ULP apart
+   sqrt    3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b   yes
+
+   sqrt(x*x+y*y+z*z) agrees, exactly as IEEE 754 requires -- so doc 23 is
+   right that normalize is safe, and doc 15's old worry stays withdrawn.
+
+   But hypot() is NOT sqrt(). It is a library routine, not an IEEE
+   operation, and it disagrees here by one ULP between runtimes on the
+   same machine. So does pow(). NORMALIZE MUST BE WRITTEN THE LONG WAY:
+     length = sqrt(x*x + y*y + z*z)     safe, pinned, every platform
+     length = hypot(x, y, z)            the obvious call, and wrong here
+   This repository's own scripts use Math.hypot in 24 places. They are
+   measuring, not specifying, and determinism.js priced one ULP at 3.8e-13
+   of a cell -- so no number here moves. The ENGINE may not do it.
+
+   Honest caveat: sin, cos and exp agree across all four here because they
+   all sit on one machine's glibc. That is a did-not-reproduce, not a
+   clearance -- a Windows or macOS libm is a different implementation, and
+   pow already fails on this machine. Doc 23's rule stands unchanged:
+   never call a transcendental where the result is stored or shared.
+
+4. so the question is not "which language is deterministic"
+   Every candidate measured in section 1 is bit-identical out of the box.
+   The determinism requirement, which looked like the deciding constraint,
+   eliminates exactly one candidate and only in its default configuration.
+
+   language   bit-identical?                              wrapping u32
+   Rust       yes, at every -O and target-cpu=native      wrapping_mul
+   C / C++    ONLY with -ffp-contract=off and no -Ofast   unsigned overflow is defined
+   Java       yes, strictfp is the default since 17       int wraps
+   Go         yes here; the SPEC permits FMA fusion       uint32 wraps
+   JS/TS      yes, the spec pins the operations           Math.imul
+   Python     yes                                         masking, by hand
+
+   Two entries need their asterisks read out loud.
+
+   C and C++ are the only candidate that MEASURABLY BREAKS, and the repair
+   is a build flag that any future -Ofast silently undoes. On aarch64 the
+   broken configuration is the DEFAULT one.
+
+   Go matched here, but this machine is amd64 and the Go specification
+   EXPLICITLY PERMITS fusing x*y+z into an FMA. On arm64 the Go compiler
+   does emit FMADD. This script cannot test that, so Go is a
+   did-not-reproduce rather than a clearance -- the same standard applied
+   to sin and cos above.
+
+   That leaves the decision to be made on the OTHER four requirements from
+   section 0, which is where it should have been made all along:
+     no GC pause in a frame       doc 14 rebuilds 84,000 triangles a chunk
+     float64 stays float64        doc 15 -- no 80-bit x87 intermediates
+     float32 for GPU data         doc 15 -- per-vertex, chunk-relative
+     ONE binary for two targets   doc 22 -- the client regenerates the map,
+                                  so it runs the server's generator and must
+                                  match it to the bit
+
+   The last of those is the sharpest and it has barely been argued. Doc 22
+   decided the client would regenerate the coarse map rather than download
+   it, and doc 23 made that legal by pinning the arithmetic. But a browser
+   client and a native server only agree if they are THE SAME CODE, and
+   "compiles to both native and WebAssembly from one source" is a much
+   shorter list than "is deterministic".
+
+verdict
+   RUST, and the reason is not determinism.
+
+   Determinism turned out to be nearly free: six languages, six compilers,
+   six runtimes, ONE digest over the whole pipeline. Doc 23 argued the
+   runtime is bit-identical across machines and could not run the check;
+   this is the check, one level down, and it passes. The only failure in
+   the whole experiment is a C build with FMA contraction on -- which is the
+   DEFAULT on every ARM target, and which two compilers get wrong in two
+   different ways.
+
+   So Rust is chosen on the requirements that were left:
+     1. it is the only candidate that is bit-identical with NO BUILD FLAG,
+        at every optimisation level, including target-cpu=native and fat
+        LTO. The guarantee is in the language rather than the makefile, so
+        it cannot be lost by someone adding -Ofast three years from now.
+     2. wrapping_mul is spelled out, which is what doc 08's hash needs and
+        what C leaves to a rule about signedness.
+     3. no garbage collector, which doc 14's per-chunk remesh budget wants.
+     4. it compiles to native AND to WebAssembly from one source, so doc
+        22's browser client regenerating the coarse map is literally the
+        server's code, not a reimplementation to be kept in sync.
+     5. wgpu is one GPU story across desktop, and the same one in the
+        browser.
+
+   The honest runner-up is JAVA. It is exactly as deterministic, strictfp
+   has been the default since 17, and Minecraft is the existence proof that
+   the genre ships in it. It loses on the frame budget (a GC pause in a
+   remesh) and on target 4 -- there is no good story for one codebase
+   running native and in a browser.
+
+   C++ has the highest ceiling and the largest ecosystem and is the only
+   candidate this script caught being wrong. That is not a reason to
+   forbid it; it is a reason not to pick it when a candidate with the same
+   performance class does not need the flag at all.
+
+   WHAT THIS DOES NOT SETTLE: two genuinely different PLATFORMS still have
+   not been compared -- everything here ran on one x86-64 Linux box. The
+   aarch64 claim in section 2 is read from the instruction set, not
+   measured. Running this script on an ARM machine and diffing the digest
+   is the one experiment left, and it is now a five-minute job.
 ```
 
 ## `light.js`
@@ -1768,7 +1956,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 588 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 597 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2296,4 +2484,4 @@ verdict
 
 ---
 
-_32 scripts. Every number above is reproduced by running them._
+_33 scripts. Every number above is reproduced by running them._

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 468" width="520" height="468">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-big" x="16" y="26">six languages, one kernel</text>
+  <text class="cf-d" x="16" y="46">20,000 samples &#183; 80,000 float64s &#183; one 64-bit digest</text>
+  <text x="16" y="74">JavaScript</text><text class="cf-d" x="106" y="74">node 22</text><text class="cf-c" x="334" y="74">482495611b&#8230;</text><text x="16" y="94">C</text><text class="cf-d" x="106" y="94">gcc -O2, baseline ISA</text><text class="cf-c" x="334" y="94">482495611b&#8230;</text><text x="16" y="114">Rust</text><text class="cf-d" x="106" y="114">rustc -O, target-cpu=native</text><text class="cf-c" x="334" y="114">482495611b&#8230;</text><text x="16" y="134">Java</text><text class="cf-d" x="106" y="134">javac/java, default</text><text class="cf-c" x="334" y="134">482495611b&#8230;</text><text x="16" y="154">Go</text><text class="cf-d" x="106" y="154">go build, amd64</text><text class="cf-c" x="334" y="154">482495611b&#8230;</text><text x="16" y="174">Python</text><text class="cf-d" x="106" y="174">CPython 3</text><text class="cf-c" x="334" y="174">482495611b&#8230;</text>
+  <path class="cf-a" d="M326 62L326 178"/>
+  <text class="cf-c" x="16" y="204">all six identical, bit for bit</text>
+  <path class="cf-l" d="M16 224L504 224"/>
+  <text class="cf-big" x="16" y="252">one C source, four planets</text>
+  <text class="cf-d" x="334" y="252">only the flags move</text>
+  <text x="16" y="280">gcc</text><text class="cf-d" x="106" y="280">-O2 -march=x86-64</text><text class="cf-c" x="334" y="280">482495611b&#8230;</text><text x="16" y="300">gcc</text><text class="cf-d" x="106" y="300">-O2 -march=haswell</text><text class="cf-gd" x="334" y="300">7e508b42b4&#8230;</text><text x="16" y="320">gcc</text><text class="cf-d" x="106" y="320">-O2 -march=haswell -ffp-contract=off</text><text class="cf-c" x="334" y="320">482495611b&#8230;</text><text x="16" y="340">gcc</text><text class="cf-d" x="106" y="340">-Ofast -ffp-contract=off</text><text class="cf-gd" x="334" y="340">4eca155245&#8230;</text><text x="16" y="360">clang</text><text class="cf-d" x="106" y="360">-O2 -march=x86-64</text><text class="cf-c" x="334" y="360">482495611b&#8230;</text><text x="16" y="380">clang</text><text class="cf-d" x="106" y="380">-O2 -march=haswell</text><text class="cf-gd" x="334" y="380">9ecaa4f714&#8230;</text><text x="16" y="400">clang</text><text class="cf-d" x="106" y="400">-O2 -march=haswell -ffp-contract=off</text><text class="cf-c" x="334" y="400">482495611b&#8230;</text>
+  <text class="cf-gd" x="16" y="434">-march=haswell alone changes the world &#8212; and gcc and clang</text>
+  <text class="cf-gd" x="16" y="452">do not even change it the same way.</text>
+</svg>
