@@ -76,6 +76,7 @@ a runnable demo where one exists.
 | 26 | [What is left before code](docs/26-implementation-readiness.md) | The four core functions, the one that does not exist, and what the 44 open questions actually block |
 | 27 | [Block state](docs/27-block-state.md) | What a block *is* as bits, why a type number cannot be a hash, and the registry that fixes it |
 | 28 | [The language and the runtime](docs/28-language-and-runtime.md) | Six languages, one digest — and the compiler flag that makes four planets |
+| 29 | [What runs where](docs/29-what-runs-where.md) | The three layers, why determinism draws the lines, and what Rust → wasm actually costs |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

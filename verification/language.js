@@ -53,6 +53,13 @@ const run = (cmd, args) => {
   catch { return null; }
 };
 const build = (cmd, args) => { try { execFileSync(cmd, args, { cwd: DIR, stdio: 'ignore' }); return true; } catch { return false; } };
+const hasWasmTarget = () => {
+  try { return execSync('rustc --print target-libdir --target wasm32-unknown-unknown',
+                        { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] }).trim().length > 0
+               && fs.existsSync(execSync('rustc --print target-libdir --target wasm32-unknown-unknown',
+                        { encoding: 'utf8', stdio: ['ignore','pipe','ignore'] }).trim()); }
+  catch { return false; }
+};
 
 const TOOLS = {
   gcc: has('gcc'), clang: has('clang'), rustc: has('rustc'),
@@ -325,6 +332,14 @@ func main(){
 }
 `;
 
+// The same Rust source again, exported as one C-ABI function so a JavaScript
+// engine can call it. Nothing about the maths changes -- that is the point.
+const WASM_KERNEL = RS_KERNEL
+  .replace('fn main(){', '#[no_mangle]\npub extern "C" fn run(n_arg: i32) -> u64 {')
+  .replace('let r=1700.0f64; let mut seed:u32=20260815; let (n_,nn)=(20000, 2048i32);',
+           'let r=1700.0f64; let mut seed:u32=20260815; let (n_,nn)=(n_arg, 2048i32);')
+  .replace('  println!("{:016x}",acc);\n}', '  acc\n}');
+
 const PY_KERNEL = `
 import struct, math
 def hash3(x,y,z):
@@ -361,7 +376,7 @@ print('%016x'%acc)
 `;
 
 // ---- 1. six languages, one kernel, one digest -------------------------------
-console.log('\n1. the same kernel in six languages: do the bits agree?');
+console.log('\n1. the same kernel in six languages and one wasm target: do the bits agree?');
 const results = [];
 let REF = null;
 {
@@ -397,6 +412,23 @@ let REF = null;
     write('k.py', PY_KERNEL);
     results.push(['Python', 'CPython 3', run('python3', [path.join(DIR,'k.py')])]);
   } else skipped.push('python3');
+
+  // The seventh target is the one doc 22 actually needs: the SAME Rust source,
+  // compiled to WebAssembly and run inside a JavaScript engine. If a browser
+  // client is going to regenerate the coarse map instead of downloading it, this
+  // is the row that has to match.
+  if (TOOLS.rustc && hasWasmTarget()){
+    write('w.rs', WASM_KERNEL);
+    if (build('rustc', ['-O','--target','wasm32-unknown-unknown','--crate-type=cdylib','w.rs','-o','k.wasm'])){
+      const wasmPath = path.join(DIR, 'k.wasm');
+      try {
+        const bytes = fs.readFileSync(wasmPath);
+        const inst = new WebAssembly.Instance(new WebAssembly.Module(bytes), {});
+        const d = BigInt.asUintN(64, inst.exports.run(20000)).toString(16).padStart(16,'0');
+        results.push(['Rust→wasm', 'same source, run in node', d]);
+      } catch { skipped.push('wasm instantiation'); }
+    }
+  } else if (TOOLS.rustc) skipped.push('the wasm32-unknown-unknown target');
 
   console.log('   20,000 samples, 80,000 float64s folded into one 64-bit digest');
   console.log('');

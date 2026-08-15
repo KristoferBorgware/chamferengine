@@ -135,7 +135,7 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
-- `docs/` — prose specification, ordered 00 through 28.
+- `docs/` — prose specification, ordered 00 through 29.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -191,6 +191,7 @@ script owns its numbers.
 | [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
 | [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
 | [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
+| [29](docs/29-what-runs-where.md) | the three layers; what crosses the wire; Rust → wasm | `language.js` |
 
 Doc 04 owns **position → cell** (`hexround.js`) and doc 18 owns **where the edge
 is drawn** (`boundary.js`). Both are load-bearing for docs 07, 09 and 14 — read

@@ -2794,5 +2794,53 @@ const prof = (() => {
   <text class="cf-gd" x="16" y="452">do not even change it the same way.</text>`));
 }
 
+// =============================================================================
+// 29 — what runs where. Both sides hold the same core; the wire carries edits
+// and positions and never terrain, which is what determinism bought.
+// =============================================================================
+{
+  const W = 520, CW = 190, LX = 20, RX = W - CW - 20, BH = 20;
+  const stack = (x, y, rows) => rows.map((r, i) =>
+    `<rect class="${r[1]}" x="${x}" y="${y + i*(BH+4)}" width="${CW}" height="${BH}" rx="3"/>`
+    + `<text class="cf-c" x="${x+8}" y="${y + i*(BH+4) + 14}">${r[0]}</text>`).join('');
+  const core = [
+    ['ID &#183; position &#8596; cell', 'cf-af'],
+    ['neighbour &#183; rank', 'cf-af'],
+    ['noise &#183; terrain', 'cf-af'],
+    ['the coarse map', 'cf-af'],
+  ];
+  const srv = [['the delta store', 'cf-gf'], ['interest &#183; authority', 'cf-gf']];
+  const cli = [['mesh &#183; light &#183; LOD', 'cf-fill'], ['render &#183; input', 'cf-fill']];
+  made.push(svg('what-runs-where', W, 340, `
+  <text class="cf-big" x="${LX}" y="24">server</text>
+  <text class="cf-big" x="${RX}" y="24">client</text>
+  <text class="cf-d" x="${LX}" y="44">one per world</text>
+  <text class="cf-d" x="${RX}" y="44">native, or the same code as wasm</text>
+
+  <text class="cf-c" x="${LX}" y="70">the core &#8212; bit-identical, both sides</text>
+  ${stack(LX, 78, core)}
+  ${stack(RX, 78, core)}
+
+  <text class="cf-gd" x="${LX}" y="196">only here</text>
+  ${stack(LX, 204, srv)}
+  <text class="cf-d" x="${RX}" y="196">only here</text>
+  ${stack(RX, 204, cli)}
+
+  <path class="cf-a" d="M${LX+CW+6} 110 L${RX-6} 110" marker-end="url(#wr)"/>
+  <path class="cf-a" d="M${RX-6} 132 L${LX+CW+6} 132" marker-end="url(#wr)"/>
+  <defs><marker id="wr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
+  <text class="cf-c" x="${(LX+CW+RX)/2}" y="104" text-anchor="middle">edits</text>
+  <text class="cf-c" x="${(LX+CW+RX)/2}" y="148" text-anchor="middle">position</text>
+  <text class="cf-d" x="${(LX+CW+RX)/2}" y="172" text-anchor="middle">and</text>
+  <text class="cf-d" x="${(LX+CW+RX)/2}" y="186" text-anchor="middle">nothing</text>
+  <text class="cf-d" x="${(LX+CW+RX)/2}" y="200" text-anchor="middle">else</text>
+
+  <path class="cf-l" d="M${LX} 280L${W-LX} 280"/>
+  <text class="cf-d" x="${LX}" y="302">The terrain never crosses the wire, and neither does the 2.5 MB coarse map:</text>
+  <text class="cf-d" x="${LX}" y="318">both sides run the same core on the same seed and get the same bits. That is</text>
+  <text class="cf-d" x="${LX}" y="334">the whole return on doc 23, and single player is this picture in one process.</text>`));
+}
+
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

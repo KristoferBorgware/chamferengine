@@ -31,7 +31,7 @@ numbered documents.
 | [`hexround.js`](../verification/hexround.js) | Does rounding a barycentric triple actually give the CONTAINING cell? On a flat triangular lattice the Voronoi cell of a lattice point is the hexagon, exactly. The real cells are Voronoi regions ON THE SPHERE of the same lattice radially projected outward, and gnomonic projection preserves straight lines but not equidistance -- so the two Voronoi diagrams need not agree. This measures whether they do. | [04](04-position-lookup.md) [15](15-precision-and-origin.md) |
 | [`id.js`](../verification/id.js) | The cell ID as an actual 64-bit word. Doc 03 draws the layout, doc 07 says finding a chunk is "one shift", doc 06 says "chunk size remains tunable after launch: it does not change world data", and doc 22 leans on a contiguous range being a compact patch. Nothing had ever packed the bits and checked those together. Packing them turns up three problems, and they are not compatible with each other -- so this measures the problem rather than announcing a fix. Adding a planet field for multiple worlds is what forced the question. | [03](03-addressing.md) [11](11-open-topics.md) |
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
-| [`language.js`](../verification/language.js) | Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check. | [11](11-open-topics.md) [26](26-implementation-readiness.md) [28](28-language-and-runtime.md) |
+| [`language.js`](../verification/language.js) | Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check. | [11](11-open-topics.md) [26](26-implementation-readiness.md) [28](28-language-and-runtime.md) [29](29-what-runs-where.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
@@ -923,7 +923,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 250M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 400M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -947,7 +947,7 @@ verdict
 
 Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check.
 
-Cited by [doc 11](11-open-topics.md), [doc 26](26-implementation-readiness.md), [doc 28](28-language-and-runtime.md).
+Cited by [doc 11](11-open-topics.md), [doc 26](26-implementation-readiness.md), [doc 28](28-language-and-runtime.md), [doc 29](29-what-runs-where.md).
 
 ```
 language.js -- which language and runtime, decided by running the kernel
@@ -967,7 +967,7 @@ language.js -- which language and runtime, decided by running the kernel
    and its optimiser, not of the code someone writes in it. Sections 1-3
    measure them. The last four are engineering, and section 5 weighs them.
 
-1. the same kernel in six languages: do the bits agree?
+1. the same kernel in six languages and one wasm target: do the bits agree?
    20,000 samples, 80,000 float64s folded into one 64-bit digest
 
    language     build                          digest             vs JS
@@ -977,8 +977,9 @@ language.js -- which language and runtime, decided by running the kernel
    Java         javac/java, default            482495611b7ba324   SAME
    Go           go build, amd64                482495611b7ba324   SAME
    Python       CPython 3                      482495611b7ba324   SAME
+   Rust→wasm    same source, run in node       482495611b7ba324   SAME
 
-   6 of 6 agree, bit for bit, over the whole pipeline.
+   7 of 7 agree, bit for bit, over the whole pipeline.
    Every one of these has a different compiler, a different optimiser and a
    different runtime, and they land on the same 64 bits. Doc 23 argued this
    from the standard; this is the argument actually run.
@@ -1101,8 +1102,8 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.31 ms   1.70x
-         JS, one object a vertex   4.33 ms   24.03x
+         JS, typed arrays          0.30 ms   1.66x
+         JS, one object a vertex   4.26 ms   23.66x
 
        THE LANGUAGE GAP IS 1.7x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
@@ -1991,7 +1992,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 581 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 599 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

@@ -42,6 +42,14 @@ requirement, and separating them is most of the work:
 | 7 | **a remesh fits in a frame** | [14](14-meshing-and-lod.md) | a chunk change rebuilds ~21,000 cells and 84,000 triangles |
 | 8 | **one source, two targets** | [22](22-multiplayer-interest.md) | the client *regenerates* the coarse map, so it runs the server's generator |
 
+> Requirement 8 is **weaker than this document originally claimed**, and
+> [doc 29](29-what-runs-where.md) is the correction. Doc 22 says a *client*
+> regenerates the coarse map — a statement about determinism, not about
+> deployment. **No document in this specification requires a browser client.**
+> A native client satisfies doc 22 completely and needs no WebAssembly. Whether
+> there is a browser client is an open product decision, and Rust holds either
+> way with a thinner margin if the answer is no.
+
 > Requirement 7 said **"no GC pause inside a frame"** in the first draft of this
 > document, and it was used below to push Java and TypeScript down the list. That
 > was asserted rather than measured, and it does not survive being measured —
@@ -285,13 +293,14 @@ Determinism turned out to be nearly free. What is left is requirements 5 through
    contiguous without anyone deciding it should be, so requirement 7 is met by
    writing ordinary code rather than by remembering to. The measured gap to
    disciplined JavaScript is only **1.5×** — this is a margin, not a wall.
-4. **One source compiles to native and to WebAssembly**, which is requirement 8
-   and is the sharpest of the four. Doc 22 decided the joining client would
-   *regenerate* [doc 21](21-rivers-and-erosion.md)'s coarse map rather than
-   download 2.5 MB of it, and doc 23 made that legal by pinning the arithmetic.
-   But a browser client and a native server only agree if they are **the same
-   code**. "Is deterministic" is a long list; "compiles to both native and WASM
-   from one source" is a short one, and the intersection is what decides this.
+4. **One source compiles to native and to WebAssembly** — *if* a browser client
+   is wanted, which no document actually requires (see
+   [doc 29](29-what-runs-where.md)). Where it applies it is real and measured: the
+   same Rust source compiled to `wasm32` produces the **identical digest** as the
+   native build, at about **1.2×** native speed, so a browser regenerating
+   [doc 21](21-rivers-and-erosion.md)'s coarse map gets the same map to the bit as
+   the server that never sent it. What does not port is the platform edge —
+   sockets, storage, threads — and doc 29 prices that.
 5. **`wgpu` is one GPU story** across desktop and browser, which keeps point 4
    from being true of the generator and false of everything around it.
 
@@ -427,3 +436,7 @@ Three lines, and they are the whole of what this decision imposes:
   source compiling to native and WebAssembly. **The margin is thin and stated as
   such** — TypeScript satisfies that last requirement for free and is within
   1.5–1.75×, and would be the better call for a prototype.
+- **And "Rust" needs a scope**, which this document did not give it.
+  [Doc 29](29-what-runs-where.md) supplies one: the determinism argument above
+  constrains **the core only**, the layout argument constrains **the mesher**, and
+  nothing here constrains the world-state layer at all.
