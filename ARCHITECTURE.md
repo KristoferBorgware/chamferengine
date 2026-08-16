@@ -16,30 +16,31 @@ document that owns each decision, and it does not repeat the reasoning.
 
 | Layer | Choice | Owned by |
 |---|---|---|
-| Language | **TypeScript**, one source tree, no second language | [doc 28](docs/28-language-and-runtime.md) |
+| Language | **TypeScript**, one source tree | [doc 28](docs/28-language-and-runtime.md) |
 | Build and dev server | **Vite** — dev with HMR, `vite build` to static assets | this page |
 | Primary client | **the browser** | [doc 28](docs/28-language-and-runtime.md), [doc 29](docs/29-what-runs-where.md) |
-| Graphics | **WebGPU**, and only WebGPU | [doc 31](docs/31-deployment.md) |
+| Graphics | **WebGPU** | [doc 31](docs/31-deployment.md) |
 | Server runtime | **Node** | [doc 31](docs/31-deployment.md) |
-| Tooling runtime | **Node**, zero dependencies | this repository |
+| Tooling runtime | **Node** | this repository |
 
-Four consequences of that list are worth stating explicitly.
+Four things follow from that list.
 
-- **WebGPU is the whole graphics layer.** It is itself the abstraction over
-  Vulkan, Metal and D3D12. A desktop client is the same TypeScript inside Tauri
-  or Electron, running the same shaders against the same API.
-- **One source tree covers all four parts.** The server, the client, the
-  generator and the tooling are the same language. The measured cost against C
-  is `1.75×` on the generator and `1.5×` on the mesher.
-- **Node is on both sides.** It runs the verification scripts and the doc build
-  today, it hosts the local server in V0.5, and it is the Lambda runtime in V1.
-- **Vite applies to the engine only.** `demos/`, `verification/` and `tools/` are
-  zero-dependency plain HTML and plain Node, and stay that way — a demo opens by
-  double-clicking the file, a script runs under bare `node`.
+- **WebGPU is the graphics layer.** It compiles to Vulkan, Metal and D3D12
+  underneath. A desktop client is the same TypeScript inside Tauri or Electron,
+  running the same shaders against the same API.
+- **One language covers all four parts.** The server, the client, the generator
+  and the tooling are TypeScript. The measured cost against C is `1.75×` on the
+  generator and `1.5×` on the mesher.
+- **Node runs on both sides.** It runs the verification scripts and the doc
+  build today, it hosts the local server in V0.5, and it is the Lambda runtime
+  in V1.
+- **Vite builds the engine.** `demos/`, `verification/` and `tools/` stay plain
+  HTML and plain Node with no build step: a demo opens by double-clicking the
+  file, a script runs under bare `node`.
 
 ### Build rules the language choice imposes
 
-These are correctness constraints, not style. The first three come from
+Each of these is a correctness constraint. The first three come from
 [doc 28](docs/28-language-and-runtime.md), the last two from
 [doc 23](docs/23-determinism.md) and [doc 08](docs/08-terrain-generation.md).
 
@@ -68,112 +69,118 @@ per-toolchain table and the per-target codegen measurement.
 
 ## Architecture
 
-Four parts. The split is by **who may differ from whom**, not by module
-convenience.
+The engine has four parts, split by which machines have to agree with each
+other. Each part carries a different constraint as a result.
 
 | Part | Runs on | Constraint |
 |---|---|---|
-| **Addressing** | client **and** server | integer work plus one blend and one `normalize`; no noise |
-| **Generation** | client only | must be **bit-identical** across clients |
-| **Presentation** | client only | deliberately free; every transcendental lives here |
-| **World state** | server only | the only thing that grows |
+| **Addressing** | client and server | integer work plus one blend and one `normalize` |
+| **Generation** | client | bit-identical across clients |
+| **Presentation** | client | no determinism constraint |
+| **World state** | server | the only part that grows |
 
 [Doc 29](docs/29-what-runs-where.md) owns this split and carries the diagram.
 
-### Addressing — both sides, unavoidably
+### Addressing
 
-Cell ID encode, decode and truncate-to-chunk; position → cell and ID → position;
-`neighbour(id, k)` and face crossing; `rank(q, r)` and chunk ownership.
+Addressing runs on the client and on the server. The delta store is keyed by cell
+ID and interest is a dot product against a chunk's direction, so both machines
+turn positions into addresses.
 
-The server cannot avoid it: the delta store is keyed by cell ID and interest is a
-dot product against a chunk's direction. It is also very little code — integer
-shuffling, one barycentric blend, one `normalize`, and no terrain.
+It covers cell ID encode, decode and truncate-to-chunk; position → cell and
+ID → position; `neighbour(id, k)` and face crossing; `rank(q, r)` and chunk
+ownership. The work is integer shuffling, one barycentric blend and one
+`normalize`.
 
 Owned by docs [03](docs/03-addressing.md), [04](docs/04-position-lookup.md),
 [05](docs/05-face-adjacency.md), [07](docs/07-data-structures.md).
 
-### Generation — client only, and the only part pinned to the bit
+### Generation
 
-The noise function, the height field and the density term, the coarse map
-(continents, flow routing, erosion), and the ray walk. Pure functions of the seed
-and a position: no I/O, no allocation, no GPU, no clock.
+Generation runs on the client. It produces identical bits on every client.
 
-**The server never generates terrain.** Terrain is generated rather than stored,
-so a server that generated it would be computing something only a screen can use.
-This makes determinism a **client-to-client** requirement: the two machines that
-must agree are two players, and they exchange no bytes about terrain. The
-requirement therefore survives any server shape.
+It covers the noise function, the height field and the density term, the coarse
+map (continents, flow routing, erosion), and the ray walk. Each is a pure
+function of the seed and a position.
+
+The server holds none of it: terrain is generated by the client, per
+[doc 08](docs/08-terrain-generation.md). The two machines that have to agree are
+two clients — determinism is a **client-to-client** requirement, and it holds
+whatever shape the server takes.
 
 Owned by docs [08](docs/08-terrain-generation.md),
 [21](docs/21-rivers-and-erosion.md), [09](docs/09-ray-traversal.md),
 [23](docs/23-determinism.md).
 
-### Presentation — client only, and free
+### Presentation
 
-Meshing, merging, LOD selection and seam ownership; lighting; the three local
-frames, camera and input; the anchor-and-offset rebase; drawing water back to
-front; the latitude, longitude and altitude readout; the sky, the clouds and the
-moon.
+Presentation runs on the client, under no determinism constraint: each client
+renders independently, and clients are not compared against each other.
 
-Nothing here is ever compared between machines, which is why
-[doc 23](docs/23-determinism.md)'s ban on transcendentals costs nothing — every
-call it forbids is in this layer, where nothing is shared.
+It covers meshing, merging, LOD selection and seam ownership; lighting; the three
+local frames, camera and input; the anchor-and-offset rebase; drawing water back
+to front; the latitude, longitude and altitude readout; the sky, the clouds and
+the moon.
+
+Every transcendental in the design lives here — `sin`, `cos`, `pow` — per
+[doc 23](docs/23-determinism.md)'s rule that a transcendental only appears where
+its result is neither stored nor shared.
 
 Owned by docs [14](docs/14-meshing-and-lod.md), [16](docs/16-lighting.md),
 [13](docs/13-gravity-and-orientation.md),
 [15](docs/15-precision-and-origin.md), [25](docs/25-water.md),
 [20](docs/20-player-coordinates.md), [32](docs/32-sky-clouds-and-moon.md).
 
-### World state — server only
+### World state
 
-The delta store (cell ID → block state), the side table (cell ID → a tagged,
-length-prefixed blob), the block registry, entities held per chunk by
+World state runs on the server. It is the only part that grows.
+
+It covers the delta store (cell ID → block state), the side table (cell ID → a
+tagged, length-prefixed blob), the block registry, entities held per chunk by
 containment, and interest — who to tell about an edit.
-
-Ten million player edits are `76 MB` before compression. Everything else in the
-world is a function of the seed.
 
 Owned by docs [07](docs/07-data-structures.md), [27](docs/27-block-state.md),
 [22](docs/22-multiplayer-interest.md).
 
 ### The transport interface
 
-Two functions, written on the first day and never bypassed:
+Two functions, written on the first day:
 
 ```
 onMessage(playerId, message)      how a message arrives
 send(playerId, message)           how one leaves
 ```
 
-Everything above them is the game. Below them is either a `ws` socket (V0.5) or a
-Lambda handler and `postToConnection` (V1). **Changing the transport must not
-touch game code.** This is the whole of what makes V0.5 → V1 a deployment change
-rather than a rewrite.
+Game code calls only these two. Underneath them is a `ws` socket in V0.5, or a
+Lambda handler and `postToConnection` in V1. The V0.5 → V1 change is a swap
+below this interface; game code stays as written.
 
 ### The wire
 
-A closed message set, never RPC. Two rules on its shape, both cheap now and
-unrepairable later:
+Messages are a fixed, enumerated set. Two rules on their shape, decided in V0.5
+and kept in every later version:
 
-- **An edit names a cell and a resulting block state.** That is what a
-  storage-only server needs to write, and exactly what a validating server would
-  need to check. Adding authority later is inserting a check before the store.
-- **A rejection message exists from the first version, unused.** A client that
-  assumes every edit succeeds has no code path for refusal, and adding one later
-  touches every place the client predicts a change.
+- **An edit names a cell and a resulting block state.** A storage-only server
+  writes it as given. A validating server checks the same fields — reach against
+  the cell, type and solidity against the state — so validation is a check
+  inserted before the store, not a change to the message.
+- **A rejection message is defined from the first version.** V0.5 never sends
+  it, but the client has a code path for it, so a later version can start sending
+  it without the client being rewritten.
 
 Owned by [doc 30](docs/30-authority-and-cheating.md).
 
 ### Single player
 
-The delta store and interest in the same process, with the network replaced by a
-function call. It falls out of the four-part split and needs no separate design.
+The delta store and interest run in the same process, with the network replaced
+by a function call. This is the four-part split with one machine playing both
+roles; it needs no separate design.
 
 ---
 
 ## Scope
 
-Three milestones. **The server's behaviour is the same in V0.5 and V1** — it
+Three milestones. **The server's behaviour is the same in V0.5 and V1**: it
 stores, it routes, and it validates nothing. What changes between them is where
 it runs and what it writes to.
 
@@ -188,11 +195,11 @@ it runs and what it writes to.
 | Authority | none |
 | Players | one, or several on one machine or one network |
 
-This is enough to play, and it defers every hosting question. Terrain, meshing,
-lighting, water, rivers and the sky are all client-side and therefore all present
-in V0.5 — the milestone is small on the server side and not on the game side.
+Terrain, meshing, lighting, water, rivers and the sky are all client-side, so all
+of them are present in V0.5. This milestone is a single-machine deployment of
+the full client and a minimal server.
 
-### V1 — hosted, and still not authoritative
+### V1 — hosted
 
 | | |
 |---|---|
@@ -201,40 +208,37 @@ in V0.5 — the milestone is small on the server side and not on the game side.
 | Compute | **Lambda**, Node runtime |
 | Hot storage | **DynamoDB** — key is the chunk ID, value is that chunk's deltas |
 | Cold storage | **S3** — chunks nobody has visited, and anything over DynamoDB's item limit |
-| Authority | **none. There is no authoritative tick loop.** |
+| Authority | none; there is no tick loop |
 | Inventory | client-side, never synced |
 
-**The server is stateless between messages, and that is why this shape fits.**
-Receive a message, write it, fan it out to the connections the interest test
-selects, exit. Everything an invocation needs is in the message and the store, so
-each one can start cold — which is the demand serverless meets and the reason
-simulation is the thing it cannot hold.
+**The server holds no state between messages.** A message arrives, the handler
+writes it, fans it out to the connections the interest test selects, and exits.
+Each invocation reads what it needs from the message and the store, so a Lambda
+handler is a complete implementation of it.
 
 **The delta store is one key and one blob.** Chunk ID in, that chunk's deltas
-out: one `get`, one `put`, and the access pattern is exact-key or key-range. That
-is what makes DynamoDB and S3 the same store at two latencies, and it is the
-whole of what the storage layer has to provide.
+out: one `get`, one `put`, and the access pattern is exact-key or key-range.
+DynamoDB and S3 both serve that access pattern, at two different latencies.
 
-**The number to instrument from the first day is messages per second**, not
-storage. Interest management is fan-out, and API Gateway bills per message:
+**Messages per second is the metric to track**, not storage volume. Interest
+management is fan-out, and API Gateway bills per message:
 
 ```
 messages/second  ≈  players × edits per player per second × interested recipients
 ```
 
-Storage is `76 MB` and requests are pennies. Fan-out is what grows, and it is not
-the number anyone watches by default.
+Storage is `76 MB` and requests are pennies; fan-out is the term that grows with
+player count.
 
-**The migration out of serverless is already scoped.** The easy direction is
-serverless → box: Lambda forces connection and player state into an external
-store, which a long-lived process can read on day one and move into memory
-whenever it likes. The trigger is the arrival of an authoritative tick loop,
-which is the workload Lambda cannot hold.
+**Moving off Lambda reads the same store from a long-lived process.** Lambda
+keeps connection and player state in DynamoDB because it has nowhere else to put
+it; a long-lived process can read that same store into memory on day one. The
+move happens at the same time a tick loop is added, because a tick loop is the
+workload Lambda cannot run.
 
 ### Beyond V1
 
-Each of these is designed and priced. None needs more thinking before it can be
-started; each is a decision to wait.
+Each of these is designed and priced.
 
 | | Priced at | In |
 |---|---|---|
@@ -248,19 +252,17 @@ started; each is a decision to wait.
 
 ### What every version keeps
 
-Three properties hold from V0.5 onward and are expensive or impossible to add
-later:
+Three properties, decided in V0.5 and held through every later version:
 
-1. **Inventory never travels client → server.** A storage-only server cannot
-   issue drops, so the client decides them. Syncing an unauthoritative inventory
-   for persistence leaves no way to make it authoritative later without
-   re-deriving every player's items from nothing. If it must persist, persist it
-   as an opaque blob marked *not authoritative*.
+1. **Inventory stays client-side.** A storage-only server cannot issue drops —
+   it has no point query on virgin ground — so the client decides what a broken
+   block gives. If inventory is persisted, it is persisted as an opaque blob
+   marked *not authoritative*, so a later authoritative version derives items
+   fresh instead of trusting a stored count.
 2. **The edit message and the rejection message keep their shape**, per the wire
    rules above.
-3. **Generation stays bit-identical.** Every rule in the build-rules table is a
-   V0.5 rule. A single-player build is where forgetting one costs nothing until
-   the day it costs everything.
+3. **Generation stays bit-identical.** Every rule in the build-rules table
+   applies from V0.5 onward, including in a single-player build.
 
 ---
 
@@ -269,20 +271,18 @@ later:
 Nothing here blocks V0.5. All of it is V1 or later, and none of it is measured.
 
 - **Latency and prediction.** API Gateway plus Lambda plus a DynamoDB round trip
-  is not fast, which makes client-side prediction and rollback load-bearing
-  rather than optional.
-- **How chunks batch into DynamoDB items.** One item per chunk is the obvious
-  answer and it has not been checked against the `400 KB` item limit or against
-  how deltas actually clump.
-- **Authentication.** Not designed anywhere in this specification, and the first
-  thing a hosted deployment needs.
+  adds latency, which makes client-side prediction and rollback load-bearing.
+- **How chunks batch into DynamoDB items.** One item per chunk is the candidate;
+  it has not been checked against the `400 KB` item limit or against how deltas
+  actually clump.
+- **Authentication.** Not designed anywhere in this specification.
 - **What moves a chunk between DynamoDB and S3**, and which one owns it.
 - **Two players editing one cell.** Conflict resolution is undesigned.
 - **How long a joining client takes to regenerate the `2.5 MB` coarse map.**
-  Regenerating rather than downloading is still right; if it is slow it needs a
-  loading screen.
+  Regenerating rather than downloading is the plan; the time it takes is
+  unmeasured, and a loading screen may be needed.
 - **WebGPU availability on Linux.** It shipped in Chrome and Edge first, then
-  Safari, then Firefox. This is the one claim on this page with a shelf life.
+  Safari, then Firefox. This is the one entry on this page with a shelf life.
 
 ---
 
@@ -291,7 +291,7 @@ Nothing here blocks V0.5. All of it is V1 or later, and none of it is measured.
 Docs [11](docs/11-open-topics.md), [26](docs/26-implementation-readiness.md),
 [30](docs/30-authority-and-cheating.md) and [31](docs/31-deployment.md) call the
 local milestone **V1** and everything after it **V2**. This page splits that
-first milestone in two — **V0.5** is local, **V1** is hosted — because the
-transport and the storage change while the server's behaviour does not. Where
-those documents say *"V1"*, read **V0.5**; where they say *"V2"*, read
-**beyond V1**. No decision in them changes.
+milestone in two — **V0.5** is local, **V1** is hosted — because the transport
+and the storage change while the server's behaviour does not. Where those
+documents say *"V1"*, read **V0.5**; where they say *"V2"*, read **beyond V1**.
+No decision in them changes.
