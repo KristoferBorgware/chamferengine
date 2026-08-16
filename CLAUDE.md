@@ -50,17 +50,18 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 - **Build it with the reader, in the imperative.** "Take one triangle. Mark the
   middle of each of its three edges. Join those three marks." Short commands they
   can follow in their head, then the result. This beats any amount of description.
-- **Name the wrong guess before correcting it.** "You might assume each little
-  triangle is a block. It isn't." The reader is usually about to make a specific
-  mistake; say what it is, then take it away.
 - **Let the key beats be very short.** "It is lumpy. That is fine." A three-word
   sentence after a long one is the strongest tool available here. Use it on the
   turn of the argument, not for decoration.
 - **Gloss every identifier in ordinary words** the first time it appears —
   "`normalize(position)`, meaning keep the direction and set the length to the
   radius". Code that is not glossed is skipped.
-- **Compare to what they already know.** Minecraft, cube worlds, a filing system,
-  H3. One familiar anchor early is worth a paragraph of definition.
+- **Compare to what they already know.** Cube worlds, a filing system, a globe.
+  One familiar anchor early is worth a paragraph of definition. Never Minecraft —
+  this is not a Minecraft clone, and the comparison sets an expectation the
+  project does not intend to meet. And not H3: it is real prior art (doc 01
+  says what this design takes from it), but most readers do not already know
+  it, which fails the one job this technique has.
 - **Say what a number feels like**, not only what it is. "By level 5 or 6 it looks
   like a ball; by level 11 you could not tell it from one." "About 21,000 cells —
   nothing at all." A number the reader cannot feel does not land.
