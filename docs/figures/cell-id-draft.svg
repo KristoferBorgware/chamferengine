@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 152" width="340" height="152">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 465 152" width="465" height="152">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -30,5 +30,5 @@
   <path class="cf-l" d="M176 28 L176 36 M328 28 L328 36"/>
   <text class="cf-d" x="252" y="24" text-anchor="middle">where in the chunk</text>
   <text class="cf-d" x="170" y="126" text-anchor="middle">C appears in the layout, so it appears in the number</text>
-  <text class="cf-gd" x="170" y="143" text-anchor="middle">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>
+  <text class="cf-gd" x="14" y="143">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>
 </svg>

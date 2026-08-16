@@ -27,8 +27,8 @@
   <circle class="cf-af" cx="151.8" cy="38.3" r="5"/>
   <path class="cf-g" d="M151.8 38.3L256.1 81.4" stroke-dasharray="4 3"/>
   <text class="cf-c" x="143.8" y="30.3" text-anchor="end">eye</text>
-  <text class="cf-c" x="14" y="30">the sight line crosses one water surface</text>
-  <text class="cf-d" x="14" y="52">and then hits the bottom</text>
+  <text class="cf-c" x="14" y="46">the sight line crosses one water surface</text>
+  <text class="cf-d" x="14" y="64">and then hits the bottom</text>
   <text class="cf-d" x="14" y="186">water fills a column from the floor up, so there is nothing to look</text>
   <text class="cf-d" x="14" y="204">through except the top of it &#8212; 82.3% of viewpoints see exactly one body</text>
 </svg>

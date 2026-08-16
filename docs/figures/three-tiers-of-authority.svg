@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 300" width="520" height="300">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 300" width="540" height="300">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -25,7 +25,7 @@
   <text class="cf-big" x="14" y="26">what the server has to know</text>
   <text class="cf-d" x="14" y="46">bars are log-scaled evaluation counts</text>
   <text x="14" y="84">stores + routes</text><rect class="cf-fill" x="148" y="66" width="12.0" height="26" rx="4"/><text class="cf-c" x="170.0" y="84">no terrain at all</text><text class="cf-d" x="148" y="108">reach, rate, protected cells, and every cell a player has touched</text><text x="14" y="146">+ point query</text><rect class="cf-af" x="148" y="128" width="41.7" height="26" rx="4"/><text class="cf-c" x="199.7" y="146">1 cell per edit</text><text class="cf-d" x="148" y="170">the last blind spot: is virgin ground solid? 0.06% of a core at 1,000 players</text><text x="14" y="208">+ resident chunks</text><rect class="cf-gf" x="148" y="190" width="190.0" height="26" rx="4"/><text class="cf-c" x="348.0" y="208">35,904 cells, resident</text><text class="cf-d" x="148" y="232">mobs only: collision, pathfinding, a tick loop, entity interest</text>
-  <path class="cf-l" d="M14 254L506 254"/>
+  <path class="cf-l" d="M14 254L526 254"/>
   <text class="cf-d" x="14" y="276">An honest server is the middle bar. Wanting one does not commit you to</text>
   <text class="cf-d" x="14" y="292">the bottom bar &#8212; only mobs do that.</text>
 </svg>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200" width="400" height="200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 200" width="420" height="200">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -28,7 +28,7 @@
   <polygon class="cf-m" fill="none" points="112.0,14.8 33.0,151.6 191.0,151.6"/>
   <path class="cf-l" d="M104.0 118.0L112.0 14.8M104.0 118.0L33.0 151.6M104.0 118.0L191.0 151.6"/>
   <circle cx="104.0" cy="118.0" r="4" fill="#48505f"/>
-  <text class="cf-d" x="112.0" y="6.8" text-anchor="middle">A</text>
+  <text class="cf-d" x="112.0" y="12.0" text-anchor="middle">A</text>
   <text class="cf-d" x="23.0" y="157.6" text-anchor="middle">B</text>
   <text class="cf-d" x="201.0" y="157.6" text-anchor="middle">C</text>
   <text class="cf-c" x="232" y="56">a  = area of PBC / total</text>

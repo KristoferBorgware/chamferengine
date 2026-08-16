@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 216" width="430" height="216">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 240" width="430" height="240">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -25,11 +25,11 @@
   <path class="cf-l" d="M62 168L398.0 168M62 168L62 46.0"/>
   <path class="cf-a" d="M62.0 162.5L86.0 162.5"/><path class="cf-l" d="M86.0 162.5L86.0 156.9"/><path class="cf-a" d="M86.0 156.9L110.0 156.9"/><path class="cf-l" d="M110.0 156.9L110.0 151.4"/><path class="cf-a" d="M110.0 151.4L134.0 151.4"/><path class="cf-l" d="M134.0 151.4L134.0 145.8"/><path class="cf-a" d="M134.0 145.8L158.0 145.8"/><path class="cf-l" d="M158.0 145.8L158.0 140.3"/><path class="cf-a" d="M158.0 140.3L182.0 140.3"/><path class="cf-l" d="M182.0 140.3L182.0 134.7"/><path class="cf-a" d="M182.0 134.7L206.0 134.7"/><path class="cf-l" d="M206.0 134.7L206.0 129.2"/><path class="cf-a" d="M206.0 129.2L230.0 129.2"/><path class="cf-l" d="M230.0 129.2L230.0 123.6"/><path class="cf-a" d="M230.0 123.6L254.0 123.6"/><path class="cf-l" d="M254.0 123.6L254.0 118.1"/><path class="cf-a" d="M254.0 118.1L278.0 118.1"/><path class="cf-l" d="M278.0 118.1L278.0 112.5"/><path class="cf-a" d="M278.0 112.5L302.0 112.5"/><path class="cf-l" d="M302.0 112.5L302.0 107.0"/><path class="cf-a" d="M302.0 107.0L326.0 107.0"/><path class="cf-l" d="M326.0 107.0L326.0 101.5"/><path class="cf-a" d="M326.0 101.5L350.0 101.5"/><path class="cf-l" d="M350.0 101.5L350.0 95.9"/><path class="cf-a" d="M350.0 95.9L374.0 95.9"/><path class="cf-l" d="M374.0 95.9L374.0 90.4"/><path class="cf-a" d="M374.0 90.4L398.0 90.4"/><path class="cf-l" d="M398.0 90.4L398.0 84.8"/><path class="cf-a" d="M398.0 84.8L422.0 84.8"/>
   <path class="cf-g" d="M154.9 145.8L154.9 174" stroke-dasharray="3 3"/><text class="cf-gd" x="154.9" y="188" text-anchor="middle">15 km</text>
-  <path class="cf-g" d="M159.3 140.3L159.3 174" stroke-dasharray="3 3"/><text class="cf-gd" x="159.3" y="188" text-anchor="middle">17 km</text>
+  <path class="cf-g" d="M159.3 140.3L159.3 188" stroke-dasharray="3 3"/><text class="cf-gd" x="159.3" y="202" text-anchor="middle">17 km</text>
   <text class="cf-d" x="54" y="52.0" text-anchor="end">1 m</text>
   <text class="cf-d" x="54" y="172" text-anchor="end">0.1 mm</text>
   <text class="cf-d" x="398.0" y="188" text-anchor="end">planet radius &#8594;</text>
   <text class="cf-c" x="14" y="24">precision does not fade. it halves, all at once,</text>
   <text class="cf-c" x="14" y="42">every time the radius crosses a power of two</text>
-  <text class="cf-gd" x="14" y="200">a 15 km planet and a 17 km planet are a factor of two apart</text>
+  <text class="cf-gd" x="14" y="226">a 15 km planet and a 17 km planet are a factor of two apart</text>
 </svg>

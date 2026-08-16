@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 208" width="440" height="208">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 222" width="440" height="222">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -29,5 +29,5 @@
   <text class="cf-d" x="224.0" y="194" text-anchor="middle">size of the disagreement &#8594;</text>
   <text class="cf-c" x="16" y="26">how much of a river network reroutes</text>
   <text class="cf-gd" x="72.0" y="144.0">nothing, all the way across here</text>
-  <text class="cf-d" x="16" y="192">thirteen orders of magnitude of margin before the first cell changes course</text>
+  <text class="cf-d" x="16" y="204">thirteen orders of magnitude of margin before the first cell changes course</text>
 </svg>

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 224" width="430" height="224">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 296" width="500" height="296">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -29,9 +29,9 @@
   <path class="cf-a" d="M213.7 77.0L213.7 139.0" stroke-width="3"/>
   <path class="cf-g" d="M213.7 77.0 Q223.7 108.0 213.7 139.0" stroke-width="3"/>
   <path class="cf-m" d="M217.7 74.0L217.7 142.0" stroke-width="3" stroke-dasharray="5 4"/>
-  <text class="cf-c" x="256" y="60">what rounding says &#183; docs 04 and 09</text>
-  <text class="cf-gd" x="256" y="88">equidistant on the sphere &#183; nobody, now</text>
-  <text class="cf-d" x="256" y="116">the dual&#8217;s corners &#183; doc 14 meshing</text>
-  <text class="cf-d" x="14" y="196">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
-  <text class="cf-c" x="14" y="214">a player clicks the mesh and the lookup answers from a different line</text>
+  <path class="cf-a" d="M14 196L34 196" stroke-width="3"/><text class="cf-c" x="42" y="200">what rounding says &#183; docs 04 and 09</text>
+  <path class="cf-g" d="M14 218L34 218" stroke-width="3"/><text class="cf-gd" x="42" y="222">equidistant on the sphere &#183; nobody, now</text>
+  <path class="cf-m" d="M14 240L34 240" stroke-width="3" stroke-dasharray="5 4"/><text class="cf-d" x="42" y="244">the dual&#8217;s corners &#183; doc 14 meshing</text>
+  <text class="cf-d" x="14" y="272">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
+  <text class="cf-c" x="14" y="290">a player clicks the mesh and the lookup answers from a different line</text>
 </svg>

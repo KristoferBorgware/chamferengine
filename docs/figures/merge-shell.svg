@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 232" width="430" height="232">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 268" width="470" height="268">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -28,7 +28,7 @@
   <text class="cf-d" x="46" y="81.0" text-anchor="end">fine</text>
   <text class="cf-d" x="46" y="158.0" text-anchor="end">coarse</text>
   <text class="cf-c" x="14" y="26">one column in four carries straight on</text>
-  <text class="cf-gd" x="14" y="212">three in four stop dead at the shell</text>
-  <text class="cf-d" x="14" y="204">cell centres nest exactly; cell areas never do</text>
-  <text class="cf-d" x="416" y="212" text-anchor="end">on the worked planet that is 41,943,042 columns</text>
+  <text class="cf-d" x="14" y="208">cell centres nest exactly; cell areas never do</text>
+  <text class="cf-gd" x="14" y="232">three in four stop dead at the shell</text>
+  <text class="cf-c" x="14" y="250">on the worked planet that is 41,943,042 columns</text>
 </svg>

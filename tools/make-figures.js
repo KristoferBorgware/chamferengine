@@ -42,10 +42,11 @@ const STYLE = `<style>
 </style>`;
 
 // Every label has to sit inside the viewBox. Nothing here can measure a glyph,
-// so widths come from the per-class advance below: the mono classes are exact,
-// and the proportional ones are an average that runs slightly wide, which is
-// the direction that fails safe.
-const ADVANCE = { 'cf-c': 6.9, 'cf-gd': 6.9, 'cf-d': 5.9, 'cf-big': 7.8, '': 6.2 };
+// so widths come from the per-class advance below, calibrated against rendered
+// bounding boxes: 6.92 measured for the monospace classes at 11.5px, 4.9-5.0
+// for the proportional ones, 6.7 for the 14px heading. Each is rounded up, so
+// the check errs toward reporting a label that in fact fits.
+const ADVANCE = { 'cf-c': 6.95, 'cf-gd': 6.95, 'cf-d': 5.15, 'cf-big': 7.0, '': 5.6 };
 const overruns = [];
 
 function checkLabels(name, w, body){
@@ -290,7 +291,7 @@ const made = [];
     x += p.w + 4;
   }
   const chunkEnd = X + 52 + 4 + 96;
-  made.push(svg('cell-id-draft', 340, 152, `
+  made.push(svg('cell-id-draft', 465, 152, `
   ${boxes}
   <path class="cf-a" d="M${X} ${Y-10} L${chunkEnd} ${Y-10}"/>
   <path class="cf-l" d="M${X} ${Y-14} L${X} ${Y-6} M${chunkEnd} ${Y-14} L${chunkEnd} ${Y-6}"/>
@@ -299,7 +300,7 @@ const made = [];
   <path class="cf-l" d="M${chunkEnd+4} ${Y-14} L${chunkEnd+4} ${Y-6} M${x-4} ${Y-14} L${x-4} ${Y-6}"/>
   <text class="cf-d" x="${(chunkEnd+x)/2}" y="${Y-18}" text-anchor="middle">where in the chunk</text>
   <text class="cf-d" x="170" y="126" text-anchor="middle">C appears in the layout, so it appears in the number</text>
-  <text class="cf-gd" x="170" y="143" text-anchor="middle">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>`));
+  <text class="cf-gd" x="14" y="143">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>`));
 }
 {
   // the word actually stored, at D = 11: 12 + 5 + 22 + 2 + 10 = 51 of 64
@@ -380,14 +381,14 @@ const made = [];
   const P = [104, 118];
   const A=T.A, B=T.B, C=T.C;
   const shade = (p1,p2,cls) => `<polygon class="${cls}" points="${pts([P,p1,p2])}"/>`;
-  made.push(svg('barycentric-areas', 400, 200, `
+  made.push(svg('barycentric-areas', 420, 200, `
   ${shade(B,C,'cf-af')}
   <polygon class="cf-gf" points="${pts([P,C,A])}"/>
   <polygon class="cf-fill" points="${pts([P,A,B])}" opacity="0.85"/>
   <polygon class="cf-m" fill="none" points="${pts([A,B,C])}"/>
   <path class="cf-l" d="${pathOf([[P,A],[P,B],[P,C]])}"/>
   <circle cx="${f(P[0])}" cy="${f(P[1])}" r="4" fill="#48505f"/>
-  <text class="cf-d" x="${f(A[0])}" y="${f(A[1]-8)}" text-anchor="middle">A</text>
+  <text class="cf-d" x="${f(A[0])}" y="${f(Math.max(A[1]-8, 12))}" text-anchor="middle">A</text>
   <text class="cf-d" x="${f(B[0]-10)}" y="${f(B[1]+6)}" text-anchor="middle">B</text>
   <text class="cf-d" x="${f(C[0]+10)}" y="${f(C[1]+6)}" text-anchor="middle">C</text>
   <text class="cf-c" x="232" y="56">a  = area of PBC / total</text>
@@ -566,8 +567,8 @@ const made = [];
   <circle class="cf-af" cx="${f(eye[0])}" cy="${f(eye[1])}" r="5"/>
   <path class="cf-g" d="M${f(eye[0])} ${f(eye[1])}L${f(at(6)[0])} ${f(O[1]-Rr*Math.cos(6*Math.PI/180))}" stroke-dasharray="4 3"/>
   <text class="cf-c" x="${f(eye[0]-8)}" y="${f(eye[1]-8)}" text-anchor="end">eye</text>
-  <text class="cf-c" x="14" y="30">the sight line crosses one water surface</text>
-  <text class="cf-d" x="14" y="52">and then hits the bottom</text>
+  <text class="cf-c" x="14" y="46">the sight line crosses one water surface</text>
+  <text class="cf-d" x="14" y="64">and then hits the bottom</text>
   <text class="cf-d" x="14" y="186">water fills a column from the floor up, so there is nothing to look</text>
   <text class="cf-d" x="14" y="204">through except the top of it &#8212; 82.3% of viewpoints see exactly one body</text>`));
 }
@@ -594,7 +595,7 @@ const made = [];
       + `<circle class="cf-gf" cx="${f(x)}" cy="${f(y-1.55*C)}" r="${f(0.3*C)}"/>`
       + `<text class="cf-gd" x="${f(x)}" y="${f(y-2.1*C)}" text-anchor="middle">${label}</text>`;
   };
-  made.push(svg('wade-or-swim', 440, 250, `
+  made.push(svg('wade-or-swim', 500, 250, `
   ${ground}${water}
   <path class="cf-a" stroke-width="2.5" d="M${f(X0+H.findIndex(h=>h<SEA)*C)} ${f(yOf(SEA))}`
     + `L${f(X0+(H.length-[...H].reverse().findIndex(h=>h<SEA))*C)} ${f(yOf(SEA))}"/>
@@ -674,7 +675,7 @@ const made = [];
   const line = (d,cls) => `<path class="${cls}" fill="none" d="M`
     + d.map(p => `${f(X(p[0]))} ${f(Y(p[1]))}`).join('L') + `"/>`;
   const dots = (d,cls) => d.map(p => `<circle class="${cls}" cx="${f(X(p[0]))}" cy="${f(Y(p[1]))}" r="3.5"/>`).join('');
-  made.push(svg('deficit-fades', 460, 214, `
+  made.push(svg('deficit-fades', 510, 214, `
   <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
   ${line(stem,'cf-g')}${dots(stem,'cf-gf')}
   ${line(head,'cf-a')}${dots(head,'cf-af')}
@@ -738,7 +739,7 @@ const made = [];
   const rows = [[-16,0],[-12,0],[-9,0],[-6,0],[-3,2.37]];
   const X = e => x0 + W*(e + 16)/13;
   const Y = v => y0 - H*(v/2.37);
-  made.push(svg('reroute-threshold', 440, 208, `
+  made.push(svg('reroute-threshold', 440, 222, `
   <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
   <path class="cf-a" fill="none" d="M` + rows.map(r => `${f(X(r[0]))} ${f(Y(r[1]))}`).join('L') + `"/>
   ${rows.map(r => `<circle class="cf-af" cx="${f(X(r[0]))}" cy="${f(Y(r[1]))}" r="4"/>`).join('')}
@@ -746,7 +747,7 @@ const made = [];
   <text class="cf-d" x="${f(x0+W/2)}" y="${y0+40}" text-anchor="middle">size of the disagreement &#8594;</text>
   <text class="cf-c" x="16" y="26">how much of a river network reroutes</text>
   <text class="cf-gd" x="${f(X(-16)+8)}" y="${f(Y(0)-10)}">nothing, all the way across here</text>
-  <text class="cf-d" x="16" y="192">thirteen orders of magnitude of margin before the first cell changes course</text>`));
+  <text class="cf-d" x="16" y="204">thirteen orders of magnitude of margin before the first cell changes course</text>`));
 }
 
 // =============================================================================
@@ -784,7 +785,7 @@ const made = [];
   let runs = 1;
   for (let k=1;k<leaves.length;k++) if (inside[k] && !inside[k-1]) runs++;
   runs = inside.filter((v,k)=>v && !inside[k-1]).length;
-  made.push(svg('patch-is-not-a-range', 440, 214, `
+  made.push(svg('patch-is-not-a-range', 465, 214, `
   ${cells}
   <circle class="cf-g" cx="${centre[0]}" cy="${centre[1]}" r="${rad}" stroke-dasharray="5 4"/>
   <text class="cf-d" x="120" y="30" text-anchor="middle">what the player can see</text>
@@ -920,7 +921,7 @@ const prof = (() => {
     else fine += `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="2.2"/>`;
   }
   const q = bary(T3,8,6,2);
-  made.push(svg('coarse-lattice', 430, 244, `
+  made.push(svg('coarse-lattice', 455, 244, `
   <path class="cf-l" d="${pathOf(fineE)}"/>
   ${fine}${coarse}
   <circle cx="${f(q[0])}" cy="${f(q[1])}" r="4" fill="#b0800f"/>
@@ -1009,7 +1010,7 @@ const prof = (() => {
       dots += `<circle class="${z>0?'cf-gf':'cf-l'}" cx="${f(x)}" cy="${f(y)}" r="${z>0?4.5:3.5}"/>`;
     }
   }
-  made.push(svg('pentagon-poles', 430, 226, `
+  made.push(svg('pentagon-poles', 485, 226, `
   <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
   ${rings}${dots}
   <path class="cf-a" d="M${O[0]} ${f(O[1]+R+16)}L${O[0]} ${f(O[1]-R-16)}" stroke-dasharray="4 3"/>
@@ -1033,7 +1034,7 @@ const prof = (() => {
   let grid = '';
   for (let gx=0; gx<=6; gx++) grid += `<path class="cf-l" d="M${f(cx-52+gx*17.4)} ${cy-56}L${f(cx-52+gx*17.4)} ${cy+56}"/>`;
   for (let gy=0; gy<=6; gy++) grid += `<path class="cf-l" d="M${cx-52} ${f(cy-52+gy*17.4)}L${cx+52} ${f(cy-52+gy*17.4)}"/>`;
-  made.push(svg('two-decimals', 430, 214, `
+  made.push(svg('two-decimals', 460, 214, `
   ${grid}
   <polygon class="cf-af" points="${pts(hexPts(cx, cy, R))}" opacity="0.75"/>
   <circle cx="${cx}" cy="${cy}" r="3.5" fill="#2f6fd0"/>
@@ -1062,7 +1063,7 @@ const prof = (() => {
       + `<path class="cf-a" d="M${f(p[0])} ${f(p[1])}L${f(p[0]+rt[0]*40)} ${f(p[1]+rt[1]*40)}" marker-end="url(#sn1)"/>`
       + `<text class="cf-c" x="${f(p[0]+rt[0]*54+up[0]*10)}" y="${f(p[1]+rt[1]*54+up[1]*10+4)}" text-anchor="middle">${label}</text>`;
   };
-  made.push(svg('same-number-different-way', 430, 250, `
+  made.push(svg('same-number-different-way', 455, 250, `
   <defs><marker id="sn1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
   <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
@@ -1090,7 +1091,7 @@ const prof = (() => {
     arrows += `<path class="cf-a" d="M${cx} ${cy}L${f(cx+R*0.82*Math.cos(am))} ${f(cy+R*0.82*Math.sin(am))}" marker-end="url(#sz1)"/>`;
     arrows += `<text class="cf-c" x="${f(cx+(R+13)*Math.cos(am))}" y="${f(cy+(R+13)*Math.sin(am)+4)}" text-anchor="middle">${k}</text>`;
   }
-  made.push(svg('snap-zones', 430, 226, `
+  made.push(svg('snap-zones', 465, 226, `
   <defs><marker id="sz1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
   ${wedges}${arrows}
@@ -1139,7 +1140,7 @@ const prof = (() => {
   for (let k=0;k<5;k++) cells += `<polygon class="cf-l" points="${pts(hexPts(...ringPos(k), R*0.92))}"/>`;
   let loop = `<path class="cf-a" stroke-width="3" fill="none" d="M`
     + [0,1,2,3,4,0].map(k => `${f(ringPos(k)[0])} ${f(ringPos(k)[1])}`).join('L') + `"/>`;
-  made.push(svg('loop-needs-a-turn', 430, 234, `
+  made.push(svg('loop-needs-a-turn', 505, 234, `
   <defs>
     <marker id="lt1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
@@ -1184,7 +1185,7 @@ const prof = (() => {
   const plain = k => [String(k), 'cf-c'];
   const turned = k => [String((k+3)%6), 'cf-gd'];
   const mirrored = k => [String((6-k)%6), 'cf-gd'];
-  made.push(svg('half-turn-not-mirror', 470, 232, `
+  made.push(svg('half-turn-not-mirror', 490, 246, `
   <text class="cf-d" x="82" y="26" text-anchor="middle">the parent&#8217;s frame</text>
   ${ring(82, 108, plain, 'cf-af')}
   <text class="cf-c" x="82" y="196" text-anchor="middle">0 1 2 3 4 5</text>
@@ -1193,12 +1194,12 @@ const prof = (() => {
   <text class="cf-d" x="235" y="26" text-anchor="middle">a half turn &#183; what happens</text>
   ${ring(235, 108, turned, 'cf-af')}
   <text class="cf-gd" x="235" y="196" text-anchor="middle">3 4 5 0 1 2</text>
-  <text class="cf-d" x="235" y="214" text-anchor="middle">still counter-clockwise &#183; every k shifts +3</text>
+  <text class="cf-d" x="235" y="214" text-anchor="middle">still CCW &#183; every k shifts +3</text>
 
   <text class="cf-d" x="388" y="26" text-anchor="middle">a mirror &#183; what does NOT</text>
   ${ring(388, 108, mirrored, 'cf-gf')}
   <text class="cf-gd" x="388" y="196" text-anchor="middle">0 5 4 3 2 1</text>
-  <text class="cf-d" x="388" y="214" text-anchor="middle">order reversed &#183; 0 and 3 stay put</text>`));
+  <text class="cf-d" x="400" y="228" text-anchor="middle">order reversed &#183; 0 and 3 stay put</text>`));
 }
 
 // =============================================================================
@@ -1237,7 +1238,7 @@ const prof = (() => {
     return [O[0] + (p[0]-O[0])/d*R, O[1] + (p[1]-O[1])/d*R]; };
   const lookup = proj(chordMid);                        // average flat, then project
   const meshAvg = [ (A[0]+B[0]+C[0])/3, (A[1]+B[1]+C[1])/3 ];   // same here (already on sphere)
-  made.push(svg('order-of-operations', 430, 250, `
+  made.push(svg('order-of-operations', 430, 326, `
   <path class="cf-m" d="M${f(at(-26)[0])} ${f(at(-26)[1])} A ${R} ${R} 0 0 1 ${f(at(26)[0])} ${f(at(26)[1])}"/>
   <path class="cf-l" d="M${f(A[0])} ${f(A[1])}L${f(C[0])} ${f(C[1])}" stroke-dasharray="4 3"/>
   <circle class="cf-fill" cx="${f(A[0])}" cy="${f(A[1])}" r="4.5"/>
@@ -1249,7 +1250,7 @@ const prof = (() => {
   <text class="cf-c" x="${f(lookup[0]+12)}" y="${f(lookup[1]-6)}">then project &#183; the lookup&#8217;s corner</text>
   <text class="cf-d" x="14" y="26">three lattice points. sag the chord inward, average, push the result out.</text>
   <text class="cf-d" x="14" y="46">do it the other way round &#8212; project each point first, then average &#8212;</text>
-  <text class="cf-d" x="14" y="66">and you land somewhere else. that is the entire disagreement.</text>
+  <text class="cf-d" x="14" y="84">and you land somewhere else. that is the entire disagreement.</text>
   <text class="cf-d" x="${O[0]}" y="${f(O[1]+18)}" text-anchor="middle">planet centre</text>`));
 }
 
@@ -1265,7 +1266,7 @@ const prof = (() => {
   const dots = (d,cls) => d.map(p=>`<circle class="${cls}" cx="${f(X(p[0]))}" cy="${f(Y(p[1]))}" r="3"/>`).join('');
   // extrapolate the mesh line to L=11
   let ext = [[8,3.076e-4],[9,1.538e-4],[10,7.69e-5],[11,3.845e-5]];
-  made.push(svg('gap-shrinks', 430, 224, `
+  made.push(svg('gap-shrinks', 520, 224, `
   <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
   ${path(sphv,'cf-g')}${dots(sphv,'cf-gf')}
   ${path(mesh,'cf-a')}${dots(mesh,'cf-af')}
@@ -1296,7 +1297,7 @@ const prof = (() => {
     const p = bary(T3,6,i,j);
     dots3 += `<circle class="cf-gf" cx="${f(p[0])}" cy="${f(p[1])}" r="4"/>`;
   }
-  made.push(svg('corner-is-a-lattice-point', 430, 234, `
+  made.push(svg('corner-is-a-lattice-point', 510, 234, `
   <path class="cf-l" d="${pathOf(fine)}"/>
   <polygon class="cf-m" points="${pts([T3.A,T3.B,T3.C])}" fill="none"/>
   ${cells}${dots3}
@@ -1323,19 +1324,19 @@ const prof = (() => {
     const a = Math.PI/6 + Math.PI*i/3;
     ring += `<polygon class="cf-fill" points="${pts(hexPts(316 + Math.sqrt(3)*30*Math.cos(a), 104 + Math.sqrt(3)*30*Math.sin(a), 30))}"/>`;
   }
-  made.push(svg('no-diagonals', 430, 216, `
+  made.push(svg('no-diagonals', 470, 256, `
   ${sq}
   <path class="cf-a" d="M${f(ox+S*1.5)} ${f(oy+S*1.5)}L${f(ox+S*0.5)} ${f(oy+S*0.5)}" stroke-width="2.5" marker-end="url(#nd1)"/>
   <defs><marker id="nd1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
   <text class="cf-d" x="${f(ox+S*1.5)}" y="34" text-anchor="middle">squares</text>
-  <text class="cf-gd" x="14" y="176">a diagonal step slips between two blocked cells</text>
-  <text class="cf-d" x="14" y="194">and costs 1.414, which every cost function has to special-case</text>
+  <text class="cf-gd" x="14" y="196">squares &#183; a diagonal step slips between two blocked cells,</text>
+  <text class="cf-d" x="14" y="214">and costs 1.414, which every cost function has to special-case</text>
   ${ring}
   <polygon class="cf-af" points="${pts(H)}"/>
   <text class="cf-d" x="316" y="34" text-anchor="middle">hexagons</text>
-  <text class="cf-c" x="416" y="176" text-anchor="end">six neighbours, six shared edges</text>
-  <text class="cf-d" x="416" y="194" text-anchor="end">no diagonal exists, so the bug cannot</text>`));
+  <text class="cf-c" x="14" y="236">hexagons &#183; six neighbours, six shared edges, and no diagonal</text>
+  <text class="cf-d" x="14" y="254">exists &#8212; so the bug cannot be written</text>`));
 }
 
 // =============================================================================
@@ -1349,7 +1350,7 @@ const prof = (() => {
     real += `<rect class="cf-af" x="${f(x0+k*wide)}" y="${y-16}" width="${f(wide-2)}" height="32" opacity="0.5"/>`;
   for (let k=0;k<=11;k++)
     ticks += `<path class="cf-g" d="M${f(x0+k*nom)} ${y+44}L${f(x0+k*nom)} ${y+68}"/>`;
-  made.push(svg('admissible-divisor', 430, 216, `
+  made.push(svg('admissible-divisor', 530, 216, `
   ${real}
   <text class="cf-c" x="${f(x0+W+6)}" y="${y+4}">10</text>
   <text class="cf-d" x="14" y="34">the route really crosses 10 cells, because these are wide ones</text>
@@ -1365,9 +1366,11 @@ const prof = (() => {
 // 01 — three-approaches: what S2, H3 and this design put on the sphere
 // =============================================================================
 {
+  // The notes are wider than the space between panels, so each takes two lines.
   const panel = (cx, title, body, note, ncls) =>
     `<text class="cf-d" x="${cx}" y="28" text-anchor="middle">${title}</text>${body}`
-  + `<text class="${ncls}" x="${cx}" y="192" text-anchor="middle">${note}</text>`;
+  + note.split('|').map((line, i) =>
+      `<text class="${ncls}" x="${cx}" y="${192 + i * 16}" text-anchor="middle">${line}</text>`).join('');
   // S2: a quad grid with cells visibly stretched toward one corner
   let s2 = '';
   for (let r=0;r<4;r++) for (let c=0;c<4;c++){
@@ -1386,10 +1389,10 @@ const prof = (() => {
     const p = bary(T3,4,i,j);
     ours += `<circle class="cf-af" cx="${f(p[0])}" cy="${f(p[1])}" r="2.6"/>`;
   }
-  made.push(svg('three-approaches', 470, 212, `
-  ${panel(76, 'S2 &#183; quads on a cube', s2, 'even indexing, uneven cells', 'cf-gd')}
-  ${panel(215, 'H3 &#183; hexes all the way down', h3, 'even cells, no exact nesting', 'cf-gd')}
-  ${panel(400, 'here &#183; both jobs split', ours, 'triangles nest, corners are cells', 'cf-c')}`));
+  made.push(svg('three-approaches', 600, 226, `
+  ${panel(112, 'S2 &#183; quads on a cube', s2, 'even indexing,|uneven cells', 'cf-gd')}
+  ${panel(300, 'H3 &#183; hexes all the way down', h3, 'even cells,|no exact nesting', 'cf-gd')}
+  ${panel(488, 'here &#183; both jobs split', ours, 'triangles nest,|corners are cells', 'cf-c')}`));
 }
 
 // =============================================================================
@@ -1399,7 +1402,14 @@ const prof = (() => {
   const cx = 160, cy = 108, R = 62;
   const H = hexPts(cx, cy, R), H2 = hexPts(cx + Math.sqrt(3)*R, cy, R);
   const a = H[1], b = H[2], mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
-  made.push(svg('three-boundaries', 430, 224, `
+  // The three labels sit under the drawing rather than beside it: the second
+  // hexagon reaches x=320, so anything to its right either lands on the outline
+  // or pushes the canvas past 600. A swatch in each curve's own colour keeps
+  // the label tied to the line it names.
+  const key = (y, cls, swatch, text) =>
+    `<path class="${cls}" d="M14 ${y - 4}L34 ${y - 4}" stroke-width="3"${swatch}/>`
+    + `<text class="${cls === 'cf-a' ? 'cf-c' : cls === 'cf-g' ? 'cf-gd' : 'cf-d'}" x="42" y="${y}">${text}</text>`;
+  made.push(svg('three-boundaries', 500, 296, `
   <polygon class="cf-l" points="${pts(H)}"/>
   <polygon class="cf-l" points="${pts(H2)}"/>
   <circle class="cf-af" cx="${cx}" cy="${cy}" r="4"/>
@@ -1407,11 +1417,11 @@ const prof = (() => {
   <path class="cf-a" d="M${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}" stroke-width="3"/>
   <path class="cf-g" d="M${f(a[0])} ${f(a[1])} Q${f(mx+10)} ${f(my)} ${f(b[0])} ${f(b[1])}" stroke-width="3"/>
   <path class="cf-m" d="M${f(a[0]+4)} ${f(a[1]-3)}L${f(b[0]+4)} ${f(b[1]+3)}" stroke-width="3" stroke-dasharray="5 4"/>
-  <text class="cf-c" x="256" y="60">what rounding says &#183; docs 04 and 09</text>
-  <text class="cf-gd" x="256" y="88">equidistant on the sphere &#183; nobody, now</text>
-  <text class="cf-d" x="256" y="116">the dual&#8217;s corners &#183; doc 14 meshing</text>
-  <text class="cf-d" x="14" y="196">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
-  <text class="cf-c" x="14" y="214">a player clicks the mesh and the lookup answers from a different line</text>`));
+  ${key(200, 'cf-a', '', 'what rounding says &#183; docs 04 and 09')}
+  ${key(222, 'cf-g', '', 'equidistant on the sphere &#183; nobody, now')}
+  ${key(244, 'cf-m', ' stroke-dasharray="5 4"', 'the dual&#8217;s corners &#183; doc 14 meshing')}
+  <text class="cf-d" x="14" y="272">three curves, about a tenth of a cell apart, and no document says which is drawn</text>
+  <text class="cf-c" x="14" y="290">a player clicks the mesh and the lookup answers from a different line</text>`));
 }
 
 // =============================================================================
@@ -1432,14 +1442,14 @@ const prof = (() => {
     good += `<rect class="cf-fill" x="286" y="${f(52+k*30)}" width="72" height="30"/>`;
     good += `<path class="cf-a" d="M286 ${f(52+k*30)}L286 ${f(82+k*30)}" stroke-width="3"/>`;
   }
-  made.push(svg('no-sideways-merge', 430, 214, `
+  made.push(svg('no-sideways-merge', 446, 230, `
   ${bad}
   <text class="cf-c" x="118" y="30" text-anchor="middle">sideways</text>
   <text class="cf-d" x="118" y="176" text-anchor="middle">same direction, parallel,</text>
-  <text class="cf-gd" x="118" y="194" text-anchor="middle">but never in line &#8212; nothing to merge</text>
+  <text class="cf-gd" x="14" y="194">but never in line &#8212; nothing to merge</text>
   ${good}
   <text class="cf-c" x="322" y="30" text-anchor="middle">downward</text>
-  <text class="cf-d" x="322" y="194" text-anchor="middle">one flat plane &#8212; four faces become one</text>
+  <text class="cf-d" x="14" y="212">one flat plane &#8212; four faces become one</text>
   <path class="cf-l" d="M215 40 L215 200" stroke-dasharray="2 5"/>`));
 }
 
@@ -1452,7 +1462,7 @@ const prof = (() => {
   const X = r => x0 + W*r/120, Y = v => y0 - H*v/22;
   const line = (idx, cls) => `<path class="${cls}" d="M` + rows.map(r=>`${f(X(r[0]))} ${f(Y(r[idx]))}`).join('L') + `" fill="none"/>`;
   const dots = (idx, cls) => rows.map(r=>`<circle class="${cls}" cx="${f(X(r[0]))}" cy="${f(Y(r[idx]))}" r="3.5"/>`).join('');
-  made.push(svg('relief-saturates', 430, 216, `
+  made.push(svg('relief-saturates', 505, 216, `
   <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
   ${line(1,'cf-g')}${dots(1,'cf-gf')}
   ${line(2,'cf-a')}${dots(2,'cf-af')}
@@ -1476,7 +1486,7 @@ const prof = (() => {
     }
     return g;
   };
-  made.push(svg('lod-is-resampling', 430, 226, `
+  made.push(svg('lod-is-resampling', 520, 226, `
   <defs><clipPath id="lodc"><rect x="30" y="44" width="370" height="112"/></clipPath></defs>
   <g clip-path="url(#lodc)">
     ${grid(30, 50, 13, 8, 'cf-l')}
@@ -1526,7 +1536,7 @@ const prof = (() => {
     out += `<text class="${ok?'cf-c':'cf-gd'}" x="308" y="${y+20}">sums to ${sum} ${ok?'&#10003;':'&#10007;'}</text>`;
     return out;
   };
-  made.push(svg('hexround-repair', 430, 190, `
+  made.push(svg('hexround-repair', 570, 190, `
   ${cellRow(30, [['4.7'],['8.6'],['2.7']], 16, true, 'measured')}
   ${cellRow(78, [['5'],['9','cf-gf'],['3']], 17, false, 'round each')}
   ${cellRow(126,[['5'],['8','cf-af'],['3']], 16, true, 'repaired')}
@@ -1542,7 +1552,7 @@ const prof = (() => {
   const H2 = hexPts(cx + Math.sqrt(3)*R, cy, R);
   // the "other" boundary: a slightly bowed curve near the shared edge
   const e0 = H[1], e1 = H[2];
-  made.push(svg('cell-is-what-rounding-says', 430, 214, `
+  made.push(svg('cell-is-what-rounding-says', 500, 214, `
   <polygon class="cf-af" points="${pts(H)}" opacity="0.5"/>
   <polygon class="cf-fill" points="${pts(H2)}" opacity="0.5"/>
   <path class="cf-a" d="M${f(e0[0])} ${f(e0[1])}L${f(e1[0])} ${f(e1[1])}" stroke-width="2.5"/>
@@ -1577,7 +1587,7 @@ const prof = (() => {
       + `<text class="cf-d" x="${x0-12}" y="${y+4}" text-anchor="end">${label}</text>`
       + `<text class="cf-c" x="${x0}" y="${y+30}">${note}</text>`;
   };
-  made.push(svg('float-ladder', 430, 224, `
+  made.push(svg('float-ladder', 430, 242, `
   <text class="cf-d" x="14" y="22">faint lines are 1 m blocks &#183; solid marks are positions a float32 can actually hold</text>
   ${row(66,  'R 1,700 m', 0.000122, '8,192 positions per block &#8212; solid')}
   ${row(134, 'Earth',     0.5,      '2 per block &#8212; nothing below half a metre')}
@@ -1598,22 +1608,24 @@ const prof = (() => {
     steps += `<path class="cf-a" d="M${f(X(e))} ${f(Y(g))}L${f(X(e+1))} ${f(Y(g))}"/>`;
     if (e < e1) steps += `<path class="cf-l" d="M${f(X(e+1))} ${f(Y(g))}L${f(X(e+1))} ${f(Y(g*2))}"/>`;
   }
-  const mark = (r, txt, cls) => {
+  // 15 km and 17 km straddle 2^14 and land within a few pixels of each other,
+  // so the second label drops a line rather than printing over the first.
+  const mark = (r, txt, cls, row = 0) => {
     const e = Math.floor(Math.log2(r));
-    return `<path class="${cls}" d="M${f(X(Math.log2(r)))} ${f(Y(2**(e-23)))}L${f(X(Math.log2(r)))} ${y0+6}" stroke-dasharray="3 3"/>`
-      + `<text class="${cls==='cf-g'?'cf-gd':'cf-c'}" x="${f(X(Math.log2(r)))}" y="${y0+20}" text-anchor="middle">${txt}</text>`;
+    return `<path class="${cls}" d="M${f(X(Math.log2(r)))} ${f(Y(2**(e-23)))}L${f(X(Math.log2(r)))} ${y0 + 6 + row * 14}" stroke-dasharray="3 3"/>`
+      + `<text class="${cls==='cf-g'?'cf-gd':'cf-c'}" x="${f(X(Math.log2(r)))}" y="${y0 + 20 + row * 14}" text-anchor="middle">${txt}</text>`;
   };
-  made.push(svg('precision-staircase', 430, 216, `
+  made.push(svg('precision-staircase', 430, 240, `
   <path class="cf-l" d="M${x0} ${y0}L${f(x0+W)} ${y0}M${x0} ${y0}L${x0} ${f(y0-H)}"/>
   ${steps}
   ${mark(15000, '15 km', 'cf-g')}
-  ${mark(17000, '17 km', 'cf-g')}
+  ${mark(17000, '17 km', 'cf-g', 1)}
   <text class="cf-d" x="${x0-8}" y="${f(y0-H+6)}" text-anchor="end">1 m</text>
   <text class="cf-d" x="${x0-8}" y="${y0+4}" text-anchor="end">0.1 mm</text>
   <text class="cf-d" x="${f(x0+W)}" y="${y0+20}" text-anchor="end">planet radius &#8594;</text>
   <text class="cf-c" x="14" y="24">precision does not fade. it halves, all at once,</text>
   <text class="cf-c" x="14" y="42">every time the radius crosses a power of two</text>
-  <text class="cf-gd" x="14" y="200">a 15 km planet and a 17 km planet are a factor of two apart</text>`));
+  <text class="cf-gd" x="14" y="${y0+58}">a 15 km planet and a 17 km planet are a factor of two apart</text>`));
 }
 
 // =============================================================================
@@ -1628,7 +1640,7 @@ const prof = (() => {
     }
     return g;
   };
-  made.push(svg('anchor-and-offset', 430, 244, `
+  made.push(svg('anchor-and-offset', 470, 244, `
   <defs><marker id="ao1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
   <text class="cf-d" x="104" y="24" text-anchor="middle">classic floating origin</text>
@@ -1686,7 +1698,7 @@ const prof = (() => {
           +  `<text class="cf-d" x="${x}" y="${y+26}" text-anchor="middle">${(1*2**l/1.20459).toFixed(0)} m</text>`;
   });
   const want = x0 + 0.92*dx;                    // level 10.92 -- what the target asks for
-  made.push(svg('level-is-an-integer', 430, 208, `
+  made.push(svg('level-is-an-integer', 430, 218, `
   <path class="cf-l" d="M28 ${y}L${x0+2*dx+28} ${y}"/>
   ${ticks}
   <path class="cf-g" d="M${f(want)} ${y+52}L${f(want)} ${y+14}" marker-end="url(#li1)"/>
@@ -1753,16 +1765,16 @@ const prof = (() => {
       : `<path class="cf-l" d="M${f(cx)} ${yTop+8}L${f(cx)} ${ySeam-2}"/>`
         + `<path class="cf-g" d="M${f(cx-7)} ${ySeam+1}l14 0"/>`;
   }
-  made.push(svg('merge-shell', 430, 232, `
+  made.push(svg('merge-shell', 470, 268, `
   <defs><marker id="ms1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>
   ${fine}${coarse}${marks}
   <text class="cf-d" x="46" y="${f((yTop+ySeam)/2)}" text-anchor="end">fine</text>
   <text class="cf-d" x="46" y="${f((ySeam+yBot)/2+6)}" text-anchor="end">coarse</text>
   <text class="cf-c" x="14" y="26">one column in four carries straight on</text>
-  <text class="cf-gd" x="14" y="212">three in four stop dead at the shell</text>
-  <text class="cf-d" x="14" y="${yBot+18}">cell centres nest exactly; cell areas never do</text>
-  <text class="cf-d" x="416" y="212" text-anchor="end">on the worked planet that is 41,943,042 columns</text>`));
+  <text class="cf-d" x="14" y="${yBot + 22}">cell centres nest exactly; cell areas never do</text>
+  <text class="cf-gd" x="14" y="${yBot + 46}">three in four stop dead at the shell</text>
+  <text class="cf-c" x="14" y="${yBot + 64}">on the worked planet that is 41,943,042 columns</text>`));
 }
 
 // =============================================================================
@@ -1803,7 +1815,7 @@ const prof = (() => {
     Array.from({length:5},(_,i)=>{const a=-Math.PI/2+2*Math.PI*i/5;
       return [p[0]+9*Math.cos(a), p[1]+9*Math.sin(a)];}))}"/>`).join('');
   const mid = [120+D/2, 64+D/Math.sqrt(3)];      // the worst point: a circumcentre
-  made.push(svg('never-far-from-one', 430, 244, `
+  made.push(svg('never-far-from-one', 450, 244, `
   ${discs}
   <path class="cf-l" d="${pathOf([[base[0],base[1]],[base[0],base[2]],[base[1],base[2]],
                                   [base[0],base[3]],[base[2],base[3]],[base[1],base[4]],[base[2],base[4]]])}"/>
@@ -1826,7 +1838,7 @@ const prof = (() => {
       out += `<rect class="${cls}" x="${x}" y="${f(52 + k*17)}" width="46" height="17"/>`;
     return out + `<text class="cf-d" x="${x+23}" y="42" text-anchor="middle">${label}</text>`;
   };
-  made.push(svg('protected-column', 430, 214, `
+  made.push(svg('protected-column', 510, 214, `
   ${col(60,  'cf-fill', 8, 'ordinary')}
   ${col(130, 'cf-gf',   8, 'pentagon')}
   ${col(200, 'cf-fill', 8, 'ordinary')}
@@ -1844,7 +1856,10 @@ const prof = (() => {
 // 17 — not-intervisible: no tower reaches the next pentagon
 // =============================================================================
 {
-  const O = [214, 470], R = 400;                       // R = 1700 m -> 400 px
+  // The tower stands radially outward at -31.7 degrees, so it reaches further
+  // left than the arc does. O and R are set from that point rather than from
+  // the arc, or the tower is drawn off the canvas.
+  const O = [254, 420], R = 300;                       // R = 1700 m -> 300 px
   const S = R/1700;                                    // px per metre
   const at = (deg, r) => [O[0] + r*Math.sin(deg*Math.PI/180), O[1] - r*Math.cos(deg*Math.PI/180)];
   const half = (1882/1700) * 180/Math.PI / 2;          // half the gap, in degrees
@@ -1852,7 +1867,7 @@ const prof = (() => {
   const towerH = 400*S, top = at(-half, R + towerH);
   const reachDeg = -half + (1143/1700) * 180/Math.PI;  // 400 m tower sees 1,143 m
   const reach = at(reachDeg, R);
-  made.push(svg('not-intervisible', 430, 248, `
+  made.push(svg('not-intervisible', 520, 252, `
   <path class="cf-m" d="M${f(at(-half*1.5,R)[0])} ${f(at(-half*1.5,R)[1])} A ${R} ${R} 0 0 1 ${f(at(half*1.5,R)[0])} ${f(at(half*1.5,R)[1])}"/>
   <path class="cf-a" d="M${f(A[0])} ${f(A[1])}L${f(top[0])} ${f(top[1])}"/>
   <path class="cf-g" d="M${f(top[0])} ${f(top[1])}L${f(reach[0])} ${f(reach[1])}"/>
@@ -1889,11 +1904,11 @@ const prof = (() => {
     return `<circle class="cf-fill" cx="${cx}" cy="${cy}" r="${r}"/>${land}${seas}`
       + `<text class="cf-d" x="${cx}" y="${cy+r+22}" text-anchor="middle">${label}</text>`;
   };
-  made.push(svg('ocean-lock', 430, 216, `
+  made.push(svg('ocean-lock', 470, 230, `
   ${planet(112, 100, 76, 1, 'seed 4823')}
   ${planet(300, 100, 76, 3, 'seed 91170')}
   <text class="cf-c" x="215" y="24" text-anchor="middle">different terrain, identical seas</text>
-  <text class="cf-d" x="215" y="204" text-anchor="middle">1% of the surface is affordable &#183; the same map in every world is not</text>`));
+  <text class="cf-d" x="14" y="212">1% of the surface is affordable &#183; the same map in every world is not</text>`));
 }
 
 // =============================================================================
@@ -1949,16 +1964,16 @@ const prof = (() => {
       hair += `<path class="cf-l" d="M${f(x)} ${f(y)} l${f(-L*Math.sin(t))} ${f(L*0.34*Math.cos(t))}"/>`;
     }
   }
-  made.push(svg('no-global-north', 430, 214, `
+  made.push(svg('no-global-north', 430, 230, `
   <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
   ${hair}
   <circle class="cf-gf" cx="${O[0]}" cy="${f(O[1]-R)}" r="6"/>
   <circle class="cf-gf" cx="${O[0]}" cy="${f(O[1]+R)}" r="6"/>
   <text class="cf-gd" x="${O[0]+14}" y="${f(O[1]-R+4)}">no direction here</text>
   <text class="cf-gd" x="${O[0]+14}" y="${f(O[1]+R+4)}">or here</text>
-  <text class="cf-c" x="14" y="24">comb every point to face &#8220;north&#8221;</text>
+  <text class="cf-c" x="14" y="24">comb every point to face north</text>
   <text class="cf-d" x="14" y="42">and two points are left with nowhere to face</text>
-  <text class="cf-d" x="14" y="196">no choice of axis removes them &#8212; only moves them</text>`));
+  <text class="cf-d" x="14" y="212">no choice of axis removes them &#8212; only moves them</text>`));
 }
 
 // =============================================================================
@@ -1971,7 +1986,7 @@ const prof = (() => {
   const arr = (x,y,dx,dy) => `<path class="cf-g" d="M${f(x)} ${f(y)} l${f(dx)} ${f(dy)}" marker-end="url(#h1)"/>`;
   // one octant: north pole, then a quarter of the equator, then back
   const P = [O[0], O[1]-R], A = [O[0]-R, O[1]], B = [O[0], O[1]+R*0.36];
-  made.push(svg('holonomy-walk', 430, 246, `${AR}
+  made.push(svg('holonomy-walk', 480, 246, `${AR}
   <circle class="cf-fill" cx="${O[0]}" cy="${O[1]}" r="${R}"/>
   <path class="cf-m" d="M${P[0]} ${P[1]} L${A[0]} ${A[1]}"/>
   <path class="cf-m" d="M${A[0]} ${A[1]} A ${R} ${f(R*0.36)} 0 0 0 ${B[0]} ${B[1]}"/>
@@ -2017,7 +2032,7 @@ const prof = (() => {
   };
   const startArrow = (cx, cy, cls, mk) =>
     `<path class="${cls}" d="M${cx} ${cy} l0 -26" marker-end="url(#${mk})"/>`;
-  made.push(svg('pentagon-slip', 430, 236, `
+  made.push(svg('pentagon-slip', 495, 236, `
   <defs>
     <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker>
@@ -2052,7 +2067,7 @@ const prof = (() => {
   }
   const AR = `<defs><marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
     <path d="M0 0 L10 5 L0 10 z" fill="#2f6fd0"/></marker></defs>`;
-  made.push(svg('pentagon-deflect', 430, 214, `${AR}
+  made.push(svg('pentagon-deflect', 460, 214, `${AR}
   <polygon class="cf-gf" points="${pts(tips)}"/>
   ${spokes}
   <path class="cf-a" d="M${C[0]} ${f(C[1]-R-34)} L${C[0]} ${f(C[1]-6)}" marker-end="url(#d1)"/>
@@ -2218,7 +2233,7 @@ const prof = (() => {
   const cq = [A[0] + (B[0]-A[0])*0.25, A[1] + (B[1]-A[1])*0.25];   // quarter of the CHORD
   const dd = Math.hypot(cq[0]-O[0], cq[1]-O[1]);
   const chordQ = [O[0] + (cq[0]-O[0])/dd*Rp, O[1] + (cq[1]-O[1])/dd*Rp];
-  made.push(svg('two-constructions', 428, 250, `
+  made.push(svg('two-constructions', 428, 276, `
   <path class="cf-m" d="M${f(A[0])} ${f(A[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(B[0])} ${f(B[1])}"/>
   <path class="cf-l" d="M${f(A[0])} ${f(A[1])}L${f(B[0])} ${f(B[1])}" stroke-dasharray="4 3"/>
   <path class="cf-l" d="M${f(O[0])} ${f(O[1])}L${f(A[0])} ${f(A[1])}M${f(O[0])} ${f(O[1])}L${f(B[0])} ${f(B[1])}"/>
@@ -2234,7 +2249,7 @@ const prof = (() => {
   <text class="cf-c" x="14" y="30">one-shot &#183; divide the chord, then project out</text>
   <text class="cf-c" x="14" y="46">lands 14.5454&#176; from A</text>
   <text class="cf-gd" x="14" y="72">recursive &#183; divide the arc</text>
-  <text class="cf-gd" x="14" y="88">lands 15.8587&#176; from A</text>
+  <text class="cf-gd" x="14" y="130">lands 15.8587&#176; from A</text>
   <text class="cf-big" x="414" y="30" text-anchor="end">1.3133&#176; apart</text>
   <text class="cf-d" x="414" y="46" text-anchor="end">= 38.97 m on a 1,700 m planet</text>
   <text class="cf-d" x="414" y="62" text-anchor="end">= 39 cells at level 11</text>
@@ -2267,7 +2282,7 @@ const prof = (() => {
     const a = project(onChord(k)), b = project(onChord(k+1));
     return `<path class="${cls}" d="M${f(a[0])} ${f(a[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(b[0])} ${f(b[1])}" stroke-width="4"/>`;
   };
-  made.push(svg('why-cells-differ', 520, 292, `
+  made.push(svg('why-cells-differ', 530, 292, `
   <path class="cf-m" d="M${f(A[0])} ${f(A[1])} A ${f(Rp)} ${f(Rp)} 0 0 1 ${f(B[0])} ${f(B[1])}"/>
   ${gap(N/2, 'cf-g')}${gap(N-1, 'cf-a')}
   <path class="cf-l" d="${pathOf(rays)}" stroke-dasharray="3 3"/>
@@ -2280,7 +2295,7 @@ const prof = (() => {
   <text class="cf-c" x="14" y="26">flat face &#183; lattice points evenly spaced</text>
   <text class="cf-gd" x="14" y="46">sphere &#183; the same points, bunched at the corners</text>
   <text class="cf-big" x="${f(A[0]-10)}" y="${f(A[1]+20)}" text-anchor="end">corner</text>
-  <text class="cf-d" x="${f(A[0]-10)}" y="${f(A[1]+36)}" text-anchor="end">already on the sphere</text>
+  <text class="cf-d" x="${f(A[0]+10)}" y="${f(A[1]+36)}">already on the sphere</text>
   <text class="cf-big" x="506" y="26" text-anchor="end">middle sits at 79% of R</text>
   <text class="cf-d" x="506" y="44" text-anchor="end">cos 37.3774&#176; = 0.7947</text>
   <text class="cf-gd" x="506" y="70" text-anchor="end">widest cell, at the face centre</text>
@@ -2350,7 +2365,7 @@ const prof = (() => {
     return `<path class="${cls}" d="M${f(p[0])} ${f(p[1])}L${f(q[0])} ${f(q[1])}"/>
       <circle class="cf-fill" cx="${f(p[0])}" cy="${f(p[1])}" r="3.5"/>
       <text class="${cls === 'cf-a' ? 'cf-c' : 'cf-gd'}" x="${f(q[0] + (Math.cos(deg*D2R) < 0 ? -6 : 6))}"
-        y="${f(q[1] + 4)}" text-anchor="${Math.cos(deg*D2R) < 0 ? 'end' : 'start'}">${label}</text>`;
+        y="${f(Math.max(q[1] + 4, 14))}" text-anchor="${Math.cos(deg*D2R) < 0 ? 'end' : 'start'}">${label}</text>`;
   };
   made.push(svg('terminator', 460, 236, `
   <defs><marker id="sun" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
@@ -2386,7 +2401,7 @@ const prof = (() => {
     s += `<path class="cf-g" d="M${f(tip[0]-9)} ${f(tip[1]-11)}L${f(tip[0]+9)} ${f(tip[1]-11)}"
            marker-end="url(#hd)"/>`;
   }
-  made.push(svg('pentagon-loops', 430, 256, `
+  made.push(svg('pentagon-loops', 450, 256, `
   <defs><marker id="hd" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
     <path d="M0 0L7 3.5L0 7Z" fill="#b0800f"/></marker></defs>
   ${s}
@@ -2544,7 +2559,7 @@ const prof = (() => {
   const pts2 = [];
   for (let n = 0; n <= NMAX; n += 4) pts2.push([px(n), py(p(n))]);
   const half = Math.round(Math.sqrt(2*SLOTS*Math.log(2)));
-  made.push(svg('hash-collides', 470, 250, `
+  made.push(svg('hash-collides', 470, 266, `
   <path class="cf-l" d="M${X0} ${Y0}L${X0} ${Y0+H}L${X0+W} ${Y0+H}"/>
   <path class="cf-l" d="M${X0} ${f(py(0.5))}L${X0+W} ${f(py(0.5))}" stroke-dasharray="3 4"/>
   <text class="cf-d" x="${X0-42}" y="${f(py(0.5)+4)}">50%</text>
@@ -2558,8 +2573,8 @@ const prof = (() => {
   <text class="cf-gd" x="${f(px(half)-6)}" y="${Y0+H+16}">${half}</text>
   <text class="cf-big" x="14" y="24">a 12-bit hash of a block name</text>
   <text class="cf-gd" x="${f(px(half)+12)}" y="${f(py(0.5)-10)}">even odds at ${half} types</text>
-  <text class="cf-d" x="14" y="226">by 200 types it is 99.2%. A collision is two blocks sharing one</text>
-  <text class="cf-d" x="14" y="242">number, so every save holding both is unreadable.</text>`));
+  <text class="cf-d" x="14" y="240">by 200 types it is 99.2%. A collision is two blocks sharing one</text>
+  <text class="cf-d" x="14" y="258">number, so every save holding both is unreadable.</text>`));
 }
 
 // =============================================================================
@@ -2631,7 +2646,7 @@ const prof = (() => {
   <circle class="cf-af" cx="${f(q[0])}" cy="${f(q[1])}" r="5"/>
   <text class="cf-c" x="${f(u[0]-14)}" y="${f(u[1]+4)}">u</text>
   <text class="cf-c" x="${f(v[0]+8)}" y="${f(v[1]+4)}">v</text>
-  <text class="cf-c" x="${f(p[0]-4)}" y="${f(p[1]-10)}">p</text>
+  <text class="cf-c" x="${f(p[0]-4)}" y="${f(Math.max(p[1]-10, 14))}">p</text>
   <text class="cf-c" x="${f(q[0]-4)}" y="${f(q[1]+18)}">q</text>
   <circle class="cf-gf" cx="${f(P[0])}" cy="${f(P[1])}" r="6"/>
   <path class="cf-g" d="M${f(P[0]+52)} ${f(P[1]-26)}L${f(P[0]+12)} ${f(P[1]-6)}" marker-end="url(#rx)"/>
@@ -2878,7 +2893,7 @@ const prof = (() => {
 // are the real evaluation counts from authority.js, log-scaled.
 // =============================================================================
 {
-  const W = 520, X = 148, BW = 190, Y = 66, H = 26, ROW = 62;
+  const W = 540, X = 148, BW = 190, Y = 66, H = 26, ROW = 62;
   const tiers = [
     ['stores + routes',   0,     'cf-fill', 'no terrain at all',
      'reach, rate, protected cells, and every cell a player has touched'],

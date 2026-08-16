@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 292" width="520" height="292">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 530 292" width="530" height="292">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -34,7 +34,7 @@
   <text class="cf-c" x="14" y="26">flat face &#183; lattice points evenly spaced</text>
   <text class="cf-gd" x="14" y="46">sphere &#183; the same points, bunched at the corners</text>
   <text class="cf-big" x="107.0" y="132.2" text-anchor="end">corner</text>
-  <text class="cf-d" x="107.0" y="148.2" text-anchor="end">already on the sphere</text>
+  <text class="cf-d" x="127.0" y="148.2">already on the sphere</text>
   <text class="cf-big" x="506" y="26" text-anchor="end">middle sits at 79% of R</text>
   <text class="cf-d" x="506" y="44" text-anchor="end">cos 37.3774&#176; = 0.7947</text>
   <text class="cf-gd" x="506" y="70" text-anchor="end">widest cell, at the face centre</text>

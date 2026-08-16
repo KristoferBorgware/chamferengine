@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 430 248" width="430" height="248">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 252" width="520" height="252">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -22,17 +22,17 @@
   }
 </style>
 
-  <path class="cf-m" d="M-81.3 200.1 A 400 400 0 0 1 509.3 200.1"/>
-  <path class="cf-a" d="M3.7 129.7L-45.8 49.7"/>
-  <path class="cf-g" d="M-45.8 49.7L261.4 72.8"/>
-  <circle class="cf-gf" cx="261.4" cy="72.8" r="4"/>
-  <polygon class="cf-gf" points="3.7,121.7 11.3,127.3 8.4,136.2 -1.0,136.2 -3.9,127.3"/>
-  <polygon class="cf-gf" points="424.3,121.7 431.9,127.3 429.0,136.2 419.6,136.2 416.7,127.3"/>
-  <path class="cf-l" d="M261.4 62.8L424.3 119.7" stroke-dasharray="3 3"/>
-  <text class="cf-c" x="-51.8" y="41.7" text-anchor="middle">a 400 m tower</text>
-  <text class="cf-gd" x="257.4" y="92.8" text-anchor="middle">sees 1,143 m</text>
-  <text class="cf-d" x="434.3" y="125.7">next pentagon,</text>
-  <text class="cf-d" x="434.3" y="141.7">1,882 m away</text>
+  <path class="cf-m" d="M32.6 217.6 A 300 300 0 0 1 475.4 217.6"/>
+  <path class="cf-a" d="M96.3 164.8L59.2 104.8"/>
+  <path class="cf-g" d="M59.2 104.8L289.6 122.1"/>
+  <circle class="cf-gf" cx="289.6" cy="122.1" r="4"/>
+  <polygon class="cf-gf" points="96.3,156.8 103.9,162.3 101.0,171.3 91.6,171.3 88.7,162.3"/>
+  <polygon class="cf-gf" points="411.7,156.8 419.3,162.3 416.4,171.3 407.0,171.3 404.1,162.3"/>
+  <path class="cf-l" d="M289.6 112.1L411.7 154.8" stroke-dasharray="3 3"/>
+  <text class="cf-c" x="53.2" y="96.8" text-anchor="middle">a 400 m tower</text>
+  <text class="cf-gd" x="285.6" y="142.1" text-anchor="middle">sees 1,143 m</text>
+  <text class="cf-d" x="421.7" y="160.8">next pentagon,</text>
+  <text class="cf-d" x="421.7" y="176.8">1,882 m away</text>
   <text class="cf-c" x="14" y="26">to see one pentagon from the next</text>
   <text class="cf-c" x="14" y="46">you would need a 1,793 m tower</text>
   <text class="cf-d" x="14" y="70">which is taller than the planet&#8217;s radius</text>

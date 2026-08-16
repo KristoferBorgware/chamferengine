@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 428 250" width="428" height="250">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 428 276" width="428" height="276">
 <style>
   .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
   .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
@@ -37,7 +37,7 @@
   <text class="cf-c" x="14" y="30">one-shot &#183; divide the chord, then project out</text>
   <text class="cf-c" x="14" y="46">lands 14.5454&#176; from A</text>
   <text class="cf-gd" x="14" y="72">recursive &#183; divide the arc</text>
-  <text class="cf-gd" x="14" y="88">lands 15.8587&#176; from A</text>
+  <text class="cf-gd" x="14" y="130">lands 15.8587&#176; from A</text>
   <text class="cf-big" x="414" y="30" text-anchor="end">1.3133&#176; apart</text>
   <text class="cf-d" x="414" y="46" text-anchor="end">= 38.97 m on a 1,700 m planet</text>
   <text class="cf-d" x="414" y="62" text-anchor="end">= 39 cells at level 11</text>

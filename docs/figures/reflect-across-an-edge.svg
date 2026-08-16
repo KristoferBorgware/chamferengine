@@ -33,7 +33,7 @@
   <circle class="cf-af" cx="205.0" cy="249.9" r="5"/>
   <text class="cf-c" x="116.0" y="124.0">u</text>
   <text class="cf-c" x="288.0" y="124.0">v</text>
-  <text class="cf-c" x="201.0" y="-19.9">p</text>
+  <text class="cf-c" x="201.0" y="14.0">p</text>
   <text class="cf-c" x="201.0" y="267.9">q</text>
   <circle class="cf-gf" cx="235.0" cy="146.0" r="6"/>
   <path class="cf-g" d="M287.0 120.0L247.0 140.0" marker-end="url(#rx)"/>

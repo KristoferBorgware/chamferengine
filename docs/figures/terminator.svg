@@ -36,7 +36,7 @@
   <path class="cf-m" d="M230.0 34.0L230.0 4.0"/>
       <circle class="cf-fill" cx="230.0" cy="34.0" r="3.5"/>
       <text class="cf-gd" x="236.0"
-        y="8.0" text-anchor="start">dot = 0 &#183; the terminator</text>
+        y="14.0" text-anchor="start">dot = 0 &#183; the terminator</text>
   <path class="cf-a" d="M308.9 89.3L337.1 79.0"/>
       <circle class="cf-fill" cx="308.9" cy="89.3" r="3.5"/>
       <text class="cf-c" x="343.1"
