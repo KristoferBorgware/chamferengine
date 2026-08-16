@@ -15,7 +15,13 @@ const DEPTH = 4;
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
 
-const seed = new URLSearchParams(location.search).get("seed") ?? "chamfer";
+const params = new URLSearchParams(location.search);
+const seed = params.get("seed") ?? "chamfer";
+
+// The shell is a test object rather than part of the world: a plain
+// see-through sphere that answers whether the blend path works before any
+// water exists to depend on it. Off unless asked for.
+const showShell = params.get("shell") === "1";
 
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
@@ -28,17 +34,21 @@ async function main(): Promise<void> {
 	const surface = buildLatticeGeometry(DEPTH, RADIUS);
 	renderer.addPass(surface, [1, 1, 1, 1]);
 
-	// A second copy just above the surface, drawn through the translucent pass.
-	// It stands in for water until the mesher produces some, and it takes one
-	// flat colour: a shell carrying the surface's own per-cell colours tints
-	// each cell with a shade of itself and disappears.
-	const shell = buildLatticeGeometry(DEPTH, RADIUS * 1.03);
-	renderer.addPass(shell, [0.42, 0.72, 1, 0.42], 1);
+	if (showShell) {
+		// One flat colour for the whole pass. A shell carrying the surface's own
+		// per-cell colours tints each cell with a shade of itself and disappears
+		// against everything except the background beyond the planet's edge.
+		const shell = buildLatticeGeometry(DEPTH, RADIUS * 1.03);
+		renderer.addPass(shell, [0.42, 0.72, 1, 0.42], 1);
+	}
 
 	report([
 		`seed "${seed}"`,
 		`level ${DEPTH} · ${surface.cellCount.toLocaleString("en-GB")} cells · ${surface.triangleCount.toLocaleString("en-GB")} triangles`,
 		"drag to turn · scroll to zoom",
+		showShell
+			? "translucent shell on"
+			: "add ?shell=1 for the translucent shell",
 	]);
 
 	let yaw = 0.6;
