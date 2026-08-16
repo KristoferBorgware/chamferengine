@@ -1,6 +1,5 @@
-// Noise, the height field, solidity and material. Every function here is a pure
-// function of a seed and a position: no I/O, no allocation, no clock. Two
-// clients run this code and compare the results bit for bit.
-//
-// Project 4 fills it in.
-export const GENERATION_PLACEHOLDER = true;
+export { hash3 } from "./hash3.js";
+export { fade } from "./fade.js";
+export { valueNoise3 } from "./valueNoise3.js";
+export { fbm } from "./fbm.js";
+export { seedFromString } from "./seedFromString.js";
