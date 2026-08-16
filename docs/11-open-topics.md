@@ -273,11 +273,10 @@ Three results, and the first is the one this page keeps being taught:
   An order dependence nobody can find by testing is exactly the kind doc 23's
   rule exists to forbid.
 
-And one debt recorded rather than hidden: `volume.js`, `mesh.js` and `seam.js`
-still use the old hash, so they describe a planet the pinned function does not
-generate — **1.28 m mean, 5.85 m worst** over 60 m of relief. Their conclusions are
-statistical and none is in doubt, but they should be switched before any of them
-sizes an engine.
+`volume.js`, `mesh.js` and `seam.js` run the pinned hash and the pinned fade,
+so every script here measures the world the generator produces. That matters
+because the float-multiply variant gives **1.28 m mean, 5.85 m worst** over 60 m
+of relief — a different planet, not a rounding difference.
 
 ---
 
@@ -462,11 +461,11 @@ rather than by the algorithm.
 The boundary rule is the part worth carrying away, because the obvious answer was
 wrong. A **skirt** — a vertical apron one coarse cell deep — closes the surface
 step where two LOD levels meet, and that is all it closes. Under a density field
-8–24% of columns hold more than one slab of rock, and a skirt cannot reach the
+13–32% of columns hold more than one slab of rock, and a skirt cannot reach the
 cave mouths: it hangs *downward*, and a cave mouth is a *horizontal* hole. Doc 14
-measures 961 holes left over 385 rim columns with skirts alone. The fix is
+measures 1,060 holes left over 385 rim columns with skirts alone. The fix is
 **seam ownership** — the finer chunk emits a face wherever its solidity differs
-from the coarse neighbour's, in both directions — which leaves **zero**, for 2.7
+from the coarse neighbour's, in both directions — which leaves **zero**, for 2.99
 faces per rim column. Keep the skirt too, as cover for the frames after a
 neighbour changes level.
 

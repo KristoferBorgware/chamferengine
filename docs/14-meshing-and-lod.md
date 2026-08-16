@@ -129,7 +129,7 @@ surface and a much larger bill for it.
 Two things to take from that table.
 
 **Most of the density term's cost is not caves.** Going from no carving to
-strength 26 at low frequency multiplies faces **10×** while carving **zero**
+strength 26 at low frequency multiplies faces **11×** while carving **zero**
 voids — all of it is surface roughening, which section 2 already accounts for.
 Real caves add only about another 20% on top.
 
@@ -368,7 +368,7 @@ after an edit while its neighbour is not.
 ### But a skirt only closes the surface, and a volume has more than one
 
 That covers a height field, where every rim column has exactly one slab of rock
-and therefore one surface to hang from. Under a density field, 8–24% of columns
+and therefore one surface to hang from. Under a density field, 13–32% of columns
 have several — and a skirt cannot reach the others, because **a skirt hangs
 downward and a cave mouth is a horizontal hole in the boundary plane.**
 
@@ -389,13 +389,13 @@ off the cave where it meets the coarser neighbour's rock.*
 >
 > | Policy | Holes left |
 > |---|---|
-> | Each side trusts its own generator past the rim | 1,041 |
-> | The same, plus a skirt one coarse cell deep | **961** |
+> | Each side trusts its own generator past the rim | 1,150 |
+> | The same, plus a skirt one coarse cell deep | **1,060** |
 > | The finer chunk owns the seam | **0** |
 >
-> The skirt closes every one of the 72 surface-slit layers and **8 of 969 cave
-> mouths**. At a 2 m coarse cell, **99% of cave mouths sit deeper than the skirt
-> reaches**; the deepest is 15 layers below the surface.
+> The skirt closes every one of the 76 surface-slit layers and **14 of 1,074
+> cave mouths**. At a 2 m coarse cell, **99% of cave mouths sit deeper than the
+> skirt reaches**; the deepest is 18 layers below the surface.
 
 **More skirts are not the answer.** One skirt per span was the obvious guess and
 it is wrong: extra skirts hang down into rock from ledges that were never the

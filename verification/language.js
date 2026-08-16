@@ -884,16 +884,25 @@ console.log('\n5. is the garbage collector the discriminator? (wall-clock, read 
   };
   const d = bench('disciplined', disciplined, REBUILDS);
   const n = bench('naive', naive, REBUILDS);
+  // The same three numbers as (a): one machine, one sitting, so the ratios
+  // between them mean something. A live JS timing against a stored Rust one
+  // would report how fast whatever runs this script is, not a language gap.
+  const RUST = 0.18, TYPED = 0.27, OBJECTS = 4.13;
   console.log('   (b) the mesher -- building doc 14\'s 84,000-triangle buffer, per rebuild');
-  console.log(`         Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)`);
-  console.log(`         JS, typed arrays        ${d.toFixed(2).padStart(6)} ms   ${(d/0.18).toFixed(2)}x`);
-  console.log(`         JS, one object a vertex ${n.toFixed(2).padStart(6)} ms   ${(n/0.18).toFixed(2)}x`);
+  console.log('       measured separately, best of 5, process startup subtracted:');
+  console.log(`         Rust, Vec<f32>          ${RUST.toFixed(2).padStart(6)} ms   1.00x`);
+  console.log(`         JS, typed arrays        ${TYPED.toFixed(2).padStart(6)} ms   ${(TYPED/RUST).toFixed(2)}x`);
+  console.log(`         JS, one object a vertex ${OBJECTS.toFixed(2).padStart(6)} ms   ${(OBJECTS/RUST).toFixed(2)}x`);
   console.log('');
-  console.log(`       THE LANGUAGE GAP IS ${(d/0.18).toFixed(1)}x. THE LAYOUT GAP IS ${(n/d).toFixed(0)}x.`);
+  console.log(`       THE LANGUAGE GAP IS ${(TYPED/RUST).toFixed(1)}x. THE LAYOUT GAP IS ${(OBJECTS/TYPED).toFixed(0)}x.`);
   console.log('       Choosing the data layout matters roughly an order of magnitude more');
   console.log(`       than choosing the language. And the ${(n/d).toFixed(0)}x version is the one that`);
   console.log(`       allocates -- ${(CELLS*2).toLocaleString('en-US')} objects per rebuild, which IS the GC case.`);
   console.log('       The fast version allocates nothing and never collects.');
+  console.log('');
+  console.log(`       This machine, now: typed arrays ${d.toFixed(2)} ms, one object a vertex`);
+  console.log(`       ${n.toFixed(2)} ms -- a layout gap of ${(n/d).toFixed(0)}x. Both are timings and move run to`);
+  console.log('       run; the ratio between them is the part that does not.');
   console.log('');
   console.log('   SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is');
   console.log('   WHICH LAYOUT YOU GET BY WRITING THE OBVIOUS THING. In Rust the obvious');

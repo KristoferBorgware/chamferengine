@@ -33,9 +33,15 @@ function geodesic(L){
 }
 
 // deterministic value-noise fBm, same shape as doc 08's generator
-const hash=(x,y,z)=>{let h=x*374761393+y*668265263+z*1274126177; h=(h^(h>>>13))*1274126177;
+// the pinned hash: three wrapping uint32 multiplies, two xor-shifts, /2^32.
+// No float multiply past 2^53, so every language computes the same planet.
+const hash=(x,y,z)=>{let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)
+  +Math.imul(z|0,1274126177))>>>0;
+  h=(h^(h>>>13))>>>0; h=Math.imul(h,1274126177)>>>0;
   return ((h^(h>>>16))>>>0)/4294967296;};
-const sm=t=>t*t*(3-2*t);
+// quintic fade: smooth in the second derivative too, so shading shows no
+// grid at the lattice planes.
+const sm=t=>t*t*t*(t*(t*6-15)+10);
 function value3(p){
   const f=p.map(Math.floor), d=p.map((x,i)=>sm(x-f[i]));
   let s=0;

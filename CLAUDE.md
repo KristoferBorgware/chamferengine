@@ -266,9 +266,9 @@ Violating any of these breaks the design. They are not tunable.
 | visible cells at eye height | `≈ 21,000` | 84k triangles, D 11, R 1700 m — a FLOOR | `mesh.js` |
 | range to a peak of height h | `R·acos(R/(R+1.7)) + R·acos(R/(R+h))` | 60 m hill → 521 m, 47× the cells | `volume.js` |
 | triangles per cell, real terrain | `4.0` flat → `9.5` at 120 m relief | saturates; merging absorbs relief | `volume.js` |
-| density-term face cost | `≈10×`, mostly roughening | caves need gradient > 1 | `volume.js` |
-| multi-span columns with caves | `8–24%` | what the seam rule must handle | `volume.js` |
-| holes at a LOD seam | `1041` naive, `961` skirted, `0` seam-owned | over 385 rim columns | `seam.js` |
+| density-term face cost | `≈11×`, mostly roughening | caves need gradient > 1 | `volume.js` |
+| multi-span columns with caves | `13–32%` | what the seam rule must handle | `volume.js` |
+| holes at a LOD seam | `1150` naive, `1060` skirted, `0` seam-owned | over 385 rim columns | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
 | water faces drawn | `0.89%` of the naive count | 113,455 of 12,717,512; **0** sides | `water.js` |
 | water surfaces in one view | `82.3%` see one, `0.6%` two | worst 3, over a 76 m horizon | `water.js` |
@@ -376,14 +376,14 @@ Violating any of these breaks the design. They are not tunable.
 - The density term only carves **enclosed** voids when its noise gradient
   (amplitude / feature size) exceeds 1 — the bias grows 1 per metre of depth
   (`volume.js`). Raising `strength` without raising frequency buys a rougher
-  surface and a 10x face bill and **zero caves**. Caves are what create
-  multi-span columns (8-24% of them); rough surfaces do not.
+  surface and an 11x face bill and **zero caves**. Caves are what create
+  multi-span columns (13-32% of them); rough surfaces do not.
 - **A skirt does not close a cave mouth** (`seam.js`). At a LOD boundary a skirt
   closes the surface slit and ~1% of cave mouths; 99% sit deeper than it reaches,
   because a skirt hangs downward and a cave mouth is a horizontal hole. One skirt
   per span is NOT the fix. The finer chunk must **own the seam**: emit a face
   wherever its solidity differs from the coarse neighbour's, both directions,
-  costing 2.7 faces and one height-field evaluation per rim column. Keep the
+  costing 2.99 faces and one height-field evaluation per rim column. Keep the
   skirt too, as cover for the frames after a neighbour changes level.
 - LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
@@ -529,10 +529,11 @@ Violating any of these breaks the design. They are not tunable.
   at every lattice plane (7.05 measured against 0.08), which shading shows as a
   grid. And accumulation order differs *only sometimes* — exact at 6 and 8 octaves,
   `1.4e-17` apart at 4 and 5 — which is the kind of bug testing never finds.
-  **Debt:** `volume.js`, `mesh.js` and `seam.js` still use the old hash and so
-  describe a different planet (**1.28 m mean, 5.85 m worst** over 60 m of relief);
-  their conclusions are statistical and unaffected, but switch them before sizing
-  an engine.
+  **Every script measures the pinned planet**: `volume.js`, `mesh.js` and
+  `seam.js` run the same hash and the same fade as `noise.js`. Which hash a
+  script runs decides the size of its counts by a tenth or so and decides none
+  of its conclusions, which is what a statistical result over hundreds of
+  thousands of cells is supposed to do.
 - **A block type number cannot be a hash of its name** (`blockstate.js`, doc 27).
   In doc 03's 12-bit type field the birthday problem gives **even odds on a
   collision at 75 types** and 99.2% at 200 — and a collision is two blocks sharing

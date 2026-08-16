@@ -111,9 +111,10 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 300 ns in this JavaScript
+   one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 196 ns)
+    upper bound -- Rust is about 202 ns)
+   this machine, now: 393 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -127,9 +128,9 @@ authority.js -- what the server must know, per cheat, and what it costs
 
      players   queries/s   CPU of one core
           10          20      0.0006%
-         100         200      0.0060%
-        1000        2000      0.0600%
-       10000       20000      0.6003%
+         100         200      0.0062%
+        1000        2000      0.0620%
+       10000       20000      0.6200%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1120,7 +1121,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1360,15 +1361,20 @@ language.js -- which language and runtime, decided by running the kernel
        so the GC never runs here at all.
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
-         Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.35 ms   1.93x
-         JS, one object a vertex   4.61 ms   25.59x
+       measured separately, best of 5, process startup subtracted:
+         Rust, Vec<f32>            0.18 ms   1.00x
+         JS, typed arrays          0.27 ms   1.50x
+         JS, one object a vertex   4.13 ms   22.94x
 
-       THE LANGUAGE GAP IS 1.9x. THE LAYOUT GAP IS 13x.
+       THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 13x version is the one that
+       than choosing the language. And the 11x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
+
+       This machine, now: typed arrays 0.68 ms, one object a vertex
+       7.57 ms -- a layout gap of 11x. Both are timings and move run to
+       run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
    WHICH LAYOUT YOU GET BY WRITING THE OBVIOUS THING. In Rust the obvious
@@ -1594,11 +1600,11 @@ Cited by [doc 14](14-meshing-and-lod.md).
 5. LOD seam depth: the same terrain sampled one level apart
    60 m of relief, D = 11, 1 m blocks on a 1700 m planet
    level  spacing   coarse   mean |dh|   max |dh|   covered by a 1-cell skirt?
-      11    1.00 m    2.0 m     0.263 m     1.517 m                yes
-      10    2.00 m    4.0 m     0.525 m     3.197 m                yes
-       9    4.00 m    8.0 m     1.041 m     6.760 m                yes
-       8    8.00 m   16.0 m     1.998 m    12.840 m                yes
-       7   16.00 m   32.0 m     3.600 m    19.894 m                yes
+      11    1.00 m    2.0 m     0.300 m     1.631 m                yes
+      10    2.00 m    4.0 m     0.599 m     3.390 m                yes
+       9    4.00 m    8.0 m     1.187 m     7.455 m                yes
+       8    8.00 m   16.0 m     2.266 m    14.160 m                yes
+       7   16.00 m   32.0 m     4.065 m    21.775 m                yes
    every level covered: true
    a skirt one coarse cell deep covers the worst case at every level,
    and costs 2 triangles per boundary cell. Cheaper than stitching, and
@@ -2251,7 +2257,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 673 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 993 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2404,9 +2410,9 @@ Coarse side: height-field term only, resampled one coarse cell away.
 
   coarse   rim      spans   columns with   cave     holes: own-margin   +skirt   seam-owned
   cell     columns  /col    >1 span        mouths
-     2 m       385   1.086             31      969              1041      961            0
-     4 m       385   1.086             31      973              1048      938            0
-     8 m       385   1.086             31      969              1050      891            0
+     2 m       385   1.132             47     1074              1150     1060            0
+     4 m       385   1.132             47     1075              1154     1027            0
+     8 m       385   1.132             47     1067              1152      953            0
 
   own-margin  = each side trusts its own generator past the boundary.
                 Neither emits anything, so every disagreement is a hole.
@@ -2416,17 +2422,17 @@ Coarse side: height-field term only, resampled one coarse cell away.
                 from the coarse neighbour's. Zero holes, by construction.
 
 Why the skirt alone is not enough:
-  coarse cell   2 m: 961 of 969 cave mouths (99%) sit deeper than the skirt reaches; deepest is 15 layers below the surface.
-  coarse cell   4 m: 938 of 973 cave mouths (96%) sit deeper than the skirt reaches; deepest is 15 layers below the surface.
-  coarse cell   8 m: 891 of 969 cave mouths (92%) sit deeper than the skirt reaches; deepest is 15 layers below the surface.
+  coarse cell   2 m: 1060 of 1074 cave mouths (99%) sit deeper than the skirt reaches; deepest is 18 layers below the surface.
+  coarse cell   4 m: 1027 of 1075 cave mouths (96%) sit deeper than the skirt reaches; deepest is 18 layers below the surface.
+  coarse cell   8 m: 953 of 1067 cave mouths (89%) sit deeper than the skirt reaches; deepest is 18 layers below the surface.
   A skirt hangs DOWN from the top surface. A cave mouth is a HORIZONTAL
   hole in the boundary plane, often far below it. The two do not meet.
 
 Cost of the fine chunk owning the seam:
-  1041 boundary faces over 385 rim columns = 2.70 per column,
+  1150 boundary faces over 385 rim columns = 2.99 per column,
   plus ONE height-field evaluation per rim column to learn where the
   coarse neighbour put its surface. Both are negligible against the
-  1.09 spans and ~12 faces per column the chunk already emits.
+  1.13 spans and ~12 faces per column the chunk already emits.
 ```
 
 ## `sky.js`
@@ -2806,10 +2812,10 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
    (patch of 765 cells)
    relief   mean |slope|   cap   side faces   side QUADS after merge   tris/column
       0 m         0.000  1.00         0.00                    0.00          4.00
-     10 m         0.607  1.00         1.74                    1.55          7.11
-     30 m         1.801  1.00         5.17                    2.36          8.71
-     60 m         3.587  1.00        10.29                    2.62          9.25
-    120 m         7.175  1.00        20.59                    2.74          9.48
+     10 m         0.671  1.00         1.93                    1.63          7.27
+     30 m         2.022  1.00         5.80                    2.42          8.84
+     60 m         4.038  1.00        11.59                    2.65          9.30
+    120 m         8.097  1.00        23.23                    2.76          9.53
    raw side faces explode with relief, but each unbroken run collapses to
    ONE quad, so the triangle count barely moves. Vertical merging is what
    keeps a volume affordable -- without it this table is the cost.
@@ -2819,10 +2825,10 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
    voids need amplitude/feature > 1 -- otherwise the bias term always wins.
    freq  strength  feature  gradient   cave cells   spans/column   faces/column
      40         0     42.5m      0.00            0          1.000            1.0
-     40        26     42.5m      0.31            0          1.000           10.1
-    140        26     12.1m      1.07           64          1.084           12.0
-    220        26      7.7m      1.68          186          1.243           11.6
-    140        40     12.1m      1.65          185          1.242           17.5
+     40        26     42.5m      0.31            1          1.001           10.9
+    140        26     12.1m      1.07          101          1.132           13.1
+    220        26      7.7m      1.68          222          1.290           12.8
+    140        40     12.1m      1.65          242          1.316           18.9
    freq 40 carves nothing at all -- gradient 0.31, the bias always wins.
    Only the high-frequency rows make real voids, and those are what drive
    both the face count and the multi-span columns the skirt has to handle.

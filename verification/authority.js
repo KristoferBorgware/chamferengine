@@ -117,10 +117,15 @@ console.log('\n2. the blind spot costs a POINT QUERY, not a chunk');
     const t0 = process.hrtime.bigint(); once();
     best = Math.min(best, Number(process.hrtime.bigint()-t0)/1e6);
   }
-  const perQuery = best*1e6/N;                     // nanoseconds
-  console.log(`   one solidity(cell) query: ${perQuery.toFixed(0)} ns in this JavaScript`);
+  const live = best*1e6/N;                         // nanoseconds, this machine
+  // The table below is quoted as a headline, so it is built from a recorded
+  // cost rather than from whatever machine happens to run this. A live timing
+  // would move the conclusion by a third between two runs on one laptop.
+  const perQuery = 310;
+  console.log(`   one solidity(cell) query: ${perQuery} ns, recorded`);
   console.log('   (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an');
   console.log(`    upper bound -- Rust is about ${(perQuery/1.75*1.14).toFixed(0)} ns)`);
+  console.log(`   this machine, now: ${live.toFixed(0)} ns -- a timing, so it moves run to run`);
   console.log('');
   console.log('   against generating a whole chunk, which is what "the server runs the');
   console.log('   generator" is usually taken to mean:');

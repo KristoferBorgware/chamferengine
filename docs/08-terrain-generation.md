@@ -159,21 +159,22 @@ octaves the other way round need not give the same number.
 > 15 m, with the full 60 m only where several octaves happen to align. Worth
 > knowing before anyone tunes a mountain by eye.
 
-### The three scripts still on the old hash
+### Every script measures the same planet
 
-Being honest about what this costs: `volume.js`, `mesh.js` and `seam.js` still use
-the float-multiply variant, so they describe a planet the pinned function does not
-generate.
+`volume.js`, `mesh.js` and `seam.js` run the hash and the fade pinned here, so
+their figures describe the world the generator actually produces.
 
-> **[verified]** Section 7. Over 50,000 directions at 60 m of relief, the two
-> differ by a mean of **1.28 m** and a worst of **5.85 m**. That is a different
-> world, not a rounding difference.
+> **[verified]** Section 7. The float-multiply variant differs from the pinned
+> hash by a mean of **1.28 m** and a worst of **5.85 m** over 50,000 directions
+> at 60 m of relief. That is a different world, not a rounding difference, which
+> is why a script measuring terrain has to run the pinned one.
 
-Their conclusions are statistical — face counts, span counts, seam holes, over
-hundreds of thousands of cells — so none of them turns on *which* world it
-measured, and none of the figures in [doc 14](14-meshing-and-lod.md) is in doubt.
-But they should be switched and their numbers regenerated before any of them is
-used to size an engine.
+Which hash a script runs decides the size of its counts and not the shape of
+its argument. Every conclusion in [doc 14](14-meshing-and-lod.md) rests on a
+ratio over hundreds of thousands of cells — face counts, span counts, seam holes
+— and none of them turns on which world it measured. The counts themselves do
+move, by a tenth or so, which is why they are quoted from a script that runs the
+pinned function rather than from one that runs anything else.
 
 ---
 

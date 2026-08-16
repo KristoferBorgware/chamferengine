@@ -136,9 +136,15 @@ console.log('   it is usually described as. The gap is entirely about merging.')
 // meet. Skirt depth follows from that, and nothing else.
 {
   const R=1700, blk=1, D=11;
-  const hash=(x,y,z)=>{let h=x*374761393+y*668265263+z*1274126177; h=(h^(h>>>13))*1274126177;
+  // the pinned hash: three wrapping uint32 multiplies, two xor-shifts, /2^32.
+  // No float multiply past 2^53, so every language computes the same planet.
+  const hash=(x,y,z)=>{let h=(Math.imul(x|0,374761393)+Math.imul(y|0,668265263)
+    +Math.imul(z|0,1274126177))>>>0;
+    h=(h^(h>>>13))>>>0; h=Math.imul(h,1274126177)>>>0;
     return ((h^(h>>>16))>>>0)/4294967296;};
-  const smooth=t=>t*t*(3-2*t);
+  // quintic fade: smooth in the second derivative too, so shading shows no
+  // grid at the lattice planes.
+  const smooth=t=>t*t*t*(t*(t*6-15)+10);
   function value3(p){                       // trilinear value noise
     const f=p.map(Math.floor), d=p.map((x,i)=>smooth(x-f[i]));
     let s=0;
