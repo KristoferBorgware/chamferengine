@@ -15,6 +15,8 @@ import {
 } from "chamfer/generation";
 import { buildChunkMesh } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
+import { NORTH } from "chamfer/addressing";
+import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
 	ChunkRenderer,
 	NoWebGPUError,
@@ -44,6 +46,22 @@ const SKIRT_CELLS = 2;
 
 /** How many screenfuls of ground a drag across the whole window travels. */
 const DRAG_SCREENS = 2.5;
+
+/**
+ * How long a day runs, in seconds.
+ *
+ * The line between day and night crosses the ground at one circumference a day,
+ * which is 1.4 m/s -- a walking pace -- for a day of 2.12 hours. Below that a
+ * player outruns the sun. This one is short enough to watch.
+ */
+const DAY_LENGTH = 240;
+
+/** The light a surface keeps after dark. */
+const NIGHT_LIGHT = 0.09;
+
+/** The sky, in daylight and at night. */
+const DAY_SKY: readonly [number, number, number] = [0.46, 0.62, 0.82];
+const NIGHT_SKY: readonly [number, number, number] = [0.02, 0.03, 0.06];
 
 /** How many chunks are built per frame, so the page keeps drawing while it fills. */
 const BUILD_PER_FRAME = 1;
@@ -227,7 +245,8 @@ async function main(): Promise<void> {
 		{ passive: false },
 	);
 
-	const draw = () => {
+	const started = performance.now();
+	const draw = (now: number) => {
 		for (let n = 0; n < BUILD_PER_FRAME; n++) {
 			const next = queue.shift();
 			if (next === undefined) break;
@@ -258,22 +277,36 @@ async function main(): Promise<void> {
 			RADIUS * 20,
 		);
 
+		// The sun turns about the planet's own polar axis, and how lit a place is
+		// comes from one dot product against its own up.
+		const sun = sunDirection(
+			((now - started) / 1000 / DAY_LENGTH) % 1,
+			NORTH,
+		);
+		const day = daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
+
 		const submerged = terrain.blockAtPosition(from) === BlockType.WATER;
-		renderer.sky = submerged ? [0.05, 0.16, 0.28] : [0.46, 0.62, 0.82];
+		renderer.sky = submerged
+			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
+			: mix(NIGHT_SKY, DAY_SKY, day);
 		renderer.render({
 			viewProj: projection.multiply(view),
 			eye,
-			sun: SUN,
+			sun: [sun.x, sun.y, sun.z],
 			fog: submerged
 				? WATER_FOG
 				: [WATER_FOG[0], WATER_FOG[1], WATER_FOG[2], CLEAR_AIR],
+			daylight: day,
+			nightLight: NIGHT_LIGHT,
 		});
 
 		report([
 			`seed "${seedText}"`,
 			`${height(altitude)} up · ${renderer.count} chunks` +
 				(queue.length > 0 ? ` · ${queue.length} to build` : ""),
-			submerged ? "under water" : "drag to travel · scroll for height",
+			submerged
+				? "under water"
+				: `${clock(day)} · drag to travel · scroll for height`,
 		]);
 		requestAnimationFrame(draw);
 	};
@@ -298,15 +331,25 @@ function height(metres: number): string {
 		: `${(metres / 1000).toFixed(1)} km`;
 }
 
-/** A fixed sun, until Project 12 turns it. */
-const SUN: readonly [number, number, number] = ((): [
-	number,
-	number,
-	number,
-] => {
-	const v = new Vec3(0.45, 0.75, 0.5).normalize();
-	return [v.x, v.y, v.z];
-})();
+/** Blend two colors. */
+function mix(
+	a: readonly [number, number, number],
+	b: readonly [number, number, number],
+	by: number,
+): [number, number, number] {
+	return [
+		a[0] + (b[0] - a[0]) * by,
+		a[1] + (b[1] - a[1]) * by,
+		a[2] + (b[2] - a[2]) * by,
+	];
+}
+
+/** What to call the light where the camera is standing. */
+function clock(day: number): string {
+	if (day > 0.85) return "day";
+	if (day > 0.15) return "twilight";
+	return "night";
+}
 
 /** Any direction that is not parallel to `up`, for building a local frame. */
 function worldUp(up: Vec3): Vec3 {

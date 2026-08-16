@@ -13,6 +13,9 @@
  *
  * `fog.w` is the distance the view fades over. Above water it is set far past
  * the horizon, which leaves the same expression doing nothing.
+ *
+ * `night.x` is how far the sun is over this place's horizon and `night.y` is
+ * what is left of the light when it is not.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
 struct Frame {
@@ -20,6 +23,7 @@ struct Frame {
 	eye      : vec4f,
 	sun      : vec4f,
 	fog      : vec4f,
+	night    : vec4f,
 };
 struct Chunk {
 	origin : vec4f,
@@ -48,10 +52,23 @@ fn vertexMain(
 	return out;
 }
 
+/**
+ * How much sun a surface takes, and how much of the sky it takes instead.
+ *
+ * The surface normal against the sun gives the direct term. The place's own up
+ * against the sun decides whether the sun is over the horizon at all, which is
+ * the whole of day and night: every point carries the answer in its position,
+ * so there is no terminator to track and nothing to store.
+ */
+fn litBy(normal : vec3f, ambient : f32, direct : f32) -> f32 {
+	let day = frame.night.x;
+	let lambert = clamp(dot(normal, frame.sun.xyz), 0.0, 1.0);
+	return mix(frame.night.y, ambient + direct * lambert, day);
+}
+
 @fragment
 fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
-	let lambert = clamp(dot(normalize(in.normal), frame.sun.xyz), 0.0, 1.0);
-	let lit = in.color * (0.30 + 0.70 * lambert);
+	let lit = in.color * litBy(normalize(in.normal), 0.30, 0.70);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -62,8 +79,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 
 @fragment
 fn waterMain(in : VertexOut) -> @location(0) vec4f {
-	let lambert = clamp(dot(normalize(in.normal), frame.sun.xyz), 0.0, 1.0);
-	let lit = in.color * (0.45 + 0.55 * lambert);
+	let lit = in.color * litBy(normalize(in.normal), 0.45, 0.55);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

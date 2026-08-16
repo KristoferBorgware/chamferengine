@@ -16,4 +16,15 @@ export interface Frame {
 	 * and a few tens of metres.
 	 */
 	readonly fog: readonly [number, number, number, number];
+
+	/**
+	 * How much daylight reaches the camera's own place, and what is left
+	 * without it.
+	 *
+	 * The first is one dot product between the sun and the camera's up, and it
+	 * carries the whole day and night cycle. The second is the light a surface
+	 * keeps after dark.
+	 */
+	readonly daylight: number;
+	readonly nightLight: number;
 }

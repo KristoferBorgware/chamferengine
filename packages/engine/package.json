@@ -10,6 +10,7 @@
 		".": "./src/index.ts",
 		"./math": "./src/math/index.ts",
 		"./world": "./src/world/index.ts",
+		"./light": "./src/light/index.ts",
 		"./addressing": "./src/addressing/index.ts",
 		"./generation": "./src/generation/index.ts",
 		"./mesh": "./src/mesh/index.ts",

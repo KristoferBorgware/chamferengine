@@ -21,8 +21,8 @@ interface Resident {
 	readonly water: Buffers | null;
 }
 
-/** How far a frame uniform block runs: a matrix, the eye, the sun and the fog. */
-const FRAME_BYTES = 64 + 16 + 16 + 16;
+/** A matrix, the eye, the sun, the fog, and how much daylight there is. */
+const FRAME_BYTES = 64 + 16 + 16 + 16 + 16;
 
 /** A chunk's origin, padded to the alignment a uniform binding needs. */
 const CHUNK_BYTES = 256;
@@ -210,6 +210,8 @@ export class ChunkRenderer {
 		this.frameData.set(frame.eye, 16);
 		this.frameData.set(frame.sun, 20);
 		this.frameData.set(frame.fog, 24);
+		this.frameData[28] = frame.daylight;
+		this.frameData[29] = frame.nightLight;
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
 		const encoder = device.createCommandEncoder();

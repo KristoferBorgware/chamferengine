@@ -8,6 +8,7 @@ import type { WorldShape } from "../world/WorldShape.js";
 import { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
 import { MESH_DEFAULTS } from "./MeshOptions.js";
 import { blockColor } from "../generation/terrain/blockColor.js";
+import { skyExposure } from "../light/skyExposure.js";
 import { canonicalCell } from "../addressing/neighbours/canonicalCell.js";
 import { cellCorners } from "../addressing/lattice/cellCorners.js";
 import { joinPath } from "../addressing/lattice/joinPath.js";
@@ -30,6 +31,21 @@ export interface MeshTally {
 
 /** Scratch color, refilled per face rather than allocated per vertex. */
 const COLOR = new Float32Array(3);
+
+/**
+ * How many layers of neighbouring ground it takes to shut the sky out.
+ *
+ * A cell with ground this much higher on every side takes the least light the
+ * exposure allows.
+ */
+const SKY_REACH = 6;
+
+/** Multiply a color in place. */
+function shade(color: Float32Array, by: number): void {
+	color[0] = color[0]! * by;
+	color[1] = color[1]! * by;
+	color[2] = color[2]! * by;
+}
 
 /** A column's block at a layer, air outside the crust. */
 function at(column: Column, layer: number): number {
@@ -182,6 +198,16 @@ function meshCell(
 	const from = Math.max(0, bandTop - 1);
 	const to = Math.min(layers - 1, bandBottom + 1);
 
+	// How much sky this column takes, from the ground standing around it. A
+	// hollow is darker than a ridge, which the occlusion at a face's corners
+	// cannot see: that only ever looks at the two cells touching the corner.
+	const around: number[] = [];
+	for (let k = 0; k < degree; k++) {
+		const other = ring[k];
+		if (other) around.push(other.first);
+	}
+	const sky = skyExposure(own.first, around, SKY_REACH);
+
 	// Caps first: a top or a bottom face covers one layer and never merges with
 	// the layer under it, because there is a different block there.
 	for (let layer = from; layer <= to; layer++) {
@@ -190,6 +216,7 @@ function meshCell(
 		if (here === 0) continue;
 		const sink = here === 1 ? translucent : opaque;
 		blockColor(block, face, i, j, seed, COLOR, 0);
+		shade(COLOR, sky);
 
 		if (opacityOf(at(own, layer - 1)) < here) {
 			emitCap(
@@ -228,6 +255,7 @@ function meshCell(
 		const block = at(own, floor);
 		if (opacityOf(block) > 0) {
 			blockColor(block, face, i, j, seed, COLOR, 0);
+			shade(COLOR, sky);
 			emitCap(
 				opacityOf(block) === 1 ? translucent : opaque,
 				corners,
@@ -250,6 +278,7 @@ function meshCell(
 		if (top >= 0) {
 			const block = at(own, top);
 			blockColor(block, face, i, j, seed, COLOR, 0);
+			shade(COLOR, sky);
 			for (let k = 0; k < degree; k++) {
 				if (!outward[k]) continue;
 				emitSide(
@@ -292,6 +321,7 @@ function meshCell(
 				end++;
 
 			blockColor(block, face, i, j, seed, COLOR, 0);
+			shade(COLOR, sky);
 			emitSide(
 				here === 1 ? translucent : opaque,
 				corners,
