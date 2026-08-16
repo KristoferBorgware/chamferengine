@@ -29,9 +29,11 @@ async function main(): Promise<void> {
 	renderer.addPass(surface, [1, 1, 1, 1]);
 
 	// A second copy just above the surface, drawn through the translucent pass.
-	// It stands in for water until the mesher produces some.
-	const shell = buildLatticeGeometry(DEPTH, RADIUS * 1.08);
-	renderer.addPass(shell, [0.55, 0.78, 1, 0.3]);
+	// It stands in for water until the mesher produces some, and it takes one
+	// flat colour: a shell carrying the surface's own per-cell colours tints
+	// each cell with a shade of itself and disappears.
+	const shell = buildLatticeGeometry(DEPTH, RADIUS * 1.03);
+	renderer.addPass(shell, [0.42, 0.72, 1, 0.42], 1);
 
 	report([
 		`seed "${seed}"`,
@@ -99,7 +101,7 @@ async function main(): Promise<void> {
 			RADIUS * 0.05,
 			RADIUS * 20,
 		);
-		renderer.render({ viewProj: multiply(projection, view) });
+		renderer.render({ viewProj: multiply(projection, view), eye });
 		requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);

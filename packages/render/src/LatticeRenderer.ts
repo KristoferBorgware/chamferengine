@@ -11,11 +11,14 @@ interface Pass {
 	readonly uniformBuffer: GPUBuffer;
 	readonly bindGroup: GPUBindGroup;
 	readonly tint: readonly [number, number, number, number];
+	/** 0 draws the cells' own colours, 1 draws the tint as a shell. */
+	readonly colourMix: number;
 }
 
-/** A view matrix, a projection matrix, and the size they were built for. */
+/** What one frame needs: where the camera is, and where it is looking. */
 export interface Frame {
 	readonly viewProj: Mat4;
+	readonly eye: readonly [number, number, number];
 }
 
 /**
@@ -123,6 +126,7 @@ export class LatticeRenderer {
 	addPass(
 		geometry: Geometry,
 		tint: readonly [number, number, number, number],
+		colourMix = 0,
 	): void {
 		const { device } = this.ctx;
 		const vertexBuffer = device.createBuffer({
@@ -137,9 +141,10 @@ export class LatticeRenderer {
 		});
 		device.queue.writeBuffer(indexBuffer, 0, geometry.indices);
 
-		// A 4x4 matrix and a tint: 64 bytes plus 16.
+		// A 4x4 matrix, a tint, the eye, and one scalar rounded up to its
+		// alignment: 64 + 16 + 16 + 16.
 		const uniformBuffer = device.createBuffer({
-			size: 80,
+			size: 112,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 		});
 		const bindGroup = device.createBindGroup({
@@ -153,6 +158,7 @@ export class LatticeRenderer {
 			uniformBuffer,
 			bindGroup,
 			tint,
+			colourMix,
 		});
 	}
 
@@ -180,9 +186,11 @@ export class LatticeRenderer {
 		const depth = this.ensureDepth();
 
 		for (const pass of this.passes) {
-			const data = new Float32Array(20);
+			const data = new Float32Array(28);
 			data.set(frame.viewProj, 0);
 			data.set(pass.tint, 16);
+			data.set(frame.eye, 20);
+			data[24] = pass.colourMix;
 			device.queue.writeBuffer(pass.uniformBuffer, 0, data);
 		}
 
