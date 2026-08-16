@@ -93,8 +93,8 @@ exact and holds everywhere. Away from the twelve pentagons a cell also has six
 neighbours, near enough equidistant to be treated as such for movement.
 
 "Near enough" is doing real work in that second sentence, and the caveat below
-says how much — more than earlier drafts of this document claimed. The shared-edge
-guarantee is the one to lean on; equidistance is the approximation.
+says how much. The shared-edge guarantee is the one to lean on. Equidistance is
+the approximation.
 
 **Honest caveat:** the hexagons are **near-regular, not congruent**. Edge lengths
 and angles vary, with most distortion clustered near the twelve pentagons and
@@ -102,9 +102,8 @@ fading out. This is *smoothly distributed* with no discontinuity, which is the
 real win over a cube map — but "all hexagons are identical" is false, and code
 must not assume it.
 
-How false was, until recently, the one load-bearing number in this specification
-with no script behind it. Earlier drafts of this document said 1.3:1 in area and
-1.14:1 in spacing. Measured, it is closer to **2:1**.
+How false is measured: **1.99:1** in area and **1.41:1** in spacing
+(`uniform.js`).
 
 ### Why the cells differ at all
 
@@ -277,3 +276,33 @@ constructed as the dual of a subdivided icosahedron.
 
 The consequences that follow — where the hierarchy lives, how cells are
 addressed, how positions are looked up — are the subject of the next documents.
+
+---
+
+## Still open
+
+- **The variation figures were 1.3:1 in area and 1.14:1 in spacing** in earlier
+  drafts, quoted without a script behind them and propagated into eight
+  documents. Measured, they are **1.99:1** and **1.41:1** (`uniform.js`) — the
+  old readings came from level 2, where the ratio really is 1.17. The error made
+  [doc 10](10-pathfinding.md)'s A* heuristic inadmissible.
+
+---
+
+## In one breath
+
+- **A sphere cannot be tiled by identical regular polygons.** Gauss–Bonnet fixes
+  the total angular defect on any closed surface at **720°**, and something has
+  to carry it.
+- **The cube carries it in 8 corners of 90° each** — which is why cube spheres
+  pinch, and why S2's cells spread **5.20:1**.
+- **The Goldberg polyhedron carries it in 12 pentagons**, spread as thinly as any
+  option can spread it.
+- **Every adjacency is a shared edge.** That is the exact guarantee. "Six
+  equidistant neighbours" is the approximation, and it is off by **1.41:1** in
+  spacing.
+- **Hexagons are near-regular, not congruent.** Area varies **1.99:1**, and it
+  **rises with level and settles** — depth is not a fix, because gnomonic
+  distortion across a face is scale-free.
+- **The decision: a Goldberg polyhedron, built as the dual of a subdivided
+  icosahedron.**

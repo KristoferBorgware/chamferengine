@@ -2,10 +2,12 @@
 
 ## What we are trying to build
 
-A voxel world in the style of Minecraft, but on a **sphere** rather than a flat
-plane. You can walk in a straight line in any direction, forever, and come back
-to where you started — and nowhere on the way does the ground go strange. No
-edge, no seam, no pole, no stretched blocks.
+A voxel world on a **sphere** rather than a flat plane. Blocks you can dig and
+place, arranged over a planet.
+
+You can walk in a straight line in any direction, forever, and come back to where
+you started. Nowhere on the way does the ground go strange. No edge, no seam, no
+pole, no stretched blocks.
 
 Everything in this specification is in service of that one sentence.
 
@@ -68,7 +70,7 @@ Goldberg polyhedron wins it.
    which [doc 02](02-geometry-choice.md) shows is forced rather than chosen; and
    neighbours are equidistant only to about **41%**, since hexagon area varies
    1.99:1. The first is small. The second is not — it is a measured 1.41:1 in
-   spacing, not the 1.14:1 earlier drafts claimed. Code that assumes otherwise is
+   spacing. Code that assumes otherwise is
    wrong — see [doc 13](13-gravity-and-orientation.md) for what the first costs
    and [doc 10](10-pathfinding.md) for what the second costs, which is an
    inadmissible search heuristic.
@@ -82,7 +84,7 @@ Goldberg polyhedron wins it.
 
 ## Non-goals
 
-- **Matching Minecraft's exact feel.** Hexagons are not cubes. Buildings,
+- **Matching how a cube world feels.** Hexagons are not cubes. Buildings,
   recipes, and directional blocks all behave differently. This is accepted.
 - **Perfectly uniform cell area.** Hexagons vary **1.99:1** across the sphere,
   2.74:1 counting the pentagons. Irrelevant for gameplay, but code must not assume
@@ -96,8 +98,8 @@ Goldberg polyhedron wins it.
 
 Two words carry most of the weight in what follows.
 
-A **cell** is one hexagon (or one of the twelve pentagons) at one radial layer —
-a hexagonal prism, the equivalent of a Minecraft block.
+A **cell** is one hexagon (or one of the twelve pentagons) at one radial layer.
+It is a hexagonal prism, and it is what a cube world would call a block.
 
 A **chunk** is a triangular patch of the surface at a chosen subdivision level,
 spanning all layers beneath it: the unit that is loaded, generated, meshed, and
@@ -126,3 +128,29 @@ shows the geometric options side by side with the curvature defect
 colour-coded, and
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html), which
 shows the chosen tiling at increasing resolution.
+
+---
+
+## Still open
+
+- **The spacing figure was 1.14:1 in earlier drafts**, quoted without a script
+  behind it. Measured, it is **1.41:1**, and 1.48:1 counting the pentagons
+  (`uniform.js`). Anything dividing by "the" cell spacing divides by
+  **1.098 × nominal**.
+
+---
+
+## In one breath
+
+- The goal is one sentence: **a voxel world on a sphere with no edge, no seam,
+  no pole and no stretched blocks.**
+- The surface is a **Goldberg polyhedron** — hexagons plus exactly **twelve**
+  pentagons, which topology forces and no tiling can avoid.
+- Cells sit on the **vertices** of a subdivided icosahedron, so triangles give
+  the hierarchy and hexagons give the playfield.
+- **Six neighbours everywhere** is the design goal, with two qualifiers: twelve
+  cells have five, and spacing varies **1.41:1** rather than being uniform.
+- **A cell** is one hexagon at one layer; **a chunk** is a triangular patch
+  spanning every layer beneath it, and it is the unit that loads and stores.
+- Terrain is **generated, not stored**, so only what a player changed is written
+  down.

@@ -50,8 +50,8 @@ for substantially better performance.
 ### The part worth stealing
 
 Leaf cells are enumerated along a **Hilbert space-filling curve**, and each cell
-gets a **64-bit ID** encoding both its position on the curve and its level. This
-buys three things almost for free:
+gets a **64-bit ID** encoding both its position on the curve and its level. One
+integer then carries three things at once:
 
 - **Spatial locality in a one-dimensional key.** Nearby cells get nearby
   integers, so range queries and disk layout are cache-friendly.
@@ -141,9 +141,8 @@ What this project does differently:
   nesting problem completely — see [doc 03](03-addressing.md).
 - **Nesting is a design choice, not an inherited approximation.**
 
-The trade is real and worth stating plainly: a Goldberg tiling is exact at each
-level but **levels do not nest into each other at all**, whereas H3's levels nest
-approximately. By moving the hierarchy onto the underlying triangles, this design
+The trade is real. A Goldberg tiling is exact at each level, but **levels do not
+nest into each other at all**, where H3's levels nest approximately. By moving the hierarchy onto the underlying triangles, this design
 gets exact nesting on the structure that needs it, and keeps the hexagons purely
 as the playfield.
 
@@ -167,3 +166,21 @@ the H3-family structure with the icosahedron face edges overlaid, so you can see
 where the per-face projections meet and that cells cross those seams freely.
 Note the demo uses a Goldberg tiling as a structural stand-in; real H3 cells are
 rotated relative to these because of aperture-7 subdivision.
+
+---
+
+## In one breath
+
+- **Take H3's shape and S2's addressing.** Each solves half of this problem and
+  neither solves both.
+- **S2's addressing is the part to steal**: one 64-bit integer carrying position
+  and level, so parent, children and range queries are bit manipulation.
+- **S2's cells are the part to leave**: a cube projected onto a sphere spreads
+  cell area **5.20:1** linear, **2.08:1** quadratic, **1.41:1** tangent
+  (`s2.js`).
+- **H3's shape is the part to steal**: hexagons, six neighbours, one distance
+  between adjacent centres.
+- **H3's nesting is the part to leave**: aperture-7 levels nest only
+  approximately, so a parent does not contain its children exactly.
+- **Putting the hierarchy on the triangles underneath** takes both halves: the
+  triangles nest exactly, and the hexagons stay purely the playfield.
