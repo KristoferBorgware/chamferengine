@@ -42,6 +42,9 @@ const MAX_ALTITUDE = RADIUS * 3;
 /** How deep a chunk's rim hangs, in its own cells. */
 const SKIRT_CELLS = 2;
 
+/** How many screenfuls of ground a drag across the whole window travels. */
+const DRAG_SCREENS = 2.5;
+
 /** How many chunks are built per frame, so the page keeps drawing while it fills. */
 const BUILD_PER_FRAME = 1;
 
@@ -195,15 +198,16 @@ async function main(): Promise<void> {
 	});
 	canvas.addEventListener("pointermove", (e) => {
 		if (!dragging) return;
-		// Turning the look-at point moves it across the surface. The step scales
-		// with altitude, so the ground travels at about the same speed on screen
-		// whatever height the camera is at.
-		const step = (0.00002 * altitude + 0.00004) * 1.5;
+		// Dragging turns the look-at point around the planet's centre, so the
+		// step is an angle. `behind` is how far back the camera sits in the same
+		// angle, and the view spans a small multiple of it, so a drag across the
+		// window travels about a screenful of ground at any height.
+		const perPixel = (behind * DRAG_SCREENS) / viewHeight();
 		const east = worldUp(ground).cross(ground).normalize();
 		const north = ground.cross(east).normalize();
 		ground = ground
-			.add(east.scale(-(e.clientX - lastX) * step * RADIUS))
-			.add(north.scale((e.clientY - lastY) * step * RADIUS))
+			.add(east.scale(-(e.clientX - lastX) * perPixel))
+			.add(north.scale((e.clientY - lastY) * perPixel))
 			.normalize();
 		lastX = e.clientX;
 		lastY = e.clientY;
@@ -274,6 +278,17 @@ async function main(): Promise<void> {
 		requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);
+}
+
+/**
+ * The window's height in the units a pointer event reports.
+ *
+ * Pointer coordinates are CSS pixels and the canvas is sized in device pixels,
+ * so on a display that draws two device pixels per CSS pixel the two differ by
+ * a factor of two.
+ */
+function viewHeight(): number {
+	return Math.max(1, canvas.clientHeight);
 }
 
 /** An altitude, in whichever unit reads better. */
