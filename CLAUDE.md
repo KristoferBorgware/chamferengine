@@ -171,6 +171,9 @@ rules:
   anything in `docs/` when the question is *what are we building with* or *what is
   in which version*. It is not part of the specification and carries no reasoning;
   every entry links to the document that owns the decision.
+- [`CODE-STYLE.md`](CODE-STYLE.md) — **formatting and comment conventions for
+  the engine.** Not part of the specification. Read it before writing or editing
+  any code comment, including in `verification/` and `tools/` today.
 - `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
