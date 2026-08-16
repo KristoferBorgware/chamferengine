@@ -36,6 +36,9 @@ export class CoarseMap {
 	/** How many cells drain through each one. A river is a large value. */
 	readonly flow: Float32Array;
 
+	/** The largest height difference from each cell to a neighbour. */
+	readonly slope: Float32Array;
+
 	constructor(
 		seed: number,
 		grid: CoarseGrid,
@@ -43,6 +46,7 @@ export class CoarseMap {
 		height: Float32Array,
 		water: Float32Array,
 		flow: Float32Array,
+		slope: Float32Array,
 	) {
 		this.seed = seed;
 		this.grid = grid;
@@ -50,6 +54,7 @@ export class CoarseMap {
 		this.height = height;
 		this.water = water;
 		this.flow = flow;
+		this.slope = slope;
 	}
 
 	get level(): number {
@@ -112,6 +117,11 @@ export class CoarseMap {
 	/** How much drains through a fine cell's coarse neighbourhood. */
 	flowAt(face: number, i: number, j: number, depth: number): number {
 		return this.sample(this.flow, face, i, j, depth);
+	}
+
+	/** How steeply the ground falls away under a fine cell. */
+	slopeAt(face: number, i: number, j: number, depth: number): number {
+		return this.sample(this.slope, face, i, j, depth);
 	}
 
 	/**

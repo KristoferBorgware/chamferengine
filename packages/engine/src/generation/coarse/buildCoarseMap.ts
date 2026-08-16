@@ -3,6 +3,7 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { accumulateFlow } from "./accumulateFlow.js";
+import { coarseSlope } from "./coarseSlope.js";
 import { continentHeight } from "./continentHeight.js";
 import { erode } from "./erode.js";
 import { fillPits } from "./fillPits.js";
@@ -59,5 +60,6 @@ export function buildCoarseMap(
 		Float32Array.from(height),
 		water,
 		Float32Array.from(flow),
+		coarseSlope(grid, height),
 	);
 }

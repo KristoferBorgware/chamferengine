@@ -1,0 +1,176 @@
+import type { CoarseMap } from "../coarse/CoarseMap.js";
+import type { TerrainColumn } from "./TerrainColumn.js";
+import type { TerrainOptions } from "./TerrainOptions.js";
+import type { WorldShape } from "../../world/WorldShape.js";
+import { BlockType } from "./BlockType.js";
+import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
+import { caveDensity } from "./caveDensity.js";
+import { fbm } from "../noise/fbm.js";
+import { latticePosition } from "../../addressing/lattice/latticePosition.js";
+
+/** Offset from the world seed, so the detail differs from the coarse tiers. */
+const DETAIL_SEED_OFFSET = 4;
+
+/**
+ * What block sits at a cell, as a pure function of the seed and the address.
+ *
+ * Nothing is stored and nothing is cached. A column is evaluated once and read
+ * layer by layer, which is what keeps a chunk at one height-field evaluation
+ * per column however deep the crust runs.
+ *
+ * The coarse map supplies the continents, the rivers and the lakes, because
+ * those depend on the whole planet. Noise supplies everything below the coarse
+ * map's own resolution, sampled from the cell's direction in 3D world space.
+ * Sampling from a cell's offset inside its face instead would draw a seam along
+ * all thirty face edges.
+ */
+export class TerrainGenerator {
+	readonly seed: number;
+	readonly shape: WorldShape;
+	readonly map: CoarseMap;
+
+	private readonly settings: Required<TerrainOptions>;
+	private readonly detailSeed: number;
+
+	/** Metres of ground fall per metre travelled, per unit of coarse slope. */
+	private readonly gradientScale: number;
+
+	constructor(
+		seed: number,
+		shape: WorldShape,
+		map: CoarseMap,
+		options: TerrainOptions = {},
+	) {
+		this.seed = seed;
+		this.shape = shape;
+		this.map = map;
+		this.settings = { ...TERRAIN_DEFAULTS, ...options };
+		this.detailSeed = (seed + DETAIL_SEED_OFFSET) | 0;
+
+		// The coarse map's slope is a height difference between neighbouring
+		// coarse cells. Metres of fall over metres of ground turns it into the
+		// gradient the material rules are written against.
+		const coarseSpacing =
+			shape.blockSize * 2 ** (shape.subdivisionDepth - map.level);
+		this.gradientScale = this.settings.heightScale / coarseSpacing;
+	}
+
+	/** Evaluate one column of the world. */
+	columnAt(face: number, i: number, j: number): TerrainColumn {
+		const depth = this.shape.subdivisionDepth;
+		const p = latticePosition(face, this.shape.n, i, j);
+
+		const detail =
+			this.settings.detailAmplitude *
+			fbm(
+				p.x,
+				p.y,
+				p.z,
+				this.settings.detailFrequency,
+				this.settings.detailOctaves,
+				this.detailSeed,
+			);
+
+		const coarseGround = this.map.heightAt(face, i, j, depth);
+		const coarseWater = this.map.waterAt(face, i, j, depth);
+		const scale = this.settings.heightScale;
+
+		const elevation = (coarseGround - this.map.seaLevel) * scale + detail;
+		const groundRadius = this.shape.seaLevelRadius + elevation;
+
+		// Whether there is water here is the coarse map's answer, and the coarse
+		// map has no fine detail in it. Comparing the two surfaces after the
+		// detail is added instead would put a film of water over every dry cell
+		// the detail happened to push downward, which is half of the land.
+		//
+		// Where the coarse map does say water, the surface is its level, and
+		// never below the detailed ground.
+		const coarseGroundRadius =
+			this.shape.seaLevelRadius +
+			(coarseGround - this.map.seaLevel) * scale;
+		const coarseWaterRadius =
+			this.shape.seaLevelRadius +
+			(coarseWater - this.map.seaLevel) * scale;
+		const waterRadius =
+			coarseWaterRadius > coarseGroundRadius
+				? Math.max(groundRadius, coarseWaterRadius)
+				: groundRadius;
+
+		return {
+			face,
+			i,
+			j,
+			x: p.x,
+			y: p.y,
+			z: p.z,
+			groundRadius,
+			waterRadius,
+			groundLayer: this.shape.layerOfRadius(groundRadius) + 1,
+			waterLayer: this.shape.layerOfRadius(waterRadius) + 1,
+			elevation,
+			gradient: this.map.slopeAt(face, i, j, depth) * this.gradientScale,
+			flow: this.map.flowAt(face, i, j, depth),
+		};
+	}
+
+	/** What block sits at one layer of a column. */
+	blockAt(column: TerrainColumn, layer: number): BlockType {
+		if (layer < 0 || layer >= this.shape.crustDepth) return BlockType.AIR;
+
+		if (layer < column.groundLayer)
+			return layer < column.waterLayer ? BlockType.AIR : BlockType.WATER;
+
+		const depthBelow =
+			(layer - column.groundLayer + 1) * this.shape.blockSize;
+
+		if (this.settings.caves) {
+			const radius = this.shape.radiusOfLayer(layer);
+			const hollow = caveDensity(
+				column.x,
+				column.y,
+				column.z,
+				radius,
+				depthBelow,
+				this.seed,
+				this.settings.caveScale,
+				this.settings.caveThreshold,
+				this.settings.caveCeiling,
+			);
+			// A cave below the water table stays dry. Water is written by the
+			// generator and never flows, so a passage under a lake is a passage,
+			// not a flooded one.
+			if (hollow) return BlockType.AIR;
+		}
+
+		return this.material(column, depthBelow);
+	}
+
+	/** Whether a layer of a column stops a player. */
+	isSolidAt(column: TerrainColumn, layer: number): boolean {
+		const block = this.blockAt(column, layer);
+		return block !== BlockType.AIR && block !== BlockType.WATER;
+	}
+
+	/**
+	 * Which ground a block is made of, from how far under the surface it sits.
+	 *
+	 * Soil covers rock to a fixed depth, and three things replace the soil: the
+	 * bed under standing water is sand, ground steeper than a cliff gradient is
+	 * bare rock because soil does not hold on it, and ground above the snow line
+	 * is snow.
+	 */
+	private material(column: TerrainColumn, depthBelow: number): BlockType {
+		const soil = this.settings.soilDepth * this.shape.blockSize;
+		if (depthBelow > soil) return BlockType.STONE;
+
+		const submerged = column.waterRadius > column.groundRadius;
+		const surface = depthBelow <= this.shape.blockSize;
+		if (!surface) return submerged ? BlockType.SAND : BlockType.DIRT;
+
+		if (submerged) return BlockType.SAND;
+		if (column.gradient > this.settings.cliffGradient)
+			return BlockType.STONE;
+		if (column.elevation > this.settings.snowLine) return BlockType.SNOW;
+		return BlockType.GRASS;
+	}
+}
