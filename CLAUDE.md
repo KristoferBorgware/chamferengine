@@ -122,15 +122,21 @@ not one per document.
 
 - **Open with the problem**, in one plain sentence about what the player or the
   program is trying to do — not with context or history.
+- **The body is current-state.** A claim reads as true now, not as a step in a
+  story about what it used to say. Do not narrate a correction where the claim
+  itself appears — state the current value and move on.
+- **"Still open" holds the history and the caveats, in one place.** A
+  superseded value, a soft caveat, or an assumption the numbers make goes in a
+  single **Still open** section, near the end of the document and immediately
+  before "In one breath" — never scattered through the body. Strike the old
+  value there and say what it turned out to be; "earlier drafts of this
+  document said ..." belongs in that section and nowhere else on the page.
+  "Honest caveat", "Two things the numbers assume", and anything not yet
+  designed live there too. A weak number stated confidently in the body is the
+  expensive kind of mistake here — the fix is to move it to "Still open", not
+  to soften it in place.
 - **Close with In one breath** — five or six bullets that carry the argument
   alone.
-- **Keep the wrong version visible.** Corrections read "earlier drafts of this
-  document said ...", and superseded entries are struck through rather than
-  deleted. What a claim turned out to be worth is usually the most useful thing on
-  the page.
-- **Say plainly what is still soft.** "Honest caveat", "Still open", "Two things
-  the numbers assume". A weak number stated confidently is the expensive kind of
-  mistake here.
 
 ## Reference documentation voice
 
