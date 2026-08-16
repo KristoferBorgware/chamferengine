@@ -22,7 +22,8 @@
 		"docs": "node tools/build-docs.js",
 		"figures": "node tools/make-figures.js",
 		"reference": "node tools/make-reference.js",
-		"coverage": "node tools/check-coverage.js"
+		"coverage": "node tools/check-coverage.js",
+		"style": "node tools/check-style.js"
 	},
 	"devDependencies": {
 		"prettier": "^3.4.2",
