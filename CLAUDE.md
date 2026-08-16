@@ -138,12 +138,14 @@ not one per document.
 - **Close with In one breath** — five or six bullets that carry the argument
   alone.
 
-## Reference documentation voice
+### A plainer voice for the pages that are not the specification
 
-[`ARCHITECTURE.md`](ARCHITECTURE.md) is not part of the specification and does
-not use the voice above. It is reference documentation — a page to consult, not
-a document to be walked through — and is held to a different, stricter set of
-rules:
+Everything above is for `docs/`, which teaches a first-time reader the design
+from nothing, step by step, in the imperative. [`ARCHITECTURE.md`](ARCHITECTURE.md)
+and [`CODE-STYLE.md`](CODE-STYLE.md) are not part of that specification and are
+not read that way — a reader opens one to look up a single fact and leaves, not
+to be walked through an argument — so they follow a stricter, plainer set of
+rules instead:
 
 - **State facts, don't announce findings.** Write the conclusion, not the
   discovery of it. "Addressing runs on the client and server", not "both sides,
