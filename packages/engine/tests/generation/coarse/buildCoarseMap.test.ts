@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CoarseMap } from "chamfer/generation";
 import {
 	CoarseGrid,
 	accumulateFlow,
@@ -23,12 +24,12 @@ describe("the coarse map", () => {
 			landFraction: 0.3,
 		});
 		let land = 0;
-		for (let cell = 0; cell < map.grid.count; cell++)
+		for (let cell = 0; cell < map.count; cell++)
 			if (map.height[cell]! > map.seaLevel) land++;
 		// Erosion lowers land and never raises it, so the share ends up a little
 		// under the target rather than on it.
-		expect(land / map.grid.count).toBeGreaterThan(0.24);
-		expect(land / map.grid.count).toBeLessThan(0.31);
+		expect(land / map.count).toBeGreaterThan(0.24);
+		expect(land / map.count).toBeLessThan(0.31);
 	});
 
 	it("gives the same map for the same seed", () => {
@@ -36,7 +37,7 @@ describe("the coarse map", () => {
 		const a = buildCoarseMap(seed, { level: LEVEL });
 		const b = buildCoarseMap(seed, { level: LEVEL });
 		expect(a.seaLevel).toBe(b.seaLevel);
-		for (let cell = 0; cell < a.grid.count; cell++) {
+		for (let cell = 0; cell < a.count; cell++) {
 			expect(a.height[cell]).toBe(b.height[cell]);
 			expect(a.water[cell]).toBe(b.water[cell]);
 			expect(a.flow[cell]).toBe(b.flow[cell]);
@@ -47,7 +48,7 @@ describe("the coarse map", () => {
 		const a = buildCoarseMap(seedFromString("world1"), { level: LEVEL });
 		const b = buildCoarseMap(seedFromString("world2"), { level: LEVEL });
 		let same = 0;
-		for (let cell = 0; cell < a.grid.count; cell++)
+		for (let cell = 0; cell < a.count; cell++)
 			if (a.height[cell] === b.height[cell]) same++;
 		expect(same).toBe(0);
 	});
@@ -57,7 +58,9 @@ describe("the coarse map", () => {
 		// drains nowhere needs a basin with a long enough outlet chain to show
 		// up, and small maps do not produce one.
 		const map = buildCoarseMap(seedFromString("chamfer"), { level: 7 });
-		const grid = map.grid;
+		// Routing reads the ring, which the map does not carry: it is 31 MB
+		// nothing reads once the map is built, so the map keeps the index alone.
+		const grid = new CoarseGrid(7);
 		const surface = Float64Array.from(map.water);
 		const down = routeFlow(grid, surface, map.seaLevel);
 
@@ -98,7 +101,7 @@ describe("the coarse map", () => {
 				level: LEVEL,
 				continentFrequency,
 			});
-			const grid = map.grid;
+			const grid = new CoarseGrid(LEVEL);
 			const surface = Float64Array.from(map.water);
 			const down = routeFlow(grid, surface, map.seaLevel);
 			const length = new Int32Array(grid.count);
@@ -117,7 +120,7 @@ describe("the coarse map", () => {
 	it("floods a basin to a surface that stands above its floor", () => {
 		const map = buildCoarseMap(seedFromString("chamfer"), { level: LEVEL });
 		let lakes = 0;
-		for (let cell = 0; cell < map.grid.count; cell++) {
+		for (let cell = 0; cell < map.count; cell++) {
 			if (map.height[cell]! <= map.seaLevel) continue;
 			expect(map.water[cell]!).toBeGreaterThanOrEqual(map.height[cell]!);
 			if (map.water[cell]! > map.height[cell]!) lakes++;
@@ -204,7 +207,7 @@ describe("sampling a fine cell", () => {
 			[11, 7, 1],
 			[19, 4, 4],
 		] as const) {
-			const cell = map.grid.indexOf(face, i, j);
+			const cell = map.index.indexOf(face, i, j);
 			expect(map.heightAt(face, i * step, j * step, depth)).toBeCloseTo(
 				map.height[cell]!,
 				6,
@@ -216,14 +219,14 @@ describe("sampling a fine cell", () => {
 		const map = buildCoarseMap(seedFromString("chamfer"), { level: 4 });
 		const depth = 7;
 		const step = 1 << (depth - 4);
-		const n = map.grid.n;
+		const n = map.index.n;
 		for (let i = 0; i < n; i++)
 			for (let j = 0; i + j < n; j++) {
 				const corners = [
-					map.height[map.grid.indexOf(0, i, j)]!,
-					map.height[map.grid.indexOf(0, i + 1, j)]!,
-					map.height[map.grid.indexOf(0, i, j + 1)]!,
-					map.height[map.grid.indexOf(0, i + 1, j + 1)]!,
+					map.height[map.index.indexOf(0, i, j)]!,
+					map.height[map.index.indexOf(0, i + 1, j)]!,
+					map.height[map.index.indexOf(0, i, j + 1)]!,
+					map.height[map.index.indexOf(0, i + 1, j + 1)]!,
 				];
 				const lo = Math.min(...corners);
 				const hi = Math.max(...corners);
@@ -246,14 +249,9 @@ describe("sampling a fine cell", () => {
 });
 
 /** Every land cell of a map, highest water surface first. */
-function order(map: {
-	grid: { count: number };
-	water: Float32Array;
-	height: Float32Array;
-	seaLevel: number;
-}): number[] {
+function order(map: CoarseMap): number[] {
 	const cells: number[] = [];
-	for (let cell = 0; cell < map.grid.count; cell++)
+	for (let cell = 0; cell < map.count; cell++)
 		if (map.height[cell]! > map.seaLevel) cells.push(cell);
 	return cells.sort((a, b) => map.water[b]! - map.water[a]! || a - b);
 }

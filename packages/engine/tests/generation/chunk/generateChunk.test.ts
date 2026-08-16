@@ -1,0 +1,245 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import type { CoarseMap } from "chamfer/generation";
+import {
+	BlockType,
+	Chunk,
+	ChunkAddress,
+	ChunkWorkerCore,
+	InlineChunkSource,
+	TerrainGenerator,
+	buildCoarseMap,
+	generateChunk,
+	seedFromString,
+} from "chamfer/generation";
+import { WorldShape, maxCrustDepth } from "chamfer/world";
+import { chunkSlots, joinPath, rank, splitPath } from "chamfer/addressing";
+
+const DEPTH = 8;
+const CHUNK_LEVEL = 4;
+const LAYERS = 40;
+
+let map: CoarseMap;
+let shape: WorldShape;
+let terrain: TerrainGenerator;
+
+beforeAll(() => {
+	map = buildCoarseMap(seedFromString("chamfer"), { level: 6 });
+	shape = new WorldShape(1700, DEPTH, 150, maxCrustDepth(DEPTH));
+	terrain = new TerrainGenerator(map.seed, shape, map);
+});
+
+describe("ChunkAddress", () => {
+	it("round-trips every chunk through its key", () => {
+		for (const chunkLevel of [0, 1, 3, 6]) {
+			const count = ChunkAddress.countAt(chunkLevel);
+			expect(count).toBe(20 * 4 ** chunkLevel);
+			for (let key = 0; key < Math.min(count, 5000); key++) {
+				const address = ChunkAddress.fromKey(key, chunkLevel);
+				expect(address.key).toBe(key);
+				expect(address.path.length).toBe(chunkLevel);
+			}
+		}
+	});
+
+	it("agrees with the path a cell splits into", () => {
+		// A chunk is the triangle a cell's path walks down to, so an address
+		// built from a cell's own split has to carry that cell.
+		const n = 1 << DEPTH;
+		for (const [face, i, j] of [
+			[0, 17, 40],
+			[9, 100, 60],
+			[19, 3, 1],
+		] as const) {
+			const split = splitPath(i, j, DEPTH, CHUNK_LEVEL);
+			const address = new ChunkAddress(face, split.path);
+			const [backI, backJ] = joinPath(
+				address.path,
+				split.q,
+				split.r,
+				DEPTH,
+			);
+			expect([backI, backJ]).toEqual([i, j]);
+			expect(n).toBeGreaterThan(i + j);
+		}
+	});
+});
+
+describe("Chunk", () => {
+	it("reserves the same slots for every chunk", () => {
+		const chunk = new Chunk(
+			ChunkAddress.fromKey(0, CHUNK_LEVEL),
+			DEPTH,
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		expect(chunk.m).toBe(1 << (DEPTH - CHUNK_LEVEL));
+		expect(chunk.slots).toBe(chunkSlots(chunk.m));
+		expect(chunk.blocks.length).toBe(chunk.slots * LAYERS);
+	});
+
+	it("gives 561 slots at the worked planet's cut", () => {
+		const chunk = new Chunk(ChunkAddress.fromKey(0, 6), 11, 6, 435);
+		expect(chunk.slots).toBe(561);
+		expect(chunk.blocks.length).toBe(244035);
+		// Two bytes a cell, plus one ground layer per slot.
+		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 2);
+	});
+
+	it("indexes a cell as its rank times the layer count", () => {
+		const chunk = new Chunk(
+			ChunkAddress.fromKey(7, CHUNK_LEVEL),
+			DEPTH,
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const seen = new Set<number>();
+		for (let q = 0; q <= chunk.m; q++)
+			for (let r = 0; q + r <= chunk.m; r++)
+				for (let layer = 0; layer < LAYERS; layer++) {
+					const at = chunk.indexOf(q, r, layer);
+					expect(at).toBe(rank(q, r, chunk.m) * LAYERS + layer);
+					expect(at).toBeLessThan(chunk.blocks.length);
+					expect(seen.has(at)).toBe(false);
+					seen.add(at);
+				}
+	});
+});
+
+describe("generateChunk", () => {
+	it("fills every slot of the triangle, borders included", () => {
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(40, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		let written = 0;
+		for (let q = 0; q <= chunk.m; q++)
+			for (let r = 0; q + r <= chunk.m; r++) {
+				const slot = rank(q, r, chunk.m);
+				expect(chunk.groundLayer[slot]).toBeGreaterThan(0);
+				written++;
+			}
+		// The 8.7% of slots a neighbouring chunk owns are generated too, which
+		// is what lets the mesher read a chunk's own border.
+		expect(written).toBe(
+			((chunk.m - 1) * (chunk.m - 2)) / 2 + 3 * (chunk.m - 1) + 3,
+		);
+		expect(written).toBe(chunk.slots);
+	});
+
+	it("agrees with the terrain generator cell for cell", () => {
+		const address = ChunkAddress.fromKey(123, CHUNK_LEVEL);
+		const chunk = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+		for (let q = 0; q <= chunk.m; q += 3)
+			for (let r = 0; q + r <= chunk.m; r += 3) {
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				const column = terrain.columnAt(address.face, i, j);
+				for (let layer = 0; layer < LAYERS; layer += 7)
+					expect(chunk.blockAt(q, r, layer)).toBe(
+						terrain.blockAt(column, layer),
+					);
+			}
+	});
+
+	it("gives the same chunk twice for the same seed", () => {
+		const a = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(200, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const b = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(200, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		expect(a.blocks).toEqual(b.blocks);
+		expect(a.groundLayer).toEqual(b.groundLayer);
+	});
+
+	it("matches its neighbour on a shared border", () => {
+		// Two chunks meeting at a face edge name some of the same cells. Both
+		// generate them, and both have to write the same block: terrain is
+		// sampled from a direction, and the two chunks reach the same direction.
+		const n = 1 << DEPTH;
+		let shared = 0;
+		for (const [face, i, j] of [
+			[0, 16, 0],
+			[0, 32, 16],
+			[5, 48, 16],
+		] as const) {
+			const split = splitPath(i, j, DEPTH, CHUNK_LEVEL);
+			const chunk = generateChunk(
+				terrain,
+				new ChunkAddress(face, split.path),
+				CHUNK_LEVEL,
+				LAYERS,
+			);
+			const column = terrain.columnAt(face, i, j);
+			expect(i + j).toBeLessThanOrEqual(n);
+			for (let layer = 0; layer < LAYERS; layer += 5)
+				expect(chunk.blockAt(split.q, split.r, layer)).toBe(
+					terrain.blockAt(column, layer),
+				);
+			shared++;
+		}
+		expect(shared).toBe(3);
+	});
+
+	it("writes air above the ground and never air below it", () => {
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(88, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		for (let q = 0; q <= chunk.m; q += 2)
+			for (let r = 0; q + r <= chunk.m; r += 2) {
+				const ground = chunk.groundLayer[rank(q, r, chunk.m)]!;
+				if (ground >= LAYERS) continue;
+				expect(chunk.blockAt(q, r, ground)).not.toBe(BlockType.AIR);
+				for (let layer = ground; layer < LAYERS; layer++)
+					expect(chunk.blockAt(q, r, layer)).not.toBe(BlockType.AIR);
+			}
+	});
+});
+
+describe("InlineChunkSource", () => {
+	it("returns the chunk the key names", async () => {
+		const source = new InlineChunkSource(terrain, CHUNK_LEVEL, LAYERS);
+		const chunk = await source.request(300);
+		expect(chunk.address.key).toBe(300);
+		expect(chunk.blocks.length).toBe(chunk.slots * LAYERS);
+		source.dispose();
+	});
+});
+
+describe("ChunkWorkerCore", () => {
+	it("produces what the calling thread would have produced", () => {
+		// The worker half holds no logic of its own: it rebuilds the generator
+		// from the snapshot and runs the same function. This is the check that
+		// the snapshot carries everything the generator reads.
+		const core = new ChunkWorkerCore({
+			kind: "setup",
+			map: map.toSnapshot(),
+			seaLevelRadius: 1700,
+			subdivisionDepth: DEPTH,
+			maxElevation: 150,
+			crustDepth: LAYERS,
+			chunkLevel: CHUNK_LEVEL,
+			terrain: {},
+		});
+		const result = core.run({ kind: "chunk", id: 1, key: 512 });
+		const here = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(512, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		expect(result.key).toBe(512);
+		expect(result.blocks).toEqual(here.blocks);
+		expect(result.groundLayer).toEqual(here.groundLayer);
+	});
+});

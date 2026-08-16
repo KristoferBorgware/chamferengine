@@ -6,7 +6,9 @@ export { seedFromString } from "./seedFromString.js";
 
 export type { CoarseMapOptions } from "./coarse/CoarseMapOptions.js";
 export { COARSE_MAP_DEFAULTS } from "./coarse/CoarseMapOptions.js";
+export { CoarseIndex } from "./coarse/CoarseIndex.js";
 export { CoarseGrid } from "./coarse/CoarseGrid.js";
+export type { CoarseMapSnapshot } from "./coarse/CoarseMapSnapshot.js";
 export { CoarseMap } from "./coarse/CoarseMap.js";
 export { MinHeap } from "./coarse/MinHeap.js";
 export { buildCoarseMap } from "./coarse/buildCoarseMap.js";
@@ -26,3 +28,24 @@ export { BlockType, isSolid, isTranslucent } from "./terrain/BlockType.js";
 export { TerrainGenerator } from "./terrain/TerrainGenerator.js";
 export { caveDensity } from "./terrain/caveDensity.js";
 export { blockColor } from "./terrain/blockColor.js";
+
+export { ChunkAddress } from "./chunk/ChunkAddress.js";
+export { Chunk } from "./chunk/Chunk.js";
+export { generateChunk } from "./chunk/generateChunk.js";
+export type { ChunkExtent } from "./chunk/chunkCenter.js";
+export { chunkCenter } from "./chunk/chunkCenter.js";
+export { horizonAngle } from "./chunk/horizonAngle.js";
+export { ChunkAtlas } from "./chunk/ChunkAtlas.js";
+export { residentChunks } from "./chunk/residentChunks.js";
+export { ChunkStore } from "./chunk/ChunkStore.js";
+export type {
+	ChunkJob,
+	ChunkResult,
+	ChunkWorkerMessage,
+	ChunkWorkerSetup,
+} from "./chunk/ChunkJob.js";
+export { ChunkWorkerCore } from "./chunk/ChunkWorkerCore.js";
+export type { ChunkSource } from "./chunk/ChunkSource.js";
+export { InlineChunkSource } from "./chunk/InlineChunkSource.js";
+export type { ChunkWorkerHandle } from "./chunk/WorkerChunkSource.js";
+export { WorkerChunkSource } from "./chunk/WorkerChunkSource.js";

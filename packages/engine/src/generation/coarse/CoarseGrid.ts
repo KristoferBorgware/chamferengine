@@ -1,9 +1,10 @@
+import { CoarseIndex } from "./CoarseIndex.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { DIRECTIONS } from "../../addressing/neighbours/DIRECTIONS.js";
 import { canonicalCell } from "../../addressing/neighbours/canonicalCell.js";
-import { chunkSlots } from "../../addressing/lattice/chunkSlots.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
 import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
+import { chunkSlots } from "../../addressing/lattice/chunkSlots.js";
 import { rank } from "../../addressing/lattice/rank.js";
 
 /**
@@ -19,14 +20,7 @@ import { rank } from "../../addressing/lattice/rank.js";
  * Every array here is typed and flat. At level 8 there are 655,362 cells, and
  * one object apiece is the layout that measures 15x slower.
  */
-export class CoarseGrid {
-	readonly level: number;
-
-	/** Lattice steps along a face edge, `2^level`. */
-	readonly n: number;
-
-	readonly count: number;
-
+export class CoarseGrid extends CoarseIndex {
 	/** Three components per cell: the unit direction from the planet's centre. */
 	readonly directions: Float64Array;
 
@@ -36,21 +30,11 @@ export class CoarseGrid {
 	 */
 	readonly ring: Int32Array;
 
-	/** `face * slots + rank(i, j)` to cell index, for all twenty faces. */
-	private readonly faceIndex: Int32Array;
-
-	private readonly slots: number;
-
 	constructor(level: number) {
 		const n = 1 << level;
-		const slots = chunkSlots(n);
-		this.level = level;
-		this.n = n;
-		this.slots = slots;
-		this.faceIndex = new Int32Array(20 * slots).fill(-1);
-
-		const cellCount = 10 * 4 ** level + 2;
-		this.count = cellCount;
+		super(level, new Int32Array(20 * chunkSlots(n)).fill(-1));
+		const slots = this.slots;
+		const cellCount = this.count;
 		this.directions = new Float64Array(cellCount * 3);
 
 		// A cell strictly inside a face is named by that face alone. A cell on an
@@ -121,10 +105,5 @@ export class CoarseGrid {
 	/** How many neighbours a cell has: 5 on the twelve pentagons, 6 elsewhere. */
 	degreeOf(cell: number): number {
 		return this.ring[cell * 6 + 5]! < 0 ? 5 : 6;
-	}
-
-	/** The cell a face-and-offset names. */
-	indexOf(face: number, i: number, j: number): number {
-		return this.faceIndex[face * this.slots + rank(i, j, this.n)]!;
 	}
 }

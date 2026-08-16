@@ -1,4 +1,5 @@
-import type { CoarseGrid } from "./CoarseGrid.js";
+import type { CoarseMapSnapshot } from "./CoarseMapSnapshot.js";
+import { CoarseIndex } from "./CoarseIndex.js";
 import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
 
 /**
@@ -19,7 +20,9 @@ import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
  */
 export class CoarseMap {
 	readonly seed: number;
-	readonly grid: CoarseGrid;
+
+	/** Which cell a face-and-offset names, at this map's level. */
+	readonly index: CoarseIndex;
 
 	/** The height that leaves the intended fraction of the surface as land. */
 	readonly seaLevel: number;
@@ -41,7 +44,7 @@ export class CoarseMap {
 
 	constructor(
 		seed: number,
-		grid: CoarseGrid,
+		index: CoarseIndex,
 		seaLevel: number,
 		height: Float32Array,
 		water: Float32Array,
@@ -49,7 +52,7 @@ export class CoarseMap {
 		slope: Float32Array,
 	) {
 		this.seed = seed;
-		this.grid = grid;
+		this.index = index;
 		this.seaLevel = seaLevel;
 		this.height = height;
 		this.water = water;
@@ -58,7 +61,44 @@ export class CoarseMap {
 	}
 
 	get level(): number {
-		return this.grid.level;
+		return this.index.level;
+	}
+
+	get count(): number {
+		return this.index.count;
+	}
+
+	/**
+	 * The map in a form that crosses to a worker.
+	 *
+	 * The five typed arrays and nothing else. Building the map needs a ring of
+	 * neighbours and a direction per cell, and neither is read afterwards, so
+	 * sending a whole grid would copy 31 MB per worker that no worker touches.
+	 */
+	toSnapshot(): CoarseMapSnapshot {
+		return {
+			seed: this.seed,
+			level: this.index.level,
+			seaLevel: this.seaLevel,
+			faceIndex: this.index.faceIndex,
+			height: this.height,
+			water: this.water,
+			flow: this.flow,
+			slope: this.slope,
+		};
+	}
+
+	/** Rebuild a map from what crossed to the worker. */
+	static fromSnapshot(snapshot: CoarseMapSnapshot): CoarseMap {
+		return new CoarseMap(
+			snapshot.seed,
+			new CoarseIndex(snapshot.level, snapshot.faceIndex),
+			snapshot.seaLevel,
+			snapshot.height,
+			snapshot.water,
+			snapshot.flow,
+			snapshot.slope,
+		);
 	}
 
 	/**
@@ -81,7 +121,7 @@ export class CoarseMap {
 		j: number,
 		depth: number,
 	): number {
-		const shift = depth - this.grid.level;
+		const shift = depth - this.index.level;
 		const step = 1 << shift;
 		const mask = step - 1;
 		const baseI = i >> shift;
@@ -138,8 +178,8 @@ export class CoarseMap {
 		i: number,
 		j: number,
 	): number {
-		const w = latticeWeights(this.grid.n, i, j);
+		const w = latticeWeights(this.index.n, i, j);
 		if (w[0] < 0) return 0;
-		return field[this.grid.indexOf(face, i, j)]!;
+		return field[this.index.indexOf(face, i, j)]!;
 	}
 }
