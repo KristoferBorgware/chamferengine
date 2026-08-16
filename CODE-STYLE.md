@@ -30,6 +30,19 @@ Prettier's default until a reason to change one is written down here.
 Comments in this codebase are dense and explanatory by design. Match that. The
 rules below are about what a comment says, not how much.
 
+### The comment stands alone
+
+A comment explains the code it sits beside. It does not point elsewhere to make
+its case — not to `docs/`, not to a document number, not to an issue or a design
+discussion. A reader with only this file open gets the full explanation.
+
+```ts
+// NO  - Doc 08's pinned kernel: a uint32 hash, quintic-faded trilinear value noise.
+// YES - A uint32 hash, quintic-faded trilinear value noise.
+```
+
+The fact belongs in the comment. The pointer to where it was decided does not.
+
 ### Document the present, not the past
 
 A comment describes the code as it is. It is not a changelog, a migration
