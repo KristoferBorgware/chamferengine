@@ -15,6 +15,7 @@ import {
 } from "chamfer/generation";
 import { buildChunkMesh } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
+import { Player } from "chamfer/player";
 import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
@@ -46,14 +47,8 @@ const MAX_ELEVATION = 150;
  */
 const DETAIL = 2;
 
-const MIN_ALTITUDE = 2;
-const MAX_ALTITUDE = RADIUS * 3;
-
 /** How deep a chunk's rim hangs, in its own cells. */
 const SKIRT_CELLS = 2;
-
-/** How many screenfuls of ground a drag across the whole window travels. */
-const DRAG_SCREENS = 2.5;
 
 /**
  * How long a day runs, in seconds.
@@ -179,8 +174,17 @@ async function main(): Promise<void> {
 		}
 		if (above > 0.25) break;
 	}
-	let altitude = 5;
-	let behind = 0.02;
+	// The player carries a heading along the ground rather than measuring one
+	// against a fixed axis. There is no fixed axis to measure against: a
+	// continuous field of directions over a whole sphere has to stop somewhere,
+	// and a frame built from a reference direction spins where that happens.
+	const player = new Player(
+		shape,
+		ground.scale(RADIUS + MAX_ELEVATION),
+		ground.cross(new Vec3(0, 1, 0)).normalize(),
+	);
+	let flying = true;
+	let chase = 6;
 
 	const meshed = new Map<number, ChunkMesh>();
 	const queue: ChunkSelection[] = [];
@@ -199,8 +203,8 @@ async function main(): Promise<void> {
 		const wanted = selectChunks(
 			DEPTH,
 			CHUNK_LEVEL,
-			ground,
-			RADIUS + altitude,
+			player.position,
+			player.position.length(),
 			RADIUS,
 			DETAIL,
 		);
@@ -238,9 +242,22 @@ async function main(): Promise<void> {
 
 	refresh();
 
+	const held = new Set<string>();
+	window.addEventListener("keydown", (e) => {
+		const key = e.key.toLowerCase();
+		held.add(key);
+		if (key === "f") flying = !flying;
+		if (key === " ") e.preventDefault();
+	});
+	window.addEventListener("keyup", (e) => {
+		held.delete(e.key.toLowerCase());
+	});
+
 	let dragging = false;
 	let lastX = 0;
 	let lastY = 0;
+	let swing = 0;
+	let tilt = 0;
 
 	canvas.addEventListener("pointerdown", (e) => {
 		dragging = true;
@@ -254,36 +271,24 @@ async function main(): Promise<void> {
 	});
 	canvas.addEventListener("pointermove", (e) => {
 		if (!dragging) return;
-		// Dragging turns the look-at point around the planet's centre, so the
-		// step is an angle. `behind` is how far back the camera sits in the same
-		// angle, and the view spans a small multiple of it, so a drag across the
-		// window travels about a screenful of ground at any height.
-		const perPixel = (behind * DRAG_SCREENS) / viewHeight();
-		const east = worldUp(ground).cross(ground).normalize();
-		const north = ground.cross(east).normalize();
-		ground = ground
-			.add(east.scale(-(e.clientX - lastX) * perPixel))
-			.add(north.scale((e.clientY - lastY) * perPixel))
-			.normalize();
+		// Looking is an angle a pixel, and half a window turns a quarter circle.
+		const perPixel = Math.PI / (2 * viewHeight());
+		swing -= (e.clientX - lastX) * perPixel;
+		tilt -= (e.clientY - lastY) * perPixel;
 		lastX = e.clientX;
 		lastY = e.clientY;
-		refresh();
 	});
 	canvas.addEventListener(
 		"wheel",
 		(e) => {
 			e.preventDefault();
-			altitude = Math.max(
-				MIN_ALTITUDE,
-				Math.min(MAX_ALTITUDE, altitude * (1 + e.deltaY * 0.0015)),
-			);
-			behind = Math.min(0.5, 0.008 + altitude * 0.0024);
-			refresh();
+			chase = Math.max(0, Math.min(60, chase + e.deltaY * 0.02));
 		},
 		{ passive: false },
 	);
 
 	const started = performance.now();
+	let previous = started;
 	let cloudsAt = -CLOUD_INTERVAL * 1000;
 	const draw = (now: number) => {
 		for (let n = 0; n < BUILD_PER_FRAME; n++) {
@@ -294,25 +299,53 @@ async function main(): Promise<void> {
 
 		resizeToDisplay(ctx);
 
-		// Behind and above the look-at point, along the surface.
-		const east = worldUp(ground).cross(ground).normalize();
-		const north = ground.cross(east).normalize();
-		const from = ground
-			.add(north.scale(-behind))
-			.normalize()
-			.scale(RADIUS + altitude);
-		const target = ground.scale(RADIUS + altitude * 0.15);
+		const seconds = Math.min(0.1, (now - previous) / 1000);
+		previous = now;
+		const ahead =
+			(held.has("w") || held.has("arrowup") ? 1 : 0) -
+			(held.has("s") || held.has("arrowdown") ? 1 : 0);
+		const aside =
+			(held.has("d") || held.has("arrowright") ? 1 : 0) -
+			(held.has("a") || held.has("arrowleft") ? 1 : 0);
+		const lift = (held.has(" ") ? 1 : 0) - (held.has("shift") ? 1 : 0);
+		player.step(
+			{
+				ahead,
+				aside,
+				turn: swing,
+				pitch: tilt,
+				lift,
+				flying,
+			},
+			seconds,
+			terrain,
+		);
+		swing = 0;
+		tilt = 0;
+		if (ahead !== 0 || aside !== 0 || lift !== 0) refresh();
+
+		// Behind the player, along the ground they are standing on.
+		const up = player.up;
+		const look = player.heading
+			.scale(Math.cos(player.pitch))
+			.add(up.scale(Math.sin(player.pitch)))
+			.normalize();
+		const from =
+			chase < 0.5
+				? player.eye
+				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
+		const target = player.eye.add(look.scale(50));
 
 		const eye: [number, number, number] = [from.x, from.y, from.z];
 		const view = Mat4.lookAt(
 			eye,
 			[target.x, target.y, target.z],
-			[ground.x, ground.y, ground.z],
+			[up.x, up.y, up.z],
 		);
 		const projection = Mat4.perspective(
-			(60 * Math.PI) / 180,
+			(65 * Math.PI) / 180,
 			canvas.width / canvas.height,
-			Math.max(0.5, altitude * 0.02),
+			Math.max(0.2, player.altitude * 0.01),
 			RADIUS * 20,
 		);
 
@@ -365,11 +398,11 @@ async function main(): Promise<void> {
 
 		report([
 			`seed "${seedText}"`,
-			`${height(altitude)} up · ${renderer.count} chunks` +
+			`${height(player.altitude)} · ${renderer.count} chunks` +
 				(queue.length > 0 ? ` · ${queue.length} to build` : ""),
-			submerged
-				? "under water"
-				: `${clock(day)} · drag to travel · scroll for height`,
+			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
+				(submerged ? " · under water" : ""),
+			"WASD to move · drag to look · F to fly · space and shift for height",
 		]);
 		requestAnimationFrame(draw);
 	};
@@ -412,11 +445,6 @@ function clock(day: number): string {
 	if (day > 0.85) return "day";
 	if (day > 0.15) return "twilight";
 	return "night";
-}
-
-/** Any direction that is not parallel to `up`, for building a local frame. */
-function worldUp(up: Vec3): Vec3 {
-	return Math.abs(up.y) > 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
 }
 
 main().catch((err: unknown) => {
