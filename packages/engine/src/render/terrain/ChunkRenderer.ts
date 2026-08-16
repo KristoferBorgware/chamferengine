@@ -240,9 +240,13 @@ export class ChunkRenderer {
 				depthStoreOp: "store",
 			},
 		});
+		// The frame's own bindings go on before anything draws, including a
+		// layer. Every pipeline in the pass reads the sun, the fog and the
+		// matrix from group 0, so a draw issued before it is bound is refused
+		// and the whole command buffer with it.
+		pass.setBindGroup(0, this.frameBindGroup);
 		this.layer?.before?.(pass, frame);
 
-		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setPipeline(this.opaquePipeline);
 		for (const chunk of this.resident.values())
 			draw(pass, chunk, chunk.opaque);
