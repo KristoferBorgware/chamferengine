@@ -1,10 +1,55 @@
 # Code style
 
-Formatting and comment conventions for the engine, once it exists. Applies to
-TypeScript source; the comment rules also apply to the prose in `README.md`.
+Structure, formatting and comment conventions for the engine, once it exists.
+Applies to TypeScript source; the comment rules also apply to the prose in
+`README.md`.
 
 Not part of the specification. [`ARCHITECTURE.md`](ARCHITECTURE.md) decides
 what is built; this page decides how it is written.
+
+This is a professional open source project. Someone who has never seen the
+codebase should be able to find a thing by its name and read it without loading
+the rest of the engine into their head.
+
+---
+
+## Structure
+
+### KISS
+
+Keep it simple, stupid. The straightforward version is the one to write. A
+technique earns its place by a measured number, never by being more capable in
+principle.
+
+### One class or function per file, named for what it holds
+
+A file is found by its name. `HexMesher.ts` holds `HexMesher`, `hexRound.ts`
+holds `hexRound`. Prefer more files over larger ones — splitting is close to
+no work, and a file that accumulated four unrelated functions is the one nobody
+can navigate.
+
+Types and definitions may be bundled into one file, and do not have to be.
+
+### Declare a type, a constant or a definition away from its use
+
+A file that both defines a constant and consumes it hides the definition from
+every other file that wants it, and the second consumer copies it. Put shared
+types and constants in their own file, and import them.
+
+### Group into folders
+
+Add a folder whenever it makes the tree clearer. Depth is a smaller obstacle
+than a folder holding forty files with no grouping.
+
+### Separate systems with interfaces
+
+A system takes what it needs through an interface it defines, and nothing else
+crosses the boundary.
+
+The mesher is the worked example: it holds no `GPUDevice`, no `GPUBuffer`, no
+renderer object of any kind. It writes to a sink it declares itself. The
+renderer supplies an implementation. The mesher is then testable under plain
+Node with no GPU, and the renderer can change without touching it.
 
 ---
 
