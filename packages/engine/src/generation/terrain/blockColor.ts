@@ -27,7 +27,7 @@ const BASE: Readonly<Record<number, readonly [number, number, number]>> = {
  * every machine and on every frame.
  */
 export function blockColor(
-	block: BlockType,
+	block: number,
 	face: number,
 	i: number,
 	j: number,

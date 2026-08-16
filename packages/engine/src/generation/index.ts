@@ -49,3 +49,7 @@ export type { ChunkSource } from "./chunk/ChunkSource.js";
 export { InlineChunkSource } from "./chunk/InlineChunkSource.js";
 export type { ChunkWorkerHandle } from "./chunk/WorkerChunkSource.js";
 export { WorkerChunkSource } from "./chunk/WorkerChunkSource.js";
+export type { Column } from "./chunk/Column.js";
+export type { ColumnSampler } from "./chunk/ColumnSampler.js";
+export { columnBand } from "./chunk/columnBand.js";
+export { ChunkColumnSampler } from "./chunk/ChunkColumnSampler.js";

@@ -1,1 +1,11 @@
 export type { Geometry } from "./Geometry.js";
+export type { MeshSink } from "./MeshSink.js";
+export type { MeshOptions } from "./MeshOptions.js";
+export { MESH_DEFAULTS } from "./MeshOptions.js";
+export { ArrayMeshSink } from "./ArrayMeshSink.js";
+export type { ChunkMesh } from "./ChunkMesh.js";
+export type { MeshTally } from "./meshChunk.js";
+export { meshChunk } from "./meshChunk.js";
+export { buildChunkMesh } from "./buildChunkMesh.js";
+export { opacityOf } from "./opacityOf.js";
+export { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
