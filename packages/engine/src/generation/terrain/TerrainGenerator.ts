@@ -1,4 +1,5 @@
 import type { CoarseMap } from "../coarse/CoarseMap.js";
+import type { ColumnBand } from "./ColumnBand.js";
 import type { TerrainColumn } from "./TerrainColumn.js";
 import type { TerrainOptions } from "./TerrainOptions.js";
 import type { Vec3 } from "../../math/Vec3.js";
@@ -145,6 +146,51 @@ export class TerrainGenerator {
 		}
 
 		return this.material(column, depthBelow);
+	}
+
+	/**
+	 * Write a whole column's blocks, and report the band they leave open.
+	 *
+	 * Below the soil every layer is stone all the way to the crust floor, so the
+	 * rock is written as one fill rather than evaluated 400 times. That is the
+	 * whole of the deep crust: a chunk at 435 layers evaluates about 10 of them
+	 * per column and fills the rest.
+	 *
+	 * The density term takes that away, because a passage can open at any depth.
+	 * With caves on every layer is evaluated.
+	 */
+	fillColumn(
+		column: TerrainColumn,
+		into: Uint16Array,
+		offset: number,
+		layers: number,
+	): ColumnBand {
+		const rock = this.settings.caves
+			? layers
+			: Math.min(
+					layers,
+					Math.max(
+						0,
+						column.groundLayer + Math.ceil(this.settings.soilDepth),
+					),
+				);
+
+		let first = layers;
+		let last = -1;
+		for (let layer = 0; layer < rock; layer++) {
+			const block = this.blockAt(column, layer);
+			into[offset + layer] = block;
+			if (block !== BlockType.AIR) {
+				if (first === layers) first = layer;
+			} else last = layer;
+			if (block === BlockType.WATER) last = layer;
+		}
+
+		if (rock < layers) {
+			into.fill(BlockType.STONE, offset + rock, offset + layers);
+			if (first === layers) first = rock;
+		}
+		return { first, last };
 	}
 
 	/**

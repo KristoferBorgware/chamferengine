@@ -3,6 +3,8 @@ import type { Frame } from "../Frame.js";
 import type { Geometry } from "../../mesh/Geometry.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
+import { Frustum } from "../../math/Frustum.js";
+import { GpuClock } from "../gpu/GpuClock.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
 /** One geometry uploaded, or nothing if it had no triangles. */
@@ -16,6 +18,8 @@ interface Buffers {
 interface Resident {
 	readonly key: number;
 	readonly origin: readonly [number, number, number];
+	readonly center: readonly [number, number, number];
+	readonly radius: number;
 	readonly uniform: GPUBuffer;
 	readonly bindGroup: GPUBindGroup;
 	readonly opaque: Buffers | null;
@@ -47,6 +51,12 @@ export class ChunkRenderer {
 	private readonly frameData = new Float32Array(FRAME_BYTES / 4);
 	private readonly resident = new Map<number, Resident>();
 	private depth: GPUTexture | null = null;
+
+	/** How long the GPU spent on the last pass it would report. */
+	readonly clock: GpuClock;
+
+	/** How many resident chunks the last frame actually drew. */
+	private lastDrawn = 0;
 
 	/** The color a pass clears to when nothing covers the sky. */
 	sky: readonly [number, number, number] = [0.46, 0.62, 0.82];
@@ -153,10 +163,16 @@ export class ChunkRenderer {
 			layout: this.frameLayout,
 			entries: [{ binding: 0, resource: { buffer: this.frameUniform } }],
 		});
+		this.clock = new GpuClock(device);
 	}
 
 	get count(): number {
 		return this.resident.size;
+	}
+
+	/** How many of them the last frame drew. */
+	get drawn(): number {
+		return this.lastDrawn;
 	}
 
 	has(key: number): boolean {
@@ -179,6 +195,8 @@ export class ChunkRenderer {
 		this.resident.set(mesh.key, {
 			key: mesh.key,
 			origin: [mesh.origin.x, mesh.origin.y, mesh.origin.z],
+			center: mesh.center,
+			radius: mesh.radius,
 			uniform,
 			bindGroup: device.createBindGroup({
 				layout: this.chunkLayout,
@@ -219,7 +237,9 @@ export class ChunkRenderer {
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
 		const encoder = device.createCommandEncoder();
+		const timing = this.clock.writes();
 		const pass = encoder.beginRenderPass({
+			...(timing ? { timestampWrites: timing } : {}),
 			colorAttachments: [
 				{
 					view: context.getCurrentTexture().createView(),
@@ -247,27 +267,49 @@ export class ChunkRenderer {
 		pass.setBindGroup(0, this.frameBindGroup);
 		this.layer?.before?.(pass, frame);
 
-		pass.setPipeline(this.opaquePipeline);
+		// Turning is instant and building a chunk is not, so what is held is a
+		// disc around the player and what is drawn is the part of it being
+		// looked at. Dropping the rest instead would put a hole in the world
+		// every time someone spun round.
+		const view = new Frustum(frame.viewProj);
+		const visible: Resident[] = [];
 		for (const chunk of this.resident.values())
-			draw(pass, chunk, chunk.opaque);
+			if (
+				view.holds(
+					chunk.center[0],
+					chunk.center[1],
+					chunk.center[2],
+					chunk.radius,
+				)
+			)
+				visible.push(chunk);
+		this.lastDrawn = visible.length;
+
+		pass.setPipeline(this.opaquePipeline);
+		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setPipeline(this.waterPipeline);
-		for (const chunk of this.byDistance(frame.eye))
+		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
 
 		this.layer?.after?.(pass, frame);
 
 		pass.end();
+		this.clock.resolve(encoder);
 		device.queue.submit([encoder.finish()]);
+		this.clock.read();
 	}
 
 	/** Chunks holding water, furthest from the eye first. */
-	private byDistance(eye: readonly [number, number, number]): Resident[] {
+	private byDistance(
+		among: readonly Resident[],
+		eye: readonly [number, number, number],
+	): Resident[] {
 		const wet: { chunk: Resident; away: number }[] = [];
-		for (const chunk of this.resident.values()) {
+		for (const chunk of among) {
 			if (!chunk.water) continue;
 			const dx = chunk.origin[0] - eye[0];
 			const dy = chunk.origin[1] - eye[1];

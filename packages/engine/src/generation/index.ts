@@ -21,6 +21,7 @@ export { accumulateFlow } from "./coarse/accumulateFlow.js";
 export { coarseSlope } from "./coarse/coarseSlope.js";
 export { erode } from "./coarse/erode.js";
 
+export type { ColumnBand } from "./terrain/ColumnBand.js";
 export type { TerrainColumn } from "./terrain/TerrainColumn.js";
 export type { TerrainOptions } from "./terrain/TerrainOptions.js";
 export { TERRAIN_DEFAULTS } from "./terrain/TerrainOptions.js";
@@ -40,17 +41,7 @@ export { residentChunks } from "./chunk/residentChunks.js";
 export type { ChunkSelection } from "./chunk/selectChunks.js";
 export { DETAIL, selectChunks } from "./chunk/selectChunks.js";
 export { ChunkStore } from "./chunk/ChunkStore.js";
-export type {
-	ChunkJob,
-	ChunkResult,
-	ChunkWorkerMessage,
-	ChunkWorkerSetup,
-} from "./chunk/ChunkJob.js";
-export { ChunkWorkerCore } from "./chunk/ChunkWorkerCore.js";
-export type { ChunkSource } from "./chunk/ChunkSource.js";
-export { InlineChunkSource } from "./chunk/InlineChunkSource.js";
-export type { ChunkWorkerHandle } from "./chunk/WorkerChunkSource.js";
-export { WorkerChunkSource } from "./chunk/WorkerChunkSource.js";
+export { selectionId } from "./chunk/selectionId.js";
 export type { Column } from "./chunk/Column.js";
 export type { ColumnSampler } from "./chunk/ColumnSampler.js";
 export { columnBand } from "./chunk/columnBand.js";

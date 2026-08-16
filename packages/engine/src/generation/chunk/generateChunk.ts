@@ -8,9 +8,9 @@ import { rank } from "../../addressing/lattice/rank.js";
  * Fill a chunk from the terrain, as a pure function of the seed and the
  * address.
  *
- * One column evaluation per slot, then a walk down the column writing block
- * types. The height field runs 561 times at depth 11 and chunk level 6, whether
- * the crust is 64 layers or 435.
+ * One column evaluation per slot, then one write of the column. The height
+ * field runs 561 times at depth 11 and chunk level 6, whether the crust is 64
+ * layers or 435.
  *
  * Every slot of the triangle is filled, including the ones a neighbouring chunk
  * owns.
@@ -30,10 +30,14 @@ export function generateChunk(
 			const [i, j] = joinPath(address.path, q, r, depth);
 			const column = terrain.columnAt(address.face, i, j);
 			const slot = rank(q, r, m);
-			chunk.groundLayer[slot] = Math.min(column.groundLayer, layerCount);
-			const base = slot * layerCount;
-			for (let layer = 0; layer < layerCount; layer++)
-				chunk.blocks[base + layer] = terrain.blockAt(column, layer);
+			const band = terrain.fillColumn(
+				column,
+				chunk.blocks,
+				slot * layerCount,
+				layerCount,
+			);
+			chunk.band[slot * 2] = band.first;
+			chunk.band[slot * 2 + 1] = band.last;
 		}
 	return chunk;
 }

@@ -4,8 +4,6 @@ import {
 	BlockType,
 	Chunk,
 	ChunkAddress,
-	ChunkWorkerCore,
-	InlineChunkSource,
 	TerrainGenerator,
 	buildCoarseMap,
 	generateChunk,
@@ -81,8 +79,8 @@ describe("Chunk", () => {
 		const chunk = new Chunk(ChunkAddress.fromKey(0, 6), 11, 6, 435);
 		expect(chunk.slots).toBe(561);
 		expect(chunk.blocks.length).toBe(244035);
-		// Two bytes a cell, plus one ground layer per slot.
-		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 2);
+		// Two bytes a cell, plus two band entries of two bytes per slot.
+		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 4);
 	});
 
 	it("indexes a cell as its rank times the layer count", () => {
@@ -117,7 +115,7 @@ describe("generateChunk", () => {
 		for (let q = 0; q <= chunk.m; q++)
 			for (let r = 0; q + r <= chunk.m; r++) {
 				const slot = rank(q, r, chunk.m);
-				expect(chunk.groundLayer[slot]).toBeGreaterThan(0);
+				expect(chunk.columnOf(slot).first).toBeGreaterThanOrEqual(0);
 				written++;
 			}
 		// The 8.7% of slots a neighbouring chunk owns are generated too, which
@@ -156,7 +154,7 @@ describe("generateChunk", () => {
 			LAYERS,
 		);
 		expect(a.blocks).toEqual(b.blocks);
-		expect(a.groundLayer).toEqual(b.groundLayer);
+		expect(a.band).toEqual(b.band);
 	});
 
 	it("matches its neighbour on a shared border", () => {
@@ -197,49 +195,11 @@ describe("generateChunk", () => {
 		);
 		for (let q = 0; q <= chunk.m; q += 2)
 			for (let r = 0; q + r <= chunk.m; r += 2) {
-				const ground = chunk.groundLayer[rank(q, r, chunk.m)]!;
+				const ground = chunk.columnOf(rank(q, r, chunk.m)).first;
 				if (ground >= LAYERS) continue;
 				expect(chunk.blockAt(q, r, ground)).not.toBe(BlockType.AIR);
 				for (let layer = ground; layer < LAYERS; layer++)
 					expect(chunk.blockAt(q, r, layer)).not.toBe(BlockType.AIR);
 			}
-	});
-});
-
-describe("InlineChunkSource", () => {
-	it("returns the chunk the key names", async () => {
-		const source = new InlineChunkSource(terrain, CHUNK_LEVEL, LAYERS);
-		const chunk = await source.request(300);
-		expect(chunk.address.key).toBe(300);
-		expect(chunk.blocks.length).toBe(chunk.slots * LAYERS);
-		source.dispose();
-	});
-});
-
-describe("ChunkWorkerCore", () => {
-	it("produces what the calling thread would have produced", () => {
-		// The worker half holds no logic of its own: it rebuilds the generator
-		// from the snapshot and runs the same function. This is the check that
-		// the snapshot carries everything the generator reads.
-		const core = new ChunkWorkerCore({
-			kind: "setup",
-			map: map.toSnapshot(),
-			seaLevelRadius: 1700,
-			subdivisionDepth: DEPTH,
-			maxElevation: 150,
-			crustDepth: LAYERS,
-			chunkLevel: CHUNK_LEVEL,
-			terrain: {},
-		});
-		const result = core.run({ kind: "chunk", id: 1, key: 512 });
-		const here = generateChunk(
-			terrain,
-			ChunkAddress.fromKey(512, CHUNK_LEVEL),
-			CHUNK_LEVEL,
-			LAYERS,
-		);
-		expect(result.key).toBe(512);
-		expect(result.blocks).toEqual(here.blocks);
-		expect(result.groundLayer).toEqual(here.groundLayer);
 	});
 });

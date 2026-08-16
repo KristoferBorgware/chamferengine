@@ -23,7 +23,8 @@
 		"figures": "node tools/make-figures.js",
 		"reference": "node tools/make-reference.js",
 		"coverage": "node tools/check-coverage.js",
-		"style": "node tools/check-style.js"
+		"style": "node tools/check-style.js",
+		"bench": "vite-node tools/bench.ts"
 	},
 	"devDependencies": {
 		"prettier": "^3.4.2",

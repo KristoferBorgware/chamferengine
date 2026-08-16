@@ -4,16 +4,14 @@ import { Mat4, Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import {
 	BlockType,
-	ChunkAddress,
 	ChunkAtlas,
-	ChunkColumnSampler,
 	TerrainGenerator,
 	buildCoarseMap,
-	generateChunk,
 	seedFromString,
 	selectChunks,
+	selectionId,
 } from "chamfer/generation";
-import { buildChunkMesh } from "chamfer/mesh";
+import { WorkerMeshSource } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
 import { Player } from "chamfer/player";
 import {
@@ -26,6 +24,7 @@ import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
 	ChunkRenderer,
+	FrameTimer,
 	NoWebGPUError,
 	SkyRenderer,
 	createGpuContext,
@@ -95,8 +94,20 @@ const MOON_DISTANCE = 102_000;
 const DAY_SKY: readonly [number, number, number] = [0.46, 0.62, 0.82];
 const NIGHT_SKY: readonly [number, number, number] = [0.02, 0.03, 0.06];
 
-/** How many chunks are built per frame, so the page keeps drawing while it fills. */
-const BUILD_PER_FRAME = 1;
+/**
+ * How many chunks may be in flight at once, and how many workers share them.
+ *
+ * Building a chunk is longer than a frame at the worked planet's settings, so
+ * it happens on other threads and the frame only uploads what came back. One
+ * core is left for the thread that draws.
+ */
+const WORKERS = Math.max(
+	1,
+	Math.min(8, (navigator.hardwareConcurrency ?? 4) - 1),
+);
+
+/** How many finished meshes are uploaded in one frame. */
+const UPLOAD_PER_FRAME = 2;
 
 /** The color the view fades toward under water, and over what distance. */
 const WATER_FOG: readonly [number, number, number, number] = [
@@ -220,19 +231,34 @@ async function main(): Promise<void> {
 		refresh();
 	}
 
-	const meshed = new Map<number, ChunkMesh>();
-	const queue: ChunkSelection[] = [];
+	// Chunks are built on other threads and arrive as geometry. Blocks never
+	// cross back: a chunk is 478 KB of them and the thread that draws has no use
+	// for any of it, so generating and meshing are one job on the far side.
+	const source = new WorkerMeshSource(
+		() =>
+			new Worker(new URL("./chunkWorker.ts", import.meta.url), {
+				type: "module",
+			}),
+		WORKERS,
+		{
+			kind: "setup",
+			map: map.toSnapshot(),
+			seaLevelRadius: RADIUS,
+			subdivisionDepth: DEPTH,
+			maxElevation: MAX_ELEVATION,
+			crustDepth: shape.crustDepth,
+			skirtCells: SKIRT_CELLS,
+			terrain: {},
+		},
+	);
 
-	/**
-	 * One number for a chunk at one level.
-	 *
-	 * A key only names a triangle within its own level, so the level has to
-	 * travel with it: the same key at two levels is two different triangles.
-	 */
-	const idOf = (selection: { chunkLevel: number; key: number }) =>
-		selection.chunkLevel * 0x100000 + selection.key;
+	/** What is drawn, what is asked for, and what has come back unuploaded. */
+	const drawn = new Set<number>();
+	const building = new Set<number>();
+	const arrived: ChunkMesh[] = [];
+	let wantedNow = 0;
 
-	/** Choose what should be drawn, and queue what is missing. */
+	/** Choose what should be drawn, and ask for what is missing. */
 	function refresh(): void {
 		const wanted = selectChunks(
 			DEPTH,
@@ -242,36 +268,31 @@ async function main(): Promise<void> {
 			RADIUS,
 			DETAIL,
 		);
-		const keep = new Set(wanted.map(idOf));
-		for (const id of [...meshed.keys()])
+		wantedNow = wanted.length;
+		const keep = new Set(
+			wanted.map((selection) =>
+				selectionId(selection.chunkLevel, selection.key),
+			),
+		);
+		for (const id of [...drawn])
 			if (!keep.has(id)) {
-				meshed.delete(id);
+				drawn.delete(id);
 				renderer.drop(id);
 			}
-		queue.length = 0;
-		for (const selection of wanted)
-			if (!meshed.has(idOf(selection))) queue.push(selection);
-	}
 
-	/** Generate and mesh one chunk, at the level it was selected for. */
-	function build(selection: ChunkSelection): void {
-		const at = shape.atLod(selection.lod);
-		const generator = byLod[selection.lod]!;
-		const chunk = generateChunk(
-			generator,
-			ChunkAddress.fromKey(selection.key, selection.chunkLevel),
-			selection.chunkLevel,
-			at.crustDepth,
-		);
-		const mesh = buildChunkMesh(
-			chunk,
-			new ChunkColumnSampler(chunk, generator),
-			at,
-			seed,
-			{ skirtCells: SKIRT_CELLS },
-		);
-		meshed.set(idOf(selection), mesh);
-		renderer.upload({ ...mesh, key: idOf(selection) });
+		for (const selection of wanted) {
+			const id = selectionId(selection.chunkLevel, selection.key);
+			if (drawn.has(id) || building.has(id)) continue;
+			building.add(id);
+			source
+				.request(selection)
+				.then((mesh) => {
+					arrived.push(mesh);
+				})
+				.catch(() => {
+					building.delete(id);
+				});
+		}
 	}
 
 	refresh();
@@ -356,12 +377,21 @@ async function main(): Promise<void> {
 	const started = performance.now();
 	let previous = started;
 	let cloudsAt = -CLOUD_INTERVAL * 1000;
+	const timer = new FrameTimer();
 	const draw = (now: number) => {
-		for (let n = 0; n < BUILD_PER_FRAME; n++) {
-			const next = queue.shift();
-			if (next === undefined) break;
-			build(next);
+		timer.begin(now);
+
+		// Meshes that finished on a worker go to the GPU here, a couple a frame,
+		// so a burst of arrivals does not turn into one long frame.
+		timer.enter("upload", performance.now());
+		for (let n = 0; n < UPLOAD_PER_FRAME; n++) {
+			const mesh = arrived.shift();
+			if (!mesh) break;
+			building.delete(mesh.key);
+			drawn.add(mesh.key);
+			renderer.upload(mesh);
 		}
+		timer.leave("upload", performance.now());
 
 		resizeToDisplay(ctx);
 
@@ -374,6 +404,7 @@ async function main(): Promise<void> {
 			(held.has("d") || held.has("arrowright") ? 1 : 0) -
 			(held.has("a") || held.has("arrowleft") ? 1 : 0);
 		const lift = (held.has(" ") ? 1 : 0) - (held.has("shift") ? 1 : 0);
+		timer.enter("player", performance.now());
 		player.step(
 			{
 				ahead,
@@ -386,6 +417,7 @@ async function main(): Promise<void> {
 			seconds,
 			terrain,
 		);
+		timer.leave("player", performance.now());
 		swing = 0;
 		tilt = 0;
 		if (ahead !== 0 || aside !== 0 || lift !== 0) refresh();
@@ -426,11 +458,13 @@ async function main(): Promise<void> {
 		// The clouds are thrown away and refilled as the wind turns. There is no
 		// address to update in place, because a cloud has none.
 		if (now - cloudsAt > CLOUD_INTERVAL * 1000) {
+			timer.enter("clouds", performance.now());
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
 			clouds.blow(WIND_AXIS, turned, seed);
 			const mesh = buildCloudMesh(clouds, RADIUS + CLOUD_HEIGHT);
 			sky.setClouds(mesh.vertices, mesh.indices);
+			timer.leave("clouds", performance.now());
 		}
 
 		// The moon stands off at a distance rather than being painted on, so
@@ -451,6 +485,7 @@ async function main(): Promise<void> {
 			: mix(NIGHT_SKY, DAY_SKY, day);
 		const viewProj = projection.multiply(view);
 		sky.inverseViewProj = viewProj.inverse();
+		timer.enter("draw", performance.now());
 		renderer.render({
 			viewProj,
 			eye,
@@ -461,21 +496,49 @@ async function main(): Promise<void> {
 			daylight: day,
 			nightLight: NIGHT_LIGHT,
 		});
+		timer.leave("draw", performance.now());
 
 		const at = geographicOf(player.position, RADIUS);
 		const cell = positionToCell(player.position, shape.n);
 		report([
 			`seed "${seedText}"`,
 			`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
-			`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.count} chunks` +
-				(queue.length > 0 ? ` · ${queue.length} to build` : ""),
+			`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
+				(building.size > 0 ? ` · ${building.size} building` : ""),
 			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
 				(submerged ? " · under water" : ""),
+			budget(timer, renderer),
 			"WASD move · drag look · F fly · T next pentagon · G go to",
 		]);
+		timer.end(performance.now());
 		requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);
+}
+
+/**
+ * The frame, against the 16.6 ms a 60 Hz display allows.
+ *
+ * The worst frame in the window is reported beside the middle one, because a
+ * mean hides the stutter that ruins a run: sixty good frames and one 40 ms
+ * frame average out to fine and do not feel it.
+ *
+ * The GPU figure is what the adapter says the pass took, which is a different
+ * question from how long it took to describe. Adapters that will not answer
+ * report nothing rather than a guess.
+ */
+function budget(timer: FrameTimer, renderer: ChunkRenderer): string {
+	const frame = timer.frame();
+	const phases = timer
+		.byCost()
+		.filter((entry) => entry.median >= 0.05)
+		.map((entry) => `${entry.phase} ${entry.median.toFixed(1)}`)
+		.join(" · ");
+	const gpu =
+		renderer.clock.readings > 0
+			? ` · gpu ${renderer.clock.milliseconds.toFixed(1)}`
+			: "";
+	return `${frame.rate.toFixed(0)} fps · ${frame.median.toFixed(1)} ms, worst ${frame.worst.toFixed(1)}${gpu}${phases ? ` · ${phases}` : ""}`;
 }
 
 /**

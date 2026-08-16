@@ -29,7 +29,14 @@ export async function createGpuContext(
 			"WebGPU is present but no adapter accepted the request, which usually means the graphics driver is blocked or out of date.",
 		);
 
-	const device = await adapter.requestDevice();
+	// Timing a pass on the GPU is an optional feature. Asking for it where it
+	// exists is what makes the draw half of a frame measurable at all; where it
+	// does not, the same frame is drawn and only the reading is missing.
+	const device = await adapter.requestDevice({
+		requiredFeatures: adapter.features.has("timestamp-query")
+			? ["timestamp-query"]
+			: [],
+	});
 	const context = canvas.getContext("webgpu");
 	if (!context)
 		throw new NoWebGPUError(

@@ -5,11 +5,15 @@ import type { ChunkMesh } from "chamfer/mesh";
 import type { Frame } from "chamfer/render";
 import { RecordingGpu } from "./recordingGpu.js";
 
-const VIEW_PROJ = Mat4.perspective(1, 1.6, 0.1, 4000);
+/** A camera standing sixty metres out, looking down at the surface. */
+const EYE: [number, number, number] = [0, 0, 1760];
+const VIEW_PROJ = Mat4.perspective(1, 1.6, 0.1, 4000).multiply(
+	Mat4.lookAt(EYE, [0, 0, 1700], [0, 1, 0]),
+);
 
 const FRAME: Frame = {
 	viewProj: VIEW_PROJ,
-	eye: [0, 0, 1700],
+	eye: EYE,
 	sun: [0, 1, 0],
 	fog: [0, 0, 0, 1e9],
 	daylight: 1,
@@ -27,6 +31,8 @@ function mesh(key: number): ChunkMesh {
 	return {
 		key,
 		origin: new Vec3(0, 0, 1700),
+		center: [0, 0, 1700],
+		radius: 20,
 		opaque: geometry(),
 		translucent: geometry(),
 		tally: { cells: 1, faces: 2, merged: 0 },
@@ -82,6 +88,25 @@ describe("what a frame encodes", () => {
 		expect(kinds[0]).toBe("draw");
 		expect(kinds[kinds.length - 1]).toBe("drawIndexed");
 		expect(kinds.length).toBe(4);
+	});
+
+	it("skips a chunk the camera is not looking at", () => {
+		// A chunk out of view stays resident and goes undrawn. Dropping it
+		// instead would put a hole in the world every time someone turned:
+		// turning is instant and building a chunk is not.
+		const gpu = new RecordingGpu();
+		const ctx = gpu.context;
+		const renderer = new ChunkRenderer(ctx);
+		renderer.upload(mesh(1));
+		// Behind the camera: it looks inward from 1760 toward the surface.
+		renderer.upload({ ...mesh(2), center: [0, 0, 2400], radius: 20 });
+
+		renderer.render(FRAME);
+
+		expect(renderer.count).toBe(2);
+		expect(renderer.drawn).toBe(1);
+		// One opaque and one water buffer, from the one chunk in view.
+		expect(gpu.draws().length).toBe(2);
 	});
 
 	it("draws nothing but the sky when no chunk is resident", () => {

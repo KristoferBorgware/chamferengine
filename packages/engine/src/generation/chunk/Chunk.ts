@@ -1,4 +1,5 @@
 import type { ChunkAddress } from "./ChunkAddress.js";
+import type { Column } from "./Column.js";
 import { BlockType } from "../terrain/BlockType.js";
 import { chunkSlots } from "../../addressing/lattice/chunkSlots.js";
 import { rank } from "../../addressing/lattice/rank.js";
@@ -30,12 +31,15 @@ export class Chunk {
 	readonly blocks: Uint16Array;
 
 	/**
-	 * The first layer holding ground, per slot.
+	 * The band of each slot, as two entries per slot: the first layer that is
+	 * not air, and the last that is not opaque.
 	 *
-	 * The mesher walks down from here rather than from layer 0, which skips the
-	 * empty sky above every column.
+	 * Reading them off the blocks afterwards costs a walk down every column of
+	 * the chunk and every column around it, which is the whole crust scanned to
+	 * find a handful of layers. Generation walks each column once already, so it
+	 * writes the band as it goes and the scan disappears.
 	 */
-	readonly groundLayer: Uint16Array;
+	readonly band: Int16Array;
 
 	constructor(
 		address: ChunkAddress,
@@ -43,7 +47,7 @@ export class Chunk {
 		chunkLevel: number,
 		layerCount: number,
 		blocks?: Uint16Array,
-		groundLayer?: Uint16Array,
+		band?: Int16Array,
 	) {
 		this.address = address;
 		this.depth = depth;
@@ -52,7 +56,17 @@ export class Chunk {
 		this.slots = chunkSlots(this.m);
 		this.layerCount = layerCount;
 		this.blocks = blocks ?? new Uint16Array(this.slots * layerCount);
-		this.groundLayer = groundLayer ?? new Uint16Array(this.slots);
+		this.band = band ?? new Int16Array(this.slots * 2);
+	}
+
+	/** The column at a slot, as the mesher reads it. */
+	columnOf(slot: number): Column {
+		const base = slot * this.layerCount;
+		return {
+			blocks: this.blocks.subarray(base, base + this.layerCount),
+			first: this.band[slot * 2]!,
+			last: this.band[slot * 2 + 1]!,
+		};
 	}
 
 	/** Where a cell sits in {@link blocks}. */
@@ -66,6 +80,6 @@ export class Chunk {
 
 	/** How many bytes the chunk holds, for a residency budget. */
 	get byteLength(): number {
-		return this.blocks.byteLength + this.groundLayer.byteLength;
+		return this.blocks.byteLength + this.band.byteLength;
 	}
 }

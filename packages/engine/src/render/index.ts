@@ -3,6 +3,8 @@ export type { PassLayer } from "./PassLayer.js";
 export type { GpuContext } from "./gpu/GpuContext.js";
 export { createGpuContext, resizeToDisplay } from "./gpu/GpuContext.js";
 export { NoWebGPUError } from "./gpu/NoWebGPUError.js";
+export { GpuClock } from "./gpu/GpuClock.js";
+export { FrameTimer } from "./FrameTimer.js";
 export { buildLatticeGeometry } from "./lattice/buildLatticeGeometry.js";
 export { LatticeRenderer } from "./lattice/LatticeRenderer.js";
 export { ChunkRenderer } from "./terrain/ChunkRenderer.js";

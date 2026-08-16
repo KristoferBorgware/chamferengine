@@ -1,7 +1,18 @@
 import { Vec3 } from "../../math/Vec3.js";
 import { FACES, VERTICES } from "../solid/icosahedron.js";
 import { neighbour } from "../neighbours/neighbour.js";
-import { latticeWeights } from "./latticeWeights.js";
+
+/**
+ * The ring, and the running weight total, held across calls.
+ *
+ * A mesher asks for this once per cell and a chunk holds 561 of them, so the
+ * six-slot ring and the twelve-slot total are refilled rather than allocated.
+ * Nothing here is read after the call returns.
+ */
+const RING_FACE = new Int32Array(6);
+const RING_I = new Int32Array(6);
+const RING_J = new Int32Array(6);
+const TOTAL = new Float64Array(12);
 
 /**
  * The corners of a cell's polygon, counter-clockwise seen from outside.
@@ -23,49 +34,48 @@ export function cellCorners(
 	i: number,
 	j: number,
 ): Vec3[] {
-	const ring: { face: number; i: number; j: number }[] = [];
+	let degree = 0;
 	for (let k = 0; k < 6; k++) {
 		const nb = neighbour(face, n, i, j, k);
-		if (nb) ring.push(nb);
+		if (!nb) continue;
+		RING_FACE[degree] = nb.face;
+		RING_I[degree] = nb.i;
+		RING_J[degree] = nb.j;
+		degree++;
 	}
 
-	const out: Vec3[] = [];
-	for (let k = 0; k < ring.length; k++) {
-		const a = ring[k]!;
-		const b = ring[(k + 1) % ring.length]!;
-		const total = new Float64Array(12);
-		addWeights(total, face, n, i, j);
-		addWeights(total, a.face, n, a.i, a.j);
-		addWeights(total, b.face, n, b.i, b.j);
+	const out: Vec3[] = new Array<Vec3>(degree);
+	for (let k = 0; k < degree; k++) {
+		const b = (k + 1) % degree;
+		TOTAL.fill(0);
+		addWeights(face, n, i, j);
+		addWeights(RING_FACE[k]!, n, RING_I[k]!, RING_J[k]!);
+		addWeights(RING_FACE[b]!, n, RING_I[b]!, RING_J[b]!);
 
 		let x = 0;
 		let y = 0;
 		let z = 0;
 		for (let v = 0; v < 12; v++) {
-			const w = total[v]!;
+			const w = TOTAL[v]!;
 			if (w === 0) continue;
 			const p = VERTICES[v]!;
 			x += p.x * w;
 			y += p.y * w;
 			z += p.z * w;
 		}
-		out.push(new Vec3(x, y, z).normalize());
+		const length = Math.sqrt(x * x + y * y + z * z);
+		out[k] = new Vec3(x / length, y / length, z / length);
 	}
 	return out;
 }
 
-/** Add one lattice point's weights into a running total over the twelve vertices. */
-function addWeights(
-	into: Float64Array,
-	face: number,
-	n: number,
-	i: number,
-	j: number,
-): void {
-	const w = latticeWeights(n, i, j);
+/** Add one lattice point's weights into the running total over the twelve vertices. */
+function addWeights(face: number, n: number, i: number, j: number): void {
 	const ids = FACES[face]!;
-	for (let x = 0; x < 3; x++) {
-		const v = ids[x]!;
-		into[v] = into[v]! + w[x]!;
-	}
+	const a = ids[0]!;
+	const b = ids[1]!;
+	const c = ids[2]!;
+	TOTAL[a] = TOTAL[a]! + (n - i - j);
+	TOTAL[b] = TOTAL[b]! + i;
+	TOTAL[c] = TOTAL[c]! + j;
 }

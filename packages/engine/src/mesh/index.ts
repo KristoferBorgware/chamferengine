@@ -9,3 +9,14 @@ export { meshChunk } from "./meshChunk.js";
 export { buildChunkMesh } from "./buildChunkMesh.js";
 export { opacityOf } from "./opacityOf.js";
 export { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
+export type {
+	MeshJob,
+	MeshResult,
+	MeshWorkerMessage,
+	MeshWorkerSetup,
+} from "./worker/MeshJob.js";
+export { MeshWorkerCore } from "./worker/MeshWorkerCore.js";
+export type { MeshSource } from "./worker/MeshSource.js";
+export { InlineMeshSource } from "./worker/InlineMeshSource.js";
+export type { MeshWorkerHandle } from "./worker/WorkerMeshSource.js";
+export { WorkerMeshSource } from "./worker/WorkerMeshSource.js";

@@ -43,11 +43,47 @@ export function buildChunkMesh(
 		translucent,
 		options,
 	);
+	// The ball everything drawn falls inside, over both buffers, moved back
+	// into world space from the origin the vertices are written against.
+	const solid = opaque.bounds();
+	const wet = translucent.bounds();
+	const ball = merge(solid, wet);
 	return {
 		key: chunk.address.key,
 		origin: new Vec3(origin.x, origin.y, origin.z),
+		center: [
+			ball.center[0] + origin.x,
+			ball.center[1] + origin.y,
+			ball.center[2] + origin.z,
+		],
+		radius: ball.radius,
 		opaque: opaque.build(tally.cells),
 		translucent: translucent.build(tally.cells),
 		tally,
+	};
+}
+
+/** One ball around two, or around whichever of them holds anything. */
+function merge(
+	a: { center: [number, number, number]; radius: number },
+	b: { center: [number, number, number]; radius: number },
+): { center: [number, number, number]; radius: number } {
+	if (a.radius === 0) return b;
+	if (b.radius === 0) return a;
+	const dx = b.center[0] - a.center[0];
+	const dy = b.center[1] - a.center[1];
+	const dz = b.center[2] - a.center[2];
+	const apart = Math.sqrt(dx * dx + dy * dy + dz * dz);
+	if (apart + b.radius <= a.radius) return a;
+	if (apart + a.radius <= b.radius) return b;
+	const radius = (apart + a.radius + b.radius) / 2;
+	const along = apart > 0 ? (radius - a.radius) / apart : 0;
+	return {
+		center: [
+			a.center[0] + dx * along,
+			a.center[1] + dy * along,
+			a.center[2] + dz * along,
+		],
+		radius,
 	};
 }

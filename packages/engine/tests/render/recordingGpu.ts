@@ -114,6 +114,9 @@ export class RecordingGpu {
 
 		const device = {
 			limits: { maxTextureDimension2D: 8192 },
+			// No timestamp query: this device reports nothing about the GPU,
+			// which is the case a renderer has to draw the same frame under.
+			features: new Set<string>(),
 			queue: { writeBuffer() {}, submit() {} },
 			createShaderModule: () => ({}),
 			createBindGroupLayout: () => ({}),
