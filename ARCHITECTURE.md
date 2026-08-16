@@ -23,20 +23,19 @@ document that owns each decision, and it does not repeat the reasoning.
 | Server runtime | **Node** | [doc 31](docs/31-deployment.md) |
 | Tooling runtime | **Node**, zero dependencies | this repository |
 
-Four consequences of that list are worth stating explicitly, because each one is
-a thing not being built.
+Four consequences of that list are worth stating explicitly.
 
-- **There is no native renderer.** WebGPU is already the abstraction over Vulkan,
-  Metal and D3D12. A desktop client is the same TypeScript inside Tauri or
-  Electron, not a second graphics backend.
-- **There is no second language.** The server, the client, the generator and the
-  tooling are one source tree. The measured cost against C is `1.75×` on the
-  generator and `1.5×` on the mesher.
+- **WebGPU is the whole graphics layer.** It is itself the abstraction over
+  Vulkan, Metal and D3D12. A desktop client is the same TypeScript inside Tauri
+  or Electron, running the same shaders against the same API.
+- **One source tree covers all four parts.** The server, the client, the
+  generator and the tooling are the same language. The measured cost against C
+  is `1.75×` on the generator and `1.5×` on the mesher.
 - **Node is on both sides.** It runs the verification scripts and the doc build
   today, it hosts the local server in V0.5, and it is the Lambda runtime in V1.
-- **Vite applies to the engine only.** `demos/`, `verification/` and `tools/`
-  stay zero-dependency plain HTML and plain Node, and are not to be moved behind
-  a bundler.
+- **Vite applies to the engine only.** `demos/`, `verification/` and `tools/` are
+  zero-dependency plain HTML and plain Node, and stay that way — a demo opens by
+  double-clicking the file, a script runs under bare `node`.
 
 ### Build rules the language choice imposes
 
@@ -205,15 +204,16 @@ in V0.5 — the milestone is small on the server side and not on the game side.
 | Authority | **none. There is no authoritative tick loop.** |
 | Inventory | client-side, never synced |
 
-**No tick loop is the reason this shape fits.** Receive a message, write it, fan
-it out to the connections the interest test selects. There is no simulation state
-to keep resident between invocations, which is the thing serverless is bad at and
-the thing this server does not have.
+**The server is stateless between messages, and that is why this shape fits.**
+Receive a message, write it, fan it out to the connections the interest test
+selects, exit. Everything an invocation needs is in the message and the store, so
+each one can start cold — which is the demand serverless meets and the reason
+simulation is the thing it cannot hold.
 
-**The delta store is not a database.** One key, one blob, one `get`, one `put` —
-no query engine, no secondary indexes, no joins. That rules out a document store
-on shape rather than on price, and it is why DynamoDB and S3 are the same access
-pattern at two latencies.
+**The delta store is one key and one blob.** Chunk ID in, that chunk's deltas
+out: one `get`, one `put`, and the access pattern is exact-key or key-range. That
+is what makes DynamoDB and S3 the same store at two latencies, and it is the
+whole of what the storage layer has to provide.
 
 **The number to instrument from the first day is messages per second**, not
 storage. Interest management is fan-out, and API Gateway bills per message:
@@ -242,7 +242,7 @@ started; each is a decision to wait.
 | Server-side simulation: mobs, a tick loop, resident chunks | `158×` what edit validation costs | [30](docs/30-authority-and-cheating.md) |
 | Entity interest | load-bearing only once mobs are server-side | [22](docs/22-multiplayer-interest.md) |
 | Moving from Lambda to a long-lived process | same event as the tick loop | [31](docs/31-deployment.md) |
-| A native desktop client — the same TypeScript in Tauri or Electron | no second renderer | [31](docs/31-deployment.md) |
+| A native desktop client — the same TypeScript in Tauri or Electron | same bundle, same shaders | [31](docs/31-deployment.md) |
 | Moving a hot path to C or Rust for wasm | `1.5–1.75×` available, and a build trap if also compiled natively | [28](docs/28-language-and-runtime.md) |
 | Space travel | the 12-bit planet field is the only part that exists | [03](docs/03-addressing.md) |
 
