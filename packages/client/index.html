@@ -4,14 +4,18 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Chamfer</title>
+		<meta
+			name="description"
+			content="A spherical voxel world: hexagonal cells, twelve pentagons, no polar singularity."
+		/>
 		<link rel="stylesheet" href="./src/landing.css" />
 	</head>
 	<body>
 		<main class="landing">
 			<h1>Chamfer</h1>
 			<p class="tagline">
-				A spherical voxel world: hexagonal cells, twelve pentagons, no
-				polar singularity.
+				A voxel world on a sphere. Hexagonal cells, exactly twelve
+				pentagons, and no seam or pole anywhere on it.
 			</p>
 
 			<form id="seed-form" class="seed">
@@ -22,6 +26,7 @@
 					type="text"
 					placeholder="any word or phrase"
 					autocomplete="off"
+					spellcheck="false"
 					required
 				/>
 				<button type="submit">Generate planet</button>
@@ -29,8 +34,31 @@
 
 			<p id="support" class="support" hidden></p>
 
+			<dl class="facts">
+				<div>
+					<dt>Surface</dt>
+					<dd>Goldberg polyhedron, level 11</dd>
+				</div>
+				<div>
+					<dt>Cells</dt>
+					<dd>41,943,042</dd>
+				</div>
+				<div>
+					<dt>Radius</dt>
+					<dd>1,700 m, 1 m blocks</dd>
+				</div>
+				<div>
+					<dt>Around it</dt>
+					<dd>10,681 m — 2.12 hours' walk</dd>
+				</div>
+			</dl>
+
 			<nav class="links">
-				<a href="./docs/">Documentation</a>
+				<a href="./docs/">Specification</a>
+				<a href="./docs/demos/how-it-works.html">How it works</a>
+				<a href="https://github.com/KristoferBorgware/chamferengine"
+					>Source</a
+				>
 			</nav>
 		</main>
 		<script type="module" src="./src/landing.ts"></script>

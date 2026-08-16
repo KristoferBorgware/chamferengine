@@ -93,3 +93,36 @@ button {
 .links a {
 	color: var(--accent);
 }
+
+.facts {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	gap: 0.75rem 1.5rem;
+	margin: 0;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--edge);
+}
+
+.facts div {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+dt {
+	font-size: 0.75rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--ink-dim);
+}
+
+dd {
+	margin: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1.25rem;
+}

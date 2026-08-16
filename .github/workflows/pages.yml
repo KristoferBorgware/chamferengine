@@ -1,14 +1,15 @@
-name: Publish documentation
+name: Publish the engine and the documentation
 
-# Regenerates everything from source and publishes it to GitHub Pages.
+# Builds both halves of the site and publishes them to GitHub Pages.
 #
-# "Everything" means: the fifteen documents plus the generated reference, all
-# sixteen diagrams, all eighteen demos, and the verification scripts
-# themselves — so a reader can follow a claim to the proof and read the proof.
+#   /             the client: a seed entry page, and the planet it opens
+#   /docs/        the specification, its diagrams, its demos and its proofs
 #
-# The proofs are not decoration here. make-reference.js runs every verification
-# script and fails if one stops running, so the site does not publish unless the
-# maths still holds.
+# Three things gate a publish, and each fails the deploy on its own:
+# make-reference.js runs every verification script, check-style.js holds the
+# documents to the writing rules, and the workspace has to typecheck and pass
+# its tests. The site does not go out unless the maths, the prose and the
+# engine all still hold.
 
 on:
   push:
@@ -35,9 +36,16 @@ jobs:
         with:
           node-version: '22'
 
-      # Everything below is plain Node with zero dependencies, exactly as it
-      # runs locally. There is no install step because there is nothing to
-      # install.
+      - name: Install the workspace
+        # tools/ and verification/ are still zero-dependency plain Node. This
+        # installs what the engine build needs: Vite, TypeScript and Vitest.
+        run: npm ci
+
+      - name: Typecheck the workspace
+        run: npm run typecheck
+
+      - name: Run the engine tests
+        run: npm test
 
       - name: Regenerate the diagrams
         run: node tools/make-figures.js
@@ -45,8 +53,21 @@ jobs:
       - name: Run every proof, and rebuild the reference from its output
         run: node tools/make-reference.js
 
-      - name: Assemble the site
-        run: node tools/build-docs.js --pages _site
+      - name: Hold the documents to the writing rules
+        run: node tools/check-style.js
+
+      - name: Build the client
+        # Pages serves from a subdirectory named after the repository, so every
+        # asset URL needs that prefix or the page loads and draws nothing.
+        env:
+          CHAMFER_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: Assemble the documentation under /docs/
+        run: node tools/build-docs.js --pages _site/docs
+
+      - name: Put the client at the root
+        run: cp -r packages/client/dist/. _site/
 
       - name: Report what was published, and any drift from the committed files
         if: always()
@@ -60,6 +81,7 @@ jobs:
             echo "| diagrams | $(ls docs/figures/*.svg | wc -l) |"
             echo "| demos | $(ls demos/*.html | wc -l) |"
             echo "| verification scripts | $(ls verification/*.js | wc -l) |"
+            echo "| engine packages | $(ls -d packages/*/ | wc -l) |"
             echo "| files in the artifact | $(find _site -type f | wc -l) |"
             echo ""
             if git diff --quiet -- docs/figures docs/REFERENCE.md; then
