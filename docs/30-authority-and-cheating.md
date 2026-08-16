@@ -34,9 +34,9 @@ store itself**. Almost everything crude is answerable from those alone.
 
 ### Two things that last row is not
 
-Earlier drafts of this document said the delta store put "the built world under
-authority" and called it "where griefing actually happens". Both claims were
-wrong, and they were the kind of wrong that sounds reassuring.
+The delta store is sometimes described as putting "the built world under
+authority", and griefing as the thing it prevents. Both readings are wrong, and
+wrong in the way that sounds reassuring.
 
 **Griefing is not cheating.** Breaking a block someone else placed is a *legal
 move*. The server cannot tell it from ordinary mining, and no amount of terrain
@@ -48,10 +48,11 @@ protects anyone's house.
 *current state* of every cell a player has changed, so it can refuse an action
 that contradicts it: you cannot break a cell it knows is already air, and you
 cannot place into one it knows is solid. That catches a desynced client and a lazy
-cheat. It is a modest thing and it is worth stating modestly.
+cheat. It is a modest thing, stated modestly.
 
-**So the honest summary is: the crude cheats are refused for free, and the free
-checks are all about where and how fast — never about what.** Everything to do
+**So the honest summary is: the crude cheats are refused with what the server
+already holds, and those checks are all about where and how fast — never about
+what.** Everything to do
 with what is actually in the ground needs the next section.
 
 ---
@@ -60,8 +61,8 @@ with what is actually in the ground needs the next section.
 
 The server cannot say what is in an **unmodified** cell, because
 [doc 08](08-terrain-generation.md) generates terrain and does not store it. That
-is the only gap. But *why anyone should care* is the part the first draft of this
-document asserted and never explained, so here it is.
+is the only gap. *Why anyone should care* is the part that needs explaining, so
+here it is.
 
 **It is not mainly about legality.** It is about what the block gives you when you
 break it.
@@ -102,7 +103,7 @@ smuggles in. It does not have to *run the generator* in the sense of producing
 chunks. It has to answer one question about **one cell**, when an edit arrives, at
 the rate a human clicks.
 
-![Three bars: stores and routes needs no terrain, adding a point query needs one cell per edit, adding resident chunks needs 35,904 cells — with the note that only mobs need the third](figures/three-tiers-of-authority.svg)
+![Three bars: stores and routes needs no terrain, adding a point query needs one cell per edit, adding resident chunks needs 35,904 cells — and only mobs need the third](figures/three-tiers-of-authority.svg)
 
 *Log-scaled, because a linear scale would make the first two invisible. The
 distance between the middle bar and the bottom one is the whole argument: an
@@ -251,10 +252,9 @@ simulation — mobs, and the input-driven authority that goes with them — is w
 later and is explicitly **out of scope for V1**.
 
 This document recommended the middle bar and the decision is the first one. That
-is a legitimate call and it is worth being precise about what it costs rather than
-arguing it again:
+is a legitimate call, and this is precisely what it costs:
 
-- **Everything in section 1 is still available for free** whenever it is wanted,
+- **Everything in section 1 stays available** whenever it is wanted,
   because it needs nothing the server does not already hold. Reach, rate,
   protected columns, malformed IDs, unknown types, and the whole edited world.
   V1 declines to *use* them; it does not lose them.
@@ -272,8 +272,8 @@ nothing:
 storage-only server needs, and it happens to be exactly what a validating server
 can check later: the cell gives reach against the player's position, and the state
 gives the type check and the solidity query. **Adding authority in V2 is inserting
-a check before the store, not changing the message.** The upgrade path is free as
-long as nobody invents a shortcut here.
+a check before the store, not changing the message.** The upgrade costs nothing
+as long as nobody invents a shortcut here.
 
 **2. Player inventory must not travel client → server.** This is the trap, and it
 is the one thing that cannot be repaired later.
@@ -310,7 +310,7 @@ and it means every client can already see where the ore is without digging for i
 
 An x-ray cheat is **unpreventable in this design**, and not because of an
 oversight — it is what "terrain is generated, not stored" means. The same is true
-of every seed-based world, Minecraft included, and no server-side check touches
+of every seed-based world, and no server-side check touches
 it: the client is not lying about anything, it simply knows.
 
 What *is* preventable is **acting** on that knowledge faster than a player could,

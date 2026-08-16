@@ -42,20 +42,19 @@ requirement, and separating them is most of the work:
 | 7 | **a remesh fits in a frame** | [14](14-meshing-and-lod.md) | a chunk change rebuilds ~21,000 cells and 84,000 triangles |
 | 8 | **one source, two targets** | [22](22-multiplayer-interest.md) | the client *regenerates* the coarse map, so it runs the server's generator |
 
-> Requirement 8 is **weaker than this document originally claimed**, and
-> [doc 29](29-what-runs-where.md) is the correction. Doc 22 says a *client*
+> Requirement 8 is **weaker than it looks**, and
+> [doc 29](29-what-runs-where.md) draws the line. Doc 22 says a *client*
 > regenerates the coarse map — a statement about determinism, not about
 > deployment. **No document in this specification requires a browser client.**
 > A native client satisfies doc 22 completely and needs no WebAssembly. Whether
 > there is a browser client is an open product decision, and Rust holds either
 > way with a thinner margin if the answer is no.
 
-> Requirement 7 said **"no GC pause inside a frame"** in the first draft of this
-> document, and it was used below to push Java and TypeScript down the list. That
-> was asserted rather than measured, and it does not survive being measured —
-> Minecraft ships in a language with a garbage collector. The
+> Requirement 7 is about the **frame**, not about the collector. "No GC pause
+> inside a frame" is the tempting way to write it and it does not survive being
+> measured — the genre ships in garbage-collected languages, and the
 > [section on what actually separates them](#a-garbage-collector-is-the-wrong-test)
-> replaces it. The requirement is about the **frame**, not about the collector.
+> gives the numbers.
 
 **The first four are properties of the language and its optimiser.** Nobody can
 write around them: if the compiler is free to rewrite `a*b + c`, no amount of
@@ -113,9 +112,9 @@ Doc 23 was right, and more comfortably right than it dared claim: `+ − × ÷ s
 really are specified to the bit, every mainstream language really does implement
 them that way, and the pipeline really does stay inside that set.
 
-That is worth sitting with, because it inverts the question. The job is no longer
-"find a language that can be made deterministic". It is "notice that one candidate
-can be made *non*-deterministic by accident, and then decide on everything else".
+That inverts the question. The job is not "find a language that can be made
+deterministic". It is "notice that one candidate can be made *non*-deterministic
+by accident, and then decide on everything else".
 
 ---
 
@@ -277,24 +276,18 @@ and they are wall-clock numbers that move run to run.
 
 ## The decision: TypeScript
 
-**TypeScript, for the whole engine, and this document said Rust first.** The
-measurements above are unchanged — every one of them still holds — but they were
-weighed against the wrong requirement, and one of them was missing.
+**TypeScript, for the whole engine.** Every measurement above holds, and three
+things decide how they weigh.
 
-Earlier drafts closed with *"Rust, and the reason is not determinism"*, on five
-grounds: no build flag needed, `wrapping_mul` in the language, the fast data layout
-being the default, one source compiling to native and WebAssembly, and `wgpu`.
-That case is kept below, because most of it is still true and only the conclusion
-moves.
+The case for Rust is kept below, because most of it is true and only the
+conclusion goes the other way.
 
-Three things move it.
-
-### 1. A browser client is now a requirement, and TypeScript satisfies it for free
+### 1. A browser client is a requirement, and TypeScript satisfies it with no work
 
 [Doc 29](29-what-runs-where.md) established that nothing in docs 00–27 asked for a
-browser, and that this document had inferred one. **That is now a stated goal:
-the game is to be playable in a browser.** With the requirement real rather than
-inferred, TypeScript is the only candidate that meets it with no work at all —
+browser. **It is a stated goal regardless: the game is to be playable in a
+browser.** With the requirement real rather than inferred, TypeScript is the only
+candidate that meets it with no work at all —
 same file, server and tab. Rust needs a `wasm32` target, a bindings layer and two
 build profiles.
 
@@ -413,7 +406,7 @@ rather than prototyped, this is the argument to re-read:
 5. `wgpu` is one GPU story across desktop and browser.
 
 Points 1 and 3 are what a scripting language gives up. Point 4 is the one
-TypeScript gets for free instead.
+TypeScript gets without a toolchain instead.
 
 ### C++ and Java, for the record
 
@@ -422,10 +415,9 @@ candidate this study caught being *wrong* — four planets from one file, the
 dangerous default on ARM, and now the wasm-versus-native trap above.
 
 **Java** is exactly as deterministic — `strictfp` has been the default since 17 —
-and Minecraft is the existence proof that the genre ships in it. It loses on the
-browser, which is now a requirement rather than an inference. (Minecraft is also
-a weaker precedent than it looks: Java was Notch's preference rather than a
-considered choice, and Bedrock, the version on consoles and phones, is C++.)
+and the genre has shipped in it. It loses on the browser. That precedent is also
+weaker than it looks: the best-known example chose Java by its author's
+preference rather than by a study, and its console and phone edition is C++.
 
 ---
 
@@ -483,6 +475,15 @@ digest rather than by reading.
 
 ## Still open
 
+- **This document chose Rust first**, on five grounds: no build flag needed,
+  `wrapping_mul` in the language, the fast data layout being the default, one
+  source compiling to native and WebAssembly, and `wgpu`. The browser
+  requirement and the C-to-wasm trap reversed it. Every measurement survived.
+- **Requirement 7 was written as "no GC pause inside a frame"** and used to push
+  Java and TypeScript down. It was asserted rather than measured; the generator
+  allocates nothing in any language.
+- **Requirement 8 was read as requiring a browser** when doc 22 only requires a
+  *client*. [Doc 29](29-what-runs-where.md) separates the two.
 - **Two genuinely different platforms have still not been compared.** Everything
   here ran on one x86-64 Linux box. The `aarch64` claim is read off the
   instruction set, not measured. Running `verification/language.js` on an ARM
@@ -536,13 +537,13 @@ digest rather than by reading.
   *both* a wasm build and a native build of one C core generates **two planets** —
   which is exactly the configuration the hatch gets reached for.
 - **TypeScript**, decided. A browser client is a stated requirement and TypeScript
-  satisfies it for free; the measured gap is **1.75×** on the generator and 1.5× on
+  satisfies it with no toolchain; the measured gap is **1.75×** on the generator and 1.5× on
   the mesher, which is a margin rather than a wall; and it has no escape-hatch trap
   because the specification pins its arithmetic. **A language you cannot write is
   not a fast language.**
-- **This document said Rust first**, on no-flag determinism and the fast layout
-  being the default. Both are still true and the Rust case is
-  [kept above](#the-case-for-rust-kept) — the weighing changed, not the
+- **Rust is the stronger engine language** on no-flag determinism and the fast
+  layout being the default. Both are true and the Rust case is
+  [kept above](#the-case-for-rust-kept) — the weighing decides, not the
   measurements.
 - **The decision needs a scope**, which this document did not give it.
   [Doc 29](29-what-runs-where.md) supplies one: the determinism argument above

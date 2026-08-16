@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 372" width="520" height="372">
+<style>
+  .cf-l{stroke:#9aa3b2;fill:none;stroke-width:1}
+  .cf-m{stroke:#48505f;fill:none;stroke-width:1.5}
+  .cf-fill{fill:#eceff5;stroke:#48505f;stroke-width:1.5}
+  .cf-a{stroke:#2f6fd0;fill:none;stroke-width:2}
+  .cf-af{fill:#dbe5f5;stroke:#2f6fd0;stroke-width:2}
+  .cf-g{stroke:#b0800f;fill:none;stroke-width:2}
+  .cf-gf{fill:#f5ead0;stroke:#b0800f;stroke-width:2}
+  .cf-void{fill:#ffffff;stroke:#48505f;stroke-width:1.5}
+  text{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;font-size:12px;fill:#39404d}
+  text.cf-d{fill:#77808f;font-size:11.5px}
+  text.cf-c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#2f6fd0}
+  text.cf-gd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;fill:#b0800f}
+  text.cf-big{font-size:14px;font-weight:600}
+  @media (prefers-color-scheme:dark){
+    .cf-l{stroke:#5c6577} .cf-m{stroke:#aeb6c4} .cf-fill{fill:#1b2333;stroke:#aeb6c4}
+    .cf-a{stroke:#6aa2f0} .cf-af{fill:#1a2942;stroke:#6aa2f0}
+    .cf-g{stroke:#e0b355} .cf-gf{fill:#2a2210;stroke:#e0b355}
+    .cf-void{fill:#0f141d;stroke:#aeb6c4}
+    text{fill:#d3d9e4} text.cf-d{fill:#98a1b2} text.cf-c{fill:#6aa2f0} text.cf-gd{fill:#e0b355}
+  }
+</style>
+
+  <text class="cf-big" x="14" y="26">what grows when a player joins</text>
+  <text class="cf-d" x="14" y="46">0.5 edits per player per second, each reaching 10 neighbours</text>
+  <path class="cf-l" d="M64.0 66L64.0 234"/><text class="cf-d" x="64.0" y="252" text-anchor="middle">0</text><path class="cf-l" d="M145.5 66L145.5 234"/><text class="cf-d" x="145.5" y="252" text-anchor="middle">25</text><path class="cf-l" d="M227.0 66L227.0 234"/><text class="cf-d" x="227.0" y="252" text-anchor="middle">50</text><path class="cf-l" d="M308.5 66L308.5 234"/><text class="cf-d" x="308.5" y="252" text-anchor="middle">75</text><path class="cf-l" d="M390.0 66L390.0 234"/><text class="cf-d" x="390.0" y="252" text-anchor="middle">100</text>
+  <path class="cf-l" d="M64 234L390 234"/>
+  <path class="cf-a" d="M64.0 234.0L145.5 192.0L227.0 150.0L308.5 108.0L390.0 66.0"/>
+  <text class="cf-c" x="398" y="70.0">messages</text>
+  <text class="cf-c" x="398" y="86.0">per second</text>
+  <text class="cf-d" x="398" y="104.0">500/s here</text>
+  <path class="cf-g" d="M64 231L390 231"/>
+  <text class="cf-c" x="398" y="212">storage</text>
+  <text class="cf-d" x="398" y="228">76 MB, flat</text>
+  <text class="cf-d" x="227.0" y="274" text-anchor="middle">players</text>
+  <path class="cf-l" d="M14 296L506 296"/>
+  <text class="cf-d" x="14" y="318">Storage is the number everyone watches, and it never moves. Fan-out is the</text>
+  <text class="cf-d" x="14" y="334">one that bills, because interest management IS fan-out &#8212; so count</text>
+  <text class="cf-d" x="14" y="350">messages per second from the first day.</text>
+</svg>

@@ -41,7 +41,35 @@ const STYLE = `<style>
   }
 </style>`;
 
+// Every label has to sit inside the viewBox. Nothing here can measure a glyph,
+// so widths come from the per-class advance below: the mono classes are exact,
+// and the proportional ones are an average that runs slightly wide, which is
+// the direction that fails safe.
+const ADVANCE = { 'cf-c': 6.9, 'cf-gd': 6.9, 'cf-d': 5.9, 'cf-big': 7.8, '': 6.2 };
+const overruns = [];
+
+function checkLabels(name, w, body){
+  for (const m of body.matchAll(/<text\b([^>]*)>([^<]*)<\/text>/g)){
+    const [, attrs, raw] = m;
+    // entities are one glyph each, and markup never reaches the reader
+    const text = raw.replace(/&[#a-z0-9]+;/gi, 'x').trim();
+    if (!text) continue;
+    const attr = n => (attrs.match(new RegExp(n + '="([^"]*)"')) || [])[1];
+    // a label inside a <g transform> is positioned by the group, not by x
+    if (/transform=/.test(attrs)) continue;
+    const x = parseFloat(attr('x'));
+    if (!isFinite(x)) continue;
+    const adv = ADVANCE[attr('class') || ''] ?? ADVANCE[''];
+    const width = text.length * adv;
+    const anchor = attr('text-anchor');
+    const left = anchor === 'middle' ? x - width / 2 : anchor === 'end' ? x - width : x;
+    if (left < -1 || left + width > w + 1)
+      overruns.push(`${name}: "${text.slice(0, 46)}" runs to ${Math.round(left + width)} of ${w}`);
+  }
+}
+
 function svg(name, w, h, body){
+  checkLabels(name, w, body);
   const doc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
 ${STYLE}
 ${body}
@@ -2918,5 +2946,51 @@ const prof = (() => {
   <text class="cf-d" x="20" y="324">all the way round turns it by 360° &#8212; in 2.12 hours.</text>`));
 }
 
+// =============================================================================
+// 31 — storage against fan-out. Storage is a fixed 76 MB whatever the player
+// count; messages are players x edits x recipients, so the gap only widens.
+// Text uses cf-c and cf-d: the stroke classes are for geometry, and applying
+// one to a <text> thickens every glyph.
+// =============================================================================
+{
+  const W = 520, H = 372;
+  const L = 64, R = W - 130, T = 66, B = 234;
+  const ticks = [0, 25, 50, 75, 100];
+  const EDITS = 0.5;          // edits per player per second, sustained building
+  const RECIPIENTS = 10;      // doc 22's interest test at a 76 m horizon
+  const msgs = n => n * EDITS * RECIPIENTS;
+  const maxMsg = msgs(100);
+  const px = n => L + (R - L) * n / 100;
+  const py = v => B - (B - T) * v / maxMsg;
+
+  const grid = ticks.map(n =>
+    `<path class="cf-l" d="M${f(px(n))} ${T}L${f(px(n))} ${B}"/>`
+    + `<text class="cf-d" x="${f(px(n))}" y="${B + 18}" text-anchor="middle">${n}</text>`).join('');
+  const curve = ticks.map((n, i) => `${i ? 'L' : 'M'}${f(px(n))} ${f(py(msgs(n)))}`).join('');
+
+  made.push(svg('fan-out-is-the-cost', W, H, `
+  <text class="cf-big" x="14" y="26">what grows when a player joins</text>
+  <text class="cf-d" x="14" y="46">0.5 edits per player per second, each reaching 10 neighbours</text>
+  ${grid}
+  <path class="cf-l" d="M${L} ${B}L${R} ${B}"/>
+  <path class="cf-a" d="${curve}"/>
+  <text class="cf-c" x="${R + 8}" y="${f(py(maxMsg) + 4)}">messages</text>
+  <text class="cf-c" x="${R + 8}" y="${f(py(maxMsg) + 20)}">per second</text>
+  <text class="cf-d" x="${R + 8}" y="${f(py(maxMsg) + 38)}">${msgs(100)}/s here</text>
+  <path class="cf-g" d="M${L} ${B - 3}L${R} ${B - 3}"/>
+  <text class="cf-c" x="${R + 8}" y="${B - 22}">storage</text>
+  <text class="cf-d" x="${R + 8}" y="${B - 6}">76 MB, flat</text>
+  <text class="cf-d" x="${f((L + R) / 2)}" y="${B + 40}" text-anchor="middle">players</text>
+  <path class="cf-l" d="M14 ${B + 62}L${W - 14} ${B + 62}"/>
+  <text class="cf-d" x="14" y="${B + 84}">Storage is the number everyone watches, and it never moves. Fan-out is the</text>
+  <text class="cf-d" x="14" y="${B + 100}">one that bills, because interest management IS fan-out &#8212; so count</text>
+  <text class="cf-d" x="14" y="${B + 116}">messages per second from the first day.</text>`));
+}
+
+if (overruns.length){
+  console.log(`\n${overruns.length} label(s) run past the viewBox:`);
+  for (const o of overruns) console.log('  ' + o);
+  console.log('');
+}
 console.log(`wrote ${made.length} figures to docs/figures/`);
 for (const m of made) console.log('  ' + m + '.svg');

@@ -72,6 +72,13 @@ the thing serverless is bad at. Receive, store, fan out. That is a Lambda.
 Storage is 76 MB and requests are pennies. The number that grows is **messages**,
 because interest management *is* fan-out:
 
+![A line for messages per second climbing steadily with player count against a flat line for storage sitting on the axis](figures/fan-out-is-the-cost.svg)
+
+*Storage does not move: a well-played world is 76 MB whether one player is on or
+a hundred. Messages are players times edits times recipients, so every player who
+joins adds to a number nobody is watching. At a hundred players building steadily
+that is 500 messages a second, and API Gateway bills each one.*
+
 ```
 messages/second  ≈  players × edits per player per second × interested recipients
 ```

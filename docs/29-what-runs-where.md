@@ -31,8 +31,8 @@ docs 00–27 except in a note about opening the demos. What
 That is a statement about **determinism**, not about deployment. A native client
 regenerating the coarse map satisfies doc 22 completely and needs no WebAssembly
 at all. Doc 28 read "client", inferred "browser client", and then promoted the
-inference to the deciding argument. Earlier drafts of this document would have
-repeated it; it is corrected here instead, and doc 28 now points at this page.
+inference to the deciding argument. Doc 28 points at this page for the
+correction.
 
 **Whether there is a browser client was a product decision nobody had made.** It
 has since been made: **there is one, and it is the primary client.** That reverses
@@ -45,8 +45,8 @@ inferred turned out to be wanted anyway.
 
 ## The server never generates terrain, and that is doc 22's own claim
 
-Earlier drafts of this document drew the server and the client each holding the
-same core, terrain generation included. That is wrong, and
+The tempting picture has the server and the client each holding the same core,
+terrain generation included. That is wrong, and
 [doc 22](22-multiplayer-interest.md) says so in one line of its own summary:
 
 > **The server needs a player position per client**, which it has anyway, **and
@@ -75,8 +75,8 @@ is not a party to it.
 
 ## Four parts, not three — and the split is not where it looked
 
-The mistake in the earlier draft was lumping two different things together as
-"the core". They have different homes.
+Lumping two different things together as "the core" is what hides the split.
+They have different homes.
 
 ### Addressing — both sides, and unavoidably so
 
@@ -182,7 +182,7 @@ already has, and change nothing else in this document.
 ## So: how much of the engine is Rust?
 
 **All of it, and doc 28's reasoning covers about a fifth of it.** Those are both
-worth saying.
+true.
 
 - The **determinism** argument (§1–3 of doc 28) constrains **generation only** —
   which is client-side, and is the smallest of the four parts.
@@ -264,6 +264,14 @@ it costs everything.
 
 ## Still open
 
+- **This page first drew the server holding the core**, terrain generation
+  included. Doc 22 already ruled that out in one line: the server needs a player
+  position per client and nothing else.
+- **Doc 28 inferred a browser client** from doc 22's word "client", which is a
+  statement about determinism rather than deployment, and then made the
+  inference its deciding argument.
+
+
 - ~~Whether there is a browser client at all.~~ — **decided: yes, and it is the
   primary client.** See [doc 28](28-language-and-runtime.md), which now lands on
   TypeScript, and [doc 31](31-deployment.md) for the shape of the hosting.
@@ -301,9 +309,8 @@ it costs everything.
   Doc 28 read that as a browser and made it the deciding reason; that is
   corrected.
 - **The server never generates terrain.** Doc 22 already said it — "a player
-  position per client, and nothing else" — and this page had it wrong first time.
-  A server that generated the world would be computing something only a screen
-  could use.
+  position per client, and nothing else". A server that generated the world would
+  be computing something only a screen could use.
 - **Four parts, not three.** **Addressing** is on both sides and unavoidably so,
   because the delta store is keyed by cell ID. **Generation** is client-side and
   is the only part that must be bit-identical. **Presentation** is client-side and

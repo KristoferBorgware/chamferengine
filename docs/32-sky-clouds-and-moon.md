@@ -90,9 +90,8 @@ round**, which is what doc 16 suggested without knowing this was the reason.
 
 ## Clouds borrow the lattice and are not cells
 
-Earlier drafts of this document said a cloud was "a cell of the same grid at a
-bigger radius, with no new addressing". That is wrong in a way worth being precise
-about, because it invites exactly the mistake it should be preventing.
+A cloud is not "a cell of the same grid at a bigger radius". The difference is
+precise, and getting it wrong invites exactly the mistake it should prevent.
 
 **Clouds have no address at all.** Not a cell ID, not a chunk, not a layer.
 
@@ -248,7 +247,7 @@ the full diameter — so it swings against the stars by a couple of degrees, sev
 times its own width. Paint it into the skybox at infinity and that motion is
 missing; the moon stays pinned to the stars in a way players read as cheap without
 being able to say why. **Draw it as an object at a finite distance and the
-parallax is free.**
+parallax comes out of the same projection everything else uses.**
 
 ---
 
@@ -256,9 +255,8 @@ parallax is free.**
 
 The section above found that the moon **survives** shrinking: scaling preserves
 angles, so a faithfully scaled moon still subtends 0.52°. Atmospheric scattering
-is the mirror image, and earlier drafts of this document got it wrong — they filed
-sky colour under *"art direction and no measurement here constrains it"* and moved
-on. A measurement does constrain it, and quite hard.
+is the mirror image. Sky colour looks like pure art direction, and a measurement
+constrains it, quite hard.
 
 **Optical depth is not scale-free.** It is *(a property of air)* × *(a path
 length)* — and when the planet shrinks, only the path shrinks. Air does not
@@ -320,6 +318,16 @@ property of light and air, not of any planet, so it needs no fiction.)*
 
 ## Still open
 
+- **Sky colour was filed under art direction** with no measurement constraining
+  it. Optical depth is *(a property of air)* × *(a path length)*, and only the
+  path shrinks, so correctly scaled air gives a zenith `τ` of `6.4e-5` against
+  Earth's `0.241` — **3,748× too thin**, and a black daytime sky.
+
+- **A cloud was described as a cell at a bigger radius.** A cloud has no cell ID,
+  no chunk and no layer — `layer` counts downward from the crust top, so there is
+  no value it could take. It is a lattice point in a transient buffer.
+
+
 - **Most of how they look.** This document settles where the sky is, how clouds
   are addressed and moved, how big the moon can be, and **that the atmosphere must
   be invented** — but not what any of it looks like. Cloud shading, star fields,
@@ -361,8 +369,8 @@ property of light and air, not of any planet, so it needs no fiction.)*
   sunset in place by walking west. That is the world telling you it is small, for
   free.
 - **Clouds borrow the lattice and are not cells.** The *construction* is
-  radius-independent so the hexagons are free; the **address is not reused at
-  all**. There is no layer number for a cloud — `layer` counts **downward** — and
+  radius-independent so the hexagons need no new geometry; the **address is not
+  reused at all**. There is no layer number for a cloud — `layer` counts **downward** — and
   an address is what makes a thing storable, so withholding it keeps "never
   stored" true by construction. **Level 5** is a 64 m puff and **10,242 points for
   the whole sky**, under **9%** ever in view: a buffer, not a data structure.
