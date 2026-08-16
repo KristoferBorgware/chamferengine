@@ -9,6 +9,7 @@ import {
 	seedFromString,
 } from "chamfer/generation";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
+import { Vec3 } from "chamfer/math";
 
 /** Coarse enough to build once per file, fine enough to carry rivers. */
 const COARSE_LEVEL = 6;
@@ -179,6 +180,50 @@ describe("water", () => {
 			expect(column.waterRadius).toBeGreaterThanOrEqual(
 				column.groundRadius,
 			);
+	});
+});
+
+describe("blockAtPosition", () => {
+	it("agrees with the column it stands over", () => {
+		for (const column of columns(64))
+			for (const layer of [
+				column.waterLayer,
+				column.groundLayer,
+				column.groundLayer + 3,
+			]) {
+				if (layer < 0 || layer >= shape.crustDepth) continue;
+				// The middle of the layer, so rounding at the boundary is not
+				// what is under test.
+				const radius =
+					shape.radiusOfLayer(layer) - shape.blockSize * 0.5;
+				const at = new Vec3(column.x, column.y, column.z).scale(radius);
+				expect(gen.blockAtPosition(at)).toBe(
+					gen.blockAt(column, layer),
+				);
+			}
+	});
+
+	it("says water for a point under a lake or the sea, and air above it", () => {
+		// Whether a camera is under the surface is this query and nothing else:
+		// water is a block, so there is no water volume to test against.
+		let wet = 0;
+		for (const column of columns(32)) {
+			if (column.waterLayer >= column.groundLayer) continue;
+			// The middle of the first water layer, and the middle of the air
+			// layer above it. The surface itself sits somewhere inside the air
+			// layer, so sampling at the surface reads whichever side of the
+			// boundary the rounding lands on.
+			const mid = (layer: number) =>
+				new Vec3(column.x, column.y, column.z).scale(
+					shape.radiusOfLayer(layer) - shape.blockSize * 0.5,
+				);
+			const under = mid(column.waterLayer);
+			const over = mid(column.waterLayer - 1);
+			expect(gen.blockAtPosition(under)).toBe(BlockType.WATER);
+			expect(gen.blockAtPosition(over)).toBe(BlockType.AIR);
+			wet++;
+		}
+		expect(wet).toBeGreaterThan(0);
 	});
 });
 

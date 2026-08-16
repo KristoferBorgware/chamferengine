@@ -1,12 +1,14 @@
 import type { CoarseMap } from "../coarse/CoarseMap.js";
 import type { TerrainColumn } from "./TerrainColumn.js";
 import type { TerrainOptions } from "./TerrainOptions.js";
+import type { Vec3 } from "../../math/Vec3.js";
 import type { WorldShape } from "../../world/WorldShape.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
 import { caveDensity } from "./caveDensity.js";
 import { fbm } from "../noise/fbm.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
+import { positionToCell } from "../../addressing/lookup/positionToCell.js";
 
 /** Offset from the world seed, so the detail differs from the coarse tiers. */
 const DETAIL_SEED_OFFSET = 4;
@@ -143,6 +145,23 @@ export class TerrainGenerator {
 		}
 
 		return this.material(column, depthBelow);
+	}
+
+	/**
+	 * The block at a point in space.
+	 *
+	 * Position to cell, then a block read. Floating in water is this same
+	 * query, and so is a camera deciding whether it is under the surface: water
+	 * is a block like any other, so there is no water volume to test against and
+	 * no second kind of lookup.
+	 */
+	blockAtPosition(position: Vec3): BlockType {
+		const cell = positionToCell(position, this.shape.n);
+		const column = this.columnAt(cell.face, cell.i, cell.j);
+		return this.blockAt(
+			column,
+			this.shape.layerOfRadius(position.length()),
+		);
 	}
 
 	/** Whether a layer of a column stops a player. */
