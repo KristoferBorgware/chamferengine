@@ -53,9 +53,8 @@ for level in 0..chunkLevel:
 
 Cost is O(depth) — a few dozen operations, no data structure in memory. The
 `flip` bit at the end is the middle-child **half turn** from
-[doc 03](03-addressing.md), carried down the walk. Earlier drafts of this document
-called it a mirror; it negates both axes rather than one, which is a rotation, and
-nothing in the world is ever mirrored.
+[doc 03](03-addressing.md), carried down the walk. It negates both axes, which
+makes it a rotation — nothing in the world is ever mirrored.
 
 ---
 
@@ -226,19 +225,18 @@ maps to it.
 Adopt that and this step is exact *by construction*, and so is
 [doc 09](09-ray-traversal.md)'s straight-line ray walk, which steps across
 exactly these boundaries. Adopt "nearest centre on the sphere" instead and both
-become approximate by ~1%, buying nothing in exchange. The choice is free and
-only one side of it is exact.
+become approximate by ~1%. Nothing is gained by switching. Both definitions are
+equally easy to write down, and only one of them is exact.
 
 The cells remain hexagons, still tile the sphere with no gaps, and still meet
 edge-to-edge everywhere — projection is a homeomorphism, so it cannot change any
 of that. Invariant 11 is untouched.
 
 > **Reconciled by [doc 18](18-cell-boundary.md).** [Doc 14](14-meshing-and-lod.md)
-> used to mesh a *third* thing — the dual polyhedron, with corners at
-> subdivided-triangle centroids. Measured, that curve sits **3.85e-5 of a cell**
-> from this one at level 11, and the gap **halves with every level**. Doc 18 moves
-> the mesh onto this boundary anyway, for free, so the picture a player clicks and
-> the answer this page computes are now the same curve by construction.
+> **Reconciled by [doc 18](18-cell-boundary.md).** The mesh draws this same
+> curve. The two differ by **3.85e-5 of a cell** at level 11, and the gap
+> **halves with every level**, so the picture a player clicks and the answer this
+> page computes are the same curve by construction.
 
 And one property of these cells that is easy to miss:
 
@@ -280,6 +278,19 @@ horizontal one, which is the recurring gift of the layout in
 [doc 03](03-addressing.md). Note `surfaceRadius` here is the *planet reference
 radius*, not the terrain height at this direction — see
 [doc 08](08-terrain-generation.md).
+
+---
+
+## Still open
+
+- **The middle-child flip was called a mirror** in earlier drafts. It negates
+  both axes, so the determinant is `+1` and it is a half turn (`winding.js`).
+- **Doc 14 meshed a different curve** — the dual polyhedron, with corners at
+  subdivided-triangle centroids. [Doc 18](18-cell-boundary.md) moved the mesh
+  onto this page's boundary; the two curves differed by `3.85e-5` of a cell at
+  level 11.
+- **A precomputed spatial lookup for step 1.** Twenty dot products is already
+  negligible, so this waits for a profile.
 
 ---
 

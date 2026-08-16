@@ -87,15 +87,15 @@ concrete number.
 | 13 | 671M | 1.5 m |
 | 14 | 2.7B | 74 cm |
 
-Level 13–14 lands at roughly Minecraft block scale on a 10 km planet.
+Level 13–14 lands at roughly the block scale of a cube world on a 10 km planet.
 
 > **[verified]** `verification/scale.js` prints the full table, levels 0 to 20,
 > for both an Earth-sized and a 10 km planet, alongside the bit budget and the
 > storage figures below.
 
-**Sanity check:** to match Minecraft's actual playable area you would need a
-planet radius around **17,000 km** — larger than Earth. A 10 km planet is a
-*small* world.
+**Sanity check:** to match the playable area of a large flat cube world you
+would need a planet radius around **17,000 km** — larger than Earth. A 10 km
+planet is a *small* world.
 
 **Tool:** [`demos/planet-size-calculator.html`](../demos/planet-size-calculator.html)
 — block size and travel time in; level, snapped radius, cell count, total voxels
@@ -138,9 +138,7 @@ the width reaches zero.*
 
 ### How deep is too deep
 
-Earlier drafts put the threshold at roughly 85% of surface width and admitted it
-was a guess with no script behind it. There is a measured anchor available
-instead, and it is more permissive than the guess.
+The threshold has a measured anchor rather than a chosen one.
 
 The trick is to stop asking "when does a cell look narrow?" and ask "when is it
 narrower than cells the player has *already walked across*?" Because the surface
@@ -151,7 +149,7 @@ Taper down to that and you have produced nothing the surface does not already
 have. That puts the budget at **25.6% of the radius** — and it confirms the old
 85% guess was conservative, so nothing built on it was wrong.
 
-Converting to layers gives a result worth stating on its own:
+In layers that is:
 
 ```
 maxCrust = (1 − 0.744) · 2^D / K        layers
@@ -177,9 +175,8 @@ headroom**. Capping is not a constraint on it; it is a ceiling nobody is near.
 ### Merging layers is declined, and now priced
 
 There is an obvious alternative to capping: when cells get too narrow, drop the
-horizontal resolution by one level and carry on down. **Merging layers.** Earlier
-drafts of this document suggested it in passing. It used to be declined on
-principle; it can now be declined on arithmetic.
+horizontal resolution by one level and carry on down. **Merging layers.** It is
+declined here on arithmetic.
 
 **What it buys.** One merge doubles cell width, so the taper budget restarts:
 reach goes from 25.6% of the radius to 62.8%. The ID gives the layer **10 bits**,
@@ -213,8 +210,8 @@ which four separate results are built on:
 |---|---|---|
 | Vertical neighbour is `layer ± 1` | [03](03-addressing.md) | a full doc 04 lookup at the shell |
 | Gravity and the three frames stay cheap | [13](13-gravity-and-orientation.md) | frames rebuilt across the shell |
-| Vertical face merging is exact to 1.5e-16 | [14](14-meshing-and-lod.md) | stacked cells no longer share a radial plane |
-| Sky light stored per column, 32× smaller | [16](16-lighting.md) | columns no longer straight through |
+| Vertical face merging is exact to 1.5e-16 | [14](14-meshing-and-lod.md) | stacked cells stop sharing a radial plane |
+| Sky light stored per column, 32× smaller | [16](16-lighting.md) | columns stop running straight through |
 
 **135% more crust against four broken results and an unrimmed planetary seam.
 Cap the crust.** [Doc 11](11-open-topics.md) records this as closed rather than open.
@@ -223,10 +220,39 @@ The calculator reports the taper live.
 
 ---
 
-## Two things the numbers assume
+## Bit and storage ceilings
 
-- **Cell area is not perfectly uniform**, and by more than this document used to
-  say. Goldberg hexagons vary **1.99:1** across the sphere — **2.74:1** counting
+Three separate ceilings on how deep you can go, and only one of them binds:
+
+- **Bits** — the stored word is
+  `[planet 12][face 5][path 2×D][corner 2][layer 10]`
+  ([doc 03](03-addressing.md)), so `12 + 5 + 2D + 2 + 10 ≤ 64` and the ceiling is
+  **`D` = 17**. That is **172 billion** cells a layer — a **1.6 cm** block on the
+  worked planet above — so it is not the binding constraint. Two higher figures
+  are reachable by counting fewer fields: **29 levels** from
+  `(64 − 5) / 2`, counting the face and the path alone, and **24 levels**
+  from `(64 − 5 − 10) / 2` once the layer joins them. Both are computed before
+  anyone packed a real word, and neither paid for the planet field or the 2-bit
+  corner that names a vertex.
+- **Storage** — level 15 at one byte per cell is ~11 GB. This is what actually
+  stops you.
+- **Nothing, if you generate on demand.** A cell's terrain comes from a noise
+  function of its position, so nothing exists until a player visits. Only
+  modified cells are written. Under that model the level you pick costs nothing
+  up front — it is a coordinate system, not an allocation.
+
+That last point is the one that matters, and [doc 08](08-terrain-generation.md)
+is where it is cashed in.
+
+---
+
+## Still open
+
+Two things the numbers assume:
+
+
+- **Cell area is not perfectly uniform.** Goldberg hexagons vary **1.99:1**
+  across the sphere — **2.74:1** counting
   the twelve pentagons — so block size is genuinely an average
   ([doc 02](02-geometry-choice.md)). Real cells run from **0.744×** to **1.098×**
   the nominal spacing, which on the worked planet means 1 m blocks that are
@@ -239,33 +265,17 @@ The calculator reports the taper live.
 *Block size is measured flat-to-flat. A hexagon that wide covers **0.87×** the
 footprint of a square block of the same size, and reaches **1.15×** as far corner
 to corner. Everything is about 13% smaller than the same number would suggest in
-Minecraft — worth knowing before you promise players a "1 metre block".*
+a cube world — worth knowing before you promise players a "1 metre block".*
 
----
+And two figures this page carried before they were measured:
 
-## Bit and storage ceilings
-
-Three separate ceilings on how deep you can go, and only one of them binds:
-
-- **Bits** — the stored word is
-  `[planet 12][face 5][path 2×D][corner 2][layer 10]`
-  ([doc 03](03-addressing.md)), so `12 + 5 + 2D + 2 + 10 ≤ 64` and the ceiling is
-  **`D` = 17**. That is **172 billion** cells a layer — a **1.6 cm** block on the
-  worked planet above — so it is not the binding constraint. But it is lower than
-  the two numbers earlier drafts of this page gave: **29 levels** from
-  `(64 − 5) / 2`, counting the face and the path alone, and then **24 levels**
-  from `(64 − 5 − 10) / 2` once the layer joined them. Both were computed before
-  anyone packed a real word, and neither paid for the planet field or the 2-bit
-  corner that names a vertex.
-- **Storage** — level 15 at one byte per cell is ~11 GB. This is what actually
-  stops you.
-- **Nothing, if you generate on demand.** A cell's terrain comes from a noise
-  function of its position, so nothing exists until a player visits. Only
-  modified cells are written. Under that model the level you pick costs nothing
-  up front — it is a coordinate system, not an allocation.
-
-That last point is the one that matters, and [doc 08](08-terrain-generation.md)
-is where it is cashed in.
+- **The taper threshold was a guess** at roughly 85% of surface width, with no
+  script behind it. Measured, a cell has gone too thin at **0.744×** nominal, so
+  the budget is **25.6%** of the radius — more permissive than the guess, so
+  nothing built on it was wrong (`taper.js`).
+- **The layer field was described as holding 512 layers.** It is 10 bits, so it
+  addresses **1,024**. That takes the first merge from 77 addressable layers to
+  **589**, and moves `D` 12 from field-bound to taper-bound.
 
 ---
 

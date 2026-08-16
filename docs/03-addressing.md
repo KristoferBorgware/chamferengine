@@ -40,7 +40,8 @@ worked planet. See [doc 15](15-precision-and-origin.md).
 
 The Goldberg cells are already the dual of that structure: every hexagon is a
 degree-6 vertex of the geodesic, every pentagon a degree-5 one. Indexing the
-thing the hexagons are derived from gives an exact hierarchy for free.
+thing the hexagons are derived from gives an exact hierarchy at no extra cost:
+the triangles are already there, and they already nest.
 
 ![A triangular lattice with a hexagon drawn around each corner point](figures/cells-on-corners.svg)
 
@@ -238,8 +239,8 @@ at the bottom so one column is; the chunk at any level is still **one shift**.
 ![The stored word at depth 11: planet 12 bits, face 5, path digits 22, corner 2, layer 10, and 13 spare, with the chunk cut marked as a dashed line inside the path digits](figures/cell-id-bits.svg)
 
 *The same picture as the draft above, after the repair — and the difference is the
-dashed line. `C` no longer names a field; it names **a place to read**, part way
-along path digits that run to full depth regardless. That is the whole of what
+dashed line. `C` names **a place to read**, part way along path digits that run
+to full depth regardless. That is the whole of what
 option C bought: slide the dashed line and not one bit of one stored ID changes.
 The address is the blue span, 29 bits; the planet and the layer are the rest of
 the word.*
@@ -278,8 +279,6 @@ Multiply them:
 
 > **[verified]** `verification/id.js`, section 7. **7.84%** at `D` 3, **7.81%** at
 > `D` 5 and `D` 11 — flat in depth, because every factor above is a constant.
-> Earlier drafts of this document said **31.25%** (`20/32 × 1/2`); that number was
-> computed for the `q, r` layout and does not survive the corner field.
 
 That costs **3.68 bits** against the draft's 1.68, and the two extra bits are not
 a subtlety — they are the corner field itself, arriving as a wider word rather
@@ -303,7 +302,7 @@ They are the **same coordinate pair at different scopes**.
 One pair, cut in two. The path digits are not extra information: they are `(i, j)`
 re-encoded so that **chopping off the end leaves a meaningful region** instead of
 a meaningless number. Plain `(i, j)` would identify cells perfectly well — it just
-would not give you chunks for free.
+would not give you chunks by truncation.
 
 > **[verified]** `verification/qr.js` splits and rejoins every lattice point at
 > depth 8 with chunk level 4: 33,153 / 33,153 exact round-trips.
@@ -332,10 +331,10 @@ in nearly half of all chunks.
 
 ### It is a half turn, not a mirror
 
-Earlier drafts of this document called a middle-descended chunk a **mirrored
-frame**. That is the wrong word, and it is worth correcting carefully, because
-"mirror" implies handedness flips somewhere — which would reach into meshing,
-surface normals and everything else that cares which way round the world is.
+"Mirror" would be the wrong word for a middle-descended chunk, and the
+difference reaches a long way. A mirror flips handedness, which would reach into
+meshing, surface normals and everything else that cares which way round the world
+is.
 
 Look at what the descent actually does: `i → half − i` and `j → half − j`. It
 negates **both** axes. A mirror negates one. Negating both is a rotation by half a
@@ -376,8 +375,8 @@ The fix is [doc 13](13-gravity-and-orientation.md)'s: order the neighbour ring
 geometrically, counter-clockwise as seen from outside, inside `neighbour()`. Then
 nothing above `neighbour()` ever learns about any of this.
 
-One more consequence worth stating, because it outlives a running session: **a
-stored rotation must be frame-independent.** If a directional block saves a raw
+One more consequence outlives a running session: **a stored rotation must be
+frame-independent.** If a directional block saves a raw
 `(q, r)`-derived index, the same byte means opposite things in flipped and
 unflipped chunks, and the save file is wrong rather than the renderer.
 
@@ -483,8 +482,8 @@ open topic in [doc 11](11-open-topics.md) rather than a recommendation.
 
 Two consequences:
 
-- **Vertical neighbours are free.** Above and below are the same address with
-  layer ±1. No face crossing, no pentagon case. All awkward geometry is
+- **Vertical neighbours cost one addition.** Above and below are the same address
+  with layer ±1. No face crossing, no pentagon case. All awkward geometry is
   horizontal only. This one fact is what makes gravity tractable
   ([doc 13](13-gravity-and-orientation.md)) and side-face merging exact
   ([doc 14](14-meshing-and-lod.md)).
@@ -528,12 +527,23 @@ address.
 
 ---
 
+## Still open
+
+- **The code-space figure was 31.25%** (`20/32 × 1/2`) in earlier drafts. That
+  was computed for the `q, r` layout and does not survive the corner field;
+  measured, it is **7.81%** and flat in depth (`id.js` §7).
+- **The middle-child flip was called a mirror.** It negates both axes, so the
+  determinant is `+1` and it is a half turn (`winding.js`). Nothing in the world
+  is ever mirrored, and no chirality bug is possible.
+
+---
+
 ## In one breath
 
 - Triangles nest exactly; hexagons never do. So the **hierarchy is on the
   triangles** and the **cells are on their corners**.
 - An address is the **route down the splits**: face, then one digit per level.
-  Truncating digits gives the containing chunk, for free.
+  Truncating digits gives the containing chunk.
 - The address is **`5 + 2D + 2`** bits — path to full depth, then two bits naming
   which corner of the smallest triangle, because path digits name triangles and a
   cell is a **vertex**. The chunk cut is a place to read, not a field, so **chunk

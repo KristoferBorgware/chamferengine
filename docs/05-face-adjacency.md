@@ -142,7 +142,7 @@ reached, and it is written down once in the face table that already exists.
 > reports as every table entry coming out `reversed` — so one direction table
 > means the same turn on every face.
 
-Note what falls out for free: negating an offset is exactly `k → k+3`. That is
+One thing falls straight out of that: negating an offset is exactly `k → k+3`. That is
 [doc 03](03-addressing.md)'s half turn, and it is why the flip is a rotation
 rather than a mirror.
 
