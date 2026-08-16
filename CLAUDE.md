@@ -13,9 +13,9 @@ and duplicates information found there.
   and dead heading anchors, and the Pages workflow runs it — a broken link
   turns the deploy red. Note the renderer does **not** nest `*italic*` inside
   `**bold**`; it reports `unconverted bold` when you try.
-- **No engine source yet.** Nothing in the specification blocks it any more
-  (doc 26 Part 1 is empty, doc 28 picked **TypeScript**), but do not start
-  implementing from these documents without being asked to.
+- **Wait to be asked before writing engine source.** Every gap that blocked code
+  is closed — doc 26 Part 1 is empty and doc 28 picked **TypeScript** — so the
+  constraint here is scope, not readiness.
 - Commit as `KristoferBorgware <kristofer@borgware.se>`, with no co-authoring
   trailer and no model identifier in the message. **Set this in the repo config,
   once, at the start of a session** — `git config user.name` / `user.email`. Passing
@@ -30,7 +30,9 @@ and duplicates information found there.
 
 ## Project shape
 
-- Documentation and demos only. No engine source code exists yet.
+- The repository holds a prose specification, generated figures, runnable demos
+  and verification scripts. Engine source begins at V0.5, defined in
+  [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — **the stack, the four-part runtime split
   and the milestone definitions, stated rather than argued.** Read it before
   anything in `docs/` when the question is *what are we building with* or *what is
