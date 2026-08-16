@@ -20,7 +20,7 @@ import {
 } from "chamfer/mesh";
 import { Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
-import { joinPath } from "chamfer/addressing";
+import { joinPath, positionToCell } from "chamfer/addressing";
 import type { Geometry } from "chamfer/mesh";
 
 const DEPTH = 8;
@@ -53,6 +53,21 @@ function mesh(key: number) {
 			map.seed,
 		),
 	};
+}
+
+/** A repeatable spread of directions over the sphere. */
+function* spread(count: number) {
+	let s = 24680;
+	const rnd = () => {
+		s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+		return s / 2 ** 32;
+	};
+	for (let n = 0; n < count; n++) {
+		const z = 2 * rnd() - 1;
+		const phi = 2 * Math.PI * rnd();
+		const r = Math.sqrt(1 - z * z);
+		yield new Vec3(r * Math.cos(phi), r * Math.sin(phi), z).normalize();
+	}
 }
 
 /** Every triangle of a geometry, as three world-space corners. */
@@ -320,6 +335,95 @@ describe("vertical run-length merging", () => {
 		// Two runs a side now, because a quad carries one block's color.
 		expect(tally.faces).toBe(6 * 2 + 2);
 		expect(tally.merged).toBe(6 * (9 + 9));
+	});
+});
+
+describe("the skirt at a level seam", () => {
+	it("hangs deeper than the levels disagree", () => {
+		// Two chunks at different levels sample the terrain at different
+		// spacings, so their surfaces meet at slightly different heights and the
+		// join opens a slit. Radial boundaries agree across levels, so the slit
+		// is horizontal and a skirt is the whole of it.
+		const base = new WorldShape(1700, 10, 150, maxCrustDepth(10));
+		for (let lod = 0; lod < 4; lod++) {
+			const fine = new TerrainGenerator(map.seed, base.atLod(lod), map);
+			const coarse = new TerrainGenerator(
+				map.seed,
+				base.atLod(lod + 1),
+				map,
+			);
+			let worst = 0;
+			for (const direction of spread(3000)) {
+				const a = positionToCell(direction, fine.shape.n);
+				const b = positionToCell(direction, coarse.shape.n);
+				worst = Math.max(
+					worst,
+					Math.abs(
+						fine.columnAt(a.face, a.i, a.j).groundRadius -
+							coarse.columnAt(b.face, b.i, b.j).groundRadius,
+					),
+				);
+			}
+			// Under one cell of the finer level, at every level, which is what
+			// makes two cells cover it with margin.
+			expect(worst / fine.shape.blockSize).toBeLessThan(1);
+		}
+	});
+
+	it("costs the rim rather than the area", () => {
+		// A skirt hangs from the edge of a chunk, so doubling the chunk's side
+		// should roughly double what it costs, not quadruple it. That is the
+		// difference between paying for a boundary and paying for a surface.
+		const added = (chunkLevel: number) => {
+			const chunk = generateChunk(
+				terrain,
+				ChunkAddress.fromKey(3, chunkLevel),
+				chunkLevel,
+				LAYERS,
+			);
+			const sampler = () => new ChunkColumnSampler(chunk, terrain);
+			const bare = buildChunkMesh(chunk, sampler(), shape, map.seed);
+			const skirted = buildChunkMesh(chunk, sampler(), shape, map.seed, {
+				skirtCells: 2,
+			});
+			return {
+				m: chunk.m,
+				faces: skirted.tally.faces - bare.tally.faces,
+				cells: bare.tally.cells,
+			};
+		};
+		const small = added(4);
+		const large = added(3);
+		expect(large.m).toBe(small.m * 2);
+		expect(small.faces).toBeGreaterThan(0);
+		// Four times the cells, and near twice the skirt.
+		expect(large.cells / small.cells).toBeGreaterThan(3.5);
+		expect(large.faces / small.faces).toBeGreaterThan(1.5);
+		expect(large.faces / small.faces).toBeLessThan(2.6);
+	});
+
+	it("puts every skirt vertex below the surface it hangs from", () => {
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(400, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const skirted = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ skirtCells: 2 },
+		);
+		for (let v = 0; v < skirted.opaque.vertices.length; v += 6) {
+			const p = new Vec3(
+				skirted.opaque.vertices[v]! + skirted.origin.x,
+				skirted.opaque.vertices[v + 1]! + skirted.origin.y,
+				skirted.opaque.vertices[v + 2]! + skirted.origin.z,
+			);
+			expect(p.length()).toBeLessThanOrEqual(shape.crustTopRadius + 1e-6);
+		}
 	});
 });
 

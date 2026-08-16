@@ -10,8 +10,24 @@ export interface MeshOptions {
 	 * one: 4 triangles a cell for a fully exposed cap.
 	 */
 	readonly crustFloor?: boolean;
+
+	/**
+	 * How far the rim of a chunk hangs below its surface, in cells.
+	 *
+	 * Two chunks drawn at different levels sample the terrain at different
+	 * spacings, so their surfaces meet at slightly different heights and the
+	 * join opens a slit. A wall hanging from the finer chunk's rim covers a
+	 * slit up to its own depth.
+	 *
+	 * Radial boundaries agree across levels, so the slit is horizontal and a
+	 * skirt is the whole of it as long as a column is one run of ground. A
+	 * column with a cave in it opens a hole a skirt reaches past, and that is
+	 * what seam ownership is for.
+	 */
+	readonly skirtCells?: number;
 }
 
 export const MESH_DEFAULTS = {
 	crustFloor: false,
+	skirtCells: 0,
 } as const satisfies Required<MeshOptions>;

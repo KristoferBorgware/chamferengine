@@ -1,0 +1,93 @@
+import { ChunkAddress } from "./ChunkAddress.js";
+import { chunkCenter } from "./chunkCenter.js";
+import { horizonAngle } from "./horizonAngle.js";
+
+/** One chunk to draw, and how coarsely. */
+export interface ChunkSelection {
+	/** How many levels coarser than the finest the chunk is sampled. */
+	readonly lod: number;
+
+	/** Where the chunk's triangle sits in the hierarchy. */
+	readonly chunkLevel: number;
+
+	readonly key: number;
+
+	/** Straight-line distance from the eye to the chunk's centre. */
+	readonly distance: number;
+}
+
+/**
+ * How many times a chunk's own width it has to be away before it is drawn one
+ * level coarser.
+ */
+export const DETAIL = 3;
+
+/**
+ * Which chunks a viewer sees, each at the level to draw it.
+ *
+ * **Depth and chunk level drop together.** A chunk one level coarser covers
+ * four times the area at half the resolution, so it holds the same 561 slots
+ * and costs the same to build, and there are four times fewer of them. Holding
+ * the chunk level fixed instead would put 81,920 chunks on a planet that is
+ * 40,962 cells at its coarsest level -- more draw calls than cells.
+ *
+ * Selection walks the triangle hierarchy from the twenty faces downward, which
+ * is what that hierarchy is for. A triangle far enough away for its own width
+ * is drawn; one closer is split into its four children and each asked again.
+ * Children tile their parent exactly, so the surface is covered once with no
+ * gap and no overlap however the levels fall.
+ */
+export function selectChunks(
+	depth: number,
+	finestChunkLevel: number,
+	viewer: { readonly x: number; readonly y: number; readonly z: number },
+	viewerRadius: number,
+	surfaceRadius: number,
+	detail = DETAIL,
+): ChunkSelection[] {
+	const length = Math.sqrt(
+		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
+	);
+	const ux = viewer.x / length;
+	const uy = viewer.y / length;
+	const uz = viewer.z / length;
+	const eyeX = ux * viewerRadius;
+	const eyeY = uy * viewerRadius;
+	const eyeZ = uz * viewerRadius;
+	const horizon = horizonAngle(viewerRadius, surfaceRadius);
+
+	const out: ChunkSelection[] = [];
+	const walk = (address: ChunkAddress, chunkLevel: number): void => {
+		const extent = chunkCenter(address, depth, chunkLevel);
+		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
+		const spread = Math.acos(Math.min(1, extent.cosRadius));
+		// Over the horizon by more than its own width: the whole triangle is on
+		// the far side of the planet.
+		if (cos < Math.cos(Math.min(Math.PI, horizon + spread))) return;
+
+		const dx = extent.x * surfaceRadius - eyeX;
+		const dy = extent.y * surfaceRadius - eyeY;
+		const dz = extent.z * surfaceRadius - eyeZ;
+		const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		const width = 2 * spread * surfaceRadius;
+
+		if (chunkLevel < finestChunkLevel && distance < detail * width) {
+			for (let child = 0; child < 4; child++)
+				walk(
+					new ChunkAddress(address.face, [...address.path, child]),
+					chunkLevel + 1,
+				);
+			return;
+		}
+		out.push({
+			lod: finestChunkLevel - chunkLevel,
+			chunkLevel,
+			key: address.key,
+			distance,
+		});
+	};
+
+	for (let face = 0; face < 20; face++) walk(new ChunkAddress(face, []), 0);
+	out.sort((a, b) => a.distance - b.distance);
+	return out;
+}

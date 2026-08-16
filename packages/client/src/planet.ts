@@ -1,4 +1,5 @@
 import type { ChunkMesh } from "chamfer/mesh";
+import type { ChunkSelection } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import {
@@ -9,8 +10,8 @@ import {
 	TerrainGenerator,
 	buildCoarseMap,
 	generateChunk,
-	residentChunks,
 	seedFromString,
+	selectChunks,
 } from "chamfer/generation";
 import { buildChunkMesh } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
@@ -28,20 +29,21 @@ const COARSE_LEVEL = 7;
 const MAX_ELEVATION = 150;
 
 /**
- * How many chunks are held at once, and how high the camera may go.
+ * How many times its own width a chunk has to be away before it drops a level.
  *
- * The horizon grows fast: 72 chunks at eye height, 260 at 8 m up, 1,127 at
- * 40 m and 2,120 at 80 m. A chunk takes 14 ms to build, so the ceiling is
- * where the horizon still fits in the budget rather than an arbitrary number.
- * Height above that needs distant chunks at a coarser level, which is what LOD
- * buys and what Project 10 adds.
+ * The worst altitude is around 60 m, where near and far chunks are both in
+ * view: 321 chunks at 2, 471 at 2.5 and 633 at 3.
  */
-const CHUNK_BUDGET = 340;
+const DETAIL = 2;
+
 const MIN_ALTITUDE = 2;
-const MAX_ALTITUDE = 10;
+const MAX_ALTITUDE = RADIUS * 3;
+
+/** How deep a chunk's rim hangs, in its own cells. */
+const SKIRT_CELLS = 2;
 
 /** How many chunks are built per frame, so the page keeps drawing while it fills. */
-const MESH_PER_FRAME = 1;
+const BUILD_PER_FRAME = 1;
 
 /** The color the view fades toward under water, and over what distance. */
 const WATER_FOG: readonly [number, number, number, number] = [
@@ -85,8 +87,15 @@ async function main(): Promise<void> {
 		maxCrustDepth(DEPTH),
 	);
 	const map = buildCoarseMap(seed, { level: COARSE_LEVEL });
-	const terrain = new TerrainGenerator(seed, shape, map);
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
+
+	// One generator per level. A chunk one level coarser samples the terrain at
+	// twice the spacing over four times the area, so it holds the same 561 slots
+	// and there are four times fewer of them.
+	const byLod: TerrainGenerator[] = [];
+	for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
+		byLod.push(new TerrainGenerator(seed, shape.atLod(lod), map));
+	const terrain = byLod[0]!;
 
 	// The camera looks at a point on the surface from a little behind and above
 	// it. Both the point and the height are what dragging and scrolling move.
@@ -115,44 +124,57 @@ async function main(): Promise<void> {
 	let behind = 0.02;
 
 	const meshed = new Map<number, ChunkMesh>();
-	const queue: number[] = [];
+	const queue: ChunkSelection[] = [];
 
-	/** Choose what should be resident, and queue what is missing. */
+	/**
+	 * One number for a chunk at one level.
+	 *
+	 * A key only names a triangle within its own level, so the level has to
+	 * travel with it: the same key at two levels is two different triangles.
+	 */
+	const idOf = (selection: { chunkLevel: number; key: number }) =>
+		selection.chunkLevel * 0x100000 + selection.key;
+
+	/** Choose what should be drawn, and queue what is missing. */
 	function refresh(): void {
-		const eyeRadius = RADIUS + altitude;
-		const wanted = residentChunks(
-			atlas,
+		const wanted = selectChunks(
+			DEPTH,
+			CHUNK_LEVEL,
 			ground,
-			eyeRadius,
+			RADIUS + altitude,
 			RADIUS,
-			CHUNK_BUDGET,
+			DETAIL,
 		);
-		const keep = new Set(wanted);
-		for (const key of [...meshed.keys()])
-			if (!keep.has(key)) {
-				meshed.delete(key);
-				renderer.drop(key);
+		const keep = new Set(wanted.map(idOf));
+		for (const id of [...meshed.keys()])
+			if (!keep.has(id)) {
+				meshed.delete(id);
+				renderer.drop(id);
 			}
 		queue.length = 0;
-		for (const key of wanted) if (!meshed.has(key)) queue.push(key);
+		for (const selection of wanted)
+			if (!meshed.has(idOf(selection))) queue.push(selection);
 	}
 
-	/** Generate and mesh one chunk. */
-	function build(key: number): void {
+	/** Generate and mesh one chunk, at the level it was selected for. */
+	function build(selection: ChunkSelection): void {
+		const at = shape.atLod(selection.lod);
+		const generator = byLod[selection.lod]!;
 		const chunk = generateChunk(
-			terrain,
-			ChunkAddress.fromKey(key, CHUNK_LEVEL),
-			CHUNK_LEVEL,
-			shape.crustDepth,
+			generator,
+			ChunkAddress.fromKey(selection.key, selection.chunkLevel),
+			selection.chunkLevel,
+			at.crustDepth,
 		);
 		const mesh = buildChunkMesh(
 			chunk,
-			new ChunkColumnSampler(chunk, terrain),
-			shape,
+			new ChunkColumnSampler(chunk, generator),
+			at,
 			seed,
+			{ skirtCells: SKIRT_CELLS },
 		);
-		meshed.set(key, mesh);
-		renderer.upload(mesh);
+		meshed.set(idOf(selection), mesh);
+		renderer.upload({ ...mesh, key: idOf(selection) });
 	}
 
 	refresh();
@@ -193,19 +215,19 @@ async function main(): Promise<void> {
 			e.preventDefault();
 			altitude = Math.max(
 				MIN_ALTITUDE,
-				Math.min(MAX_ALTITUDE, altitude * (1 + e.deltaY * 0.001)),
+				Math.min(MAX_ALTITUDE, altitude * (1 + e.deltaY * 0.0015)),
 			);
-			behind = 0.008 + altitude * 0.0024;
+			behind = Math.min(0.5, 0.008 + altitude * 0.0024);
 			refresh();
 		},
 		{ passive: false },
 	);
 
 	const draw = () => {
-		for (let n = 0; n < MESH_PER_FRAME; n++) {
-			const key = queue.shift();
-			if (key === undefined) break;
-			build(key);
+		for (let n = 0; n < BUILD_PER_FRAME; n++) {
+			const next = queue.shift();
+			if (next === undefined) break;
+			build(next);
 		}
 
 		resizeToDisplay(ctx);
@@ -228,8 +250,8 @@ async function main(): Promise<void> {
 		const projection = Mat4.perspective(
 			(60 * Math.PI) / 180,
 			canvas.width / canvas.height,
-			0.5,
-			RADIUS * 8,
+			Math.max(0.5, altitude * 0.02),
+			RADIUS * 20,
 		);
 
 		const submerged = terrain.blockAtPosition(from) === BlockType.WATER;
@@ -245,16 +267,20 @@ async function main(): Promise<void> {
 
 		report([
 			`seed "${seedText}"`,
-			`${altitude.toFixed(1)} m up · ${renderer.count} chunks` +
+			`${height(altitude)} up · ${renderer.count} chunks` +
 				(queue.length > 0 ? ` · ${queue.length} to build` : ""),
 			submerged ? "under water" : "drag to travel · scroll for height",
-			altitude >= MAX_ALTITUDE
-				? `${MAX_ALTITUDE} m is the ceiling until LOD lands`
-				: "",
 		]);
 		requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);
+}
+
+/** An altitude, in whichever unit reads better. */
+function height(metres: number): string {
+	return metres < 1000
+		? `${metres.toFixed(metres < 20 ? 1 : 0)} m`
+		: `${(metres / 1000).toFixed(1)} km`;
 }
 
 /** A fixed sun, until Project 12 turns it. */

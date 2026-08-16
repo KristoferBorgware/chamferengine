@@ -122,6 +122,16 @@ export class CoarseMap {
 		depth: number,
 	): number {
 		const shift = depth - this.index.level;
+
+		// A grid coarser than the map reads it directly. Lattices at different
+		// depths nest exactly -- the point `(i, j)` at one depth is `(2i, 2j)`
+		// at the next -- so the coarse cell is named rather than interpolated,
+		// and there is nothing to mix.
+		if (shift <= 0) {
+			const up = -shift;
+			return this.at(field, face, i << up, j << up);
+		}
+
 		const step = 1 << shift;
 		const mask = step - 1;
 		const baseI = i >> shift;

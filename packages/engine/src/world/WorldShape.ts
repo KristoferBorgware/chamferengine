@@ -27,6 +27,9 @@ export class WorldShape {
 
 	readonly crustDepth: number;
 
+	/** How far above sea level layer 0 sits. */
+	readonly maxElevation: number;
+
 	constructor(
 		seaLevelRadius: number,
 		subdivisionDepth: number,
@@ -39,6 +42,27 @@ export class WorldShape {
 			(CELL_CONSTANT * seaLevelRadius) / 2 ** subdivisionDepth;
 		this.crustTopRadius = seaLevelRadius + maxElevation;
 		this.crustDepth = crustDepth;
+		this.maxElevation = maxElevation;
+	}
+
+	/**
+	 * The same planet sampled `lod` levels coarser.
+	 *
+	 * Cells double in width each level and so do layers, and the crust keeps the
+	 * same reach with half as many of them. The crust top does not move, so
+	 * `radiusOfLayer` at one level lands on radii the finer level also has:
+	 * layer `L` here is layer `L * 2^lod` there. Two chunks at different levels
+	 * therefore agree about where every layer boundary is, and a seam between
+	 * them can only open horizontally.
+	 */
+	atLod(lod: number): WorldShape {
+		if (lod === 0) return this;
+		return new WorldShape(
+			this.seaLevelRadius,
+			this.subdivisionDepth - lod,
+			this.maxElevation,
+			Math.ceil(this.crustDepth / 2 ** lod),
+		);
 	}
 
 	/** Cells along one face edge. */

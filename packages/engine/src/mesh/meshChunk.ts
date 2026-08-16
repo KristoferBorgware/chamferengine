@@ -66,6 +66,7 @@ export function meshChunk(
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0 };
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
+	const outward: boolean[] = new Array<boolean>(6).fill(false);
 
 	for (let q = 0; q <= chunk.m; q++)
 		for (let r = 0; q + r <= chunk.m; r++) {
@@ -76,9 +77,14 @@ export function meshChunk(
 			const corners = cellCorners(face, n, i, j);
 			const degree = corners.length;
 			const own = sampler.columnAt(face, i, j);
+			// A cell on the chunk triangle's own edge has neighbours in another
+			// chunk, and those are the edges a skirt hangs from.
+			const onRim = q === 0 || r === 0 || q + r === chunk.m;
 			for (let k = 0; k < 6; k++) {
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+				outward[k] =
+					onRim && nb !== null && !inChunk(chunk, nb.i, nb.j);
 			}
 
 			meshCell(
@@ -98,9 +104,19 @@ export function meshChunk(
 				translucent,
 				tally,
 				settings.crustFloor,
+				settings.skirtCells > 0 ? outward : null,
+				settings.skirtCells,
 			);
 		}
 	return tally;
+}
+
+/** Whether a lattice point falls inside this chunk's triangle. */
+function inChunk(chunk: Chunk, i: number, j: number): boolean {
+	const split = splitPath(i, j, chunk.depth, chunk.chunkLevel);
+	for (let level = 0; level < split.path.length; level++)
+		if (split.path[level] !== chunk.address.path[level]) return false;
+	return true;
 }
 
 /**
@@ -147,6 +163,8 @@ function meshCell(
 	translucent: MeshSink,
 	tally: MeshTally,
 	crustFloor: boolean,
+	outward: readonly boolean[] | null,
+	skirtCells: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -221,6 +239,33 @@ function meshCell(
 				() => 0,
 			);
 			tally.faces++;
+		}
+	}
+
+	// A skirt on every edge of the chunk that faces out of it, hanging from the
+	// cell's own surface. It covers the slit where a neighbour drawn at another
+	// level put its surface at a slightly different height.
+	if (outward && skirtCells > 0) {
+		const top = firstSolid(own, from, to);
+		if (top >= 0) {
+			const block = at(own, top);
+			blockColor(block, face, i, j, seed, COLOR, 0);
+			for (let k = 0; k < degree; k++) {
+				if (!outward[k]) continue;
+				emitSide(
+					opaque,
+					corners,
+					degree,
+					k,
+					shape.radiusOfLayer(top),
+					shape.radiusOfLayer(top + skirtCells),
+					origin,
+					ring,
+					top,
+					top + skirtCells,
+				);
+				tally.faces++;
+			}
 		}
 	}
 
@@ -355,6 +400,13 @@ function emitSide(
 
 	sink.triangle(topLeft, bottomLeft, bottomRight);
 	sink.triangle(topLeft, bottomRight, topRight);
+}
+
+/** The topmost layer of a column that stops light, inside a band. */
+function firstSolid(column: Column, from: number, to: number): number {
+	for (let layer = Math.max(0, from); layer <= to; layer++)
+		if (opacityOf(at(column, layer)) === 2) return layer;
+	return -1;
 }
 
 /** How many of the two cells touching a corner are solid at a layer. */
