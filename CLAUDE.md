@@ -141,31 +141,6 @@ not one per document.
 
 - **Open with the problem**, in one plain sentence about what the player or the
   program is trying to do — not with context or history.
-- **The body is current-state.** A claim reads as true now, not as a step in a
-  story about what it used to say. Do not narrate a correction where the claim
-  itself appears — state the current value and move on.
-- **"Still open" holds the history and the caveats, in one place.** A
-  superseded value, a soft caveat, or an assumption the numbers make goes in a
-  single **Still open** section, near the end of the document and immediately
-  before "In one breath" — never scattered through the body. Strike the old
-  value there and say what it turned out to be; "earlier drafts of this
-  document said ..." belongs in that section and nowhere else on the page.
-  "Honest caveat", "Two things the numbers assume", and anything not yet
-  designed live there too. A weak number stated confidently in the body is the
-  expensive kind of mistake here — the fix is to move it to "Still open", not
-  to soften it in place.
-- **Close with In one breath** — five or six bullets that carry the argument
-  alone.
-
-### A plainer voice for the pages that are not the specification
-
-Everything above is for `docs/`, which teaches a first-time reader the design
-from nothing, step by step, in the imperative. [`ARCHITECTURE.md`](ARCHITECTURE.md)
-and [`CODE-STYLE.md`](CODE-STYLE.md) are not part of that specification and are
-not read that way — a reader opens one to look up a single fact and leaves, not
-to be walked through an argument — so they follow a stricter, plainer set of
-rules instead:
-
 - **State facts, don't announce findings.** Write the conclusion, not the
   discovery of it. "Addressing runs on the client and server", not "both sides,
   unavoidably".
@@ -176,12 +151,24 @@ rules instead:
   like "and that is why this shape fits", "which is why", "already scoped".
   State the fact; if a supporting detail is needed, give it as a separate plain
   sentence, not as an argument for the decision.
+- **The body is current-state.** A claim reads as true now, not as a step in a
+  story about what it used to say. Do not narrate a correction where the claim
+  itself appears — state the current value and move on. Future intent and
+  migration plans belong in the section that is explicitly about what's
+  deferred, never folded as justification into the section about what is true
+  now.
 - **Cut a number that doesn't serve the sentence it's in.** Don't restate a
   figure a second time for effect — say it once, where it is load-bearing.
-- **Describe only the current state of the thing being described.** Future
-  intent and migration plans belong in the section that is explicitly about
-  what's deferred, never folded as justification into the section about what is
-  true now.
+- **"Still open" holds the history and the caveats, in one place.** A
+  superseded value, a soft caveat, or an assumption the numbers make goes in a
+  single **Still open** section, near the end of the document and immediately
+  before "In one breath" — never scattered through the body. Strike the old
+  value there and say what it turned out to be; "earlier drafts of this
+  document said ..." belongs in that section and nowhere else on the page.
+  "Honest caveat", "Two things the numbers assume", and anything not yet
+  designed live there too. A weak number stated confidently in the body is the
+  expensive kind of mistake here — the fix is to move it to "Still open", not
+  to soften it in place.
 - **This is documentation, not copy.** No persuasive framing, no "worth
   stating", no rhetorical flourish — plain prose a reader consults, not an
   argument a reader is walked through.
@@ -189,6 +176,8 @@ rules instead:
   explicitly", no flagging a sentence as notable before saying it, no
   referring to how a decision was reached or revised. State the fact the way
   it would read if it had always read that way.
+- **Close with In one breath** — five or six bullets that carry the argument
+  alone.
 
 ## Project shape
 
