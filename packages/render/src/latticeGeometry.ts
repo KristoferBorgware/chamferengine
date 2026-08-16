@@ -1,4 +1,9 @@
-import { cellCorners, cellKey, latticePosition } from "@chamfer/core";
+import {
+	cellCorners,
+	cellKey,
+	latticePosition,
+	pentagonVertex,
+} from "@chamfer/core";
 
 /** Interleaved vertex data and the indices that draw it. */
 export interface Geometry {
@@ -8,6 +13,15 @@ export interface Geometry {
 	readonly cellCount: number;
 	readonly triangleCount: number;
 }
+
+/**
+ * The twelve pentagons, picked out against the faces.
+ *
+ * They are the only cells with five sides, one per icosahedron vertex, and no
+ * amount of subdivision adds or removes one. Colouring them says at a glance
+ * that there are twelve and that they sit where the geometry puts them.
+ */
+const PENTAGON_COLOUR: readonly [number, number, number] = [0.86, 0.16, 0.2];
 
 /** Twenty hues spread round the wheel, so neighbouring faces never share one. */
 function faceColour(face: number): [number, number, number] {
@@ -63,7 +77,10 @@ export function buildLatticeGeometry(depth: number, radius: number): Geometry {
 
 				const corners = cellCorners(face, n, i, j);
 				const centre = latticePosition(face, n, i, j);
-				const [r, g, b] = faceColour(face);
+				const [r, g, b] =
+					pentagonVertex(face, n, i, j) >= 0
+						? PENTAGON_COLOUR
+						: faceColour(face);
 				// A slight lift toward the cell centre keeps neighbouring polygons
 				// from meeting exactly on the same plane, where the depth test has
 				// no ordering to work with.
