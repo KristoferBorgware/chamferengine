@@ -33,7 +33,7 @@
 <body>
 
 <header><h1>A player's patch is not an ID range</h1></header>
-<div class="sub">Drag the circle. Each colour is one unbroken run of consecutive IDs.</div>
+<div class="sub">Drag the circle. Each color is one unbroken run of consecutive IDs.</div>
 <div class="cap" id="cap"></div>
 
 <div class="stage"><svg id="svg" viewBox="0 0 640 580" aria-label="a disc over ID-ordered chunks"></svg></div>
@@ -96,8 +96,8 @@ function runsOf(){
 }
 
 // hues spaced by the golden angle, so consecutive runs never look alike and the
-// caption's "each colour is one run" stays literally true however many there are
-const runColour = i => `hsl(${(i*137.508) % 360} 62% 58%)`;
+// caption's "each color is one run" stays literally true however many there are
+const runColor = i => `hsl(${(i*137.508) % 360} 62% 58%)`;
 
 function draw(){
   const { inDisc, runOf, runs, count } = runsOf();
@@ -111,10 +111,10 @@ function draw(){
     S.push(`<polygon points="${t.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"/>`);
   }
   S.push('</g>');
-  // the ones in view, coloured by which run of consecutive IDs they belong to
+  // the ones in view, colored by which run of consecutive IDs they belong to
   for (let i=0;i<list.length;i++){
     if (!inDisc[i]) continue;
-    const t = list[i], col = runColour(runOf[i]);
+    const t = list[i], col = runColor(runOf[i]);
     S.push(`<polygon points="${t.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}"
              fill="${col}" fill-opacity="0.85" stroke="${col}" stroke-width="0.4"/>`);
   }
@@ -128,7 +128,7 @@ function draw(){
     `${count} chunks · ${runs} runs · ${(count/Math.max(runs,1)).toFixed(1)} per run`;
   document.getElementById('cap').innerHTML =
     `The player sees <b>${count}</b> chunks. Sorted by ID those fall into <b>${runs}</b> unbroken
-     runs — each colour is one. A single range would be one colour, and it never is.
+     runs — each color is one. A single range would be one color, and it never is.
      <b>Drag the circle wider and watch the two numbers pull apart</b>: chunks grow with the
      <b>area</b> you can see, runs only with its <b>rim</b>, so bigger views are better served by
      ranges, not worse — ${(count/Math.max(runs,1)).toFixed(1)} chunks per fetch here.`;

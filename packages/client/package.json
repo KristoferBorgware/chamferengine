@@ -10,10 +10,7 @@
 		"preview": "vite preview"
 	},
 	"dependencies": {
-		"@chamfer/core": "*",
-		"@chamfer/generation": "*",
-		"@chamfer/mesh": "*",
-		"@chamfer/render": "*"
+		"chamfer": "*"
 	},
 	"devDependencies": {
 		"@webgpu/types": "^0.1.52",

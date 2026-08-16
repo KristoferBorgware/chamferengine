@@ -125,7 +125,7 @@ dependencies; claims marked **[verified]** name the script that produces them.
 After the walkthrough above, open
 [`demos/sphere-tiling-shapes.html`](../demos/sphere-tiling-shapes.html), which
 shows the geometric options side by side with the curvature defect
-colour-coded, and
+color-coded, and
 [`demos/goldberg-voxel-sphere.html`](../demos/goldberg-voxel-sphere.html), which
 shows the chosen tiling at increasing resolution.
 

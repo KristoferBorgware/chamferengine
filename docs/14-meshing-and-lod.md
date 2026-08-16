@@ -535,6 +535,6 @@ the generator and the easiest to get wrong.
 **Demo:** [`demos/mesh-lod.html`](../demos/mesh-lod.html) — the tiling at five
 resolutions, reporting its own vertex and triangle counts so you can watch them
 converge on 2 and 4 per cell. The altitude slider draws the true horizon ring and
-colours the cells inside it: at eye height that is **one hexagon on the whole
+colors the cells inside it: at eye height that is **one hexagon on the whole
 planet**, 0.05% of the surface, and the readout gives the real figures for a
 level-11 world.

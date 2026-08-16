@@ -30,18 +30,29 @@ and duplicates information found there.
 
 ## Project shape
 
-- The repository holds a prose specification, generated figures, runnable demos
-  and verification scripts. Engine source begins at 0.5.0, defined in
-  [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- The repository holds a prose specification, generated figures, runnable demos,
+  verification scripts, and the engine. `plans/v0.1.0.md` is the current build
+  order; [`ARCHITECTURE.md`](ARCHITECTURE.md) defines the milestones it feeds.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — **the stack, the four-part runtime split
   and the milestone definitions, stated rather than argued.** Read it before
   anything in `docs/` when the question is *what are we building with* or *what is
   in which version*. It is not part of the specification and carries no reasoning;
   every entry links to the document that owns the decision.
-- [`CODE-STYLE.md`](CODE-STYLE.md) — **formatting and comment conventions for
-  the engine.** Not part of the specification. Read it before writing or editing
-  any code comment, including in `verification/` and `tools/` today, and any
-  code inside an artifact produced for this project.
+- [`CODE-STYLE.md`](CODE-STYLE.md) — **structure, naming, formatting and comment
+  conventions.** It governs **all code**, not comments alone: the package split,
+  the folder tree, filenames, where tests live, when a class is right, and the
+  spelling. Not part of the specification. **Read it before writing or editing
+  any code**, including in `verification/` and `tools/`, and any code inside an
+  artifact produced for this project.
+- `packages/engine` is the engine, published as `chamfer`; `packages/client` is
+  the browser app. Subsystems are reached by subpath — `chamfer/math`,
+  `chamfer/addressing`, `chamfer/generation`, `chamfer/mesh`, `chamfer/render` —
+  and each is a folder under `src/` with a barrel. Tests are in
+  `packages/engine/tests/`, mirroring `src/` path for path, and import through
+  those subpaths rather than reaching into `src/`.
+- **A filename is its primary export, spelled the same way**: `Vec3.ts`,
+  `hexRound.ts`, `DIRECTIONS.ts`. One exported function per file.
+- **`color`, never `colour`** — American spelling in code and in prose.
 - `docs/` — prose specification, ordered 00 through 32. See
   [`HOW-TO-WRITE-DOCS.md`](HOW-TO-WRITE-DOCS.md) for voice, structure and
   figure rules — not needed for engine work, so it is linked rather than

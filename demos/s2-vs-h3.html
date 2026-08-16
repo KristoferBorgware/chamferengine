@@ -246,7 +246,7 @@ function rebuild(){
       `<div class="note">6 cube faces, each a quadtree. ${label} projection.</div>
        <div class="metric">measured area ratio ${ratio.toFixed(2)} : 1</div>
        <div class="note"><span style="color:#f2543d">Red</span> = the 8 cube corners: 3 quads meet where 4 should.
-       The colour boundaries are the 12 face seams — neighbour lookups are special-cased there.
+       The color boundaries are the 12 face seams — neighbour lookups are special-cased there.
        ${showCurve?'The gold thread is the Hilbert order that makes cell IDs spatially local.':''}</div>`);
   } else {
     const cells=goldberg(res);

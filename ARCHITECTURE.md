@@ -8,7 +8,9 @@ measurements. This page states the conclusions as they apply to a build: what is
 used, where each part runs, and what is in which version. It links to the
 document that owns each decision, and it does not repeat the reasoning.
 
-**No engine source exists yet.** This describes the target, not a codebase.
+This page states the target. `packages/engine` is the source tree that
+implements it, and [`CODE-STYLE.md`](CODE-STYLE.md) governs how that tree is
+laid out.
 
 ---
 

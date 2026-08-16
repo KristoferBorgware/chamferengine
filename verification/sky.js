@@ -286,7 +286,7 @@ console.log('\n6. atmospheric scattering: the one sky feature that does not scal
   console.log(`   sky is bright at the horizon because the grazing path is ${(horiz(ER,H)/1000).toFixed(0)} km of air,`);
   console.log(`   giving tau ${(bB*horiz(ER,H)).toFixed(1)} -- saturated. Here that path is ${horiz(R,Hs).toFixed(0)} m, and doc 13's`);
   console.log('   ground horizon is only 76 m away in any case. There is no long sightline');
-  console.log('   to accumulate colour along, whatever the air is made of.');
+  console.log('   to accumulate color along, whatever the air is made of.');
   console.log('');
   console.log('   THE RECOMMENDATION IS THEREFORE SPECIFIC: run whichever scattering model');
   console.log('   you like on a FICTIONAL EARTH-SIZED ATMOSPHERE. Preetham, Hosek-Wilkie and');

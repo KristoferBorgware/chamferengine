@@ -213,7 +213,7 @@ thing they ask about does not exist yet:
 
 **Neither — 20.** Game design, all of it. What the twelve pentagons contain,
 whether players are told about the loop rule, how fast a swimmer sinks, whether
-light is coloured, what happens in creative mode. All real questions. None of
+light is colored, what happens in creative mode. All real questions. None of
 them is between anyone and a working planet, and none needs a decision before the
 first commit.
 

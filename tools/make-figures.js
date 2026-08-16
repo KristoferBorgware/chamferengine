@@ -1404,7 +1404,7 @@ const prof = (() => {
   const a = H[1], b = H[2], mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
   // The three labels sit under the drawing rather than beside it: the second
   // hexagon reaches x=320, so anything to its right either lands on the outline
-  // or pushes the canvas past 600. A swatch in each curve's own colour keeps
+  // or pushes the canvas past 600. A swatch in each curve's own color keeps
   // the label tied to the line it names.
   const key = (y, cls, swatch, text) =>
     `<path class="${cls}" d="M14 ${y - 4}L34 ${y - 4}" stroke-width="3"${swatch}/>`

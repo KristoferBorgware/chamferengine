@@ -19,12 +19,11 @@ A design specification for a **spherical voxel world**: a planet built from
 hexagonal cells that wraps seamlessly, with no distorted cells at the seams
 and no polar singularities.
 
-This repository currently contains **documentation and interactive demos only**.
-No engine code has been written yet. Everything here is the reasoning, the
-mathematics, and the verified constants that an implementation should be built
-against — and as of [doc 28](docs/28-language-and-runtime.md), nothing in the
-specification is still blocking that implementation. It is **TypeScript**,
-playable in a browser — see [doc 28](docs/28-language-and-runtime.md).
+The specification came first: the reasoning, the mathematics, and the verified
+constants an implementation is built against. The engine is now being written
+against it, in **TypeScript**, playable in a browser — see
+[doc 28](docs/28-language-and-runtime.md). `packages/engine` holds it and
+`plans/v0.1.0.md` is the build order.
 
 ---
 

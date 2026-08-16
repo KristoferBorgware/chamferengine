@@ -98,7 +98,7 @@ faces are listed in a fixed order, and that order was written vertex-0-first.
 > pair `0-3`, whose north cap is faces `0,1,2,3,4` and whose south cap is faces
 > `10,11,12,13,14`. The other five scatter across the table.
 
-![Six rows of twenty squares, one row per antipodal pair, with the faces meeting each pole coloured; only the first row's colours form two solid blocks](figures/which-pair.svg)
+![Six rows of twenty squares, one row per antipodal pair, with the faces meeting each pole colored; only the first row's colors form two solid blocks](figures/which-pair.svg)
 
 *Each row is the twenty faces in table order, for one choice of axis. The five
 faces touching the north pole are blue and the five touching the south are gold —

@@ -51,8 +51,8 @@ than to any other dot. **Triangles are the filing system. Hexagons are the
 floor.***
 
 **Demo:** [`demos/chunk-hierarchy.html`](../demos/chunk-hierarchy.html) — raise
-the subdivision depth and watch the colours stay put: children never leave their
-parent. Switch to *Hex cells* and the colour boundaries now cut *through*
+the subdivision depth and watch the colors stay put: children never leave their
+parent. Switch to *Hex cells* and the color boundaries now cut *through*
 hexagons, because a cell lives on a vertex shared by up to three triangles.
 
 **Demo:** [`demos/flat-cells-chunks.html`](../demos/flat-cells-chunks.html) — the

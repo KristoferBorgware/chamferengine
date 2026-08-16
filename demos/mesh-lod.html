@@ -222,7 +222,7 @@ function paint(){
   const cosA = R/(R+h), alpha = Math.acos(cosA);
   const frac = (1-cosA)/2;                       // fraction of the sphere in view
 
-  // colour the cells inside the horizon
+  // color the cells inside the horizon
   const col = mesh.geometry.attributes.color;
   let seen = 0;
   grid.pts.forEach((u, v) => {

@@ -1,10 +1,4 @@
 {
 	"files": [],
-	"references": [
-		{ "path": "packages/core" },
-		{ "path": "packages/generation" },
-		{ "path": "packages/mesh" },
-		{ "path": "packages/render" },
-		{ "path": "packages/client" }
-	]
+	"references": [{ "path": "packages/engine" }, { "path": "packages/client" }]
 }

@@ -7,10 +7,5 @@
 		"types": ["vite/client", "@webgpu/types", "node"]
 	},
 	"include": ["src/**/*.ts", "vite.config.ts"],
-	"references": [
-		{ "path": "../core" },
-		{ "path": "../generation" },
-		{ "path": "../mesh" },
-		{ "path": "../render" }
-	]
+	"references": [{ "path": "../engine" }]
 }

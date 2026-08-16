@@ -203,17 +203,17 @@ function refit(){
 }
 
 // an arrow at cell v pointing along heading index h, as a projected segment
-function arrow(v, h, colour, width, frac){
+function arrow(v, h, color, width, frac){
   if (ring[v][h] === undefined) return '';
   const [x0,y0] = xy(v), [x1,y1] = xy(ring[v][h]);
   const dx = (x1-x0)*frac, dy = (y1-y0)*frac;
   const L = Math.hypot(dx,dy) || 1, ux = dx/L, uy = dy/L;
   const hx = x0+dx, hy = y0+dy, s = PX*0.30;
   return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}"
-           stroke="${colour}" stroke-width="${width}" stroke-linecap="round"/>`
+           stroke="${color}" stroke-width="${width}" stroke-linecap="round"/>`
     + `<polygon points="${(hx).toFixed(1)},${(hy).toFixed(1)}
         ${(hx-s*ux+s*0.55*uy).toFixed(1)},${(hy-s*uy-s*0.55*ux).toFixed(1)}
-        ${(hx-s*ux-s*0.55*uy).toFixed(1)},${(hy-s*uy+s*0.55*ux).toFixed(1)}" fill="${colour}"/>`;
+        ${(hx-s*ux-s*0.55*uy).toFixed(1)},${(hy-s*uy+s*0.55*ux).toFixed(1)}" fill="${color}"/>`;
 }
 
 function draw(){

@@ -167,7 +167,7 @@ let D = 4, C = 2, NF = 2, VIEW = 'both', sel = null;
 
 // ---- palettes --------------------------------------------------------------
 const SEA = -0.06;
-function terrainColour(h){
+function terrainColor(h){
   if (h < SEA - 0.10) return '#143d63';
   if (h < SEA)        return '#1d5a86';
   if (h < SEA + 0.04) return '#b8a171';
@@ -177,7 +177,7 @@ function terrainColour(h){
   if (h < 0.40)       return '#8d8a83';
   return '#d6dbe4';
 }
-function chunkColour(key){
+function chunkColor(key){
   let h = 0;
   for (let i=0;i<key.length;i++) h = Math.imul(h ^ key.charCodeAt(i), 2654435761) >>> 0;
   return `hsl(${h % 360} 46% ${34 + (h >> 9) % 16}%)`;
@@ -217,7 +217,7 @@ function render(){
       seen.add(kk); count++;
       const h = height(at3(g,i,j));
       const key = chunkKey(g,i,j);
-      const fill = VIEW === 'chunks' ? chunkColour(key) : terrainColour(h);
+      const fill = VIEW === 'chunks' ? chunkColor(key) : terrainColor(h);
       const pts = hexOff.map(o => (P[0]+o[0]).toFixed(1)+','+(P[1]+o[1]).toFixed(1)).join(' ');
       const isSel = sel && sel.g===g && sel.i===i && sel.j===j;
       if (isSel) selHit = { P, h, key };

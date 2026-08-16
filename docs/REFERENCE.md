@@ -2609,7 +2609,7 @@ sky.js -- the skybox, clouds and the moon on a 1,700 m planet
    sky is bright at the horizon because the grazing path is 329 km of air,
    giving tau 9.3 -- saturated. Here that path is 88 m, and doc 13's
    ground horizon is only 76 m away in any case. There is no long sightline
-   to accumulate colour along, whatever the air is made of.
+   to accumulate color along, whatever the air is made of.
 
    THE RECOMMENDATION IS THEREFORE SPECIFIC: run whichever scattering model
    you like on a FICTIONAL EARTH-SIZED ATMOSPHERE. Preetham, Hosek-Wilkie and

@@ -255,7 +255,7 @@ parallax comes out of the same projection everything else uses.**
 
 The section above found that the moon **survives** shrinking: scaling preserves
 angles, so a faithfully scaled moon still subtends 0.52°. Atmospheric scattering
-is the mirror image. Sky colour looks like pure art direction, and a measurement
+is the mirror image. Sky color looks like pure art direction, and a measurement
 constrains it, quite hard.
 
 **Optical depth is not scale-free.** It is *(a property of air)* × *(a path
@@ -294,7 +294,7 @@ air. Neither is a physical planet, so neither is a defensible default.
 bright at the horizon because the grazing sightline crosses **329 km** of air, for
 `τ` = 9.3 — saturated. Here that path is **88 m**, and
 [doc 13](13-gravity-and-orientation.md)'s ground horizon is only **76 m** away in
-any case. There is no long sightline to accumulate colour along, whatever the air
+any case. There is no long sightline to accumulate color along, whatever the air
 is made of.
 
 ### So the model runs on a planet that does not exist
@@ -318,7 +318,7 @@ property of light and air, not of any planet, so it needs no fiction.)*
 
 ## Still open
 
-- **Sky colour was filed under art direction** with no measurement constraining
+- **Sky color was filed under art direction** with no measurement constraining
   it. Optical depth is *(a property of air)* × *(a path length)*, and only the
   path shrinks, so correctly scaled air gives a zenith `τ` of `6.4e-5` against
   Earth's `0.241` — **3,748× too thin**, and a black daytime sky.
@@ -332,7 +332,7 @@ property of light and air, not of any planet, so it needs no fiction.)*
   are addressed and moved, how big the moon can be, and **that the atmosphere must
   be invented** — but not what any of it looks like. Cloud shading, star fields,
   the actual palette: art direction, and nothing here constrains those.
-  *(An earlier draft put sky colour in this bullet too. It does not belong: the
+  *(An earlier draft put sky color in this bullet too. It does not belong: the
   scattering section above is a measurement, not a preference.)*
 - **Which scattering model, and its fictional parameters.** "Feed it Earth's
   radius and scale height" is a starting point, not a decision. Whether the

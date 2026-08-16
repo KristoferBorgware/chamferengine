@@ -32,7 +32,7 @@ into it.
 ## Geometry
 
 ### [`sphere-tiling-shapes.html`](sphere-tiling-shapes.html)
-Six tilings side by side, colour-coded by where the curvature defect lands.
+Six tilings side by side, color-coded by where the curvature defect lands.
 Blue = regular cells, red = major defect, amber = minor.
 
 Compare *Quads · cube* against *Quads · rhombic 30* at the same resolution: same
@@ -88,8 +88,8 @@ or more faces up and the terrain crosses the seam without a break.
 
 ### [`chunk-hierarchy.html`](chunk-hierarchy.html)
 Triangles carrying the hierarchy, hexes sitting on their vertices. Raise the
-depth and watch the colours stay put — exact containment. Switch to *Hex cells*
-and colour boundaries cut *through* hexagons; the readout gives the live
+depth and watch the colors stay put — exact containment. Switch to *Hex cells*
+and color boundaries cut *through* hexagons; the readout gives the live
 border-cell percentage.
 
 **Docs:** [03 — Addressing](../docs/03-addressing.md)
@@ -137,8 +137,8 @@ face-boundary test.
 ### [`patch-vs-range.html`](patch-vs-range.html)
 Doc 11 claimed multiplayer interest was "an ID range comparison; the addressing
 scheme does the work". This is what that actually looks like. One face, split into
-4,096 chunks, with a player's view drawn over it and **each colour one unbroken
-run of consecutive IDs**. A single range would be a single colour. Drag it
+4,096 chunks, with a player's view drawn over it and **each color one unbroken
+run of consecutive IDs**. A single range would be a single color. Drag it
 anywhere and it never is.
 
 The reason is in the second control. Widen the view and the chunk count grows with
@@ -295,7 +295,7 @@ The tiling at five resolutions, reporting its own vertex and triangle counts.
 Watch them converge on exactly **2 vertices and 4 triangles per cell** — the real
 cost of an unmerged hex surface, twice a cube's and no worse.
 
-The altitude slider is the argument. It draws the true horizon ring and colours
+The altitude slider is the argument. It draws the true horizon ring and colors
 the cells inside it; at eye height that is **one hexagon on the whole planet**,
 0.05% of the surface. The readout gives the figures for a real level-11 world and
 the level that fits a 2M-triangle budget.

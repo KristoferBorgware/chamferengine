@@ -300,7 +300,7 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
   is per-cell and gives the terminator — but a cell in a deep valley still gets
   full sky light at noon and at dusk alike, which is wrong in a way players will
   see on a small planet where the sun visibly moves.
-- **Coloured light**, which triples the per-cell storage that is already 4× the
+- **Colored light**, which triples the per-cell storage that is already 4× the
   blocks.
 - **Whether the twelve pentagons need a gameplay note.** Mechanically they cost
   nothing here. But a torch at a pentagon lights 17% fewer cells, and a player

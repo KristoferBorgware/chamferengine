@@ -1,13 +1,11 @@
+import { Mat4 } from "chamfer/math";
 import {
 	LatticeRenderer,
 	NoWebGPUError,
 	buildLatticeGeometry,
 	createGpuContext,
-	lookAt,
-	multiply,
-	perspective,
 	resizeToDisplay,
-} from "@chamfer/render";
+} from "chamfer/render";
 
 const RADIUS = 1700;
 const DEPTH = 4;
@@ -35,8 +33,8 @@ async function main(): Promise<void> {
 	renderer.addPass(surface, [1, 1, 1, 1]);
 
 	if (showShell) {
-		// One flat colour for the whole pass. A shell carrying the surface's own
-		// per-cell colours tints each cell with a shade of itself and disappears
+		// One flat color for the whole pass. A shell carrying the surface's own
+		// per-cell colors tints each cell with a shade of itself and disappears
 		// against everything except the background beyond the planet's edge.
 		const shell = buildLatticeGeometry(DEPTH, RADIUS * 1.03);
 		renderer.addPass(shell, [0.42, 0.72, 1, 0.42], 1);
@@ -104,14 +102,14 @@ async function main(): Promise<void> {
 			Math.sin(pitch) * distance,
 			Math.cos(pitch) * Math.cos(yaw) * distance,
 		];
-		const view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
-		const projection = perspective(
+		const view = Mat4.lookAt(eye, [0, 0, 0], [0, 1, 0]);
+		const projection = Mat4.perspective(
 			(50 * Math.PI) / 180,
 			canvas.width / canvas.height,
 			RADIUS * 0.05,
 			RADIUS * 20,
 		);
-		renderer.render({ viewProj: multiply(projection, view), eye });
+		renderer.render({ viewProj: projection.multiply(view), eye });
 		requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);

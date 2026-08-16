@@ -127,7 +127,7 @@ function build(depth){
 }
 const chunkOf=(f,level)=>f.base+':'+f.path.slice(0,level).join('');
 
-/* ---------- colours ---------- */
+/* ---------- colors ---------- */
 const colCache=new Map();
 function chunkColor(id){
   if(colCache.has(id))return colCache.get(id);
@@ -220,9 +220,9 @@ function rebuild(){
   if (view==='tri'){
     setHud(`${cellCount} triangles · ${chunks.length} chunks`,
       `<div class="note">Each triangle's ID is <code>base:${'d'.repeat(chunkLvl)||'—'}…</code> — 5 bits of base face
-       plus 2 bits per level. Colour = the ID truncated to level ${chunkLvl}
+       plus 2 bits per level. Color = the ID truncated to level ${chunkLvl}
        (${pathBits} path bits), which is exactly what masking off the low digits gives you.</div>
-       <div class="note">Raise the depth and the colours don't move: children never leave their parent.
+       <div class="note">Raise the depth and the colors don't move: children never leave their parent.
        That's the exactness you don't get from hex-in-hex nesting.</div>`);
   } else {
     setHud(`${cellCount} cells · ${boundary} on a chunk border`,
