@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Chamfer</title>
+		<link rel="stylesheet" href="./src/landing.css" />
+	</head>
+	<body>
+		<main class="landing">
+			<h1>Chamfer</h1>
+			<p class="tagline">
+				A spherical voxel world: hexagonal cells, twelve pentagons, no
+				polar singularity.
+			</p>
+
+			<form id="seed-form" class="seed">
+				<label for="seed">Seed</label>
+				<input
+					id="seed"
+					name="seed"
+					type="text"
+					placeholder="any word or phrase"
+					autocomplete="off"
+					required
+				/>
+				<button type="submit">Generate planet</button>
+			</form>
+
+			<p id="support" class="support" hidden></p>
+
+			<nav class="links">
+				<a href="./docs/">Documentation</a>
+			</nav>
+		</main>
+		<script type="module" src="./src/landing.ts"></script>
+	</body>
+</html>

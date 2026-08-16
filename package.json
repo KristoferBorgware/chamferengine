@@ -1,0 +1,30 @@
+{
+	"name": "chamfer",
+	"private": true,
+	"version": "0.1.0",
+	"description": "A spherical voxel world built on a Goldberg polyhedron",
+	"license": "UNLICENSED",
+	"engines": {
+		"node": ">=22"
+	},
+	"workspaces": [
+		"packages/*"
+	],
+	"scripts": {
+		"dev": "npm run dev --workspace @chamfer/client",
+		"build": "npm run build --workspace @chamfer/client",
+		"preview": "npm run preview --workspace @chamfer/client",
+		"typecheck": "tsc --build --force",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"docs": "node tools/build-docs.js",
+		"figures": "node tools/make-figures.js",
+		"reference": "node tools/make-reference.js",
+		"coverage": "node tools/check-coverage.js"
+	},
+	"devDependencies": {
+		"prettier": "^3.4.2",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.7"
+	}
+}

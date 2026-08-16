@@ -1,0 +1,16 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"outDir": "dist-types",
+		"noEmit": false,
+		"types": ["vite/client", "@webgpu/types", "node"]
+	},
+	"include": ["src/**/*.ts", "vite.config.ts"],
+	"references": [
+		{ "path": "../core" },
+		{ "path": "../generation" },
+		{ "path": "../mesh" },
+		{ "path": "../render" }
+	]
+}

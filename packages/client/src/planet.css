@@ -1,0 +1,30 @@
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	overflow: hidden;
+	background: #05070a;
+	color: #e6ecf3;
+	font:
+		14px/1.5 system-ui,
+		sans-serif;
+}
+
+#viewport {
+	display: block;
+	width: 100vw;
+	height: 100vh;
+}
+
+.status {
+	position: fixed;
+	top: 1rem;
+	left: 1rem;
+	padding: 0.5rem 0.75rem;
+	background: #0d1219cc;
+	border: 1px solid #26303d;
+	border-radius: 4px;
+	font-variant-numeric: tabular-nums;
+}

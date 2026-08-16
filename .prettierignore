@@ -1,0 +1,15 @@
+# Prettier covers the engine only. The documentation is hand-wrapped, and
+# demos/, verification/ and tools/ are zero-dependency plain JavaScript that
+# predates this config and keeps its own layout.
+*.md
+.github/
+docs/
+demos/
+verification/
+tools/
+site/
+_site/
+dist/
+dist-types/
+node_modules/
+package-lock.json
