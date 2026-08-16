@@ -230,12 +230,6 @@ messages/second  ≈  players × edits per player per second × interested recip
 Storage is `76 MB` and requests are pennies; fan-out is the term that grows with
 player count.
 
-**Moving off Lambda reads the same store from a long-lived process.** Lambda
-keeps connection and player state in DynamoDB because it has nowhere else to put
-it; a long-lived process can read that same store into memory on day one. The
-move happens at the same time a tick loop is added, because a tick loop is the
-workload Lambda cannot run.
-
 ### Beyond V1
 
 Each of these is designed and priced.
