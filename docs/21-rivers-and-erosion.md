@@ -8,7 +8,7 @@ That is what makes chunks independent, level-of-detail possible
 ([doc 14](14-meshing-and-lod.md)), and a fresh planet a hundred bytes on disk
 ([doc 07](07-data-structures.md)).
 
-A river cannot be written that way, and it is worth seeing exactly why.
+A river cannot be written that way. Here is exactly why.
 
 ![A terrain profile with a window drawn over part of it, and an arrow at a hilltop inside the window asking which way water leaves](figures/no-local-rule-for-rivers.svg)
 
@@ -54,9 +54,8 @@ river is*, not what it looks like.
 ### The lookup, and a correction to doc 08
 
 [Doc 08](08-terrain-generation.md) says the coarse map is found by "masking its
-ID". That is nearly right and worth stating precisely, because the obvious reading
-is wrong: truncating an ID's **path digits** gives the containing *triangle* — a
-chunk — not a coarse *cell*.
+ID". Stated precisely: truncating an ID's **path digits** gives the containing
+*triangle* — a chunk — not a coarse *cell*.
 
 What actually lines up is the lattice.
 
@@ -179,7 +178,7 @@ before any water is routed.*
 
 **So the three problems doc 08 lists are not independent — they are ordered.**
 Plain fBm makes many small blobs, and small blobs give streams no matter how good
-the routing is. Fix the continents first, and the rivers come along for free.
+the routing is. Fix the continents first, and the same routing gives rivers.
 
 That reorders the work, and it is the most useful thing this document found.
 

@@ -69,9 +69,8 @@ Three things fall out, and none of them cost anything:
 
 ## Which pair: you cannot decide this on merit, so decide it on the face table
 
-Earlier drafts of this document left "which of the six pairs" open on the grounds
-that the choice is arbitrary. It is worth knowing *how* arbitrary, because
-"arbitrary" is a claim like any other and this one had no number behind it.
+"Which of the six pairs" looks arbitrary, and *how* arbitrary is measurable —
+"arbitrary" is a claim like any other.
 
 Take each of the six pairs in turn as the axis and ask where the twelve pentagons
 land:
@@ -250,17 +249,14 @@ between "same cell" and "a neighbour" as you move, which is this table one sampl
 at a time. The twelve pentagons are marked, so you can watch them sit at ±90° and
 ±26.565° however you turn the planet.
 
-And an identity is already available, exactly, for free:
+And the ID is already exactly that identity:
 
 > **[verified]** Same script, section 5. A cell address at `D` 11 is **29 bits**;
 > with the layer that is 39, which is **eight characters in base 36**, and with
 > [doc 03](03-addressing.md)'s planet field 51, which is **ten**. At `D` 13:
 > nine and eleven.
 
-Earlier drafts of this document said **six base-36 characters**. They were costing
-the address at `5 + 2D` and leaving the layer out — the address is `5 + 2D + 2`
-(doc 03), and a location without a layer is a column, not a place. Eight is the
-number a player reads aloud. Ten only when the code has to cross planets, which
+Eight is the number a player reads aloud. Ten only when the code has to cross planets, which
 is [doc 03](03-addressing.md)'s planet field and not something a single-world
 save ever needs to print.
 
@@ -319,6 +315,12 @@ a number whose meaning depended on where you were standing when you took it.
 ---
 
 ## Still open
+
+- **The share code was six base-36 characters** in earlier drafts, costing the
+  address at `5 + 2D` and leaving the layer out. The address is `5 + 2D + 2`
+  ([doc 03](03-addressing.md)), and a location without a layer is a column
+  rather than a place, so the code is **eight**.
+
 
 - ~~Which of the six pairs~~ — **decided above: the pair at vertices 0 and 3,
   north at vertex 0, prime meridian through vertex 11.** This entry used to say

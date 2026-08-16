@@ -123,7 +123,7 @@ A busy server does not produce twenty thousand chunk updates a second. **The who
 problem is smaller than the machinery doc 11 imagined for it**, and it needs no
 addressing tricks at all.
 
-Two things follow that are worth stating plainly:
+Two things follow:
 
 - **Interest is per entity, not per chunk.** It uses the same anchor-and-offset
   position [doc 15](15-precision-and-origin.md) already stores, and needs nothing

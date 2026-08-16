@@ -178,7 +178,7 @@ not go. No warning system, no tutorial, no error message needed.
 Protection on its own would leave twelve inexplicable no-build zones. The decision
 goes further and makes them intentional.
 
-### What is already true about them, for free
+### What the geometry already guarantees
 
 - There are **exactly twelve**, at every subdivision depth, at every world size,
   forever. That is Gauss–Bonnet, not a content budget.

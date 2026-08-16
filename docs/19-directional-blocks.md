@@ -192,8 +192,8 @@ transported heading is a guess about it.
 
 ### What it means for a player
 
-Almost nothing, and that is worth saying plainly rather than engineering around.
-A loop that encloses a pentagon needs one more turn than a builder expects. They
+Almost nothing. A loop that encloses a pentagon needs one more turn than a
+builder expects. They
 will place it, see it not line up, add a turn, and move on — the same as
 discovering any other one-cell mistake. It is not a failure state, and by the
 table above it is a case most players will never construct.

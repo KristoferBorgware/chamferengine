@@ -170,7 +170,7 @@ Not because 0.038 mm is a problem. It is not. The reason is that the alternative
 leaves a permanent "these two are nearly the same" in the specification, and this
 one can be deleted instead — for no cost at all.
 
-Here is why it is free.
+Here is why it costs nothing to change.
 
 ![A subdivided triangle with the cell centres marked on its lattice, and the hexagon corners marked as points of the same lattice at three times the resolution](figures/corner-is-a-lattice-point.svg)
 
@@ -296,8 +296,9 @@ document just closed. One cause, three consequences.
   every level**, the only discrepancy in this specification that does.
 - Doc 11's "all three agree to about 0.1 of a cell" was out by **2,600×** for this
   pair; the 0.1 belongs to spherical Voronoi, which is the one that plateaus.
-- The fix is free: a corner is a **lattice point at `3n`** — `(3i+2, 3j+1)` for an
-  up-triangle — so doc 14's **2 vertices and 4 triangles per cell** does not move.
+- The fix costs nothing: a corner is a **lattice point at `3n`** — `(3i+2, 3j+1)`
+  for an up-triangle — so doc 14's **2 vertices and 4 triangles per cell** does
+  not move.
 - **No seam at the 30 face edges** and **no reflex corners**, both of which were
   the places a hidden cost was expected.
 - Every cell is an **exactly regular hexagon in its face plane**. All the
