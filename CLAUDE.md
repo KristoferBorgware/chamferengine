@@ -117,6 +117,12 @@ not one per document.
   A caption that only names the picture is wasted.
 - **Point at a demo** in `demos/` whenever one lets the reader move the thing
   themselves. A figure shows one case; a demo shows the family.
+- **No label may overlap a line, a shape, or another label.** Check the
+  generated SVG at the size it actually renders, not just the generator code —
+  wrap or shorten any string that collides, break a long label onto multiple
+  `<tspan>` lines rather than letting it run into the geometry, and move a
+  label's anchor point before shrinking its font to make it fit. A figure a
+  reader has to squint at or guess the boundaries of has failed at its one job.
 
 ### Structure and honesty
 
