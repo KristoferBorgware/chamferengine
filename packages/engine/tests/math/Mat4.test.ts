@@ -70,3 +70,32 @@ describe("multiply", () => {
 		expect(apply(both, [0, 0, 0]).z).toBeCloseTo(direct.z, 4);
 	});
 });
+
+describe("inverse", () => {
+	it("takes a point back where it came from", () => {
+		const view = Mat4.lookAt([120, 40, -70], [1, 2, 3], [0, 1, 0]);
+		const proj = Mat4.perspective(Math.PI / 3, 1.6, 0.5, 5000);
+		const both = proj.multiply(view);
+		const back = both.inverse();
+
+		for (const point of [
+			[0, 0, 0],
+			[10, -5, 30],
+			[-200, 60, 15],
+		] as const) {
+			const clip = apply(both, point);
+			// A sky shader does exactly this: a pixel and a depth, back into the
+			// direction the camera looks along.
+			const world = apply(back, [clip.x, clip.y, clip.z]);
+			expect(world.x).toBeCloseTo(point[0], 2);
+			expect(world.y).toBeCloseTo(point[1], 2);
+			expect(world.z).toBeCloseTo(point[2], 2);
+		}
+	});
+
+	it("returns the identity for a matrix with no inverse", () => {
+		const flat = Mat4.perspective(Math.PI / 3, 1, 1, 1);
+		const back = flat.inverse();
+		expect(back.elements.length).toBe(16);
+	});
+});

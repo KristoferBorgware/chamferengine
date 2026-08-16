@@ -5,6 +5,7 @@
 export * from "./math/index.js";
 export * from "./world/index.js";
 export * from "./light/index.js";
+export * from "./sky/index.js";
 export * from "./addressing/index.js";
 export * from "./generation/index.js";
 export * from "./mesh/index.js";

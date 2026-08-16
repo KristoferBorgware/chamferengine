@@ -20,9 +20,17 @@ import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
 	ChunkRenderer,
 	NoWebGPUError,
+	SkyRenderer,
 	createGpuContext,
 	resizeToDisplay,
 } from "chamfer/render";
+import {
+	CloudField,
+	WIND_AXIS,
+	WIND_RATE,
+	buildCloudMesh,
+	windRotation,
+} from "chamfer/sky";
 
 const RADIUS = 1700;
 const DEPTH = 11;
@@ -58,6 +66,29 @@ const DAY_LENGTH = 240;
 
 /** The light a surface keeps after dark. */
 const NIGHT_LIGHT = 0.09;
+
+/**
+ * The clouds: what level their hexagons come from and how high they sit.
+ *
+ * Level 5 is a 64 m puff and 10,242 points for the whole sky, against
+ * 41,943,042 cells in one surface layer.
+ */
+const CLOUD_LEVEL = 5;
+const CLOUD_HEIGHT = 220;
+
+/** How often the cloud buffer is thrown away and refilled, in seconds. */
+const CLOUD_INTERVAL = 0.7;
+
+/**
+ * The moon, as an angle and a distance.
+ *
+ * Its size is an art decision -- a faithfully scaled real moon is still 0.518
+ * degrees, because scaling preserves angles. Its distance is not: at this one,
+ * walking to the far side of the planet shifts it 1.90 degrees against the
+ * stars, which is why it is placed rather than painted into the sky.
+ */
+const MOON_ANGULAR_RADIUS = (0.6 * Math.PI) / 180;
+const MOON_DISTANCE = 102_000;
 
 /** The sky, in daylight and at night. */
 const DAY_SKY: readonly [number, number, number] = [0.46, 0.62, 0.82];
@@ -109,6 +140,13 @@ async function main(): Promise<void> {
 	);
 	const map = buildCoarseMap(seed, { level: COARSE_LEVEL });
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
+	const clouds = new CloudField(CLOUD_LEVEL);
+	const sky = new SkyRenderer(ctx, {
+		direction: new Vec3(0.2, 0.55, 0.81).normalize(),
+		angularRadius: MOON_ANGULAR_RADIUS,
+	});
+	sky.surfaceRadius = RADIUS;
+	renderer.layer = sky;
 
 	// One generator per level. A chunk one level coarser samples the terrain at
 	// twice the spacing over four times the area, so it holds the same 561 slots
@@ -246,6 +284,7 @@ async function main(): Promise<void> {
 	);
 
 	const started = performance.now();
+	let cloudsAt = -CLOUD_INTERVAL * 1000;
 	const draw = (now: number) => {
 		for (let n = 0; n < BUILD_PER_FRAME; n++) {
 			const next = queue.shift();
@@ -285,12 +324,36 @@ async function main(): Promise<void> {
 		);
 		const day = daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
 
+		// The clouds are thrown away and refilled as the wind turns. There is no
+		// address to update in place, because a cloud has none.
+		if (now - cloudsAt > CLOUD_INTERVAL * 1000) {
+			cloudsAt = now;
+			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
+			clouds.blow(WIND_AXIS, turned, seed);
+			const mesh = buildCloudMesh(clouds, RADIUS + CLOUD_HEIGHT);
+			sky.setClouds(mesh.vertices, mesh.indices);
+		}
+
+		// The moon stands off at a distance rather than being painted on, so
+		// walking round the planet shifts it against the stars.
+		const moonPlace = windRotation(
+			new Vec3(0.2, 0.55, 0.81).normalize(),
+			NORTH,
+			((now - started) / 1000 / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
+		).scale(MOON_DISTANCE);
+		sky.moon = {
+			direction: moonPlace.sub(from).normalize(),
+			angularRadius: MOON_ANGULAR_RADIUS,
+		};
+
 		const submerged = terrain.blockAtPosition(from) === BlockType.WATER;
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
+		const viewProj = projection.multiply(view);
+		sky.inverseViewProj = viewProj.inverse();
 		renderer.render({
-			viewProj: projection.multiply(view),
+			viewProj,
 			eye,
 			sun: [sun.x, sun.y, sun.z],
 			fog: submerged

@@ -1,4 +1,5 @@
 export type { Frame } from "./Frame.js";
+export type { PassLayer } from "./PassLayer.js";
 export type { GpuContext } from "./gpu/GpuContext.js";
 export { createGpuContext, resizeToDisplay } from "./gpu/GpuContext.js";
 export { NoWebGPUError } from "./gpu/NoWebGPUError.js";
@@ -6,3 +7,5 @@ export { buildLatticeGeometry } from "./lattice/buildLatticeGeometry.js";
 export { LatticeRenderer } from "./lattice/LatticeRenderer.js";
 export { ChunkRenderer } from "./terrain/ChunkRenderer.js";
 export { TERRAIN_SHADER } from "./terrain/TERRAIN_SHADER.js";
+export { SKY_SHADER } from "./sky/SKY_SHADER.js";
+export { SkyRenderer } from "./sky/SkyRenderer.js";

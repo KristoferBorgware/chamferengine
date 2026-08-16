@@ -2,6 +2,7 @@ import type { ChunkMesh } from "../../mesh/ChunkMesh.js";
 import type { Frame } from "../Frame.js";
 import type { Geometry } from "../../mesh/Geometry.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
+import type { PassLayer } from "../PassLayer.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
 /** One geometry uploaded, or nothing if it had no triangles. */
@@ -49,6 +50,9 @@ export class ChunkRenderer {
 
 	/** The color a pass clears to when nothing covers the sky. */
 	sky: readonly [number, number, number] = [0.46, 0.62, 0.82];
+
+	/** Drawn around the terrain: a sky before it, clouds after. */
+	layer: PassLayer | null = null;
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
@@ -236,17 +240,21 @@ export class ChunkRenderer {
 				depthStoreOp: "store",
 			},
 		});
-		pass.setBindGroup(0, this.frameBindGroup);
+		this.layer?.before?.(pass, frame);
 
+		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setPipeline(this.opaquePipeline);
 		for (const chunk of this.resident.values())
 			draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
+		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(frame.eye))
 			draw(pass, chunk, chunk.water);
+
+		this.layer?.after?.(pass, frame);
 
 		pass.end();
 		device.queue.submit([encoder.finish()]);

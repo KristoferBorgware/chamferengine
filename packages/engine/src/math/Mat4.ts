@@ -69,6 +69,59 @@ export class Mat4 {
 		return new Mat4(m);
 	}
 
+	/**
+	 * The inverse, or the identity where there is none.
+	 *
+	 * A sky shader turns a pixel back into the direction it looks along, which
+	 * is this matrix applied to a point on the far plane.
+	 */
+	inverse(): Mat4 {
+		const m = this.elements;
+		const out = new Float32Array(16);
+		const a = (r: number, c: number) => m[c * 4 + r]!;
+
+		const s0 = a(0, 0) * a(1, 1) - a(1, 0) * a(0, 1);
+		const s1 = a(0, 0) * a(1, 2) - a(1, 0) * a(0, 2);
+		const s2 = a(0, 0) * a(1, 3) - a(1, 0) * a(0, 3);
+		const s3 = a(0, 1) * a(1, 2) - a(1, 1) * a(0, 2);
+		const s4 = a(0, 1) * a(1, 3) - a(1, 1) * a(0, 3);
+		const s5 = a(0, 2) * a(1, 3) - a(1, 2) * a(0, 3);
+		const c5 = a(2, 2) * a(3, 3) - a(3, 2) * a(2, 3);
+		const c4 = a(2, 1) * a(3, 3) - a(3, 1) * a(2, 3);
+		const c3 = a(2, 1) * a(3, 2) - a(3, 1) * a(2, 2);
+		const c2 = a(2, 0) * a(3, 3) - a(3, 0) * a(2, 3);
+		const c1 = a(2, 0) * a(3, 2) - a(3, 0) * a(2, 2);
+		const c0 = a(2, 0) * a(3, 1) - a(3, 0) * a(2, 1);
+
+		const det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;
+		if (det === 0) {
+			for (let d = 0; d < 4; d++) out[d * 4 + d] = 1;
+			return new Mat4(out);
+		}
+		const k = 1 / det;
+		const put = (r: number, c: number, value: number) => {
+			out[c * 4 + r] = value * k;
+		};
+
+		put(0, 0, a(1, 1) * c5 - a(1, 2) * c4 + a(1, 3) * c3);
+		put(0, 1, -a(0, 1) * c5 + a(0, 2) * c4 - a(0, 3) * c3);
+		put(0, 2, a(3, 1) * s5 - a(3, 2) * s4 + a(3, 3) * s3);
+		put(0, 3, -a(2, 1) * s5 + a(2, 2) * s4 - a(2, 3) * s3);
+		put(1, 0, -a(1, 0) * c5 + a(1, 2) * c2 - a(1, 3) * c1);
+		put(1, 1, a(0, 0) * c5 - a(0, 2) * c2 + a(0, 3) * c1);
+		put(1, 2, -a(3, 0) * s5 + a(3, 2) * s2 - a(3, 3) * s1);
+		put(1, 3, a(2, 0) * s5 - a(2, 2) * s2 + a(2, 3) * s1);
+		put(2, 0, a(1, 0) * c4 - a(1, 1) * c2 + a(1, 3) * c0);
+		put(2, 1, -a(0, 0) * c4 + a(0, 1) * c2 - a(0, 3) * c0);
+		put(2, 2, a(3, 0) * s4 - a(3, 1) * s2 + a(3, 3) * s0);
+		put(2, 3, -a(2, 0) * s4 + a(2, 1) * s2 - a(2, 3) * s0);
+		put(3, 0, -a(1, 0) * c3 + a(1, 1) * c1 - a(1, 2) * c0);
+		put(3, 1, a(0, 0) * c3 - a(0, 1) * c1 + a(0, 2) * c0);
+		put(3, 2, -a(3, 0) * s3 + a(3, 1) * s1 - a(3, 2) * s0);
+		put(3, 3, a(2, 0) * s3 - a(2, 1) * s1 + a(2, 2) * s0);
+		return new Mat4(out);
+	}
+
 	/** The product `this * b`, applying `b` first. */
 	multiply(b: Mat4): Mat4 {
 		const a = this.elements;
