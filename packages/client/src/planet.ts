@@ -16,6 +16,12 @@ import {
 import { buildChunkMesh } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
 import { Player } from "chamfer/player";
+import {
+	geographicOf,
+	landmarks,
+	positionOf,
+	shareCode,
+} from "chamfer/coordinates";
 import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
@@ -157,7 +163,7 @@ async function main(): Promise<void> {
 	// The opening view is high ground, found from the coarse map alone: three
 	// array reads a chunk against a noise evaluation, which is 27 ms over the
 	// whole planet instead of a second.
-	let ground = new Vec3(
+	let ground: Vec3 = new Vec3(
 		atlas.extents[0]!.x,
 		atlas.extents[0]!.y,
 		atlas.extents[0]!.z,
@@ -178,6 +184,15 @@ async function main(): Promise<void> {
 	// against a fixed axis. There is no fixed axis to measure against: a
 	// continuous field of directions over a whole sphere has to stop somewhere,
 	// and a frame built from a reference direction spins where that happens.
+	const asked = params.get("at");
+	if (asked) {
+		const [lat, lon] = asked.split(",").map(Number.parseFloat);
+		if (lat !== undefined && lon !== undefined && !Number.isNaN(lat))
+			ground = positionOf(
+				{ latitude: lat, longitude: lon, altitude: 0 },
+				1,
+			);
+	}
 	const player = new Player(
 		shape,
 		ground.scale(RADIUS + MAX_ELEVATION),
@@ -185,6 +200,25 @@ async function main(): Promise<void> {
 	);
 	let flying = true;
 	let chase = 6;
+
+	// The twelve pentagons and the two poles, which are two of the twelve.
+	const places = landmarks();
+	let nextPlace = 0;
+
+	/** Put the player on the ground at a direction, clear of it. */
+	function land(direction: Vec3): void {
+		const cell = positionToCell(direction, shape.n);
+		const column = terrain.columnAt(cell.face, cell.i, cell.j);
+		player.position = direction
+			.normalize()
+			.scale(Math.max(column.groundRadius, column.waterRadius) + 1.2);
+		player.heading = direction
+			.normalize()
+			.cross(new Vec3(0, 1, 0))
+			.normalize();
+		player.fall = 0;
+		refresh();
+	}
 
 	const meshed = new Map<number, ChunkMesh>();
 	const queue: ChunkSelection[] = [];
@@ -248,6 +282,38 @@ async function main(): Promise<void> {
 		held.add(key);
 		if (key === "f") flying = !flying;
 		if (key === " ") e.preventDefault();
+		if (key === "t") {
+			// The twelve are 1,882 m apart on this planet, so each is a short
+			// journey from the last and none is in sight of another.
+			land(places[nextPlace % places.length]!.direction);
+			nextPlace++;
+		}
+		if (key === "g") {
+			const typed = prompt(
+				"latitude, longitude, altitude",
+				"26.6, 36, 40",
+			);
+			if (!typed) return;
+			const [lat, lon, alt] = typed
+				.split(/[,\s]+/)
+				.map((part) => Number.parseFloat(part));
+			if (
+				lat === undefined ||
+				lon === undefined ||
+				Number.isNaN(lat) ||
+				Number.isNaN(lon)
+			)
+				return;
+			const at = positionOf(
+				{ latitude: lat, longitude: lon, altitude: 0 },
+				RADIUS,
+			);
+			land(at);
+			if (alt !== undefined && !Number.isNaN(alt))
+				player.position = player.position
+					.normalize()
+					.scale(RADIUS + alt);
+		}
 	});
 	window.addEventListener("keyup", (e) => {
 		held.delete(e.key.toLowerCase());
@@ -396,13 +462,16 @@ async function main(): Promise<void> {
 			nightLight: NIGHT_LIGHT,
 		});
 
+		const at = geographicOf(player.position, RADIUS);
+		const cell = positionToCell(player.position, shape.n);
 		report([
 			`seed "${seedText}"`,
-			`${height(player.altitude)} · ${renderer.count} chunks` +
+			`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
+			`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.count} chunks` +
 				(queue.length > 0 ? ` · ${queue.length} to build` : ""),
 			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
 				(submerged ? " · under water" : ""),
-			"WASD to move · drag to look · F to fly · space and shift for height",
+			"WASD move · drag look · F fly · T next pentagon · G go to",
 		]);
 		requestAnimationFrame(draw);
 	};
@@ -438,6 +507,12 @@ function mix(
 		a[1] + (b[1] - a[1]) * by,
 		a[2] + (b[2] - a[2]) * by,
 	];
+}
+
+/** An angle, the way a coordinate is read out. */
+function degrees(value: number, poles: string): string {
+	const side = poles[value >= 0 ? 0 : 1]!;
+	return `${Math.abs(value).toFixed(2)}\u00b0${side}`;
 }
 
 /** What to call the light where the camera is standing. */

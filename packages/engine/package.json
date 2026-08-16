@@ -14,6 +14,7 @@
 		"./sky": "./src/sky/index.ts",
 		"./player": "./src/player/index.ts",
 		"./addressing": "./src/addressing/index.ts",
+		"./coordinates": "./src/coordinates/index.ts",
 		"./generation": "./src/generation/index.ts",
 		"./mesh": "./src/mesh/index.ts",
 		"./render": "./src/render/index.ts"
