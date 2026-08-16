@@ -85,7 +85,7 @@ a runnable demo where one exists.
 
 **Building it?** [`ARCHITECTURE.md`](ARCHITECTURE.md) is the short version:
 the stack (TypeScript, Vite, the browser, WebGPU, Node), the four-part runtime
-split, and what is in V0.5, V1 and after. It states the decisions and links to
+split, and what is in 0.5.0, 1.0.0 and after. It states the decisions and links to
 the document that argues each one.
 
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,

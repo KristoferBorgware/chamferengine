@@ -32,8 +32,8 @@ Four things follow from that list.
   and the tooling are TypeScript. The measured cost against C is `1.75×` on the
   generator and `1.5×` on the mesher.
 - **Node runs on both sides.** It runs the verification scripts and the doc
-  build today, it hosts the local server in V0.5, and it is the Lambda runtime
-  in V1.
+  build today, it hosts the local server in 0.5.0, and it is the Lambda runtime
+  in 1.0.0.
 - **Vite builds the engine.** `demos/`, `verification/` and `tools/` stay plain
   HTML and plain Node with no build step: a demo opens by double-clicking the
   file, a script runs under bare `node`.
@@ -151,20 +151,20 @@ onMessage(playerId, message)      how a message arrives
 send(playerId, message)           how one leaves
 ```
 
-Game code calls only these two. Underneath them is a `ws` socket in V0.5, or a
-Lambda handler and `postToConnection` in V1. The V0.5 → V1 change is a swap
+Game code calls only these two. Underneath them is a `ws` socket in 0.5.0, or a
+Lambda handler and `postToConnection` in 1.0.0. The 0.5.0 → 1.0.0 change is a swap
 below this interface; game code stays as written.
 
 ### The wire
 
-Messages are a fixed, enumerated set. Two rules on their shape, decided in V0.5
+Messages are a fixed, enumerated set. Two rules on their shape, decided in 0.5.0
 and kept in every later version:
 
 - **An edit names a cell and a resulting block state.** A storage-only server
   writes it as given. A validating server checks the same fields — reach against
   the cell, type and solidity against the state — so validation is a check
   inserted before the store, not a change to the message.
-- **A rejection message is defined from the first version.** V0.5 never sends
+- **A rejection message is defined from the first version.** 0.5.0 never sends
   it, but the client has a code path for it, so a later version can start sending
   it without the client being rewritten.
 
@@ -180,11 +180,11 @@ roles; it needs no separate design.
 
 ## Scope
 
-Three milestones. **The server's behaviour is the same in V0.5 and V1**: it
+Three milestones. **The server's behaviour is the same in 0.5.0 and 1.0.0**: it
 stores, it routes, and it validates nothing. What changes between them is where
 it runs and what it writes to.
 
-### V0.5 — local only
+### 0.5.0 — local only
 
 | | |
 |---|---|
@@ -196,10 +196,10 @@ it runs and what it writes to.
 | Players | one, or several on one machine or one network |
 
 Terrain, meshing, lighting, water, rivers and the sky are all client-side, so all
-of them are present in V0.5. This milestone is a single-machine deployment of
+of them are present in 0.5.0. This milestone is a single-machine deployment of
 the full client and a minimal server.
 
-### V1 — hosted
+### 1.0.0 — hosted
 
 | | |
 |---|---|
@@ -230,7 +230,7 @@ messages/second  ≈  players × edits per player per second × interested recip
 Storage is `76 MB` and requests are pennies; fan-out is the term that grows with
 player count.
 
-### Beyond V1
+### Beyond 1.0.0
 
 Each of these is designed and priced.
 
@@ -246,7 +246,7 @@ Each of these is designed and priced.
 
 ### What every version keeps
 
-Three properties, decided in V0.5 and held through every later version:
+Three properties, decided in 0.5.0 and held through every later version:
 
 1. **Inventory stays client-side.** A storage-only server cannot issue drops —
    it has no point query on virgin ground — so the client decides what a broken
@@ -256,13 +256,13 @@ Three properties, decided in V0.5 and held through every later version:
 2. **The edit message and the rejection message keep their shape**, per the wire
    rules above.
 3. **Generation stays bit-identical.** Every rule in the build-rules table
-   applies from V0.5 onward, including in a single-player build.
+   applies from 0.5.0 onward, including in a single-player build.
 
 ---
 
 ## Not settled
 
-Nothing here blocks V0.5. All of it is V1 or later, and none of it is measured.
+Nothing here blocks 0.5.0. All of it is 1.0.0 or later, and none of it is measured.
 
 - **Latency and prediction.** API Gateway plus Lambda plus a DynamoDB round trip
   adds latency, which makes client-side prediction and rollback load-bearing.
@@ -285,7 +285,7 @@ Nothing here blocks V0.5. All of it is V1 or later, and none of it is measured.
 Docs [11](docs/11-open-topics.md), [26](docs/26-implementation-readiness.md),
 [30](docs/30-authority-and-cheating.md) and [31](docs/31-deployment.md) call the
 local milestone **V1** and everything after it **V2**. This page splits that
-milestone in two — **V0.5** is local, **V1** is hosted — because the transport
+milestone in two — **0.5.0** is local, **1.0.0** is hosted — because the transport
 and the storage change while the server's behaviour does not. Where those
-documents say *"V1"*, read **V0.5**; where they say *"V2"*, read **beyond V1**.
-No decision in them changes.
+documents say *"V1"*, read **0.5.0**; where they say *"V2"*, read
+**beyond 1.0.0**. No decision in them changes.

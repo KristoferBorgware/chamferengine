@@ -31,7 +31,7 @@ and duplicates information found there.
 ## Project shape
 
 - The repository holds a prose specification, generated figures, runnable demos
-  and verification scripts. Engine source begins at V0.5, defined in
+  and verification scripts. Engine source begins at 0.5.0, defined in
   [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — **the stack, the four-part runtime split
   and the milestone definitions, stated rather than argued.** Read it before
@@ -748,12 +748,12 @@ written down the same way are now separated: **open** (needs thinking) and
 **deferred** (has an answer, a price, and a decision not to spend it yet).
 **The milestones are numbered in [`ARCHITECTURE.md`](ARCHITECTURE.md), and that
 file is authoritative for them** — docs 11, 26, 30 and 31 predate the split and
-call the local milestone *V1*. **V0.5** = TypeScript, browser with WebGPU, Vite,
+call the local milestone *V1*. **0.5.0** = TypeScript, browser with WebGPU, Vite,
 local filesystem storage, a Node server on the same machine that stores and routes
-and validates nothing, inventory client-side and never synced. **V1** = the same
+and validates nothing, inventory client-side and never synced. **1.0.0** = the same
 server behaviour hosted on AWS — API Gateway WebSocket → Lambda → DynamoDB, S3 for
 cold chunks and the client bundle — and still **no authoritative tick loop**.
-**Beyond V1** = edit validation (the point query, `0.06%` of a core at 1,000
+**Beyond 1.0.0** = edit validation (the point query, `0.06%` of a core at 1,000
 players), server-side simulation and mobs (**158×** that), entity interest, the
 move off Lambda, a native desktop client, and any move of a hot path to C/Rust+wasm.
 **Unscoped and in no document at all**: only **space travel** now — the skybox,
