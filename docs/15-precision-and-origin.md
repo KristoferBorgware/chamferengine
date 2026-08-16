@@ -100,9 +100,9 @@ And the thresholds, which are the numbers to design against:
 > | 10 cm | 1,049 km |
 > | 1 m | 8,389 km |
 
-Powers of two, exactly as the formula above predicts, and the practical
-consequence is worth stating on its own: **precision does not decay smoothly as a
-world grows — it halves, abruptly, every time the radius crosses a power of two.**
+Powers of two, exactly as the formula above predicts. So **precision does not
+decay smoothly as a world grows — it halves, abruptly, every time the radius
+crosses a power of two.**
 
 ![A staircase graph of position spacing against planet radius, flat across each binade and doubling vertically at each power of two, with 15 km and 17 km marked on either side of one step](figures/precision-staircase.svg)
 
@@ -251,8 +251,8 @@ integer arithmetic:
 > the world goes the floating-point work is one barycentric blend and one
 > normalise. Nothing accumulates.
 
-A deeper world is not a less accurate world. That is worth saying plainly,
-because in most spatial hierarchies it would be false.
+A deeper world is not a less accurate world. In most spatial hierarchies that
+would be false.
 
 ---
 
@@ -346,7 +346,7 @@ The offset is bounded by construction, so `float32` is enough for it at any
 planet size. **Rebasing is renormalising**: when the offset leaves the anchor's
 extent, fold the excess into the anchor and subtract it from the offset.
 
-That is the whole mechanism, and it is worth noticing what it is *not*.
+That is the whole mechanism. What it does **not** do is move the world.
 
 ![On the left, a whole grid of world cells sliding sideways as one; on the right, a single entity moving from one chunk box to the next with its offset arrow restarting inside the new box](figures/anchor-and-offset.svg)
 
@@ -399,8 +399,8 @@ mistake, in a different currency, as storing a heading as a world vector
 ## What this forces elsewhere
 
 - **World positions are `float64`.** Anything that computes a position from an ID
-  for gameplay, physics, or lookup does so in double precision. This is free on
-  every platform the game would ship on.
+  for gameplay, physics, or lookup does so in double precision. Every platform
+  the game would ship on runs `float64` at full speed.
 - **GPU-facing data is `float32` and chunk-local, always.** Vertex positions,
   instance transforms, and the camera's own position are expressed relative to
   the chunk being drawn. Upload the chunk's origin as a uniform.

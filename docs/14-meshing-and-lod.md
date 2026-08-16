@@ -62,8 +62,8 @@ Going sideways they never do — each neighbour's matching face is shifted half 
 cell, so there is no run to collapse and no algorithm can invent one.*
 
 That is the honest summary of what transfers: **run-length merging along the
-radial axis is free and exact; the rectangle-growing part of greedy meshing has
-no hex equivalent.** Which is the same shape as everything else in this design —
+radial axis is exact and costs one comparison per layer; the rectangle-growing
+part of greedy meshing has no hex equivalent.** Which is the same shape as everything else in this design —
 the radial axis is easy, the horizontal one is not ([doc 13](13-gravity-and-orientation.md)).
 
 ---
@@ -213,9 +213,9 @@ conclusion survives — the near field still needs no merging — but the render
 budget has to be set from the relief-extended range, not from 76 m, and the
 distant part of that range is exactly what LOD is for.
 
-**The 76 m horizon is the greedy mesher.** It has already thrown away
-everything a merge pass would have, and it did it for free, before the mesher
-ran. Build the naive version, ship it, and spend the effort on altitude instead —
+**The 76 m horizon is the greedy mesher.** It has already thrown away everything
+a merge pass would have, and it did so before the mesher ran, at no cost in
+code. Build the naive version, ship it, and spend the effort on altitude instead —
 which is where the numbers actually go bad.
 
 ---
@@ -264,8 +264,7 @@ keep twice.
 
 ## Terrain is generated, not stored — and that changes LOD
 
-Worth stating plainly, because every assumption in this document rests on it.
-**There is no heightmap.** [Doc 08](08-terrain-generation.md) makes terrain two
+Every assumption in this document rests on one fact. **There is no heightmap.** [Doc 08](08-terrain-generation.md) makes terrain two
 pure functions of position — a height-field term giving `surfaceRadius(direction)`,
 and optionally a density term `(surfaceRadius − |p|) + noise3D(p) × strength`
 that carves caves and overhangs into it. Nothing is on disk but the seed and the
@@ -278,7 +277,8 @@ Three consequences that a mesh-simplification mindset gets wrong.
 There is no fine mesh to decimate — there is no mesh at all until something asks
 for one. A coarse chunk is the same function asked again on a wider grid, so a
 LOD step cuts **generation** cost by 4× at the same time as it cuts drawing.
-Distant terrain is cheap twice over. Classical mesh LOD gets neither for free.
+Distant terrain is cheaper twice over. Classical mesh LOD gets neither saving:
+it decimates a mesh that has already been built.
 
 ### The two terms cost wildly different amounts
 

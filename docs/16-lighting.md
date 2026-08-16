@@ -2,7 +2,7 @@
 
 ## The problem
 
-Minecraft-style lighting is a flood fill: every cell holds a light level, light
+Voxel lighting is a flood fill: every cell holds a light level, light
 spreads to neighbours losing one level per step, and solid cells block it. There
 are two independent channels — **sky light** from above and **block light** from
 torches — and they are stored per cell and recomputed when a block changes.
@@ -10,12 +10,12 @@ torches — and they are stored per cell and recomputed when a block changes.
 [Doc 11](11-open-topics.md) listed three things that make this different on a
 sphere: cells have **8 neighbours** rather than 6, sky light arrives along the
 **radial** direction rather than straight down, and a sun direction dotted
-against cell normals gives **a real terminator for free**.
+against cell normals gives **a real terminator from one dot product**.
 
 All three turn out to be true, and the document's shape is unusual for this
 project: **this is the system where the sphere costs least.** Two of the three
-are free, one costs a flat 1.5×, and the twelve pentagons — expensive everywhere
-else — cost nothing whatsoever.
+cost nothing, one costs a flat 1.5×, and the twelve pentagons — expensive
+everywhere else — cost nothing whatsoever.
 
 ---
 
@@ -81,8 +81,8 @@ a blow-up — and it is the entire price.
 
 ## The pentagons cost nothing, and the reason is worth following
 
-This is the one place in the specification where the twelve pentagons are free,
-and the measurement looks alarming until you read it correctly.
+This is the one place in the specification where the twelve pentagons cost
+nothing, and the measurement looks alarming until you read it correctly.
 
 > **[verified]** `verification/light.js`, level 7, range 15.
 >
@@ -181,7 +181,7 @@ the block data rather than four times it.
 
 ---
 
-## The terminator is free
+## The terminator is one dot product
 
 This is the part worth designing toward rather than around.
 
@@ -199,7 +199,7 @@ and no shadow map at all**.
 *The lit set is just the hemisphere facing the sun. On a flat world day and
 night are a global clock value; here they are a place.*
 
-A flat world cannot have this. Minecraft's day/night is a single global number,
+A flat world cannot have this. Its day and night are a single global number,
 because there is nowhere for a terminator to be. Here it falls out of the
 geometry at no cost, and it is the most visible thing the sphere gives back.
 
@@ -295,8 +295,8 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
 - **Ambient occlusion with 8 neighbours**, carried over from
   [doc 14](14-meshing-and-lod.md), including what a corner means where three
   hexagons meet rather than four squares.
-- **Whether sky light should know the sun's angle.** Minecraft's sky light is
-  direction-free and then modulated globally by time of day. Here the modulation
+- **Whether sky light should know the sun's angle.** The usual voxel approach
+  makes sky light directionless and then modulates it globally by time of day. Here the modulation
   is per-cell and gives the terminator — but a cell in a deep valley still gets
   full sky light at noon and at dusk alike, which is wrong in a way players will
   see on a small planet where the sun visibly moves.
@@ -321,8 +321,8 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
 - **Light storage is 4× the block storage** — the largest hidden cost here — but
   sky light is monotone down a column, so storing a depth per column instead of a
   value per cell shrinks that part **32×**.
-- **The terminator is free**: `dot(sun, up) > 0`, reusing gravity's `up`, no
-  shadow map. A flat world cannot have one at all.
+- **The terminator is one dot product**: `dot(sun, up) > 0`, reusing gravity's
+  `up`, with no shadow map. A flat world cannot have one at all.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

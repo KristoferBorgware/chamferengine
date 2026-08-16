@@ -49,8 +49,8 @@ becomes a feature.
 
 ### Why the vertical direction never causes trouble
 
-The radial axis is free, and this is worth saying plainly because it is the fact
-that makes the rest of the document tractable.
+The radial axis costs one `normalize`, and that one fact is what makes the rest
+of this document tractable.
 
 From [doc 03](03-addressing.md): the cell above you is your own address with the
 layer number increased by one. That is the entire operation. No face crossing, no
@@ -140,8 +140,7 @@ as you walk.
 
 ### Walk in a circle and you come back turned
 
-This one is genuinely strange the first time, so it is worth walking through
-rather than stating.
+This one is strange the first time. Walk through it rather than reading it.
 
 Stand at the north pole facing your left. Walk straight down to the equator — no
 turning. Walk a quarter of the way round the equator — still no turning. Walk
@@ -319,7 +318,7 @@ leaning 3.37° away from each other.*
 Three consequences, all useful:
 
 - **Render distance is bounded by geometry, not by taste.** Ground-level occlusion
-  is free and total; chunks past the horizon cannot be seen at all. The near-field
+  is total and needs no test: chunks past the horizon cannot be seen at all. The near-field
   LOD budget is far smaller than a flat world's.
 - **LOD must be driven by altitude, not distance.** Climb 50 m and the visible area
   multiplies by 28×. A view-distance slider is the wrong control; the right one is
