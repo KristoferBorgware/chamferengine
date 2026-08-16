@@ -41,16 +41,18 @@ this document exists for, and the obvious answer to it is wrong.
 > | rotation | 4 | **16** variants of each |
 > | together | 16 | **65,536** distinct block states |
 
-For scale, take Minecraft Java as the yardstick. It has **1,159 block types** in
-its registry, so 4,096 is **3.5× a full game** — comfortable, not unlimited.
+For scale, take the largest published cube-world block registry as the
+yardstick. It carries **1,159 block types**, so 4,096 is **3.5× a full game** —
+comfortable, not unlimited.
 
-But it also ships **roughly 26,000 block states**, which is **22 variants per
+But the same game ships **roughly 26,000 block states**, which is **22 variants per
 type on average** — *above* the 16 a type gets here. That number is the one to
 watch, and it is priced below rather than waved at.
 
-*(Both figures are quoted from the Minecraft wiki, not produced by a script here.
-The type count is exact; the state total is the wiki's "tens of thousands", taken
-as 26,000. They are used as a sense of scale, not as anything to size against.)*
+*(Both figures are quoted from that game's published block list, not produced by
+a script here. The type count is exact; the state total is its "tens of
+thousands", taken as 26,000. They give a sense of scale and are not something to
+size against.)*
 
 ---
 
@@ -161,9 +163,9 @@ machinery.**
 
 ## Two representations, and only one of them is on disk
 
-It is worth being explicit that "block state" appears in two different shapes,
-because [doc 07](07-data-structures.md) introduces both and never says they are
-the same thing seen twice.
+"Block state" appears in two different shapes.
+[Doc 07](07-data-structures.md) introduces both without saying they are the same
+thing seen twice.
 
 ![Two panels: a chunk holding a four-entry palette and a grid of small indices, beside a short list of edit records each pairing a cell with a new state](figures/two-representations.svg)
 
@@ -235,9 +237,9 @@ It does not need to be clever, because it is never big:
 
 ### How does a cell know it has side data? It asks the table
 
-Earlier drafts of this document answered: **the type says so.** A chest always has
-contents, stone never does, and the registry already carries a line per type, so
-no bit is spent. That was cheap, and it was the wrong shape of answer. It decides
+One obvious answer is **the type says so**. A chest always has contents, stone
+never does, and the registry already carries a line per type, so no bit is spent.
+It is cheap, and it is the wrong shape of answer. It decides
 a per-**cell** question from a per-**type** fact, which quietly forbids ever
 putting a note, an owner or a marker on a block of stone.
 
@@ -291,8 +293,8 @@ writing a block clears that cell's side data
 ```
 
 The type keeps two real jobs — it says what a freshly placed block is **born**
-with, and it says what a tag **means** — but it no longer gates whether an entry
-may exist. So a stone block *can* carry a name, and nothing in the design has to
+with, and it says what a tag **means**. It does not gate whether an entry may
+exist. So a stone block *can* carry a name, and nothing in the design has to
 be widened to allow it. [Doc 19](19-directional-blocks.md)'s spare rotation bit
 stays spare, which was the only thing A was protecting.
 
@@ -323,7 +325,7 @@ in is a query, not its address.
 
 ## Rotation stays a field, not part of the number
 
-There is one genuine design choice here, and it is worth stating both sides.
+One genuine design choice remains, and both sides of it are real.
 
 **A flat index** would make the 16 bits one number into a table of every state
 the world defines, the way a modern block-state registry works. Variants per type
@@ -337,10 +339,10 @@ The deciding argument is [doc 19](19-directional-blocks.md). A rail reads the
 facing of its neighbours constantly; that is the one block-state read that
 happens per block per frame, and it should not be a table lookup.
 
-The 16-variant cap is the thing to check, and here an earlier draft of this
-document cheated. It priced a stair-like block — 4 facings × 2 halves × 5 join
-shapes, 40 states, 3 type slots — and concluded that sixty such materials spend
-**4.4%** of the type space. That is true, and it is a flattering example.
+The 16-variant cap is the thing to check, and a flattering example makes it look
+better than it is. Price a stair-like block — 4 facings × 2 halves × 5 join
+shapes, 40 states, 3 type slots — and sixty such materials spend **4.4%** of the
+type space. True, and not representative.
 
 Price it against the yardstick instead:
 
@@ -351,9 +353,9 @@ Price it against the yardstick instead:
 > the split's waste is exactly what rounding each type up to a multiple of 16
 > costs.
 
-**So the fixed split is not nearly free. At a Minecraft-sized catalogue it spends
+**So the fixed split is not nearly free. At that catalogue size it spends
 about half the type space.** It still fits, with headroom for a game larger than
-Minecraft — and the deciding argument was never the space. It is that a rail
+the yardstick — and the deciding argument was never the space. It is that a rail
 reading its neighbour's facing should be a mask.
 
 **Take the fixed split, knowing the price.** If a game ever outgrows it, the nine
@@ -377,13 +379,18 @@ spare bits in the edit record are where the extra type bits come from.
 
 ## Still open
 
+- **This document answered the side-data question with the type.** A chest always
+  has contents, stone never does. It settles a per-**cell** question from a
+  per-**type** fact, so a stone block could never carry a name, and replacing a
+  chest with stone orphans the blob. The rule is **the table answers**, and
+  writing a block clears that cell's side data.
 - **What a slot in a chest actually is.** The side table has a shape now — tag,
   length, payload — but the payload for an inventory needs an item format, and
   items are a bigger question than blocks: they stack, they carry durability, and
   they are not addressed by cell at all.
 - **What happens when a save names a type this build does not have.** Keep the
-  number and render a placeholder, or refuse to load? Minecraft's answer is a
-  placeholder, which preserves the world if a mod comes back later.
+  number and render a placeholder, or refuse to load? A placeholder preserves the
+  world if the missing content comes back later, which is the usual answer.
 - **Whether the registry is per planet or per save.** A save holding several
   planets ([doc 03](03-addressing.md)'s planet field) probably wants one shared
   registry, but nothing here has checked what that costs.
@@ -403,7 +410,7 @@ spare bits in the edit record are where the extra type bits come from.
 ## In one breath
 
 - **12 bits of type, 4 of rotation**: **4,096** block types, **16** variants each,
-  **65,536** states — **3.5×** Minecraft's 1,159 block types.
+  **65,536** states — **3.5×** the yardstick's 1,159 block types.
 - **A type number cannot be a hash of its name.** In 12 bits it is even odds on a
   collision by **75 types** and near-certain by 200, and a collision makes every
   save holding both blocks unreadable. Widening to 24 bits still leaves 2.9%.
@@ -434,6 +441,6 @@ spare bits in the edit record are where the extra type bits come from.
   entities are held per chunk by containment, and the cell a mob stands in is a
   query, not its address.
 - **Rotation stays a mask, not a lookup**, because doc 19 reads it per block per
-  frame. The 16-variant cap is **not** cheap, though: at Minecraft's ~26,000
+  frame. The 16-variant cap is **not** cheap, though: at the yardstick's ~26,000
   states it spends **40–68%** of the type space against a flat index's 40%. It
   fits; it is not free; and the space was never the deciding argument.

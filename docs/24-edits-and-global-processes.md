@@ -200,7 +200,7 @@ is no correct answer to *how much* to recompute.
 ## The general rule
 
 Rivers are the first case, not the only one. The same shape appears wherever a
-global precomputed fact meets a local edit, so it is worth stating once:
+global precomputed fact meets a local edit. Stated once:
 
 > **A precomputed global map is a statement about the generated world, never about
 > the current one.** Player edits are recorded in the delta store and interpreted

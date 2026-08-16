@@ -70,8 +70,8 @@ It is **"does this code path call a transcendental at all?"**
 walking a ray, generating terrain, computing gravity — all of it is arithmetic the
 standard pins to the bit.
 
-The two display rows do not matter, and it is worth being explicit about why
-rather than waving at it. A latitude readout that differs in the twelfth decimal
+The two display rows do not matter, and the reason is precise. A latitude
+readout that differs in the twelfth decimal
 between two players is a difference nobody can observe and nothing acts on. It is
 printed, not stored and not compared.
 
@@ -195,8 +195,7 @@ measuring output. Three places it bites:
 - **Anything that becomes a cell ID, a block state or a stored height** stays in
   the top group.
 
-And the freedoms it grants, which are worth stating because they are broader than
-the restriction:
+The freedoms it grants are broader than the restriction:
 
 - **Display code may use anything.** Latitude, distances, the horizon, the compass
   — all transcendental, all fine, because nothing compares them across machines.

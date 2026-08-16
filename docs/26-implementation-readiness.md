@@ -219,7 +219,7 @@ first commit.
 
 ### The one free decision, now taken
 
-This document originally listed a fourth category with one member: **which of the
+A fourth category holds one member: **which of the
 six antipodal pentagon pairs is the polar axis** ([doc 20](20-player-coordinates.md)).
 Free today, unfixable after the first world ships, and on nobody's critical path —
 exactly the kind of thing that gets decided by accident.
@@ -238,7 +238,7 @@ code first.
 
 ---
 
-## One entry that is no longer true
+## One entry the triage overtakes
 
 [Doc 15](15-precision-and-origin.md)'s Still open list says the `hexRound`
 question is "sharper, not answered" and that whether planar rounding finds the
@@ -302,8 +302,7 @@ closed**, both by the method every question in this repository closed with:
 alone and checks it against the geometric graph the other scripts already build —
 60/60 face edges round-tripping, `+0` or `+3` and nothing between, 12 cells at
 degree 5, and the same direction round every ring. `rank.js` does the same for the
-chunk index, and finds that doc 03's border rule — never previously checked — is an
-exact partition. So step 1 needs a language and a noise function, and then it is
+chunk index, and finds that doc 03's border rule is an exact partition. So step 1 needs a language and a noise function, and then it is
 transcription rather than design.
 
 **2. A chunk, and a height field.** `rank(q, r)`, the palette, column-major order,
@@ -320,7 +319,7 @@ the specification and cannot be answered any other way.
 and the delta store. Each one has a document, a script and a number waiting for
 it.
 
-**"The server" used to be on that list and is now a file.**
+**"The server" on that list is a file.**
 [Doc 30](30-authority-and-cheating.md) scopes V1's server to a point of storage —
 it stores edits, routes them, and validates nothing — and
 [doc 31](31-deployment.md) puts V1 on the local filesystem. So step 4's last item

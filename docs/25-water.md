@@ -5,9 +5,9 @@
 A block type. Translucent, placeable, with no collision, written by the generator
 at world creation and never simulated.
 
-That is the whole model, and it is worth stating first because every instinct
-about water in a game pulls the other way. There is no flow, no pressure, no
-spreading, no level-seeking. **This is a construction toy, not a planetary
+That is the whole model, and it goes first because every instinct about water in
+a game pulls the other way. There is no flow, no pressure, no spreading, no
+level-seeking. **This is a construction toy, not a planetary
 simulator** — the nearest thing to it is a box of hexagonal Lego, and water is one
 of the pieces. A translucent one you can swim in.
 
@@ -198,8 +198,8 @@ height rather than about any particular coast.
 
 ### Test the step, not the end of it
 
-There is one bug this invites, and it is worth naming because a block with no
-collision is exactly a block a fast mover can pass straight through.
+One bug follows directly: a block with no collision is exactly a block a fast
+mover can pass straight through.
 
 > **[verified]** `verification/water.js`, section 4. A player falling at roughly
 > terminal velocity, 50 m/s:
@@ -228,8 +228,7 @@ This is the same rule as every other block, and it is the rule
 [doc 24](24-edits-and-global-processes.md) already argued for. **A world of
 translucent Lego is one where a wall of water is as buildable as a wall of stone.**
 
-It costs two of the measurements above their generality, and it is worth being
-exact about which:
+It costs two of the measurements above their generality. Exactly which:
 
 - **"Zero exposed sides" describes the generated world only.** It was always
   stated that way — generated water is held in by land at or above its own level
