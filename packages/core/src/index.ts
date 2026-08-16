@@ -22,6 +22,7 @@ export {
 export { latticeWeights } from "./latticeWeights.js";
 export { latticePosition } from "./latticePosition.js";
 export { cellKey } from "./cellKey.js";
+export { cellCorners } from "./cellCorners.js";
 export { hexRound } from "./hexRound.js";
 export { faceOf } from "./faceOf.js";
 export { barycentricOf } from "./barycentricOf.js";

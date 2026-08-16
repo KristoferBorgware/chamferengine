@@ -68,6 +68,9 @@ export function pentagonRing(
 	const ring: FaceCell[] = [];
 	for (let s = 0; s < 5; s++) {
 		const e = FACES[g]!.indexOf(p);
+		// Faces wind A -> B -> C counter-clockwise from outside, so at vertex p the
+		// next cell round is the one toward the following vertex, and the next face
+		// round is the one across the edge that arrives back at p.
 		const x = FACES[g]![(e + 1) % 3]!;
 		const cell = offsetOn(
 			g,
@@ -77,7 +80,7 @@ export function pentagonRing(
 			]),
 		);
 		if (cell) ring.push(cell);
-		g = FACE_ADJACENCY[g]![e]!.face;
+		g = FACE_ADJACENCY[g]![(e + 2) % 3]!.face;
 	}
 	return ring;
 }

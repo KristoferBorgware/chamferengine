@@ -22,6 +22,8 @@ body {
 	position: fixed;
 	top: 1rem;
 	left: 1rem;
+	max-width: min(32rem, calc(100vw - 2rem));
+	white-space: pre-line;
 	padding: 0.5rem 0.75rem;
 	background: #0d1219cc;
 	border: 1px solid #26303d;
