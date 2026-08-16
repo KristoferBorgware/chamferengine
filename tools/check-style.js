@@ -1,9 +1,15 @@
 #!/usr/bin/env node
-// Checks docs/ against the rules in HOW-TO-WRITE-DOCS.md. Only the mechanical
-// ones -- voice and sentence length need a reader.
+// Checks every Markdown file against the rules in HOW-TO-WRITE-DOCS.md. Only
+// the mechanical ones -- voice and sentence length need a reader.
 //
-//   node tools/check-style.js              check every document
+//   node tools/check-style.js              check everything
 //   node tools/check-style.js docs/17-*.md check one
+//
+// docs/ is the specification and argues each decision from a measurement.
+// Every other page states what is true today, so it carries no history and no
+// argument, and the `reason` rule applies to it alone. Figures and the
+// "Still open" / "In one breath" structure are the specification's, and are
+// checked on docs/ alone.
 //
 // Exits non-zero when anything is flagged, so it can gate a build.
 
@@ -11,9 +17,21 @@ const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
+function walk(dir, out) {
+  for (const entry of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (/^(node_modules|site|_site|dist|dist-types|\.git)$/.test(entry.name)) continue;
+      walk(rel, out);
+    } else if (entry.name.endsWith('.md')) out.push(rel.replace(/^\.\//, ''));
+  }
+  return out;
+}
+
 const only = process.argv.slice(2);
-const FILES = only.length ? only : fs.readdirSync(path.join(ROOT, 'docs'))
-  .filter(f => /^\d\d-.*\.md$/.test(f)).sort().map(f => `docs/${f}`);
+const FILES = only.length ? only : walk('.', []).sort();
+
+const isSpec = rel => /^docs\/\d\d-.*\.md$/.test(rel);
 
 // ---- the rules --------------------------------------------------------------
 // Each is [name, regex, note]. A line matching the regex is reported. Rules
@@ -26,6 +44,9 @@ const LINE_RULES = [
   ['meta', /\bworth (?:stating|noting|saying)\b|\bit is worth\b|\bnote that\b/i,
     'leave no trace of how the page was written'],
 ];
+
+// A reference page states what is true today. It does not argue for it.
+const REASON = /\bwhich is why\b|\bfor (?:one|two|three|four|several) reasons?\b|\bthe reason (?:is|being|for)\b|\bthis (?:matters|is important) because\b|\bbecause otherwise\b|\brather than (?:several|the alternative)\b|\bthat is why\b/i;
 
 // A history marker belongs in Still open and nowhere else.
 const HISTORY = /\bearlier drafts?\b|\bthis (?:document|page) (?:said|had|used|first|originally)\b|\bused to (?:say|claim|be|call|read|imply|mean)\b|\boriginally (?:said|claimed|implied)\b|\bfirst draft\b|\bno longer\b|\bany more\b|\bpreviously\b/i;
@@ -51,6 +72,14 @@ function sections(lines) {
 const EXEMPT = {
   'docs/11-open-topics.md': ['structure', 'history'],
   'docs/12-glossary.md': ['structure', 'figure'],
+  // The style guide quotes the phrasings it bans, so it matches its own rules.
+  'HOW-TO-WRITE-DOCS.md': ['reason', 'history', 'meta', 'free', 'anchor'],
+  'CODE-STYLE.md': ['history', 'meta', 'free'],
+  // Generated: every line is a verification script's own output.
+  'docs/REFERENCE.md': ['history', 'free', 'anchor', 'meta', 'reason'],
+  // A digest of the specification, carrying its corrections verbatim. An agent
+  // that does not know 1.3:1 was a level-2 reading writes it down again.
+  'CLAUDE.md': ['history', 'free', 'anchor'],
 };
 
 let total = 0;
@@ -82,6 +111,11 @@ for (const rel of FILES) {
       if (name === 'free' && FREE_OK.test(line)) continue;
       hits.push({ line: i + 1, name, note, text: line.trim().slice(0, 78) });
     }
+    if (!isSpec(rel) && REASON.test(line)) hits.push({
+      line: i + 1, name: 'reason',
+      note: 'a reference page states, it does not argue',
+      text: line.trim().slice(0, 78),
+    });
     if (HISTORY.test(line)) {
       const inStillOpen = stillOpen && i >= stillOpen.start && i < stillOpen.end;
       if (!inStillOpen) hits.push({
@@ -92,12 +126,14 @@ for (const rel of FILES) {
     }
   });
 
-  if (!oneBreath) hits.push({ line: 0, name: 'structure', note: 'no "In one breath"', text: '' });
-  if (stillOpen && oneBreath && stillOpen.end !== oneBreath.start) hits.push({
-    line: stillOpen.start + 1, name: 'structure',
-    note: '"Still open" must sit immediately before "In one breath"', text: '',
-  });
-  if (!/^!\[/m.test(text)) hits.push({ line: 0, name: 'figure', note: 'no figure', text: '' });
+  if (isSpec(rel)) {
+    if (!oneBreath) hits.push({ line: 0, name: 'structure', note: 'no "In one breath"', text: '' });
+    if (stillOpen && oneBreath && stillOpen.end !== oneBreath.start) hits.push({
+      line: stillOpen.start + 1, name: 'structure',
+      note: '"Still open" must sit immediately before "In one breath"', text: '',
+    });
+    if (!/^!\[/m.test(text)) hits.push({ line: 0, name: 'figure', note: 'no figure', text: '' });
+  }
 
   const exempt = EXEMPT[rel] || [];
   const kept = hits.filter(h => !exempt.includes(h.name));
@@ -105,9 +141,9 @@ for (const rel of FILES) {
 }
 
 if (!total) {
-  console.log(`Every document matches HOW-TO-WRITE-DOCS.md. ${FILES.length} checked.`);
+  console.log(`Every page matches HOW-TO-WRITE-DOCS.md. ${FILES.length} checked.`);
 } else {
-  console.log(`${total} flagged across ${report.length} of ${FILES.length} documents:\n`);
+  console.log(`${total} flagged across ${report.length} of ${FILES.length} pages:\n`);
   for (const r of report) {
     console.log(`  ${r.rel}  (${r.hits.length})`);
     for (const h of r.hits)

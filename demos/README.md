@@ -141,7 +141,7 @@ scheme does the work". This is what that actually looks like. One face, split in
 run of consecutive IDs**. A single range would be a single color. Drag it
 anywhere and it never is.
 
-The reason is in the second control. Widen the view and the chunk count grows with
+The second control shows it. Widen the view and the chunk count grows with
 the **area** while the run count grows only with the **rim** — 2.4 chunks per run
 at close range, 26 at long range. So ID ranges get *better* with distance, which
 is why they earn their keep on disk and not on the network. The order toggle shows
@@ -246,7 +246,7 @@ river is one cell wide and one block really would dam it.
 Drag a walker round the planet and watch the sky turn — because `up` is
 `normalize(position)`, and 10,681 m of walking rotates it through a full 360°.
 Switch the sky to *locked to the camera* and the view freezes however far you go,
-which is what a flat-world skybox does for free and why it cannot be used here.
+which is what a flat-world skybox does, and why it cannot be used here.
 The moon is drawn **to scale**, so 0.52° really is a speck, and it slides against
 the stars as you move — parallax a skybox at infinity does not have.
 

@@ -301,7 +301,7 @@ achieve.
 ## `light.js` — lighting on a hex sphere
 
 Seven checks, covering what 8 neighbours cost, why sky light is still one
-downward pass, and what a sun direction buys for free.
+downward pass, and what one dot product against `up` settles.
 
 **Verifies:**
 
@@ -361,9 +361,9 @@ brute-force search for the nearest cell centre on the sphere.
 
 ## `uniform.js` — how uniform are the cells, really?
 
-Doc 02 claimed 1.3:1 in area and 1.14:1 in spacing from the first draft, with no
-script behind either — the only load-bearing constant in the specification that
-had none. Both are used: doc 10 divides by maximum spacing to keep its A*
+Doc 02's 1.3:1 in area and 1.14:1 in spacing had no script behind either, and
+they were the only load-bearing constants in the specification without one. Both
+are used: doc 10 divides by maximum spacing to keep its A*
 heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real
 spread on the one-shot grid.
 
@@ -612,9 +612,9 @@ decide whether that is workable.
 
 ## `winding.js` — is the middle-child flip a mirror?
 
-Doc 03 called a middle-descended chunk a "mirrored frame" from the first draft.
-That word implies handedness changes, which would reach into meshing, normals and
-everything chirality-dependent. This checks what the flip actually is.
+Doc 03 called a middle-descended chunk a "mirrored frame". That word implies
+handedness changes, which would reach into meshing, normals and everything
+chirality-dependent. This checks what the flip actually is.
 
 **Verifies:**
 
@@ -662,7 +662,7 @@ actually separates the first from the third.
    L11, or **0.038 mm** on the doc-06 planet. Doc 11's "about 0.1 of a cell" was
    out by **2,600×**; that figure belongs to spherical Voronoi (`hexround.js`),
    which plateaus. The disputed sliver is **0.003%** of a cell at L11.
-4. **The fix is free.** A corner is a lattice point of the same construction at
+4. **The fix costs no extra vertices.** A corner is a lattice point of the same construction at
    `3n`: `(3i+2, 3j+1)` for an up-triangle, `(3i+1, 3j+2)` for a down-triangle,
    agreeing with the averaged construction to **3e-8 radians**. One blend and one
    normalise from integers, so doc 14's **2 vertices and 4 triangles per cell**

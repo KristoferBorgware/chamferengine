@@ -1,11 +1,40 @@
 # How to write docs
 
-Voice, structure and figure rules for `docs/` — the prose specification. Not
-needed for engine work, which is why it is linked from
-[`CLAUDE.md`](CLAUDE.md) rather than kept there: a coding session should not
-have to load a doc-writing style guide by default.
+Voice, structure and figure rules for **every Markdown file in this
+repository** — the `docs/` specification, `README.md`, `ARCHITECTURE.md`,
+`CODE-STYLE.md`, `CLAUDE.md`, `plans/`, and every `README` beside a folder of
+scripts. Linked from [`CLAUDE.md`](CLAUDE.md) rather than kept there, so a
+coding session loads it when it writes prose and not before.
+
+Two sections apply to `docs/` alone, and say so where they begin: **Figures**
+and the parts of **Structure and honesty** that name "Still open" and "In one
+breath". Everything else applies to all of it.
 
 ---
+
+## Reference pages state, they do not argue
+
+`docs/` is a specification: it argues each decision from a measurement, and the
+measurement is the point of the page.
+
+Every other Markdown file states what is true today and stops.
+
+- **No history.** A reference page describes the project as it stands. When the
+  project changes, the page changes with it. Git holds what it used to say.
+- **No reasoning.** State the arrangement, not the case for it. "The engine is
+  one package, and subsystems are subpath exports" — not "one package rather
+  than several, for two reasons".
+- **No self-justification.** The page owes the reader no defence of its
+  contents. Cut "which is why", "the reason is", "this matters because", and
+  any sentence whose job is to make the previous sentence acceptable.
+- **No alternatives.** Do not name the arrangement that was not chosen in order
+  to contrast it. A reader wants the shape of the thing, not the shape of the
+  thing it is not.
+
+Where a fact genuinely has to carry a reason — a constant that would look
+arbitrary and get changed — give it as one plain sentence of fact, not as an
+argument. "`float32` steps by `1.2e-7` at this magnitude" states a number; "we
+chose this so that the lake would not go flat, because otherwise" argues.
 
 ## Who is reading
 
@@ -92,6 +121,8 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 
 ## Figures
 
+`docs/` only.
+
 **Every document earns at least one, and the harder the document the more it
 needs.** A reader who is lost in prose is rescued by a picture; a reader who is
 lost in prose about three-dimensional space is not rescued by more prose. Docs
@@ -139,7 +170,8 @@ not one per document.
   now.
 - **Cut a number that doesn't serve the sentence it's in.** Don't restate a
   figure a second time for effect — say it once, where it is load-bearing.
-- **"Still open" holds the history and the caveats, in one place.** A
+- **"Still open" holds the history and the caveats, in one place.** `docs/`
+  only; a reference page carries no history at all. A
   superseded value, a soft caveat, or an assumption the numbers make goes in a
   single **Still open** section, near the end of the document and immediately
   before "In one breath" — never scattered through the body. Strike the old
@@ -157,4 +189,4 @@ not one per document.
   referring to how a decision was reached or revised. State the fact the way
   it would read if it had always read that way.
 - **Close with In one breath** — five or six bullets that carry the argument
-  alone.
+  alone. `docs/` only.

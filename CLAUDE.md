@@ -53,10 +53,15 @@ and duplicates information found there.
 - **A filename is its primary export, spelled the same way**: `Vec3.ts`,
   `hexRound.ts`, `DIRECTIONS.ts`. One exported function per file.
 - **`color`, never `colour`** — American spelling in code and in prose.
-- `docs/` — prose specification, ordered 00 through 32. See
-  [`HOW-TO-WRITE-DOCS.md`](HOW-TO-WRITE-DOCS.md) for voice, structure and
-  figure rules — not needed for engine work, so it is linked rather than
-  inlined here.
+- [`HOW-TO-WRITE-DOCS.md`](HOW-TO-WRITE-DOCS.md) — **voice, structure and figure
+  rules for every Markdown file here**, `docs/` and reference pages alike.
+  **Read it before writing or editing any Markdown.** Linked rather than
+  inlined so a coding session loads it when it writes prose.
+  **`docs/` argues each decision from a measurement. Every other page states
+  what is true today and stops**: no history, no reasoning, no justification,
+  no naming the alternative that was not chosen. When the project changes, the
+  page changes with it; git holds what it used to say.
+- `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
 - `verification/` — plain Node scripts, zero dependencies, that check the
@@ -410,7 +415,7 @@ Violating any of these breaks the design. They are not tunable.
   1 through 16: **one index, every time**. It counts the pentagons enclosed, not
   the distance kept, so no exclusion zone or ocean removes it — doc 13's claim that
   burial "removes the problem" is corrected in doc 17. Burial removes only the
-  *local* problem. That is why doc 17 protects the cell (cheap, reversible, keeps
+  *local* problem. Doc 17 protects the cell (cheap, reversible, keeps
   seed variety) rather than flooding it (1% of the surface, fixes the macro map of
   every world, cannot be undone).
 - **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
@@ -647,7 +652,7 @@ Violating any of these breaks the design. They are not tunable.
   direction, so integer shuffling plus one blend and one `normalize`, and **no
   noise**); **generation** (client only, and the only part that must be
   bit-identical); **presentation** (client only, deliberately free, and where every
-  transcendental lives — which is why doc 23's rule costs nothing); **world state**
+  transcendental lives, so doc 23's rule reaches nothing here); **world state**
   (server, the only thing that grows). The two machines that must agree are **two
   players**, and they exchange no bytes about terrain — so the requirement survives
   any server shape. **Open, and the biggest question left about the system's
@@ -672,7 +677,7 @@ Violating any of these breaks the design. They are not tunable.
   **The farming cheat is not about terrain** — no server CPU can check "I now have
   3 iron". **The client sends intents, never outcomes**: it names a cell and an
   action, the server reads the type it removed and issues the drop from doc 27's
-  registry. That is why the wire is a **closed message set, never RPC**. And
+  registry. The wire is a **closed message set, never RPC**. And
   **x-ray is unpreventable by construction** — every client generates the whole
   planet — so this design polices **actions**, never **knowledge**.
 - **V1 SCOPE: the server is a point of storage only** (doc 30). It holds the delta
@@ -724,7 +729,7 @@ Violating any of these breaks the design. They are not tunable.
   parameterised by radius and scale height — feed them Earth's) and take **only the
   sun direction** from the real world. Horizon glow has no geometry either: Earth's
   grazing path is **329 km** of air, here it is **88 m** and doc 13's horizon is
-  76 m. **Angles scale and path lengths do not** — which is why the moon survives
+  76 m. **Angles scale and path lengths do not**: the moon survives
   shrinking and the sky does not, and why both are invented anyway. All three are **presentation**, so they
   are client-only and may spend the transcendentals doc 23 forbids in the
   generator; doc 32 is the first place that freedom is actually used.

@@ -130,8 +130,8 @@ disagree with the maths. Each is a standalone theme-aware SVG, so it renders on
 GitHub, in the site, and inlined into the single-file bundle.
 
 `check-coverage.js` compares every document against its committed version and
-reports each number, identifier, link and defined term that no longer appears
-anywhere. It is how the rewrite was kept honest.
+reports each number, identifier, link and defined term that an edit dropped
+from the corpus. It is how a rewrite is kept honest.
 
 Zero dependencies, like everything else here. `site/` is generated and ignored
 by git; the Markdown is the source of truth. The build fails loudly on a dead
@@ -216,7 +216,7 @@ All thirty-five are run by `make-reference.js`, and
 | Pathfinding | Approach chosen, 2D prototype only |
 | Language and runtime | **TypeScript**, decided — see [doc 28](docs/28-language-and-runtime.md) |
 | Deployment | Sketched, **not decided** — see [doc 31](docs/31-deployment.md) |
-| **Engine source** | **Not written.** Nothing in the specification blocks it any more |
+| **Engine source** | `packages/engine`, built against `plans/v0.1.0.md` |
 
 ## Licence
 
