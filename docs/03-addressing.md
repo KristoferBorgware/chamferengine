@@ -503,8 +503,8 @@ The test: **does this change when a player does something?**
 
 **Identity — goes in the ID.** Layer index, world version, resolution level.
 These describe *which cell you are talking about* and never change for a given
-cell. A 512-block crust needs 10 bits for the layer, putting depth 13 plus layer
-at 41 bits with 23 to spare.
+cell. The layer gets **10 bits**, which addresses **1,024** layers, putting depth
+13 plus layer at 41 bits with 23 to spare.
 
 **Mutable state — does not.** If block type lives in the ID, placing a block
 *changes the cell's ID*. Every sorted index, cache key, and range query breaks,

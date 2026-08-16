@@ -408,10 +408,10 @@ prices both sides.
 2. **The crust cap depends on `D` alone.** `maxCrust = (1 − 0.744)·2^D / K`
    layers — the radius cancels, because block size and radius scale together. At
    `D` 11 that is **435 layers** against the **64** the worked planet uses, 6.8× of
-   headroom. Beyond `D` 12 the ID's 512-layer field binds first instead.
-3. **Merging buys almost nothing.** One merge lifts reach from 25.6% to 62.8% of
-   the radius, but the ID addresses only 512 layers and the unmerged cap is
-   already 435 — so it buys **77 layers, 18%**, and every merge after it buys zero.
+   headroom. Beyond `D` 12 the ID's 1,024-layer field binds first instead.
+3. **Merging is capped by the ID.** One merge lifts reach from 25.6% to 62.8% of
+   the radius, but the ID addresses 1,024 layers and the unmerged cap is already
+   435 — so it buys **589 layers, 135%**, and every merge after it buys zero.
 4. **And costs a seam with no rim.** Cell *centres* nest exactly
    (`oneShot(n/2, i, j)` = `oneShot(n, 2i, 2j)`) but cell *areas* do not, so **one
    fine column in four continues through the shell and three in four terminate**.

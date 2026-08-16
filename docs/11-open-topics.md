@@ -560,10 +560,10 @@ an Earth-sized one. At `D` 11 it is **435 layers** against the **64** the worked
 planet uses — 6.8× of headroom.
 
 So the thing merging was for barely exists. And what it would buy is capped by
-something else entirely: the ID sizes its layer field for a **512-layer** crust,
-and the unmerged cap is already 435, so **the first merge buys 77 addressable
-layers — 18% — and every merge after it buys nothing**, because the ID cannot
-address the result.
+something else entirely: the ID gives its layer **10 bits**, addressing
+**1,024** layers, against an unmerged cap of 435 — so **the first merge buys 589
+addressable layers, 135%, and every merge after it buys nothing**, because the
+ID cannot address the result.
 
 Against that, the cost is an interior LOD seam wrapping the entire planet. The
 finding that makes it concrete: **cell centres nest exactly and cell areas do

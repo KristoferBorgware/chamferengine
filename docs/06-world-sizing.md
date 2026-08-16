@@ -168,8 +168,8 @@ an Earth-sized one.
 > | 9 | 4 m | 109 layers | taper |
 > | 10 | 2 m | 218 layers | taper |
 > | 11 | 1 m | **435 layers** | taper |
-> | 12 | 0.5 m | 870 layers | the ID's 512-layer field |
-> | 13 | 0.25 m | 1,741 layers | the ID's 512-layer field |
+> | 12 | 0.5 m | 870 layers | taper |
+> | 13 | 0.25 m | 1,741 layers | the ID's 1,024-layer field |
 
 The worked planet uses **64** layers against a cap of **435** — **6.8× of
 headroom**. Capping is not a constraint on it; it is a ceiling nobody is near.
@@ -182,9 +182,9 @@ drafts of this document suggested it in passing. It used to be declined on
 principle; it can now be declined on arithmetic.
 
 **What it buys.** One merge doubles cell width, so the taper budget restarts:
-reach goes from 25.6% of the radius to 62.8%. But the ID layout sizes the layer
-field for a **512-layer** crust ([doc 03](03-addressing.md)), and the unmerged cap
-at `D` 11 is already 435. So the first merge buys **77 addressable layers — 18%
+reach goes from 25.6% of the radius to 62.8%. The ID gives the layer **10 bits**,
+which addresses **1,024** layers ([doc 03](03-addressing.md)), against an unmerged
+cap at `D` 11 of 435. So the first merge buys **589 addressable layers — 135%
 more crust** — and every merge after it buys **nothing at all**, because the ID
 cannot address the result.
 
@@ -216,8 +216,8 @@ which four separate results are built on:
 | Vertical face merging is exact to 1.5e-16 | [14](14-meshing-and-lod.md) | stacked cells no longer share a radial plane |
 | Sky light stored per column, 32× smaller | [16](16-lighting.md) | columns no longer straight through |
 
-**18% more crust against four broken results and an unrimmed planetary seam. Cap
-the crust.** [Doc 11](11-open-topics.md) records this as closed rather than open.
+**135% more crust against four broken results and an unrimmed planetary seam.
+Cap the crust.** [Doc 11](11-open-topics.md) records this as closed rather than open.
 
 The calculator reports the taper live.
 
@@ -280,6 +280,6 @@ is where it is cashed in.
 - Depth tapers cells by `(R − h)/R`. The budget is **25.6% of the radius** — the
   point where a cell gets narrower than the narrowest one already on the surface —
   which is `(1 − 0.744)·2^D/K` layers and **depends on `D` alone**, not on radius.
-- **Cap the crust; do not merge layers.** Merging buys 18% more addressable crust
-  and costs an unrimmed seam across every column on the planet.
+- **Cap the crust; do not merge layers.** Merging buys 135% more addressable
+  crust and costs an unrimmed seam across every column on the planet.
 - Storage is the real ceiling, and generating on demand removes even that.

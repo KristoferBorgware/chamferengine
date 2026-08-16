@@ -145,7 +145,7 @@ Violating any of these breaks the design. They are not tunable.
     same `(q, r)`, evaluated at a smaller radius. This is what makes vertical
     neighbours free, gravity tractable, and vertical face merging exact. Do not
     change horizontal resolution with depth; doc 06 raised it as a taper remedy
-    and `taper.js` priced it at 18% more crust against an interior seam crossing
+    and `taper.js` priced it at 135% more crust against an interior seam crossing
     every column on the planet, so doc 11 now files it as **struck**, not open.
 11. Every adjacency is a **shared edge**, never a bare corner. That is the exact
     guarantee. "Six neighbours, all equidistant" is the *approximation* — 12
@@ -218,6 +218,7 @@ Violating any of these breaks the design. They are not tunable.
 | narrowest cell ÷ nominal | `0.744` | at a pentagon; anchors the taper budget | `uniform.js` |
 | taper budget | `25.6%` of `R` | `maxCrust = (1−0.744)·2^D/K` layers; `R` cancels | `taper.js` |
 | max crust at `D` 11 | `435` layers | vs 64 in use — 6.8× headroom | `taper.js` |
+| layer field | `10` bits = `1,024` layers | the addressing ceiling; taper binds below `D` 13 | `id.js`, `taper.js` |
 | float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
 | float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
 | float64 at Earth radius | `0.93 nm` | never the binding constraint | `precision.js` |
@@ -330,9 +331,9 @@ Violating any of these breaks the design. They are not tunable.
 - **Layer merging is struck, not open** (`taper.js`). The taper budget is 25.6%
   of the radius — `(1−0.744)·2^D/K` layers, and **the radius cancels**, so the
   crust cap is a property of `D` alone: 435 layers at `D` 11 against the 64 in
-  use. Merging buys **77 addressable layers, 18%** (the ID's layer field stops at
-  512) and costs an interior seam crossing **every column on the planet** — cell
-  *centres* nest exactly, cell *areas* do not, so 3 of every 4 columns dead-end
+  use. Merging buys **589 addressable layers, 135%** (the layer field is 10 bits,
+  so it stops at 1,024) and costs an interior seam crossing **every column on the
+  planet** — cell *centres* nest exactly, cell *areas* do not, so 3 of every 4 columns dead-end
   at the shell — plus all four results invariant 10 pays for. Cap the crust.
 - The 720° shows up **twice**, and the two forms behave oppositely under
   refinement (`frame.js`). The *geometric* defect at a pentagon shrinks ~4× per

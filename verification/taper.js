@@ -25,6 +25,13 @@ console.log(`   so the taper budget is                  : ${((1-MIN_SURFACE)*100
 console.log(`   doc 06's guess was 85% -> 15% of R, which is CONSERVATIVE against this,`);
 console.log('   so nothing built on it was wrong -- but it was a judgement, and this is not.');
 
+// The ID gives the layer field 10 bits (doc 03), so it addresses 2^10 layers.
+// The field width is what every other result is built on -- the delta record is
+// 29 + 10 + 16 bits, and the word is 51 of 64 at D 11 -- so capacity follows
+// from the width rather than the other way round.
+const LAYER_BITS = 10;
+const LAYER_CAP = 2 ** LAYER_BITS;
+
 // ---- 2. max crust depends on subdivision depth alone ------------------------
 // layers = (1-t)*R / blockSize, and blockSize = K*R/2^D, so R cancels.
 console.log('\n2. max crust in layers = (1-t) * 2^D / K  -- the radius cancels');
@@ -32,7 +39,7 @@ console.log('   D    block @ R=1700   max crust (layers)   as metres @ R=1700   
 for (const D of [9, 10, 11, 12, 13, 14]){
   const layers = (1 - MIN_SURFACE) * 2**D / K;
   const bs = K * 1700 / 2**D;
-  const binds = layers < 512 ? 'taper binds' : 'layer field binds (512)';
+  const binds = layers < LAYER_CAP ? 'taper binds' : `layer field binds (${LAYER_CAP})`;
   console.log(`   ${String(D).padStart(2)}  ${bs.toFixed(3).padStart(10)} m   ${layers.toFixed(0).padStart(14)}`
     + `   ${(layers*bs).toFixed(0).padStart(15)} m   ${binds}`);
 }
@@ -61,9 +68,9 @@ for (let k = 0; k <= 3; k++){
   console.log(`   after ${k} merge(s): reach ${(reach*100).toFixed(1)}% of R`
     + `  = ${layersEquivalent.toFixed(0)} m = ${layersEquivalent.toFixed(0)} layers @ 1 m`);
 }
-console.log(`   But the ID layout sizes the layer field for a 512-layer crust (docs 03, 06).`);
-console.log(`   Unmerged reach is ${cap.toFixed(0)} layers; the field stops at 512. So the first merge`);
-console.log(`   buys ${(512-cap).toFixed(0)} addressable layers -- ${(100*(512-cap)/cap).toFixed(0)}% more crust -- and every merge after`);
+console.log(`   But the ID gives the layer ${LAYER_BITS} bits, which addresses ${LAYER_CAP} layers (docs 03, 06).`);
+console.log(`   Unmerged reach is ${cap.toFixed(0)} layers; the field stops at ${LAYER_CAP}. So the first merge`);
+console.log(`   buys ${(LAYER_CAP-cap).toFixed(0)} addressable layers -- ${(100*(LAYER_CAP-cap)/cap).toFixed(0)}% more crust -- and every merge after`);
 console.log('   it buys nothing at all, because the ID cannot address the result.');
 
 // ---- 5. what the shell would cost -------------------------------------------
@@ -96,7 +103,7 @@ for (const [what, doc, cost] of [
 ]) console.log(`   ${what.padEnd(42)} ${doc}  ->  ${cost}`);
 
 console.log('\nverdict');
-console.log(`   buys : ${(512-cap).toFixed(0)} layers of addressable crust on the worked planet, ${(100*(512-cap)/cap).toFixed(0)}%`);
+console.log(`   buys : ${(LAYER_CAP-cap).toFixed(0)} layers of addressable crust on the worked planet, ${(100*(LAYER_CAP-cap)/cap).toFixed(0)}%`);
 console.log(`   costs: an unrimmed seam across all ${N(11).toLocaleString('en-US')} columns, and four results`);
 console.log('          that four separate documents are built on');
 console.log('   Cap the crust. Strike layer merging.');

@@ -111,9 +111,9 @@ authority.js -- what the server must know, per cheat, and what it costs
      and a lazy cheat. It is a modest thing and worth stating modestly.
 
 2. the blind spot costs a POINT QUERY, not a chunk
-   one solidity(cell) query: 389 ns in this JavaScript
+   one solidity(cell) query: 307 ns in this JavaScript
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
-    upper bound -- Rust is about 253 ns)
+    upper bound -- Rust is about 200 ns)
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -126,10 +126,10 @@ authority.js -- what the server must know, per cheat, and what it costs
    and doc 27 measured a player acting on a block about 2x a second:
 
      players   queries/s   CPU of one core
-          10          20      0.0008%
-         100         200      0.0078%
-        1000        2000      0.0777%
-       10000       20000      0.7773%
+          10          20      0.0006%
+         100         200      0.0061%
+        1000        2000      0.0614%
+       10000       20000      0.6142%
 
    SO EDIT VALIDATION IS NOT THE EXPENSIVE THING. A thousand players cost
    a rounding error of one core, because a player is a slow, human-rate
@@ -1120,7 +1120,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 308M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1361,12 +1361,12 @@ language.js -- which language and runtime, decided by running the kernel
 
    (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
          Rust, Vec<f32>            0.18 ms   1.00x   (measured separately)
-         JS, typed arrays          0.69 ms   3.81x
-         JS, one object a vertex   7.85 ms   43.59x
+         JS, typed arrays          0.33 ms   1.81x
+         JS, one object a vertex   4.47 ms   24.85x
 
-       THE LANGUAGE GAP IS 3.8x. THE LAYOUT GAP IS 11x.
+       THE LANGUAGE GAP IS 1.8x. THE LAYOUT GAP IS 14x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 11x version is the one that
+       than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
@@ -2251,7 +2251,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 921 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 593 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2677,9 +2677,9 @@ Cited by [doc 06](06-world-sizing.md).
     9       4.000 m              109               435 m   taper binds
    10       2.000 m              218               435 m   taper binds
    11       1.000 m              435               435 m   taper binds
-   12       0.500 m              870               435 m   layer field binds (512)
-   13       0.250 m             1741               435 m   layer field binds (512)
-   14       0.125 m             3482               435 m   layer field binds (512)
+   12       0.500 m              870               435 m   taper binds
+   13       0.250 m             1741               435 m   layer field binds (1024)
+   14       0.125 m             3482               435 m   layer field binds (1024)
    Same layer count on a 10 km planet and on an Earth-sized one: block size and
    radius scale together, so only D matters. That is worth stating on its own --
    the crust cap is a property of the grid, not of the world you sized.
@@ -2696,9 +2696,9 @@ Cited by [doc 06](06-world-sizing.md).
    after 1 merge(s): reach 62.8% of R  = 1068 m = 1068 layers @ 1 m
    after 2 merge(s): reach 81.4% of R  = 1384 m = 1384 layers @ 1 m
    after 3 merge(s): reach 90.7% of R  = 1542 m = 1542 layers @ 1 m
-   But the ID layout sizes the layer field for a 512-layer crust (docs 03, 06).
-   Unmerged reach is 435 layers; the field stops at 512. So the first merge
-   buys 77 addressable layers -- 18% more crust -- and every merge after
+   But the ID gives the layer 10 bits, which addresses 1024 layers (docs 03, 06).
+   Unmerged reach is 435 layers; the field stops at 1024. So the first merge
+   buys 589 addressable layers -- 135% more crust -- and every merge after
    it buys nothing at all, because the ID cannot address the result.
 
 5. what the interior shell would cost
@@ -2723,7 +2723,7 @@ Cited by [doc 06](06-world-sizing.md).
    sky light stored per column, 32x smaller   doc 16  ->  columns are no longer straight through
 
 verdict
-   buys : 77 layers of addressable crust on the worked planet, 18%
+   buys : 589 layers of addressable crust on the worked planet, 135%
    costs: an unrimmed seam across all 41,943,042 columns, and four results
           that four separate documents are built on
    Cap the crust. Strike layer merging.
