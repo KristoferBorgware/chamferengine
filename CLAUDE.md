@@ -132,6 +132,37 @@ not one per document.
   the numbers assume". A weak number stated confidently is the expensive kind of
   mistake here.
 
+## Reference documentation voice
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is not part of the specification and does
+not use the voice above. It is reference documentation — a page to consult, not
+a document to be walked through — and is held to a different, stricter set of
+rules:
+
+- **State facts, don't announce findings.** Write the conclusion, not the
+  discovery of it. "Addressing runs on the client and server", not "both sides,
+  unavoidably".
+- **Define what something is, not what it isn't.** Avoid "not a database",
+  "never RPC", "no second language" as the definition of a thing. Say what it is
+  instead.
+- **Don't justify decisions with narrative reasoning.** Cut connective tissue
+  like "and that is why this shape fits", "which is why", "already scoped".
+  State the fact; if a supporting detail is needed, give it as a separate plain
+  sentence, not as an argument for the decision.
+- **Cut a number that doesn't serve the sentence it's in.** Don't restate a
+  figure a second time for effect — say it once, where it is load-bearing.
+- **Describe only the current state of the thing being described.** Future
+  intent and migration plans belong in the section that is explicitly about
+  what's deferred, never folded as justification into the section about what is
+  true now.
+- **This is documentation, not copy.** No persuasive framing, no "worth
+  stating", no rhetorical flourish — plain prose a reader consults, not an
+  argument a reader is walked through.
+- **Leave no trace of how the page was written.** No "worth stating
+  explicitly", no flagging a sentence as notable before saying it, no
+  referring to how a decision was reached or revised. State the fact the way
+  it would read if it had always read that way.
+
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
