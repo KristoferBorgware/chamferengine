@@ -76,6 +76,14 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 - **One idea per sentence, conclusion at the front.** A full stop beats a
   semicolon; a second sentence beats a subordinate clause. Do not write a sentence
   you could not say out loud.
+- **Split a dense sentence into several plain ones, even if the paragraph gets
+  longer.** A sentence that chains a claim, a number, a citation and an
+  instruction with commas and an em-dash asks the reader to hold all of it at
+  once. Give each part its own sentence instead: "Doc 19 checked this at every
+  centre and radius. Not one exception." beats "Doc 19 checked this at every
+  centre and radius, with 0 exceptions — and the demo lets you see it
+  yourself." Four short sentences read faster than one long one, and drop
+  nothing the long one had.
 - **Headings are claims, not labels.** "The blocks are the corners, not the
   triangles", not "Cell placement". A reader who reads only the headings should
   come away with the design.
