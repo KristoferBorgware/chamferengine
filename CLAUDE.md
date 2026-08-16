@@ -79,6 +79,11 @@ match it. Docs [02](docs/02-geometry-choice.md), [03](docs/03-addressing.md) and
 - **Headings are claims, not labels.** "The blocks are the corners, not the
   triangles", not "Cell placement". A reader who reads only the headings should
   come away with the design.
+- **Nothing is "free."** Reusing a table, a predicate or a value that already
+  exists for another reason is convenient, not free — name what it reuses.
+  "`isPentagon` is already free" hides the fact behind a word that means zero
+  cost; "`isPentagon` reads the constant table the adjacency check already
+  reads" states it.
 
 ### Numbers and maths
 

@@ -78,9 +78,9 @@ synchronous`). An escalating if-then-therefore is not.
 
 ### Code is not a monetary system
 
-No economic metaphors. Not `pay`, `pays for itself`, `buy`, `cheap`,
-`worth it`, `budget`, `price`, `dividend`, `tax`. Excluded are words like
-`cost` and `expensive`, but only when they address performance, memory, or
+No economic metaphors. Not `pay`, `pays for itself`, `buy`, `worth it`,
+`budget`, `price`, `dividend`, `tax`, `free`. Excluded are words like `cost`,
+`expensive`, and `cheap`, but only when they address performance, memory, or
 other things related to programming.
 
 Name the actual resource — bytes, a fetch, a round trip, a draw call, an
@@ -91,6 +91,15 @@ allocation, a frame, milliseconds.
 //       cheapest thing that satisfies the bind group.
 // YES - A scene of rectangles issues no font request, and the placeholder is one texel, the
 //       smallest thing the bind group accepts.
+```
+
+`free` carries its own trap. Reusing a table or a value that already exists for
+another reason is convenient, not free — name what is reused instead of calling
+the reuse a savings.
+
+```ts
+// NO  - isPentagon is already free -- the constant table exists for the adjacency check.
+// YES - isPentagon reads the same constant table the adjacency check already reads.
 ```
 
 ### Keep the register plain
