@@ -173,7 +173,8 @@ rules:
   every entry links to the document that owns the decision.
 - [`CODE-STYLE.md`](CODE-STYLE.md) — **formatting and comment conventions for
   the engine.** Not part of the specification. Read it before writing or editing
-  any code comment, including in `verification/` and `tools/` today.
+  any code comment, including in `verification/` and `tools/` today, and any
+  code inside an artifact produced for this project.
 - `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
