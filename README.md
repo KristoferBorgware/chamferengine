@@ -83,6 +83,11 @@ a runnable demo where one exists.
 | 32 | [The sky, the clouds and the moon](docs/32-sky-clouds-and-moon.md) | Why walking turns the sky, why wind must have calm points, and why a scaled moon is still 0.52° |
 | — | [Reference](docs/REFERENCE.md) | **Generated.** Every measured number with the script that produced it |
 
+**Building it?** [`ARCHITECTURE.md`](ARCHITECTURE.md) is the short version:
+the stack (TypeScript, Vite, the browser, WebGPU, Node), the four-part runtime
+split, and what is in V0.5, V1 and after. It states the decisions and links to
+the document that argues each one.
+
 **For agents:** [`CLAUDE.md`](CLAUDE.md) holds invariants, verified constants,
 and naming conventions in a compact form intended for machine consumption.
 

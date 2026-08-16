@@ -135,6 +135,11 @@ not one per document.
 ## Project shape
 
 - Documentation and demos only. No engine source code exists yet.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — **the stack, the four-part runtime split
+  and the milestone definitions, stated rather than argued.** Read it before
+  anything in `docs/` when the question is *what are we building with* or *what is
+  in which version*. It is not part of the specification and carries no reasoning;
+  every entry links to the document that owns the decision.
 - `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
@@ -836,11 +841,16 @@ Violating any of these breaks the design. They are not tunable.
 **The V1 line is drawn, and doc 11 now holds it.** Two states that were being
 written down the same way are now separated: **open** (needs thinking) and
 **deferred** (has an answer, a price, and a decision not to spend it yet).
-**V1** = TypeScript, browser-first with WebGPU, local filesystem storage, a server
-that stores and routes and validates nothing, inventory client-side and never
-synced. **V2** = edit validation (the point query, `0.06%` of a core at 1,000
-players), server-side simulation and mobs (**158×** that), entity interest,
-AWS hosting, a native desktop client, and any move of a hot path to C/Rust+wasm.
+**The milestones are numbered in [`ARCHITECTURE.md`](ARCHITECTURE.md), and that
+file is authoritative for them** — docs 11, 26, 30 and 31 predate the split and
+call the local milestone *V1*. **V0.5** = TypeScript, browser with WebGPU, Vite,
+local filesystem storage, a Node server on the same machine that stores and routes
+and validates nothing, inventory client-side and never synced. **V1** = the same
+server behaviour hosted on AWS — API Gateway WebSocket → Lambda → DynamoDB, S3 for
+cold chunks and the client bundle — and still **no authoritative tick loop**.
+**Beyond V1** = edit validation (the point query, `0.06%` of a core at 1,000
+players), server-side simulation and mobs (**158×** that), entity interest, the
+move off Lambda, a native desktop client, and any move of a hot path to C/Rust+wasm.
 **Unscoped and in no document at all**: only **space travel** now — the skybox,
 clouds and the moon are doc 32. Doc 03's 12-bit **planet field** is still the only
 part of space travel that exists, added early because it would have been expensive
