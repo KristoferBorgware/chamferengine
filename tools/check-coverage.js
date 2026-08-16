@@ -22,7 +22,8 @@ const ONLY = args.find(a => a.includes('/'));
 
 // Every document the specification is made of, plus the indexes that quote it.
 const FILES = ONLY ? [ONLY] : [
-  'README.md', 'CLAUDE.md', 'demos/README.md', 'verification/README.md',
+  'README.md', 'CLAUDE.md', 'ARCHITECTURE.md', 'CODE-STYLE.md',
+  'HOW-TO-WRITE-DOCS.md', 'demos/README.md', 'verification/README.md',
   ...fs.readdirSync(path.join(ROOT, 'docs')).filter(f => f.endsWith('.md')).sort()
      .map(f => `docs/${f}`),
 ];
