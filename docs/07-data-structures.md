@@ -54,9 +54,8 @@ side table:  cellID → a tagged blob, for chests and signs
 **The only structure that grows.** It holds what players changed and nothing
 else.
 
-Two corrections to what this section used to say, both from
-[doc 27](27-block-state.md), which defined the side table for the first time.
-**Entities were listed here and do not belong** — a mob has a position and moves
+Two rules come from [doc 27](27-block-state.md), which defines the side table.
+**Entities do not belong in it** — a mob has a position and moves
 cell every 0.71 s, so keying one by cell is a rekey every 21 frames forever;
 entities are held per chunk by containment. And **whether a cell has an entry is
 the side table's question, not the block type's**: nothing on the frame path ever
@@ -75,7 +74,7 @@ blocks     packed indices into the palette, bit width = ceil(log2(paletteSize))
 ```
 
 **Chunks store no IDs.** Cells sit in canonical `q,r,layer` order, so an address
-is implied by array position — the same way a Minecraft chunk is a flat array.
+is implied by array position, the way any flat chunk array works.
 Storing a 64-bit ID beside a one-byte block type would be 8× overhead for
 something already known from where the byte sits.
 
@@ -136,8 +135,7 @@ owned = (m−1)(m−2)/2  +  e·(m−1)  +  c        e = edges won (0–3), c = 
 > distinct values** — 105, 120, 135, 136, 150, 151, 152, 153 — and every one of
 > them is that formula.
 
-That leaves a real choice, and it is worth stating both sides because the
-cheaper-looking one loses.
+That leaves a real choice between two layouts.
 
 **(A) Rank the whole triangle** and let the unowned border slots go unused:
 
@@ -183,9 +181,8 @@ two bits per cell beats sixteen:
 
 Widen the packing only when a chunk earns it.
 
-*(Earlier drafts of this table used a round 4,096 cells and reported 64 KB. That
-was a placeholder from before anything had counted a chunk; the real figure at
-`D` 11 / `C` 6 is the 561 above, and a triangular chunk can never hold a power of
+*(A round 4,096 cells and 64 KB is the figure to avoid here: it is a power of
+two, and a triangular chunk can never hold a power of
 two.)*
 
 ---
@@ -235,7 +232,18 @@ Under a hundred bytes. A whole planet, before anyone has touched it.
 ## Multiplayer note
 
 "Which players care about this chunk update" is an ID range comparison. Interest
-management falls out of the addressing scheme for free.
+management is the addressing scheme doing a second job.
+
+---
+
+## Still open
+
+- **Entities were listed in this document's side table** and do not belong
+  there. A mob changes cell every **0.71 s**, so keying one by cell is a rekey
+  every 21 frames forever ([doc 27](27-block-state.md)).
+- **The chunk table used a round 4,096 cells and 64 KB**, a placeholder from
+  before anything had counted a chunk. The figure at `D` 11 / `C` 6 is **561**
+  slots (`rank.js`).
 
 ---
 

@@ -354,7 +354,7 @@ lowest ID — which costs the same bits as storing `(i, j)` and keeps every prop
 the specification asks for. **It is not yet verified**, and it should be before
 anyone writes `encode`.
 
-Two things worth noting about how this surfaced. It came from a **scope change**
+Two things about how this surfaced. It came from a **scope change**
 rather than from review — wanting more than one planet forced the word to be laid
 out concretely for the first time. And two of the three problems are consequences
 of [invariant 3](../CLAUDE.md), which has been on the front page throughout:
@@ -624,7 +624,7 @@ flat **1.5×** a cube world, because a hex disc holds `3r²+3r+1` cells against
 `2r²+2r+1`. **Radial sky light** turned out to be a distinction without a
 difference: invariant 10 makes a column a straight line of cells sharing one
 address, so the sky pass is exactly as cheap as it is in a flat world. And the
-**terminator** really is free — `dot(sunDirection, up) > 0`, reusing the `up`
+**terminator** is one dot product — `dot(sunDirection, up) > 0`, reusing the `up`
 already computed for gravity, with no shadow map anywhere.
 
 Two things that were not predicted. **The twelve pentagons cost nothing at all**
@@ -813,7 +813,7 @@ anyone asked what the first line of code would need.
 
 ## What closing twelve of these taught
 
-All twelve closed items came back with the same shape of answer, and it is worth
+All twelve closed items came back with the same shape of answer:
 expecting again:
 
 - **The pessimistic estimate was wrong in kind, not degree.** Meshing was

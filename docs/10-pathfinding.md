@@ -72,9 +72,7 @@ the largest cell there is, not the typical one.*
 > **1.0984** by level 8, and the mean settles at 0.9988 — so nominal really is
 > the mean, and the largest step is **9.84% above it**.
 
-**The safe divisor is 10% above nominal.** Earlier drafts of this document said
-7%, derived from a spacing figure of 1.14:1 that [doc 02](02-geometry-choice.md)
-has since measured and corrected to **1.41:1**. A 7% divisor is *not* admissible:
+**The safe divisor is 10% above nominal.** A 7% divisor is *not* admissible:
 every step through the tightest regions is overcounted, which is exactly the
 failure this section warns about, committed by this section.
 
@@ -117,7 +115,7 @@ where full A* would succeed, and is not guaranteed to find the shortest route. I
 needs a fallback to full search.
 
 Real HPA* fixes this by precomputing actual **entrance-to-entrance connectivity**
-per chunk rather than treating a chunk as passable if any cell is free. The
+per chunk rather than treating a chunk as passable if any cell in it is open. The
 simplification is what makes the demo small, not what makes it correct.
 
 ---
@@ -128,14 +126,24 @@ simplification is what makes the demo small, not what makes it correct.
   any-angle pathfinding (Theta*) or string-pulling — and the line-of-sight test
   both need is exactly the ray walk from [doc 09](09-ray-traversal.md). That
   traversal is already the pathfinding smoother.
-- **Step costs are not perfectly uniform**, and by more than this document used
-  to say. Cells vary **1.99:1** in area across the sphere — **1.41:1** in spacing,
+- **Step costs are not perfectly uniform.** Cells vary **1.99:1** in area across
+  the sphere — **1.41:1** in spacing,
   **1.48:1** counting the pentagons ([doc 02](02-geometry-choice.md)) — and shrink
   with depth. Irrelevant to how gameplay *feels*, but not irrelevant to
   correctness: it is exactly why the cross-face heuristic above must divide by
   maximum spacing, and getting the spread wrong is how that heuristic silently
   stopped being admissible. If true travel times are needed, weight each edge by
   actual centre-to-centre distance.
+
+---
+
+## Still open
+
+- **This document divided by nominal + 7%**, which made the A* heuristic
+  **inadmissible** — it could overestimate, and an overestimating heuristic
+  returns paths that are not shortest. The 7% came from a spacing figure of
+  1.14:1 that [doc 02](02-geometry-choice.md) has since measured at **1.41:1**.
+  The admissible divisor is **1.098 × nominal** (`uniform.js`).
 
 ---
 
@@ -149,5 +157,5 @@ simplification is what makes the demo small, not what makes it correct.
   is not admissible.
 - Pentagons are degree-5 nodes and seams live inside `neighbour()` — **the
   pathfinder never learns it is on a sphere**.
-- Hierarchical search is free: **truncate the ID** and the coarse graph is
-  already there.
+- Hierarchical search needs no second structure: **truncate the ID** and the
+  coarse graph is already there.

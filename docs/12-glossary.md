@@ -30,7 +30,7 @@ chamfering of a dodecahedron generates exactly this project's subdivision
 sequence, and is the source of the project's name.
 
 **Cell** — one hexagon (or one of the twelve pentagons) at one radial layer. The
-equivalent of a Minecraft block.
+cell a cube world would call a block.
 
 **Cell boundary** — defined as the radial projection of the lattice point's
 *planar* Voronoi hexagon: a cell **is** the set of directions `hexRound` maps to

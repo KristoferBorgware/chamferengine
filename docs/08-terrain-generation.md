@@ -89,8 +89,7 @@ and that this will show as a grid in the terrain. **Measured, it does not.**
 > perfectly well.
 
 So the case against it is **portability alone** — it has no definition outside one
-language. That is enough on its own, and it is worth stating plainly rather than
-dressing it up as a quality argument it does not support.
+language. That is the whole argument, and it is not a quality argument.
 
 ### The pinned function
 
@@ -325,8 +324,8 @@ on top, interpolating between coarse samples.
 
 Two megabytes buys rivers and erosion.
 
-**And the lookup is free**, though not quite in the way this document first said.
-Truncating an ID's *path digits* gives the containing triangle — a chunk — not a
+**And the lookup is a mask.** Truncating an ID's *path digits* gives the
+containing triangle — a chunk — not a
 coarse cell. What lines up is the lattice: a level-8 lattice point `(i, j)` and the
 level-11 point `(8i, 8j)` are the **same point**, so a coarse sample is literally
 one of the fine cells. Mask the low bits off `(i, j)` to find the three that

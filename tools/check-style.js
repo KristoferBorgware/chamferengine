@@ -45,6 +45,14 @@ function sections(lines) {
   return out;
 }
 
+// Two documents are not arguments and are exempt from the structure rules.
+// Doc 11 is an index of what is undesigned -- the whole page is Still open
+// content, so history belongs in its body. Doc 12 is a lookup table.
+const EXEMPT = {
+  'docs/11-open-topics.md': ['structure', 'history'],
+  'docs/12-glossary.md': ['structure', 'figure'],
+};
+
 let total = 0;
 const report = [];
 
@@ -91,7 +99,9 @@ for (const rel of FILES) {
   });
   if (!/^!\[/m.test(text)) hits.push({ line: 0, name: 'figure', note: 'no figure', text: '' });
 
-  if (hits.length) { report.push({ rel, hits }); total += hits.length; }
+  const exempt = EXEMPT[rel] || [];
+  const kept = hits.filter(h => !exempt.includes(h.name));
+  if (kept.length) { report.push({ rel, hits: kept }); total += kept.length; }
 }
 
 if (!total) {

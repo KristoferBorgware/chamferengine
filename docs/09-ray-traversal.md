@@ -133,4 +133,4 @@ see [doc 10](10-pathfinding.md). Build it once.
   Voronoi diagram. Both halves are exact.
 - Four boundary families: three horizontal, one radial. Step the nearest.
 - Walking off a face is the adjacency table's job; the line does not bend.
-- The entry boundary is the **placement face**, for free.
+- The entry boundary **is** the placement face, so picking needs no second test.
