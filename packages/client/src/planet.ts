@@ -54,10 +54,18 @@ const seedText = settings.knobs.seed;
 /**
  * How many times its own width a chunk has to be away before it drops a level.
  *
- * The worst altitude is around 60 m, where near and far chunks are both in
- * view: 321 chunks at 2, 471 at 2.5 and 633 at 3.
+ * A live knob, starting at the same figure `selectChunks` defaults to.
  */
 let DETAIL = settings.knobs.detail;
+
+/**
+ * Whether the world is held down to its lattice and nothing else.
+ *
+ * Read once, here, rather than per frame: everything it pauses is either not
+ * constructed at all or answered by a constant, so there is nothing for the
+ * frame loop to keep asking.
+ */
+const PLAIN = settings.knobs.plain;
 
 /** How deep a chunk's rim hangs, in its own cells. */
 const SKIRT_CELLS = settings.knobs.skirtCells;
@@ -161,14 +169,14 @@ async function main(): Promise<void> {
 
 	report([
 		`seed "${seedText}"`,
-		settings.knobs.coarseMap
+		settings.coarseMapRuns
 			? "routing rivers across the planet..."
 			: "the coarse map is off...",
 	]);
 	await paint();
 
 	const seed = seedFromString(seedText);
-	const map = settings.knobs.coarseMap
+	const map = settings.coarseMapRuns
 		? buildCoarseMap(seed, settings.coarseOptions())
 		: flatCoarseMap(seed, FLAT_COARSE_LEVEL);
 
@@ -182,25 +190,39 @@ async function main(): Promise<void> {
 	// deck this size is unaffordable on the main thread, and the field is
 	// already a pure function of the seed and the wind angle, so it moves the
 	// way chunks moved.
-	const cloudSource = new WorkerCloudSource(
-		() =>
-			new Worker(new URL("./cloudWorker.ts", import.meta.url), {
-				type: "module",
-			}),
-		{ kind: "setup", seed, decks: settings.cloudDecks() },
-	);
-	const sky = new SkyRenderer(
-		ctx,
-		{
-			direction: new Vec3(0.2, 0.55, 0.81).normalize(),
-			angularRadius: MOON_ANGULAR_RADIUS,
-		},
-		planetAtmosphere(
-			RADIUS,
-			settings.knobs.atmosphereTop,
-			settings.knobs.zenithDepth,
-		),
-	);
+	//
+	// Under the pause neither the worker nor the sky is built at all. That is
+	// the difference between a paused feature and a hidden one: no deck is
+	// filled and thrown away, and no scattering runs to be drawn over.
+	const cloudSource = PLAIN
+		? null
+		: new WorkerCloudSource(
+				() =>
+					new Worker(new URL("./cloudWorker.ts", import.meta.url), {
+						type: "module",
+					}),
+				{ kind: "setup", seed, decks: settings.cloudDecks() },
+			);
+
+	// The sky is a layer over the terrain pass, and the renderer already treats
+	// that layer as optional. Leaving it off is what pauses the atmosphere, the
+	// stars and the moon together, without the engine learning what a pause is:
+	// with no layer to fill every pixel at the far plane, the clear color the
+	// renderer is already given shows through as one flat sky.
+	const sky = PLAIN
+		? null
+		: new SkyRenderer(
+				ctx,
+				{
+					direction: new Vec3(0.2, 0.55, 0.81).normalize(),
+					angularRadius: MOON_ANGULAR_RADIUS,
+				},
+				planetAtmosphere(
+					RADIUS,
+					settings.knobs.atmosphereTop,
+					settings.knobs.zenithDepth,
+				),
+			);
 	renderer.layer = sky;
 
 	// One generator per level. A chunk one level coarser samples the terrain at
@@ -339,12 +361,35 @@ async function main(): Promise<void> {
 
 	/** What is drawn, what is asked for, and what has come back unuploaded. */
 	const drawn = new Set<number>();
-	const building = new Set<number>();
+	const building = new Map<number, ChunkSelection>();
 	const arrived: ChunkMesh[] = [];
 	let wantedNow = 0;
 
+	/**
+	 * What the last selection asked for, held so an arrival can be checked
+	 * against it.
+	 *
+	 * A mesh that finishes after the player has moved past it is geometry for
+	 * ground nobody is looking at, and uploading it costs a buffer and a draw
+	 * until the next selection drops it again.
+	 */
+	let keep = new Set<number>();
+
+	/** Where the player stood when the selection was last worked out. */
+	let selectedAt = player.position;
+
+	/**
+	 * How far the player moves before the selection is worked out again.
+	 *
+	 * Two blocks. Which level a chunk is drawn at changes over tens of metres,
+	 * so this cannot step over a level change, and a selection costs up to
+	 * 4.9 ms at the worked settings, which is too much to spend every frame.
+	 */
+	const RESELECT_DISTANCE = Math.max(1, settings.knobs.blockSize * 2);
+
 	/** Choose what should be drawn, and ask for what is missing. */
 	function refresh(): void {
+		selectedAt = player.position;
 		const wanted = selectChunks(
 			DEPTH,
 			CHUNK_LEVEL,
@@ -354,7 +399,7 @@ async function main(): Promise<void> {
 			DETAIL,
 		);
 		wantedNow = wanted.length;
-		const keep = new Set(
+		keep = new Set(
 			wanted.map((selection) =>
 				selectionId(selection.chunkLevel, selection.key),
 			),
@@ -365,17 +410,30 @@ async function main(): Promise<void> {
 				renderer.drop(id);
 			}
 
+		// Work that is no longer wanted is called off rather than left to
+		// finish. A queued chunk is dropped outright and one already on a
+		// worker is allowed to run out, so the pool spends its time on the
+		// ground ahead instead of the ground already crossed.
+		for (const [id, selection] of [...building])
+			if (!keep.has(id)) {
+				building.delete(id);
+				source.cancel(selection);
+			}
+
 		for (const selection of wanted) {
 			const id = selectionId(selection.chunkLevel, selection.key);
 			if (drawn.has(id) || building.has(id)) continue;
-			building.add(id);
+			building.set(id, selection);
 			source
 				.request(selection)
 				.then((mesh) => {
 					arrived.push(mesh);
 				})
 				.catch(() => {
-					building.delete(id);
+					// Only if this request is still the one outstanding: a
+					// cancelled chunk the player turned back toward has been
+					// asked for again by now, and that one is still coming.
+					if (building.get(id) === selection) building.delete(id);
 				});
 		}
 	}
@@ -399,11 +457,12 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
-		sky.atmosphere = planetAtmosphere(
-			RADIUS,
-			live.knobs.atmosphereTop,
-			live.knobs.zenithDepth,
-		);
+		if (sky)
+			sky.atmosphere = planetAtmosphere(
+				RADIUS,
+				live.knobs.atmosphereTop,
+				live.knobs.zenithDepth,
+			);
 
 		const now = performance.now();
 		if (live.knobs.timeOfDay !== lastTimeOfDay) {
@@ -519,6 +578,11 @@ async function main(): Promise<void> {
 			const mesh = arrived.shift();
 			if (!mesh) break;
 			building.delete(mesh.key);
+			// A chunk already on a worker is allowed to finish when it is
+			// cancelled, so an arrival can be for ground the player has since
+			// left. Dropping it here costs nothing; uploading it costs a
+			// buffer and a draw until the next selection notices.
+			if (!keep.has(mesh.key)) continue;
 			drawn.add(mesh.key);
 			renderer.upload(mesh);
 		}
@@ -551,7 +615,13 @@ async function main(): Promise<void> {
 		timer.leave("player", performance.now());
 		swing = 0;
 		tilt = 0;
-		if (ahead !== 0 || aside !== 0 || lift !== 0) refresh();
+		// Distance moved, not a key held. A player also moves without pressing
+		// anything -- gravity pulls them down every frame until they land, and
+		// a fall off a ridge crosses several levels on the way. Keying off a
+		// direction key left all of that unnoticed until the next key press,
+		// which read as the world snapping resolution once they landed.
+		if (player.position.sub(selectedAt).length() > RESELECT_DISTANCE)
+			refresh();
 
 		// Behind the player, along the ground they are standing on.
 		const up = player.up;
@@ -582,15 +652,30 @@ async function main(): Promise<void> {
 		// comes from one dot product against its own up. Paused reads a frozen
 		// elapsed time instead of the live clock, and both the sun and the moon
 		// below read the same one, so pausing stops them in step.
+		// Under the pause the light is held at noon, and noon is a local fact
+		// on a sphere: walking 100 m turns a player's own up by 3.37 degrees,
+		// so a sun fixed in world directions is a lit hemisphere that can be
+		// walked out of rather than a constant. Pointing it along the player's
+		// own up puts the sun overhead wherever they stand, and full daylight
+		// leaves the terrain shader's night term out of the mix entirely.
 		const elapsed = paused ? frozenAt : (now - dayStarted) / 1000;
-		const sun = sunDirection((elapsed / DAY_LENGTH) % 1, NORTH);
-		const day = daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
+		const sun = PLAIN
+			? up
+			: sunDirection((elapsed / DAY_LENGTH) % 1, NORTH);
+		const day = PLAIN
+			? 1
+			: daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
 
 		// The clouds are thrown away and refilled as the wind turns, on their
 		// own worker. There is no address to update in place, because a cloud
 		// has none, and `busy` skips a tick rather than queuing one behind a
 		// deck still building.
-		if (!cloudSource.busy && now - cloudsAt > CLOUD_INTERVAL * 1000) {
+		if (
+			sky &&
+			cloudSource &&
+			!cloudSource.busy &&
+			now - cloudsAt > CLOUD_INTERVAL * 1000
+		) {
 			timer.enter("clouds", performance.now());
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
@@ -602,22 +687,24 @@ async function main(): Promise<void> {
 
 		// The moon stands off at a distance rather than being painted on, so
 		// walking round the planet shifts it against the stars.
-		const moonPlace = windRotation(
-			new Vec3(0.2, 0.55, 0.81).normalize(),
-			NORTH,
-			(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
-		).scale(MOON_DISTANCE);
-		sky.moon = {
-			direction: moonPlace.sub(from).normalize(),
-			angularRadius: MOON_ANGULAR_RADIUS,
-		};
+		if (sky) {
+			const moonPlace = windRotation(
+				new Vec3(0.2, 0.55, 0.81).normalize(),
+				NORTH,
+				(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
+			).scale(MOON_DISTANCE);
+			sky.moon = {
+				direction: moonPlace.sub(from).normalize(),
+				angularRadius: MOON_ANGULAR_RADIUS,
+			};
+		}
 
 		const submerged = terrain.blockAtPosition(from) === BlockType.WATER;
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
 		const viewProj = projection.multiply(view);
-		sky.inverseViewProj = viewProj.inverse();
+		if (sky) sky.inverseViewProj = viewProj.inverse();
 		timer.enter("draw", performance.now());
 		renderer.render({
 			viewProj,

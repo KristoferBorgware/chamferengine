@@ -39,7 +39,13 @@ const knobs: Record<string, number> = {};
 for (const [name, value] of Object.entries(process.env))
 	if (name.startsWith("BENCH_") && value !== undefined)
 		knobs[name.slice(6)] = Number(value);
-const settings = new PlanetSettings(knobs as Partial<PlanetKnobs>);
+// Un-paused unless a run asks otherwise. The bench exists to measure the world
+// at full settings against the numbers 0.1.0 recorded, and the pause turns off
+// most of what it is counting -- BENCH_plain=1 measures the paused one instead.
+const settings = new PlanetSettings({
+	plain: false,
+	...(knobs as Partial<PlanetKnobs>),
+});
 
 const RADIUS = settings.radius;
 const DEPTH = settings.depth;
@@ -57,7 +63,7 @@ const ASPECT = 1920 / 1080;
 const seed = seedFromString(settings.knobs.seed);
 
 const worldStart = performance.now();
-const map = settings.knobs.coarseMap
+const map = settings.coarseMapRuns
 	? buildCoarseMap(seed, settings.coarseOptions())
 	: flatCoarseMap(seed, FLAT_COARSE_LEVEL);
 const worldMs = performance.now() - worldStart;

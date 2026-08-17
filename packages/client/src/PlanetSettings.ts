@@ -61,6 +61,21 @@ const MAX_COARSE_LEVEL = 9;
 export interface PlanetKnobs {
 	seed: string;
 
+	/**
+	 * Whether the world is held down to its lattice and nothing else.
+	 *
+	 * On, nine things are paused at once: the coarse map, the detail noise,
+	 * water, the atmosphere, the day, the clouds, the moon, the stars, and the
+	 * light moving at all. What is left is a smooth green sphere of cells, lit
+	 * as at noon, which is the only state in which the level of detail can be
+	 * looked at on its own -- every paused feature changes the color on both
+	 * sides of a chunk boundary for a reason of its own.
+	 *
+	 * Nothing is removed by it. Every paused subsystem keeps its code, its
+	 * tests and its knobs, and unchecking this gives all of them back.
+	 */
+	plain: boolean;
+
 	/** Metres. Moved slightly so the block size comes out exact. */
 	radius: number;
 
@@ -132,6 +147,7 @@ export interface PlanetKnobs {
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
 	seed: "chamfer",
+	plain: true,
 	radius: 6800,
 	blockSize: 1,
 	chunkCells: 32,
@@ -183,6 +199,7 @@ const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
 };
 
 export const KNOB_RANGES: Record<string, KnobRange> = {
+	plain: { ...TOGGLE, rebuilds: true },
 	radius: { low: 850, high: 25000, step: 50, rebuilds: true, unit: "m" },
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
@@ -279,6 +296,29 @@ export class PlanetSettings {
 
 	constructor(knobs: Partial<PlanetKnobs> = {}) {
 		this.knobs = { ...PLANET_DEFAULTS, ...knobs };
+	}
+
+	/**
+	 * Whether continents, rivers and the sea run, once the pause is applied.
+	 *
+	 * `plain` overrides the knob rather than replacing it, so the setting a
+	 * person left behind is still there when they uncheck the pause. Every
+	 * reader inside this class goes through here rather than through
+	 * `knobs.coarseMap`, which is what keeps the override in one place.
+	 */
+	get coarseMapRuns(): boolean {
+		return this.knobs.coarseMap && !this.knobs.plain;
+	}
+
+	/**
+	 * Metres the fine detail moves the surface by, once the pause is applied.
+	 *
+	 * Zero under the pause, and zero is exact rather than small: `fbm` is
+	 * multiplied by it, so the detail term leaves the elevation untouched and
+	 * the ground is a sphere to the last bit.
+	 */
+	get detailAmplitude(): number {
+		return this.knobs.plain ? 0 : this.knobs.detailAmplitude;
 	}
 
 	/** The depth the radius and the block size ask for, before any cap. */
@@ -404,8 +444,8 @@ export class PlanetSettings {
 	 * detailAmplitude]`, so this is that bound rather than a ratio.
 	 */
 	get maxElevation(): number {
-		if (!this.knobs.coarseMap)
-			return Math.max(1, Math.ceil(this.knobs.detailAmplitude));
+		if (!this.coarseMapRuns)
+			return Math.max(1, Math.ceil(this.detailAmplitude));
 		return Math.ceil(0.6 * this.knobs.heightScale);
 	}
 
@@ -425,7 +465,7 @@ export class PlanetSettings {
 			if (map.height[cell]! > highest) highest = map.height[cell]!;
 		const metres =
 			(highest - map.seaLevel) * this.knobs.heightScale +
-			this.knobs.detailAmplitude;
+			this.detailAmplitude;
 		return Math.max(1, Math.ceil(metres));
 	}
 
@@ -436,8 +476,7 @@ export class PlanetSettings {
 	 * amplitude — there is no coarse variation to add a margin for.
 	 */
 	get groundSpan(): number {
-		if (!this.knobs.coarseMap)
-			return Math.max(2, 2 * this.knobs.detailAmplitude);
+		if (!this.coarseMapRuns) return Math.max(2, 2 * this.detailAmplitude);
 		return 1.3 * this.knobs.heightScale;
 	}
 
@@ -543,7 +582,7 @@ export class PlanetSettings {
 	terrainOptions(): TerrainOptions {
 		return {
 			heightScale: this.knobs.heightScale,
-			detailAmplitude: this.knobs.detailAmplitude,
+			detailAmplitude: this.detailAmplitude,
 			detailFrequency: this.frequencyFor(this.knobs.detailFeature),
 		};
 	}
@@ -578,7 +617,7 @@ export class PlanetSettings {
 		if (reach < this.groundSpan) {
 			const neededCrust = Math.ceil(this.groundSpan);
 			out.push(
-				k.coarseMap
+				this.coarseMapRuns
 					? `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Height scale to ${Math.floor(reach / 1.3)} m or under.`
 					: `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Detail to ${Math.floor(reach / 2)} m or under.`,
 			);
@@ -587,7 +626,7 @@ export class PlanetSettings {
 		// The coarse map's own resolution only matters while it runs. Off, its
 		// level is a fixed cheap constant nothing reads, so these two checks
 		// would be warning about a knob with nothing left to affect.
-		if (k.coarseMap) {
+		if (this.coarseMapRuns) {
 			if (this.coarseCell < k.blockSize * 2) {
 				const neededSpacing = Math.ceil(k.blockSize * 2);
 				out.push(
@@ -609,13 +648,13 @@ export class PlanetSettings {
 			// Off, maxElevation is defined as exactly enough to cover the detail
 			// term (see the getter), so this can never fire and would be
 			// warning about a clipping risk that does not exist in that mode.
-			if (this.maxElevation < k.detailAmplitude * 2) {
+			if (this.maxElevation < this.detailAmplitude * 2) {
 				const neededHeightScale = Math.ceil(
-					(k.detailAmplitude * 2) / 0.6,
+					(this.detailAmplitude * 2) / 0.6,
 				);
 				const largestDetail = Math.floor(this.maxElevation / 2);
 				out.push(
-					`Ground reaches ${this.maxElevation} m and the detail alone moves it ${k.detailAmplitude} m, so the tallest ground would be clipped flat. Raise Height scale to at least ${neededHeightScale} m, or lower Detail to ${largestDetail} m or under.`,
+					`Ground reaches ${this.maxElevation} m and the detail alone moves it ${this.detailAmplitude} m, so the tallest ground would be clipped flat. Raise Height scale to at least ${neededHeightScale} m, or lower Detail to ${largestDetail} m or under.`,
 				);
 			}
 		}

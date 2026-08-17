@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { decodeCell, encodeCell } from "chamfer/addressing";
-import { PlanetSettings } from "../src/PlanetSettings.js";
+import {
+	BlockType,
+	TerrainGenerator,
+	flatCoarseMap,
+	seedFromString,
+} from "chamfer/generation";
+import { FLAT_COARSE_LEVEL, PlanetSettings } from "../src/PlanetSettings.js";
 
 describe("cell address", () => {
 	it("moves with the radius and the block size, and nothing else", () => {
@@ -69,10 +75,83 @@ describe("the coarse level budget (F-020)", () => {
 	});
 });
 
+describe("the pause", () => {
+	it("is what a page with no query string gets", () => {
+		expect(new PlanetSettings().knobs.plain).toBe(true);
+	});
+
+	it("overrides the coarse map and the detail term without losing either", () => {
+		const paused = new PlanetSettings({
+			plain: true,
+			coarseMap: true,
+			detailAmplitude: 17,
+		});
+		expect(paused.coarseMapRuns).toBe(false);
+		expect(paused.detailAmplitude).toBe(0);
+		expect(paused.terrainOptions().detailAmplitude).toBe(0);
+
+		// The settings a person left behind are still there to come back to.
+		expect(paused.knobs.coarseMap).toBe(true);
+		expect(paused.knobs.detailAmplitude).toBe(17);
+	});
+
+	it("gives both of them back when it is lifted", () => {
+		const live = new PlanetSettings({
+			plain: false,
+			coarseMap: true,
+			detailAmplitude: 17,
+		});
+		expect(live.coarseMapRuns).toBe(true);
+		expect(live.detailAmplitude).toBe(17);
+	});
+
+	it("leaves a smooth, dry, all-grass sphere at the shipped defaults", () => {
+		// The whole of the ground half of the pause, checked rather than
+		// assumed: no coarse map means every field is zero, and no detail term
+		// means the elevation formula has nothing left in it, so the surface is
+		// the sea-level radius exactly and the water test can never be true.
+		const settings = new PlanetSettings();
+		const seed = seedFromString(settings.knobs.seed);
+		const map = flatCoarseMap(seed, FLAT_COARSE_LEVEL);
+		const shape = settings.shapeFor(map);
+		const terrain = new TerrainGenerator(
+			seed,
+			shape,
+			map,
+			settings.terrainOptions(),
+		);
+
+		const radii = new Set<number>();
+		const surface = new Set<number>();
+		let wet = 0;
+		for (let face = 0; face < 20; face++)
+			for (let i = 0; i <= 12; i++)
+				for (let j = 0; i + j <= 12; j++) {
+					const column = terrain.columnAt(face, i * 80, j * 80);
+					radii.add(column.groundRadius);
+					surface.add(terrain.blockAt(column, column.groundLayer));
+					if (column.waterRadius > column.groundRadius) wet++;
+				}
+
+		// One radius over every face: a sphere to the last bit, not a small
+		// amount of relief.
+		expect(radii.size).toBe(1);
+		expect(wet).toBe(0);
+		expect([...surface]).toEqual([BlockType.GRASS]);
+	});
+});
+
 describe("the coarse map off", () => {
+	// The pause forces the coarse map off and the detail term to zero, so
+	// these carry `plain: false` to reach the knob's own behaviour.
 	it("makes maxElevation and groundSpan exact bounds of the detail term", () => {
-		const on = new PlanetSettings({ coarseMap: true, detailAmplitude: 12 });
+		const on = new PlanetSettings({
+			plain: false,
+			coarseMap: true,
+			detailAmplitude: 12,
+		});
 		const off = new PlanetSettings({
+			plain: false,
 			coarseMap: false,
 			detailAmplitude: 12,
 		});
@@ -90,6 +169,7 @@ describe("the coarse map off", () => {
 		// This combination would refuse for being too fine a coarse cell if
 		// the coarse map were on.
 		const off = new PlanetSettings({
+			plain: false,
 			coarseMap: false,
 			coarseSpacing: 1,
 			blockSize: 4,
@@ -99,6 +179,7 @@ describe("the coarse map off", () => {
 
 	it("still catches a crust too shallow for the detail term", () => {
 		const off = new PlanetSettings({
+			plain: false,
 			coarseMap: false,
 			detailAmplitude: 40,
 			crustMetres: 32,

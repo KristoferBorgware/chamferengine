@@ -10,88 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-001 — The residency loop never cancels work it no longer wants
-
-**Kind:** bug
-**Milestone:** 0.1.0
-**Priority:** high
-**Effort:** small
-**Found:** 2026-08-17, auditing the worker pool after moving chunk building off
-the main thread
-**Where:** `packages/client/src/planet.ts`, the `refresh` function
-
-**What happens.** `refresh()` asks the worker pool for every chunk in the new
-selection. It never tells the pool about chunks that have dropped out of the
-selection since the last call. `WorkerMeshSource.cancel()` exists and is
-covered by two tests, and nothing in the client calls it.
-
-**Why it matters.** Flying 200 m along the ground replaces 222 of 333 chunks.
-Every one of the chunks left behind is still generated, still meshed, and still
-sent back, so the seven workers spend their time on ground the player has
-already crossed. The ground ahead waits behind it in the queue. This shows up
-as the world filling in late while flying, and it gets worse the faster you go.
-
-**What would fix it.** In `refresh()`, keep the previous selection, and call
-`source.cancel(selection)` for every chunk that was wanted and no longer is.
-The pool already drops a queued chunk on cancel and lets an in-flight one
-finish, so nothing else has to change.
-
----
-
-### F-002 — A mesh that arrives for a chunk you already left is still uploaded
-
-**Kind:** bug
-**Milestone:** 0.1.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-17, same audit as F-001
-**Where:** `packages/client/src/planet.ts`, the `arrived` array and the upload
-loop at the top of `draw`
-
-**What happens.** Finished meshes go into an `arrived` array and two a frame are
-uploaded to the GPU. Nothing checks, at upload time, whether the chunk is still
-in the current selection. A mesh that finished after the player moved away is
-uploaded anyway, and only dropped on the next `refresh()`.
-
-**Why it matters.** It wastes a GPU upload and a buffer allocation, and until
-the next `refresh()` the renderer holds and draws a chunk nobody wants. Because
-`refresh()` only runs on a movement key (see F-003), a player who stops moving
-can be left drawing stale chunks indefinitely.
-
-**What would fix it.** Hold the current selection as a set on the outer scope,
-and skip any arrival whose key is not in it. Two lines. Fixing F-001 reduces how
-often this happens but does not remove it, because a chunk already in flight is
-allowed to finish.
-
----
-
-### F-003 — Residency is only recalculated when a movement key is held
-
-**Kind:** bug
-**Milestone:** 0.1.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-17, same audit as F-001
-**Where:** `packages/client/src/planet.ts`, the line
-`if (ahead !== 0 || aside !== 0 || lift !== 0) refresh();`
-
-**What happens.** `refresh()` runs only when the player is pressing a direction
-key. The player also moves without any key held: gravity pulls them down every
-frame until they land, and the fall can be long.
-
-**Why it matters.** Altitude decides which level a chunk is drawn at, so a
-player falling off a 150 m ridge changes level several times on the way down and
-none of it is noticed until they touch a key. The visible effect is the world
-around the landing point being at the wrong resolution for a moment, and then
-snapping.
-
-**What would fix it.** Call `refresh()` whenever the player's position has moved
-more than some small distance since the last call, rather than when a key is
-held. The distance test is cheap and it covers falling, swimming, and teleports
-in one rule.
-
----
-
 ### F-004 — The GPU pass timer has never produced a reading
 
 **Kind:** risk
@@ -230,33 +148,6 @@ file — and neither of those exists yet.
 **What would fix it.** Keep it and say in its comment that it is for blocks
 that did not come from the generator, or take it out and let the test compute
 its own bands. Do not leave it undecided.
-
----
-
-### F-009 — The exported `DETAIL` default does not match what the client uses
-
-**Kind:** cleanup
-**Milestone:** 0.1.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-17, reading `selectChunks` while measuring the reference
-scenes
-**Where:** `packages/engine/src/generation/chunk/selectChunks.ts` exports
-`DETAIL = 3`; `packages/client/src/planet.ts` defines its own `DETAIL = 2` and
-passes it in
-
-**What happens.** Two constants of the same name hold different values. The
-engine's is the default when a caller passes nothing. The client always passes
-its own, so the engine's value is never used by anything that ships.
-
-**Why it matters.** Anyone reading the engine to find out how detailed the world
-is gets 3, and the answer is 2. The client's comment records that 2 was chosen
-by measuring chunk counts at 60 m of altitude — that measurement is what the
-default should be, and it is recorded in the wrong package.
-
-**What would fix it.** Move the measured value and its reasoning into
-`selectChunks.ts` as the default, and delete the client's constant, or delete
-the engine's default and require the argument.
 
 ---
 
@@ -441,6 +332,42 @@ have. That needs `erode` to know the planet's radius, which the coarse map
 deliberately does not — so the alternative is to normalise by level inside
 `buildCoarseMap`, where the level is already known. Measure the valley depths
 before and after; they should stop moving with resolution.
+
+---
+
+---
+
+### F-021 — Daylight is measured at the spawn point, not where the player is
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-17, holding the light at noon for v0.1.2's pause
+**Where:** `packages/client/src/planet.ts`, the `ground` variable and the
+`daylight(...)` call in the frame loop
+
+**What happens.** `ground` is a direction assigned three times while the world
+is being set up, and never again. The frame loop passes it to `daylight()`
+every frame, so how lit the world is gets measured at the place the player
+started rather than the place they are standing.
+
+**Why it matters.** Walking the 10,681 m round this planet takes 2.12 hours,
+which is inside a single day at most settings, so a player can walk to the
+night side and stay in full daylight, or stand at their spawn point at dusk
+and watch the far side darken instead. The terminator is one of the few things
+on a planet this small that a player can outrun, which is most of what makes
+it interesting, and it does not move relative to them at all.
+
+**What would fix it.** Pass the player's own up, which the frame loop already
+holds as `up` a few lines above. One argument. It has gone unnoticed because
+the opening view and the first minutes of walking are near the spawn point,
+where the two agree.
+
+**Neither fixed nor visible under v0.1.2's pause.** That release holds daylight
+at 1 and never calls `daylight()`, so this cannot be seen until the pause is
+lifted. It is written down rather than fixed there because the day is one of
+the paused features, and judging a fix would mean turning it back on.
 
 ---
 
@@ -683,3 +610,128 @@ unchanged; the exact combination above now caps to level 9 and, at the coarse
 cell that rounds to, trips the existing "cannot carry the hills" refusal
 instead of building anything. The `Coarse cell` knob's description and the
 panel's derived readout were updated the way `Puff`'s were.
+
+---
+
+### F-001 — The residency loop never cancels work it no longer wants
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** high
+**Effort:** small
+**Found:** 2026-08-17, auditing the worker pool after moving chunk building off
+the main thread
+**Where:** `packages/client/src/planet.ts`, the `refresh` function
+
+**What happens.** `refresh()` asks the worker pool for every chunk in the new
+selection. It never tells the pool about chunks that have dropped out of the
+selection since the last call. `WorkerMeshSource.cancel()` exists and is
+covered by two tests, and nothing in the client calls it.
+
+**Why it matters.** Flying 200 m along the ground replaces 222 of 333 chunks.
+Every one of the chunks left behind is still generated, still meshed, and still
+sent back, so the seven workers spend their time on ground the player has
+already crossed. The ground ahead waits behind it in the queue. This shows up
+as the world filling in late while flying, and it gets worse the faster you go.
+
+**What would fix it.** In `refresh()`, keep the previous selection, and call
+`source.cancel(selection)` for every chunk that was wanted and no longer is.
+The pool already drops a queued chunk on cancel and lets an in-flight one
+finish, so nothing else has to change.
+
+**Closed:** 2026-08-17, promoted to `plans/v0.1.2.md`, I-2 -- the release strips the
+world back to its lattice so the level of detail can be looked at, and this is
+the finding that most distorts what there is to look at. Fixed with the
+`cancel()` the register said was already there and unused.
+
+---
+
+### F-002 — A mesh that arrives for a chunk you already left is still uploaded
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-17, same audit as F-001
+**Where:** `packages/client/src/planet.ts`, the `arrived` array and the upload
+loop at the top of `draw`
+
+**What happens.** Finished meshes go into an `arrived` array and two a frame are
+uploaded to the GPU. Nothing checks, at upload time, whether the chunk is still
+in the current selection. A mesh that finished after the player moved away is
+uploaded anyway, and only dropped on the next `refresh()`.
+
+**Why it matters.** It wastes a GPU upload and a buffer allocation, and until
+the next `refresh()` the renderer holds and draws a chunk nobody wants. Because
+`refresh()` only runs on a movement key (see F-003), a player who stops moving
+can be left drawing stale chunks indefinitely.
+
+**What would fix it.** Hold the current selection as a set on the outer scope,
+and skip any arrival whose key is not in it. Two lines. Fixing F-001 reduces how
+often this happens but does not remove it, because a chunk already in flight is
+allowed to finish.
+
+**Closed:** 2026-08-17, promoted to `plans/v0.1.2.md`, I-2 -- the selection is now held
+on the outer scope and an arrival not in it is dropped rather than uploaded.
+
+---
+
+### F-003 — Residency is only recalculated when a movement key is held
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-17, same audit as F-001
+**Where:** `packages/client/src/planet.ts`, the line
+`if (ahead !== 0 || aside !== 0 || lift !== 0) refresh();`
+
+**What happens.** `refresh()` runs only when the player is pressing a direction
+key. The player also moves without any key held: gravity pulls them down every
+frame until they land, and the fall can be long.
+
+**Why it matters.** Altitude decides which level a chunk is drawn at, so a
+player falling off a 150 m ridge changes level several times on the way down and
+none of it is noticed until they touch a key. The visible effect is the world
+around the landing point being at the wrong resolution for a moment, and then
+snapping.
+
+**What would fix it.** Call `refresh()` whenever the player's position has moved
+more than some small distance since the last call, rather than when a key is
+held. The distance test is cheap and it covers falling, swimming, and teleports
+in one rule.
+
+**Closed:** 2026-08-17, promoted to `plans/v0.1.2.md`, I-2 -- the selection is now
+recalculated on distance moved rather than on a key being held, which covers
+falling, swimming and teleports in one rule.
+
+---
+
+### F-009 — The exported `DETAIL` default does not match what the client uses
+
+**Kind:** cleanup
+**Milestone:** 0.1.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, reading `selectChunks` while measuring the reference
+scenes
+**Where:** `packages/engine/src/generation/chunk/selectChunks.ts` exports
+`DETAIL = 3`; `packages/client/src/planet.ts` defines its own `DETAIL = 2` and
+passes it in
+
+**What happens.** Two constants of the same name hold different values. The
+engine's is the default when a caller passes nothing. The client always passes
+its own, so the engine's value is never used by anything that ships.
+
+**Why it matters.** Anyone reading the engine to find out how detailed the world
+is gets 3, and the answer is 2. The client's comment records that 2 was chosen
+by measuring chunk counts at 60 m of altitude — that measurement is what the
+default should be, and it is recorded in the wrong package.
+
+**What would fix it.** Move the measured value and its reasoning into
+`selectChunks.ts` as the default, and delete the client's constant, or delete
+the engine's default and require the argument.
+
+**Closed:** 2026-08-17, promoted to `plans/v0.1.2.md`, I-3 -- the measured value and its
+reasoning moved into `selectChunks.ts` as the default, which is now 2 and
+agrees with what the client ships.

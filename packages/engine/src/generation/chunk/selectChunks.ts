@@ -19,8 +19,12 @@ export interface ChunkSelection {
 /**
  * How many times a chunk's own width it has to be away before it is drawn one
  * level coarser.
+ *
+ * Chosen by counting chunks in view at 60 m of altitude, which is the worst
+ * case because near and far chunks are both on screen there: 321 chunks at 2,
+ * 471 at 2.5 and 633 at 3.
  */
-export const DETAIL = 3;
+export const DETAIL = 2;
 
 /**
  * Which chunks a viewer sees, each at the level to draw it.
