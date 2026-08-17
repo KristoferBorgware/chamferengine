@@ -27,6 +27,9 @@ Each step answers one question and nothing else:
 | 2. Trial | Which candidate is right, and how is that known? | One chosen solution and the measurement that chose it |
 | 3. Implementation | — | The engine changed to match |
 
+An item whose candidates can only be judged against real terrain **skips step 2**
+and is decided inside step 3, both ways at once. See **Judged in the engine**.
+
 **Steps 1 and 2 run per item.** Items move through them one at a time and may
 sit at different steps.
 
@@ -98,9 +101,7 @@ Each candidate is built somewhere that is not the engine, and measured.
   a candidate turns on how something looks or feels rather than on a count.
 - **A test** in `packages/engine/tests/`, where the candidate has a behaviour
   that can be stated and checked without a device.
-- **A branch that is not merged**, where a candidate cannot be tried outside the
-  engine at all. This is the last resort, and the branch is a trial, not a
-  half-finished implementation.
+Where none of those can carry it, see **Judged in the engine** below.
 
 **What comes out.** **One chosen solution**, and the measurement that chose it,
 both written into the item. The measurement is the point. A decision recorded
@@ -119,6 +120,25 @@ is the most useful thing in the file a year later.
 **An item where both candidates fail leaves the release.** It goes back to
 [`FINDINGS.md`](FINDINGS.md) with what was learned, and the scope is re-cut
 without it.
+
+### Judged in the engine
+
+Some candidates cannot be judged without real terrain, a real coarse map or the
+real lattice. Rebuilding those outside the engine produces a lookalike, and
+judging the lookalike answers a question nobody asked.
+
+**Those items skip step 2.** Both candidates go into the engine, behind a
+switch, and the choice is made by looking at the real thing. There is no branch
+and nothing is held back from `master`: a branch nobody can open is a trial
+nobody runs, and `master` is what publishes.
+
+Two rules keep this from being a way to avoid deciding:
+
+1. **The losing candidate is removed in the same release.** A switch left
+   standing is two engines, and the next reader cannot tell which one is meant.
+2. **The measurement still goes in the item.** Judged by eye is a measurement
+   when what was being judged is how something looks; recorded as *chosen: B*
+   with nothing beside it, it is not.
 
 ---
 
