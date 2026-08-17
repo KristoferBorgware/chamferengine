@@ -139,7 +139,11 @@ for (const rel of FILES) {
     if (!/^!\[/m.test(text)) hits.push({ line: 0, name: 'figure', note: 'no figure', text: '' });
   }
 
-  const exempt = EXEMPT[rel] || [];
+  // A plan records a decision, and a decision without the measurement that
+  // made it cannot be reviewed. It also records the candidates that lost,
+  // which is the most useful thing in the file a year later.
+  const exempt =
+    EXEMPT[rel] || (rel.startsWith('plans/') ? ['reason', 'history'] : []);
   const kept = hits.filter(h => !exempt.includes(h.name));
   if (kept.length) { report.push({ rel, hits: kept }); total += kept.length; }
 }

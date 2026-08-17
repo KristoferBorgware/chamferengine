@@ -260,75 +260,6 @@ the engine's default and require the argument.
 
 ---
 
-### F-010 — The level-of-detail chain stops at the icosahedron faces
-
-**Kind:** idea
-**Milestone:** unscheduled
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-17, answering a question about whether the deleted lattice
-builder could have been a space view
-**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`
-
-**What happens.** Chunk selection walks down from the 20 faces, so chunk level 0
-is the floor. Measured from a camera at various distances, with the planet
-radius `R`:
-
-| Distance | Chunks | Tessellation | Planet on screen | One cell |
-|---|---|---|---|---|
-| 3R | 28 | level 6, 32 m cells | 38.9° | 5.97 px |
-| 10R | 15 | level 5, 64 m cells | 11.5° | 3.58 px |
-| 50R | 16 | level 5, 64 m cells | 2.29° | 0.72 px |
-| 200R | 16 | level 5, 64 m cells | 0.57° | 0.18 px |
-
-Past 10R nothing changes. Flying to 200R still generates about 9,000 columns of
-noise and about 36,000 triangles to draw a dot 0.57° wide.
-
-**Why it matters.** Not much today, because the cost is flat rather than growing
-— 36,000 triangles is nothing. What is wasted is roughly 110 ms of terrain
-generation every time someone flies out and comes back, for a picture in which
-no cell is a whole pixel.
-
-**What would fix it.** A single globe mesh built straight from the coarse map
-rather than from the chunk chain. The map is already in memory on the client and
-on every worker: level 7, 163,842 cells, with height and water per cell. At
-level 4 the whole planet is 2,562 cells and about 10,000 triangles, from array
-reads and no noise at all. The coarse map has no fine detail in it, so the two
-meshes disagree by a few metres — which is 0.28 px at 10R, so handing over at
-10R or further is invisible. No texture and no new stored data are needed.
-
----
-
-### F-011 — WebGPU in the development container cannot present
-
-**Kind:** risk
-**Milestone:** unscheduled
-**Priority:** medium
-**Effort:** large
-**Found:** 2026-08-17, trying to confirm the black-screen fix by screenshot
-**Where:** the container, not the repository
-
-**What happens.** Headless Chromium in this container acquires a WebGPU adapter
-and a device, and reports its features correctly, including `timestamp-query`.
-Anything that touches the swap chain then fails with `A valid external Instance
-reference no longer exists`. A screenshot of the canvas is fully transparent,
-and reading the canvas back through `toDataURL` gives one color with zero alpha.
-The oldest screenshot in the repository's history shows the same blank canvas,
-so this has always been true here.
-
-**Why it matters.** Nothing after Project 3 can be checked by eye in the
-container it is written in. That is how the black screen survived four projects.
-Every visual claim has to be confirmed on the author's own machine, and any
-session that forgets this will spend an hour rediscovering it.
-
-**What would fix it.** Either a container with a working software rasteriser for
-WebGPU — Dawn built with its own software backend, driven headlessly rather than
-through Chromium — or accepting that visual confirmation happens on real
-hardware and saying so wherever it matters. The second is what happens today,
-undocumented.
-
----
-
 ### F-012 — Every chunk build allocates and discards half a megabyte of blocks
 
 **Kind:** idea
@@ -386,6 +317,85 @@ several scripts already carry.
 
 ---
 
+## Closed
+
+### F-010 — The level-of-detail chain stops at the icosahedron faces
+
+**Kind:** idea
+**Milestone:** unscheduled
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-17, answering a question about whether the deleted lattice
+builder could have been a space view
+**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`
+
+**What happens.** Chunk selection walks down from the 20 faces, so chunk level 0
+is the floor. Measured from a camera at various distances, with the planet
+radius `R`:
+
+| Distance | Chunks | Tessellation | Planet on screen | One cell |
+|---|---|---|---|---|
+| 3R | 28 | level 6, 32 m cells | 38.9° | 5.97 px |
+| 10R | 15 | level 5, 64 m cells | 11.5° | 3.58 px |
+| 50R | 16 | level 5, 64 m cells | 2.29° | 0.72 px |
+| 200R | 16 | level 5, 64 m cells | 0.57° | 0.18 px |
+
+Past 10R nothing changes. Flying to 200R still generates about 9,000 columns of
+noise and about 36,000 triangles to draw a dot 0.57° wide.
+
+**Why it matters.** Not much today, because the cost is flat rather than growing
+— 36,000 triangles is nothing. What is wasted is roughly 110 ms of terrain
+generation every time someone flies out and comes back, for a picture in which
+no cell is a whole pixel.
+
+**What would fix it.** A single globe mesh built straight from the coarse map
+rather than from the chunk chain. The map is already in memory on the client and
+on every worker: level 7, 163,842 cells, with height and water per cell. At
+level 4 the whole planet is 2,562 cells and about 10,000 triangles, from array
+reads and no noise at all. The coarse map has no fine detail in it, so the two
+meshes disagree by a few metres — which is 0.28 px at 10R, so handing over at
+10R or further is invisible. No texture and no new stored data are needed.
+
+**Closed:** 2026-08-18, promoted to `plans/v0.1.1.md`, I-3 — the planet
+grows to a 6,800 m radius, which makes the chain's floor four times coarser in
+angle, so the two are decided together.
+
+---
+
+### F-011 — WebGPU in the development container cannot present
+
+**Kind:** risk
+**Milestone:** unscheduled
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-17, trying to confirm the black-screen fix by screenshot
+**Where:** the container, not the repository
+
+**What happens.** Headless Chromium in this container acquires a WebGPU adapter
+and a device, and reports its features correctly, including `timestamp-query`.
+Anything that touches the swap chain then fails with `A valid external Instance
+reference no longer exists`. A screenshot of the canvas is fully transparent,
+and reading the canvas back through `toDataURL` gives one color with zero alpha.
+The oldest screenshot in the repository's history shows the same blank canvas,
+so this has always been true here.
+
+**Why it matters.** Nothing after Project 3 can be checked by eye in the
+container it is written in. That is how the black screen survived four projects.
+Every visual claim has to be confirmed on the author's own machine, and any
+session that forgets this will spend an hour rediscovering it.
+
+**What would fix it.** Either a container with a working software rasteriser for
+WebGPU — Dawn built with its own software backend, driven headlessly rather than
+through Chromium — or accepting that visual confirmation happens on real
+hardware and saying so wherever it matters. The second is what happens today,
+undocumented.
+
+**Closed:** 2026-08-18, promoted to `plans/v0.1.1.md` — not as work but as a
+constraint on the release. Every item in 0.1.1 turns on how something looks, so
+every trial is a demo run on real hardware rather than a screenshot taken here.
+
+---
+
 ### F-014 — Refilling the clouds stalls the frame for 12.7 ms
 
 **Kind:** bug
@@ -414,8 +424,6 @@ pure function of the wind angle and the seed, so a worker can build both and
 send back the two typed arrays. Nothing on the main thread needs the field
 itself — it uploads the buffers and draws them.
 
----
-
-## Closed
-
-Nothing yet.
+**Closed:** 2026-08-18, promoted to `plans/v0.1.1.md`, I-2 — moving the field
+and its mesh to a worker is a requirement of that item, and it is this finding's
+fix.

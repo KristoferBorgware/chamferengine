@@ -218,6 +218,16 @@ The table at the top is the file's index and is updated whenever an item moves.
 `State` is a short phrase, not a status word: *discussing*, *trialling A and B*,
 *chosen: B*, *implemented*, *dropped — see F-014*.
 
+### Voice
+
+Every rule in [`HOW-TO-WRITE-DOCS.md`](HOW-TO-WRITE-DOCS.md) applies, with two
+released: a plan **may argue**, because a decision without the measurement that
+made it cannot be reviewed; and a plan **may carry what was rejected**, because
+knowing what was tried and what it cost is what stops it being tried again.
+
+Everything else holds — no comparison to other games, nothing described as free,
+no trace of how the page was written, `color` never `colour`.
+
 ### Item numbers
 
 `I-1` onwards, per release file, **never reused within it**. An item that leaves
