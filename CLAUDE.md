@@ -34,8 +34,11 @@ and duplicates information found there.
 ## Project shape
 
 - The repository holds a prose specification, generated figures, runnable demos,
-  verification scripts, and the engine. `plans/v0.1.0.md` is the current build
-  order; [`ARCHITECTURE.md`](ARCHITECTURE.md) defines the milestones it feeds.
+  verification scripts, and the engine. `plans/` holds one file per release —
+  `v0.1.0.md` is the greenfield build, organised by project, and every file
+  after it is organised by item and worked through the three steps in
+  [`HOW-TO-WRITE-PLANS.md`](HOW-TO-WRITE-PLANS.md).
+  [`ARCHITECTURE.md`](ARCHITECTURE.md) defines the milestones they feed.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — **the stack, the four-part runtime split
   and the milestone definitions, stated rather than argued.** Read it before
   anything in `docs/` when the question is *what are we building with* or *what is
