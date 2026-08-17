@@ -455,20 +455,43 @@ describe("merging at a level seam", () => {
 			};
 
 			const expected = new Set<number>();
+			const put = (cell: { face: number; i: number; j: number }) => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (draws(canon)) return;
+				expected.add(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+				);
+			};
 			for (let q = 0; q <= m; q++)
 				for (let r = 0; q + r <= m; r++) {
-					if (q !== 0 && r !== 0 && q + r !== m) continue;
 					const [i, j] = joinPath(address.path, q, r, DEPTH);
 					if (!draws({ face, i, j })) continue;
 					for (let k = 0; k < 6; k++) {
 						const nb = neighbour(face, n, i, j, k);
 						if (!nb || draws(nb)) continue;
-						const canon = canonicalCell(nb.face, n, nb.i, nb.j);
-						expected.add(
-							(canon.face * 262144 + canon.i) * 262144 + canon.j,
-						);
+						put(nb);
 					}
 				}
+			// The three corner cells and their rings go in outright.
+			for (const [cq, cr] of [
+				[0, 0],
+				[m, 0],
+				[0, m],
+			] as const) {
+				const [ci, cj] = joinPath(address.path, cq, cr, DEPTH);
+				const corner = canonicalCell(face, n, ci, cj);
+				put(corner);
+				const degree = cellCorners(
+					corner.face,
+					n,
+					corner.i,
+					corner.j,
+				).length;
+				for (let k = 0; k < degree; k++) {
+					const nb = neighbour(corner.face, n, corner.i, corner.j, k);
+					if (nb) put(nb);
+				}
+			}
 
 			const chunk = generateChunk(terrain, address, level, LAYERS);
 			const built = buildChunkMesh(

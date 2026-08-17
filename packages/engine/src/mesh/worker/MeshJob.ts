@@ -20,6 +20,9 @@ export interface MeshWorkerSetup {
 	/** How deep a chunk's rim hangs, in its own cells. */
 	readonly skirtCells: number;
 
+	/** Whether to paint the seams instead of hiding them. */
+	readonly debugSeams?: boolean;
+
 	readonly terrain: TerrainOptions;
 }
 

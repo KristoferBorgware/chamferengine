@@ -6,10 +6,12 @@ import {
 	ChunkAtlas,
 	TerrainGenerator,
 	buildCoarseMap,
+	chunkOverlaps,
 	flatCoarseMap,
 	seedFromString,
 	selectChunks,
 	selectionId,
+	selectionOf,
 } from "chamfer/generation";
 import { WorkerMeshSource } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
@@ -355,6 +357,7 @@ async function main(): Promise<void> {
 			maxElevation: shape.maxElevation,
 			crustDepth: shape.crustDepth,
 			skirtCells: SKIRT_CELLS,
+			debugSeams: settings.knobs.seamOverlay,
 			terrain: settings.terrainOptions(),
 		},
 	);
@@ -374,6 +377,47 @@ async function main(): Promise<void> {
 	 * until the next selection drops it again.
 	 */
 	let keep = new Set<number>();
+	let lastWanted: ChunkSelection[] = [];
+
+	/**
+	 * Chunks the selection no longer wants but which are still drawn.
+	 *
+	 * A chunk that leaves the selection is not dropped on the spot: its
+	 * replacement at another level is usually still on a worker, and dropping
+	 * first opens a hole straight through the planet at every level change,
+	 * for as long as the replacement takes to build. A retiring chunk keeps
+	 * drawing until every wanted chunk overlapping its triangle has been
+	 * uploaded, so the ground under it is never bare.
+	 */
+	const retiring = new Set<number>();
+
+	/** Drop every retiring chunk whose ground is drawn again. */
+	function dropReplaced(): void {
+		for (const id of [...retiring]) {
+			const old = selectionOf(id);
+			let replaced = true;
+			for (const wanted of lastWanted) {
+				if (
+					!chunkOverlaps(
+						old.chunkLevel,
+						old.key,
+						wanted.chunkLevel,
+						wanted.key,
+					)
+				)
+					continue;
+				if (!drawn.has(selectionId(wanted.chunkLevel, wanted.key))) {
+					replaced = false;
+					break;
+				}
+			}
+			if (replaced) {
+				retiring.delete(id);
+				drawn.delete(id);
+				renderer.drop(id);
+			}
+		}
+	}
 
 	/** Where the player stood when the selection was last worked out. */
 	let selectedAt = player.position;
@@ -404,16 +448,16 @@ async function main(): Promise<void> {
 			shape.maxElevation,
 		);
 		wantedNow = wanted.length;
+		lastWanted = wanted;
 		keep = new Set(
 			wanted.map((selection) =>
 				selectionId(selection.chunkLevel, selection.key),
 			),
 		);
-		for (const id of [...drawn])
-			if (!keep.has(id)) {
-				drawn.delete(id);
-				renderer.drop(id);
-			}
+		// Chunks that left the selection retire rather than dropping: they
+		// keep drawing until their ground is covered again.
+		for (const id of [...drawn]) if (!keep.has(id)) retiring.add(id);
+		for (const id of [...retiring]) if (keep.has(id)) retiring.delete(id);
 
 		// Work that is no longer wanted is called off rather than left to
 		// finish. A queued chunk is dropped outright and one already on a
@@ -441,6 +485,7 @@ async function main(): Promise<void> {
 					if (building.get(id) === selection) building.delete(id);
 				});
 		}
+		dropReplaced();
 	}
 
 	refresh();
@@ -579,6 +624,7 @@ async function main(): Promise<void> {
 		// Meshes that finished on a worker go to the GPU here, a couple a frame,
 		// so a burst of arrivals does not turn into one long frame.
 		timer.enter("upload", performance.now());
+		let uploaded = false;
 		for (let n = 0; n < UPLOAD_PER_FRAME; n++) {
 			const mesh = arrived.shift();
 			if (!mesh) break;
@@ -590,7 +636,10 @@ async function main(): Promise<void> {
 			if (!keep.has(mesh.key)) continue;
 			drawn.add(mesh.key);
 			renderer.upload(mesh);
+			uploaded = true;
 		}
+		// An upload may be the last thing a retiring chunk was waiting for.
+		if (uploaded) dropReplaced();
 		timer.leave("upload", performance.now());
 
 		resizeToDisplay(ctx);

@@ -226,6 +226,11 @@ const GROUPS: Group[] = [
 				digits: 1,
 				says: "How many of its own widths away a chunk goes before it drops to the next coarser level. Higher holds more chunks at full detail, which costs generation time and memory rather than frame time.",
 			},
+			{
+				key: "seamOverlay",
+				label: "Seam overlay",
+				says: "Paints the joins instead of hiding them: yellow cells sit on a face edge, blue cells on a chunk boundary, and orange is the apron ring a chunk draws past its own rim. For finding where a hole came from, not for playing under.",
+			},
 		],
 	},
 ];

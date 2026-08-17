@@ -24,6 +24,7 @@ export class MeshWorkerCore {
 	private readonly map: CoarseMap;
 	private readonly seed: number;
 	private readonly skirtCells: number;
+	private readonly debugSeams: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -45,6 +46,7 @@ export class MeshWorkerCore {
 		);
 		this.seed = setup.map.seed;
 		this.skirtCells = setup.skirtCells;
+		this.debugSeams = setup.debugSeams ?? false;
 		this.options = setup.terrain;
 	}
 
@@ -73,6 +75,7 @@ export class MeshWorkerCore {
 				skirtCells: this.skirtCells,
 				surfaceGrid: this.shape.blockSize,
 				seamFloor: seamFloor(shape.n, brackets),
+				debugSeams: this.debugSeams,
 			},
 		);
 		return {

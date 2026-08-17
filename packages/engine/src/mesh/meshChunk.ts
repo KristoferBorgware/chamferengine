@@ -95,6 +95,26 @@ function skirtBottom(
 	);
 }
 
+/** The seam overlay's marker colors, by tint index. */
+const TINTS: readonly (readonly [number, number, number])[] = [
+	[0, 0, 0],
+	// A cell on a chunk boundary.
+	[0.15, 0.35, 0.95],
+	// A cell on a face edge.
+	[0.95, 0.85, 0.1],
+	// An apron cell.
+	[0.95, 0.45, 0.1],
+];
+
+/** Paint a cell's faces toward its seam marker, for the overlay. */
+function debugTint(color: Float32Array, tint: number): void {
+	if (tint === 0) return;
+	const mark = TINTS[tint]!;
+	color[0] = color[0]! * 0.3 + mark[0] * 0.7;
+	color[1] = color[1]! * 0.3 + mark[1] * 0.7;
+	color[2] = color[2]! * 0.3 + mark[2] * 0.7;
+}
+
 /** Multiply a color in place. */
 function shade(color: Float32Array, by: number): void {
 	color[0] = color[0]! * by;
@@ -158,20 +178,25 @@ export function meshChunk(
 			const corners = cellCorners(face, n, i, j);
 			const degree = corners.length;
 			const own = sampler.columnAt(face, i, j);
-			// A cell on the chunk triangle's own edge has neighbours in another
-			// chunk, and those are the edges a skirt hangs from.
-			const onRim = q === 0 || r === 0 || q + r === chunk.m;
+			// An edge is outward when it faces a cell this chunk does not
+			// draw, wherever the cell sits. The rim rows are the usual case,
+			// but a boundary row can belong wholly to the neighbouring chunk,
+			// and the canonical-face rule refuses cells inside the triangle
+			// on a face edge -- either way the adjacent drawn cells sit one
+			// row in, and a rim test on `q` and `r` never sees their edges.
+			// The face check first: a neighbour across a face edge carries
+			// the other face's coordinates, and those can path-match this
+			// triangle by coincidence.
 			for (let k = 0; k < 6; k++) {
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
-				// A neighbour across a face edge carries the other face's
-				// coordinates, and those can path-match this triangle by
-				// coincidence -- the face has to agree before the path means
-				// anything.
 				outward[k] =
-					onRim &&
 					nb !== null &&
-					!(nb.face === face && inChunk(chunk, nb.i, nb.j));
+					!(
+						nb.face === face &&
+						inChunk(chunk, nb.i, nb.j) &&
+						owns(chunk, nb.face, n, nb.i, nb.j)
+					);
 				if (outward[k] && nb && settings.skirtCells > 0) {
 					const canon = canonicalCell(nb.face, n, nb.i, nb.j);
 					apron.set(
@@ -179,6 +204,13 @@ export function meshChunk(
 						canon,
 					);
 				}
+			}
+
+			let tint = 0;
+			if (settings.debugSeams) {
+				const w = latticeWeights(n, i, j);
+				if (w[0] === 0 || w[1] === 0 || w[2] === 0) tint = 2;
+				else if (outward.some(Boolean)) tint = 1;
 			}
 
 			meshCell(
@@ -202,7 +234,43 @@ export function meshChunk(
 				settings.skirtCells,
 				grid,
 				floorAt,
+				tint,
 			);
+		}
+
+	// The three corners of the chunk triangle. A cell clipping the corner
+	// wedge can sit two steps from every owned cell -- the edge cells at a
+	// corner often belong to the neighbouring chunk -- so the walk along the
+	// rim never reaches it, and the far side of the planet showed through a
+	// sliver of exactly that shape. The corner point's own cell and its full
+	// ring are everything that can touch the wedge, and they go in outright.
+	if (settings.skirtCells > 0)
+		for (const [cq, cr] of [
+			[0, 0],
+			[chunk.m, 0],
+			[0, chunk.m],
+		] as const) {
+			const [ci, cj] = joinPath(chunk.address.path, cq, cr, depth);
+			const corner = canonicalCell(face, n, ci, cj);
+			const degree = cellCorners(
+				corner.face,
+				n,
+				corner.i,
+				corner.j,
+			).length;
+			apron.set(
+				(corner.face * 262144 + corner.i) * 262144 + corner.j,
+				corner,
+			);
+			for (let k = 0; k < degree; k++) {
+				const nb = neighbour(corner.face, n, corner.i, corner.j, k);
+				if (!nb) continue;
+				const canon = canonicalCell(nb.face, n, nb.i, nb.j);
+				apron.set(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+					canon,
+				);
+			}
 		}
 
 	for (const cell of apron.values()) {
@@ -226,6 +294,7 @@ export function meshChunk(
 			settings.skirtCells,
 			grid,
 			floorAt,
+			settings.debugSeams ? 3 : 0,
 		);
 	}
 	return tally;
@@ -287,6 +356,7 @@ function meshCell(
 	skirtCells: number,
 	grid: number,
 	floorAt: ((face: number, i: number, j: number) => number) | undefined,
+	tint: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -348,6 +418,7 @@ function meshCell(
 		const sink = here === 1 ? translucent : opaque;
 		blockColor(block, face, i, j, seed, COLOR, 0);
 		shade(COLOR, sky);
+		debugTint(COLOR, tint);
 
 		if (opacityOf(at(own, layer - 1)) < here) {
 			emitCap(
@@ -387,6 +458,7 @@ function meshCell(
 		if (opacityOf(block) > 0) {
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			debugTint(COLOR, tint);
 			emitCap(
 				opacityOf(block) === 1 ? translucent : opaque,
 				corners,
@@ -410,6 +482,7 @@ function meshCell(
 			const block = at(own, top);
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			debugTint(COLOR, tint);
 			const bottom = skirtBottom(
 				shape,
 				grid,
@@ -457,6 +530,7 @@ function meshCell(
 			const block = at(own, groundCap);
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			debugTint(COLOR, tint);
 			emitSide(
 				opaque,
 				corners,
@@ -497,6 +571,7 @@ function meshCell(
 
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			debugTint(COLOR, tint);
 			emitSide(
 				here === 1 ? translucent : opaque,
 				corners,
@@ -542,6 +617,7 @@ function meshApronCell(
 	skirtCells: number,
 	grid: number,
 	floorAt: ((face: number, i: number, j: number) => number) | undefined,
+	tint: number,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -606,6 +682,7 @@ function meshApronCell(
 		if (opacityOf(at(own, layer - 1)) >= here) continue;
 		blockColor(block, face, i, j, seed, COLOR, 0);
 		shade(COLOR, sky);
+		debugTint(COLOR, tint);
 		emitCap(
 			here === 1 ? translucent : opaque,
 			corners,
@@ -635,6 +712,7 @@ function meshApronCell(
 			const block = at(own, groundCap);
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			debugTint(COLOR, tint);
 			emitSide(
 				opaque,
 				corners,
@@ -657,6 +735,7 @@ function meshApronCell(
 		const block = at(own, top);
 		blockColor(block, face, i, j, seed, COLOR, 0);
 		shade(COLOR, sky);
+		debugTint(COLOR, tint);
 		const bottom = skirtBottom(
 			shape,
 			grid,

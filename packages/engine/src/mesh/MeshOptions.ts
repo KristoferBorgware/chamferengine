@@ -49,10 +49,21 @@ export interface MeshOptions {
 	 * returning `Infinity`, the fixed depth stands.
 	 */
 	readonly seamFloor?: (face: number, i: number, j: number) => number;
+
+	/**
+	 * Whether to paint the seams instead of hiding them.
+	 *
+	 * Face-edge cells turn yellow, cells on a chunk boundary blue, and apron
+	 * cells orange, so where the joins run — and which kind each one is — can
+	 * be read off the ground itself. A debugging aid, off everywhere by
+	 * default.
+	 */
+	readonly debugSeams?: boolean;
 }
 
 export const MESH_DEFAULTS = {
 	crustFloor: false,
 	skirtCells: 0,
 	surfaceGrid: 0,
+	debugSeams: false,
 } as const satisfies MeshOptions;

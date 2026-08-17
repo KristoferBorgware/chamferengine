@@ -135,6 +135,9 @@ export interface PlanetKnobs {
 	/** How deep a chunk's rim hangs, in its own cells. */
 	skirtCells: number;
 
+	/** Whether the terrain paints its seams: face edges, chunk rims, aprons. */
+	seamOverlay: boolean;
+
 	/** Seconds in a day. */
 	dayLength: number;
 
@@ -167,6 +170,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShells: 4,
 	detail: 2,
 	skirtCells: 2,
+	seamOverlay: false,
 	dayLength: 240,
 	paused: false,
 	timeOfDay: 0.5,
@@ -243,6 +247,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	cloudShells: { low: 1, high: 8, step: 1, rebuilds: true, unit: "shells" },
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
 	skirtCells: { low: 0, high: 4, step: 1, rebuilds: true, unit: "cells" },
+	seamOverlay: { ...TOGGLE, rebuilds: true },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
