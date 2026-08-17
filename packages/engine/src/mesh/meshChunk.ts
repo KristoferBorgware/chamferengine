@@ -74,11 +74,21 @@ function snappedSurface(
 }
 
 /**
- * Where a skirt stops: its fixed depth, or the seam floor, whichever is lower.
+ * Where a skirt hangs to, or nothing when no level can open a gap here.
  *
- * The floor is where a neighbouring level might put its own surface beside
- * this column, snapped to the shared grid and taken one step further so the
- * wall meets that surface rather than ending flush with it.
+ * A skirt is insurance against a neighbouring level putting its surface
+ * lower than this one, and it is a **wall hanging from the cap plane**. Where
+ * no level puts it lower there is nothing to insure against, and the wall is
+ * then coplanar with the neighbouring chunk's cap along their shared edge --
+ * the depth buffer cannot separate two coplanar surfaces at any distance
+ * where its precision is coarser than nothing, so the darker wall speckles
+ * through the ground. On a world with no relief at all that was every chunk
+ * boundary at once: 372 wall triangles a chunk, all of them in the cap plane,
+ * drawn as a dashed dark outline of the whole chunk grid.
+ *
+ * So the floor decides whether the skirt exists, not only how far it reaches.
+ * `Infinity` means the caller gave no bracketing levels to compare against,
+ * and the skirt is emitted on the old always-insure rule.
  */
 function skirtBottom(
 	shape: WorldShape,
@@ -86,13 +96,15 @@ function skirtBottom(
 	top: number,
 	skirtCells: number,
 	floor: number,
-): number {
+	capTop: number,
+): number | null {
 	const fixed = shape.radiusOfLayer(top + skirtCells);
 	if (!Number.isFinite(floor)) return fixed;
-	return Math.min(
-		fixed,
-		snappedSurface(shape.crustTopRadius, floor, grid) - grid,
-	);
+	const theirs = snappedSurface(shape.crustTopRadius, floor, grid);
+	// Every level this chunk can meet puts its surface at or above ours, so
+	// the caps join edge to edge and there is no gap under them.
+	if (theirs >= capTop - 1e-9) return null;
+	return Math.min(fixed, theirs - grid);
 }
 
 /** The seam overlay's marker colors, by tint index. */
@@ -489,23 +501,25 @@ function meshCell(
 				top,
 				skirtCells,
 				floorAt ? floorAt(face, i, j) : Infinity,
+				capRadius(top),
 			);
-			for (let k = 0; k < degree; k++) {
-				if (!outward[k]) continue;
-				emitSide(
-					opaque,
-					corners,
-					degree,
-					k,
-					capRadius(top),
-					bottom,
-					origin,
-					ring,
-					top,
-					Math.min(layers - 1, shape.layerOfRadius(bottom)),
-				);
-				tally.faces++;
-			}
+			if (bottom !== null)
+				for (let k = 0; k < degree; k++) {
+					if (!outward[k]) continue;
+					emitSide(
+						opaque,
+						corners,
+						degree,
+						k,
+						capRadius(top),
+						bottom,
+						origin,
+						ring,
+						top,
+						Math.min(layers - 1, shape.layerOfRadius(bottom)),
+					);
+					tally.faces++;
+				}
 		}
 	}
 
@@ -742,23 +756,25 @@ function meshApronCell(
 			top,
 			skirtCells,
 			floorAt ? floorAt(face, i, j) : Infinity,
+			capRadius(top),
 		);
-		for (let k = 0; k < degree; k++) {
-			if (!away[k] || !ring[k]) continue;
-			emitSide(
-				opaque,
-				corners,
-				degree,
-				k,
-				capRadius(top) - APRON_DROP,
-				bottom - APRON_DROP,
-				origin,
-				ring,
-				top,
-				Math.min(layers - 1, shape.layerOfRadius(bottom)),
-			);
-			tally.faces++;
-		}
+		if (bottom !== null)
+			for (let k = 0; k < degree; k++) {
+				if (!away[k] || !ring[k]) continue;
+				emitSide(
+					opaque,
+					corners,
+					degree,
+					k,
+					capRadius(top) - APRON_DROP,
+					bottom - APRON_DROP,
+					origin,
+					ring,
+					top,
+					Math.min(layers - 1, shape.layerOfRadius(bottom)),
+				);
+				tally.faces++;
+			}
 	}
 	tally.apron++;
 }

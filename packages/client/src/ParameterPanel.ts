@@ -132,7 +132,7 @@ const GROUPS: Group[] = [
 				key: "skirtCells",
 				label: "Skirt",
 				digits: 0,
-				says: "How far a chunk's rim hangs below its edge, to cover the crack where a chunk meets a coarser neighbour. It also switches the apron: the ring of cells drawn just beyond the rim that closes the gaps two levels leave between their tilings. Zero shows the cracks and the holes.",
+				says: "How far a chunk's rim hangs below its edge, to cover the crack where a chunk meets a coarser neighbour. A rim only hangs one where the neighbouring levels actually disagree, so smooth ground grows none. It also switches the apron: the ring of cells drawn just beyond the rim that closes the gaps two levels leave between their tilings. Zero shows the cracks and the holes.",
 			},
 		],
 	},

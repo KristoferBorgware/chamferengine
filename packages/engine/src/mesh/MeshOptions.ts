@@ -23,6 +23,10 @@ export interface MeshOptions {
 	 * skirt is the whole of it as long as a column is one run of ground. A
 	 * column with a cave in it opens a hole a skirt reaches past, and that is
 	 * what seam ownership is for.
+	 *
+	 * A skirt is only emitted where {@link seamFloor} says a level can put its
+	 * surface lower. Hung where no level disagrees it is a wall coplanar with
+	 * the neighbouring chunk's cap, which the depth buffer cannot separate.
 	 */
 	readonly skirtCells?: number;
 
