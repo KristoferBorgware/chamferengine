@@ -1,7 +1,9 @@
 // What actually happens at a chunk boundary when the two sides are at different
-// LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep";
-// this checks whether that is enough once a rim column has more than one solid
-// span, and what does close the remaining holes.
+// LOD and one of them has caves. Doc 14 first said "a skirt one coarse cell
+// deep"; this checks whether that is enough once a rim column has more than one
+// solid span, what does close the remaining holes, and -- since a skirt was
+// tried in the engine and taken out again -- what a skirt costs on the
+// boundaries where it is not needed, which is most of them.
 const T=(1+Math.sqrt(5))/2;
 const norm=v=>{const l=Math.hypot(...v);return v.map(x=>x/l);};
 const add=(a,b)=>a.map((x,i)=>x+b[i]);
@@ -49,6 +51,11 @@ const fbm=(p,freq,oct)=>{let a=1,f=freq,s=0,n=0;
   for(let i=0;i<oct;i++){s+=a*value3(p.map(x=>x*f)); n+=a; a*=0.5; f*=2;} return s/n;};
 
 const R=1700, BLK=1, LAYERS=80, RELIEF=30;
+// Every level snaps its surface caps to the finest level's layer grid, which
+// hangs from one crust top, so two levels that sample the same height land on
+// the same cap. This is the rounding the engine uses.
+const TOP = R + RELIEF + BLK;
+const capOf = h => Math.ceil((TOP - h)/BLK - 1e-9);
 const CAVE_FREQ=140, CAVE_STRENGTH=26;      // gradient 1.07 -> real enclosed voids
 const height = dir => R + RELIEF*fbm(dir,6,5);
 // fine side: doc 08's full density field, so it has caves
@@ -67,8 +74,9 @@ const rim = pts.map((p,i)=>[i,dot(p,CENTRE)]).filter(a=>a[1]>Math.cos(0.20)).map
 function run(coarseCells){
   const skirt = coarseCells;                 // "one coarse cell deep", in layers
   let cols=0, spans=0, multi=0, caveMouths=0, mouthsBelowSkirt=0;
-  const holes={own:0, skirt:0, owned:0}, faces={own:0, skirt:0, owned:0};
-  let deepest=0;
+  const holes={own:0, skirt:0, apron:0, owned:0};
+  const faces={own:0, skirt:0, apron:0, owned:0};
+  let deepest=0, sameCap=0;
 
   for (const v of rim){
     const dir = pts[v];
@@ -77,6 +85,11 @@ function run(coarseCells){
     let t = cross(dir,[0,0,1]); if (Math.hypot(...t)<1e-9) t = cross(dir,[1,0,0]);
     t = norm(t);
     const surfC = height(norm(add(dir, mul(t, coarseCells*BLK/R))));
+
+    // Do the two levels even disagree about where the surface is, once both
+    // are snapped to the shared fine grid? Where they do not, a skirt hangs a
+    // wall in the plane of the neighbour's own cap and can only fight it.
+    if (capOf(surfF) === capOf(surfC)) sameCap++;
 
     const F=new Uint8Array(LAYERS), C=new Uint8Array(LAYERS);
     for (let y=0;y<LAYERS;y++){
@@ -97,7 +110,12 @@ function run(coarseCells){
       // POLICY 2 -- the same, plus a skirt hanging from the fine top surface
       const covered = (y >= top && y < top + skirt);
       if (covered) faces.skirt++; else holes.skirt++;
-      // POLICY 3 -- the finer chunk owns the seam and emits wherever the two
+      // POLICY 3 -- each chunk also draws the ring of cells beyond its own rim,
+      // at its own level. Both surfaces then exist over the strip, so a
+      // surface-slit layer always has ground drawn across it and only a cave
+      // mouth -- coarse rock against fine air -- is still seen through.
+      if (!F[y] && C[y]) holes.apron++; else faces.apron++;
+      // POLICY 4 -- the finer chunk owns the seam and emits wherever the two
       // sides disagree, having evaluated the coarse neighbour's height field
       faces.owned++;
       // a cave mouth is coarse-solid against fine-air: rock facing a void
@@ -109,27 +127,35 @@ function run(coarseCells){
     }
   }
   faces.skirt += cols;                              // the skirt quad itself, per column
-  return {cols, spans, multi, caveMouths, mouthsBelowSkirt, holes, faces, deepest};
+  faces.apron += cols;                              // the apron cell's own cap
+  return {cols, spans, multi, caveMouths, mouthsBelowSkirt, holes, faces,
+          deepest, sameCap};
 }
 
 console.log('A chunk rim where the neighbour is one LOD coarser.');
 console.log(`Fine side: full density field (freq ${CAVE_FREQ}, strength ${CAVE_STRENGTH}) -- has caves.`);
 console.log('Coarse side: height-field term only, resampled one coarse cell away.\n');
-console.log('  coarse   rim      spans   columns with   cave     holes: own-margin   +skirt   seam-owned');
+console.log('  coarse   rim      spans   columns with   cave     holes: own-margin   +skirt   +apron   seam-owned');
 console.log('  cell     columns  /col    >1 span        mouths');
 for (const cc of [2,4,8]){
   const r=run(cc);
   console.log(`  ${String(cc+' m').padStart(6)} ${String(r.cols).padStart(9)}`
     +` ${(r.spans/r.cols).toFixed(3).padStart(7)} ${String(r.multi).padStart(14)}`
     +` ${String(r.caveMouths).padStart(8)} ${String(r.holes.own).padStart(17)}`
-    +` ${String(r.holes.skirt).padStart(8)} ${String(r.holes.owned ?? 0).padStart(12)}`);
+    +` ${String(r.holes.skirt).padStart(8)} ${String(r.holes.apron).padStart(8)}`
+    +` ${String(r.holes.owned ?? 0).padStart(12)}`);
 }
 console.log('\n  own-margin  = each side trusts its own generator past the boundary.');
 console.log('                Neither emits anything, so every disagreement is a hole.');
 console.log('  +skirt      = same, plus a curtain one coarse cell deep from the top');
 console.log('                surface. It closes the surface slit and nothing else.');
+console.log('  +apron      = same, plus each chunk drawing the ring of cells beyond');
+console.log('                its own rim at its own level. Both surfaces then cover');
+console.log('                the strip, so the slit closes with no wall anywhere.');
 console.log('  seam-owned  = the finer chunk emits a face wherever its solidity differs');
 console.log('                from the coarse neighbour\'s. Zero holes, by construction.');
+console.log('\n  The apron and the skirt leave the same holes -- every cave mouth, and');
+console.log('  nothing else. They differ in what they cost where nothing is wrong.');
 
 // ---- what the skirt cannot reach -------------------------------------------
 console.log('\nWhy the skirt alone is not enough:');
@@ -153,3 +179,23 @@ console.log('  hole in the boundary plane, often far below it. The two do not me
   console.log('  coarse neighbour put its surface. Both are negligible against the');
   console.log(`  ${(r.spans/r.cols).toFixed(2)} spans and ~12 faces per column the chunk already emits.`);
 }
+
+
+// ---- what a skirt costs where nothing is wrong ------------------------------
+// A skirt hangs from the cap plane. Where the two sides put their surface on
+// the same layer of the shared fine grid, that wall is coplanar with the
+// neighbour's own cap along their shared edge, and no depth buffer separates
+// two coplanar surfaces: the darker wall speckles through the ground.
+console.log('\nWhere a skirt hangs a wall it cannot help:');
+for (const cc of [2,4,8]){
+  const r=run(cc);
+  const pct = 100*r.sameCap/r.cols;
+  console.log(`  coarse cell ${String(cc+' m').padStart(5)}:`
+    +` ${r.sameCap} of ${r.cols} rim columns (${pct.toFixed(0)}%) have both levels on the`
+    +` same cap,\n${' '.repeat(19)}so the skirt there is coplanar with the neighbour's cap.`);
+}
+// And that is the LOD boundary, which is the rare one. Two chunks at the SAME
+// level ran the same generator on the same grid, so they agree everywhere.
+console.log('  At a boundary between two chunks of the SAME level -- which is most of');
+console.log('  them -- both ran one generator on one grid, so every rim column agrees');
+console.log('  and every skirt quad is coplanar. The apron hangs no wall at all.');

@@ -2196,7 +2196,7 @@ const prof = (() => {
 }
 
 // =============================================================================
-// 14 — the LOD seam a skirt cannot close
+// 14 — the LOD seam the apron cannot close
 // =============================================================================
 {
   const chunkA = (ox, sealed) => {
@@ -2207,17 +2207,17 @@ const prof = (() => {
     <clipPath id="cv${ox}"><rect x="${ox}" y="0" width="96" height="160"/></clipPath>
     <g clip-path="url(#cv${ox})"><ellipse class="cf-void" cx="${ox+72}" cy="${100}" rx="34" ry="14"/></g>
     <line class="cf-l" x1="${b}" y1="44" x2="${b}" y2="134" stroke-dasharray="3 3"/>
-    <rect class="cf-af" x="${b-2}" y="62" width="4.5" height="18"/>
+    <path class="cf-af" d="M${b} ${72} L${b+18} ${77} L${b+18} ${88} L${b} ${88} Z"/>
     ${sealed
-      ? `<rect class="cf-af" x="${b-2}" y="88" width="4.5" height="25"/><text class="cf-c" x="${b+8}" y="88">wall</text>`
-      : `<line x1="${b}" y1="88" x2="${b}" y2="113" stroke="#b0800f" stroke-width="4"/><text class="cf-gd" x="${b+8}" y="88">open</text>`}
-    <text class="cf-c" x="${b+8}" y="58">skirt</text>
+      ? `<rect class="cf-af" x="${b-2}" y="88" width="4.5" height="25"/><text class="cf-c" x="${b+22}" y="104">wall</text>`
+      : `<line x1="${b}" y1="88" x2="${b}" y2="113" stroke="#b0800f" stroke-width="4"/><text class="cf-gd" x="${b+22}" y="104">open</text>`}
+    <text class="cf-c" x="${b+22}" y="74">apron</text>
     <text class="cf-d" x="${ox+40}" y="102" text-anchor="middle">cave</text>`;
   };
   made.push(svg('lod-seam', 420, 178, `
   ${chunkA(16, false)}
   ${chunkA(228, true)}
-  <text class="cf-gd" x="100" y="160" text-anchor="middle">skirt alone &#183; 961 holes</text>
+  <text class="cf-gd" x="100" y="160" text-anchor="middle">apron alone &#183; 1,074 holes</text>
   <text class="cf-c" x="312" y="160" text-anchor="middle">seam owned &#183; 0 holes</text>`));
 }
 

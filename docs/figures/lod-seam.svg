@@ -28,9 +28,9 @@
     <clipPath id="cv16"><rect x="16" y="0" width="96" height="160"/></clipPath>
     <g clip-path="url(#cv16)"><ellipse class="cf-void" cx="88" cy="100" rx="34" ry="14"/></g>
     <line class="cf-l" x1="112" y1="44" x2="112" y2="134" stroke-dasharray="3 3"/>
-    <rect class="cf-af" x="110" y="62" width="4.5" height="18"/>
-    <line x1="112" y1="88" x2="112" y2="113" stroke="#b0800f" stroke-width="4"/><text class="cf-gd" x="120" y="88">open</text>
-    <text class="cf-c" x="120" y="58">skirt</text>
+    <path class="cf-af" d="M112 72 L130 77 L130 88 L112 88 Z"/>
+    <line x1="112" y1="88" x2="112" y2="113" stroke="#b0800f" stroke-width="4"/><text class="cf-gd" x="134" y="104">open</text>
+    <text class="cf-c" x="134" y="74">apron</text>
     <text class="cf-d" x="56" y="102" text-anchor="middle">cave</text>
   
     <path class="cf-fill" d="M228 62 L250 52 L272 68 L294 58 L324 72 L324 132 L228 132 Z"/>
@@ -38,10 +38,10 @@
     <clipPath id="cv228"><rect x="228" y="0" width="96" height="160"/></clipPath>
     <g clip-path="url(#cv228)"><ellipse class="cf-void" cx="300" cy="100" rx="34" ry="14"/></g>
     <line class="cf-l" x1="324" y1="44" x2="324" y2="134" stroke-dasharray="3 3"/>
-    <rect class="cf-af" x="322" y="62" width="4.5" height="18"/>
-    <rect class="cf-af" x="322" y="88" width="4.5" height="25"/><text class="cf-c" x="332" y="88">wall</text>
-    <text class="cf-c" x="332" y="58">skirt</text>
+    <path class="cf-af" d="M324 72 L342 77 L342 88 L324 88 Z"/>
+    <rect class="cf-af" x="322" y="88" width="4.5" height="25"/><text class="cf-c" x="346" y="104">wall</text>
+    <text class="cf-c" x="346" y="74">apron</text>
     <text class="cf-d" x="268" y="102" text-anchor="middle">cave</text>
-  <text class="cf-gd" x="100" y="160" text-anchor="middle">skirt alone &#183; 961 holes</text>
+  <text class="cf-gd" x="100" y="160" text-anchor="middle">apron alone &#183; 1,074 holes</text>
   <text class="cf-c" x="312" y="160" text-anchor="middle">seam owned &#183; 0 holes</text>
 </svg>

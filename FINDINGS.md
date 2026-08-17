@@ -399,131 +399,6 @@ by more than a couple of metres, the same rule movement already uses.
 
 ---
 
-### F-023 — The selection's peak term assumes the tallest ground is everywhere
-
-**Kind:** idea
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-17, pricing v0.1.2's I-4 fix on the bench
-**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`, the
-`peakHeight` term; the numbers are in `plans/v0.1.2.md`, I-4
-
-**What happens.** The selection reaches
-`horizonAngle(eye) + horizonAngle(peak)` with one planet-wide `maxElevation`
-as the peak, so it selects every chunk that could hold visible ground if the
-tallest mountain on the planet stood in it. Most chunks hold nothing near
-that tall. On the un-paused world (`maxElevation` ~120 m, its own horizon
-~1.3 km) the bench's eye-height flat-ground scene went from 286 to 552
-chunks and 2.4 to 3.9 s to fill a view.
-
-**Why it matters.** Roughly half the chunks built at eye height are in a ring
-that is mostly below the horizon, built and uploaded for nothing. It is the
-correct conservative bound — nothing visible is ever dropped, which is what
-I-4 restored — but the cost is paid on every world with relief, every frame
-the player moves.
-
-**What would fix it.** A height bound per chunk rather than per planet. The
-coarse map already knows the height field; the maximum over a chunk's
-footprint, computed once at world creation for the chunk levels that matter,
-would let the walk use each triangle's own tallest ground. The walk already
-visits parents before children, so a bound per face triangle refined
-downward fits the existing recursion.
-
-### F-024 — The column cache key collides at the deepest world the word allows
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-17, writing v0.1.2's apron, whose own key packs with
-262,144 for exactly this reason
-**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`, the
-`key` in `columnAt`
-
-**What happens.** The cache key is `(face * 65536 + i) * 65536 + j`, and a
-lattice coordinate runs to `2^depth`. The address word allows depth 17, where
-`n` is 131,072 — twice the multiplier — so two different cells can share a
-key and the sampler would hand one cell the other's blocks.
-
-**Why it matters.** Nobody yet: the shipped worlds sit at depth 10 to 13 and
-the panel caps what a person can ask for below the collision. It is a trap
-armed for whoever first builds a depth-17 world, and it would surface as
-subtly wrong terrain rather than an error.
-
-**What would fix it.** Multiply by 262,144 — `2^18`, one step above the
-deepest lattice — the way the apron's key in `meshChunk.ts` already does.
-The product stays under `2^53` with room to spare: 20 faces times `2^36` is
-`1.4e12`.
-
-### F-025 — A cave mouth crossing a level join is still an open hole
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** large
-**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
-**Where:** `packages/engine/src/mesh/meshChunk.ts` and
-`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
-ownership, priced by `verification/seam.js`
-
-**What happens.** The skirts now reach the lowest surface a neighbouring
-level might put beside a rim column, which closes the join's surface slit at
-any relief. A skirt is still a wall hanging from the surface: a cave mouth
-that crosses the join sits deeper than any skirt hangs, and `seam.js`
-measured that 13 to 32% of columns have more than one span once caves are
-on. The full design — the finer chunk emits a face wherever its solidity
-differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
-is not built.
-
-**Why it matters.** Nobody today: caves are off by default and off under
-v0.1.2's pause, so no shipped world has a multi-span column. The first
-release that turns caves on gets sky-through-the-planet back, at exactly the
-joins v0.1.2 closed for the surface.
-
-**What would fix it.** Seam-owned faces need to know the neighbour's level,
-which the mesher deliberately does not: a blind guess emits walls above a
-same-level neighbour's ground, standing into the air. The selection knows
-every chunk's level, so the road is to tell the mesher its neighbours'
-levels and re-mesh the rim when a neighbour changes level — a residency and
-worker-protocol change, not a mesher formula.
-
-### F-026 — The specification still describes a skirt the engine no longer has
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-17, retiring the skirt in v0.1.2's I-6
-**Where:** [`docs/14-meshing-and-lod.md`](docs/14-meshing-and-lod.md) and
-`CLAUDE.md`'s established results; the code is
-`packages/engine/src/mesh/meshChunk.ts`
-
-**What happens.** Doc 14 and `CLAUDE.md` both hold that a LOD seam is covered
-by a skirt one coarse cell deep, and `CLAUDE.md` adds "Keep the skirt too, as
-cover for the frames after a neighbour changes level." The engine has no
-skirt any more. Level joins are covered by the apron -- each chunk drawing the
-ring of cells beyond its own rim -- and by cap-step walls between neighbours,
-both added in v0.1.2's I-5, and the frames after a level change are covered by
-I-6's retire-until-replaced instead.
-
-**Why it matters.** The specification is the thing this project is for, and it
-now describes a mechanism that was measured out of the engine for putting a
-dark wall in the cap plane at every chunk boundary. Anyone reading doc 14 to
-learn how seams are handled gets an answer that is two mechanisms out of date,
-and `verification/seam.js` prices skirts against seam ownership without the
-apron being in the comparison at all.
-
-**What would fix it.** Doc 14's seam section rewritten around the apron and
-the cap step, with the measurements that chose them: 372 coplanar wall
-triangles a chunk on a flat world, and 0 failures over 3,899 outward and 1,446
-grazing rays with skirts off. `seam.js` should grow the apron as a third
-candidate beside the skirt and seam ownership. That is a documentation item
-with a script behind it, so it belongs in a release rather than a patch's
-margin.
-
----
-
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
@@ -888,3 +763,141 @@ the engine's default and require the argument.
 **Closed:** 2026-08-17, promoted to `plans/v0.1.2.md`, I-3 -- the measured value and its
 reasoning moved into `selectChunks.ts` as the default, which is now 2 and
 agrees with what the client ships.
+
+---
+
+### F-023 — The selection's peak term assumes the tallest ground is everywhere
+
+**Kind:** idea
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-17, pricing v0.1.2's I-4 fix on the bench
+**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`, the
+`peakHeight` term; the numbers are in `plans/v0.1.2.md`, I-4
+
+**What happens.** The selection reaches
+`horizonAngle(eye) + horizonAngle(peak)` with one planet-wide `maxElevation`
+as the peak, so it selects every chunk that could hold visible ground if the
+tallest mountain on the planet stood in it. Most chunks hold nothing near
+that tall. On the un-paused world (`maxElevation` ~120 m, its own horizon
+~1.3 km) the bench's eye-height flat-ground scene went from 286 to 552
+chunks and 2.4 to 3.9 s to fill a view.
+
+**Why it matters.** Roughly half the chunks built at eye height are in a ring
+that is mostly below the horizon, built and uploaded for nothing. It is the
+correct conservative bound — nothing visible is ever dropped, which is what
+I-4 restored — but the cost is paid on every world with relief, every frame
+the player moves.
+
+**What would fix it.** A height bound per chunk rather than per planet. The
+coarse map already knows the height field; the maximum over a chunk's
+footprint, computed once at world creation for the chunk levels that matter,
+would let the walk use each triangle's own tallest ground. The walk already
+visits parents before children, so a bound per face triangle refined
+downward fits the existing recursion.
+
+### F-024 — The column cache key collides at the deepest world the word allows
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, writing v0.1.2's apron, whose own key packs with
+262,144 for exactly this reason
+**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`, the
+`key` in `columnAt`
+
+**What happens.** The cache key is `(face * 65536 + i) * 65536 + j`, and a
+lattice coordinate runs to `2^depth`. The address word allows depth 17, where
+`n` is 131,072 — twice the multiplier — so two different cells can share a
+key and the sampler would hand one cell the other's blocks.
+
+**Why it matters.** Nobody yet: the shipped worlds sit at depth 10 to 13 and
+the panel caps what a person can ask for below the collision. It is a trap
+armed for whoever first builds a depth-17 world, and it would surface as
+subtly wrong terrain rather than an error.
+
+**What would fix it.** Multiply by 262,144 — `2^18`, one step above the
+deepest lattice — the way the apron's key in `meshChunk.ts` already does.
+The product stays under `2^53` with room to spare: 20 faces times `2^36` is
+`1.4e12`.
+
+### F-025 — A cave mouth crossing a level join is still an open hole
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** large
+**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
+**Where:** `packages/engine/src/mesh/meshChunk.ts` and
+`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
+ownership, priced by `verification/seam.js`
+
+**What happens.** The skirts now reach the lowest surface a neighbouring
+level might put beside a rim column, which closes the join's surface slit at
+any relief. A skirt is still a wall hanging from the surface: a cave mouth
+that crosses the join sits deeper than any skirt hangs, and `seam.js`
+measured that 13 to 32% of columns have more than one span once caves are
+on. The full design — the finer chunk emits a face wherever its solidity
+differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
+is not built.
+
+**Why it matters.** Nobody today: caves are off by default and off under
+v0.1.2's pause, so no shipped world has a multi-span column. The first
+release that turns caves on gets sky-through-the-planet back, at exactly the
+joins v0.1.2 closed for the surface.
+
+**What would fix it.** Seam-owned faces need to know the neighbour's level,
+which the mesher deliberately does not: a blind guess emits walls above a
+same-level neighbour's ground, standing into the air. The selection knows
+every chunk's level, so the road is to tell the mesher its neighbours'
+levels and re-mesh the rim when a neighbour changes level — a residency and
+worker-protocol change, not a mesher formula.
+
+### F-026 — The specification still describes a skirt the engine no longer has
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-17, retiring the skirt in v0.1.2's I-6
+**Where:** [`docs/14-meshing-and-lod.md`](docs/14-meshing-and-lod.md) and
+`CLAUDE.md`'s established results; the code is
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** Doc 14 and `CLAUDE.md` both hold that a LOD seam is covered
+by a skirt one coarse cell deep, and `CLAUDE.md` adds "Keep the skirt too, as
+cover for the frames after a neighbour changes level." The engine has no
+skirt any more. Level joins are covered by the apron -- each chunk drawing the
+ring of cells beyond its own rim -- and by cap-step walls between neighbours,
+both added in v0.1.2's I-5, and the frames after a level change are covered by
+I-6's retire-until-replaced instead.
+
+**Why it matters.** The specification is the thing this project is for, and it
+now describes a mechanism that was measured out of the engine for putting a
+dark wall in the cap plane at every chunk boundary. Anyone reading doc 14 to
+learn how seams are handled gets an answer that is two mechanisms out of date,
+and `verification/seam.js` prices skirts against seam ownership without the
+apron being in the comparison at all.
+
+**What would fix it.** Doc 14's seam section rewritten around the apron and
+the cap step, with the measurements that chose them: 372 coplanar wall
+triangles a chunk on a flat world, and 0 failures over 3,899 outward and 1,446
+grazing rays with skirts off. `seam.js` should grow the apron as a third
+candidate beside the skirt and seam ownership. That is a documentation item
+with a script behind it, so it belongs in a release rather than a patch's
+margin.
+
+---
+
+**Closed:** 2026-08-17, fixed in the same turn. `seam.js` grew the apron as a
+fourth policy and a new measurement of what a skirt costs where nothing is
+wrong -- **85%** of rim columns at a 2 m LOD seam put both levels on the same
+cap, and **100%** do at a same-level seam, so the wall is coplanar with the
+neighbour's own cap. Doc 14's seam section is rewritten around the apron, with
+the skirt kept as the candidate that was tried and removed; the `lod-seam`
+figure draws an apron rather than a curtain; `CLAUDE.md`'s constant table and
+established results follow. Both mechanisms leave the same holes -- all 76
+surface-slit layers closed, 99% of cave mouths open -- so seam ownership is
+still the only exact answer, and still F-025.

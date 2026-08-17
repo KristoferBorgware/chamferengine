@@ -293,7 +293,8 @@ Violating any of these breaks the design. They are not tunable.
 | triangles per cell, real terrain | `4.0` flat → `9.5` at 120 m relief | saturates; merging absorbs relief | `volume.js` |
 | density-term face cost | `≈11×`, mostly roughening | caves need gradient > 1 | `volume.js` |
 | multi-span columns with caves | `13–32%` | what the seam rule must handle | `volume.js` |
-| holes at a LOD seam | `1150` naive, `1060` skirted, `0` seam-owned | over 385 rim columns | `seam.js` |
+| holes at a LOD seam | `1150` naive, `1074` aproned, `0` seam-owned | over 385 rim columns | `seam.js` |
+| skirt walls in the cap plane | `85%` of rim columns at a LOD seam | 100% at a same-level one; why the skirt went | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
 | water faces drawn | `0.89%` of the naive count | 113,455 of 12,717,512; **0** sides | `water.js` |
 | water surfaces in one view | `82.3%` see one, `0.6%` two | worst 3, over a 76 m horizon | `water.js` |
@@ -403,17 +404,28 @@ Violating any of these breaks the design. They are not tunable.
   (`volume.js`). Raising `strength` without raising frequency buys a rougher
   surface and an 11x face bill and **zero caves**. Caves are what create
   multi-span columns (13-32% of them); rough surfaces do not.
-- **A skirt does not close a cave mouth** (`seam.js`). At a LOD boundary a skirt
-  closes the surface slit and ~1% of cave mouths; 99% sit deeper than it reaches,
-  because a skirt hangs downward and a cave mouth is a horizontal hole. One skirt
-  per span is NOT the fix. The finer chunk must **own the seam**: emit a face
-  wherever its solidity differs from the coarse neighbour's, both directions,
-  costing 2.99 faces and one height-field evaluation per rim column. Keep the
-  skirt too, as cover for the frames after a neighbour changes level.
+- **A LOD seam is closed by the APRON, and a cave mouth by neither** (`seam.js`,
+  doc 14). Each chunk draws the ring of cells one step past its own rim, at its
+  own level, a centimetre low — both levels' surfaces then cover the strip and
+  the step reads as one standing over the other. **The skirt was tried and
+  removed.** A curtain hangs from the **cap plane**, so wherever the two sides
+  put their surface on one layer it is coplanar with the neighbour's own cap and
+  no depth buffer separates them: measured, **85%** of rim columns at a 2 m LOD
+  seam and **100%** at a same-level seam, which is most of them — a dashed dark
+  outline of every chunk boundary. Skirt and apron leave the same holes: both
+  close all 76 surface-slit layers, the skirt reaches 14 of 1,074 cave mouths
+  and the apron none, and **99% sit deeper than any curtain reaches** because a
+  curtain hangs downward and a cave mouth is a horizontal hole. Depth is not the
+  axis. The finer chunk must **own the seam**: emit a face wherever its solidity
+  differs from the coarse neighbour's, both directions, costing 2.99 faces and
+  one height-field evaluation per rim column. Not built — F-025. What covers the
+  frames while a neighbour changes level is the **residency loop**, which keeps a
+  retiring chunk drawing until its replacements are uploaded, not geometry.
 - LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
-  seams come from terrain sampled at two spacings, not from geometry; skirts one
-  coarse cell deep cover them and do not care what level the neighbour chose.
+  seams come from terrain sampled at two spacings, not from geometry; an apron
+  one cell past the rim covers them and does not care what level the neighbour
+  chose.
 - **The ID is already a floating origin** (`precision.js`). Every field is an
   integer, so identity never drifts at any planet size, and floating point enters
   only when an ID is turned into a position — against any origin you choose. The

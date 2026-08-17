@@ -355,17 +355,36 @@ Two things could open a seam where levels meet. Only one of them does.
 > | 8 | 8 m | 2.00 m | 12.84 m | yes |
 > | 7 | 16 m | 3.60 m | 19.89 m | yes |
 
-**Fix: skirts, one coarse cell deep.** A vertical apron hanging from the chunk's
-boundary cells, 2 triangles each. Verified to cover the worst case at every
-level tested.
+**Fix: each chunk draws one cell past its own rim.** The *apron*. A chunk meshes
+the ring of cells just beyond its boundary at its own level, a centimetre below
+their true height so a real cell wins wherever one exists. Both levels' surfaces
+then cover the strip where they meet, and the step between them shows as the
+higher surface standing over the lower rather than as a gap.
 
-Skirts beat stitching here for a specific reason: with LOD driven by altitude
+The apron beats stitching for a specific reason: with LOD driven by altitude
 rather than distance, **neighbouring chunks can differ by more than one level**,
-and a stitching scheme has to enumerate the cases. A skirt does not care what the
-neighbour chose. It is also the only option that survives a chunk being remeshed
-after an edit while its neighbour is not.
+and a stitching scheme has to enumerate the cases. An apron does not care what
+the neighbour chose. It is also the only option that survives a chunk being
+remeshed after an edit while its neighbour is not.
 
-### But a skirt only closes the surface, and a volume has more than one
+**A curtain does not work, and the reason is the cap plane.** The first answer
+here was a *skirt* — a wall hung one coarse cell deep from every rim, closing
+the slit from above. It was built and taken out again. A skirt hangs **from the
+cap plane**, so wherever the two sides put their surface on the same layer it is
+coplanar with the neighbour's own cap along their shared edge, and no depth
+buffer separates two coplanar surfaces: the darker wall speckles through the
+ground as a dashed outline of every chunk boundary.
+
+> **[verified]** `verification/seam.js`. Even at a genuine LOD boundary, where
+> the two sides are supposed to disagree, **85% of rim columns at a 2 m coarse
+> cell** put both levels on the same cap — 74% at 4 m, 49% at 8 m. At a boundary
+> between two chunks of the **same** level, which is most of them, both ran one
+> generator on one grid, so every column agrees and **every** skirt quad is
+> coplanar. The apron hangs no wall anywhere.
+
+The apron is not free of the deeper problem, and neither was the skirt.
+
+### Neither closes a cave mouth, and a volume has more than one surface
 
 That covers a height field, where every rim column has exactly one slab of rock
 and therefore one surface to hang from. Under a density field, 13–32% of columns
@@ -378,28 +397,33 @@ it does not know a cave is there, so it emits no face; and the fine chunk assume
 its own generator continues past the rim, so it emits none either. Nobody draws
 the wall, and you can see through the rock into the void.
 
-![Two chunk boundaries: with a skirt alone the cave mouth stays open, with the seam owned it is walled](figures/lod-seam.svg)
+![Two chunk boundaries: with the apron alone the cave mouth stays open, with the seam owned it is walled](figures/lod-seam.svg)
 
-*The skirt covers the surface step in both. Only the right-hand chunk also walls
-off the cave where it meets the coarser neighbour's rock.*
+*The apron carries the surface past the rim in both. Only the right-hand chunk
+also walls off the cave where it meets the coarser neighbour's rock.*
 
 > **[verified]** `verification/seam.js` builds a real rim — full density field on
-> the fine side, height field one level coarser on the other — and scores three
-> policies over 385 rim columns:
+> the fine side, height field one level coarser on the other — and scores four
+> policies over 385 rim columns at a 2 m coarse cell:
 >
 > | Policy | Holes left |
 > |---|---|
 > | Each side trusts its own generator past the rim | 1,150 |
 > | The same, plus a skirt one coarse cell deep | **1,060** |
+> | The same, plus the apron | **1,074** |
 > | The finer chunk owns the seam | **0** |
 >
-> The skirt closes every one of the 76 surface-slit layers and **14 of 1,074
-> cave mouths**. At a 2 m coarse cell, **99% of cave mouths sit deeper than the
-> skirt reaches**; the deepest is 18 layers below the surface.
+> Both close every one of the 76 surface-slit layers. The skirt also happens to
+> reach **14 of 1,074 cave mouths** — the shallowest ones — and the apron reaches
+> none, because it draws surfaces and not walls. **99% of cave mouths sit deeper
+> than a skirt reaches** anyway; the deepest is 18 layers below the surface. The
+> two are the same answer to the surface and the same non-answer to the volume,
+> and they differ in what they cost where nothing is wrong.
 
-**More skirts are not the answer.** One skirt per span was the obvious guess and
-it is wrong: extra skirts hang down into rock from ledges that were never the
-problem, and still do not cover a horizontal hole.
+**More curtains are not the answer.** One skirt per span was the obvious guess
+and it is wrong: extra skirts hang down into rock from ledges that were never
+the problem, and still do not cover a horizontal hole. Neither does a deeper
+apron, for the same reason — depth is not the axis the hole is on.
 
 ### The finer chunk owns the seam
 
@@ -422,12 +446,18 @@ At a boundary where both sides are at the *same* level the rule costs nothing at
 all: both ran the same generator on the same grid, so there are no disagreements
 to draw and it degenerates to emitting nothing.
 
-**Keep the skirt as well.** Seam ownership is exact but needs the chunk to know
+**Keep the apron as well.** Seam ownership is exact but needs the chunk to know
 its neighbours' levels, so a chunk must be remeshed when a neighbour changes
-level. The skirt needs no such knowledge, costs 2 triangles per rim column, and
-covers the most visible failure — the surface slit — during the frames between a
-neighbour changing level and this chunk catching up. One is correctness, the
-other is insurance.
+level. The apron needs no such knowledge and closes the most visible failure,
+the surface slit. One is correctness, the other is what holds while a level
+changes.
+
+**What covers the frames during a level change is the residency loop, not
+geometry.** A chunk leaving the selection is not dropped when its replacement is
+still being built: it keeps drawing until every wanted chunk covering its
+triangle has been uploaded. That is the honest version of the insurance a skirt
+used to stand in for — the old chunk itself, rather than a wall pretending to be
+it.
 
 ---
 
@@ -460,14 +490,14 @@ both already on the table:
 1. **Height field only.** `surfaceRadius(direction)`, one evaluation per column.
    4 triangles per cap, run-length merged side faces, no cap merging. This is a
    whole planet with mountains and no caves, and it is cheap.
-2. **Skirts** at chunk boundaries, one coarse cell deep.
+2. **The apron** at chunk boundaries, one cell of the chunk's own level.
 3. **Altitude-driven LOD** by re-evaluating the terrain function at a coarser
    level — with the render budget set from the relief-extended range, not the
    76 m ground horizon.
 4. **The density term**, restricted to a band around the surface and to
    full-detail chunks only. This is where caves, overhangs and most of the
    triangle count arrive at once — and where **seam ownership** becomes
-   necessary, because until there are caves there is nothing a skirt misses.
+   necessary, because until there are caves there is nothing the apron misses.
 5. **Cap merging**, only for high-altitude shells, bounded to a 37 m patch.
 
 Steps 1–3 are a working planet you can fly over. Step 4 is the one that turns it
@@ -527,7 +557,9 @@ the generator and the easiest to get wrong.
   saturates). Caves multiply *faces* but stay invisible until opened.
 - **LOD is resampling, not decimation**, because Goldberg levels do not nest.
   Drive it by **altitude**, not distance.
-- Seams: a **skirt** closes the surface step; only the finer chunk **owning the
+- Seams: the **apron** — one cell drawn past the rim — closes the surface step
+  without hanging a wall in the cap plane, where a skirt was coplanar with the
+  neighbour's cap on **85%** of rim columns. Only the finer chunk **owning the
   seam** closes a cave mouth.
 
 ---

@@ -47,7 +47,7 @@ numbered documents.
 | [`rotation.js`](../verification/rotation.js) | Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close. | [19](19-directional-blocks.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
 | [`scale.js`](../verification/scale.js) | — | [06](06-world-sizing.md) |
-| [`seam.js`](../verification/seam.js) | What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, and what does close the remaining holes. | [14](14-meshing-and-lod.md) |
+| [`seam.js`](../verification/seam.js) | What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 first said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, what does close the remaining holes, and -- since a skirt was tried in the engine and taken out again -- what a skirt costs on the boundaries where it is not needed, which is most of them. | [14](14-meshing-and-lod.md) |
 | [`sky.js`](../verification/sky.js) | What is above you, on a planet you can walk around in two hours. node verification/sky.js A skybox, clouds and a moon are the three things this specification has discussed and never written down (doc 11). They look like pure decoration, and on a normal-sized world they are: a cube at infinity, a scrolling texture, a sprite. This planet is 1,700 m across and that changes all three, because the player is the fastest-moving thing in the sky. Everything here is PRESENTATION (doc 29): client-side, never compared between machines, and therefore allowed transcendentals that doc 23 forbids in the generator. That freedom is used, and it is why none of this is expensive. | [32](32-sky-clouds-and-moon.md) |
 | [`taper.js`](../verification/taper.js) | Layer merging: buy it or strike it. Doc 06 caps the crust because cells taper as (R-h)/R with depth, and raises merging -- dropping horizontal resolution one level at some depth -- only to decline it. Doc 11 has carried it as "proposed, never designed" ever since. This prices both sides: how deep the taper really lets a crust run, what a merge would buy, and what the interior shell would cost. | [06](06-world-sizing.md) |
 | [`uniform.js`](../verification/uniform.js) | How uniform are the cells, really? Doc 02 has claimed 1.3:1 in area and 1.14:1 in spacing since the first draft, with no script behind either. Both are load-bearing: doc 10 divides by the largest spacing to keep its A* heuristic admissible, and doc 06 sizes blocks from a mean. This measures the real spread on the one-shot grid doc 15 pins the design to, and finds the closed form it converges to. | [02](02-geometry-choice.md) [10](10-pathfinding.md) |
@@ -114,7 +114,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 336 ns -- a timing, so it moves run to run
+   this machine, now: 340 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1368,12 +1368,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 16x version is the one that
+       than choosing the language. And the 15x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.38 ms, one object a vertex
-       6.25 ms -- a layout gap of 16x. Both are timings and move run to
+       This machine, now: typed arrays 0.39 ms, one object a vertex
+       5.82 ms -- a layout gap of 15x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2282,7 +2282,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 799 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 865 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2440,7 +2440,7 @@ storage at 1 byte/cell, level 15: 10.7 GB
 
 ## `seam.js`
 
-What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, and what does close the remaining holes.
+What actually happens at a chunk boundary when the two sides are at different LOD and one of them has caves. Doc 14 first said "a skirt one coarse cell deep"; this checks whether that is enough once a rim column has more than one solid span, what does close the remaining holes, and -- since a skirt was tried in the engine and taken out again -- what a skirt costs on the boundaries where it is not needed, which is most of them.
 
 Cited by [doc 14](14-meshing-and-lod.md).
 
@@ -2449,18 +2449,24 @@ A chunk rim where the neighbour is one LOD coarser.
 Fine side: full density field (freq 140, strength 26) -- has caves.
 Coarse side: height-field term only, resampled one coarse cell away.
 
-  coarse   rim      spans   columns with   cave     holes: own-margin   +skirt   seam-owned
+  coarse   rim      spans   columns with   cave     holes: own-margin   +skirt   +apron   seam-owned
   cell     columns  /col    >1 span        mouths
-     2 m       385   1.132             47     1074              1150     1060            0
-     4 m       385   1.132             47     1075              1154     1027            0
-     8 m       385   1.132             47     1067              1152      953            0
+     2 m       385   1.132             47     1074              1150     1060     1074            0
+     4 m       385   1.132             47     1075              1154     1027     1075            0
+     8 m       385   1.132             47     1067              1152      953     1067            0
 
   own-margin  = each side trusts its own generator past the boundary.
                 Neither emits anything, so every disagreement is a hole.
   +skirt      = same, plus a curtain one coarse cell deep from the top
                 surface. It closes the surface slit and nothing else.
+  +apron      = same, plus each chunk drawing the ring of cells beyond
+                its own rim at its own level. Both surfaces then cover
+                the strip, so the slit closes with no wall anywhere.
   seam-owned  = the finer chunk emits a face wherever its solidity differs
                 from the coarse neighbour's. Zero holes, by construction.
+
+  The apron and the skirt leave the same holes -- every cave mouth, and
+  nothing else. They differ in what they cost where nothing is wrong.
 
 Why the skirt alone is not enough:
   coarse cell   2 m: 1060 of 1074 cave mouths (99%) sit deeper than the skirt reaches; deepest is 18 layers below the surface.
@@ -2474,6 +2480,17 @@ Cost of the fine chunk owning the seam:
   plus ONE height-field evaluation per rim column to learn where the
   coarse neighbour put its surface. Both are negligible against the
   1.13 spans and ~12 faces per column the chunk already emits.
+
+Where a skirt hangs a wall it cannot help:
+  coarse cell   2 m: 329 of 385 rim columns (85%) have both levels on the same cap,
+                   so the skirt there is coplanar with the neighbour's cap.
+  coarse cell   4 m: 286 of 385 rim columns (74%) have both levels on the same cap,
+                   so the skirt there is coplanar with the neighbour's cap.
+  coarse cell   8 m: 190 of 385 rim columns (49%) have both levels on the same cap,
+                   so the skirt there is coplanar with the neighbour's cap.
+  At a boundary between two chunks of the SAME level -- which is most of
+  them -- both ran one generator on one grid, so every rim column agrees
+  and every skirt quad is coplanar. The apron hangs no wall at all.
 ```
 
 ## `sky.js`
