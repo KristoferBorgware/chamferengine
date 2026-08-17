@@ -37,12 +37,21 @@ import {
 	buildCloudMesh,
 	windRotation,
 } from "chamfer/sky";
+import { ParameterPanel } from "./ParameterPanel.js";
+import { PlanetSettings } from "./PlanetSettings.js";
 
-const RADIUS = 1700;
-const DEPTH = 11;
-const CHUNK_LEVEL = 6;
-const COARSE_LEVEL = 7;
-const MAX_ELEVATION = 150;
+const params = new URLSearchParams(location.search);
+
+// A world is what the query string says it is, so a link carries one and the
+// panel changes one by reloading. Anything absent falls back on the defaults,
+// which are the numbers 0.1.0 shipped.
+const settings = PlanetSettings.fromParams(params);
+const RADIUS = settings.radius;
+const DEPTH = settings.depth;
+const CHUNK_LEVEL = settings.chunkLevel;
+const COARSE_LEVEL = settings.coarseLevel;
+const MAX_ELEVATION = settings.knobs.maxElevation;
+const seedText = settings.knobs.seed;
 
 /**
  * How many times its own width a chunk has to be away before it drops a level.
@@ -50,10 +59,10 @@ const MAX_ELEVATION = 150;
  * The worst altitude is around 60 m, where near and far chunks are both in
  * view: 321 chunks at 2, 471 at 2.5 and 633 at 3.
  */
-const DETAIL = 2;
+let DETAIL = settings.knobs.detail;
 
 /** How deep a chunk's rim hangs, in its own cells. */
-const SKIRT_CELLS = 2;
+const SKIRT_CELLS = settings.knobs.skirtCells;
 
 /**
  * How long a day runs, in seconds.
@@ -62,7 +71,7 @@ const SKIRT_CELLS = 2;
  * which is 1.4 m/s -- a walking pace -- for a day of 2.12 hours. Below that a
  * player outruns the sun. This one is short enough to watch.
  */
-const DAY_LENGTH = 240;
+let DAY_LENGTH = settings.knobs.dayLength;
 
 /** The light a surface keeps after dark. */
 const NIGHT_LIGHT = 0.09;
@@ -73,8 +82,8 @@ const NIGHT_LIGHT = 0.09;
  * Level 5 is a 64 m puff and 10,242 points for the whole sky, against
  * 41,943,042 cells in one surface layer.
  */
-const CLOUD_LEVEL = 5;
-const CLOUD_HEIGHT = 220;
+const CLOUD_LEVEL = settings.cloudLevel;
+let CLOUD_HEIGHT = settings.knobs.lowDeck;
 
 /** How often the cloud buffer is thrown away and refilled, in seconds. */
 const CLOUD_INTERVAL = 0.7;
@@ -120,9 +129,6 @@ const CLEAR_AIR = 1e9;
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
 
-const params = new URLSearchParams(location.search);
-const seedText = params.get("seed") ?? "chamfer";
-
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
 }
@@ -135,6 +141,20 @@ function paint(): Promise<void> {
 		});
 	});
 }
+
+/**
+ * What a live knob does, once there is a world for it to change.
+ *
+ * The panel goes up before the device is asked for, so a browser that will not
+ * give one still shows the parameters and still lets someone change them and
+ * try again. Until the world exists a live knob has nothing to do.
+ */
+let onLiveKnob: (live: PlanetSettings) => void = () => {};
+
+if (params.get("panel") === "1")
+	new ParameterPanel(settings, (live) => {
+		onLiveKnob(live);
+	});
 
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
@@ -332,6 +352,20 @@ async function main(): Promise<void> {
 
 	refresh();
 
+	// Refilled on a timer, and again whenever a knob moves the decks.
+	let cloudsAt = -CLOUD_INTERVAL * 1000;
+
+	// The bench is already on screen. Hand it what to do with a knob that only
+	// changes how the world is drawn; the ones that change what it is reload
+	// the page and never reach here.
+	onLiveKnob = (live) => {
+		DETAIL = live.knobs.detail;
+		DAY_LENGTH = live.knobs.dayLength;
+		CLOUD_HEIGHT = live.knobs.lowDeck;
+		cloudsAt = -Infinity;
+		refresh();
+	};
+
 	const held = new Set<string>();
 	window.addEventListener("keydown", (e) => {
 		const key = e.key.toLowerCase();
@@ -412,7 +446,6 @@ async function main(): Promise<void> {
 
 	const started = performance.now();
 	let previous = started;
-	let cloudsAt = -CLOUD_INTERVAL * 1000;
 	const timer = new FrameTimer();
 	const draw = (now: number) => {
 		timer.begin(now);

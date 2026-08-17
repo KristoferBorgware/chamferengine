@@ -30,3 +30,182 @@ body {
 	border-radius: 4px;
 	font-variant-numeric: tabular-nums;
 }
+
+/*
+ * The parameter panel, behind ?panel=1.
+ *
+ * A bench for choosing numbers by looking at what they do, not part of what
+ * the engine is for. It sits over the world rather than beside it so the view
+ * keeps the whole window when the panel is shut.
+ */
+.knobs {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: min(320px, 92vw);
+	display: flex;
+	flex-direction: column;
+	background: rgba(11, 14, 20, 0.93);
+	border-left: 1px solid #222839;
+	backdrop-filter: blur(9px);
+	font-size: 12px;
+	z-index: 20;
+}
+.knobs.shut {
+	bottom: auto;
+}
+.knobs-head {
+	font: inherit;
+	font-weight: 650;
+	color: #fff;
+	text-align: left;
+	background: none;
+	border: none;
+	border-bottom: 1px solid #222839;
+	padding: 10px 12px;
+	cursor: pointer;
+}
+.knobs-head::after {
+	content: "▾";
+	float: right;
+	color: #6d768c;
+}
+.knobs.shut .knobs-head::after {
+	content: "▸";
+}
+.knobs-body {
+	overflow-y: auto;
+	padding: 4px 12px 12px;
+}
+.knobs.shut .knobs-body {
+	display: none;
+}
+.knobs h2 {
+	font-size: 10.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: #8b93a7;
+	margin: 14px 0 2px;
+}
+.knobs section p {
+	font-size: 11px;
+	color: #6d768c;
+	line-height: 1.5;
+	margin-bottom: 6px;
+}
+.knob {
+	margin-bottom: 7px;
+}
+.knob label {
+	display: flex;
+	align-items: baseline;
+	font-size: 11px;
+	color: #8b93a7;
+}
+.knob label b {
+	margin-left: auto;
+	color: #fff;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.knob label i {
+	color: #4f8ef7;
+	font-size: 8px;
+	font-style: normal;
+	margin-left: 4px;
+}
+.knob input[type="range"] {
+	width: 100%;
+	height: 18px;
+	background: none;
+	-webkit-appearance: none;
+}
+.knob input[type="range"]::-webkit-slider-runnable-track {
+	height: 4px;
+	background: #222a3a;
+	border-radius: 2px;
+}
+.knob input[type="range"]::-moz-range-track {
+	height: 4px;
+	background: #222a3a;
+	border-radius: 2px;
+}
+.knob input[type="range"]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	width: 15px;
+	height: 15px;
+	border-radius: 50%;
+	background: #4f8ef7;
+	margin-top: -5.5px;
+	border: 2px solid #0b0e14;
+}
+.knob input[type="range"]::-moz-range-thumb {
+	width: 15px;
+	height: 15px;
+	border-radius: 50%;
+	background: #4f8ef7;
+	border: 2px solid #0b0e14;
+}
+.knob input[type="text"] {
+	width: 100%;
+	font: inherit;
+	background: #131826;
+	color: #e6e8ee;
+	border: 1px solid #2a3245;
+	border-radius: 6px;
+	padding: 5px 7px;
+}
+.knobs-problems {
+	margin-top: 12px;
+}
+.knobs-problems.some {
+	border-left: 2px solid #ff9b8a;
+	padding-left: 8px;
+}
+.knobs-problems p {
+	color: #ff9b8a;
+	font-size: 11px;
+	line-height: 1.5;
+	margin-bottom: 5px;
+}
+.knobs-derived {
+	margin-top: 12px;
+	padding-top: 9px;
+	border-top: 1px solid #1b2130;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px 10px;
+	font-size: 11px;
+	color: #6d768c;
+}
+.knobs-derived b {
+	color: #dfe3ec;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+.knobs-bar {
+	display: flex;
+	gap: 6px;
+	margin-top: 12px;
+}
+.knobs-bar button {
+	font: inherit;
+	font-size: 11.5px;
+	font-weight: 550;
+	padding: 6px 9px;
+	border-radius: 7px;
+	cursor: pointer;
+	background: #1a2130;
+	color: #dfe3ec;
+	border: 1px solid #2a3245;
+}
+.knobs-bar button.wants {
+	background: #4f8ef7;
+	border-color: #4f8ef7;
+	color: #fff;
+}
+.knobs-bar button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
