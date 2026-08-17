@@ -75,6 +75,10 @@ const EXEMPT = {
   // The style guide quotes the phrasings it bans, so it matches its own rules.
   'HOW-TO-WRITE-DOCS.md': ['reason', 'history', 'meta', 'free', 'anchor'],
   'CODE-STYLE.md': ['history', 'meta', 'free'],
+  // The register says why each entry is there, which is the one place outside
+  // docs/ that argues. Its own guide quotes the phrasings it asks for.
+  'FINDINGS.md': ['reason', 'history'],
+  'HOW-TO-WRITE-FINDINGS.md': ['reason', 'history', 'meta', 'free', 'anchor'],
   // Generated: every line is a verification script's own output.
   'docs/REFERENCE.md': ['history', 'free', 'anchor', 'meta', 'reason'],
   // A digest of the specification, carrying its corrections verbatim. An agent

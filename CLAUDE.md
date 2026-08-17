@@ -13,6 +13,9 @@ and duplicates information found there.
   and dead heading anchors, and the Pages workflow runs it — a broken link
   turns the deploy red. Note the renderer does **not** nest `*italic*` inside
   `**bold**`; it reports `unconverted bold` when you try.
+- **Write findings down as they turn up.** Anything noticed during other work
+  that is not in the plan and is not being fixed in the same turn goes in
+  [`FINDINGS.md`](FINDINGS.md) before the turn ends.
 - **Wait to be asked before writing engine source.** Every gap that blocked code
   is closed — doc 26 Part 1 is empty and doc 28 picked **TypeScript** — so the
   constraint here is scope, not readiness.
@@ -61,6 +64,16 @@ and duplicates information found there.
   what is true today and stops**: no history, no reasoning, no justification,
   no naming the alternative that was not chosen. When the project changes, the
   page changes with it; git holds what it used to say.
+- [`FINDINGS.md`](FINDINGS.md) — **the register of things noticed while doing
+  other work** that are not in the plan and were not fixed on the spot: bugs,
+  dead code, unverified claims, ideas nobody has decided on. Not part of the
+  specification. **Add to it the moment something turns up**, in the same
+  session — a finding carried to the end of a task is a finding that gets
+  dropped. [`HOW-TO-WRITE-FINDINGS.md`](HOW-TO-WRITE-FINDINGS.md) gives the
+  entry format and the vocabularies for `Kind`, `Milestone`, `Priority` and
+  `Effort`; **read it before adding or editing an entry**. Findings are the one
+  place outside `docs/` that argues, because a register whose entries do not say
+  why they are there cannot be triaged.
 - `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.
