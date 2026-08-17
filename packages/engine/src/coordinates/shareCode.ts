@@ -13,8 +13,9 @@ import { encodeCell } from "../addressing/id/encodeCell.js";
  * stand in the same block rather than near each other.
  */
 export function shareCode(fields: CellFields, depth: number): string {
-	const withoutPlanet = encodeCell({ ...fields, planet: 0 }, depth);
-	return withoutPlanet.toString(36).toUpperCase().padStart(8, "0");
+	const [high, low] = encodeCell({ ...fields, planet: 0 }, depth);
+	const word = (BigInt(high >>> 0) << 32n) | BigInt(low >>> 0);
+	return word.toString(36).toUpperCase().padStart(8, "0");
 }
 
 /** How many characters a code takes at a subdivision depth. */

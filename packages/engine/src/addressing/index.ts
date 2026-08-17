@@ -40,6 +40,7 @@ export { cellRepresentations } from "./neighbours/cellRepresentations.js";
 export { canonicalCell } from "./neighbours/canonicalCell.js";
 
 export type { CellFields } from "./id/CellFields.js";
+export type { CellId } from "./id/CellId.js";
 export {
 	PLANET_BITS,
 	FACE_BITS,

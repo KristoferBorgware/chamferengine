@@ -7,6 +7,7 @@ import {
 	shareCode,
 	shareCodeLength,
 } from "chamfer/coordinates";
+import type { CellId } from "chamfer/addressing";
 import {
 	MERIDIAN_VERTEX,
 	NORTH,
@@ -204,7 +205,12 @@ describe("share codes", () => {
 	it("agrees with the packed cell it came from", () => {
 		const fields = { planet: 0, face: 3, i: 100, j: 200, layer: 12 };
 		const code = shareCode(fields, DEPTH);
-		const value = Number.parseInt(code, 36);
-		expect(decodeCell(value, DEPTH).layer).toBe(12);
+		// A code is base 36 of the whole word, read back by hand rather than
+		// through placeFromShareCode, so this checks the encoding itself and
+		// not just that the two functions agree with each other.
+		let word = 0n;
+		for (const char of code) word = word * 36n + BigInt(parseInt(char, 36));
+		const id: CellId = [Number(word >> 32n), Number(word & 0xffffffffn)];
+		expect(decodeCell(id, DEPTH).layer).toBe(12);
 	});
 });

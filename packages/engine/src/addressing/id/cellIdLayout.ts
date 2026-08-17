@@ -3,10 +3,11 @@
  *
  *     [planet 12][face 5][path 2 x depth][corner 2][layer 10]
  *
- * At depth 11 that is 51 bits, which sits inside the range `float64` represents
- * exactly, so an ID is a plain `number`. JavaScript's bitwise operators work on
- * 32 bits and would silently truncate, so every field is extracted with
- * multiply and divide instead.
+ * `29 + 2 x depth` bits wide, reaching 63 at the deepest subdivision level. A
+ * `number` only counts integers exactly to 53 bits, past at depth 13, so the
+ * word is a {@link CellId} — two 32-bit halves — rather than one `number`.
+ * `encodeCell` and `decodeCell` build and read it with `bigint`, which is
+ * exact at any width and never rounds.
  */
 export const PLANET_BITS = 12;
 export const FACE_BITS = 5;

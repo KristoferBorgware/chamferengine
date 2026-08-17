@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CellId } from "chamfer/addressing";
 import {
 	LAYER_COUNT,
 	cellKey,
@@ -8,6 +9,11 @@ import {
 	encodeCell,
 	wordBits,
 } from "chamfer/addressing";
+
+/** A `CellId` as a string, so it can be a `Set` or `Map` key. */
+function idKey(id: CellId): string {
+	return `${id[0]}:${id[1]}`;
+}
 
 describe("the word", () => {
 	it("is 51 bits at depth 11", () => {
@@ -19,8 +25,13 @@ describe("the word", () => {
 		expect(LAYER_COUNT).toBe(1024);
 	});
 
-	it("stays inside the range float64 represents exactly", () => {
-		expect(2 ** wordBits(11)).toBeLessThan(Number.MAX_SAFE_INTEGER);
+	it("passes what a number represents exactly well before it reaches 64 bits", () => {
+		// A CellId is two 32-bit halves rather than a number, so this is no
+		// longer a limit -- but the word does cross it, at depth 13, which is
+		// why the split exists at all. Depth 12 is exactly 53 bits and still
+		// safe; one level deeper is the first that is not.
+		expect(wordBits(12)).toBeLessThanOrEqual(53);
+		expect(wordBits(13)).toBeGreaterThan(53);
 	});
 
 	it("fits depth 17 in 64 bits and no more", () => {
@@ -30,7 +41,7 @@ describe("the word", () => {
 });
 
 describe("encodeCell", () => {
-	it("gives one number to a cell however it is named", () => {
+	it("gives one address to a cell however it is named", () => {
 		for (const depth of [2, 3, 4]) {
 			const n = 1 << depth;
 			for (let f = 0; f < 20; f++)
@@ -52,22 +63,24 @@ describe("encodeCell", () => {
 									},
 									depth,
 								),
-							).toBe(id);
+							).toEqual(id);
 					}
 		}
 	});
 
-	it("gives 10 * 4^L + 2 distinct numbers", () => {
+	it("gives 10 * 4^L + 2 distinct addresses", () => {
 		for (const depth of [2, 3, 4]) {
 			const n = 1 << depth;
-			const ids = new Set<number>();
+			const ids = new Set<string>();
 			for (let f = 0; f < 20; f++)
 				for (let i = 0; i <= n; i++)
 					for (let j = 0; i + j <= n; j++)
 						ids.add(
-							encodeCell(
-								{ planet: 0, face: f, i, j, layer: 0 },
-								depth,
+							idKey(
+								encodeCell(
+									{ planet: 0, face: f, i, j, layer: 0 },
+									depth,
+								),
 							),
 						);
 			expect(ids.size).toBe(10 * 4 ** depth + 2);
@@ -93,6 +106,23 @@ describe("encodeCell", () => {
 				}
 	});
 
+	it("round-trips a planet field that pushes the word past 53 bits", () => {
+		// The shipped planet grows to depth 13, a 55-bit word. Planet 4095 is
+		// the highest the 12-bit field holds. A number would round this off
+		// silently; two 32-bit halves do not.
+		const depth = 13;
+		const id = encodeCell(
+			{ planet: 4095, face: 7, i: 100, j: 5, layer: 800 },
+			depth,
+		);
+		const back = decodeCell(id, depth);
+		expect(back.planet).toBe(4095);
+		expect(back.layer).toBe(800);
+		expect(cellKey(back.face, 1 << depth, back.i, back.j)).toBe(
+			cellKey(7, 1 << depth, 100, 5),
+		);
+	});
+
 	it("keeps the layer in its own field, clear of the address", () => {
 		const depth = 5;
 		const a = encodeCell(
@@ -103,7 +133,9 @@ describe("encodeCell", () => {
 			{ planet: 0, face: 3, i: 4, j: 5, layer: 1023 },
 			depth,
 		);
-		expect(b - a).toBe(1023);
+		expect(decodeCell(a, depth).layer).toBe(0);
+		expect(decodeCell(b, depth).layer).toBe(1023);
+		expect(a[0]).toBe(b[0]);
 	});
 });
 
@@ -112,7 +144,7 @@ describe("chunkOf", () => {
 		const depth = 5;
 		const chunkLevel = 2;
 		const n = 1 << depth;
-		const members = new Map<number, Set<string>>();
+		const members = new Map<string, Set<string>>();
 		for (let f = 0; f < 20; f++)
 			for (let i = 0; i <= n; i++)
 				for (let j = 0; i + j <= n; j++) {
@@ -120,7 +152,7 @@ describe("chunkOf", () => {
 						{ planet: 0, face: f, i, j, layer: 0 },
 						depth,
 					);
-					const c = chunkOf(id, depth, chunkLevel);
+					const c = idKey(chunkOf(id, depth, chunkLevel));
 					if (!members.has(c)) members.set(c, new Set());
 					members.get(c)!.add(cellKey(f, n, i, j));
 				}
@@ -132,7 +164,7 @@ describe("chunkOf", () => {
 
 	it("does not change when the cut moves", () => {
 		// The cut is a place to read rather than a stored field, so the same cell
-		// keeps the same number at every chunk level.
+		// keeps the same address at every chunk level.
 		const depth = 5;
 		const id = encodeCell(
 			{ planet: 0, face: 9, i: 7, j: 11, layer: 2 },
@@ -142,6 +174,6 @@ describe("chunkOf", () => {
 			expect(decodeCell(chunkOf(id, depth, c), depth).planet).toBe(0);
 		expect(
 			encodeCell({ planet: 0, face: 9, i: 7, j: 11, layer: 2 }, depth),
-		).toBe(id);
+		).toEqual(id);
 	});
 });
