@@ -386,6 +386,36 @@ several scripts already carry.
 
 ---
 
+### F-014 — Refilling the clouds stalls the frame for 12.7 ms
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-18, pricing volumetric clouds during step 1 of v0.1.1
+**Where:** `packages/engine/src/sky/CloudField.ts`, the `blow` method, called
+from the frame loop in `packages/client/src/planet.ts`
+
+**What happens.** The cloud field is thrown away and refilled every 0.7 seconds
+as the wind turns, on the thread that draws. Measured at the level the client
+uses: **12.7 ms for 10,242 points**, one noise evaluation each. Building the
+mesh from the refilled field is on top of that. The frame budget at 60 frames a
+second is 16.6 ms.
+
+**Why it matters.** Every 0.7 seconds the client spends three quarters of a
+frame's budget on clouds and cannot draw. That is a visible hitch twice a
+second, and it is the largest single thing on the main thread now that chunks
+are built on workers. It also caps what the clouds can ever become: 40,962
+points costs 52.7 ms and 163,842 costs 192.6 ms, so smaller puffs are
+unaffordable before anything is added to them.
+
+**What would fix it.** The same move chunks took. The field and its mesh are a
+pure function of the wind angle and the seed, so a worker can build both and
+send back the two typed arrays. Nothing on the main thread needs the field
+itself — it uploads the buffers and draws them.
+
+---
+
 ## Closed
 
 Nothing yet.
