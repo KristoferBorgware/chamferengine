@@ -362,37 +362,6 @@ is free to do and needs somebody to look at the world and say so.
 
 ---
 
-### F-016 — Four panel knobs still reach nothing
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-18, wiring the ground knobs through for I-5
-**Where:** `packages/client/src/PlanetSettings.ts` and `ParameterPanel.ts`
-
-**What happens.** The panel shows *Air reaches*, *Depth overhead*, *High deck*
-and *Shells*. All four move, all four appear in the URL, and none of them
-changes anything on screen.
-
-The reason is not an oversight. The atmosphere model I-1 chose and the two cloud
-decks I-2 chose are not built yet, so there is nothing in the engine for those
-four numbers to be passed to. The other knobs are all wired: seed, radius, block
-size, chunk, coarse cell, crust, height scale, detail, land, skirt, low deck,
-puff, day, and full detail to.
-
-**Why it matters.** A slider that moves and changes nothing is worse than no
-slider, because somebody turning it concludes the parameter does not matter. It
-is currently possible to spend a minute deciding that the atmosphere height has
-no effect.
-
-**What would fix it.** Either build I-1 and I-2, which is the plan and which
-makes all four live, or mark the four as not yet connected in the panel until
-then. Marking them is under an hour: the `Knob` interface takes a `pending` flag
-and the row draws greyed with a note.
-
----
-
 ### F-017 — Erosion depth follows the map's resolution
 
 **Kind:** risk
@@ -433,7 +402,91 @@ before and after; they should stop moving with resolution.
 
 ---
 
+### F-018 — A second planet loses the low bits of every cell address at the shipped depth
+
+**Kind:** bug
+**Milestone:** beyond 1.0.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-18, answering whether a panel setting can build an invalid
+cell address
+**Where:** `packages/engine/src/addressing/id/encodeCell.ts`, and every caller
+that stores or compares a cell ID as a `number`
+
+**What happens.** A cell ID is `[planet 12][face 5][path 2 x depth][corner
+2][layer 10]`, packed with plain multiplication into a JavaScript `number`. A
+`number` only counts integers exactly up to `2^53`. The word is `29 + 2 x
+depth` bits, which passes 53 at **depth 12** — one level short of the depth
+this release ships, 13.
+
+At depth 13 the word is 55 bits. With the planet field at 0, which every world
+built so far has, the top 12 bits are unused and the value never reaches
+`2^53`, so nothing has gone wrong yet. Set the planet field to anything from 1
+upward and it does: encoding cell `(planet 4095, face 7, i 100, j 5, layer
+800)` at depth 13 and reading it back returns the wrong layer, because the low
+bits were rounded off on the way to a `number`. Verified directly —
+`Number.isSafeInteger` is `false` on the encoded ID.
+
+**Why it matters.** Nothing today sets the planet field above 0: doc 03's field
+exists for future multi-planet worlds and nothing in the shipped client reads
+or writes it. So this cannot be hit by anyone using the panel or playing the
+game as it stands. It becomes real the day a second planet is added, and it
+will look like data corruption on one planet rather than an addressing bug,
+because planet 0 keeps working.
+
+The panel now says so: `PlanetSettings.notes()` reports "an ID is a number,
+which counts exactly to 53" whenever a world's address passes that width,
+which the shipped 6,801 m planet already does. It is a note, not a refusal,
+because the shipped world is fine — the note is there so the next person
+raising the planet field past 0 has a pointer to this finding instead of a
+silent bug.
+
+**What would fix it.** Either keep every world under a 53-bit address — which
+means capping subdivision depth at 12 rather than 13, at a real cost to I-3's
+landform work, which needed the extra level of horizon — or stop representing a
+cell ID as a `number`. The second is the real fix: use a `bigint`, or split the
+ID into two 32-bit halves the way a 64-bit value is carried across a worker
+boundary elsewhere in the engine. Either touches every place an ID is stored,
+compared, or sent to a worker, which is why this is `beyond 1.0.0` rather than
+`0.5.0`: it costs nothing until a second planet exists, and no world shipped
+today can trigger it.
+
+---
+
 ## Closed
+
+### F-016 — Four panel knobs still reach nothing
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, wiring the ground knobs through for I-5
+**Where:** `packages/client/src/PlanetSettings.ts` and `ParameterPanel.ts`
+
+**What happens.** The panel shows *Air reaches*, *Depth overhead*, *High deck*
+and *Shells*. All four move, all four appear in the URL, and none of them
+changes anything on screen.
+
+The reason is not an oversight. The atmosphere model I-1 chose and the two cloud
+decks I-2 chose are not built yet, so there is nothing in the engine for those
+four numbers to be passed to. The other knobs are all wired: seed, radius, block
+size, chunk, coarse cell, crust, height scale, detail, land, skirt, low deck,
+puff, day, and full detail to.
+
+**Why it matters.** A slider that moves and changes nothing is worse than no
+slider, because somebody turning it concludes the parameter does not matter. It
+is currently possible to spend a minute deciding that the atmosphere height has
+no effect.
+
+**What would fix it.** Either build I-1 and I-2, which is the plan and which
+makes all four live, or mark the four as not yet connected in the panel until
+then. Marking them is under an hour: the `Knob` interface takes a `pending` flag
+and the row draws greyed with a note.
+
+**Closed:** 2026-08-18, marked. Every knob now carries a description of what it
+does, and the four unconnected ones end theirs with "Not connected yet." Building
+I-1 and I-2 is the real fix and is still open in `plans/v0.1.1.md`.
 
 ### F-010 — The level-of-detail chain stops at the icosahedron faces
 

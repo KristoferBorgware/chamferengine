@@ -5,6 +5,10 @@ import { KNOB_RANGES, PlanetSettings } from "./PlanetSettings.js";
 interface Knob {
 	readonly key: keyof PlanetKnobs;
 	readonly label: string;
+
+	/** What turning it does, in one or two sentences, under the slider. */
+	readonly says: string;
+
 	readonly digits?: number;
 }
 
@@ -24,50 +28,147 @@ interface Group {
 const GROUPS: Group[] = [
 	{
 		title: "The planet",
-		note: "Changing any of these builds the world again.",
+		note: "Changing any of these builds the world again. The first two decide the cell address; the rest do not.",
 		knobs: [
-			{ key: "radius", label: "Radius", digits: 0 },
-			{ key: "blockSize", label: "Block size", digits: 2 },
-			{ key: "chunkCells", label: "Chunk", digits: 0 },
-			{ key: "coarseSpacing", label: "Coarse cell", digits: 0 },
-			{ key: "crustMetres", label: "Crust reaches", digits: 0 },
+			{
+				key: "radius",
+				label: "Radius",
+				digits: 0,
+				says: "How big the planet is. Sets how far you can see, which goes as the square root of this, and how long a walk round takes, which goes as this. With the block size it also sets the subdivision depth, and the depth is two bits of every cell address.",
+			},
+			{
+				key: "blockSize",
+				label: "Block size",
+				digits: 2,
+				says: "How wide one cell is. Fixed for the life of the world. The radius moves to whatever makes this size exact, so the number above is a request and the readout below is what you get.",
+			},
+			{
+				key: "chunkCells",
+				label: "Chunk",
+				digits: 0,
+				says: "How many cells along one edge of a chunk, which is the unit that is generated, meshed, stored and sent. Smaller chunks redraw less when one block changes and cost more of everything else. It does not appear in a cell address.",
+			},
+			{
+				key: "coarseSpacing",
+				label: "Coarse cell",
+				digits: 0,
+				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory.",
+			},
+			{
+				key: "crustMetres",
+				label: "Crust reaches",
+				digits: 0,
+				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
+			},
 		],
 	},
 	{
 		title: "The ground",
-		note: "Also a rebuild. The height scale is how tall a hill is and the landform size is how wide, and it is the width that decides whether the ground reads as hills or as a slope.",
+		note: "Also a rebuild. Height is how tall a hill is and landform is how wide, and it is the width that decides whether the ground reads as hills or as one long slope.",
 		knobs: [
-			{ key: "heightScale", label: "Height scale", digits: 0 },
-			{ key: "reliefFeature", label: "Landform across", digits: 0 },
-			{ key: "detailAmplitude", label: "Detail", digits: 0 },
-			{ key: "detailFeature", label: "Detail across", digits: 0 },
-			{ key: "landFraction", label: "Land", digits: 2 },
-			{ key: "skirtCells", label: "Skirt", digits: 0 },
+			{
+				key: "heightScale",
+				label: "Height scale",
+				digits: 0,
+				says: "How tall the terrain is. It multiplies the whole height field, so mountains and sea floors move together and the ground gets steeper without changing shape. The tallest peak comes out at about half this number.",
+			},
+			{
+				key: "reliefFeature",
+				label: "Landform across",
+				digits: 0,
+				says: "How wide one hill or valley is. This is the knob that decides whether you are looking at hills or standing on a hillside: below about twice the horizon the ground reads as landforms, above it as a slope. Narrower also means fewer octaves, because the smallest hill stays at 64 m.",
+			},
+			{
+				key: "detailAmplitude",
+				label: "Detail",
+				digits: 0,
+				says: "How far the fine noise moves the ground, under the size the coarse map can describe. It is added after the map has decided where water is, so a large value puts hills through lakes.",
+			},
+			{
+				key: "detailFeature",
+				label: "Detail across",
+				digits: 0,
+				says: "How wide one bump of that fine noise is. Below the coarse cell it is the only thing giving the ground texture between one map sample and the next.",
+			},
+			{
+				key: "landFraction",
+				label: "Land",
+				digits: 2,
+				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground. It also decides how long rivers get, because a river cannot be longer than the land it crosses.",
+			},
+			{
+				key: "skirtCells",
+				label: "Skirt",
+				digits: 0,
+				says: "How far a chunk's rim hangs below its edge, to cover the crack where a chunk meets a coarser neighbour. Zero shows the cracks.",
+			},
 		],
 	},
 	{
 		title: "The air",
 		note: "Immediate. How tall the air is decides how strong a sunset is.",
 		knobs: [
-			{ key: "atmosphereTop", label: "Air reaches", digits: 0 },
-			{ key: "zenithDepth", label: "Depth overhead", digits: 3 },
-			{ key: "dayLength", label: "Day", digits: 0 },
+			{
+				key: "atmosphereTop",
+				label: "Air reaches",
+				digits: 0,
+				says: "How high the air goes. On a planet this size correctly scaled air is 3,748 times too thin to see, so this is an invented number chosen by eye rather than a physical one. Not connected yet.",
+			},
+			{
+				key: "zenithDepth",
+				label: "Depth overhead",
+				digits: 3,
+				says: "How thick the air reads looking straight up. Earth is 0.241. Not connected yet.",
+			},
+			{
+				key: "dayLength",
+				label: "Day",
+				digits: 0,
+				says: "Seconds in a day. Below about two hours a walking player outruns the sunset and can hold it in place by walking west.",
+			},
 		],
 	},
 	{
 		title: "The clouds",
 		note: "Immediate. One shell is a flat sheet, which is what today draws.",
 		knobs: [
-			{ key: "lowDeck", label: "Low deck", digits: 0 },
-			{ key: "highDeck", label: "High deck", digits: 0 },
-			{ key: "cloudPuff", label: "Puff", digits: 0 },
-			{ key: "cloudShells", label: "Shells", digits: 0 },
+			{
+				key: "lowDeck",
+				label: "Low deck",
+				digits: 0,
+				says: "How high the lower cloud deck sits.",
+			},
+			{
+				key: "highDeck",
+				label: "High deck",
+				digits: 0,
+				says: "How high the upper deck sits. Not connected yet.",
+			},
+			{
+				key: "cloudPuff",
+				label: "Puff",
+				digits: 0,
+				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level.",
+			},
+			{
+				key: "cloudShells",
+				label: "Shells",
+				digits: 0,
+				says: "How many layers deep a deck is drawn. One is a flat sheet with no thickness. Not connected yet.",
+			},
 		],
 	},
 	{
 		title: "Drawing",
 		note: "Immediate. What is held, and how much of it is drawn.",
-		knobs: [{ key: "detail", label: "Full detail to", digits: 1 }],
+		knobs: [
+			{
+				key: "detail",
+				label: "Full detail to",
+				digits: 1,
+				says: "How many of its own widths away a chunk goes before it drops to the next coarser level. Higher holds more chunks at full detail, which costs generation time and memory rather than frame time.",
+			},
+		],
 	},
 ];
 
@@ -91,6 +192,7 @@ export class ParameterPanel {
 	private readonly draft: PlanetKnobs;
 	private readonly onLive: (settings: PlanetSettings) => void;
 	private problems!: HTMLElement;
+	private notes!: HTMLElement;
 	private derived!: HTMLElement;
 	private applyButton!: HTMLButtonElement;
 	private dirty = false;
@@ -146,6 +248,10 @@ export class ParameterPanel {
 		this.problems.className = "knobs-problems";
 		body.appendChild(this.problems);
 
+		this.notes = document.createElement("div");
+		this.notes.className = "knobs-notes";
+		body.appendChild(this.notes);
+
 		this.derived = document.createElement("div");
 		this.derived.className = "knobs-derived";
 		body.appendChild(this.derived);
@@ -179,7 +285,7 @@ export class ParameterPanel {
 		wrap.innerHTML =
 			`<label>${knob.label}` +
 			(range.rebuilds ? ' <i title="needs a rebuild">&#9679;</i>' : "") +
-			`<b></b></label><input type="range">`;
+			`<b></b></label><input type="range"><small>${knob.says}</small>`;
 
 		const input = wrap.querySelector("input")!;
 		input.min = String(range.low);
@@ -240,6 +346,10 @@ export class ParameterPanel {
 			this.dirty && !trouble.length,
 		);
 
+		const notice = settings.notes();
+		this.notes.innerHTML = notice.map((line) => `<p>${line}</p>`).join("");
+		this.notes.classList.toggle("some", notice.length > 0);
+
 		const cells = 10 * 4 ** settings.depth + 2;
 		this.derived.innerHTML =
 			`<span>depth <b>${settings.depth}</b></span>` +
@@ -251,6 +361,7 @@ export class ParameterPanel {
 			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + 1.7))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
-			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>`;
+			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>` +
+			`<span>cell address <b>${settings.addressBits} bits</b></span>`;
 	}
 }

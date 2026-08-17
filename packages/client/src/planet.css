@@ -95,7 +95,14 @@ body {
 	margin-bottom: 6px;
 }
 .knob {
-	margin-bottom: 7px;
+	margin-bottom: 11px;
+}
+.knob small {
+	display: block;
+	font-size: 10.5px;
+	color: #6d768c;
+	line-height: 1.45;
+	margin-top: 1px;
 }
 .knob label {
 	display: flex;
@@ -165,6 +172,19 @@ body {
 }
 .knobs-problems p {
 	color: #ff9b8a;
+	font-size: 11px;
+	line-height: 1.5;
+	margin-bottom: 5px;
+}
+.knobs-notes {
+	margin-top: 12px;
+}
+.knobs-notes.some {
+	border-left: 2px solid #e0b25a;
+	padding-left: 8px;
+}
+.knobs-notes p {
+	color: #e0b25a;
 	font-size: 11px;
 	line-height: 1.5;
 	margin-bottom: 5px;

@@ -1,11 +1,23 @@
 import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
+import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 
-/** How many layers the ten-bit layer field can name. */
-const LAYER_CEILING = 1024;
-
-/** The deepest the address word reaches, from doc 03's arithmetic. */
+/**
+ * The deepest world the address word can name.
+ *
+ * The word is `[planet 12][face 5][path 2 x depth][corner 2][layer 10]`, so it
+ * is `29 + 2 x depth` bits wide and 64 of them run out at depth 17.
+ */
 const MAX_DEPTH = 17;
+
+/**
+ * The widest word an integer held in a `number` represents exactly.
+ *
+ * A cell ID is a plain `number`, and above `2^53` those stop being able to
+ * count: the low bits are rounded off, which is the layer and the corner. That
+ * is a tighter limit than the 64-bit word, and it binds at depth 12.
+ */
+const SAFE_WORD_BITS = 53;
 
 /**
  * Metres across the smallest landform the coarse map carries.
@@ -195,13 +207,17 @@ export class PlanetSettings {
 		this.knobs = { ...PLANET_DEFAULTS, ...knobs };
 	}
 
+	/** The depth the radius and the block size ask for, before any cap. */
+	private get wantedDepth(): number {
+		return Math.max(
+			1,
+			levelFor(CELL_CONSTANT * this.knobs.radius, this.knobs.blockSize),
+		);
+	}
+
 	/** How many times a face is split. Follows from the block and the radius. */
 	get depth(): number {
-		const wanted = levelFor(
-			CELL_CONSTANT * this.knobs.radius,
-			this.knobs.blockSize,
-		);
-		return Math.max(1, Math.min(MAX_DEPTH, wanted));
+		return Math.min(MAX_DEPTH, this.wantedDepth);
 	}
 
 	/**
@@ -230,12 +246,19 @@ export class PlanetSettings {
 		);
 	}
 
-	/** How many layers deep the world runs, under both caps. */
+	/**
+	 * How many layers deep the world runs, under all three caps.
+	 *
+	 * The taper says where a column would pinch shut, the layer field says how
+	 * many layers can be named, and the knob says how many are wanted. This is
+	 * the only place the layer field is filled from, so no setting here can put
+	 * a layer outside it.
+	 */
 	get crustDepth(): number {
 		const wanted = Math.ceil(this.knobs.crustMetres / this.knobs.blockSize);
 		return Math.max(
 			8,
-			Math.min(wanted, maxCrustDepth(this.depth), LAYER_CEILING),
+			Math.min(wanted, maxCrustDepth(this.depth), LAYER_COUNT),
 		);
 	}
 
@@ -328,6 +351,18 @@ export class PlanetSettings {
 	}
 
 	/**
+	 * How wide one cell address is, in bits.
+	 *
+	 * Two knobs reach it and no others. The radius and the block size set the
+	 * subdivision depth, which is two bits of path per level, and the crust sets
+	 * how many of the ten layer bits are used. Everything else here decides what
+	 * block sits at an address rather than what the address is.
+	 */
+	get addressBits(): number {
+		return wordBits(this.depth);
+	}
+
+	/**
 	 * The three things the engine is handed, in the shapes it takes them.
 	 *
 	 * A knob that reaches no further than this class is a slider that moves and
@@ -361,6 +396,28 @@ export class PlanetSettings {
 	}
 
 	/**
+	 * What is true about this world and worth saying, without stopping it.
+	 *
+	 * Separate from {@link problems} because a world that draws correctly today
+	 * and has a limit behind it is not a world to refuse. Refusing it would take
+	 * the shipped planet off the table.
+	 */
+	notes(): string[] {
+		const out: string[] = [];
+
+		// The address is a `number`, so only the low 53 bits count. The planet
+		// field is the top 12 of the word and is 0 in a single-planet client,
+		// which is why a 55-bit word works: the value never reaches the part
+		// that rounds. It stops working the moment a second planet exists.
+		if (this.addressBits > SAFE_WORD_BITS)
+			out.push(
+				`A cell address is ${this.addressBits} bits at depth ${this.depth} and an ID is a number, which counts exactly to ${SAFE_WORD_BITS}. It is right here because the planet field is 0; on planet 1 or above the layer would be rounded off.`,
+			);
+
+		return out;
+	}
+
+	/**
 	 * Why this world cannot be built, or nothing if it can.
 	 *
 	 * A person setting numbers by hand will reach one of these, and a message
@@ -371,9 +428,9 @@ export class PlanetSettings {
 		const out: string[] = [];
 		const k = this.knobs;
 
-		if (this.depth >= MAX_DEPTH)
+		if (this.wantedDepth > MAX_DEPTH)
 			out.push(
-				`A ${k.blockSize} m block on a ${Math.round(k.radius)} m radius needs more than the ${MAX_DEPTH} levels the address word holds.`,
+				`A ${k.blockSize} m block on a ${Math.round(k.radius)} m radius splits a face ${this.wantedDepth} times, which needs a ${wordBits(this.wantedDepth)}-bit address, and the word is 64.`,
 			);
 
 		// The crust has to reach from the top of the tallest ground to under
