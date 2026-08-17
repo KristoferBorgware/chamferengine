@@ -17,8 +17,8 @@ export interface MeshWorkerSetup {
 	readonly maxElevation: number;
 	readonly crustDepth: number;
 
-	/** How deep a chunk's rim hangs, in its own cells. */
-	readonly skirtCells: number;
+	/** Whether a chunk draws the ring of cells just beyond its rim. */
+	readonly apron: boolean;
 
 	/** Whether to paint the seams instead of hiding them. */
 	readonly debugSeams?: boolean;

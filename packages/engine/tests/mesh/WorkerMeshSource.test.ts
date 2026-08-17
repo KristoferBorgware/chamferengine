@@ -28,7 +28,7 @@ const SETUP = {
 	subdivisionDepth: 5,
 	maxElevation: 150,
 	crustDepth: LAYERS,
-	skirtCells: 2,
+	apron: true,
 	terrain: {},
 } satisfies MeshWorkerSetup;
 

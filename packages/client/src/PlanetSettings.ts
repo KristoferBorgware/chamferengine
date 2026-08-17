@@ -132,8 +132,8 @@ export interface PlanetKnobs {
 	/** How many times its own width a chunk is away before it drops a level. */
 	detail: number;
 
-	/** How deep a chunk's rim hangs, in its own cells. */
-	skirtCells: number;
+	/** Whether a chunk draws the ring of cells just beyond its rim. */
+	apron: boolean;
 
 	/** Whether the terrain paints its seams: face edges, chunk rims, aprons. */
 	seamOverlay: boolean;
@@ -169,7 +169,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudPuff: 64,
 	cloudShells: 4,
 	detail: 2,
-	skirtCells: 2,
+	apron: true,
 	seamOverlay: false,
 	dayLength: 240,
 	paused: false,
@@ -246,7 +246,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: true, unit: "m" },
 	cloudShells: { low: 1, high: 8, step: 1, rebuilds: true, unit: "shells" },
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
-	skirtCells: { low: 0, high: 4, step: 1, rebuilds: true, unit: "cells" },
+	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },

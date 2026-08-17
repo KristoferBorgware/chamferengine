@@ -14,7 +14,7 @@ import {
 	selectChunks,
 	selectionId,
 } from "chamfer/generation";
-import { buildChunkMesh, seamFloor } from "chamfer/mesh";
+import { buildChunkMesh } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
 import { positionOf } from "chamfer/coordinates";
 import { Frustum, Mat4, Vec3 } from "chamfer/math";
@@ -51,7 +51,7 @@ const RADIUS = settings.radius;
 const DEPTH = settings.depth;
 const CHUNK_LEVEL = settings.chunkLevel;
 const DETAIL = settings.knobs.detail;
-const SKIRT_CELLS = settings.knobs.skirtCells;
+const APRON = settings.knobs.apron;
 
 /** How many workers the client asks for on a machine with this many cores. */
 const WORKERS = 7;
@@ -248,19 +248,14 @@ function measure(scene: Scene): Measured {
 			chosen.chunkLevel,
 			lodShape.crustDepth,
 		);
-		const brackets = [];
-		if (chosen.lod > 0) brackets.push(byLod[chosen.lod - 1]!);
-		if (chosen.chunkLevel > 0 && byLod[chosen.lod + 1])
-			brackets.push(byLod[chosen.lod + 1]!);
 		const mesh = buildChunkMesh(
 			chunk,
 			new ChunkColumnSampler(chunk, terrain),
 			lodShape,
 			seed,
 			{
-				skirtCells: SKIRT_CELLS,
+				apron: APRON,
 				surfaceGrid: shape.blockSize,
-				seamFloor: seamFloor(lodShape.n, brackets),
 			},
 		);
 		const took = performance.now() - start;

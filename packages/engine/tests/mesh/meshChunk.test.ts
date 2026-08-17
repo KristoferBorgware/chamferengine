@@ -379,7 +379,7 @@ describe("merging at a level seam", () => {
 			new ChunkColumnSampler(chunk, gen),
 			at,
 			map.seed,
-			{ skirtCells: 2, surfaceGrid: grid },
+			{ apron: true, surfaceGrid: grid },
 		);
 	}
 
@@ -419,7 +419,7 @@ describe("merging at a level seam", () => {
 			new ChunkColumnSampler(chunk, terrain),
 			shape,
 			map.seed,
-			{ skirtCells: 2 },
+			{ apron: true },
 		);
 		expect(bare.tally.apron).toBe(0);
 		const m = 1 << (DEPTH - CHUNK_LEVEL);
@@ -499,7 +499,7 @@ describe("merging at a level seam", () => {
 				new ChunkColumnSampler(chunk, terrain),
 				shape,
 				map.seed,
-				{ skirtCells: 2 },
+				{ apron: true },
 			);
 			expect(built.tally.apron).toBe(expected.size);
 		}
@@ -522,7 +522,7 @@ describe("merging at a level seam", () => {
 			new ChunkColumnSampler(chunk, gen),
 			at2,
 			map.seed,
-			{ skirtCells: 2, surfaceGrid: shape.blockSize },
+			{ apron: true, surfaceGrid: shape.blockSize },
 		);
 
 		// Find an interior pair of solid neighbours sharing a coarse layer
@@ -597,48 +597,6 @@ describe("merging at a level seam", () => {
 				}
 			}
 		expect(checked).toBeGreaterThan(0);
-	});
-
-	it("reaches the seam floor when it is deeper than the fixed skirt", () => {
-		// On relief, two levels put a cliff's edge at horizontally different
-		// places, so their surfaces disagree by the whole cliff height where a
-		// boundary crosses one -- far past any fixed depth. The floor says how
-		// far down a neighbouring level might put its surface, and the skirt
-		// reaches it.
-		const chunk = generateChunk(
-			terrain,
-			ChunkAddress.fromKey(400, CHUNK_LEVEL),
-			CHUNK_LEVEL,
-			LAYERS,
-		);
-		const lowest = (built: { origin: Vec3; opaque: Geometry }): number => {
-			const v = built.opaque.vertices;
-			let least = Infinity;
-			for (let at = 0; at < v.length; at += 6) {
-				const x = v[at]! + built.origin.x;
-				const y = v[at + 1]! + built.origin.y;
-				const z = v[at + 2]! + built.origin.z;
-				least = Math.min(least, Math.sqrt(x * x + y * y + z * z));
-			}
-			return least;
-		};
-		const fixed = buildChunkMesh(
-			chunk,
-			new ChunkColumnSampler(chunk, terrain),
-			shape,
-			map.seed,
-			{ skirtCells: 2 },
-		);
-		const floor = lowest(fixed) - 40;
-		const deep = buildChunkMesh(
-			chunk,
-			new ChunkColumnSampler(chunk, terrain),
-			shape,
-			map.seed,
-			{ skirtCells: 2, seamFloor: () => floor },
-		);
-		expect(lowest(deep)).toBeLessThan(floor + 1e-6);
-		expect(lowest(deep)).toBeGreaterThan(floor - 2 * shape.blockSize);
 	});
 
 	it("has an apron cell for every hole two levels leave between them", () => {
@@ -739,95 +697,6 @@ describe("merging at a level seam", () => {
 		expect(bare).toBeGreaterThan(0);
 		// ...and the apron reaches all of it.
 		expect(uncovered).toBe(0);
-	});
-});
-
-describe("the skirt at a level seam", () => {
-	it("hangs deeper than the levels disagree", () => {
-		// Two chunks at different levels sample the terrain at different
-		// spacings, so their surfaces meet at slightly different heights and the
-		// join opens a slit. Radial boundaries agree across levels, so the slit
-		// is horizontal and a skirt is the whole of it.
-		const base = new WorldShape(1700, 10, 150, maxCrustDepth(10));
-		for (let lod = 0; lod < 4; lod++) {
-			const fine = new TerrainGenerator(map.seed, base.atLod(lod), map);
-			const coarse = new TerrainGenerator(
-				map.seed,
-				base.atLod(lod + 1),
-				map,
-			);
-			let worst = 0;
-			for (const direction of spread(3000)) {
-				const a = positionToCell(direction, fine.shape.n);
-				const b = positionToCell(direction, coarse.shape.n);
-				worst = Math.max(
-					worst,
-					Math.abs(
-						fine.columnAt(a.face, a.i, a.j).groundRadius -
-							coarse.columnAt(b.face, b.i, b.j).groundRadius,
-					),
-				);
-			}
-			// Under one cell of the finer level, at every level, which is what
-			// makes two cells cover it with margin.
-			expect(worst / fine.shape.blockSize).toBeLessThan(1);
-		}
-	});
-
-	it("costs the rim rather than the area", () => {
-		// A skirt hangs from the edge of a chunk, so doubling the chunk's side
-		// should roughly double what it costs, not quadruple it. That is the
-		// difference between paying for a boundary and paying for a surface.
-		const added = (chunkLevel: number) => {
-			const chunk = generateChunk(
-				terrain,
-				ChunkAddress.fromKey(3, chunkLevel),
-				chunkLevel,
-				LAYERS,
-			);
-			const sampler = () => new ChunkColumnSampler(chunk, terrain);
-			const bare = buildChunkMesh(chunk, sampler(), shape, map.seed);
-			const skirted = buildChunkMesh(chunk, sampler(), shape, map.seed, {
-				skirtCells: 2,
-			});
-			return {
-				m: chunk.m,
-				faces: skirted.tally.faces - bare.tally.faces,
-				cells: bare.tally.cells,
-			};
-		};
-		const small = added(4);
-		const large = added(3);
-		expect(large.m).toBe(small.m * 2);
-		expect(small.faces).toBeGreaterThan(0);
-		// Four times the cells, and near twice the skirt.
-		expect(large.cells / small.cells).toBeGreaterThan(3.5);
-		expect(large.faces / small.faces).toBeGreaterThan(1.5);
-		expect(large.faces / small.faces).toBeLessThan(2.6);
-	});
-
-	it("puts every skirt vertex below the surface it hangs from", () => {
-		const chunk = generateChunk(
-			terrain,
-			ChunkAddress.fromKey(400, CHUNK_LEVEL),
-			CHUNK_LEVEL,
-			LAYERS,
-		);
-		const skirted = buildChunkMesh(
-			chunk,
-			new ChunkColumnSampler(chunk, terrain),
-			shape,
-			map.seed,
-			{ skirtCells: 2 },
-		);
-		for (let v = 0; v < skirted.opaque.vertices.length; v += 6) {
-			const p = new Vec3(
-				skirted.opaque.vertices[v]! + skirted.origin.x,
-				skirted.opaque.vertices[v + 1]! + skirted.origin.y,
-				skirted.opaque.vertices[v + 2]! + skirted.origin.z,
-			);
-			expect(p.length()).toBeLessThanOrEqual(shape.crustTopRadius + 1e-6);
-		}
 	});
 });
 

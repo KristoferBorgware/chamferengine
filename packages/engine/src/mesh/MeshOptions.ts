@@ -12,23 +12,25 @@ export interface MeshOptions {
 	readonly crustFloor?: boolean;
 
 	/**
-	 * How far the rim of a chunk hangs below its surface, in cells.
+	 * Whether a chunk also draws the ring of cells just beyond its rim.
 	 *
-	 * Two chunks drawn at different levels sample the terrain at different
-	 * spacings, so their surfaces meet at slightly different heights and the
-	 * join opens a slit. A wall hanging from the finer chunk's rim covers a
-	 * slit up to its own depth.
+	 * Two chunks drawn at different levels tile their shared boundary with
+	 * hexagons of two sizes, and those do not interlock: strips of ground have
+	 * their containing cell centred across the line, at a lattice the chunk
+	 * over there does not use, so neither side's own cells cover them. Each
+	 * chunk closes its own side by drawing one cell further out, a centimetre
+	 * low so a real cell wins wherever one exists.
 	 *
-	 * Radial boundaries agree across levels, so the slit is horizontal and a
-	 * skirt is the whole of it as long as a column is one run of ground. A
-	 * column with a cave in it opens a hole a skirt reaches past, and that is
-	 * what seam ownership is for.
-	 *
-	 * A skirt is only emitted where {@link seamFloor} says a level can put its
-	 * surface lower. Hung where no level disagrees it is a wall coplanar with
-	 * the neighbouring chunk's cap, which the depth buffer cannot separate.
+	 * This replaced the skirt -- a wall hung from every rim in case a level
+	 * disagreed. A skirt hangs from the cap plane, so wherever no level
+	 * actually disagreed it was coplanar with the neighbouring chunk's cap and
+	 * speckled through it as a dashed dark line along every chunk boundary.
+	 * Measured against the apron: over 3,899 rays outward and 1,446 grazing
+	 * rays into the terrain across a mixed-level scene, removing skirts opened
+	 * **no hole and no crack**, because the apron overlaps the join and the cap
+	 * steps wall every drop between neighbours.
 	 */
-	readonly skirtCells?: number;
+	readonly apron?: boolean;
 
 	/**
 	 * The layer grid every level's surface caps snap to, in metres.
@@ -44,17 +46,6 @@ export interface MeshOptions {
 	readonly surfaceGrid?: number;
 
 	/**
-	 * How deep the join beside a rim column can open, as a radius floor.
-	 *
-	 * On relief, two levels put a cliff's edge at horizontally different
-	 * places, so their surfaces disagree by the whole cliff height at a
-	 * boundary that crosses one -- far past any fixed skirt depth. Skirts
-	 * reach whichever is lower: their fixed depth, or this floor. Absent, or
-	 * returning `Infinity`, the fixed depth stands.
-	 */
-	readonly seamFloor?: (face: number, i: number, j: number) => number;
-
-	/**
 	 * Whether to paint the seams instead of hiding them.
 	 *
 	 * Face-edge cells turn yellow, cells on a chunk boundary blue, and apron
@@ -67,7 +58,7 @@ export interface MeshOptions {
 
 export const MESH_DEFAULTS = {
 	crustFloor: false,
-	skirtCells: 0,
+	apron: false,
 	surfaceGrid: 0,
 	debugSeams: false,
 } as const satisfies MeshOptions;

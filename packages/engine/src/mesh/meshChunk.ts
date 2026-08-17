@@ -73,40 +73,6 @@ function snappedSurface(
 	);
 }
 
-/**
- * Where a skirt hangs to, or nothing when no level can open a gap here.
- *
- * A skirt is insurance against a neighbouring level putting its surface
- * lower than this one, and it is a **wall hanging from the cap plane**. Where
- * no level puts it lower there is nothing to insure against, and the wall is
- * then coplanar with the neighbouring chunk's cap along their shared edge --
- * the depth buffer cannot separate two coplanar surfaces at any distance
- * where its precision is coarser than nothing, so the darker wall speckles
- * through the ground. On a world with no relief at all that was every chunk
- * boundary at once: 372 wall triangles a chunk, all of them in the cap plane,
- * drawn as a dashed dark outline of the whole chunk grid.
- *
- * So the floor decides whether the skirt exists, not only how far it reaches.
- * `Infinity` means the caller gave no bracketing levels to compare against,
- * and the skirt is emitted on the old always-insure rule.
- */
-function skirtBottom(
-	shape: WorldShape,
-	grid: number,
-	top: number,
-	skirtCells: number,
-	floor: number,
-	capTop: number,
-): number | null {
-	const fixed = shape.radiusOfLayer(top + skirtCells);
-	if (!Number.isFinite(floor)) return fixed;
-	const theirs = snappedSurface(shape.crustTopRadius, floor, grid);
-	// Every level this chunk can meet puts its surface at or above ours, so
-	// the caps join edge to edge and there is no gap under them.
-	if (theirs >= capTop - 1e-9) return null;
-	return Math.min(fixed, theirs - grid);
-}
-
 /** The seam overlay's marker colors, by tint index. */
 const TINTS: readonly (readonly [number, number, number])[] = [
 	[0, 0, 0],
@@ -167,7 +133,6 @@ export function meshChunk(
 	const face = chunk.address.face;
 	const layers = chunk.layerCount;
 	const grid = settings.surfaceGrid || shape.blockSize;
-	const floorAt = settings.seamFloor;
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
@@ -209,7 +174,7 @@ export function meshChunk(
 						inChunk(chunk, nb.i, nb.j) &&
 						owns(chunk, nb.face, n, nb.i, nb.j)
 					);
-				if (outward[k] && nb && settings.skirtCells > 0) {
+				if (outward[k] && nb && settings.apron) {
 					const canon = canonicalCell(nb.face, n, nb.i, nb.j);
 					apron.set(
 						(canon.face * 262144 + canon.i) * 262144 + canon.j,
@@ -242,10 +207,7 @@ export function meshChunk(
 				translucent,
 				tally,
 				settings.crustFloor,
-				settings.skirtCells > 0 ? outward : null,
-				settings.skirtCells,
 				grid,
-				floorAt,
 				tint,
 			);
 		}
@@ -256,7 +218,7 @@ export function meshChunk(
 	// rim never reaches it, and the far side of the planet showed through a
 	// sliver of exactly that shape. The corner point's own cell and its full
 	// ring are everything that can touch the wedge, and they go in outright.
-	if (settings.skirtCells > 0)
+	if (settings.apron)
 		for (const [cq, cr] of [
 			[0, 0],
 			[chunk.m, 0],
@@ -303,9 +265,7 @@ export function meshChunk(
 			opaque,
 			translucent,
 			tally,
-			settings.skirtCells,
 			grid,
-			floorAt,
 			settings.debugSeams ? 3 : 0,
 		);
 	}
@@ -364,10 +324,7 @@ function meshCell(
 	translucent: MeshSink,
 	tally: MeshTally,
 	crustFloor: boolean,
-	outward: readonly boolean[] | null,
-	skirtCells: number,
 	grid: number,
-	floorAt: ((face: number, i: number, j: number) => number) | undefined,
 	tint: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
@@ -485,44 +442,6 @@ function meshCell(
 		}
 	}
 
-	// A skirt on every edge of the chunk that faces out of it, hanging from the
-	// cell's own surface. It covers the slit where a neighbour drawn at another
-	// level put its surface at a slightly different height.
-	if (outward && skirtCells > 0) {
-		const top = firstSolid(own, from, to);
-		if (top >= 0) {
-			const block = at(own, top);
-			blockColor(block, face, i, j, seed, COLOR, 0);
-			shade(COLOR, sky);
-			debugTint(COLOR, tint);
-			const bottom = skirtBottom(
-				shape,
-				grid,
-				top,
-				skirtCells,
-				floorAt ? floorAt(face, i, j) : Infinity,
-				capRadius(top),
-			);
-			if (bottom !== null)
-				for (let k = 0; k < degree; k++) {
-					if (!outward[k]) continue;
-					emitSide(
-						opaque,
-						corners,
-						degree,
-						k,
-						capRadius(top),
-						bottom,
-						origin,
-						ring,
-						top,
-						Math.min(layers - 1, shape.layerOfRadius(bottom)),
-					);
-					tally.faces++;
-				}
-		}
-	}
-
 	// A cap step. Two neighbours level at this chunk's own grid can stand
 	// several fine layers apart once their caps snap to the shared fine grid,
 	// and the side runs never cover that span: at the chunk's own resolution
@@ -628,9 +547,7 @@ function meshApronCell(
 	opaque: MeshSink,
 	translucent: MeshSink,
 	tally: MeshTally,
-	skirtCells: number,
 	grid: number,
-	floorAt: ((face: number, i: number, j: number) => number) | undefined,
 	tint: number,
 ): void {
 	const n = 1 << chunk.depth;
@@ -743,39 +660,6 @@ function meshApronCell(
 		}
 	}
 
-	// A skirt down from the surface on the outward edges.
-	const top = firstSolid(own, from, to);
-	if (top >= 0) {
-		const block = at(own, top);
-		blockColor(block, face, i, j, seed, COLOR, 0);
-		shade(COLOR, sky);
-		debugTint(COLOR, tint);
-		const bottom = skirtBottom(
-			shape,
-			grid,
-			top,
-			skirtCells,
-			floorAt ? floorAt(face, i, j) : Infinity,
-			capRadius(top),
-		);
-		if (bottom !== null)
-			for (let k = 0; k < degree; k++) {
-				if (!away[k] || !ring[k]) continue;
-				emitSide(
-					opaque,
-					corners,
-					degree,
-					k,
-					capRadius(top) - APRON_DROP,
-					bottom - APRON_DROP,
-					origin,
-					ring,
-					top,
-					Math.min(layers - 1, shape.layerOfRadius(bottom)),
-				);
-				tally.faces++;
-			}
-	}
 	tally.apron++;
 }
 
@@ -867,13 +751,6 @@ function emitSide(
 
 	sink.triangle(topLeft, bottomLeft, bottomRight);
 	sink.triangle(topLeft, bottomRight, topRight);
-}
-
-/** The topmost layer of a column that stops light, inside a band. */
-function firstSolid(column: Column, from: number, to: number): number {
-	for (let layer = Math.max(0, from); layer <= to; layer++)
-		if (opacityOf(at(column, layer)) === 2) return layer;
-	return -1;
 }
 
 /** How many of the two cells touching a corner are solid at a layer. */

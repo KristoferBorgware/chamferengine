@@ -129,10 +129,9 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "skirtCells",
-				label: "Skirt",
-				digits: 0,
-				says: "How far a chunk's rim hangs below its edge, to cover the crack where a chunk meets a coarser neighbour. A rim only hangs one where the neighbouring levels actually disagree, so smooth ground grows none. It also switches the apron: the ring of cells drawn just beyond the rim that closes the gaps two levels leave between their tilings. Zero shows the cracks and the holes.",
+				key: "apron",
+				label: "Apron",
+				says: "Whether a chunk also draws the ring of cells just beyond its rim. Two levels tile their shared boundary with hexagons of two sizes and those do not interlock, so without it strips of ground belong to nobody and the sky shows through the planet. Off shows the holes.",
 			},
 		],
 	},

@@ -6,7 +6,6 @@ import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
-import { seamFloor } from "../seamFloor.js";
 
 /**
  * The working half of a mesh worker, with no reference to `Worker`, `self` or
@@ -23,7 +22,7 @@ export class MeshWorkerCore {
 	private readonly shape: WorldShape;
 	private readonly map: CoarseMap;
 	private readonly seed: number;
-	private readonly skirtCells: number;
+	private readonly apron: boolean;
 	private readonly debugSeams: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
 
@@ -45,7 +44,7 @@ export class MeshWorkerCore {
 			setup.crustDepth,
 		);
 		this.seed = setup.map.seed;
-		this.skirtCells = setup.skirtCells;
+		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
 		this.options = setup.terrain;
 	}
@@ -59,11 +58,6 @@ export class MeshWorkerCore {
 			job.chunkLevel,
 			shape.crustDepth,
 		);
-		// The levels a neighbour can be drawn at bracket this one, and their
-		// surfaces are where a skirt may have to reach.
-		const brackets: TerrainGenerator[] = [];
-		if (job.lod > 0) brackets.push(this.generator(job.lod - 1));
-		if (job.chunkLevel > 0) brackets.push(this.generator(job.lod + 1));
 		const mesh = buildChunkMesh(
 			chunk,
 			new ChunkColumnSampler(chunk, terrain),
@@ -72,9 +66,8 @@ export class MeshWorkerCore {
 			// Every level snaps its surface caps to the finest level's grid,
 			// which is what merges the levels where the terrain agrees.
 			{
-				skirtCells: this.skirtCells,
+				apron: this.apron,
 				surfaceGrid: this.shape.blockSize,
-				seamFloor: seamFloor(shape.n, brackets),
 				debugSeams: this.debugSeams,
 			},
 		);

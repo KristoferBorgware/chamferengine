@@ -7,7 +7,6 @@ export type { ChunkMesh } from "./ChunkMesh.js";
 export type { MeshTally } from "./meshChunk.js";
 export { meshChunk } from "./meshChunk.js";
 export { buildChunkMesh } from "./buildChunkMesh.js";
-export { seamFloor } from "./seamFloor.js";
 export { opacityOf } from "./opacityOf.js";
 export { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
 export type {

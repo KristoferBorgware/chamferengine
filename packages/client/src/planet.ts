@@ -70,8 +70,8 @@ let DETAIL = settings.knobs.detail;
  */
 const PLAIN = settings.knobs.plain;
 
-/** How deep a chunk's rim hangs, in its own cells. */
-const SKIRT_CELLS = settings.knobs.skirtCells;
+/** Whether a chunk draws the ring of cells just beyond its rim. */
+const APRON = settings.knobs.apron;
 
 /**
  * How long a day runs, in seconds.
@@ -357,7 +357,7 @@ async function main(): Promise<void> {
 			subdivisionDepth: DEPTH,
 			maxElevation: shape.maxElevation,
 			crustDepth: shape.crustDepth,
-			skirtCells: SKIRT_CELLS,
+			apron: APRON,
 			debugSeams: settings.knobs.seamOverlay,
 			terrain: settings.terrainOptions(),
 		},

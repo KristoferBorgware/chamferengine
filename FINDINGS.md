@@ -488,6 +488,40 @@ every chunk's level, so the road is to tell the mesher its neighbours'
 levels and re-mesh the rim when a neighbour changes level — a residency and
 worker-protocol change, not a mesher formula.
 
+### F-026 — The specification still describes a skirt the engine no longer has
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-17, retiring the skirt in v0.1.2's I-6
+**Where:** [`docs/14-meshing-and-lod.md`](docs/14-meshing-and-lod.md) and
+`CLAUDE.md`'s established results; the code is
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** Doc 14 and `CLAUDE.md` both hold that a LOD seam is covered
+by a skirt one coarse cell deep, and `CLAUDE.md` adds "Keep the skirt too, as
+cover for the frames after a neighbour changes level." The engine has no
+skirt any more. Level joins are covered by the apron -- each chunk drawing the
+ring of cells beyond its own rim -- and by cap-step walls between neighbours,
+both added in v0.1.2's I-5, and the frames after a level change are covered by
+I-6's retire-until-replaced instead.
+
+**Why it matters.** The specification is the thing this project is for, and it
+now describes a mechanism that was measured out of the engine for putting a
+dark wall in the cap plane at every chunk boundary. Anyone reading doc 14 to
+learn how seams are handled gets an answer that is two mechanisms out of date,
+and `verification/seam.js` prices skirts against seam ownership without the
+apron being in the comparison at all.
+
+**What would fix it.** Doc 14's seam section rewritten around the apron and
+the cap step, with the measurements that chose them: 372 coplanar wall
+triangles a chunk on a flat world, and 0 failures over 3,899 outward and 1,446
+grazing rays with skirts off. `seam.js` should grow the apron as a third
+candidate beside the skirt and seam ownership. That is a documentation item
+with a script behind it, so it belongs in a release rather than a patch's
+margin.
+
 ---
 
 ## Closed
