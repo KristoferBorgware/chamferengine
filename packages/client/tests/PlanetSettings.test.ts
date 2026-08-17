@@ -86,6 +86,35 @@ describe("the coarse map off", () => {
 	});
 });
 
+describe("the cloud level budget", () => {
+	it("leaves the shipped default untouched", () => {
+		// Level 7 at 4 shells, 163,842 points a deck -- the heaviest deck this
+		// project has actually measured, and the number the budget is
+		// calibrated from.
+		const shipped = new PlanetSettings();
+		expect(shipped.cloudLevel).toBe(7);
+	});
+
+	it("caps a puff fine enough to have crashed the renderer", () => {
+		// The exact combination that filled a combined vertex buffer past the
+		// device's 256 MiB buffer limit on real hardware: a 0.75 m block asks
+		// for a small enough world that a 16 m puff rounds to level 9, and
+		// three shells on that many points is not a buffer any more.
+		const crashed = new PlanetSettings({
+			blockSize: 0.75,
+			cloudPuff: 16,
+			cloudShells: 3,
+		});
+		expect(crashed.cloudLevel).toBeLessThan(9);
+	});
+
+	it("lowers the level further as shells rise, at the same puff", () => {
+		const fewShells = new PlanetSettings({ cloudPuff: 8, cloudShells: 1 });
+		const manyShells = new PlanetSettings({ cloudPuff: 8, cloudShells: 8 });
+		expect(manyShells.cloudLevel).toBeLessThanOrEqual(fewShells.cloudLevel);
+	});
+});
+
 describe("boolean knobs round-trip through a query string", () => {
 	it("reads coarseMap, paused and timeOfDay back out", () => {
 		const params = new PlanetSettings({

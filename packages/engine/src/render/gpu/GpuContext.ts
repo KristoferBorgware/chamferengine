@@ -32,10 +32,19 @@ export async function createGpuContext(
 	// Timing a pass on the GPU is an optional feature. Asking for it where it
 	// exists is what makes the draw half of a frame measurable at all; where it
 	// does not, the same frame is drawn and only the reading is missing.
+	//
+	// The default buffer limit is 256 MiB, and a cloud deck built fine and deep
+	// enough can ask for more than that in one vertex buffer. Requesting the
+	// adapter's own maximum costs nothing where the default already covers it,
+	// and is the only safe way to raise it -- the ceiling differs by hardware,
+	// so a hardcoded number would ask for headroom that is not actually there.
 	const device = await adapter.requestDevice({
 		requiredFeatures: adapter.features.has("timestamp-query")
 			? ["timestamp-query"]
 			: [],
+		requiredLimits: {
+			maxBufferSize: adapter.limits.maxBufferSize,
+		},
 	});
 	const context = canvas.getContext("webgpu");
 	if (!context)

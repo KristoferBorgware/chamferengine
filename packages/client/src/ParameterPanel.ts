@@ -183,13 +183,13 @@ const GROUPS: Group[] = [
 				key: "cloudPuff",
 				label: "Puff",
 				digits: 0,
-				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it.",
+				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it. A puff fine enough, combined with enough shells, is capped coarser than asked rather than filling a buffer the renderer cannot hold — the readout below is what you get.",
 			},
 			{
 				key: "cloudShells",
 				label: "Shells",
 				digits: 0,
-				says: "How many hexagons deep a deck runs. One is a single flat-topped layer; a thicker point in the horizontal pattern reliably fills more of its shells, so raising this is what turns a haze into billows.",
+				says: "How many hexagons deep a deck runs. One is a single flat-topped layer; a thicker point in the horizontal pattern reliably fills more of its shells, so raising this is what turns a haze into billows. Raising it also lowers how fine Puff is allowed to go, for the same reason.",
 			},
 		],
 	},
@@ -433,6 +433,7 @@ export class ParameterPanel {
 			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + 1.7))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
+			`<span>cloud puff <b>${settings.cloudPuff.toFixed(0)} m</b>, level <b>${settings.cloudLevel}</b></span>` +
 			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>` +
 			`<span>cell address <b>${settings.addressBits} bits</b></span>`;
 	}

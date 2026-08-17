@@ -223,6 +223,31 @@ function levelFor(span: number, size: number): number {
 }
 
 /**
+ * How many lattice points times shells one cloud deck may hold.
+ *
+ * Calibrated from the shipped default -- level 7, 4 shells, 163,842 points,
+ * measured at 500-900 ms to build -- the heaviest deck anyone has actually
+ * run. A deck asking for more crashes the renderer rather than reading
+ * expensive: two decks at level 9 and 3 shells filled a combined vertex
+ * buffer past the device's 256 MiB buffer limit on real hardware. The budget
+ * divides shells out of the ceiling it gives a level, so raising Shells
+ * lowers what Puff is allowed to ask for -- the same trade the mesh already
+ * makes between how deep a cloud reads and how finely it is drawn.
+ */
+const CLOUD_POINT_SHELL_BUDGET = 700_000;
+
+/** The finest cloud level this many shells may run at, under the budget. */
+function cloudLevelBudget(shells: number): number {
+	let level = 10;
+	while (
+		level > 2 &&
+		(10 * 4 ** level + 2) * shells > CLOUD_POINT_SHELL_BUDGET
+	)
+		level--;
+	return level;
+}
+
+/**
  * One world, as the numbers a person sets and the numbers that follow.
  *
  * A subdivision depth is a property of the grid, not of a world. Someone
@@ -308,7 +333,7 @@ export class PlanetSettings {
 		return Math.max(
 			2,
 			Math.min(
-				10,
+				cloudLevelBudget(this.knobs.cloudShells),
 				levelFor(CELL_CONSTANT * this.radius, this.knobs.cloudPuff),
 			),
 		);
