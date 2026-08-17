@@ -163,6 +163,19 @@ body {
 	border-radius: 6px;
 	padding: 5px 7px;
 }
+.knob input[type="checkbox"] {
+	width: 15px;
+	height: 15px;
+	margin: 2px 0 0 auto;
+	accent-color: #4f8ef7;
+}
+.knob input:disabled {
+	opacity: 0.35;
+}
+.knob.off label,
+.knob.off small {
+	opacity: 0.45;
+}
 .knobs-problems {
 	margin-top: 12px;
 }
@@ -172,19 +185,6 @@ body {
 }
 .knobs-problems p {
 	color: #ff9b8a;
-	font-size: 11px;
-	line-height: 1.5;
-	margin-bottom: 5px;
-}
-.knobs-notes {
-	margin-top: 12px;
-}
-.knobs-notes.some {
-	border-left: 2px solid #e0b25a;
-	padding-left: 8px;
-}
-.knobs-notes p {
-	color: #e0b25a;
 	font-size: 11px;
 	line-height: 1.5;
 	margin-bottom: 5px;

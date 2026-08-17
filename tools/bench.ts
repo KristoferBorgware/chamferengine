@@ -1,10 +1,14 @@
 import type { PlanetKnobs } from "../packages/client/src/PlanetSettings.js";
-import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
+import {
+	FLAT_COARSE_LEVEL,
+	PlanetSettings,
+} from "../packages/client/src/PlanetSettings.js";
 import {
 	ChunkAddress,
 	ChunkColumnSampler,
 	TerrainGenerator,
 	buildCoarseMap,
+	flatCoarseMap,
 	generateChunk,
 	seedFromString,
 	selectChunks,
@@ -51,11 +55,16 @@ const FIELD_OF_VIEW = (65 * Math.PI) / 180;
 const ASPECT = 1920 / 1080;
 
 const seed = seedFromString(settings.knobs.seed);
-const shape = settings.shape();
 
 const worldStart = performance.now();
-const map = buildCoarseMap(seed, settings.coarseOptions());
+const map = settings.knobs.coarseMap
+	? buildCoarseMap(seed, settings.coarseOptions())
+	: flatCoarseMap(seed, FLAT_COARSE_LEVEL);
 const worldMs = performance.now() - worldStart;
+
+// The crust top comes from the map's own true peak, the way the client builds
+// it, not the pre-build guess `settings.shape()` uses for the panel.
+const shape = settings.shapeFor(map);
 
 const byLod: TerrainGenerator[] = [];
 for (let lod = 0; lod <= CHUNK_LEVEL; lod++)

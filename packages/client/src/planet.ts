@@ -6,6 +6,7 @@ import {
 	ChunkAtlas,
 	TerrainGenerator,
 	buildCoarseMap,
+	flatCoarseMap,
 	seedFromString,
 	selectChunks,
 	selectionId,
@@ -37,7 +38,7 @@ import {
 	windRotation,
 } from "chamfer/sky";
 import { ParameterPanel } from "./ParameterPanel.js";
-import { PlanetSettings } from "./PlanetSettings.js";
+import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -48,7 +49,6 @@ const settings = PlanetSettings.fromParams(params);
 const RADIUS = settings.radius;
 const DEPTH = settings.depth;
 const CHUNK_LEVEL = settings.chunkLevel;
-const MAX_ELEVATION = settings.maxElevation;
 const seedText = settings.knobs.seed;
 
 /**
@@ -158,12 +158,23 @@ async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
 	const renderer = new ChunkRenderer(ctx);
 
-	report([`seed "${seedText}"`, "routing rivers across the planet..."]);
+	report([
+		`seed "${seedText}"`,
+		settings.knobs.coarseMap
+			? "routing rivers across the planet..."
+			: "the coarse map is off...",
+	]);
 	await paint();
 
 	const seed = seedFromString(seedText);
-	const shape = settings.shape();
-	const map = buildCoarseMap(seed, settings.coarseOptions());
+	const map = settings.knobs.coarseMap
+		? buildCoarseMap(seed, settings.coarseOptions())
+		: flatCoarseMap(seed, FLAT_COARSE_LEVEL);
+
+	// The crust top is placed at the map's own true peak, not a pre-build
+	// guess: a Land setting far from the default shifts sea level a long way,
+	// and a guessed crust top too low shears the mountains flat.
+	const shape = settings.shapeFor(map);
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
 	const clouds = new CloudField(CLOUD_LEVEL);
 	const sky = new SkyRenderer(ctx, {
@@ -226,7 +237,7 @@ async function main(): Promise<void> {
 	}
 	const player = new Player(
 		shape,
-		ground.scale(RADIUS + MAX_ELEVATION),
+		ground.scale(RADIUS + shape.maxElevation),
 		ground.cross(new Vec3(0, 1, 0)).normalize(),
 	);
 	let flying = true;
@@ -300,7 +311,7 @@ async function main(): Promise<void> {
 			map: map.toSnapshot(),
 			seaLevelRadius: RADIUS,
 			subdivisionDepth: DEPTH,
-			maxElevation: MAX_ELEVATION,
+			maxElevation: shape.maxElevation,
 			crustDepth: shape.crustDepth,
 			skirtCells: SKIRT_CELLS,
 			terrain: settings.terrainOptions(),
@@ -355,6 +366,14 @@ async function main(): Promise<void> {
 	// Refilled on a timer, and again whenever a knob moves the decks.
 	let cloudsAt = -CLOUD_INTERVAL * 1000;
 
+	// Whether the sun and moon are frozen, and where -- as seconds on their own
+	// clock, `dayStarted` below. Paused freezes both at that reading; resuming
+	// re-anchors `dayStarted` so the clock continues from there rather than
+	// jumping to wherever it would have reached while frozen.
+	let paused = settings.knobs.paused;
+	let frozenAt = settings.knobs.timeOfDay * DAY_LENGTH;
+	let lastTimeOfDay = settings.knobs.timeOfDay;
+
 	// The bench is already on screen. Hand it what to do with a knob that only
 	// changes how the world is drawn; the ones that change what it is reload
 	// the page and never reach here.
@@ -363,6 +382,22 @@ async function main(): Promise<void> {
 		DAY_LENGTH = live.knobs.dayLength;
 		CLOUD_HEIGHT = live.knobs.lowDeck;
 		cloudsAt = -Infinity;
+
+		const now = performance.now();
+		if (live.knobs.timeOfDay !== lastTimeOfDay) {
+			// Dragged to a specific time: jump there and freeze.
+			lastTimeOfDay = live.knobs.timeOfDay;
+			frozenAt = live.knobs.timeOfDay * DAY_LENGTH;
+			paused = true;
+		} else if (live.knobs.paused && !paused) {
+			// Paused without dragging: freeze wherever the clock already was.
+			frozenAt = (now - dayStarted) / 1000;
+			paused = true;
+		} else if (!live.knobs.paused && paused) {
+			// Resumed: continue smoothly from the frozen reading.
+			dayStarted = now - frozenAt * 1000;
+			paused = false;
+		}
 		refresh();
 	};
 
@@ -445,6 +480,11 @@ async function main(): Promise<void> {
 	);
 
 	const started = performance.now();
+
+	// A pause freezes the sun and the moon, never the wind, so this is its own
+	// clock rather than a reuse of `started` -- reusing it would jump the wind
+	// every time the day/night clock re-anchors itself on a resume.
+	let dayStarted = started;
 	let previous = started;
 	const timer = new FrameTimer();
 	const draw = (now: number) => {
@@ -517,11 +557,11 @@ async function main(): Promise<void> {
 		);
 
 		// The sun turns about the planet's own polar axis, and how lit a place is
-		// comes from one dot product against its own up.
-		const sun = sunDirection(
-			((now - started) / 1000 / DAY_LENGTH) % 1,
-			NORTH,
-		);
+		// comes from one dot product against its own up. Paused reads a frozen
+		// elapsed time instead of the live clock, and both the sun and the moon
+		// below read the same one, so pausing stops them in step.
+		const elapsed = paused ? frozenAt : (now - dayStarted) / 1000;
+		const sun = sunDirection((elapsed / DAY_LENGTH) % 1, NORTH);
 		const day = daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
 
 		// The clouds are thrown away and refilled as the wind turns. There is no
@@ -541,7 +581,7 @@ async function main(): Promise<void> {
 		const moonPlace = windRotation(
 			new Vec3(0.2, 0.55, 0.81).normalize(),
 			NORTH,
-			((now - started) / 1000 / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
+			(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
 		).scale(MOON_DISTANCE);
 		sky.moon = {
 			direction: moonPlace.sub(from).normalize(),

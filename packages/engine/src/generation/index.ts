@@ -12,6 +12,7 @@ export type { CoarseMapSnapshot } from "./coarse/CoarseMapSnapshot.js";
 export { CoarseMap } from "./coarse/CoarseMap.js";
 export { MinHeap } from "./coarse/MinHeap.js";
 export { buildCoarseMap } from "./coarse/buildCoarseMap.js";
+export { flatCoarseMap } from "./coarse/flatCoarseMap.js";
 export { continentHeight } from "./coarse/continentHeight.js";
 export { seaLevelFor } from "./coarse/seaLevelFor.js";
 export { fillPits } from "./coarse/fillPits.js";

@@ -1,6 +1,16 @@
 import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
+import { CoarseMap } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
+
+/**
+ * The level a flat coarse map is built at when the coarse map is off.
+ *
+ * Every field of a flat map is zero everywhere, so no level reads any
+ * differently from any other -- this is the cheapest one, not a rounded
+ * request in metres the way {@link PlanetSettings.coarseLevel} is.
+ */
+export const FLAT_COARSE_LEVEL = 2;
 
 /**
  * The deepest world the address word can name.
@@ -9,15 +19,6 @@ import { LAYER_COUNT, wordBits } from "chamfer/addressing";
  * is `29 + 2 x depth` bits wide and 64 of them run out at depth 17.
  */
 const MAX_DEPTH = 17;
-
-/**
- * The widest word an integer held in a `number` represents exactly.
- *
- * A cell ID is a plain `number`, and above `2^53` those stop being able to
- * count: the low bits are rounded off, which is the layer and the corner. That
- * is a tighter limit than the 64-bit word, and it binds at depth 12.
- */
-const SAFE_WORD_BITS = 53;
 
 /**
  * Metres across the smallest landform the coarse map carries.
@@ -53,6 +54,13 @@ export interface PlanetKnobs {
 
 	/** Cells along one edge of a chunk. */
 	chunkCells: number;
+
+	/**
+	 * Whether the coarse map runs at all: continents, sea, relief, rivers and
+	 * erosion. Off is the one-tier height field doc 08 describes before the
+	 * coarse tier existed -- dry, with the detail term the only relief.
+	 */
+	coarseMap: boolean;
 
 	/** Metres across one cell of the map that carries continents and rivers. */
 	coarseSpacing: number;
@@ -99,6 +107,12 @@ export interface PlanetKnobs {
 
 	/** Seconds in a day. */
 	dayLength: number;
+
+	/** Whether the day and night cycle advances. */
+	paused: boolean;
+
+	/** The fraction of a day to show while paused, 0 at midnight to 1 at the next. */
+	timeOfDay: number;
 }
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
@@ -106,6 +120,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	radius: 6800,
 	blockSize: 1,
 	chunkCells: 32,
+	coarseMap: true,
 	coarseSpacing: 32,
 	heightScale: 200,
 	reliefFeature: 280,
@@ -122,9 +137,18 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	detail: 2,
 	skirtCells: 2,
 	dayLength: 240,
+	paused: false,
+	timeOfDay: 0.5,
 };
 
-/** A knob that is a number, and what it may be set to. */
+/**
+ * A knob that is a number, and what it may be set to.
+ *
+ * A boolean knob reuses this with `low: 0, high: 1, step: 1` -- the panel
+ * tells the two kinds apart by the draft value's own `typeof`, not by a field
+ * here, so a boolean knob's range is unused and kept only so every knob has
+ * one entry in one table.
+ */
 export interface KnobRange {
 	readonly low: number;
 	readonly high: number;
@@ -136,10 +160,18 @@ export interface KnobRange {
 	readonly unit: string;
 }
 
+const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
+	low: 0,
+	high: 1,
+	step: 1,
+	unit: "",
+};
+
 export const KNOB_RANGES: Record<string, KnobRange> = {
 	radius: { low: 850, high: 25000, step: 50, rebuilds: true, unit: "m" },
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
+	coarseMap: { ...TOGGLE, rebuilds: true },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
 	heightScale: { low: 20, high: 1200, step: 20, rebuilds: true, unit: "m" },
 	reliefFeature: {
@@ -180,6 +212,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
 	skirtCells: { low: 0, high: 4, step: 1, rebuilds: true, unit: "cells" },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
+	paused: { ...TOGGLE, rebuilds: false },
+	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
 };
 
 /** The nearest power of two, for turning a size in metres into a level. */
@@ -285,26 +319,63 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * Metres of ground above sea level, and the whole spread from floor to peak.
+	 * A pre-build guess at how far the ground reaches above sea level.
 	 *
-	 * Elevation is linear in the height scale, so both follow from it. Measured
-	 * over 3,000 places on the worked seed, the tallest ground is **0.50** of
-	 * the height scale and the spread from the deepest sea floor to the highest
-	 * peak is **1.15** of it, at every amplitude tried. The margins here are
-	 * for the seeds that were not tried, and for the landform size, which moves
-	 * both figures by about a tenth.
+	 * Elevation is linear in the height scale, so this scales with it. Measured
+	 * over 3,000 places on the worked seed **at the default land fraction of
+	 * 0.3**, the tallest ground came out at 0.50 of the height scale, and this
+	 * keeps a margin above that.
 	 *
-	 * This is not a knob. Setting it above the ground costs generation time for
-	 * air nobody reaches: a column is written from the crust top downward, so
-	 * every metre of empty sky above the tallest peak is a layer evaluated on
-	 * every column of every chunk.
+	 * **This is a guess, not a bound, and Land moves it a lot.** Sea level is a
+	 * percentile of the height field, so raising Land pushes sea level down and
+	 * leaves more of the same field standing above it: measured at landFraction
+	 * 0.05 the tallest ground is 0.25 of the height scale, and at 0.8 it is
+	 * 0.77 — three times higher. Nothing here reads Land, because this getter
+	 * exists to answer the panel's sliders before a coarse map has been built,
+	 * and Land's effect on sea level is not known until one has. Once a map
+	 * exists, {@link tallestGroundOf} gives the true figure and
+	 * {@link shapeFor} uses it — never this — to build the world, which is what
+	 * keeps a Land of 0.8 from silently shearing the mountaintops flat.
+	 *
+	 * With the coarse map off there is no guess to make: elevation is the
+	 * detail term alone, bounded exactly to `[-detailAmplitude,
+	 * detailAmplitude]`, so this is that bound rather than a ratio.
 	 */
 	get maxElevation(): number {
+		if (!this.knobs.coarseMap)
+			return Math.max(1, Math.ceil(this.knobs.detailAmplitude));
 		return Math.ceil(0.6 * this.knobs.heightScale);
 	}
 
-	/** How far the ground spreads, floor to peak, before anyone digs. */
+	/**
+	 * The exact metres of ground above sea level the coarse map's own numbers
+	 * reach, once the detail term's reach is added.
+	 *
+	 * Not a measurement: `fbm` is bounded to `[-1, 1]` by construction — a
+	 * weighted sum of values already in that range, divided by the weights'
+	 * own total — so `detailAmplitude * fbm(...)` can never exceed
+	 * `detailAmplitude` in either direction. Adding it to the coarse map's own
+	 * highest cell gives the true ceiling, not an estimate of it.
+	 */
+	tallestGroundOf(map: CoarseMap): number {
+		let highest = -Infinity;
+		for (let cell = 0; cell < map.count; cell++)
+			if (map.height[cell]! > highest) highest = map.height[cell]!;
+		const metres =
+			(highest - map.seaLevel) * this.knobs.heightScale +
+			this.knobs.detailAmplitude;
+		return Math.max(1, Math.ceil(metres));
+	}
+
+	/**
+	 * How far the ground spreads, floor to peak, before anyone digs.
+	 *
+	 * With the coarse map off the true spread is exactly twice the detail
+	 * amplitude — there is no coarse variation to add a margin for.
+	 */
 	get groundSpan(): number {
+		if (!this.knobs.coarseMap)
+			return Math.max(2, 2 * this.knobs.detailAmplitude);
 		return 1.3 * this.knobs.heightScale;
 	}
 
@@ -363,17 +434,37 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * The three things the engine is handed, in the shapes it takes them.
+	 * The world shape, using the pre-build guess at how tall the ground is.
 	 *
-	 * A knob that reaches no further than this class is a slider that moves and
-	 * changes nothing, which is worse than no slider, so every knob a subsystem
-	 * has an option for is passed here rather than left at its default.
+	 * Only for asking questions before a coarse map exists to answer them
+	 * exactly: the panel's derived readout, and the pre-build refusals in
+	 * {@link problems}. **Never build a world from this** — call
+	 * {@link shapeFor} once the coarse map is built, or a Land setting far from
+	 * 0.3 builds a crust top too low for its own ground and the peaks come out
+	 * flat.
 	 */
 	shape(): WorldShape {
 		return new WorldShape(
 			this.radius,
 			this.depth,
 			this.maxElevation,
+			this.crustDepth,
+		);
+	}
+
+	/**
+	 * The world shape once its coarse map exists, with the crust top placed at
+	 * the map's own true peak rather than a guess.
+	 *
+	 * A knob that reaches no further than this class is a slider that moves and
+	 * changes nothing, which is worse than no slider, so every knob a subsystem
+	 * has an option for is passed here rather than left at its default.
+	 */
+	shapeFor(map: CoarseMap): WorldShape {
+		return new WorldShape(
+			this.radius,
+			this.depth,
+			this.tallestGroundOf(map),
 			this.crustDepth,
 		);
 	}
@@ -396,28 +487,6 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * What is true about this world and worth saying, without stopping it.
-	 *
-	 * Separate from {@link problems} because a world that draws correctly today
-	 * and has a limit behind it is not a world to refuse. Refusing it would take
-	 * the shipped planet off the table.
-	 */
-	notes(): string[] {
-		const out: string[] = [];
-
-		// The address is a `number`, so only the low 53 bits count. The planet
-		// field is the top 12 of the word and is 0 in a single-planet client,
-		// which is why a 55-bit word works: the value never reaches the part
-		// that rounds. It stops working the moment a second planet exists.
-		if (this.addressBits > SAFE_WORD_BITS)
-			out.push(
-				`A cell address is ${this.addressBits} bits at depth ${this.depth} and an ID is a number, which counts exactly to ${SAFE_WORD_BITS}. It is right here because the planet field is 0; on planet 1 or above the layer would be rounded off.`,
-			);
-
-		return out;
-	}
-
-	/**
 	 * Why this world cannot be built, or nothing if it can.
 	 *
 	 * A person setting numbers by hand will reach one of these, and a message
@@ -428,46 +497,77 @@ export class PlanetSettings {
 		const out: string[] = [];
 		const k = this.knobs;
 
-		if (this.wantedDepth > MAX_DEPTH)
+		if (this.wantedDepth > MAX_DEPTH) {
+			// The largest block that keeps this radius under the word: solve
+			// CELL_CONSTANT * radius / 2^MAX_DEPTH for the block size.
+			const largestBlock = (
+				(CELL_CONSTANT * k.radius) /
+				2 ** MAX_DEPTH
+			).toFixed(2);
 			out.push(
-				`A ${k.blockSize} m block on a ${Math.round(k.radius)} m radius splits a face ${this.wantedDepth} times, which needs a ${wordBits(this.wantedDepth)}-bit address, and the word is 64.`,
+				`A ${k.blockSize} m block on a ${Math.round(k.radius)} m radius splits a face ${this.wantedDepth} times, which needs a ${wordBits(this.wantedDepth)}-bit address, and the word is 64. Lower Radius, or raise Block size to at least ${largestBlock} m.`,
 			);
+		}
 
 		// The crust has to reach from the top of the tallest ground to under
 		// the deepest sea, or the sea floor falls out of the bottom of the
 		// world and every ocean column is empty.
 		const reach = this.crustDepth * k.blockSize;
-		if (reach < this.groundSpan)
+		if (reach < this.groundSpan) {
+			const neededCrust = Math.ceil(this.groundSpan);
 			out.push(
-				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world.`,
+				k.coarseMap
+					? `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Height scale to ${Math.floor(reach / 1.3)} m or under.`
+					: `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Detail to ${Math.floor(reach / 2)} m or under.`,
 			);
+		}
 
-		if (this.coarseCell < k.blockSize * 2)
-			out.push(
-				`A ${Math.round(this.coarseCell)} m coarse cell is no coarser than a ${k.blockSize} m block, so the map that carries rivers has nothing left to carry.`,
-			);
+		// The coarse map's own resolution only matters while it runs. Off, its
+		// level is a fixed cheap constant nothing reads, so these two checks
+		// would be warning about a knob with nothing left to affect.
+		if (k.coarseMap) {
+			if (this.coarseCell < k.blockSize * 2) {
+				const neededSpacing = Math.ceil(k.blockSize * 2);
+				out.push(
+					`A ${Math.round(this.coarseCell)} m coarse cell is no coarser than a ${k.blockSize} m block, so the map that carries rivers has nothing left to carry. Raise Coarse cell to at least ${neededSpacing} m.`,
+				);
+			}
 
-		// Two samples across a feature is the least that describes it. Below
-		// that the map records something narrower than it can see, and what it
-		// records changes with the resolution rather than with the seed.
-		if (this.coarseCell * 2 > this.smallestLandform)
-			out.push(
-				`The smallest hill is ${Math.round(this.smallestLandform)} m across and a coarse cell is ${Math.round(this.coarseCell)} m, so the map cannot carry the hills it is being asked for.`,
-			);
+			// Two samples across a feature is the least that describes it. Below
+			// that the map records something narrower than it can see, and what
+			// it records changes with the resolution rather than with the seed.
+			if (this.coarseCell * 2 > this.smallestLandform) {
+				const largestSpacing = Math.floor(this.smallestLandform / 2);
+				const neededLandform = Math.ceil(this.coarseCell * 2);
+				out.push(
+					`The smallest hill is ${Math.round(this.smallestLandform)} m across and a coarse cell is ${Math.round(this.coarseCell)} m, so the map cannot carry the hills it is being asked for. Lower Coarse cell to ${largestSpacing} m or under, or raise Landform across so the smallest hill reaches at least ${neededLandform} m.`,
+				);
+			}
 
-		if (this.maxElevation < k.detailAmplitude * 2)
-			out.push(
-				`Ground reaches ${this.maxElevation} m and the detail alone moves it ${k.detailAmplitude} m, so the tallest ground would be clipped flat.`,
-			);
+			// Off, maxElevation is defined as exactly enough to cover the detail
+			// term (see the getter), so this can never fire and would be
+			// warning about a clipping risk that does not exist in that mode.
+			if (this.maxElevation < k.detailAmplitude * 2) {
+				const neededHeightScale = Math.ceil(
+					(k.detailAmplitude * 2) / 0.6,
+				);
+				const largestDetail = Math.floor(this.maxElevation / 2);
+				out.push(
+					`Ground reaches ${this.maxElevation} m and the detail alone moves it ${k.detailAmplitude} m, so the tallest ground would be clipped flat. Raise Height scale to at least ${neededHeightScale} m, or lower Detail to ${largestDetail} m or under.`,
+				);
+			}
+		}
 
-		if (this.chunkLevel <= 0)
+		if (this.chunkLevel <= 0) {
+			const largestChunkCells = 2 ** Math.max(0, this.depth - 1);
 			out.push(
-				`A ${k.chunkCells}-cell chunk at depth ${this.depth} is the whole face, which leaves nothing for the level of detail to walk down.`,
+				`A ${k.chunkCells}-cell chunk at depth ${this.depth} is the whole face, which leaves nothing for the level of detail to walk down. Lower Chunk to ${largestChunkCells} cells or under.`,
 			);
+		}
 
 		if (k.highDeck <= k.lowDeck)
 			out.push(
-				`The high cloud deck sits at ${k.highDeck} m and the low one at ${k.lowDeck} m, so they are inside out.`,
+				`The high cloud deck sits at ${k.highDeck} m and the low one at ${k.lowDeck} m, so they are inside out. Raise High deck above ${k.lowDeck} m, or lower Low deck under ${k.highDeck} m.`,
 			);
 
 		return out;
@@ -482,6 +582,9 @@ export class PlanetSettings {
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
+			else if (typeof PLANET_DEFAULTS[key] === "boolean")
+				(knobs as unknown as Record<string, boolean>)[key] =
+					raw === "true";
 			else {
 				const value = Number.parseFloat(raw);
 				if (Number.isFinite(value))

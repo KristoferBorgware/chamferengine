@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeCell, wordBits } from "chamfer/addressing";
+import { decodeCell, encodeCell } from "chamfer/addressing";
 import { PlanetSettings } from "../src/PlanetSettings.js";
 
 describe("cell address", () => {
@@ -28,26 +28,80 @@ describe("cell address", () => {
 		expect(past.problems().join(" ")).toMatch(/64/);
 	});
 
-	it("warns rather than refuses once the address passes what a number holds exactly", () => {
-		// The shipped planet sits at depth 13, a 55-bit word. A number counts
-		// exactly to 53 bits, so this is already past it and still builds,
-		// because the round planet field is 0 and the rounding lands above the
-		// bits that are ever set.
+	it("builds cleanly past what a number holds exactly (F-018)", () => {
+		// The shipped planet sits at depth 13, a 55-bit word -- past the 53
+		// bits a number counts exactly. An ID is two 32-bit halves rather than
+		// a number, so this is no longer a limit: a planet field above 0 still
+		// round-trips exactly at this depth.
 		const shipped = new PlanetSettings();
 		expect(shipped.addressBits).toBeGreaterThan(53);
 		expect(shipped.problems()).toEqual([]);
-		expect(shipped.notes().join(" ")).toMatch(/number/);
-	});
 
-	it("is the finding: a second planet loses precision where a number rounds", () => {
-		// This is not hypothetical. Encode the same cell on two different
-		// planet numbers at the shipped depth and watch the low bits go missing
-		// on the one whose word does not fit in 53 bits.
-		const depth = new PlanetSettings().depth;
-		expect(wordBits(depth)).toBeGreaterThan(53);
-
+		const depth = shipped.depth;
 		const fields = { planet: 4095, face: 7, i: 100, j: 5, layer: 800 };
 		const id = encodeCell(fields, depth);
-		expect(Number.isSafeInteger(id)).toBe(false);
+		const back = decodeCell(id, depth);
+		expect(back.planet).toBe(4095);
+		expect(back.layer).toBe(800);
+		expect(back.i).toBe(100);
+		expect(back.j).toBe(5);
+	});
+});
+
+describe("the coarse map off", () => {
+	it("makes maxElevation and groundSpan exact bounds of the detail term", () => {
+		const on = new PlanetSettings({ coarseMap: true, detailAmplitude: 12 });
+		const off = new PlanetSettings({
+			coarseMap: false,
+			detailAmplitude: 12,
+		});
+
+		// On, the estimate is a ratio of the height scale and has nothing to do
+		// with the detail term.
+		expect(on.maxElevation).not.toBe(12);
+
+		// Off, elevation is the detail term alone, so the true bound is exact.
+		expect(off.maxElevation).toBe(12);
+		expect(off.groundSpan).toBe(24);
+	});
+
+	it("skips the coarse-resolution problems, since nothing reads that knob", () => {
+		// This combination would refuse for being too fine a coarse cell if
+		// the coarse map were on.
+		const off = new PlanetSettings({
+			coarseMap: false,
+			coarseSpacing: 1,
+			blockSize: 4,
+		});
+		expect(off.problems()).toEqual([]);
+	});
+
+	it("still catches a crust too shallow for the detail term", () => {
+		const off = new PlanetSettings({
+			coarseMap: false,
+			detailAmplitude: 40,
+			crustMetres: 32,
+		});
+		expect(off.problems().join(" ")).toMatch(/sea floor/);
+	});
+});
+
+describe("boolean knobs round-trip through a query string", () => {
+	it("reads coarseMap, paused and timeOfDay back out", () => {
+		const params = new PlanetSettings({
+			coarseMap: false,
+			paused: true,
+			timeOfDay: 0.75,
+		}).toParams();
+		const back = PlanetSettings.fromParams(params);
+		expect(back.knobs.coarseMap).toBe(false);
+		expect(back.knobs.paused).toBe(true);
+		expect(back.knobs.timeOfDay).toBe(0.75);
+	});
+
+	it("leaves an unset boolean at its default", () => {
+		const back = PlanetSettings.fromParams(new URLSearchParams());
+		expect(back.knobs.coarseMap).toBe(true);
+		expect(back.knobs.paused).toBe(false);
 	});
 });
