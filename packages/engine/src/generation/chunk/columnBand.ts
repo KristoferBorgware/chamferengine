@@ -18,5 +18,5 @@ export function columnBand(blocks: Uint16Array): Column {
 			break;
 		}
 	}
-	return { blocks, first, last };
+	return { blocks, first, last, groundRadius: 0, waterRadius: 0 };
 }

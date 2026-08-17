@@ -41,6 +41,12 @@ export class Chunk {
 	 */
 	readonly band: Int16Array;
 
+	/**
+	 * Each slot's true surface radii, ground then water, before the rounding
+	 * to this chunk's own layer grid. Zeros where nothing recorded them.
+	 */
+	readonly surface: Float32Array;
+
 	constructor(
 		address: ChunkAddress,
 		depth: number,
@@ -48,6 +54,7 @@ export class Chunk {
 		layerCount: number,
 		blocks?: Uint16Array,
 		band?: Int16Array,
+		surface?: Float32Array,
 	) {
 		this.address = address;
 		this.depth = depth;
@@ -57,6 +64,7 @@ export class Chunk {
 		this.layerCount = layerCount;
 		this.blocks = blocks ?? new Uint16Array(this.slots * layerCount);
 		this.band = band ?? new Int16Array(this.slots * 2);
+		this.surface = surface ?? new Float32Array(this.slots * 2);
 	}
 
 	/** The column at a slot, as the mesher reads it. */
@@ -66,6 +74,8 @@ export class Chunk {
 			blocks: this.blocks.subarray(base, base + this.layerCount),
 			first: this.band[slot * 2]!,
 			last: this.band[slot * 2 + 1]!,
+			groundRadius: this.surface[slot * 2]!,
+			waterRadius: this.surface[slot * 2 + 1]!,
 		};
 	}
 
@@ -80,6 +90,10 @@ export class Chunk {
 
 	/** How many bytes the chunk holds, for a residency budget. */
 	get byteLength(): number {
-		return this.blocks.byteLength + this.band.byteLength;
+		return (
+			this.blocks.byteLength +
+			this.band.byteLength +
+			this.surface.byteLength
+		);
 	}
 }

@@ -38,7 +38,7 @@ function mesh(key: number): ChunkMesh {
 		radius: 20,
 		opaque: geometry(),
 		translucent: geometry(),
-		tally: { cells: 1, faces: 2, merged: 0 },
+		tally: { cells: 1, faces: 2, merged: 0, apron: 0 },
 	};
 }
 

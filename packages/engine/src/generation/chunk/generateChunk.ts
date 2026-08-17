@@ -38,6 +38,8 @@ export function generateChunk(
 			);
 			chunk.band[slot * 2] = band.first;
 			chunk.band[slot * 2 + 1] = band.last;
+			chunk.surface[slot * 2] = column.groundRadius;
+			chunk.surface[slot * 2 + 1] = column.waterRadius;
 		}
 	return chunk;
 }

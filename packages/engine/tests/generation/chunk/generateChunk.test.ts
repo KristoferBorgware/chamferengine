@@ -79,8 +79,9 @@ describe("Chunk", () => {
 		const chunk = new Chunk(ChunkAddress.fromKey(0, 6), 11, 6, 435);
 		expect(chunk.slots).toBe(561);
 		expect(chunk.blocks.length).toBe(244035);
-		// Two bytes a cell, plus two band entries of two bytes per slot.
-		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 4);
+		// Two bytes a cell, two band entries of two bytes per slot, and two
+		// surface radii of four bytes per slot.
+		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 4 + 561 * 8);
 	});
 
 	it("indexes a cell as its rank times the layer count", () => {

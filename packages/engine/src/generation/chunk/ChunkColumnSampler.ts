@@ -59,7 +59,13 @@ export class ChunkColumnSampler implements ColumnSampler {
 				0,
 				chunk.layerCount,
 			);
-			made = { blocks, first: band.first, last: band.last };
+			made = {
+				blocks,
+				first: band.first,
+				last: band.last,
+				groundRadius: column.groundRadius,
+				waterRadius: column.waterRadius,
+			};
 			this.outside++;
 		}
 

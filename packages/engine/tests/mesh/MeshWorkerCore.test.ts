@@ -53,7 +53,7 @@ function here(key: number, chunkLevel: number, lod: number) {
 		new ChunkColumnSampler(chunk, terrain),
 		at,
 		SEED,
-		{ skirtCells: 2 },
+		{ skirtCells: 2, surfaceGrid: shape.blockSize },
 	);
 }
 

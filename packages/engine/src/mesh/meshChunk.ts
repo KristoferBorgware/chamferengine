@@ -27,6 +27,9 @@ export interface MeshTally {
 
 	/** Side faces the run-length merge collapsed away. */
 	merged: number;
+
+	/** Cells drawn beyond the rim, closing the tiling gap at a level join. */
+	apron: number;
 }
 
 /** Scratch color, refilled per face rather than allocated per vertex. */
@@ -39,6 +42,36 @@ const COLOR = new Float32Array(3);
  * exposure allows.
  */
 const SKY_REACH = 6;
+
+/**
+ * How far below its true radius an apron cell is drawn, in metres.
+ *
+ * An apron duplicates a cell its neighbour may be drawing as its own, and two
+ * copies of one polygon written against two different chunk origins land on
+ * two different `float32` roundings — a sparkle of depth fighting along every
+ * boundary. A centimetre puts the apron cleanly underneath wherever a real
+ * cell exists, and a centimetre down is invisible where one does not.
+ */
+const APRON_DROP = 0.01;
+
+/**
+ * Where a chunk's surfaces sit once snapped to the shared fine grid.
+ *
+ * The rounding is {@link WorldShape.layerOfSurface}'s, on the grid the caller
+ * asked for rather than the chunk's own: the layer boundaries hang from the
+ * crust top, which every level shares, so two levels snapping one radius get
+ * one answer.
+ */
+function snappedSurface(
+	crustTopRadius: number,
+	radius: number,
+	grid: number,
+): number {
+	return (
+		crustTopRadius -
+		Math.ceil((crustTopRadius - radius) / grid - 1e-9) * grid
+	);
+}
 
 /** Multiply a color in place. */
 function shade(color: Float32Array, by: number): void {
@@ -79,10 +112,19 @@ export function meshChunk(
 	const n = 1 << depth;
 	const face = chunk.address.face;
 	const layers = chunk.layerCount;
-	const tally: MeshTally = { cells: 0, faces: 0, merged: 0 };
+	const grid = settings.surfaceGrid || shape.blockSize;
+	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
+
+	// The cells just outside the rim. Two chunks drawn at different levels
+	// tile the boundary with hexagons of two different sizes, and those do not
+	// interlock: strips of ground fall between the levels' jagged edges with
+	// neither side's cells covering them. Each chunk closes its own side by
+	// also drawing the ring beyond its rim, dropped a centimetre so a real
+	// cell wins wherever one exists.
+	const apron = new Map<number, { face: number; i: number; j: number }>();
 
 	for (let q = 0; q <= chunk.m; q++)
 		for (let r = 0; q + r <= chunk.m; r++) {
@@ -101,6 +143,13 @@ export function meshChunk(
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
 				outward[k] =
 					onRim && nb !== null && !inChunk(chunk, nb.i, nb.j);
+				if (outward[k] && nb && settings.skirtCells > 0) {
+					const canon = canonicalCell(nb.face, n, nb.i, nb.j);
+					apron.set(
+						(canon.face * 262144 + canon.i) * 262144 + canon.j,
+						canon,
+					);
+				}
 			}
 
 			meshCell(
@@ -122,8 +171,28 @@ export function meshChunk(
 				settings.crustFloor,
 				settings.skirtCells > 0 ? outward : null,
 				settings.skirtCells,
+				grid,
 			);
 		}
+
+	for (const cell of apron.values()) {
+		if (owns(chunk, cell.face, n, cell.i, cell.j)) continue;
+		meshApronCell(
+			chunk,
+			sampler,
+			shape,
+			seed,
+			origin,
+			cell,
+			ring,
+			layers,
+			opaque,
+			translucent,
+			tally,
+			settings.skirtCells,
+			grid,
+		);
+	}
 	return tally;
 }
 
@@ -181,6 +250,7 @@ function meshCell(
 	crustFloor: boolean,
 	outward: readonly boolean[] | null,
 	skirtCells: number,
+	grid: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -197,6 +267,31 @@ function meshCell(
 	}
 	const from = Math.max(0, bandTop - 1);
 	const to = Math.min(layers - 1, bandBottom + 1);
+
+	// Where the ground and water surfaces sit once snapped to the shared fine
+	// grid, and which of this chunk's own layers each cap belongs to. Every
+	// level snapping to one grid is what merges the levels: wherever the
+	// terrain gave two levels the same surface, their caps land on the same
+	// radius and the join disappears. Caps deeper down -- cave ceilings and
+	// floors -- stay on the chunk's own grid, where nothing joins them.
+	const groundCap =
+		own.groundRadius > 0 ? shape.layerOfSurface(own.groundRadius) : -1;
+	const waterCap =
+		own.waterRadius > 0 ? shape.layerOfSurface(own.waterRadius) : -1;
+	const groundTop =
+		groundCap >= 0
+			? snappedSurface(shape.crustTopRadius, own.groundRadius, grid)
+			: 0;
+	const waterTop =
+		waterCap >= 0
+			? snappedSurface(shape.crustTopRadius, own.waterRadius, grid)
+			: 0;
+	const capRadius = (layer: number): number =>
+		layer === groundCap
+			? groundTop
+			: layer === waterCap
+				? waterTop
+				: shape.radiusOfLayer(layer);
 
 	// How much sky this column takes, from the ground standing around it. A
 	// hollow is darker than a ridge, which the occlusion at a face's corners
@@ -223,7 +318,7 @@ function meshCell(
 				sink,
 				corners,
 				degree,
-				shape.radiusOfLayer(layer),
+				capRadius(layer),
 				origin,
 				FACE_SHADE.top,
 				true,
@@ -286,7 +381,7 @@ function meshCell(
 					corners,
 					degree,
 					k,
-					shape.radiusOfLayer(top),
+					capRadius(top),
 					shape.radiusOfLayer(top + skirtCells),
 					origin,
 					ring,
@@ -327,7 +422,7 @@ function meshCell(
 				corners,
 				degree,
 				k,
-				shape.radiusOfLayer(layer),
+				capRadius(layer),
 				shape.radiusOfLayer(end + 1),
 				origin,
 				ring,
@@ -340,6 +435,133 @@ function meshCell(
 		}
 	}
 	void chunk;
+}
+
+/**
+ * Draw one cell from just beyond the rim, a centimetre under its true height.
+ *
+ * The apron is coverage, not terrain. Where the neighbouring chunk is at this
+ * chunk's own level it draws this very cell itself, and the apron sits a
+ * centimetre under it, invisible. Where the levels differ, the two tilings'
+ * jagged edges leave strips neither side's own cells cover, and the apron is
+ * what shows there instead of the sky through the planet. Only the surface is
+ * drawn: the caps, and a skirt on the edges facing away from the chunk.
+ */
+function meshApronCell(
+	chunk: Chunk,
+	sampler: ColumnSampler,
+	shape: WorldShape,
+	seed: number,
+	origin: Vec3,
+	cell: { face: number; i: number; j: number },
+	ring: (Column | null)[],
+	layers: number,
+	opaque: MeshSink,
+	translucent: MeshSink,
+	tally: MeshTally,
+	skirtCells: number,
+	grid: number,
+): void {
+	const n = 1 << chunk.depth;
+	const { face, i, j } = cell;
+	const corners = cellCorners(face, n, i, j);
+	const degree = corners.length;
+	const own = sampler.columnAt(face, i, j);
+
+	const away: boolean[] = new Array<boolean>(6).fill(false);
+	for (let k = 0; k < 6; k++) {
+		const nb = k < degree ? neighbour(face, n, i, j, k) : null;
+		ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+		// The edges facing away from the chunk carry the skirt; the inner ones
+		// are buried in the rim cells the chunk already drew.
+		away[k] =
+			nb === null ||
+			nb.face !== chunk.address.face ||
+			!inChunk(chunk, nb.i, nb.j);
+	}
+
+	let bandTop = own.first;
+	let bandBottom = own.last;
+	for (let k = 0; k < degree; k++) {
+		const other = ring[k];
+		if (!other) continue;
+		if (other.first < bandTop) bandTop = other.first;
+		if (other.last > bandBottom) bandBottom = other.last;
+	}
+	const from = Math.max(0, bandTop - 1);
+	const to = Math.min(layers - 1, bandBottom + 1);
+
+	const groundCap =
+		own.groundRadius > 0 ? shape.layerOfSurface(own.groundRadius) : -1;
+	const waterCap =
+		own.waterRadius > 0 ? shape.layerOfSurface(own.waterRadius) : -1;
+	const groundTop =
+		groundCap >= 0
+			? snappedSurface(shape.crustTopRadius, own.groundRadius, grid)
+			: 0;
+	const waterTop =
+		waterCap >= 0
+			? snappedSurface(shape.crustTopRadius, own.waterRadius, grid)
+			: 0;
+	const capRadius = (layer: number): number =>
+		layer === groundCap
+			? groundTop
+			: layer === waterCap
+				? waterTop
+				: shape.radiusOfLayer(layer);
+
+	const around: number[] = [];
+	for (let k = 0; k < degree; k++) {
+		const other = ring[k];
+		if (other) around.push(other.first);
+	}
+	const sky = skyExposure(own.first, around, SKY_REACH);
+
+	// Up-caps only: the apron exists to be looked down at.
+	for (let layer = from; layer <= to; layer++) {
+		const block = at(own, layer);
+		const here = opacityOf(block);
+		if (here === 0) continue;
+		if (opacityOf(at(own, layer - 1)) >= here) continue;
+		blockColor(block, face, i, j, seed, COLOR, 0);
+		shade(COLOR, sky);
+		emitCap(
+			here === 1 ? translucent : opaque,
+			corners,
+			degree,
+			capRadius(layer) - APRON_DROP,
+			origin,
+			FACE_SHADE.top,
+			true,
+			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
+		);
+		tally.faces++;
+	}
+
+	// A skirt down from the surface on the outward edges.
+	const top = firstSolid(own, from, to);
+	if (top >= 0) {
+		const block = at(own, top);
+		blockColor(block, face, i, j, seed, COLOR, 0);
+		shade(COLOR, sky);
+		for (let k = 0; k < degree; k++) {
+			if (!away[k] || !ring[k]) continue;
+			emitSide(
+				opaque,
+				corners,
+				degree,
+				k,
+				capRadius(top) - APRON_DROP,
+				shape.radiusOfLayer(top + skirtCells) - APRON_DROP,
+				origin,
+				ring,
+				top,
+				top + skirtCells,
+			);
+			tally.faces++;
+		}
+	}
+	tally.apron++;
 }
 
 /**

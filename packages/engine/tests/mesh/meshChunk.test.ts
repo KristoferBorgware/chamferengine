@@ -8,8 +8,10 @@ import {
 	columnBand,
 	TerrainGenerator,
 	buildCoarseMap,
+	flatCoarseMap,
 	generateChunk,
 	seedFromString,
+	selectChunks,
 } from "chamfer/generation";
 import {
 	AMBIENT_OCCLUSION,
@@ -20,7 +22,13 @@ import {
 } from "chamfer/mesh";
 import { Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
-import { joinPath, positionToCell } from "chamfer/addressing";
+import {
+	canonicalCell,
+	joinPath,
+	neighbour,
+	positionToCell,
+	splitPath,
+} from "chamfer/addressing";
 import type { Geometry } from "chamfer/mesh";
 
 const DEPTH = 8;
@@ -335,6 +343,187 @@ describe("vertical run-length merging", () => {
 		// Two runs a side now, because a quad carries one block's color.
 		expect(tally.faces).toBe(6 * 2 + 2);
 		expect(tally.merged).toBe(6 * (9 + 9));
+	});
+});
+
+describe("merging at a level seam", () => {
+	/** The largest radius any vertex of a mesh reaches. */
+	function crest(built: { origin: Vec3; opaque: Geometry }): number {
+		const v = built.opaque.vertices;
+		let highest = 0;
+		for (let at = 0; at < v.length; at += 6) {
+			const x = v[at]! + built.origin.x;
+			const y = v[at + 1]! + built.origin.y;
+			const z = v[at + 2]! + built.origin.z;
+			highest = Math.max(highest, Math.sqrt(x * x + y * y + z * z));
+		}
+		return highest;
+	}
+
+	function flatMesh(lod: number, grid: number) {
+		const flat = flatCoarseMap(map.seed, 2);
+		const base = new WorldShape(1700, DEPTH, 1, maxCrustDepth(DEPTH));
+		const at = base.atLod(lod);
+		const gen = new TerrainGenerator(map.seed, at, flat, {
+			detailAmplitude: 0,
+		});
+		const chunk = generateChunk(
+			gen,
+			ChunkAddress.fromKey(0, CHUNK_LEVEL - lod),
+			CHUNK_LEVEL - lod,
+			at.crustDepth,
+		);
+		return buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, gen),
+			at,
+			map.seed,
+			{ skirtCells: 2, surfaceGrid: grid },
+		);
+	}
+
+	it("puts every level's surface of a flat world at one radius", () => {
+		// A chunk drawn coarser rounds its surfaces to its own coarser layer
+		// grid, so on a world with no relief each level's whole surface sat a
+		// different number of metres down and every level join was a cliff.
+		// Snapped to the shared fine grid, levels agree wherever the terrain
+		// does -- on a flat world, everywhere.
+		const base = new WorldShape(1700, DEPTH, 1, maxCrustDepth(DEPTH));
+		const fine = crest(flatMesh(0, base.blockSize));
+		const coarse = crest(flatMesh(1, base.blockSize));
+		expect(Math.abs(fine - coarse)).toBeLessThan(0.02);
+
+		// Without the shared grid the coarser level rounds a whole coarse
+		// block further down, which is the seam the merge removes. Zero asks
+		// for the chunk's own grid, which is what an unmerged level used.
+		const unmerged = crest(flatMesh(1, 0));
+		expect(fine - unmerged).toBeGreaterThan(base.blockSize * 0.9);
+	});
+
+	it("draws the apron with the skirt, and not without", () => {
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(9, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const bare = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+		);
+		const skirted = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ skirtCells: 2 },
+		);
+		expect(bare.tally.apron).toBe(0);
+		const m = 1 << (DEPTH - CHUNK_LEVEL);
+		expect(skirted.tally.apron).toBeGreaterThan(m);
+		expect(skirted.tally.apron).toBeLessThan(4 * (m + 2));
+	});
+
+	it("has an apron cell for every hole two levels leave between them", () => {
+		// Two levels tile a shared boundary with hexagons of two sizes, and
+		// those do not interlock: some ground's containing cell is centred in
+		// the chunk across the line, at a lattice that chunk does not use, so
+		// nobody's own cells draw it. The apron ring is exactly what covers
+		// it, and this is the check that it always does.
+		const viewer = new Vec3(0.3, 0.7, 0.5).normalize();
+		const chosen = selectChunks(DEPTH, CHUNK_LEVEL, viewer, 2100, 1700);
+		const lods = new Set(chosen.map((sel) => sel.lod));
+		expect(lods.size).toBeGreaterThan(1);
+
+		const parsed = chosen.map((sel) => ({
+			lod: sel.lod,
+			n: 1 << (DEPTH - sel.lod),
+			depth: DEPTH - sel.lod,
+			address: ChunkAddress.fromKey(sel.key, sel.chunkLevel),
+			chunkLevel: sel.chunkLevel,
+		}));
+		type Parsed = (typeof parsed)[number];
+
+		const drawn = (
+			chunk: Parsed,
+			cell: { face: number; i: number; j: number },
+		): boolean => {
+			if (cell.face !== chunk.address.face) return false;
+			const split = splitPath(
+				cell.i,
+				cell.j,
+				chunk.depth,
+				chunk.chunkLevel,
+			);
+			for (let level = 0; level < split.path.length; level++)
+				if (split.path[level] !== chunk.address.path[level])
+					return false;
+			return true;
+		};
+		const owned = (chunk: Parsed, direction: Vec3): boolean => {
+			const cell = positionToCell(direction, chunk.n);
+			return drawn(
+				chunk,
+				canonicalCell(cell.face, chunk.n, cell.i, cell.j),
+			);
+		};
+		const aproned = (chunk: Parsed, direction: Vec3): boolean => {
+			const cell = positionToCell(direction, chunk.n);
+			const canon = canonicalCell(cell.face, chunk.n, cell.i, cell.j);
+			for (let k = 0; k < 6; k++) {
+				const nb = neighbour(canon.face, chunk.n, canon.i, canon.j, k);
+				if (!nb) continue;
+				if (drawn(chunk, canonicalCell(nb.face, chunk.n, nb.i, nb.j)))
+					return true;
+			}
+			return false;
+		};
+
+		const east = viewer.cross(new Vec3(0, 1, 0)).normalize();
+		const north = viewer.cross(east).normalize();
+		let s = 13579;
+		const rnd = () => {
+			s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+			return s / 2 ** 32;
+		};
+		let inside = 0;
+		let bare = 0;
+		let uncovered = 0;
+		for (let t = 0; t < 6000; t++) {
+			const direction = viewer
+				.add(east.scale((rnd() - 0.5) * 1.2))
+				.add(north.scale((rnd() - 0.5) * 1.2))
+				.normalize();
+			if (!parsed.some((chunk) => owned(chunk, direction))) {
+				// Inside the selection at all?
+				const base = positionToCell(direction, 1 << DEPTH);
+				const canon = canonicalCell(
+					base.face,
+					1 << DEPTH,
+					base.i,
+					base.j,
+				);
+				const home = parsed.find((chunk) =>
+					drawn({ ...chunk, depth: DEPTH } as Parsed, {
+						face: canon.face,
+						i: canon.i,
+						j: canon.j,
+					}),
+				);
+				if (!home) continue;
+				inside++;
+				bare++;
+				if (!parsed.some((chunk) => aproned(chunk, direction)))
+					uncovered++;
+			} else inside++;
+		}
+		expect(inside).toBeGreaterThan(1000);
+		// The gap is real -- some ground is nobody's own cell...
+		expect(bare).toBeGreaterThan(0);
+		// ...and the apron reaches all of it.
+		expect(uncovered).toBe(0);
 	});
 });
 

@@ -25,9 +25,23 @@ export interface MeshOptions {
 	 * what seam ownership is for.
 	 */
 	readonly skirtCells?: number;
+
+	/**
+	 * The layer grid every level's surface caps snap to, in metres.
+	 *
+	 * A chunk drawn coarser rounds its surfaces to its own coarser layers, so
+	 * two levels disagree about a surface the terrain placed identically and
+	 * the join reads as a step. Snapping every level's top caps to the finest
+	 * grid instead — the world's real block grid — makes the levels agree
+	 * exactly wherever the terrain does, and the step shrinks to what the
+	 * sampling genuinely changed. Zero snaps to the chunk's own grid, which
+	 * is what the finest level does anyway.
+	 */
+	readonly surfaceGrid?: number;
 }
 
 export const MESH_DEFAULTS = {
 	crustFloor: false,
 	skirtCells: 0,
+	surfaceGrid: 0,
 } as const satisfies Required<MeshOptions>;

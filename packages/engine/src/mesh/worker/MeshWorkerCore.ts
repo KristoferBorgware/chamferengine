@@ -61,7 +61,9 @@ export class MeshWorkerCore {
 			new ChunkColumnSampler(chunk, terrain),
 			shape,
 			this.seed,
-			{ skirtCells: this.skirtCells },
+			// Every level snaps its surface caps to the finest level's grid,
+			// which is what merges the levels where the terrain agrees.
+			{ skirtCells: this.skirtCells, surfaceGrid: this.shape.blockSize },
 		);
 		return {
 			id: job.id,
