@@ -4,7 +4,7 @@ Every release after the first is planned the same way: **discuss, try, then
 implement**. This page says what each step is, what ends it, and what a plan
 file looks like while it is being worked through.
 
-Read this before opening a new file in [`plans/`](plans/).
+Read this before opening a new file in `plans/`.
 
 [`plans/v0.1.0.md`](plans/v0.1.0.md) is organised by project rather than by
 item, because it was building an engine that did not exist. Everything after it
@@ -91,10 +91,10 @@ Each candidate is built somewhere that is not the engine, and measured.
 
 **What happens.** Each candidate gets a plan, then whichever of these apply:
 
-- **A verification script** in [`verification/`](verification/), plain Node with
+- **A verification script** in `verification/`, plain Node with
   no dependencies, in the style of everything already there. This is where a
   candidate that turns on a number is settled.
-- **A demo** in [`demos/`](demos/), standalone HTML with no dependencies, where
+- **A demo** in `demos/`, standalone HTML with no dependencies, where
   a candidate turns on how something looks or feels rather than on a count.
 - **A test** in `packages/engine/tests/`, where the candidate has a behaviour
   that can be stated and checked without a device.
@@ -128,8 +128,8 @@ Step 2's results are applied to the engine, for every item in the release.
 
 **What happens.** Each chosen solution is built, in whatever order suits the
 code. The verification scripts, demos and tests from step 2 stay — they move
-from being a trial to being part of the corpus, and
-[`tools/make-reference.js`](tools/make-reference.js) runs them from then on.
+from being a trial to being part of the corpus, and `tools/make-reference.js`
+runs them from then on.
 
 **No decisions are taken in this step.** Step 3 is the mechanical part on
 purpose. If implementing an item turns up a choice nobody made, **the item goes

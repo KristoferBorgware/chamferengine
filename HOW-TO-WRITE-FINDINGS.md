@@ -205,7 +205,7 @@ look at this", and an entry rewritten to match the fix cannot answer it.
 
 ## Promoting one
 
-A finding that becomes real work moves into [`plans/`](plans/) as an item, and
+A finding that becomes real work moves into `plans/` as an item, and
 its entry closes with `promoted to plans/v<version>.md, I-<n>`. The plan is what
 gets built; the register is what is waiting.
 
