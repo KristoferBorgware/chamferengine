@@ -417,6 +417,12 @@ means a different amount of cutting on every planet size and every coarse
 spacing. Tuning it on one world and changing the radius silently changes the
 terrain. Nothing is wrong today because only one spacing ships.
 
+Re-measured after the relief tier was stated in metres, the gap closed to
+**35.4 m against 34.4 m** — the tier now stops at 70 m, which both a 32 m and a
+16 m map carry, so neither has fine content the other lacks. The units in
+`erode` are still grid units, so the symptom comes back for anyone who moves the
+smallest landform below twice a coarse cell.
+
 **What would fix it.** Write the incision against metres: divide `drop` by the
 coarse spacing to get a real gradient, and multiply `flow` by the cell area to
 get a catchment, then scale the rate so the shipped worlds keep the terrain they

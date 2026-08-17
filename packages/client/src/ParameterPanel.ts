@@ -35,10 +35,12 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The ground",
-		note: "Also a rebuild. The height scale is what makes a hill a mountain, and the tallest ground follows from it.",
+		note: "Also a rebuild. The height scale is how tall a hill is and the landform size is how wide, and it is the width that decides whether the ground reads as hills or as a slope.",
 		knobs: [
 			{ key: "heightScale", label: "Height scale", digits: 0 },
+			{ key: "reliefFeature", label: "Landform across", digits: 0 },
 			{ key: "detailAmplitude", label: "Detail", digits: 0 },
+			{ key: "detailFeature", label: "Detail across", digits: 0 },
 			{ key: "landFraction", label: "Land", digits: 2 },
 			{ key: "skirtCells", label: "Skirt", digits: 0 },
 		],
@@ -245,6 +247,8 @@ export class ParameterPanel {
 			`<span>chunk <b>${settings.chunkSpan.toFixed(0)} m</b></span>` +
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			`<span>coarse <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
+			`<span>landforms <b>${settings.knobs.reliefFeature} m</b> down to <b>${settings.smallestLandform.toFixed(0)} m</b>, <b>${settings.reliefOctaves}</b> octaves</span>` +
+			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + 1.7))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
 			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>`;

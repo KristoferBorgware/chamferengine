@@ -8,6 +8,21 @@ const LAYER_CEILING = 1024;
 const MAX_DEPTH = 17;
 
 /**
+ * Metres across the smallest landform the coarse map carries.
+ *
+ * The relief tier is summed octaves, each half the width of the one above it,
+ * and this is where that stops. It is a fixed number of metres rather than a
+ * multiple of the coarse cell: tying it to the cell would give a 16 m map one
+ * more octave than a 32 m map, so the same seed would grow different hills at
+ * different resolutions, and the resolution is supposed to decide only how
+ * finely a river is drawn.
+ *
+ * A map has to be fine enough to carry it, which is two samples across a
+ * feature. That is what refuses a coarse cell wider than half of this.
+ */
+const SMALLEST_LANDFORM = 64;
+
+/**
  * What a person sets, before anything is derived from it.
  *
  * Every one of these is in metres or in cells — something a person can picture.
@@ -33,8 +48,14 @@ export interface PlanetKnobs {
 	/** Metres of elevation one unit of the coarse map stands for. */
 	heightScale: number;
 
+	/** Metres across the largest hill or valley the coarse map carries. */
+	reliefFeature: number;
+
 	/** Metres the fine detail moves the surface by. */
 	detailAmplitude: number;
+
+	/** Metres across the largest feature the fine detail makes. */
+	detailFeature: number;
 
 	/** How much of the surface stands above the sea. */
 	landFraction: number;
@@ -74,8 +95,10 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	blockSize: 1,
 	chunkCells: 32,
 	coarseSpacing: 32,
-	heightScale: 480,
+	heightScale: 200,
+	reliefFeature: 280,
 	detailAmplitude: 5,
+	detailFeature: 112,
 	landFraction: 0.3,
 	crustMetres: 900,
 	atmosphereTop: 400,
@@ -107,7 +130,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
 	heightScale: { low: 20, high: 1200, step: 20, rebuilds: true, unit: "m" },
+	reliefFeature: {
+		low: 128,
+		high: 4096,
+		step: 16,
+		rebuilds: true,
+		unit: "m",
+	},
 	detailAmplitude: { low: 0, high: 60, step: 1, rebuilds: true, unit: "m" },
+	detailFeature: { low: 16, high: 512, step: 8, rebuilds: true, unit: "m" },
 	landFraction: {
 		low: 0.05,
 		high: 0.8,
@@ -234,10 +265,11 @@ export class PlanetSettings {
 	 * Metres of ground above sea level, and the whole spread from floor to peak.
 	 *
 	 * Elevation is linear in the height scale, so both follow from it. Measured
-	 * over 3,000 places on the worked seed, the tallest ground is **0.45** of
+	 * over 3,000 places on the worked seed, the tallest ground is **0.50** of
 	 * the height scale and the spread from the deepest sea floor to the highest
-	 * peak is **1.06** of it, at every amplitude tried. The margins here are
-	 * for the seeds that were not tried.
+	 * peak is **1.15** of it, at every amplitude tried. The margins here are
+	 * for the seeds that were not tried, and for the landform size, which moves
+	 * both figures by about a tenth.
 	 *
 	 * This is not a knob. Setting it above the ground costs generation time for
 	 * air nobody reaches: a column is written from the crust top downward, so
@@ -245,17 +277,49 @@ export class PlanetSettings {
 	 * every column of every chunk.
 	 */
 	get maxElevation(): number {
-		return Math.ceil(0.55 * this.knobs.heightScale);
+		return Math.ceil(0.6 * this.knobs.heightScale);
 	}
 
 	/** How far the ground spreads, floor to peak, before anyone digs. */
 	get groundSpan(): number {
-		return 1.15 * this.knobs.heightScale;
+		return 1.3 * this.knobs.heightScale;
 	}
 
 	/** Metres across one cell of the coarse map, once its level is rounded. */
 	get coarseCell(): number {
 		return (CELL_CONSTANT * this.radius) / 2 ** this.coarseLevel;
+	}
+
+	/**
+	 * How many octaves the relief tier runs, and the smallest hill it makes.
+	 *
+	 * Each octave is half the width of the one above, so the count is however
+	 * many halvings fit between the largest landform and the smallest. Asking
+	 * for wider hills therefore buys octaves and asking for narrower ones spends
+	 * them, which keeps the finest hill the same size on every planet.
+	 */
+	get reliefOctaves(): number {
+		const halvings = Math.log2(
+			this.knobs.reliefFeature / SMALLEST_LANDFORM,
+		);
+		return Math.max(1, Math.floor(halvings) + 1);
+	}
+
+	get smallestLandform(): number {
+		return this.knobs.reliefFeature / 2 ** (this.reliefOctaves - 1);
+	}
+
+	/**
+	 * A size in metres, as the engine's noise wants it.
+	 *
+	 * Noise is sampled from a unit direction, so a frequency counts features
+	 * across the whole sphere. One feature is then `radius / frequency` metres,
+	 * and a planet four times larger grows four times larger hills from the same
+	 * number. Every frequency the engine takes is derived here from a size, so
+	 * changing the radius moves the horizon and leaves the landforms alone.
+	 */
+	private frequencyFor(metres: number): number {
+		return this.radius / metres;
 	}
 
 	/** Metres across one chunk. */
@@ -283,6 +347,8 @@ export class PlanetSettings {
 		return {
 			level: this.coarseLevel,
 			landFraction: this.knobs.landFraction,
+			reliefFrequency: this.frequencyFor(this.knobs.reliefFeature),
+			reliefOctaves: this.reliefOctaves,
 		};
 	}
 
@@ -290,6 +356,7 @@ export class PlanetSettings {
 		return {
 			heightScale: this.knobs.heightScale,
 			detailAmplitude: this.knobs.detailAmplitude,
+			detailFrequency: this.frequencyFor(this.knobs.detailFeature),
 		};
 	}
 
@@ -321,6 +388,14 @@ export class PlanetSettings {
 		if (this.coarseCell < k.blockSize * 2)
 			out.push(
 				`A ${Math.round(this.coarseCell)} m coarse cell is no coarser than a ${k.blockSize} m block, so the map that carries rivers has nothing left to carry.`,
+			);
+
+		// Two samples across a feature is the least that describes it. Below
+		// that the map records something narrower than it can see, and what it
+		// records changes with the resolution rather than with the seed.
+		if (this.coarseCell * 2 > this.smallestLandform)
+			out.push(
+				`The smallest hill is ${Math.round(this.smallestLandform)} m across and a coarse cell is ${Math.round(this.coarseCell)} m, so the map cannot carry the hills it is being asked for.`,
 			);
 
 		if (this.maxElevation < k.detailAmplitude * 2)

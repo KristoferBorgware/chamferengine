@@ -258,11 +258,82 @@ console.log('\n7. what switching the three float-multiply scripts would move');
   console.log('   regenerated, before any of them is used to size an engine.');
 }
 
+// ---- 8. a frequency is not a tuning number, it is a size -------------------
+// Noise is sampled from a UNIT direction, so a frequency counts features across
+// the whole sphere and one feature is radius/frequency metres. Change the radius
+// and every landform changes size. This measures what that does to the view.
+console.log('\n8. what a frequency means once the planet has a size');
+{
+  const norm = v => { const l = Math.hypot(...v); return v.map(x=>x/l); };
+  const EYE = 1.7, AMPLITUDE = 200, OCTAVES = 3;
+
+  // Split the ground in view into the part that is a straight TILT across it
+  // and the part that departs from that tilt, which is the only part that reads
+  // as a hill. Fit the plane from opposite edges of the view, then measure the
+  // worst departure from it around three rings.
+  const split = (R, freq) => {
+    const horizon = R * Math.acos(R / (R + EYE));
+    let tilt = 0, bumps = 0, n = 0;
+    for (let s = 0; s < 24; s++){
+      const p = norm([Math.sin(s*1.7)*Math.cos(s*2.3), Math.sin(s*0.9), Math.cos(s*1.7)*Math.cos(s*2.3)]);
+      const east = norm([-p[2], 0, p[0]]);
+      const north = norm([p[1]*east[2]-p[2]*east[1], p[2]*east[0]-p[0]*east[2], p[0]*east[1]-p[1]*east[0]]);
+      const read = (dx, dy) => AMPLITUDE * fbm(norm([
+        p[0] + (east[0]*dx + north[0]*dy)/R,
+        p[1] + (east[1]*dx + north[1]*dy)/R,
+        p[2] + (east[2]*dx + north[2]*dy)/R]), freq, OCTAVES);
+      const centre = read(0,0);
+      const gx = (read(horizon,0) - read(-horizon,0)) / 2;
+      const gy = (read(0,horizon) - read(0,-horizon)) / 2;
+      tilt += 2*Math.hypot(gx, gy);
+      let worst = 0;
+      for (let d = 0; d < 16; d++){
+        const a = d*Math.PI/8;
+        for (const reach of [0.35, 0.7, 1.0]){
+          const dx = Math.cos(a)*horizon*reach, dy = Math.sin(a)*horizon*reach;
+          worst = Math.max(worst, Math.abs(read(dx,dy) - (centre + (gx*dx + gy*dy)/horizon)));
+        }
+      }
+      bumps += worst; n++;
+    }
+    return { horizon, tilt: tilt/n, bumps: bumps/n };
+  };
+
+  console.log(`   Same field, same amplitude (${AMPLITUDE} m), same frequency (6). Only the planet grows:`);
+  console.log('   radius     horizon   one feature   features in view    tilt   landform');
+  for (const R of [1700, 3400, 6800, 13600]){
+    const r = split(R, 6);
+    console.log(`   ${String(R).padStart(6)} m  ${r.horizon.toFixed(0).padStart(6)} m`
+      + `  ${(R/6).toFixed(0).padStart(10)} m  ${(r.horizon/(R/6)).toFixed(2).padStart(15)}`
+      + `  ${r.tilt.toFixed(1).padStart(6)} m ${r.bumps.toFixed(1).padStart(8)} m`);
+  }
+  console.log('   The horizon goes as the SQUARE ROOT of the radius and a feature goes as');
+  console.log('   the radius, so a bigger planet puts less of a landform in view. Amplitude');
+  console.log('   does not fix it: it multiplies tilt and landform together and leaves the');
+  console.log('   ratio where it was.');
+
+  const R = 6800;
+  console.log(`\n   Now hold the planet at ${R} m and ask for a feature SIZE instead:`);
+  console.log('   feature   frequency    tilt   landform   landform / tilt');
+  for (const feature of [1133, 567, 283, 142]){
+    const r = split(R, R/feature);
+    console.log(`   ${String(feature).padStart(6)} m  ${(R/feature).toFixed(1).padStart(9)}`
+      + `  ${r.tilt.toFixed(1).padStart(6)} m ${r.bumps.toFixed(1).padStart(8)} m`
+      + `  ${(r.bumps/r.tilt).toFixed(2).padStart(16)}`);
+  }
+  console.log('   The ratio is what a person sees, and only the feature size moves it. So a');
+  console.log('   frequency belongs in the world file as METRES, divided by the radius on');
+  console.log('   the way in -- the same rule doc 21 states for the coarse map resolution.');
+}
+
 console.log('\nverdict');
 console.log('   The noise is pinned: hash3 above (three imul, two xor-shift, /2^32),');
 console.log('   trilinear value noise with the QUINTIC fade, fBm at lacunarity 2 and');
 console.log('   gain 0.5, accumulated low octave first and divided by summed amplitude.');
 console.log('   Octave count and base frequency are per-field tuning and belong in the');
 console.log('   world file beside the seed, because changing either changes the planet.');
+console.log('   Write the frequency there as a FEATURE SIZE IN METRES: a frequency counts');
+console.log('   features per sphere, so the same number grows different hills on every');
+console.log('   planet size (section 8).');
 console.log('   Every operation is int32 or IEEE-754 + - * /, so doc 23\'s rule holds with');
 console.log('   nothing left to check: no transcendental, and no float multiply past 2^53.');

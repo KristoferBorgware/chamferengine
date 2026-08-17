@@ -118,6 +118,52 @@ fbm(p, frequency, octaves)
 **Frequency and octave count are per-field tuning** and belong in the world file
 beside the seed, because changing either changes the planet.
 
+### Write the frequency as a size in metres
+
+`frequency` counts features across the **whole sphere**, because the noise is
+sampled from a unit direction. One feature is therefore `radius / frequency`
+metres, and the same number grows a different hill on every planet.
+
+That is not a unit inconvenience. Split the ground a standing player can see
+into two parts — how far it **tilts** across the view, and how far it departs
+from that tilt — and only the second reads as a landform. The first reads as
+standing on a slope.
+
+> **[verified]** `verification/noise.js`, section 8. One field, 200 m of
+> amplitude, frequency 6, eye height 1.7 m. Only the planet grows:
+>
+> | Radius | Horizon | One feature | Features in view | Tilt | Landform |
+> |---|---|---|---|---|---|
+> | 1,700 m | 76 m | 283 m | 0.27 | 59.4 m | 39.8 m |
+> | 3,400 m | 107 m | 567 m | 0.19 | 52.8 m | 25.7 m |
+> | 6,800 m | 152 m | 1,133 m | 0.13 | 43.2 m | 15.0 m |
+> | 13,600 m | 215 m | 2,267 m | 0.09 | 33.2 m | 8.2 m |
+
+The horizon is `R·acos(R/(R+h))`, which goes as the **square root** of the
+radius, while a feature goes as the radius. So every doubling of the planet puts
+about **30% less landform** in view, on the same field with the same amplitude.
+
+Amplitude cannot undo it. It multiplies the whole field, so tilt and landform
+rise together and the ratio between them does not move. Hold the planet still
+and ask for a feature size instead, and the ratio is the only thing that moves:
+
+> **[verified]** `verification/noise.js`, section 8. R = 6,800 m:
+>
+> | Feature | Frequency | Tilt | Landform | Landform ÷ tilt |
+> |---|---|---|---|---|
+> | 1,133 m | 6.0 | 43.3 m | 15.0 m | 0.35 |
+> | 567 m | 12.0 | 71.3 m | 39.9 m | 0.56 |
+> | 283 m | 24.0 | 90.5 m | 84.1 m | 0.93 |
+> | 142 m | 47.9 | 89.1 m | 129.1 m | 1.45 |
+
+At a feature of 283 m — about twice the horizon — tilt and landform are equal.
+Below that the ground reads as hills; above it, as a hillside.
+
+So a world file carries **metres**, and `frequency = radius / metres` is applied
+on the way in. [Doc 21](21-rivers-and-erosion.md) states the same rule for the
+coarse map's resolution, for the same reason: a level and a frequency are both
+properties of the grid, and what a person sees is a distance.
+
 ### Why the quintic fade rather than smoothstep
 
 `t²(3 − 2t)` is the cheaper and more familiar curve, and it is smooth in the

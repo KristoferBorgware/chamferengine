@@ -114,7 +114,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 333 ns -- a timing, so it moves run to run
+   this machine, now: 336 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1121,7 +1121,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 267M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1373,7 +1373,7 @@ language.js -- which language and runtime, decided by running the kernel
        The fast version allocates nothing and never collects.
 
        This machine, now: typed arrays 0.38 ms, one object a vertex
-       6.00 ms -- a layout gap of 16x. Both are timings and move run to
+       6.25 ms -- a layout gap of 16x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -1761,12 +1761,37 @@ Cited by [doc 08](08-terrain-generation.md), [doc 11](11-open-topics.md).
    world it measured. But they should be switched, and the numbers
    regenerated, before any of them is used to size an engine.
 
+8. what a frequency means once the planet has a size
+   Same field, same amplitude (200 m), same frequency (6). Only the planet grows:
+   radius     horizon   one feature   features in view    tilt   landform
+     1700 m      76 m         283 m             0.27    59.4 m     39.8 m
+     3400 m     107 m         567 m             0.19    52.8 m     25.7 m
+     6800 m     152 m        1133 m             0.13    43.2 m     15.0 m
+    13600 m     215 m        2267 m             0.09    33.2 m      8.2 m
+   The horizon goes as the SQUARE ROOT of the radius and a feature goes as
+   the radius, so a bigger planet puts less of a landform in view. Amplitude
+   does not fix it: it multiplies tilt and landform together and leaves the
+   ratio where it was.
+
+   Now hold the planet at 6800 m and ask for a feature SIZE instead:
+   feature   frequency    tilt   landform   landform / tilt
+     1133 m        6.0    43.3 m     15.0 m              0.35
+      567 m       12.0    71.3 m     39.9 m              0.56
+      283 m       24.0    90.5 m     84.1 m              0.93
+      142 m       47.9    89.1 m    129.1 m              1.45
+   The ratio is what a person sees, and only the feature size moves it. So a
+   frequency belongs in the world file as METRES, divided by the radius on
+   the way in -- the same rule doc 21 states for the coarse map resolution.
+
 verdict
    The noise is pinned: hash3 above (three imul, two xor-shift, /2^32),
    trilinear value noise with the QUINTIC fade, fBm at lacunarity 2 and
    gain 0.5, accumulated low octave first and divided by summed amplitude.
    Octave count and base frequency are per-field tuning and belong in the
    world file beside the seed, because changing either changes the planet.
+   Write the frequency there as a FEATURE SIZE IN METRES: a frequency counts
+   features per sphere, so the same number grows different hills on every
+   planet size (section 8).
    Every operation is int32 or IEEE-754 + - * /, so doc 23's rule holds with
    nothing left to check: no transcendental, and no float multiply past 2^53.
 ```
@@ -2257,7 +2282,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1060 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 799 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

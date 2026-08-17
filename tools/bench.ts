@@ -1,4 +1,5 @@
-import { WorldShape, maxCrustDepth } from "chamfer/world";
+import type { PlanetKnobs } from "../packages/client/src/PlanetSettings.js";
+import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
 import {
 	ChunkAddress,
 	ChunkColumnSampler,
@@ -26,17 +27,21 @@ import { Frustum, Mat4, Vec3 } from "chamfer/math";
  * spends on one chunk.
  */
 
-// The worked planet, and the numbers the client ships with. A bench that
-// measures a world nobody plays is measuring nothing.
-const RADIUS = Number(process.env.BENCH_RADIUS ?? 6801);
-const DEPTH = Number(process.env.BENCH_DEPTH ?? 13);
-const CHUNK_LEVEL = Number(process.env.BENCH_CHUNK_LEVEL ?? 8);
-const COARSE_LEVEL = Number(process.env.BENCH_COARSE_LEVEL ?? 8);
-const HEIGHT_SCALE = Number(process.env.BENCH_HEIGHT_SCALE ?? 480);
-const MAX_ELEVATION = Math.ceil(0.55 * HEIGHT_SCALE);
-const CRUST = Number(process.env.BENCH_CRUST ?? 900);
-const DETAIL = 2;
-const SKIRT_CELLS = 2;
+// The world the client ships, read from the client's own description rather
+// than restated here. A bench that measures a world nobody plays is measuring
+// nothing, and two copies of a planet drift apart the moment one is edited.
+// Any knob can be moved for one run by name: BENCH_heightScale=720.
+const knobs: Record<string, number> = {};
+for (const [name, value] of Object.entries(process.env))
+	if (name.startsWith("BENCH_") && value !== undefined)
+		knobs[name.slice(6)] = Number(value);
+const settings = new PlanetSettings(knobs as Partial<PlanetKnobs>);
+
+const RADIUS = settings.radius;
+const DEPTH = settings.depth;
+const CHUNK_LEVEL = settings.chunkLevel;
+const DETAIL = settings.knobs.detail;
+const SKIRT_CELLS = settings.knobs.skirtCells;
 
 /** How many workers the client asks for on a machine with this many cores. */
 const WORKERS = 7;
@@ -45,24 +50,22 @@ const WORKERS = 7;
 const FIELD_OF_VIEW = (65 * Math.PI) / 180;
 const ASPECT = 1920 / 1080;
 
-const seed = seedFromString("chamfer");
-const shape = new WorldShape(
-	RADIUS,
-	DEPTH,
-	MAX_ELEVATION,
-	Math.min(CRUST, maxCrustDepth(DEPTH), 1024),
-);
+const seed = seedFromString(settings.knobs.seed);
+const shape = settings.shape();
 
 const worldStart = performance.now();
-const map = buildCoarseMap(seed, { level: COARSE_LEVEL });
+const map = buildCoarseMap(seed, settings.coarseOptions());
 const worldMs = performance.now() - worldStart;
 
 const byLod: TerrainGenerator[] = [];
 for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 	byLod.push(
-		new TerrainGenerator(seed, shape.atLod(lod), map, {
-			heightScale: HEIGHT_SCALE,
-		}),
+		new TerrainGenerator(
+			seed,
+			shape.atLod(lod),
+			map,
+			settings.terrainOptions(),
+		),
 	);
 
 /** Where the ground is under a direction, so a camera can stand on it. */
@@ -289,10 +292,13 @@ function thousands(value: number): string {
 }
 
 console.log(
-	`chamfer bench — radius ${RADIUS} m, depth ${DEPTH}, chunk level ${CHUNK_LEVEL}, height scale ${HEIGHT_SCALE}`,
+	`chamfer bench — radius ${RADIUS} m, depth ${DEPTH}, chunk level ${CHUNK_LEVEL}, height scale ${settings.knobs.heightScale}`,
 );
 console.log(
-	`block ${shape.blockSize.toFixed(4)} m · crust ${shape.crustDepth} layers · coarse level ${COARSE_LEVEL}`,
+	`block ${shape.blockSize.toFixed(4)} m · crust ${shape.crustDepth} layers · coarse ${settings.coarseCell.toFixed(0)} m at level ${settings.coarseLevel}`,
+);
+console.log(
+	`landforms ${settings.knobs.reliefFeature} m down to ${settings.smallestLandform.toFixed(0)} m in ${settings.reliefOctaves} octaves`,
 );
 console.log(`world creation: ${worldMs.toFixed(0)} ms for the coarse map\n`);
 
