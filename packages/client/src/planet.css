@@ -16,6 +16,13 @@ body {
 	display: block;
 	width: 100vw;
 	height: 100vh;
+	/*
+	 * The browser's own panning and zooming would otherwise claim every drag
+	 * and cancel the pointer stream mid-gesture, which is what made looking
+	 * around unusable on a touch screen even though the handlers were already
+	 * written for it.
+	 */
+	touch-action: none;
 }
 
 .status {
@@ -228,4 +235,78 @@ body {
 .knobs-bar button:disabled {
 	opacity: 0.45;
 	cursor: default;
+}
+
+/*
+ * The touch controls.
+ *
+ * Held things are widgets and momentary things are gestures, so this is a
+ * stick for moving and buttons for climbing, and nothing for looking or
+ * zooming. Hidden until a touch actually happens.
+ */
+.touch {
+	position: fixed;
+	inset: auto 0 0 0;
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-end;
+	padding: 1.25rem;
+	pointer-events: none;
+	touch-action: none;
+	z-index: 15;
+}
+
+.touch.hidden {
+	display: none;
+}
+
+.touch-pad,
+.touch-side {
+	pointer-events: auto;
+}
+
+.touch-pad {
+	position: relative;
+	width: 8.5rem;
+	height: 8.5rem;
+	border-radius: 50%;
+	background: #0d1219aa;
+	border: 1px solid #26303d;
+	display: grid;
+	place-items: center;
+}
+
+.touch-knob {
+	width: 3.25rem;
+	height: 3.25rem;
+	border-radius: 50%;
+	background: #26303dcc;
+	border: 1px solid #3d4a5c;
+}
+
+.touch-side {
+	display: grid;
+	grid-template-columns: repeat(2, auto);
+	gap: 0.5rem;
+}
+
+.touch-button {
+	width: 3.75rem;
+	height: 3.75rem;
+	border-radius: 50%;
+	background: #0d1219cc;
+	border: 1px solid #26303d;
+	color: #e6ecf3;
+	font: inherit;
+	font-size: 1.1rem;
+	touch-action: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.touch-button:active {
+	background: #26303dcc;
+}
+
+.touch-tap {
+	font-size: 0.8rem;
 }

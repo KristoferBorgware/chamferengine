@@ -40,6 +40,7 @@ import {
 	windRotation,
 } from "chamfer/sky";
 import { ParameterPanel } from "./ParameterPanel.js";
+import { TouchControls } from "./TouchControls.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 
 const params = new URLSearchParams(location.search);
@@ -576,31 +577,74 @@ async function main(): Promise<void> {
 		held.delete(e.key.toLowerCase());
 	});
 
-	let dragging = false;
-	let lastX = 0;
-	let lastY = 0;
 	let swing = 0;
 	let tilt = 0;
 
-	canvas.addEventListener("pointerdown", (e) => {
-		dragging = true;
-		lastX = e.clientX;
-		lastY = e.clientY;
-		canvas.setPointerCapture(e.pointerId);
+	// Moving and climbing are held, and a finger holding one of those cannot
+	// also be dragging the view, so they are the two things drawn on screen.
+	// Looking and zooming are momentary and stay gestures on the world itself.
+	const touch = new TouchControls({
+		onFly: () => {
+			flying = !flying;
+		},
+		onStand: () => {
+			standHere();
+		},
 	});
-	canvas.addEventListener("pointerup", (e) => {
-		dragging = false;
-		canvas.releasePointerCapture(e.pointerId);
+
+	// Every pointer currently down, by its own id. One is a drag to look --
+	// mouse or finger, the same path -- and two are a pinch. Tracking them by
+	// id rather than with a single flag is what keeps a second finger from
+	// overwriting the first one's position and throwing the view about.
+	const down = new Map<number, { x: number; y: number }>();
+	let pinchFrom = 0;
+	let pinchChase = 0;
+
+	/** How far apart the two pointers are. */
+	function spread(): number {
+		const [a, b] = [...down.values()];
+		if (!a || !b) return 0;
+		return Math.hypot(a.x - b.x, a.y - b.y);
+	}
+
+	canvas.addEventListener("pointerdown", (e) => {
+		if (e.pointerType === "touch") touch.reveal();
+		canvas.setPointerCapture(e.pointerId);
+		down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		if (down.size === 2) {
+			pinchFrom = spread();
+			pinchChase = chase;
+		}
 	});
 	canvas.addEventListener("pointermove", (e) => {
-		if (!dragging) return;
-		// Looking is an angle a pixel, and half a window turns a quarter circle.
-		const perPixel = Math.PI / (2 * viewHeight());
-		swing -= (e.clientX - lastX) * perPixel;
-		tilt -= (e.clientY - lastY) * perPixel;
-		lastX = e.clientX;
-		lastY = e.clientY;
+		const was = down.get(e.pointerId);
+		if (!was) return;
+		const dx = e.clientX - was.x;
+		const dy = e.clientY - was.y;
+		was.x = e.clientX;
+		was.y = e.clientY;
+		if (down.size === 1) {
+			// Looking is an angle a pixel, and half a window turns a quarter
+			// circle.
+			const perPixel = Math.PI / (2 * viewHeight());
+			swing -= dx * perPixel;
+			tilt -= dy * perPixel;
+		} else if (down.size === 2 && pinchFrom > 0) {
+			// Fingers apart pulls the camera in, the way a wheel forward does.
+			const now = spread();
+			if (now > 0)
+				chase = Math.max(
+					0,
+					Math.min(60, (pinchChase * pinchFrom) / now),
+				);
+		}
 	});
+	const lift = (e: PointerEvent) => {
+		down.delete(e.pointerId);
+		pinchFrom = 0;
+	};
+	canvas.addEventListener("pointerup", lift);
+	canvas.addEventListener("pointercancel", lift);
 	canvas.addEventListener(
 		"wheel",
 		(e) => {
@@ -646,13 +690,22 @@ async function main(): Promise<void> {
 
 		const seconds = Math.min(0.1, (now - previous) / 1000);
 		previous = now;
-		const ahead =
+		// Keys and the stick add, so neither has to know the other exists, and
+		// a touch laptop can use both at once.
+		const reach = (value: number) => Math.max(-1, Math.min(1, value));
+		const ahead = reach(
 			(held.has("w") || held.has("arrowup") ? 1 : 0) -
-			(held.has("s") || held.has("arrowdown") ? 1 : 0);
-		const aside =
+				(held.has("s") || held.has("arrowdown") ? 1 : 0) +
+				touch.ahead,
+		);
+		const aside = reach(
 			(held.has("d") || held.has("arrowright") ? 1 : 0) -
-			(held.has("a") || held.has("arrowleft") ? 1 : 0);
-		const lift = (held.has(" ") ? 1 : 0) - (held.has("shift") ? 1 : 0);
+				(held.has("a") || held.has("arrowleft") ? 1 : 0) +
+				touch.aside,
+		);
+		const lift = reach(
+			(held.has(" ") ? 1 : 0) - (held.has("shift") ? 1 : 0) + touch.lift,
+		);
 		timer.enter("player", performance.now());
 		player.step(
 			{
