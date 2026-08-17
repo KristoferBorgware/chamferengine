@@ -50,7 +50,7 @@ const RADIUS = settings.radius;
 const DEPTH = settings.depth;
 const CHUNK_LEVEL = settings.chunkLevel;
 const COARSE_LEVEL = settings.coarseLevel;
-const MAX_ELEVATION = settings.knobs.maxElevation;
+const MAX_ELEVATION = settings.maxElevation;
 const seedText = settings.knobs.seed;
 
 /**

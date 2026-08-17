@@ -35,11 +35,10 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The ground",
-		note: "Also a rebuild. The height scale is what makes a hill a mountain.",
+		note: "Also a rebuild. The height scale is what makes a hill a mountain, and the tallest ground follows from it.",
 		knobs: [
 			{ key: "heightScale", label: "Height scale", digits: 0 },
 			{ key: "detailAmplitude", label: "Detail", digits: 0 },
-			{ key: "maxElevation", label: "Tallest ground", digits: 0 },
 			{ key: "landFraction", label: "Land", digits: 2 },
 			{ key: "skirtCells", label: "Skirt", digits: 0 },
 		],
@@ -247,6 +246,7 @@ export class ParameterPanel {
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			`<span>coarse <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
+			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
 			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>`;
 	}
 }

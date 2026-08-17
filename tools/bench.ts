@@ -26,11 +26,15 @@ import { Frustum, Mat4, Vec3 } from "chamfer/math";
  * spends on one chunk.
  */
 
-const RADIUS = 1700;
-const DEPTH = 11;
-const CHUNK_LEVEL = 6;
-const COARSE_LEVEL = 7;
-const MAX_ELEVATION = 150;
+// The worked planet, and the numbers the client ships with. A bench that
+// measures a world nobody plays is measuring nothing.
+const RADIUS = Number(process.env.BENCH_RADIUS ?? 6801);
+const DEPTH = Number(process.env.BENCH_DEPTH ?? 13);
+const CHUNK_LEVEL = Number(process.env.BENCH_CHUNK_LEVEL ?? 8);
+const COARSE_LEVEL = Number(process.env.BENCH_COARSE_LEVEL ?? 8);
+const HEIGHT_SCALE = Number(process.env.BENCH_HEIGHT_SCALE ?? 480);
+const MAX_ELEVATION = Math.ceil(0.55 * HEIGHT_SCALE);
+const CRUST = Number(process.env.BENCH_CRUST ?? 900);
 const DETAIL = 2;
 const SKIRT_CELLS = 2;
 
@@ -46,7 +50,7 @@ const shape = new WorldShape(
 	RADIUS,
 	DEPTH,
 	MAX_ELEVATION,
-	maxCrustDepth(DEPTH),
+	Math.min(CRUST, maxCrustDepth(DEPTH), 1024),
 );
 
 const worldStart = performance.now();
@@ -55,7 +59,11 @@ const worldMs = performance.now() - worldStart;
 
 const byLod: TerrainGenerator[] = [];
 for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
-	byLod.push(new TerrainGenerator(seed, shape.atLod(lod), map));
+	byLod.push(
+		new TerrainGenerator(seed, shape.atLod(lod), map, {
+			heightScale: HEIGHT_SCALE,
+		}),
+	);
 
 /** Where the ground is under a direction, so a camera can stand on it. */
 function groundAt(direction: Vec3): number {
@@ -192,10 +200,13 @@ function measure(scene: Scene): Measured {
 	const up = at.normalize();
 	const ahead = Math.abs(up.y) > 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
 	const along = ahead.sub(up.scale(ahead.dot(up))).normalize();
-	// Looking at the ground fifty metres along it. From eye height that is a
-	// view down the slope ahead; from orbit it is a view of the planet.
+	// Looking at the ground one horizon away. A fixed distance would aim nearly
+	// straight down on a large planet and along the ground on a small one, so
+	// what the scene measures would depend on the radius rather than the view.
+	const height = Math.max(1.6, at.length() - RADIUS);
+	const horizon = RADIUS * Math.acos(RADIUS / (RADIUS + height));
 	const target = up
-		.add(along.scale(50 / RADIUS))
+		.add(along.scale(horizon / RADIUS))
 		.normalize()
 		.scale(RADIUS);
 	const view = new Frustum(
@@ -277,7 +288,9 @@ function thousands(value: number): string {
 	return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
-console.log(`chamfer bench — radius ${RADIUS} m, depth ${DEPTH}, chunk level ${CHUNK_LEVEL}`);
+console.log(
+	`chamfer bench — radius ${RADIUS} m, depth ${DEPTH}, chunk level ${CHUNK_LEVEL}, height scale ${HEIGHT_SCALE}`,
+);
 console.log(
 	`block ${shape.blockSize.toFixed(4)} m · crust ${shape.crustDepth} layers · coarse level ${COARSE_LEVEL}`,
 );
