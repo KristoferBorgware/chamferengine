@@ -216,6 +216,41 @@ async function main(): Promise<void> {
 	const places = landmarks();
 	let nextPlace = 0;
 
+	/**
+	 * Stand where the camera already is, at the height of someone's eyes.
+	 *
+	 * A world of one-metre blocks on a 1,700 m planet has nothing in it to
+	 * judge scale against from the air. This puts the eye at the one height a
+	 * person can read a size from, and points it level, so a hill is a hill
+	 * rather than a shape on a map.
+	 *
+	 * The camera is put there and left there. Nothing walks, nothing falls, and
+	 * flight is still on: this is a place to look from, not a way to play.
+	 */
+	function standHere(): void {
+		const direction = player.position.normalize();
+		const cell = positionToCell(direction, shape.n);
+		const column = terrain.columnAt(cell.face, cell.i, cell.j);
+		// The face that is actually drawn, not the radius the height field
+		// returned: a surface is the top of a block, so the two differ by up to
+		// one block and standing on the second leaves the feet in the air.
+		// Whichever of ground and water is higher is the lower layer number.
+		const surface = Math.min(column.groundLayer, column.waterLayer);
+		player.position = direction.scale(
+			shape.radiusOfLayer(Math.max(0, surface)),
+		);
+		player.fall = 0;
+		// Level, not aimed down at the ground. On a planet this small the
+		// horizon sits 2.48 degrees below level and 73.7 m away at eye height,
+		// and seeing that drop is part of reading the size of the place.
+		player.pitch = 0;
+		// The eye rather than a camera trailing behind it, or the player's own
+		// height is measured from the wrong point.
+		chase = 0;
+		flying = true;
+		refresh();
+	}
+
 	/** Put the player on the ground at a direction, clear of it. */
 	function land(direction: Vec3): void {
 		const cell = positionToCell(direction, shape.n);
@@ -302,6 +337,7 @@ async function main(): Promise<void> {
 		const key = e.key.toLowerCase();
 		held.add(key);
 		if (key === "f") flying = !flying;
+		if (key === "e") standHere();
 		if (key === " ") e.preventDefault();
 		if (key === "t") {
 			// The twelve are 1,882 m apart on this planet, so each is a short
@@ -508,7 +544,7 @@ async function main(): Promise<void> {
 			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
 				(submerged ? " · under water" : ""),
 			budget(timer, renderer),
-			"WASD move · drag look · F fly · T next pentagon · G go to",
+			"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
 		]);
 		timer.end(performance.now());
 		requestAnimationFrame(draw);
