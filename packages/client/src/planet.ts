@@ -31,10 +31,9 @@ import {
 	resizeToDisplay,
 } from "chamfer/render";
 import {
-	CloudField,
 	WIND_AXIS,
 	WIND_RATE,
-	buildCloudMesh,
+	WorkerCloudSource,
 	windRotation,
 } from "chamfer/sky";
 import { ParameterPanel } from "./ParameterPanel.js";
@@ -75,15 +74,16 @@ let DAY_LENGTH = settings.knobs.dayLength;
 const NIGHT_LIGHT = 0.09;
 
 /**
- * The clouds: what level their hexagons come from and how high they sit.
+ * The soonest the cloud buffer is thrown away and refilled, in seconds.
  *
- * Level 5 is a 64 m puff and 10,242 points for the whole sky, against
- * 41,943,042 cells in one surface layer.
+ * A floor, not the achieved rate: two full-planet decks at the shipped puff
+ * size take about a second to build between them, so `busy` (below) skips a
+ * tick rather than queuing one behind a deck still building, and the real
+ * cadence settles closer to 1.5-2 s. The wind turns a full circle in 900 s, so
+ * a tick that arrives late has moved the pattern by a fraction of a degree --
+ * imperceptible, which is what makes skipping ticks the right answer rather
+ * than a second worker to hit 0.7 s exactly.
  */
-const CLOUD_LEVEL = settings.cloudLevel;
-let CLOUD_HEIGHT = settings.knobs.lowDeck;
-
-/** How often the cloud buffer is thrown away and refilled, in seconds. */
 const CLOUD_INTERVAL = 0.7;
 
 /**
@@ -176,7 +176,18 @@ async function main(): Promise<void> {
 	// and a guessed crust top too low shears the mountains flat.
 	const shape = settings.shapeFor(map);
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
-	const clouds = new CloudField(CLOUD_LEVEL);
+
+	// Both decks are built on their own worker, off the thread that draws: a
+	// deck this size is unaffordable on the main thread, and the field is
+	// already a pure function of the seed and the wind angle, so it moves the
+	// way chunks moved.
+	const cloudSource = new WorkerCloudSource(
+		() =>
+			new Worker(new URL("./cloudWorker.ts", import.meta.url), {
+				type: "module",
+			}),
+		{ kind: "setup", seed, decks: settings.cloudDecks() },
+	);
 	const sky = new SkyRenderer(ctx, {
 		direction: new Vec3(0.2, 0.55, 0.81).normalize(),
 		angularRadius: MOON_ANGULAR_RADIUS,
@@ -380,8 +391,6 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
-		CLOUD_HEIGHT = live.knobs.lowDeck;
-		cloudsAt = -Infinity;
 
 		const now = performance.now();
 		if (live.knobs.timeOfDay !== lastTimeOfDay) {
@@ -564,15 +573,17 @@ async function main(): Promise<void> {
 		const sun = sunDirection((elapsed / DAY_LENGTH) % 1, NORTH);
 		const day = daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
 
-		// The clouds are thrown away and refilled as the wind turns. There is no
-		// address to update in place, because a cloud has none.
-		if (now - cloudsAt > CLOUD_INTERVAL * 1000) {
+		// The clouds are thrown away and refilled as the wind turns, on their
+		// own worker. There is no address to update in place, because a cloud
+		// has none, and `busy` skips a tick rather than queuing one behind a
+		// deck still building.
+		if (!cloudSource.busy && now - cloudsAt > CLOUD_INTERVAL * 1000) {
 			timer.enter("clouds", performance.now());
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
-			clouds.blow(WIND_AXIS, turned, seed);
-			const mesh = buildCloudMesh(clouds, RADIUS + CLOUD_HEIGHT);
-			sky.setClouds(mesh.vertices, mesh.indices);
+			cloudSource
+				.request(WIND_AXIS, turned)
+				.then((mesh) => sky.setClouds(mesh.vertices, mesh.indices));
 			timer.leave("clouds", performance.now());
 		}
 

@@ -165,31 +165,31 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The clouds",
-		note: "Immediate. One shell is a flat sheet, which is what today draws.",
+		note: "A rebuild. A cloud is a stack of hexagon shells, not a flat sheet, so shape follows from where the shells sit as much as from the noise.",
 		knobs: [
 			{
 				key: "lowDeck",
 				label: "Low deck",
 				digits: 0,
-				says: "How high the lower cloud deck sits.",
+				says: "How high the lower cloud deck sits, from the planet's own surface.",
 			},
 			{
 				key: "highDeck",
 				label: "High deck",
 				digits: 0,
-				says: "How high the upper deck sits. Not connected yet.",
+				says: "How high the upper deck sits. Two decks read as two layers of weather rather than one.",
 			},
 			{
 				key: "cloudPuff",
 				label: "Puff",
 				digits: 0,
-				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level.",
+				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it.",
 			},
 			{
 				key: "cloudShells",
 				label: "Shells",
 				digits: 0,
-				says: "How many layers deep a deck is drawn. One is a flat sheet with no thickness. Not connected yet.",
+				says: "How many hexagons deep a deck runs. One is a single flat-topped layer; a thicker point in the horizontal pattern reliably fills more of its shells, so raising this is what turns a haze into billows.",
 			},
 		],
 	},

@@ -6,3 +6,14 @@ export { windSpeed } from "./windSpeed.js";
 export { CloudField } from "./CloudField.js";
 export type { CloudMesh } from "./buildCloudMesh.js";
 export { buildCloudMesh } from "./buildCloudMesh.js";
+
+export type {
+	CloudDeckSetup,
+	CloudJob,
+	CloudResult,
+	CloudWorkerMessage,
+	CloudWorkerSetup,
+} from "./worker/CloudJob.js";
+export { CloudWorkerCore } from "./worker/CloudWorkerCore.js";
+export type { CloudWorkerHandle } from "./worker/WorkerCloudSource.js";
+export { WorkerCloudSource } from "./worker/WorkerCloudSource.js";

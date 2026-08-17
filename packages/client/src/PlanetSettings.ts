@@ -2,6 +2,7 @@ import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
 import { CoarseMap } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
+import type { CloudDeckSetup } from "chamfer/sky";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -130,10 +131,10 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	crustMetres: 900,
 	atmosphereTop: 400,
 	zenithDepth: 0.134,
-	lowDeck: 220,
-	highDeck: 900,
+	lowDeck: 400,
+	highDeck: 1200,
 	cloudPuff: 64,
-	cloudShells: 1,
+	cloudShells: 4,
 	detail: 2,
 	skirtCells: 2,
 	dayLength: 240,
@@ -205,10 +206,10 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "",
 	},
-	lowDeck: { low: 100, high: 3000, step: 20, rebuilds: false, unit: "m" },
-	highDeck: { low: 200, high: 6000, step: 50, rebuilds: false, unit: "m" },
-	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: false, unit: "m" },
-	cloudShells: { low: 1, high: 8, step: 1, rebuilds: false, unit: "shells" },
+	lowDeck: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
+	highDeck: { low: 200, high: 6000, step: 50, rebuilds: true, unit: "m" },
+	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: true, unit: "m" },
+	cloudShells: { low: 1, high: 8, step: 1, rebuilds: true, unit: "shells" },
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
 	skirtCells: { low: 0, high: 4, step: 1, rebuilds: true, unit: "cells" },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
@@ -316,6 +317,27 @@ export class PlanetSettings {
 	/** Metres across one cloud puff, once its level is rounded. */
 	get cloudPuff(): number {
 		return (CELL_CONSTANT * this.radius) / 2 ** this.cloudLevel;
+	}
+
+	/**
+	 * The two decks the engine builds, as the numbers a cloud worker takes.
+	 *
+	 * Shell spacing and the noise feature deciding a shell's shape both follow
+	 * the puff size rather than being asked for separately: a deck built from
+	 * wider puffs gets taller, wider shells to match, so raising Puff scales a
+	 * cloud rather than only its footprint.
+	 */
+	cloudDecks(): CloudDeckSetup[] {
+		const shellSpan = this.cloudPuff * 0.75;
+		const featureSize = this.cloudPuff * 1.5;
+		const deck = (height: number): CloudDeckSetup => ({
+			level: this.cloudLevel,
+			shells: this.knobs.cloudShells,
+			baseRadius: this.radius + height,
+			shellSpan,
+			featureSize,
+		});
+		return [deck(this.knobs.lowDeck), deck(this.knobs.highDeck)];
 	}
 
 	/**

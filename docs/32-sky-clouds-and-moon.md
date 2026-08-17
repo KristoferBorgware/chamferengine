@@ -156,11 +156,20 @@ than the ground does — the same `R·acos(R/(R+h))` doc 14 uses for a distant p
 > is **5.0%** of the sheet; at **300 m**, out to 1,019 m and **8.7%**; at
 > **600 m**, out to 1,332 m and **14.6%**.
 
-So the visible sheet is a few hundred points. **It is a sheet and not a volume**:
-no crust, no layers, no chunk, no delta store, no collision, and nothing that
-[doc 07](07-data-structures.md) has to make room for. Coverage is one noise lookup
-on the point's direction — the same `fbm` [doc 08](08-terrain-generation.md)
-already pins.
+So the visible sheet is a few hundred points. **A puff is a stack of hexagon
+shells, not a flat one** — coverage still decides where a cloud is with one
+noise lookup on the point's direction, the same `fbm`
+[doc 08](08-terrain-generation.md) already pins, and a second lookup sampled at
+each shell's true radius decides which shells fill, the way
+[doc 08](08-terrain-generation.md)'s density term samples rock. **A shell index
+is not an address.** It is a step into the same transient buffer a puff already
+was, counting up through a handful of layers a renderer owns for one frame
+rather than down from a crust top, and it is thrown away with the rest of the
+buffer when the wind turns. None of the four things that make a block storable —
+delta store, side table, interest, edit message — read a shell index, the same
+way none of them read a puff's `(face, i, j)`. So the volume costs geometry, not
+identity: still no crust, no layers, no chunk, no delta store, no collision, and
+nothing that [doc 07](07-data-structures.md) has to make room for.
 
 ### Wind cannot blow the same way everywhere
 
@@ -373,7 +382,10 @@ property of light and air, not of any planet, so it needs no fiction.)*
   reused at all**. There is no layer number for a cloud — `layer` counts **downward** — and
   an address is what makes a thing storable, so withholding it keeps "never
   stored" true by construction. **Level 5** is a 64 m puff and **10,242 points for
-  the whole sky**, under **9%** ever in view: a buffer, not a data structure.
+  the whole sky**, under **9%** ever in view: a buffer, not a data structure. A
+  puff is a stack of shells now, not one hexagon, and a shell index is a step
+  into that same buffer, not a fifth field alongside face, path, corner and
+  layer.
 - **Wind is one axis and one rate.** The hairy ball theorem forbids a uniform
   wind, and of the two obvious fields only **rigid rotation is divergence-free**
   (`3.3e−12` against `0.9988`), so only it carries a pattern without stretching it.
