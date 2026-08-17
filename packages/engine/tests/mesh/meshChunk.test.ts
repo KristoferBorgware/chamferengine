@@ -426,6 +426,103 @@ describe("merging at a level seam", () => {
 		expect(skirted.tally.apron).toBeLessThan(4 * (m + 2));
 	});
 
+	it("draws exactly the apron ring, on chunks that cross a face edge too", () => {
+		// The apron set has one correct definition: the canonicalised outward
+		// neighbours of the cells the chunk draws, minus the ones it draws
+		// itself. A neighbour across a face edge carries the other face's
+		// coordinates, and testing those against this chunk's triangle without
+		// checking the face lets a path-match drop a cell — a sparse dotted
+		// line of holes along exactly the boundaries that follow face edges.
+		const level = 2;
+		const m = 1 << (DEPTH - level);
+		const n = 1 << DEPTH;
+		for (let key = 0; key < 4 ** level; key++) {
+			const address = ChunkAddress.fromKey(key, level);
+			const face = address.face;
+
+			const draws = (cell: {
+				face: number;
+				i: number;
+				j: number;
+			}): boolean => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (canon.face !== face) return false;
+				const split = splitPath(canon.i, canon.j, DEPTH, level);
+				for (let at = 0; at < split.path.length; at++)
+					if (split.path[at] !== address.path[at]) return false;
+				return true;
+			};
+
+			const expected = new Set<number>();
+			for (let q = 0; q <= m; q++)
+				for (let r = 0; q + r <= m; r++) {
+					if (q !== 0 && r !== 0 && q + r !== m) continue;
+					const [i, j] = joinPath(address.path, q, r, DEPTH);
+					if (!draws({ face, i, j })) continue;
+					for (let k = 0; k < 6; k++) {
+						const nb = neighbour(face, n, i, j, k);
+						if (!nb || draws(nb)) continue;
+						const canon = canonicalCell(nb.face, n, nb.i, nb.j);
+						expected.add(
+							(canon.face * 262144 + canon.i) * 262144 + canon.j,
+						);
+					}
+				}
+
+			const chunk = generateChunk(terrain, address, level, LAYERS);
+			const built = buildChunkMesh(
+				chunk,
+				new ChunkColumnSampler(chunk, terrain),
+				shape,
+				map.seed,
+				{ skirtCells: 2 },
+			);
+			expect(built.tally.apron).toBe(expected.size);
+		}
+	});
+
+	it("reaches the seam floor when it is deeper than the fixed skirt", () => {
+		// On relief, two levels put a cliff's edge at horizontally different
+		// places, so their surfaces disagree by the whole cliff height where a
+		// boundary crosses one -- far past any fixed depth. The floor says how
+		// far down a neighbouring level might put its surface, and the skirt
+		// reaches it.
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(400, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const lowest = (built: { origin: Vec3; opaque: Geometry }): number => {
+			const v = built.opaque.vertices;
+			let least = Infinity;
+			for (let at = 0; at < v.length; at += 6) {
+				const x = v[at]! + built.origin.x;
+				const y = v[at + 1]! + built.origin.y;
+				const z = v[at + 2]! + built.origin.z;
+				least = Math.min(least, Math.sqrt(x * x + y * y + z * z));
+			}
+			return least;
+		};
+		const fixed = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ skirtCells: 2 },
+		);
+		const floor = lowest(fixed) - 40;
+		const deep = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ skirtCells: 2, seamFloor: () => floor },
+		);
+		expect(lowest(deep)).toBeLessThan(floor + 1e-6);
+		expect(lowest(deep)).toBeGreaterThan(floor - 2 * shape.blockSize);
+	});
+
 	it("has an apron cell for every hole two levels leave between them", () => {
 		// Two levels tile a shared boundary with hexagons of two sizes, and
 		// those do not interlock: some ground's containing cell is centred in

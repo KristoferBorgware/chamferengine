@@ -9,7 +9,12 @@ import {
 	seedFromString,
 	selectionId,
 } from "chamfer/generation";
-import { InlineMeshSource, MeshWorkerCore, buildChunkMesh } from "chamfer/mesh";
+import {
+	InlineMeshSource,
+	MeshWorkerCore,
+	buildChunkMesh,
+	seamFloor,
+} from "chamfer/mesh";
 import { WorldShape } from "chamfer/world";
 
 const DEPTH = 8;
@@ -48,12 +53,21 @@ function here(key: number, chunkLevel: number, lod: number) {
 		chunkLevel,
 		at.crustDepth,
 	);
+	const brackets = [];
+	if (lod > 0)
+		brackets.push(new TerrainGenerator(SEED, shape.atLod(lod - 1), map));
+	if (chunkLevel > 0)
+		brackets.push(new TerrainGenerator(SEED, shape.atLod(lod + 1), map));
 	return buildChunkMesh(
 		chunk,
 		new ChunkColumnSampler(chunk, terrain),
 		at,
 		SEED,
-		{ skirtCells: 2, surfaceGrid: shape.blockSize },
+		{
+			skirtCells: 2,
+			surfaceGrid: shape.blockSize,
+			seamFloor: seamFloor(at.n, brackets),
+		},
 	);
 }
 

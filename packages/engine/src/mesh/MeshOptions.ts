@@ -38,10 +38,21 @@ export interface MeshOptions {
 	 * is what the finest level does anyway.
 	 */
 	readonly surfaceGrid?: number;
+
+	/**
+	 * How deep the join beside a rim column can open, as a radius floor.
+	 *
+	 * On relief, two levels put a cliff's edge at horizontally different
+	 * places, so their surfaces disagree by the whole cliff height at a
+	 * boundary that crosses one -- far past any fixed skirt depth. Skirts
+	 * reach whichever is lower: their fixed depth, or this floor. Absent, or
+	 * returning `Infinity`, the fixed depth stands.
+	 */
+	readonly seamFloor?: (face: number, i: number, j: number) => number;
 }
 
 export const MESH_DEFAULTS = {
 	crustFloor: false,
 	skirtCells: 0,
 	surfaceGrid: 0,
-} as const satisfies Required<MeshOptions>;
+} as const satisfies MeshOptions;

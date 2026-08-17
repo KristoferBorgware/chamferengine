@@ -14,7 +14,7 @@ import {
 	selectChunks,
 	selectionId,
 } from "chamfer/generation";
-import { buildChunkMesh } from "chamfer/mesh";
+import { buildChunkMesh, seamFloor } from "chamfer/mesh";
 import { positionToCell } from "chamfer/addressing";
 import { positionOf } from "chamfer/coordinates";
 import { Frustum, Mat4, Vec3 } from "chamfer/math";
@@ -248,12 +248,20 @@ function measure(scene: Scene): Measured {
 			chosen.chunkLevel,
 			lodShape.crustDepth,
 		);
+		const brackets = [];
+		if (chosen.lod > 0) brackets.push(byLod[chosen.lod - 1]!);
+		if (chosen.chunkLevel > 0 && byLod[chosen.lod + 1])
+			brackets.push(byLod[chosen.lod + 1]!);
 		const mesh = buildChunkMesh(
 			chunk,
 			new ChunkColumnSampler(chunk, terrain),
 			lodShape,
 			seed,
-			{ skirtCells: SKIRT_CELLS },
+			{
+				skirtCells: SKIRT_CELLS,
+				surfaceGrid: shape.blockSize,
+				seamFloor: seamFloor(lodShape.n, brackets),
+			},
 		);
 		const took = performance.now() - start;
 		buildMs += took;

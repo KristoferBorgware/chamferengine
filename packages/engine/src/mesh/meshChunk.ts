@@ -73,6 +73,28 @@ function snappedSurface(
 	);
 }
 
+/**
+ * Where a skirt stops: its fixed depth, or the seam floor, whichever is lower.
+ *
+ * The floor is where a neighbouring level might put its own surface beside
+ * this column, snapped to the shared grid and taken one step further so the
+ * wall meets that surface rather than ending flush with it.
+ */
+function skirtBottom(
+	shape: WorldShape,
+	grid: number,
+	top: number,
+	skirtCells: number,
+	floor: number,
+): number {
+	const fixed = shape.radiusOfLayer(top + skirtCells);
+	if (!Number.isFinite(floor)) return fixed;
+	return Math.min(
+		fixed,
+		snappedSurface(shape.crustTopRadius, floor, grid) - grid,
+	);
+}
+
 /** Multiply a color in place. */
 function shade(color: Float32Array, by: number): void {
 	color[0] = color[0]! * by;
@@ -113,6 +135,7 @@ export function meshChunk(
 	const face = chunk.address.face;
 	const layers = chunk.layerCount;
 	const grid = settings.surfaceGrid || shape.blockSize;
+	const floorAt = settings.seamFloor;
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
@@ -141,8 +164,14 @@ export function meshChunk(
 			for (let k = 0; k < 6; k++) {
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+				// A neighbour across a face edge carries the other face's
+				// coordinates, and those can path-match this triangle by
+				// coincidence -- the face has to agree before the path means
+				// anything.
 				outward[k] =
-					onRim && nb !== null && !inChunk(chunk, nb.i, nb.j);
+					onRim &&
+					nb !== null &&
+					!(nb.face === face && inChunk(chunk, nb.i, nb.j));
 				if (outward[k] && nb && settings.skirtCells > 0) {
 					const canon = canonicalCell(nb.face, n, nb.i, nb.j);
 					apron.set(
@@ -172,11 +201,16 @@ export function meshChunk(
 				settings.skirtCells > 0 ? outward : null,
 				settings.skirtCells,
 				grid,
+				floorAt,
 			);
 		}
 
 	for (const cell of apron.values()) {
-		if (owns(chunk, cell.face, n, cell.i, cell.j)) continue;
+		// Already canonical, so the chunk draws it exactly when it is on this
+		// chunk's own face and inside its triangle. `owns` is not this test:
+		// it never compares the faces, and another face's coordinates can
+		// path-match this triangle by coincidence.
+		if (cell.face === face && inChunk(chunk, cell.i, cell.j)) continue;
 		meshApronCell(
 			chunk,
 			sampler,
@@ -191,6 +225,7 @@ export function meshChunk(
 			tally,
 			settings.skirtCells,
 			grid,
+			floorAt,
 		);
 	}
 	return tally;
@@ -251,6 +286,7 @@ function meshCell(
 	outward: readonly boolean[] | null,
 	skirtCells: number,
 	grid: number,
+	floorAt: ((face: number, i: number, j: number) => number) | undefined,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -374,6 +410,13 @@ function meshCell(
 			const block = at(own, top);
 			blockColor(block, face, i, j, seed, COLOR, 0);
 			shade(COLOR, sky);
+			const bottom = skirtBottom(
+				shape,
+				grid,
+				top,
+				skirtCells,
+				floorAt ? floorAt(face, i, j) : Infinity,
+			);
 			for (let k = 0; k < degree; k++) {
 				if (!outward[k]) continue;
 				emitSide(
@@ -382,11 +425,11 @@ function meshCell(
 					degree,
 					k,
 					capRadius(top),
-					shape.radiusOfLayer(top + skirtCells),
+					bottom,
 					origin,
 					ring,
 					top,
-					top + skirtCells,
+					Math.min(layers - 1, shape.layerOfRadius(bottom)),
 				);
 				tally.faces++;
 			}
@@ -461,6 +504,7 @@ function meshApronCell(
 	tally: MeshTally,
 	skirtCells: number,
 	grid: number,
+	floorAt: ((face: number, i: number, j: number) => number) | undefined,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -544,6 +588,13 @@ function meshApronCell(
 		const block = at(own, top);
 		blockColor(block, face, i, j, seed, COLOR, 0);
 		shade(COLOR, sky);
+		const bottom = skirtBottom(
+			shape,
+			grid,
+			top,
+			skirtCells,
+			floorAt ? floorAt(face, i, j) : Infinity,
+		);
 		for (let k = 0; k < degree; k++) {
 			if (!away[k] || !ring[k]) continue;
 			emitSide(
@@ -552,11 +603,11 @@ function meshApronCell(
 				degree,
 				k,
 				capRadius(top) - APRON_DROP,
-				shape.radiusOfLayer(top + skirtCells) - APRON_DROP,
+				bottom - APRON_DROP,
 				origin,
 				ring,
 				top,
-				top + skirtCells,
+				Math.min(layers - 1, shape.layerOfRadius(bottom)),
 			);
 			tally.faces++;
 		}

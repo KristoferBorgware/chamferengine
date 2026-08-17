@@ -456,6 +456,38 @@ deepest lattice — the way the apron's key in `meshChunk.ts` already does.
 The product stays under `2^53` with room to spare: 20 faces times `2^36` is
 `1.4e12`.
 
+### F-025 — A cave mouth crossing a level join is still an open hole
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** large
+**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
+**Where:** `packages/engine/src/mesh/meshChunk.ts` and
+`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
+ownership, priced by `verification/seam.js`
+
+**What happens.** The skirts now reach the lowest surface a neighbouring
+level might put beside a rim column, which closes the join's surface slit at
+any relief. A skirt is still a wall hanging from the surface: a cave mouth
+that crosses the join sits deeper than any skirt hangs, and `seam.js`
+measured that 13 to 32% of columns have more than one span once caves are
+on. The full design — the finer chunk emits a face wherever its solidity
+differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
+is not built.
+
+**Why it matters.** Nobody today: caves are off by default and off under
+v0.1.2's pause, so no shipped world has a multi-span column. The first
+release that turns caves on gets sky-through-the-planet back, at exactly the
+joins v0.1.2 closed for the surface.
+
+**What would fix it.** Seam-owned faces need to know the neighbour's level,
+which the mesher deliberately does not: a blind guess emits walls above a
+same-level neighbour's ground, standing into the air. The selection knows
+every chunk's level, so the road is to tell the mesher its neighbours'
+levels and re-mesh the rim when a neighbour changes level — a residency and
+worker-protocol change, not a mesher formula.
+
 ---
 
 ## Closed
