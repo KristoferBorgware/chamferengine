@@ -3,6 +3,7 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { Mat4 } from "../../math/Mat4.js";
 import type { PassLayer } from "../PassLayer.js";
 import type { Vec3 } from "../../math/Vec3.js";
+import type { PlanetAtmosphere } from "../../sky/ATMOSPHERE.js";
 import { CLOUD_SHADER } from "./CLOUD_SHADER.js";
 import { SKY_SHADER } from "./SKY_SHADER.js";
 
@@ -15,16 +16,16 @@ export interface Moon {
 	readonly angularRadius: number;
 }
 
-/** The inverse matrix, the moon, and the two numbers the sky needs. */
-const SKY_BYTES = 64 + 16 + 16;
+/** The inverse matrix, the moon, and the three vectors the atmosphere needs. */
+const SKY_BYTES = 64 + 16 + 16 + 16 + 16;
 
 /**
  * Draws the sky before the terrain and the clouds after it.
  *
- * The atmosphere is Earth's whatever size the planet is, because optical depth
- * is a property of air times a path length and only the path shrinks. The
- * camera's real height is lifted onto Earth's radius by one scale factor, and
- * the sun's direction is the only thing taken from the world.
+ * The atmosphere is the planet's own, built by {@link planetAtmosphere} from a
+ * height and a wanted zenith depth. The camera's real position goes straight
+ * in as the ray origin -- there is no height to lift and no factor to lift it
+ * by. The sun's direction is the only thing still taken from the world as-is.
  */
 export class SkyRenderer implements PassLayer {
 	private readonly ctx: GpuContext;
@@ -40,8 +41,8 @@ export class SkyRenderer implements PassLayer {
 		count: number;
 	} | null = null;
 
-	/** The planet's own radius, and how much of a metre here is one there. */
-	surfaceRadius = 1700;
+	/** The planet's own air, in its own metres. */
+	atmosphere: PlanetAtmosphere;
 
 	/** Where the moon sits, and how much sky it takes. */
 	moon: Moon;
@@ -49,9 +50,10 @@ export class SkyRenderer implements PassLayer {
 	/** The inverse of the frame's view-projection, for casting rays per pixel. */
 	inverseViewProj: Mat4 | null = null;
 
-	constructor(ctx: GpuContext, moon: Moon) {
+	constructor(ctx: GpuContext, moon: Moon, atmosphere: PlanetAtmosphere) {
 		this.ctx = ctx;
 		this.moon = moon;
+		this.atmosphere = atmosphere;
 		const { device, format } = ctx;
 
 		const layout = device.createBindGroupLayout({
@@ -207,10 +209,21 @@ export class SkyRenderer implements PassLayer {
 			],
 			16,
 		);
-		// The planet's radius, and the factor lifting a height here onto
-		// Earth's atmosphere.
-		this.data[20] = this.surfaceRadius;
-		this.data[21] = 6371000 / this.surfaceRadius;
+		const air = this.atmosphere;
+		this.data.set(
+			[
+				air.planetRadius,
+				air.topRadius,
+				air.rayleighScaleHeight,
+				air.mieScaleHeight,
+			],
+			20,
+		);
+		this.data.set(
+			[air.rayleigh[0], air.rayleigh[1], air.rayleigh[2], air.mie],
+			24,
+		);
+		this.data.set([air.mieDirection, 0, 0, 0], 28);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		pass.setPipeline(this.skyPipeline);

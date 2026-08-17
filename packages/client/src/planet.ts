@@ -34,6 +34,7 @@ import {
 	WIND_AXIS,
 	WIND_RATE,
 	WorkerCloudSource,
+	planetAtmosphere,
 	windRotation,
 } from "chamfer/sky";
 import { ParameterPanel } from "./ParameterPanel.js";
@@ -188,11 +189,18 @@ async function main(): Promise<void> {
 			}),
 		{ kind: "setup", seed, decks: settings.cloudDecks() },
 	);
-	const sky = new SkyRenderer(ctx, {
-		direction: new Vec3(0.2, 0.55, 0.81).normalize(),
-		angularRadius: MOON_ANGULAR_RADIUS,
-	});
-	sky.surfaceRadius = RADIUS;
+	const sky = new SkyRenderer(
+		ctx,
+		{
+			direction: new Vec3(0.2, 0.55, 0.81).normalize(),
+			angularRadius: MOON_ANGULAR_RADIUS,
+		},
+		planetAtmosphere(
+			RADIUS,
+			settings.knobs.atmosphereTop,
+			settings.knobs.zenithDepth,
+		),
+	);
 	renderer.layer = sky;
 
 	// One generator per level. A chunk one level coarser samples the terrain at
@@ -391,6 +399,11 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
+		sky.atmosphere = planetAtmosphere(
+			RADIUS,
+			live.knobs.atmosphereTop,
+			live.knobs.zenithDepth,
+		);
 
 		const now = performance.now();
 		if (live.knobs.timeOfDay !== lastTimeOfDay) {

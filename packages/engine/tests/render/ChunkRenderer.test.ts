@@ -3,7 +3,10 @@ import { ChunkRenderer, SkyRenderer } from "chamfer/render";
 import { Mat4, Vec3 } from "chamfer/math";
 import type { ChunkMesh } from "chamfer/mesh";
 import type { Frame } from "chamfer/render";
+import { planetAtmosphere } from "chamfer/sky";
 import { RecordingGpu } from "./recordingGpu.js";
+
+const AIR = planetAtmosphere(1700, 400, 0.134);
 
 /** A camera standing sixty metres out, looking down at the surface. */
 const EYE: [number, number, number] = [0, 0, 1760];
@@ -48,10 +51,14 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
+		const sky = new SkyRenderer(
+			ctx,
+			{
+				direction: new Vec3(0, 1, 0),
+				angularRadius: 0.01,
+			},
+			AIR,
+		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
 		renderer.layer = sky;
@@ -70,10 +77,14 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
+		const sky = new SkyRenderer(
+			ctx,
+			{
+				direction: new Vec3(0, 1, 0),
+				angularRadius: 0.01,
+			},
+			AIR,
+		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
 		renderer.layer = sky;
@@ -113,10 +124,14 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
+		const sky = new SkyRenderer(
+			ctx,
+			{
+				direction: new Vec3(0, 1, 0),
+				angularRadius: 0.01,
+			},
+			AIR,
+		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		renderer.layer = sky;
 
