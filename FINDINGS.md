@@ -317,6 +317,48 @@ several scripts already carry.
 
 ---
 
+### F-019 — A candidate judged by eye can turn out to be a planet parameter, not a release decision
+
+**Kind:** idea
+**Milestone:** unscheduled
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-19, closing I-5 and the remaining half of I-1
+**Where:** `HOW-TO-WRITE-PLANS.md`, the step for candidates judged in the
+engine rather than argued from a measurement
+
+**What happens.** I-5 asked "32 m or 16 m coarse cells", built both behind a
+switch, and set out to pick a winner and remove the loser — the standard
+close for a candidate judged by looking rather than by a script. Looking
+answered a different question than expected: which spacing reads better does
+not depend on anything about this release, only on the planet being looked
+at. A small calm world can afford a narrower river than a large dramatic one
+wants, the same way I-3 found that a bigger planet needs a wider landform to
+read as one. I-1's remaining question — how tall B2's atmosphere should be —
+turned out to be the same shape once it was named: the demo shows the range,
+and nothing here picks one height as *the* answer.
+
+Both closed by leaving the knob exactly as it was, default included, rather
+than by choosing a winner. Nothing in the process document currently expects
+that outcome — it only describes "pick one, remove the other."
+
+**Why it matters.** The process as written pushes toward manufacturing a
+decision even when the honest answer is "this varies by world, and both
+sides already coexist as one knob." Following it as written would have
+picked an arbitrary default and quietly narrowed what a later world author
+could set. Nothing is broken today — both items closed correctly once this
+was noticed — but the next candidate judged in the engine will ask the same
+question again unless the process names it.
+
+**What would fix it.** Add a line to `HOW-TO-WRITE-PLANS.md`'s step for
+engine-judged candidates: before removing the losing side, ask whether the
+difference is a property of the world or a property of the release. If it is
+the world's, the close is "confirmed as a per-planet knob, no default
+chosen" rather than "A wins, B comes out." Small — one paragraph, and two
+worked examples already exist to cite.
+
+---
+
 ### F-015 — A large river is a chain of pools, not a continuous ribbon
 
 **Kind:** question
