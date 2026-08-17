@@ -436,6 +436,43 @@ function meshCell(
 		}
 	}
 
+	// A cap step. Two neighbours level at this chunk's own grid can stand
+	// several fine layers apart once their caps snap to the shared fine grid,
+	// and the side runs never cover that span: at the chunk's own resolution
+	// the two columns are the same height, so no run exists there at all. The
+	// wall between the two snapped caps is what a terrace brink shows.
+	if (groundCap >= 0 && opacityOf(at(own, groundCap)) === 2) {
+		for (let k = 0; k < degree; k++) {
+			const other = ring[k];
+			if (!other || other.groundRadius <= 0) continue;
+			// A neighbour open at the cap layer already has a run whose top
+			// is this cap; only a level neighbour leaves the span bare.
+			if (opacityOf(at(other, groundCap)) !== 2) continue;
+			const otherTop = snappedSurface(
+				shape.crustTopRadius,
+				other.groundRadius,
+				grid,
+			);
+			if (otherTop >= groundTop - 1e-9) continue;
+			const block = at(own, groundCap);
+			blockColor(block, face, i, j, seed, COLOR, 0);
+			shade(COLOR, sky);
+			emitSide(
+				opaque,
+				corners,
+				degree,
+				k,
+				groundTop,
+				otherTop,
+				origin,
+				ring,
+				groundCap,
+				groundCap,
+			);
+			tally.faces++;
+		}
+	}
+
 	// Sides, as runs. A column is straight -- the tessellation is identical at
 	// every layer -- so a stretch of layers with the same block and the same
 	// neighbour exposed is one quad however tall it is.
@@ -580,6 +617,38 @@ function meshApronCell(
 			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
 		);
 		tally.faces++;
+	}
+
+	// The same cap step the owned cells draw: a level neighbour whose cap
+	// snapped lower leaves a bare span no run covers.
+	if (groundCap >= 0 && opacityOf(at(own, groundCap)) === 2) {
+		for (let k = 0; k < degree; k++) {
+			const other = ring[k];
+			if (!other || other.groundRadius <= 0) continue;
+			if (opacityOf(at(other, groundCap)) !== 2) continue;
+			const otherTop = snappedSurface(
+				shape.crustTopRadius,
+				other.groundRadius,
+				grid,
+			);
+			if (otherTop >= groundTop - 1e-9) continue;
+			const block = at(own, groundCap);
+			blockColor(block, face, i, j, seed, COLOR, 0);
+			shade(COLOR, sky);
+			emitSide(
+				opaque,
+				corners,
+				degree,
+				k,
+				groundTop - APRON_DROP,
+				otherTop - APRON_DROP,
+				origin,
+				ring,
+				groundCap,
+				groundCap,
+			);
+			tally.faces++;
+		}
 	}
 
 	// A skirt down from the surface on the outward edges.

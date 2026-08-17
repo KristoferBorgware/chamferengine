@@ -24,6 +24,7 @@ import { Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import {
 	canonicalCell,
+	cellCorners,
 	joinPath,
 	neighbour,
 	positionToCell,
@@ -479,6 +480,100 @@ describe("merging at a level seam", () => {
 			);
 			expect(built.tally.apron).toBe(expected.size);
 		}
+	});
+
+	it("walls the step between neighbours level at the coarse grid", () => {
+		// Two neighbours in one coarse layer can stand several fine layers
+		// apart once their caps snap to the shared fine grid, and the side
+		// runs never cover that span: at the chunk's own resolution the two
+		// columns are the same height, so no run exists there at all. The
+		// terrace brinks of a coarse chunk showed the missing walls as slits.
+		const lod = 2;
+		const at2 = shape.atLod(lod);
+		const gen = new TerrainGenerator(map.seed, at2, map);
+		const level = CHUNK_LEVEL - lod;
+		const address = ChunkAddress.fromKey(2, level);
+		const chunk = generateChunk(gen, address, level, at2.crustDepth);
+		const built = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, gen),
+			at2,
+			map.seed,
+			{ skirtCells: 2, surfaceGrid: shape.blockSize },
+		);
+
+		// Find an interior pair of solid neighbours sharing a coarse layer
+		// whose snapped caps differ, and demand the wall's four corners among
+		// the vertices.
+		const n2 = 1 << at2.subdivisionDepth;
+		const snapped = (radius: number) =>
+			at2.crustTopRadius -
+			Math.ceil((at2.crustTopRadius - radius) / shape.blockSize - 1e-9) *
+				shape.blockSize;
+		const sampler = new ChunkColumnSampler(chunk, gen);
+		let checked = 0;
+		for (let q = 1; q < chunk.m && checked < 3; q++)
+			for (let r = 1; q + r < chunk.m && checked < 3; r++) {
+				const [i, j] = joinPath(
+					address.path,
+					q,
+					r,
+					at2.subdivisionDepth,
+				);
+				const own = sampler.columnAt(address.face, i, j);
+				const ownCap = at2.layerOfSurface(own.groundRadius);
+				const ownTop = snapped(own.groundRadius);
+				for (let k = 0; k < 6 && checked < 3; k++) {
+					const nb = neighbour(address.face, n2, i, j, k);
+					if (!nb || nb.face !== address.face) continue;
+					const other = sampler.columnAt(nb.face, nb.i, nb.j);
+					if (at2.layerOfSurface(other.groundRadius) !== ownCap)
+						continue;
+					const otherTop = snapped(other.groundRadius);
+					if (ownTop - otherTop < shape.blockSize * 0.5) continue;
+
+					const corners = cellCorners(address.face, n2, i, j);
+					const degree = corners.length;
+					const left = corners[(k + degree - 1) % degree]!;
+					const right = corners[k]!;
+					// A cap is horizontal, so only a wall face mixes the two
+					// radii: demand a triangle with a corner on each.
+					const near = (
+						v: Vec3,
+						p: Vec3,
+						radius: number,
+					): boolean => {
+						const dx = v.x - p.x * radius;
+						const dy = v.y - p.y * radius;
+						const dz = v.z - p.z * radius;
+						return dx * dx + dy * dy + dz * dz < 1e-2;
+					};
+					let wall = false;
+					for (const [a, b, c] of triangles(
+						built.opaque,
+						built.origin,
+					)) {
+						let tops = 0;
+						let bottoms = 0;
+						for (const v of [a, b, c]) {
+							if (near(v, left, ownTop) || near(v, right, ownTop))
+								tops++;
+							if (
+								near(v, left, otherTop) ||
+								near(v, right, otherTop)
+							)
+								bottoms++;
+						}
+						if (tops > 0 && bottoms > 0) {
+							wall = true;
+							break;
+						}
+					}
+					expect(wall).toBe(true);
+					checked++;
+				}
+			}
+		expect(checked).toBeGreaterThan(0);
 	});
 
 	it("reaches the seam floor when it is deeper than the fixed skirt", () => {
