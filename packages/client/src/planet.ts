@@ -1,7 +1,6 @@
 import type { ChunkMesh } from "chamfer/mesh";
 import type { ChunkSelection } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
-import { WorldShape, maxCrustDepth } from "chamfer/world";
 import {
 	BlockType,
 	ChunkAtlas,
@@ -49,7 +48,6 @@ const settings = PlanetSettings.fromParams(params);
 const RADIUS = settings.radius;
 const DEPTH = settings.depth;
 const CHUNK_LEVEL = settings.chunkLevel;
-const COARSE_LEVEL = settings.coarseLevel;
 const MAX_ELEVATION = settings.maxElevation;
 const seedText = settings.knobs.seed;
 
@@ -164,13 +162,8 @@ async function main(): Promise<void> {
 	await paint();
 
 	const seed = seedFromString(seedText);
-	const shape = new WorldShape(
-		RADIUS,
-		DEPTH,
-		MAX_ELEVATION,
-		maxCrustDepth(DEPTH),
-	);
-	const map = buildCoarseMap(seed, { level: COARSE_LEVEL });
+	const shape = settings.shape();
+	const map = buildCoarseMap(seed, settings.coarseOptions());
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
 	const clouds = new CloudField(CLOUD_LEVEL);
 	const sky = new SkyRenderer(ctx, {
@@ -185,7 +178,14 @@ async function main(): Promise<void> {
 	// and there are four times fewer of them.
 	const byLod: TerrainGenerator[] = [];
 	for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
-		byLod.push(new TerrainGenerator(seed, shape.atLod(lod), map));
+		byLod.push(
+			new TerrainGenerator(
+				seed,
+				shape.atLod(lod),
+				map,
+				settings.terrainOptions(),
+			),
+		);
 	const terrain = byLod[0]!;
 
 	// The camera looks at a point on the surface from a little behind and above
@@ -303,7 +303,7 @@ async function main(): Promise<void> {
 			maxElevation: MAX_ELEVATION,
 			crustDepth: shape.crustDepth,
 			skirtCells: SKIRT_CELLS,
-			terrain: {},
+			terrain: settings.terrainOptions(),
 		},
 	);
 

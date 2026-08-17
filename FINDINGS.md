@@ -317,6 +317,116 @@ several scripts already carry.
 
 ---
 
+### F-015 — A large river is a chain of pools, not a continuous ribbon
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, measuring channel widths for I-5
+**Where:** `packages/engine/src/generation/coarse/buildCoarseMap.ts`, the `water`
+field; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, `columnAt`
+
+**What happens.** Water is written into a column wherever the coarse map's water
+surface is above its ground surface. The map's water surface is the pit-filled
+height, so it is above the ground only in a basin the fill raised, or below sea
+level. A cell that drains — which is what a river cell is — was not raised, so
+its water surface equals its ground surface and no water block is written.
+
+Measured on a 6,800 m planet at a 32 m coarse cell: of the **785 cells draining
+more than a square kilometre, 354 carry water** and 431 do not. So the biggest
+rivers on the planet are about 45% water. They read as a chain of ponds with dry
+channel between them.
+
+The dry stretches are not flat. They are incised valleys 11 to 37 m deep, so the
+landform is there. What is missing is water in it.
+
+**Why it matters.** Nobody is hurt today, because there is no water simulation
+and nothing depends on a river being continuous. It matters for how the world
+looks: standing in one of these valleys, there is an obvious river bed with no
+river in it. It also makes "how wide is a river" hard to answer by looking,
+which is the question I-5 asks.
+
+It may also be correct. A dry wash between pools is a real landform, and this
+planet has no rainfall model to say otherwise. Nothing has decided.
+
+**What would fix it.** Two shapes, and they are different decisions.
+
+The small one: write water wherever the catchment is above a threshold in square
+metres, at a depth that follows from the catchment, rather than only where the
+fill raised the ground. `TerrainColumn.catchment` already carries the number.
+That gives a continuous ribbon and costs one comparison per column.
+
+The large one: leave it, and decide that rivers on this planet are pools. That
+is free to do and needs somebody to look at the world and say so.
+
+---
+
+### F-016 — Four panel knobs still reach nothing
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, wiring the ground knobs through for I-5
+**Where:** `packages/client/src/PlanetSettings.ts` and `ParameterPanel.ts`
+
+**What happens.** The panel shows *Air reaches*, *Depth overhead*, *High deck*
+and *Shells*. All four move, all four appear in the URL, and none of them
+changes anything on screen.
+
+The reason is not an oversight. The atmosphere model I-1 chose and the two cloud
+decks I-2 chose are not built yet, so there is nothing in the engine for those
+four numbers to be passed to. The other knobs are all wired: seed, radius, block
+size, chunk, coarse cell, crust, height scale, detail, land, skirt, low deck,
+puff, day, and full detail to.
+
+**Why it matters.** A slider that moves and changes nothing is worse than no
+slider, because somebody turning it concludes the parameter does not matter. It
+is currently possible to spend a minute deciding that the atmosphere height has
+no effect.
+
+**What would fix it.** Either build I-1 and I-2, which is the plan and which
+makes all four live, or mark the four as not yet connected in the panel until
+then. Marking them is under an hour: the `Knob` interface takes a `pending` flag
+and the row draws greyed with a note.
+
+---
+
+### F-017 — Erosion depth follows the map's resolution
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-18, comparing 32 m and 16 m coarse cells for I-5
+**Where:** `packages/engine/src/generation/coarse/erode.ts`
+
+**What happens.** `erode` lowers a cell by `rate * sqrt(flow) * drop`, where
+`flow` is a count of upstream cells and `drop` is the height difference to the
+downhill neighbour. Neither is in metres. At a finer level `flow` is four times
+larger for the same ground and `drop` is about half, so the two errors mostly
+cancel and the result is nearly resolution-independent — but only nearly.
+
+Measured over five large valleys on the 6,800 m planet, floor-to-rim depth is
+11 to 37 m at a 32 m coarse cell and 20 to 43 m at 16 m: about **a quarter
+deeper** at the finer resolution, on the same seed.
+
+**Why it matters.** `erosionRate` is a knob somebody will tune by eye, and it
+means a different amount of cutting on every planet size and every coarse
+spacing. Tuning it on one world and changing the radius silently changes the
+terrain. Nothing is wrong today because only one spacing ships.
+
+**What would fix it.** Write the incision against metres: divide `drop` by the
+coarse spacing to get a real gradient, and multiply `flow` by the cell area to
+get a catchment, then scale the rate so the shipped worlds keep the terrain they
+have. That needs `erode` to know the planet's radius, which the coarse map
+deliberately does not — so the alternative is to normalise by level inside
+`buildCoarseMap`, where the level is already known. Measure the valley depths
+before and after; they should stop moving with resolution.
+
+---
+
 ## Closed
 
 ### F-010 — The level-of-detail chain stops at the icosahedron faces

@@ -95,6 +95,44 @@ describe("the height field", () => {
 	});
 });
 
+describe("catchment", () => {
+	/** The biggest river mouth on the planet, in square metres of ground. */
+	function largestCatchment(at: CoarseMap): number {
+		const cellArea = (4 * Math.PI * shape.seaLevelRadius ** 2) / at.count;
+		let most = 0;
+		for (let cell = 0; cell < at.count; cell++)
+			most = Math.max(most, at.flow[cell]!);
+		return most * cellArea;
+	}
+
+	it("does not move when the coarse map's resolution does", () => {
+		// The map counts cells draining through a cell, and a cell is four
+		// times smaller at each finer level, so one physical catchment scores
+		// four times higher on a map drawn one level finer. Multiplied by the
+		// area a cell covers it is the same ground either way, which is why a
+		// column reports an area and not the count.
+		const coarse = largestCatchment(map);
+		const fine = largestCatchment(
+			buildCoarseMap(map.seed, { level: COARSE_LEVEL + 1 }),
+		);
+		expect(fine / coarse).toBeGreaterThan(0.85);
+		expect(fine / coarse).toBeLessThan(1.15);
+	});
+
+	it("is what a column reports, on the map's own scale", () => {
+		const cellArea = (4 * Math.PI * shape.seaLevelRadius ** 2) / map.count;
+		for (const [face, i, j] of [
+			[0, 0, 0],
+			[7, 33, 61],
+			[19, 100, 4],
+		] as const) {
+			const column = gen.columnAt(face, i, j);
+			const flow = map.flowAt(face, i, j, shape.subdivisionDepth);
+			expect(column.catchment).toBeCloseTo(flow * cellArea, 6);
+		}
+	});
+});
+
 describe("solidity", () => {
 	it("puts air above the ground and rock below it", () => {
 		for (const column of columns(64)) {

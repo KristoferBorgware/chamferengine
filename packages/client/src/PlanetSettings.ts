@@ -1,4 +1,5 @@
-import { CELL_CONSTANT, maxCrustDepth } from "chamfer/world";
+import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
+import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 
 /** How many layers the ten-bit layer field can name. */
 const LAYER_CEILING = 1024;
@@ -260,6 +261,36 @@ export class PlanetSettings {
 	/** Metres across one chunk. */
 	get chunkSpan(): number {
 		return this.knobs.blockSize * 2 ** (this.depth - this.chunkLevel);
+	}
+
+	/**
+	 * The three things the engine is handed, in the shapes it takes them.
+	 *
+	 * A knob that reaches no further than this class is a slider that moves and
+	 * changes nothing, which is worse than no slider, so every knob a subsystem
+	 * has an option for is passed here rather than left at its default.
+	 */
+	shape(): WorldShape {
+		return new WorldShape(
+			this.radius,
+			this.depth,
+			this.maxElevation,
+			this.crustDepth,
+		);
+	}
+
+	coarseOptions(): CoarseMapOptions {
+		return {
+			level: this.coarseLevel,
+			landFraction: this.knobs.landFraction,
+		};
+	}
+
+	terrainOptions(): TerrainOptions {
+		return {
+			heightScale: this.knobs.heightScale,
+			detailAmplitude: this.knobs.detailAmplitude,
+		};
 	}
 
 	/**

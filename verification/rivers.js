@@ -258,10 +258,90 @@ console.log('\n6. rivers are as long as the continent lets them be');
   console.log('   and never a river system. Fix the continents first.');
 }
 
+// ---- 7. what the map's resolution decides, and what it does not ------------
+// The map is built at a LEVEL, and a level is a different spacing on a
+// different planet. So the question is which of the map's answers move when the
+// same seed is drawn at a different resolution.
+console.log('\n7. the same planet drawn at three resolutions');
+{
+  const grid = Lv => {
+    const n = 1 << Lv, idx = new Map(), pts = [], nb = [];
+    const put = p => { const k = p.map(x => Math.round(x*1e7)).join(',');
+      if (!idx.has(k)){ idx.set(k, pts.length); pts.push(p); nb.push(new Set()); } return idx.get(k); };
+    const link = (a,b) => { nb[a].add(b); nb[b].add(a); };
+    for (const f of F0){
+      const [A,B,C] = f.map(i => V0[i]), G = [];
+      for (let i=0;i<=n;i++){ const row=[];
+        for (let j=0;j<=i;j++) row.push(put(norm(P(A,B,C,n,i,j))));
+        G.push(row); }
+      for (let i=0;i<n;i++) for (let j=0;j<=i;j++){
+        link(G[i][j],G[i+1][j]); link(G[i][j],G[i+1][j+1]); link(G[i+1][j],G[i+1][j+1]); }
+    }
+    return { pts, ring: nb.map(s => [...s]) };
+  };
+  // A fixed catchment in square metres, so the same ground is asked about at
+  // every resolution. 40,000 m2 is a modest valley on the worked planet.
+  const AREA = 40000, R = 1700;
+  console.log('   level   cells   spacing   land   longest river   largest catchment   channel');
+  for (const Lv of [5, 6, 7]){
+    const { pts, ring } = grid(Lv);
+    const N = pts.length, h = new Float64Array(N);
+    for (let v=0;v<N;v++) h[v] = fbm(pts[v], 0.8, 6);
+    const s = Float64Array.from(h).sort(), sea = s[Math.floor(s.length*0.70)];
+    let land = 0; for (let v=0;v<N;v++) if (h[v] > sea) land++;
+
+    const filled = Float64Array.from(h), done = new Uint8Array(N), EPS = 1e-7;
+    const hq = [], hpush = (k,v) => { hq.push([k,v]); let i=hq.length-1;
+      while (i>0){ const p=(i-1)>>1; if (hq[p][0] <= hq[i][0]) break; [hq[p],hq[i]]=[hq[i],hq[p]]; i=p; } };
+    const hpop = () => { const top=hq[0], last=hq.pop();
+      if (hq.length){ hq[0]=last; let i=0;
+        for(;;){ const l=2*i+1, r=l+1; let m=i;
+          if (l<hq.length && hq[l][0]<hq[m][0]) m=l;
+          if (r<hq.length && hq[r][0]<hq[m][0]) m=r;
+          if (m===i) break; [hq[m],hq[i]]=[hq[i],hq[m]]; i=m; } }
+      return top; };
+    for (let v=0;v<N;v++) if (h[v] <= sea){ done[v]=1; hpush(h[v], v); }
+    while (hq.length){ const [k,v] = hpop();
+      for (const w of ring[v]){ if (done[w]) continue; done[w]=1;
+        if (filled[w] <= k) filled[w] = k + EPS;
+        hpush(filled[w], w); } }
+
+    const order = [...Array(N).keys()].filter(v => filled[v] > sea).sort((a,b) => filled[b]-filled[a]);
+    const dn = new Int32Array(N).fill(-1), flow = new Float64Array(N).fill(1);
+    for (const v of order){ let best=-1, bh=filled[v];
+      for (const w of ring[v]) if (filled[w] < bh){ bh = filled[w]; best = w; }
+      dn[v] = best; }
+    for (const v of order) if (dn[v] >= 0) flow[dn[v]] += flow[v];
+    const len = new Int32Array(N);
+    for (const v of order) if (dn[v] >= 0) len[dn[v]] = Math.max(len[dn[v]], len[v] + 1);
+
+    let longest = 0, most = 0;
+    for (let v=0;v<N;v++){ if (len[v] > longest) longest = len[v]; if (flow[v] > most) most = flow[v]; }
+    const cellArea = 4*Math.PI*R*R / N, spacing = K*R/2**Lv;
+    let channel = 0;
+    for (const v of order) if (flow[v]*cellArea >= AREA) channel++;
+    console.log(`   ${String(Lv).padStart(5)}  ${String(N).padStart(6)}`
+      + `  ${spacing.toFixed(1).padStart(6)} m  ${(100*land/N).toFixed(1)}%`
+      + `   ${String(longest).padStart(4)} cells = ${(longest*spacing/1000).toFixed(2)} km`
+      + `   ${String(Math.round(most)).padStart(6)} cells = ${(most*cellArea/1e6).toFixed(2)} km2`
+      + `   ${(100*channel/land).toFixed(2)}% of land`);
+  }
+  console.log('   Land share and river LENGTH in kilometres hold across all three. What');
+  console.log('   moves is the CELL COUNT: the largest catchment quadruples per level');
+  console.log('   while the ground it drains does not, so a threshold written in cells');
+  console.log('   means a different river on every map. Write it in square metres.');
+  console.log('   The share of land inside a fixed catchment HALVES per level, and that');
+  console.log('   is not an error: a channel is one coarse cell wide, so a finer map');
+  console.log('   draws the same river narrower. Choosing the level IS choosing how wide');
+  console.log('   a river is.');
+}
+
 console.log('\nverdict');
 console.log('   Flow routing works on the hex sphere with no pentagon case and no face');
 console.log('   case, because it only ever compares a cell against its neighbours. The');
 console.log('   real algorithm is not the routing but the PIT FILLING, without which');
-console.log('   most land drains into a hole instead of the sea. Store the coarse map at');
-console.log('   level 8 for 2.5 MB, look it up by masking the low bits of (i, j), and');
-console.log('   interpolate with the remainder.');
+console.log('   most land drains into a hole instead of the sea. Look the map up by');
+console.log('   masking the low bits of (i, j) and interpolate with the remainder. Ask');
+console.log('   for its resolution in METRES: the level that gives 32 m cells is 8 on a');
+console.log('   1,700 m planet and 10 on a 6,800 m one, and it is the metres that decide');
+console.log('   how wide a river is.');

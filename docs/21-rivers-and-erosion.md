@@ -46,10 +46,47 @@ in memory, and leaves the runtime generator local.
 > | 9 | 2,621,442 | 10.0 MB | 4.0 m |
 > | 10 | 10,485,762 | 40.0 MB | 2.0 m |
 
-**Level 8 is the recommendation**, at 2.5 MB. A coarse cell is 8 m across, so a
-river channel is about one coarse cell wide before the fine generator adds detail
-to its banks. That is the right scale: the coarse map should carry *where the
-river is*, not what it looks like.
+Read that table as a size, not as a level. A level is a property of the grid: it
+says how many times a face has been split, and it means a different distance on
+a different planet. Level 8 is an 8 m cell on the 1,700 m worked planet and a
+32 m cell on a 6,800 m one.
+
+**Ask for the coarse map in metres and let the level follow from the radius.**
+The number the design cares about is how wide a coarse cell is, because a river
+channel is about one coarse cell wide before the fine generator adds detail to
+its banks. On the worked planet 8 m is the right width, at 2.5 MB.
+
+### Resolution decides how wide a river is, and nothing else
+
+Draw the same seed at three resolutions and most of the map does not move.
+
+> **[verified]** `verification/rivers.js`, section 7. One seed, three levels,
+> R = 1,700 m:
+>
+> | Level | Spacing | Land | Longest river | Largest catchment | Land inside a 40,000 m² catchment |
+> |---|---|---|---|---|---|
+> | 5 | 64.0 m | 30.0% | 1.22 km | 141 cells = 0.50 km² | 9.08% |
+> | 6 | 32.0 m | 30.0% | 1.38 km | 482 cells = 0.43 km² | 4.23% |
+> | 7 | 16.0 m | 30.0% | 1.38 km | 1,900 cells = 0.42 km² | 2.10% |
+
+Land is **30.0%** at all three. The longest river is **1.38 km** at two of them
+and 1.22 km at the coarsest, where a cell is wide enough to swallow a bend. The
+map's conclusions are not a function of its resolution.
+
+Two columns do move, in opposite directions, and both for the same reason.
+
+The **largest catchment quadruples** in cells — 141, 482, 1,900 — while the
+ground it drains stays at about **0.42 km²**. A cell is four times smaller at
+each finer level, so a count of cells is not an area. Anything that compares one
+channel against another writes its threshold in **square metres**.
+
+The **share of land inside a fixed catchment halves** — 9.08%, 4.23%, 2.10%.
+That is the same river drawn narrower. A channel is one coarse cell wide, so
+halving the cell halves the ground the channel covers while its length holds.
+
+So the resolution buys exactly one thing: **how wide a river is to somebody
+standing next to it.** At 32 m cells a channel is 32 blocks across, at 16 m it
+is 16, and neither figure changes where the water goes.
 
 ### The lookup, and a correction to doc 08
 
@@ -132,9 +169,11 @@ changes nothing about which cells hold water, only whether they can be sorted.
 ### Drainage, and what counts as a river
 
 Once every cell has a downhill neighbour, sort by height and accumulate: each cell
-passes its own area plus everything above it to the cell below. One pass.
+passes 1 plus everything above it to the cell below. One pass, and the number that
+comes out is a **count of cells**, which is a fact about the graph and holds at any
+planet size.
 
-> **[verified]** `verification/rivers.js`, section 5. Cells whose upstream area
+> **[verified]** `verification/rivers.js`, section 5. Cells whose upstream count
 > exceeds a threshold, as a share of land:
 >
 > | Upstream cells | Qualifying cells | Share of land |
@@ -143,9 +182,11 @@ passes its own area plus everything above it to the cell below. One pass.
 > | 100 | 563 | 1.15% |
 > | 500 | 29 | 0.06% |
 
-The threshold is the design knob: it decides what is a stream and what is a river,
-and it costs nothing to change because the drainage number is already computed for
-every cell.
+The threshold is the design knob: it decides what is a stream and what is a river.
+**Write it in square metres**, and turn the count into an area on the way out by
+multiplying by `4πR² / cellCount`. The same physical valley scores four times
+higher at each finer level, so a threshold of 500 upstream cells is a major river
+on one map and a ditch on another.
 
 The whole pass — noise, routing, filling, accumulation — runs in **well under a
 second for 163,842 cells**. The script also prints the reading it saw, but that is
@@ -285,10 +326,18 @@ need to know it is drawing a river.
 - **Whether lakes should survive.** The fill turns 4.8% of land into lakes, which
   is a lot of lakes. Some of them are real features and some are artefacts of the
   noise; nothing distinguishes them yet.
-- **Rivers below the coarse resolution.** At level 8 a channel is 8 m wide. A
-  stream narrower than that has nowhere to live in the coarse map, so either the
-  fine generator invents small tributaries locally — with no guarantee they
-  connect — or small streams simply do not exist.
+- **Rivers below the coarse resolution.** At an 8 m coarse cell a channel is 8 m
+  wide. A stream narrower than that has nowhere to live in the coarse map, so
+  either the fine generator invents small tributaries locally — with no
+  guarantee they connect — or small streams simply do not exist. No resolution
+  fixes this: halving the cell halves the smallest channel and never produces
+  one narrower than a cell.
+- **A big channel is half pools.** Filling the pits raises basins along a
+  channel, and standing water is written wherever the fill raised the ground.
+  Measured on a 6,800 m planet at a 32 m coarse cell, **354 of the 785 cells
+  draining more than a square kilometre carry water** — so a large river reads
+  as a chain of pools with dry channel between them rather than a continuous
+  ribbon. Nothing here decides whether that is right.
 - ~~What happens where a river meets a player's edits~~ — settled by
   [doc 24](24-edits-and-global-processes.md). The coarse map **stays read-only**:
   it is a statement about the *generated* world, not the current one, which is
@@ -303,8 +352,12 @@ need to know it is drawing a river.
 ## In one breath
 
 - Rivers, erosion and continents are **global**, and local generation cannot do
-  global. The fix is one **coarse map, computed once and stored** — **2.5 MB at
-  level 8**, where a coarse cell is 8 m.
+  global. The fix is one **coarse map, computed once and stored** — an **8 m
+  coarse cell** on the worked planet, which is 2.5 MB.
+- **Ask for the map in metres and let the level follow from the radius.** The
+  resolution decides one thing only: **how wide a river is.** Land share and
+  river length in kilometres are the same at 64 m, 32 m and 16 m; a channel is
+  one coarse cell across at every one of them.
 - The lookup is masking the **low bits of `(i, j)`**, not the path digits, because
   a coarse sample is literally one of the fine cells and the bits you mask off are
   the blend weights.

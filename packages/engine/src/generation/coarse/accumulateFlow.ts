@@ -8,9 +8,11 @@ import { downhillOrder } from "./downhillOrder.js";
  * order of descending surface height means a cell is only ever added to after
  * everything above it has been, so one pass over the ordering is enough.
  *
- * The number is a cell count rather than an area. Cell areas vary about 2:1
- * across the sphere, so this is a proxy for catchment size, and it is what
- * decides which channels are drawn as rivers.
+ * The number is a cell count, which is a fact about the graph and holds at any
+ * radius. It is not a catchment: a cell is four times smaller at each finer
+ * level, so the same ground scores four times higher. Anything comparing one
+ * channel against another across resolutions multiplies by the area a cell
+ * covers first, which {@link TerrainGenerator} does.
  */
 export function accumulateFlow(
 	grid: CoarseGrid,

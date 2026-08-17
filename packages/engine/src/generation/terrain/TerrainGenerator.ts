@@ -38,6 +38,9 @@ export class TerrainGenerator {
 	/** Metres of ground fall per metre travelled, per unit of coarse slope. */
 	private readonly gradientScale: number;
 
+	/** Square metres one coarse cell covers, on average. */
+	private readonly coarseCellArea: number;
+
 	constructor(
 		seed: number,
 		shape: WorldShape,
@@ -56,6 +59,16 @@ export class TerrainGenerator {
 		const coarseSpacing =
 			shape.blockSize * 2 ** (shape.subdivisionDepth - map.level);
 		this.gradientScale = this.settings.heightScale / coarseSpacing;
+
+		// The map counts cells draining through a cell, and a cell is four times
+		// smaller at each finer level, so the count for one physical catchment
+		// moves by four while the catchment does not. Multiplying by the area a
+		// cell covers gives a number that means the same at every resolution:
+		// the wettest place on the worked planet drains 5.1 square kilometres
+		// whether the map is drawn at 64 m, 32 m or 16 m.
+		this.coarseCellArea =
+			(4 * Math.PI * shape.seaLevelRadius * shape.seaLevelRadius) /
+			map.count;
 	}
 
 	/** Evaluate one column of the world. */
@@ -112,7 +125,7 @@ export class TerrainGenerator {
 			waterLayer: this.shape.layerOfRadius(waterRadius) + 1,
 			elevation,
 			gradient: this.map.slopeAt(face, i, j, depth) * this.gradientScale,
-			flow: this.map.flowAt(face, i, j, depth),
+			catchment: this.map.flowAt(face, i, j, depth) * this.coarseCellArea,
 		};
 	}
 

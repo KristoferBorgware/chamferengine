@@ -114,7 +114,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 393 ns -- a timing, so it moves run to run
+   this machine, now: 333 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1121,7 +1121,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1368,12 +1368,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 11x version is the one that
+       than choosing the language. And the 16x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.68 ms, one object a vertex
-       7.57 ms -- a layout gap of 11x. Both are timings and move run to
+       This machine, now: typed arrays 0.38 ms, one object a vertex
+       6.00 ms -- a layout gap of 16x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2257,7 +2257,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 993 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1060 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -2273,13 +2273,29 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    Plain fBm makes many small blobs, which is why raw noise gives streams
    and never a river system. Fix the continents first.
 
+7. the same planet drawn at three resolutions
+   level   cells   spacing   land   longest river   largest catchment   channel
+       5   10242    64.0 m  30.0%     19 cells = 1.22 km      141 cells = 0.50 km2   9.08% of land
+       6   40962    32.0 m  30.0%     43 cells = 1.38 km      482 cells = 0.43 km2   4.23% of land
+       7  163842    16.0 m  30.0%     86 cells = 1.38 km     1900 cells = 0.42 km2   2.10% of land
+   Land share and river LENGTH in kilometres hold across all three. What
+   moves is the CELL COUNT: the largest catchment quadruples per level
+   while the ground it drains does not, so a threshold written in cells
+   means a different river on every map. Write it in square metres.
+   The share of land inside a fixed catchment HALVES per level, and that
+   is not an error: a channel is one coarse cell wide, so a finer map
+   draws the same river narrower. Choosing the level IS choosing how wide
+   a river is.
+
 verdict
    Flow routing works on the hex sphere with no pentagon case and no face
    case, because it only ever compares a cell against its neighbours. The
    real algorithm is not the routing but the PIT FILLING, without which
-   most land drains into a hole instead of the sea. Store the coarse map at
-   level 8 for 2.5 MB, look it up by masking the low bits of (i, j), and
-   interpolate with the remainder.
+   most land drains into a hole instead of the sea. Look the map up by
+   masking the low bits of (i, j) and interpolate with the remainder. Ask
+   for its resolution in METRES: the level that gives 32 m cells is 8 on a
+   1,700 m planet and 10 on a 6,800 m one, and it is the metres that decide
+   how wide a river is.
 ```
 
 ## `rotation.js`
