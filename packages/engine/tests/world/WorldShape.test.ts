@@ -29,6 +29,28 @@ describe("WorldShape", () => {
 		}
 	});
 
+	it("agrees with layerOfRadius about a surface away from the boundaries", () => {
+		const shape = new WorldShape(1700, 11, 150, 435);
+		for (const radius of [1700.3, 1699.7, 1600.1, 1849.5]) {
+			expect(shape.layerOfSurface(radius)).toBe(
+				shape.layerOfRadius(radius) + 1,
+			);
+		}
+	});
+
+	it("tops a surface landing exactly on a boundary at that boundary", () => {
+		// The other rounding put the first solid block one whole layer down,
+		// which a sphere with no relief hits at every column: the walkable
+		// surface of the whole planet sat one block below the radius the
+		// generator named, and a viewer standing on it stood under the horizon
+		// formula's reference sphere.
+		const shape = new WorldShape(1700, 11, 150, 435);
+		for (const layer of [1, 2, 150]) {
+			const boundary = shape.radiusOfLayer(layer);
+			expect(shape.layerOfSurface(boundary)).toBe(layer);
+		}
+	});
+
 	it("stacks layers downward from a fixed crust top", () => {
 		const shape = new WorldShape(1700, 11, 150, 435);
 		expect(shape.radiusOfLayer(0)).toBe(1850);

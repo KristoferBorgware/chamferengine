@@ -85,6 +85,29 @@ export class WorldShape {
 		return Math.floor((this.crustTopRadius - radius) / this.blockSize);
 	}
 
+	/**
+	 * The first layer a surface topping at `radius` fills.
+	 *
+	 * Not {@link layerOfRadius}: that assigns a radius to the layer it falls
+	 * inside, which puts a surface landing exactly on a layer boundary into
+	 * the layer above the one it tops -- a whole block of air where the ground
+	 * should end. A surface fills every layer whose top face is at or below
+	 * it, so the exact hit belongs to the layer under the boundary. Noise
+	 * terrain lands on a boundary almost never; a sphere with no relief lands
+	 * on one at every column, which is how a whole planet's walkable surface
+	 * once came to sit one block below the radius the generator named.
+	 *
+	 * The boundary is recognised within a billionth of a layer, because the
+	 * arithmetic rebuilding one -- a subtraction against the crust top and a
+	 * division by the block size -- does not always land on it to the last
+	 * bit, and a surface a last-bit over a boundary must not skip a layer.
+	 */
+	layerOfSurface(radius: number): number {
+		return Math.ceil(
+			(this.crustTopRadius - radius) / this.blockSize - 1e-9,
+		);
+	}
+
 	/** The layer holding sea level. */
 	get seaLevelLayer(): number {
 		return this.layerOfRadius(this.seaLevelRadius);

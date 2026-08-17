@@ -390,13 +390,18 @@ async function main(): Promise<void> {
 	/** Choose what should be drawn, and ask for what is missing. */
 	function refresh(): void {
 		selectedAt = player.position;
+		// The eye, not the feet: a viewer standing on ground at exactly the
+		// reference radius still sees to the eye-height horizon, and the feet
+		// put the horizon at zero. The peak height reaches the ground that
+		// stands above the reference sphere beyond that horizon.
 		const wanted = selectChunks(
 			DEPTH,
 			CHUNK_LEVEL,
 			player.position,
-			player.position.length(),
+			player.eye.length(),
 			RADIUS,
 			DETAIL,
+			shape.maxElevation,
 		);
 		wantedNow = wanted.length;
 		keep = new Set(

@@ -40,6 +40,16 @@ export const DETAIL = 2;
  * is drawn; one closer is split into its four children and each asked again.
  * Children tile their parent exactly, so the surface is covered once with no
  * gap and no overlap however the levels fall.
+ *
+ * The reach is two horizons added together: how far the viewer sees over the
+ * reference sphere, and how far ground standing `peakHeight` above that
+ * sphere pokes back over it. A peak is visible from
+ * `R acos(R/(R+eye)) + R acos(R/(R+peak))` away -- a 60 m hill from 521 m on
+ * the worked planet -- so leaving the second term out drops mountains that
+ * are plainly on screen. `viewerRadius` is where the **eye** is, not the
+ * feet: a viewer standing on ground at exactly `surfaceRadius` still sees to
+ * the eye-height horizon, and passing the feet there collapses the first
+ * term to nothing.
  */
 export function selectChunks(
 	depth: number,
@@ -48,6 +58,7 @@ export function selectChunks(
 	viewerRadius: number,
 	surfaceRadius: number,
 	detail = DETAIL,
+	peakHeight = 0,
 ): ChunkSelection[] {
 	const length = Math.sqrt(
 		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
@@ -58,7 +69,9 @@ export function selectChunks(
 	const eyeX = ux * viewerRadius;
 	const eyeY = uy * viewerRadius;
 	const eyeZ = uz * viewerRadius;
-	const horizon = horizonAngle(viewerRadius, surfaceRadius);
+	const horizon =
+		horizonAngle(viewerRadius, surfaceRadius) +
+		horizonAngle(surfaceRadius + peakHeight, surfaceRadius);
 
 	const out: ChunkSelection[] = [];
 	const walk = (address: ChunkAddress, chunkLevel: number): void => {

@@ -131,6 +131,14 @@ describe("the pause", () => {
 					radii.add(column.groundRadius);
 					surface.add(terrain.blockAt(column, column.groundLayer));
 					if (column.waterRadius > column.groundRadius) wet++;
+					// The walkable surface tops at the radius the generator
+					// names -- one rounding once put it a whole block lower,
+					// which dropped a standing viewer under the horizon
+					// formula's reference sphere and shrank the world to the
+					// four chunks underfoot.
+					expect(shape.radiusOfLayer(column.groundLayer)).toBe(
+						column.groundRadius,
+					);
 				}
 
 		// One radius over every face: a sphere to the last bit, not a small

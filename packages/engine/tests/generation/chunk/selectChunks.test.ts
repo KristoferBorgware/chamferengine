@@ -143,6 +143,79 @@ describe("selectChunks", () => {
 		for (const selection of chosen)
 			expect(holds(selection, away)).toBe(false);
 	});
+
+	it("keeps the world in view for an eye at the surface radius itself", () => {
+		// The regression that shipped as a four-chunk world: on a sphere with
+		// no relief the surface sits at the reference radius exactly, the
+		// eye-height term is zero there, and without the peak term the only
+		// chunks kept were the ones directly underfoot. Ground standing above
+		// the sphere is what there is to see, and its own horizon is what has
+		// to reach it.
+		const peak = 150;
+		const peakHorizon = Math.acos(RADIUS / (RADIUS + peak));
+		const east = VIEWER.cross(new Vec3(0, 1, 0)).normalize();
+		// Half the peak's horizon out: far outside the chunks underfoot, and
+		// well inside where a peak is visible from.
+		const inside = VIEWER.scale(Math.cos(peakHorizon * 0.5))
+			.add(east.scale(Math.sin(peakHorizon * 0.5)))
+			.normalize();
+
+		const smooth = selectChunks(DEPTH, FINEST, VIEWER, RADIUS, RADIUS);
+		const peaked = selectChunks(
+			DEPTH,
+			FINEST,
+			VIEWER,
+			RADIUS,
+			RADIUS,
+			2,
+			peak,
+		);
+		expect(smooth.some((selection) => holds(selection, inside))).toBe(
+			false,
+		);
+		expect(peaked.some((selection) => holds(selection, inside))).toBe(true);
+	});
+
+	it("reaches ground standing above the sphere beyond the horizon", () => {
+		// A peak of height p is visible from the eye-height horizon plus the
+		// peak's own: R acos(R/(R+eye)) + R acos(R/(R+p)). A direction between
+		// the two is ground only a peak can occupy -- selected when the peak
+		// height says one can be there, and not when it says the world is
+		// smooth.
+		const eye = 1.6;
+		const peak = 150;
+		const eyeHorizon = Math.acos(RADIUS / (RADIUS + eye));
+		const peakHorizon = Math.acos(RADIUS / (RADIUS + peak));
+		const east = VIEWER.cross(new Vec3(0, 1, 0)).normalize();
+		const between = VIEWER.scale(Math.cos(eyeHorizon + peakHorizon * 0.5))
+			.add(east.scale(Math.sin(eyeHorizon + peakHorizon * 0.5)))
+			.normalize();
+
+		const smooth = selectChunks(
+			DEPTH,
+			FINEST,
+			VIEWER,
+			RADIUS + eye,
+			RADIUS,
+			2,
+			0,
+		);
+		const peaked = selectChunks(
+			DEPTH,
+			FINEST,
+			VIEWER,
+			RADIUS + eye,
+			RADIUS,
+			2,
+			peak,
+		);
+		expect(smooth.some((selection) => holds(selection, between))).toBe(
+			false,
+		);
+		expect(peaked.some((selection) => holds(selection, between))).toBe(
+			true,
+		);
+	});
 });
 
 describe("WorldShape.atLod", () => {

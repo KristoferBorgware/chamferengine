@@ -371,6 +371,67 @@ the paused features, and judging a fix would mean turning it back on.
 
 ---
 
+### F-022 — The chase camera does not drive the chunk selection
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, fixing v0.1.2's I-4, where which radius the horizon
+belongs to was the whole item
+**Where:** `packages/client/src/planet.ts` — `refresh` reads `player.eye`, the
+frame loop's `from` is the camera, and the wheel handler changes `chase`
+
+**What happens.** The mouse wheel moves the camera up to 60 m up and behind
+the player. The selection keeps reading the player's eye, whose horizon at
+eye height is a tenth of the camera's from 60 m, and turning the wheel does
+not trigger a reselect at all — `refresh` runs on player movement alone.
+
+**Why it matters.** Zoomed out, the camera sees past the selection's rim: the
+mesh edge and the unselected ground beyond it are on screen until the player
+happens to walk two metres. The chase view exists for judging the level of
+detail from outside, which is v0.1.2's whole purpose, so the one view the
+release is for is the one the selection serves worst.
+
+**What would fix it.** Pass the camera's own radius to `selectChunks` — the
+frame loop already computes `from` — and call `refresh` when `chase` changes
+by more than a couple of metres, the same rule movement already uses.
+
+---
+
+### F-023 — The selection's peak term assumes the tallest ground is everywhere
+
+**Kind:** idea
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-17, pricing v0.1.2's I-4 fix on the bench
+**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`, the
+`peakHeight` term; the numbers are in `plans/v0.1.2.md`, I-4
+
+**What happens.** The selection reaches
+`horizonAngle(eye) + horizonAngle(peak)` with one planet-wide `maxElevation`
+as the peak, so it selects every chunk that could hold visible ground if the
+tallest mountain on the planet stood in it. Most chunks hold nothing near
+that tall. On the un-paused world (`maxElevation` ~120 m, its own horizon
+~1.3 km) the bench's eye-height flat-ground scene went from 286 to 552
+chunks and 2.4 to 3.9 s to fill a view.
+
+**Why it matters.** Roughly half the chunks built at eye height are in a ring
+that is mostly below the horizon, built and uploaded for nothing. It is the
+correct conservative bound — nothing visible is ever dropped, which is what
+I-4 restored — but the cost is paid on every world with relief, every frame
+the player moves.
+
+**What would fix it.** A height bound per chunk rather than per planet. The
+coarse map already knows the height field; the maximum over a chunk's
+footprint, computed once at world creation for the chunk levels that matter,
+would let the walk use each triangle's own tallest ground. The walk already
+visits parents before children, so a bound per face triangle refined
+downward fits the existing recursion.
+
+---
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth

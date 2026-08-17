@@ -198,6 +198,7 @@ function measure(scene: Scene): Measured {
 		at.length(),
 		RADIUS,
 		DETAIL,
+		shape.maxElevation,
 	);
 	const selectMs = performance.now() - selectStart;
 
@@ -365,7 +366,15 @@ for (const row of measured) {
 console.log("\nchurn");
 const churnFrom = hill.scale(groundAt(hill) + 20);
 const before = new Set(
-	selectChunks(DEPTH, CHUNK_LEVEL, churnFrom, churnFrom.length(), RADIUS, DETAIL).map(
+	selectChunks(
+		DEPTH,
+		CHUNK_LEVEL,
+		churnFrom,
+		churnFrom.length(),
+		RADIUS,
+		DETAIL,
+		shape.maxElevation,
+	).map(
 		(chosen) => selectionId(chosen.chunkLevel, chosen.key),
 	),
 );
@@ -383,6 +392,7 @@ for (const metres of [10, 50, 200]) {
 		moved.length(),
 		RADIUS,
 		DETAIL,
+		shape.maxElevation,
 	);
 	let fresh = 0;
 	for (const chosen of after)
