@@ -430,6 +430,32 @@ would let the walk use each triangle's own tallest ground. The walk already
 visits parents before children, so a bound per face triangle refined
 downward fits the existing recursion.
 
+### F-024 — The column cache key collides at the deepest world the word allows
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, writing v0.1.2's apron, whose own key packs with
+262,144 for exactly this reason
+**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`, the
+`key` in `columnAt`
+
+**What happens.** The cache key is `(face * 65536 + i) * 65536 + j`, and a
+lattice coordinate runs to `2^depth`. The address word allows depth 17, where
+`n` is 131,072 — twice the multiplier — so two different cells can share a
+key and the sampler would hand one cell the other's blocks.
+
+**Why it matters.** Nobody yet: the shipped worlds sit at depth 10 to 13 and
+the panel caps what a person can ask for below the collision. It is a trap
+armed for whoever first builds a depth-17 world, and it would surface as
+subtly wrong terrain rather than an error.
+
+**What would fix it.** Multiply by 262,144 — `2^18`, one step above the
+deepest lattice — the way the apron's key in `meshChunk.ts` already does.
+The product stays under `2^53` with room to spare: 20 faces times `2^36` is
+`1.4e12`.
+
 ---
 
 ## Closed
