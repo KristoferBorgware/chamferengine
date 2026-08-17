@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Two ways to give a small planet a sky</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; display:flex; flex-direction:column; }
+  header { padding:14px 16px 8px; }
+  h1 { font-size:16px; font-weight:650; }
+  .sub { font-size:12px; color:#8b93a7; margin-top:3px; }
+  .stage { position:relative; flex:1; min-height:44vh; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+  canvas.dragging { cursor:grabbing; }
+  .tags { position:absolute; top:10px; left:0; right:0; display:flex; pointer-events:none;
+          font-size:11.5px; font-weight:650; letter-spacing:.04em; }
+  .tag { flex:1; text-align:center; }
+  .tag span { background:rgba(11,14,20,.8); border:1px solid #222839; border-radius:7px;
+              padding:5px 9px; display:inline-block; }
+  .reads { position:absolute; bottom:10px; left:0; right:0; display:flex; pointer-events:none;
+           font-size:11px; color:#8b93a7; font-variant-numeric:tabular-nums; }
+  .read { flex:1; text-align:center; }
+  .read span { background:rgba(11,14,20,.8); border:1px solid #222839; border-radius:7px;
+               padding:5px 9px; display:inline-block; line-height:1.6; }
+  .read b { color:#e6e8ee; font-weight:650; }
+  .panel { padding:10px 14px 16px; border-top:1px solid #1b2130; background:#0e121b;
+           display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:0 18px; }
+  .field { margin-bottom:9px; }
+  .flabel { display:flex; align-items:baseline; font-size:10.5px; color:#8b93a7;
+            text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; }
+  .fval { margin-left:auto; font-size:12.5px; color:#fff; font-weight:650;
+          text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; height:22px; background:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-moz-range-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:19px; height:19px;
+    border-radius:50%; background:#4f8ef7; margin-top:-7px; border:2px solid #0b0e14; }
+  input[type=range]::-moz-range-thumb { width:19px; height:19px; border-radius:50%;
+    background:#4f8ef7; border:2px solid #0b0e14; }
+  .bar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:2px; }
+  button { font:inherit; font-size:12px; font-weight:550; padding:6px 10px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+  .note { font-size:11.5px; color:#8b93a7; line-height:1.6; grid-column:1/-1;
+          border-top:1px solid #1b2130; padding-top:10px; margin-top:2px; }
+  .note b { color:#e6e8ee; }
+  .fail { padding:18px; color:#ff9b8a; font-size:13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Two ways to give a small planet a sky</h1>
+  <div class="sub">Same scattering, same sun, same camera. Only the atmosphere the camera is put
+    into differs. Drag to look around.</div>
+</header>
+
+<div class="stage">
+  <canvas id="c"></canvas>
+  <div class="tags">
+    <div class="tag"><span>B1 &middot; Earth's air, altitude scaled into it</span></div>
+    <div class="tag"><span>B2 &middot; the planet's own air, in metres</span></div>
+  </div>
+  <div class="reads">
+    <div class="read"><span id="readA">&mdash;</span></div>
+    <div class="read"><span id="readB">&mdash;</span></div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div>
+    <div class="field">
+      <div class="flabel">Planet radius <span class="fval" id="vRadius"></span></div>
+      <div class="bar" id="radiusBar"></div>
+    </div>
+    <div class="field">
+      <div class="flabel">Camera altitude <span class="fval" id="vAlt"></span></div>
+      <input type="range" id="alt" min="0" max="1000" value="80">
+    </div>
+  </div>
+  <div>
+    <div class="field">
+      <div class="flabel">B2 &middot; how tall the air is <span class="fval" id="vTop"></span></div>
+      <input type="range" id="top" min="50" max="2000" step="10" value="400">
+    </div>
+    <div class="field">
+      <div class="flabel">Sun elevation <span class="fval" id="vSun"></span></div>
+      <input type="range" id="sun" min="-12" max="90" step="0.5" value="6">
+    </div>
+  </div>
+  <div>
+    <div class="field">
+      <div class="flabel">Exposure <span class="fval" id="vExp"></span></div>
+      <input type="range" id="exp" min="20" max="400" value="100">
+    </div>
+    <div class="bar">
+      <button id="faceSun">Face the sun</button>
+      <button id="away">Look away</button>
+      <button id="ground">Stand on the ground</button>
+    </div>
+  </div>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+"use strict";
+
+// Earth's air, which is what the engine draws today and what B1 keeps.
+const EARTH = {
+  radius: 6371000, thickness: 60000,
+  hRay: 8000, hMie: 1200,
+  bRay: [5.802e-6, 13.558e-6, 33.1e-6], bMie: 21e-6, g: 0.76,
+};
+
+// Mie thins over a shorter height than Rayleigh does; B2 keeps that proportion
+// whatever height it is given, so haze stays low against the blue.
+const MIE_SHARE = EARTH.hMie / EARTH.hRay;
+
+// Where the air is thin enough to stop, as a multiple of the scale height. The
+// same 7.5 Earth's 60 km top is at.
+const TOPS = EARTH.thickness / EARTH.hRay;
+
+const canvas = document.getElementById("c");
+const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
+if (!gl) {
+  document.querySelector(".stage").innerHTML =
+    '<p class="fail">This browser will not give a WebGL 2 context, which this page draws with.</p>';
+  throw new Error("no webgl2");
+}
+
+const VERT = `#version 300 es
+void main() {
+  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+// The scattering is the engine's, with every constant lifted into a uniform.
+// The two sides differ in what they are handed, and in nothing else.
+const FRAG = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+
+uniform vec2  uSize;
+uniform vec3  uForward, uRight, uUp, uSun;
+uniform float uSplit;
+uniform float uExposure;
+
+// Left and right: planet radius, top of the air, the two scale heights, the
+// scattering coefficients, and where the camera sits above the centre.
+uniform float uPlanetA, uTopA, uHRayA, uHMieA, uHeightA;
+uniform vec3  uBRayA;  uniform float uBMieA;
+uniform float uPlanetB, uTopB, uHRayB, uHMieB, uHeightB;
+uniform vec3  uBRayB;  uniform float uBMieB;
+uniform float uG;
+
+const int VIEW_STEPS  = 12;
+const int LIGHT_STEPS = 4;
+
+float topDistance(vec3 o, vec3 d, float top) {
+  float b = dot(o, d);
+  float c = dot(o, o) - top * top;
+  return -b + sqrt(max(0.0, b * b - c));
+}
+
+bool hitsGround(vec3 o, vec3 d, float planet) {
+  float b = dot(o, d);
+  float c = dot(o, o) - planet * planet;
+  return c > 0.0 && b < 0.0 && b * b - c > 0.0;
+}
+
+vec2 opticalDepth(vec3 o, vec3 d, float far, float planet, float hRay, float hMie) {
+  vec2 sum = vec2(0.0);
+  float step = far / float(LIGHT_STEPS);
+  for (int s = 0; s < LIGHT_STEPS; s++) {
+    float height = length(o + d * (float(s) + 0.5) * step) - planet;
+    sum += vec2(exp(-height / hRay), exp(-height / hMie)) * step;
+  }
+  return sum;
+}
+
+/** Where a ray meets the ground, or a negative number if it misses. */
+float groundDistance(vec3 o, vec3 d, float planet) {
+  float b = dot(o, d);
+  float c = dot(o, o) - planet * planet;
+  float disc = b * b - c;
+  if (disc < 0.0) return -1.0;
+  float near = -b - sqrt(disc);
+  return near > 0.0 ? near : -1.0;
+}
+
+vec3 scatter(vec3 o, vec3 d, vec3 sun, float planet, float top,
+             float hRay, float hMie, vec3 bRay, float bMie, out float ground) {
+  float far = topDistance(o, d, top);
+  ground = groundDistance(o, d, planet);
+  if (ground > 0.0) far = min(far, ground);
+  float step = far / float(VIEW_STEPS);
+  float cosAngle = dot(d, sun);
+  float rayleighPhase = 3.0 / (16.0 * 3.14159265) * (1.0 + cosAngle * cosAngle);
+  float g2 = uG * uG;
+  float miePhase = 3.0 / (8.0 * 3.14159265)
+    * ((1.0 - g2) * (1.0 + cosAngle * cosAngle))
+    / ((2.0 + g2) * pow(1.0 + g2 - 2.0 * uG * cosAngle, 1.5));
+
+  vec2 accumulated = vec2(0.0);
+  vec3 rayleigh = vec3(0.0);
+  vec3 mie = vec3(0.0);
+  for (int s = 0; s < VIEW_STEPS; s++) {
+    vec3 point = o + d * (float(s) + 0.5) * step;
+    float height = length(point) - planet;
+    vec2 density = vec2(exp(-height / hRay), exp(-height / hMie)) * step;
+    accumulated += density;
+
+    if (!hitsGround(point, sun, planet)) {
+      vec2 toSun = opticalDepth(point, sun, topDistance(point, sun, top), planet, hRay, hMie);
+      vec3 tau = bRay * (toSun.x + accumulated.x) + vec3(bMie * 1.1 * (toSun.y + accumulated.y));
+      vec3 transmittance = exp(-tau);
+      rayleigh += transmittance * density.x;
+      mie += transmittance * density.y;
+    }
+  }
+  return (rayleigh * bRay * rayleighPhase + mie * vec3(bMie) * miePhase) * 22.0;
+}
+
+void main() {
+  vec2 ndc = (gl_FragCoord.xy / uSize) * 2.0 - 1.0;
+  float aspect = uSize.x / uSize.y;
+  // One view for both sides: the pixel's ray does not know which half it is in.
+  vec3 dir = normalize(uForward + uRight * ndc.x * aspect * 0.6 + uUp * ndc.y * 0.6);
+
+  bool left = gl_FragCoord.x < uSplit;
+  vec3 color;
+  float ground;
+  vec3 o;
+  if (left) {
+    // The camera's up is +y here, so the world is turned rather than the sky.
+    o = vec3(0.0, uPlanetA + max(1.0, uHeightA), 0.0);
+    color = scatter(o, dir, uSun, uPlanetA, uTopA, uHRayA, uHMieA, uBRayA, uBMieA, ground);
+  } else {
+    o = vec3(0.0, uPlanetB + max(0.5, uHeightB), 0.0);
+    color = scatter(o, dir, uSun, uPlanetB, uTopB, uHRayB, uHMieB, uBRayB, uBMieB, ground);
+  }
+
+  // Ground under the air, so the lower half of the frame is a surface rather
+  // than sky seen from underneath. It carries no terrain: this page is about
+  // what the air does, and a landscape would be the thing being looked at.
+  if (ground > 0.0) {
+    vec3 hit = normalize(o + dir * ground);
+    float lit = max(0.0, dot(hit, uSun));
+    color += vec3(0.16, 0.14, 0.12) * (0.05 + 0.95 * lit) * 0.02;
+  }
+
+  color *= uExposure;
+  color = color / (color + vec3(1.0));            // roll the highlights off
+  color = pow(color, vec3(1.0 / 2.2));            // to something a screen shows
+
+  // A hairline where the two meet, so neither side is read as the other.
+  float edge = abs(gl_FragCoord.x - uSplit);
+  if (edge < 1.0) color = mix(color, vec3(0.55), 0.8);
+
+  fragColor = vec4(color, 1.0);
+}`;
+
+function compile(type, source) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, source);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s) || "shader");
+  return s;
+}
+const program = gl.createProgram();
+gl.attachShader(program, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(program);
+if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+  throw new Error(gl.getProgramInfoLog(program) || "link");
+gl.useProgram(program);
+const at = (name) => gl.getUniformLocation(program, name);
+
+const RADII = [1700, 3400, 6800];
+const state = { radius: 1700, altitude: 1.6, top: 400, sunElevation: 6, exposure: 1, yaw: 0, pitch: 0.06 };
+
+// ---- what each candidate hands the scattering --------------------------------
+
+/** B1: Earth's air, and the camera's altitude multiplied into it. */
+function candidateA() {
+  return {
+    planet: EARTH.radius,
+    top: EARTH.radius + EARTH.thickness,
+    hRay: EARTH.hRay, hMie: EARTH.hMie,
+    bRay: EARTH.bRay, bMie: EARTH.bMie,
+    height: state.altitude * (EARTH.radius / state.radius),
+  };
+}
+
+/**
+ * B2: air of the planet's own, as tall as the slider says.
+ *
+ * The coefficients rise by exactly what the scale height falls by, so the
+ * optical depth straight up is Earth's in both halves. That leaves the geometry
+ * as the only difference between the two sides, which is the thing being looked
+ * at.
+ */
+function candidateB() {
+  const hRay = state.top / TOPS;
+  const scale = EARTH.hRay / hRay;
+  return {
+    planet: state.radius,
+    top: state.radius + state.top,
+    hRay,
+    hMie: hRay * MIE_SHARE,
+    bRay: EARTH.bRay.map((b) => b * scale),
+    bMie: EARTH.bMie * scale,
+    height: state.altitude,
+  };
+}
+
+/** Optical depth straight up, which is what a colour at the zenith comes from. */
+const zenith = (c) => [0, 1, 2].map((i) => c.bRay[i] * c.hRay + c.bMie * c.hMie);
+
+/** How much further a ray to the horizon travels than one straight up. */
+const pathRatio = (c) => Math.sqrt((2 * Math.PI * c.planet) / c.hRay);
+
+function upload(prefix, c) {
+  gl.uniform1f(at(`uPlanet${prefix}`), c.planet);
+  gl.uniform1f(at(`uTop${prefix}`), c.top);
+  gl.uniform1f(at(`uHRay${prefix}`), c.hRay);
+  gl.uniform1f(at(`uHMie${prefix}`), c.hMie);
+  gl.uniform1f(at(`uHeight${prefix}`), c.height);
+  gl.uniform3f(at(`uBRay${prefix}`), c.bRay[0], c.bRay[1], c.bRay[2]);
+  gl.uniform1f(at(`uBMie${prefix}`), c.bMie);
+}
+
+function draw() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
+  const h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+
+  // The camera stands at +y and looks along the ground, turned by the drag.
+  const cy = Math.cos(state.pitch), sy = Math.sin(state.pitch);
+  const forward = [Math.sin(state.yaw) * cy, sy, Math.cos(state.yaw) * cy];
+  const right = [Math.cos(state.yaw), 0, -Math.sin(state.yaw)];
+  const up = [
+    forward[1] * right[2] - forward[2] * right[1],
+    forward[2] * right[0] - forward[0] * right[2],
+    forward[0] * right[1] - forward[1] * right[0],
+  ];
+  // The sun rises in front of the camera's starting direction.
+  const se = (state.sunElevation * Math.PI) / 180;
+  const sun = [0, Math.sin(se), Math.cos(se)];
+
+  gl.uniform2f(at("uSize"), w, h);
+  gl.uniform3f(at("uForward"), forward[0], forward[1], forward[2]);
+  gl.uniform3f(at("uRight"), right[0], right[1], right[2]);
+  gl.uniform3f(at("uUp"), up[0], up[1], up[2]);
+  gl.uniform3f(at("uSun"), sun[0], sun[1], sun[2]);
+  gl.uniform1f(at("uSplit"), w / 2);
+  gl.uniform1f(at("uExposure"), state.exposure);
+  gl.uniform1f(at("uG"), EARTH.g);
+
+  const a = candidateA();
+  const b = candidateB();
+  upload("A", a);
+  upload("B", b);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  report(a, b);
+}
+
+const metres = (m) =>
+  m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 2)} km` : `${m.toFixed(m < 10 ? 1 : 0)} m`;
+
+function report(a, b) {
+  const say = (c, where) =>
+    `zenith depth <b>${zenith(c)[1].toFixed(3)}</b> &middot; ` +
+    `horizon path <b>${pathRatio(c).toFixed(1)}&times;</b><br>` +
+    `camera sits at <b>${where}</b>`;
+  document.getElementById("readA").innerHTML =
+    say(a, metres(a.height) + " in Earth's air");
+  document.getElementById("readB").innerHTML =
+    say(b, metres(b.height) + ` of ${metres(state.top)}`);
+
+  document.getElementById("vRadius").textContent = metres(state.radius);
+  document.getElementById("vAlt").textContent = metres(state.altitude);
+  document.getElementById("vTop").textContent = metres(state.top);
+  document.getElementById("vSun").textContent = `${state.sunElevation.toFixed(1)}°`;
+  document.getElementById("vExp").textContent = state.exposure.toFixed(2);
+
+  const out = state.altitude * (EARTH.radius / state.radius) > EARTH.thickness;
+  document.getElementById("note").innerHTML =
+    `<b>What to look for.</b> B1 puts the camera ` +
+    `${(EARTH.radius / state.radius).toFixed(0)}&times; higher than it is, so at ` +
+    `${metres(EARTH.thickness * state.radius / EARTH.radius)} of real altitude it has left the ` +
+    `air altogether` + (out ? " &mdash; which is what the left half is showing now" : "") +
+    `. B2 keeps the camera where it is, and the air ends where the slider says. ` +
+    `Both halves carry the same optical depth straight up, so the colour overhead ` +
+    `starts the same; what differs is the path to the horizon, which is what ` +
+    `reddens a sunset. Earth's ratio is <b>70.7&times;</b>.`;
+}
+
+// ---- controls ---------------------------------------------------------------
+
+const bar = document.getElementById("radiusBar");
+for (const r of RADII) {
+  const button = document.createElement("button");
+  button.textContent = metres(r);
+  button.onclick = () => {
+    state.radius = r;
+    for (const other of bar.children) other.classList.toggle("on", other === button);
+    draw();
+  };
+  if (r === state.radius) button.classList.add("on");
+  bar.appendChild(button);
+}
+
+// Altitude runs from the ground to three radii out, on a curve, so the first
+// few metres are reachable and orbit is still on the same slider.
+const altInput = document.getElementById("alt");
+const altFrom = (v) => {
+  const t = v / 1000;
+  return 0.4 * Math.pow(3 * state.radius / 0.4, t) - 0.4 + 1.6 * (1 - t);
+};
+altInput.oninput = () => { state.altitude = altFrom(+altInput.value); draw(); };
+state.altitude = altFrom(+altInput.value);
+
+const bind = (id, set) => {
+  const el = document.getElementById(id);
+  el.oninput = () => { set(+el.value); draw(); };
+};
+bind("top", (v) => { state.top = v; });
+bind("sun", (v) => { state.sunElevation = v; });
+bind("exp", (v) => { state.exposure = v / 100; });
+
+document.getElementById("faceSun").onclick = () => { state.yaw = 0; state.pitch = 0.06; draw(); };
+document.getElementById("away").onclick = () => { state.yaw = Math.PI; state.pitch = 0.06; draw(); };
+document.getElementById("ground").onclick = () => {
+  altInput.value = "0"; state.altitude = altFrom(0); draw();
+};
+
+let dragging = false, lastX = 0, lastY = 0;
+canvas.addEventListener("pointerdown", (e) => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add("dragging"); canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointerup", (e) => {
+  dragging = false; canvas.classList.remove("dragging"); canvas.releasePointerCapture(e.pointerId);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  state.yaw -= (e.clientX - lastX) * 0.005;
+  state.pitch = Math.max(-0.4, Math.min(1.2, state.pitch + (e.clientY - lastY) * 0.004));
+  lastX = e.clientX; lastY = e.clientY;
+  draw();
+});
+window.addEventListener("resize", draw);
+draw();
+</script>
+</body>
+</html>

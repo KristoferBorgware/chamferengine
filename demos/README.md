@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-eight self-contained HTML files. No build step, no `npm install`, no server
+Twenty-nine self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -249,6 +249,22 @@ Switch the sky to *locked to the camera* and the view freezes however far you go
 which is what a flat-world skybox does, and why it cannot be used here.
 The moon is drawn **to scale**, so 0.52° really is a speck, and it slides against
 the stars as you move — parallax a skybox at infinity does not have.
+
+**Docs:** [32 — The sky, the clouds and the moon](../docs/32-sky-clouds-and-moon.md)
+
+### [`atmosphere-scale.html`](atmosphere-scale.html)
+Two ways to give a planet 3.4 km across a sky, side by side, with one sun and one
+camera between them. The left half is Earth's atmosphere with the camera's
+altitude multiplied into it; the right half is air of the planet's own, as tall
+as the slider says. Both carry the same optical depth straight up, so the two
+differ in geometry alone.
+
+Raise the camera and the halves part company: at **46 m** — a modest hill — the
+left one is black, because 46 m scaled into Earth's air is 171 km. The right one
+is a daytime sky. Push the air thinner and the right half's sunset comes back,
+which is the trade the height slider actually makes: the horizon path is 70.7
+times the zenith path on Earth, 20 times at a 200 m atmosphere and 10 times at
+800 m.
 
 **Docs:** [32 — The sky, the clouds and the moon](../docs/32-sky-clouds-and-moon.md)
 
