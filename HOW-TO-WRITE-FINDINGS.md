@@ -205,6 +205,14 @@ look at this", and an entry rewritten to match the fix cannot answer it.
 
 ## Promoting one
 
-A finding that becomes real work moves into [`plans/`](plans/) as a step, and
-its entry closes with `promoted to <plan>, <step>`. The plan is what gets built;
-the register is what is waiting.
+A finding that becomes real work moves into [`plans/`](plans/) as an item, and
+its entry closes with `promoted to plans/v<version>.md, I-<n>`. The plan is what
+gets built; the register is what is waiting.
+
+Most promotions happen in step 1 of a release, where
+[`HOW-TO-WRITE-PLANS.md`](HOW-TO-WRITE-PLANS.md) requires the register to be
+searched for entries touching the item under discussion. That is what the
+register is for, so **write every entry as if someone will find it while
+standing in the code it describes** — name the files, name the functions, and
+say what the fix would touch. An entry that cannot be matched to a subsystem
+will not be found at the moment it is cheapest to act on.

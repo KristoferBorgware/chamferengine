@@ -54,8 +54,34 @@ doubt, name two.
 
 **No engine code is written in this step.** Reading it is the work.
 
-**The step ends** when the candidates are written down and named, and both sides
-agree they are the candidates.
+### Read the register first
+
+Before proposing anything, read [`FINDINGS.md`](FINDINGS.md) for entries that
+touch the same subsystem, the same files, or the same cause. **Say which ones
+were found and offer them**, one at a time, with the reason each one fits:
+
+- it is in a file this item will have open anyway;
+- it shares a cause, so one fix closes both;
+- it would be made harder to reach by the fix being discussed;
+- it is a risk this item's change would make worse.
+
+**Offer, do not fold in.** Widening the scope of a release is a decision for
+whoever owns the release, not a side effect of a search. Name the finding, say
+what pulling it in would add to the work, and wait.
+
+A finding pulled in becomes part of the item, or its own item where it is large
+enough to need its own candidates and its own trial. Its register entry closes
+with `promoted to plans/v<version>.md, I-<n>`.
+
+A finding left out stays open and is not raised again for the same item.
+
+Searching the register is not optional and not a courtesy. An entry nobody reads
+while standing in the code it describes is an entry that was written for
+nothing, and the cheapest moment to fix something is while the file is already
+open.
+
+**The step ends** when the candidates are written down and named, the register
+has been searched, and both sides agree they are the candidates.
 
 ---
 
@@ -161,6 +187,7 @@ Patch: fixes to what 0.1.0 shipped, no new capability.
 ## I-1 — Water is drawn over the sky at the horizon
 
 **From:** visual inspection, 2026-08-18
+**Findings pulled in:** F-002, F-009
 **Step:** 3
 
 ### The problem

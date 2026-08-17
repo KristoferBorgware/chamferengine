@@ -67,6 +67,15 @@ and duplicates information found there.
   what is true today and stops**: no history, no reasoning, no justification,
   no naming the alternative that was not chosen. When the project changes, the
   page changes with it; git holds what it used to say.
+- [`HOW-TO-WRITE-PLANS.md`](HOW-TO-WRITE-PLANS.md) — **the three steps every
+  release after 0.1.0 is worked through**: discuss until one or two candidate
+  solutions are named, try each one outside the engine until a measurement
+  chooses between them, then implement the whole release at once. **Read it
+  before opening a file in `plans/`.** Steps 1 and 2 run per item; step 3 takes
+  no decisions, and an item that turns one up goes back to step 1. **Step 1
+  requires searching [`FINDINGS.md`](FINDINGS.md)** for entries touching the same
+  subsystem, files or cause, and offering them one at a time with why each fits.
+  Offer, never fold in: widening a release is the owner's decision.
 - [`FINDINGS.md`](FINDINGS.md) — **the register of things noticed while doing
   other work** that are not in the plan and were not fixed on the spot: bugs,
   dead code, unverified claims, ideas nobody has decided on. Not part of the
