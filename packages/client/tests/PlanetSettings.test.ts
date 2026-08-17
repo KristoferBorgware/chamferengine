@@ -48,6 +48,27 @@ describe("cell address", () => {
 	});
 });
 
+describe("the coarse level budget (F-020)", () => {
+	it("leaves the shipped default untouched", () => {
+		const shipped = new PlanetSettings();
+		expect(shipped.coarseLevel).toBe(8);
+	});
+
+	it("caps a radius and coarse cell that asked for 671 million cells", () => {
+		// The exact combination F-020 found: a 25,000 m radius with a 4 m
+		// coarse cell, and a 0.5 m block so the subdivision depth does not cap
+		// it first, asked for level 13 -- 671,088,642 cells -- with nothing
+		// refusing it.
+		const wide = new PlanetSettings({
+			radius: 25000,
+			coarseSpacing: 4,
+			blockSize: 0.5,
+		});
+		expect(wide.coarseLevel).toBe(9);
+		expect(10 * 4 ** wide.coarseLevel + 2).toBe(2621442);
+	});
+});
+
 describe("the coarse map off", () => {
 	it("makes maxElevation and groundSpan exact bounds of the detail term", () => {
 		const on = new PlanetSettings({ coarseMap: true, detailAmplitude: 12 });

@@ -66,7 +66,7 @@ const GROUPS: Group[] = [
 				key: "coarseSpacing",
 				label: "Coarse cell",
 				digits: 0,
-				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory.",
+				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide — the readout below is what you get.",
 				enabledWhen: (k) => k.coarseMap,
 			},
 			{

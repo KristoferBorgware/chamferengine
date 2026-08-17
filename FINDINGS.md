@@ -359,47 +359,6 @@ worked examples already exist to cite.
 
 ---
 
-### F-020 — A fine coarse cell on a large radius asks for a map with hundreds of millions of cells
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-17, capping the cloud lattice level after a fine puff and
-three shells crashed the renderer with a 307 MB vertex buffer
-**Where:** `packages/client/src/PlanetSettings.ts`, the `coarseLevel` getter;
-read by `packages/engine/src/generation/coarse/buildCoarseMap.ts`
-
-**What happens.** `coarseLevel` is `Math.min(this.depth, levelFor(...))` —
-capped by the subdivision depth and nothing else. Radius (up to 25,000 m) and
-Coarse cell (down to 4 m) are both on the panel, and the two together are not
-checked against each other the way Puff and Shells now are. Radius 25,000 m, Coarse cell 4 m and Block size 0.5 m together ask for
-depth 16 and coarse level 13: `10 * 4^13 + 2` = **671,088,642 cells**, and
-the coarse cell this actually rounds to is exactly 4 m. `problems()` already
-refuses a coarse cell finer than twice the block size and finer than half
-the smallest landform, and neither refusal fires on this combination —
-verified directly against `PlanetSettings`, `problems()` returns empty. The
-panel would accept Apply and try to build the map.
-
-**Why it matters.** This is the same shape of bug the cloud lattice just had
-— a global buffer sized by two knobs multiplied together, with only one of
-them bounded — except the coarse map is CPU memory and a build-time cost
-rather than a GPU buffer, so it would not throw the same clear "invalid
-buffer" error. It would allocate several arrays a few cells short of a
-billion entries long and hang or run out of memory, on a combination nobody
-has to know is dangerous to reach: nothing on the panel says 25,000 m and 4 m
-do not go together.
-
-**What would fix it.** The same pattern `cloudLevelBudget` just used: cap
-`coarseLevel` to whatever level keeps `10 * 4^level + 2` under a measured
-cell-count budget, calibrated from the largest coarse map this project has
-actually built and timed (`buildCoarseMap.test.ts` and the plan's own bench
-notes give a starting number). Update the panel's derived readout and the
-`Coarse cell` knob's description the same way `Puff`'s was, so a value
-silently rounded coarser reads honestly rather than looking granted.
-
----
-
 ### F-015 — A large river is a chain of pools, not a continuous ribbon
 
 **Kind:** question
@@ -675,3 +634,52 @@ itself — it uploads the buffers and draws them.
 **Closed:** 2026-08-18, promoted to `plans/v0.1.1.md`, I-2 — moving the field
 and its mesh to a worker is a requirement of that item, and it is this finding's
 fix.
+
+---
+
+### F-020 — A fine coarse cell on a large radius asks for a map with hundreds of millions of cells
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-17, capping the cloud lattice level after a fine puff and
+three shells crashed the renderer with a 307 MB vertex buffer
+**Where:** `packages/client/src/PlanetSettings.ts`, the `coarseLevel` getter;
+read by `packages/engine/src/generation/coarse/buildCoarseMap.ts`
+
+**What happens.** `coarseLevel` is `Math.min(this.depth, levelFor(...))` —
+capped by the subdivision depth and nothing else. Radius (up to 25,000 m) and
+Coarse cell (down to 4 m) are both on the panel, and the two together are not
+checked against each other the way Puff and Shells now are. Radius 25,000 m, Coarse cell 4 m and Block size 0.5 m together ask for
+depth 16 and coarse level 13: `10 * 4^13 + 2` = **671,088,642 cells**, and
+the coarse cell this actually rounds to is exactly 4 m. `problems()` already
+refuses a coarse cell finer than twice the block size and finer than half
+the smallest landform, and neither refusal fires on this combination —
+verified directly against `PlanetSettings`, `problems()` returns empty. The
+panel would accept Apply and try to build the map.
+
+**Why it matters.** This is the same shape of bug the cloud lattice just had
+— a global buffer sized by two knobs multiplied together, with only one of
+them bounded — except the coarse map is CPU memory and a build-time cost
+rather than a GPU buffer, so it would not throw the same clear "invalid
+buffer" error. It would allocate several arrays a few cells short of a
+billion entries long and hang or run out of memory, on a combination nobody
+has to know is dangerous to reach: nothing on the panel says 25,000 m and 4 m
+do not go together.
+
+**What would fix it.** The same pattern `cloudLevelBudget` just used: cap
+`coarseLevel` to whatever level keeps `10 * 4^level + 2` under a measured
+cell-count budget, calibrated from the largest coarse map this project has
+actually built and timed (`buildCoarseMap.test.ts` and the plan's own bench
+notes give a starting number). Update the panel's derived readout and the
+`Coarse cell` knob's description the same way `Puff`'s was, so a value
+silently rounded coarser reads honestly rather than looking granted.
+
+**Closed:** 2026-08-17, fixed in the same turn — `MAX_COARSE_LEVEL = 9` caps
+`coarseLevel`, calibrated from the 13.8 s, 2,621,442-cell map I-5 already
+measured and kept as a live knob value. The shipped default's level (8) is
+unchanged; the exact combination above now caps to level 9 and, at the coarse
+cell that rounds to, trips the existing "cannot carry the hills" refusal
+instead of building anything. The `Coarse cell` knob's description and the
+panel's derived readout were updated the way `Puff`'s were.

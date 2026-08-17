@@ -37,6 +37,20 @@ const MAX_DEPTH = 17;
 const SMALLEST_LANDFORM = 64;
 
 /**
+ * The finest level the coarse map may be built at.
+ *
+ * Radius and Coarse cell are asked for independently, and neither refusal in
+ * {@link PlanetSettings.problems} catches the two of them combined: a 25,000 m
+ * radius with a 4 m coarse cell asks for level 13, 671,088,642 cells, with
+ * nothing on the panel to say those two numbers do not go together (F-020).
+ * Level 9 -- 2,621,442 cells, 10 MB a field -- is the largest coarse map this
+ * project has actually built and timed, at 13.8 s, when I-5 measured it
+ * against the 32 m default. This is that number, not a guess: raising it
+ * needs a new measurement, the same way `CLOUD_POINT_SHELL_BUDGET` does.
+ */
+const MAX_COARSE_LEVEL = 9;
+
+/**
  * What a person sets, before anything is derived from it.
  *
  * Every one of these is in metres or in cells — something a person can picture.
@@ -301,6 +315,7 @@ export class PlanetSettings {
 			2,
 			Math.min(
 				this.depth,
+				MAX_COARSE_LEVEL,
 				levelFor(CELL_CONSTANT * this.radius, this.knobs.coarseSpacing),
 			),
 		);
