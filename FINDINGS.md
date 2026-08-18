@@ -580,6 +580,48 @@ which the selection could do, since it already knows the horizon angle.
 
 ---
 
+### F-030 — Lowering Chunk coarsens the ground it does not resize
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, explaining the Chunk knob to the owner from a screenshot
+of enormous cells at Chunk = 8
+**Where:** `packages/client/src/PlanetSettings.ts` (`chunkLevel`),
+`packages/engine/src/generation/chunk/selectChunks.ts`
+
+**What happens.** The panel's own words for Chunk say it is a packaging size —
+"how many cells along one edge of a chunk" — and "it does not appear in a cell
+address." Lowering it from 32 to 8 instead changed the ground itself: at the
+same real distances from the camera, measured with `selectChunks` directly,
+Chunk 32 draws 1 m cells out to 150 m and Chunk 8 draws 1 m at 20 m, 2 m at
+60 m, and 4 m at 150 m.
+
+The cause is that `chunkLevel` — where "native resolution" sits in the
+triangle hierarchy — is derived from Chunk (`depth -
+round(log2(chunkCells))`), and `selectChunks` defines `lod` as how many levels
+a drawn chunk sits *below* that level. Its own stopping rule, distance versus
+the current triangle's width, does not read Chunk and lands on roughly the
+same absolute hierarchy level regardless. So shrinking Chunk pushes native
+resolution deeper without moving that stopping level, and the gap between them
+— which is what `lod` counts, and each step of `lod` doubles the block size —
+opens up. The knob meant to bound storage per chunk ends up setting how far
+the near, full-detail patch of ground reaches.
+
+**Why it matters.** A player moving the slider to save memory or bandwidth
+gets a visibly coarser world as a side effect the panel's own description does
+not mention, and there is no separate control for the falloff distance itself
+— it is Chunk or nothing.
+
+**What would fix it.** Either decouple `lod` from `chunkCells` — measure it
+against a fixed physical width rather than a level count relative to a
+Chunk-dependent zero point — or say in the panel that Chunk also sets how far
+full detail reaches. The first is the real fix; the second is one sentence and
+buys time to design it.
+
+---
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
