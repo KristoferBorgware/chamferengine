@@ -53,6 +53,9 @@ export class MapPanel {
 	/** Where the player stands, as a direction, or nothing before there is one. */
 	private player: { x: number; y: number; z: number } | null = null;
 
+	/** Whether the player is followed. Off, nothing happens as they move. */
+	private pinned = false;
+
 	constructor(
 		settings: PlanetSettings,
 		onApply: (settings: PlanetSettings) => void,
@@ -91,6 +94,17 @@ export class MapPanel {
 			list.appendChild(button);
 		}
 		body.appendChild(list);
+
+		const pin = document.createElement("button");
+		pin.className = "maps-pin";
+		pin.textContent = "Pin the player";
+		pin.onclick = () => {
+			this.pinned = !this.pinned;
+			pin.classList.toggle("on", this.pinned);
+			this.drawOverlay();
+			this.sphere.setMarker(this.pinned ? this.player : null);
+		};
+		body.appendChild(pin);
 
 		this.canvas = document.createElement("canvas");
 		this.canvas.width = WIDTH;
@@ -140,21 +154,26 @@ export class MapPanel {
 
 	/** Where the player is standing, so both pictures can mark it. */
 	setPlayer(at: { x: number; y: number; z: number }): void {
-		const was = this.player;
-		// Redrawing a whole map for a step the player has not taken is the one
-		// thing this pane must not do every frame.
+		this.player = at;
+		if (!this.pinned) return;
+		const was = this.marked;
+		// A step too small to move the mark by a pixel is not worth a redraw,
+		// and this runs once a frame.
 		if (
 			was &&
 			Math.abs(was.x - at.x) +
 				Math.abs(was.y - at.y) +
 				Math.abs(was.z - at.z) <
-				1e-4
+				2e-4
 		)
 			return;
-		this.player = at;
+		this.marked = { ...at };
+		this.drawOverlay();
 		this.sphere.setMarker(at);
-		this.paint();
 	}
+
+	/** Where the mark was last put, so an unmoved player costs nothing. */
+	private marked: { x: number; y: number; z: number } | null = null;
 
 	/** A knob moved. Rebuild from the step that knob first reaches. */
 	changed(settings: PlanetSettings): void {
@@ -227,6 +246,14 @@ export class MapPanel {
 			: `${COARSE_STAGE_SAYS[step.stage]}... ${ms} ms`;
 	}
 
+	/**
+	 * Redraw the field itself.
+	 *
+	 * This walks every cell of the map -- 655,362 of them at the shipped level
+	 * -- so it runs when the map or the chosen field changes and at no other
+	 * time. Moving the mark goes through {@link drawOverlay}, which does not
+	 * touch it.
+	 */
 	private paint(): void {
 		if (!this.map) return;
 		paintCoarseField(
@@ -236,21 +263,32 @@ export class MapPanel {
 			HEIGHT,
 			this.image.data as unknown as Uint8ClampedArray,
 		);
-		this.context.putImageData(this.image, 0, 0);
+		this.drawOverlay();
+	}
 
-		// The mark goes on after the pixels, because `putImageData` writes
-		// straight over anything already drawn.
-		if (!this.player) return;
+	/**
+	 * Put the drawn field back and mark the player on top of it.
+	 *
+	 * `putImageData` writes straight over whatever is on the canvas, so the
+	 * mark is drawn after it rather than into it -- which is what keeps the
+	 * field's own pixels good for the next frame without being computed again.
+	 */
+	private drawOverlay(): void {
+		if (!this.map) return;
+		const ctx = this.context;
+		ctx.putImageData(this.image, 0, 0);
+		if (!this.pinned || !this.player) return;
+
 		const place = geographicOf(
 			new Vec3(this.player.x, this.player.y, this.player.z),
 			1,
 		);
 		const x = ((place.longitude + 180) / 360) * WIDTH;
 		const y = ((90 - place.latitude) / 180) * HEIGHT;
+
 		// Drawn twice, dark under light. A single color loses the mark wherever
 		// the map happens to match it, and the map is every color it has.
-		const ctx = this.context;
-		const cross = () => {
+		const cross = (): void => {
 			ctx.beginPath();
 			ctx.arc(x, y, 4.5, 0, 2 * Math.PI);
 			ctx.stroke();

@@ -486,3 +486,22 @@ body {
 .maps-ball:active {
 	cursor: grabbing;
 }
+
+.maps-pin {
+	flex: 0 0 auto;
+	padding: 6px 10px;
+	background: #ffffff10;
+	border: 1px solid #ffffff1a;
+	border-radius: 4px;
+	color: #9aa4b2;
+	font:
+		12px/1 system-ui,
+		sans-serif;
+	cursor: pointer;
+}
+
+.maps-pin.on {
+	background: #3d6b3d;
+	border-color: #5c9c5c;
+	color: #fff;
+}

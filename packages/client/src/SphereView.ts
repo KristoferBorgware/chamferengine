@@ -78,6 +78,9 @@ export class SphereView {
 	private field: CoarseField | null = null;
 	private marker: { x: number; y: number; z: number } | null = null;
 
+	/** The ball as last filled, so moving the mark does not fill it again. */
+	private filled: ImageData | null = null;
+
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.context = canvas.getContext("2d")!;
@@ -165,10 +168,23 @@ export class SphereView {
 		this.draw();
 	}
 
+	/** Put the filled ball back and draw the mark on it. */
+	private markOnly(): void {
+		if (!this.filled) {
+			this.draw();
+			return;
+		}
+		this.context.putImageData(this.filled, 0, 0);
+		this.drawMarker();
+	}
+
 	/** Where the player stands, as a direction, or nothing to drop the mark. */
 	setMarker(at: { x: number; y: number; z: number } | null): void {
 		this.marker = at;
-		this.draw();
+		// The ball is 20,480 triangles and the mark is one ring. Putting the
+		// filled ball back and drawing the ring on it costs neither the
+		// triangles nor a sample of the map per triangle.
+		this.markOnly();
 	}
 
 	private draw(): void {
@@ -233,26 +249,43 @@ export class SphereView {
 			ctx.fill();
 		}
 
-		if (this.marker) {
-			const [px, py, pz] = turn(
-				this.marker.x,
-				this.marker.y,
-				this.marker.z,
+		this.filled = ctx.getImageData(0, 0, width, height);
+		this.turned = turn;
+		this.drawMarker();
+	}
+
+	/** How a direction reached the screen the last time the ball was filled. */
+	private turned:
+		((x: number, y: number, z: number) => [number, number, number]) | null =
+		null;
+
+	/** The mark alone, over a ball that is already on the canvas. */
+	private drawMarker(): void {
+		if (!this.marker || !this.turned) return;
+		const { width, height } = this.canvas;
+		const radius = Math.min(width, height) * 0.46;
+		const [px, py, pz] = this.turned(
+			this.marker.x,
+			this.marker.y,
+			this.marker.z,
+		);
+		if (pz > 0) return; // round the far side
+		const ctx = this.context;
+		for (const [color, stroke] of [
+			["#000", 4],
+			["#fff", 1.8],
+		] as const) {
+			ctx.strokeStyle = color;
+			ctx.lineWidth = stroke;
+			ctx.beginPath();
+			ctx.arc(
+				width / 2 + px * radius,
+				height / 2 - py * radius,
+				5,
+				0,
+				2 * Math.PI,
 			);
-			if (pz <= 0) {
-				const mx = ox + px * radius;
-				const my = oy - py * radius;
-				for (const [color, width] of [
-					["#000", 4],
-					["#fff", 1.8],
-				] as const) {
-					ctx.strokeStyle = color;
-					ctx.lineWidth = width;
-					ctx.beginPath();
-					ctx.arc(mx, my, 5, 0, 2 * Math.PI);
-					ctx.stroke();
-				}
-			}
+			ctx.stroke();
 		}
 	}
 }
