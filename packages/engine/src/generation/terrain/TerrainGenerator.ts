@@ -53,12 +53,12 @@ export class TerrainGenerator {
 		this.settings = { ...TERRAIN_DEFAULTS, ...options };
 		this.detailSeed = (seed + DETAIL_SEED_OFFSET) | 0;
 
-		// The coarse map's slope is a height difference between neighbouring
-		// coarse cells. Metres of fall over metres of ground turns it into the
-		// gradient the material rules are written against.
-		const coarseSpacing =
-			shape.blockSize * 2 ** (shape.subdivisionDepth - map.level);
-		this.gradientScale = this.settings.heightScale / coarseSpacing;
+		// The coarse map's slope is height units per radius unit -- the cell
+		// step is already divided out, so the map's own level does not appear
+		// here. Metres of fall over metres of ground is then the height scale
+		// over the radius, which turns it into the gradient the material rules
+		// are written against.
+		this.gradientScale = this.settings.heightScale / shape.seaLevelRadius;
 
 		// The map counts cells draining through a cell, and a cell is four times
 		// smaller at each finer level, so the count for one physical catchment

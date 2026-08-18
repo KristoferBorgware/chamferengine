@@ -822,6 +822,79 @@ run, and 2 decks at level 9 and 3 shells did fill a 256 MiB buffer on real
 hardware. Raising it needs a device that draws, a build of every combination,
 and the number where it stops.
 
+---
+
+### F-037 — The grown landform states its shore profile in cells, so its shelf is twice as wide in metres on a coarser map
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-18, measuring coarse slope across map levels while fixing the
+slope ramp
+**Where:** `packages/engine/src/generation/coarse/grownHeight.ts` — `PROFILE`
+and `alongProfile`
+
+**What happens.** `grownHeight` turns its land mask into a height by reading the
+distance to the coast off a table of named points: `-60` cells offshore at the
+deepest shelf, then `-6`, `-1`, `1`, `40` and `200` cells inland at full height.
+Those are **cells**, and a cell is a different distance at every map level. Drawn
+one level coarser the same profile reaches twice as far in metres, so the
+continental shelf, the beach and the rise inland are all double the width they
+were.
+
+Measured through the slope field, which is now level-independent: `noise` holds
+still at `2.50`, `2.65`, `2.63` across levels 6, 7 and 8, while `grown` moves
+`3.52`, `3.62`, `3.80` at the median and `4.85`, `7.62`, `12.62` at the 75th
+percentile. The plate landform already solved exactly this, by stating
+`upliftReach` at a reference level and doubling it for every level finer.
+
+**Why it matters.** Moving the Coarse cell slider is meant to change how finely
+the map is drawn and nothing else — the panel says so, and for the shipped noise
+landform it is true. On `grown` it also reshapes every coast on the planet. That
+is on top of the `2.2%` of cells the grown mask already disagrees with itself
+about across levels (`coastline.js` section 5), which is inherent to growing a
+mask on the grid; this part is not inherent and is one line.
+
+**What would fix it.** The same shape `plateHeight` uses: a `PROFILE_LEVEL`
+constant, and scale the distance by `2 ** (grid.level - PROFILE_LEVEL)` before
+reading the table. Ten minutes, and it needs `coastline.js` re-run because its
+section 3 quotes the profile's effect on the grown mask.
+
+---
+
+### F-038 — The shipped Landform across default draws a coast made of foam
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-18, comparing the four landforms at the panel's own defaults
+**Where:** `packages/client/src/PlanetSettings.ts` — `reliefFeature` in the knob
+defaults
+
+**What happens.** Landform across defaults to `280 m` on a `6,800 m` radius,
+which is a relief feature repeating about **24 times around the planet** at an
+amplitude of `0.35` against a continent tier of `1`. The coastline is a contour
+of the sum, so at that ratio the relief decides where the water stops over most
+of the shore: a continent comes out as a green core inside a wide band of specks,
+and every landform does it — `noise` and `plates` drawn at the default are
+equally speckled, so this is not a property of any one of them.
+
+**Why it matters.** It is the first thing anybody sees when they open the editor,
+and it makes all four ways of deciding where the land is look about the same and
+all four look wrong. Judging between them is what the editor was built for.
+Nothing is broken: turning Landform across up to a couple of thousand metres
+gives coasts with shape, and the panel already says this knob moves `17%` of the
+surface.
+
+**What would fix it.** Decide what the default should be by looking, which is a
+minute in the editor now that the maps draw honestly, and change one number. The
+open question is whether the default should be a fixed metre count at all, since
+what matters is its ratio to the planet's circumference and the radius slider
+moves that by thirty times across its range.
+
+---
 
 ## Closed
 

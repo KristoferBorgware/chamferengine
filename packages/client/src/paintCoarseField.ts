@@ -31,6 +31,12 @@ export function paintCoarseField(
 	into: Uint8ClampedArray,
 ): void {
 	const values = coarseFieldOf(map, field);
+	// A field drawn as a difference is averaged as a difference, not as two
+	// averages subtracted afterwards -- those agree here, and only because
+	// every pixel weights its cells equally.
+	const base = field.against
+		? coarseFieldOf(map, { key: field.against })
+		: null;
 	const n = 1 << map.level;
 	const sum = new Float32Array(width * height);
 	const count = new Uint32Array(width * height);
@@ -62,7 +68,7 @@ export function paintCoarseField(
 					),
 				);
 				const at = y * width + x;
-				sum[at]! += values[cell] ?? 0;
+				sum[at]! += (values[cell] ?? 0) - (base?.[cell] ?? 0);
 				count[at]!++;
 			}
 
@@ -79,7 +85,8 @@ export function paintCoarseField(
 			altitude: 0,
 		};
 		const cell = positionToCell(positionOf(place, 1), n);
-		sum[at] = values[map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
+		const found = map.index.indexOf(cell.face, cell.i, cell.j);
+		sum[at] = (values[found] ?? 0) - (base?.[found] ?? 0);
 		count[at] = 1;
 	}
 

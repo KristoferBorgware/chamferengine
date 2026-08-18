@@ -262,10 +262,21 @@ interior into separate basins, so a river runs from a ridge to the nearest coast
 rather than across the continent.
 
 > **[verified]** `verification/coastline.js`, sections 2 and 4. Level 7, one
-> seed, land fraction 0.3, 36 plates. The largest landmass holds **25,072**
-> cells against **27,305** for the noise field that ships — so the land is
-> there — and the longest river on it is **94** cells against **172**. The
-> limit is the ground, not the coast.
+> seed, land fraction 0.3, 36 plates. The largest landmass holds **34,359**
+> cells against **27,305** for the noise field that ships — the largest of the
+> four, so the land is there — and the longest river on it is **114** cells
+> against **172**. The limit is the ground, not the coast.
+
+**A plate's elevation bias is a step, and that is what decides how tall its
+interior stands.** Sea level is a percentile, and with most plates set to ocean
+floor it lands just above their band — so land comes out a flat *twice the bias*
+above the water across a whole plate, however far inland. At a bias of `0.5` that
+is a step of `1.0` on a field whose other landforms all stay inside `1`, and the
+whole continent draws past the top of any color ramp built for them. The bias is
+`0.15` for that reason and not by taste. The uplift a seam carries is divided by
+the fastest two plates can close — twice the largest spin rate — so `upliftWeight`
+is the height of the tallest range this world can grow, rather than a multiplier
+on a raw closing speed that runs to `2.3`.
 
 ### A percentile cut through smooth noise draws a smooth coast
 

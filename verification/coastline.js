@@ -347,6 +347,16 @@ function hashedDirection(seed, salt, k){
 }
 // the level `upliftReach` is stated at
 const REACH_LEVEL = 7;
+// The fastest a plate turns, and so the fastest two of them can close: a
+// plate's motion at a cell is its spin crossed with that cell, which is at
+// most MAX_SPIN long, and two meeting head on close at twice that. Dividing a
+// seam by it puts every one in -1 to 1, which makes upliftWeight the height of
+// the tallest range rather than a multiplier on a raw closing speed. A
+// constant and not the largest close the planet contains: that maximum rises
+// with the number of seam cells, and there are more of those at every finer
+// level.
+const MAX_SPIN = 1.5;
+const MAX_CLOSING_RATE = 2*MAX_SPIN;
 const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
 const dot = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 
@@ -364,7 +374,7 @@ function plateHeight(g, seed, opts){
     // an angular velocity, so a plate's motion at a cell is the cross product
     // of its own axis with that cell -- the way plate motion is described
     const axis = hashedDirection(seed, 300, k);
-    const rate = 0.5 + hash3(k, 7, 0, seed);
+    const rate = MAX_SPIN - 1 + hash3(k, 7, 0, seed);
     spin.push([axis[0]*rate, axis[1]*rate, axis[2]*rate]);
     bias.push(hash3(k, 11, 0, seed) < oceanShare ? -1 : 1);
   }
@@ -391,7 +401,7 @@ function plateHeight(g, seed, opts){
       sum += -(dot(va, step) - dot(vb, step))/l;
       n++;
     }
-    if (n){ seam[v] = sum/n; front.push(v); }
+    if (n){ seam[v] = sum/n/MAX_CLOSING_RATE; front.push(v); }
   }
   // Carry the seam inland, weaker at every step. Each cell remembers the seam
   // value that reached it, because the cell it was reached from is a seam cell
@@ -422,7 +432,12 @@ function plateHeight(g, seed, opts){
 const SEED = 12345, LAND = 0.3;
 const WARP_AMP = 0.35, WARP_FREQ = 1.6;
 const GROWN = { island: 0.0008, growthWeight: 0.35, growthPasses: 1, creation: 0.281 };
-const PLATES = { plates: 36, oceanShare: 0.60, biasWeight: 0.5, upliftWeight: 1.2,
+// biasWeight is 0.15 and not 0.5 because a plate's bias is a step: land ends
+// up a flat 2 x it above sea level over a whole plate, however far inland,
+// since sea level lands just above the ocean plates' band. At 0.5 that step is
+// 1.0 across a terrain ramp 0.7 wide and every continent draws as one
+// saturated slab with its shape lost.
+const PLATES = { plates: 36, oceanShare: 0.60, biasWeight: 0.15, upliftWeight: 1.2,
                  upliftReach: 4, reliefAmp: 0.22, reliefFreq: 6 };
 
 const levels = [];
@@ -518,10 +533,11 @@ console.log('\n3. the distance to the coast, and the height built on it');
       `  on a landmass of ${pad(r.largestLandmass,6)}`);
   console.log('   A river cannot be longer than the land it crosses, which is what holds');
   console.log('   the grown field down: its largest landmass is little over half the');
-  console.log('   others. The plate field keeps the land and still loses the length, so');
-  console.log('   there the limit is the ground rather than the coast -- a range raised');
-  console.log('   along every seam cuts the interior into separate basins, and a river');
-  console.log('   runs from a ridge to the nearest coast instead of across the continent.');
+  console.log('   others. The plate field has the largest landmass of the four and still');
+  console.log('   runs a shorter river than either noise field, so there the limit is the');
+  console.log('   ground rather than the coast -- a range raised along every seam cuts the');
+  console.log('   interior into basins, and a river runs from a ridge to the nearest coast');
+  console.log('   instead of across the continent.');
 }
 
 console.log('\n5. whether a preview at a lower level is the map you get');
@@ -567,9 +583,9 @@ console.log('');
 console.log('   The two that build structure both reach a ragged coast and both charge');
 console.log('   for it, in different places. Growing the mask gives up the land fraction');
 console.log('   as a number that can be asked for, and halves the largest landmass.');
-console.log('   Plates keep both -- the fraction is exact and the landmass survives -- and');
-console.log('   lose the rivers a different way, by raising a range along every seam and');
-console.log('   cutting the interior into basins.');
+console.log('   Plates give up neither -- the fraction is exact and the landmass is the');
+console.log('   largest of the four -- and lose the rivers a different way, by raising a');
+console.log('   range along every seam and cutting the interior into basins.');
 console.log('');
 console.log('   Only the two noise fields preview faithfully. A field built by running a');
 console.log('   process over the grid disagrees with itself across levels by 2 to 4% of');

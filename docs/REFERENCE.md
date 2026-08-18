@@ -117,7 +117,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 434 ns -- a timing, so it moves run to run
+   this machine, now: 416 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -598,15 +598,15 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    A round cap holding the same land gives 3.24.
 
    level              today           warp          grown          plate
-   5         11.72   (781)  12.51   (827)  20.44  (1007)  16.79   (993)
-   6         12.18  (1623)  14.11  (1865)  27.00  (2655)  22.05  (2807)
-   7         13.23  (3523)  15.46  (4087)  36.78  (7239)  24.97  (6373)
+   5         11.72   (781)  12.51   (827)  20.44  (1007)  21.42  (1319)
+   6         12.18  (1623)  14.11  (1865)  27.00  (2655)  25.15  (3143)
+   7         13.23  (3523)  15.46  (4087)  36.78  (7239)  33.22  (9925)
 
    perimeter growth as the cells halve, and the dimension it implies
    today  x2.08 then x2.17   dimension 1.06 then 1.12
     warp  x2.26 then x2.19   dimension 1.17 then 1.13
    grown  x2.64 then x2.73   dimension 1.40 then 1.45
-   plate  x2.83 then x2.27   dimension 1.50 then 1.18
+   plate  x2.38 then x3.16   dimension 1.25 then 1.66
    A smooth curve gives exactly x2 and a dimension of 1. Published figures
    for real coasts, quoted and not measured here, run from about 1.05 for
    South Africa through 1.25 for Britain to about 1.52 for Norway.
@@ -616,7 +616,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    today  land 30.0%  largest landmass  27305  islands   45
     warp  land 30.0%  largest landmass  26913  islands   43
    grown  land 30.4%  largest landmass  14910  islands  312
-   plate  land 30.0%  largest landmass  25072  islands  136
+   plate  land 30.0%  largest landmass  34359  islands  102
    Three of the four cut a height field at a percentile, so they land on the
    asked-for fraction exactly. The grown mask has no height field and no
    percentile in it, so `creation` was searched for the value that reaches
@@ -634,20 +634,21 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    today  longest river  172 cells  on a landmass of  27305
     warp  longest river  153 cells  on a landmass of  26913
    grown  longest river   83 cells  on a landmass of  16064
-   plate  longest river   94 cells  on a landmass of  25072
+   plate  longest river  114 cells  on a landmass of  34359
    A river cannot be longer than the land it crosses, which is what holds
    the grown field down: its largest landmass is little over half the
-   others. The plate field keeps the land and still loses the length, so
-   there the limit is the ground rather than the coast -- a range raised
-   along every seam cuts the interior into separate basins, and a river
-   runs from a ridge to the nearest coast instead of across the continent.
+   others. The plate field has the largest landmass of the four and still
+   runs a shorter river than either noise field, so there the limit is the
+   ground rather than the coast -- a range raised along every seam cuts the
+   interior into basins, and a river runs from a ridge to the nearest coast
+   instead of across the continent.
 
 5. whether a preview at a lower level is the map you get
    cells of the level-6 map that the level-8 map disagrees with, of 40962
    today      7  = 0.017%
     warp      4  = 0.010%
    grown    901  = 2.200%
-   plate   1528  = 3.730%
+   plate   1524  = 3.721%
    Noise is sampled from a direction, so a cell that exists at both levels
    is handed the same height at both, and only the percentile moves.
    The other two build their features by running a process over the grid,
@@ -668,9 +669,9 @@ verdict
    The two that build structure both reach a ragged coast and both charge
    for it, in different places. Growing the mask gives up the land fraction
    as a number that can be asked for, and halves the largest landmass.
-   Plates keep both -- the fraction is exact and the landmass survives -- and
-   lose the rivers a different way, by raising a range along every seam and
-   cutting the interior into basins.
+   Plates give up neither -- the fraction is exact and the landmass is the
+   largest of the four -- and lose the rivers a different way, by raising a
+   range along every seam and cutting the interior into basins.
 
    Only the two noise fields preview faithfully. A field built by running a
    process over the grid disagrees with itself across levels by 2 to 4% of
@@ -1320,7 +1321,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 222M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1566,12 +1567,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 13x version is the one that
+       than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.75 ms, one object a vertex
-       9.38 ms -- a layout gap of 13x. Both are timings and move run to
+       This machine, now: typed arrays 0.69 ms, one object a vertex
+       9.95 ms -- a layout gap of 14x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2555,7 +2556,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1057 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1168 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

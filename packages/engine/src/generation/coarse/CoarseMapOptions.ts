@@ -26,7 +26,13 @@ export interface CoarseMapOptions {
 	/** How many of them are ocean floor. `plates` only. */
 	readonly oceanShare?: number;
 
-	/** How far apart ocean floor and continent stand. `plates` only. */
+	/**
+	 * How far apart ocean floor and continent stand. `plates` only.
+	 *
+	 * Land ends up a flat `2 x` this above sea level across a whole plate, so
+	 * it is the knob that decides whether a continent draws as lowland or as a
+	 * saturated slab.
+	 */
 	readonly biasWeight?: number;
 
 	/** How high a range rises where two plates close. `plates` only. */
@@ -77,7 +83,7 @@ export const COARSE_MAP_DEFAULTS = {
 	growthWeight: 0.8,
 	plates: 36,
 	oceanShare: 0.6,
-	biasWeight: 0.5,
+	biasWeight: 0.15,
 	upliftWeight: 1.2,
 	upliftReach: 4,
 	level: 8,

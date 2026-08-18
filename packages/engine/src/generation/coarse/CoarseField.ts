@@ -39,13 +39,24 @@ export interface CoarseField {
 
 	readonly scale: "linear" | "sea" | "log";
 
+	/**
+	 * Another field this one is drawn as a difference from.
+	 *
+	 * Water is the field that needs it. What it stores is the height water
+	 * stands at, which over the ocean is sea level exactly -- so drawn against
+	 * the terrain ramp the whole sea came out one flat shore color and could
+	 * not be told from lowland. The useful picture is how deep the water is,
+	 * which is this field minus the ground, and that is zero on dry land.
+	 */
+	readonly against?: CoarseField["key"];
+
 	readonly ramp: CoarseRamp;
 }
 
 /** The array a field names, from a map. */
 export function coarseFieldOf(
 	map: CoarseMap,
-	field: CoarseField,
+	field: { readonly key: CoarseField["key"] },
 ): Float32Array {
 	return map[field.key];
 }

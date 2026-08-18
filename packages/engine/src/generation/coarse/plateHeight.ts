@@ -11,6 +11,25 @@ const RELIEF_SEED_OFFSET = 1;
 /** The level `reach` is stated at, doubling for every level finer. */
 const REACH_LEVEL = 7;
 
+/** The fastest a plate turns, from the `rate` drawn for each one below. */
+const MAX_SPIN = 1.5;
+
+/**
+ * What a seam's closing speed is divided by, to land in `-1` to `1`.
+ *
+ * A plate's motion at a cell is its spin crossed with the cell direction, so
+ * it is at most `MAX_SPIN` long, and two plates meeting head on close at twice
+ * that. Dividing by it makes `upliftWeight` the height of the tallest range
+ * this world can grow, which is what that knob says it is.
+ *
+ * **A constant and not the largest closing speed the planet contains.** That
+ * maximum rises with the number of seam cells, and there are more of them at
+ * every finer level, so the same seed would grow different mountains on maps
+ * of different resolutions -- which is what `reach` doubling is here to
+ * prevent.
+ */
+const MAX_CLOSING_RATE = 2 * MAX_SPIN;
+
 /**
  * A direction from the seed and an index, without an angle anywhere.
  *
@@ -58,6 +77,13 @@ function hashedDirection(
  * it is stated at.** Counting a fixed number of cells instead makes a range
  * twice as wide on a map drawn at half the resolution, and the same seed grows
  * different mountains at different resolutions.
+ *
+ * **A plate's bias is a step, and that is what sets how tall its interior
+ * stands.** Land sits a flat `2 x biasWeight` above sea level over a whole
+ * plate, however far inland, because sea level lands just above the ocean
+ * plates' band. At `0.5` that step was `1.0` on a terrain ramp `0.7` wide, so
+ * every continent drew as one saturated white slab with its shape lost. It is
+ * `0.15` for that reason and not by taste.
  */
 export function plateHeight(
 	grid: CoarseGrid,
@@ -77,7 +103,7 @@ export function plateHeight(
 	for (let k = 0; k < plates; k++) {
 		seats.push(hashedDirection(seed, SEAT_SEED_OFFSET, k));
 		const axis = hashedDirection(seed, SPIN_SEED_OFFSET, k);
-		const rate = 0.5 + hash3(k, 7, 0, seed);
+		const rate = MAX_SPIN - 1 + hash3(k, 7, 0, seed);
 		spins.push([axis[0] * rate, axis[1] * rate, axis[2] * rate]);
 		bias.push(hash3(k, BIAS_SEED_OFFSET, 0, seed) < oceanShare ? -1 : 1);
 	}
@@ -140,7 +166,7 @@ export function plateHeight(
 			n++;
 		}
 		if (n) {
-			seam[cell] = sum / n;
+			seam[cell] = sum / n / MAX_CLOSING_RATE;
 			front.push(cell);
 		}
 	}

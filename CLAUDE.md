@@ -835,12 +835,26 @@ Violating any of these breaks the design. They are not tunable.
   smooth end of the real range rather than outside it. Warping the sample
   direction reaches 1.13 to 1.17, which nobody would see. Growing a mask level
   by level reaches **1.40 to 1.45** and gives up the land fraction as a number
-  that can be asked for, halving the largest landmass. **Plates** reach 1.18 to
-  1.50, keep an exact land fraction and a big continent, and lose river length a
-  different way — a range along every seam cuts the interior into basins, so
-  `94` cells against `172`. A plate is laid out from **hashed directions, never
-  angles**: `sin` and `cos` would put a transcendental in a field two clients
-  must agree on to the bit.
+  that can be asked for, halving the largest landmass. **Plates** reach 1.25 to
+  1.66, keep an exact land fraction and the **largest** continent of the four —
+  34,359 cells against 27,305 — and lose river length a different way: a range
+  along every seam cuts the interior into basins, so `114` cells against `172`.
+  A plate is laid out from **hashed directions, never angles**: `sin` and `cos`
+  would put a transcendental in a field two clients must agree on to the bit.
+  **A plate's elevation bias is a step, so land stands a flat `2 x biasWeight`
+  above sea level across a whole plate** — at `0.5` that is a `1.0` step on a
+  terrain ramp `0.7` wide and every continent drew as one saturated slab. It is
+  `0.15`, and a seam's uplift is divided by the fastest two plates can close so
+  `upliftWeight` is the tallest range rather than a multiplier on a raw closing
+  speed that runs to `2.3`.
+- **A coarse slope is rise over run, not a drop per cell** (`coarseSlope`). The
+  drop to a neighbour halves at every finer level — the same ground read
+  `0.047`, `0.025` and `0.012` at levels 6, 7 and 8 — so anything with a fixed
+  idea of steep reads a different planet at every map size. Dividing by the step
+  in radius units, `CELL_CONSTANT / 2^level`, holds it still, and a consumer
+  multiplies by `heightScale / radius` for metres per metre. The editor's slope
+  ramp had been calibrated against the old units at `0.02`, which was **under
+  the median at every level**: 68 to 80% of the planet drew at full white.
 - **The selection reaches for ground each triangle actually holds** (`ChunkPeaks`,
   F-023). One planet-wide `maxElevation` selects a ring of chunks whose ground is
   nowhere near that tall. A pyramid of tallest ground per triangle, built once
