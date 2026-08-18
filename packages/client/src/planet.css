@@ -425,3 +425,47 @@ body {
 		sans-serif;
 	cursor: pointer;
 }
+
+/* A group is a fold. Only the first is open, so the rows that decide where the
+   land is are the ones in view. */
+.knobs-fold {
+	width: 100%;
+	padding: 0;
+	background: none;
+	border: 0;
+	color: inherit;
+	font: inherit;
+	letter-spacing: inherit;
+	text-align: left;
+	text-transform: inherit;
+	cursor: pointer;
+}
+
+.knobs-fold::after {
+	content: " –";
+	opacity: 0.5;
+}
+
+.knobs section.shut .knobs-fold::after {
+	content: " +";
+}
+
+.knobs section.shut p,
+.knobs section.shut .knob {
+	display: none;
+}
+
+.knobs label em {
+	margin-left: 4px;
+	padding: 1px 4px;
+	background: #4b7bd633;
+	border-radius: 3px;
+	color: #8fb0ea;
+	font:
+		9px/1.4 system-ui,
+		sans-serif;
+	font-style: normal;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	vertical-align: 1px;
+}
