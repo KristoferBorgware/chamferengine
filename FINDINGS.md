@@ -735,6 +735,56 @@ hardware. Raising it needs a device that draws, a build of every combination,
 and the number where it stops.
 
 ---
+---
+
+### F-039 — Droplet erosion cuts straight lattice-aligned gashes, not valleys
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-18, hillshading an eroded map to show what erosion does to
+the ground
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts` — the
+steepest-neighbour loop
+
+**What happens.** A droplet moves by picking the steepest of the six cells
+around it. That is a choice between six fixed directions, and on ground whose
+gradient is gentle and smooth the same direction keeps winning, so the droplet
+marches in a straight line along one axis of the lattice. Droplets starting near
+each other pick the same line, and what they cut is a long straight trench.
+
+Measured over 20,000 droplets on the shipped map, recording which of the six a
+step took: **60.2% of all steps are part of a run of eight or more steps in one
+unchanged direction**, and the longest run is **48** — a droplet's entire life in
+one straight line. The mean run is 3.7 steps. A walk that followed the ground
+rather than the lattice would sit near 1.4.
+
+Hillshaded, the result is unmistakable: at Erosion 0 the ground is smooth noise,
+and at 0.3 and 1 it is crossed by straight gashes in three directions, tens of
+map cells long, with square ends.
+
+**Why it matters.** Erosion is the only pass that shapes the ground in a way
+noise cannot, and it is now the only such pass at all — rivers and lakes are
+gone. It is also the only source of exposed rock, through the cliff rule, so the
+grey slabs on a hillside sit along these gashes. What it is meant to produce is
+graded valleys and sharpened ridges; what it produces is a lattice pattern that
+looks like a rendering artifact. Every measurement taken of it is still true —
+the median slope barely moves, the tail grows, the ground shifts 8 m a cell at
+full strength — those numbers just do not say what shape the moved ground took.
+
+**What would fix it.** The standard droplet algorithm does not step cell to
+cell. It carries a **continuous position and a direction with momentum**,
+computes the height gradient by interpolating the field around that position,
+and moves along the gradient — which is what stops a walk from locking to an
+axis. On this grid that means a position in a face's `(i, j)` lattice
+coordinates, the existing three-corner blend for the height, and a direction
+carried between steps rather than re-chosen. Two cheaper half-measures worth
+measuring first: give the choice a hashed tie-break among near-equal neighbours,
+or blend the step direction with the previous one so a droplet cannot turn
+instantly. Neither is as good as momentum and both are an afternoon rather than
+a rewrite.
+
 
 ## Closed
 
