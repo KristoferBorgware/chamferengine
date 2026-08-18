@@ -249,6 +249,56 @@ run on the result unchanged.
 **Recommendation:** plates set the coarse heights, erosion carves them, rivers
 follow. In that order, because each stage needs the one before it.
 
+**A plate is laid out from hashed directions, not from angles.** A seed, a
+rotation axis and a rate are each three hashed components divided by their own
+length — a wrapping multiply and a square root, both pinned to the bit by IEEE
+754. Placing seeds with `sin` and `cos` instead would put a transcendental in a
+field two clients have to agree on exactly, which doc 23 forbids. Plate motion
+at a cell is then the cross product of the plate's axis with the cell, which is
+how plate motion is described anyway.
+
+**What plates cost is river length.** A range raised along every seam cuts the
+interior into separate basins, so a river runs from a ridge to the nearest coast
+rather than across the continent.
+
+> **[verified]** `verification/coastline.js`, sections 2 and 4. Level 7, one
+> seed, land fraction 0.3, 36 plates. The largest landmass holds **25,072**
+> cells against **27,305** for the noise field that ships — so the land is
+> there — and the longest river on it is **94** cells against **172**. The
+> limit is the ground, not the coast.
+
+### A percentile cut through smooth noise draws a smooth coast
+
+Low-frequency noise is what the engine runs, and it decides the coastline as
+well as the landmasses. Sea level is the height that leaves the intended
+fraction of the surface standing, so the coast is a contour line of the height
+field — and a contour of a smooth field is a smooth curve.
+
+How smooth is a number, and the useful form of it does not depend on how finely
+the map is drawn. Take the coastline of the largest landmass and count the cell
+edges along it. Halve the cells and count again. A curve with no detail below
+the map's own resolution doubles its count exactly: the ruler halved, so it
+takes twice as many. A ragged curve more than doubles, because halving the
+ruler finds inlets the coarser one stepped over. The excess is what ragged
+means as a number.
+
+> **[verified]** `verification/coastline.js`, section 1. Levels 5, 6 and 7 on
+> one seed at a land fraction of 0.3. The coastline steps go 781, 1,623 and
+> 3,523 — growing by **2.08** and then **2.17** — so the shipped coast sits at
+> a fractal dimension of **1.06 to 1.12**. Published figures for real coasts,
+> quoted rather than measured here, run from about 1.05 for South Africa
+> through 1.25 for Britain to about 1.52 for Norway.
+
+Perimeter over the square root of area says the same thing in one number:
+**13.23** at level 7, against **3.24** for a round cap holding the same land.
+That figure is not comparable between resolutions, and the growth rate above
+is, which is why the growth rate is the one to quote.
+
+So the coast this planet has is at the smooth end of the real range rather than
+outside it. **The relief tier is what keeps it off 1.0** — a second tier of
+noise at frequency 6 roughens the contour the continent tier draws, and without
+it the coast would double exactly.
+
 ---
 
 ## Erosion

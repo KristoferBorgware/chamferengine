@@ -327,6 +327,37 @@ at level 8, for rivers and erosion — does not change any of this. It is an
 *input* to the height-field term, not a mesh, and it is sampled by masking a cell
 ID rather than by any second spatial structure.
 
+### A coarse chunk is exact where it draws, and silent in between
+
+The generator takes a face and a lattice offset and nothing else. It is not
+told which level the chunk asking for the column is drawn at, and that turns out
+to be the property the whole scheme rests on.
+
+A coarse chunk draws a subset of a fine chunk's points — every fourth, every
+sixteenth. Because the height of a point does not depend on who asked, **the
+points a coarse chunk keeps hold exactly the height the fine chunk gives them**,
+to the bit. So a chunk changing level moves no ground at all. What appears and
+disappears is the surface between the retained points, which the coarse chunk
+draws flat.
+
+That is the trade, and it is the right way round. A coarse chunk is **not
+inaccurate, it is incomplete**: a hill sitting between two of its points is
+missing rather than misplaced, and a point that lands on a bump stretches that
+height across its whole flat span.
+
+> **[verified]** `verification/lod.js`, section 2. The shipped detail term — 5 m
+> over features 112 m across, four octaves — at 190 places on one face, against
+> the average of the ground each cell covers. What the flat span misses runs
+> from **0.02 m** at LOD 1 to **0.31 m** at LOD 6, worst case **1.19 m**.
+
+**Do not make the generator level-aware to close that gap.** Dropping or fading
+octaves by level is the obvious fix and it is a bad trade: a retained point
+would then hold one height in the coarse chunk and another in the fine one, so
+ground that currently never moves would start moving every time a chunk changed
+level. Both attempts measured worse against the same reference — **1.02 m** and
+**0.50 m** at LOD 6 against **0.31 m** for leaving it alone — and they would buy
+that with a popping artifact the engine does not currently have.
+
 ---
 
 ## Cracks, and which cause actually matters

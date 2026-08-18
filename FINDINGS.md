@@ -580,7 +580,110 @@ which the selection could do, since it already knows the horizon angle.
 
 ---
 
-### F-030 — Lowering Chunk coarsens the ground it does not resize
+### F-030 — Nobody has decided whether this game has rivers
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, scoping v0.2.0, where a rivers checkbox was proposed and
+turned out to need this answer first
+**Where:** `packages/engine/src/generation/coarse/buildCoarseMap.ts` — the
+`fillPits`, `routeFlow` and `accumulateFlow` calls and the `water` field;
+`packages/engine/src/generation/terrain/TerrainGenerator.ts`, `columnAt`
+
+**What happens.** Rivers always run. `buildCoarseMap` fills the basins, routes
+every cell downhill and accumulates what drains through it, on every world,
+with no way to ask for a planet without them. There is no switch and no
+setting.
+
+That was going to be a checkbox in v0.2.0. Writing the item showed the switch
+cannot be built without saying what "on" means, because what "on" produces
+today is a chain of pools rather than a river — F-015 has the numbers. And what
+"on" should mean depends on a question nobody has answered: whether a river is
+something this game wants.
+
+**Why it matters.** Nobody is hurt today. The cost is carried in three places
+and none of it is visible. Every world pays for the routing whether or not
+anything reads it. Erosion runs four passes that each re-flood and re-route, so
+the flow field decides the shape of every valley on the planet even on a world
+that would rather not have rivers. And the coarse map holds a `flow` field of
+2.5 MB at level 8 whose only consumers are erosion and the water surface.
+
+Removing rivers is therefore not removing a feature — it changes what the
+landscape looks like, because the valleys are cut by the same numbers. Anyone
+answering this has to decide about the valleys as well as the water in them.
+
+**What would fix it.** Look at a planet with rivers and a planet without, side
+by side, and say which one this game wants. v0.2.0's I-5 builds the editor that
+makes that a knob rather than a rebuild, so this is cheap to answer after that
+release and not before.
+
+If the answer is that rivers stay, the shape is already chosen: **a ribbon, not
+a chain of pools**. Write water wherever the catchment is above a threshold in
+square metres, at a depth that follows from the catchment.
+`TerrainColumn.catchment` already carries the number, so it is one comparison
+per column. That closes F-015 at the same time.
+
+If the answer is that they go, the flow field and the routing stay anyway,
+because erosion reads them to cut the valleys. What goes is the water.
+
+---
+
+
+### F-032 — The terrain generator must not be told which level of detail is asking
+
+**Kind:** risk
+**Milestone:** unscheduled
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-18, trialling v0.2.0's I-4, which was opened to do exactly
+this and was dropped when it was measured
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`columnAt`; the numbers are in `verification/lod.js` and `plans/v0.2.0.md`, I-4
+
+**What happens.** `columnAt(face, i, j)` takes a face and a lattice offset and
+nothing else. A chunk drawn coarsely calls it for a subset of the points a fine
+chunk calls it for, and every one of those points gets the same answer either
+way.
+
+That looks like an oversight and it is the property the level of detail rests
+on. Because a point's height does not depend on which chunk asked, **a chunk
+changing level moves no ground at all.** The points it keeps hold exactly the
+height they had. What appears and disappears is the ground between them, which
+a coarse chunk draws as a flat span.
+
+**Why it matters.** The oversight reading is easy to reach, and acting on it
+makes the engine worse. Passing the level in so the detail term can drop or fade
+the octaves a wide cell cannot represent is the obvious anti-aliasing fix. It
+would give a retained point one height in the coarse chunk and a different one
+in the fine chunk, so ground that never moves today would move every time a
+chunk changed level — trading a blurred span, which nobody has complained about,
+for a popping surface, which is the thing people do complain about.
+
+Measured against the average of the ground each cell covers, at 190 places on
+one face: leaving it alone is **0.31 m** at LOD 6, dropping octaves is
+**1.02 m**, fading them is **0.50 m**. The two fixes are worse than the problem
+at every level tested, not only at the extreme.
+
+And the span it blurs is small where anyone stands. `selectChunks` on the
+shipped planet draws nothing coarser than LOD 4 at eye height, where the figure
+is **0.06 m** on 1 m blocks. LOD 6 needs 1,200 m of altitude, which nothing in
+the game reaches.
+
+**What would fix it.** Nothing. This entry exists so the next person to notice
+that `columnAt` ignores the level finds the measurement instead of the fix.
+
+Two things would make it worth measuring again, and only these two: a much
+taller detail term, since the blur is bounded by the amplitude the term carries
+below the cell; or a way for a player to get high enough to see LOD 6 — flying,
+a map view, or a much smaller planet. The same two conditions decide whether
+the coarse map needs a mip pyramid, which is undecided for the same reason and
+priced at a third more memory in `plans/v0.2.0.md`, I-4.
+
+---
+
+### F-033 — Lowering Chunk coarsens the ground it does not resize
 
 **Kind:** bug
 **Milestone:** 0.5.0
@@ -623,6 +726,54 @@ buys time to design it.
 ---
 
 ## Closed
+
+### F-031 — The coverage gate reports a dropped fact every time a timing moves
+
+**Kind:** bug
+**Milestone:** unscheduled
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-18, regenerating `docs/REFERENCE.md` after adding
+`verification/coastline.js` for v0.2.0's I-1
+**Where:** `tools/check-coverage.js`; the number comes from
+`verification/language.js` section 5, printed into `docs/REFERENCE.md`
+
+**What happens.** `check-coverage.js` reads every number in the corpus and
+reports the ones an edit removed. `docs/REFERENCE.md` is generated by running
+every verification script, and some of those scripts print a live wall-clock
+timing beside their recorded figure. Regenerating the reference on a different
+machine, or on the same machine at a different moment, changes those timings, so
+the old numbers are gone and the gate reports them as dropped facts.
+
+Seen on a tree whose only edit was in a different document: `num "0.39"`
+reported as dropped, from the line "This machine, now: typed arrays 0.39 ms",
+which had become 0.68 ms. Nothing was dropped. The script ran again.
+
+**Why it matters.** The gate cries wolf, and a gate that reports something on a
+clean tree stops being read. The report is also the one place a genuinely
+dropped fact would show up, so a real loss now arrives in a list that the
+reader has learned to dismiss.
+
+It is narrow today: `language.js` is the only script printing a live timing into
+a line the reference carries, and F-013 records that the rest of `verification/`
+has not been swept for the same pattern. Every script that gains one widens
+this.
+
+**What would fix it.** Two shapes. The narrow one: have `check-coverage.js`
+skip `docs/REFERENCE.md`, since it is generated and the Markdown is the source
+of truth — the facts in it are already checked in the documents that quote
+them. The wider one: have the scripts mark a live timing so the reference can
+emit it in a form the fact reader ignores, which also gives F-013 somewhere to
+put the values it is sweeping for. The narrow one is minutes; the wider one
+needs a convention agreed across `verification/`.
+
+**Closed:** 2026-08-18, fixed — `tools/check-coverage.js` no longer reads facts
+out of `docs/REFERENCE.md`. It is the combined output of running every
+verification script, so its numbers move whenever a script runs again, and every
+number in it the specification relies on is quoted by a document that is still
+on the list.
+
+---
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
 

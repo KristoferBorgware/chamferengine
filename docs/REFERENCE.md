@@ -25,6 +25,7 @@ numbered documents.
 | [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
+| [`coastline.js`](../verification/coastline.js) | Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number. | [21](21-rivers-and-erosion.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
@@ -34,6 +35,7 @@ numbered documents.
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
 | [`language.js`](../verification/language.js) | Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check. | [11](11-open-topics.md) [26](26-implementation-readiness.md) [28](28-language-and-runtime.md) [29](29-what-runs-where.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
+| [`lod.js`](../verification/lod.js) | A chunk drawn at a coarser level of detail spaces its cells further apart and asks the terrain for a height at each one. The generator is not told which level is asking, so a point that survives the coarsening keeps exactly the height the fine chunk gives it -- a chunk changing level moves no ground. What a coarse chunk loses is the surface BETWEEN its points, which it draws flat. This measures how much that flat span misses, and what happens if the generator is made level-aware to close the gap. Two ways of doing that are tried, and both come out worse than leaving it alone. | [14](14-meshing-and-lod.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`neighbour.js`](../verification/neighbour.js) | neighbour(id, k) -- the function eight documents delegate to and none defines (doc 11, Part 1). Doc 05 proves its 180-byte table complete and has never used it to cross an edge; every other script here builds the whole planet and reads adjacency off a hash map of rounded positions, which is fine for measuring and unavailable to an engine holding one integer. So this builds the function from the table and INTEGER ARITHMETIC ALONE, then checks it against that geometric graph. It also settles the three decisions hiding inside it: where direction index 0 is anchored, how (i, j) re-expresses across a face edge, and what a pentagon returns for k = 5. | [05](05-face-adjacency.md) [11](11-open-topics.md) |
@@ -114,7 +116,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 325 ns -- a timing, so it moves run to run
+   this machine, now: 397 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -581,6 +583,98 @@ edges: 30 each with 2 faces: true
 max non-planarity (should be ~0): 8.095e-18
 diagonal ratio min/max: 1.618034 1.618034  phi = 1.618034
 RT defect: 20*(360-3*116.565) + 12*(360-5*63.435) = 720.00
+```
+
+## `coastline.js`
+
+Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number.
+
+Cited by [doc 21](21-rivers-and-erosion.md).
+
+```
+1. how ragged the coastline is, and how that changes with resolution
+   Perimeter of the largest landmass over the square root of its area.
+   A round cap holding the same land gives 3.24.
+
+   level              today           warp          grown          plate
+   5         11.72   (781)  12.51   (827)  20.44  (1007)  16.79   (993)
+   6         12.18  (1623)  14.11  (1865)  27.00  (2655)  22.05  (2807)
+   7         13.23  (3523)  15.46  (4087)  36.78  (7239)  24.97  (6373)
+
+   perimeter growth as the cells halve, and the dimension it implies
+   today  x2.08 then x2.17   dimension 1.06 then 1.12
+    warp  x2.26 then x2.19   dimension 1.17 then 1.13
+   grown  x2.64 then x2.73   dimension 1.40 then 1.45
+   plate  x2.83 then x2.27   dimension 1.50 then 1.18
+   A smooth curve gives exactly x2 and a dimension of 1. Published figures
+   for real coasts, quoted and not measured here, run from about 1.05 for
+   South Africa through 1.25 for Britain to about 1.52 for Norway.
+
+2. what each one does to the land itself
+   at level 7
+   today  land 30.0%  largest landmass  27305  islands   45
+    warp  land 30.0%  largest landmass  26913  islands   43
+   grown  land 30.4%  largest landmass  14910  islands  312
+   plate  land 30.0%  largest landmass  25072  islands  136
+   Three of the four cut a height field at a percentile, so they land on the
+   asked-for fraction exactly. The grown mask has no height field and no
+   percentile in it, so `creation` was searched for the value that reaches
+   the same fraction, and it arrives near it rather than on it.
+
+3. the distance to the coast, and the height built on it
+   every cell reached: -47 cells at the deepest sea to 26 inland
+   grown, once the profile and the relief are laid on it:
+   ratio 28.61 against 36.78 for the bare mask, islands 193 against 312
+   Relief laid over a baseline and re-cut at sea level pulls the thinnest
+   filaments back under, so the profile tempers the mask rather than
+   inheriting it whole.
+
+4. how long a river gets, which is what the land allows
+   today  longest river  172 cells  on a landmass of  27305
+    warp  longest river  153 cells  on a landmass of  26913
+   grown  longest river   83 cells  on a landmass of  16064
+   plate  longest river   94 cells  on a landmass of  25072
+   A river cannot be longer than the land it crosses, which is what holds
+   the grown field down: its largest landmass is little over half the
+   others. The plate field keeps the land and still loses the length, so
+   there the limit is the ground rather than the coast -- a range raised
+   along every seam cuts the interior into separate basins, and a river
+   runs from a ridge to the nearest coast instead of across the continent.
+
+5. whether a preview at a lower level is the map you get
+   cells of the level-6 map that the level-8 map disagrees with, of 40962
+   today      7  = 0.017%
+    warp      4  = 0.010%
+   grown    901  = 2.200%
+   plate   1528  = 3.730%
+   Noise is sampled from a direction, so a cell that exists at both levels
+   is handed the same height at both, and only the percentile moves.
+   The other two build their features by running a process over the grid,
+   and the grid is the thing that changes between the two maps: the grown
+   mask reconsiders inherited cells at every level, and a plate range is a
+   band a fixed number of cells wide, which cannot be narrower than one
+   cell on the coarser map however few metres it is meant to be.
+
+verdict
+   The coastline that ships is a smooth curve by the only measurement here
+   that does not depend on resolution: its perimeter grows x2.08 then x2.17
+   as the cells halve, against x2 for a curve carrying no detail at all.
+   That is the smooth end of the real range rather than outside it.
+
+   Warping the direction moves it to x2.26 and x2.19, which is not a change
+   anyone would see, at the one amplitude tried.
+
+   The two that build structure both reach a ragged coast and both charge
+   for it, in different places. Growing the mask gives up the land fraction
+   as a number that can be asked for, and halves the largest landmass.
+   Plates keep both -- the fraction is exact and the landmass survives -- and
+   lose the rivers a different way, by raising a range along every seam and
+   cutting the interior into basins.
+
+   Only the two noise fields preview faithfully. A field built by running a
+   process over the grid disagrees with itself across levels by 2 to 4% of
+   the surface, because the grid is what the process runs on. A preview of
+   one of those has to be built at the level it will be applied at.
 ```
 
 ## `coords.js`
@@ -1121,7 +1215,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 167M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1175,9 +1269,8 @@ language.js -- which language and runtime, decided by running the kernel
    Java         javac/java, default            482495611b7ba324   SAME
    Go           go build, amd64                482495611b7ba324   SAME
    Python       CPython 3                      482495611b7ba324   SAME
-   Rust→wasm    same source, run in node       482495611b7ba324   SAME
 
-   7 of 7 agree, bit for bit, over the whole pipeline.
+   6 of 6 agree, bit for bit, over the whole pipeline.
    Every one of these has a different compiler, a different optimiser and a
    different runtime, and they land on the same 64 bits. Doc 23 argued this
    from the standard; this is the argument actually run.
@@ -1368,12 +1461,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 15x version is the one that
+       than choosing the language. And the 14x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.39 ms, one object a vertex
-       5.69 ms -- a layout gap of 15x. Both are timings and move run to
+       This machine, now: typed arrays 0.69 ms, one object a vertex
+       9.66 ms -- a layout gap of 14x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -1429,6 +1522,9 @@ verdict
    aarch64 claim in section 2 is read from the instruction set, not
    measured. Running this script on an ARM machine and diffing the digest
    is the one experiment left, and it is now a five-minute job.
+
+   NOT CHECKED ON THIS MACHINE: the wasm32-unknown-unknown target.
+   Those rows are missing above rather than assumed.
 ```
 
 ## `light.js`
@@ -1542,6 +1638,64 @@ Cited by [doc 16](16-lighting.md).
             15                    7,471 1.497x
    Shortening the light range is the cheapest lever: cost grows as the cube
    of it. Range 8 costs 83% less than range 15.
+```
+
+## `lod.js`
+
+A chunk drawn at a coarser level of detail spaces its cells further apart and asks the terrain for a height at each one. The generator is not told which level is asking, so a point that survives the coarsening keeps exactly the height the fine chunk gives it -- a chunk changing level moves no ground. What a coarse chunk loses is the surface BETWEEN its points, which it draws flat. This measures how much that flat span misses, and what happens if the generator is made level-aware to close the gap. Two ways of doing that are tried, and both come out worse than leaving it alone.
+
+Cited by [doc 14](14-meshing-and-lod.md).
+
+```
+1. which octaves a level of detail can still carry
+   4 octaves from a 112 m feature, amplitude 5 m.
+   An octave needs two cells across a feature to be drawn at all.
+
+   octave  feature   its share of the 5 m
+     0     112 m    2.67 m   gone past LOD 5
+     1      56 m    1.33 m   gone past LOD 4
+     2      28 m    0.67 m   gone past LOD 3
+     3      14 m    0.33 m   gone past LOD 2
+
+   lod  cell   octaves it can carry
+     0     1 m   4
+     1     2 m   4
+     2     4 m   4
+     3     8 m   3
+     4    16 m   2
+     5    32 m   1
+     6    64 m   0
+     7   128 m   0
+     8   256 m   0
+   The detail term has nothing left to say past LOD 5. Nothing is broken
+   by that: the points a coarse chunk keeps still hold their own exact
+   height, and what is gone is the wiggle between them.
+
+2. how much the flat span between a coarse chunk's points misses
+   Against the average of the ground a cell covers, over 190 places on
+   one face, each averaged across its own footprint. `today` is the
+   engine as it stands, which is exact at the point and flat between.
+   The other two make the generator level-aware, which is the obvious
+   fix and the wrong one.
+
+   lod   today          drop octaves   roll off
+         rms    worst   rms    worst   rms    worst
+     1    0.02   0.04    0.02   0.04    0.02   0.04    (190 places)
+     2    0.02   0.04    0.02   0.04    0.02   0.04    (190 places)
+     3    0.02   0.07    0.12   0.27    0.03   0.09    (190 places)
+     4    0.06   0.22    0.29   0.75    0.12   0.41    (190 places)
+     5    0.15   0.44    0.53   1.55    0.25   0.77    (190 places)
+     6    0.31   1.19    1.02   2.41    0.50   1.50    (190 places)
+
+verdict
+   Leaving the generator alone is the smallest of the three at every
+   level, and it is the only one of the three under which a chunk
+   changing level moves no ground at all. Both level-aware versions
+   would give a retained point one height in the coarse chunk and
+   another in the fine one, so they buy a little sharpness with a
+   popping artifact the engine does not currently have.
+
+   Do not make the terrain generator level-aware.
 ```
 
 ## `lookup.js`
@@ -2296,7 +2450,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 805 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1101 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3087,4 +3241,4 @@ verdict
 
 ---
 
-_35 scripts. Every number above is reproduced by running them._
+_37 scripts. Every number above is reproduced by running them._
