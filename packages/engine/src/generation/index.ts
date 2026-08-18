@@ -20,6 +20,9 @@ export { routeFlow } from "./coarse/routeFlow.js";
 export { downhillOrder } from "./coarse/downhillOrder.js";
 export { accumulateFlow } from "./coarse/accumulateFlow.js";
 export { coarseSlope } from "./coarse/coarseSlope.js";
+export type { CoarseField, CoarseRamp } from "./coarse/CoarseField.js";
+export { coarseFieldOf } from "./coarse/CoarseField.js";
+export { COARSE_FIELDS } from "./coarse/COARSE_FIELDS.js";
 export { erode } from "./coarse/erode.js";
 
 export type { ColumnBand } from "./terrain/ColumnBand.js";
@@ -41,6 +44,7 @@ export { ChunkAtlas } from "./chunk/ChunkAtlas.js";
 export { residentChunks } from "./chunk/residentChunks.js";
 export type { ChunkSelection } from "./chunk/selectChunks.js";
 export { DETAIL, selectChunks } from "./chunk/selectChunks.js";
+export { CAPPED_LEVEL, ChunkPeaks } from "./chunk/ChunkPeaks.js";
 export { ChunkStore } from "./chunk/ChunkStore.js";
 export { selectionId, selectionOf } from "./chunk/selectionId.js";
 export { chunkOverlaps } from "./chunk/chunkOverlaps.js";

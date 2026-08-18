@@ -1,0 +1,94 @@
+import type { CoarseMap } from "../coarse/CoarseMap.js";
+import { ChunkAddress } from "./ChunkAddress.js";
+import { joinPath } from "../../addressing/lattice/joinPath.js";
+
+/**
+ * How high the ground reaches under each triangle of the chunk hierarchy.
+ *
+ * The selection has to know how far a chunk's own ground pokes back over the
+ * horizon. One planet-wide figure answers that for every chunk, which reaches
+ * every peak and selects a ring of chunks whose ground is nowhere near that
+ * tall: measured at 7 to 9% of the chunks at the shipped settings, and 32% on a
+ * world with a tenth of its surface above water.
+ *
+ * Built once, from the coarse map, and read per triangle during the walk.
+ * Asking the map during the walk instead would cost about six million reads a
+ * selection, because a face-sized triangle covers 33,153 coarse cells and the
+ * walk visits every level.
+ *
+ * **Levels below {@link CAPPED_LEVEL} read their ancestor's figure.** A parent's
+ * tallest ground is never lower than a child's, so a child reading it is
+ * conservative in the same direction the planet-wide figure was: nothing
+ * visible is ever dropped. What it saves is the table — the pyramid to level 6
+ * is 109,220 entries and 437 KB, and carrying it to level 8 would be
+ * 1,747,626 and 7 MB for triangles 32 m across, whose peaks barely differ.
+ */
+export const CAPPED_LEVEL = 6;
+
+export class ChunkPeaks {
+	/** Metres above the sea-level radius, one per triangle, level by level. */
+	private readonly levels: Float32Array[];
+
+	/**
+	 * @param margin metres to add to every figure, for ground the coarse map
+	 * does not carry. The detail term is bounded by its own amplitude, so
+	 * passing that keeps this an upper bound rather than an estimate.
+	 */
+	constructor(
+		map: CoarseMap,
+		heightScale: number,
+		margin: number,
+		finestChunkLevel: number,
+	) {
+		const deepest = Math.min(CAPPED_LEVEL, finestChunkLevel);
+		this.levels = [];
+		for (let level = 0; level <= deepest; level++)
+			this.levels.push(new Float32Array(20 * 4 ** level));
+
+		// The deepest level reads the map; every coarser one is the largest of
+		// its four children, so the map is walked once rather than once a level.
+		const mapLevel = map.level;
+		const deep = this.levels[deepest]!;
+		const m = 1 << Math.max(0, mapLevel - deepest);
+		for (let face = 0; face < 20; face++)
+			for (let value = 0; value < 4 ** deepest; value++) {
+				const address = ChunkAddress.fromKey(
+					face * 4 ** deepest + value,
+					deepest,
+				);
+				let highest = -Infinity;
+				for (let q = 0; q <= m; q++)
+					for (let r = 0; q + r <= m; r++) {
+						const [i, j] = joinPath(address.path, q, r, mapLevel);
+						const h = map.heightAt(face, i, j, mapLevel);
+						if (h > highest) highest = h;
+					}
+				deep[address.key] = Math.max(
+					0,
+					(highest - map.seaLevel) * heightScale + margin,
+				);
+			}
+
+		for (let level = deepest - 1; level >= 0; level--) {
+			const here = this.levels[level]!;
+			const below = this.levels[level + 1]!;
+			for (let key = 0; key < here.length; key++) {
+				let highest = 0;
+				for (let child = 0; child < 4; child++) {
+					const value = below[key * 4 + child]!;
+					if (value > highest) highest = value;
+				}
+				here[key] = highest;
+			}
+		}
+	}
+
+	/** Metres of ground above the sea-level radius under one triangle. */
+	peakOf(key: number, chunkLevel: number): number {
+		if (chunkLevel < this.levels.length)
+			return this.levels[chunkLevel]![key]!;
+		// Below the table, read the deepest ancestor that is in it.
+		const deepest = this.levels.length - 1;
+		return this.levels[deepest]![key >> (2 * (chunkLevel - deepest))]!;
+	}
+}
