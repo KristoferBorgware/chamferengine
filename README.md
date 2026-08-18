@@ -97,7 +97,7 @@ and naming conventions in a compact form intended for machine consumption.
 **Published at <https://kristoferborgware.github.io/chamferengine/>** — the whole
 specification, every diagram, every demo and every verification script, rebuilt
 and deployed by GitHub Actions on each push to `master`. The proofs are the gate:
-`make-reference.js` runs all thirty-five verification scripts and fails the build if
+`make-reference.js` runs all thirty-seven verification scripts and fails the build if
 one stops running, so the site cannot publish unless the maths still holds.
 
 The Markdown is written to be read on GitHub, but the same generator produces a
@@ -141,7 +141,7 @@ link, a dead heading anchor, or any Markdown the generator does not understand.
 
 ## Demos
 
-Twenty-eight self-contained HTML files. No build step, no dependencies to install —
+Thirty self-contained HTML files. No build step, no dependencies to install —
 open any of them directly in a browser. All are mobile-friendly.
 
 **New to this?** Start with
@@ -177,6 +177,8 @@ node verification/frame.js     # holonomy == enclosed area; the 720° in two for
 node verification/mesh.js      # 2 verts / 4 tris per cell; sag, seams, LOD budget
 node verification/volume.js    # relief, caves, and what noise generation costs
 node verification/seam.js      # a skirt does not close a cave mouth; what does
+node verification/coastline.js # where a coastline comes from; four ways, measured
+node verification/lod.js      # what a coarse chunk draws, and what it leaves out
 ```
 
 The five that closed the pre-code gap list:
@@ -191,7 +193,7 @@ node verification/language.js   # the same kernel in six languages; the digests 
 ```
 
 Claims in the documentation marked **[verified]** have a corresponding script.
-All thirty-five are run by `make-reference.js`, and
+All thirty-seven are run by `make-reference.js`, and
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is their combined output.
 
 ---
@@ -217,6 +219,7 @@ All thirty-five are run by `make-reference.js`, and
 | Language and runtime | **TypeScript**, decided — see [doc 28](docs/28-language-and-runtime.md) |
 | Deployment | Sketched, **not decided** — see [doc 31](docs/31-deployment.md) |
 | **Engine source** | `packages/engine`, built against `plans/v0.1.0.md` |
+| **The map editor** | `?panel=1` on the client — the maps redrawn while a knob moves, the terrain left alone |
 
 ## Licence
 
