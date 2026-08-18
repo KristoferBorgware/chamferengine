@@ -27,6 +27,7 @@ numbered documents.
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`coastline.js`](../verification/coastline.js) | Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number. | [21](21-rivers-and-erosion.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
+| [`detail.js`](../verification/detail.js) | Which level of detail a chunk is drawn at, and where on the ground the steps between levels land. | [14](14-meshing-and-lod.md) |
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
 | [`frame.js`](../verification/frame.js) | Gravity and orientation: the local frame, its holonomy, and what the grid's 720 degrees does to direction indices. | [13](13-gravity-and-orientation.md) |
@@ -116,7 +117,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 397 ns -- a timing, so it moves run to run
+   this machine, now: 299 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -788,6 +789,110 @@ verdict
    if the code names the planet as well.
 ```
 
+## `detail.js`
+
+Which level of detail a chunk is drawn at, and where on the ground the steps between levels land.
+
+Cited by [doc 14](14-meshing-and-lod.md).
+
+```
+1. a chunk triangle, and the cap the selector measures it by
+   worked planet: depth 13, 1 m blocks, radius 6800.6 m
+
+   chunk level   cells on an edge   nominal edge   cap width, narrowest to widest
+            10                  8            8 m   7.7 to 10.1 m  (0.96 to 1.27 of it)
+             9                 16           16 m   15.4 to 20.3 m  (0.96 to 1.27 of it)
+             8                 32           32 m   30.8 to 40.6 m  (0.96 to 1.27 of it)
+             7                 64           64 m   61.7 to 81.2 m  (0.96 to 1.27 of it)
+             6                128          128 m   124.0 to 162.3 m  (0.97 to 1.27 of it)
+
+   So a detail ring is not a circle. A chunk sitting where the lattice is
+   stretched is wider than one at a face corner, and the wider chunk needs to
+   be further away before it is drawn.
+
+2. where each detail step begins, at 1 m blocks
+   (the nearest chunk drawn at that step, over the whole selection)
+
+   chunk cells   first 2 m cells   first 4 m   first 8 m   first 16 m
+             8              39 m        77 m       154 m        307 m
+            16              77 m       154 m       307 m           --
+            32             154 m       307 m          --           --
+            64             307 m          --          --           --
+
+   Every step doubles the distance, exactly, because a chunk one step coarser
+   is twice as wide. And the four rows are one sequence read at four offsets:
+   what decides a ring is how wide the chunk drawn there is, in metres, and
+   not which knob produced that width.
+
+   chunk drawn is   ...which happens at
+        16 m wide             39 m out   = 2.41 of its width
+        32 m wide             77 m out   = 2.41 of its width
+        64 m wide            154 m out   = 2.41 of its width
+       128 m wide            307 m out   = 2.40 of its width
+
+   One number, at every width: a chunk is drawn once the viewer is about 2.4
+   of its nominal widths away from it -- the multiplier of 2, against a cap
+   some 1.2 times the nominal edge.
+
+3. what a standing player sees, by distance
+   (the coarsest chunk covering that distance; a band holds two levels
+    where the rings fall)
+
+   distance     chunk 8 cells   chunk 32 cells
+       10 m               1 m              1 m
+       20 m               1 m              1 m
+       40 m         1 m / 2 m              1 m
+       60 m               2 m              1 m
+      100 m         2 m / 4 m              1 m
+      150 m         4 m / 8 m        1 m / 2 m
+      250 m               8 m              2 m
+      400 m              16 m              4 m
+      700 m                --               --
+
+4. chunks held, by the detail multiplier, at 32 cells a chunk
+   (60 m of altitude is the worst case: near and far are both on screen)
+
+   altitude    detail 2   detail 2.5   detail 3
+      1.7 m         279          353        428
+       60 m         490          678        924
+      300 m         365          566        782
+
+5. the level jump between chunks that touch
+   (two chunks touch when their caps do)
+
+   chunk cells   altitude   view   pairs touching   1 level apart   2 or more
+             8      1.7 m   A             2953             606           0
+             8      1.7 m   B             3058             622           0
+             8      1.7 m   C             3011             624           0
+             8       60 m   A             3045             671           0
+             8       60 m   B             3109             700           0
+             8       60 m   C             3023             724           0
+             8      300 m   A             2050             430           0
+             8      300 m   B             2062             397           0
+             8      300 m   C             1893             418           0
+            32      1.7 m   A             1553             244           0
+            32      1.7 m   B             1654             274           0
+            32      1.7 m   C             1611             260           0
+            32       60 m   A             2786             566           0
+            32       60 m   B             2867             600           0
+            32       60 m   C             2819             622           0
+            32      300 m   A             2050             430           0
+            32      300 m   B             2062             397           0
+            32      300 m   C             1893             418           0
+
+   Over 43,499 touching pairs the widest jump is 1 level.
+   Splitting on a triangle's own width restricts itself: a neighbour close
+   enough to be split is close enough that its own neighbour splits too. So a
+   seam is always between two levels, never three -- but that is a measurement
+   over these views and not a rule the walk enforces, and the apron does not
+   need it: it covers the strip whatever the neighbour chose.
+
+   ANSWER: the level is chosen per triangle, from distance against that
+   triangle's own width -- never from the viewer's altitude, which reaches it
+   only by moving every distance at once. At 32 cells and 1 m blocks the
+   ground first coarsens at 154 m; at 8 cells it coarsens at 38 m.
+```
+
 ## `determinism.js`
 
 Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses.
@@ -1215,7 +1320,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 167M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 267M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1269,8 +1374,9 @@ language.js -- which language and runtime, decided by running the kernel
    Java         javac/java, default            482495611b7ba324   SAME
    Go           go build, amd64                482495611b7ba324   SAME
    Python       CPython 3                      482495611b7ba324   SAME
+   Rust→wasm    same source, run in node       482495611b7ba324   SAME
 
-   6 of 6 agree, bit for bit, over the whole pipeline.
+   7 of 7 agree, bit for bit, over the whole pipeline.
    Every one of these has a different compiler, a different optimiser and a
    different runtime, and they land on the same 64 bits. Doc 23 argued this
    from the standard; this is the argument actually run.
@@ -1461,12 +1567,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 14x version is the one that
+       than choosing the language. And the 20x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.69 ms, one object a vertex
-       9.66 ms -- a layout gap of 14x. Both are timings and move run to
+       This machine, now: typed arrays 0.34 ms, one object a vertex
+       6.65 ms -- a layout gap of 20x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -1522,9 +1628,6 @@ verdict
    aarch64 claim in section 2 is read from the instruction set, not
    measured. Running this script on an ARM machine and diffing the digest
    is the one experiment left, and it is now a five-minute job.
-
-   NOT CHECKED ON THIS MACHINE: the wasm32-unknown-unknown target.
-   Those rows are missing above rather than assumed.
 ```
 
 ## `light.js`
@@ -2450,7 +2553,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1101 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 799 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3241,4 +3344,4 @@ verdict
 
 ---
 
-_37 scripts. Every number above is reproduced by running them._
+_38 scripts. Every number above is reproduced by running them._

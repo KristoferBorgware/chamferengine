@@ -3,9 +3,8 @@
 ## The problem
 
 Turn a chunk of hexagonal prisms into triangles, cheaply enough to stream, with
-a level-of-detail scheme that keys on **altitude** rather than distance
-([doc 13](13-gravity-and-orientation.md)), and without cracks where two levels
-meet.
+a level-of-detail scheme that decides **per triangle** how finely to draw the
+ground under it, and without cracks where two levels meet.
 
 ## The received wisdom is half wrong
 
@@ -215,15 +214,73 @@ distant part of that range is exactly what LOD is for.
 
 **The 76 m horizon is the greedy mesher.** It has already thrown away everything
 a merge pass would have, and it did so before the mesher ran, at no cost in
-code. Build the naive version, ship it, and spend the effort on altitude instead —
-which is where the numbers actually go bad.
+code. Build the naive version, ship it, and spend the effort on the view from
+above instead — which is where the numbers actually go bad.
 
 ---
 
 ## Level of detail
 
-Key on altitude, as [doc 13](13-gravity-and-orientation.md) establishes. Within a
-2 M-triangle budget:
+### The level is chosen per triangle, from how far away that triangle is
+
+There is no level for the view. Walk the triangle hierarchy from the twenty
+faces downward and ask each triangle one question: **is the viewer at least two
+of this triangle's own widths away from it?** If yes, draw it. If no, split it
+into its four children and ask each of them the same thing.
+
+That is the whole rule. A face is enormous, so from anywhere on the surface the
+answer at the top is always "no" and the walk descends. It stops when a triangle
+is far enough away for its own size, which happens early in the distance and
+late underfoot — so one frame holds many levels at once, fine where you stand
+and coarse at the horizon.
+
+The multiplier of two is the only free number in it. **Width** is not the
+triangle's edge but the cap that holds it, which is what the walk already has to
+compute to know whether the triangle is over the horizon at all.
+
+### Every step doubles the cell and doubles the distance
+
+A triangle one level coarser covers four times the area, so it is **twice as
+wide**, so it has to be **twice as far away** before it is drawn. The rings
+where the ground coarsens are therefore a doubling sequence, and where the first
+one lands is set by how wide a chunk is in metres.
+
+> **[verified]** `verification/detail.js`, sections 2 and 3. The worked planet at
+> 1 m blocks — depth 13 — with a standing player. The nearest chunk drawn at each
+> step:
+>
+> | Chunk | First 2 m cells | First 4 m | First 8 m | First 16 m |
+> |---|---|---|---|---|
+> | 8 cells | 39 m | 77 m | 154 m | 307 m |
+> | 16 cells | 77 m | 154 m | 307 m | — |
+> | 32 cells | 154 m | 307 m | — | — |
+> | 64 cells | 307 m | — | — | — |
+>
+> The four rows are one sequence read at four offsets. What decides a ring is
+> **how wide the chunk drawn there is, in metres** — a 16 m chunk first appears
+> at 39 m, a 64 m chunk at 154 m, and both are **2.41** of their own nominal
+> width, whichever knob produced that width.
+
+So the chunk size is not a detail setting, and it moves the picture more than it
+looks as though it should. Cutting a chunk from 32 cells to 8 does not coarsen
+the world; it pulls every ring in by a factor of four, which puts 8 m cells at
+154 m where there had been 1 m cells.
+
+**A ring is not a circle.** Cell spacing varies 1.41:1 across a face
+(`uniform.js`), so two chunks with the same cell count are not the same width,
+and the wider one has to be further away before it is drawn.
+
+> **[verified]** `verification/detail.js`, section 1. Over every chunk of one
+> face, the cap the walk measures runs **0.96 to 1.27** of the chunk's nominal
+> edge, at every chunk level. The rings are that fuzzy — about a quarter of a
+> ring's own radius — and they wobble with the lattice rather than with anything
+> the viewer does.
+
+### Altitude is a budget, not the control
+
+Altitude reaches the level only by moving every distance at once. What it does
+decide is how much there is to draw, which is a budget rather than a rule.
+Within 2 M triangles:
 
 | Altitude | Finest level that fits |
 |---|---|
@@ -235,8 +292,45 @@ Key on altitude, as [doc 13](13-gravity-and-orientation.md) establishes. Within 
 | 1,700 m | 8 |
 
 Roughly **one level per doubling of altitude** above 50 m, and full detail below
-it. A view-distance slider is the wrong control; the right one is a function of
-`|position| − surfaceRadius`.
+it. A view-distance slider is the wrong control for a player to hold, and so is
+an altitude curve for the engine to follow: both set one level for everything on
+screen, and the near ground and the horizon are not one thing.
+
+### What the multiplier costs
+
+Raising it from two holds full detail further out, and pays in chunks held —
+every one of which is generated, meshed, uploaded and drawn.
+
+> **[verified]** `verification/detail.js`, section 4. Chunks held at 32 cells a
+> chunk, on the worked planet:
+>
+> | Altitude | Detail 2 | Detail 2.5 | Detail 3 |
+> |---|---|---|---|
+> | 1.7 m | 279 | 353 | 428 |
+> | 60 m | **490** | 678 | 924 |
+> | 300 m | 365 | 566 | 782 |
+>
+> 60 m of altitude is the worst case, because near and far ground are both on
+> screen there. Going from 2 to 3 costs **89%** more chunks and buys one step of
+> sharpness at the ring.
+
+**Two is the setting.** The cost is close to the square of the multiplier and
+the gain is one ring of cells moved outward.
+
+### Two chunks that touch are never more than one level apart
+
+Splitting on a triangle's own width restricts itself. A neighbour close enough
+to be split is close enough that *its* neighbour splits too, so the level cannot
+jump twice across one boundary — not because the walk forbids it, but because
+the distances that would be needed do not occur.
+
+> **[verified]** `verification/detail.js`, section 5. Over **43,499** pairs of
+> chunks whose caps touch — two chunk sizes, three altitudes, three view
+> directions — the widest gap is **1 level**, and about 20% of pairs have any gap
+> at all.
+
+That is measured rather than enforced, so nothing downstream may assume it. The
+apron does not: it covers the strip whatever the neighbour chose.
 
 ### LOD is resampling, not decimation
 
@@ -392,11 +486,12 @@ their true height so a real cell wins wherever one exists. Both levels' surfaces
 then cover the strip where they meet, and the step between them shows as the
 higher surface standing over the lower rather than as a gap.
 
-The apron beats stitching for a specific reason: with LOD driven by altitude
-rather than distance, **neighbouring chunks can differ by more than one level**,
-and a stitching scheme has to enumerate the cases. An apron does not care what
-the neighbour chose. It is also the only option that survives a chunk being
-remeshed after an edit while its neighbour is not.
+The apron beats stitching for a specific reason: **it enumerates no cases**. A
+stitching scheme has to know what the neighbour drew, which means the mesher has
+to be told the neighbour's level and the rim has to be re-meshed whenever that
+level changes. An apron is one ring of the chunk's own cells and does not care
+what the neighbour chose — which is also what makes it the only option that
+survives a chunk being remeshed after an edit while its neighbour is not.
 
 **A curtain does not work, and the reason is the cap plane.** The first answer
 here was a *skirt* — a wall hung one coarse cell deep from every rim, closing
@@ -522,9 +617,10 @@ both already on the table:
    4 triangles per cap, run-length merged side faces, no cap merging. This is a
    whole planet with mountains and no caves, and it is cheap.
 2. **The apron** at chunk boundaries, one cell of the chunk's own level.
-3. **Altitude-driven LOD** by re-evaluating the terrain function at a coarser
-   level — with the render budget set from the relief-extended range, not the
-   76 m ground horizon.
+3. **Distance-driven LOD** by re-evaluating the terrain function at a coarser
+   level — one level per triangle, from the two-widths test, with the render
+   budget set from the relief-extended range rather than the 76 m ground
+   horizon.
 4. **The density term**, restricted to a band around the surface and to
    full-detail chunks only. This is where caves, overhangs and most of the
    triangle count arrive at once — and where **seam ownership** becomes
@@ -587,7 +683,10 @@ the generator and the easiest to get wrong.
 - Relief barely moves the triangle count (**4.0 → 9.5 per cell**, then it
   saturates). Caves multiply *faces* but stay invisible until opened.
 - **LOD is resampling, not decimation**, because Goldberg levels do not nest.
-  Drive it by **altitude**, not distance.
+  The level is chosen **per triangle**: draw it once the viewer is **two of its
+  own widths** away, split it into four children when closer. Every step doubles
+  the cell and doubles the distance, so at 32 cells and 1 m blocks the ground
+  first coarsens at **154 m** and at 8 cells at **39 m**.
 - Seams: the **apron** — one cell drawn past the rim — closes the surface step
   without hanging a wall in the cap plane, where a skirt was coplanar with the
   neighbour's cap on **85%** of rim columns. Only the finer chunk **owning the
@@ -601,3 +700,8 @@ converge on 2 and 4 per cell. The altitude slider draws the true horizon ring an
 colors the cells inside it: at eye height that is **one hexagon on the whole
 planet**, 0.05% of the surface, and the readout gives the real figures for a
 level-11 world.
+
+**Demo:** [`demos/detail-with-distance.html`](../demos/detail-with-distance.html) —
+the three settings that decide where the steps land, and the ground from above
+banded by how big a cell is drawn there. Drop the chunk from 32 cells to 8 and
+watch the first step come in from 154 m to 39 m.

@@ -20,7 +20,7 @@ triangles**. Ten diagrams, no interaction, no dependencies.
 It then carries that one idea through to the parts it decides — why there are
 exactly twelve pentagons, why an address is just the route down the splits, what
 a cell costs to draw, why level of detail has to resample rather than decimate,
-and why a skirt closes a chunk seam at the surface but not where a cave runs
+and why an apron closes a chunk seam at the surface but not where a cave runs
 into it.
 
 **Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md),

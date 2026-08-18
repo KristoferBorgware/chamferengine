@@ -357,8 +357,8 @@ three passes:</p>
   <li><strong>Tops.</strong> For every cell whose ceiling is air, emit 4 triangles.</li>
   <li><strong>Sides.</strong> For each of the 6 directions, walk down the column
   and merge every unbroken run of exposed faces into one rectangle.</li>
-  <li><strong>Skirt.</strong> Around the chunk's rim, hang a short vertical apron
-  downward — the reason is on the next diagram.</li>
+  <li><strong>Apron.</strong> Draw the ring of cells just past the chunk's rim as
+  well, a centimetre low — the reason is on the next diagram.</li>
 </ul>
 
 <p>Sideways merging, on the other hand, does not work. In a hex grid, the
@@ -387,59 +387,76 @@ a genuinely different set of cells, not a subset.</p>
 <figcaption>The coarser grid does not contain whole fine cells — its boundaries cut straight through them. The two levels are simply <b>different sets of cells</b>, so a coarse mesh cannot be made by throwing fine cells away. It is built by <b>asking the terrain function again</b> at the wider spacing, which works only because terrain is a pure function of world position with no memory of any grid.</figcaption>
 </figure>
 
-<p>The level to use is chosen by <strong>altitude</strong>, not by distance. On a
-1,700 m planet the ground curves away only 76 m in front of a standing player, so
-at eye height the entire visible world is about 21,000 cells — nothing at all.
-Climb, and it grows fast:</p>
+<p>The level is chosen <strong>one triangle at a time</strong>, and the question
+is always the same: <strong>are you at least two of this triangle's own widths
+away from it?</strong> If you are, draw it. If you are not, split it into its four
+children and ask each of them. Start at the twenty faces and walk down.</p>
+
+<p>So there is no level for the view. A triangle one step coarser is twice as
+wide, so it has to be twice as far away to be drawn — which makes the ground
+coarsen in rings, each one twice as far out as the last, and one frame holds
+several levels at once. On the shipped planet, with 1 m blocks and 32 cells to a
+chunk, the first ring lands at <strong>154 m</strong> and the next at 307 m. Cut
+the chunk to 8 cells and the same rings land at <strong>39 m</strong> and 77 m,
+because what a ring measures is how wide the chunk drawn there is.</p>
+
+<p>Altitude is not the control, but it is the bill. On a 1,700 m planet the ground
+curves away only 76 m in front of a standing player, so at eye height the entire
+visible world is about 21,000 cells — nothing at all. Climb, and it grows
+fast:</p>
 
 <div class="tw"><table>
-  <thead><tr><th>Your altitude</th><th class="n">You can see</th><th class="n">Cells in view</th><th class="n">Detail level</th></tr></thead>
+  <thead><tr><th>Your altitude</th><th class="n">You can see</th><th class="n">Cells in view</th><th class="n">At full detail that is</th></tr></thead>
   <tbody>
-    <tr><td>1.7 m — standing</td><td class="n">76 m</td><td class="n">20,951</td><td class="n">full</td></tr>
-    <tr><td>50 m — a tower</td><td class="n">407 m</td><td class="n">599,186</td><td class="n">−1</td></tr>
-    <tr><td>200 m — flying</td><td class="n">787 m</td><td class="n">2,207,529</td><td class="n">−2</td></tr>
-    <tr><td>1,700 m — orbit-ish</td><td class="n">1.8 km</td><td class="n">10,485,761</td><td class="n">−3</td></tr>
+    <tr><td>1.7 m — standing</td><td class="n">76 m</td><td class="n">20,951</td><td class="n">nothing at all</td></tr>
+    <tr><td>50 m — a tower</td><td class="n">407 m</td><td class="n">599,186</td><td class="n">affordable</td></tr>
+    <tr><td>200 m — flying</td><td class="n">787 m</td><td class="n">2,207,529</td><td class="n">too much</td></tr>
+    <tr><td>1,700 m — orbit-ish</td><td class="n">1.8 km</td><td class="n">10,485,761</td><td class="n">hopeless</td></tr>
   </tbody>
 </table></div>
 
-<h3>Which is why the seams need skirts</h3>
+<h3>Which is why the seams need an apron</h3>
 
 <p>When two neighbouring chunks pick different levels, they sample the terrain at
-different spacings, so their edges land at slightly different heights. That leaves
-a crack you can see straight through to the sky.</p>
+different spacings, so their edges land at slightly different heights — and their
+hexagons, being different sizes, do not interlock along the join. That leaves a
+strip that neither side's own cells cover, and you see straight through it to the
+sky.</p>
 
 <figure class="fig">
-<svg viewBox="0 0 420 178" role="img" aria-label="Two terrain profiles at different detail levels leaving a visible gap, then the same gap closed by a vertical skirt">
+<svg viewBox="0 0 420 186" role="img" aria-label="Two terrain profiles at different detail levels leaving a strip neither covers, then the same join with the fine chunk drawing one cell past its rim so both surfaces cover the strip">
   <g>
     <path class="ln2" d="M20 70 L44 60 L68 76 L92 66 L116 80"/>
-    <path class="ln2" d="M116 112 L164 100 L188 116"/>
-    <path class="ln2" d="M20 70 L20 132 M116 80 L116 132 M188 116 L188 132"/>
-    <path class="ln" d="M20 132 L188 132"/>
-    <line x1="116" y1="80" x2="116" y2="112" stroke="var(--gold)" stroke-width="3.5"/>
-    <text class="tg" x="122" y="100">gap</text>
-    <text class="tm" x="68" y="48" text-anchor="middle">fine chunk</text>
-    <text class="tm" x="152" y="84" text-anchor="middle">coarse chunk</text>
-    <text class="t" x="104" y="162" text-anchor="middle">sky shows through</text>
+    <path class="ln2" d="M140 104 L164 100 L188 116"/>
+    <path class="ln2" d="M20 70 L20 136 M116 80 L116 136 M140 104 L140 136 M188 116 L188 136"/>
+    <path class="ln" d="M20 136 L188 136"/>
+    <line x1="116" y1="88" x2="140" y2="88" stroke="var(--gold)" stroke-width="3.5"/>
+    <text class="tg" x="128" y="78" text-anchor="middle">gap</text>
+    <text class="tm" x="66" y="48" text-anchor="middle">fine chunk</text>
+    <text class="tm" x="164" y="126" text-anchor="middle">coarse</text>
+    <text class="t" x="104" y="168" text-anchor="middle">sky shows through</text>
   </g>
   <g>
     <path class="ln2" d="M232 70 L256 60 L280 76 L304 66 L328 80"/>
-    <path class="ln2" d="M328 112 L376 100 L400 116"/>
-    <path class="ln2" d="M232 70 L232 132 M400 116 L400 132"/>
-    <path class="ln" d="M232 132 L400 132"/>
-    <rect x="325.5" y="80" width="5" height="36" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
-    <text class="ta" x="338" y="96">skirt</text>
+    <path class="ln2" d="M352 104 L376 100 L400 116"/>
+    <path class="ln2" d="M232 70 L232 136 M352 104 L352 136 M400 116 L400 136"/>
+    <path class="ln" d="M232 136 L400 136"/>
+    <path class="acc" d="M328 84 L360 84"/>
+    <line x1="360" y1="84" x2="360" y2="104" stroke="var(--accent)" stroke-width="1"
+      stroke-dasharray="3 2" opacity=".7"/>
+    <text class="ta" x="344" y="76" text-anchor="middle">apron</text>
     <text class="tm" x="280" y="48" text-anchor="middle">same two chunks</text>
-    <text class="t" x="316" y="162" text-anchor="middle">2 triangles per edge cell</text>
+    <text class="t" x="316" y="168" text-anchor="middle">one more ring of its own cells</text>
   </g>
 </svg>
-<figcaption>A <b>skirt</b> is a short vertical curtain hanging down from a chunk's rim. It does not have to match the neighbour, or even know what level the neighbour chose — it just has to hang deeper than the worst possible mismatch, which is <b>one coarse cell</b>. Cheap, and it needs no special case.</figcaption>
+<figcaption>An <b>apron</b> is the ring of cells just past a chunk's rim, drawn by that chunk at its own level and a centimetre below their true height. It does not have to match the neighbour, or know what level the neighbour chose: wherever the neighbour has a real cell, the real one wins by that centimetre, and wherever it has none, the apron is what covers the strip. The step between two levels then reads as one surface standing over the other rather than as a hole.</figcaption>
 </figure>
 
-<h3>A skirt only closes the surface</h3>
+<h3>An apron only closes the surface</h3>
 
 <p>That works while every column is a single slab of rock. Once the ground has
 <strong>caves</strong> in it, a column can hold several separate slabs — and a
-cave that runs up to the chunk's edge opens a hole a skirt can never reach.</p>
+cave that runs up to the chunk's edge opens a hole no apron reaches.</p>
 
 <p>Here is why. The far chunk, being far, was built from the cheap generator and
 has no caves: it is solid rock all the way down. It does not know a cave is
@@ -449,7 +466,7 @@ rock simply carries on past the edge, so it draws no wall either.
 through solid rock.</p>
 
 <figure class="fig">
-<svg viewBox="0 0 430 206" role="img" aria-label="A cross-section through a chunk boundary. With a skirt alone the surface step is covered but a cave running up to the boundary is left open; with the finer chunk drawing every disagreement, both are closed">
+<svg viewBox="0 0 430 206" role="img" aria-label="A cross-section through a chunk boundary. With the apron alone the surface step is covered but a cave running up to the boundary is left open; with the finer chunk drawing every disagreement, both are closed">
   <defs>
     <clipPath id="caveA"><rect x="0" y="0" width="106" height="206"/></clipPath>
     <clipPath id="caveB"><rect x="212" y="0" width="106" height="206"/></clipPath>
@@ -465,17 +482,17 @@ through solid rock.</p>
     <g clip-path="url(#caveA)"><ellipse class="void" cx="90" cy="110" rx="36" ry="15"/></g>
     <line x1="106" y1="46" x2="106" y2="152" stroke="currentColor" stroke-width="1"
       stroke-dasharray="3 3" opacity=".45"/>
-    <rect x="104" y="66" width="4.5" height="18" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <path class="acc" d="M106 68 L132 72"/>
     <line x1="106" y1="96.6" x2="106" y2="123.4" stroke="var(--gold)" stroke-width="4"/>
     <line x1="72" y1="118" x2="150" y2="118" stroke="var(--gold)" stroke-width="1.6"
       stroke-dasharray="4 3" marker-end="url(#see)"/>
-    <text class="ta" x="112" y="60">skirt</text>
+    <text class="ta" x="122" y="60" text-anchor="middle">apron</text>
     <text class="tg" x="112" y="92">open</text>
     <text class="tm" x="76" y="106" text-anchor="middle">cave</text>
     <text class="tm" x="52" y="42" text-anchor="middle">near · detailed</text>
     <text class="tm" x="160" y="42" text-anchor="middle">far · no caves</text>
-    <text class="t" x="106" y="176" text-anchor="middle">skirt alone</text>
-    <text class="tg" x="106" y="194" text-anchor="middle">961 holes left</text>
+    <text class="t" x="106" y="176" text-anchor="middle">apron alone</text>
+    <text class="tg" x="106" y="194" text-anchor="middle">1,074 holes left</text>
   </g>
 
   <g>
@@ -484,18 +501,18 @@ through solid rock.</p>
     <g clip-path="url(#caveB)"><ellipse class="void" cx="302" cy="110" rx="36" ry="15"/></g>
     <line x1="318" y1="46" x2="318" y2="152" stroke="currentColor" stroke-width="1"
       stroke-dasharray="3 3" opacity=".45"/>
-    <rect x="316" y="66" width="4.5" height="18" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
+    <path class="acc" d="M318 68 L344 72"/>
     <rect x="316" y="96.6" width="4.5" height="26.8" fill="var(--fill)" stroke="var(--accent)" stroke-width="2"/>
     <line x1="284" y1="118" x2="314" y2="118" stroke="var(--accent)" stroke-width="1.6"
       stroke-dasharray="4 3" marker-end="url(#stop)"/>
-    <text class="ta" x="324" y="60">skirt</text>
+    <text class="ta" x="334" y="60" text-anchor="middle">apron</text>
     <text class="ta" x="324" y="92">wall</text>
     <text class="tm" x="288" y="106" text-anchor="middle">cave</text>
     <text class="t" x="318" y="176" text-anchor="middle">near chunk draws both</text>
     <text class="ta" x="318" y="194" text-anchor="middle">0 holes</text>
   </g>
 </svg>
-<figcaption>The skirt hangs <b>downward</b>; the cave mouth is a <b>horizontal</b> hole further down. They never meet — 99% of cave mouths sit deeper than a skirt reaches, so adding more skirts does not help. The fix is that the <b>near, detailed chunk takes charge of the whole boundary</b> and draws a face wherever its own rock-or-air disagrees with the far chunk's — its rock against their air, and their rock against its caves. About 2.7 extra faces per edge cell, and the hole count goes to zero.</figcaption>
+<figcaption>The apron is a <b>surface</b>, laid over the join from above; the cave mouth is a <b>horizontal</b> hole in a wall further down. They never meet — the apron closes every one of the 76 surface slits and <b>none</b> of the 1,074 cave mouths, and no amount of extra apron or extra depth changes that, because depth is not the axis the hole is on. The fix is that the <b>near, detailed chunk takes charge of the whole boundary</b> and draws a face wherever its own rock-or-air disagrees with the far chunk's — its rock against their air, and their rock against its caves. About 3 extra faces per rim column, and the hole count goes to zero.</figcaption>
 </figure>
 
 <h2>One last limit: you cannot flatten too much at once</h2>
@@ -527,7 +544,7 @@ actually be.</p>
   <li>Twelve corners have five neighbours instead of six. Those are the <strong>twelve pentagons</strong>, and they are unavoidable.</li>
   <li>An address is the <strong>route down the splits</strong>, so chopping digits off gives you the containing chunk for free.</li>
   <li>A cell costs <strong>2 vertices and 4 triangles</strong>. Sides merge vertically for free; nothing merges sideways.</li>
-  <li>Detail level follows <strong>altitude</strong>. Coarse meshes re-ask the terrain function rather than dropping cells, and <strong>skirts</strong> hide the seams.</li>
+  <li>Detail is chosen <strong>per triangle</strong> — drawn once you are two of its own widths away, split into four when you are closer. Coarse meshes re-ask the terrain function rather than dropping cells, and an <strong>apron</strong> covers the joins.</li>
 </ul>
 
 <footer>
