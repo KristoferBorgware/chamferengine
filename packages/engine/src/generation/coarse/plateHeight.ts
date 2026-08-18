@@ -1,15 +1,17 @@
 import type { CoarseGrid } from "./CoarseGrid.js";
-import { fbm } from "../noise/fbm.js";
+import { octaveNoise } from "../noise/octaveNoise.js";
 import { hash3 } from "../noise/hash3.js";
 
 /** Offsets from the world seed, so the seats, the spins and the relief differ. */
 const SEAT_SEED_OFFSET = 100;
 const SPIN_SEED_OFFSET = 300;
 const BIAS_SEED_OFFSET = 11;
-const RELIEF_SEED_OFFSET = 1;
 
 /** The level `reach` is stated at, doubling for every level finer. */
 const REACH_LEVEL = 7;
+
+/** How much of the finished height the noise is, against the plate structure. */
+const RELIEF_SHARE = 0.35;
 
 /** The fastest a plate turns, from the `rate` drawn for each one below. */
 const MAX_SPIN = 1.5;
@@ -93,9 +95,12 @@ export function plateHeight(
 	biasWeight: number,
 	upliftWeight: number,
 	upliftReach: number,
-	reliefFrequency: number,
-	reliefOctaves: number,
-	reliefAmplitude: number,
+	frequency: number,
+	octaves: number,
+	persistence: number,
+	lacunarity: number,
+	offsetX: number,
+	offsetY: number,
 ): Float64Array {
 	const seats: [number, number, number][] = [];
 	const spins: [number, number, number][] = [];
@@ -200,7 +205,6 @@ export function plateHeight(
 	}
 
 	const height = new Float64Array(grid.count);
-	const reliefSeed = (seed + RELIEF_SEED_OFFSET) | 0;
 	for (let cell = 0; cell < grid.count; cell++) {
 		const x = grid.directions[cell * 3]!;
 		const y = grid.directions[cell * 3 + 1]!;
@@ -208,8 +212,19 @@ export function plateHeight(
 		height[cell] =
 			biasWeight * bias[owner[cell]!]! +
 			upliftWeight * uplift[cell]! +
-			reliefAmplitude *
-				fbm(x, y, z, reliefFrequency, reliefOctaves, reliefSeed);
+			RELIEF_SHARE *
+				octaveNoise(
+					x,
+					y,
+					z,
+					seed,
+					frequency,
+					octaves,
+					persistence,
+					lacunarity,
+					offsetX,
+					offsetY,
+				);
 	}
 	return height;
 }

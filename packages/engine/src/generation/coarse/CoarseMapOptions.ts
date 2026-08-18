@@ -1,9 +1,51 @@
 import type { Landform } from "./Landform.js";
 
-/** The knobs on a coarse map, all of them defaulted. */
+/**
+ * The knobs on a coarse map, all of them defaulted.
+ *
+ * **Every one of these shows in the map picture.** A knob whose effect can only
+ * be found by walking the finished world is a knob nobody can set, which is why
+ * there is no longer a detail tier, no separate relief frequency, and no height
+ * multiplier applied after the map was drawn.
+ */
 export interface CoarseMapOptions {
 	/** Which way the land is decided. */
 	readonly landform?: Landform;
+
+	/** Subdivision level of the map. Level 8 is 655,362 cells and 2.5 MB a field. */
+	readonly level?: number;
+
+	/** Metres across one cell of the map, which is what makes its heights metric. */
+	readonly cellMetres?: number;
+
+	/** Seed for the noise alone, so the ground can be re-rolled on its own. */
+	readonly noiseSeed?: number;
+
+	/** How many times the widest feature repeats around the planet. */
+	readonly frequency?: number;
+
+	/** How many octaves of noise are summed. */
+	readonly octaves?: number;
+
+	/** What each octave's amplitude is multiplied by. Under 1. */
+	readonly persistence?: number;
+
+	/** What each octave's frequency is multiplied by. Over 1. */
+	readonly lacunarity?: number;
+
+	/** Slides the sample point through the noise field. */
+	readonly offsetX?: number;
+
+	readonly offsetY?: number;
+
+	/** Metres from sea level to the tallest ground, before erosion. */
+	readonly relief?: number;
+
+	/** Fraction of the surface left above sea level. Earth is near 0.3. */
+	readonly landFraction?: number;
+
+	/** How hard the water cuts. Zero leaves the noise exactly as it fell. */
+	readonly erosion?: number;
 
 	/** How far the warp pushes a sample point. `warped` only. */
 	readonly warpAmplitude?: number;
@@ -40,42 +82,22 @@ export interface CoarseMapOptions {
 
 	/** How far inland a range reaches, in cells at level 7. `plates` only. */
 	readonly upliftReach?: number;
-
-	/** Subdivision level of the map. Level 8 is 655,362 cells and 2.5 MB a field. */
-	readonly level?: number;
-
-	/**
-	 * Noise frequency of the continent tier.
-	 *
-	 * This is the number that decides how long rivers get. A river cannot be
-	 * longer than the land it crosses, and raising the frequency breaks the
-	 * surface into many small blobs: at 6.0 the largest landmass carries a
-	 * 31-cell river, at 0.8 it carries 86.
-	 */
-	readonly continentFrequency?: number;
-
-	readonly continentOctaves?: number;
-
-	/** Frequency of the relief laid over the continents. */
-	readonly reliefFrequency?: number;
-
-	readonly reliefOctaves?: number;
-
-	/** How much the relief moves the surface, against a continent tier of 1. */
-	readonly reliefAmplitude?: number;
-
-	/** Fraction of the surface left above sea level. Earth is near 0.3. */
-	readonly landFraction?: number;
-
-	/** How many rounds of incision run. Each one refills and reroutes first. */
-	readonly erosionPasses?: number;
-
-	/** How deeply one round cuts, against a drainage area of one cell. */
-	readonly erosionRate?: number;
 }
 
 export const COARSE_MAP_DEFAULTS = {
 	landform: "noise",
+	level: 8,
+	cellMetres: 32,
+	noiseSeed: 21,
+	frequency: 1.5,
+	octaves: 4,
+	persistence: 0.5,
+	lacunarity: 2,
+	offsetX: 0,
+	offsetY: 0,
+	relief: 300,
+	landFraction: 0.3,
+	erosion: 0.3,
 	warpAmplitude: 0.35,
 	warpFrequency: 1.6,
 	creation: 0.35,
@@ -86,13 +108,4 @@ export const COARSE_MAP_DEFAULTS = {
 	biasWeight: 0.15,
 	upliftWeight: 1.2,
 	upliftReach: 4,
-	level: 8,
-	continentFrequency: 0.8,
-	continentOctaves: 4,
-	reliefFrequency: 6,
-	reliefOctaves: 5,
-	reliefAmplitude: 0.35,
-	landFraction: 0.3,
-	erosionPasses: 4,
-	erosionRate: 0.004,
 } as const satisfies Required<CoarseMapOptions>;

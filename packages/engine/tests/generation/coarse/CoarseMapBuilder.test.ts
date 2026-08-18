@@ -9,13 +9,12 @@ import {
 
 const SEED = 909;
 const LEVEL = 5;
-const OPTIONS = { level: LEVEL, erosionPasses: 2 };
+const OPTIONS = { level: LEVEL, cellMetres: 200 };
 
 /** Every field of two maps, cell by cell. */
 function same(a: ReturnType<typeof buildCoarseMap>, b: typeof a): void {
-	expect(b.seaLevel).toBe(a.seaLevel);
 	expect(b.count).toBe(a.count);
-	for (const key of ["height", "water", "flow", "slope"] as const)
+	for (const key of ["height", "slope"] as const)
 		for (let cell = 0; cell < a.count; cell++)
 			expect(b[key][cell], `${key} at ${cell}`).toBe(a[key][cell]);
 }
@@ -63,8 +62,8 @@ describe("CoarseMapBuilder", () => {
 	it("picks up a changed option at the step that option reaches", () => {
 		const builder = new CoarseMapBuilder(LEVEL);
 		builder.run(SEED, OPTIONS);
-		const cut = { ...OPTIONS, erosionRate: 0.02 };
-		const partial = builder.run(SEED, cut, coarseStageOf("erosionRate"));
+		const cut = { ...OPTIONS, erosion: 0.8 };
+		const partial = builder.run(SEED, cut, coarseStageOf("erosion"));
 		same(buildCoarseMap(SEED, cut), partial);
 
 		const land = { ...OPTIONS, landFraction: 0.6 };
@@ -83,14 +82,18 @@ describe("CoarseMapBuilder", () => {
 	it("names a step for every option a map takes", () => {
 		for (const option of [
 			"level",
-			"continentFrequency",
-			"continentOctaves",
-			"reliefFrequency",
-			"reliefOctaves",
-			"reliefAmplitude",
+			"cellMetres",
+			"noiseSeed",
+			"frequency",
+			"octaves",
+			"persistence",
+			"lacunarity",
+			"offsetX",
+			"offsetY",
+			"relief",
 			"landFraction",
-			"erosionPasses",
-			"erosionRate",
+			"erosion",
+			"landform",
 		] as const)
 			expect(COARSE_STAGES).toContain(coarseStageOf(option));
 	});

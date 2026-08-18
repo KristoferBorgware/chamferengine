@@ -90,29 +90,41 @@ export interface PlanetKnobs {
 	chunkCells: number;
 
 	/**
-	 * Whether the coarse map runs at all: continents, sea, relief, rivers and
-	 * erosion. Off is the one-tier height field doc 08 describes before the
-	 * coarse tier existed -- dry, with the detail term the only relief.
+	 * Whether the height map runs at all. Off is a smooth sphere at sea level,
+	 * which is the only state the level of detail can be judged in.
 	 */
 	coarseMap: boolean;
 
 	/** Which way the land is decided. */
 	landform: Landform;
 
-	/** Metres across one cell of the map that carries continents and rivers. */
+	/** Metres across one cell of the height map, which is one step of ground. */
 	coarseSpacing: number;
 
-	/** Metres of elevation one unit of the coarse map stands for. */
-	heightScale: number;
+	/** Seed for the noise alone, so the ground can be re-rolled on its own. */
+	noiseSeed: number;
 
-	/** Metres across the largest hill or valley the coarse map carries. */
-	reliefFeature: number;
+	/** Metres across the widest feature the noise makes. */
+	noiseScale: number;
 
-	/** Metres the fine detail moves the surface by. */
-	detailAmplitude: number;
+	/** How many octaves of noise are summed. */
+	octaves: number;
 
-	/** Metres across the largest feature the fine detail makes. */
-	detailFeature: number;
+	/** What each octave's amplitude is multiplied by. */
+	persistence: number;
+
+	/** What each octave's frequency is multiplied by. */
+	lacunarity: number;
+
+	/** Slides the sample point through the noise field. */
+	offsetX: number;
+	offsetY: number;
+
+	/** Metres from sea level to the tallest ground. */
+	relief: number;
+
+	/** How hard the water cuts into the ground. */
+	erosion: number;
 
 	/** How much of the surface stands above the sea. */
 	landFraction: number;
@@ -167,12 +179,17 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	coarseMap: true,
 	landform: "noise",
 	coarseSpacing: 32,
-	heightScale: 200,
-	reliefFeature: 280,
-	detailAmplitude: 5,
-	detailFeature: 112,
+	noiseSeed: 21,
+	noiseScale: 4500,
+	octaves: 4,
+	persistence: 0.5,
+	lacunarity: 2,
+	offsetX: 0,
+	offsetY: 0,
+	relief: 300,
+	erosion: 0.3,
 	landFraction: 0.3,
-	crustMetres: 900,
+	crustMetres: 960,
 	atmosphereTop: 400,
 	zenithDepth: 0.134,
 	cloudsDrawn: true,
@@ -222,16 +239,27 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	coarseMap: { ...TOGGLE, rebuilds: true },
 	landform: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
-	heightScale: { low: 20, high: 1200, step: 20, rebuilds: true, unit: "m" },
-	reliefFeature: {
-		low: 128,
-		high: 4096,
-		step: 16,
+	noiseSeed: { low: 0, high: 999, step: 1, rebuilds: true, unit: "" },
+	noiseScale: {
+		low: 200,
+		high: 40000,
+		step: 100,
 		rebuilds: true,
 		unit: "m",
 	},
-	detailAmplitude: { low: 0, high: 60, step: 1, rebuilds: true, unit: "m" },
-	detailFeature: { low: 16, high: 512, step: 8, rebuilds: true, unit: "m" },
+	octaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
+	persistence: {
+		low: 0.05,
+		high: 0.95,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	lacunarity: { low: 1.2, high: 4, step: 0.05, rebuilds: true, unit: "" },
+	offsetX: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
+	offsetY: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
+	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
+	erosion: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	landFraction: {
 		low: 0.05,
 		high: 0.8,
@@ -335,14 +363,13 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * Metres the fine detail moves the surface by, once the pause is applied.
+	 * Metres from sea level to the tallest ground, once the pause is applied.
 	 *
-	 * Zero under the pause, and zero is exact rather than small: `fbm` is
-	 * multiplied by it, so the detail term leaves the elevation untouched and
-	 * the ground is a sphere to the last bit.
+	 * Zero under the pause, and zero is exact rather than small: the whole
+	 * field is multiplied by it, so the ground is a sphere to the last bit.
 	 */
-	get detailAmplitude(): number {
-		return this.knobs.plain ? 0 : this.knobs.detailAmplitude;
+	get relief(): number {
+		return this.coarseMapRuns ? this.knobs.relief : 0;
 	}
 
 	/** The depth the radius and the block size ask for, before any cap. */
@@ -488,61 +515,46 @@ export class PlanetSettings {
 	/**
 	 * A pre-build guess at how far the ground reaches above sea level.
 	 *
-	 * Elevation is linear in the height scale, so this scales with it. Measured
-	 * over 3,000 places on the worked seed **at the default land fraction of
-	 * 0.3**, the tallest ground came out at 0.50 of the height scale, and this
-	 * keeps a margin above that.
+	 * **It is the Relief knob, exactly.** The map is scaled so its tallest
+	 * point stands that many metres up, so there is nothing to estimate: the
+	 * guess and the answer are the same number, and the long paragraph that
+	 * used to be here explaining how far off the guess could be is gone with
+	 * the multiplier it described.
 	 *
-	 * **This is a guess, not a bound, and Land moves it a lot.** Sea level is a
-	 * percentile of the height field, so raising Land pushes sea level down and
-	 * leaves more of the same field standing above it: measured at landFraction
-	 * 0.05 the tallest ground is 0.25 of the height scale, and at 0.8 it is
-	 * 0.77 — three times higher. Nothing here reads Land, because this getter
-	 * exists to answer the panel's sliders before a coarse map has been built,
-	 * and Land's effect on sea level is not known until one has. Once a map
-	 * exists, {@link tallestGroundOf} gives the true figure and
-	 * {@link shapeFor} uses it — never this — to build the world, which is what
-	 * keeps a Land of 0.8 from silently shearing the mountaintops flat.
-	 *
-	 * With the coarse map off there is no guess to make: elevation is the
-	 * detail term alone, bounded exactly to `[-detailAmplitude,
-	 * detailAmplitude]`, so this is that bound rather than a ratio.
+	 * Erosion only lowers ground, so this stays an upper bound after it runs.
 	 */
 	get maxElevation(): number {
-		if (!this.coarseMapRuns)
-			return Math.max(1, Math.ceil(this.detailAmplitude));
-		return Math.ceil(0.6 * this.knobs.heightScale);
+		return Math.max(1, Math.ceil(this.relief));
 	}
 
-	/**
-	 * The exact metres of ground above sea level the coarse map's own numbers
-	 * reach, once the detail term's reach is added.
-	 *
-	 * Not a measurement: `fbm` is bounded to `[-1, 1]` by construction — a
-	 * weighted sum of values already in that range, divided by the weights'
-	 * own total — so `detailAmplitude * fbm(...)` can never exceed
-	 * `detailAmplitude` in either direction. Adding it to the coarse map's own
-	 * highest cell gives the true ceiling, not an estimate of it.
-	 */
+	/** The metres of ground above sea level the built map actually reaches. */
 	tallestGroundOf(map: CoarseMap): number {
-		let highest = -Infinity;
+		let highest = 0;
 		for (let cell = 0; cell < map.count; cell++)
 			if (map.height[cell]! > highest) highest = map.height[cell]!;
-		const metres =
-			(highest - map.seaLevel) * this.knobs.heightScale +
-			this.detailAmplitude;
-		return Math.max(1, Math.ceil(metres));
+		return Math.max(1, Math.ceil(highest));
 	}
 
 	/**
 	 * How far the ground spreads, floor to peak, before anyone digs.
 	 *
-	 * With the coarse map off the true spread is exactly twice the detail
-	 * amplitude — there is no coarse variation to add a margin for.
+	 * The peak is exactly Relief, and the floor is what Land decides. Sea level
+	 * is a percentile of the noise, so asking for less land pushes it up the
+	 * field and leaves the sea floor further under it: measured on two
+	 * landforms at level 6, the whole span came to `1.69` times Relief at a
+	 * land fraction of `0.8`, `2.18` at `0.5`, `2.69` at `0.3` and `4.71` at
+	 * `0.1`. This is a curve through those with a little room over each.
+	 *
+	 * **A sea floor through the bottom of the world is a flat abyss**, not a
+	 * crash: the crust clamps it. It is still worth refusing, because a world
+	 * whose ocean floor is one plateau is not the world the map drew.
 	 */
 	get groundSpan(): number {
-		if (!this.coarseMapRuns) return Math.max(2, 2 * this.detailAmplitude);
-		return 1.3 * this.knobs.heightScale;
+		const land = Math.min(0.95, Math.max(0.05, this.knobs.landFraction));
+		return Math.max(
+			2,
+			this.relief * (1 + 1.4 * Math.sqrt((1 - land) / land)),
+		);
 	}
 
 	/** Metres across one cell of the coarse map, once its level is rounded. */
@@ -551,22 +563,20 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * How many octaves the relief tier runs, and the smallest hill it makes.
+	 * Metres across the narrowest feature the octave stack makes.
 	 *
-	 * Each octave is half the width of the one above, so the count is however
-	 * many halvings fit between the largest landform and the smallest. Asking
-	 * for wider hills therefore buys octaves and asking for narrower ones spends
-	 * them, which keeps the finest hill the same size on every planet.
+	 * Each octave is `lacunarity` times narrower than the one above it, so the
+	 * last one is the widest feature divided by `lacunarity` to the power of
+	 * one less than the octave count. **This is the number the map has to be
+	 * fine enough to draw**, and the panel refuses a map that is not: ground
+	 * the map cannot carry is ground the world does not have, because the world
+	 * is the map.
 	 */
-	get reliefOctaves(): number {
-		const halvings = Math.log2(
-			this.knobs.reliefFeature / SMALLEST_LANDFORM,
-		);
-		return Math.max(1, Math.floor(halvings) + 1);
-	}
-
 	get smallestLandform(): number {
-		return this.knobs.reliefFeature / 2 ** (this.reliefOctaves - 1);
+		return (
+			this.knobs.noiseScale /
+			this.knobs.lacunarity ** (this.knobs.octaves - 1)
+		);
 	}
 
 	/**
@@ -639,18 +649,22 @@ export class PlanetSettings {
 		return {
 			landform: this.knobs.landform,
 			level: this.coarseLevel,
+			cellMetres: this.coarseCell,
+			noiseSeed: this.knobs.noiseSeed,
+			frequency: this.frequencyFor(this.knobs.noiseScale),
+			octaves: this.knobs.octaves,
+			persistence: this.knobs.persistence,
+			lacunarity: this.knobs.lacunarity,
+			offsetX: this.knobs.offsetX,
+			offsetY: this.knobs.offsetY,
+			relief: this.relief,
 			landFraction: this.knobs.landFraction,
-			reliefFrequency: this.frequencyFor(this.knobs.reliefFeature),
-			reliefOctaves: this.reliefOctaves,
+			erosion: this.knobs.erosion,
 		};
 	}
 
 	terrainOptions(): TerrainOptions {
-		return {
-			heightScale: this.knobs.heightScale,
-			detailAmplitude: this.detailAmplitude,
-			detailFrequency: this.frequencyFor(this.knobs.detailFeature),
-		};
+		return { snowLine: 0.72 * this.relief };
 	}
 
 	/**
@@ -683,9 +697,7 @@ export class PlanetSettings {
 		if (reach < this.groundSpan) {
 			const neededCrust = Math.ceil(this.groundSpan);
 			out.push(
-				this.coarseMapRuns
-					? `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Height scale to ${Math.floor(reach / 1.3)} m or under.`
-					: `The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Detail to ${Math.floor(reach / 2)} m or under.`,
+				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Relief to ${Math.floor((reach * this.relief) / Math.max(1, this.groundSpan))} m or under.`,
 			);
 		}
 
@@ -696,31 +708,25 @@ export class PlanetSettings {
 			if (this.coarseCell < k.blockSize * 2) {
 				const neededSpacing = Math.ceil(k.blockSize * 2);
 				out.push(
-					`A ${Math.round(this.coarseCell)} m coarse cell is no coarser than a ${k.blockSize} m block, so the map that carries rivers has nothing left to carry. Raise Coarse cell to at least ${neededSpacing} m.`,
+					`A ${Math.round(this.coarseCell)} m map cell is no coarser than a ${k.blockSize} m block, so the map is asking to describe the ground one block at a time. Raise Map cell to at least ${neededSpacing} m.`,
 				);
 			}
 
 			// Two samples across a feature is the least that describes it. Below
 			// that the map records something narrower than it can see, and what
 			// it records changes with the resolution rather than with the seed.
+			// The world is the map, so a feature the map cannot draw is a
+			// feature the ground does not have. Two samples across it is the
+			// least that describes it.
 			if (this.coarseCell * 2 > this.smallestLandform) {
-				const largestSpacing = Math.floor(this.smallestLandform / 2);
-				const neededLandform = Math.ceil(this.coarseCell * 2);
+				const largestOctaves =
+					1 +
+					Math.floor(
+						Math.log(k.noiseScale / (2 * this.coarseCell)) /
+							Math.log(k.lacunarity),
+					);
 				out.push(
-					`The smallest hill is ${Math.round(this.smallestLandform)} m across and a coarse cell is ${Math.round(this.coarseCell)} m, so the map cannot carry the hills it is being asked for. Lower Coarse cell to ${largestSpacing} m or under, or raise Landform across so the smallest hill reaches at least ${neededLandform} m.`,
-				);
-			}
-
-			// Off, maxElevation is defined as exactly enough to cover the detail
-			// term (see the getter), so this can never fire and would be
-			// warning about a clipping risk that does not exist in that mode.
-			if (this.maxElevation < this.detailAmplitude * 2) {
-				const neededHeightScale = Math.ceil(
-					(this.detailAmplitude * 2) / 0.6,
-				);
-				const largestDetail = Math.floor(this.maxElevation / 2);
-				out.push(
-					`Ground reaches ${this.maxElevation} m and the detail alone moves it ${this.detailAmplitude} m, so the tallest ground would be clipped flat. Raise Height scale to at least ${neededHeightScale} m, or lower Detail to ${largestDetail} m or under.`,
+					`The narrowest octave is ${Math.round(this.smallestLandform)} m across and a map cell is ${Math.round(this.coarseCell)} m, so the map cannot draw the finest ground it is being asked for — and the world is the map, so that ground would not exist. Lower Octaves to ${Math.max(1, largestOctaves)}, raise Noise scale, or lower Map cell.`,
 				);
 			}
 		}

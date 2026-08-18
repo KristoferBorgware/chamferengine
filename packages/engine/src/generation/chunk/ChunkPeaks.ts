@@ -30,16 +30,12 @@ export class ChunkPeaks {
 	private readonly levels: Float32Array[];
 
 	/**
-	 * @param margin metres to add to every figure, for ground the coarse map
-	 * does not carry. The detail term is bounded by its own amplitude, so
-	 * passing that keeps this an upper bound rather than an estimate.
+	 * @param margin metres to add to every figure. The map is the whole of the
+	 * terrain now, so nothing is missing from it and this can be zero; it stays
+	 * because a chunk's own interpolation reaches a shade past the coarse
+	 * samples it mixes, and because an upper bound is what the selection wants.
 	 */
-	constructor(
-		map: CoarseMap,
-		heightScale: number,
-		margin: number,
-		finestChunkLevel: number,
-	) {
+	constructor(map: CoarseMap, margin: number, finestChunkLevel: number) {
 		const deepest = Math.min(CAPPED_LEVEL, finestChunkLevel);
 		this.levels = [];
 		for (let level = 0; level <= deepest; level++)
@@ -63,10 +59,7 @@ export class ChunkPeaks {
 						const h = map.heightAt(face, i, j, mapLevel);
 						if (h > highest) highest = h;
 					}
-				deep[address.key] = Math.max(
-					0,
-					(highest - map.seaLevel) * heightScale + margin,
-				);
+				deep[address.key] = Math.max(0, highest + margin);
 			}
 
 		for (let level = deepest - 1; level >= 0; level--) {

@@ -281,7 +281,7 @@ export class SphereView {
 			const cell = positionToCell(new Vec3(mx, my, mz), n);
 			const value =
 				values[this.map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
-			const [r, g, b] = rampColor(value, this.field, this.map.seaLevel);
+			const [r, g, b] = rampColor(value, this.field);
 
 			// A little shading, so the ball reads as one and not as a disc.
 			const shade = 0.55 + 0.45 * Math.min(1, -mzz);

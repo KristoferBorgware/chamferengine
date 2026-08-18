@@ -152,7 +152,7 @@ script owns its numbers.
 | [05](docs/05-face-adjacency.md) | crossing between the 20 faces; the 180-byte table | `adj.js` |
 | [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js`, `taper.js` |
 | [07](docs/07-data-structures.md) | what lives in RAM, on disk, and in code | — |
-| [08](docs/08-terrain-generation.md) | the noise model, height vs density term, deltas | `volume.js` |
+| [08](docs/08-terrain-generation.md) | the octave stack; why there is no detail tier | `volume.js` |
 | [09](docs/09-ray-traversal.md) | block picking as a grid walk | — |
 | [10](docs/10-pathfinding.md) | A* on hexes, hierarchical search on the triangle tree | — |
 | [11](docs/11-open-topics.md) | what is **not** designed yet | — |
@@ -165,7 +165,7 @@ script owns its numbers.
 | [18](docs/18-cell-boundary.md) | which curve a cell edge is; the mesh and the lookup reconciled | `boundary.js` |
 | [19](docs/19-directional-blocks.md) | 6-state rotation, placing by facing, the loop that does not close | `rotation.js` |
 | [20](docs/20-player-coordinates.md) | lat/long/altitude, the axis through a pentagon pair, what to share | `coords.js` |
-| [21](docs/21-rivers-and-erosion.md) | the one stored map, flow routing, pit filling, why continents come first | `rivers.js` |
+| [21](docs/21-rivers-and-erosion.md) | the one stored map, droplet erosion; rivers designed and not built | `rivers.js` |
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
@@ -427,12 +427,24 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
-- Terrain is **generated, not stored** — there is no heightmap, so LOD is
-  re-generation and cuts noise cost 4× per level as well as draw cost
-  (`volume.js`). The density term costs 51× the height term over a full crust,
-  so **far chunks run the height field alone**: a coarse mesh cannot represent a
-  cave anyway (a 3 m cave is gone by level 10). That makes a LOD-2 chunk ~330×
-  cheaper to generate.
+- **THE MAP IS THE TERRAIN, and there is no detail term** (doc 08, doc 21,
+  `plans/v0.3.0.md`). `columnAt` reads a height off the coarse map and adds
+  **nothing** — no second noise field, no multiplier. The map is stored in
+  **metres above sea level**, so sea level is zero by construction and land is
+  `height > 0`. What that removes is three knobs that moved the ground and
+  appeared nowhere in the editor's picture: `heightScale`, `detailAmplitude` and
+  `detailFeature`. The detail tier existed because a map cell is coarser than a
+  block — a 32 m cell is a straight ramp **32 blocks long** — and the ramp turns
+  out to rise **4.0 m at the median** of land cells, 9.1 m at the 90th
+  percentile and 27.1 m at the 99th. One block of climb every eight reads as a
+  hillside, not a facet; the answer for the steep 1% is **Map cell**, which
+  moves the picture. **Never add a term the map does not show.**
+- Terrain is still **generated, not stored** for LOD purposes — a coarse chunk
+  re-reads the same map at the same place, so LOD is re-generation and cuts
+  noise cost 4× per level as well as draw cost (`volume.js`). The density term
+  costs 51× the height term over a full crust, so **far chunks run the height
+  field alone**: a coarse mesh cannot represent a cave anyway (a 3 m cave is gone
+  by level 10). That makes a LOD-2 chunk ~330× cheaper to generate.
 - Cave geometry is culled **by enclosure, never by simplification**. It costs
   build time and memory, not draw time.
 - The density term only carves **enclosed** voids when its noise gradient
@@ -498,15 +510,37 @@ Violating any of these breaks the design. They are not tunable.
   gravity's `up`. The twelve pentagons cost **nothing** — a torch there lights 5/6
   as many cells only because a ring holds `5k` instead of `6k`. The real bill is
   storage: 4× the block data, halved again by storing sky light per column.
-- **Rivers, erosion and continents need one stored map** (`rivers.js`, doc 21) —
-  2.5 MB at level 8, computed once at world creation, read as an input so the
-  runtime generator stays a pure function of position. Flow routing needs **no
-  pentagon case and no face case** (0 of 12 pentagons were pits); the work is
-  **pit filling**, and a flat filled lake stops every river reaching it — fill
-  with a tiny slope and 0 dead ends remain. **Continents decide rivers**: the same
-  routing gives a 31-cell river on small blobs and 86 on a large landmass, so
-  build the continent tier first. The coarse lookup is masking the low bits of
-  **`(i, j)`**, not the path digits — those give a triangle, not a cell.
+- **The map carries one field, and rivers and lakes are NOT generated**
+  (doc 21, F-030 closed). At the resolutions the map is drawn at the routed
+  channels were one cell wide and the lakes were flat discs, so `fillPits`,
+  `routeFlow`, `accumulateFlow`, the `flow` field and the `water` field are all
+  gone. **Water is wherever the map reads under zero**, which makes the ocean the
+  only water and a radius the only thing that describes it. `rivers.js` still
+  holds the routing results — no pentagon case, no face case, fill with a tiny
+  slope for 0 dead ends, continents decide river length — for whoever revisits
+  it. The coarse lookup is masking the low bits of **`(i, j)`**, not the path
+  digits — those give a triangle, not a cell.
+- **Erosion is droplets, and both its constants came from measuring the wrong
+  answer** (`erodeDroplets`, doc 21, F-017 closed). A droplet walks downhill cell
+  to cell, cutting where it moves fast and depositing where it slows; it reads
+  only its own cell and the six around it. **Capacity is a gradient, never a fall
+  in metres times a cell width** — the second form made a droplet on flat ground
+  want `15 m` of material and cut it out, moving **15 m per cell**. **A droplet
+  may take a tenth of one step's fall and no more** — uncapped it **multiplied
+  the median slope by 4 and the 90th percentile by 7**, which is the opposite of
+  what water does. Tuned: at strength 1 the median slope moves `0.077 → 0.083`
+  while the 99th goes `0.209 → 0.577`, and the ground moves `8.04 m` a cell. A
+  knob whose median climbs with it is adding roughness, not carving.
+- **The noise is the reference implementation's parameter set** (`octaveNoise`,
+  doc 08): seed, frequency, octaves, persistence, lacunarity, offset X and Y,
+  divided by the summed amplitude and low octave first. **Every octave gets its
+  own hashed offset** or two octaves of one seeded lattice share zero crossings
+  wherever their frequencies land near a whole multiple and the ground grows a
+  repeating grain. `relief` scales the field so its **tallest point is exactly
+  that many metres**, which makes it "how tall is the highest mountain" rather
+  than a multiplier on whatever this seed reached. The narrowest octave is
+  `scale / lacunarity^(octaves−1)` and the panel **refuses** a map too coarse to
+  carry it: ground the map cannot draw is ground the world does not have.
 - **The runtime is bit-identical across machines by construction**
   (`determinism.js`, doc 23). IEEE 754 pins `+ − × ÷ sqrt` and comparisons to the
   bit — **including `sqrt`, so `normalize` is safe** and doc 15's stated worry is

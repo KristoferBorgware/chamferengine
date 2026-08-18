@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
 	COARSE_FIELDS,
 	CoarseGrid,
+	LANDFORMS,
 	buildCoarseMap,
 	coarseSlope,
-	continentHeight,
+	metreHeight,
+	noiseHeight,
 	seedFromString,
 } from "chamfer/generation";
-
-/** Every way the map can decide where its land is. */
-const LANDFORMS = ["noise", "warped", "grown", "plates"] as const;
 
 const percentile = (values: Float32Array, p: number): number => {
 	const sorted = Float64Array.from(values).sort();
@@ -21,13 +20,17 @@ describe("coarseSlope", () => {
 		// The drop to a neighbour halves at every finer level because the step
 		// does, so a raw drop describes a different planet at every map size:
 		// the same ground read 0.047, 0.025 and 0.012 at levels 6, 7 and 8.
-		// Dividing the step out is what makes one ramp, one material rule and
-		// one spawn test mean the same thing on every map.
-		const seed = seedFromString("chamfer");
+		// Dividing by the step in metres is what makes one ramp, one material
+		// rule and one spawn test mean the same thing on every map.
 		const median = (level: number): number => {
 			const grid = new CoarseGrid(level);
-			const height = continentHeight(grid, seed, 0.8, 4, 6, 5, 0.35);
-			return percentile(coarseSlope(grid, height), 0.5);
+			const cell = 25600 / 2 ** level;
+			const height = metreHeight(
+				noiseHeight(grid, 21, 1.5, 4, 0.5, 2, 0, 0),
+				0.3,
+				600,
+			);
+			return percentile(coarseSlope(grid, height, cell), 0.5);
 		};
 		const coarse = median(6);
 		const fine = median(7);
@@ -37,16 +40,16 @@ describe("coarseSlope", () => {
 	it("is zero everywhere on ground that does not move", () => {
 		const grid = new CoarseGrid(4);
 		const flat = new Float64Array(grid.count).fill(0.25);
-		for (const v of coarseSlope(grid, flat)) expect(v).toBe(0);
+		for (const v of coarseSlope(grid, flat, 100)) expect(v).toBe(0);
 	});
 });
 
-describe("every landform stands where the terrain ramp can draw it", () => {
-	// A field measured from sea level is drawn on a ramp that runs to 0.35
-	// either side of it. Ground past that end is not merely clipped -- it is
-	// flat, so a whole mountain range or a whole continent comes out as one
-	// solid white slab with its shape gone. Plates ran to 2.70 and drew a
-	// quarter of the planet that way.
+describe("every landform lands inside the terrain ramp", () => {
+	// The map's colors are absolute metres, so a landform whose scale has
+	// drifted does not merely clip -- it draws flat, and a whole mountain range
+	// or a whole continent comes out as one solid slab with its shape gone.
+	// Plates once ran to 2.70 where the ramp reached 0.35 and drew a quarter of
+	// the planet that way.
 	const RAMP = COARSE_FIELDS.find((f) => f.key === "height")!.ramp.high;
 
 	for (const landform of LANDFORMS)
@@ -54,15 +57,13 @@ describe("every landform stands where the terrain ramp can draw it", () => {
 			const map = buildCoarseMap(seedFromString("chamfer"), {
 				landform,
 				level: 5,
+				cellMetres: 800,
+				relief: 600,
 			});
 			const above = Float32Array.from(
 				map.height,
-				(v) => Math.abs(v - map.seaLevel) / RAMP,
+				(v) => Math.abs(v) / RAMP,
 			);
-			// Half the planet inside the ramp, and the far tail within three
-			// times it. All four sit at 0.28 to 0.53 and 1.31 to 2.08 here, so
-			// this catches a landform whose scale has drifted rather than one
-			// that grew a taller mountain.
 			expect(percentile(above, 0.5)).toBeLessThan(1);
 			expect(percentile(above, 0.99)).toBeLessThan(3);
 		});

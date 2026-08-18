@@ -41,7 +41,11 @@ let shape: WorldShape;
 let terrain: TerrainGenerator;
 
 beforeAll(() => {
-	map = buildCoarseMap(seedFromString("chamfer"), { level: 6 });
+	map = buildCoarseMap(seedFromString("chamfer"), {
+		level: 6,
+		cellMetres: 100,
+		relief: 100,
+	});
 	shape = new WorldShape(1700, DEPTH, 150, maxCrustDepth(DEPTH));
 	terrain = new TerrainGenerator(map.seed, shape, map);
 });
@@ -365,9 +369,7 @@ describe("merging at a level seam", () => {
 		const flat = flatCoarseMap(map.seed, 2);
 		const base = new WorldShape(1700, DEPTH, 1, maxCrustDepth(DEPTH));
 		const at = base.atLod(lod);
-		const gen = new TerrainGenerator(map.seed, at, flat, {
-			detailAmplitude: 0,
-		});
+		const gen = new TerrainGenerator(map.seed, at, flat, {});
 		const chunk = generateChunk(
 			gen,
 			ChunkAddress.fromKey(0, CHUNK_LEVEL - lod),
@@ -714,9 +716,7 @@ describe("a surface exactly on a layer boundary", () => {
 	it("meshes to caps, with no wall anywhere", () => {
 		const flat = flatCoarseMap(seedFromString("chamfer"), 2);
 		const world = boundary();
-		const generator = new TerrainGenerator(flat.seed, world, flat, {
-			detailAmplitude: 0,
-		});
+		const generator = new TerrainGenerator(flat.seed, world, flat, {});
 		const chunk = generateChunk(
 			generator,
 			ChunkAddress.fromKey(3, 6),

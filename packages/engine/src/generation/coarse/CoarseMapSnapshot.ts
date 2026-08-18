@@ -7,10 +7,7 @@
 export interface CoarseMapSnapshot {
 	readonly seed: number;
 	readonly level: number;
-	readonly seaLevel: number;
 	readonly faceIndex: Int32Array;
 	readonly height: Float32Array;
-	readonly water: Float32Array;
-	readonly flow: Float32Array;
 	readonly slope: Float32Array;
 }

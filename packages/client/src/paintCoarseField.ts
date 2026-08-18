@@ -97,7 +97,6 @@ export function paintCoarseField(
 		const [r, g, b] = rampColor(
 			count[at] ? sum[at]! / count[at]! : 0,
 			field,
-			map.seaLevel,
 		);
 		into[at * 4] = r;
 		into[at * 4 + 1] = g;

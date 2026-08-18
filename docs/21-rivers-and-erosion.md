@@ -314,47 +314,95 @@ it the coast would double exactly.
 
 ## Erosion
 
-With drainage in hand, erosion is one line applied repeatedly to the coarse map:
+Erosion is what makes ground look like ground, and it is the one thing on this
+page that ships. It runs on the map, once, at world creation.
 
-```
-lower each cell by  k · (upstream area)^m · (local slope)^n
-```
+**Not the stream-power law, and that is a change.** This document argued for
+`lower each cell by k · (upstream area)^m · (local slope)^n`, which needs the
+drainage network computed first: fill every basin, point every cell downhill,
+count what drains through it, and re-do all three between iterations because
+erosion moves the heights. Three passes and two stored fields, and what they
+produced was lakes nobody asked for and rivers nobody could see.
 
-That is the **stream-power law**, and it is the reason real mountains have
-V-shaped valleys instead of fractal lumps. A cell with a lot of water passing
-through it cuts down faster, so valleys deepen where rivers already are, which
-makes more water flow there. The feedback is the whole point.
+**Droplets instead.** A droplet starts on a hashed cell and walks downhill, cell
+to cell, taking the steepest step it can find. How much it can carry depends on
+how fast it is going and how steeply the ground falls; where it can carry more
+than it holds it cuts, and where it slows or runs onto flat ground it puts
+material back down. It looks only at the cell it stands on and the six around
+it — **no routing, no pit filling, no stored flow.**
 
-Two practical notes, both about it being an offline pass:
+Two constants earn their place, and both were found by measuring the wrong
+answer first.
 
-- **Re-route between iterations.** Erosion changes the heights, which changes
-  which neighbour is lowest, which changes the drainage. Running the flow routing
-  once and then eroding many times gives valleys that ignore their own carving.
-- **Re-fill between iterations too.** Erosion creates new dips, and a new dip is a
-  new pit.
+**Capacity is a gradient, never a fall in metres times a cell width.** With the
+second form a droplet crossing flat ground on a 100 m map wanted to carry `15 m`
+of material, and cut it out: erosion moved **15 m per cell** before it had done
+anything useful. The gradient form means the same hillside erodes by the same
+amount whatever the map's cell size is.
 
-Both are cheap at 2.5 MB and neither happens at runtime.
+**A droplet may take a tenth of one step's fall, and no more.** Uncapped, it
+meets a tall step, takes the whole thing at once, and leaves a pit for the next
+one to fall into. Measured at level 7 on the shipped ground, uncapped erosion
+**multiplied the median slope by four and the 90th percentile by seven** — the
+opposite of what water does to a hillside.
+
+> **[verified]** Level 7, 100 m cells, 300 m of relief. Slope is metres of fall
+> per metre travelled; the last column is how far the ground moved on average.
+>
+> | Erosion | median slope | 90th | 99th | steepest | moved |
+> |---|---|---|---|---|---|
+> | 0 | 0.077 | 0.144 | 0.209 | 0.30 | — |
+> | 0.1 | 0.078 | 0.149 | 0.223 | 0.46 | 1.07 m |
+> | 0.3 | 0.078 | 0.160 | 0.298 | 0.92 | 2.89 m |
+> | 0.6 | 0.080 | 0.178 | 0.452 | 1.08 | 5.27 m |
+> | 1 | 0.083 | 0.208 | 0.577 | 1.24 | 8.04 m |
+
+The median barely moves and the tail grows: that is the shape of a channel
+network being cut into ground that is otherwise left alone. A knob whose median
+climbed with it would be adding roughness, not carving.
+
+Every draw is hashed from the seed and the droplet's number rather than taken
+from a running generator, and droplets run one after another, so the result is a
+function of the seed and nothing else.
+
+---
+
+## Rivers and lakes are not generated
+
+Everything above about routing, filling and drainage is **designed and not
+built**. At the resolutions the map is drawn at, the channels the routing found
+were one cell wide and the lakes were flat discs. A river you cannot see is a
+stored field, a flood fill and three passes over the planet, paid for at every
+world creation, for nothing.
+
+So the map carries **one field**: the height. Water is wherever that height is
+under zero, which makes the ocean the only water and a radius the only thing
+that describes it. What this page designs stays here for when somebody decides
+the game has rivers — **F-030** holds that question — and the erosion above is
+what was worth keeping from it.
 
 ---
 
 ## What the fine generator does with it
 
-The per-chunk generator changes in one place. `surfaceRadius(direction)` from
-[doc 08](08-terrain-generation.md) becomes:
+The per-chunk generator reads the map and adds nothing:
 
 ```
-coarse = blend of the three surrounding coarse samples     ← masked (i,j)
-surfaceRadius = R · (1 + coarse + detail · fbm(direction · highFrequency))
+elevation     = blend of the three surrounding coarse samples     ← masked (i,j)
+surfaceRadius = seaLevelRadius + elevation
 ```
 
-The coarse term carries continents, erosion and river channels. The detail term
-carries everything smaller than 8 m. **Both are still pure functions of
-position** — the coarse map is an input, like the seed, so nothing about chunk
-independence, level-of-detail or determinism changes.
+The map is stated in **metres above sea level**, so there is no level to subtract
+and no multiplier to apply, and sea level is zero by construction. Water stands
+at the sea-level radius wherever the ground is under it.
 
-A river is then a channel already cut into the coarse heights, plus a material
-rule: below the channel floor, water instead of air. The fine generator does not
-need to know it is drawing a river.
+**There is no detail term.** [Doc 08](08-terrain-generation.md) has the
+measurement that removed it: a second tier of noise moves ground the map does not
+show, and the ramp it was there to fill turns out to rise 4 m across a 32 m map
+cell at the median — a hillside, not a facet.
+
+The map is still an input, like the seed, so nothing about chunk independence,
+level-of-detail or determinism changes.
 
 ---
 
@@ -363,8 +411,8 @@ need to know it is drawing a river.
 - **[Doc 07](07-data-structures.md)** gains one stored artefact: a 2.5 MB coarse
   map, written once at world creation and read-only thereafter. It is the only
   terrain on disk that is not a player delta.
-- **[Doc 08](08-terrain-generation.md)**'s height-field term gains the coarse
-  blend, and its "masking its ID" sentence needs the correction above.
+- **[Doc 08](08-terrain-generation.md)**'s height field *becomes* the coarse
+  blend rather than gaining it, and its "masking its ID" sentence needs the correction above.
 - **World creation** gains a step measured in seconds, which did not exist before.
 - **[Doc 14](14-meshing-and-lod.md)** is unaffected: a coarse chunk reads the same
   coarse map at the same place, so LOD still works by re-evaluating a function.

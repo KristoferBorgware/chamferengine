@@ -334,10 +334,10 @@ addressing.
 
 The term means two different things, and the answer differs for each.
 
-**As stored authoring data: no.** You do not need a painted texture. The
-`surfaceRadius(direction)` function *is* the heightmap, evaluated lazily. That is
-the whole point of the seed-based approach, and the reason a fresh planet is
-under a hundred bytes ([doc 07](07-data-structures.md)).
+**As stored authoring data: no.** You do not need a painted texture. The map
+below is computed from the seed at world creation, not authored, so a fresh
+planet is still under a hundred bytes on disk ([doc 07](07-data-structures.md))
+and every client builds the same one.
 
 **As a cached intermediate: yes, and you already have it.** Compute the surface
 radius once per column and reuse it for layers, meshing, water, spawn placement,
@@ -356,12 +356,11 @@ therefore collide head-on with local on-demand generation:
 - **Coherent continents.** Noise gives blobs. Plates, shelves, and mountain
   ranges running along collision boundaries need structure noise does not have.
 
-### The two-tier fix
+### The map is the terrain, and there is no second tier
 
-Generate a **coarse global heightmap once at world creation** — at, say, level 8 —
-and store it. Run erosion, river tracing, and plate assignment on that offline,
-when the whole planet is visible at once. Per-chunk noise then adds local detail
-on top, interpolating between coarse samples.
+Generate a **coarse global heightmap once at world creation** — at, say, level 8
+— and store it. Run erosion on it offline, when the whole planet is visible at
+once. Then read it, and add **nothing**.
 
 | Coarse level | Cells | At 4 bytes |
 |---|---|---|
@@ -369,25 +368,61 @@ on top, interpolating between coarse samples.
 | 8 | 655K | 2.6 MB |
 | 9 | 2.6M | 10 MB |
 
-Two megabytes buys rivers and erosion.
+Two and a half megabytes buys erosion, and the argument for a second tier of
+noise laid on top is where this document was wrong.
 
-**And the lookup is a mask.** Truncating an ID's *path digits* gives the
-containing triangle — a chunk — not a
-coarse cell. What lines up is the lattice: a level-8 lattice point `(i, j)` and the
-level-11 point `(8i, 8j)` are the **same point**, so a coarse sample is literally
-one of the fine cells. Mask the low bits off `(i, j)` to find the three that
-surround a cell, and the bits you masked off are the blend weights between them.
-No second spatial structure and no interpolation scheme to invent.
-See [doc 21](21-rivers-and-erosion.md).
+**The argument was that a map is too coarse to stand on.** A level-8 cell on the
+worked planet is 32 m, so between two samples the ground is one straight ramp 32
+blocks long, and a per-chunk noise term was going to fill that in. What the term
+actually costs is that **it moves ground the map does not show**. Its amplitude,
+its feature size, and the multiplier turning map units into metres are three
+numbers that decide the surface and appear nowhere in the picture, so setting any
+one of them means walking the planet to find out what happened — and raising one
+means lowering another to keep the crust from clipping.
 
-This is the **only** stored terrain the design contemplates, and it is an *input*
-to the height-field term rather than a mesh.
+**And the ramp is not what it sounds like.** Measured on the shipped map, over
+every land cell:
 
-**Recommendation:** start with pure noise, ship something, and add the coarse tier
-when the terrain starts looking like fractal lumps instead of a world.
-[Doc 21](21-rivers-and-erosion.md) designs that tier, and finds that the three
-problems above are **ordered rather than independent** — continents decide how long
-rivers can be, so that is the one to build first.
+| Land slope | Metres of rise across one 32 m map cell |
+|---|---|
+| median | 4.0 |
+| 90th percentile | 9.1 |
+| 99th percentile | 27.1 |
+| steepest | 78.5 |
+
+A 32-block run rising 4 m is one block of climb every eight, which reads as a
+hillside and not as a facet. The place a ramp shows is the steep 1%, and the
+answer there is the map's own resolution — **Map cell**, which is a knob that
+moves the picture — not an invisible term.
+
+So the octave stack does the work a detail tier was going to do, and does it
+where it can be seen. Five numbers describe the whole surface:
+
+| Knob | Decides |
+|---|---|
+| noise scale | how wide the widest feature is |
+| octaves | how many narrower copies are summed |
+| persistence | how much height each one keeps |
+| lacunarity | how much narrower each one is |
+| relief | how far the tallest ground stands above sea level, in metres |
+
+The narrowest octave is `scale / lacunarity^(octaves−1)`, and it has to be wider
+than two map cells or the map cannot carry it. **That refusal is the whole of the
+rule that used to need three knobs balanced against each other**: ground the map
+cannot draw is ground the world does not have, so the panel says so rather than
+building it invisibly.
+
+**And the lookup is a mask.** Truncating an ID's *path digits* gives the containing
+triangle — a chunk — not a coarse cell. What lines up is the lattice: a level-8
+lattice point `(i, j)` and the level-11 point `(8i, 8j)` are the **same point**,
+so a coarse sample is literally one of the fine cells. Mask the low bits off
+`(i, j)` to find the three that surround a cell, and the bits you masked off are
+the blend weights between them. No second spatial structure and no interpolation
+scheme to invent.
+
+This is the **only** stored terrain the design contemplates, and with the second
+tier gone it is not an input to the height field — it **is** the height field.
+[Doc 21](21-rivers-and-erosion.md) designs it.
 
 ---
 

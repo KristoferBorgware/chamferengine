@@ -1,91 +1,59 @@
 import type { CoarseField } from "./CoarseField.js";
 
 /**
- * Deep water through shallow, to the shore, then lowland, upland, rock, snow.
- *
- * **Nine stops, so sea level lands exactly on one of them.** The stops are
- * evenly spaced and the ramp is symmetric about sea level, so an odd count
- * puts the middle stop at a height of zero. The sand is the waterline rather
- * than sitting half a stop under it, which is where eight put it -- the last
- * `0.05` of water drew as beach.
- */
-const TERRAIN: CoarseField["ramp"] = {
-	low: -0.35,
-	high: 0.35,
-	stops: [
-		[0.04, 0.08, 0.28],
-		[0.1, 0.24, 0.55],
-		[0.22, 0.46, 0.76],
-		[0.42, 0.68, 0.88],
-		[0.87, 0.83, 0.6],
-		[0.31, 0.56, 0.26],
-		[0.52, 0.5, 0.3],
-		[0.47, 0.44, 0.41],
-		[0.98, 0.98, 1.0],
-	],
-};
-
-/**
  * Every field a coarse map carries, in the order the editor lists them.
  *
- * A field appears here or it cannot be drawn. `coarseFields.test.ts` walks the
+ * A field appears here or it cannot be drawn. `COARSE_FIELDS.test.ts` walks the
  * map's own properties against this table, so a field added to one and not the
  * other fails rather than going quietly missing from the editor.
+ *
+ * **Two, where there were four.** Water and Drainage were separate fields
+ * because a lake stood above sea level and a river had a width; with neither
+ * generated, water is wherever the ground is under zero and the height map says
+ * so on its own.
  */
 export const COARSE_FIELDS: readonly CoarseField[] = [
 	{
 		key: "height",
 		label: "Ground",
-		says: "The surface after erosion has cut into it, measured from sea level.",
-		scale: "sea",
-		ramp: TERRAIN,
-	},
-	{
-		key: "water",
-		label: "Water",
-		says: "How deep the water is. Zero on dry land, the distance down to the seabed under the ocean, and the distance down to the floor of a flooded basin under a lake.",
+		says: "Metres above sea level, after the water has cut into it. Zero is the waterline, so everything blue is sea and everything else is land.",
 		scale: "linear",
-		against: "height",
+		// Absolute metres, not a range that stretches to fit whatever this
+		// planet happens to hold. A ramp scaled to the field would draw every
+		// world the same and make Relief a knob with no picture, which is the
+		// whole complaint that removed the height multiplier: the point of
+		// stating a height in metres is that 100 m of it looks different from
+		// 600 m. Every 100 m is a stop, so the shipped 300 m of relief reaches
+		// bare rock and raising it walks the peaks up into snow.
 		ramp: {
-			low: 0,
-			high: 0.3,
+			low: -400,
+			high: 400,
 			stops: [
-				[0.72, 0.7, 0.62],
-				[0.55, 0.8, 0.9],
-				[0.2, 0.45, 0.78],
-				[0.04, 0.1, 0.32],
-			],
-		},
-	},
-	{
-		key: "flow",
-		label: "Drainage",
-		says: "How many cells drain through each one. A river is a large value, and the scale is logarithmic because the range runs from one cell to hundreds of thousands.",
-		scale: "log",
-		ramp: {
-			low: 0,
-			high: 12,
-			stops: [
-				[0.06, 0.06, 0.09],
-				[0.13, 0.3, 0.5],
-				[0.3, 0.62, 0.85],
-				[0.75, 0.93, 1.0],
+				[0.04, 0.08, 0.28],
+				[0.1, 0.24, 0.55],
+				[0.22, 0.46, 0.76],
+				[0.42, 0.68, 0.88],
+				[0.87, 0.83, 0.6],
+				[0.31, 0.56, 0.26],
+				[0.52, 0.5, 0.3],
+				[0.47, 0.44, 0.41],
+				[0.98, 0.98, 1.0],
 			],
 		},
 	},
 	{
 		key: "slope",
 		label: "Slope",
-		says: "How steeply the ground falls away, as rise over run rather than a drop per cell, so the picture means the same at every map size. Flat ground is dark, a cliff is bright.",
+		says: "How steeply the ground falls away, as metres of fall per metre travelled. Flat ground is dark and a cliff is bright, and the number means the same at every map size.",
 		scale: "linear",
-		// Eight is where noise and warped put their 99th percentile, near 6,
-		// comfortably inside the ramp, and their steepest ground, near 10, at
-		// white. The old 0.02 was a drop per cell step, which halves at every
-		// finer level and was under the median at every level measured: 68 to
-		// 80% of the planet drew at full white and the map said nothing.
+		// Erosion is what puts ground at the top of this ramp. Measured at
+		// level 7 on the shipped ground: unwatered noise runs to `0.21` at the
+		// 99th percentile and `0.30` at its steepest, and water at full
+		// strength takes those to `0.58` and `1.24` -- so the channels it cuts
+		// are what the bright end shows.
 		ramp: {
 			low: 0,
-			high: 8,
+			high: 0.6,
 			stops: [
 				[0.04, 0.04, 0.05],
 				[0.55, 0.55, 0.58],

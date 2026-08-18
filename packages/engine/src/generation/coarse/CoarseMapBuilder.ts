@@ -4,13 +4,10 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
-import { accumulateFlow } from "./accumulateFlow.js";
 import { coarseSlope } from "./coarseSlope.js";
+import { erodeDroplets } from "./erodeDroplets.js";
 import { landformHeight } from "./landformHeight.js";
-import { erode } from "./erode.js";
-import { fillPits } from "./fillPits.js";
-import { routeFlow } from "./routeFlow.js";
-import { seaLevelFor } from "./seaLevelFor.js";
+import { metreHeight } from "./metreHeight.js";
 
 /** One step finished, and the map as it stands after it. */
 export interface CoarseMapStep {
@@ -29,12 +26,13 @@ export interface CoarseMapStep {
  * Two things a single call cannot do. A caller that wants to draw the map while
  * it is still being built needs each step handed back as it lands, which is
  * what iterating this gives. And a caller changing one option does not want the
- * steps above it computed again — the grid never changes, and neither does the
- * height field when only the erosion rate moved.
+ * steps above it computed again -- the grid never changes, and neither does the
+ * noise field when only the erosion moved.
  *
  * The grid is held for the builder's whole life and costs 413 ms at level 8.
- * The raw height field is held beside the eroded one, because erosion writes in
- * place and a rerun has to start from ground nothing has cut yet.
+ * The unitless field is held beside the metric one, and the uneroded metric
+ * field beside the eroded one, because both later steps write in place and a
+ * rerun has to start from ground nothing has cut yet.
  *
  * **Running from a later step gives the same map as running from the first.**
  * Held ground and freshly computed ground are identical at every cell, so this
@@ -43,13 +41,13 @@ export interface CoarseMapStep {
 export class CoarseMapBuilder {
 	readonly grid: CoarseGrid;
 
-	/** The surface before erosion, held so a later step can start again. */
+	/** The surface with no unit, held so a later step can start again. */
 	private raw?: Float64Array;
 
+	/** The surface in metres before erosion, held for the same reason. */
+	private metres?: Float64Array;
+
 	private height?: Float64Array;
-	private seaLevel?: number;
-	private flow?: Float32Array;
-	private water?: Float32Array;
 	private slope?: Float32Array;
 	private seed = 0;
 
@@ -77,78 +75,57 @@ export class CoarseMapBuilder {
 		const asked = COARSE_STAGES.indexOf(from);
 		const at = this.raw === undefined ? 0 : asked;
 
-		if (at <= 0) this.raw = landformHeight(grid, seed, settings);
 		if (at <= 0) {
-			// Nothing downstream has run, so the sea is wherever it was last and
-			// the rivers are empty. Drawing this shows the raw surface, which is
-			// what the continent knobs are turned against.
-			this.height = Float64Array.from(this.raw!);
+			this.raw = landformHeight(grid, settings);
+			// Nothing downstream has run, so the ground is the noise itself with
+			// no sea in it. Drawing this shows what the octave knobs are turned
+			// against.
+			this.height = Float64Array.from(this.raw);
 			yield this.step("height", false);
 		}
 
-		if (at <= 1 || this.seaLevel === undefined)
-			this.seaLevel = seaLevelFor(this.raw!, settings.landFraction);
-		if (at <= 1) yield this.step("sea", false);
+		if (at <= 1 || this.metres === undefined)
+			this.metres = metreHeight(
+				this.raw!,
+				settings.landFraction,
+				settings.relief,
+			);
+		if (at <= 1) {
+			this.height = Float64Array.from(this.metres!);
+			yield this.step("metres", false);
+		}
 
 		if (at <= 2) {
 			// Erosion writes in place, so it starts from a copy of ground nothing
-			// has cut. That copy is why the raw field is held separately.
-			this.height = Float64Array.from(this.raw!);
-			erode(
+			// has cut. That copy is why the metric field is held separately.
+			this.height = Float64Array.from(this.metres!);
+			erodeDroplets(
 				grid,
 				this.height,
-				this.seaLevel!,
-				settings.erosionPasses,
-				settings.erosionRate,
+				seed,
+				settings.erosion,
+				settings.cellMetres,
 			);
 			yield this.step("erosion", false);
 		}
 
-		if (at <= 3) {
-			const sea = this.seaLevel!;
-			const filled = fillPits(grid, this.height!, sea);
-			const down = routeFlow(grid, filled, sea);
-			this.flow = Float32Array.from(
-				accumulateFlow(grid, filled, down, sea),
-			);
-			// The ocean stands at sea level rather than on the seabed, so one
-			// field answers "how high is the water here" over ocean, lake and dry
-			// land alike.
-			const water = new Float32Array(grid.count);
-			for (let cell = 0; cell < grid.count; cell++)
-				water[cell] = Math.max(filled[cell]!, this.seaLevel!);
-			this.water = water;
-			yield this.step("rivers", false);
-		}
-
-		this.slope = coarseSlope(grid, this.height!);
+		this.slope = coarseSlope(grid, this.height!, settings.cellMetres);
 		yield this.step("slope", true);
 	}
 
 	/** The map as it stands, with anything not yet computed holding zero. */
 	private step(stage: CoarseStage, done: boolean): CoarseMapStep {
-		const count = this.grid.count;
-		const empty = new Float32Array(count);
+		const empty = new Float32Array(this.grid.count);
 		return {
 			stage,
 			done,
 			map: new CoarseMap(
 				this.seed,
 				this.grid,
-				this.seaLevel ?? 0,
 				Float32Array.from(this.height ?? empty),
-				this.water ?? this.flatWater(),
-				this.flow ?? empty,
 				this.slope ?? empty,
 			),
 		};
-	}
-
-	/** Water at sea level everywhere, for a map whose rivers have not run. */
-	private flatWater(): Float32Array {
-		const water = new Float32Array(this.grid.count);
-		if (this.seaLevel) water.fill(this.seaLevel);
-		return water;
 	}
 
 	/** Run every step and return the finished map, discarding the rest. */

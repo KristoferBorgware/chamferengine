@@ -2,25 +2,21 @@ import type { CoarseMapOptions } from "./CoarseMapOptions.js";
 import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
-import { accumulateFlow } from "./accumulateFlow.js";
 import { coarseSlope } from "./coarseSlope.js";
+import { erodeDroplets } from "./erodeDroplets.js";
 import { landformHeight } from "./landformHeight.js";
-import { erode } from "./erode.js";
-import { fillPits } from "./fillPits.js";
-import { routeFlow } from "./routeFlow.js";
-import { seaLevelFor } from "./seaLevelFor.js";
+import { metreHeight } from "./metreHeight.js";
 
 /**
  * Compute a planet's coarse map from its seed.
  *
- * The order is fixed by what each step needs from the one before it.
- * Continents come first because a river cannot be longer than the land it
- * crosses, so the continent tier decides the scale of everything downstream of
- * it. Sea level follows, because routing needs to know which cells are
- * outlets. Erosion cuts the channels, and the final flood and route describe
- * the surface erosion left behind.
+ * Four steps, and the order is fixed by what each needs from the one before it.
+ * The noise decides the shape, sea level and the metre scale turn that shape
+ * into ground a person can measure, water cuts into the ground, and the slopes
+ * are read off what erosion left.
  *
- * Seconds of work, once, at world creation. Nothing here runs per frame.
+ * Seconds of work, once, at world creation. Nothing here runs per frame, and
+ * nothing runs afterwards either: what this returns **is** the terrain.
  */
 export function buildCoarseMap(
 	seed: number,
@@ -28,29 +24,13 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-	const height = landformHeight(grid, seed, settings);
-	const seaLevel = seaLevelFor(height, settings.landFraction);
-
-	erode(grid, height, seaLevel, settings.erosionPasses, settings.erosionRate);
-
-	const filled = fillPits(grid, height, seaLevel);
-	const down = routeFlow(grid, filled, seaLevel);
-	const flow = accumulateFlow(grid, filled, down, seaLevel);
-
-	// The ocean stands at sea level rather than on the seabed, so a single
-	// field answers "how high is the water here" over ocean, lake and dry land
-	// alike.
-	const water = new Float32Array(grid.count);
-	for (let cell = 0; cell < grid.count; cell++)
-		water[cell] = Math.max(filled[cell]!, seaLevel);
-
+	const raw = landformHeight(grid, settings);
+	const height = metreHeight(raw, settings.landFraction, settings.relief);
+	erodeDroplets(grid, height, seed, settings.erosion, settings.cellMetres);
 	return new CoarseMap(
 		seed,
 		grid,
-		seaLevel,
 		Float32Array.from(height),
-		water,
-		Float32Array.from(flow),
-		coarseSlope(grid, height),
+		coarseSlope(grid, height, settings.cellMetres),
 	);
 }

@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { CoarseMap } from "chamfer/generation";
 import {
 	CoarseGrid,
-	accumulateFlow,
 	buildCoarseMap,
-	continentHeight,
-	fillPits,
-	routeFlow,
+	erodeDroplets,
+	metreHeight,
+	noiseHeight,
 	seaLevelFor,
 	seedFromString,
 } from "chamfer/generation";
@@ -14,244 +12,162 @@ import {
 /** A map small enough to build several times in a test run. */
 const LEVEL = 5;
 
-/** How many cells drain through a channel before it is drawn as a river. */
-const RIVER_THRESHOLD = 20;
+/** Metres across a cell at that level on the worked planet. */
+const CELL = 200;
 
 describe("the coarse map", () => {
 	it("leaves the intended fraction of the surface above sea level", () => {
-		const map = buildCoarseMap(seedFromString("chamfer"), {
-			level: LEVEL,
-			landFraction: 0.3,
-		});
-		let land = 0;
-		for (let cell = 0; cell < map.count; cell++)
-			if (map.height[cell]! > map.seaLevel) land++;
-		// Erosion lowers land and never raises it, so the share ends up a little
-		// under the target rather than on it.
-		expect(land / map.count).toBeGreaterThan(0.24);
-		expect(land / map.count).toBeLessThan(0.31);
+		// Sea level is zero by construction, so "is this land" is one
+		// comparison and there is no stored level to disagree with it.
+		for (const landFraction of [0.1, 0.3, 0.6]) {
+			const map = buildCoarseMap(1, {
+				level: LEVEL,
+				landFraction,
+				erosion: 0,
+			});
+			let land = 0;
+			for (const h of map.height) if (h > 0) land++;
+			expect(land / map.count).toBeCloseTo(landFraction, 2);
+		}
+	});
+
+	it("puts its tallest ground exactly where Relief asks for it", () => {
+		// The knob is the answer, not a multiplier on however high this seed's
+		// noise happened to reach, so two seeds at one setting give two worlds
+		// of the same stature.
+		for (const relief of [200, 600, 2000]) {
+			const map = buildCoarseMap(1, { level: LEVEL, relief, erosion: 0 });
+			let peak = 0;
+			for (const h of map.height) if (h > peak) peak = h;
+			expect(peak).toBeCloseTo(relief, 1);
+		}
 	});
 
 	it("gives the same map for the same seed", () => {
-		const seed = seedFromString("chamfer");
-		const a = buildCoarseMap(seed, { level: LEVEL });
-		const b = buildCoarseMap(seed, { level: LEVEL });
-		expect(a.seaLevel).toBe(b.seaLevel);
-		for (let cell = 0; cell < a.count; cell++) {
+		const a = buildCoarseMap(seedFromString("chamfer"), { level: LEVEL });
+		const b = buildCoarseMap(seedFromString("chamfer"), { level: LEVEL });
+		for (let cell = 0; cell < a.count; cell++)
 			expect(a.height[cell]).toBe(b.height[cell]);
-			expect(a.water[cell]).toBe(b.water[cell]);
-			expect(a.flow[cell]).toBe(b.flow[cell]);
-		}
 	});
 
 	it("gives different maps for different seeds", () => {
-		const a = buildCoarseMap(seedFromString("world1"), { level: LEVEL });
-		const b = buildCoarseMap(seedFromString("world2"), { level: LEVEL });
-		let same = 0;
+		const a = buildCoarseMap(1, { level: LEVEL, noiseSeed: 1 });
+		const b = buildCoarseMap(1, { level: LEVEL, noiseSeed: 2 });
+		let differ = 0;
 		for (let cell = 0; cell < a.count; cell++)
-			if (a.height[cell] === b.height[cell]) same++;
-		expect(same).toBe(0);
+			if (a.height[cell] !== b.height[cell]) differ++;
+		expect(differ).toBeGreaterThan(a.count / 2);
 	});
 
-	it("carries rivers, and every one of them reaches the sea", () => {
-		// Level 7 rather than the level the rest of this file uses: a cell that
-		// drains nowhere needs a basin with a long enough outlet chain to show
-		// up, and small maps do not produce one.
-		const map = buildCoarseMap(seedFromString("chamfer"), { level: 7 });
-		// Routing reads the ring, which the map does not carry: it is 31 MB
-		// nothing reads once the map is built, so the map keeps the index alone.
-		const grid = new CoarseGrid(7);
-		const surface = Float64Array.from(map.water);
-		const down = routeFlow(grid, surface, map.seaLevel);
+	it("re-rolls the ground from the noise seed alone", () => {
+		// The world seed reaches the erosion and nothing else about the shape,
+		// so a person hunting for a continent they like moves one number.
+		const a = buildCoarseMap(1, { level: LEVEL, noiseSeed: 7, erosion: 0 });
+		const b = buildCoarseMap(9, { level: LEVEL, noiseSeed: 7, erosion: 0 });
+		for (let cell = 0; cell < a.count; cell++)
+			expect(a.height[cell]).toBe(b.height[cell]);
+	});
+});
 
-		let rivers = 0;
-		let stranded = 0;
-		for (let cell = 0; cell < grid.count; cell++) {
-			if (map.height[cell]! <= map.seaLevel) continue;
-			// Above sea level and draining nowhere is a drop of water with no
-			// way out. Filling with a slope rather than flat is what takes this
-			// to zero.
-			if (down[cell]! < 0) stranded++;
-			if (map.flow[cell]! >= RIVER_THRESHOLD) rivers++;
-		}
-		expect(stranded).toBe(0);
-		expect(rivers).toBeGreaterThan(0);
+describe("metreHeight", () => {
+	it("puts the waterline at zero whatever the field was doing", () => {
+		const raw = Float64Array.from([-3, -1, 0, 2, 5, 9]);
+		const metres = metreHeight(raw, 0.5, 100);
+		const sea = seaLevelFor(raw, 0.5);
+		for (let cell = 0; cell < raw.length; cell++)
+			expect(metres[cell]! > 0).toBe(raw[cell]! > sea);
+	});
 
-		// Follow the largest channel down and require it to end in the ocean
-		// rather than in a loop or a hole.
-		let start = 0;
+	it("scales the sea floor by the same number as the peaks", () => {
+		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
+		const a = metreHeight(raw, 0.5, 100);
+		const b = metreHeight(raw, 0.5, 400);
+		for (let cell = 0; cell < raw.length; cell++)
+			expect(b[cell]).toBeCloseTo(4 * a[cell]!, 6);
+	});
+});
+
+describe("erodeDroplets", () => {
+	const grid = new CoarseGrid(LEVEL);
+	const ground = (): Float64Array =>
+		metreHeight(noiseHeight(grid, 21, 1.5, 4, 0.5, 2, 0, 0), 0.3, 600);
+
+	it("does nothing at all at a strength of zero", () => {
+		const before = ground();
+		const after = Float64Array.from(before);
+		erodeDroplets(grid, after, 1, 0, CELL);
 		for (let cell = 0; cell < grid.count; cell++)
-			if (map.flow[cell]! > map.flow[start]!) start = cell;
-		let at = start;
-		let steps = 0;
-		while (down[at]! >= 0 && steps <= grid.count) {
-			at = down[at]!;
-			steps++;
-		}
-		expect(steps).toBeLessThanOrEqual(grid.count);
-		expect(map.height[at]!).toBeLessThanOrEqual(map.seaLevel);
+			expect(after[cell]).toBe(before[cell]);
 	});
 
-	it("makes rivers longer as the continents grow", () => {
-		// A river cannot be longer than the land it crosses, so the continent
-		// frequency is the control over river length. Raising it breaks the
-		// surface into small blobs and the channels shorten with them.
-		const longest = (continentFrequency: number) => {
-			const map = buildCoarseMap(seedFromString("chamfer"), {
-				level: LEVEL,
-				continentFrequency,
-			});
-			const grid = new CoarseGrid(LEVEL);
-			const surface = Float64Array.from(map.water);
-			const down = routeFlow(grid, surface, map.seaLevel);
-			const length = new Int32Array(grid.count);
-			let best = 0;
-			for (const cell of order(map)) {
-				const next = down[cell]!;
-				if (next < 0) continue;
-				length[next] = Math.max(length[next]!, length[cell]! + 1);
-				best = Math.max(best, length[next]!);
-			}
-			return best;
+	it("moves ground without inventing or destroying it", () => {
+		// Water carries material downhill and puts it down again; it does not
+		// add any. The total may drift a little where a droplet is abandoned
+		// mid-journey still holding sediment, and that has to stay small.
+		const before = ground();
+		const after = Float64Array.from(before);
+		erodeDroplets(grid, after, 1, 1, CELL);
+		const sum = (a: Float64Array): number => {
+			let total = 0;
+			for (const v of a) total += v;
+			return total;
 		};
-		expect(longest(0.8)).toBeGreaterThan(longest(6));
+		const moved = sum(before);
+		expect(Math.abs(sum(after) - moved) / Math.abs(moved)).toBeLessThan(
+			0.05,
+		);
 	});
 
-	it("floods a basin to a surface that stands above its floor", () => {
-		const map = buildCoarseMap(seedFromString("chamfer"), { level: LEVEL });
-		let lakes = 0;
-		for (let cell = 0; cell < map.count; cell++) {
-			if (map.height[cell]! <= map.seaLevel) continue;
-			expect(map.water[cell]!).toBeGreaterThanOrEqual(map.height[cell]!);
-			if (map.water[cell]! > map.height[cell]!) lakes++;
-		}
-		expect(lakes).toBeGreaterThan(0);
+	it("changes the ground, and more of it the harder it is turned", () => {
+		const before = ground();
+		const cut = (strength: number): number => {
+			const after = Float64Array.from(before);
+			erodeDroplets(grid, after, 1, strength, CELL);
+			let total = 0;
+			for (let cell = 0; cell < grid.count; cell++)
+				total += Math.abs(after[cell]! - before[cell]!);
+			return total;
+		};
+		const light = cut(0.2);
+		expect(light).toBeGreaterThan(0);
+		expect(cut(1)).toBeGreaterThan(light);
+	});
+
+	it("gives the same ground for the same seed", () => {
+		const a = ground();
+		const b = ground();
+		erodeDroplets(grid, a, 5, 0.5, CELL);
+		erodeDroplets(grid, b, 5, 0.5, CELL);
+		for (let cell = 0; cell < grid.count; cell++)
+			expect(a[cell]).toBe(b[cell]);
 	});
 });
 
 describe("seaLevelFor", () => {
 	it("returns a level float32 holds exactly", () => {
-		// The map is stored as float32 and "is this cell land" is asked of the
-		// stored height, so a level float32 cannot hold rounds up under the one
-		// cell sitting exactly on it. That cell then reads as land with nowhere
-		// to drain -- one stranded cell on the whole planet, at every level.
-		const grid = new CoarseGrid(4);
-		for (const seed of [0, 1, 12345, 999]) {
-			const height = continentHeight(grid, seed, 0.8, 4, 6, 5, 0.35);
-			const seaLevel = seaLevelFor(height, 0.3);
-			expect(Math.fround(seaLevel)).toBe(seaLevel);
-		}
-	});
-});
-
-describe("fillPits", () => {
-	it("takes the count of cells with nowhere to go to zero", () => {
-		const grid = new CoarseGrid(LEVEL);
-		const height = continentHeight(grid, 1234, 0.8, 4, 6, 5, 0.35);
-		const seaLevel = seaLevelFor(height, 0.3);
-
-		let before = 0;
-		const raw = routeFlow(grid, height, seaLevel);
-		for (let cell = 0; cell < grid.count; cell++)
-			if (height[cell]! > seaLevel && raw[cell]! < 0) before++;
-		expect(before).toBeGreaterThan(0);
-
-		const filled = fillPits(grid, height, seaLevel);
-		const down = routeFlow(grid, filled, seaLevel);
-		let after = 0;
-		for (let cell = 0; cell < grid.count; cell++)
-			if (filled[cell]! > seaLevel && down[cell]! < 0) after++;
-		expect(after).toBe(0);
-	});
-
-	it("never lowers the ground", () => {
-		const grid = new CoarseGrid(4);
-		const height = continentHeight(grid, 99, 0.8, 4, 6, 5, 0.35);
-		const seaLevel = seaLevelFor(height, 0.3);
-		const filled = fillPits(grid, height, seaLevel);
-		for (let cell = 0; cell < grid.count; cell++)
-			expect(filled[cell]!).toBeGreaterThanOrEqual(height[cell]!);
-	});
-});
-
-describe("accumulateFlow", () => {
-	it("sums to one drainage count per land cell at the outlets", () => {
-		const grid = new CoarseGrid(4);
-		const height = continentHeight(grid, 7, 0.8, 4, 6, 5, 0.35);
-		const seaLevel = seaLevelFor(height, 0.3);
-		const filled = fillPits(grid, height, seaLevel);
-		const down = routeFlow(grid, filled, seaLevel);
-		const flow = accumulateFlow(grid, filled, down, seaLevel);
-
-		let land = 0;
-		let atOutlets = 0;
-		for (let cell = 0; cell < grid.count; cell++) {
-			if (filled[cell]! <= seaLevel) continue;
-			land++;
-			// A cell draining into the ocean carries everything above it, so the
-			// outlets between them account for every land cell exactly once.
-			if (filled[down[cell]!]! <= seaLevel) atOutlets += flow[cell]!;
-		}
-		expect(atOutlets).toBe(land);
+		const height = new Float64Array(1000);
+		for (let cell = 0; cell < height.length; cell++)
+			height[cell] = Math.sin(cell) * 0.7;
+		const level = seaLevelFor(height, 0.3);
+		expect(Math.fround(level)).toBe(level);
 	});
 });
 
 describe("sampling a fine cell", () => {
 	it("returns the stored value at a cell the coarse map sits on", () => {
-		const map = buildCoarseMap(seedFromString("chamfer"), { level: 4 });
+		const map = buildCoarseMap(1, { level: 4 });
 		const depth = 7;
-		const step = 1 << (depth - 4);
+		const step = 1 << (depth - map.level);
 		for (const [face, i, j] of [
 			[0, 0, 0],
 			[3, 2, 5],
-			[11, 7, 1],
-			[19, 4, 4],
+			[17, 9, 1],
 		] as const) {
-			const cell = map.index.indexOf(face, i, j);
+			const at = map.index.indexOf(face, i, j);
 			expect(map.heightAt(face, i * step, j * step, depth)).toBeCloseTo(
-				map.height[cell]!,
-				6,
+				map.height[at]!,
+				5,
 			);
 		}
 	});
-
-	it("stays between the coarse samples it mixes", () => {
-		const map = buildCoarseMap(seedFromString("chamfer"), { level: 4 });
-		const depth = 7;
-		const step = 1 << (depth - 4);
-		const n = map.index.n;
-		for (let i = 0; i < n; i++)
-			for (let j = 0; i + j < n; j++) {
-				const corners = [
-					map.height[map.index.indexOf(0, i, j)]!,
-					map.height[map.index.indexOf(0, i + 1, j)]!,
-					map.height[map.index.indexOf(0, i, j + 1)]!,
-					map.height[map.index.indexOf(0, i + 1, j + 1)]!,
-				];
-				const lo = Math.min(...corners);
-				const hi = Math.max(...corners);
-				for (const [di, dj] of [
-					[1, 1],
-					[step - 1, 1],
-					[step >> 1, step >> 1],
-				] as const) {
-					const v = map.heightAt(
-						0,
-						i * step + di,
-						j * step + dj,
-						depth,
-					);
-					expect(v).toBeGreaterThanOrEqual(lo - 1e-6);
-					expect(v).toBeLessThanOrEqual(hi + 1e-6);
-				}
-			}
-	});
 });
-
-/** Every land cell of a map, highest water surface first. */
-function order(map: CoarseMap): number[] {
-	const cells: number[] = [];
-	for (let cell = 0; cell < map.count; cell++)
-		if (map.height[cell]! > map.seaLevel) cells.push(cell);
-	return cells.sort((a, b) => map.water[b]! - map.water[a]! || a - b);
-}

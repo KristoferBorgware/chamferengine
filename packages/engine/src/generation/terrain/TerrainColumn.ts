@@ -32,7 +32,4 @@ export interface TerrainColumn {
 
 	/** Ground fall per metre travelled, at the coarse map's resolution. */
 	readonly gradient: number;
-
-	/** Square metres of ground draining through here. */
-	readonly catchment: number;
 }

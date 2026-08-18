@@ -1,16 +1,13 @@
-/** The knobs on the terrain, all of them defaulted. */
+/**
+ * The knobs on the terrain, all of them defaulted.
+ *
+ * **Nothing here decides where the ground is.** The map does, and this decides
+ * only what the ground is made of and whether it is hollow. A knob that moved
+ * the surface after the map was drawn was a knob whose effect could not be seen
+ * on the map, which is how the height multiplier and the two detail knobs came
+ * to be turned against each other with nothing to look at.
+ */
 export interface TerrainOptions {
-	/** Metres of elevation one unit of the coarse map's height stands for. */
-	readonly heightScale?: number;
-
-	/** How far the fine detail moves the surface, in metres. */
-	readonly detailAmplitude?: number;
-
-	/** Noise frequency of the fine detail, in features per planet radius. */
-	readonly detailFrequency?: number;
-
-	readonly detailOctaves?: number;
-
 	/** How deep the soil runs before stone starts, in blocks. */
 	readonly soilDepth?: number;
 
@@ -20,8 +17,8 @@ export interface TerrainOptions {
 	/**
 	 * Ground fall per metre travelled above which a slope carries no soil.
 	 *
-	 * Dry land runs to a gradient of 0.68 and sits at 0.18 in the middle, so
-	 * this is roughly the steepest 3% of the surface.
+	 * The map's slope field is metres of fall per metre travelled, so this is
+	 * an angle: `0.38` is about 21 degrees.
 	 */
 	readonly cliffGradient?: number;
 
@@ -39,12 +36,8 @@ export interface TerrainOptions {
 }
 
 export const TERRAIN_DEFAULTS = {
-	heightScale: 120,
-	detailAmplitude: 5,
-	detailFrequency: 60,
-	detailOctaves: 4,
 	soilDepth: 4,
-	snowLine: 45,
+	snowLine: 240,
 	cliffGradient: 0.38,
 	caves: false,
 	caveScale: 24,

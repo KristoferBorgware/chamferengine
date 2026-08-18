@@ -57,24 +57,23 @@ interface Group {
  * What the panel shows, grouped by what a knob decides and ordered by how much
  * of the world it moves.
  *
- * **Only three knobs move a coastline.** Swept across their whole ranges
- * against the land-or-sea state of every cell, Land changes 25 to 50% of the
- * surface, Landform across 17 to 18%, and Radius 16 to 17%. Every other knob
- * measured changes **none of it** — which does not make them useless, only
- * about something else: how tall the ground stands, how finely it is drawn, how
- * deep it runs. So the first group is open and the rest are folded, and a knob
- * comes out only when it is shown to do nothing at all.
+ * **Every knob that decides where the ground is now moves the map picture, and
+ * the ones that did not are gone.** There used to be a height multiplier, a
+ * detail amplitude and a detail feature size sitting under the map, moving the
+ * world without moving the picture -- so setting any of them meant walking the
+ * planet to find out what had happened, and turning one always meant turning
+ * another back. The map is the terrain now, so the first group is the terrain.
  */
 const GROUPS: Group[] = [
 	{
 		title: "Where the land is",
-		note: "The only knobs that move a coastline, and the ones the map redraws for. Swept across their whole ranges, Land changes 25 to 50% of the surface, Landform across 17%, and Radius 16%.",
+		note: "The height map, which is the whole of the terrain. Every knob here moves the picture beside it, and nothing moves the ground without moving the picture.",
 		knobs: [
 			{
 				key: "landform",
 				map: true,
 				label: "Landform",
-				says: "Which way the land is decided. Noise cuts two tiers of noise at the height leaving the asked-for land above it, and gives rounded coasts and the longest rivers. Warped pushes the sample point about first, folding the coastline without changing what it is made of. Grown scatters seeds and grows them level by level, which is the most ragged and the most islands, and the only one that cannot be told exactly how much land to leave. Plates cuts the surface into drifting plates and raises a range where two close, so a mountain is somewhere for a reason.",
+				says: "What the octaves are laid on. Noise is the octave stack on its own, cut at sea level. Warped pushes the sample point about first, folding the coastline without changing what it is made of. Grown scatters seeds and grows land level by level, which is the most ragged and the most islands. Plates cuts the surface into drifting plates and raises a range where two close, so a mountain is somewhere for a reason.",
 				choices: [
 					{ value: "noise", label: "Noise" },
 					{ value: "warped", label: "Warped" },
@@ -82,6 +81,114 @@ const GROUPS: Group[] = [
 					{ value: "plates", label: "Plates" },
 				],
 				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "noiseSeed",
+				map: true,
+				label: "Noise seed",
+				digits: 0,
+				says: "Which world the noise draws. It reaches nothing but the ground, so a world can be re-rolled without moving the block size, the chunk grid or anything a cell address is made of.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "noiseScale",
+				map: true,
+				label: "Noise scale",
+				digits: 0,
+				says: "How wide the widest feature is. This is the continent knob: at a few thousand metres the land comes in large masses, and turning it down breaks the same seed into islands.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "octaves",
+				map: true,
+				label: "Octaves",
+				digits: 0,
+				says: "How many times the noise is added to itself at a narrower scale. One is a smooth rolling field; each one after that adds a layer of finer ground without making the world taller. The narrowest one has to be wider than two map cells or the map cannot draw it, and the panel refuses that rather than building ground nobody can see.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "persistence",
+				map: true,
+				label: "Persistence",
+				digits: 2,
+				says: "How much of its height each octave keeps against the one above it. Low leaves a smooth field with a whisper of detail; near one gives every scale the same say and the ground turns to rubble.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "lacunarity",
+				map: true,
+				label: "Lacunarity",
+				digits: 2,
+				says: "How much narrower each octave is than the one above it. Two is the usual: every octave is half the width and half the height of the last. Higher spreads the octaves further apart and leaves a gap between the landforms and the detail.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "landFraction",
+				map: true,
+				label: "Land",
+				digits: 2,
+				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "relief",
+				map: true,
+				label: "Relief",
+				digits: 0,
+				says: "How far the tallest ground stands above sea level, in metres. The map is scaled so its highest point is exactly this, and the map's colors are absolute metres — so raising it walks the picture up through green, brown, rock and snow. It is also the whole of the height a player climbs.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "erosion",
+				map: true,
+				label: "Erosion",
+				digits: 2,
+				says: "How much water is run over the ground. Droplets walk downhill, cut where they are moving fast and drop what they carry where they slow, which sharpens the ridges and grades the valleys. Zero leaves the noise exactly as it fell.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "offsetX",
+				map: true,
+				label: "Offset X",
+				digits: 0,
+				says: "Slides the sample point through the noise field. Another way to reach a different world at the same settings, and the pair of them is a plane you can walk across looking for one you like.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "offsetY",
+				map: true,
+				label: "Offset Y",
+				digits: 0,
+				says: "The other axis of the same slide.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "coarseMap",
+				map: true,
+				label: "Height map",
+				says: "Whether the ground exists at all. Off is a smooth sphere at sea level, which is the only state the level of detail can be judged in. Every other knob in this group stops mattering while it is off.",
+				enabledWhen: (k) => !k.plain,
+			},
+		],
+	},
+	{
+		title: "How finely it is drawn",
+		note: "How many cells the height map holds. It decides how much of the ground the map can carry, and the world carries exactly what the map does.",
+		folded: true,
+		knobs: [
+			{
+				key: "coarseSpacing",
+				map: true,
+				label: "Map cell",
+				digits: 0,
+				says: "Metres between two samples of the height map. Between them the ground is a straight ramp, so this is the size of the smallest thing the world can have. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+				given: (s) =>
+					Math.abs(s.coarseCell - s.knobs.coarseSpacing) < 1
+						? null
+						: s.coarseLevelCapped
+							? `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. Level 9 is the finest map anyone has built here, 2,621,442 cells and 10 MB a field, and this radius asks past it. Lower Radius to go finer.`
+							: `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. A cell is a level, so it lands on the nearest one.`,
 			},
 			{
 				key: "radius",
@@ -93,71 +200,6 @@ const GROUPS: Group[] = [
 					Math.abs(s.radius - s.knobs.radius) < 1
 						? null
 						: `you get ${s.radius.toFixed(0)} m. Block size is exact and the radius absorbs the rounding, so it lands wherever depth ${s.depth} puts it.`,
-			},
-			{
-				key: "landFraction",
-				map: true,
-				label: "Land",
-				digits: 2,
-				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground. It also decides how long rivers get, because a river cannot be longer than the land it crosses.",
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "reliefFeature",
-				map: true,
-				label: "Landform across",
-				digits: 0,
-				says: "How wide one hill or valley is. This is the knob that decides whether you are looking at hills or standing on a hillside: below about twice the horizon the ground reads as landforms, above it as a slope. Narrower also means fewer octaves, because the smallest hill stays at 64 m.",
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "coarseMap",
-				map: true,
-				label: "Coarse map",
-				says: "Whether continents, sea, relief, rivers and erosion run at all. Off is the ground doc 08 describes before that tier existed: dry, textured by Detail alone, and a fraction of the world-creation cost. Every other knob in this group stops mattering while it is off, and so does How the ground stands.",
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "coarseSpacing",
-				map: true,
-				label: "Coarse cell",
-				digits: 0,
-				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide.",
-				given: (s) =>
-					Math.abs(s.coarseCell - s.knobs.coarseSpacing) < 1
-						? null
-						: s.coarseLevelCapped
-							? `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. Level 9 is the finest map anyone has built here, 2,621,442 cells and 10 MB a field, and this radius asks past it. Lower Radius to go finer.`
-							: `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. A cell is a level, so it lands on the nearest one.`,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-		],
-	},
-	{
-		title: "How the ground stands",
-		note: "How far the map's numbers reach in metres, and the detail laid over them. None of these moves a coastline, so the map does not redraw for them.",
-		folded: true,
-		knobs: [
-			{
-				key: "heightScale",
-				label: "Height scale",
-				digits: 0,
-				says: "How tall the terrain is. It multiplies the whole height field, so mountains and sea floors move together and the ground gets steeper without changing shape. The tallest peak comes out at about half this number.",
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "detailAmplitude",
-				label: "Detail",
-				digits: 0,
-				says: "How far the fine noise moves the ground. With the coarse map on this is under the size the map can describe, added after it has decided where water is, so a large value puts hills through lakes. With the map off this is the whole of the terrain.",
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "detailFeature",
-				label: "Detail across",
-				digits: 0,
-				says: "How wide one bump of that fine noise is. Below the coarse cell it is the only thing giving the ground texture between one map sample and the next.",
-				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
@@ -202,7 +244,7 @@ const GROUPS: Group[] = [
 			{
 				key: "plain",
 				label: "Plain planet",
-				says: "Holds nine things off at once: the coarse map, the detail noise, water, the air, the day, the clouds, the moon, the stars, and the light moving at all. What is left is a smooth green sphere of cells lit as at noon. Nothing is removed -- every knob below keeps its setting and comes back when this is unchecked.",
+				says: "Holds nine things off at once: the height map, water, the air, the day, the clouds, the moon, the stars, and the light moving at all. What is left is a smooth green sphere of cells lit as at noon. Nothing is removed -- every knob below keeps its setting and comes back when this is unchecked.",
 			},
 		],
 	},
@@ -284,13 +326,13 @@ const GROUPS: Group[] = [
 				label: "Puff",
 				digits: 0,
 				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it. A puff fine enough, combined with enough shells, is capped coarser than asked rather than filling a buffer the renderer cannot hold.",
+				enabledWhen: (k) => !k.plain,
 				given: (s) =>
 					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
 						? null
 						: s.cloudLevelCapped
 							? `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. ${s.knobs.cloudShells} shells hold it there, because a deck is capped at 700,000 lattice points times shells. Lower Shells, or this slider does nothing.`
 							: `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. A puff is a level, so it lands on the nearest one.`,
-				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "cloudShells",
@@ -615,9 +657,9 @@ export class ParameterPanel {
 			`<span>chunk <b>${settings.chunkSpan.toFixed(0)} m</b></span>` +
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			(settings.knobs.coarseMap
-				? `<span>coarse <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
-					`<span>landforms <b>${settings.knobs.reliefFeature} m</b> down to <b>${settings.smallestLandform.toFixed(0)} m</b>, <b>${settings.reliefOctaves}</b> octaves</span>`
-				: `<span>coarse map <b>off</b></span>`) +
+				? `<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
+					`<span>ground <b>${settings.knobs.noiseScale.toFixed(0)} m</b> down to <b>${settings.smallestLandform.toFixed(0)} m</b> across, over <b>${settings.knobs.octaves}</b> octaves</span>`
+				: `<span>height map <b>off</b></span>`) +
 			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + 1.7))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +

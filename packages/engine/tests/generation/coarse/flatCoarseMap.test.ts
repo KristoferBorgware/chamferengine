@@ -13,11 +13,8 @@ describe("flatCoarseMap", () => {
 		const map = flatCoarseMap(seedFromString("chamfer"), LEVEL);
 		expect(map.level).toBe(LEVEL);
 		expect(map.count).toBe(10 * 4 ** LEVEL + 2);
-		expect(map.seaLevel).toBe(0);
 		for (let cell = 0; cell < map.count; cell++) {
 			expect(map.height[cell]).toBe(0);
-			expect(map.water[cell]).toBe(0);
-			expect(map.flow[cell]).toBe(0);
 			expect(map.slope[cell]).toBe(0);
 		}
 	});
@@ -27,28 +24,23 @@ describe("flatCoarseMap", () => {
 		expect(flatCoarseMap(seed, LEVEL).seed).toBe(seed);
 	});
 
-	it("gives the terrain generator pure noise and no water", () => {
+	it("gives the terrain generator a sphere at sea level", () => {
+		// Zero metres everywhere is exactly sea level, so the world is a
+		// smooth ball with water standing on it and no ground anywhere. That is
+		// the whole of the pause: there is no second term left to leave running.
 		const seed = seedFromString("chamfer");
 		const map = flatCoarseMap(seed, LEVEL);
 		const shape = new WorldShape(1700, 8, 60, 200);
-		const gen = new TerrainGenerator(seed, shape, map, {
-			detailAmplitude: 20,
-		});
+		const gen = new TerrainGenerator(seed, shape, map);
 
-		let sawRelief = false;
 		for (let face = 0; face < 20; face += 3)
 			for (let i = 0; i <= shape.n; i += 16)
 				for (let j = 0; i + j <= shape.n; j += 16) {
 					const column = gen.columnAt(face, i, j);
-					// The coarse term is zero everywhere, so elevation is the
-					// detail term alone, bounded by construction to the
-					// amplitude asked for.
-					expect(Math.abs(column.elevation)).toBeLessThanOrEqual(20);
-					if (Math.abs(column.elevation) > 1) sawRelief = true;
-					// Ground and water coincide everywhere: nothing is wet.
+					expect(column.elevation).toBe(0);
+					expect(column.groundRadius).toBe(shape.seaLevelRadius);
 					expect(column.waterRadius).toBe(column.groundRadius);
-					expect(column.catchment).toBe(0);
+					expect(column.gradient).toBe(0);
 				}
-		expect(sawRelief).toBe(true);
 	});
 });

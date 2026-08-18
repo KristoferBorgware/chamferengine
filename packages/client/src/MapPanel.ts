@@ -5,6 +5,7 @@ import type {
 } from "chamfer/generation";
 import {
 	COARSE_FIELDS,
+	COARSE_STAGES,
 	COARSE_STAGE_SAYS,
 	CoarseMap,
 	coarseStageOf,
@@ -243,14 +244,7 @@ export class MapPanel {
 	/** Whichever of two steps comes first in the chain. */
 	private earliest(a: CoarseStage | null, b: CoarseStage): CoarseStage {
 		if (!a) return b;
-		const order: CoarseStage[] = [
-			"height",
-			"sea",
-			"erosion",
-			"rivers",
-			"slope",
-		];
-		return order.indexOf(a) <= order.indexOf(b) ? a : b;
+		return COARSE_STAGES.indexOf(a) <= COARSE_STAGES.indexOf(b) ? a : b;
 	}
 
 	/** The earliest step any of the changed options reaches. */
@@ -262,17 +256,13 @@ export class MapPanel {
 		const was = before.coarseOptions();
 		const now = after.coarseOptions();
 		let earliest: CoarseStage | null = null;
-		const order: CoarseStage[] = [
-			"height",
-			"sea",
-			"erosion",
-			"rivers",
-			"slope",
-		];
 		for (const key of Object.keys(now) as (keyof typeof now)[]) {
 			if (was[key] === now[key]) continue;
 			const stage = coarseStageOf(key);
-			if (!earliest || order.indexOf(stage) < order.indexOf(earliest))
+			if (
+				!earliest ||
+				COARSE_STAGES.indexOf(stage) < COARSE_STAGES.indexOf(earliest)
+			)
 				earliest = stage;
 		}
 		return earliest ?? "slope";

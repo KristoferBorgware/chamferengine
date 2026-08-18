@@ -1,6 +1,6 @@
 import { CoarseGrid } from "./CoarseGrid.js";
 import { coastDistance } from "./coastDistance.js";
-import { fbm } from "../noise/fbm.js";
+import { octaveNoise } from "../noise/octaveNoise.js";
 import { hash3 } from "../noise/hash3.js";
 import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
@@ -8,7 +8,15 @@ import { latticePosition } from "../../addressing/lattice/latticePosition.js";
 /** The level the growth starts from, before any refinement. */
 const SEED_LEVEL = 2;
 
-const RELIEF_SEED_OFFSET = 1;
+/**
+ * How much of the finished height the noise is, against the coast profile.
+ *
+ * The profile runs from `-0.6` offshore to `1.0` inland, so this is the noise's
+ * share of that span. Above about a third the relief decides where the water
+ * stops and the grown mask is drowned by it, which shows up as a growth weight
+ * that changes nothing.
+ */
+const RELIEF_SHARE = 0.35;
 
 /**
  * The shelf and the interior, as metres of nothing in particular against cells
@@ -74,9 +82,12 @@ export function grownHeight(
 	creation: number,
 	island: number,
 	growthWeight: number,
-	reliefFrequency: number,
-	reliefOctaves: number,
-	reliefAmplitude: number,
+	frequency: number,
+	octaves: number,
+	persistence: number,
+	lacunarity: number,
+	offsetX: number,
+	offsetY: number,
 ): Float64Array {
 	// The refinement needs a grid at every level on the way up, because a growth
 	// pass compares a cell against its neighbours. The finest one is the
@@ -178,7 +189,6 @@ export function grownHeight(
 	}
 
 	const distance = coastDistance(grid, mask);
-	const reliefSeed = (seed + RELIEF_SEED_OFFSET) | 0;
 	const height = new Float64Array(grid.count);
 	for (let cell = 0; cell < grid.count; cell++) {
 		// Named points with straight lines between them, in cells from the coast.
@@ -192,8 +202,19 @@ export function grownHeight(
 		const z = grid.directions[cell * 3 + 2]!;
 		height[cell] =
 			base +
-			reliefAmplitude *
-				fbm(x, y, z, reliefFrequency, reliefOctaves, reliefSeed);
+			RELIEF_SHARE *
+				octaveNoise(
+					x,
+					y,
+					z,
+					seed,
+					frequency,
+					octaves,
+					persistence,
+					lacunarity,
+					offsetX,
+					offsetY,
+				);
 	}
 	return height;
 }

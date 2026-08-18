@@ -13,7 +13,7 @@ describe("cell address", () => {
 		const base = new PlanetSettings();
 		const wider = new PlanetSettings({ chunkCells: 64 });
 		const coarser = new PlanetSettings({ coarseSpacing: 8 });
-		const flatter = new PlanetSettings({ heightScale: 900 });
+		const flatter = new PlanetSettings({ relief: 900 });
 
 		// A subdivision depth is a property of the radius and the block size
 		// alone. Every other knob changes what block sits at an address, never
@@ -83,36 +83,35 @@ describe("the pause", () => {
 		expect(new PlanetSettings().knobs.plain).toBe(false);
 	});
 
-	it("overrides the coarse map and the detail term without losing either", () => {
+	it("overrides the height map without losing the setting", () => {
 		const paused = new PlanetSettings({
 			plain: true,
 			coarseMap: true,
-			detailAmplitude: 17,
+			relief: 700,
 		});
 		expect(paused.coarseMapRuns).toBe(false);
-		expect(paused.detailAmplitude).toBe(0);
-		expect(paused.terrainOptions().detailAmplitude).toBe(0);
+		expect(paused.relief).toBe(0);
 
 		// The settings a person left behind are still there to come back to.
 		expect(paused.knobs.coarseMap).toBe(true);
-		expect(paused.knobs.detailAmplitude).toBe(17);
+		expect(paused.knobs.relief).toBe(700);
 	});
 
-	it("gives both of them back when it is lifted", () => {
+	it("gives it back when the pause is lifted", () => {
 		const live = new PlanetSettings({
 			plain: false,
 			coarseMap: true,
-			detailAmplitude: 17,
+			relief: 700,
 		});
 		expect(live.coarseMapRuns).toBe(true);
-		expect(live.detailAmplitude).toBe(17);
+		expect(live.relief).toBe(700);
 	});
 
 	it("leaves a smooth, dry, all-grass sphere at the shipped defaults", () => {
 		// The whole of the ground half of the pause, checked rather than
-		// assumed: no coarse map means every field is zero, and no detail term
-		// means the elevation formula has nothing left in it, so the surface is
-		// the sea-level radius exactly and the water test can never be true.
+		// assumed: no height map means every cell reads zero metres, which is
+		// sea level exactly, so the surface is the sea-level radius and the
+		// water test can never be true.
 		const settings = new PlanetSettings({ plain: true });
 		const seed = seedFromString(settings.knobs.seed);
 		const map = flatCoarseMap(seed, FLAT_COARSE_LEVEL);
@@ -152,33 +151,23 @@ describe("the pause", () => {
 	});
 });
 
-describe("the coarse map off", () => {
-	// The pause forces the coarse map off and the detail term to zero, so
-	// these carry `plain: false` to reach the knob's own behaviour.
-	it("makes maxElevation and groundSpan exact bounds of the detail term", () => {
-		const on = new PlanetSettings({
-			plain: false,
-			coarseMap: true,
-			detailAmplitude: 12,
-		});
+describe("the height map off", () => {
+	// The pause forces the height map off, so these carry `plain: false` to
+	// reach the knob's own behaviour.
+	it("takes the ground to nothing at all", () => {
 		const off = new PlanetSettings({
 			plain: false,
 			coarseMap: false,
-			detailAmplitude: 12,
+			relief: 900,
 		});
-
-		// On, the estimate is a ratio of the height scale and has nothing to do
-		// with the detail term.
-		expect(on.maxElevation).not.toBe(12);
-
-		// Off, elevation is the detail term alone, so the true bound is exact.
-		expect(off.maxElevation).toBe(12);
-		expect(off.groundSpan).toBe(24);
+		expect(off.relief).toBe(0);
+		expect(off.maxElevation).toBe(1);
+		expect(off.groundSpan).toBe(2);
 	});
 
-	it("skips the coarse-resolution problems, since nothing reads that knob", () => {
-		// This combination would refuse for being too fine a coarse cell if
-		// the coarse map were on.
+	it("skips the map-resolution problems, since nothing reads that knob", () => {
+		// This combination would refuse for being too fine a map cell if the
+		// height map were on.
 		const off = new PlanetSettings({
 			plain: false,
 			coarseMap: false,
@@ -188,14 +177,40 @@ describe("the coarse map off", () => {
 		expect(off.problems()).toEqual([]);
 	});
 
-	it("still catches a crust too shallow for the detail term", () => {
-		const off = new PlanetSettings({
+	it("still refuses a crust too shallow for the ground it is asked for", () => {
+		const shallow = new PlanetSettings({
 			plain: false,
-			coarseMap: false,
-			detailAmplitude: 40,
-			crustMetres: 32,
+			coarseMap: true,
+			relief: 900,
+			crustMetres: 200,
 		});
-		expect(off.problems().join(" ")).toMatch(/sea floor/);
+		expect(shallow.problems().join(" ")).toMatch(/sea floor/);
+	});
+});
+
+describe("the octave stack", () => {
+	it("names the narrowest octave the noise makes", () => {
+		// Each octave is `lacunarity` times narrower than the one above, so
+		// four octaves at lacunarity 2 reach an eighth of the widest feature.
+		const s = new PlanetSettings({
+			noiseScale: 4000,
+			octaves: 4,
+			lacunarity: 2,
+		});
+		expect(s.smallestLandform).toBeCloseTo(500, 6);
+	});
+
+	it("refuses ground the map is too coarse to draw", () => {
+		// The world is the map, so an octave narrower than two map cells is
+		// ground that would not exist. Refusing beats building it invisibly.
+		const tooFine = new PlanetSettings({
+			plain: false,
+			coarseMap: true,
+			noiseScale: 4000,
+			octaves: 8,
+			coarseSpacing: 128,
+		});
+		expect(tooFine.problems().join(" ")).toMatch(/narrowest octave/);
 	});
 });
 

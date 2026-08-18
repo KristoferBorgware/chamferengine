@@ -10,17 +10,16 @@ import {
 const DEPTH = 9;
 const FINEST = 5;
 const RADIUS = 1700;
-const SCALE = 200;
 
 const map = buildCoarseMap(4242, { level: 6 });
-const peaks = new ChunkPeaks(map, SCALE, 0, FINEST);
+const peaks = new ChunkPeaks(map, 0, FINEST);
 
-/** The tallest ground the map holds anywhere, in the units the table uses. */
+/** The tallest ground the map holds anywhere, which is metres already. */
 const planetWide = (() => {
-	let highest = -Infinity;
+	let highest = 0;
 	for (let cell = 0; cell < map.count; cell++)
 		if (map.height[cell]! > highest) highest = map.height[cell]!;
-	return Math.max(0, (highest - map.seaLevel) * SCALE);
+	return highest;
 })();
 
 describe("ChunkPeaks", () => {
@@ -64,7 +63,7 @@ describe("ChunkPeaks", () => {
 	 */
 	it("adds the margin, and holds the result at zero", () => {
 		const margin = 37;
-		const wider = new ChunkPeaks(map, SCALE, margin, FINEST);
+		const wider = new ChunkPeaks(map, margin, FINEST);
 		let raised = 0;
 		for (let key = 0; key < 20; key++) {
 			const bare = peaks.peakOf(key, 0);

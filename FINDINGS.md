@@ -223,45 +223,6 @@ is free to do and needs somebody to look at the world and say so.
 
 ---
 
-### F-017 — Erosion depth follows the map's resolution
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-18, comparing 32 m and 16 m coarse cells for I-5
-**Where:** `packages/engine/src/generation/coarse/erode.ts`
-
-**What happens.** `erode` lowers a cell by `rate * sqrt(flow) * drop`, where
-`flow` is a count of upstream cells and `drop` is the height difference to the
-downhill neighbour. Neither is in metres. At a finer level `flow` is four times
-larger for the same ground and `drop` is about half, so the two errors mostly
-cancel and the result is nearly resolution-independent — but only nearly.
-
-Measured over five large valleys on the 6,800 m planet, floor-to-rim depth is
-11 to 37 m at a 32 m coarse cell and 20 to 43 m at 16 m: about **a quarter
-deeper** at the finer resolution, on the same seed.
-
-**Why it matters.** `erosionRate` is a knob somebody will tune by eye, and it
-means a different amount of cutting on every planet size and every coarse
-spacing. Tuning it on one world and changing the radius silently changes the
-terrain. Nothing is wrong today because only one spacing ships.
-
-Re-measured after the relief tier was stated in metres, the gap closed to
-**35.4 m against 34.4 m** — the tier now stops at 70 m, which both a 32 m and a
-16 m map carry, so neither has fine content the other lacks. The units in
-`erode` are still grid units, so the symptom comes back for anyone who moves the
-smallest landform below twice a coarse cell.
-
-**What would fix it.** Write the incision against metres: divide `drop` by the
-coarse spacing to get a real gradient, and multiply `flow` by the cell area to
-get a catchment, then scale the rate so the shipped worlds keep the terrain they
-have. That needs `erode` to know the planet's radius, which the coarse map
-deliberately does not — so the alternative is to normalise by level inside
-`buildCoarseMap`, where the level is already known. Measure the valley depths
-before and after; they should stop moving with resolution.
-
----
 
 ---
 
@@ -580,55 +541,6 @@ which the selection could do, since it already knows the horizon angle.
 
 ---
 
-### F-030 — Nobody has decided whether this game has rivers
-
-**Kind:** question
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-18, scoping v0.2.0, where a rivers checkbox was proposed and
-turned out to need this answer first
-**Where:** `packages/engine/src/generation/coarse/buildCoarseMap.ts` — the
-`fillPits`, `routeFlow` and `accumulateFlow` calls and the `water` field;
-`packages/engine/src/generation/terrain/TerrainGenerator.ts`, `columnAt`
-
-**What happens.** Rivers always run. `buildCoarseMap` fills the basins, routes
-every cell downhill and accumulates what drains through it, on every world,
-with no way to ask for a planet without them. There is no switch and no
-setting.
-
-That was going to be a checkbox in a release it has since left. Writing the item showed the switch
-cannot be built without saying what "on" means, because what "on" produces
-today is a chain of pools rather than a river — F-015 has the numbers. And what
-"on" should mean depends on a question nobody has answered: whether a river is
-something this game wants.
-
-**Why it matters.** Nobody is hurt today. The cost is carried in three places
-and none of it is visible. Every world pays for the routing whether or not
-anything reads it. Erosion runs four passes that each re-flood and re-route, so
-the flow field decides the shape of every valley on the planet even on a world
-that would rather not have rivers. And the coarse map holds a `flow` field of
-2.5 MB at level 8 whose only consumers are erosion and the water surface.
-
-Removing rivers is therefore not removing a feature — it changes what the
-landscape looks like, because the valleys are cut by the same numbers. Anyone
-answering this has to decide about the valleys as well as the water in them.
-
-**What would fix it.** Look at a planet with rivers and a planet without, side
-by side, and say which one this game wants. v0.2.0's I-1, the map editor, builds the surface that
-makes that a knob rather than a rebuild, so this is cheap to answer after that
-release and not before.
-
-If the answer is that rivers stay, the shape is already chosen: **a ribbon, not
-a chain of pools**. Write water wherever the catchment is above a threshold in
-square metres, at a depth that follows from the catchment.
-`TerrainColumn.catchment` already carries the number, so it is one comparison
-per column. That closes F-015 at the same time.
-
-If the answer is that they go, the flow field and the routing stay anyway,
-because erosion reads them to cut the valleys. What goes is the water.
-
----
 
 
 ### F-032 — The terrain generator must not be told which level of detail is asking
@@ -824,6 +736,112 @@ and the number where it stops.
 
 ---
 
+## Closed
+
+### F-017 — Erosion depth follows the map's resolution
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-18, comparing 32 m and 16 m coarse cells for I-5
+**Where:** `packages/engine/src/generation/coarse/erode.ts`
+
+**What happens.** `erode` lowers a cell by `rate * sqrt(flow) * drop`, where
+`flow` is a count of upstream cells and `drop` is the height difference to the
+downhill neighbour. Neither is in metres. At a finer level `flow` is four times
+larger for the same ground and `drop` is about half, so the two errors mostly
+cancel and the result is nearly resolution-independent — but only nearly.
+
+Measured over five large valleys on the 6,800 m planet, floor-to-rim depth is
+11 to 37 m at a 32 m coarse cell and 20 to 43 m at 16 m: about **a quarter
+deeper** at the finer resolution, on the same seed.
+
+**Why it matters.** `erosionRate` is a knob somebody will tune by eye, and it
+means a different amount of cutting on every planet size and every coarse
+spacing. Tuning it on one world and changing the radius silently changes the
+terrain. Nothing is wrong today because only one spacing ships.
+
+Re-measured after the relief tier was stated in metres, the gap closed to
+**35.4 m against 34.4 m** — the tier now stops at 70 m, which both a 32 m and a
+16 m map carry, so neither has fine content the other lacks. The units in
+`erode` are still grid units, so the symptom comes back for anyone who moves the
+smallest landform below twice a coarse cell.
+
+**What would fix it.** Write the incision against metres: divide `drop` by the
+coarse spacing to get a real gradient, and multiply `flow` by the cell area to
+get a catchment, then scale the rate so the shipped worlds keep the terrain they
+have. That needs `erode` to know the planet's radius, which the coarse map
+deliberately does not — so the alternative is to normalise by level inside
+`buildCoarseMap`, where the level is already known. Measure the valley depths
+before and after; they should stop moving with resolution.
+
+**Closed:** 2026-08-18, fixed. `erode` is gone with the drainage network it
+needed. `erodeDroplets` replaced it, and the map is stated in metres on a grid
+stated in metres, so every constant in it means something on the ground rather
+than in grid units. Valley depth no longer follows the map's resolution because
+nothing in the pass is counted in cells. See [`plans/v0.3.0.md`](plans/v0.3.0.md),
+I-2.
+
+---
+
+### F-030 — Nobody has decided whether this game has rivers
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, scoping v0.2.0, where a rivers checkbox was proposed and
+turned out to need this answer first
+**Where:** `packages/engine/src/generation/coarse/buildCoarseMap.ts` — the
+`fillPits`, `routeFlow` and `accumulateFlow` calls and the `water` field;
+`packages/engine/src/generation/terrain/TerrainGenerator.ts`, `columnAt`
+
+**What happens.** Rivers always run. `buildCoarseMap` fills the basins, routes
+every cell downhill and accumulates what drains through it, on every world,
+with no way to ask for a planet without them. There is no switch and no
+setting.
+
+That was going to be a checkbox in a release it has since left. Writing the item showed the switch
+cannot be built without saying what "on" means, because what "on" produces
+today is a chain of pools rather than a river — F-015 has the numbers. And what
+"on" should mean depends on a question nobody has answered: whether a river is
+something this game wants.
+
+**Why it matters.** Nobody is hurt today. The cost is carried in three places
+and none of it is visible. Every world pays for the routing whether or not
+anything reads it. Erosion runs four passes that each re-flood and re-route, so
+the flow field decides the shape of every valley on the planet even on a world
+that would rather not have rivers. And the coarse map holds a `flow` field of
+2.5 MB at level 8 whose only consumers are erosion and the water surface.
+
+Removing rivers is therefore not removing a feature — it changes what the
+landscape looks like, because the valleys are cut by the same numbers. Anyone
+answering this has to decide about the valleys as well as the water in them.
+
+**What would fix it.** Look at a planet with rivers and a planet without, side
+by side, and say which one this game wants. v0.2.0's I-1, the map editor, builds the surface that
+makes that a knob rather than a rebuild, so this is cheap to answer after that
+release and not before.
+
+If the answer is that rivers stay, the shape is already chosen: **a ribbon, not
+a chain of pools**. Write water wherever the catchment is above a threshold in
+square metres, at a depth that follows from the catchment.
+`TerrainColumn.catchment` already carries the number, so it is one comparison
+per column. That closes F-015 at the same time.
+
+If the answer is that they go, the flow field and the routing stay anyway,
+because erosion reads them to cut the valleys. What goes is the water.
+
+**Closed:** 2026-08-18, decided. This game does not have rivers, for now. The
+flow field, the water field, the pit filling and the flow routing are all
+removed: at the resolutions the map is drawn at, the channels were one cell wide
+and the lakes were flat discs. Water is wherever the map reads under zero, which
+makes the ocean the only water. The design stays in doc 21 for whoever revisits
+it, and reopening this is a new finding rather than this one.
+
+---
+
 ### F-037 — The grown landform states its shore profile in cells, so its shelf is twice as wide in metres on a coarser map
 
 **Kind:** bug
@@ -861,6 +879,12 @@ constant, and scale the distance by `2 ** (grid.level - PROFILE_LEVEL)` before
 reading the table. Ten minutes, and it needs `coastline.js` re-run because its
 section 3 quotes the profile's effect on the grown mask.
 
+**Closed:** 2026-08-18, moot. The profile is still stated in cells, and the
+landform it belongs to now shares the octave stack with the other three — but the
+release that would have judged the four against each other has not happened, and
+`grown` is no longer the only thing between the noise and the ground. Reopen it
+if `grown` is chosen.
+
 ---
 
 ### F-038 — The shipped Landform across default draws a coast made of foam
@@ -894,9 +918,14 @@ open question is whether the default should be a fixed metre count at all, since
 what matters is its ratio to the planet's circumference and the radius slider
 moves that by thirty times across its range.
 
----
+**Closed:** 2026-08-18, fixed. The knob it named no longer exists. Noise scale
+replaces Landform across and ships at `4,500 m` on a `6,800 m` radius — the
+widest feature repeating about one and a half times around the planet rather
+than twenty-four — and the finer ground is octaves of it rather than a separate
+tier. The coast the shipped defaults draw is continents with shores, not
+foam.
 
-## Closed
+---
 
 ### F-031 — The coverage gate reports a dropped fact every time a timing moves
 

@@ -33,13 +33,6 @@ export class TerrainGenerator {
 	readonly map: CoarseMap;
 
 	private readonly settings: Required<TerrainOptions>;
-	private readonly detailSeed: number;
-
-	/** Metres of ground fall per metre travelled, per unit of coarse slope. */
-	private readonly gradientScale: number;
-
-	/** Square metres one coarse cell covers, on average. */
-	private readonly coarseCellArea: number;
 
 	constructor(
 		seed: number,
@@ -51,66 +44,39 @@ export class TerrainGenerator {
 		this.shape = shape;
 		this.map = map;
 		this.settings = { ...TERRAIN_DEFAULTS, ...options };
-		this.detailSeed = (seed + DETAIL_SEED_OFFSET) | 0;
-
-		// The coarse map's slope is height units per radius unit -- the cell
-		// step is already divided out, so the map's own level does not appear
-		// here. Metres of fall over metres of ground is then the height scale
-		// over the radius, which turns it into the gradient the material rules
-		// are written against.
-		this.gradientScale = this.settings.heightScale / shape.seaLevelRadius;
-
-		// The map counts cells draining through a cell, and a cell is four times
-		// smaller at each finer level, so the count for one physical catchment
-		// moves by four while the catchment does not. Multiplying by the area a
-		// cell covers gives a number that means the same at every resolution:
-		// the wettest place on the worked planet drains 5.1 square kilometres
-		// whether the map is drawn at 64 m, 32 m or 16 m.
-		this.coarseCellArea =
-			(4 * Math.PI * shape.seaLevelRadius * shape.seaLevelRadius) /
-			map.count;
 	}
 
-	/** Evaluate one column of the world. */
+	/**
+	 * Evaluate one column of the world.
+	 *
+	 * **The map is read and nothing is added to it.** There was a noise term
+	 * here, at its own amplitude and its own feature size, laid over a map
+	 * height multiplied by a third number -- three knobs that moved the ground
+	 * and appeared nowhere in the picture the editor drew, so setting any of
+	 * them meant walking the world to find out what had happened. The map is
+	 * now stated in metres and the world is the map, which makes the editor's
+	 * picture a statement about the ground rather than a suggestion.
+	 *
+	 * The level of detail is not passed in and must not be. A coarse chunk
+	 * draws a subset of a fine chunk's points, and because a point's height
+	 * does not depend on who asked, the points it keeps hold exactly the height
+	 * the fine chunk gives them -- so a chunk changing level moves no ground.
+	 */
 	columnAt(face: number, i: number, j: number): TerrainColumn {
 		const depth = this.shape.subdivisionDepth;
 		const p = latticePosition(face, this.shape.n, i, j);
 
-		const detail =
-			this.settings.detailAmplitude *
-			fbm(
-				p.x,
-				p.y,
-				p.z,
-				this.settings.detailFrequency,
-				this.settings.detailOctaves,
-				this.detailSeed,
-			);
-
-		const coarseGround = this.map.heightAt(face, i, j, depth);
-		const coarseWater = this.map.waterAt(face, i, j, depth);
-		const scale = this.settings.heightScale;
-
-		const elevation = (coarseGround - this.map.seaLevel) * scale + detail;
+		// Metres above sea level, straight off the map. Sea level is zero on it
+		// by construction, so there is no level to subtract and no scale to
+		// apply.
+		const elevation = this.map.heightAt(face, i, j, depth);
 		const groundRadius = this.shape.seaLevelRadius + elevation;
 
-		// Whether there is water here is the coarse map's answer, and the coarse
-		// map has no fine detail in it. Comparing the two surfaces after the
-		// detail is added instead would put a film of water over every dry cell
-		// the detail happened to push downward, which is half of the land.
-		//
-		// Where the coarse map does say water, the surface is its level, and
-		// never below the detailed ground.
-		const coarseGroundRadius =
-			this.shape.seaLevelRadius +
-			(coarseGround - this.map.seaLevel) * scale;
-		const coarseWaterRadius =
-			this.shape.seaLevelRadius +
-			(coarseWater - this.map.seaLevel) * scale;
-		const waterRadius =
-			coarseWaterRadius > coarseGroundRadius
-				? Math.max(groundRadius, coarseWaterRadius)
-				: groundRadius;
+		// Water stands at sea level and nowhere else. Lakes were a stored field
+		// and a flood fill; without them the ocean is the only water, and the
+		// ocean is a radius -- which makes it the one exactly flat surface on
+		// the planet.
+		const waterRadius = Math.max(groundRadius, this.shape.seaLevelRadius);
 
 		return {
 			face,
@@ -124,8 +90,7 @@ export class TerrainGenerator {
 			groundLayer: this.shape.layerOfSurface(groundRadius),
 			waterLayer: this.shape.layerOfSurface(waterRadius),
 			elevation,
-			gradient: this.map.slopeAt(face, i, j, depth) * this.gradientScale,
-			catchment: this.map.flowAt(face, i, j, depth) * this.coarseCellArea,
+			gradient: this.map.slopeAt(face, i, j, depth),
 		};
 	}
 

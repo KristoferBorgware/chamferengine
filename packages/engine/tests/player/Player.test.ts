@@ -19,7 +19,11 @@ let terrain: TerrainGenerator;
 
 beforeAll(() => {
 	shape = new WorldShape(RADIUS, DEPTH, 150, maxCrustDepth(DEPTH));
-	map = buildCoarseMap(seedFromString("chamfer"), { level: 6 });
+	map = buildCoarseMap(seedFromString("chamfer"), {
+		level: 6,
+		cellMetres: 100,
+		relief: 100,
+	});
 	terrain = new TerrainGenerator(map.seed, shape, map);
 });
 

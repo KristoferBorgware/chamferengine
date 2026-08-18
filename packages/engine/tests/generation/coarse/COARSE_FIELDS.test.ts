@@ -73,15 +73,13 @@ describe("COARSE_FIELDS", () => {
 	});
 
 	it("puts sea level on a stop of the terrain ramp, not between two", () => {
-		// A ramp measured from sea level is symmetric about it, so an odd stop
-		// count lands the middle stop at a height of zero and the waterline is
-		// one named color. An even count puts it halfway between two, which is
-		// where the last 0.05 of water used to draw as beach.
-		for (const field of COARSE_FIELDS) {
-			if (field.scale !== "sea") continue;
-			expect(field.ramp.low, field.key).toBe(-field.ramp.high);
-			expect(field.ramp.stops.length % 2, field.key).toBe(1);
-		}
+		// The ground ramp is metres above sea level and symmetric about it, so
+		// an odd stop count lands the middle stop at a height of zero and the
+		// waterline is one named color. An even count puts it halfway between
+		// two, which is where the last few metres of water drew as beach.
+		const ground = COARSE_FIELDS.find((f) => f.key === "height")!;
+		expect(ground.ramp.low).toBe(-ground.ramp.high);
+		expect(ground.ramp.stops.length % 2).toBe(1);
 	});
 
 	it("names each field once", () => {

@@ -17,11 +17,8 @@ const SETUP = {
 	map: {
 		seed: 1,
 		level: 2,
-		seaLevel: 0,
 		faceIndex: new Int32Array(0),
 		height: new Float32Array(0),
-		water: new Float32Array(0),
-		flow: new Float32Array(0),
 		slope: new Float32Array(0),
 	},
 	seaLevelRadius: 1700,

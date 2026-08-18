@@ -20,16 +20,14 @@ export interface CoarseRamp {
  * occupy, the colors that range maps onto, and a name to put beside the
  * picture.
  *
- * `scale` says how a value reaches the ramp. `linear` uses it as it stands.
- * `sea` measures it from the map's own sea level, so the same description
- * works on a planet whose heights sit anywhere. `log` takes `log(1 + value)`,
- * for a field spanning several orders of magnitude — drainage counts run from
- * one cell to hundreds of thousands, and a linear ramp draws that as a black
- * planet with a few white threads.
+ * `scale` says how a value reaches the ramp. `linear` uses it as it stands,
+ * which is every field here now that a height is metres above a sea level of
+ * zero. `log` takes `log(1 + value)`, for a field spanning several orders of
+ * magnitude.
  */
 export interface CoarseField {
 	/** The property this reads on a {@link CoarseMap}. */
-	readonly key: "height" | "water" | "flow" | "slope";
+	readonly key: "height" | "slope";
 
 	/** What to call it beside the picture. */
 	readonly label: string;
@@ -37,7 +35,7 @@ export interface CoarseField {
 	/** One sentence on what the numbers are. */
 	readonly says: string;
 
-	readonly scale: "linear" | "sea" | "log";
+	readonly scale: "linear" | "log";
 
 	/**
 	 * Another field this one is drawn as a difference from.

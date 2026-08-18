@@ -4,25 +4,18 @@ import type { CoarseField } from "chamfer/generation";
  * A field's value as a color, from the ramp its description carries.
  *
  * `scale` is what lets one description cover fields that mean different things.
- * `linear` takes the value as it stands. `sea` measures it from the map's own
- * sea level, so a description works on a planet whose heights sit anywhere.
- * `log` takes `log(1 + value)`, which drainage needs: its counts run from one
- * cell to hundreds of thousands, and a straight ramp draws that as a black
- * planet with a few white threads.
+ * `linear` takes the value as it stands, which both fields do now that heights
+ * are metres above a sea level of zero. `log` takes `log(1 + value)`, for a
+ * field spanning several orders of magnitude.
  *
  * Returns `[r, g, b]` in `0` to `255`.
  */
 export function rampColor(
 	value: number,
 	field: CoarseField,
-	seaLevel: number,
 ): [number, number, number] {
 	const raw =
-		field.scale === "sea"
-			? value - seaLevel
-			: field.scale === "log"
-				? Math.log(1 + Math.max(0, value))
-				: value;
+		field.scale === "log" ? Math.log(1 + Math.max(0, value)) : value;
 	const { low, high, stops } = field.ramp;
 	const t =
 		Math.min(1, Math.max(0, (raw - low) / (high - low))) *

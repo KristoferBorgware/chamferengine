@@ -3,20 +3,21 @@ import { CoarseIndex } from "./CoarseIndex.js";
 import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
 
 /**
- * Where the land, the water and the rivers are, across the whole planet.
+ * The height of the ground everywhere on the planet, in metres above sea level.
  *
- * Rivers, erosion and continents are the three things a noise function cannot
- * produce, because all three depend on the whole planet rather than on a
- * neighbourhood: where water goes from here is decided by ground it has not
- * reached yet. This map is computed once, at world creation, and read
- * afterwards as an input — which is what lets the runtime generator stay a pure
- * function of a position.
+ * **This map is the world.** The terrain generator reads a height off it and
+ * adds nothing: no second noise field, no multiplier, no detail tier. So the
+ * picture the editor draws and the ground a player stands on are the same
+ * numbers, and a knob that does not move the picture does not move the world
+ * either.
  *
- * It describes the **generated** world and is never rewritten. That keeps it a
- * function of the seed alone, so a client regenerates it instead of
- * downloading it, and a dam built later does not move a river on it.
+ * Computed once, at world creation, and read afterwards as an input -- which is
+ * what lets the runtime generator stay a pure function of a position. It
+ * describes the **generated** world and is never rewritten, so it stays a
+ * function of the seed alone: a client regenerates it instead of downloading
+ * it, and a wall built later does not move the ground on it.
  *
- * The fields are `float32`, four bytes a cell: 2.5 MB each at level 8.
+ * Two fields, `float32`, four bytes a cell: 2.5 MB each at level 8.
  */
 export class CoarseMap {
 	readonly seed: number;
@@ -24,39 +25,28 @@ export class CoarseMap {
 	/** Which cell a face-and-offset names, at this map's level. */
 	readonly index: CoarseIndex;
 
-	/** The height that leaves the intended fraction of the surface as land. */
-	readonly seaLevel: number;
-
-	/** The ground surface, after erosion has cut into it. */
+	/**
+	 * The ground surface in metres above sea level, after erosion.
+	 *
+	 * Sea level is zero by construction rather than by a stored number: the
+	 * percentile that leaves the intended land above it is subtracted before
+	 * the field is scaled into metres. So "is this land" is `height > 0`, and
+	 * water stands wherever it is not.
+	 */
 	readonly height: Float32Array;
 
-	/**
-	 * The surface water stands on: sea level over the ocean, the lake surface
-	 * over a flooded basin, and the ground everywhere else.
-	 */
-	readonly water: Float32Array;
-
-	/** How many cells drain through each one. A river is a large value. */
-	readonly flow: Float32Array;
-
-	/** The largest height difference from each cell to a neighbour. */
+	/** How steeply the ground falls away, as metres per metre. */
 	readonly slope: Float32Array;
 
 	constructor(
 		seed: number,
 		index: CoarseIndex,
-		seaLevel: number,
 		height: Float32Array,
-		water: Float32Array,
-		flow: Float32Array,
 		slope: Float32Array,
 	) {
 		this.seed = seed;
 		this.index = index;
-		this.seaLevel = seaLevel;
 		this.height = height;
-		this.water = water;
-		this.flow = flow;
 		this.slope = slope;
 	}
 
@@ -71,7 +61,7 @@ export class CoarseMap {
 	/**
 	 * The map in a form that crosses to a worker.
 	 *
-	 * The five typed arrays and nothing else. Building the map needs a ring of
+	 * The typed arrays and nothing else. Building the map needs a ring of
 	 * neighbours and a direction per cell, and neither is read afterwards, so
 	 * sending a whole grid would copy 31 MB per worker that no worker touches.
 	 */
@@ -79,11 +69,8 @@ export class CoarseMap {
 		return {
 			seed: this.seed,
 			level: this.index.level,
-			seaLevel: this.seaLevel,
 			faceIndex: this.index.faceIndex,
 			height: this.height,
-			water: this.water,
-			flow: this.flow,
 			slope: this.slope,
 		};
 	}
@@ -93,10 +80,7 @@ export class CoarseMap {
 		return new CoarseMap(
 			snapshot.seed,
 			new CoarseIndex(snapshot.level, snapshot.faceIndex),
-			snapshot.seaLevel,
 			snapshot.height,
-			snapshot.water,
-			snapshot.flow,
 			snapshot.slope,
 		);
 	}
@@ -154,19 +138,9 @@ export class CoarseMap {
 		);
 	}
 
-	/** The ground surface under a fine cell. */
+	/** Metres above sea level under a fine cell. */
 	heightAt(face: number, i: number, j: number, depth: number): number {
 		return this.sample(this.height, face, i, j, depth);
-	}
-
-	/** The surface water stands on above a fine cell. */
-	waterAt(face: number, i: number, j: number, depth: number): number {
-		return this.sample(this.water, face, i, j, depth);
-	}
-
-	/** How much drains through a fine cell's coarse neighbourhood. */
-	flowAt(face: number, i: number, j: number, depth: number): number {
-		return this.sample(this.flow, face, i, j, depth);
 	}
 
 	/** How steeply the ground falls away under a fine cell. */

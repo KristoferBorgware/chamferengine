@@ -225,14 +225,9 @@ async function main(): Promise<void> {
 
 	// How high the ground reaches under each triangle, so the selection reaches
 	// for the ground a chunk actually has rather than for the planet's tallest.
-	// The margin is the detail term's own amplitude, which bounds how far it can
-	// lift ground the coarse map does not carry.
-	const peaks = new ChunkPeaks(
-		map,
-		settings.knobs.heightScale,
-		settings.detailAmplitude,
-		CHUNK_LEVEL,
-	);
+	// The map is the whole of the terrain, so nothing is missing from it and the
+	// margin is one block.
+	const peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
 
 	// Both decks are built on their own worker, off the thread that draws: a
@@ -304,8 +299,7 @@ async function main(): Promise<void> {
 	for (const extent of atlas.extents) {
 		const there = new Vec3(extent.x, extent.y, extent.z);
 		const cell = positionToCell(there, shape.n);
-		const above =
-			map.heightAt(cell.face, cell.i, cell.j, DEPTH) - map.seaLevel;
+		const above = map.heightAt(cell.face, cell.i, cell.j, DEPTH);
 		if (above > highest) {
 			highest = above;
 			ground = there;
