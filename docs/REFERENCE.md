@@ -25,6 +25,7 @@ numbered documents.
 | [`boundary.js`](../verification/boundary.js) | Which curve is a cell's edge? Three definitions are in play and doc 11 has carried the disagreement as the last structural gap. Doc 04 defines a cell by what hexRound maps to it; doc 14 meshes the dual polyhedron, whose corners are the centroids of subdivided triangles; and "everywhere equidistant on the sphere" is the intuitive reading. This measures what actually separates them, and whether the mesh can be made to draw the lookup's curve for free. | [04](04-position-lookup.md) [18](18-cell-boundary.md) |
 | [`calc.js`](../verification/calc.js) | — | [06](06-world-sizing.md) |
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
+| [`coastline.js`](../verification/coastline.js) | Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number. | [21](21-rivers-and-erosion.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
@@ -114,7 +115,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 325 ns -- a timing, so it moves run to run
+   this machine, now: 402 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -581,6 +582,75 @@ edges: 30 each with 2 faces: true
 max non-planarity (should be ~0): 8.095e-18
 diagonal ratio min/max: 1.618034 1.618034  phi = 1.618034
 RT defect: 20*(360-3*116.565) + 12*(360-5*63.435) = 720.00
+```
+
+## `coastline.js`
+
+Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number.
+
+Cited by [doc 21](21-rivers-and-erosion.md).
+
+```
+1. how ragged the coastline is, and how that changes with resolution
+   Perimeter of the largest landmass over the square root of its area.
+   A round cap holding the same land gives 3.24.
+
+   level      today            warped           grown
+   5      11.72 (  781 edges)   12.51 (  827 edges)   20.44 ( 1007 edges)
+   6      12.18 ( 1623 edges)   14.11 ( 1865 edges)   27.00 ( 2655 edges)
+   7      13.23 ( 3523 edges)   15.46 ( 4087 edges)   36.78 ( 7239 edges)
+
+   perimeter growth as the cells halve, and the dimension it implies
+   today  x2.08 then x2.17   dimension 1.06 then 1.12
+    warp  x2.26 then x2.19   dimension 1.17 then 1.13
+   grown  x2.64 then x2.73   dimension 1.40 then 1.45
+   A smooth curve gives exactly x2 and a dimension of 1. Published figures
+   for real coasts, quoted and not measured here, run from about 1.05 for
+   South Africa through 1.25 for Britain to about 1.52 for Norway.
+
+2. what each one does to the land itself
+   at level 7
+   today  land 30.0%  largest landmass  27305  islands   45
+    warp  land 30.0%  largest landmass  26913  islands   43
+   grown  land 30.4%  largest landmass  14910  islands  312
+   The percentile lands on the asked-for fraction exactly. The grown mask
+   has no percentile in it, so `creation` was searched for the value that
+   reaches the same fraction, and it arrives near it rather than on it.
+
+3. the distance to the coast, and the height built on it
+   every cell reached: -47 cells at the deepest sea to 26 inland
+   grown, once the profile and the relief are laid on it:
+   ratio 28.61 against 36.78 for the bare mask, islands 193 against 312
+   Relief laid over a baseline and re-cut at sea level pulls the thinnest
+   filaments back under, so the profile tempers the mask rather than
+   inheriting it whole.
+
+4. how long a river gets, which is what the land allows
+   today  longest river  172 cells  on a landmass of  27305
+    warp  longest river  153 cells  on a landmass of  26913
+   grown  longest river   83 cells  on a landmass of  16064
+   A river cannot be longer than the land it crosses, so a coastline that
+   breaks the surface into more pieces shortens every river on it.
+
+5. whether a preview at a lower level is the map you get
+   cells of the level-6 map that the level-8 map disagrees with, of 40962
+   today      7  = 0.017%
+    warp      4  = 0.010%
+   grown    901  = 2.200%
+   Noise is sampled from a direction, so a cell that exists at both levels
+   is handed the same height at both, and only the percentile moves. The
+   grown mask runs its growth pass again at every level, and a cell decided
+   at level 6 keeps being reconsidered on the way to level 8.
+
+verdict
+   The coastline that ships is a smooth curve by the only measurement that
+   does not depend on resolution: its perimeter grows x2.08 then x2.17 as
+   the cells halve, against x2 for a curve with no detail in it at all.
+   Warping the direction moves that to x2.26 and x2.19, which is a change
+   too small to see. Growing the mask reaches x2.64 and x2.73, and pays for
+   it in two places nothing else pays: the land fraction stops being a
+   number that can be asked for, and the longest river on the planet halves
+   because the land is broken into more pieces.
 ```
 
 ## `coords.js`
@@ -1121,7 +1191,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 200M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1175,9 +1245,8 @@ language.js -- which language and runtime, decided by running the kernel
    Java         javac/java, default            482495611b7ba324   SAME
    Go           go build, amd64                482495611b7ba324   SAME
    Python       CPython 3                      482495611b7ba324   SAME
-   Rust→wasm    same source, run in node       482495611b7ba324   SAME
 
-   7 of 7 agree, bit for bit, over the whole pipeline.
+   6 of 6 agree, bit for bit, over the whole pipeline.
    Every one of these has a different compiler, a different optimiser and a
    different runtime, and they land on the same 64 bits. Doc 23 argued this
    from the standard; this is the argument actually run.
@@ -1368,12 +1437,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 15x version is the one that
+       than choosing the language. And the 11x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.39 ms, one object a vertex
-       5.69 ms -- a layout gap of 15x. Both are timings and move run to
+       This machine, now: typed arrays 0.68 ms, one object a vertex
+       7.57 ms -- a layout gap of 11x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -1429,6 +1498,9 @@ verdict
    aarch64 claim in section 2 is read from the instruction set, not
    measured. Running this script on an ARM machine and diffing the digest
    is the one experiment left, and it is now a five-minute job.
+
+   NOT CHECKED ON THIS MACHINE: the wasm32-unknown-unknown target.
+   Those rows are missing above rather than assumed.
 ```
 
 ## `light.js`
@@ -2296,7 +2368,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 805 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1115 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3087,4 +3159,4 @@ verdict
 
 ---
 
-_35 scripts. Every number above is reproduced by running them._
+_36 scripts. Every number above is reproduced by running them._
