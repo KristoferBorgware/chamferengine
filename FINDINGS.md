@@ -785,6 +785,7 @@ or blend the step direction with the previous one so a droplet cannot turn
 instantly. Neither is as good as momentum and both are an afternoon rather than
 a rewrite.
 
+---
 
 ## Closed
 
