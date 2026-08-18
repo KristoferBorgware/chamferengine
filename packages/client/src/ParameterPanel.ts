@@ -19,92 +19,89 @@ interface Knob {
 	 * up wherever this one was left.
 	 */
 	readonly enabledWhen?: (knobs: PlanetKnobs) => boolean;
+
+	/** Whether the map pane redraws when this moves. */
+	readonly map?: boolean;
 }
 
 /** One titled run of rows. */
 interface Group {
 	readonly title: string;
 	readonly note: string;
+
+	/** Whether the group starts folded away. */
+	readonly folded?: boolean;
+
 	readonly knobs: Knob[];
 }
 
 /**
- * What the panel shows, in the order the questions are usually asked.
+ * What the panel shows, grouped by what a knob decides and ordered by how much
+ * of the world it moves.
  *
- * A knob is here because a number in it was chosen by looking at the result
- * rather than read off a table. One that nobody turns comes out again.
+ * **Only three knobs move a coastline.** Swept across their whole ranges
+ * against the land-or-sea state of every cell, Land changes 25 to 50% of the
+ * surface, Landform across 17 to 18%, and Radius 16 to 17%. Every other knob
+ * measured changes **none of it** — which does not make them useless, only
+ * about something else: how tall the ground stands, how finely it is drawn, how
+ * deep it runs. So the first group is open and the rest are folded, and a knob
+ * comes out only when it is shown to do nothing at all.
  */
 const GROUPS: Group[] = [
 	{
-		title: "Paused",
-		note: "Builds the world again. What is left is the lattice and nothing else, which is the only state the level of detail can be judged in.",
-		knobs: [
-			{
-				key: "plain",
-				label: "Plain planet",
-				says: "Holds nine things off at once: the coarse map, the detail noise, water, the air, the day, the clouds, the moon, the stars, and the light moving at all. What is left is a smooth green sphere of cells lit as at noon. Nothing is removed -- every knob below keeps its setting and comes back when this is unchecked.",
-			},
-		],
-	},
-	{
-		title: "The planet",
-		note: "Changing any of these builds the world again. The first two decide the cell address; the rest do not.",
+		title: "Where the land is",
+		note: "The only knobs that move a coastline, and the ones the map redraws for. Swept across their whole ranges, Land changes 25 to 50% of the surface, Landform across 17%, and Radius 16%.",
 		knobs: [
 			{
 				key: "radius",
+				map: true,
 				label: "Radius",
 				digits: 0,
 				says: "How big the planet is. Sets how far you can see, which goes as the square root of this, and how long a walk round takes, which goes as this. With the block size it also sets the subdivision depth, and the depth is two bits of every cell address.",
 			},
 			{
-				key: "blockSize",
-				label: "Block size",
+				key: "landFraction",
+				map: true,
+				label: "Land",
 				digits: 2,
-				says: "How wide one cell is. Fixed for the life of the world. The radius moves to whatever makes this size exact, so the number above is a request and the readout below is what you get.",
+				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground. It also decides how long rivers get, because a river cannot be longer than the land it crosses.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "chunkCells",
-				label: "Chunk",
+				key: "reliefFeature",
+				map: true,
+				label: "Landform across",
 				digits: 0,
-				says: "How many cells along one edge of a chunk, which is the unit that is generated, meshed, stored and sent. Smaller chunks redraw less when one block changes and cost more of everything else. It does not appear in a cell address.",
+				says: "How wide one hill or valley is. This is the knob that decides whether you are looking at hills or standing on a hillside: below about twice the horizon the ground reads as landforms, above it as a slope. Narrower also means fewer octaves, because the smallest hill stays at 64 m.",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "coarseMap",
+				map: true,
 				label: "Coarse map",
-				says: "Whether continents, sea, relief, rivers and erosion run at all. Off is the ground doc 08 describes before that tier existed: dry, textured by Detail alone, and a fraction of the world-creation cost. Every other knob in this group and the next stops mattering while it is off.",
+				says: "Whether continents, sea, relief, rivers and erosion run at all. Off is the ground doc 08 describes before that tier existed: dry, textured by Detail alone, and a fraction of the world-creation cost. Every other knob in this group stops mattering while it is off, and so does How the ground stands.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "coarseSpacing",
+				map: true,
 				label: "Coarse cell",
 				digits: 0,
 				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide — the readout below is what you get.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
-			{
-				key: "crustMetres",
-				label: "Crust reaches",
-				digits: 0,
-				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
-			},
 		],
 	},
 	{
-		title: "The ground",
-		note: "Also a rebuild. Height is how tall a hill is and landform is how wide, and it is the width that decides whether the ground reads as hills or as one long slope.",
+		title: "How the ground stands",
+		note: "How far the map's numbers reach in metres, and the detail laid over them. None of these moves a coastline, so the map does not redraw for them.",
+		folded: true,
 		knobs: [
 			{
 				key: "heightScale",
 				label: "Height scale",
 				digits: 0,
 				says: "How tall the terrain is. It multiplies the whole height field, so mountains and sea floors move together and the ground gets steeper without changing shape. The tallest peak comes out at about half this number.",
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "reliefFeature",
-				label: "Landform across",
-				digits: 0,
-				says: "How wide one hill or valley is. This is the knob that decides whether you are looking at hills or standing on a hillside: below about twice the horizon the ground reads as landforms, above it as a slope. Narrower also means fewer octaves, because the smallest hill stays at 64 m.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -121,23 +118,49 @@ const GROUPS: Group[] = [
 				says: "How wide one bump of that fine noise is. Below the coarse cell it is the only thing giving the ground texture between one map sample and the next.",
 				enabledWhen: (k) => !k.plain,
 			},
+		],
+	},
+	{
+		title: "The cell grid",
+		note: "How big a cell is, how many make a chunk, and how deep the world runs. The first two decide the cell address.",
+		folded: true,
+		knobs: [
 			{
-				key: "landFraction",
-				label: "Land",
+				key: "blockSize",
+				label: "Block size",
 				digits: 2,
-				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground. It also decides how long rivers get, because a river cannot be longer than the land it crosses.",
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				says: "How wide one cell is. Fixed for the life of the world. The radius moves to whatever makes this size exact, so the number above is a request and the readout below is what you get.",
 			},
 			{
-				key: "apron",
-				label: "Apron",
-				says: "Whether a chunk also draws the ring of cells just beyond its rim. Two levels tile their shared boundary with hexagons of two sizes and those do not interlock, so without it strips of ground belong to nobody and the sky shows through the planet. Off shows the holes.",
+				key: "chunkCells",
+				label: "Chunk",
+				digits: 0,
+				says: "How many cells along one edge of a chunk, which is the unit that is generated, meshed, stored and sent. Smaller chunks redraw less when one block changes and cost more of everything else. It does not appear in a cell address.",
+			},
+			{
+				key: "crustMetres",
+				label: "Crust reaches",
+				digits: 0,
+				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
+			},
+		],
+	},
+	{
+		title: "Paused",
+		note: "Builds the world again. What is left is the lattice and nothing else, which is the only state the level of detail can be judged in.",
+		folded: true,
+		knobs: [
+			{
+				key: "plain",
+				label: "Plain planet",
+				says: "Holds nine things off at once: the coarse map, the detail noise, water, the air, the day, the clouds, the moon, the stars, and the light moving at all. What is left is a smooth green sphere of cells lit as at noon. Nothing is removed -- every knob below keeps its setting and comes back when this is unchecked.",
 			},
 		],
 	},
 	{
 		title: "The air",
-		note: "Immediate. How tall the air is decides how strong a sunset is.",
+		note: "How thick the sky is and how far up it reaches.",
+		folded: true,
 		knobs: [
 			{
 				key: "atmosphereTop",
@@ -157,7 +180,8 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "Time",
-		note: "Immediate. Pausing freezes the sun and the moon exactly where they stood; dragging the time of day jumps there and pauses too.",
+		note: "How long a day is, and where in one the light stands.",
+		folded: true,
 		knobs: [
 			{
 				key: "dayLength",
@@ -183,7 +207,8 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The clouds",
-		note: "A rebuild. A cloud is a stack of hexagon shells, not a flat sheet, so shape follows from where the shells sit as much as from the noise.",
+		note: "Where the two decks sit, and how a puff is shaped.",
+		folded: true,
 		knobs: [
 			{
 				key: "lowDeck",
@@ -217,13 +242,19 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "Drawing",
-		note: "Immediate. What is held, and how much of it is drawn.",
+		note: "What the renderer does with the world once it exists.",
+		folded: true,
 		knobs: [
 			{
 				key: "detail",
 				label: "Full detail to",
 				digits: 1,
 				says: "How many of its own widths away a chunk goes before it drops to the next coarser level. Higher holds more chunks at full detail, which costs generation time and memory rather than frame time.",
+			},
+			{
+				key: "apron",
+				label: "Apron",
+				says: "Whether a chunk also draws the ring of cells just beyond its rim. Two levels tile their shared boundary with hexagons of two sizes and those do not interlock, so without it strips of ground belong to nobody and the sky shows through the planet. Off shows the holes.",
 			},
 			{
 				key: "seamOverlay",
@@ -312,9 +343,26 @@ export class ParameterPanel {
 		};
 		body.appendChild(seed);
 
+		// A group is a fold, and only the first is open. Twenty-six rows at one
+		// prominence is the thing this release set out to fix, and the order
+		// they are in is what each one decides rather than which subsystem
+		// happens to read it.
 		for (const group of GROUPS) {
 			const section = document.createElement("section");
-			section.innerHTML = `<h2>${group.title}</h2><p>${group.note}</p>`;
+			if (group.folded) section.classList.add("shut");
+
+			const head = document.createElement("h2");
+			const toggle = document.createElement("button");
+			toggle.className = "knobs-fold";
+			toggle.textContent = group.title;
+			toggle.onclick = () => section.classList.toggle("shut");
+			head.appendChild(toggle);
+			section.appendChild(head);
+
+			const note = document.createElement("p");
+			note.textContent = group.note;
+			section.appendChild(note);
+
 			for (const knob of group.knobs) {
 				const row = this.row(knob);
 				this.rows.push(row);
@@ -361,6 +409,10 @@ export class ParameterPanel {
 		wrap.innerHTML =
 			`<label>${knob.label}` +
 			(range.rebuilds ? ' <i title="needs a rebuild">&#9679;</i>' : "") +
+			// The map pane answers to five knobs and not the other nineteen, and
+			// nothing on a slider used to say which. Turning Height scale and
+			// watching the map sit still is the shape of complaint this marks.
+			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
 			(toggle ? "" : "<b></b>") +
 			`</label><input type="${toggle ? "checkbox" : "range"}">` +
 			`<small>${knob.says}</small>`;
