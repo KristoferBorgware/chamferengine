@@ -6,6 +6,22 @@ and duplicates information found there.
 
 ## Working agreements
 
+- **Write to be acted on.** These rules govern replies to the owner, not
+  repository prose — [`HOW-TO-WRITE-DOCS.md`](HOW-TO-WRITE-DOCS.md) governs
+  that, and the two want different things.
+  - **Name every label at every use.** `I-5, the map editor`, never `I-5` alone;
+    `F-023, the selection reaching for the planet's tallest mountain`, never
+    `F-023`. The number is a filing reference and carries no meaning on its own.
+  - **Carry a number through to what it causes.** `0.31 m` decides nothing.
+    `0.31 m, a third of a block, and only above 1,200 m where nobody stands`
+    does. A measurement that stops before its consequence is half-reported.
+  - **Assume nothing earlier in the conversation is loaded.** A question that
+    needs an answer carries the whole picture with it: what the thing is, what
+    the options are, what each one costs. Detail established twenty messages ago
+    is not available to the reader.
+  - **Short sentences, ordinary words.** Explain the mechanism rather than
+    naming it. If a reply cannot be acted on, it failed, however accurate it is.
+
 - **Push to `master`.** That is the default and does not need asking for each
   time. Work may be staged on a feature branch first, but it is not finished
   until `master` has it, because `master` is what publishes the site.
