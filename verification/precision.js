@@ -295,3 +295,46 @@ console.log('\n9. the vector between two distant entities, in float32');
   console.log('   float64 and the answer is right at every planet size.');
   console.log('   ANSWER: nothing needs it in float32; the limit if you tried is ~16 km.');
 }
+
+// ---- 10. a surface radius, and the ceil that turns it into a layer ----------
+// The third tier's rule says float32 is for chunk-local data. A ground radius
+// looks small on the page and is not: it is a distance from the planet's centre,
+// so storing one in float32 rounds a world position. What makes that visible
+// rather than academic is the arithmetic downstream -- the layer a surface tops
+// is a ceil, and a ceil has no tolerance at all.
+console.log('\n10. a surface radius held in float32, and the layer it names');
+{
+  const K = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
+  // The shipped planet: 1 m blocks, so the radius is whatever makes them exact.
+  const D = 13, block = 1;
+  const R = (block * 2 ** D) / K;
+  const crustTop = R + block;                    // one metre of elevation above sea level
+  const layerOf = r => Math.ceil((crustTop - r) / block - 1e-9);
+
+  console.log('   radius R                    ' + R.toFixed(12) + ' m');
+  console.log('   float32 spacing at R        ' + m(ulp32(R), 3));
+  console.log('   R through float32           ' + f(R).toFixed(12) + ' m'
+    + '  (' + m(Math.abs(f(R) - R), 3) + ' away)');
+  console.log('   layer the surface tops      ' + layerOf(R) + ' from float64, '
+    + layerOf(f(R)) + ' from float32');
+  console.log('   the two differ by           ' + Math.abs(layerOf(R) - layerOf(f(R)))
+    + ' layer = ' + block + ' m of cliff');
+
+  // How often it fires on ground that is NOT on a layer boundary: the flip needs
+  // the fraction to sit within one float32 step of an integer.
+  let s = 987654321;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32; };
+  let flips = 0;
+  const trials = 2e6;
+  for (let n = 0; n < trials; n++) {
+    const ground = R - rnd() * 200;               // anywhere in the top 200 m of crust
+    if (layerOf(ground) !== layerOf(f(ground))) flips++;
+  }
+  console.log('\n   ground sampled anywhere in the crust: '
+    + (100 * flips / trials).toFixed(3) + '% of columns land on different layers');
+  console.log('   ground sitting exactly on a layer boundary: 100% of them do, and a');
+  console.log('   flat planet at sea level is that case at every column it has.');
+  console.log('   ANSWER: a radius is a world position. Held at float32 it moves by half a');
+  console.log('   millimetre at planet scale, and a ceil turns half a millimetre into a');
+  console.log('   whole block. The rounding to a layer is where the third tier bites back.');
+}

@@ -202,7 +202,12 @@ Violating any of these breaks the design. They are not tunable.
     ray walk. Midpoint splitting is the *index* hierarchy only.
 13. Identity is integer, world positions are `float64`, and anything GPU-facing is
     `float32` **relative to its chunk**. Never cache a world-space position across
-    a frame — recompute it from anchor plus offset.
+    a frame — recompute it from anchor plus offset. **A surface radius is a world
+    position** — it carries the planet's whole magnitude, and the layer it names
+    is a `ceil`, so a `float32` one moves 48 µm at the shipped radius and lands a
+    **whole block** away (`precision.js` §10, doc 15). That reaches 0.020% of
+    arbitrary ground and **every** column of a world whose ground is at sea
+    level.
 14. A cell **is** the set of directions `hexRound` maps to it — the radial
     projection of the planar Voronoi hexagon, and the **mesh draws that same
     curve** (doc 18): a corner is the lattice point `(3i+2, 3j+1)` at `3n` for an

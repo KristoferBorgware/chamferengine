@@ -114,7 +114,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 340 ns -- a timing, so it moves run to run
+   this machine, now: 325 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1121,7 +1121,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 267M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 286M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1373,7 +1373,7 @@ language.js -- which language and runtime, decided by running the kernel
        The fast version allocates nothing and never collects.
 
        This machine, now: typed arrays 0.39 ms, one object a vertex
-       5.82 ms -- a layout gap of 15x. Both are timings and move run to
+       5.69 ms -- a layout gap of 15x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2126,6 +2126,20 @@ Cited by [doc 15](15-precision-and-origin.md).
    while the float32 budget exists for per-VERTEX data. Compute them in
    float64 and the answer is right at every planet size.
    ANSWER: nothing needs it in float32; the limit if you tried is ~16 km.
+
+10. a surface radius held in float32, and the layer it names
+   radius R                    6800.648485818399 m
+   float32 spacing at R        488.281 um
+   R through float32           6800.648437500000 m  (48.318 um away)
+   layer the surface tops      1 from float64, 2 from float32
+   the two differ by           1 layer = 1 m of cliff
+
+   ground sampled anywhere in the crust: 0.020% of columns land on different layers
+   ground sitting exactly on a layer boundary: 100% of them do, and a
+   flat planet at sea level is that case at every column it has.
+   ANSWER: a radius is a world position. Held at float32 it moves by half a
+   millimetre at planet scale, and a ceil turns half a millimetre into a
+   whole block. The rounding to a layer is where the third tier bites back.
 ```
 
 ## `qr.js`
@@ -2282,7 +2296,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 865 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 805 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 

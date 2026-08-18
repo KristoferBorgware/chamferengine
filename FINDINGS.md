@@ -496,6 +496,46 @@ worker-protocol change, not a mesher formula.
 
 ---
 
+### F-027 — The container can present WebGPU after all, and nothing takes a frame
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-18, chasing v0.1.2 I-8's dark lines to a horizon band whose
+color turned out to be a ratio
+**Where:** the container; nothing in the repository, which is the point
+
+**What happens.** F-011 recorded that headless Chromium here acquires a WebGPU
+device and then fails on the swap chain, and that every visual claim has to be
+confirmed on real hardware. That is no longer true. Chromium started with
+`--headless=new --enable-unsafe-webgpu --use-angle=swiftshader
+--use-vulkan=swiftshader` runs the client on a software adapter, reports 120 to
+180 frames a second, and hands a real frame back through the DevTools protocol
+— `Page.captureScreenshot` on a page driven by `Page.navigate` and
+`Input.dispatchKeyEvent`. The pixels are the client's own: reading the rows at
+the horizon gave the artifact's brightness as 0.58 of the ground's own color,
+which is what identified it.
+
+**Why it matters.** Two things were held back by the old answer. **F-005** —
+nothing checks that the renderer produces a picture — was filed as needing
+hardware, and it does not: a frame taken here can be asserted on, and a first
+test as blunt as "the middle of the canvas is not the clear color" would have
+caught the black screen that survived four projects. And every seam item in
+v0.1.2 was argued from meshes and raycasts because looking was thought to be
+impossible; I-8 was three passes of measuring the wrong thing until the frame
+itself was read.
+
+**What would fix it.** Keep the harness. It is about eighty lines: launch
+Chromium with the three flags and a debugging port, connect to the page's
+WebSocket, navigate, wait for the chunk count in the readout to settle, ask for
+a screenshot, decode the PNG. It belongs in `tools/`, beside the other checks
+that a session runs before pushing, and it is what makes F-005 a small piece of
+work rather than a large one. The frames it takes are a software rasteriser's,
+so it settles what is drawn and never how fast.
+
+---
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth

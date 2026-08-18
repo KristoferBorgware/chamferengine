@@ -44,8 +44,16 @@ export class Chunk {
 	/**
 	 * Each slot's true surface radii, ground then water, before the rounding
 	 * to this chunk's own layer grid. Zeros where nothing recorded them.
+	 *
+	 * A radius is a world position, so it is held at `float64` however small
+	 * the number looks. The cells around a chunk are generated on demand and
+	 * arrive at full precision, and the rounding that turns a radius into a
+	 * layer is a `ceil`: two readings of one surface that differ by a
+	 * `float32` step at planet radius -- 0.49 mm at 6,800 m -- land on
+	 * different layers whenever the surface sits on a layer boundary, and a
+	 * whole block of cliff stands between them.
 	 */
-	readonly surface: Float32Array;
+	readonly surface: Float64Array;
 
 	constructor(
 		address: ChunkAddress,
@@ -54,7 +62,7 @@ export class Chunk {
 		layerCount: number,
 		blocks?: Uint16Array,
 		band?: Int16Array,
-		surface?: Float32Array,
+		surface?: Float64Array,
 	) {
 		this.address = address;
 		this.depth = depth;
@@ -64,7 +72,7 @@ export class Chunk {
 		this.layerCount = layerCount;
 		this.blocks = blocks ?? new Uint16Array(this.slots * layerCount);
 		this.band = band ?? new Int16Array(this.slots * 2);
-		this.surface = surface ?? new Float32Array(this.slots * 2);
+		this.surface = surface ?? new Float64Array(this.slots * 2);
 	}
 
 	/** The column at a slot, as the mesher reads it. */

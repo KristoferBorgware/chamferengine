@@ -80,8 +80,36 @@ describe("Chunk", () => {
 		expect(chunk.slots).toBe(561);
 		expect(chunk.blocks.length).toBe(244035);
 		// Two bytes a cell, two band entries of two bytes per slot, and two
-		// surface radii of four bytes per slot.
-		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 4 + 561 * 8);
+		// surface radii of eight bytes per slot.
+		expect(chunk.byteLength).toBe(244035 * 2 + 561 * 4 + 561 * 16);
+	});
+
+	it("keeps a stored surface radius bit-identical to the generator's", () => {
+		// A radius is a world position, and 6,800 m is well past what float32
+		// resolves at a millimetre. The cells around a chunk are generated on
+		// demand rather than read from it, so a chunk that stored its own
+		// radii any narrower would disagree with its neighbours about where
+		// the ground is -- and the rounding to a layer is a ceil, which turns
+		// that disagreement into a whole block of cliff.
+		const wide = new WorldShape(6800.648485818399, 10, 4, 24);
+		const generator = new TerrainGenerator(map.seed, wide, map);
+		const chunk = generateChunk(
+			generator,
+			ChunkAddress.fromKey(3, 6),
+			6,
+			24,
+		);
+		let checked = 0;
+		for (let q = 0; q <= chunk.m; q++)
+			for (let r = 0; q + r <= chunk.m; r++) {
+				const [i, j] = joinPath(chunk.address.path, q, r, 10);
+				const stored = chunk.columnOf(rank(q, r, chunk.m));
+				const fresh = generator.columnAt(chunk.address.face, i, j);
+				expect(stored.groundRadius).toBe(fresh.groundRadius);
+				expect(stored.waterRadius).toBe(fresh.waterRadius);
+				checked++;
+			}
+		expect(checked).toBe(chunk.slots);
 	});
 
 	it("indexes a cell as its rank times the layer count", () => {

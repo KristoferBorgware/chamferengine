@@ -700,6 +700,59 @@ describe("merging at a level seam", () => {
 	});
 });
 
+describe("a surface exactly on a layer boundary", () => {
+	// The paused world puts the ground at sea level everywhere, and sea level
+	// is a radius, so every column on the planet tops a layer exactly. That is
+	// the worst case for the ceil that turns a radius into a layer: any two
+	// readings of one surface that do not agree to the bit land on different
+	// layers, and a wall stands between them.
+	const boundary = () => {
+		const first = new WorldShape(6800.648485818399, 10, 1, 24);
+		return new WorldShape(6800.648485818399, 10, 3 * first.blockSize, 24);
+	};
+
+	it("meshes to caps, with no wall anywhere", () => {
+		const flat = flatCoarseMap(seedFromString("chamfer"), 2);
+		const world = boundary();
+		const generator = new TerrainGenerator(flat.seed, world, flat, {
+			detailAmplitude: 0,
+		});
+		const chunk = generateChunk(
+			generator,
+			ChunkAddress.fromKey(3, 6),
+			6,
+			24,
+		);
+		const built = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, generator),
+			world,
+			flat.seed,
+			{ apron: true, surfaceGrid: world.blockSize },
+		);
+
+		const vertices = built.opaque.vertices;
+		const indices = built.opaque.indices;
+		const origin = built.origin;
+		const radiusOf = (index: number) =>
+			Math.hypot(
+				vertices[index * 6]! + origin.x,
+				vertices[index * 6 + 1]! + origin.y,
+				vertices[index * 6 + 2]! + origin.z,
+			);
+		let walls = 0;
+		for (let t = 0; t + 2 < indices.length; t += 3) {
+			const radii = [0, 1, 2].map((corner) =>
+				radiusOf(indices[t + corner]!),
+			);
+			if (Math.max(...radii) - Math.min(...radii) > 0.05) walls++;
+		}
+		expect(indices.length).toBeGreaterThan(0);
+		expect(built.tally.apron).toBeGreaterThan(0);
+		expect(walls).toBe(0);
+	});
+});
+
 describe("ambient occlusion", () => {
 	it("has three levels, not a cube world's four", () => {
 		// A hexagon's corner is shared by three cells, so a face's vertex has two

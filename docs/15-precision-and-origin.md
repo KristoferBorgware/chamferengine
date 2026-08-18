@@ -396,6 +396,38 @@ mistake, in a different currency, as storing a heading as a world vector
 
 ---
 
+### A radius is a world position, and the layer it names is a `ceil`
+
+The rule's middle row is the one that looks easiest to break, because a radius
+does not look like a position. It is a single number, it changes by centimetres
+across a whole landscape, and it is tempting to store a field of them the way a
+heightmap is stored. It is a distance from the planet's centre, so it carries
+the planet's whole magnitude and rounds exactly as badly as a coordinate does.
+
+What makes that visible rather than academic is what happens next. Turning a
+surface radius into a **layer** — which is how [doc 07](07-data-structures.md)
+addresses the crust, and what the mesher asks before it draws a cap — is a
+`ceil`. A `ceil` has no tolerance. Two readings of one surface that straddle a
+layer boundary name different layers however small the gap between them is, and
+the mesher then correctly draws the wall between them.
+
+> **[verified]** `verification/precision.js`, section 10. On the worked planet
+> at 1 m blocks — radius `6800.648485818399` m, `D = 13` — `float32` spacing is
+> **488 µm**, and the radius through `float32` moves **48 µm**. The surface tops
+> layer **1** read one way and layer **2** read the other: **a whole block of
+> cliff, from 48 micrometres.**
+
+The share of ground this reaches says why it is a trap rather than an obvious
+bug. Over ground sampled anywhere in the crust it fires on **0.020%** of columns
+— one in five thousand, scattered, and invisible. Over ground that sits exactly
+on a layer boundary it fires on **every** column, and a planet whose ground is
+at sea level everywhere is precisely that case, because sea level is a radius
+([doc 25](25-water.md)).
+
+So the middle row is not advice about accuracy. A `float32` radius does not
+produce a slightly wrong surface; it produces a surface a whole block away from
+the one next to it, in a pattern set by which code path read it.
+
 ## What this forces elsewhere
 
 - **World positions are `float64`.** Anything that computes a position from an ID
