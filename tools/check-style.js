@@ -139,6 +139,31 @@ for (const rel of FILES) {
     if (!/^!\[/m.test(text)) hits.push({ line: 0, name: 'figure', note: 'no figure', text: '' });
   }
 
+  // The register's two lists mean opposite things, and an entry filed under
+  // the wrong one is invisible: an open finding under Closed is a finding
+  // nobody will pick up. Editing the file by machine is what puts one there,
+  // because an insertion can eat the `---` a naive splitter relies on, so the
+  // check splits on the headings themselves and asks only one question --
+  // does the entry carry a Closed field, and is it on the matching side.
+  if (rel === 'FINDINGS.md') {
+    const openAt = text.indexOf('## Open');
+    const closedAt = text.indexOf('## Closed');
+    const upto = i => text.slice(0, i).split('\n').length;
+    for (const m of text.matchAll(/^### (F-\d+).*$/gm)) {
+      const next = text.slice(m.index + 1).search(/^### F-\d+/m);
+      const body = text.slice(m.index, next < 0 ? text.length : m.index + 1 + next);
+      const shut = /^\*\*Closed:\*\*/m.test(body);
+      const filedShut = m.index > closedAt && closedAt > openAt;
+      if (shut !== filedShut) hits.push({
+        line: upto(m.index), name: 'register',
+        note: shut
+          ? `${m[1]} carries a Closed field but is filed under Open`
+          : `${m[1]} is filed under Closed with no Closed field`,
+        text: '',
+      });
+    }
+  }
+
   // A plan records a decision, and a decision without the measurement that
   // made it cannot be reviewed. It also records the candidates that lost,
   // which is the most useful thing in the file a year later.

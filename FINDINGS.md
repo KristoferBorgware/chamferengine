@@ -208,48 +208,6 @@ several scripts already carry.
 
 ---
 
-### F-019 — A candidate judged by eye can turn out to be a planet parameter, not a release decision
-
-**Kind:** idea
-**Milestone:** unscheduled
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-19, closing I-5 and the remaining half of I-1
-**Where:** `HOW-TO-WRITE-PLANS.md`, the step for candidates judged in the
-engine rather than argued from a measurement
-
-**What happens.** I-5 asked "32 m or 16 m coarse cells", built both behind a
-switch, and set out to pick a winner and remove the loser — the standard
-close for a candidate judged by looking rather than by a script. Looking
-answered a different question than expected: which spacing reads better does
-not depend on anything about this release, only on the planet being looked
-at. A small calm world can afford a narrower river than a large dramatic one
-wants, the same way I-3 found that a bigger planet needs a wider landform to
-read as one. I-1's remaining question — how tall B2's atmosphere should be —
-turned out to be the same shape once it was named: the demo shows the range,
-and nothing here picks one height as *the* answer.
-
-Both closed by leaving the knob exactly as it was, default included, rather
-than by choosing a winner. Nothing in the process document currently expects
-that outcome — it only describes "pick one, remove the other."
-
-**Why it matters.** The process as written pushes toward manufacturing a
-decision even when the honest answer is "this varies by world, and both
-sides already coexist as one knob." Following it as written would have
-picked an arbitrary default and quietly narrowed what a later world author
-could set. Nothing is broken today — both items closed correctly once this
-was noticed — but the next candidate judged in the engine will ask the same
-question again unless the process names it.
-
-**What would fix it.** Add a line to `HOW-TO-WRITE-PLANS.md`'s step for
-engine-judged candidates: before removing the losing side, ask whether the
-difference is a property of the world or a property of the release. If it is
-the world's, the close is "confirmed as a per-planet knob, no default
-chosen" rather than "A wins, B comes out." Small — one paragraph, and two
-worked examples already exist to cite.
-
----
-
 ### F-015 — A large river is a chain of pools, not a continuous ribbon
 
 **Kind:** question
@@ -337,6 +295,48 @@ before and after; they should stop moving with resolution.
 
 ---
 
+### F-019 — A candidate judged by eye can turn out to be a planet parameter, not a release decision
+
+**Kind:** idea
+**Milestone:** unscheduled
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-19, closing I-5 and the remaining half of I-1
+**Where:** `HOW-TO-WRITE-PLANS.md`, the step for candidates judged in the
+engine rather than argued from a measurement
+
+**What happens.** I-5 asked "32 m or 16 m coarse cells", built both behind a
+switch, and set out to pick a winner and remove the loser — the standard
+close for a candidate judged by looking rather than by a script. Looking
+answered a different question than expected: which spacing reads better does
+not depend on anything about this release, only on the planet being looked
+at. A small calm world can afford a narrower river than a large dramatic one
+wants, the same way I-3 found that a bigger planet needs a wider landform to
+read as one. I-1's remaining question — how tall B2's atmosphere should be —
+turned out to be the same shape once it was named: the demo shows the range,
+and nothing here picks one height as *the* answer.
+
+Both closed by leaving the knob exactly as it was, default included, rather
+than by choosing a winner. Nothing in the process document currently expects
+that outcome — it only describes "pick one, remove the other."
+
+**Why it matters.** The process as written pushes toward manufacturing a
+decision even when the honest answer is "this varies by world, and both
+sides already coexist as one knob." Following it as written would have
+picked an arbitrary default and quietly narrowed what a later world author
+could set. Nothing is broken today — both items closed correctly once this
+was noticed — but the next candidate judged in the engine will ask the same
+question again unless the process names it.
+
+**What would fix it.** Add a line to `HOW-TO-WRITE-PLANS.md`'s step for
+engine-judged candidates: before removing the losing side, ask whether the
+difference is a property of the world or a property of the release. If it is
+the world's, the close is "confirmed as a per-planet knob, no default
+chosen" rather than "A wins, B comes out." Small — one paragraph, and two
+worked examples already exist to cite.
+
+---
+
 ### F-021 — Daylight is measured at the spawn point, not where the player is
 
 **Kind:** bug
@@ -399,6 +399,103 @@ by more than a couple of metres, the same rule movement already uses.
 
 ---
 
+---
+
+### F-023 — The selection's peak term assumes the tallest ground is everywhere
+
+**Kind:** idea
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-17, pricing v0.1.2's I-4 fix on the bench
+**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`, the
+`peakHeight` term; the numbers are in `plans/v0.1.2.md`, I-4
+
+**What happens.** The selection reaches
+`horizonAngle(eye) + horizonAngle(peak)` with one planet-wide `maxElevation`
+as the peak, so it selects every chunk that could hold visible ground if the
+tallest mountain on the planet stood in it. Most chunks hold nothing near
+that tall. On the un-paused world (`maxElevation` ~120 m, its own horizon
+~1.3 km) the bench's eye-height flat-ground scene went from 286 to 552
+chunks and 2.4 to 3.9 s to fill a view.
+
+**Why it matters.** Roughly half the chunks built at eye height are in a ring
+that is mostly below the horizon, built and uploaded for nothing. It is the
+correct conservative bound — nothing visible is ever dropped, which is what
+I-4 restored — but the cost is paid on every world with relief, every frame
+the player moves.
+
+**What would fix it.** A height bound per chunk rather than per planet. The
+coarse map already knows the height field; the maximum over a chunk's
+footprint, computed once at world creation for the chunk levels that matter,
+would let the walk use each triangle's own tallest ground. The walk already
+visits parents before children, so a bound per face triangle refined
+downward fits the existing recursion.
+
+---
+
+### F-024 — The column cache key collides at the deepest world the word allows
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, writing v0.1.2's apron, whose own key packs with
+262,144 for exactly this reason
+**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`, the
+`key` in `columnAt`
+
+**What happens.** The cache key is `(face * 65536 + i) * 65536 + j`, and a
+lattice coordinate runs to `2^depth`. The address word allows depth 17, where
+`n` is 131,072 — twice the multiplier — so two different cells can share a
+key and the sampler would hand one cell the other's blocks.
+
+**Why it matters.** Nobody yet: the shipped worlds sit at depth 10 to 13 and
+the panel caps what a person can ask for below the collision. It is a trap
+armed for whoever first builds a depth-17 world, and it would surface as
+subtly wrong terrain rather than an error.
+
+**What would fix it.** Multiply by 262,144 — `2^18`, one step above the
+deepest lattice — the way the apron's key in `meshChunk.ts` already does.
+The product stays under `2^53` with room to spare: 20 faces times `2^36` is
+`1.4e12`.
+
+---
+
+### F-025 — A cave mouth crossing a level join is still an open hole
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** large
+**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
+**Where:** `packages/engine/src/mesh/meshChunk.ts` and
+`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
+ownership, priced by `verification/seam.js`
+
+**What happens.** The skirts now reach the lowest surface a neighbouring
+level might put beside a rim column, which closes the join's surface slit at
+any relief. A skirt is still a wall hanging from the surface: a cave mouth
+that crosses the join sits deeper than any skirt hangs, and `seam.js`
+measured that 13 to 32% of columns have more than one span once caves are
+on. The full design — the finer chunk emits a face wherever its solidity
+differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
+is not built.
+
+**Why it matters.** Nobody today: caves are off by default and off under
+v0.1.2's pause, so no shipped world has a multi-span column. The first
+release that turns caves on gets sky-through-the-planet back, at exactly the
+joins v0.1.2 closed for the surface.
+
+**What would fix it.** Seam-owned faces need to know the neighbour's level,
+which the mesher deliberately does not: a blind guess emits walls above a
+same-level neighbour's ground, standing into the air. The selection knows
+every chunk's level, so the road is to tell the mesher its neighbours'
+levels and re-mesh the rim when a neighbour changes level — a residency and
+worker-protocol change, not a mesher formula.
+
+---
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
@@ -448,6 +545,8 @@ every depth the address word reaches, 63 bits, with no `number` anywhere in
 the path. `packages/engine/tests/addressing/id/CellId.test.ts` pins the
 planet-4095, depth-13 round trip directly.
 
+---
+
 ### F-016 — Four panel knobs still reach nothing
 
 **Kind:** gap
@@ -480,6 +579,8 @@ and the row draws greyed with a note.
 **Closed:** 2026-08-18, marked. Every knob now carries a description of what it
 does, and the four unconnected ones end theirs with "Not connected yet." Building
 I-1 and I-2 is the real fix and is still open in `plans/v0.1.1.md`.
+
+---
 
 ### F-010 — The level-of-detail chain stops at the icosahedron faces
 
@@ -765,95 +866,6 @@ reasoning moved into `selectChunks.ts` as the default, which is now 2 and
 agrees with what the client ships.
 
 ---
-
-### F-023 — The selection's peak term assumes the tallest ground is everywhere
-
-**Kind:** idea
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-17, pricing v0.1.2's I-4 fix on the bench
-**Where:** `packages/engine/src/generation/chunk/selectChunks.ts`, the
-`peakHeight` term; the numbers are in `plans/v0.1.2.md`, I-4
-
-**What happens.** The selection reaches
-`horizonAngle(eye) + horizonAngle(peak)` with one planet-wide `maxElevation`
-as the peak, so it selects every chunk that could hold visible ground if the
-tallest mountain on the planet stood in it. Most chunks hold nothing near
-that tall. On the un-paused world (`maxElevation` ~120 m, its own horizon
-~1.3 km) the bench's eye-height flat-ground scene went from 286 to 552
-chunks and 2.4 to 3.9 s to fill a view.
-
-**Why it matters.** Roughly half the chunks built at eye height are in a ring
-that is mostly below the horizon, built and uploaded for nothing. It is the
-correct conservative bound — nothing visible is ever dropped, which is what
-I-4 restored — but the cost is paid on every world with relief, every frame
-the player moves.
-
-**What would fix it.** A height bound per chunk rather than per planet. The
-coarse map already knows the height field; the maximum over a chunk's
-footprint, computed once at world creation for the chunk levels that matter,
-would let the walk use each triangle's own tallest ground. The walk already
-visits parents before children, so a bound per face triangle refined
-downward fits the existing recursion.
-
-### F-024 — The column cache key collides at the deepest world the word allows
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-17, writing v0.1.2's apron, whose own key packs with
-262,144 for exactly this reason
-**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`, the
-`key` in `columnAt`
-
-**What happens.** The cache key is `(face * 65536 + i) * 65536 + j`, and a
-lattice coordinate runs to `2^depth`. The address word allows depth 17, where
-`n` is 131,072 — twice the multiplier — so two different cells can share a
-key and the sampler would hand one cell the other's blocks.
-
-**Why it matters.** Nobody yet: the shipped worlds sit at depth 10 to 13 and
-the panel caps what a person can ask for below the collision. It is a trap
-armed for whoever first builds a depth-17 world, and it would surface as
-subtly wrong terrain rather than an error.
-
-**What would fix it.** Multiply by 262,144 — `2^18`, one step above the
-deepest lattice — the way the apron's key in `meshChunk.ts` already does.
-The product stays under `2^53` with room to spare: 20 faces times `2^36` is
-`1.4e12`.
-
-### F-025 — A cave mouth crossing a level join is still an open hole
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** large
-**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
-**Where:** `packages/engine/src/mesh/meshChunk.ts` and
-`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
-ownership, priced by `verification/seam.js`
-
-**What happens.** The skirts now reach the lowest surface a neighbouring
-level might put beside a rim column, which closes the join's surface slit at
-any relief. A skirt is still a wall hanging from the surface: a cave mouth
-that crosses the join sits deeper than any skirt hangs, and `seam.js`
-measured that 13 to 32% of columns have more than one span once caves are
-on. The full design — the finer chunk emits a face wherever its solidity
-differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
-is not built.
-
-**Why it matters.** Nobody today: caves are off by default and off under
-v0.1.2's pause, so no shipped world has a multi-span column. The first
-release that turns caves on gets sky-through-the-planet back, at exactly the
-joins v0.1.2 closed for the surface.
-
-**What would fix it.** Seam-owned faces need to know the neighbour's level,
-which the mesher deliberately does not: a blind guess emits walls above a
-same-level neighbour's ground, standing into the air. The selection knows
-every chunk's level, so the road is to tell the mesher its neighbours'
-levels and re-mesh the rim when a neighbour changes level — a residency and
-worker-protocol change, not a mesher formula.
 
 ### F-026 — The specification still describes a skirt the engine no longer has
 
