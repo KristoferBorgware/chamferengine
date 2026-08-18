@@ -153,7 +153,7 @@ export interface PlanetKnobs {
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
 	seed: "chamfer",
-	plain: true,
+	plain: false,
 	radius: 6800,
 	blockSize: 1,
 	chunkCells: 32,

@@ -176,6 +176,8 @@ let onLiveKnob: (live: PlanetSettings) => void = () => {};
  * string, which is the one path that rebuilds the device, the map and every
  * chunk together.
  */
+let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
+
 if (params.get("panel") === "1") {
 	const maps = new MapPanel(settings, (chosen) => {
 		const wanted = chosen.toParams();
@@ -189,6 +191,7 @@ if (params.get("panel") === "1") {
 		},
 		(draft) => maps.changed(draft),
 	);
+	onPlayerMoved = (up) => maps.setPlayer(up);
 }
 
 async function main(): Promise<void> {
@@ -877,6 +880,7 @@ async function main(): Promise<void> {
 		});
 		timer.leave("draw", performance.now());
 
+		onPlayerMoved(up);
 		const at = geographicOf(player.position, RADIUS);
 		const cell = positionToCell(player.position, shape.n);
 		report([

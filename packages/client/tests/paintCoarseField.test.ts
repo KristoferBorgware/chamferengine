@@ -4,7 +4,9 @@ import { paintCoarseField } from "../src/paintCoarseField.js";
 
 const W = 96;
 const H = 48;
-const map = buildCoarseMap(77, { level: 5, erosionPasses: 1 });
+// Level 6 with the erosion that ships, so the slope field has something in
+// it: a barely-eroded level-5 map is nearly flat everywhere.
+const map = buildCoarseMap(77, { level: 6 });
 const field = COARSE_FIELDS[0]!;
 
 function paint(which = field): Uint8ClampedArray {

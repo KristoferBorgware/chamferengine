@@ -1,0 +1,258 @@
+import type { CoarseField, CoarseMap } from "chamfer/generation";
+import { coarseFieldOf } from "chamfer/generation";
+import { positionToCell } from "chamfer/addressing";
+import { Vec3 } from "chamfer/math";
+import { rampColor } from "./rampColor.js";
+
+/** Icosahedron corners, the same twelve the engine builds every world from. */
+const T = (1 + Math.sqrt(5)) / 2;
+const norm = (v: number[]): number[] => {
+	const l = Math.sqrt(v[0]! * v[0]! + v[1]! * v[1]! + v[2]! * v[2]!);
+	return [v[0]! / l, v[1]! / l, v[2]! / l];
+};
+const CORNERS = [
+	[-1, T, 0],
+	[1, T, 0],
+	[-1, -T, 0],
+	[1, -T, 0],
+	[0, -1, T],
+	[0, 1, T],
+	[0, -1, -T],
+	[0, 1, -T],
+	[T, 0, -1],
+	[T, 0, 1],
+	[-T, 0, -1],
+	[-T, 0, 1],
+].map(norm);
+const FACES = [
+	[0, 11, 5],
+	[0, 5, 1],
+	[0, 1, 7],
+	[0, 7, 10],
+	[0, 10, 11],
+	[1, 5, 9],
+	[5, 11, 4],
+	[11, 10, 2],
+	[10, 7, 6],
+	[7, 1, 8],
+	[3, 9, 4],
+	[3, 4, 2],
+	[3, 2, 6],
+	[3, 6, 8],
+	[3, 8, 9],
+	[4, 9, 5],
+	[2, 4, 11],
+	[6, 2, 10],
+	[8, 6, 7],
+	[9, 8, 1],
+];
+
+/** How finely the ball is cut. Level 5 is 20,480 triangles. */
+const LEVEL = 5;
+
+/**
+ * The same field, wrapped back onto a ball, turned by dragging.
+ *
+ * The flat picture is the one that shows the whole planet at once, and it is
+ * the one that lies about shape: a landmass near a pole is drawn many times
+ * wider than it is. This is the same values on a ball, so the two together say
+ * what the map holds and what it looks like.
+ *
+ * It is drawn on a plain 2D canvas rather than through the renderer. The ball
+ * is a fixed 20,480 triangles whatever the map's level, each one filled with
+ * the field's color at its own middle, and the far side is dropped by its
+ * facing rather than sorted.
+ */
+export class SphereView {
+	private readonly canvas: HTMLCanvasElement;
+	private readonly context: CanvasRenderingContext2D;
+
+	/** Three corner directions per triangle, and the middle of each. */
+	private readonly corners: Float64Array;
+	private readonly middles: Float64Array;
+	private readonly count: number;
+
+	private yaw = 0.6;
+	private pitch = 0.35;
+	private map: CoarseMap | null = null;
+	private field: CoarseField | null = null;
+	private marker: { x: number; y: number; z: number } | null = null;
+
+	constructor(canvas: HTMLCanvasElement) {
+		this.canvas = canvas;
+		this.context = canvas.getContext("2d")!;
+
+		const n = 1 << LEVEL;
+		this.count = 20 * n * n;
+		this.corners = new Float64Array(this.count * 9);
+		this.middles = new Float64Array(this.count * 3);
+		let at = 0;
+		for (const face of FACES) {
+			const [A, B, C] = face.map((k) => CORNERS[k]!);
+			const point = (i: number, j: number): number[] => {
+				const a = (n - i) / n,
+					b = (i - j) / n,
+					c = j / n;
+				return norm([
+					A![0]! * a + B![0]! * b + C![0]! * c,
+					A![1]! * a + B![1]! * b + C![1]! * c,
+					A![2]! * a + B![2]! * b + C![2]! * c,
+				]);
+			};
+			for (let i = 0; i < n; i++)
+				for (let j = 0; j <= i; j++) {
+					this.put(
+						at++,
+						point(i, j),
+						point(i + 1, j),
+						point(i + 1, j + 1),
+					);
+					if (j < i)
+						this.put(
+							at++,
+							point(i, j),
+							point(i + 1, j + 1),
+							point(i, j + 1),
+						);
+				}
+		}
+
+		let dragging = false;
+		let lastX = 0,
+			lastY = 0;
+		const down = (x: number, y: number) => {
+			dragging = true;
+			lastX = x;
+			lastY = y;
+		};
+		const move = (x: number, y: number) => {
+			if (!dragging) return;
+			this.yaw += (x - lastX) * 0.01;
+			this.pitch = Math.max(
+				-1.5,
+				Math.min(1.5, this.pitch + (y - lastY) * 0.01),
+			);
+			lastX = x;
+			lastY = y;
+			this.draw();
+		};
+		canvas.onpointerdown = (e) => {
+			canvas.setPointerCapture(e.pointerId);
+			down(e.clientX, e.clientY);
+		};
+		canvas.onpointermove = (e) => move(e.clientX, e.clientY);
+		canvas.onpointerup = () => {
+			dragging = false;
+		};
+		canvas.onpointercancel = () => {
+			dragging = false;
+		};
+	}
+
+	private put(at: number, a: number[], b: number[], c: number[]): void {
+		const base = at * 9;
+		for (let k = 0; k < 3; k++) {
+			this.corners[base + k] = a[k]!;
+			this.corners[base + 3 + k] = b[k]!;
+			this.corners[base + 6 + k] = c[k]!;
+			this.middles[at * 3 + k] = (a[k]! + b[k]! + c[k]!) / 3;
+		}
+	}
+
+	show(map: CoarseMap, field: CoarseField): void {
+		this.map = map;
+		this.field = field;
+		this.draw();
+	}
+
+	/** Where the player stands, as a direction, or nothing to drop the mark. */
+	setMarker(at: { x: number; y: number; z: number } | null): void {
+		this.marker = at;
+		this.draw();
+	}
+
+	private draw(): void {
+		const { width, height } = this.canvas;
+		const ctx = this.context;
+		ctx.clearRect(0, 0, width, height);
+		if (!this.map || !this.field) return;
+
+		const values = coarseFieldOf(this.map, this.field);
+		const n = 1 << this.map.level;
+		const cy = Math.cos(this.yaw),
+			sy = Math.sin(this.yaw);
+		const cp = Math.cos(this.pitch),
+			sp = Math.sin(this.pitch);
+		const radius = Math.min(width, height) * 0.46;
+		const ox = width / 2,
+			oy = height / 2;
+
+		// Yaw about the vertical, then pitch about the horizontal. The viewer is
+		// down the z axis, so a point with positive z after both is facing away.
+		const turn = (
+			x: number,
+			y: number,
+			z: number,
+		): [number, number, number] => {
+			const x1 = x * cy - z * sy;
+			const z1 = x * sy + z * cy;
+			const y2 = y * cp - z1 * sp;
+			const z2 = y * sp + z1 * cp;
+			return [x1, y2, z2];
+		};
+
+		for (let t = 0; t < this.count; t++) {
+			const mx = this.middles[t * 3]!,
+				my = this.middles[t * 3 + 1]!,
+				mz = this.middles[t * 3 + 2]!;
+			const [, , mzz] = turn(mx, my, mz);
+			if (mzz > 0) continue; // the far side
+
+			const cell = positionToCell(new Vec3(mx, my, mz), n);
+			const value =
+				values[this.map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
+			const [r, g, b] = rampColor(value, this.field, this.map.seaLevel);
+
+			// A little shading, so the ball reads as one and not as a disc.
+			const shade = 0.55 + 0.45 * Math.min(1, -mzz);
+			ctx.fillStyle = `rgb(${r * shade} ${g * shade} ${b * shade})`;
+			ctx.beginPath();
+			for (let k = 0; k < 3; k++) {
+				const base = t * 9 + k * 3;
+				const [px, py] = turn(
+					this.corners[base]!,
+					this.corners[base + 1]!,
+					this.corners[base + 2]!,
+				);
+				const sx = ox + px * radius;
+				const sy2 = oy - py * radius;
+				if (k === 0) ctx.moveTo(sx, sy2);
+				else ctx.lineTo(sx, sy2);
+			}
+			ctx.closePath();
+			ctx.fill();
+		}
+
+		if (this.marker) {
+			const [px, py, pz] = turn(
+				this.marker.x,
+				this.marker.y,
+				this.marker.z,
+			);
+			if (pz <= 0) {
+				const mx = ox + px * radius;
+				const my = oy - py * radius;
+				for (const [color, width] of [
+					["#000", 4],
+					["#fff", 1.8],
+				] as const) {
+					ctx.strokeStyle = color;
+					ctx.lineWidth = width;
+					ctx.beginPath();
+					ctx.arc(mx, my, 5, 0, 2 * Math.PI);
+					ctx.stroke();
+				}
+			}
+		}
+	}
+}

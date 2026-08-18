@@ -10,7 +10,10 @@ import {
 	coarseStageOf,
 } from "chamfer/generation";
 import type { PlanetSettings } from "./PlanetSettings.js";
+import { geographicOf } from "chamfer/coordinates";
+import { Vec3 } from "chamfer/math";
 import { paintCoarseField } from "./paintCoarseField.js";
+import { SphereView } from "./SphereView.js";
 
 /** Pixels across the drawing. Height is half, so a degree is square at the equator. */
 const WIDTH = 512;
@@ -34,6 +37,7 @@ export class MapPanel {
 	private readonly canvas: HTMLCanvasElement;
 	private readonly context: CanvasRenderingContext2D;
 	private readonly image: ImageData;
+	private readonly sphere: SphereView;
 	private readonly status: HTMLElement;
 	private readonly says: HTMLElement;
 	private readonly worker: Worker;
@@ -45,6 +49,9 @@ export class MapPanel {
 	private token = 0;
 	private level: number;
 	private startedAt = 0;
+
+	/** Where the player stands, as a direction, or nothing before there is one. */
+	private player: { x: number; y: number; z: number } | null = null;
 
 	constructor(
 		settings: PlanetSettings,
@@ -78,6 +85,7 @@ export class MapPanel {
 				button.classList.add("on");
 				this.says.textContent = field.says;
 				this.paint();
+				if (this.map) this.sphere.show(this.map, field);
 			};
 			if (field === this.field) button.classList.add("on");
 			list.appendChild(button);
@@ -91,6 +99,16 @@ export class MapPanel {
 		body.appendChild(this.canvas);
 		this.context = this.canvas.getContext("2d")!;
 		this.image = this.context.createImageData(WIDTH, HEIGHT);
+
+		// The flat picture shows the whole planet at once and lies about shape;
+		// the ball shows the shape and hides half of it. The two together say
+		// what the map holds and what it looks like.
+		const ball = document.createElement("canvas");
+		ball.width = 260;
+		ball.height = 260;
+		ball.className = "maps-ball";
+		body.appendChild(ball);
+		this.sphere = new SphereView(ball);
 
 		this.status = document.createElement("div");
 		this.status.className = "maps-status";
@@ -118,6 +136,24 @@ export class MapPanel {
 			this.arrived(event.data);
 		this.setup();
 		this.rebuild("height");
+	}
+
+	/** Where the player is standing, so both pictures can mark it. */
+	setPlayer(at: { x: number; y: number; z: number }): void {
+		const was = this.player;
+		// Redrawing a whole map for a step the player has not taken is the one
+		// thing this pane must not do every frame.
+		if (
+			was &&
+			Math.abs(was.x - at.x) +
+				Math.abs(was.y - at.y) +
+				Math.abs(was.z - at.z) <
+				1e-4
+		)
+			return;
+		this.player = at;
+		this.sphere.setMarker(at);
+		this.paint();
 	}
 
 	/** A knob moved. Rebuild from the step that knob first reaches. */
@@ -184,6 +220,7 @@ export class MapPanel {
 		if (step.token !== this.token) return;
 		this.map = CoarseMap.fromSnapshot(step.snapshot);
 		this.paint();
+		this.sphere.show(this.map, this.field);
 		const ms = Math.round(performance.now() - this.startedAt);
 		this.status.textContent = step.done
 			? `${this.level === 0 ? "" : `level ${this.level}, `}${this.map.count.toLocaleString()} cells, ${ms} ms`
@@ -200,5 +237,40 @@ export class MapPanel {
 			this.image.data as unknown as Uint8ClampedArray,
 		);
 		this.context.putImageData(this.image, 0, 0);
+
+		// The mark goes on after the pixels, because `putImageData` writes
+		// straight over anything already drawn.
+		if (!this.player) return;
+		const place = geographicOf(
+			new Vec3(this.player.x, this.player.y, this.player.z),
+			1,
+		);
+		const x = ((place.longitude + 180) / 360) * WIDTH;
+		const y = ((90 - place.latitude) / 180) * HEIGHT;
+		// Drawn twice, dark under light. A single color loses the mark wherever
+		// the map happens to match it, and the map is every color it has.
+		const ctx = this.context;
+		const cross = () => {
+			ctx.beginPath();
+			ctx.arc(x, y, 4.5, 0, 2 * Math.PI);
+			ctx.stroke();
+			ctx.beginPath();
+			for (const [dx, dy] of [
+				[-1, 0],
+				[1, 0],
+				[0, -1],
+				[0, 1],
+			] as const) {
+				ctx.moveTo(x + dx * 9, y + dy * 9);
+				ctx.lineTo(x + dx * 5.5, y + dy * 5.5);
+			}
+			ctx.stroke();
+		};
+		ctx.strokeStyle = "#000";
+		ctx.lineWidth = 3.5;
+		cross();
+		ctx.strokeStyle = "#fff";
+		ctx.lineWidth = 1.5;
+		cross();
 	}
 }

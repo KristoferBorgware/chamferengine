@@ -1,24 +1,9 @@
 import type { CoarseField, CoarseMap } from "chamfer/generation";
 import { coarseFieldOf } from "chamfer/generation";
 import { geographicOf } from "chamfer/coordinates";
+import { rampColor } from "./rampColor.js";
 import { latticePosition, positionToCell } from "chamfer/addressing";
 import { positionOf } from "chamfer/coordinates";
-
-/** Where a value sits between a ramp's two ends, held to `0` and `1`. */
-function alongRamp(
-	value: number,
-	field: CoarseField,
-	seaLevel: number,
-): number {
-	const raw =
-		field.scale === "sea"
-			? value - seaLevel
-			: field.scale === "log"
-				? Math.log(1 + Math.max(0, value))
-				: value;
-	const { low, high } = field.ramp;
-	return Math.min(1, Math.max(0, (raw - low) / (high - low)));
-}
 
 /**
  * Draw one field of a coarse map into an image, longitude across and latitude
@@ -47,9 +32,6 @@ export function paintCoarseField(
 ): void {
 	const values = coarseFieldOf(map, field);
 	const n = 1 << map.level;
-	const stops = field.ramp.stops;
-	const spans = stops.length - 1;
-
 	const sum = new Float32Array(width * height);
 	const count = new Uint32Array(width * height);
 	// A cell on a face edge answers to several names and is one cell. Taking it
@@ -80,7 +62,7 @@ export function paintCoarseField(
 					),
 				);
 				const at = y * width + x;
-				sum[at]! += alongRamp(values[cell] ?? 0, field, map.seaLevel);
+				sum[at]! += values[cell] ?? 0;
 				count[at]!++;
 			}
 
@@ -97,23 +79,22 @@ export function paintCoarseField(
 			altitude: 0,
 		};
 		const cell = positionToCell(positionOf(place, 1), n);
-		sum[at] = alongRamp(
-			values[map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0,
-			field,
-			map.seaLevel,
-		);
+		sum[at] = values[map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
 		count[at] = 1;
 	}
 
+	// Averaging the values and then coloring, rather than averaging colors: a
+	// mean of two heights is a height, while a mean of two colors off a ramp is
+	// whatever the ramp does between them.
 	for (let at = 0; at < width * height; at++) {
-		const t = (count[at] ? sum[at]! / count[at]! : 0) * spans;
-		const first = Math.min(spans - 1, Math.floor(t));
-		const mix = t - first;
-		const a = stops[first]!;
-		const b = stops[first + 1]!;
-		into[at * 4] = 255 * (a[0] + (b[0] - a[0]) * mix);
-		into[at * 4 + 1] = 255 * (a[1] + (b[1] - a[1]) * mix);
-		into[at * 4 + 2] = 255 * (a[2] + (b[2] - a[2]) * mix);
+		const [r, g, b] = rampColor(
+			count[at] ? sum[at]! / count[at]! : 0,
+			field,
+			map.seaLevel,
+		);
+		into[at * 4] = r;
+		into[at * 4 + 1] = g;
+		into[at * 4 + 2] = b;
 		into[at * 4 + 3] = 255;
 	}
 }

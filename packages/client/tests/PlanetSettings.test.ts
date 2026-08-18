@@ -76,8 +76,11 @@ describe("the coarse level budget (F-020)", () => {
 });
 
 describe("the pause", () => {
-	it("is what a page with no query string gets", () => {
-		expect(new PlanetSettings().knobs.plain).toBe(true);
+	it("is not what a page with no query string gets", () => {
+		// The pause is a tool for looking at the lattice on its own, not the
+		// world anyone wants to arrive in. A page with no query string builds
+		// the whole planet.
+		expect(new PlanetSettings().knobs.plain).toBe(false);
 	});
 
 	it("overrides the coarse map and the detail term without losing either", () => {
@@ -110,7 +113,7 @@ describe("the pause", () => {
 		// assumed: no coarse map means every field is zero, and no detail term
 		// means the elevation formula has nothing left in it, so the surface is
 		// the sea-level radius exactly and the water test can never be true.
-		const settings = new PlanetSettings();
+		const settings = new PlanetSettings({ plain: true });
 		const seed = seedFromString(settings.knobs.seed);
 		const map = flatCoarseMap(seed, FLAT_COARSE_LEVEL);
 		const shape = settings.shapeFor(map);
