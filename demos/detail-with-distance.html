@@ -149,7 +149,7 @@ const $ = (id) => document.getElementById(id);
 const round = (x) => Math.max(0, Math.round(x));
 const metres = (x) => x >= 1000 ? (x / 1000).toFixed(x >= 10000 ? 0 : 1) + ' km'
   : x >= 1 ? x.toFixed(x >= 100 ? 0 : x >= 10 ? 1 : 2).replace(/\.0+$/, '') + ' m'
-  : (x * 100).toFixed(0) + ' cm';
+  : x > 0 ? (x * 100).toFixed(0) + ' cm' : 'here';
 const count = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + ' B'
   : n >= 1e6 ? (n / 1e6).toFixed(1) + ' M'
   : n >= 1e3 ? (n / 1e3).toFixed(0) + ' K' : String(n);
@@ -249,8 +249,9 @@ function draw() {
     if (x1 - x0 > 46) {
       svg += `<text x="${mid.toFixed(1)}" y="22" text-anchor="middle" font-size="12"
               font-family="ui-sans-serif, sans-serif" fill="${color}" font-weight="600">${metres(r.cell)}</text>`;
-      svg += `<text x="${mid.toFixed(1)}" y="${H - 30}" text-anchor="middle" font-size="10.5"
-              font-family="ui-sans-serif, sans-serif" fill="#6d768c">${metres(r.from)}</text>`;
+      if (r.from > 0)
+        svg += `<text x="${mid.toFixed(1)}" y="${H - 30}" text-anchor="middle" font-size="10.5"
+                font-family="ui-sans-serif, sans-serif" fill="#6d768c">${metres(r.from)}</text>`;
     }
   }
   svg += `<circle cx="${EYE}" cy="${H / 2}" r="7" fill="#fff"/>`;
