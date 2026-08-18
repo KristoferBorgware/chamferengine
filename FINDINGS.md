@@ -580,6 +580,57 @@ which the selection could do, since it already knows the horizon angle.
 
 ---
 
+### F-030 — Nobody has decided whether this game has rivers
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, scoping v0.2.0, where a rivers checkbox was proposed and
+turned out to need this answer first
+**Where:** `packages/engine/src/generation/coarse/buildCoarseMap.ts` — the
+`fillPits`, `routeFlow` and `accumulateFlow` calls and the `water` field;
+`packages/engine/src/generation/terrain/TerrainGenerator.ts`, `columnAt`
+
+**What happens.** Rivers always run. `buildCoarseMap` fills the basins, routes
+every cell downhill and accumulates what drains through it, on every world,
+with no way to ask for a planet without them. There is no switch and no
+setting.
+
+That was going to be a checkbox in v0.2.0. Writing the item showed the switch
+cannot be built without saying what "on" means, because what "on" produces
+today is a chain of pools rather than a river — F-015 has the numbers. And what
+"on" should mean depends on a question nobody has answered: whether a river is
+something this game wants.
+
+**Why it matters.** Nobody is hurt today. The cost is carried in three places
+and none of it is visible. Every world pays for the routing whether or not
+anything reads it. Erosion runs four passes that each re-flood and re-route, so
+the flow field decides the shape of every valley on the planet even on a world
+that would rather not have rivers. And the coarse map holds a `flow` field of
+2.5 MB at level 8 whose only consumers are erosion and the water surface.
+
+Removing rivers is therefore not removing a feature — it changes what the
+landscape looks like, because the valleys are cut by the same numbers. Anyone
+answering this has to decide about the valleys as well as the water in them.
+
+**What would fix it.** Look at a planet with rivers and a planet without, side
+by side, and say which one this game wants. v0.2.0's I-5 builds the editor that
+makes that a knob rather than a rebuild, so this is cheap to answer after that
+release and not before.
+
+If the answer is that rivers stay, the shape is already chosen: **a ribbon, not
+a chain of pools**. Write water wherever the catchment is above a threshold in
+square metres, at a depth that follows from the catchment.
+`TerrainColumn.catchment` already carries the number, so it is one comparison
+per column. That closes F-015 at the same time.
+
+If the answer is that they go, the flow field and the routing stay anyway,
+because erosion reads them to cut the valleys. What goes is the water.
+
+---
+
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
