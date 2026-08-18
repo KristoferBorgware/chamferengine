@@ -1,4 +1,8 @@
-import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
+import type {
+	CoarseMapOptions,
+	Landform,
+	TerrainOptions,
+} from "chamfer/generation";
 import { CoarseMap, seedFromString } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
@@ -92,6 +96,9 @@ export interface PlanetKnobs {
 	 */
 	coarseMap: boolean;
 
+	/** Which way the land is decided. */
+	landform: Landform;
+
 	/** Metres across one cell of the map that carries continents and rivers. */
 	coarseSpacing: number;
 
@@ -158,6 +165,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	blockSize: 1,
 	chunkCells: 32,
 	coarseMap: true,
+	landform: "noise",
 	coarseSpacing: 32,
 	heightScale: 200,
 	reliefFeature: 280,
@@ -212,6 +220,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseMap: { ...TOGGLE, rebuilds: true },
+	landform: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
 	heightScale: { low: 20, high: 1200, step: 20, rebuilds: true, unit: "m" },
 	reliefFeature: {
@@ -587,6 +596,7 @@ export class PlanetSettings {
 
 	coarseOptions(): CoarseMapOptions {
 		return {
+			landform: this.knobs.landform,
 			level: this.coarseLevel,
 			landFraction: this.knobs.landFraction,
 			reliefFrequency: this.frequencyFor(this.knobs.reliefFeature),
@@ -698,6 +708,7 @@ export class PlanetSettings {
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
+			else if (key === "landform") knobs.landform = raw as Landform;
 			else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";

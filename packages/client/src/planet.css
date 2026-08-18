@@ -505,3 +505,15 @@ body {
 	border-color: #5c9c5c;
 	color: #fff;
 }
+
+.knobs .knob select {
+	width: 100%;
+	margin-top: 4px;
+	padding: 5px 6px;
+	background: #131a28;
+	border: 1px solid #2a3245;
+	border-radius: 4px;
+	color: #dfe3ec;
+	font: inherit;
+	font-size: 12px;
+}

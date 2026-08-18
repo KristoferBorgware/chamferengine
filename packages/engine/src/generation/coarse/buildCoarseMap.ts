@@ -4,7 +4,7 @@ import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { accumulateFlow } from "./accumulateFlow.js";
 import { coarseSlope } from "./coarseSlope.js";
-import { continentHeight } from "./continentHeight.js";
+import { landformHeight } from "./landformHeight.js";
 import { erode } from "./erode.js";
 import { fillPits } from "./fillPits.js";
 import { routeFlow } from "./routeFlow.js";
@@ -28,16 +28,7 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-
-	const height = continentHeight(
-		grid,
-		seed,
-		settings.continentFrequency,
-		settings.continentOctaves,
-		settings.reliefFrequency,
-		settings.reliefOctaves,
-		settings.reliefAmplitude,
-	);
+	const height = landformHeight(grid, seed, settings);
 	const seaLevel = seaLevelFor(height, settings.landFraction);
 
 	erode(grid, height, seaLevel, settings.erosionPasses, settings.erosionRate);

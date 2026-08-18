@@ -178,12 +178,19 @@ let onLiveKnob: (live: PlanetSettings) => void = () => {};
  */
 let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
 
+/** Stand somewhere, once there is a world to stand in. */
+let onGoTo: (at: { x: number; y: number; z: number }) => void = () => {};
+
 if (params.get("panel") === "1") {
-	const maps = new MapPanel(settings, (chosen) => {
-		const wanted = chosen.toParams();
-		wanted.set("panel", "1");
-		location.href = `${location.pathname}?${wanted.toString()}`;
-	});
+	const maps = new MapPanel(
+		settings,
+		(chosen) => {
+			const wanted = chosen.toParams();
+			wanted.set("panel", "1");
+			location.href = `${location.pathname}?${wanted.toString()}`;
+		},
+		(at) => onGoTo(at),
+	);
 	new ParameterPanel(
 		settings,
 		(live) => {
@@ -364,6 +371,11 @@ async function main(): Promise<void> {
 		flying = true;
 		refresh();
 	}
+
+	// Right-clicking the ball in the map pane stands the player there. The ball
+	// is the only place showing the whole planet at once, so it is the only
+	// place somewhere out of sight can be pointed at.
+	onGoTo = (at) => land(new Vec3(at.x, at.y, at.z));
 
 	/** Put the player on the ground at a direction, clear of it. */
 	function land(direction: Vec3): void {

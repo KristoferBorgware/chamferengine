@@ -22,6 +22,12 @@ interface Knob {
 
 	/** Whether the map pane redraws when this moves. */
 	readonly map?: boolean;
+
+	/** Named choices, for a knob that is one of a few things rather than a number. */
+	readonly choices?: readonly {
+		readonly value: string;
+		readonly label: string;
+	}[];
 }
 
 /** One titled run of rows. */
@@ -52,6 +58,19 @@ const GROUPS: Group[] = [
 		title: "Where the land is",
 		note: "The only knobs that move a coastline, and the ones the map redraws for. Swept across their whole ranges, Land changes 25 to 50% of the surface, Landform across 17%, and Radius 16%.",
 		knobs: [
+			{
+				key: "landform",
+				map: true,
+				label: "Landform",
+				says: "Which way the land is decided. Noise cuts two tiers of noise at the height leaving the asked-for land above it, and gives rounded coasts and the longest rivers. Warped pushes the sample point about first, folding the coastline without changing what it is made of. Grown scatters seeds and grows them level by level, which is the most ragged and the most islands, and the only one that cannot be told exactly how much land to leave. Plates cuts the surface into drifting plates and raises a range where two close, so a mountain is somewhere for a reason.",
+				choices: [
+					{ value: "noise", label: "Noise" },
+					{ value: "warped", label: "Warped" },
+					{ value: "grown", label: "Grown" },
+					{ value: "plates", label: "Plates" },
+				],
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
 			{
 				key: "radius",
 				map: true,
@@ -407,6 +426,7 @@ export class ParameterPanel {
 	}
 
 	private row(knob: Knob): Row {
+		if (knob.choices) return this.choiceRow(knob);
 		const range = KNOB_RANGES[knob.key as string]!;
 		const toggle = typeof this.draft[knob.key] === "boolean";
 		const wrap = document.createElement("div");
@@ -467,6 +487,42 @@ export class ParameterPanel {
 	}
 
 	/** A change was made: either hand it over now, or wait for the button. */
+	/** A knob that is one of a few named things rather than a number. */
+	private choiceRow(knob: Knob): Row {
+		const wrap = document.createElement("div");
+		wrap.className = "knob";
+		wrap.innerHTML =
+			`<label>${knob.label}` +
+			' <i title="needs a rebuild">&#9679;</i>' +
+			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
+			`</label><select></select><small>${knob.says}</small>`;
+		const select = wrap.querySelector("select")!;
+		for (const choice of knob.choices!) {
+			const option = document.createElement("option");
+			option.value = choice.value;
+			option.textContent = choice.label;
+			select.appendChild(option);
+		}
+		select.value = String(this.draft[knob.key]);
+		select.onchange = () => {
+			(this.draft as unknown as Record<string, string>)[knob.key] =
+				select.value;
+			this.touch(true);
+		};
+		return {
+			knob,
+			wrap,
+			input: select as unknown as HTMLInputElement,
+			write: () => {
+				select.value = String(this.draft[knob.key]);
+				select.disabled = knob.enabledWhen
+					? !knob.enabledWhen(this.draft)
+					: false;
+				wrap.classList.toggle("off", select.disabled);
+			},
+		};
+	}
+
 	private touch(rebuilds: boolean): void {
 		this.onDraft(this.settings);
 		if (rebuilds) {

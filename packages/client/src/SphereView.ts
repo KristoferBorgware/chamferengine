@@ -72,6 +72,9 @@ export class SphereView {
 	private readonly middles: Float64Array;
 	private readonly count: number;
 
+	/** Told where a right-click landed, as a direction on the ball. */
+	private onPick: (at: [number, number, number]) => void = () => {};
+
 	private yaw = 0.6;
 	private pitch = 0.35;
 	private map: CoarseMap | null = null;
@@ -139,6 +142,14 @@ export class SphereView {
 			lastY = y;
 			this.draw();
 		};
+		// Right-click picks rather than turns. The ball is the only place on
+		// screen showing the whole planet at once, so it is the only place a
+		// person can point at somewhere they cannot see.
+		canvas.oncontextmenu = (e) => {
+			e.preventDefault();
+			const at = this.directionAt(e.offsetX, e.offsetY);
+			if (at) this.onPick(at);
+		};
 		canvas.onpointerdown = (e) => {
 			canvas.setPointerCapture(e.pointerId);
 			down(e.clientX, e.clientY);
@@ -160,6 +171,49 @@ export class SphereView {
 			this.corners[base + 6 + k] = c[k]!;
 			this.middles[at * 3 + k] = (a[k]! + b[k]! + c[k]!) / 3;
 		}
+	}
+
+	/** What to do when somebody right-clicks a place on the ball. */
+	picked(handler: (at: [number, number, number]) => void): void {
+		this.onPick = handler;
+	}
+
+	/**
+	 * The direction under a point on the canvas, or nothing if it missed.
+	 *
+	 * The ball is drawn straight down the z axis, so a screen point gives two
+	 * of the three components and the sphere gives the third. The near face is
+	 * the one with negative z, which is the half being drawn, and undoing the
+	 * two turns in the opposite order puts the answer back in world directions.
+	 */
+	private directionAt(
+		sx: number,
+		sy: number,
+	): [number, number, number] | null {
+		const { width, height } = this.canvas;
+		// The canvas is laid out at a different size from its pixel grid, so a
+		// click has to be scaled into it before anything else.
+		const rect = this.canvas.getBoundingClientRect();
+		const px =
+			(sx * (rect.width ? width / rect.width : 1) - width / 2) /
+			(Math.min(width, height) * 0.46);
+		const py =
+			(height / 2 - sy * (rect.height ? height / rect.height : 1)) /
+			(Math.min(width, height) * 0.46);
+		const flat = px * px + py * py;
+		if (flat > 1) return null;
+		const pz = -Math.sqrt(1 - flat);
+
+		const cy = Math.cos(this.yaw),
+			sy2 = Math.sin(this.yaw);
+		const cp = Math.cos(this.pitch),
+			sp = Math.sin(this.pitch);
+		// Undo the pitch, then the yaw.
+		const y = py * cp + pz * sp;
+		const z1 = -py * sp + pz * cp;
+		const x = px * cy + z1 * sy2;
+		const z = -px * sy2 + z1 * cy;
+		return [x, y, z];
 	}
 
 	show(map: CoarseMap, field: CoarseField): void {

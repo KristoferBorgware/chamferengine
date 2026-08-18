@@ -26,6 +26,13 @@ export type {
 export { MapWorkerCore } from "./coarse/MapWorkerCore.js";
 export { flatCoarseMap } from "./coarse/flatCoarseMap.js";
 export { continentHeight } from "./coarse/continentHeight.js";
+export type { Landform } from "./coarse/Landform.js";
+export { LANDFORMS, LANDFORM_SAYS } from "./coarse/Landform.js";
+export { landformHeight } from "./coarse/landformHeight.js";
+export { warpedHeight } from "./coarse/warpedHeight.js";
+export { grownHeight } from "./coarse/grownHeight.js";
+export { plateHeight } from "./coarse/plateHeight.js";
+export { coastDistance } from "./coarse/coastDistance.js";
 export { seaLevelFor } from "./coarse/seaLevelFor.js";
 export { fillPits } from "./coarse/fillPits.js";
 export { routeFlow } from "./coarse/routeFlow.js";

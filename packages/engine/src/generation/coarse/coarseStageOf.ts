@@ -20,6 +20,19 @@ export function coarseStageOf(option: keyof CoarseMapOptions): CoarseStage {
 		case "reliefOctaves":
 		case "reliefAmplitude":
 		case "level":
+		// Every landform option decides the surface itself, so all of them
+		// enter at the top of the chain.
+		case "landform":
+		case "warpAmplitude":
+		case "warpFrequency":
+		case "creation":
+		case "island":
+		case "growthWeight":
+		case "plates":
+		case "oceanShare":
+		case "biasWeight":
+		case "upliftWeight":
+		case "upliftReach":
 			return "height";
 		case "landFraction":
 			return "sea";

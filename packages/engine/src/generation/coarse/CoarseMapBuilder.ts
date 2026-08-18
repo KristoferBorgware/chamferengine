@@ -6,7 +6,7 @@ import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { accumulateFlow } from "./accumulateFlow.js";
 import { coarseSlope } from "./coarseSlope.js";
-import { continentHeight } from "./continentHeight.js";
+import { landformHeight } from "./landformHeight.js";
 import { erode } from "./erode.js";
 import { fillPits } from "./fillPits.js";
 import { routeFlow } from "./routeFlow.js";
@@ -77,16 +77,7 @@ export class CoarseMapBuilder {
 		const asked = COARSE_STAGES.indexOf(from);
 		const at = this.raw === undefined ? 0 : asked;
 
-		if (at <= 0)
-			this.raw = continentHeight(
-				grid,
-				seed,
-				settings.continentFrequency,
-				settings.continentOctaves,
-				settings.reliefFrequency,
-				settings.reliefOctaves,
-				settings.reliefAmplitude,
-			);
+		if (at <= 0) this.raw = landformHeight(grid, seed, settings);
 		if (at <= 0) {
 			// Nothing downstream has run, so the sea is wherever it was last and
 			// the rivers are empty. Drawing this shows the raw surface, which is

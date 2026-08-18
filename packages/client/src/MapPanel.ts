@@ -59,6 +59,7 @@ export class MapPanel {
 	constructor(
 		settings: PlanetSettings,
 		onApply: (settings: PlanetSettings) => void,
+		onGoTo: (at: { x: number; y: number; z: number }) => void = () => {},
 	) {
 		this.settings = settings;
 		this.onApply = onApply;
@@ -123,6 +124,7 @@ export class MapPanel {
 		ball.className = "maps-ball";
 		body.appendChild(ball);
 		this.sphere = new SphereView(ball);
+		this.sphere.picked(([x, y, z]) => onGoTo({ x, y, z }));
 
 		this.status = document.createElement("div");
 		this.status.className = "maps-status";
@@ -132,6 +134,12 @@ export class MapPanel {
 		this.says.className = "maps-says";
 		this.says.textContent = this.field.says;
 		body.appendChild(this.says);
+
+		const hint = document.createElement("p");
+		hint.className = "maps-says";
+		hint.textContent =
+			"Drag the ball to turn it. Right-click it to stand somewhere.";
+		body.appendChild(hint);
 
 		const bar = document.createElement("div");
 		bar.className = "maps-bar";

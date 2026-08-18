@@ -1,5 +1,40 @@
+import type { Landform } from "./Landform.js";
+
 /** The knobs on a coarse map, all of them defaulted. */
 export interface CoarseMapOptions {
+	/** Which way the land is decided. */
+	readonly landform?: Landform;
+
+	/** How far the warp pushes a sample point. `warped` only. */
+	readonly warpAmplitude?: number;
+
+	/** Feature size of the field doing the pushing. `warped` only. */
+	readonly warpFrequency?: number;
+
+	/** How much of the coarsest level starts as land. `grown` only. */
+	readonly creation?: number;
+
+	/** How often a sea cell becomes land on its own. `grown` only. */
+	readonly island?: number;
+
+	/** How strongly a cell is pulled toward its neighbours. `grown` only. */
+	readonly growthWeight?: number;
+
+	/** How many plates the surface is cut into. `plates` only. */
+	readonly plates?: number;
+
+	/** How many of them are ocean floor. `plates` only. */
+	readonly oceanShare?: number;
+
+	/** How far apart ocean floor and continent stand. `plates` only. */
+	readonly biasWeight?: number;
+
+	/** How high a range rises where two plates close. `plates` only. */
+	readonly upliftWeight?: number;
+
+	/** How far inland a range reaches, in cells at level 7. `plates` only. */
+	readonly upliftReach?: number;
+
 	/** Subdivision level of the map. Level 8 is 655,362 cells and 2.5 MB a field. */
 	readonly level?: number;
 
@@ -34,6 +69,17 @@ export interface CoarseMapOptions {
 }
 
 export const COARSE_MAP_DEFAULTS = {
+	landform: "noise",
+	warpAmplitude: 0.35,
+	warpFrequency: 1.6,
+	creation: 0.35,
+	island: 0.0008,
+	growthWeight: 0.8,
+	plates: 36,
+	oceanShare: 0.6,
+	biasWeight: 0.5,
+	upliftWeight: 1.2,
+	upliftReach: 4,
 	level: 8,
 	continentFrequency: 0.8,
 	continentOctaves: 4,
