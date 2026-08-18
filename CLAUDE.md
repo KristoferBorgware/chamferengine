@@ -86,6 +86,13 @@ and duplicates information found there.
   `Effort`; **read it before adding or editing an entry**. Findings are the one
   place outside `docs/` that argues, because a register whose entries do not say
   why they are there cannot be triaged.
+- [`HOW-TO-TAKE-A-FRAME.md`](HOW-TO-TAKE-A-FRAME.md) — **the client runs in this
+  container, and a frame of it can be read pixel by pixel.** Headless Chromium
+  on a software adapter, driven over the DevTools protocol; four flags, all of
+  them needed. Every knob is a URL parameter, so two frames from two URLs
+  attribute an artifact to its cause. **Read it before claiming anything about
+  how the world looks**, and before writing a probe that measures a mesh
+  instead of a picture. A frame here settles what is drawn, never how fast.
 - `docs/` — prose specification, ordered 00 through 32.
 - `demos/` — standalone HTML, zero dependencies, opened directly in a browser.
   `how-it-works.html` is the illustrated primer; point newcomers there first.

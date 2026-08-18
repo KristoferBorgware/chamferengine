@@ -10,36 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-004 — The GPU pass timer has never produced a reading
-
-**Kind:** risk
-**Milestone:** 0.1.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-17, adding frame instrumentation for Project 16
-**Where:** `packages/engine/src/render/gpu/GpuClock.ts`
-
-**What happens.** `GpuClock` asks the adapter for `timestamp-query`, writes a
-timestamp at each end of the render pass, resolves them into a buffer and maps
-that buffer to read the difference. The client shows the number on the budget
-line when at least one reading has come back. In the development container the
-adapter reports the feature and no reading has ever arrived, so the `gpu` figure
-never appears.
-
-**Why it matters.** The container's WebGPU cannot present at all (see F-011), so
-there is no way to tell here whether the timing path works or is quietly broken.
-It is the only measurement of the draw half of a frame, which is the half
-Project 16's target depends on. If it is broken, the frame budget cannot be
-checked at all.
-
-**What would fix it.** Run the client on a machine with a working adapter and
-look at the budget line. If no `gpu` figure appears, the likely causes in order
-are: the platform quantises both timestamps to the same value so the span is
-zero and gets skipped; `mapAsync` rejects because the buffer is still in use;
-or the resolve is being encoded on a command buffer that never submits.
-
----
-
 ### F-005 — Nothing checks that the renderer produces a picture
 
 **Kind:** gap
@@ -509,13 +479,15 @@ color turned out to be a ratio
 **What happens.** F-011 recorded that headless Chromium here acquires a WebGPU
 device and then fails on the swap chain, and that every visual claim has to be
 confirmed on real hardware. That is no longer true. Chromium started with
-`--headless=new --enable-unsafe-webgpu --use-angle=swiftshader
---use-vulkan=swiftshader` runs the client on a software adapter, reports 120 to
-180 frames a second, and hands a real frame back through the DevTools protocol
-— `Page.captureScreenshot` on a page driven by `Page.navigate` and
-`Input.dispatchKeyEvent`. The pixels are the client's own: reading the rows at
-the horizon gave the artifact's brightness as 0.58 of the ground's own color,
-which is what identified it.
+`--headless=new --enable-unsafe-webgpu --enable-features=Vulkan
+--use-angle=swiftshader --use-vulkan=swiftshader` runs the client on a software
+adapter, reports around 100 frames a second, and hands a real frame back
+through the DevTools protocol — `Page.captureScreenshot` on a page driven by
+`Page.navigate` and `Input.dispatchKeyEvent`. All three WebGPU flags are
+needed, and dropping any one of them gives a blank canvas on a page that
+otherwise runs, which is what F-011 saw. The pixels are the client's own:
+reading the rows at the horizon gave the artifact's brightness as 0.58 of the
+ground's own color, which is what identified it.
 
 **Why it matters.** Two things were held back by the old answer. **F-005** —
 nothing checks that the renderer produces a picture — was filed as needing
@@ -526,13 +498,13 @@ v0.1.2 was argued from meshes and raycasts because looking was thought to be
 impossible; I-8 was three passes of measuring the wrong thing until the frame
 itself was read.
 
-**What would fix it.** Keep the harness. It is about eighty lines: launch
-Chromium with the three flags and a debugging port, connect to the page's
-WebSocket, navigate, wait for the chunk count in the readout to settle, ask for
-a screenshot, decode the PNG. It belongs in `tools/`, beside the other checks
-that a session runs before pushing, and it is what makes F-005 a small piece of
-work rather than a large one. The frames it takes are a software rasteriser's,
-so it settles what is drawn and never how fast.
+**What would fix it.** `HOW-TO-TAKE-A-FRAME.md` now carries the flags, the
+protocol calls and the way to read the pixels back, so a session can rebuild
+the harness in a few minutes. What is left is the harness itself: about eighty
+lines in `tools/`, beside the other checks that run before a push, which is
+what makes F-005 a small piece of work rather than a large one. The frames it
+takes are a software rasteriser's, so it settles what is drawn and never how
+fast.
 
 ---
 
@@ -1025,3 +997,40 @@ figure draws an apron rather than a curtain; `CLAUDE.md`'s constant table and
 established results follow. Both mechanisms leave the same holes -- all 76
 surface-slit layers closed, 99% of cave mouths open -- so seam ownership is
 still the only exact answer, and still F-025.
+
+---
+
+### F-004 — The GPU pass timer has never produced a reading
+
+**Kind:** risk
+**Milestone:** 0.1.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-17, adding frame instrumentation for Project 16
+**Where:** `packages/engine/src/render/gpu/GpuClock.ts`
+
+**What happens.** `GpuClock` asks the adapter for `timestamp-query`, writes a
+timestamp at each end of the render pass, resolves them into a buffer and maps
+that buffer to read the difference. The client shows the number on the budget
+line when at least one reading has come back. In the development container the
+adapter reports the feature and no reading has ever arrived, so the `gpu` figure
+never appears.
+
+**Why it matters.** The container's WebGPU cannot present at all (see F-011), so
+there is no way to tell here whether the timing path works or is quietly broken.
+It is the only measurement of the draw half of a frame, which is the half
+Project 16's target depends on. If it is broken, the frame budget cannot be
+checked at all.
+
+**What would fix it.** Run the client on a machine with a working adapter and
+look at the budget line. If no `gpu` figure appears, the likely causes in order
+are: the platform quantises both timestamps to the same value so the span is
+zero and gets skipped; `mapAsync` rejects because the buffer is still in use;
+or the resolve is being encoded on a command buffer that never submits.
+
+**Closed:** 2026-08-18, answered — the reading arrives. Running the client in
+this container (`HOW-TO-TAKE-A-FRAME.md`) puts a `gpu` figure of 50 to 80 ms on
+the budget line, beside 100 fps at 1280 by 800. The timing path resolves, maps
+and reads as written; a configuration that presents nothing shows no `gpu`
+figure at all, which is what this entry was seeing. The numbers belong to a
+software rasteriser and say nothing about a real adapter's frame cost.
