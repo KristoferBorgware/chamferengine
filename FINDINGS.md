@@ -536,6 +536,78 @@ so it settles what is drawn and never how fast.
 
 ---
 
+### F-028 — A grazing ray slips through a chunk boundary at the horizon
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-18, reading frames of the paused planet after v0.1.2 I-8 took
+the cliffs out of it
+**Where:** `packages/engine/src/mesh/meshChunk.ts`, the apron
+
+**What happens.** On the paused planet — no relief at all — the horizon carries
+occasional single sky-colored pixels **below** the skyline, one or two in a
+frame at 1,280 by 800. Turning the seam overlay on puts every one of them on a
+cell the overlay paints as a chunk boundary or an apron ring. Radially the
+surface is closed: 200,000 rays out from the planet's centre across a
+mixed-level scene found **0** directions with no cover. These leak at a grazing
+angle, not a radial one.
+
+**Why it matters.** It is one pixel of sky where there should be ground, at the
+one place a player looks at for minutes on end. Nobody will see it on a still
+frame; a moving camera makes single pixels twinkle, which is how a distant
+horizon reads as noisy rather than solid. It is also the last visible remnant of
+the same class the apron was built to close, so leaving it unexplained means the
+next seam artifact starts from a boundary nobody trusts.
+
+**What would fix it.** First find out which of two it is, because the fix
+differs. The apron sits a centimetre below the surface it duplicates, so at a
+grazing angle the step between a chunk's own rim cap and its apron is a
+centimetre of wall that nothing draws — a ray entering there passes into the
+crust and out the far side, and every interior face is culled. That would be
+fixed by walling the apron's own outer edge, which is a few triangles a chunk.
+The other candidate is the wedge between two levels' caps: a coarse cap is a
+chord of a bigger cell, so it sags further below the sphere than the fine caps
+beside it, and a ray can pass over one and under the other. That one is not
+closed by a wall and needs the levels to meet on one surface, which is F-025's
+seam ownership. A grazing raycast against a two-level scene, counting entries
+that exit the planet, separates them in an afternoon.
+
+---
+
+### F-029 — The skyline steps by a pixel where the level changes
+
+**Kind:** bug
+**Milestone:** unscheduled
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-18, in the same frames as F-028
+**Where:** `packages/engine/src/mesh/meshChunk.ts`, `emitCap`
+
+**What happens.** The horizon of the paused planet is not one line. Every few
+tens of pixels it steps up or down by one, with solid ground on both sides of
+the step, in a pattern that follows the chunk grid rather than the cells.
+
+**Why it matters.** A cell's cap is a flat polygon with its corners on the
+sphere and its middle below it, so a cap's silhouette sits below the sphere's by
+the sag — and the sag goes as the square of the cell's width. A cell twice as
+wide sags four times as far. Two levels meeting near the tangent point therefore
+draw two different horizons, and the taller one wins. This is a property of
+drawing a sphere as flat faces at more than one resolution, not a defect in any
+one chunk, and it is why it is filed as unscheduled: it costs a pixel and the
+fixes cost geometry.
+
+**What would fix it.** Nothing cheap. Lifting each cap to the sphere at its
+centre rather than inscribing it hides the sag from the silhouette and puts the
+error back on the shared edges, which is worse. Splitting a cap into more
+triangles reduces the sag and multiplies doc 14's 2-verts-4-tris, which is the
+number the whole mesh budget rests on. The honest options are to accept it, or
+to hold the level fixed within the band around the horizon where it shows —
+which the selection could do, since it already knows the horizon angle.
+
+---
+
 ## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
