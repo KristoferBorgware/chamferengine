@@ -327,10 +327,103 @@ function baseline(signed, points){
   return out;
 }
 
+// Candidate C. Scatter a few dozen seeds, give every cell the nearest one, and
+// let the seams between them decide the ground.
+//
+// Every direction here is hashed and normalised rather than drawn from an angle.
+// A plate laid out with sin and cos would be a transcendental in a field two
+// clients have to agree on to the bit; three hashed components and one
+// normalise are a wrapping multiply and a square root, both pinned by IEEE 754.
+function hashedDirection(seed, salt, k){
+  for (let attempt = 0; attempt < 8; attempt++){
+    const s = salt + attempt*977;
+    const x = 2*hash3(k, s, 0, seed) - 1;
+    const y = 2*hash3(k, s, 1, seed) - 1;
+    const z = 2*hash3(k, s, 2, seed) - 1;
+    const d2 = x*x + y*y + z*z;
+    if (d2 > 0.05 && d2 <= 1){ const l = Math.sqrt(d2); return [x/l, y/l, z/l]; }
+  }
+  return [0, 0, 1];
+}
+// the level `upliftReach` is stated at
+const REACH_LEVEL = 7;
+const cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const dot = (a,b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+
+function plateHeight(g, seed, opts){
+  const { plates, oceanShare, biasWeight, upliftWeight, upliftReach, reliefAmp, reliefFreq } = opts;
+  // How far a range reaches inland is a distance, so it is stated at a
+  // reference level and doubled for every level finer than that. Counting a
+  // fixed number of cells instead would make a range twice as wide on a map
+  // drawn at half the resolution, and the same seed would grow different
+  // mountains on the preview and on the world.
+  const reach = Math.max(1, Math.round(upliftReach * 2 ** (g.level - REACH_LEVEL)));
+  const seat = [], spin = [], bias = [];
+  for (let k = 0; k < plates; k++){
+    seat.push(hashedDirection(seed, 100, k));
+    // an angular velocity, so a plate's motion at a cell is the cross product
+    // of its own axis with that cell -- the way plate motion is described
+    const axis = hashedDirection(seed, 300, k);
+    const rate = 0.5 + hash3(k, 7, 0, seed);
+    spin.push([axis[0]*rate, axis[1]*rate, axis[2]*rate]);
+    bias.push(hash3(k, 11, 0, seed) < oceanShare ? -1 : 1);
+  }
+  // nearest seat, which is the same argmax of dot products the face lookup uses
+  const owner = new Int32Array(g.count);
+  for (let v = 0; v < g.count; v++){
+    const p = g.pts[v];
+    let best = 0, bestD = -2;
+    for (let k = 0; k < plates; k++){ const d = dot(p, seat[k]); if (d > bestD){ bestD = d; best = k; } }
+    owner[v] = best;
+  }
+  // At a seam, how fast the two plates close on each other along the step
+  // between the cells. Closing raises a range; parting drops a rift.
+  const seam = new Float64Array(g.count);
+  const front = [];
+  for (let v = 0; v < g.count; v++){
+    const a = owner[v]; let sum = 0, n = 0;
+    for (const w of g.ring[v]){
+      const b = owner[w];
+      if (b === a) continue;
+      const va = cross(spin[a], g.pts[v]), vb = cross(spin[b], g.pts[w]);
+      const step = [g.pts[w][0]-g.pts[v][0], g.pts[w][1]-g.pts[v][1], g.pts[w][2]-g.pts[v][2]];
+      const l = Math.sqrt(dot(step, step)) || 1;
+      sum += -(dot(va, step) - dot(vb, step))/l;
+      n++;
+    }
+    if (n){ seam[v] = sum/n; front.push(v); }
+  }
+  // Carry the seam inland, weaker at every step. Each cell remembers the seam
+  // value that reached it, because the cell it was reached from is a seam cell
+  // only on the first step and carries zero on every step after that.
+  const uplift = new Float64Array(g.count);
+  const origin = new Float64Array(g.count);
+  const seen = new Uint8Array(g.count);
+  let wave = front.slice();
+  for (const v of wave){ seen[v] = 1; origin[v] = seam[v]; uplift[v] = seam[v]; }
+  for (let step = 1; step <= reach && wave.length; step++){
+    const decay = 1 - step/(reach + 1);
+    const next = [];
+    for (const v of wave) for (const w of g.ring[v]) if (!seen[w]){
+      seen[w] = 1; origin[w] = origin[v]; uplift[w] = origin[v]*decay; next.push(w);
+    }
+    wave = next;
+  }
+  const h = new Float64Array(g.count);
+  for (let v = 0; v < g.count; v++){
+    const [x,y,z] = g.pts[v];
+    h[v] = biasWeight*bias[owner[v]] + upliftWeight*uplift[v]
+         + reliefAmp*fbm(x, y, z, reliefFreq, 5, seed + 1);
+  }
+  return { height: h, owner };
+}
+
 // ---- the run ----------------------------------------------------------------
 const SEED = 12345, LAND = 0.3;
 const WARP_AMP = 0.35, WARP_FREQ = 1.6;
 const GROWN = { island: 0.0008, growthWeight: 0.35, growthPasses: 1, creation: 0.281 };
+const PLATES = { plates: 36, oceanShare: 0.60, biasWeight: 0.5, upliftWeight: 1.2,
+                 upliftReach: 4, reliefAmp: 0.22, reliefFreq: 6 };
 
 const levels = [];
 for (let L = 2; L <= 8; L++) levels.push(grid(L));
@@ -349,8 +442,8 @@ console.log('1. how ragged the coastline is, and how that changes with resolutio
 console.log('   Perimeter of the largest landmass over the square root of its area.');
 console.log('   A round cap holding the same land gives 3.24.');
 console.log('');
-console.log('   level      today            warped           grown');
-const rows = { today: [], warp: [], grown: [] };
+const NAMES = ['today', 'warp', 'grown', 'plate'];
+const rows = { today: [], warp: [], grown: [], plate: [] };
 for (const L of [5, 6, 7]){
   const g = at(L);
   const h = todayHeight(g, SEED), s = seaLevelFor(h, LAND);
@@ -358,14 +451,17 @@ for (const L of [5, 6, 7]){
   const hw = warpedHeight(g, SEED, WARP_AMP, WARP_FREQ), sw = seaLevelFor(hw, LAND);
   rows.warp.push(summary(g, maskFromHeight(hw, sw)));
   rows.grown.push(summary(g, grownMask(levels.slice(0, L - 1), SEED, GROWN)));
+  const hp = plateHeight(g, SEED, PLATES).height, sp = seaLevelFor(hp, LAND);
+  rows.plate.push(summary(g, maskFromHeight(hp, sp)));
 }
+console.log('   level    ' + NAMES.map(n => pad(n, 15)).join(''));
 for (let k = 0; k < 3; k++)
-  console.log(`   ${5+k}     ` +
-    ['today','warp','grown'].map(n => pad(rows[n][k].ratio.toFixed(2), 6) +
-      ' (' + pad(rows[n][k].edges, 5) + ' edges)').join('  '));
+  console.log(`   ${5+k}       ` +
+    NAMES.map(n => pad(rows[n][k].ratio.toFixed(2), 7) +
+      pad('(' + rows[n][k].edges + ')', 8)).join(''));
 console.log('');
 console.log('   perimeter growth as the cells halve, and the dimension it implies');
-for (const n of ['today','warp','grown']){
+for (const n of NAMES){
   const g1 = rows[n][1].edges/rows[n][0].edges, g2 = rows[n][2].edges/rows[n][1].edges;
   console.log(`   ${pad(n,5)}  x${g1.toFixed(2)} then x${g2.toFixed(2)}` +
     `   dimension ${(Math.log2(g1)).toFixed(2)} then ${(Math.log2(g2)).toFixed(2)}`);
@@ -376,14 +472,15 @@ console.log('   South Africa through 1.25 for Britain to about 1.52 for Norway.'
 
 console.log('\n2. what each one does to the land itself');
 console.log('   at level 7');
-for (const n of ['today','warp','grown']){
+for (const n of NAMES){
   const r = rows[n][2];
   console.log(`   ${pad(n,5)}  land ${(100*r.land).toFixed(1)}%  largest landmass ` +
     `${pad(r.biggest,6)}  islands ${pad(r.islands,4)}`);
 }
-console.log('   The percentile lands on the asked-for fraction exactly. The grown mask');
-console.log('   has no percentile in it, so `creation` was searched for the value that');
-console.log('   reaches the same fraction, and it arrives near it rather than on it.');
+console.log('   Three of the four cut a height field at a percentile, so they land on the');
+console.log('   asked-for fraction exactly. The grown mask has no height field and no');
+console.log('   percentile in it, so `creation` was searched for the value that reaches');
+console.log('   the same fraction, and it arrives near it rather than on it.');
 
 console.log('\n3. the distance to the coast, and the height built on it');
 {
@@ -414,11 +511,17 @@ console.log('\n3. the distance to the coast, and the height built on it');
   const hw = warpedHeight(g, SEED, WARP_AMP, WARP_FREQ), sw = seaLevelFor(hw, LAND);
   const rw = longestRiver(g, hw, sw, maskFromHeight(hw, sw));
   const rg = longestRiver(g, h, 0, mk);
-  for (const [n, r] of [['today',rt],['warp',rw],['grown',rg]])
+  const hp = plateHeight(g, SEED, PLATES).height, sp = seaLevelFor(hp, LAND);
+  const rp = longestRiver(g, hp, sp, maskFromHeight(hp, sp));
+  for (const [n, r] of [['today',rt],['warp',rw],['grown',rg],['plate',rp]])
     console.log(`   ${pad(n,5)}  longest river ${pad(r.longest,4)} cells` +
       `  on a landmass of ${pad(r.largestLandmass,6)}`);
-  console.log('   A river cannot be longer than the land it crosses, so a coastline that');
-  console.log('   breaks the surface into more pieces shortens every river on it.');
+  console.log('   A river cannot be longer than the land it crosses, which is what holds');
+  console.log('   the grown field down: its largest landmass is little over half the');
+  console.log('   others. The plate field keeps the land and still loses the length, so');
+  console.log('   there the limit is the ground rather than the coast -- a range raised');
+  console.log('   along every seam cuts the interior into separate basins, and a river');
+  console.log('   runs from a ridge to the nearest coast instead of across the continent.');
 }
 
 console.log('\n5. whether a preview at a lower level is the map you get');
@@ -438,21 +541,37 @@ console.log('\n5. whether a preview at a lower level is the map you get');
   const wP = warpedHeight(gP, SEED, WARP_AMP, WARP_FREQ), wA = warpedHeight(gA, SEED, WARP_AMP, WARP_FREQ);
   const w = agree(maskFromHeight(wP, seaLevelFor(wP, LAND)), maskFromHeight(wA, seaLevelFor(wA, LAND)));
   const gr = agree(grownMask(levels.slice(0, 5), SEED, GROWN), grownMask(levels, SEED, GROWN));
+  const pP = plateHeight(gP, SEED, PLATES).height, pA = plateHeight(gA, SEED, PLATES).height;
+  const pl = agree(maskFromHeight(pP, seaLevelFor(pP, LAND)), maskFromHeight(pA, seaLevelFor(pA, LAND)));
   console.log('   cells of the level-6 map that the level-8 map disagrees with, of ' + t.shared);
-  for (const [n, r] of [['today',t],['warp',w],['grown',gr]])
+  for (const [n, r] of [['today',t],['warp',w],['grown',gr],['plate',pl]])
     console.log(`   ${pad(n,5)}  ${pad(r.disagree,5)}  = ${(100*r.disagree/r.shared).toFixed(3)}%`);
   console.log('   Noise is sampled from a direction, so a cell that exists at both levels');
-  console.log('   is handed the same height at both, and only the percentile moves. The');
-  console.log('   grown mask runs its growth pass again at every level, and a cell decided');
-  console.log('   at level 6 keeps being reconsidered on the way to level 8.');
+	console.log('   is handed the same height at both, and only the percentile moves.');
+	console.log('   The other two build their features by running a process over the grid,');
+	console.log('   and the grid is the thing that changes between the two maps: the grown');
+	console.log('   mask reconsiders inherited cells at every level, and a plate range is a');
+	console.log('   band a fixed number of cells wide, which cannot be narrower than one');
+	console.log('   cell on the coarser map however few metres it is meant to be.');
 }
 
 console.log('\nverdict');
-console.log('   The coastline that ships is a smooth curve by the only measurement that');
-console.log('   does not depend on resolution: its perimeter grows x2.08 then x2.17 as');
-console.log('   the cells halve, against x2 for a curve with no detail in it at all.');
-console.log('   Warping the direction moves that to x2.26 and x2.19, which is a change');
-console.log('   too small to see. Growing the mask reaches x2.64 and x2.73, and pays for');
-console.log('   it in two places nothing else pays: the land fraction stops being a');
-console.log('   number that can be asked for, and the longest river on the planet halves');
-console.log('   because the land is broken into more pieces.');
+console.log('   The coastline that ships is a smooth curve by the only measurement here');
+console.log('   that does not depend on resolution: its perimeter grows x2.08 then x2.17');
+console.log('   as the cells halve, against x2 for a curve carrying no detail at all.');
+console.log('   That is the smooth end of the real range rather than outside it.');
+console.log('');
+console.log('   Warping the direction moves it to x2.26 and x2.19, which is not a change');
+console.log('   anyone would see, at the one amplitude tried.');
+console.log('');
+console.log('   The two that build structure both reach a ragged coast and both charge');
+console.log('   for it, in different places. Growing the mask gives up the land fraction');
+console.log('   as a number that can be asked for, and halves the largest landmass.');
+console.log('   Plates keep both -- the fraction is exact and the landmass survives -- and');
+console.log('   lose the rivers a different way, by raising a range along every seam and');
+console.log('   cutting the interior into basins.');
+console.log('');
+console.log('   Only the two noise fields preview faithfully. A field built by running a');
+console.log('   process over the grid disagrees with itself across levels by 2 to 4% of');
+console.log('   the surface, because the grid is what the process runs on. A preview of');
+console.log('   one of those has to be built at the level it will be applied at.');

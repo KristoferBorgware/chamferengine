@@ -631,6 +631,8 @@ because erosion reads them to cut the valleys. What goes is the water.
 ---
 
 
+## Closed
+
 ### F-031 — The coverage gate reports a dropped fact every time a timing moves
 
 **Kind:** bug
@@ -671,10 +673,13 @@ emit it in a form the fact reader ignores, which also gives F-013 somewhere to
 put the values it is sweeping for. The narrow one is minutes; the wider one
 needs a convention agreed across `verification/`.
 
+**Closed:** 2026-08-18, fixed — `tools/check-coverage.js` no longer reads facts
+out of `docs/REFERENCE.md`. It is the combined output of running every
+verification script, so its numbers move whenever a script runs again, and every
+number in it the specification relies on is quoted by a document that is still
+on the list.
+
 ---
-
-
-## Closed
 
 ### F-018 — A second planet loses the low bits of every cell address at the shipped depth
 

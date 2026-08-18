@@ -24,9 +24,15 @@ const ONLY = args.find(a => a.includes('/'));
 const FILES = ONLY ? [ONLY] : [
   'README.md', 'CLAUDE.md', 'ARCHITECTURE.md', 'CODE-STYLE.md',
   'HOW-TO-WRITE-DOCS.md', 'plans/v0.1.0.md', 'demos/README.md', 'verification/README.md',
-  ...fs.readdirSync(path.join(ROOT, 'docs')).filter(f => f.endsWith('.md')).sort()
+  ...fs.readdirSync(path.join(ROOT, 'docs'))
+     .filter(f => f.endsWith('.md') && f !== 'REFERENCE.md').sort()
      .map(f => `docs/${f}`),
 ];
+// REFERENCE.md is the combined output of running every verification script, so
+// its numbers change whenever a script is re-run on a different machine or at a
+// different moment. Reading facts out of it reports a live timing that moved as
+// a fact that was dropped. Every number in it that the specification relies on
+// is quoted by a document, and those documents are on the list above.
 
 const old = f => {
   try { return execSync(`git show ${REF}:${f}`, { cwd: ROOT, stdio: ['ignore','pipe','ignore'] }).toString(); }

@@ -249,6 +249,24 @@ run on the result unchanged.
 **Recommendation:** plates set the coarse heights, erosion carves them, rivers
 follow. In that order, because each stage needs the one before it.
 
+**A plate is laid out from hashed directions, not from angles.** A seed, a
+rotation axis and a rate are each three hashed components divided by their own
+length — a wrapping multiply and a square root, both pinned to the bit by IEEE
+754. Placing seeds with `sin` and `cos` instead would put a transcendental in a
+field two clients have to agree on exactly, which doc 23 forbids. Plate motion
+at a cell is then the cross product of the plate's axis with the cell, which is
+how plate motion is described anyway.
+
+**What plates cost is river length.** A range raised along every seam cuts the
+interior into separate basins, so a river runs from a ridge to the nearest coast
+rather than across the continent.
+
+> **[verified]** `verification/coastline.js`, sections 2 and 4. Level 7, one
+> seed, land fraction 0.3, 36 plates. The largest landmass holds **25,072**
+> cells against **27,305** for the noise field that ships — so the land is
+> there — and the longest river on it is **94** cells against **172**. The
+> limit is the ground, not the coast.
+
 ### A percentile cut through smooth noise draws a smooth coast
 
 Low-frequency noise is what the engine runs, and it decides the coastline as
