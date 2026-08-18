@@ -327,6 +327,28 @@ at level 8, for rivers and erosion — does not change any of this. It is an
 *input* to the height-field term, not a mesh, and it is sampled by masking a cell
 ID rather than by any second spatial structure.
 
+### A coarse chunk asks for a height at a point, and gets one
+
+The honest surface for a wide cell is the **average** of the ground it covers.
+What a generator returns is the value at the cell's centre. Those are the same
+thing only while the ground varies little across the cell, and they part company
+exactly when a chunk drops a level.
+
+So a coarse chunk does not draw a smoothed version of the fine one. It draws an
+arbitrary selection from it, and which points it happens to land on changes when
+the level changes — which is what a player sees as the ground shifting under a
+chunk that has just swapped detail.
+
+> **[verified]** `verification/lod.js`, section 2. The shipped detail term — 5 m
+> over features 112 m across, four octaves — sampled at 190 places on one face,
+> each compared against the average of the ground its own cell covers. The gap
+> is **0.02 m** at LOD 1 and grows to **0.31 m** at LOD 6, worst case **1.19 m**
+> on 1 m blocks.
+
+The size of that gap follows the amplitude the term carries below the cell, so
+it is bounded by the detail term rather than by the terrain: a taller detail
+term moves it in proportion, and the coarse map underneath is untouched by it.
+
 ---
 
 ## Cracks, and which cause actually matters

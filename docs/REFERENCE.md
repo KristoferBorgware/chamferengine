@@ -35,6 +35,7 @@ numbered documents.
 | [`interest.js`](../verification/interest.js) | Multiplayer interest management. Doc 11 has always called this the easy one: "which players care about this chunk update is an ID range comparison, and the addressing scheme does the work". A contiguous ID range IS one compact patch of surface (doc 03) -- but the question here is the CONVERSE, and the converse of a true statement is not free. This measures it. | [22](22-multiplayer-interest.md) |
 | [`language.js`](../verification/language.js) | Which language and runtime -- the last item on doc 11's Part 1 list, and the only one that still blocked the first line of code. node verification/language.js Doc 23 argued from the IEEE 754 standard that the runtime is bit-identical across machines, and then admitted the argument had never been run: "a real check would run the generator on two genuinely different platforms and compare hashes, which cannot be done from inside one script." It can be done from inside one script, one level down. Instead of two platforms, use SIX LANGUAGES on one machine, each compiling the same kernel through a different compiler, optimiser and runtime. If the pipeline is as pinned as doc 23 claims, they all produce the same bits. If any of them is free to rewrite the arithmetic, that one disagrees -- and which one disagrees is exactly the language decision. The kernel is not a toy. It is noise.js's pinned hash, the quintic fade, trilinear value noise, fBm accumulated low octave first, and doc 04's barycentric blend + normalize -- 20,000 samples, four float64s folded from each, 80,000 doubles hashed into one 64-bit digest. Nothing here needs a network and nothing is installed. Toolchains that are absent are skipped and named, so this script runs anywhere and says what it could not check. | [11](11-open-topics.md) [26](26-implementation-readiness.md) [28](28-language-and-runtime.md) [29](29-what-runs-where.md) |
 | [`light.js`](../verification/light.js) | Lighting on a hex sphere: what 8 neighbours cost, why sky light is still one downward pass, and what a sun direction buys for free. | [16](16-lighting.md) |
+| [`lod.js`](../verification/lod.js) | A chunk drawn at a coarser level of detail spaces its cells further apart and asks the terrain for a height at each one. The terrain answers with the value at that exact point, which is not the same as the average of the ground the cell covers -- so a coarse chunk does not draw a smoothed version of the fine one, it draws an arbitrary selection from it. This measures what that costs, what two ways of band-limiting the detail term buy, and whether the coarse map has the same problem once the detail term is fixed. | [14](14-meshing-and-lod.md) |
 | [`lookup.js`](../verification/lookup.js) | — | [04](04-position-lookup.md) |
 | [`mesh.js`](../verification/mesh.js) | Meshing and LOD: what a hex surface actually costs, how far a flat patch may span before the sphere's curvature shows, and whether LOD levels share vertices. | [14](14-meshing-and-lod.md) |
 | [`neighbour.js`](../verification/neighbour.js) | neighbour(id, k) -- the function eight documents delegate to and none defines (doc 11, Part 1). Doc 05 proves its 180-byte table complete and has never used it to cross an edge; every other script here builds the whole planet and reads adjacency off a hash map of rounded positions, which is fine for measuring and unavailable to an engine holding one integer. So this builds the function from the table and INTEGER ARITHMETIC ALONE, then checks it against that geometric graph. It also settles the three decisions hiding inside it: where direction index 0 is anchored, how (i, j) re-expresses across a face edge, and what a pentagon returns for k = 5. | [05](05-face-adjacency.md) [11](11-open-topics.md) |
@@ -115,7 +116,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 393 ns -- a timing, so it moves run to run
+   this machine, now: 401 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1214,7 +1215,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 143M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 182M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1460,12 +1461,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 14x version is the one that
+       than choosing the language. And the 10x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.71 ms, one object a vertex
-       9.80 ms -- a layout gap of 14x. Both are timings and move run to
+       This machine, now: typed arrays 0.70 ms, one object a vertex
+       7.01 ms -- a layout gap of 10x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -1637,6 +1638,58 @@ Cited by [doc 16](16-lighting.md).
             15                    7,471 1.497x
    Shortening the light range is the cheapest lever: cost grows as the cube
    of it. Range 8 costs 83% less than range 15.
+```
+
+## `lod.js`
+
+A chunk drawn at a coarser level of detail spaces its cells further apart and asks the terrain for a height at each one. The terrain answers with the value at that exact point, which is not the same as the average of the ground the cell covers -- so a coarse chunk does not draw a smoothed version of the fine one, it draws an arbitrary selection from it. This measures what that costs, what two ways of band-limiting the detail term buy, and whether the coarse map has the same problem once the detail term is fixed.
+
+Cited by [doc 14](14-meshing-and-lod.md).
+
+```
+1. which octaves a level of detail can still carry
+   4 octaves from a 112 m feature, amplitude 5 m.
+   An octave needs two cells across a feature to be drawn at all.
+
+   octave  feature   its share of the 5 m
+     0     112 m    2.67 m   gone past LOD 5
+     1      56 m    1.33 m   gone past LOD 4
+     2      28 m    0.67 m   gone past LOD 3
+     3      14 m    0.33 m   gone past LOD 2
+
+   lod  cell   octaves it can carry
+     0     1 m   4
+     1     2 m   4
+     2     4 m   4
+     3     8 m   3
+     4    16 m   2
+     5    32 m   1
+     6    64 m   0
+     7   128 m   0
+     8   256 m   0
+   The detail term has nothing left to say past LOD 5, which is where
+   section 3 picks the coarse map up.
+
+2. how far the drawn ground moves, in metres
+   Against the average of the ground a cell covers, over 190 places on
+   one face, each averaged across its own footprint.
+
+   lod   today          drop octaves   roll off
+         rms    worst   rms    worst   rms    worst
+     1    0.02   0.04    0.02   0.04    0.02   0.04    (190 places)
+     2    0.02   0.04    0.02   0.04    0.02   0.04    (190 places)
+     3    0.02   0.07    0.12   0.27    0.03   0.09    (190 places)
+     4    0.06   0.22    0.29   0.75    0.12   0.41    (190 places)
+     5    0.15   0.44    0.53   1.55    0.25   0.77    (190 places)
+     6    0.31   1.19    1.02   2.41    0.50   1.50    (190 places)
+
+   the step a player sees when a chunk changes level, rms metres
+   lod change   today   drop octaves   roll off
+   1 -> 2       0.00    0.00           0.00
+   2 -> 3       0.01    0.10           0.01
+   3 -> 4       0.04    0.17           0.09
+   4 -> 5       0.09    0.24           0.14
+   5 -> 6       0.16    0.50           0.24
 ```
 
 ## `lookup.js`
@@ -2391,7 +2444,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1232 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1073 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3182,4 +3235,4 @@ verdict
 
 ---
 
-_36 scripts. Every number above is reproduced by running them._
+_37 scripts. Every number above is reproduced by running them._
