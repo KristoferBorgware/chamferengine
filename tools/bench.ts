@@ -7,6 +7,7 @@ import {
 	ChunkAddress,
 	ChunkColumnSampler,
 	TerrainGenerator,
+	ChunkPeaks,
 	buildCoarseMap,
 	flatCoarseMap,
 	generateChunk,
@@ -71,6 +72,15 @@ const worldMs = performance.now() - worldStart;
 // The crust top comes from the map's own true peak, the way the client builds
 // it, not the pre-build guess `settings.shape()` uses for the panel.
 const shape = settings.shapeFor(map);
+
+// The selection reaches for the ground each triangle actually holds, which is
+// what the client does, so the counts here are the ones a player gets.
+const peaks = new ChunkPeaks(
+	map,
+	settings.knobs.heightScale,
+	settings.detailAmplitude,
+	CHUNK_LEVEL,
+);
 
 const byLod: TerrainGenerator[] = [];
 for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
@@ -199,6 +209,7 @@ function measure(scene: Scene): Measured {
 		RADIUS,
 		DETAIL,
 		shape.maxElevation,
+		peaks,
 	);
 	const selectMs = performance.now() - selectStart;
 
@@ -377,6 +388,7 @@ const before = new Set(
 		RADIUS,
 		DETAIL,
 		shape.maxElevation,
+		peaks,
 	).map(
 		(chosen) => selectionId(chosen.chunkLevel, chosen.key),
 	),
@@ -396,6 +408,7 @@ for (const metres of [10, 50, 200]) {
 		RADIUS,
 		DETAIL,
 		shape.maxElevation,
+		peaks,
 	);
 	let fresh = 0;
 	for (const chosen of after)

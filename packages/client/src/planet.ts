@@ -5,6 +5,7 @@ import {
 	BlockType,
 	ChunkAtlas,
 	TerrainGenerator,
+	ChunkPeaks,
 	buildCoarseMap,
 	chunkOverlaps,
 	flatCoarseMap,
@@ -187,6 +188,17 @@ async function main(): Promise<void> {
 	// guess: a Land setting far from the default shifts sea level a long way,
 	// and a guessed crust top too low shears the mountains flat.
 	const shape = settings.shapeFor(map);
+
+	// How high the ground reaches under each triangle, so the selection reaches
+	// for the ground a chunk actually has rather than for the planet's tallest.
+	// The margin is the detail term's own amplitude, which bounds how far it can
+	// lift ground the coarse map does not carry.
+	const peaks = new ChunkPeaks(
+		map,
+		settings.knobs.heightScale,
+		settings.detailAmplitude,
+		CHUNK_LEVEL,
+	);
 	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
 
 	// Both decks are built on their own worker, off the thread that draws: a
@@ -447,6 +459,7 @@ async function main(): Promise<void> {
 			RADIUS,
 			DETAIL,
 			shape.maxElevation,
+			peaks,
 		);
 		wantedNow = wanted.length;
 		lastWanted = wanted;

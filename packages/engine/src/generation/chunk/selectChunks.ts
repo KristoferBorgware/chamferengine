@@ -1,6 +1,7 @@
 import { ChunkAddress } from "./ChunkAddress.js";
 import { chunkCenter } from "./chunkCenter.js";
 import { horizonAngle } from "./horizonAngle.js";
+import type { ChunkPeaks } from "./ChunkPeaks.js";
 
 /** One chunk to draw, and how coarsely. */
 export interface ChunkSelection {
@@ -50,6 +51,12 @@ export const DETAIL = 2;
  * feet: a viewer standing on ground at exactly `surfaceRadius` still sees to
  * the eye-height horizon, and passing the feet there collapses the first
  * term to nothing.
+ *
+ * `peaks` replaces that one planet-wide figure with each triangle's own tallest
+ * ground, so a triangle holding nothing tall is reached from nearer and a ring
+ * of chunks whose ground is below the horizon is never built. It is optional
+ * because the reach is the only thing it changes: without it every triangle
+ * uses `peakHeight`, which is what a caller checking geometry wants.
  */
 export function selectChunks(
 	depth: number,
@@ -59,6 +66,7 @@ export function selectChunks(
 	surfaceRadius: number,
 	detail = DETAIL,
 	peakHeight = 0,
+	peaks?: ChunkPeaks,
 ): ChunkSelection[] {
 	const length = Math.sqrt(
 		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
@@ -69,15 +77,22 @@ export function selectChunks(
 	const eyeX = ux * viewerRadius;
 	const eyeY = uy * viewerRadius;
 	const eyeZ = uz * viewerRadius;
-	const horizon =
-		horizonAngle(viewerRadius, surfaceRadius) +
-		horizonAngle(surfaceRadius + peakHeight, surfaceRadius);
+	const eyeHorizon = horizonAngle(viewerRadius, surfaceRadius);
+	const wholePlanet = horizonAngle(surfaceRadius + peakHeight, surfaceRadius);
 
 	const out: ChunkSelection[] = [];
 	const walk = (address: ChunkAddress, chunkLevel: number): void => {
 		const extent = chunkCenter(address, depth, chunkLevel);
 		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
 		const spread = Math.acos(Math.min(1, extent.cosRadius));
+		const horizon =
+			eyeHorizon +
+			(peaks
+				? horizonAngle(
+						surfaceRadius + peaks.peakOf(address.key, chunkLevel),
+						surfaceRadius,
+					)
+				: wholePlanet);
 		// Over the horizon by more than its own width: the whole triangle is on
 		// the far side of the planet.
 		if (cos < Math.cos(Math.min(Math.PI, horizon + spread))) return;
