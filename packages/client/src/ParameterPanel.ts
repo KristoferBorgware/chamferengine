@@ -261,6 +261,9 @@ export class ParameterPanel {
 	private readonly root: HTMLElement;
 	private readonly draft: PlanetKnobs;
 	private readonly onLive: (settings: PlanetSettings) => void;
+
+	/** Told whenever the draft moves, so a pane drawing from it can keep up. */
+	private readonly onDraft: (settings: PlanetSettings) => void;
 	private readonly rows: Row[] = [];
 	private problems!: HTMLElement;
 	private derived!: HTMLElement;
@@ -270,9 +273,11 @@ export class ParameterPanel {
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
+		onDraft: (settings: PlanetSettings) => void = () => {},
 	) {
 		this.draft = { ...settings.knobs };
 		this.onLive = onLive;
+		this.onDraft = onDraft;
 		this.root = document.createElement("aside");
 		this.root.className = "knobs";
 		this.build();
@@ -405,6 +410,7 @@ export class ParameterPanel {
 
 	/** A change was made: either hand it over now, or wait for the button. */
 	private touch(rebuilds: boolean): void {
+		this.onDraft(this.settings);
 		if (rebuilds) {
 			this.dirty = true;
 			this.applyButton.classList.add("wants");

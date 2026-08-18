@@ -40,6 +40,7 @@ import {
 	planetAtmosphere,
 	windRotation,
 } from "chamfer/sky";
+import { MapPanel } from "./MapPanel.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
@@ -162,10 +163,33 @@ function paint(): Promise<void> {
  */
 let onLiveKnob: (live: PlanetSettings) => void = () => {};
 
-if (params.get("panel") === "1")
-	new ParameterPanel(settings, (live) => {
-		onLiveKnob(live);
+/**
+ * Editor mode.
+ *
+ * `?panel=1` turns it on, and it carries panes that show and hide on their own
+ * heads: the world knobs, and the maps. A pane is open because it is being
+ * used, not because the mode is on.
+ *
+ * The map pane draws the maps while they are still being built and never
+ * touches the terrain. **Apply** is what rebuilds the world, and it does that
+ * the way every knob used to: by reloading with the settings in the query
+ * string, which is the one path that rebuilds the device, the map and every
+ * chunk together.
+ */
+if (params.get("panel") === "1") {
+	const maps = new MapPanel(settings, (chosen) => {
+		const wanted = chosen.toParams();
+		wanted.set("panel", "1");
+		location.href = `${location.pathname}?${wanted.toString()}`;
 	});
+	new ParameterPanel(
+		settings,
+		(live) => {
+			onLiveKnob(live);
+		},
+		(draft) => maps.changed(draft),
+	);
+}
 
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
