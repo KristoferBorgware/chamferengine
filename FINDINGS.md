@@ -597,7 +597,7 @@ every cell downhill and accumulates what drains through it, on every world,
 with no way to ask for a planet without them. There is no switch and no
 setting.
 
-That was going to be a checkbox in v0.2.0. Writing the item showed the switch
+That was going to be a checkbox in a release it has since left. Writing the item showed the switch
 cannot be built without saying what "on" means, because what "on" produces
 today is a chain of pools rather than a river — F-015 has the numbers. And what
 "on" should mean depends on a question nobody has answered: whether a river is
@@ -615,7 +615,7 @@ landscape looks like, because the valleys are cut by the same numbers. Anyone
 answering this has to decide about the valleys as well as the water in them.
 
 **What would fix it.** Look at a planet with rivers and a planet without, side
-by side, and say which one this game wants. v0.2.0's I-5 builds the editor that
+by side, and say which one this game wants. v0.2.0's I-1, the map editor, builds the surface that
 makes that a knob rather than a rebuild, so this is cheap to answer after that
 release and not before.
 
@@ -637,10 +637,11 @@ because erosion reads them to cut the valleys. What goes is the water.
 **Milestone:** unscheduled
 **Priority:** medium
 **Effort:** small
-**Found:** 2026-08-18, trialling v0.2.0's I-4, which was opened to do exactly
-this and was dropped when it was measured
+**Found:** 2026-08-18, trialling an item that was opened to do exactly this
+and was dropped when it was measured; it left the plan and this entry is what
+remains of it
 **Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
-`columnAt`; the numbers are in `verification/lod.js` and `plans/v0.2.0.md`, I-4
+`columnAt`; the numbers are in `verification/lod.js`
 
 **What happens.** `columnAt(face, i, j)` takes a face and a lattice offset and
 nothing else. A chunk drawn coarsely calls it for a subset of the points a fine
@@ -679,7 +680,7 @@ taller detail term, since the blur is bounded by the amplitude the term carries
 below the cell; or a way for a player to get high enough to see LOD 6 — flying,
 a map view, or a much smaller planet. The same two conditions decide whether
 the coarse map needs a mip pyramid, which is undecided for the same reason and
-priced at a third more memory in `plans/v0.2.0.md`, I-4.
+priced at a third more memory by the same trial.
 
 ---
 
@@ -734,7 +735,8 @@ buys time to design it.
 **Priority:** low
 **Effort:** small
 **Found:** 2026-08-18, regenerating `docs/REFERENCE.md` after adding
-`verification/coastline.js` for v0.2.0's I-1
+`verification/coastline.js` for the coastline trial now in
+`plans/v0.3.0.md`, I-1
 **Where:** `tools/check-coverage.js`; the number comes from
 `verification/language.js` section 5, printed into `docs/REFERENCE.md`
 
