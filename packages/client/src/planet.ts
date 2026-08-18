@@ -818,9 +818,12 @@ async function main(): Promise<void> {
 		const sun = PLAIN
 			? up
 			: sunDirection((elapsed / DAY_LENGTH) % 1, NORTH);
-		const day = PLAIN
-			? 1
-			: daylight(ground.x, ground.y, ground.z, sun.x, sun.y, sun.z);
+		// The player's own up, not the place they started. How lit the world is
+		// is a local fact on a sphere: this planet is 10,681 m round and takes
+		// 2.12 hours to walk, so a player can cross the terminator inside one
+		// day. Measuring it anywhere but under their feet holds the whole scene
+		// at whatever the light was where they spawned.
+		const day = PLAIN ? 1 : daylight(up.x, up.y, up.z, sun.x, sun.y, sun.z);
 
 		// The clouds are thrown away and refilled as the wind turns, on their
 		// own worker. There is no address to update in place, because a cloud
