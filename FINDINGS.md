@@ -784,6 +784,44 @@ it is the only one of the three that makes the poles worth standing on.
 
 ---
 
+### F-036 — The whole Puff slider is unreachable on a planet the shipped size
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, chasing a report that the cloud Puff knob does nothing
+**Where:** `packages/client/src/PlanetSettings.ts` — `CLOUD_POINT_SHELL_BUDGET`,
+`cloudLevelBudget`, `PlanetSettings.cloudLevel`
+
+**What happens.** Puff asks for a cloud lump in metres and is answered as a
+lattice level, and the level is capped so one deck stays under 700,000 lattice
+points times shells. At 4 shells that cap is level 7. On a 20,402 m radius,
+level 7 is a **192 m** puff — coarser than the slider's own maximum of 128 m.
+So every value from 8 m to 128 m gives the same clouds, and the knob is not
+stiff at one end, it is dead across its whole travel.
+
+It is not the radius alone. At 1 shell the cap is level 8, which is 96 m — the
+top quarter of the slider and nothing else. The default 1,700 m radius is where
+the range was chosen and there the slider works, because the same level is a
+16 m puff.
+
+**Why it matters.** This was reported as a broken knob, and looking at it that
+is exactly what it is. The panel now prints what was given and why underneath
+the slider, so nobody has to guess again, but a knob that prints an excuse
+across its whole range is still a knob nobody can use. Cloud size is one of the
+few things about this sky that is an art decision rather than a measurement, so
+it is a knob that has to work.
+
+**What would fix it.** Two candidates, and they cost different things. Scale
+the slider's range with the radius, so it offers what the planet can give
+rather than a fixed 8 to 128 m — cheap, and it means the same number means a
+different cloud on two planets. Or raise the budget, which is a real
+measurement rather than a guess: 700,000 came from the heaviest deck anyone has
+run, and 2 decks at level 9 and 3 shells did fill a 256 MiB buffer on real
+hardware. Raising it needs a device that draws, a build of every combination,
+and the number where it stops.
+
 
 ## Closed
 

@@ -19,6 +19,9 @@ import { SphereView } from "./SphereView.js";
 const WIDTH = 512;
 const HEIGHT = 256;
 
+/** How long a knob has to stop moving before the map is rebuilt, in ms. */
+const SETTLE_MS = 250;
+
 /**
  * The maps, drawn while they are still being built.
  *
@@ -154,8 +157,22 @@ export class MapPanel {
 		this.worker = new Worker(new URL("./mapWorker.ts", import.meta.url), {
 			type: "module",
 		});
-		this.worker.onmessage = (event: MessageEvent<MapWorkerStep>) =>
-			this.arrived(event.data);
+		this.worker.onmessage = (
+			event: MessageEvent<
+				MapWorkerStep | { kind: "failed"; level: number; why: string }
+			>,
+		) => {
+			const message = event.data;
+			if ("kind" in message && message.kind === "failed") {
+				this.status.textContent =
+					`a map at level ${message.level} would not fit in memory. ` +
+					"Raise Coarse cell, or lower Radius.";
+				// The level that failed is not held, so the next try rebuilds.
+				this.level = -1;
+				return;
+			}
+			this.arrived(message as MapWorkerStep);
+		};
 		this.setup();
 		this.rebuild("height");
 	}
@@ -183,20 +200,57 @@ export class MapPanel {
 	/** Where the mark was last put, so an unmoved player costs nothing. */
 	private marked: { x: number; y: number; z: number } | null = null;
 
-	/** A knob moved. Rebuild from the step that knob first reaches. */
-	changed(settings: PlanetSettings): void {
-		const before = this.settings;
-		this.settings = settings;
+	/** A rebuild waiting for the knob to stop moving. */
+	private waiting: ReturnType<typeof setTimeout> | null = null;
 
-		// The level decides the grid, which the worker holds for its whole life,
-		// so a new level is a new worker rather than a rebuild.
-		if (settings.coarseLevel !== this.level) {
-			this.level = settings.coarseLevel;
-			this.setup();
-			this.rebuild("height");
-			return;
-		}
-		this.rebuild(this.stageFor(before, settings));
+	/**
+	 * A knob moved.
+	 *
+	 * Held until the knob stops. A slider dragged across its range fires on
+	 * every step, and a map is seconds of work and a grid of tens of megabytes,
+	 * so acting on each step queues both faster than either can be finished.
+	 */
+	changed(settings: PlanetSettings): void {
+		const before = this.pending ?? this.settings;
+		this.pending = settings;
+		this.from = this.earliest(this.from, this.stageFor(before, settings));
+		if (this.waiting) clearTimeout(this.waiting);
+		this.waiting = setTimeout(() => {
+			this.waiting = null;
+			const wanted = this.pending;
+			const from = this.from;
+			this.pending = null;
+			this.from = null;
+			if (!wanted) return;
+			this.settings = wanted;
+
+			// The level decides the grid, which the worker holds for its whole
+			// life, so a new level is a new grid rather than a rebuild.
+			if (wanted.coarseLevel !== this.level) {
+				this.level = wanted.coarseLevel;
+				this.setup();
+				this.rebuild("height");
+				return;
+			}
+			this.rebuild(from ?? "height");
+		}, SETTLE_MS);
+	}
+
+	/** What is waiting, and the earliest step anything in it reaches. */
+	private pending: PlanetSettings | null = null;
+	private from: CoarseStage | null = null;
+
+	/** Whichever of two steps comes first in the chain. */
+	private earliest(a: CoarseStage | null, b: CoarseStage): CoarseStage {
+		if (!a) return b;
+		const order: CoarseStage[] = [
+			"height",
+			"sea",
+			"erosion",
+			"rivers",
+			"slope",
+		];
+		return order.indexOf(a) <= order.indexOf(b) ? a : b;
 	}
 
 	/** The earliest step any of the changed options reaches. */

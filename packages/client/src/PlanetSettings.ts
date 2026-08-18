@@ -386,6 +386,21 @@ export class PlanetSettings {
 	}
 
 	/**
+	 * Whether the coarse map is coarser than asked because it had to be.
+	 *
+	 * A wide radius and a fine cell together ask for a level nobody has built:
+	 * 19,800 m and 12 m ask for level 11, which is 41,943,042 cells and four
+	 * fields of them. The panel shows what was given instead of leaving the
+	 * slider looking like it did nothing.
+	 */
+	get coarseLevelCapped(): boolean {
+		return (
+			Math.min(this.depth, MAX_COARSE_LEVEL) <
+			levelFor(CELL_CONSTANT * this.radius, this.knobs.coarseSpacing)
+		);
+	}
+
+	/**
 	 * How many layers deep the world runs, under all three caps.
 	 *
 	 * The taper says where a column would pinch shut, the layer field says how
@@ -415,6 +430,32 @@ export class PlanetSettings {
 				cloudLevelBudget(this.knobs.cloudShells),
 				levelFor(CELL_CONSTANT * this.radius, this.knobs.cloudPuff),
 			),
+		);
+	}
+
+	/**
+	 * Which of the three caps on {@link PlanetSettings.crustDepth} bound it.
+	 *
+	 * `"asked"` means the knob got what it wanted. `"taper"` means the column
+	 * would pinch shut before reaching that far down, and `"field"` means the
+	 * ten-bit layer field ran out of names at 1,024 layers.
+	 */
+	get crustCap(): "asked" | "taper" | "field" {
+		const wanted = Math.ceil(this.knobs.crustMetres / this.knobs.blockSize);
+		if (wanted <= this.crustDepth) return "asked";
+		return maxCrustDepth(this.depth) <= LAYER_COUNT ? "taper" : "field";
+	}
+
+	/**
+	 * Whether the shell budget, rather than rounding, decided the cloud level.
+	 *
+	 * When it did, moving Puff alone changes nothing at all until it comes
+	 * back inside the budget, which is what a knob that feels dead looks like.
+	 */
+	get cloudLevelCapped(): boolean {
+		return (
+			cloudLevelBudget(this.knobs.cloudShells) <
+			levelFor(CELL_CONSTANT * this.radius, this.knobs.cloudPuff)
 		);
 	}
 

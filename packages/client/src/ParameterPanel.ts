@@ -23,6 +23,18 @@ interface Knob {
 	/** Whether the map pane redraws when this moves. */
 	readonly map?: boolean;
 
+	/**
+	 * What the world actually got, when that is not what was asked for.
+	 *
+	 * Several of these numbers are requests: a puff size is answered as a
+	 * lattice level, a coarse cell too, and a radius moves to whatever makes
+	 * the block size exact. When the answer is far from the question the
+	 * slider looks broken -- asking for an 8 m puff and receiving 192 m reads
+	 * as a knob that does nothing. This says so on the row rather than leaving
+	 * it to be found in the readout at the bottom.
+	 */
+	readonly given?: (settings: PlanetSettings) => string | null;
+
 	/** Named choices, for a knob that is one of a few things rather than a number. */
 	readonly choices?: readonly {
 		readonly value: string;
@@ -77,6 +89,10 @@ const GROUPS: Group[] = [
 				label: "Radius",
 				digits: 0,
 				says: "How big the planet is. Sets how far you can see, which goes as the square root of this, and how long a walk round takes, which goes as this. With the block size it also sets the subdivision depth, and the depth is two bits of every cell address.",
+				given: (s) =>
+					Math.abs(s.radius - s.knobs.radius) < 1
+						? null
+						: `you get ${s.radius.toFixed(0)} m. Block size is exact and the radius absorbs the rounding, so it lands wherever depth ${s.depth} puts it.`,
 			},
 			{
 				key: "landFraction",
@@ -106,7 +122,13 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Coarse cell",
 				digits: 0,
-				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide — the readout below is what you get.",
+				says: "How finely the map of continents, rivers and lakes is drawn. It decides how wide a river is and nothing else: land share, sea level and where the water goes are the same at every setting. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide.",
+				given: (s) =>
+					Math.abs(s.coarseCell - s.knobs.coarseSpacing) < 1
+						? null
+						: s.coarseLevelCapped
+							? `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. Level 9 is the finest map anyone has built here, 2,621,442 cells and 10 MB a field, and this radius asks past it. Lower Radius to go finer.`
+							: `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. A cell is a level, so it lands on the nearest one.`,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 		],
@@ -161,6 +183,14 @@ const GROUPS: Group[] = [
 				label: "Crust reaches",
 				digits: 0,
 				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
+				given: (s) => {
+					const cap = s.crustCap;
+					if (cap === "asked") return null;
+					const got = s.crustDepth * s.knobs.blockSize;
+					return cap === "taper"
+						? `you get ${got.toFixed(0)} m, ${s.crustDepth} layers. A column narrows going down and pinches shut there, so nothing deeper exists to name.`
+						: `you get ${got.toFixed(0)} m, ${s.crustDepth} layers. The layer field is ten bits, so 1,024 layers is every layer the address can name. Raise Block size to reach further down.`;
+				},
 			},
 		],
 	},
@@ -253,7 +283,13 @@ const GROUPS: Group[] = [
 				key: "cloudPuff",
 				label: "Puff",
 				digits: 0,
-				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it. A puff fine enough, combined with enough shells, is capped coarser than asked rather than filling a buffer the renderer cannot hold — the readout below is what you get.",
+				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it. A puff fine enough, combined with enough shells, is capped coarser than asked rather than filling a buffer the renderer cannot hold.",
+				given: (s) =>
+					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
+						? null
+						: s.cloudLevelCapped
+							? `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. ${s.knobs.cloudShells} shells hold it there, because a deck is capped at 700,000 lattice points times shells. Lower Shells, or this slider does nothing.`
+							: `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. A puff is a level, so it lands on the nearest one.`,
 				enabledWhen: (k) => !k.plain,
 			},
 			{
@@ -441,6 +477,7 @@ export class ParameterPanel {
 			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
 			(toggle ? "" : "<b></b>") +
 			`</label><input type="${toggle ? "checkbox" : "range"}">` +
+			"<u></u>" +
 			`<small>${knob.says}</small>`;
 
 		const input = wrap.querySelector("input")!;
@@ -454,6 +491,7 @@ export class ParameterPanel {
 		}
 
 		const shown = wrap.querySelector("b");
+		const answer = wrap.querySelector("u")!;
 		const write = () => {
 			if (toggle)
 				input.checked = this.draft[knob.key] as unknown as boolean;
@@ -463,6 +501,9 @@ export class ParameterPanel {
 					`${Number(this.draft[knob.key]).toFixed(digits)}` +
 					(range.unit ? ` ${range.unit}` : "");
 			}
+			const given = knob.given?.(this.settings) ?? null;
+			answer.textContent = given ?? "";
+			answer.classList.toggle("some", given !== null);
 		};
 		write();
 

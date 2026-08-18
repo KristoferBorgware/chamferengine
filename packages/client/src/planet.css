@@ -104,6 +104,21 @@ body {
 .knob {
 	margin-bottom: 11px;
 }
+/* What the world actually got, when a slider asked for something it could not
+   have. Sits between the slider and its description, above the prose, because
+   a knob that reads as broken is looked at before it is read about. */
+.knob u {
+	display: none;
+}
+.knob u.some {
+	display: block;
+	font-size: 10.5px;
+	line-height: 1.45;
+	color: #f0c274;
+	text-decoration: none;
+	margin-top: 1px;
+}
+
 .knob small {
 	display: block;
 	font-size: 10.5px;

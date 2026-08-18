@@ -247,3 +247,54 @@ describe("boolean knobs round-trip through a query string", () => {
 		expect(back.knobs.paused).toBe(false);
 	});
 });
+
+describe("a knob that did not get what it asked for says so", () => {
+	// The report these answer: a Puff slider that felt "completely unaffected
+	// by the knob". It was clamped, and nothing on the row said which knob was
+	// doing the clamping or what the world actually held.
+
+	it("names the shell budget when it, not rounding, set the cloud level", () => {
+		const capped = new PlanetSettings({
+			radius: 19800,
+			blockSize: 0.75,
+			cloudPuff: 8,
+			cloudShells: 4,
+		});
+		expect(capped.cloudLevelCapped).toBe(true);
+		// Asked for 8 m and the world holds 192 m: the whole 8-to-128 m slider
+		// is on the far side of the cap, so no value on it changes anything.
+		expect(capped.cloudPuff).toBeGreaterThan(128);
+	});
+
+	it("does not claim a cap when the puff only rounded to a level", () => {
+		const rounded = new PlanetSettings({ cloudPuff: 64, cloudShells: 1 });
+		expect(rounded.cloudLevelCapped).toBe(false);
+	});
+
+	it("names the coarse cap when a wide radius asks past level 9", () => {
+		const capped = new PlanetSettings({
+			radius: 19800,
+			blockSize: 0.75,
+			coarseSpacing: 12,
+		});
+		expect(capped.coarseLevelCapped).toBe(true);
+		expect(capped.coarseLevel).toBe(9);
+	});
+
+	it("does not claim a coarse cap at the shipped defaults", () => {
+		expect(new PlanetSettings({}).coarseLevelCapped).toBe(false);
+	});
+
+	it("says which of the three caps held the crust back", () => {
+		expect(new PlanetSettings({}).crustCap).toBe("asked");
+		// 832 m of crust in 0.75 m blocks is 1,110 layers, and the layer field
+		// names 1,024. The world runs 768 m deep and the knob never said.
+		const field = new PlanetSettings({
+			radius: 19800,
+			blockSize: 0.75,
+			crustMetres: 832,
+		});
+		expect(field.crustCap).toBe("field");
+		expect(field.crustDepth).toBe(1024);
+	});
+});
