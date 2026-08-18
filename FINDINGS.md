@@ -631,6 +631,59 @@ because erosion reads them to cut the valleys. What goes is the water.
 ---
 
 
+### F-032 — The terrain generator must not be told which level of detail is asking
+
+**Kind:** risk
+**Milestone:** unscheduled
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-18, trialling v0.2.0's I-4, which was opened to do exactly
+this and was dropped when it was measured
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`columnAt`; the numbers are in `verification/lod.js` and `plans/v0.2.0.md`, I-4
+
+**What happens.** `columnAt(face, i, j)` takes a face and a lattice offset and
+nothing else. A chunk drawn coarsely calls it for a subset of the points a fine
+chunk calls it for, and every one of those points gets the same answer either
+way.
+
+That looks like an oversight and it is the property the level of detail rests
+on. Because a point's height does not depend on which chunk asked, **a chunk
+changing level moves no ground at all.** The points it keeps hold exactly the
+height they had. What appears and disappears is the ground between them, which
+a coarse chunk draws as a flat span.
+
+**Why it matters.** The oversight reading is easy to reach, and acting on it
+makes the engine worse. Passing the level in so the detail term can drop or fade
+the octaves a wide cell cannot represent is the obvious anti-aliasing fix. It
+would give a retained point one height in the coarse chunk and a different one
+in the fine chunk, so ground that never moves today would move every time a
+chunk changed level — trading a blurred span, which nobody has complained about,
+for a popping surface, which is the thing people do complain about.
+
+Measured against the average of the ground each cell covers, at 190 places on
+one face: leaving it alone is **0.31 m** at LOD 6, dropping octaves is
+**1.02 m**, fading them is **0.50 m**. The two fixes are worse than the problem
+at every level tested, not only at the extreme.
+
+And the span it blurs is small where anyone stands. `selectChunks` on the
+shipped planet draws nothing coarser than LOD 4 at eye height, where the figure
+is **0.06 m** on 1 m blocks. LOD 6 needs 1,200 m of altitude, which nothing in
+the game reaches.
+
+**What would fix it.** Nothing. This entry exists so the next person to notice
+that `columnAt` ignores the level finds the measurement instead of the fix.
+
+Two things would make it worth measuring again, and only these two: a much
+taller detail term, since the blur is bounded by the amplitude the term carries
+below the cell; or a way for a player to get high enough to see LOD 6 — flying,
+a map view, or a much smaller planet. The same two conditions decide whether
+the coarse map needs a mip pyramid, which is undecided for the same reason and
+priced at a third more memory in `plans/v0.2.0.md`, I-4.
+
+---
+
+
 ## Closed
 
 ### F-031 — The coverage gate reports a dropped fact every time a timing moves

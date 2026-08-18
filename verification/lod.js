@@ -1,10 +1,12 @@
 // A chunk drawn at a coarser level of detail spaces its cells further apart and
-// asks the terrain for a height at each one. The terrain answers with the value
-// at that exact point, which is not the same as the average of the ground the
-// cell covers -- so a coarse chunk does not draw a smoothed version of the fine
-// one, it draws an arbitrary selection from it. This measures what that costs,
-// what two ways of band-limiting the detail term buy, and whether the coarse
-// map has the same problem once the detail term is fixed.
+// asks the terrain for a height at each one. The generator is not told which
+// level is asking, so a point that survives the coarsening keeps exactly the
+// height the fine chunk gives it -- a chunk changing level moves no ground. What
+// a coarse chunk loses is the surface BETWEEN its points, which it draws flat.
+//
+// This measures how much that flat span misses, and what happens if the
+// generator is made level-aware to close the gap. Two ways of doing that are
+// tried, and both come out worse than leaving it alone.
 // Backs docs/14-meshing-and-lod.md
 const T = (1 + Math.sqrt(5)) / 2;
 const norm = v => { const l = Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]); return [v[0]/l, v[1]/l, v[2]/l]; };
@@ -76,8 +78,9 @@ for (let lod = 0; lod <= 8; lod++){
   carried.push(k);
   console.log(`   ${String(lod).padStart(3)}  ${String(cell).padStart(4)} m   ${k}`);
 }
-console.log('   The detail term has nothing left to say past LOD 5, which is where');
-console.log('   section 3 picks the coarse map up.');
+console.log('   The detail term has nothing left to say past LOD 5. Nothing is broken');
+console.log('   by that: the points a coarse chunk keeps still hold their own exact');
+console.log('   height, and what is gone is the wiggle between them.');
 
 // ---- 2. what a coarse chunk actually draws ----------------------------------
 // The honest surface for a cell is the average of the ground it covers. Point
@@ -101,9 +104,12 @@ function weightsFor(lod, mode){
 }
 const detail = (p, w) => DETAIL_AMPLITUDE * fbmWeighted(p, DETAIL_FREQ, w, SEED);
 
-console.log('\n2. how far the drawn ground moves, in metres');
+console.log('\n2. how much the flat span between a coarse chunk\'s points misses');
 console.log('   Against the average of the ground a cell covers, over 190 places on');
-console.log('   one face, each averaged across its own footprint.');
+console.log('   one face, each averaged across its own footprint. `today` is the');
+console.log('   engine as it stands, which is exact at the point and flat between.');
+console.log('   The other two make the generator level-aware, which is the obvious');
+console.log('   fix and the wrong one.');
 console.log('');
 console.log('   lod   today          drop octaves   roll off');
 console.log('         rms    worst   rms    worst   rms    worst');
@@ -142,9 +148,12 @@ for (let lod = 1; lod <= 6; lod++){
     `    (${used} places)`);
 }
 console.log('');
-console.log('   the step a player sees when a chunk changes level, rms metres');
-console.log('   lod change   today   drop octaves   roll off');
-for (let k = 0; k < err.today.length - 1; k++){
-  const jump = o => Math.abs(err[o][k+1] - err[o][k]).toFixed(2).padStart(5);
-  console.log(`   ${k+1} -> ${k+2}      ${jump('today')}   ${jump('drop')}          ${jump('ramp')}`);
-}
+console.log('verdict');
+console.log('   Leaving the generator alone is the smallest of the three at every');
+console.log('   level, and it is the only one of the three under which a chunk');
+console.log('   changing level moves no ground at all. Both level-aware versions');
+console.log('   would give a retained point one height in the coarse chunk and');
+console.log('   another in the fine one, so they buy a little sharpness with a');
+console.log('   popping artifact the engine does not currently have.');
+console.log('');
+console.log('   Do not make the terrain generator level-aware.');
