@@ -124,6 +124,14 @@ and duplicates information found there.
   executes everything, so run it when the maths changes.
 - `tools/check-coverage.js` — reports facts (numbers, identifiers, links, bold
   terms) that an edit dropped from the corpus. Run it after rewriting prose.
+- `tools/take-frame.mjs` — launches headless Chromium on a software adapter,
+  drives the client over the DevTools protocol, waits for the readout to stop
+  saying it is building, and writes a PNG. `node tools/take-frame.mjs <url>
+  <out.png> [--wait ms] [--read selector]`. It settles what is drawn and never
+  how fast. See [`HOW-TO-TAKE-A-FRAME.md`](HOW-TO-TAKE-A-FRAME.md).
+- `tools/bench.ts`, `tools/trial-*.ts` — wall-clock and count measurements over
+  the real engine, run by hand. They are not part of `make-reference.js`, whose
+  scripts must be plain Node and whose output is quoted in `docs/`.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
   (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
   source of truth. It fails the build on dead links and dead heading anchors,
@@ -799,6 +807,54 @@ Violating any of these breaks the design. They are not tunable.
   shrinking and the sky does not, and why both are invented anyway. All three are **presentation**, so they
   are client-only and may spend the transcendentals doc 23 forbids in the
   generator; doc 32 is the first place that freedom is actually used.
+- **The terrain generator must not be told which level of detail is asking**
+  (`lod.js`, doc 14, F-032). `columnAt` takes a face and a lattice offset and no
+  level, which looks like an oversight and is the property the whole scheme
+  rests on: a coarse chunk draws a subset of a fine chunk's points, and because
+  a point's height does not depend on who asked, **the points it keeps hold
+  exactly the height the fine chunk gives them**. A chunk changing level moves
+  no ground. What a coarse chunk loses is the surface *between* its points,
+  which it draws flat — so it is **not inaccurate, it is incomplete**, and a
+  hill between two of its points is missing rather than misplaced. Measured
+  against the average of the ground each cell covers, that flat span misses
+  `0.02 m` at LOD 1 and `0.31 m` at LOD 6. **Band-limiting it by level is the
+  obvious fix and the wrong one**: a retained point would then hold one height
+  in the coarse chunk and another in the fine one, so ground that never moves
+  would start moving at every level change. Both attempts measured **worse than
+  doing nothing** — `1.02 m` dropping octaves and `0.50 m` fading them, against
+  `0.31 m` for leaving it alone. And it happens where nobody stands: the
+  selection draws nothing coarser than **LOD 4 at eye height**, where the figure
+  is `0.06 m`, and LOD 6 needs `1,200 m` of altitude. The coarse map's own mip
+  pyramid is undecided for the same reason — it is read more widely than its own
+  cell only from LOD 6.
+- **A coastline is a contour of a smooth field, and that is a number**
+  (`coastline.js`, doc 21). Count the cell edges along the largest landmass,
+  halve the cells, count again: a curve carrying no detail below the map's
+  resolution doubles exactly, and the excess is what ragged means. What ships
+  grows **`x2.08` then `x2.17`** — a fractal dimension of **1.06 to 1.12**, the
+  smooth end of the real range rather than outside it. Warping the sample
+  direction reaches 1.13 to 1.17, which nobody would see. Growing a mask level
+  by level reaches **1.40 to 1.45** and gives up the land fraction as a number
+  that can be asked for, halving the largest landmass. **Plates** reach 1.18 to
+  1.50, keep an exact land fraction and a big continent, and lose river length a
+  different way — a range along every seam cuts the interior into basins, so
+  `94` cells against `172`. A plate is laid out from **hashed directions, never
+  angles**: `sin` and `cos` would put a transcendental in a field two clients
+  must agree on to the bit.
+- **The selection reaches for ground each triangle actually holds** (`ChunkPeaks`,
+  F-023). One planet-wide `maxElevation` selects a ring of chunks whose ground is
+  nowhere near that tall. A pyramid of tallest ground per triangle, built once
+  from the coarse map and capped at level 6 with finer triangles reading their
+  ancestor, is **437 KB** and cuts the reference scenes from **615 chunks to 434**
+  at the shore and 610 to 407 under water, against 5 to 7% inland. **The land
+  fraction decides the size of the win, not the relief**: 600 m of relief moves
+  9% to 10%, while 10% land moves it to 32%.
+- **Only three knobs move a coastline** (`trial-knobs.ts`). Swept across their
+  whole ranges against the land-or-sea state of every cell: Land `25–50%`,
+  Landform across `17%`, Radius `16%`, and **every other knob 0%**. The rest are
+  not useless. They decide how tall the ground stands, how finely it is drawn,
+  and how deep it runs. The panel groups by what a knob decides and folds all
+  but the first group; nothing is cut.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

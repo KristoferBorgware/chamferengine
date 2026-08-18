@@ -211,6 +211,12 @@ const GROUPS: Group[] = [
 		folded: true,
 		knobs: [
 			{
+				key: "cloudsDrawn",
+				label: "Draw the clouds",
+				says: "Whether the two decks are drawn. Off empties the buffer and stops the pass, and the decks keep being built and turned by the wind, so turning it back on shows them where they would have been. To stop building them as well, use Plain planet.",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "lowDeck",
 				label: "Low deck",
 				digits: 0,

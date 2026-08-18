@@ -1,6 +1,6 @@
 # Demos
 
-Thirty self-contained HTML files. No build step, no `npm install`, no server
+Thirty-one self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -330,6 +330,20 @@ the cells inside it; at eye height that is **one hexagon on the whole planet**,
 the level that fits a 2M-triangle budget.
 
 **Docs:** [14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
+
+### [`flat-map-of-a-sphere.html`](flat-map-of-a-sphere.html)
+The whole planet drawn flat, twice, from the same cells and the same
+projection. One picture keeps whichever cell reached a pixel last; the other
+averages every cell that reached it. At subdivision 5 there are fewer cells
+than pixels and the two agree. By subdivision 8 there are **ten cells to a
+pixel**, and keeping one of them throws away 90% of what the map holds — which
+reads as speckle, and is a rough reading of a planet rather than a rough
+planet.
+
+The point it settles is what a map pane has to do to be worth looking at. It is
+also the reason the poles look the way they do: a row of pixels there is far
+wider than the ring of cells under it, so a projection that stretches is
+showing you something true about drawing a ball flat.
 
 ### [`precision-scale.html`](precision-scale.html)
 A player taking twenty-four 10 cm steps, on a planet you can resize. Hollow

@@ -536,6 +536,7 @@ async function main(): Promise<void> {
 	// re-anchors `dayStarted` so the clock continues from there rather than
 	// jumping to wherever it would have reached while frozen.
 	let paused = settings.knobs.paused;
+	let cloudsDrawn = settings.knobs.cloudsDrawn;
 	let frozenAt = settings.knobs.timeOfDay * DAY_LENGTH;
 	let lastTimeOfDay = settings.knobs.timeOfDay;
 
@@ -545,6 +546,17 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
+
+		// Turning the clouds off empties the buffer, which is what stops the
+		// pass -- the renderer draws nothing when it holds no cloud geometry.
+		// The decks go on being built and turned by the wind, so turning it
+		// back on shows them where they would have been rather than where they
+		// were left.
+		if (live.knobs.cloudsDrawn !== cloudsDrawn) {
+			cloudsDrawn = live.knobs.cloudsDrawn;
+			if (!cloudsDrawn && sky)
+				sky.setClouds(new Float32Array(0), new Uint32Array(0));
+		}
 		if (sky)
 			sky.atmosphere = planetAtmosphere(
 				RADIUS,
@@ -823,9 +835,9 @@ async function main(): Promise<void> {
 			timer.enter("clouds", performance.now());
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
-			cloudSource
-				.request(WIND_AXIS, turned)
-				.then((mesh) => sky.setClouds(mesh.vertices, mesh.indices));
+			cloudSource.request(WIND_AXIS, turned).then((mesh) => {
+				if (cloudsDrawn) sky.setClouds(mesh.vertices, mesh.indices);
+			});
 			timer.leave("clouds", performance.now());
 		}
 

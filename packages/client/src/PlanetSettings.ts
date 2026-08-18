@@ -119,6 +119,9 @@ export interface PlanetKnobs {
 	/** How thick the air reads straight up. */
 	zenithDepth: number;
 
+	/** Whether the cloud decks are drawn at all. */
+	cloudsDrawn: boolean;
+
 	/** Metres to each cloud deck. */
 	lowDeck: number;
 	highDeck: number;
@@ -164,6 +167,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	crustMetres: 900,
 	atmosphereTop: 400,
 	zenithDepth: 0.134,
+	cloudsDrawn: true,
 	lowDeck: 400,
 	highDeck: 1200,
 	cloudPuff: 64,
@@ -241,6 +245,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "",
 	},
+	cloudsDrawn: { ...TOGGLE, rebuilds: false },
 	lowDeck: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
 	highDeck: { low: 200, high: 6000, step: 50, rebuilds: true, unit: "m" },
 	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: true, unit: "m" },

@@ -726,6 +726,65 @@ buys time to design it.
 
 ---
 
+### F-035 — The poles stand on the terminator all day, every day
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, the owner noticing that parts of the planet never come
+into the light as the time of day is turned
+**Where:** `packages/engine/src/light/sunDirection.ts`; the client calls it as
+`sunDirection(t, NORTH)` in `packages/client/src/planet.ts`
+
+**What happens.** The sun swings a full circle about the polar axis, and
+`sunDirection` takes a `tilt` saying what angle it keeps to that axis. Nothing
+sets it, so it is zero and the sun stays in the plane through the planet's
+middle.
+
+Measured over one whole day, as `dot(up, sun)` where 1 is the sun overhead and
+0 is the horizon:
+
+| latitude | brightest the sun gets | hours of light |
+|---|---|---|
+| 0° | 1.000 | 12.0 |
+| 45° | 0.707 | 12.0 |
+| 75° | 0.259 | 12.0 |
+| 85° | **0.087** | 12.0 |
+| 90° | **0.000** | 11.8 |
+
+So the arithmetic is right and the consequence is real: **at the poles the sun
+never rises above the horizon and never sets below it.** At 85° it reaches five
+degrees up. The polar caps are in permanent twilight, which is what looks like
+part of the planet never being lit.
+
+**Why it matters.** It is a twelfth of the surface above 75°, held at a
+brightness nothing a player does can change. It also makes the two pentagons on
+the axis — which doc 17 protects as landmarks and doc 20 puts the poles on —
+the two places on the planet that can never be seen properly.
+
+Nobody is hurt beyond that. Every other latitude gets a full day and night, and
+the terminator is the thing this planet is small enough to outwalk, which still
+works.
+
+**What would fix it.** Three shapes, and they are different worlds.
+
+Leave it, and say in doc 32 that this planet has no axial tilt, so it has no
+seasons and its poles live in permanent dusk. Free, and it is a real
+configuration — a planet with no tilt is not an error.
+
+Set a fixed tilt. One line, since the parameter is already there. It trades
+permanent dusk for **one pole in permanent day and the other in permanent
+night**, which is worse rather than better, and the docstring already says so.
+
+Give the tilt a year: a second, slower cycle turning the sun's angle to the
+axis, so the poles get a real midnight sun and a real polar night. That is what
+a tilted planet actually does, it needs one more knob and one more clock, and
+it is the only one of the three that makes the poles worth standing on.
+
+---
+
+
 ## Closed
 
 ### F-031 — The coverage gate reports a dropped fact every time a timing moves
