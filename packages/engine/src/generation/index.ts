@@ -17,6 +17,13 @@ export { COARSE_STAGES, COARSE_STAGE_SAYS } from "./coarse/CoarseStage.js";
 export { coarseStageOf } from "./coarse/coarseStageOf.js";
 export type { CoarseMapStep } from "./coarse/CoarseMapBuilder.js";
 export { CoarseMapBuilder } from "./coarse/CoarseMapBuilder.js";
+export type {
+	MapWorkerMessage,
+	MapWorkerRequest,
+	MapWorkerSetup,
+	MapWorkerStep,
+} from "./coarse/MapWorkerCore.js";
+export { MapWorkerCore } from "./coarse/MapWorkerCore.js";
 export { flatCoarseMap } from "./coarse/flatCoarseMap.js";
 export { continentHeight } from "./coarse/continentHeight.js";
 export { seaLevelFor } from "./coarse/seaLevelFor.js";

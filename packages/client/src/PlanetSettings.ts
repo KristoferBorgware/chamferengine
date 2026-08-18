@@ -1,5 +1,5 @@
 import type { CoarseMapOptions, TerrainOptions } from "chamfer/generation";
-import { CoarseMap } from "chamfer/generation";
+import { CoarseMap, seedFromString } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import type { CloudDeckSetup } from "chamfer/sky";
@@ -301,6 +301,11 @@ export class PlanetSettings {
 
 	constructor(knobs: Partial<PlanetKnobs> = {}) {
 		this.knobs = { ...PLANET_DEFAULTS, ...knobs };
+	}
+
+	/** The seed as the generator takes it, hashed from what was typed. */
+	get seedNumber(): number {
+		return seedFromString(this.knobs.seed);
 	}
 
 	/**
