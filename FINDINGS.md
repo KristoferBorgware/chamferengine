@@ -725,6 +725,42 @@ buys time to design it.
 
 ---
 
+### F-030 — The illustrated primer still teaches the skirt
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-18, adding the `detail-with-distance.html` demo and reading
+what the other demos already say about level of detail
+**Where:** [`demos/how-it-works.html`](demos/how-it-works.html), the "Which is
+why the seams need skirts" section and its figure; the summary line in
+[`demos/README.md`](demos/README.md)
+
+**What happens.** F-026 followed the engine off the skirt through
+[`docs/14-meshing-and-lod.md`](docs/14-meshing-and-lod.md), `CLAUDE.md` and the
+`lod-seam` figure. It did not reach `demos/`. The primer still gives a skirt its
+own step in the meshing list, its own heading, and its own drawn figure with the
+caption "a short vertical curtain hanging down from a chunk's rim... it just has
+to hang deeper than the worst possible mismatch". The engine has drawn no skirt
+since v0.1.2's I-6, and the measurement that retired it says a curtain hangs
+from the cap plane, which puts it coplanar with the neighbouring chunk's own cap
+on 85% to 100% of rim columns.
+
+**Why it matters.** `how-it-works.html` is where newcomers are pointed first,
+and `CLAUDE.md` names it as the reference for voice. It is the one page in the
+repository that a reader meets before any of the documents that correct it, so
+it teaches the retired mechanism to exactly the audience least able to notice.
+
+**What would fix it.** The section and its figure become the apron: each chunk
+draws the ring of cells one step past its own rim, at its own level, a
+centimetre low, so both levels' surfaces cover the strip. The figure is
+hand-drawn SVG inside the demo rather than generated, so it is redrawn by hand
+there — the `lod-seam` figure in `docs/figures/` already shows the apron and is
+the model. The README's summary line needs the same word changed.
+
+---
+
 ## Closed
 
 ### F-031 — The coverage gate reports a dropped fact every time a timing moves

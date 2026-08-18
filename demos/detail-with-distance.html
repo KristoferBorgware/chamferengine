@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Detail with distance</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:#0b0e14; color:#e6e8ee; min-height:100vh; padding:16px 15px 34px;
+         max-width:760px; margin:0 auto; }
+  h1 { font-size:17px; font-weight:650; letter-spacing:-.01em; }
+  h2 { font-size:12px; color:#8b93a7; text-transform:uppercase; letter-spacing:.06em;
+       margin:22px 0 10px; font-weight:600; }
+  .sub { font-size:12.5px; color:#8b93a7; margin-top:3px; margin-bottom:18px; line-height:1.55; }
+
+  .field { margin-bottom:14px; }
+  .flabel { display:flex; align-items:baseline; font-size:12px; color:#8b93a7;
+            text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; }
+  .fval { margin-left:auto; font-size:15px; color:#fff; font-weight:650;
+          text-transform:none; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; height:26px; background:none; -webkit-appearance:none; }
+  input[type=range]::-webkit-slider-runnable-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-moz-range-track { height:5px; background:#222a3a; border-radius:3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px;
+    border-radius:50%; background:#4f8ef7; margin-top:-8.5px; border:2px solid #0b0e14; }
+  input[type=range]::-moz-range-thumb { width:22px; height:22px; border-radius:50%;
+    background:#4f8ef7; border:2px solid #0b0e14; }
+  .segs { display:flex; gap:6px; flex-wrap:wrap; }
+  button { font:inherit; font-size:12.5px; font-weight:550; padding:7px 12px; border-radius:8px;
+           cursor:pointer; background:#1a2130; color:#dfe3ec; border:1px solid #2a3245; }
+  button.on { background:#4f8ef7; border-color:#4f8ef7; color:#fff; }
+  button:active { transform:scale(.97); }
+
+  .box { background:#101725; border:1px solid #223049; border-radius:12px;
+         padding:14px 15px 13px; margin:12px 0; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px 14px; }
+  .cellv { font-size:17px; font-weight:640; color:#fff; font-variant-numeric:tabular-nums; }
+  .cellv small { font-size:11.5px; color:#7d879c; font-weight:500; }
+  .cellk { font-size:10.5px; color:#7d879c; text-transform:uppercase; letter-spacing:.05em; margin-top:3px; }
+  .eq { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px;
+        color:#6d768c; margin-top:12px; padding-top:11px; border-top:1px solid #1e293c; line-height:1.7; }
+  .eq b { color:#9fd88f; font-weight:600; }
+
+  svg { width:100%; height:auto; display:block; background:#0d1320;
+        border:1px solid #223049; border-radius:12px; }
+
+  table { width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  th { text-align:right; font-size:10.5px; color:#6d768c; text-transform:uppercase;
+       letter-spacing:.05em; font-weight:600; padding:0 0 7px; }
+  th:first-child, td:first-child { text-align:left; }
+  td { text-align:right; padding:7px 0; border-top:1px solid #182032; color:#c2c9d8; }
+  td .sw { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:7px;
+           vertical-align:-1px; }
+  .note { font-size:12.5px; color:#a9b2c6; line-height:1.65; margin-top:12px; }
+  .note b { color:#fff; font-weight:600; }
+  .note.warn b { color:#ffd166; }
+  .cap { font-size:11.5px; color:#6d768c; margin-top:9px; line-height:1.55; }
+</style>
+</head>
+<body>
+
+<h1>Detail with distance</h1>
+<div class="sub">
+  A cell is 1 m wide where you stand and 8 m wide across the valley. Nothing about
+  the world changed — the far ground is being drawn at a coarser step. These three
+  settings decide where the steps are.
+</div>
+
+<div class="field">
+  <div class="flabel">Block size <span class="fval" id="bval">1.00 m</span></div>
+  <input type="range" id="block" min="0" max="3" step="1" value="1">
+</div>
+
+<div class="field">
+  <div class="flabel">Radius <span class="fval" id="rval">6,800 m</span></div>
+  <input type="range" id="radius" min="0" max="4" step="1" value="2">
+</div>
+
+<div class="field">
+  <div class="flabel">Chunk <span class="fval" id="cval">32 cells</span></div>
+  <div class="segs" id="chunkbtns"></div>
+</div>
+
+<h2>Fixed when the world is made</h2>
+<div class="box">
+  <div class="grid">
+    <div><div class="cellv" id="oD">13</div><div class="cellk">Depth D</div></div>
+    <div><div class="cellv" id="oC">8</div><div class="cellk">Chunk level C</div></div>
+    <div><div class="cellv" id="oW">32 m</div><div class="cellk">Chunk width</div></div>
+    <div><div class="cellv" id="oCells">671 M</div><div class="cellk">Cells on the planet</div></div>
+    <div><div class="cellv" id="oChunks">1.3 M</div><div class="cellk">Chunks on the planet</div></div>
+    <div><div class="cellv" id="oSteps">5</div><div class="cellk">Steps down to a face</div></div>
+  </div>
+  <div class="eq">
+    D = round(log2(1.20459 &times; radius &divide; block)) &nbsp;<b id="eD">= 13</b><br>
+    C = D &minus; log2(chunk cells) &nbsp;<b id="eC">= 8</b>
+  </div>
+</div>
+<div class="note">
+  <b>Neither number is chosen directly, and neither can change afterwards.</b>
+  A cell's address spells out the route down D splits, so moving D would rename
+  every cell in the world. D stops at 17, where the address word runs out of
+  bits — at the settings above that is a <span id="floor"></span> block.
+</div>
+
+<h2>Chosen every frame, per triangle</h2>
+<svg id="map" viewBox="0 0 700 380" role="img" aria-label="Ground seen from above, with rings where the cell size doubles"></svg>
+<div class="cap" id="mapcap"></div>
+
+<div class="box" style="margin-top:14px">
+  <table>
+    <thead><tr><th>Ground at</th><th>Detail step</th><th>Cells there</th><th>One cell is</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<div class="note">
+  The rule is one line: <b>a triangle is drawn when you are at least two of its own
+  widths away from it</b>, and split into its four children when you are closer.
+  A chunk one step coarser is twice as wide, so it has to be twice as far away to
+  be drawn: <b>every step doubles the cell and doubles the distance</b>. The ring
+  distances here are the ones <code>selectChunks</code> produces — at 32 cells and
+  1 m blocks it puts the first step at 154 m, and this page says 154 m.
+</div>
+
+<div class="note" style="margin-top:11px">
+  <b>Chunk decides where the steps are, not how detailed the world is.</b> Halving
+  the cells in a chunk halves the chunk's width, which pulls every step ring in by
+  half and puts coarse ground much closer to you. The block size is untouched: the
+  world still has 1 m cells, you just have to walk to them.
+</div>
+
+<script>
+const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
+const DETAIL = 2;    // how many of its own widths away a chunk is drawn
+const CAP = 1.201;   // a chunk's bounding circle, against the edge it spans
+const MAX_DEPTH = 17;
+
+const BLOCKS = [0.5, 1, 2, 4];
+const RADII = [1700, 3400, 6800, 13600, 27200];
+const CHUNKS = [8, 16, 32, 64];
+const COLORS = ['#4f8ef7', '#3fb8af', '#9fd88f', '#e0913a', '#e8663d', '#cbb4ff', '#8b93a7'];
+
+let block = 1, radius = 6800, chunkCells = 32;
+
+const $ = (id) => document.getElementById(id);
+const round = (x) => Math.max(0, Math.round(x));
+const metres = (x) => x >= 1000 ? (x / 1000).toFixed(x >= 10000 ? 0 : 1) + ' km'
+  : x >= 1 ? x.toFixed(x >= 100 ? 0 : x >= 10 ? 1 : 2).replace(/\.0+$/, '') + ' m'
+  : (x * 100).toFixed(0) + ' cm';
+const count = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + ' B'
+  : n >= 1e6 ? (n / 1e6).toFixed(1) + ' M'
+  : n >= 1e3 ? (n / 1e3).toFixed(0) + ' K' : String(n);
+
+// Buttons for the chunk sizes.
+const btns = $('chunkbtns');
+for (const cells of CHUNKS) {
+  const b = document.createElement('button');
+  b.textContent = cells;
+  b.onclick = () => { chunkCells = cells; draw(); };
+  b.dataset.cells = cells;
+  btns.appendChild(b);
+}
+
+$('block').oninput = (e) => { block = BLOCKS[+e.target.value]; draw(); };
+$('radius').oninput = (e) => { radius = RADII[+e.target.value]; draw(); };
+
+function world() {
+  const wanted = round(Math.log2((CELL_CONSTANT * radius) / block));
+  const D = Math.min(MAX_DEPTH, wanted);
+  const C = Math.max(0, D - Math.round(Math.log2(chunkCells)));
+  // The radius moves to whatever makes the block size exact, the way the client's
+  // own settings do; the level is the thing that has to be a whole number.
+  // The level has to be a whole number, so the radius moves to whatever makes the
+  // block size exact -- which is what the client's own settings do.
+  const trueRadius = (block * 2 ** D) / CELL_CONSTANT;
+  return { D, C, width: chunkCells * block, trueRadius, steps: C };
+}
+
+/**
+ * Where the ground first coarsens to `2^lod` blocks, in metres from the eye.
+ *
+ * A chunk is drawn once you are `DETAIL` of its own widths away from it, and a
+ * chunk one step coarser is twice as wide. Step 0 has no near edge: it is what
+ * you get wherever nothing coarser has taken over yet.
+ */
+function ringAt(w, lod) { return DETAIL * CAP * w * 2 ** lod; }
+
+function draw() {
+  const { D, C, width, trueRadius, steps } = world();
+  for (const b of btns.children) b.classList.toggle('on', +b.dataset.cells === chunkCells);
+  $('bval').textContent = metres(block);
+  $('rval').textContent = Math.round(trueRadius).toLocaleString('en-US') + ' m';
+  $('cval').textContent = chunkCells + ' cells';
+
+  $('oD').textContent = D;
+  $('oC').textContent = C;
+  $('oW').innerHTML = metres(width);
+  $('oCells').textContent = count(10 * 4 ** D + 2);
+  $('oChunks').textContent = count(20 * 4 ** C);
+  $('oSteps').textContent = steps;
+  $('eD').textContent = '= ' + D;
+  $('eC').textContent = '= ' + C;
+  $('floor').textContent = metres((CELL_CONSTANT * trueRadius) / 2 ** MAX_DEPTH);
+
+  // The rings, out to the far edge of the picture.
+  const FAR = ringAt(width, 4);
+  const rings = [];
+  for (let lod = 0; lod <= steps; lod++) {
+    const from = lod === 0 ? 0 : ringAt(width, lod);
+    if (from >= FAR) break;
+    rings.push({ lod, from, to: Math.min(FAR, ringAt(width, lod + 1)), cell: block * 2 ** lod });
+  }
+
+  // Ground from above, the eye at the left edge, distance running right.
+  const W = 700, H = 380, EYE = 26;
+  const scale = (W - EYE - 14) / FAR;
+  let svg = '';
+  for (const r of rings) {
+    const x0 = EYE + r.from * scale, x1 = EYE + r.to * scale;
+    const color = COLORS[r.lod % COLORS.length];
+    svg += `<rect x="${x0.toFixed(1)}" y="30" width="${(x1 - x0).toFixed(1)}" height="${H - 76}"
+            fill="${color}" fill-opacity="0.13" stroke="${color}" stroke-opacity="0.5"/>`;
+
+    // At map scale a 1 m cell is a third of a pixel, so every band's hexagons are
+    // magnified by the same factor: what is true on screen is that each band's are
+    // twice the width of the band before it.
+    const side = 3 * 2 ** r.lod;
+    const dx = side * 1.5, dy = side * Math.sqrt(3);
+    let hexes = '';
+    const top = 30 + side, bottom = H - 46 - side;
+    for (let col = 0; col * dx < (x1 - x0) - side; col++)
+      for (let row = 0; row * dy < H; row++) {
+        const cx = x0 + side + col * dx, cy = top + row * dy + (col % 2 ? dy / 2 : 0);
+        if (cx + side > x1 || cy + side > bottom) continue;
+        const pts = [];
+        for (let k = 0; k < 6; k++) {
+          const a = (Math.PI / 3) * k;
+          pts.push(`${(cx + side * Math.cos(a)).toFixed(1)},${(cy + side * Math.sin(a)).toFixed(1)}`);
+        }
+        hexes += `<polygon points="${pts.join(' ')}"/>`;
+      }
+    svg += `<g fill="${color}" fill-opacity="0.30" stroke="${color}" stroke-opacity="0.85"
+            stroke-width="0.7">${hexes}</g>`;
+
+    const mid = (x0 + x1) / 2;
+    if (x1 - x0 > 46) {
+      svg += `<text x="${mid.toFixed(1)}" y="22" text-anchor="middle" font-size="12"
+              font-family="ui-sans-serif, sans-serif" fill="${color}" font-weight="600">${metres(r.cell)}</text>`;
+      svg += `<text x="${mid.toFixed(1)}" y="${H - 30}" text-anchor="middle" font-size="10.5"
+              font-family="ui-sans-serif, sans-serif" fill="#6d768c">${metres(r.from)}</text>`;
+    }
+  }
+  svg += `<circle cx="${EYE}" cy="${H / 2}" r="7" fill="#fff"/>`;
+  svg += `<text x="${EYE}" y="${H - 12}" text-anchor="middle" font-size="10.5"
+          font-family="ui-sans-serif, sans-serif" fill="#8b93a7">you</text>`;
+  svg += `<text x="${W - 8}" y="${H - 12}" text-anchor="end" font-size="10.5"
+          font-family="ui-sans-serif, sans-serif" fill="#8b93a7">${metres(FAR)} away</text>`;
+  $('map').innerHTML = svg;
+  $('mapcap').textContent =
+    `The ground from above, you on the left, distance running right. The bands are at `
+    + `map scale; the hexagons are magnified, all by the same amount, because a 1 m cell `
+    + `at this scale is a third of a pixel. Each band's cells are twice the width of the `
+    + `band before it, and the first step is ${metres(ringAt(width, 1))} out.`;
+
+  const at = [10, 20, 40, 60, 100, 150, 250, 400, 700];
+  $('rows').innerHTML = at.map((d) => {
+    let lod = 0;
+    while (lod < steps && d >= ringAt(width, lod + 1)) lod++;
+    const color = COLORS[lod % COLORS.length];
+    const cell = block * 2 ** lod;
+    return `<tr><td>${metres(d)}</td><td><span class="sw" style="background:${color}"></span>`
+      + `${lod === 0 ? 'full detail' : 'step ' + lod}</td>`
+      + `<td>${(cell / block).toFixed(0)}&times; a block</td><td>${metres(cell)} across</td></tr>`;
+  }).join('');
+}
+
+draw();
+</script>
+</body>
+</html>

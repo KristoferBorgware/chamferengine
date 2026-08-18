@@ -1,6 +1,6 @@
 # Demos
 
-Twenty-nine self-contained HTML files. No build step, no `npm install`, no server
+Thirty self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -160,6 +160,19 @@ total voxels, and crust taper out. Drag the time slider slowly to watch the leve
 tick over and the rounding penalty swing up to ±40%.
 
 **Docs:** [06 — World sizing](../docs/06-world-sizing.md)
+
+### [`detail-with-distance.html`](detail-with-distance.html)
+Block size, radius and chunk cells in; the depth, the chunk level and the rings
+where the ground coarsens out. The picture is the ground from above with you on
+the left, banded by how big a cell is drawn there — the hexagons double band to
+band. Drop Chunk from 32 cells to 8 and watch the first step come in from 154 m
+to 38 m.
+
+Answers the two questions the panel's own wording does not: which settings are
+fixed when the world is made, and which one is chosen again every frame.
+
+**Docs:** [06 — World sizing](../docs/06-world-sizing.md),
+[14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
 
 ### [`data-structures.html`](data-structures.html)
 Three tabbed diagrams: what lives where (constant / pure / RAM / disk), inside a
