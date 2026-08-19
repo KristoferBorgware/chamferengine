@@ -149,7 +149,7 @@ Camera and controller state only; never a stored coordinate.
 | Cell spacing variation | ≈ 1.41 : 1 | hexagons; `sec^1.5(37.3774°)` |
 | Largest edge ÷ nominal spacing | 1.098 | the admissible A* divisor |
 | Address width | `5 + 2D + 2` bits | 29 at `D` 11; the last 2 name a corner |
-| Stored word | `[planet 12][face 5][path 2×D][corner 2][layer 10]` | 51 of 64 at `D` 11 |
+| Stored word | `[planet 12][face 5][path 2×D][corner 2][layer 11]` | 52 of 64 at `D` 11 |
 | Code space used | ≈ 7.81% | `0.625 × 0.75 × 1/6`; was 31.25% under the `q,r` draft |
 | Max levels in 64 bits | 17 | `12 + 5 + 2D + 2 + 10 ≤ 64` — the real ceiling |
 | Adjacency table | 60 entries, 180 bytes | 20 × 3 × 3 bytes |

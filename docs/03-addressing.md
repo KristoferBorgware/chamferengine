@@ -229,14 +229,14 @@ So the address is:
 and the word, with the planet field that started all this:
 
 ```
-[ planet 12 ][ face 5 ][ path 2×D ][ corner 2 ][ layer 10 ]
+[ planet 12 ][ face 5 ][ path 2×D ][ corner 2 ][ layer 11 ]
 ```
 
-`12 + 29 + 10 = 51` — **51 of 64 bits at `D` 11**, 13 spare, for **4,096 worlds**
+`12 + 29 + 11 = 52` — **52 of 64 bits at `D` 11**, 12 spare, for **4,096 worlds**
 of 41,943,042 cells each. Planet on top so one world is a contiguous range; layer
 at the bottom so one column is; the chunk at any level is still **one shift**.
 
-![The stored word at depth 11: planet 12 bits, face 5, path digits 22, corner 2, layer 10, and 13 spare, with the chunk cut marked as a dashed line inside the path digits](figures/cell-id-bits.svg)
+![The stored word at depth 11: planet 12 bits, face 5, path digits 22, corner 2, layer 11, and 12 spare, with the chunk cut marked as a dashed line inside the path digits](figures/cell-id-bits.svg)
 
 *The same picture as the draft above, after the repair — and the difference is the
 dashed line. `C` names **a place to read**, part way along path digits that run
@@ -502,8 +502,12 @@ The test: **does this change when a player does something?**
 
 **Identity — goes in the ID.** Layer index, world version, resolution level.
 These describe *which cell you are talking about* and never change for a given
-cell. The layer gets **10 bits**, which addresses **1,024** layers, putting depth
-13 plus layer at 41 bits with 23 to spare.
+cell. The layer gets **11 bits**, which addresses **2,048** layers, putting depth
+13 plus layer at 44 bits with 20 to spare. The eleventh bit is the last one the
+word has: at `D` 17 the whole thing comes to **exactly 64**, so a twelfth would
+cost a level of subdivision. What it is spent on is the crust, which is capped
+at whichever is smaller of this field and the taper — and at ten bits the field
+held a 1 m block to 1,024 m of ground where the taper allowed 1,740.
 
 **Mutable state — does not.** If block type lives in the ID, placing a block
 *changes the cell's ID*. Every sorted index, cache key, and range query breaks,
@@ -548,7 +552,7 @@ address.
   which corner of the smallest triangle, because path digits name triangles and a
   cell is a **vertex**. The chunk cut is a place to read, not a field, so **chunk
   size stays tunable after launch**. The stored word is
-  `[planet 12][face 5][path 2×D][corner 2][layer 10]` — 51 of 64 at `D` 11.
+  `[planet 12][face 5][path 2×D][corner 2][layer 11]` — 52 of 64 at `D` 11.
 - The **middle child is turned half a turn** — not mirrored — and about 46% of
   cells live inside one. Handedness never changes; a naive direction index is just
   shifted by 3. Carry

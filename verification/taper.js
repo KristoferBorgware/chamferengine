@@ -25,11 +25,11 @@ console.log(`   so the taper budget is                  : ${((1-MIN_SURFACE)*100
 console.log(`   doc 06's guess was 85% -> 15% of R, which is CONSERVATIVE against this,`);
 console.log('   so nothing built on it was wrong -- but it was a judgement, and this is not.');
 
-// The ID gives the layer field 10 bits (doc 03), so it addresses 2^10 layers.
+// The ID gives the layer field 11 bits (doc 03), so it addresses 2^11 layers.
 // The field width is what every other result is built on -- the delta record is
-// 29 + 10 + 16 bits, and the word is 51 of 64 at D 11 -- so capacity follows
+// 29 + 11 + 16 bits, and the word is 52 of 64 at D 11 -- so capacity follows
 // from the width rather than the other way round.
-const LAYER_BITS = 10;
+const LAYER_BITS = 11;
 const LAYER_CAP = 2 ** LAYER_BITS;
 
 // ---- 2. max crust depends on subdivision depth alone ------------------------

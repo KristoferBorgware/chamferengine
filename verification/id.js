@@ -92,7 +92,7 @@ console.log('\n3. do q and r fit in (D-C) bits each?');
 // as drawn. These are the options, with what each costs.
 console.log('\n4. what the options actually are');
 {
-  const D = 11, LAYER = 10, PLANET = 12;
+  const D = 11, LAYER = 11, PLANET = 12;
   const rows = [
     ['A  store (i, j) directly',   5 + 2*(D+1), 'yes', 'NO -- needs the descent', 'NO'],
     ['B  store path + (q, r) at a fixed C', 5 + 2*D + 2, 'NO', 'yes -- one shift', 'yes'],
@@ -286,5 +286,5 @@ console.log('   depths 3, 4 and 5 -- the counts land on 10*4^D + 2 -- names are 
 console.log('   they decode back, and truncating one agrees with doc 03\'s ownership rule');
 console.log('   at every cell and every chunk level. The chunk is still one shift.');
 console.log('');
-console.log('   ADDRESS = 5 + 2D + 2 bits.  WORD = [planet 12][address 29][layer 10]');
-console.log('   = 51 of 64 at D 11, 13 spare, 4,096 worlds of 41,943,042 cells.');
+console.log('   ADDRESS = 5 + 2D + 2 bits.  WORD = [planet 12][address 29][layer 11]');
+console.log('   = 52 of 64 at D 11, 12 spare, 4,096 worlds of 41,943,042 cells.');

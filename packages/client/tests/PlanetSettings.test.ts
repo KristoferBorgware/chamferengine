@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeCell, encodeCell } from "chamfer/addressing";
+import { decodeCell, encodeCell, wordBits } from "chamfer/addressing";
 import {
 	BlockType,
 	TerrainGenerator,
@@ -29,15 +29,18 @@ describe("cell address", () => {
 		expect(flatter.depth).toBe(base.depth);
 		expect(wider.addressBits).toBe(base.addressBits);
 
-		const smaller = new PlanetSettings({ radius: 100 });
+		const smaller = new PlanetSettings({ subdivisionDepth: 9 });
 		expect(smaller.depth).toBeLessThan(base.depth);
 	});
 
-	it("refuses a radius and block size past the 64-bit word", () => {
-		// A 0.15 m block on a 25,000 m radius asks for depth 18, and the word
-		// is 29 + 2 x depth, which passes 64 at depth 18.
-		const past = new PlanetSettings({ radius: 25000, blockSize: 0.15 });
-		expect(past.problems().join(" ")).toMatch(/64/);
+	it("cannot be asked for a world past the 64-bit word", () => {
+		// The word is 30 + 2 x depth and passes 64 at depth 18, which is why
+		// the depth slider stops at 17. Asking past it is held rather than
+		// refused, because a depth is the knob now rather than a consequence
+		// of two others.
+		expect(new PlanetSettings({ subdivisionDepth: 30 }).depth).toBe(17);
+		expect(wordBits(17)).toBe(64);
+		expect(wordBits(18)).toBeGreaterThan(64);
 	});
 
 	it("builds cleanly past what a number holds exactly (F-018)", () => {
@@ -72,7 +75,7 @@ describe("the coarse level budget (F-020)", () => {
 		// it first, asked for level 13 -- 671,088,642 cells -- with nothing
 		// refusing it.
 		const wide = new PlanetSettings({
-			radius: 25000,
+			subdivisionDepth: 16,
 			coarseSpacing: 4,
 			blockSize: 0.5,
 		});
@@ -335,7 +338,7 @@ describe("a knob that did not get what it asked for says so", () => {
 
 	it("names the shell budget when it, not rounding, set the cloud level", () => {
 		const capped = new PlanetSettings({
-			radius: 19800,
+			subdivisionDepth: 15,
 			blockSize: 0.75,
 			cloudPuff: 8,
 			cloudShells: 4,
@@ -353,7 +356,7 @@ describe("a knob that did not get what it asked for says so", () => {
 
 	it("names the coarse cap when a wide radius asks past level 9", () => {
 		const capped = new PlanetSettings({
-			radius: 19800,
+			subdivisionDepth: 15,
 			blockSize: 0.75,
 			coarseSpacing: 12,
 		});
@@ -367,15 +370,15 @@ describe("a knob that did not get what it asked for says so", () => {
 
 	it("says which of the three caps held the crust back", () => {
 		expect(new PlanetSettings({}).crustCap).toBe("asked");
-		// 832 m of crust in 0.75 m blocks is 1,110 layers, and the layer field
-		// names 1,024. The world runs 768 m deep and the knob never said.
+		// 1,600 m of crust in 0.75 m blocks is 2,134 layers, and the layer field
+		// names 2,048. The world runs 1,536 m deep and the knob never said.
 		const field = new PlanetSettings({
-			radius: 19800,
+			subdivisionDepth: 15,
 			blockSize: 0.75,
-			crustMetres: 832,
+			crustMetres: 1600,
 		});
 		expect(field.crustCap).toBe("field");
-		expect(field.crustDepth).toBe(1024);
+		expect(field.crustDepth).toBe(2048);
 	});
 });
 
@@ -414,7 +417,10 @@ describe("how deep the crust may be asked to run", () => {
 		// every world with a block over a metre to a fraction of what it could
 		// hold.
 		for (const blockSize of [1, 2, 4]) {
-			const settings = new PlanetSettings({ blockSize, radius: 6800 });
+			const settings = new PlanetSettings({
+				blockSize,
+				subdivisionDepth: 13,
+			});
 			const range = settings.rangeFor("crustMetres");
 			expect(range.high, `${blockSize} m block`).toBeGreaterThanOrEqual(
 				settings.crustCeiling - KNOB_RANGES.crustMetres!.step,
@@ -429,21 +435,33 @@ describe("how deep the crust may be asked to run", () => {
 		// draft whose ground is taller than any crust it could have is a pair
 		// of constraints crossing, and there the lower end wins on purpose.
 		for (const blockSize of [0.5, 1, 2, 4])
-			for (const radius of [900, 6800, 19250, 25000]) {
+			for (const subdivisionDepth of [10, 13, 15, 16]) {
 				const settings = new PlanetSettings(
 					PlanetSettings.settle({
 						...PLANET_DEFAULTS,
 						blockSize,
-						radius,
+						subdivisionDepth,
 					}),
 				);
+				const range = settings.rangeFor("crustMetres");
+				// Within one step of the ceiling, not on it: the two ends round
+				// to the slider's own step in opposite directions, so on a
+				// small world they cross by less than a step and the low one
+				// wins. What matters is that the world still builds, which the
+				// line below checks -- `crustDepth` takes the smaller of the
+				// knob, the taper and the field, so no setting can name a layer
+				// outside them.
 				expect(
-					settings.rangeFor("crustMetres").high,
-					`${blockSize} m block at ${radius} m`,
+					range.high,
+					`${blockSize} m block at depth ${subdivisionDepth}`,
+				).toBeLessThanOrEqual(settings.crustCeiling + range.step);
+				expect(
+					settings.crustDepth * blockSize,
+					`${blockSize} m block at depth ${subdivisionDepth}`,
 				).toBeLessThanOrEqual(settings.crustCeiling);
 				expect(
 					settings.problems(),
-					`${blockSize} m block at ${radius} m`,
+					`${blockSize} m block at depth ${subdivisionDepth}`,
 				).toEqual([]);
 			}
 	});

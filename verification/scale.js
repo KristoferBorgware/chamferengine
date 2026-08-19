@@ -14,12 +14,12 @@ for (let L=0;L<=20;L++){
   const a=rows.find(r=>r.L===L&&r.name.startsWith('Earth')), b=rows.find(r=>r.L===L&&r.name.startsWith('small'));
   console.log(String(L).padStart(3), fmtN(a.N).padStart(11), fmt(a.d).padStart(15), fmt(b.d).padStart(20));
 }
-// doc 03's word is [planet 12][face 5][path 2D][corner 2][layer 10]; solve for D.
+// doc 03's word is [planet 12][face 5][path 2D][corner 2][layer 11]; solve for D.
 // Earlier drafts of this line counted the face and the path alone and printed 29,
 // which is the ceiling of a word that holds nothing but a surface address.
 {
   const D = Math.floor((64 - 12 - 5 - 2 - 10) / 2);
-  console.log('\nbit budget, 64-bit word [planet 12][face 5][path 2D][corner 2][layer 10]');
+  console.log('\nbit budget, 64-bit word [planet 12][face 5][path 2D][corner 2][layer 11]');
   console.log('   ->', D, 'levels max  (' + fmtN(10*Math.pow(4,D)+2), 'cells per layer)');
   console.log('   face + path alone would say', Math.floor((64-5)/2) + ', which pays for neither');
   console.log('   the planet field nor the 2-bit corner that names a vertex.');

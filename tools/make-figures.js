@@ -303,15 +303,15 @@ const made = [];
   <text class="cf-gd" x="14" y="143">SUPERSEDED &#8212; 2,144 of 2,145 cells change value when C moves</text>`));
 }
 {
-  // the word actually stored, at D = 11: 12 + 5 + 22 + 2 + 10 = 51 of 64
+  // the word actually stored, at D = 11: 12 + 5 + 22 + 2 + 11 = 52 of 64
   const D = 11, W = 476, X = 14, Y = 70, H = 32, SCALE = 7;
   const parts = [
     { bits: 12,  label: 'planet', cls: 'cf-fill' },
     { bits: 5,   label: 'face',   cls: 'cf-af'   },
     { bits: 2*D, label: 'path digits', cls: 'cf-af' },
     { bits: 2,   label: 'corner', cls: 'cf-gf'   },
-    { bits: 10,  label: 'layer',  cls: 'cf-fill' },
-    { bits: 13,  label: 'spare',  cls: 'cf-void' },
+    { bits: 11,  label: 'layer',  cls: 'cf-fill' },
+    { bits: 12,  label: 'spare',  cls: 'cf-void' },
   ];
   // the bit count goes INSIDE the box (a number fits in 14 px, a word does not)
   // and the field name goes underneath, so face and corner stay readable.

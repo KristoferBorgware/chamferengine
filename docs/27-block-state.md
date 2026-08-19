@@ -188,7 +188,7 @@ chunk's variety, not by the world's.
 address and the new state.
 
 > **[verified]** Same script, section 5.
-> `[ address 29 ][ layer 10 ][ block state 16 ]` = **55 bits**, with **9 spare**
+> `[ address 29 ][ layer 11 ][ block state 16 ]` = **56 bits**, with **8 spare**
 > in a 64-bit word. Ten million player edits cost **76 MB** raw, before any
 > compression, and runs of identical edits compress hard.
 

@@ -81,8 +81,19 @@ export interface PlanetKnobs {
 	 */
 	plain: boolean;
 
-	/** Metres. Moved slightly so the block size comes out exact. */
-	radius: number;
+	/**
+	 * How many times a face is split, which is what decides how big the planet
+	 * is once a block size is chosen.
+	 *
+	 * Depth, block size and radius are one quantity written three ways --
+	 * `radius = blockSize x 2^depth / K` -- so any two of them fix the third.
+	 * This is the pair a person can actually set: a block size is a size you
+	 * can picture, and a depth is a whole number with a distinct world behind
+	 * every value. Asking for a radius instead gave a slider of 484 positions
+	 * reaching **6** distinct worlds, because a radius is quantised to powers
+	 * of two and every position between two of them built the same planet.
+	 */
+	subdivisionDepth: number;
 
 	/** Metres across one cell. */
 	blockSize: number;
@@ -198,7 +209,7 @@ export interface PlanetKnobs {
 export const PLANET_DEFAULTS: PlanetKnobs = {
 	seed: "chamfer",
 	plain: false,
-	radius: 6800,
+	subdivisionDepth: 13,
 	blockSize: 1,
 	chunkCells: 32,
 	coarseMap: true,
@@ -264,7 +275,7 @@ const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
 
 export const KNOB_RANGES: Record<string, KnobRange> = {
 	plain: { ...TOGGLE, rebuilds: true },
-	radius: { low: 850, high: 25000, step: 50, rebuilds: true, unit: "m" },
+	subdivisionDepth: { low: 4, high: 17, step: 1, rebuilds: true, unit: "" },
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseMap: { ...TOGGLE, rebuilds: true },
@@ -316,12 +327,13 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: true,
 		unit: "",
 	},
-	// 1,024 is the layer field's whole count, and a crust is that many layers
-	// of whatever a block is: 1,024 m at a 1 m block and 4,096 m at a 4 m one,
-	// which is the largest any radius and block size here reach. Holding this
-	// at 1,024 m held every world with a block over a metre to a quarter of the
-	// depth it could carry, because `rangeFor` only ever narrows.
-	crustMetres: { low: 32, high: 4096, step: 16, rebuilds: true, unit: "m" },
+	// A crust is a count of layers and a layer is a block tall, so the metres
+	// it reaches are the layer field's 2,048 times whatever a block is: 2,048 m
+	// at a 1 m block and 8,192 m at a 4 m one, which is the largest any world
+	// here reaches. Stating this in metres and holding it at the layer count
+	// held every world with a block over a metre to a fraction of the depth it
+	// could carry, because `rangeFor` only ever narrows.
+	crustMetres: { low: 32, high: 8192, step: 16, rebuilds: true, unit: "m" },
 	atmosphereTop: {
 		low: 50,
 		high: 4000,
@@ -432,24 +444,17 @@ export class PlanetSettings {
 	}
 
 	/** The depth the radius and the block size ask for, before any cap. */
-	private get wantedDepth(): number {
-		return Math.max(
-			1,
-			levelFor(CELL_CONSTANT * this.knobs.radius, this.knobs.blockSize),
-		);
-	}
-
-	/** How many times a face is split. Follows from the block and the radius. */
+	/** How many times a face is split. Asked for directly. */
 	get depth(): number {
-		return Math.min(MAX_DEPTH, this.wantedDepth);
+		return Math.min(MAX_DEPTH, Math.max(1, this.knobs.subdivisionDepth));
 	}
 
 	/**
-	 * The radius the world actually has.
+	 * The radius the world has, which follows exactly from the other two.
 	 *
-	 * Block size is fixed at world creation and the radius absorbs the level
-	 * rounding, so this is the asked-for radius moved to the nearest one that
-	 * gives the block size exactly.
+	 * Block size is fixed at world creation, and a depth is a whole number, so
+	 * there is no rounding left for the radius to absorb: this is the size the
+	 * planet is rather than the size it was moved to.
 	 */
 	get radius(): number {
 		return (this.knobs.blockSize * 2 ** this.depth) / CELL_CONSTANT;
@@ -763,21 +768,33 @@ export class PlanetSettings {
 		};
 
 		switch (key) {
-			// The address is 2 bits of path per level, and the word is 64. The
-			// depth is a rounded logarithm, so the largest radius one block size
-			// allows is where that logarithm still rounds down to MAX_DEPTH.
-			case "radius":
+			// The address is 2 bits of path per level and the word is 64, which
+			// is what stops the subdivision at MAX_DEPTH. A chunk has to fit
+			// inside a face with a level left over for the detail to walk down.
+			// Two things stop a world being too small. A chunk has to fit
+			// inside a face with a level left over for the detail to walk
+			// down. And the crust tapers with the world, so a small enough
+			// planet cannot hold even the shallowest ground the panel offers
+			// -- 53 m across, the crust reaches 13 m, and the least relief and
+			// sea depth here come to 30.
+			case "subdivisionDepth": {
+				const leastGround =
+					KNOB_RANGES.relief!.low + KNOB_RANGES.seaDepth!.low;
+				let least = range.low;
+				while (
+					least < range.high &&
+					Math.min(maxCrustDepth(least), LAYER_COUNT) * k.blockSize <
+						leastGround
+				)
+					least++;
 				return narrowed({
-					high: down(
-						(k.blockSize * 2 ** (MAX_DEPTH + 0.5)) / CELL_CONSTANT,
+					low: Math.max(
+						least,
+						1 + Math.round(Math.log2(k.chunkCells)),
 					),
+					high: MAX_DEPTH,
 				});
-			case "blockSize":
-				return narrowed({
-					low: up(
-						(CELL_CONSTANT * k.radius) / 2 ** (MAX_DEPTH + 0.5),
-					),
-				});
+			}
 
 			// A map cell has to be coarser than a block or the map is being
 			// asked to describe the ground one block at a time. Three blocks
@@ -866,7 +883,7 @@ export class PlanetSettings {
 	static settle(knobs: PlanetKnobs): PlanetKnobs {
 		const order: (keyof PlanetKnobs)[] = [
 			"blockSize",
-			"radius",
+			"subdivisionDepth",
 			"chunkCells",
 			"coarseSpacing",
 			"noiseScale",
@@ -900,18 +917,6 @@ export class PlanetSettings {
 	problems(): string[] {
 		const out: string[] = [];
 		const k = this.knobs;
-
-		if (this.wantedDepth > MAX_DEPTH) {
-			// The largest block that keeps this radius under the word: solve
-			// CELL_CONSTANT * radius / 2^MAX_DEPTH for the block size.
-			const largestBlock = (
-				(CELL_CONSTANT * k.radius) /
-				2 ** MAX_DEPTH
-			).toFixed(2);
-			out.push(
-				`A ${k.blockSize} m block on a ${Math.round(k.radius)} m radius splits a face ${this.wantedDepth} times, which needs a ${wordBits(this.wantedDepth)}-bit address, and the word is 64. Lower Radius, or raise Block size to at least ${largestBlock} m.`,
-			);
-		}
 
 		// The crust has to reach from the top of the tallest ground to under
 		// the deepest sea, or the sea floor falls out of the bottom of the
@@ -1002,6 +1007,21 @@ export class PlanetSettings {
 				if (Number.isFinite(value))
 					(knobs as unknown as Record<string, number>)[key] = value;
 			}
+		}
+		// A link written before depth was asked for directly names a radius.
+		// Depth, block size and radius are one quantity, so the depth that
+		// radius meant is recoverable exactly.
+		const radius = params.get("radius");
+		if (radius !== null && params.get("subdivisionDepth") === null) {
+			const metres = Number.parseFloat(radius);
+			if (Number.isFinite(metres))
+				knobs.subdivisionDepth = Math.max(
+					1,
+					levelFor(
+						CELL_CONSTANT * metres,
+						knobs.blockSize ?? PLANET_DEFAULTS.blockSize,
+					),
+				);
 		}
 		return new PlanetSettings(
 			PlanetSettings.settle({ ...PLANET_DEFAULTS, ...knobs }),

@@ -328,7 +328,7 @@ all. The chunk prefix is in the high bits, so the smallest full name carries the
 smallest prefix: **"lowest ID" and "lowest chunk ID" are the same instruction.**
 
 The address is **`5 + 2D + 2`** bits and the word is
-`[planet 12][face 5][path 2×D][corner 2][layer 10]` — 51 of 64 at `D` 11.
+`[planet 12][face 5][path 2×D][corner 2][layer 11]` — 52 of 64 at `D` 11.
 
 The entry below is kept as written.
 
@@ -559,10 +559,10 @@ an Earth-sized one. At `D` 11 it is **435 layers** against the **64** the worked
 planet uses — 6.8× of headroom.
 
 So the thing merging was for barely exists. And what it would buy is capped by
-something else entirely: the ID gives its layer **10 bits**, addressing
-**1,024** layers, against an unmerged cap of 435 — so **the first merge buys 589
-addressable layers, 135%, and every merge after it buys nothing**, because the
-ID cannot address the result.
+something else entirely: the ID gives its layer **11 bits**, addressing
+**2,048** layers, against an unmerged cap of 435 — so **the first merge buys
+1,613 addressable layers, 371%, and every merge after it buys nothing**, because
+the ID cannot address the result.
 
 Against that, the cost is an interior LOD seam wrapping the entire planet. The
 finding that makes it concrete: **cell centres nest exactly and cell areas do

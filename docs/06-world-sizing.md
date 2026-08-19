@@ -167,7 +167,7 @@ an Earth-sized one.
 > | 10 | 2 m | 218 layers | taper |
 > | 11 | 1 m | **435 layers** | taper |
 > | 12 | 0.5 m | 870 layers | taper |
-> | 13 | 0.25 m | 1,741 layers | the ID's 1,024-layer field |
+> | 13 | 0.25 m | 1,741 layers | taper |
 
 The worked planet uses **64** layers against a cap of **435** — **6.8× of
 headroom**. Capping is not a constraint on it; it is a ceiling nobody is near.
@@ -179,9 +179,9 @@ horizontal resolution by one level and carry on down. **Merging layers.** It is
 declined here on arithmetic.
 
 **What it buys.** One merge doubles cell width, so the taper budget restarts:
-reach goes from 25.6% of the radius to 62.8%. The ID gives the layer **10 bits**,
-which addresses **1,024** layers ([doc 03](03-addressing.md)), against an unmerged
-cap at `D` 11 of 435. So the first merge buys **589 addressable layers — 135%
+reach goes from 25.6% of the radius to 62.8%. The ID gives the layer **11 bits**,
+which addresses **2,048** layers ([doc 03](03-addressing.md)), against an unmerged
+cap at `D` 11 of 435. So the first merge buys **1,613 addressable layers — 371%
 more crust** — and every merge after it buys **nothing at all**, because the ID
 cannot address the result.
 
@@ -225,8 +225,8 @@ The calculator reports the taper live.
 Three separate ceilings on how deep you can go, and only one of them binds:
 
 - **Bits** — the stored word is
-  `[planet 12][face 5][path 2×D][corner 2][layer 10]`
-  ([doc 03](03-addressing.md)), so `12 + 5 + 2D + 2 + 10 ≤ 64` and the ceiling is
+  `[planet 12][face 5][path 2×D][corner 2][layer 11]`
+  ([doc 03](03-addressing.md)), so `12 + 5 + 2D + 2 + 11 ≤ 64` and the ceiling is
   **`D` = 17**. That is **172 billion** cells a layer — a **1.6 cm** block on the
   worked planet above — so it is not the binding constraint. Two higher figures
   are reachable by counting fewer fields: **29 levels** from
@@ -273,9 +273,9 @@ And two figures this page carried before they were measured:
   script behind it. Measured, a cell has gone too thin at **0.744×** nominal, so
   the budget is **25.6%** of the radius — more permissive than the guess, so
   nothing built on it was wrong (`taper.js`).
-- **The layer field was described as holding 512 layers.** It is 10 bits, so it
-  addresses **1,024**. That takes the first merge from 77 addressable layers to
-  **589**, and moves `D` 12 from field-bound to taper-bound.
+- **The layer field was described as holding 512 layers.** It is **11** bits, so
+  it addresses **2,048**. That takes the first merge from 77 addressable layers
+  to **1,613**, and leaves the taper binding at every depth to 13.
 
 ---
 

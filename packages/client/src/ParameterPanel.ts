@@ -217,14 +217,12 @@ const GROUPS: Group[] = [
 						: `${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}`,
 			},
 			{
-				key: "radius",
+				key: "subdivisionDepth",
 				map: true,
-				label: "Radius",
+				label: "Depth",
 				digits: 0,
 				given: (s) =>
-					Math.abs(s.radius - s.knobs.radius) < 1
-						? null
-						: `${s.radius.toFixed(0)} m, depth ${s.depth}`,
+					`${s.radius.toFixed(0)} m radius, ${(10 * 4 ** s.depth + 2).toLocaleString("en-US")} cells a layer`,
 			},
 		],
 	},

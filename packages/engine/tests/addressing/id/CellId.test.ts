@@ -16,26 +16,28 @@ function idKey(id: CellId): string {
 }
 
 describe("the word", () => {
-	it("is 51 bits at depth 11", () => {
-		expect(wordBits(11)).toBe(51);
+	it("is 52 bits at depth 11", () => {
+		expect(wordBits(11)).toBe(52);
 		expect(wordBits(11)).toBeLessThan(64);
 	});
 
-	it("addresses 1,024 layers", () => {
-		expect(LAYER_COUNT).toBe(1024);
+	it("addresses 2,048 layers", () => {
+		expect(LAYER_COUNT).toBe(2048);
 	});
 
 	it("passes what a number represents exactly well before it reaches 64 bits", () => {
 		// A CellId is two 32-bit halves rather than a number, so this is no
-		// longer a limit -- but the word does cross it, at depth 13, which is
-		// why the split exists at all. Depth 12 is exactly 53 bits and still
-		// safe; one level deeper is the first that is not.
-		expect(wordBits(12)).toBeLessThanOrEqual(53);
-		expect(wordBits(13)).toBeGreaterThan(53);
+		// longer a limit -- but the word does cross it, at depth 12, which is
+		// why the split exists at all. Depth 11 is 52 bits and still safe; one
+		// level deeper is the first that is not.
+		expect(wordBits(11)).toBeLessThanOrEqual(53);
+		expect(wordBits(12)).toBeGreaterThan(53);
 	});
 
-	it("fits depth 17 in 64 bits and no more", () => {
-		expect(wordBits(17)).toBeLessThanOrEqual(64);
+	it("fits depth 17 in exactly 64 bits, with none to spare", () => {
+		// The eleventh layer bit is the last one the word has. Depth 17 comes
+		// to 64 on the nose, so a twelfth would cost a level of subdivision.
+		expect(wordBits(17)).toBe(64);
 		expect(wordBits(18)).toBeGreaterThan(64);
 	});
 });

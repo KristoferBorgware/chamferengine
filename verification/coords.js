@@ -207,7 +207,7 @@ console.log('\n4. what a degree of longitude is worth, by latitude (R = 1,700 m)
 // ---- 5. the exact form is the ID, and it is short --------------------------
 console.log('\n5. sharing an exact location');
 {
-  // doc 03's word: [planet 12][face 5][path 2D][corner 2][layer 10].
+  // doc 03's word: [planet 12][face 5][path 2D][corner 2][layer 11].
   // The address is 5 + 2D + 2 -- the last two bits name a corner of the
   // smallest triangle, because path digits name triangles and a cell is a
   // vertex. Earlier drafts of this section used 5 + 2D and got 27 bits at
@@ -216,11 +216,11 @@ console.log('\n5. sharing an exact location');
   for (const D of [11, 13]){
     const addr = 5 + 2*D + 2;
     console.log(`   D=${D}: address ${addr} bits -> ${chars(addr)} chars`
-      + `,  +10-bit layer ${addr+10} -> ${chars(addr+10)} chars`
-      + `,  +12-bit planet ${addr+22} -> ${chars(addr+22)} chars`);
+      + `,  +11-bit layer ${addr+11} -> ${chars(addr+11)} chars`
+      + `,  +12-bit planet ${addr+23} -> ${chars(addr+23)} chars`);
   }
   console.log('   So an exact, lossless "here" inside one world is EIGHT base-36');
-  console.log('   characters, and TEN if the code has to say which planet too.');
+  console.log('   characters, and ELEVEN if the code has to say which planet too.');
   console.log('   Either way a player can read it aloud, and it never needs a');
   console.log('   decimal point.');
 }
@@ -234,5 +234,5 @@ console.log('   asymmetry there is and record it: axis through 0-3, north at v0,
 console.log('   meridian through v11. Show latitude and longitude to');
 console.log('   TWO decimals plus altitude in metres -- that resolves 0.30 m on the worked');
 console.log('   planet. Show it, but do not share it: the shareable form is the cell ID,');
-console.log('   which is 39 bits with its layer -- eight base-36 characters, or ten');
+console.log('   which is 40 bits with its layer -- eight base-36 characters, or eleven');
 console.log('   if the code names the planet as well.');

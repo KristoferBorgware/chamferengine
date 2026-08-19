@@ -160,10 +160,11 @@ describe("share codes", () => {
 	const DEPTH = 11;
 
 	it("takes eight characters at the worked planet's depth", () => {
-		// 29 bits of address and 10 of layer. The planet field is left off;
-		// putting it back takes the code to ten.
+		// 29 bits of address and 11 of layer, which is 40 and still inside the
+		// 41.4 bits eight base-36 characters carry. The planet field is left
+		// off; putting it back takes the code to eleven.
 		expect(shareCodeLength(DEPTH)).toBe(8);
-		expect(shareCodeLength(DEPTH, true)).toBe(10);
+		expect(shareCodeLength(DEPTH, true)).toBe(11);
 	});
 
 	it("names a cell, so two players stand in the same block", () => {

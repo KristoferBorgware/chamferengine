@@ -217,7 +217,7 @@ Violating any of these breaks the design. They are not tunable.
     same `(q, r)`, evaluated at a smaller radius. This is what makes vertical
     neighbours free, gravity tractable, and vertical face merging exact. Do not
     change horizontal resolution with depth; doc 06 raised it as a taper remedy
-    and `taper.js` priced it at 135% more crust against an interior seam crossing
+    and `taper.js` priced it at 371% more crust against an interior seam crossing
     every column on the planet, so doc 11 now files it as **struck**, not open.
 11. Every adjacency is a **shared edge**, never a bare corner. That is the exact
     guarantee. "Six neighbours, all equidistant" is the *approximation* — 12
@@ -276,14 +276,14 @@ Violating any of these breaks the design. They are not tunable.
 | cross-language digest | `6` of 6 identical | JS, C, Rust, Java, Go, Python; 80,000 float64s | `language.js` |
 | one C source, flags moved | `4` distinct digests | `-march=haswell` alone changes the world | `language.js` |
 | `hypot` vs `sqrt` | `hypot` differs `1` ULP between runtimes | `sqrt(x*x+y*y+z*z)` never does | `language.js` |
-| delta record | `29 + 10 + 16` = `55` of 64 bits | planet implied by the file; 9 spare | `blockstate.js` |
+| delta record | `29 + 11 + 16` = `56` of 64 bits | planet implied by the file; 8 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
 | side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
 | entity rekey rate | every `0.71` s = 21 frames | why entities are NOT keyed by cell | `blockstate.js` |
-| planet field | `12` bits = 4,096 worlds | word is 51 of 64 at D11 | `id.js` |
+| planet field | `12` bits = 4,096 worlds | word is 52 of 64 at D11 | `id.js` |
 | code space used | `≈ 7.81%` | `0.625` face × `0.75` corner × `1/6` canonical | `id.js` |
-| max levels in 64 bits | `17` | `12 + 5 + 2D + 2 + 10 ≤ 64`; 1.6 cm blocks | `scale.js` |
-| share code | `8` base-36 chars | address + layer = 39 bits; 10 with planet | `coords.js` |
+| max levels in 64 bits | `17` | `12 + 5 + 2D + 2 + 11 ≤ 64`, exactly 64 at 17 | `scale.js` |
+| share code | `8` base-36 chars | address + layer = 40 bits; 11 with planet | `coords.js` |
 | adjacency table | 60 entries, 180 bytes | 20 faces × 3 edges × 3 bytes | `adj.js` |
 | S2 area ratios | linear `5.20`, quadratic `2.08`, tangent `1.41` | asymptotic | `s2.js` |
 | RT defect split | `20 × 10.3°` + `12 × 42.8°` = `720°` | rhombic triacontahedron | `check.js` |
@@ -295,7 +295,7 @@ Violating any of these breaks the design. They are not tunable.
 | narrowest cell ÷ nominal | `0.744` | at a pentagon; anchors the taper budget | `uniform.js` |
 | taper budget | `25.6%` of `R` | `maxCrust = (1−0.744)·2^D/K` layers; `R` cancels | `taper.js` |
 | max crust at `D` 11 | `435` layers | vs 64 in use — 6.8× headroom | `taper.js` |
-| layer field | `10` bits = `1,024` layers | the addressing ceiling; taper binds below `D` 13 | `id.js`, `taper.js` |
+| layer field | `11` bits = `2,048` layers | the last bit the word has; taper binds to `D` 13 | `id.js`, `taper.js` |
 | float32 spacing at R | `2^(e-23)` for `R` in `[2^e, 2^(e+1))` | doubles at each binade | `precision.js` |
 | float32 at R 1700 / Earth | `122 µm` / `500 mm` | 8192 / **2** positions per 1 m block | `precision.js` |
 | float64 at Earth radius | `0.93 nm` | never the binding constraint | `precision.js` |
@@ -409,8 +409,8 @@ Violating any of these breaks the design. They are not tunable.
 - **Layer merging is struck, not open** (`taper.js`). The taper budget is 25.6%
   of the radius — `(1−0.744)·2^D/K` layers, and **the radius cancels**, so the
   crust cap is a property of `D` alone: 435 layers at `D` 11 against the 64 in
-  use. Merging buys **589 addressable layers, 135%** (the layer field is 10 bits,
-  so it stops at 1,024) and costs an interior seam crossing **every column on the
+  use. Merging buys **1,613 addressable layers, 371%** (the layer field is 11
+  bits, so it stops at 2,048) and costs an interior seam crossing **every column on the
   planet** — cell *centres* nest exactly, cell *areas* do not, so 3 of every 4 columns dead-end
   at the shell — plus all four results invariant 10 pays for. Cap the crust.
 - The 720° shows up **twice**, and the two forms behave oppositely under
@@ -608,15 +608,34 @@ Violating any of these breaks the design. They are not tunable.
   not a second material, so shading it drew sea floors the world does not have,
   and Height is the picture depth is read from. `Height` keeps its blend,
   because it answers a different question.
+- **THE LAYER FIELD IS 11 BITS, AND THE ELEVENTH IS THE LAST ONE THE WORD HAS**
+  (`cellIdLayout`, doc 03). `[planet 12][face 5][path 2D][corner 2][layer 11]` is
+  `30 + 2D`, which at `D` 17 comes to **exactly 64** — so this bit was free and a
+  twelfth would cost a level of subdivision. What it buys is the crust: at ten
+  bits a 1 m block was held to **1,024** layers where the taper allowed
+  **1,740**, and the tallest mountain to `900 m` against `1,620 m`. Above `D` 13
+  the field still binds. Three numbers moved with it — the share code is **11**
+  base-36 characters with a planet field rather than 10, the delta record is
+  **56 of 64** bits rather than 55, and layer merging would now buy **1,613**
+  layers rather than 589, which does not change that it is struck.
+- **DEPTH IS A KNOB AND THE RADIUS FOLLOWS** (`PlanetKnobs.subdivisionDepth`).
+  Depth, block size and radius are one quantity written three ways —
+  `radius = blockSize x 2^depth / K` — so any two fix the third, and the pair a
+  person can set is the one where every value means a different world. Asking
+  for a radius did not: measured, the Radius slider had **484 positions and
+  reached 6 distinct worlds**, because a radius is quantised to powers of two
+  and every position between two of them built the same planet. Depth is a whole
+  number from 4 to 17, radius is what it gives, and there is no rounding left
+  for the radius to absorb. A link written with `radius=` still works — the
+  depth that radius meant is recoverable exactly.
 - **A CRUST IS A COUNT OF LAYERS, AND THE SLIDER WAS STATING IT IN METRES**
-  (`KNOB_RANGES.crustMetres`). The layer field holds **1,024** layers and a
-  layer is a block tall, so the crust reaches `1,024 m` at a 1 m block and
-  **`4,096 m`** at a 4 m one — the largest any radius and block size in the
+  (`KNOB_RANGES.crustMetres`). The layer field holds **2,048** layers and a
+  layer is a block tall, so the crust reaches `2,048 m` at a 1 m block and
+  **`8,192 m`** at a 4 m one — the largest any radius and block size in the
   panel allow. **Crust reaches** was capped at `1,024` **metres**, which is the
   layer count wearing the wrong unit, and because `rangeFor` only ever narrows
   it could never widen back: every world with a block over a metre was held to
-  a fraction of the depth it could carry, a 2 m block to `1,024 m` of a possible
-  `1,740 m`. The cap is the largest ceiling any world reaches now, and each
+  a fraction of the depth it could carry. The cap is the largest ceiling any world reaches now, and each
   world is narrowed to its own.
 - **A LINK COULD BUILD WHAT A SLIDER COULD NOT REACH** (`fromParams`). Every
   slider's ends move with the rest of the draft, and `fromParams` went straight
