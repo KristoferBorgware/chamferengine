@@ -52,13 +52,31 @@ fine ones underfoot, and the step between them is the level-of-detail seam.
 times the area at half the resolution, so it is the same count at a wider
 spacing — level of detail is re-sampling the ground, never dropping cells out of
 a fine mesh. A few hundred triangles then cover a planet of hundreds of millions
-of cells: at depth 13 with 8-cell chunks, **1,079 triangles against
+of cells: at depth 13 with 8-cell chunks, **1,115 triangles against
 20,971,520** if every one were at full detail.
 
 **Chunk decides how much ground is at full detail, and not how many chunks
 there are.** At `detail` 2 the full-detail region reaches two chunk widths, so
 8-cell chunks reach 16 m and 64-cell chunks reach 128 m — while the count of
 full-detail chunks stays near 150 either way.
+
+**The red lines are the seam** — every edge where a triangle meets a finer one.
+Both sides tile at their own spacing, so their cells do not meet along it: the
+coarse side's hexagons reach past the line and the fine side's stop short of it.
+There is one ring per band and the bands double in width going out, so the
+default world draws **163 seam edges** in four rings around the player. **Apron**
+shows what closes them: every triangle draws the ring of cells one step past its
+own rim, at its own level, so both sides cover the strip neither of them tiled.
+
+**Altitude lifts the eye, and the finest bands go first.** Distance is measured
+from the eye, so the ground under the feet is that far away and everything
+coarsens at once. At eye height **156** triangles reach full detail; at 215 m
+**none** do, because full detail reaches two chunk widths — 16 m — and the eye is
+past it. The seam rings go with them: 163 edges on the ground, 101 at 215 m, and
+**0 from 27 km up**, where the selection is the twenty bare faces. **Horizon**
+adds the cull the engine runs, `acos(R / (R + altitude))` widened by a triangle's
+own half-width: at eye height that leaves a 152 m cap of a 6.80 km planet, and
+rising opens it.
 
 **Left click a cell** for its address — which face, the route down the splits
 with the chunk's own digits marked off, which corner of the last triangle, and

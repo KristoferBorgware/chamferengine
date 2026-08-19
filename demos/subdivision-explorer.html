@@ -76,7 +76,7 @@
 
 <header>
   <h1>Subdivision and level of detail — twenty triangles down to one cell</h1>
-  <div class="sub">The splits go deep only where the player stands. Right click to stand somewhere · left click a cell · drag to turn · wheel to zoom. The surface layer only.</div>
+  <div class="sub">The splits go deep only where the player stands, and Altitude lifts the eye off the ground. Right click to stand somewhere · left click a cell · drag to turn · wheel to zoom. The surface layer only.</div>
 </header>
 
 <div class="stage">
@@ -111,11 +111,19 @@
     <input type="range" id="kDetail" min="5" max="40" step="1" value="20">
     <div class="given" id="gDetail"></div>
   </div>
+  <div class="knob">
+    <label>Altitude <b id="vAlt">—</b></label>
+    <input type="range" id="kAlt" min="0" max="1000" step="1" value="0">
+    <div class="given" id="gAlt"></div>
+  </div>
   <div class="toggles">
     <button id="tSplits" class="on">Splits</button>
     <button id="tChunks" class="on">Chunks</button>
     <button id="tCells" class="on">Cells</button>
     <button id="tFaces" class="on">Faces</button>
+    <button id="tSeam" class="on">Seam</button>
+    <button id="tApron">Apron</button>
+    <button id="tHorizon">Horizon</button>
     <button id="tSpin">Spin</button>
   </div>
 </div>
@@ -296,15 +304,35 @@ function children(t) {
  * Everything coarser is the same chunk drawn with fewer cells in it -- level of
  * detail is re-sampling the ground at a wider spacing, never dropping cells out
  * of a fine mesh.
+ *
+ * `altitude` is metres above the surface, and it moves the eye rather than the
+ * player: distance is measured from the eye and the ground under the feet is
+ * `altitude` away, so rising coarsens everything at once and the finest bands
+ * go first. Culling is the same two angles the engine uses -- how far the eye
+ * sees over the sphere, widened by the triangle's own half-width so one
+ * straddling the horizon is not dropped whole.
+ *
+ * This is `selectChunks` in `chamfer/generation`, with the terrain terms left
+ * out: there is no ground here, so there are no peaks to see over.
  */
-function selectTriangles(player, finest, detail, radius) {
+function selectTriangles(player, finest, detail, radius, altitude, cullHorizon) {
   const out = [];
+  const eyeRadius = radius + altitude;
+  const eye = [player[0] * eyeRadius, player[1] * eyeRadius, player[2] * eyeRadius];
+  // How far around the planet the eye sees, as an angle from below it.
+  const horizon = eyeRadius > radius ? Math.acos(radius / eyeRadius) : 0;
   const walk = (t) => {
     const dirs = triDirs(t);
     const centre = norm(add3(dirs[0], dirs[1], dirs[2]));
-    // Half the triangle's own angular reach, and the surface distance to it.
     const spread = Math.acos(Math.min(1, Math.max(-1, dot(centre, dirs[0]))));
-    const away = Math.acos(Math.min(1, Math.max(-1, dot(centre, player)))) * radius;
+    const cos = dot(centre, player);
+    // Over the horizon by more than its own width: the whole triangle is on
+    // the far side of the planet and is never built.
+    if (cullHorizon && cos < Math.cos(Math.min(Math.PI, horizon + spread))) return;
+    const dx = centre[0] * radius - eye[0];
+    const dy = centre[1] * radius - eye[1];
+    const dz = centre[2] * radius - eye[2];
+    const away = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const width = 2 * spread * radius;
     if (t.level < finest && away < detail * width) {
       for (const child of children(t)) walk(child);
@@ -366,9 +394,10 @@ function buildTriangleCells(t, chunkBits, depth) {
     return d;
   };
   const held = (i, j) => i >= loI && i <= hiI && j >= loJ && j <= hiJ && i + j <= n;
+  const ring = 1.01 / m;      // one lattice step, in the same units as `inside`
   const cells = new Map();
   const take = (i, j, middle) => {
-    if (!inside(i, j, 1e-9)) return;                 // owned by a neighbour
+    if (!inside(i, j, ring)) return;                 // further out than the apron
     const key = i * 100000 + j;
     let cell = cells.get(key);
     if (!cell) cells.set(key, (cell = { dir: dirAt(i, j), corners: [], i, j,
@@ -386,7 +415,7 @@ function buildTriangleCells(t, chunkBits, depth) {
         take(i + 1, j, down); take(i, j + 1, down); take(i + 1, j + 1, down);
       }
     }
-  const out = [];
+  const own = [], apron = [];
   for (const cell of cells.values()) {
     if (cell.corners.length < 3) continue;
     const up = cell.dir;
@@ -395,7 +424,42 @@ function buildTriangleCells(t, chunkBits, depth) {
     const north = cross(up, east);
     cell.corners.sort((a, b) =>
       Math.atan2(dot(a, north), dot(a, east)) - Math.atan2(dot(b, north), dot(b, east)));
-    out.push(cell);
+    (inside(cell.i, cell.j, 1e-9) ? own : apron).push(cell);
+  }
+  return { own, apron };
+}
+
+/**
+ * A direction as a key, coarse enough to survive being computed two ways.
+ *
+ * Two triangles meeting at a point reach it through different faces and
+ * different levels, so the last bits differ. Nothing here sits closer together
+ * than a millionth of a radius.
+ */
+const dirKey = (d) =>
+  `${Math.round(d[0] * 1e6)},${Math.round(d[1] * 1e6)},${Math.round(d[2] * 1e6)}`;
+
+/**
+ * The edges where a triangle meets finer ones -- the level-of-detail seam.
+ *
+ * A triangle's edge is a seam when some other triangle in the selection has a
+ * corner half way along it, which only happens when that side was split and
+ * this one was not. The two sides then tile at different spacings and their
+ * cells do not meet: the coarse side's hexagons reach past the line and the
+ * fine side's stop short of it.
+ */
+function seamEdges(tris) {
+  const corners = new Set();
+  for (const t of tris) for (const d of t.dirs) corners.add(dirKey(d));
+  const out = [];
+  for (const t of tris) {
+    const n = 1 << (t.level + 1);
+    const pts = triCorners(t);
+    for (let e = 0; e < 3; e++) {
+      const p = pts[e], q = pts[(e + 1) % 3];
+      const mid = latticeDir(t.face, n, p[0] + q[0], p[1] + q[1]);
+      if (corners.has(dirKey(mid))) out.push([t.dirs[e], t.dirs[(e + 1) % 3]]);
+    }
   }
   return out;
 }
@@ -406,7 +470,9 @@ const state = {
   cellSize: 1,
   chunkBits: 3,          // cells along a chunk edge = 2^chunkBits
   detail: 2,
+  altitudeAt: 0,         // 0 to 1 along a logarithmic range of altitudes
   splits: true, chunks: true, cells: true, faces: true, spin: false,
+  seam: true, apron: false, horizon: false,
   yaw: 0.6, pitch: 0.35, zoom: 1,
   player: [0, 0, 1],   // put under the eye once the camera is known
   selected: null,
@@ -416,7 +482,16 @@ const radiusRange = () => [
   (CELL_MIN * 2 ** state.depth) / K, (CELL_MAX * 2 ** state.depth) / K,
 ];
 const chunkCells = () => 1 << state.chunkBits;
+
+/** Metres above the surface, from eye height to well clear of the planet. */
+const ALTITUDE_LOW = 1.7;
+const altitude = () =>
+  ALTITUDE_LOW * ((4 * radius()) / ALTITUDE_LOW) ** state.altitudeAt;
 const chunkLevel = () => Math.max(0, state.depth - state.chunkBits);
+
+/** How far around the planet the eye can see, along the ground. */
+const horizonReach = () =>
+  radius() * Math.acos(radius() / (radius() + altitude()));
 
 /**
  * How many cells the drawing is allowed, over the whole planet.
@@ -432,9 +507,9 @@ const CELL_BUDGET = 55000;
 /** Under this many pixels across, a triangle is filled rather than tiled. */
 const CELL_PIXELS = 1.6;
 
-let drawnCells = 0, filled = 0, budgeted = 0;
+let drawnCells = 0, filled = 0, budgeted = 0, apronCells = 0;
 
-let tris = [], patch = [], withCells = 0;
+let tris = [], patch = [], seams = [], withCells = 0;
 
 /** Built cells, kept between moves: a triangle that survives is not rebuilt. */
 let cache = new Map();
@@ -450,7 +525,9 @@ let cacheKey = '';
  * there is; zoom in and the near ones start tiling.
  */
 function rebuild() {
-  tris = selectTriangles(state.player, chunkLevel(), state.detail, radius());
+  tris = selectTriangles(state.player, chunkLevel(), state.detail, radius(),
+    altitude(), state.horizon);
+  seams = state.seam ? seamEdges(tris) : [];
   const key = state.depth + ':' + state.chunkBits;
   if (key !== cacheKey) { cache = new Map(); cacheKey = key; }
   patch = [];
@@ -472,7 +549,7 @@ function rebuild() {
     let built = cache.get(id);
     if (!built) { built = buildTriangleCells(t, state.chunkBits, state.depth); cache.set(id, built); }
     patch.push({ t, cells: built, across });
-    total += built.length;
+    total += built.own.length;
     withCells++;
   }
   if (cache.size > 4000) cache = new Map();
@@ -602,7 +679,7 @@ function draw() {
   // A triangle whose cells are under a pixel is filled with that same colour
   // instead: forty-five polygons and one leave the same marks on the screen,
   // and the whole far side of a deep world is in that state.
-  drawnCells = 0; filled = 0;
+  drawnCells = 0; filled = 0; apronCells = 0;
   if (state.cells) {
     for (const { t, cells, across } of patch) {
       if (!t.dirs.some((d) => rotate(d)[2] >= 1 / EYE)) continue;
@@ -617,7 +694,7 @@ function draw() {
       // because the cost is in the call rather than in the polygon.
       ctx.beginPath();
       let pents = null;
-      for (const cell of cells) {
+      for (const cell of cells.own) {
         if (rotate(cell.dir)[2] < 1 / EYE) continue;
         const into = cell.pent ? (pents || (pents = new Path2D())) : ctx;
         for (let k = 0; k < cell.corners.length; k++) {
@@ -633,6 +710,28 @@ function draw() {
         ctx.strokeStyle = 'rgba(11,14,20,.6)'; ctx.lineWidth = 0.6; ctx.stroke();
       }
       if (pents) { ctx.fillStyle = 'rgba(242,84,61,.95)'; ctx.fill(pents); }
+
+      // The apron: the ring of cells one step past this triangle's own rim,
+      // drawn at its own level. Where a coarse triangle meets a fine one their
+      // cells do not meet, and both sides reaching one cell over covers the
+      // strip that neither of them tiled.
+      if (state.apron) {
+        ctx.beginPath();
+        for (const cell of cells.apron) {
+          if (rotate(cell.dir)[2] < 1 / EYE) continue;
+          for (let k = 0; k < cell.corners.length; k++) {
+            const p = projectHeld(rotate(cell.corners[k]));
+            if (k === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+          }
+          ctx.closePath();
+          apronCells++;
+        }
+        // Amber rather than the level's own colour, and no per-cell outline:
+        // every triangle has an apron, so this is a halo round each of them
+        // and the eye needs to read it as one band and not as more cells.
+        ctx.fillStyle = 'rgba(242,193,78,.34)';
+        ctx.fill();
+      }
     }
   }
 
@@ -649,6 +748,15 @@ function draw() {
     }
   }
 
+
+  // Where a coarse triangle meets finer ones. Both sides tile at their own
+  // spacing, so their cells do not line up along this line.
+  if (state.seam && seams.length) {
+    ctx.strokeStyle = '#ff5d47'; ctx.lineWidth = 2.6; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (const [a, b] of seams) arc(a, b);
+    ctx.stroke();
+  }
 
   if (state.faces) {
     ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
@@ -708,9 +816,11 @@ function arc(u, v) {
 function outlineSelected() {
   const s = state.selected;
   let cell = null;
-  for (const { cells } of patch)
-    for (const c of cells)
+  for (const { cells } of patch) {
+    if (!cells) continue;
+    for (const c of cells.own)
       if (c.level === state.depth && c.face === s.face && c.i === s.i && c.j === s.j) cell = c;
+  }
   if (!cell) return;
   ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
   ctx.beginPath();
@@ -768,9 +878,25 @@ function readout() {
     `<div class="row"><span>Cells drawn</span><b>${fmt(drawnCells)}</b></div>` +
     `<div class="row"><span>Too small to tile</span><b>${fmt(filled)} triangles filled flat</b></div>` +
     `<div class="row"><span>Full detail out to</span><b>${metres(state.detail * chunkSpan)}</b></div>` +
+    `<div class="row"><span>Eye above the ground</span><b>${metres(altitude())}</b></div>` +
+    `<div class="row"><span>Horizon</span><b>${metres(horizonReach())}${state.horizon ? '' : ' — not culled'}</b></div>` +
+    `<div class="row"><span>LOD seams</span><b>${state.seam ? fmt(seams.length) + ' edges' : 'hidden'}</b></div>` +
+    `<div class="row"><span>Apron cells</span><b>${state.apron ? fmt(apronCells) + ' drawn' : 'hidden'}</b></div>` +
     `<div class="row"><span>One cell on screen</span><b>${cellPixels() < 0.4 ? 'under half a pixel' : cellPixels().toFixed(1) + ' px'}</b></div>` +
     `<div class="ramp">${ramp.join('')}</div>` +
     `<div class="rampkey"><span>full detail</span><span>${maxLod} levels coarser</span></div>` +
+    (state.seam
+      ? `<div class="muted" style="margin-top:5px"><b style="color:#ff5d47">The red ` +
+        `lines</b> are where a triangle meets a finer one. Both sides tile at their ` +
+        `own spacing, so their cells do not meet along it — one ring per band, and ` +
+        `the bands double in width as they go out.</div>`
+      : '') +
+    (state.apron
+      ? `<div class="muted" style="margin-top:5px"><b style="color:#f2c14e">The amber ` +
+        `cells</b> are the apron: every triangle draws the ring one step past its own ` +
+        `rim, at its own level, so both sides cover the strip neither of them tiled. ` +
+        `${fmt(apronCells)} of them, over ${fmt(withCells)} tiled triangles.</div>`
+      : '') +
     `<div class="muted" style="margin-top:5px">` +
     `${fmt(tris.length)} triangles cover the whole planet, against ` +
     `<b>${fmt(20 * 4 ** C)}</b> if every one were at full detail — and each holds ` +
@@ -841,12 +967,15 @@ function syncKnobs(moved) {
   el('vCell').textContent = metres(state.cellSize);
   el('vChunk').textContent = String(chunkCells());
   el('vDetail').textContent = state.detail.toFixed(1);
+  el('kAlt').value = String(Math.round(1000 * state.altitudeAt));
+  el('vAlt').textContent = metres(altitude());
   el('gDepth').textContent = `${fmt(10 * 4 ** state.depth + 2)} cells a layer`;
   el('gRadius').textContent =
     `follows the other two — ${metres(rLo)} to ${metres(rHi)} at this depth`;
   el('gCell').textContent = `radius = cell x 2^depth / ${K.toFixed(5)}`;
   el('gChunk').textContent = `chunk level ${chunkLevel()}, ${fmt(20 * 4 ** chunkLevel())} on the planet`;
-  el('gDetail').textContent = 'chunk widths from the player';
+  el('gDetail').textContent = 'chunk widths from the eye';
+  el('gAlt').textContent = `horizon ${metres(horizonReach())} away`;
 }
 
 el('kDepth').oninput = (e) => {
@@ -864,8 +993,13 @@ el('kChunk').oninput = (e) => {
 el('kDetail').oninput = (e) => {
   state.detail = +e.target.value / 10; syncKnobs(); resize();
 };
+el('kAlt').oninput = (e) => {
+  state.altitudeAt = +e.target.value / 1000; syncKnobs(); resize();
+};
 for (const [id, key] of [['tSplits', 'splits'], ['tChunks', 'chunks'],
-                         ['tCells', 'cells'], ['tFaces', 'faces'], ['tSpin', 'spin']])
+                         ['tCells', 'cells'], ['tFaces', 'faces'],
+                         ['tSeam', 'seam'], ['tApron', 'apron'],
+                         ['tHorizon', 'horizon'], ['tSpin', 'spin']])
   el(id).onclick = () => {
     state[key] = !state[key];
     el(id).classList.toggle('on', state[key]);
