@@ -737,6 +737,39 @@ and the number where it stops.
 ---
 ---
 
+### F-043 — Nothing says the bottom layer of the crust cannot be dug through
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-19, working out how deep a player could dig on the shipped
+world
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`fillColumn`; [`docs/06-world-sizing.md`](docs/06-world-sizing.md), the crust
+depth section
+
+**What happens.** The crust is a shell: it runs from the planet's tallest ground
+down a fixed number of layers, and under the last one there is no world at all.
+On the shipped settings that floor sits `360 m` under sea level. Every layer of
+it is ordinary stone, and two documents already use bedrock as the example of a
+rule a player discovers by trying — but no rule exists. Breaking the last layer
+opens a hole through the bottom of the planet into space.
+
+**Why it matters.** Digging is the thing a voxel game is for, and the floor is
+the one place the world ends rather than continues. A hole through it is not a
+graphical glitch: the ray walk, gravity and the mesher all assume a column has a
+bottom, and a player standing over one falls out of the world with nothing under
+them to land on. It costs nothing to prevent and cannot be repaired in a save
+that already has holes in it.
+
+**What would fix it.** A block type the edit path refuses to remove, written
+into the deepest layer of every column, the same way the twelve pentagon columns
+already refuse placement. It needs a name in the registry, one comparison in
+whatever validates an edit, and a line in doc 06 saying the crust's last layer
+is not stone. The alternative — refusing the edit by layer number rather than by
+block type — is cheaper still but invisible to a player looking at the block.
+
 ### F-040 — `tools/bench.ts` still names three knobs that no longer exist
 
 **Kind:** bug
