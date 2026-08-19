@@ -1,6 +1,6 @@
 # Demos
 
-Thirty-one self-contained HTML files. No build step, no `npm install`, no server
+Thirty-two self-contained HTML files. No build step, no `npm install`, no server
 required — open any of them directly in a browser. All are mobile-friendly and
 touch-enabled.
 
@@ -40,6 +40,29 @@ Compare *Quads · cube* against *Quads · rhombic 30* at the same resolution: sa
 across 32 points. The last two buttons show the space-filling lattice cells.
 
 **Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md)
+
+### [`subdivision-explorer.html`](subdivision-explorer.html)
+The construction as one interactive ball: twenty triangles, the splits under
+them, and the cells on the corners. **Left click a cell** for its address —
+which face, the route down the splits, which corner of the last triangle, and
+whether it is one of the twelve pentagons. **Right click** to stand somewhere.
+
+The bit bar under the address is the stored word, drawn to scale: `planet 12`,
+`face 5`, `path 2 x depth`, `corner 2`, `layer 11`, and whatever is left of the
+64. Drag **Depth** and watch the path field eat the spare — depth 4 leaves 26
+bits over, depth 13 leaves 8, and depth 17 leaves none at all.
+
+**Depth, Cell size and Radius are one quantity written three ways**, so moving
+any of them moves another: `radius = cell x 2^depth / 1.20459`. Dragging Radius
+snaps, because a radius is quantised to powers of two and every position between
+two of them is the same planet.
+
+Past depth 6 there are more cells than a browser will draw, so it says which
+level it is drawing and how many real cells each one on screen stands for.
+
+**Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md),
+[03 — Addressing](../docs/03-addressing.md),
+[06 — World sizing](../docs/06-world-sizing.md)
 
 ### [`goldberg-voxel-sphere.html`](goldberg-voxel-sphere.html)
 The chosen tiling, generated as the dual of a subdivided icosahedron. Four
