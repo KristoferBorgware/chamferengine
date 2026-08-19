@@ -9,6 +9,7 @@ import {
 	buildCoarseMap,
 	chunkOverlaps,
 	flatCoarseMap,
+	horizonAngle,
 	seedFromString,
 	selectChunks,
 	selectionId,
@@ -28,6 +29,7 @@ import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
 	ChunkRenderer,
 	FrameTimer,
+	MarkerRenderer,
 	NoWebGPUError,
 	SkyRenderer,
 	createGpuContext,
@@ -282,7 +284,11 @@ async function main(): Promise<void> {
 					settings.knobs.zenithDepth,
 				),
 			);
-	renderer.layer = sky;
+	// The frozen camera is drawn as an object, after the sky and the clouds so
+	// it is never behind either of them. It has nothing to draw until the view
+	// is frozen.
+	const viewMarker = new MarkerRenderer(ctx);
+	renderer.layers = sky ? [sky, viewMarker] : [viewMarker];
 
 	// One generator per level. A chunk one level coarser samples the terrain at
 	// twice the spacing over four times the area, so it holds the same 561 slots
@@ -379,8 +385,9 @@ async function main(): Promise<void> {
 		);
 		player.fall = 0;
 		// Level, not aimed down at the ground. On a planet this small the
-		// horizon sits 2.48 degrees below level and 73.7 m away at eye height,
-		// and seeing that drop is part of reading the size of the place.
+		// horizon sits 1.34 degrees below level and 159 m away at the 1.86 m
+		// the camera stands at, and seeing that drop is part of reading the
+		// size of the place.
 		player.pitch = 0;
 		// The eye rather than a camera trailing behind it, or the player's own
 		// height is measured from the wrong point.
@@ -509,6 +516,76 @@ async function main(): Promise<void> {
 	let selectedAt = player.position;
 
 	/**
+	 * The camera the drawing decisions are read from, when it is not the live
+	 * one.
+	 *
+	 * Two decisions use a camera and neither is the picture: which level each
+	 * chunk is drawn at, from the eye's place and height, and which resident
+	 * chunks are drawn at all, from the frustum. Holding both at one camera
+	 * while the real one keeps moving is the only way to look at either of
+	 * them, because a decision made from where you are standing is invisible
+	 * from there -- it always looks complete.
+	 *
+	 * `null` is the ordinary case: every decision reads the live camera.
+	 */
+	let frozen: {
+		position: Vec3;
+		eyeRadius: number;
+		viewProj: Mat4;
+		eye: Vec3;
+		look: Vec3;
+	} | null = null;
+
+	/** Set by the knob, read by the next frame, which has a matrix to freeze. */
+	let freezeWanted = settings.knobs.freezeView;
+
+	/**
+	 * How much sky the camera takes in, top to bottom, in radians.
+	 *
+	 * Named once because two things read it: the projection every frame, and
+	 * the cone that draws a frozen camera's own frustum. Two copies of it
+	 * would draw a cone that agreed with the view until somebody moved one.
+	 */
+	const FIELD_OF_VIEW = (65 * Math.PI) / 180;
+
+	/**
+	 * Draw the frozen camera where it stands, at a size it can be found at.
+	 *
+	 * **The cone keeps its true shape and the box does not.** The cone opens at
+	 * the camera's own field of view and reaches its own horizon, so both of
+	 * those are measurements and stretching either would be a lie -- what it
+	 * encloses is the ground that camera could have drawn. The box carries no
+	 * length at all, only a place, so holding it to a fixed fraction of the
+	 * viewing distance costs nothing and buys the one thing it is for: a 4 m
+	 * box is under a pixel from 2 km up, and a marker nobody can find is not a
+	 * marker.
+	 *
+	 * Rebuilt only when the size has moved enough to see, because the geometry
+	 * is remade on the CPU each time it changes.
+	 */
+	function markMarker(at: {
+		readonly eye: Vec3;
+		readonly eyeRadius: number;
+		readonly look: Vec3;
+	}): void {
+		const away = player.eye.sub(at.eye).length();
+		const size = Math.max(settings.knobs.blockSize * 2, away / 200);
+		const drawn = viewMarker.marker;
+		if (drawn && Math.abs(size / drawn.size - 1) < 0.05) return;
+		viewMarker.marker = {
+			position: at.eye,
+			direction: at.look,
+			size,
+			spread: FIELD_OF_VIEW / 2,
+			// How far that camera could see: its own horizon, the first of the
+			// two terms selectChunks reaches by. 159 m at eye height and
+			// 2.9 km from 600 m up, so the cone grows with the altitude the
+			// way the selection does.
+			reach: RADIUS * horizonAngle(at.eyeRadius, RADIUS),
+		};
+	}
+
+	/**
 	 * How far the player moves before the selection is worked out again.
 	 *
 	 * Two blocks. Which level a chunk is drawn at changes over tens of metres,
@@ -524,11 +601,15 @@ async function main(): Promise<void> {
 		// reference radius still sees to the eye-height horizon, and the feet
 		// put the horizon at zero. The peak height reaches the ground that
 		// stands above the reference sphere beyond that horizon.
+		const from = frozen ?? {
+			position: player.position,
+			eyeRadius: player.eye.length(),
+		};
 		const wanted = selectChunks(
 			DEPTH,
 			CHUNK_LEVEL,
-			player.position,
-			player.eye.length(),
+			from.position,
+			from.eyeRadius,
 			RADIUS,
 			DETAIL,
 			shape.maxElevation,
@@ -595,6 +676,15 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
+
+		// Freezing waits for the next frame, which has a matrix to hold.
+		// Unfreezing is immediate, and the refresh at the foot of this
+		// function catches the selection up to where the camera has got to.
+		freezeWanted = live.knobs.freezeView;
+		if (!freezeWanted) {
+			frozen = null;
+			viewMarker.marker = null;
+		}
 
 		// Turning the clouds off empties the buffer, which is what stops the
 		// pass -- the renderer draws nothing when it holds no cloud geometry.
@@ -825,7 +915,10 @@ async function main(): Promise<void> {
 		// a fall off a ridge crosses several levels on the way. Keying off a
 		// direction key left all of that unnoticed until the next key press,
 		// which read as the world snapping resolution once they landed.
-		if (player.position.sub(selectedAt).length() > RESELECT_DISTANCE)
+		if (
+			!frozen &&
+			player.position.sub(selectedAt).length() > RESELECT_DISTANCE
+		)
 			refresh();
 
 		// Behind the player, along the ground they are standing on.
@@ -847,7 +940,7 @@ async function main(): Promise<void> {
 			[up.x, up.y, up.z],
 		);
 		const projection = Mat4.perspective(
-			(65 * Math.PI) / 180,
+			FIELD_OF_VIEW,
 			canvas.width / canvas.height,
 			Math.max(0.2, player.altitude * 0.01),
 			RADIUS * 20,
@@ -912,10 +1005,26 @@ async function main(): Promise<void> {
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
 		const viewProj = projection.multiply(view);
+		// Frozen with the frame it was asked for on, rather than from a camera
+		// rebuilt out of parts: what is held is a view that was on screen.
+		if (freezeWanted && !frozen) {
+			frozen = {
+				position: player.position,
+				eyeRadius: player.eye.length(),
+				viewProj,
+				eye: player.eye,
+				look,
+			};
+			refresh();
+		}
+		if (frozen) markMarker(frozen);
 		if (sky) sky.inverseViewProj = viewProj.inverse();
 		timer.enter("draw", performance.now());
 		renderer.render({
 			viewProj,
+			// Absent unless the view is frozen, and then what is drawn is what
+			// that camera could see rather than this one.
+			cullViewProj: frozen?.viewProj,
 			eye,
 			sun: [sun.x, sun.y, sun.z],
 			fog: submerged
@@ -936,6 +1045,15 @@ async function main(): Promise<void> {
 				(building.size > 0 ? ` · ${building.size} building` : ""),
 			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
 				(submerged ? " · under water" : ""),
+			// Where the decisions are being read from, and how far that is from
+			// where the picture is being taken. Without the distance a frozen
+			// view is a world that has simply stopped responding.
+			...(frozen
+				? [
+						`view frozen · ${height(geographicOf(frozen.position, RADIUS).altitude)} · ` +
+							`${height(player.position.sub(frozen.position).length())} from the camera`,
+					]
+				: []),
 			budget(timer, renderer),
 			"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
 		]);

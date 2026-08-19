@@ -61,8 +61,13 @@ export class ChunkRenderer {
 	/** The color a pass clears to when nothing covers the sky. */
 	sky: readonly [number, number, number] = [0.46, 0.62, 0.82];
 
-	/** Drawn around the terrain: a sky before it, clouds after. */
-	layer: PassLayer | null = null;
+	/**
+	 * Drawn around the terrain: a sky before it, clouds and markers after.
+	 *
+	 * In order, so a layer added later draws over one added earlier. The
+	 * renderer knows only the two moments; what fills them is not its concern.
+	 */
+	layers: PassLayer[] = [];
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
@@ -265,13 +270,18 @@ export class ChunkRenderer {
 		// matrix from group 0, so a draw issued before it is bound is refused
 		// and the whole command buffer with it.
 		pass.setBindGroup(0, this.frameBindGroup);
-		this.layer?.before?.(pass, frame);
+		for (const layer of this.layers) layer.before?.(pass, frame);
 
 		// Turning is instant and building a chunk is not, so what is held is a
 		// disc around the player and what is drawn is the part of it being
 		// looked at. Dropping the rest instead would put a hole in the world
 		// every time someone spun round.
-		const view = new Frustum(frame.viewProj);
+		//
+		// `cullViewProj` is the frame's own matrix unless a caller froze one,
+		// and then the sort below still runs against the live eye: which water
+		// surface is in front of which is a fact about the picture being
+		// taken, not about the camera that chose the chunks.
+		const view = new Frustum(frame.cullViewProj ?? frame.viewProj);
 		const visible: Resident[] = [];
 		for (const chunk of this.resident.values())
 			if (
@@ -295,7 +305,7 @@ export class ChunkRenderer {
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
 
-		this.layer?.after?.(pass, frame);
+		for (const layer of this.layers) layer.after?.(pass, frame);
 
 		pass.end();
 		this.clock.resolve(encoder);

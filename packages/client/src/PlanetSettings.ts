@@ -196,6 +196,16 @@ export interface PlanetKnobs {
 	/** Whether the terrain paints its seams: face edges, chunk rims, aprons. */
 	seamOverlay: boolean;
 
+	/**
+	 * Whether the camera that decides what to draw is held where it is.
+	 *
+	 * On, the level of detail and the frustum cull go on reading the place and
+	 * the direction the camera had at the moment it was turned on, while the
+	 * camera itself keeps moving. Flying out of that frozen view is then the
+	 * only way to see where its edges fell.
+	 */
+	freezeView: boolean;
+
 	/** Seconds in a day. */
 	dayLength: number;
 
@@ -242,6 +252,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	detail: 2,
 	apron: true,
 	seamOverlay: false,
+	freezeView: false,
 	dayLength: 240,
 	paused: false,
 	timeOfDay: 0.5,
@@ -356,6 +367,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
 	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
+	freezeView: { ...TOGGLE, rebuilds: false },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },

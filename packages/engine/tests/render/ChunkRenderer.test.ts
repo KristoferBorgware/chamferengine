@@ -61,7 +61,7 @@ describe("what a frame encodes", () => {
 		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
-		renderer.layer = sky;
+		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
 		renderer.render(FRAME);
@@ -87,7 +87,7 @@ describe("what a frame encodes", () => {
 		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
-		renderer.layer = sky;
+		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
 		renderer.render(FRAME);
@@ -120,6 +120,33 @@ describe("what a frame encodes", () => {
 		expect(gpu.draws().length).toBe(2);
 	});
 
+	it("culls against a frozen matrix while drawing with the live one", () => {
+		// The whole point of freezing a view: what is drawn is what *that*
+		// camera could see, from a camera that has since moved. Without this
+		// the decision is invisible, because flying out of it re-takes it.
+		const gpu = new RecordingGpu();
+		const ctx = gpu.context;
+		const renderer = new ChunkRenderer(ctx);
+		renderer.upload(mesh(1));
+
+		// Turned right round, away from the one chunk there is.
+		const turned = Mat4.perspective(1, 1.6, 0.1, 4000).multiply(
+			Mat4.lookAt(EYE, [0, 0, 2400], [0, 1, 0]),
+		);
+
+		renderer.render({
+			...FRAME,
+			viewProj: turned,
+			cullViewProj: VIEW_PROJ,
+		});
+		expect(renderer.drawn).toBe(1);
+
+		// The same frame with nothing frozen draws nothing, which is what says
+		// the frozen matrix was the one read.
+		renderer.render({ ...FRAME, viewProj: turned });
+		expect(renderer.drawn).toBe(0);
+	});
+
 	it("draws nothing but the sky when no chunk is resident", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
@@ -133,7 +160,7 @@ describe("what a frame encodes", () => {
 			AIR,
 		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
-		renderer.layer = sky;
+		renderer.layers = [sky];
 
 		renderer.render(FRAME);
 

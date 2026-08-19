@@ -5,6 +5,17 @@ export interface Frame {
 	readonly viewProj: Mat4;
 	readonly eye: readonly [number, number, number];
 
+	/**
+	 * The matrix to cull against, when that is not the one being drawn with.
+	 *
+	 * Normally absent, and then the view being drawn decides what is in it.
+	 * Setting it holds the cull at a camera the frame is no longer taken from,
+	 * so what is drawn is what *that* camera could see -- which is how the
+	 * decision itself is looked at, by flying out of the frozen view and
+	 * seeing where its edges fall.
+	 */
+	readonly cullViewProj?: Mat4 | undefined;
+
 	/** Unit direction toward the sun. */
 	readonly sun: readonly [number, number, number];
 
