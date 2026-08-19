@@ -8,7 +8,9 @@ const COLOR_SEED_OFFSET = 3;
 const SPECKLE = 0.06;
 
 /** The base color of each block type, as linear red, green and blue. */
-const BASE: Readonly<Record<number, readonly [number, number, number]>> = {
+export const BLOCK_COLORS: Readonly<
+	Record<number, readonly [number, number, number]>
+> = {
 	[BlockType.AIR]: [0, 0, 0],
 	[BlockType.STONE]: [0.42, 0.42, 0.45],
 	[BlockType.DIRT]: [0.36, 0.26, 0.17],
@@ -35,7 +37,7 @@ export function blockColor(
 	out: Float32Array,
 	at: number,
 ): void {
-	const base = BASE[block] ?? BASE[BlockType.STONE]!;
+	const base = BLOCK_COLORS[block] ?? BLOCK_COLORS[BlockType.STONE]!;
 	const noise =
 		hash3(face * 8191 + i, j, i ^ j, (seed + COLOR_SEED_OFFSET) | 0) - 0.5;
 	const shade = 1 + noise * 2 * SPECKLE;

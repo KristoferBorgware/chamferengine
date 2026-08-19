@@ -586,21 +586,35 @@ Violating any of these breaks the design. They are not tunable.
   `warpAmplitude: 0` is the plain field and **Warp scale** comes off the panel
   there. One file replaces four, and the shipped default world does not move:
   value noise's frequency multiplier is exactly 1.
-- **TWO ELEVATIONS CUT THE LAND INTO THREE BANDS** (`material`, doc 08). Grass
-  under the rock line, bare stone over it, one layer of snow over the snow line
-  — and over the rock line the soil is gone through its **whole** depth, so a
-  hillside that high is rock where it is cut into as well as where it is walked
-  on. Where the lines go was decided by how much land each band gets, not by
-  taste: land elevation over relief runs median `0.21`, 90th `0.51`, 99th `0.75`
-  on the shipped world, so the snow line at `0.72` leaves **1.5%** of land above
-  it — a speck — and a rock line at **`0.45`** puts 14.9% above it, giving rock
-  **13.4%** of the land. Both are fractions of relief, so the shares hold at any
-  stated height. **The rule this replaces was a slope**, and it carried a
-  `2.5 MB` field for one boolean test and read the **map cell's** gradient
-  rather than the block's; an elevation needs no field, because the column
-  already knows how high it stands. **The map and the world still disagree about
-  where the colors go** — the Ground ramp is absolute metres with rock at 300 m,
-  the world is fractions of relief — which is F-042 and not fixed.
+- **TWO ELEVATIONS CUT THE LAND INTO THREE BANDS, IN ABSOLUTE METRES**
+  (`GROUND_LINES`, `material`, doc 08). Water under 0, grass to **300 m**, bare
+  stone to **400 m**, snow over it — and over the rock line the soil is gone
+  through its **whole** depth, so a hillside that high is rock where it is cut
+  into as well as where it is walked on. **The metres are absolute because the
+  map is**: the Ground picture bands on the same 100 m grid, in the blocks'
+  **own colors**, so a color on the map names the block the world builds there.
+  Fractions of relief agreed at one relief and drifted everywhere else. What
+  absolute costs is that a low world never reaches the lines — at relief `300 m`
+  the ground tops out on the rock line and the world is **grass to its summit**
+  — so the shipped Relief is **600 m**, giving 89.2% grass, 8.1% rock, 2.7%
+  snow; 450 m gives 97.3/2.6/0.1 and 750 m gives 79.8/11.9/8.3. **The rule this
+  replaces was a slope**, carrying a `2.5 MB` field for one boolean test and
+  reading the **map cell's** gradient rather than the block's; an elevation
+  needs no field, because the column already knows how high it stands.
+- **A BLENDED RAMP INVENTS BLOCKS THAT DO NOT EXIST** (`CoarseRamp.hard`). The
+  Ground picture is bands, not a gradient: every pixel of it is a block, so a
+  color mixed from two stops is a material nothing builds. **Water is one band
+  because water is one block** — depth is how much of it a look passes through,
+  not a second material, so shading it drew sea floors the world does not have,
+  and Height is the picture depth is read from. `Height` keeps its blend,
+  because it answers a different question.
+- **A LINK COULD BUILD WHAT A SLIDER COULD NOT REACH** (`fromParams`). Every
+  slider's ends move with the rest of the draft, and `fromParams` went straight
+  past that — while **Copy link** is how a world travels. A query string naming
+  a crust too shallow for its own sea built a planet whose ocean columns sat
+  **entirely under the bottom of the world**: no blocks, nothing drawn, space
+  where the water should be, and low land missing with it. `fromParams` settles
+  now; `problems()` stays for what settling cannot reach.
 - **A row with no meaning comes off the panel, it is not greyed out**
   (`Knob.shownWhen`, `ParameterPanel`). **Spin** shows only under psrd,
   **Cells** and **Jitter** only under cellular, **Warp scale** only above a warp

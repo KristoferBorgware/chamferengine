@@ -51,7 +51,8 @@ export { TERRAIN_DEFAULTS } from "./terrain/TerrainOptions.js";
 export { BlockType, isSolid, isTranslucent } from "./terrain/BlockType.js";
 export { TerrainGenerator } from "./terrain/TerrainGenerator.js";
 export { caveDensity } from "./terrain/caveDensity.js";
-export { blockColor } from "./terrain/blockColor.js";
+export { blockColor, BLOCK_COLORS } from "./terrain/blockColor.js";
+export { GROUND_LINES } from "./terrain/GROUND_LINES.js";
 
 export { ChunkAddress } from "./chunk/ChunkAddress.js";
 export { Chunk } from "./chunk/Chunk.js";

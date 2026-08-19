@@ -6,11 +6,20 @@ import type { CoarseStage } from "./CoarseStage.js";
  *
  * `low` and `high` are the two ends of the ramp. `stops` are the colors it
  * passes through, as `[r, g, b]` in `0` to `1`, evenly spaced between them.
+ *
+ * `hard` decides what sits between two stops. Without it a value is mixed from
+ * the two it falls between, which reads elevation well and blurs every edge.
+ * With it each stop owns an equal band and there is no mixing at all -- for a
+ * picture whose colors are materials rather than heights, where a blend is a
+ * color the world cannot build. A hard ramp cuts `low` to `high` into
+ * `stops.length` bands, and everything under the first or over the last takes
+ * the end band.
  */
 export interface CoarseRamp {
 	readonly low: number;
 	readonly high: number;
 	readonly stops: readonly (readonly [number, number, number])[];
+	readonly hard?: boolean;
 }
 
 /**

@@ -1,3 +1,5 @@
+import { GROUND_LINES } from "./GROUND_LINES.js";
+
 /**
  * The knobs on the terrain, all of them defaulted.
  *
@@ -14,10 +16,8 @@ export interface TerrainOptions {
 	/**
 	 * Metres above sea level at which the soil runs out and bare rock shows.
 	 *
-	 * Under the snow line and over this one is the band that reads as a
-	 * mountainside rather than a green swell. It has to leave the grass most
-	 * of the land: measured on the shipped world, `0.45` of the relief puts
-	 * **14.9%** of land above it, against **1.5%** above the snow line.
+	 * Between this and the snow line is the band that reads as a mountainside
+	 * rather than a green swell.
 	 */
 	readonly rockLine?: number;
 
@@ -39,8 +39,8 @@ export interface TerrainOptions {
 
 export const TERRAIN_DEFAULTS = {
 	soilDepth: 4,
-	rockLine: 150,
-	snowLine: 240,
+	rockLine: GROUND_LINES.rock,
+	snowLine: GROUND_LINES.snow,
 	caves: false,
 	caveScale: 24,
 	caveThreshold: 0.12,

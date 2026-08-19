@@ -16,7 +16,20 @@ export function rampColor(
 ): [number, number, number] {
 	const raw =
 		field.scale === "log" ? Math.log(1 + Math.max(0, value)) : value;
-	const { low, high, stops } = field.ramp;
+	const { low, high, stops, hard } = field.ramp;
+	// A banded ramp takes one stop whole: its colors are the blocks the world
+	// builds, and a mix of two of them is a block that does not exist.
+	if (hard) {
+		const band = Math.min(
+			stops.length - 1,
+			Math.max(
+				0,
+				Math.floor(((raw - low) / (high - low)) * stops.length),
+			),
+		);
+		const c = stops[band]!;
+		return [255 * c[0], 255 * c[1], 255 * c[2]];
+	}
 	const t =
 		Math.min(1, Math.max(0, (raw - low) / (high - low))) *
 		(stops.length - 1);

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+	BLOCK_COLORS,
+	BlockType,
 	COARSE_FIELDS,
 	COARSE_STAGES,
 	CoarseMap,
+	GROUND_LINES,
 	coarseFieldOf,
 	flatCoarseMap,
 } from "chamfer/generation";
@@ -68,15 +71,48 @@ describe("COARSE_FIELDS", () => {
 			expect(COARSE_STAGES, field.id).toContain(field.stage);
 	});
 
-	it("puts sea level on a stop of a ramp, not between two", () => {
-		// A ramp measured in metres above sea level and symmetric about it
-		// lands its middle stop at zero when the count is odd, so the waterline
-		// is one named color. An even count puts it halfway between two, which
-		// is where the last few metres of water drew as beach.
+	it("puts sea level where a ramp changes color, not part way through one", () => {
+		// The waterline is the one place a reader has to be able to trust, and
+		// a ramp that runs a colour across it draws the last few metres of
+		// water as beach. A blended ramp lands it on a stop, which needs an odd
+		// count over a symmetric range; a banded one lands it on a band edge.
 		for (const field of COARSE_FIELDS) {
-			expect(field.ramp.low, field.id).toBe(-field.ramp.high);
-			expect(field.ramp.stops.length % 2, field.id).toBe(1);
+			const { low, high, stops, hard } = field.ramp;
+			if (!hard) {
+				expect(low, field.id).toBe(-high);
+				expect(stops.length % 2, field.id).toBe(1);
+				continue;
+			}
+			const width = (high - low) / stops.length;
+			expect(-low / width, field.id).toBe(Math.round(-low / width));
 		}
+	});
+
+	it("bands the ground picture on the elevations the world builds to", () => {
+		// The map and the world are two drawings of one thing, and colour is
+		// what both of them draw. They agree only if the band edges are the
+		// same numbers the materials are chosen by, so a colour moved on one
+		// side without the other is caught here rather than by standing on
+		// white ground beside a green pixel.
+		const ground = COARSE_FIELDS.find((f) => f.id === "ground")!;
+		const { low, high, stops } = ground.ramp;
+		expect(ground.ramp.hard).toBe(true);
+		const width = (high - low) / stops.length;
+		const bandOf = (metres: number): number => (metres - low) / width;
+		for (const line of [0, GROUND_LINES.rock, GROUND_LINES.snow])
+			expect(bandOf(line), `${line} m`).toBe(Math.round(bandOf(line)));
+
+		// And the colour of each land band is the block that band builds.
+		expect(stops[bandOf(GROUND_LINES.rock) - 1]).toEqual(
+			BLOCK_COLORS[BlockType.GRASS],
+		);
+		expect(stops[bandOf(GROUND_LINES.rock)]).toEqual(
+			BLOCK_COLORS[BlockType.STONE],
+		);
+		expect(stops[bandOf(GROUND_LINES.snow)]).toEqual(
+			BLOCK_COLORS[BlockType.SNOW],
+		);
+		expect(bandOf(GROUND_LINES.snow)).toBe(stops.length - 1);
 	});
 
 	it("names each picture once", () => {

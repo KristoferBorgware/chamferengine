@@ -1,4 +1,6 @@
 import type { CoarseField } from "./CoarseField.js";
+import { BLOCK_COLORS } from "../terrain/blockColor.js";
+import { BlockType } from "../terrain/BlockType.js";
 
 /**
  * Every picture the editor can draw of a coarse map, in the order it lists
@@ -6,9 +8,11 @@ import type { CoarseField } from "./CoarseField.js";
  *
  * **Two pictures of one field.** The map carries a single array — metres above
  * sea level — and these are two ways of looking at it that stop at different
- * points in the build. Height is the ground the noise makes, before water has
- * touched it, so it redraws without waiting for the slow step. Ground is the
- * finished surface in the colours the world is built from.
+ * points in the build. Height is a grey ramp over the ground the noise makes,
+ * before water has touched it, so it redraws without waiting for the slow step
+ * and reads elevation everywhere. Ground is the finished surface in the blocks
+ * the world builds from, in bands rather than a blend, because a block is one
+ * thing or another.
  */
 export const COARSE_FIELDS: readonly CoarseField[] = [
 	{
@@ -37,26 +41,35 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 		stage: "erosion",
 		label: "Ground",
 		scale: "linear",
-		// Absolute metres, not a range that stretches to fit whatever this
-		// planet happens to hold. A ramp scaled to the field would draw every
-		// world the same and make Relief a knob with no picture, which is the
-		// complaint that removed the height multiplier: the point of stating a
-		// height in metres is that 100 m of it looks different from 600 m.
-		// Every 100 m is a stop, so the shipped 300 m of relief reaches bare
-		// rock and raising it walks the peaks up into snow.
+		// **Bands, not a blend, and every band is one of the world's blocks.**
+		// This picture answers "what is the ground made of here", and the world
+		// answers that with four blocks divided by three elevations -- so a
+		// color between two of them is a block nothing builds. The bands run on
+		// a 100 m grid so all three elevations land on edges: water under sea
+		// level, grass to 300 m, bare stone from 300 to 400, snow over 400.
+		//
+		// **Water is one band because water is one block.** Depth is not a
+		// second material -- what makes deep water darker than shallow is how
+		// much of it a look passes through -- so shading it would draw sea
+		// floors this world does not have. Height is the picture depth is read
+		// from.
+		//
+		// Absolute metres rather than a range stretched to fit whatever this
+		// planet holds. A ramp scaled to the field would draw every world the
+		// same and make Relief a knob with no picture; stated in metres, a
+		// 300 m world is green to its summit and raising Relief walks its peaks
+		// up into rock and then snow.
 		ramp: {
-			low: -400,
-			high: 400,
+			low: -100,
+			high: 500,
+			hard: true,
 			stops: [
-				[0.04, 0.08, 0.28],
-				[0.1, 0.24, 0.55],
-				[0.22, 0.46, 0.76],
-				[0.42, 0.68, 0.88],
-				[0.87, 0.83, 0.6],
-				[0.31, 0.56, 0.26],
-				[0.52, 0.5, 0.3],
-				[0.47, 0.44, 0.41],
-				[0.98, 0.98, 1.0],
+				BLOCK_COLORS[BlockType.WATER]!,
+				BLOCK_COLORS[BlockType.GRASS]!,
+				BLOCK_COLORS[BlockType.GRASS]!,
+				BLOCK_COLORS[BlockType.GRASS]!,
+				BLOCK_COLORS[BlockType.STONE]!,
+				BLOCK_COLORS[BlockType.SNOW]!,
 			],
 		},
 	},

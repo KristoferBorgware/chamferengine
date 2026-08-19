@@ -4,7 +4,7 @@ import type {
 	NoiseBasis,
 	TerrainOptions,
 } from "chamfer/generation";
-import { CoarseMap, seedFromString } from "chamfer/generation";
+import { CoarseMap, GROUND_LINES, seedFromString } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import type { CloudDeckSetup } from "chamfer/sky";
@@ -215,7 +215,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	spin: 0,
 	jitter: 1,
 	cellFeature: "f1",
-	relief: 300,
+	relief: 600,
 	seaDepth: 120,
 	ridge: 0.6,
 	erosion: 0,
@@ -719,10 +719,9 @@ export class PlanetSettings {
 	}
 
 	terrainOptions(): TerrainOptions {
-		// Both lines are fractions of the relief, so the bands hold the same
-		// share of the land whatever height the world is stated at. Rock takes
-		// 13.4% of the land on the shipped world and snow the 1.5% above it.
-		return { rockLine: 0.45 * this.relief, snowLine: 0.72 * this.relief };
+		// The two are absolute metres, the same metres the Ground map's bands
+		// are drawn on, so a colour on the map is the block the world builds.
+		return { rockLine: GROUND_LINES.rock, snowLine: GROUND_LINES.snow };
 	}
 
 	/**
@@ -965,7 +964,20 @@ export class PlanetSettings {
 		return out;
 	}
 
-	/** Read a world out of a query string, falling back on the defaults. */
+	/**
+	 * Read a world out of a query string, falling back on the defaults.
+	 *
+	 * **What comes back is settled.** The panel moves each slider's own ends
+	 * with the rest of the draft, so a combination that cannot be built cannot
+	 * be dragged to — and a link went straight past that, because **Copy link**
+	 * is how a world travels and a hand-edited one is how it gets changed. A
+	 * query string naming a crust too shallow for its own sea built a planet
+	 * whose ocean columns were entirely under the bottom of the world: no
+	 * blocks, nothing drawn, space where the water should be. Settling moves
+	 * each value to the nearest one that can be built rather than building the
+	 * one that cannot, and {@link problems} stays for whatever settling cannot
+	 * reach.
+	 */
 	static fromParams(params: URLSearchParams): PlanetSettings {
 		const knobs: Partial<PlanetKnobs> = {};
 		for (const key of Object.keys(
@@ -986,7 +998,9 @@ export class PlanetSettings {
 					(knobs as unknown as Record<string, number>)[key] = value;
 			}
 		}
-		return new PlanetSettings(knobs);
+		return new PlanetSettings(
+			PlanetSettings.settle({ ...PLANET_DEFAULTS, ...knobs }),
+		);
 	}
 
 	/**

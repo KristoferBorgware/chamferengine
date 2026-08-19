@@ -378,3 +378,30 @@ describe("a knob that did not get what it asked for says so", () => {
 		expect(field.crustDepth).toBe(1024);
 	});
 });
+
+describe("a world read from a link", () => {
+	it("is settled, so a link cannot build what a slider cannot reach", () => {
+		// A crust too shallow for its own sea puts every ocean column entirely
+		// under the bottom of the world: no blocks, nothing drawn, space where
+		// the water should be. The panel cannot be dragged there; a link went
+		// straight past it, and Copy link is how a world travels.
+		const settings = PlanetSettings.fromParams(
+			new URLSearchParams(
+				"blockSize=1&relief=820&seaDepth=100&crustMetres=400",
+			),
+		);
+		expect(
+			settings.crustDepth * settings.knobs.blockSize,
+		).toBeGreaterThanOrEqual(settings.groundSpan);
+		expect(settings.problems()).toEqual([]);
+	});
+
+	it("leaves a world it can build exactly as the link states it", () => {
+		const query = "seed=elsewhere&relief=240&seaDepth=80&landFraction=0.4";
+		const settings = PlanetSettings.fromParams(new URLSearchParams(query));
+		expect(settings.knobs.seed).toBe("elsewhere");
+		expect(settings.knobs.relief).toBe(240);
+		expect(settings.knobs.seaDepth).toBe(80);
+		expect(settings.knobs.landFraction).toBe(0.4);
+	});
+});

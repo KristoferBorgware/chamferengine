@@ -51,7 +51,43 @@ describe("paintCoarseField", () => {
 						(px[at * 4 + 1]! << 8) |
 						px[at * 4 + 2]!,
 				);
-			expect(seen.size, `${which.key} drew one color`).toBeGreaterThan(2);
+			// A banded ramp draws as many colors as the world has blocks in
+			// reach, and a world whose ground stops short of the rock line has
+			// two: land and sea. A blended one has a color per shade of height,
+			// so it is held to a picture rather than to a pair.
+			expect(
+				seen.size,
+				`${which.id} drew one color`,
+			).toBeGreaterThanOrEqual(which.ramp.hard ? 2 : 20);
+		}
+	});
+
+	it("draws a banded picture only in colors the world builds", () => {
+		// The whole reason the Ground picture is banded: every pixel of it is a
+		// block, so a color that is not one of the ramp's own stops is a block
+		// that does not exist. Averaging cells into a pixel is what would
+		// invent one, and it happens before the ramp rather than after it.
+		const banded = COARSE_FIELDS.filter((f) => f.ramp.hard);
+		expect(banded.length).toBeGreaterThan(0);
+		for (const which of banded) {
+			const allowed = new Set(
+				which.ramp.stops.map(
+					(c) =>
+						(Math.round(255 * c[0]) << 16) |
+						(Math.round(255 * c[1]) << 8) |
+						Math.round(255 * c[2]),
+				),
+			);
+			const px = paint(which);
+			for (let at = 0; at < W * H; at++)
+				expect(
+					allowed.has(
+						(px[at * 4]! << 16) |
+							(px[at * 4 + 1]! << 8) |
+							px[at * 4 + 2]!,
+					),
+					`${which.id} pixel ${at}`,
+				).toBe(true);
 		}
 	});
 
