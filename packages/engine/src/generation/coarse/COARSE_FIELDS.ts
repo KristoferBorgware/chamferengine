@@ -16,7 +16,6 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 		key: "height",
 		stage: "metres",
 		label: "Height",
-		says: "The ground the noise makes, in metres above sea level, before any water has cut into it. This is the picture the octave knobs are turned against, and it redraws without waiting for erosion.",
 		scale: "linear",
 		// Grey, and absolute metres like the other one, so Relief brightens it
 		// rather than being normalised away. Sea level is the middle stop.
@@ -37,7 +36,6 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 		key: "height",
 		stage: "erosion",
 		label: "Ground",
-		says: "The finished surface, after the water has cut into it, in the colours the world is built from. Zero is the waterline, so everything blue is sea and everything else is land.",
 		scale: "linear",
 		// Absolute metres, not a range that stretches to fit whatever this
 		// planet happens to hold. A ramp scaled to the field would draw every

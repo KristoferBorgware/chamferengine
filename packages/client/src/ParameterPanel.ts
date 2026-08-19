@@ -6,9 +6,6 @@ interface Knob {
 	readonly key: keyof PlanetKnobs;
 	readonly label: string;
 
-	/** What turning it does, in one or two sentences, under the slider. */
-	readonly says: string;
-
 	readonly digits?: number;
 
 	/**
@@ -24,25 +21,13 @@ interface Knob {
 	readonly map?: boolean;
 
 	/**
-	 * What the world actually got, when that is not what was asked for.
+	 * What the world got, when that is not what was asked for, as numbers.
 	 *
-	 * Several of these numbers are requests: a puff size is answered as a
-	 * lattice level, a coarse cell too, and a radius moves to whatever makes
-	 * the block size exact. When the answer is far from the question the
-	 * slider looks broken -- asking for an 8 m puff and receiving 192 m reads
-	 * as a knob that does nothing. This says so on the row rather than leaving
-	 * it to be found in the readout at the bottom.
+	 * Several of these are requests rather than settings: a puff size and a map
+	 * cell are both answered as a lattice level, and a radius moves to whatever
+	 * makes the block size exact.
 	 */
 	readonly given?: (settings: PlanetSettings) => string | null;
-
-	/**
-	 * What moves this slider's own ends, named so the wall says whose it is.
-	 *
-	 * A slider that stops short of its printed range has been narrowed by
-	 * another knob, and "why does this stop here" is the question that costs
-	 * the most time in a panel like this one.
-	 */
-	readonly boundBy?: string;
 
 	/** Named choices, for a knob that is one of a few things rather than a number. */
 	readonly choices?: readonly {
@@ -54,7 +39,6 @@ interface Knob {
 /** One titled run of rows. */
 interface Group {
 	readonly title: string;
-	readonly note: string;
 
 	/** Whether the group starts folded away. */
 	readonly folded?: boolean;
@@ -66,23 +50,18 @@ interface Group {
  * What the panel shows, grouped by what a knob decides and ordered by how much
  * of the world it moves.
  *
- * **Every knob that decides where the ground is now moves the map picture, and
- * the ones that did not are gone.** There used to be a height multiplier, a
- * detail amplitude and a detail feature size sitting under the map, moving the
- * world without moving the picture -- so setting any of them meant walking the
- * planet to find out what had happened, and turning one always meant turning
- * another back. The map is the terrain now, so the first group is the terrain.
+ * **No prose.** A row is a label, a number and its unit, and under it the
+ * bounds the rest of the draft leaves it -- nothing that has to be read. Every
+ * knob here moves a picture, so the picture is the explanation.
  */
 const GROUPS: Group[] = [
 	{
 		title: "Where the land is",
-		note: "The height map, which is the whole of the terrain. Every knob here moves the picture beside it, and nothing moves the ground without moving the picture.",
 		knobs: [
 			{
 				key: "landform",
 				map: true,
 				label: "Landform",
-				says: "What the octaves are laid on. Noise is the octave stack on its own, cut at sea level. Warped pushes the sample point about first, folding the coastline without changing what it is made of. Grown scatters seeds and grows land level by level, which is the most ragged and the most islands. Plates cuts the surface into drifting plates and raises a range where two close, so a mountain is somewhere for a reason.",
 				choices: [
 					{ value: "noise", label: "Noise" },
 					{ value: "warped", label: "Warped" },
@@ -96,27 +75,20 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Noise seed",
 				digits: 0,
-				says: "Which world the noise draws. It reaches nothing but the ground, so a world can be re-rolled without moving the block size, the chunk grid or anything a cell address is made of.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "noiseScale",
-				boundBy:
-					"The widest feature has to be wider than two map cells.",
 				map: true,
 				label: "Noise scale",
 				digits: 0,
-				says: "How wide the widest feature is. This is the continent knob: at a few thousand metres the land comes in large masses, and turning it down breaks the same seed into islands.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "octaves",
-				boundBy:
-					"Map cell and Noise scale decide how many the map can draw.",
 				map: true,
 				label: "Octaves",
 				digits: 0,
-				says: "How many times the noise is added to itself at a narrower scale. One is a smooth rolling field; each one after that adds a layer of finer ground without making the world taller. The narrowest one has to be wider than two map cells or the map cannot draw it, and the panel refuses that rather than building ground nobody can see.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -124,7 +96,6 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Persistence",
 				digits: 2,
-				says: "How much of its height each octave keeps against the one above it. Low leaves a smooth field with a whisper of detail; near one gives every scale the same say and the ground turns to rubble.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -132,7 +103,6 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Lacunarity",
 				digits: 2,
-				says: "How much narrower each octave is than the one above it. Two is the usual: every octave is half the width and half the height of the last. Higher spreads the octaves further apart and leaves a gap between the landforms and the detail.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -140,17 +110,13 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Land",
 				digits: 2,
-				says: "How much of the surface is left above the sea. Sea level is chosen to hit it, so lowering this floods the world rather than lowering the ground.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "relief",
-				boundBy:
-					"Crust reaches follows this, and the layer field stops at 1,024 layers.",
 				map: true,
 				label: "Relief",
 				digits: 0,
-				says: "How far the tallest ground stands above sea level, in metres. The map is scaled so its highest point is exactly this, and the map's colors are absolute metres — so raising it walks the picture up through green, brown, rock and snow. It is also the whole of the height a player climbs.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -158,7 +124,6 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Erosion",
 				digits: 2,
-				says: "How much water is run over the ground. Droplets walk downhill, cut where they are moving fast and drop what they carry where they slow, which sharpens the ridges and grades the valleys. Zero leaves the noise exactly as it fell.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -166,7 +131,6 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Offset X",
 				digits: 0,
-				says: "Slides the sample point through the noise field. Another way to reach a different world at the same settings, and the pair of them is a plane you can walk across looking for one you like.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -174,220 +138,174 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Offset Y",
 				digits: 0,
-				says: "The other axis of the same slide.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "coarseMap",
 				map: true,
 				label: "Height map",
-				says: "Whether the ground exists at all. Off is a smooth sphere at sea level, which is the only state the level of detail can be judged in. Every other knob in this group stops mattering while it is off.",
 				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
 	{
 		title: "How finely it is drawn",
-		note: "How many cells the height map holds. It decides how much of the ground the map can carry, and the world carries exactly what the map does.",
 		folded: true,
 		knobs: [
 			{
 				key: "coarseSpacing",
-				boundBy: "A map cell has to be coarser than a block.",
 				map: true,
 				label: "Map cell",
 				digits: 0,
-				says: "Metres between two samples of the height map. Between them the ground is a straight ramp, so this is the size of the smallest thing the world can have. Halving it costs four times the world creation time and four times the memory. A wide radius and a fine cell together are capped coarser than asked rather than building a map hundreds of millions of cells wide.",
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 				given: (s) =>
 					Math.abs(s.coarseCell - s.knobs.coarseSpacing) < 1
 						? null
-						: s.coarseLevelCapped
-							? `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. Level 9 is the finest map anyone has built here, 2,621,442 cells and 10 MB a field, and this radius asks past it. Lower Radius to go finer.`
-							: `you get ${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}. A cell is a level, so it lands on the nearest one.`,
+						: `${s.coarseCell.toFixed(0)} m, level ${s.coarseLevel}`,
 			},
 			{
 				key: "radius",
-				boundBy:
-					"Block size and the 64-bit cell address decide how far it goes.",
 				map: true,
 				label: "Radius",
 				digits: 0,
-				says: "How big the planet is. Sets how far you can see, which goes as the square root of this, and how long a walk round takes, which goes as this. With the block size it also sets the subdivision depth, and the depth is two bits of every cell address.",
 				given: (s) =>
 					Math.abs(s.radius - s.knobs.radius) < 1
 						? null
-						: `you get ${s.radius.toFixed(0)} m. Block size is exact and the radius absorbs the rounding, so it lands wherever depth ${s.depth} puts it.`,
+						: `${s.radius.toFixed(0)} m, depth ${s.depth}`,
 			},
 		],
 	},
 	{
 		title: "The cell grid",
-		note: "How big a cell is, how many make a chunk, and how deep the world runs. The first two decide the cell address.",
 		folded: true,
 		knobs: [
 			{
 				key: "blockSize",
-				boundBy:
-					"Radius and the 64-bit cell address decide how small it goes.",
 				label: "Block size",
 				digits: 2,
-				says: "How wide one cell is. Fixed for the life of the world. The radius moves to whatever makes this size exact, so the number above is a request and the readout below is what you get.",
 			},
 			{
 				key: "chunkCells",
-				boundBy: "A chunk has to be smaller than a whole face.",
 				label: "Chunk",
 				digits: 0,
-				says: "How many cells along one edge of a chunk, which is the unit that is generated, meshed, stored and sent. Smaller chunks redraw less when one block changes and cost more of everything else. It does not appear in a cell address.",
 			},
 			{
 				key: "crustMetres",
-				boundBy:
-					"It follows Relief and Land, and the layer field stops at 1,024 layers.",
 				label: "Crust reaches",
 				digits: 0,
-				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
-				given: (s) => {
-					const cap = s.crustCap;
-					if (cap === "asked") return null;
-					const got = s.crustDepth * s.knobs.blockSize;
-					return cap === "taper"
-						? `you get ${got.toFixed(0)} m, ${s.crustDepth} layers. A column narrows going down and pinches shut there, so nothing deeper exists to name.`
-						: `you get ${got.toFixed(0)} m, ${s.crustDepth} layers. The layer field is ten bits, so 1,024 layers is every layer the address can name. Raise Block size to reach further down.`;
-				},
+				given: (s) =>
+					s.crustCap === "asked"
+						? null
+						: `${(s.crustDepth * s.knobs.blockSize).toFixed(0)} m, ${s.crustDepth} layers`,
 			},
 		],
 	},
 	{
 		title: "Paused",
-		note: "Builds the world again. What is left is the lattice and nothing else, which is the only state the level of detail can be judged in.",
 		folded: true,
 		knobs: [
 			{
 				key: "plain",
 				label: "Plain planet",
-				says: "Holds nine things off at once: the height map, water, the air, the day, the clouds, the moon, the stars, and the light moving at all. What is left is a smooth green sphere of cells lit as at noon. Nothing is removed -- every knob below keeps its setting and comes back when this is unchecked.",
 			},
 		],
 	},
 	{
 		title: "The air",
-		note: "How thick the sky is and how far up it reaches.",
 		folded: true,
 		knobs: [
 			{
 				key: "atmosphereTop",
 				label: "Air reaches",
 				digits: 0,
-				says: "How high the air goes. On a planet this size correctly scaled air is 3,748 times too thin to see, so this is an invented number chosen by eye rather than a physical one.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "zenithDepth",
 				label: "Depth overhead",
 				digits: 3,
-				says: "How thick the air reads looking straight up. Earth is 0.241.",
 				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
 	{
 		title: "Time",
-		note: "How long a day is, and where in one the light stands.",
 		folded: true,
 		knobs: [
 			{
 				key: "dayLength",
 				label: "Day",
 				digits: 0,
-				says: "Seconds in a day. Below about two hours a walking player outruns the sunset and can hold it in place by walking west.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "paused",
 				label: "Pause",
-				says: "Stops the sun and the moon exactly where they are. Unchecking resumes from there, rather than jumping to wherever the clock would have reached.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "timeOfDay",
 				label: "Time of day",
 				digits: 2,
-				says: "Where in the day to freeze, 0 at midnight to 1 at the next. Moving this pauses, the same as checking Pause.",
 				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
 	{
 		title: "The clouds",
-		note: "Where the two decks sit, and how a puff is shaped.",
 		folded: true,
 		knobs: [
 			{
 				key: "cloudsDrawn",
 				label: "Draw the clouds",
-				says: "Whether the two decks are drawn. Off empties the buffer and stops the pass, and the decks keep being built and turned by the wind, so turning it back on shows them where they would have been. To stop building them as well, use Plain planet.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "lowDeck",
-				boundBy: "It stays under High deck.",
 				label: "Low deck",
 				digits: 0,
-				says: "How high the lower cloud deck sits, from the planet's own surface.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "highDeck",
-				boundBy: "It stays over Low deck.",
 				label: "High deck",
 				digits: 0,
-				says: "How high the upper deck sits. Two decks read as two layers of weather rather than one.",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "cloudPuff",
 				label: "Puff",
 				digits: 0,
-				says: "How wide one lump of cloud is. Clouds borrow the same hexagon lattice as the ground, higher up, so this is asked for in metres and answered as a level. Both decks and the shell spacing follow it. A puff fine enough, combined with enough shells, is capped coarser than asked rather than filling a buffer the renderer cannot hold.",
 				enabledWhen: (k) => !k.plain,
 				given: (s) =>
 					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
 						? null
-						: s.cloudLevelCapped
-							? `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. ${s.knobs.cloudShells} shells hold it there, because a deck is capped at 700,000 lattice points times shells. Lower Shells, or this slider does nothing.`
-							: `you get ${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}. A puff is a level, so it lands on the nearest one.`,
+						: `${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}`,
 			},
 			{
 				key: "cloudShells",
 				label: "Shells",
 				digits: 0,
-				says: "How many hexagons deep a deck runs. One is a single flat-topped layer; a thicker point in the horizontal pattern reliably fills more of its shells, so raising this is what turns a haze into billows. Raising it also lowers how fine Puff is allowed to go, for the same reason.",
 				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
 	{
 		title: "Drawing",
-		note: "What the renderer does with the world once it exists.",
 		folded: true,
 		knobs: [
 			{
 				key: "detail",
 				label: "Full detail to",
 				digits: 1,
-				says: "How many of its own widths away a chunk goes before it drops to the next coarser level. Higher holds more chunks at full detail, which costs generation time and memory rather than frame time.",
 			},
 			{
 				key: "apron",
 				label: "Apron",
-				says: "Whether a chunk also draws the ring of cells just beyond its rim. Two levels tile their shared boundary with hexagons of two sizes and those do not interlock, so without it strips of ground belong to nobody and the sky shows through the planet. Off shows the holes.",
 			},
 			{
 				key: "seamOverlay",
 				label: "Seam overlay",
-				says: "Paints the joins instead of hiding them: yellow cells sit on a face edge, blue cells on a chunk boundary, and orange is the apron ring a chunk draws past its own rim. For finding where a hole came from, not for playing under.",
 			},
 		],
 	},
@@ -501,10 +419,6 @@ export class ParameterPanel {
 			head.appendChild(toggle);
 			section.appendChild(head);
 
-			const note = document.createElement("p");
-			note.textContent = group.note;
-			section.appendChild(note);
-
 			for (const knob of group.knobs) {
 				const row = this.row(knob);
 				this.rows.push(row);
@@ -559,8 +473,7 @@ export class ParameterPanel {
 			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
 			(toggle ? "" : "<b></b>") +
 			`</label><input type="${toggle ? "checkbox" : "range"}">` +
-			"<u></u>" +
-			`<small>${knob.says}</small>`;
+			"<u></u>";
 
 		const input = wrap.querySelector("input")!;
 		if (toggle) {
@@ -620,20 +533,16 @@ export class ParameterPanel {
 		return { knob, wrap, input, write };
 	}
 
-	/** Why a slider stops short of its printed range, or nothing if it does not. */
+	/** The ends this slider has been pulled to, when they are not its own. */
 	private wallOf(knob: Knob, range: KnobRange): string | null {
 		const live = this.settings.rangeFor(knob.key);
 		const unit = range.unit ? ` ${range.unit}` : "";
-		const digits = knob.digits ?? 0;
-		const say = (v: number): string => `${v.toFixed(digits)}${unit}`;
-		const by = knob.boundBy ? ` ${knob.boundBy}` : "";
-		if (live.high < range.high && live.low > range.low)
-			return `held between ${say(live.low)} and ${say(live.high)} here.${by}`;
-		if (live.high < range.high)
-			return `stops at ${say(live.high)} here.${by}`;
-		if (live.low > range.low)
-			return `starts at ${say(live.low)} here.${by}`;
-		return null;
+		const say = (v: number): string =>
+			`${v.toFixed(knob.digits ?? 0)}${unit}`;
+		const parts: string[] = [];
+		if (live.low > range.low) parts.push(`min ${say(live.low)}`);
+		if (live.high < range.high) parts.push(`max ${say(live.high)}`);
+		return parts.length > 0 ? parts.join(" · ") : null;
 	}
 
 	/** A change was made: either hand it over now, or wait for the button. */
@@ -645,7 +554,7 @@ export class ParameterPanel {
 			`<label>${knob.label}` +
 			' <i title="needs a rebuild">&#9679;</i>' +
 			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
-			`</label><select></select><small>${knob.says}</small>`;
+			`</label><select></select>`;
 		const select = wrap.querySelector("select")!;
 		for (const choice of knob.choices!) {
 			const option = document.createElement("option");

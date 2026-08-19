@@ -46,7 +46,6 @@ export class MapPanel {
 
 	/** Where a group of sliders sits, once one has been handed over. */
 	private readonly knobs: HTMLElement;
-	private readonly says: HTMLElement;
 	private readonly worker: Worker;
 	private readonly onApply: (settings: PlanetSettings) => void;
 
@@ -106,7 +105,6 @@ export class MapPanel {
 				this.field = field;
 				for (const other of list.children) other.classList.remove("on");
 				button.classList.add("on");
-				this.says.textContent = field.says;
 				// Each pane names how far down the build it needs. Going deeper
 				// runs the steps between; coming back up runs the one this pane
 				// stops at, so the picture is the ground that pane describes
@@ -163,17 +161,6 @@ export class MapPanel {
 		this.status = document.createElement("div");
 		this.status.className = "maps-status";
 		body.appendChild(this.status);
-
-		this.says = document.createElement("p");
-		this.says.className = "maps-says";
-		this.says.textContent = this.field.says;
-		body.appendChild(this.says);
-
-		const hint = document.createElement("p");
-		hint.className = "maps-says";
-		hint.textContent =
-			"Drag the ball to turn it. Right-click it to stand somewhere.";
-		body.appendChild(hint);
 
 		const bar = document.createElement("div");
 		bar.className = "maps-bar";

@@ -96,13 +96,6 @@ body {
 	color: #8b93a7;
 	margin: 14px 0 2px;
 }
-.knobs section p,
-.maps-knobs section p {
-	font-size: 11px;
-	color: #6d768c;
-	line-height: 1.5;
-	margin-bottom: 6px;
-}
 .knob {
 	margin-bottom: 11px;
 }
@@ -129,13 +122,6 @@ body {
 	margin-top: 1px;
 }
 
-.knob small {
-	display: block;
-	font-size: 10.5px;
-	color: #6d768c;
-	line-height: 1.45;
-	margin-top: 1px;
-}
 .knob label {
 	display: flex;
 	align-items: baseline;
@@ -204,8 +190,7 @@ body {
 .knob input:disabled {
 	opacity: 0.35;
 }
-.knob.off label,
-.knob.off small {
+.knob.off label {
 	opacity: 0.45;
 }
 .knobs-problems {
@@ -438,11 +423,6 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 
-.maps-says {
-	margin: 6px 0 0;
-	color: #8a94a4;
-}
-
 .maps-bar {
 	margin-top: 12px;
 }
@@ -485,9 +465,7 @@ body {
 	content: " +";
 }
 
-.knobs section.shut p,
 .knobs section.shut .knob,
-.maps-knobs section.shut p,
 .maps-knobs section.shut .knob {
 	display: none;
 }

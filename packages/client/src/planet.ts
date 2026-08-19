@@ -54,6 +54,15 @@ const settings = PlanetSettings.fromParams(params);
 const RADIUS = settings.radius;
 const DEPTH = settings.depth;
 const CHUNK_LEVEL = settings.chunkLevel;
+
+/**
+ * How far from the equator a world may open, in degrees.
+ *
+ * Wide enough that every seed has land inside it -- the twelve pentagons sit at
+ * a latitude of 26.6 degrees and at the two poles, so this band holds ten of
+ * them and neither pole.
+ */
+const SPAWN_LATITUDE = 30;
 const seedText = settings.knobs.seed;
 
 /**
@@ -290,9 +299,15 @@ async function main(): Promise<void> {
 	// The camera looks at a point on the surface from a little behind and above
 	// it. Both the point and the height are what dragging and scrolling move.
 	//
-	// The opening view is high ground, found from the coarse map alone: three
-	// array reads a chunk against a noise evaluation, which is 27 ms over the
-	// whole planet instead of a second.
+	// The opening view is the highest ground **near the equator**, found from
+	// the coarse map alone: three array reads a chunk against a noise
+	// evaluation, which is 27 ms over the whole planet instead of a second.
+	//
+	// Near the equator because a pole is the one place on this planet where the
+	// picture lies. An equirectangular map stretches a polar row across its
+	// whole width, so a player who starts there cannot find themselves on it;
+	// and doc 20 puts an icosahedron vertex at each pole, which is a pentagon
+	// and the one cell shape nothing else on the planet has.
 	let ground: Vec3 = new Vec3(
 		atlas.extents[0]!.x,
 		atlas.extents[0]!.y,
@@ -301,6 +316,8 @@ async function main(): Promise<void> {
 	let highest = -Infinity;
 	for (const extent of atlas.extents) {
 		const there = new Vec3(extent.x, extent.y, extent.z);
+		if (Math.abs(geographicOf(there, 1).latitude) > SPAWN_LATITUDE)
+			continue;
 		const cell = positionToCell(there, shape.n);
 		const above = map.heightAt(cell.face, cell.i, cell.j, DEPTH);
 		if (above > highest) {

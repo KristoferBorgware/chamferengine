@@ -45,9 +45,6 @@ export interface CoarseField {
 	/** What to call it beside the picture. */
 	readonly label: string;
 
-	/** One sentence on what the numbers are. */
-	readonly says: string;
-
 	readonly scale: "linear" | "log";
 
 	readonly ramp: CoarseRamp;
