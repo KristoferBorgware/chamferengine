@@ -356,6 +356,61 @@ therefore collide head-on with local on-demand generation:
 - **Coherent continents.** Noise gives blobs. Plates, shelves, and mountain
   ranges running along collision boundaries need structure noise does not have.
 
+### A sum of smooth things is smooth, and a mountain is a crease
+
+fBm gives hills at any steepness, and that is not a tuning failure. Every octave
+is `valueNoise3`, which the quintic fade makes smooth in its first and second
+derivative, and **a sum of smooth functions is smooth**: every summit is a dome,
+every valley a bowl. A photograph of a mountain range is a photograph of
+**creases** — knife ridges, faceted faces, a sharp line where two slopes meet.
+
+Steepness is not what separates them.
+
+> **[verified]** Land gradient over the shipped map, 300 m of relief at a 32 m
+> map cell: median **11.1°**, 90th **25.2°**, 99th **38.1°**, steepest
+> **56.0°**. That is steep ground. It still reads as hills, because none of it
+> has an edge.
+
+**The only place a crease can come from is an absolute value.** `1 - |n|` folds
+an octave at its own zero crossing, and the fold is the ridge. Squaring it
+sharpens the fold and pulls the low ground down. Each ridged octave is then
+weighted by the one above it, so the fine detail lands on ground the coarse
+octaves already raised — which is what leaves the flats flat instead of
+crinkling the whole planet.
+
+> **[verified]** The same seed and the same 300 m of relief, as the `ridge` knob
+> is turned:
+>
+> | Ridge | median | 90th | 99th | steepest |
+> |---|---|---|---|---|
+> | 0 | 11.0° | 24.9° | 37.5° | 55.4° |
+> | 0.2 | 19.1° | 42.9° | 58.8° | 72.9° |
+> | 0.4 | 25.9° | 51.3° | 67.2° | 79.6° |
+> | **0.6** | 24.3° | 47.8° | 63.7° | 77.0° |
+> | 0.8 | 24.2° | 46.8° | 62.4° | 75.9° |
+
+The gradient settles above about `0.4`, because the weighting starts taking back
+what the fold adds; what keeps changing past that is how much of the roughness
+sits on high ground rather than everywhere. **At `0` the field is bit-for-bit
+the plain sum**, so the knob adds a shape without taking one away.
+
+### The sea floor was spending the mountains' budget
+
+One scale for the whole field is the obvious way to turn noise into metres, and
+it caps the mountains. Noise is roughly symmetric about its own middle and sea
+level is a percentile **above** that middle, so the floor runs further below sea
+level than the peaks run above it — measured, **1.92x**: 300 m of relief gave a
+sea floor at **−575 m**, and the crust had to span all **942 m** of a
+1,024-layer budget.
+
+The ocean was spending twice what the mountains got, on ground that is never
+seen: [doc 25](25-water.md) draws water from above, and a sea floor is visible
+only where it meets the shore.
+
+**So land and sea are scaled apart**, each to its own number. The crust spans
+`relief + seaDepth`, and the tallest mountain a 1 m block allows goes from
+**320 m to 900 m** without touching the block size.
+
 ### The map is the terrain, and there is no second tier
 
 Generate a **coarse global heightmap once at world creation** — at, say, level 8

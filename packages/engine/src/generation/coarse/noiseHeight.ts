@@ -29,6 +29,7 @@ export function noiseHeight(
 	lacunarity: number,
 	offsetX: number,
 	offsetY: number,
+	ridge: number,
 ): Float64Array {
 	const height = new Float64Array(grid.count);
 	for (let cell = 0; cell < grid.count; cell++)
@@ -43,6 +44,7 @@ export function noiseHeight(
 			lacunarity,
 			offsetX,
 			offsetY,
+			ridge,
 		);
 	return height;
 }

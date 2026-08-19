@@ -537,6 +537,24 @@ Violating any of these breaks the design. They are not tunable.
   what water does. Tuned: at strength 1 the median slope moves `0.077 → 0.083`
   while the 99th goes `0.209 → 0.577`, and the ground moves `8.04 m` a cell. A
   knob whose median climbs with it is adding roughness, not carving.
+- **A SUM OF SMOOTH THINGS IS SMOOTH, and a mountain is a crease** (`ridge`,
+  doc 08). fBm gives hills at any steepness and that is not a tuning failure:
+  every octave is smooth in its first and second derivative, so every summit is
+  a dome. Measured, the shipped ground already ran **11.1° at the median, 38.1°
+  at the 99th and 56.0° at its steepest** — steep, and still hills, because none
+  of it has an edge. **The only place a crease comes from is an absolute
+  value**: `1 - |n|` folds an octave at its own zero crossing, squaring sharpens
+  the fold, and weighting each ridged octave by the one above it keeps the flats
+  flat. At `ridge` 0.6 the median goes to **24.3°** and the 99th to **63.7°**.
+  **At 0 it is bit-for-bit the plain sum.**
+- **THE SEA FLOOR WAS SPENDING THE MOUNTAINS' BUDGET** (`metreHeight`, doc 08).
+  One scale for the whole field looks obvious and caps the peaks: noise is
+  symmetric about its own middle and sea level is a percentile **above** it, so
+  the floor ran **1.92x** deeper than the peaks were tall — 300 m of relief gave
+  a `-575 m` sea floor and a `942 m` span out of a 1,024-layer budget, on ground
+  doc 25 never draws. Land and sea scale **apart** now, each to its own knob, so
+  the span is `relief + seaDepth` and the tallest mountain a 1 m block allows
+  goes from **320 m to 900 m**. Never bind Relief to the crust; bind the ocean.
 - **The noise is the reference implementation's parameter set** (`octaveNoise`,
   doc 08): seed, frequency, octaves, persistence, lacunarity, offset X and Y,
   divided by the summed amplitude and low octave first. **Every octave gets its

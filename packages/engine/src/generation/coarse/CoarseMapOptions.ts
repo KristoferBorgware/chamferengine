@@ -30,6 +30,9 @@ export interface CoarseMapOptions {
 	/** What each octave's frequency is multiplied by. Over 1. */
 	readonly lacunarity?: number;
 
+	/** How much each octave is folded at its own zero crossing, for creases. */
+	readonly ridge?: number;
+
 	/** Slides the sample point through the noise field. */
 	readonly offsetX?: number;
 
@@ -37,6 +40,9 @@ export interface CoarseMapOptions {
 
 	/** Metres from sea level to the tallest ground, before erosion. */
 	readonly relief?: number;
+
+	/** Metres from sea level down to the deepest sea floor. */
+	readonly seaDepth?: number;
 
 	/** Fraction of the surface left above sea level. Earth is near 0.3. */
 	readonly landFraction?: number;
@@ -98,9 +104,11 @@ export const COARSE_MAP_DEFAULTS = {
 	octaves: 4,
 	persistence: 0.5,
 	lacunarity: 2,
+	ridge: 0.6,
 	offsetX: 0,
 	offsetY: 0,
 	relief: 300,
+	seaDepth: 120,
 	landFraction: 0.3,
 	erosion: 0,
 	warpAmplitude: 0.8,

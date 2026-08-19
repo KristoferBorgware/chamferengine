@@ -19,6 +19,7 @@ export function coarseStageOf(option: keyof CoarseMapOptions): CoarseStage {
 		case "octaves":
 		case "persistence":
 		case "lacunarity":
+		case "ridge":
 		case "offsetX":
 		case "offsetY":
 		case "level":
@@ -39,6 +40,7 @@ export function coarseStageOf(option: keyof CoarseMapOptions): CoarseStage {
 			return "height";
 		case "landFraction":
 		case "relief":
+		case "seaDepth":
 			return "metres";
 		case "erosion":
 			return "erosion";

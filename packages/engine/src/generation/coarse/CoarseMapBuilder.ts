@@ -93,6 +93,7 @@ export class CoarseMapBuilder {
 				this.raw!,
 				settings.landFraction,
 				settings.relief,
+				settings.seaDepth,
 			);
 		if (at <= 1) {
 			this.height = Float64Array.from(this.metres!);

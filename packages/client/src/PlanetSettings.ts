@@ -126,6 +126,12 @@ export interface PlanetKnobs {
 	/** Metres from sea level to the tallest ground. */
 	relief: number;
 
+	/** Metres from sea level down to the deepest sea floor. */
+	seaDepth: number;
+
+	/** How much each octave is folded at its own zero crossing, for creases. */
+	ridge: number;
+
 	/**
 	 * How hard the water cuts into the ground.
 	 *
@@ -197,6 +203,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	warpAmplitude: 0.8,
 	warpScale: 4250,
 	relief: 300,
+	seaDepth: 120,
+	ridge: 0.6,
 	erosion: 0,
 	landFraction: 0.3,
 	crustMetres: 960,
@@ -282,6 +290,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m",
 	},
 	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
+	seaDepth: { low: 10, high: 1200, step: 10, rebuilds: true, unit: "m" },
+	ridge: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	erosion: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	landFraction: {
 		low: 0.05,
@@ -393,6 +403,11 @@ export class PlanetSettings {
 	 */
 	get relief(): number {
 		return this.coarseMapRuns ? this.knobs.relief : 0;
+	}
+
+	/** Metres to the deepest sea floor, once the pause is applied. */
+	get seaDepth(): number {
+		return this.coarseMapRuns ? this.knobs.seaDepth : 0;
 	}
 
 	/** The depth the radius and the block size ask for, before any cap. */
@@ -561,23 +576,18 @@ export class PlanetSettings {
 	/**
 	 * How far the ground spreads, floor to peak, before anyone digs.
 	 *
-	 * The peak is exactly Relief, and the floor is what Land decides. Sea level
-	 * is a percentile of the noise, so asking for less land pushes it up the
-	 * field and leaves the sea floor further under it: measured on two
-	 * landforms at level 6, the whole span came to `1.69` times Relief at a
-	 * land fraction of `0.8`, `2.18` at `0.5`, `2.69` at `0.3` and `4.71` at
-	 * `0.1`. This is a curve through those with a little room over each.
+	 * The peak is exactly Relief and the floor is exactly Sea depth, because
+	 * the two are scaled apart. It used to be Relief times a curve through
+	 * Land — sea level is a percentile above the noise's own middle, so asking
+	 * for less land left the floor further under it and the ocean took `1.92x`
+	 * what the mountains got. That was what capped Relief at `320 m`.
 	 *
 	 * **A sea floor through the bottom of the world is a flat abyss**, not a
 	 * crash: the crust clamps it. It is still worth refusing, because a world
 	 * whose ocean floor is one plateau is not the world the map drew.
 	 */
 	get groundSpan(): number {
-		const land = Math.min(0.95, Math.max(0.05, this.knobs.landFraction));
-		return Math.max(
-			2,
-			this.relief * (1 + 1.4 * Math.sqrt((1 - land) / land)),
-		);
+		return Math.max(2, this.relief + this.seaDepth);
 	}
 
 	/** Metres across one cell of the coarse map, once its level is rounded. */
@@ -682,6 +692,8 @@ export class PlanetSettings {
 			warpAmplitude: this.knobs.warpAmplitude,
 			warpFrequency: this.frequencyFor(this.knobs.warpScale),
 			relief: this.relief,
+			seaDepth: this.seaDepth,
+			ridge: this.knobs.ridge,
 			landFraction: this.knobs.landFraction,
 			erosion: this.knobs.erosion,
 		};
@@ -772,6 +784,10 @@ export class PlanetSettings {
 			// sea, and it can hold at most the layer field's 1,024 layers.
 			case "relief":
 				return narrowed({ high: down(this.reliefCeiling) });
+			case "seaDepth":
+				return narrowed({
+					high: down(this.crustCeiling - this.relief),
+				});
 			case "crustMetres":
 				return narrowed({
 					low: up(this.groundSpan),
@@ -802,13 +818,11 @@ export class PlanetSettings {
 	/**
 	 * The tallest ground a crust of {@link crustCeiling} can hold.
 	 *
-	 * {@link groundSpan} is linear in Relief, so this is that relationship read
-	 * backwards: whatever multiple of Relief the sea floor adds at this land
-	 * fraction, divide the deepest possible crust by it.
+	 * The span is Relief plus Sea depth, so this is the deepest crust the layer
+	 * field allows with the ocean's share taken out of it.
 	 */
 	get reliefCeiling(): number {
-		const perMetre = this.relief > 0 ? this.groundSpan / this.relief : 1;
-		return this.crustCeiling / Math.max(1, perMetre);
+		return this.crustCeiling - this.seaDepth;
 	}
 
 	/**
@@ -832,6 +846,7 @@ export class PlanetSettings {
 			"noiseScale",
 			"octaves",
 			"relief",
+			"seaDepth",
 			"crustMetres",
 			"lowDeck",
 			"highDeck",
@@ -879,7 +894,7 @@ export class PlanetSettings {
 		if (reach < this.groundSpan) {
 			const neededCrust = Math.ceil(this.groundSpan);
 			out.push(
-				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the deepest ocean has no floor: those columns are water down to the last layer and nothing under it. Raise Crust reaches to at least ${neededCrust} m, or lower Relief to ${Math.floor((reach * this.relief) / Math.max(1, this.groundSpan))} m or under.`,
+				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the deepest ocean has no floor: those columns are water down to the last layer and nothing under it. Raise Crust reaches to at least ${neededCrust} m, or lower Relief to ${Math.max(0, Math.floor(reach - this.seaDepth))} m or under.`,
 			);
 		}
 

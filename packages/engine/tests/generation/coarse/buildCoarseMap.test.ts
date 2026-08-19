@@ -31,6 +31,22 @@ describe("the coarse map", () => {
 		}
 	});
 
+	it("puts the sea floor exactly where Sea depth asks for it", () => {
+		// The two are scaled apart, because one scale for both let the ocean
+		// spend twice the layer budget the mountains got, on ground nobody
+		// ever sees.
+		for (const seaDepth of [50, 120, 400]) {
+			const map = buildCoarseMap(1, {
+				level: LEVEL,
+				seaDepth,
+				erosion: 0,
+			});
+			let floor = 0;
+			for (const h of map.height) if (h < floor) floor = h;
+			expect(-floor).toBeCloseTo(seaDepth, 1);
+		}
+	});
+
 	it("puts its tallest ground exactly where Relief asks for it", () => {
 		// The knob is the answer, not a multiplier on however high this seed's
 		// noise happened to reach, so two seeds at one setting give two worlds
@@ -75,7 +91,7 @@ describe("the coarse map", () => {
 describe("metreHeight", () => {
 	it("puts the waterline at zero whatever the field was doing", () => {
 		const raw = Float64Array.from([-3, -1, 0, 2, 5, 9]);
-		const metres = metreHeight(raw, 0.5, 100);
+		const metres = metreHeight(raw, 0.5, 100, 100);
 		const sea = seaLevelFor(raw, 0.5);
 		for (let cell = 0; cell < raw.length; cell++)
 			expect(metres[cell]! > 0).toBe(raw[cell]! > sea);
@@ -83,8 +99,8 @@ describe("metreHeight", () => {
 
 	it("scales the sea floor by the same number as the peaks", () => {
 		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
-		const a = metreHeight(raw, 0.5, 100);
-		const b = metreHeight(raw, 0.5, 400);
+		const a = metreHeight(raw, 0.5, 100, 100);
+		const b = metreHeight(raw, 0.5, 400, 400);
 		for (let cell = 0; cell < raw.length; cell++)
 			expect(b[cell]).toBeCloseTo(4 * a[cell]!, 6);
 	});
@@ -93,7 +109,12 @@ describe("metreHeight", () => {
 describe("erodeDroplets", () => {
 	const grid = new CoarseGrid(LEVEL);
 	const ground = (): Float64Array =>
-		metreHeight(noiseHeight(grid, 21, 1.5, 4, 0.5, 2, 0, 0), 0.3, 600);
+		metreHeight(
+			noiseHeight(grid, 21, 1.5, 4, 0.5, 2, 0, 0, 0),
+			0.3,
+			600,
+			240,
+		);
 
 	it("does nothing at all at a strength of zero", () => {
 		const before = ground();

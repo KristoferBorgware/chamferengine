@@ -88,6 +88,7 @@ export function grownHeight(
 	lacunarity: number,
 	offsetX: number,
 	offsetY: number,
+	ridge: number,
 ): Float64Array {
 	// The refinement needs a grid at every level on the way up, because a growth
 	// pass compares a cell against its neighbours. The finest one is the
@@ -214,6 +215,7 @@ export function grownHeight(
 					lacunarity,
 					offsetX,
 					offsetY,
+					ridge,
 				);
 	}
 	return height;

@@ -25,6 +25,7 @@ export function warpedHeight(
 	lacunarity: number,
 	offsetX: number,
 	offsetY: number,
+	ridge: number,
 	warpAmplitude: number,
 	warpFrequency: number,
 ): Float64Array {
@@ -79,6 +80,7 @@ export function warpedHeight(
 			lacunarity,
 			offsetX,
 			offsetY,
+			ridge,
 		);
 	}
 	return height;

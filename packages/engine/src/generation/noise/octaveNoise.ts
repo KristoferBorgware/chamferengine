@@ -13,6 +13,14 @@ import { valueNoise3 } from "./valueNoise3.js";
 const OCTAVE_SPREAD = 1000;
 
 /**
+ * How fast a ridged octave hands its detail to the one below it.
+ *
+ * Above 1 the fine octaves land on ground the coarse ones already raised, which
+ * is what leaves the flats flat and puts the roughness on the mountains.
+ */
+const RIDGE_GAIN = 2.2;
+
+/**
  * Octaves of {@link valueNoise3}, with the shape and the parameters of the
  * reference implementation, in `[-1, 1]`.
  *
@@ -34,6 +42,15 @@ const OCTAVE_SPREAD = 1000;
  * An error that appears at some octave counts and not others is the kind
  * testing never finds.
  *
+ * **`ridge` turns a sum of smooth things into something with edges.** A sum of
+ * smooth functions is smooth, so plain octaves give a field whose every summit
+ * is a dome and whose every valley is a bowl -- hills, at any steepness. A
+ * mountain ridge is a **crease**, and the only place a crease can come from is
+ * an absolute value: `1 - |n|` folds each octave at its own zero crossing. Each
+ * ridged octave is then weighted by the one above it, so the fine detail lands
+ * on ground the coarse octaves already raised and the flats stay flat. At `0`
+ * this is bit-for-bit the plain sum.
+ *
  * **The sum is divided by the total amplitude**, so the octave count is a
  * control over shape rather than over height: adding an octave adds detail
  * without making the world taller. The result is bounded by `[-1, 1]` and does
@@ -52,17 +69,32 @@ export function octaveNoise(
 	lacunarity: number,
 	offsetX: number,
 	offsetY: number,
+	ridge = 0,
 ): number {
 	let sum = 0;
 	let amplitude = 1;
 	let total = 0;
 	let f = frequency;
+	let weight = 1;
 	for (let o = 0; o < octaves; o++) {
 		const ox = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + offsetX;
 		const oy = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + offsetY;
 		const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
-		sum +=
-			amplitude * valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+		let signal = n;
+		if (ridge > 0) {
+			// `1 - |n|` folds the octave at its own zero crossing, and the fold
+			// is a crease. Squaring sharpens it and pulls the low ground down.
+			const fold = 1 - Math.abs(n);
+			const crease = fold * fold;
+			signal = n * (1 - ridge) + (crease * 2 - 1) * ridge;
+			signal *= weight;
+			weight = Math.min(
+				1,
+				Math.max(0, 1 - ridge + ridge * crease * RIDGE_GAIN),
+			);
+		}
+		sum += amplitude * signal;
 		total += amplitude;
 		amplitude *= persistence;
 		f *= lacunarity;

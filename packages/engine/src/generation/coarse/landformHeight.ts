@@ -36,6 +36,7 @@ export function landformHeight(
 				s.lacunarity,
 				s.offsetX,
 				s.offsetY,
+				s.ridge,
 				s.warpAmplitude,
 				s.warpFrequency,
 			);
@@ -52,6 +53,7 @@ export function landformHeight(
 				s.lacunarity,
 				s.offsetX,
 				s.offsetY,
+				s.ridge,
 			);
 		case "plates":
 			return plateHeight(
@@ -68,6 +70,7 @@ export function landformHeight(
 				s.lacunarity,
 				s.offsetX,
 				s.offsetY,
+				s.ridge,
 			);
 		default:
 			return noiseHeight(
@@ -79,6 +82,7 @@ export function landformHeight(
 				s.lacunarity,
 				s.offsetX,
 				s.offsetY,
+				s.ridge,
 			);
 	}
 }

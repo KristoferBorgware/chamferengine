@@ -200,12 +200,24 @@ describe("a slider narrowed by the rest of the draft", () => {
 	// The report this answers: "I get 'raise Crust reaches to at least 1758 m,
 	// or lower Relief' very often and I spend a lot of time tweaking sliders."
 	it("pulls the crust up behind Relief rather than refusing", () => {
-		const asked = { ...PLANET_DEFAULTS, relief: 600, crustMetres: 737 };
+		const asked = { ...PLANET_DEFAULTS, relief: 900, crustMetres: 400 };
 		expect(new PlanetSettings(asked).problems().length).toBeGreaterThan(0);
 
 		const settled = PlanetSettings.settle(asked);
 		expect(settled.crustMetres).toBeGreaterThan(asked.crustMetres);
 		expect(new PlanetSettings(settled).problems()).toEqual([]);
+	});
+
+	it("lets Relief have what the ocean is not using", () => {
+		// One scale for both put the sea floor 1.92x deeper than the peaks were
+		// tall, which took Relief's ceiling down to 320 m on the shipped
+		// planet. Split, the ceiling is the crust less the ocean's own share.
+		const s = new PlanetSettings();
+		expect(s.rangeFor("relief").high).toBeGreaterThan(600);
+		expect(s.rangeFor("relief").high).toBeCloseTo(
+			s.crustCeiling - s.seaDepth,
+			-1,
+		);
 	});
 
 	it("leaves no reachable combination that refuses", () => {

@@ -99,6 +99,20 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
+				key: "ridge",
+				map: true,
+				label: "Ridges",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "seaDepth",
+				map: true,
+				label: "Sea depth",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
 				key: "warpAmplitude",
 				map: true,
 				label: "Warp",

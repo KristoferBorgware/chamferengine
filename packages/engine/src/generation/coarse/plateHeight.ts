@@ -101,6 +101,7 @@ export function plateHeight(
 	lacunarity: number,
 	offsetX: number,
 	offsetY: number,
+	ridge: number,
 ): Float64Array {
 	const seats: [number, number, number][] = [];
 	const spins: [number, number, number][] = [];
@@ -224,6 +225,7 @@ export function plateHeight(
 					lacunarity,
 					offsetX,
 					offsetY,
+					ridge,
 				);
 	}
 	return height;
