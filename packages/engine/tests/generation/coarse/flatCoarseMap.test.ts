@@ -13,10 +13,8 @@ describe("flatCoarseMap", () => {
 		const map = flatCoarseMap(seedFromString("chamfer"), LEVEL);
 		expect(map.level).toBe(LEVEL);
 		expect(map.count).toBe(10 * 4 ** LEVEL + 2);
-		for (let cell = 0; cell < map.count; cell++) {
+		for (let cell = 0; cell < map.count; cell++)
 			expect(map.height[cell]).toBe(0);
-			expect(map.slope[cell]).toBe(0);
-		}
 	});
 
 	it("carries the seed, for a worker that reads its seed off the map", () => {
@@ -40,7 +38,6 @@ describe("flatCoarseMap", () => {
 					expect(column.elevation).toBe(0);
 					expect(column.groundRadius).toBe(shape.seaLevelRadius);
 					expect(column.waterRadius).toBe(column.groundRadius);
-					expect(column.gradient).toBe(0);
 				}
 	});
 });

@@ -766,10 +766,10 @@ map cells long, with square ends.
 
 **Why it matters.** Erosion is the only pass that shapes the ground in a way
 noise cannot, and it is now the only such pass at all — rivers and lakes are
-gone. It is also the only source of exposed rock, through the cliff rule, so the
-grey slabs on a hillside sit along these gashes. What it is meant to produce is
-graded valleys and sharpened ridges; what it produces is a lattice pattern that
-looks like a rendering artifact. Every measurement taken of it is still true —
+gone. What it is meant to produce is graded valleys and sharpened ridges; what it
+produces is a lattice pattern that looks like a rendering artifact. It used to
+show a second way too, as bare grey rock wherever the gashes ran steep, until
+the cliff rule and the slope field it read were removed. Every measurement taken of it is still true —
 the median slope barely moves, the tail grows, the ground shifts 8 m a cell at
 full strength — those numbers just do not say what shape the moved ground took.
 

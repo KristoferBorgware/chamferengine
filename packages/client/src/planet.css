@@ -110,6 +110,14 @@ body {
 .knob u {
 	display: none;
 }
+/* A slider whose own ends have been pulled in by another knob. */
+.knob.bound input[type="range"]::-webkit-slider-runnable-track {
+	background: #3a3320;
+}
+.knob.bound input[type="range"]::-moz-range-track {
+	background: #3a3320;
+}
+
 .knob u.some {
 	display: block;
 	font-size: 10.5px;

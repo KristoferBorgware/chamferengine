@@ -19,10 +19,5 @@ import { CoarseMap } from "./CoarseMap.js";
  */
 export function flatCoarseMap(seed: number, level: number): CoarseMap {
 	const grid = new CoarseGrid(level);
-	return new CoarseMap(
-		seed,
-		grid,
-		new Float32Array(grid.count),
-		new Float32Array(grid.count),
-	);
+	return new CoarseMap(seed, grid, new Float32Array(grid.count));
 }

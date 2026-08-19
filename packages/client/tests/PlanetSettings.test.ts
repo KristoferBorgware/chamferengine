@@ -6,7 +6,13 @@ import {
 	flatCoarseMap,
 	seedFromString,
 } from "chamfer/generation";
-import { FLAT_COARSE_LEVEL, PlanetSettings } from "../src/PlanetSettings.js";
+import type { PlanetKnobs } from "../src/PlanetSettings.js";
+import {
+	FLAT_COARSE_LEVEL,
+	KNOB_RANGES,
+	PLANET_DEFAULTS,
+	PlanetSettings,
+} from "../src/PlanetSettings.js";
 
 describe("cell address", () => {
 	it("moves with the radius and the block size, and nothing else", () => {
@@ -178,13 +184,60 @@ describe("the height map off", () => {
 	});
 
 	it("still refuses a crust too shallow for the ground it is asked for", () => {
+		// Reachable only from a hand-edited query string now: the panel settles
+		// the two knobs into each other before either is read.
 		const shallow = new PlanetSettings({
 			plain: false,
 			coarseMap: true,
 			relief: 900,
 			crustMetres: 200,
 		});
-		expect(shallow.problems().join(" ")).toMatch(/sea floor/);
+		expect(shallow.problems().join(" ")).toMatch(/no floor/);
+	});
+});
+
+describe("a slider narrowed by the rest of the draft", () => {
+	// The report this answers: "I get 'raise Crust reaches to at least 1758 m,
+	// or lower Relief' very often and I spend a lot of time tweaking sliders."
+	it("pulls the crust up behind Relief rather than refusing", () => {
+		const asked = { ...PLANET_DEFAULTS, relief: 600, crustMetres: 737 };
+		expect(new PlanetSettings(asked).problems().length).toBeGreaterThan(0);
+
+		const settled = PlanetSettings.settle(asked);
+		expect(settled.crustMetres).toBeGreaterThan(asked.crustMetres);
+		expect(new PlanetSettings(settled).problems()).toEqual([]);
+	});
+
+	it("leaves no reachable combination that refuses", () => {
+		// Every knob at each end of its own live range, settled, has to build.
+		const keys = Object.keys(KNOB_RANGES) as (keyof PlanetKnobs)[];
+		for (const key of keys)
+			for (const end of ["low", "high"] as const) {
+				const live = new PlanetSettings().rangeFor(key);
+				const draft = { ...PLANET_DEFAULTS } as Record<string, unknown>;
+				draft[key as string] =
+					typeof PLANET_DEFAULTS[key] === "boolean"
+						? end === "high"
+						: live[end];
+				const settled = PlanetSettings.settle(
+					draft as unknown as PlanetKnobs,
+				);
+				expect(
+					new PlanetSettings(settled).problems(),
+					`${key} at its ${end}`,
+				).toEqual([]);
+			}
+	});
+
+	it("only ever moves an end inward", () => {
+		const s = new PlanetSettings();
+		for (const key of Object.keys(KNOB_RANGES) as (keyof PlanetKnobs)[]) {
+			const live = s.rangeFor(key);
+			const stated = KNOB_RANGES[key as string]!;
+			expect(live.low, key).toBeGreaterThanOrEqual(stated.low);
+			expect(live.high, key).toBeLessThanOrEqual(stated.high);
+			expect(live.low, key).toBeLessThanOrEqual(live.high);
+		}
 	});
 });
 

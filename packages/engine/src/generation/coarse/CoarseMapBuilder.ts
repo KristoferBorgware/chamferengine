@@ -4,7 +4,6 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
-import { coarseSlope } from "./coarseSlope.js";
 import { erodeDroplets } from "./erodeDroplets.js";
 import { landformHeight } from "./landformHeight.js";
 import { metreHeight } from "./metreHeight.js";
@@ -48,7 +47,6 @@ export class CoarseMapBuilder {
 	private metres?: Float64Array;
 
 	private height?: Float64Array;
-	private slope?: Float32Array;
 	private seed = 0;
 
 	constructor(level: number) {
@@ -65,6 +63,7 @@ export class CoarseMapBuilder {
 		seed: number,
 		options: CoarseMapOptions = {},
 		from: CoarseStage = "height",
+		until: CoarseStage = COARSE_STAGES[COARSE_STAGES.length - 1]!,
 	): Generator<CoarseMapStep> {
 		const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 		const grid = this.grid;
@@ -74,6 +73,10 @@ export class CoarseMapBuilder {
 		// it was asked for.
 		const asked = COARSE_STAGES.indexOf(from);
 		const at = this.raw === undefined ? 0 : asked;
+		// A caller wanting a picture of the ground before the water does not
+		// wait for the water. The steps below the last one it asked for are not
+		// run, and the map it gets back holds what has been computed so far.
+		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
 			this.raw = landformHeight(grid, settings);
@@ -81,8 +84,9 @@ export class CoarseMapBuilder {
 			// no sea in it. Drawing this shows what the octave knobs are turned
 			// against.
 			this.height = Float64Array.from(this.raw);
-			yield this.step("height", false);
+			yield this.step("height", last <= 0);
 		}
+		if (last <= 0) return;
 
 		if (at <= 1 || this.metres === undefined)
 			this.metres = metreHeight(
@@ -92,25 +96,21 @@ export class CoarseMapBuilder {
 			);
 		if (at <= 1) {
 			this.height = Float64Array.from(this.metres!);
-			yield this.step("metres", false);
+			yield this.step("metres", last <= 1);
 		}
+		if (last <= 1) return;
 
-		if (at <= 2) {
-			// Erosion writes in place, so it starts from a copy of ground nothing
-			// has cut. That copy is why the metric field is held separately.
-			this.height = Float64Array.from(this.metres!);
-			erodeDroplets(
-				grid,
-				this.height,
-				seed,
-				settings.erosion,
-				settings.cellMetres,
-			);
-			yield this.step("erosion", false);
-		}
-
-		this.slope = coarseSlope(grid, this.height!, settings.cellMetres);
-		yield this.step("slope", true);
+		// Erosion writes in place, so it starts from a copy of ground nothing
+		// has cut. That copy is why the metric field is held separately.
+		this.height = Float64Array.from(this.metres!);
+		erodeDroplets(
+			grid,
+			this.height,
+			seed,
+			settings.erosion,
+			settings.cellMetres,
+		);
+		yield this.step("erosion", true);
 	}
 
 	/** The map as it stands, with anything not yet computed holding zero. */
@@ -123,7 +123,6 @@ export class CoarseMapBuilder {
 				this.seed,
 				this.grid,
 				Float32Array.from(this.height ?? empty),
-				this.slope ?? empty,
 			),
 		};
 	}

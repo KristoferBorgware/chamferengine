@@ -19,6 +19,9 @@ export interface MapWorkerRequest {
 	readonly seed: number;
 	readonly options: CoarseMapOptions;
 	readonly from: CoarseStage;
+
+	/** The last step worth running, for a picture that does not need the rest. */
+	readonly until: CoarseStage;
 }
 
 export type MapWorkerMessage = MapWorkerSetup | MapWorkerRequest;
@@ -58,6 +61,7 @@ export class MapWorkerCore {
 			request.seed,
 			request.options,
 			request.from,
+			request.until,
 		))
 			yield {
 				token: request.token,

@@ -36,7 +36,6 @@ export { seaLevelFor } from "./coarse/seaLevelFor.js";
 export { noiseHeight } from "./coarse/noiseHeight.js";
 export { metreHeight } from "./coarse/metreHeight.js";
 export { erodeDroplets } from "./coarse/erodeDroplets.js";
-export { coarseSlope } from "./coarse/coarseSlope.js";
 export type { CoarseField, CoarseRamp } from "./coarse/CoarseField.js";
 export { coarseFieldOf } from "./coarse/CoarseField.js";
 export { COARSE_FIELDS } from "./coarse/COARSE_FIELDS.js";

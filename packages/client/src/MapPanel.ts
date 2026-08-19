@@ -57,8 +57,8 @@ export class MapPanel {
 	/** Where the player stands, as a direction, or nothing before there is one. */
 	private player: { x: number; y: number; z: number } | null = null;
 
-	/** Whether the player is followed. Off, nothing happens as they move. */
-	private pinned = false;
+	/** Whether the player's own place is marked. On, because it usually is. */
+	private pinned = true;
 
 	constructor(
 		settings: PlanetSettings,
@@ -88,12 +88,21 @@ export class MapPanel {
 			const button = document.createElement("button");
 			button.textContent = field.label;
 			button.onclick = () => {
+				const was = this.field;
 				this.field = field;
 				for (const other of list.children) other.classList.remove("on");
 				button.classList.add("on");
 				this.says.textContent = field.says;
-				this.paint();
-				if (this.map) this.sphere.show(this.map, field);
+				// Each pane names how far down the build it needs. Going deeper
+				// runs the steps between; coming back up runs the one this pane
+				// stops at, so the picture is the ground that pane describes
+				// rather than whatever the other one left behind.
+				this.rebuild(
+					COARSE_STAGES.indexOf(field.stage) >
+						COARSE_STAGES.indexOf(was.stage)
+						? COARSE_STAGES[COARSE_STAGES.indexOf(was.stage) + 1]!
+						: field.stage,
+				);
 			};
 			if (field === this.field) button.classList.add("on");
 			list.appendChild(button);
@@ -103,6 +112,7 @@ export class MapPanel {
 		const pin = document.createElement("button");
 		pin.className = "maps-pin";
 		pin.textContent = "Pin the player";
+		pin.classList.toggle("on", this.pinned);
 		pin.onclick = () => {
 			this.pinned = !this.pinned;
 			pin.classList.toggle("on", this.pinned);
@@ -265,14 +275,29 @@ export class MapPanel {
 			)
 				earliest = stage;
 		}
-		return earliest ?? "slope";
+		return earliest ?? COARSE_STAGES[COARSE_STAGES.length - 1]!;
 	}
 
 	private setup(): void {
 		this.worker.postMessage({ kind: "setup", level: this.level });
 	}
 
+	/**
+	 * Ask for a rebuild from one step, stopping where the open pane needs it to.
+	 *
+	 * A pane showing the ground before the water does not wait for the water,
+	 * which is what makes dragging a noise knob redraw while it is still
+	 * moving. Erosion is the slow step by a wide margin.
+	 */
 	private rebuild(from: CoarseStage): void {
+		// A knob whose earliest step is below the open pane's own cannot change
+		// what that pane draws, so nothing runs at all. Turning Erosion while
+		// the Height pane is open costs nothing.
+		if (
+			COARSE_STAGES.indexOf(from) >
+			COARSE_STAGES.indexOf(this.field.stage)
+		)
+			return;
 		this.token++;
 		this.startedAt = performance.now();
 		this.status.textContent = `${COARSE_STAGE_SAYS[from]}...`;
@@ -282,6 +307,7 @@ export class MapPanel {
 			seed: this.settings.seedNumber,
 			options: this.settings.coarseOptions(),
 			from,
+			until: this.field.stage,
 		});
 	}
 

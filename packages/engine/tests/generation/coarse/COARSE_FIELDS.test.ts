@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	COARSE_FIELDS,
+	COARSE_STAGES,
 	CoarseMap,
 	coarseFieldOf,
 	flatCoarseMap,
@@ -60,31 +61,27 @@ describe("COARSE_FIELDS", () => {
 		}
 	});
 
-	it("draws a difference only against a field the map carries", () => {
-		const onTheMap = new Set(arraysOnTheMap.map(([name]) => name));
+	it("names a step of the build it stops at", () => {
+		// A picture that does not need the slow step must not wait for it, and
+		// the pane's own entry is where that is stated.
+		for (const field of COARSE_FIELDS)
+			expect(COARSE_STAGES, field.id).toContain(field.stage);
+	});
+
+	it("puts sea level on a stop of a ramp, not between two", () => {
+		// A ramp measured in metres above sea level and symmetric about it
+		// lands its middle stop at zero when the count is odd, so the waterline
+		// is one named color. An even count puts it halfway between two, which
+		// is where the last few metres of water drew as beach.
 		for (const field of COARSE_FIELDS) {
-			if (!field.against) continue;
-			expect(
-				onTheMap.has(field.against),
-				`${field.key} is drawn against ${field.against}, which is not a field on CoarseMap`,
-			).toBe(true);
-			expect(field.against, field.key).not.toBe(field.key);
+			expect(field.ramp.low, field.id).toBe(-field.ramp.high);
+			expect(field.ramp.stops.length % 2, field.id).toBe(1);
 		}
 	});
 
-	it("puts sea level on a stop of the terrain ramp, not between two", () => {
-		// The ground ramp is metres above sea level and symmetric about it, so
-		// an odd stop count lands the middle stop at a height of zero and the
-		// waterline is one named color. An even count puts it halfway between
-		// two, which is where the last few metres of water drew as beach.
-		const ground = COARSE_FIELDS.find((f) => f.key === "height")!;
-		expect(ground.ramp.low).toBe(-ground.ramp.high);
-		expect(ground.ramp.stops.length % 2).toBe(1);
-	});
-
-	it("names each field once", () => {
-		const keys = COARSE_FIELDS.map((f) => f.key);
-		expect(new Set(keys).size).toBe(keys.length);
+	it("names each picture once", () => {
+		const ids = COARSE_FIELDS.map((f) => f.id);
+		expect(new Set(ids).size).toBe(ids.length);
 	});
 
 	it("is what CoarseMap hands to a worker", () => {

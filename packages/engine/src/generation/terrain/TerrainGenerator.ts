@@ -90,7 +90,6 @@ export class TerrainGenerator {
 			groundLayer: this.shape.layerOfSurface(groundRadius),
 			waterLayer: this.shape.layerOfSurface(waterRadius),
 			elevation,
-			gradient: this.map.slopeAt(face, i, j, depth),
 		};
 	}
 
@@ -197,10 +196,14 @@ export class TerrainGenerator {
 	/**
 	 * Which ground a block is made of, from how far under the surface it sits.
 	 *
-	 * Soil covers rock to a fixed depth, and three things replace the soil: the
-	 * bed under standing water is sand, ground steeper than a cliff gradient is
-	 * bare rock because soil does not hold on it, and ground above the snow line
-	 * is snow.
+	 * Soil covers rock to a fixed depth, and two things replace the soil: the
+	 * bed under standing water is sand, and ground above the snow line is snow.
+	 *
+	 * **There was a third, and it read a whole stored field to place grey
+	 * slabs.** Ground past a cliff gradient came out as bare stone, which meant
+	 * carrying a slope field of `2.5 MB` for one boolean test -- and the slope
+	 * it read was the map cell's, not the block's, so the rock came out in
+	 * patches the size of map cells rather than as a cliff face.
 	 */
 	private material(column: TerrainColumn, depthBelow: number): BlockType {
 		const soil = this.settings.soilDepth * this.shape.blockSize;
@@ -211,8 +214,6 @@ export class TerrainGenerator {
 		if (!surface) return submerged ? BlockType.SAND : BlockType.DIRT;
 
 		if (submerged) return BlockType.SAND;
-		if (column.gradient > this.settings.cliffGradient)
-			return BlockType.STONE;
 		if (column.elevation > this.settings.snowLine) return BlockType.SNOW;
 		return BlockType.GRASS;
 	}

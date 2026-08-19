@@ -19,7 +19,6 @@ const SETUP = {
 		level: 2,
 		faceIndex: new Int32Array(0),
 		height: new Float32Array(0),
-		slope: new Float32Array(0),
 	},
 	seaLevelRadius: 1700,
 	subdivisionDepth: 5,

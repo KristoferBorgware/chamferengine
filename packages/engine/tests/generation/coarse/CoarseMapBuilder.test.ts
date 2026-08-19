@@ -14,7 +14,7 @@ const OPTIONS = { level: LEVEL, cellMetres: 200 };
 /** Every field of two maps, cell by cell. */
 function same(a: ReturnType<typeof buildCoarseMap>, b: typeof a): void {
 	expect(b.count).toBe(a.count);
-	for (const key of ["height", "slope"] as const)
+	for (const key of ["height"] as const)
 		for (let cell = 0; cell < a.count; cell++)
 			expect(b[key][cell], `${key} at ${cell}`).toBe(a[key][cell]);
 }
@@ -55,7 +55,7 @@ describe("CoarseMapBuilder", () => {
 
 	it("starts at the top on a first run, whatever step it is asked for", () => {
 		const builder = new CoarseMapBuilder(LEVEL);
-		same(wanted, builder.run(SEED, OPTIONS, "slope"));
+		same(wanted, builder.run(SEED, OPTIONS, "erosion"));
 	});
 
 	/** A knob that only reaches erosion must still answer to a changed value. */

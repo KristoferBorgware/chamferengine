@@ -9,5 +9,4 @@ export interface CoarseMapSnapshot {
 	readonly level: number;
 	readonly faceIndex: Int32Array;
 	readonly height: Float32Array;
-	readonly slope: Float32Array;
 }

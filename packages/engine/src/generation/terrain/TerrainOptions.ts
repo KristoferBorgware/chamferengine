@@ -14,14 +14,6 @@ export interface TerrainOptions {
 	/** Metres above sea level at which the ground turns to snow. */
 	readonly snowLine?: number;
 
-	/**
-	 * Ground fall per metre travelled above which a slope carries no soil.
-	 *
-	 * The map's slope field is metres of fall per metre travelled, so this is
-	 * an angle: `0.38` is about 21 degrees.
-	 */
-	readonly cliffGradient?: number;
-
 	/** Whether the density term runs. Caves cost 51x the height field. */
 	readonly caves?: boolean;
 
@@ -38,7 +30,6 @@ export interface TerrainOptions {
 export const TERRAIN_DEFAULTS = {
 	soilDepth: 4,
 	snowLine: 240,
-	cliffGradient: 0.38,
 	caves: false,
 	caveScale: 24,
 	caveThreshold: 0.12,

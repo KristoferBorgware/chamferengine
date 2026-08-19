@@ -881,14 +881,26 @@ Violating any of these breaks the design. They are not tunable.
   `0.15`, and a seam's uplift is divided by the fastest two plates can close so
   `upliftWeight` is the tallest range rather than a multiplier on a raw closing
   speed that runs to `2.3`.
-- **A coarse slope is rise over run, not a drop per cell** (`coarseSlope`). The
-  drop to a neighbour halves at every finer level — the same ground read
-  `0.047`, `0.025` and `0.012` at levels 6, 7 and 8 — so anything with a fixed
-  idea of steep reads a different planet at every map size. Dividing by the step
-  in radius units, `CELL_CONSTANT / 2^level`, holds it still, and a consumer
-  multiplies by `heightScale / radius` for metres per metre. The editor's slope
-  ramp had been calibrated against the old units at `0.02`, which was **under
-  the median at every level**: 68 to 80% of the planet drew at full white.
+- **THE MAP CARRIES ONE FIELD, and the editor draws two pictures of it**
+  (`COARSE_FIELDS`, `plans/v0.3.0.md`). Water, drainage and slope are all gone:
+  the last of them, slope, had **one reader** — a cliff rule turning steep ground
+  to bare stone — and that reader cost `2.5 MB` for one boolean test, read the
+  **map cell's** gradient rather than the block's, and drew grey patches the size
+  of map cells instead of cliff faces. The rule went with the field. **A picture
+  names the step of the build it stops at**: Height stops at the metre scale and
+  Ground runs the erosion, so dragging a noise knob on the Height pane redraws in
+  `1.2 s` against `5.5 s` — **4.4x** — and turning Erosion while Height is open
+  runs nothing at all. Read the ratio; those are software-adapter timings.
+- **A SLIDER THAT CANNOT REACH A REFUSAL beats a refusal that explains itself**
+  (`PlanetSettings.rangeFor`, `settle`). Several knobs bound each other — the
+  crust must reach past the ground, the map must be fine enough for the narrowest
+  octave, a chunk must be smaller than a face — and every pair used to be found by
+  hitting it. Each slider's own ends now move with the rest of the draft, and
+  `settle` pulls every value inside, **in dependency order and inward only**, so
+  lowering Relief never drags the crust back down behind it. Relief tops out at
+  `320 m` on the shipped planet because `1,024` layers is all the address can name
+  and the sea floor runs `3.14x` Relief at Land `0.3`; raise Block size to go
+  taller. `problems()` stays as a backstop for a hand-edited query string.
 - **The selection reaches for ground each triangle actually holds** (`ChunkPeaks`,
   F-023). One planet-wide `maxElevation` selects a ring of chunks whose ground is
   nowhere near that tall. A pyramid of tallest ground per triangle, built once

@@ -668,6 +668,164 @@ export class PlanetSettings {
 	}
 
 	/**
+	 * One knob's range, narrowed by the rest of the draft.
+	 *
+	 * **A slider that cannot be moved into a refusal is worth more than a
+	 * refusal that explains itself.** Several of these knobs bound each other —
+	 * the crust has to reach past the ground, the map has to be fine enough to
+	 * draw the narrowest octave, a chunk has to be smaller than a face — and
+	 * every one of those pairs used to be discovered by hitting it. The panel
+	 * moves the slider's own end instead, so the wall is visible before it is
+	 * reached and {@link problems} is left as a backstop for a hand-edited
+	 * query string.
+	 *
+	 * The narrowing only ever moves an end **inward**. Nothing here widens a
+	 * range past what {@link KNOB_RANGES} states.
+	 */
+	rangeFor(key: keyof PlanetKnobs): KnobRange {
+		const range = KNOB_RANGES[key as string]!;
+		const k = this.knobs;
+		// Both round to the slider's own step and stay inside its stated ends,
+		// so a narrowing can never widen one.
+		const inside = (v: number): number =>
+			Math.min(range.high, Math.max(range.low, v));
+		const up = (v: number): number =>
+			inside(Math.ceil(v / range.step) * range.step);
+		const down = (v: number): number =>
+			inside(Math.floor(v / range.step) * range.step);
+		const narrowed = (ends: Partial<KnobRange>): KnobRange => {
+			const out = { ...range, ...ends };
+			// A pair of constraints can cross. The lower end wins, because it
+			// is the one describing a world that can be built.
+			return { ...out, high: Math.max(out.low, out.high) };
+		};
+
+		switch (key) {
+			// The address is 2 bits of path per level, and the word is 64. The
+			// depth is a rounded logarithm, so the largest radius one block size
+			// allows is where that logarithm still rounds down to MAX_DEPTH.
+			case "radius":
+				return narrowed({
+					high: down(
+						(k.blockSize * 2 ** (MAX_DEPTH + 0.5)) / CELL_CONSTANT,
+					),
+				});
+			case "blockSize":
+				return narrowed({
+					low: up(
+						(CELL_CONSTANT * k.radius) / 2 ** (MAX_DEPTH + 0.5),
+					),
+				});
+
+			// A map cell has to be coarser than a block or the map is being
+			// asked to describe the ground one block at a time. Three blocks
+			// rather than two, because the level is rounded and a request can
+			// land a factor of root two under what it asked for.
+			case "coarseSpacing":
+				return narrowed({ low: up(3 * k.blockSize) });
+
+			// The world is the map, so an octave narrower than two map cells is
+			// ground that would not exist.
+			case "octaves":
+				return narrowed({
+					high: Math.max(
+						range.low,
+						Math.min(
+							range.high,
+							1 +
+								Math.floor(
+									Math.log(
+										k.noiseScale / (2 * this.coarseCell),
+									) / Math.log(k.lacunarity),
+								),
+						),
+					),
+				});
+			case "noiseScale":
+				return narrowed({ low: up(2 * this.coarseCell) });
+
+			// The crust runs from above the tallest ground to under the deepest
+			// sea, and it can hold at most the layer field's 1,024 layers.
+			case "relief":
+				return narrowed({ high: down(this.reliefCeiling) });
+			case "crustMetres":
+				return narrowed({
+					low: up(this.groundSpan),
+					high: down(this.crustCeiling),
+				});
+
+			// A chunk the size of a whole face leaves nothing for the level of
+			// detail to walk down.
+			case "chunkCells":
+				return narrowed({ high: down(2 ** (this.depth - 1)) });
+
+			case "lowDeck":
+				return narrowed({ high: down(k.highDeck - range.step) });
+			case "highDeck":
+				return narrowed({ low: up(k.lowDeck + range.step) });
+		}
+		return range;
+	}
+
+	/** The deepest crust this block size and the layer field allow, in metres. */
+	get crustCeiling(): number {
+		return (
+			Math.min(maxCrustDepth(this.depth), LAYER_COUNT) *
+			this.knobs.blockSize
+		);
+	}
+
+	/**
+	 * The tallest ground a crust of {@link crustCeiling} can hold.
+	 *
+	 * {@link groundSpan} is linear in Relief, so this is that relationship read
+	 * backwards: whatever multiple of Relief the sea floor adds at this land
+	 * fraction, divide the deepest possible crust by it.
+	 */
+	get reliefCeiling(): number {
+		const perMetre = this.relief > 0 ? this.groundSpan / this.relief : 1;
+		return this.crustCeiling / Math.max(1, perMetre);
+	}
+
+	/**
+	 * Every knob pulled inside the range the rest of the draft leaves it.
+	 *
+	 * Applied in dependency order, because these bound each other: the block
+	 * size and the radius decide the depth, the depth and the map cell decide
+	 * how many octaves fit, and Relief decides how deep the crust has to run.
+	 * Working down that order settles in one pass.
+	 *
+	 * **It only ever pushes a value into range, never back out.** Lowering
+	 * Relief widens what the crust may be and leaves the crust where it was, so
+	 * nothing a person set is undone by a knob they went on to turn back.
+	 */
+	static settle(knobs: PlanetKnobs): PlanetKnobs {
+		const order: (keyof PlanetKnobs)[] = [
+			"blockSize",
+			"radius",
+			"chunkCells",
+			"coarseSpacing",
+			"noiseScale",
+			"octaves",
+			"relief",
+			"crustMetres",
+			"lowDeck",
+			"highDeck",
+		];
+		const out = { ...knobs };
+		const values = out as unknown as Record<string, number>;
+		for (const key of order) {
+			const range = new PlanetSettings(out).rangeFor(key);
+			const was = values[key as string]!;
+			values[key as string] = Math.min(
+				range.high,
+				Math.max(range.low, was),
+			);
+		}
+		return out;
+	}
+
+	/**
 	 * Why this world cannot be built, or nothing if it can.
 	 *
 	 * A person setting numbers by hand will reach one of these, and a message
@@ -697,7 +855,7 @@ export class PlanetSettings {
 		if (reach < this.groundSpan) {
 			const neededCrust = Math.ceil(this.groundSpan);
 			out.push(
-				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the sea floor would fall through the bottom of the world. Raise Crust reaches to at least ${neededCrust} m, or lower Relief to ${Math.floor((reach * this.relief) / Math.max(1, this.groundSpan))} m or under.`,
+				`The crust reaches ${Math.round(reach)} m and the ground spans about ${Math.round(this.groundSpan)} m, so the deepest ocean has no floor: those columns are water down to the last layer and nothing under it. Raise Crust reaches to at least ${neededCrust} m, or lower Relief to ${Math.floor((reach * this.relief) / Math.max(1, this.groundSpan))} m or under.`,
 			);
 		}
 

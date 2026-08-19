@@ -29,7 +29,4 @@ export interface TerrainColumn {
 
 	/** Metres of ground above sea level, negative under the ocean. */
 	readonly elevation: number;
-
-	/** Ground fall per metre travelled, at the coarse map's resolution. */
-	readonly gradient: number;
 }

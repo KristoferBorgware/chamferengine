@@ -1,30 +1,51 @@
 import type { CoarseField } from "./CoarseField.js";
 
 /**
- * Every field a coarse map carries, in the order the editor lists them.
+ * Every picture the editor can draw of a coarse map, in the order it lists
+ * them.
  *
- * A field appears here or it cannot be drawn. `COARSE_FIELDS.test.ts` walks the
- * map's own properties against this table, so a field added to one and not the
- * other fails rather than going quietly missing from the editor.
- *
- * **Two, where there were four.** Water and Drainage were separate fields
- * because a lake stood above sea level and a river had a width; with neither
- * generated, water is wherever the ground is under zero and the height map says
- * so on its own.
+ * **Two pictures of one field.** The map carries a single array — metres above
+ * sea level — and these are two ways of looking at it that stop at different
+ * points in the build. Height is the ground the noise makes, before water has
+ * touched it, so it redraws without waiting for the slow step. Ground is the
+ * finished surface in the colours the world is built from.
  */
 export const COARSE_FIELDS: readonly CoarseField[] = [
 	{
+		id: "height",
 		key: "height",
+		stage: "metres",
+		label: "Height",
+		says: "The ground the noise makes, in metres above sea level, before any water has cut into it. This is the picture the octave knobs are turned against, and it redraws without waiting for erosion.",
+		scale: "linear",
+		// Grey, and absolute metres like the other one, so Relief brightens it
+		// rather than being normalised away. Sea level is the middle stop.
+		ramp: {
+			low: -400,
+			high: 400,
+			stops: [
+				[0.03, 0.03, 0.04],
+				[0.26, 0.27, 0.3],
+				[0.5, 0.51, 0.54],
+				[0.76, 0.77, 0.79],
+				[1.0, 1.0, 1.0],
+			],
+		},
+	},
+	{
+		id: "ground",
+		key: "height",
+		stage: "erosion",
 		label: "Ground",
-		says: "Metres above sea level, after the water has cut into it. Zero is the waterline, so everything blue is sea and everything else is land.",
+		says: "The finished surface, after the water has cut into it, in the colours the world is built from. Zero is the waterline, so everything blue is sea and everything else is land.",
 		scale: "linear",
 		// Absolute metres, not a range that stretches to fit whatever this
 		// planet happens to hold. A ramp scaled to the field would draw every
 		// world the same and make Relief a knob with no picture, which is the
-		// whole complaint that removed the height multiplier: the point of
-		// stating a height in metres is that 100 m of it looks different from
-		// 600 m. Every 100 m is a stop, so the shipped 300 m of relief reaches
-		// bare rock and raising it walks the peaks up into snow.
+		// complaint that removed the height multiplier: the point of stating a
+		// height in metres is that 100 m of it looks different from 600 m.
+		// Every 100 m is a stop, so the shipped 300 m of relief reaches bare
+		// rock and raising it walks the peaks up into snow.
 		ramp: {
 			low: -400,
 			high: 400,
@@ -38,26 +59,6 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 				[0.52, 0.5, 0.3],
 				[0.47, 0.44, 0.41],
 				[0.98, 0.98, 1.0],
-			],
-		},
-	},
-	{
-		key: "slope",
-		label: "Slope",
-		says: "How steeply the ground falls away, as metres of fall per metre travelled. Flat ground is dark and a cliff is bright, and the number means the same at every map size.",
-		scale: "linear",
-		// Erosion is what puts ground at the top of this ramp. Measured at
-		// level 7 on the shipped ground: unwatered noise runs to `0.21` at the
-		// 99th percentile and `0.30` at its steepest, and water at full
-		// strength takes those to `0.58` and `1.24` -- so the channels it cuts
-		// are what the bright end shows.
-		ramp: {
-			low: 0,
-			high: 0.6,
-			stops: [
-				[0.04, 0.04, 0.05],
-				[0.55, 0.55, 0.58],
-				[1.0, 0.98, 0.9],
 			],
 		},
 	},

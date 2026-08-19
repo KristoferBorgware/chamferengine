@@ -17,7 +17,7 @@ import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
  * function of the seed alone: a client regenerates it instead of downloading
  * it, and a wall built later does not move the ground on it.
  *
- * Two fields, `float32`, four bytes a cell: 2.5 MB each at level 8.
+ * **One field**, `float32`, four bytes a cell: 2.5 MB at level 8.
  */
 export class CoarseMap {
 	readonly seed: number;
@@ -35,19 +35,10 @@ export class CoarseMap {
 	 */
 	readonly height: Float32Array;
 
-	/** How steeply the ground falls away, as metres per metre. */
-	readonly slope: Float32Array;
-
-	constructor(
-		seed: number,
-		index: CoarseIndex,
-		height: Float32Array,
-		slope: Float32Array,
-	) {
+	constructor(seed: number, index: CoarseIndex, height: Float32Array) {
 		this.seed = seed;
 		this.index = index;
 		this.height = height;
-		this.slope = slope;
 	}
 
 	get level(): number {
@@ -71,7 +62,6 @@ export class CoarseMap {
 			level: this.index.level,
 			faceIndex: this.index.faceIndex,
 			height: this.height,
-			slope: this.slope,
 		};
 	}
 
@@ -81,7 +71,6 @@ export class CoarseMap {
 			snapshot.seed,
 			new CoarseIndex(snapshot.level, snapshot.faceIndex),
 			snapshot.height,
-			snapshot.slope,
 		);
 	}
 
@@ -141,11 +130,6 @@ export class CoarseMap {
 	/** Metres above sea level under a fine cell. */
 	heightAt(face: number, i: number, j: number, depth: number): number {
 		return this.sample(this.height, face, i, j, depth);
-	}
-
-	/** How steeply the ground falls away under a fine cell. */
-	slopeAt(face: number, i: number, j: number, depth: number): number {
-		return this.sample(this.slope, face, i, j, depth);
 	}
 
 	/**

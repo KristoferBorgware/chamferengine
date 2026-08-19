@@ -1,4 +1,4 @@
-import type { PlanetKnobs } from "./PlanetSettings.js";
+import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
 import { KNOB_RANGES, PlanetSettings } from "./PlanetSettings.js";
 
 /** One row of the panel. */
@@ -34,6 +34,15 @@ interface Knob {
 	 * it to be found in the readout at the bottom.
 	 */
 	readonly given?: (settings: PlanetSettings) => string | null;
+
+	/**
+	 * What moves this slider's own ends, named so the wall says whose it is.
+	 *
+	 * A slider that stops short of its printed range has been narrowed by
+	 * another knob, and "why does this stop here" is the question that costs
+	 * the most time in a panel like this one.
+	 */
+	readonly boundBy?: string;
 
 	/** Named choices, for a knob that is one of a few things rather than a number. */
 	readonly choices?: readonly {
@@ -92,6 +101,8 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "noiseScale",
+				boundBy:
+					"The widest feature has to be wider than two map cells.",
 				map: true,
 				label: "Noise scale",
 				digits: 0,
@@ -100,6 +111,8 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "octaves",
+				boundBy:
+					"Map cell and Noise scale decide how many the map can draw.",
 				map: true,
 				label: "Octaves",
 				digits: 0,
@@ -132,6 +145,8 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "relief",
+				boundBy:
+					"Crust reaches follows this, and the layer field stops at 1,024 layers.",
 				map: true,
 				label: "Relief",
 				digits: 0,
@@ -178,6 +193,7 @@ const GROUPS: Group[] = [
 		knobs: [
 			{
 				key: "coarseSpacing",
+				boundBy: "A map cell has to be coarser than a block.",
 				map: true,
 				label: "Map cell",
 				digits: 0,
@@ -192,6 +208,8 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "radius",
+				boundBy:
+					"Block size and the 64-bit cell address decide how far it goes.",
 				map: true,
 				label: "Radius",
 				digits: 0,
@@ -210,18 +228,23 @@ const GROUPS: Group[] = [
 		knobs: [
 			{
 				key: "blockSize",
+				boundBy:
+					"Radius and the 64-bit cell address decide how small it goes.",
 				label: "Block size",
 				digits: 2,
 				says: "How wide one cell is. Fixed for the life of the world. The radius moves to whatever makes this size exact, so the number above is a request and the readout below is what you get.",
 			},
 			{
 				key: "chunkCells",
+				boundBy: "A chunk has to be smaller than a whole face.",
 				label: "Chunk",
 				digits: 0,
 				says: "How many cells along one edge of a chunk, which is the unit that is generated, meshed, stored and sent. Smaller chunks redraw less when one block changes and cost more of everything else. It does not appear in a cell address.",
 			},
 			{
 				key: "crustMetres",
+				boundBy:
+					"It follows Relief and Land, and the layer field stops at 1,024 layers.",
 				label: "Crust reaches",
 				digits: 0,
 				says: "How far down the world goes, from above the tallest peak to the floor. It has to reach below the deepest sea floor or the ocean falls out of the bottom. This is the layer count, and the layer is ten bits of every cell address.",
@@ -309,6 +332,7 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "lowDeck",
+				boundBy: "It stays under High deck.",
 				label: "Low deck",
 				digits: 0,
 				says: "How high the lower cloud deck sits, from the planet's own surface.",
@@ -316,6 +340,7 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "highDeck",
+				boundBy: "It stays over Low deck.",
 				label: "High deck",
 				digits: 0,
 				says: "How high the upper deck sits. Two decks read as two layers of weather rather than one.",
@@ -538,14 +563,25 @@ export class ParameterPanel {
 			if (toggle)
 				input.checked = this.draft[knob.key] as unknown as boolean;
 			else {
+				// The ends move with the rest of the draft, so a combination
+				// that cannot be built cannot be dragged to either.
+				const live = this.settings.rangeFor(knob.key);
+				input.min = String(live.low);
+				input.max = String(live.high);
+				wrap.classList.toggle(
+					"bound",
+					live.low > range.low || live.high < range.high,
+				);
 				input.value = String(this.draft[knob.key]);
 				shown!.textContent =
 					`${Number(this.draft[knob.key]).toFixed(digits)}` +
 					(range.unit ? ` ${range.unit}` : "");
 			}
 			const given = knob.given?.(this.settings) ?? null;
-			answer.textContent = given ?? "";
-			answer.classList.toggle("some", given !== null);
+			const wall = toggle ? null : this.wallOf(knob, range);
+			const said = [wall, given].filter(Boolean).join(" ");
+			answer.textContent = said;
+			answer.classList.toggle("some", said.length > 0);
 		};
 		write();
 
@@ -567,6 +603,22 @@ export class ParameterPanel {
 			this.touch(range.rebuilds);
 		};
 		return { knob, wrap, input, write };
+	}
+
+	/** Why a slider stops short of its printed range, or nothing if it does not. */
+	private wallOf(knob: Knob, range: KnobRange): string | null {
+		const live = this.settings.rangeFor(knob.key);
+		const unit = range.unit ? ` ${range.unit}` : "";
+		const digits = knob.digits ?? 0;
+		const say = (v: number): string => `${v.toFixed(digits)}${unit}`;
+		const by = knob.boundBy ? ` ${knob.boundBy}` : "";
+		if (live.high < range.high && live.low > range.low)
+			return `held between ${say(live.low)} and ${say(live.high)} here.${by}`;
+		if (live.high < range.high)
+			return `stops at ${say(live.high)} here.${by}`;
+		if (live.low > range.low)
+			return `starts at ${say(live.low)} here.${by}`;
+		return null;
 	}
 
 	/** A change was made: either hand it over now, or wait for the button. */
@@ -607,6 +659,10 @@ export class ParameterPanel {
 	}
 
 	private touch(rebuilds: boolean): void {
+		// Pull every knob inside the range the rest of the draft leaves it,
+		// before anything downstream reads one. A slider that cannot reach a
+		// refusal is worth more than a refusal that explains itself.
+		Object.assign(this.draft, PlanetSettings.settle(this.draft));
 		this.onDraft(this.settings);
 		if (rebuilds) {
 			this.dirty = true;

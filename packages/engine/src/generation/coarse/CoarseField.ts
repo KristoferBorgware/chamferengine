@@ -1,4 +1,5 @@
 import type { CoarseMap } from "./CoarseMap.js";
+import type { CoarseStage } from "./CoarseStage.js";
 
 /**
  * How a value in one of a coarse map's fields is turned into a color.
@@ -26,8 +27,20 @@ export interface CoarseRamp {
  * magnitude.
  */
 export interface CoarseField {
+	/** Names this picture. Two pictures may read one field. */
+	readonly id: string;
+
 	/** The property this reads on a {@link CoarseMap}. */
-	readonly key: "height" | "slope";
+	readonly key: "height";
+
+	/**
+	 * How far down the build this picture needs, and no further.
+	 *
+	 * The steps are a chain and the slow one is at the bottom, so a picture of
+	 * the ground before water cut into it does not have to wait for the water.
+	 * A map pane naming an early step redraws while a knob is still moving.
+	 */
+	readonly stage: CoarseStage;
 
 	/** What to call it beside the picture. */
 	readonly label: string;
@@ -36,17 +49,6 @@ export interface CoarseField {
 	readonly says: string;
 
 	readonly scale: "linear" | "log";
-
-	/**
-	 * Another field this one is drawn as a difference from.
-	 *
-	 * Water is the field that needs it. What it stores is the height water
-	 * stands at, which over the ocean is sea level exactly -- so drawn against
-	 * the terrain ramp the whole sea came out one flat shore color and could
-	 * not be told from lowland. The useful picture is how deep the water is,
-	 * which is this field minus the ground, and that is zero on dry land.
-	 */
-	readonly against?: CoarseField["key"];
 
 	readonly ramp: CoarseRamp;
 }
