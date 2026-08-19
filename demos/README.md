@@ -42,27 +42,34 @@ across 32 points. The last two buttons show the space-filling lattice cells.
 **Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md)
 
 ### [`subdivision-explorer.html`](subdivision-explorer.html)
-The construction as one interactive ball: twenty triangles, the splits under
-them, and the cells on the corners. **Left click a cell** for its address —
-which face, the route down the splits, which corner of the last triangle, and
-whether it is one of the twelve pentagons. **Right click** to stand somewhere.
+Two things in one ball: how the subdivision works, and what level of detail does
+with it. **The splits go deep only where the player stands.** Right click to
+stand somewhere and the triangles halve their way toward you, each drawn in the
+colour of how many levels coarser than full detail it is; the ones that reach
+the chunk level are outlined in blue, and inside those the real cells are built
+at the world's own depth. Wheel all the way in and you are looking at 1 m
+hexagons on a 6.8 km planet.
 
-The bit bar under the address is the stored word, drawn to scale: `planet 12`,
-`face 5`, `path 2 x depth`, `corner 2`, `layer 11`, and whatever is left of the
-64. Drag **Depth** and watch the path field eat the spare — depth 4 leaves 26
-bits over, depth 13 leaves 8, and depth 17 leaves none at all.
+That is the number the demo exists for. At depth 13 with 32-cell chunks,
+**854 triangles cover the whole planet against 1,310,720** if every chunk were
+drawn at full detail. At depth 17 it is 1,307 against 335,544,320.
 
-**Depth, Cell size and Radius are one quantity written three ways**, so moving
-any of them moves another: `radius = cell x 2^depth / 1.20459`. Dragging Radius
-snaps, because a radius is quantised to powers of two and every position between
-two of them is the same planet.
+**Left click a cell** for its address — which face, the route down the splits
+with the chunk's own digits marked off, which corner of the last triangle, and
+whether it is one of the twelve pentagons. Under it the stored word is drawn to
+scale: `planet 12`, `face 5`, `path 2 x depth`, `corner 2`, `layer 11`, and
+whatever is left of the 64. Depth 4 leaves 26 bits over, depth 13 leaves 8, and
+depth 17 leaves none.
 
-Past depth 6 there are more cells than a browser will draw, so it says which
-level it is drawing and how many real cells each one on screen stands for.
+**Depth, Radius and Cell size are one quantity written three ways** —
+`radius = cell x 2^depth / 1.20459` — so moving one moves another. Depth does
+not fix the radius on its own: at depth 13 it still runs from 3.40 km to
+27.20 km, which is the range of cell sizes. The ball is drawn to a compressed
+scale, because the radius runs over four orders of magnitude across the knobs.
 
 **Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md),
 [03 — Addressing](../docs/03-addressing.md),
-[06 — World sizing](../docs/06-world-sizing.md)
+[14 — Meshing and LOD](../docs/14-meshing-and-lod.md)
 
 ### [`goldberg-voxel-sphere.html`](goldberg-voxel-sphere.html)
 The chosen tiling, generated as the dual of a subdivided icosahedron. Four

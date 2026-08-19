@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Subdivision Explorer</title>
+<title>Subdivision and Level of Detail</title>
 <style>
   :root { color-scheme: dark; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -16,7 +16,7 @@
   h1 { font-size:17px; font-weight:650; letter-spacing:-0.01em; }
   .sub { font-size:12.5px; color:#8b93a7; margin-top:3px; }
 
-  .stage { position:relative; flex:1; min-height:56vh; }
+  .stage { position:relative; flex:1; min-height:58vh; }
   canvas { display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
 
   .hud, .card {
@@ -24,24 +24,25 @@
     background:rgba(11,14,20,.78); border:1px solid #222839;
     padding:9px 11px; border-radius:8px; backdrop-filter:blur(6px);
   }
-  .hud { top:10px; left:12px; max-width:290px; }
-  .card { top:10px; right:12px; width:322px; max-width:calc(100% - 24px); }
+  .hud { top:10px; left:12px; width:292px; max-width:calc(100% - 24px); }
+  .card { top:10px; right:12px; width:326px; max-width:calc(100% - 24px); }
   .hud b, .card b { color:#fff; font-weight:600; }
   .muted { color:#8b93a7; }
   .warn { color:#f0b429; }
   .row { display:flex; justify-content:space-between; gap:10px; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11.5px; }
   .digits { word-break:break-all; color:#7fd1ae; }
+  .ramp { display:flex; height:9px; margin:6px 0 3px; border-radius:3px; overflow:hidden; }
+  .ramp div { flex:1; }
+  .rampkey { display:flex; justify-content:space-between; font-size:10.5px; color:#8b93a7; }
 
   .bits { display:flex; height:22px; margin:7px 0 3px; border-radius:4px; overflow:hidden; }
   .bits div { display:flex; align-items:center; justify-content:center;
     font-size:10px; font-weight:600; color:#0b0e14; min-width:0; }
-  .b-planet { background:#5b6b8c; }
-  .b-face   { background:#4f8ef7; }
-  .b-path   { background:#7fd1ae; }
-  .b-corner { background:#f2c14e; }
-  .b-layer  { background:#c78bf0; }
-  .b-spare  { background:#1b2130; color:#6b7488; box-shadow:inset 0 0 0 1px #2a3245; }
+  .b-planet { background:#5b6b8c; } .b-face { background:#4f8ef7; }
+  .b-path { background:#7fd1ae; } .b-corner { background:#f2c14e; }
+  .b-layer { background:#c78bf0; }
+  .b-spare { background:#1b2130; color:#6b7488; box-shadow:inset 0 0 0 1px #2a3245; }
   .key { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:10.5px; color:#8b93a7; }
   .key span::before { content:''; display:inline-block; width:8px; height:8px;
     border-radius:2px; margin-right:4px; vertical-align:middle; }
@@ -53,7 +54,7 @@
     padding:12px 16px 16px; border-top:1px solid #1b2130; background:#0e121b;
     display:flex; flex-wrap:wrap; gap:14px 20px; align-items:flex-start;
   }
-  .knob { display:flex; flex-direction:column; gap:3px; min-width:186px; }
+  .knob { display:flex; flex-direction:column; gap:3px; min-width:184px; }
   .knob label { font-size:11.5px; color:#8b93a7; display:flex; justify-content:space-between; gap:8px; }
   .knob label b { color:#e6e8ee; font-weight:600; }
   .knob input[type=range] { width:100%; accent-color:#4f8ef7; }
@@ -71,8 +72,8 @@
 <body>
 
 <header>
-  <h1>Subdivision explorer — twenty triangles down to one cell</h1>
-  <div class="sub">Drag to turn · left click a cell · right click to stand there · wheel to zoom. The surface layer only.</div>
+  <h1>Subdivision and level of detail — twenty triangles down to one cell</h1>
+  <div class="sub">The splits go deep only where the player stands. Right click to stand somewhere · left click a cell · drag to turn · wheel to zoom. The surface layer only.</div>
 </header>
 
 <div class="stage">
@@ -83,30 +84,35 @@
 
 <div class="panel">
   <div class="knob">
-    <label>Depth <b id="vDepth">4</b></label>
-    <input type="range" id="kDepth" min="1" max="17" step="1" value="4">
+    <label>Depth <b id="vDepth">13</b></label>
+    <input type="range" id="kDepth" min="3" max="17" step="1" value="13">
     <div class="given" id="gDepth"></div>
   </div>
   <div class="knob">
-    <label>Cell size <b id="vCell">1.00 m</b></label>
-    <input type="range" id="kCell" min="0" max="40" step="1" value="12">
-    <div class="given" id="gCell"></div>
-  </div>
-  <div class="knob">
-    <label>Radius <b id="vRadius">— m</b></label>
-    <input type="range" id="kRadius" min="0" max="400" step="1" value="200">
+    <label>Radius <b id="vRadius">—</b></label>
+    <input type="range" id="kRadius" min="0" max="1000" step="1" value="500">
     <div class="given" id="gRadius"></div>
   </div>
   <div class="knob">
-    <label>Show splits to <b id="vSplit">2</b></label>
-    <input type="range" id="kSplit" min="0" max="5" step="1" value="2">
-    <div class="given" id="gSplit"></div>
+    <label>Cell size <b id="vCell">—</b></label>
+    <input type="range" id="kCell" min="0" max="1000" step="1" value="500">
+    <div class="given" id="gCell"></div>
+  </div>
+  <div class="knob">
+    <label>Chunk <b id="vChunk">32</b></label>
+    <input type="range" id="kChunk" min="3" max="6" step="1" value="5">
+    <div class="given" id="gChunk"></div>
+  </div>
+  <div class="knob">
+    <label>Full detail to <b id="vDetail">2.0</b></label>
+    <input type="range" id="kDetail" min="5" max="40" step="1" value="20">
+    <div class="given" id="gDetail"></div>
   </div>
   <div class="toggles">
-    <button id="tCells" class="on">Cells</button>
     <button id="tSplits" class="on">Splits</button>
+    <button id="tChunks" class="on">Chunks</button>
+    <button id="tCells" class="on">Cells</button>
     <button id="tFaces" class="on">Faces</button>
-    <button id="tShade" class="on">Shade</button>
     <button id="tSpin">Spin</button>
   </div>
 </div>
@@ -114,46 +120,38 @@
 <script>
 "use strict";
 
-// ---------------------------------------------------------------------------
-// The constant tying a block size, a radius and a depth together.
-// blockSize = K * radius / 2^depth, from equal-area hexagons on a sphere.
+// The constant tying a cell size, a radius and a depth together, from equal-area
+// hexagons on a sphere: cellSize = K * radius / 2^depth.
 const K = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
-
-// Field widths of the stored word, most significant first.
+const CELL_MIN = 0.5, CELL_MAX = 4;   // metres across one cell
+const WORD = 64;
 const FIELDS = [
   { name: 'planet', bits: 12, cls: 'b-planet' },
   { name: 'face',   bits: 5,  cls: 'b-face'   },
-  { name: 'path',   bits: 0,  cls: 'b-path'   },  // 2 per level of depth
+  { name: 'path',   bits: 0,  cls: 'b-path'   },   // 2 per level of depth
   { name: 'corner', bits: 2,  cls: 'b-corner' },
   { name: 'layer',  bits: 11, cls: 'b-layer'  },
 ];
-const WORD = 64;
 
 // ---------------------------------------------------------------------------
-// vectors
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add3 = (a, b, c) => [a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2]];
 const cross = (a, b) => [
-  a[1] * b[2] - a[2] * b[1],
-  a[2] * b[0] - a[0] * b[2],
-  a[0] * b[1] - a[1] * b[0],
+  a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0],
 ];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-function norm(v) {
-  const l = Math.sqrt(dot(v, v));
-  return [v[0] / l, v[1] / l, v[2] / l];
-}
+function norm(v) { const l = Math.sqrt(dot(v, v)); return [v[0] / l, v[1] / l, v[2] / l]; }
 
 // ---------------------------------------------------------------------------
 // The icosahedron, built rather than transcribed: twelve vertices from the
-// golden ratio, then every triple of them that is a face is the one whose three
-// edges are all the shortest distance there is. Each is wound counter-clockwise
-// seen from outside, which is what makes a face's own normal point outward.
+// golden ratio, then every triple whose three edges are all the shortest
+// distance there is, wound counter-clockwise seen from outside.
 const PHI = (1 + Math.sqrt(5)) / 2;
 const VERTS = [];
 for (const s1 of [-1, 1]) for (const s2 of [-1, 1]) {
-  VERTS.push(norm([0, s1 * 1, s2 * PHI]));
-  VERTS.push(norm([s1 * 1, s2 * PHI, 0]));
-  VERTS.push(norm([s1 * PHI, 0, s2 * 1]));
+  VERTS.push(norm([0, s1, s2 * PHI]));
+  VERTS.push(norm([s1, s2 * PHI, 0]));
+  VERTS.push(norm([s1 * PHI, 0, s2]));
 }
 const FACES = (() => {
   let shortest = Infinity;
@@ -164,22 +162,14 @@ const FACES = (() => {
   const near = (a, b) =>
     Math.abs(dot(sub(VERTS[a], VERTS[b]), sub(VERTS[a], VERTS[b])) - shortest) < 1e-9;
   const out = [];
-  for (let a = 0; a < 12; a++)
-    for (let b = a + 1; b < 12; b++)
-      for (let c = b + 1; c < 12; c++)
-        if (near(a, b) && near(b, c) && near(a, c)) {
-          const n = cross(sub(VERTS[b], VERTS[a]), sub(VERTS[c], VERTS[a]));
-          out.push(dot(n, VERTS[a]) > 0 ? [a, b, c] : [a, c, b]);
-        }
+  for (let a = 0; a < 12; a++) for (let b = a + 1; b < 12; b++) for (let c = b + 1; c < 12; c++)
+    if (near(a, b) && near(b, c) && near(a, c)) {
+      const n = cross(sub(VERTS[b], VERTS[a]), sub(VERTS[c], VERTS[a]));
+      out.push(dot(n, VERTS[a]) > 0 ? [a, b, c] : [a, c, b]);
+    }
   return out;
 })();
-const CENTROIDS = FACES.map(([a, b, c]) =>
-  norm([
-    VERTS[a][0] + VERTS[b][0] + VERTS[c][0],
-    VERTS[a][1] + VERTS[b][1] + VERTS[c][1],
-    VERTS[a][2] + VERTS[b][2] + VERTS[c][2],
-  ]),
-);
+const CENTROIDS = FACES.map(([a, b, c]) => norm(add3(VERTS[a], VERTS[b], VERTS[c])));
 
 /**
  * Where lattice point (i, j) on a face sits on the ball.
@@ -190,21 +180,18 @@ const CENTROIDS = FACES.map(([a, b, c]) =>
  */
 function latticeDir(face, n, i, j) {
   const [a, b, c] = FACES[face];
-  const wa = n - i - j;
+  const w = n - i - j;
   return norm([
-    VERTS[a][0] * wa + VERTS[b][0] * i + VERTS[c][0] * j,
-    VERTS[a][1] * wa + VERTS[b][1] * i + VERTS[c][1] * j,
-    VERTS[a][2] * wa + VERTS[b][2] * i + VERTS[c][2] * j,
+    VERTS[a][0] * w + VERTS[b][0] * i + VERTS[c][0] * j,
+    VERTS[a][1] * w + VERTS[b][1] * i + VERTS[c][1] * j,
+    VERTS[a][2] * w + VERTS[b][2] * i + VERTS[c][2] * j,
   ]);
 }
 
 /** Which face a direction is over: the nearest centroid, exactly. */
 function faceOf(d) {
   let best = 0, bestDot = -2;
-  for (let f = 0; f < 20; f++) {
-    const v = dot(d, CENTROIDS[f]);
-    if (v > bestDot) { bestDot = v; best = f; }
-  }
+  for (let f = 0; f < 20; f++) { const v = dot(d, CENTROIDS[f]); if (v > bestDot) { bestDot = v; best = f; } }
   return best;
 }
 
@@ -222,12 +209,11 @@ function baryOf(d, face) {
 
 /**
  * The lattice point a direction belongs to: cube rounding on the three
- * barycentric weights, with the one that moved furthest corrected so the three
- * still sum to n.
+ * barycentric weights, with the one that moved furthest corrected so they still
+ * sum to n.
  *
  * A cell IS the set of directions this maps to it -- the flat Voronoi hexagon
  * projected outward -- rather than "the nearest centre measured on the ball".
- * The two disagree on about 1% of the sphere, always with an edge neighbour.
  */
 function hexRound(d, face, n) {
   const w = baryOf(d, face);
@@ -244,8 +230,8 @@ function hexRound(d, face, n) {
  * The route down the splits to one lattice point, and which corner of the last
  * triangle it is.
  *
- * Four children each level: the three at the corners keep the frame, and the
- * middle one is turned half a turn -- which is a rotation and not a mirror, so
+ * Four children a level: the three at the corners keep the frame and the middle
+ * one is turned half a turn, which is a rotation and not a mirror -- so
  * handedness never changes anywhere on the planet.
  */
 function pathOf(i, j, depth) {
@@ -259,138 +245,199 @@ function pathOf(i, j, depth) {
     else { digits.push(3); i = m - i; j = m - j; }
     n = m;
   }
-  const corner = i === 1 ? 1 : j === 1 ? 2 : 0;
-  return { digits, corner };
+  return { digits, corner: i === 1 ? 1 : j === 1 ? 2 : 0 };
 }
 
-/** How many of the twelve icosahedron vertices this lattice point is. */
-function isPentagon(n, i, j) {
-  return (i === 0 && j === 0) || (i === n && j === 0) || (i === 0 && j === n);
-}
+const isPentagon = (n, i, j) =>
+  (i === 0 && j === 0) || (i === n && j === 0) || (i === 0 && j === n);
 
 // ---------------------------------------------------------------------------
-// The drawable mesh.
+// A triangle in the hierarchy: a level, a lattice cell in that level's grid,
+// and whether it points the same way as its face or the other way.
 //
-// A cell on a face edge has two names and one place, and one at an icosahedron
-// vertex has five. Keying a cell by its integer weights on the twelve GLOBAL
-// vertices settles that exactly -- no rounding, no distance test -- so the
-// hexagons close across all thirty face edges and the twelve pentagons come out
-// with five corners rather than a hole.
-function buildMesh(level) {
-  const n = 1 << level;
-  const cells = new Map();
-  const keyOf = (face, i, j) => {
-    const [a, b, c] = FACES[face];
-    const parts = [[a, n - i - j], [b, i], [c, j]].filter((p) => p[1] > 0);
-    parts.sort((p, q) => p[0] - q[0]);
-    return parts.map((p) => p[0] + ':' + p[1]).join('|');
-  };
-  const take = (face, i, j, centre) => {
-    const key = keyOf(face, i, j);
-    let cell = cells.get(key);
-    if (!cell) {
-      cell = { dir: latticeDir(face, n, i, j), corners: [], face, i, j,
-               pent: isPentagon(n, i, j) };
-      cells.set(key, cell);
-    }
-    cell.corners.push(centre);
-  };
-  // Every triangle hands its own middle to each of its three corners. Two cells
-  // sharing a triangle therefore share that corner exactly, so no seam can open
-  // between them however the arithmetic rounds.
-  const middle = (face, p, q, r) =>
-    norm([
-      latticeDir(face, n, p[0], p[1])[0] + latticeDir(face, n, q[0], q[1])[0] + latticeDir(face, n, r[0], r[1])[0],
-      latticeDir(face, n, p[0], p[1])[1] + latticeDir(face, n, q[0], q[1])[1] + latticeDir(face, n, r[0], r[1])[1],
-      latticeDir(face, n, p[0], p[1])[2] + latticeDir(face, n, q[0], q[1])[2] + latticeDir(face, n, r[0], r[1])[2],
-    ]);
-  for (let face = 0; face < 20; face++)
-    for (let i = 0; i < n; i++)
-      for (let j = 0; i + j < n; j++) {
-        const up = middle(face, [i, j], [i + 1, j], [i, j + 1]);
-        take(face, i, j, up); take(face, i + 1, j, up); take(face, i, j + 1, up);
-        if (i + j < n - 1) {
-          const down = middle(face, [i + 1, j], [i, j + 1], [i + 1, j + 1]);
-          take(face, i + 1, j, down); take(face, i, j + 1, down); take(face, i + 1, j + 1, down);
-        }
-      }
-  // Put each ring in order around its own cell, so the polygon is convex on
-  // screen rather than a star.
-  for (const cell of cells.values()) {
-    const up = cell.dir;
-    let ref = Math.abs(up[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
-    const east = norm(cross(up, ref));
-    const north = cross(up, east);
-    cell.corners.sort(
-      (p, q) =>
-        Math.atan2(dot(p, north), dot(p, east)) -
-        Math.atan2(dot(q, north), dot(q, east)),
-    );
-  }
-  return [...cells.values()];
+// Splitting one gives four. Three keep the parent's own orientation and sit at
+// its corners; the fourth is the middle, and it is the one turned half a turn.
+function triCorners(t) {
+  const n = 1 << t.level;
+  return t.up
+    ? [[t.i, t.j], [t.i + 1, t.j], [t.i, t.j + 1]]
+    : [[t.i + 1, t.j], [t.i, t.j + 1], [t.i + 1, t.j + 1]];
+}
+function triDirs(t) {
+  const n = 1 << t.level;
+  return triCorners(t).map(([i, j]) => latticeDir(t.face, n, i, j));
+}
+function children(t) {
+  const i = t.i * 2, j = t.j * 2, L = t.level + 1;
+  return t.up
+    ? [{ face: t.face, level: L, i, j, up: true },
+       { face: t.face, level: L, i: i + 1, j, up: true },
+       { face: t.face, level: L, i, j: j + 1, up: true },
+       { face: t.face, level: L, i, j, up: false }]
+    : [{ face: t.face, level: L, i: i + 1, j, up: false },
+       { face: t.face, level: L, i, j: j + 1, up: false },
+       { face: t.face, level: L, i: i + 1, j: j + 1, up: false },
+       { face: t.face, level: L, i: i + 1, j: j + 1, up: true }];
 }
 
 /**
- * Every triangle edge from the first cut down to `maxLevel`, each tagged with
- * the level that introduced it.
+ * Which triangles a viewer sees, each at the level to draw it.
  *
- * A cut made early is still there at every level under it, so an edge is
- * recorded once at its coarsest level and drawn at that weight. Coarse lines
- * are drawn last and heaviest, which is what makes the order of the splits
- * readable rather than a uniform mesh.
+ * The walk starts at the twenty faces, which is what the hierarchy is for. A
+ * triangle far enough away for its own width is kept; one closer is split into
+ * its four children and each asked again. Children tile their parent exactly,
+ * so the surface is covered once, with no gap and no overlap, however the
+ * levels fall.
+ *
+ * `finest` stops it: that is the chunk level, and a triangle there is a chunk.
+ * Everything coarser is the same chunk drawn with fewer cells in it -- level of
+ * detail is re-sampling the ground at a wider spacing, never dropping cells out
+ * of a fine mesh.
  */
-function buildSplitEdges(maxLevel) {
-  const fine = 1 << maxLevel;
-  const seen = new Set();
+function selectTriangles(player, finest, detail, radius) {
   const out = [];
-  for (let level = 1; level <= maxLevel; level++) {
-    const n = 1 << level;
-    const up = fine / n;
-    for (let face = 0; face < 20; face++)
-      for (let i = 0; i < n; i++)
-        for (let j = 0; i + j < n; j++)
-          for (const [p, q] of [
-            [[i, j], [i + 1, j]],
-            [[i, j], [i, j + 1]],
-            [[i + 1, j], [i, j + 1]],
-          ]) {
-            const a = [p[0] * up, p[1] * up], b = [q[0] * up, q[1] * up];
-            const key = face + ':' + Math.min(a[0], b[0]) + ',' + Math.min(a[1], b[1]) +
-              ':' + Math.max(a[0], b[0]) + ',' + Math.max(a[1], b[1]);
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ face, a, b, level });
-          }
-  }
-  return { n: fine, list: out };
+  const walk = (t) => {
+    const dirs = triDirs(t);
+    const centre = norm(add3(dirs[0], dirs[1], dirs[2]));
+    // Half the triangle's own angular reach, and the surface distance to it.
+    const spread = Math.acos(Math.min(1, Math.max(-1, dot(centre, dirs[0]))));
+    const away = Math.acos(Math.min(1, Math.max(-1, dot(centre, player)))) * radius;
+    const width = 2 * spread * radius;
+    if (t.level < finest && away < detail * width) {
+      for (const child of children(t)) walk(child);
+      return;
+    }
+    out.push({ ...t, centre, dirs, lod: finest - t.level, away, width });
+  };
+  for (let face = 0; face < 20; face++) walk({ face, level: 0, i: 0, j: 0, up: true });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
-// state
+/**
+ * The real cells inside a handful of chunks, at the world's own full depth.
+ *
+ * Only the chunks nearest the player are built, which is the whole point: at
+ * depth 13 the planet holds 671 million cells and one chunk holds 561 of them.
+ *
+ * Every triangle hands its own middle to each of its three corners, so two
+ * cells sharing a triangle share that corner exactly and no seam can open
+ * between them. A cell that did not collect a full ring sits on the edge of
+ * what was built and is left undrawn rather than drawn as a fragment.
+ */
+function buildPatch(chunks, depth) {
+  const n = 1 << depth;
+  const points = new Map();      // "i,j" -> [i, j], per face
+  const faces = new Map();       // face -> point map
+  const room = (face) => {
+    if (!faces.has(face)) faces.set(face, new Map());
+    return faces.get(face);
+  };
+  for (const chunk of chunks) {
+    const m = 1 << (depth - chunk.level);
+    const [p, q, r] = triCorners(chunk).map(([i, j]) => [i * m, j * m]);
+    const loI = Math.min(p[0], q[0], r[0]) - 2, hiI = Math.max(p[0], q[0], r[0]) + 2;
+    const loJ = Math.min(p[1], q[1], r[1]) - 2, hiJ = Math.max(p[1], q[1], r[1]) + 2;
+    const inside = (i, j) => {
+      // Barycentric sign test in the lattice, so a down-triangle works too.
+      const s = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+      const w = s(p, q, r), pt = [i, j];
+      const s1 = s(p, q, pt) / w, s2 = s(q, r, pt) / w, s3 = s(r, p, pt) / w;
+      return s1 >= -0.35 && s2 >= -0.35 && s3 >= -0.35;
+    };
+    const at = room(chunk.face);
+    for (let i = Math.max(0, loI); i <= Math.min(n, hiI); i++)
+      for (let j = Math.max(0, loJ); j <= Math.min(n - i, hiJ); j++)
+        if (inside(i, j)) at.set(i + ',' + j, [i, j]);
+  }
+
+  const cells = new Map();
+  const dirCache = new Map();
+  const dirAt = (face, i, j) => {
+    const key = face + ':' + i + ',' + j;
+    let d = dirCache.get(key);
+    if (!d) { d = latticeDir(face, n, i, j); dirCache.set(key, d); }
+    return d;
+  };
+  const keyOf = (face, i, j) => {
+    const [a, b, c] = FACES[face];
+    const parts = [[a, n - i - j], [b, i], [c, j]].filter((x) => x[1] > 0);
+    parts.sort((x, y) => x[0] - y[0]);
+    return parts.map((x) => x[0] + ':' + x[1]).join('|');
+  };
+  const take = (face, i, j, middle) => {
+    const key = keyOf(face, i, j);
+    let cell = cells.get(key);
+    if (!cell) {
+      cell = { dir: dirAt(face, i, j), corners: [], face, i, j, pent: isPentagon(n, i, j) };
+      cells.set(key, cell);
+    }
+    cell.corners.push(middle);
+  };
+  for (const [face, at] of faces) {
+    const has = (i, j) => at.has(i + ',' + j);
+    for (const [, [i, j]] of at) {
+      if (has(i + 1, j) && has(i, j + 1)) {
+        const up = norm(add3(dirAt(face, i, j), dirAt(face, i + 1, j), dirAt(face, i, j + 1)));
+        take(face, i, j, up); take(face, i + 1, j, up); take(face, i, j + 1, up);
+      }
+      if (has(i + 1, j) && has(i, j + 1) && has(i + 1, j + 1)) {
+        const down = norm(add3(dirAt(face, i + 1, j), dirAt(face, i, j + 1), dirAt(face, i + 1, j + 1)));
+        take(face, i + 1, j, down); take(face, i, j + 1, down); take(face, i + 1, j + 1, down);
+      }
+    }
+  }
+  const out = [];
+  for (const cell of cells.values()) {
+    const want = cell.pent ? 5 : 6;
+    if (cell.corners.length !== want) continue;      // on the rim of what was built
+    const up = cell.dir;
+    const ref = Math.abs(up[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    const east = norm(cross(up, ref));
+    const north = cross(up, east);
+    cell.corners.sort((p, q) =>
+      Math.atan2(dot(p, north), dot(p, east)) - Math.atan2(dot(q, north), dot(q, east)));
+    // Which chunk owns it: the first `chunkLevel` digits of its own route down
+    // the splits, which is the same truncation the address makes.
+    const route = pathOf(cell.i, cell.j, depth).digits.slice(0, chunkLevel());
+    let h = cell.face * 7;
+    for (const d of route) h = (h * 4 + d) % 360;
+    cell.hue = (h * 61) % 360;
+    out.push(cell);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 const state = {
-  depth: 4,
-  blockSize: 1,
-  split: 2,
-  cells: true, splits: true, faces: true, shade: true, spin: false,
+  depth: 13,
+  cellSize: 1,
+  chunkBits: 5,          // cells along a chunk edge = 2^chunkBits
+  detail: 2,
+  splits: true, chunks: true, cells: true, faces: true, spin: false,
   yaw: 0.6, pitch: 0.35, zoom: 1,
-  selected: null,   // { face, i, j }
-  player: null,     // unit direction
+  player: [0, 0, 1],   // put under the eye once the camera is known
+  selected: null,
 };
+const radius = () => (state.cellSize * 2 ** state.depth) / K;
+const radiusRange = () => [
+  (CELL_MIN * 2 ** state.depth) / K, (CELL_MAX * 2 ** state.depth) / K,
+];
+const chunkCells = () => 1 << state.chunkBits;
+const chunkLevel = () => Math.max(0, state.depth - state.chunkBits);
 
-/** The cell level actually drawn, which is not always the one asked for. */
-const DRAW_CAP = 6;
-const drawLevel = () => Math.min(state.depth, DRAW_CAP);
-const radius = () => (state.blockSize * 2 ** state.depth) / K;
+/** How many chunks around the player get their real cells drawn. */
+const PATCH_CHUNKS = 12;
 
-let mesh = buildMesh(drawLevel());
-let meshLevel = drawLevel();
-let edges = buildSplitEdges(Math.max(1, Math.min(state.split, drawLevel())));
-let edgeLevel = Math.min(state.split, drawLevel());
-
-function remesh() {
-  if (drawLevel() !== meshLevel) { meshLevel = drawLevel(); mesh = buildMesh(meshLevel); }
-  const want = Math.min(state.split, drawLevel());
-  if (want !== edgeLevel) { edgeLevel = want; edges = buildSplitEdges(Math.max(1, want)); }
+let tris = [], patch = [], patchChunks = 0;
+function rebuild() {
+  tris = selectTriangles(state.player, chunkLevel(), state.detail, radius());
+  const full = tris
+    .filter((t) => t.level === chunkLevel())
+    .sort((a, b) => a.away - b.away)
+    .slice(0, PATCH_CHUNKS);
+  patchChunks = full.length;
+  patch = state.cells && full.length ? buildPatch(full, state.depth) : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -400,8 +447,7 @@ function rotate(v) {
   const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
   const x = v[0] * cy + v[2] * sy;
   const z = -v[0] * sy + v[2] * cy;
-  const y = v[1] * cp - z * sp;
-  return [x, y, z * cp + v[1] * sp];
+  return [x, v[1] * cp - z * sp, z * cp + v[1] * sp];
 }
 function unrotate(v) {
   const cy = Math.cos(state.yaw), sy = Math.sin(state.yaw);
@@ -413,7 +459,21 @@ function unrotate(v) {
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-let W = 0, H = 0, cx = 0, cy = 0, scale = 1, EYE = 3.4;
+let W = 0, H = 0, cx = 0, cy = 0, scale = 1;
+const EYE = 3.4;
+
+/**
+ * How big the ball is drawn.
+ *
+ * The radius runs from a couple of metres to hundreds of kilometres across the
+ * knobs, which is four orders of magnitude and cannot be drawn to scale beside
+ * itself. The drawn size follows the logarithm of it, so the knob is visibly
+ * alive and the order is right, and the readout carries the metres.
+ */
+function ballScale() {
+  const span = Math.log2(radius() / 1.4) / 18;
+  return (0.28 + 0.20 * Math.max(0, Math.min(1, span)));
+}
 
 function resize() {
   const box = canvas.getBoundingClientRect();
@@ -422,37 +482,36 @@ function resize() {
   canvas.width = W * dpr; canvas.height = H * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   cx = W / 2; cy = H / 2;
-  scale = Math.min(W, H) * 0.42 * state.zoom;
+  scale = Math.min(W, H) * ballScale() * state.zoom;
   draw();
 }
 
 /** Project a rotated unit direction. Behind the limb it returns nothing. */
 function project(v) {
-  if (v[2] < 1 / EYE) return null;           // over the horizon from this eye
+  if (v[2] < 1 / EYE) return null;
   const k = (scale * EYE) / (EYE - v[2]);
   return [cx + v[0] * k, cy - v[1] * k];
 }
+const rimRadius = () => (scale * EYE) / Math.sqrt(EYE * EYE - 1);
 
 /**
  * The same, with a point just past the limb held on it rather than dropped.
  *
  * A cell whose middle is in view can have a corner a few metres over the
- * horizon, and dropping the whole cell for it takes a ring of them off the
- * edge of the ball. Held on the limb the shape is a sliver short and the
- * tiling stays closed, which is what the picture is about.
+ * horizon, and dropping the whole cell for it takes a ring of them off the edge
+ * of the ball.
  */
 function projectHeld(v) {
   const p = project(v);
   if (p) return p;
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1]) || 1;
-  const rim = (scale * EYE) / Math.sqrt(EYE * EYE - 1);
+  const rim = rimRadius();
   return [cx + (v[0] / len) * rim, cy - (v[1] / len) * rim];
 }
 
-/** The direction under a screen point, or nothing if the click missed the ball. */
+/** The direction under a screen point, or nothing if it missed the ball. */
 function pick(sx, sy) {
   const px = (sx - cx) / scale, py = -(sy - cy) / scale;
-  // A ray from the eye at (0, 0, EYE) through the image plane at z = EYE - 1.
   const dir = norm([px / EYE, py / EYE, -1]);
   const o = [0, 0, EYE];
   const b = dot(o, dir), c = dot(o, o) - 1;
@@ -462,24 +521,44 @@ function pick(sx, sy) {
   return unrotate(norm([o[0] + dir[0] * t, o[1] + dir[1] * t, o[2] + dir[2] * t]));
 }
 
-const FACE_HUE = (f) => `hsl(${(f * 47) % 360} 42% ${44}%)`;
-const LIGHT = norm([0.5, 0.7, 0.9]);
+// ---------------------------------------------------------------------------
+/** Coarse is cold and fine is warm, so the bands read at a glance. */
+function lodColor(lod, maxLod, alpha) {
+  const t = maxLod > 0 ? Math.min(1, lod / maxLod) : 0;
+  return `hsl(${(150 + 110 * t).toFixed(0)} ${(70 - 25 * t).toFixed(0)}% ${(62 - 18 * t).toFixed(0)}% / ${alpha})`;
+}
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
+  const rim = rimRadius();
+  const g = ctx.createRadialGradient(cx - rim * 0.3, cy - rim * 0.3, rim * 0.1, cx, cy, rim);
+  g.addColorStop(0, '#161d2b'); g.addColorStop(1, '#0c1017');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(cx, cy, rim, 0, 2 * Math.PI); ctx.fill();
 
-  // the ball behind everything, so a gap in the tiling shows as a hole
-  const back = project([0, 0, 1]);
-  if (back) {
-    const rim = (scale * EYE) / Math.sqrt(EYE * EYE - 1);
-    const g = ctx.createRadialGradient(cx - rim * 0.3, cy - rim * 0.3, rim * 0.1, cx, cy, rim);
-    g.addColorStop(0, '#1b2333'); g.addColorStop(1, '#0d1119');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(cx, cy, rim, 0, 2 * Math.PI); ctx.fill();
+  const maxLod = tris.reduce((m, t) => Math.max(m, t.lod), 0);
+
+  // The selection, coarse triangles first so the fine ones sit over them. Every
+  // edge here is a split that was made; where they crowd is where the player is.
+  if (state.splits) {
+    const order = [...tris].sort((a, b) => a.level - b.level);
+    for (const t of order) {
+      // Drawn if any part of it is on this side of the limb, so a face-sized
+      // triangle straddling the edge is not dropped whole.
+      if (!t.dirs.some((d) => rotate(d)[2] >= 1 / EYE)
+          && rotate(t.centre)[2] < 1 / EYE) continue;
+      const dirs = t.dirs;
+      ctx.strokeStyle = lodColor(t.lod, maxLod, 0.85);
+      ctx.lineWidth = t.level === chunkLevel() ? 1.5 : 0.7 + 0.5 * (chunkLevel() - t.level) / Math.max(1, chunkLevel()) * 3;
+      ctx.beginPath();
+      arc(dirs[0], dirs[1]); arc(dirs[1], dirs[2]); arc(dirs[2], dirs[0]);
+      ctx.stroke();
+    }
   }
 
+  // The real cells, at the world's own depth, in the chunks nearest the player.
   if (state.cells) {
-    for (const cell of mesh) {
+    for (const cell of patch) {
       const up = rotate(cell.dir);
       if (up[2] < 1 / EYE) continue;
       const path = new Path2D();
@@ -488,61 +567,46 @@ function draw() {
         if (k === 0) path.moveTo(p[0], p[1]); else path.lineTo(p[0], p[1]);
       }
       path.closePath();
-      const lit = state.shade ? 0.45 + 0.55 * Math.max(0, dot(up, LIGHT)) : 1;
-      if (cell.pent) ctx.fillStyle = `rgba(242,84,61,${0.55 + 0.45 * lit})`;
-      else {
-        const base = FACE_HUE(cell.face);
-        ctx.fillStyle = base;
-        ctx.globalAlpha = lit;
-      }
+      ctx.fillStyle = cell.pent
+        ? 'rgba(242,84,61,.92)'
+        : `hsl(${cell.hue} 38% 52% / 0.62)`;
       ctx.fill(path);
-      ctx.globalAlpha = 1;
-      if (meshLevel <= 5) {
-        ctx.strokeStyle = 'rgba(11,14,20,.55)'; ctx.lineWidth = 0.6; ctx.stroke(path);
-      }
+      ctx.strokeStyle = 'rgba(11,14,20,.7)'; ctx.lineWidth = 0.6; ctx.stroke(path);
     }
   }
 
-  // The splits, finest first so the coarse cuts are drawn over them. The first
-  // cut is the heaviest line and the last is a hairline, so the order the
-  // triangles were made in is the order they read in.
-  if (state.splits && edgeLevel > 0) {
-    const n = edges.n;
-    for (let level = edgeLevel; level >= 1; level--) {
-      const age = edgeLevel - level;
-      ctx.strokeStyle = `rgba(127,209,174,${(0.45 + 0.13 * age).toFixed(3)})`;
-      ctx.lineWidth = 0.55 + 0.55 * age;
+  // The chunks that reached full detail: the ones whose cells are drawn.
+  if (state.chunks) {
+    for (const t of tris) {
+      if (t.level !== chunkLevel()) continue;
+      if (rotate(t.centre)[2] < 1 / EYE) continue;
+      // Outlined rather than filled, so the cells inside stay visible.
+      ctx.strokeStyle = '#4f8ef7'; ctx.lineWidth = 2;
       ctx.beginPath();
-      for (const e of edges.list) {
-        if (e.level !== level) continue;
-        const a = project(rotate(latticeDir(e.face, n, e.a[0], e.a[1])));
-        const b = project(rotate(latticeDir(e.face, n, e.b[0], e.b[1])));
-        if (!a || !b) continue;
-        ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-      }
+      arc(t.dirs[0], t.dirs[1]); arc(t.dirs[1], t.dirs[2]); arc(t.dirs[2], t.dirs[0]);
       ctx.stroke();
     }
   }
 
-  // The twenty faces themselves, thick, over everything.
+
   if (state.faces) {
-    ctx.strokeStyle = '#4f8ef7'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
     ctx.beginPath();
     for (let face = 0; face < 20; face++) {
       const [a, b, c] = FACES[face];
-      for (const [u, v] of [[a, b], [b, c], [c, a]]) arc(VERTS[u], VERTS[v]);
+      arc(VERTS[a], VERTS[b]); arc(VERTS[b], VERTS[c]); arc(VERTS[c], VERTS[a]);
     }
     ctx.stroke();
   }
 
-  if (state.selected) outline(state.selected, '#f2c14e', 2.4);
-  if (state.player) marker(state.player);
+  if (state.selected) outlineSelected();
+  marker(state.player);
   readout();
 }
 
 /** A great-circle segment, in enough pieces that the limb stays curved. */
 function arc(u, v) {
-  const STEPS = 24;
+  const STEPS = 16;
   let first = true;
   for (let s = 0; s <= STEPS; s++) {
     const t = s / STEPS;
@@ -554,51 +618,35 @@ function arc(u, v) {
   }
 }
 
-/**
- * Outline one cell at the drawn level.
- *
- * At a depth past what can be drawn this is the triangle the cell sits in
- * rather than the cell, because a cell there is smaller than a pixel -- which
- * is the point the readout makes in numbers.
- */
-function outline(sel, color, width) {
-  const n = 1 << meshLevel;
-  const shift = state.depth - meshLevel;
-  const i = sel.i >> shift, j = sel.j >> shift;
-  const key = mesh.find((c) => c.face === sel.face && c.i === i && c.j === j)
-    || mesh.find((c) => {
-      const d = rotate(c.dir); return d[2] > 1 / EYE && near(c.dir, sel.dir, 1 / n);
-    });
-  if (!key) return;
-  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round';
+function outlineSelected() {
+  const s = state.selected;
+  const cell = patch.find((c) => c.face === s.face && c.i === s.i && c.j === s.j);
+  if (!cell) return;
+  ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
   ctx.beginPath();
-  let first = true;
-  for (const corner of key.corners) {
+  cell.corners.forEach((corner, k) => {
     const p = projectHeld(rotate(corner));
-    if (first) { ctx.moveTo(p[0], p[1]); first = false; } else ctx.lineTo(p[0], p[1]);
-  }
+    if (k === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+  });
   ctx.closePath(); ctx.stroke();
 }
-const near = (a, b, r) => dot(sub(a, b), sub(a, b)) < r * r;
 
 function marker(dir) {
   const p = project(rotate(dir));
   if (!p) return;
-  ctx.lineWidth = 3; ctx.strokeStyle = '#000';
-  for (const [w, col] of [[3.4, '#000'], [1.6, '#fff']]) {
+  for (const [w, col] of [[3.6, '#000'], [1.7, '#fff']]) {
     ctx.lineWidth = w; ctx.strokeStyle = col;
-    ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 2 * Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(p[0], p[1], 5.5, 0, 2 * Math.PI); ctx.stroke();
     ctx.beginPath();
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      ctx.moveTo(p[0] + dx * 10, p[1] + dy * 10);
-      ctx.lineTo(p[0] + dx * 6.5, p[1] + dy * 6.5);
+      ctx.moveTo(p[0] + dx * 11, p[1] + dy * 11);
+      ctx.lineTo(p[0] + dx * 7, p[1] + dy * 7);
     }
     ctx.stroke();
   }
 }
 
 // ---------------------------------------------------------------------------
-// the numbers
 const fmt = (x) => x.toLocaleString('en-US');
 function metres(m) {
   if (m >= 1000) return (m / 1000).toFixed(m >= 10000 ? 0 : 2) + ' km';
@@ -607,124 +655,123 @@ function metres(m) {
 }
 
 function readout() {
-  const D = state.depth, n = 1 << D;
-  const cells = 10 * 4 ** D + 2;
-  const drawn = 10 * 4 ** meshLevel + 2;
-  const perDrawn = 4 ** (D - meshLevel);
+  const D = state.depth;
+  const C = chunkLevel();
+  const maxLod = tris.reduce((m, t) => Math.max(m, t.lod), 0);
+  const chunkSpan = chunkCells() * state.cellSize;
+  const ramp = [];
+  for (let lod = 0; lod <= maxLod; lod++)
+    ramp.push(`<div style="background:${lodColor(lod, maxLod, 1)}"></div>`);
 
   document.getElementById('hud').innerHTML =
-    `<div class="row"><span>Depth</span><b>${D}</b></div>` +
-    `<div class="row"><span>Cells on the planet</span><b>${fmt(cells)}</b></div>` +
-    `<div class="row"><span>Cell across</span><b>${metres(state.blockSize)}</b></div>` +
-    `<div class="row"><span>Radius</span><b>${metres(radius())}</b></div>` +
-    `<div class="row"><span>Pentagons</span><b>12</b></div>` +
-    (meshLevel < D
-      ? `<div class="warn" style="margin-top:5px">Drawing level ${meshLevel} — ` +
-        `${fmt(drawn)} of them. Each one you see stands for <b>${fmt(perDrawn)}</b> real cells.</div>`
-      : `<div class="muted" style="margin-top:5px">Every cell on screen is a real one.</div>`);
+    `<div class="row"><span>Cells on the planet</span><b>${fmt(10 * 4 ** D + 2)}</b></div>` +
+    `<div class="row"><span>Chunks on the planet</span><b>${fmt(20 * 4 ** C)}</b></div>` +
+    `<div class="row"><span>Chunk across</span><b>${metres(chunkSpan)}, ${fmt(chunkCells())} cells</b></div>` +
+    `<div class="row"><span>Chunk level</span><b>${C} of ${D}</b></div>` +
+    `<div style="margin-top:6px" class="row"><span>Triangles drawn</span><b>${fmt(tris.length)}</b></div>` +
+    `<div class="row"><span>At full detail</span><b>${fmt(tris.filter((t) => t.level === C).length)}</b></div>` +
+    `<div class="row"><span>Real cells drawn</span><b>${fmt(patch.length)}</b></div>` +
+    `<div class="row"><span>Chunks with cells built</span><b>${fmt(patchChunks)}</b></div>` +
+    `<div class="ramp">${ramp.join('')}</div>` +
+    `<div class="rampkey"><span>full detail</span><span>${maxLod} levels coarser</span></div>` +
+    `<div class="muted" style="margin-top:5px">` +
+    `${fmt(tris.length)} triangles cover the whole planet, against ` +
+    `<b>${fmt(20 * 4 ** C)}</b> if every chunk were drawn at full detail.</div>`;
 
   const card = document.getElementById('card');
   if (!state.selected) {
     card.innerHTML =
-      `<div class="muted">Left click a cell for its address.<br>` +
-      `Right click to stand somewhere.</div>` + bitsBar(null);
+      `<div class="muted">Left click a cell in the blue chunks for its address.<br>` +
+      `Right click anywhere to stand there.</div>` + bitsBar(D);
     return;
   }
-  const s = state.selected;
+  const s = state.selected, n = 1 << D;
   const { digits, corner } = pathOf(s.i, s.j, D);
   const pent = isPentagon(n, s.i, s.j);
   card.innerHTML =
     `<div class="row"><span>Face</span><b>${s.face} of 20</b></div>` +
-    `<div class="row"><span>Lattice (i, j)</span><b>${s.i}, ${s.j} of ${n}</b></div>` +
+    `<div class="row"><span>Lattice (i, j)</span><b>${fmt(s.i)}, ${fmt(s.j)} of ${fmt(n)}</b></div>` +
     `<div class="row"><span>Corner of the last split</span><b>${corner}</b></div>` +
     `<div class="row"><span>Neighbours</span><b>${pent ? '5 — a pentagon' : '6'}</b></div>` +
-    `<div style="margin-top:6px" class="muted">Route down the splits</div>` +
-    `<div class="mono digits">${digits.join('') || '(the face itself)'}</div>` +
-    (meshLevel < D
-      ? `<div class="warn" style="margin-top:5px">The ring on the ball is the ` +
-        `level ${meshLevel} cell this one sits inside. The address is the real ` +
-        `one, at depth ${D}.</div>`
-      : '') +
+    `<div style="margin-top:6px" class="muted">Route down the splits — the first ` +
+    `${C} digits name the chunk</div>` +
+    `<div class="mono digits"><b style="color:#4f8ef7">${digits.slice(0, C).join('')}</b>` +
+    `${digits.slice(C).join('')}</div>` +
     bitsBar(D);
 }
 
 function bitsBar(D) {
-  const parts = FIELDS.map((f) =>
-    f.name === 'path' ? { ...f, bits: 2 * (D === null ? state.depth : D) } : f);
+  const parts = FIELDS.map((f) => (f.name === 'path' ? { ...f, bits: 2 * D } : f));
   const used = parts.reduce((t, f) => t + f.bits, 0);
   const spare = WORD - used;
-  const cell = (f) =>
-    `<div class="${f.cls}" style="flex:${f.bits}" title="${f.name} ${f.bits} bits">${f.bits}</div>`;
   return (
     `<div style="margin-top:8px" class="row"><span>Word</span>` +
     `<b>${used} of ${WORD} bits${spare < 0 ? ' — over' : `, ${spare} spare`}</b></div>` +
-    `<div class="bits">${parts.map(cell).join('')}` +
+    `<div class="bits">` +
+    parts.map((f) => `<div class="${f.cls}" style="flex:${f.bits}" title="${f.name} ${f.bits} bits">${f.bits}</div>`).join('') +
     (spare > 0 ? `<div class="b-spare" style="flex:${spare}">${spare}</div>` : '') +
-    `</div>` +
-    `<div class="key">` +
+    `</div><div class="key">` +
     parts.map((f) => `<span class="k-${f.name}">${f.name}</span>`).join('') +
-    (spare > 0 ? `<span class="k-spare">spare</span>` : '') +
-    `</div>`
+    (spare > 0 ? `<span class="k-spare">spare</span>` : '') + `</div>`
   );
 }
 
 // ---------------------------------------------------------------------------
-// knobs. Depth, cell size and radius are one quantity written three ways, so
-// two of them fix the third and the panel shows which one just moved.
-const CELL_STEPS = [];
-for (let e = -8; e <= 32; e++) CELL_STEPS.push(2 ** (e / 4));
-
+// Depth, radius and cell size are one quantity written three ways, so two of
+// them fix the third. Depth is a whole number; inside one depth the radius
+// still has an eightfold range, because that is the range of cell sizes.
 const el = (id) => document.getElementById(id);
+const lerpLog = (t, lo, hi) => lo * (hi / lo) ** t;
+const invLog = (v, lo, hi) => Math.log(v / lo) / Math.log(hi / lo);
 
 function syncKnobs(moved) {
+  const [rLo, rHi] = radiusRange();
   el('kDepth').value = String(state.depth);
   el('vDepth').textContent = String(state.depth);
-  let step = 0, bestOff = Infinity;
-  CELL_STEPS.forEach((v, k) => {
-    const off = Math.abs(Math.log(v / state.blockSize));
-    if (off < bestOff) { bestOff = off; step = k; }
-  });
-  el('kCell').value = String(step);
-  el('vCell').textContent = metres(state.blockSize);
+  el('kRadius').value = String(Math.round(1000 * invLog(radius(), rLo, rHi)));
   el('vRadius').textContent = metres(radius());
-  el('kRadius').value = String(Math.round((Math.log2(radius()) - 4) * 20));
-  el('vSplit').textContent = String(Math.min(state.split, drawLevel()));
+  el('kCell').value = String(Math.round(1000 * invLog(state.cellSize, CELL_MIN, CELL_MAX)));
+  el('vCell').textContent = metres(state.cellSize);
+  el('vChunk').textContent = String(chunkCells());
+  el('vDetail').textContent = state.detail.toFixed(1);
   el('gDepth').textContent = `${fmt(10 * 4 ** state.depth + 2)} cells a layer`;
-  el('gCell').textContent = `radius = cell x 2^depth / ${K.toFixed(5)}`;
   el('gRadius').textContent =
-    moved === 'radius'
-      ? `snapped to depth ${state.depth} — a radius is quantised to powers of two`
-      : 'follows from the other two';
-  el('gSplit').textContent =
-    state.split > drawLevel()
-      ? `held at ${drawLevel()} — deeper than this is drawn`
-      : `${fmt(20 * 4 ** Math.min(state.split, drawLevel()))} triangles`;
+    `${metres(rLo)} to ${metres(rHi)} at this depth`;
+  el('gCell').textContent = `radius = cell x 2^depth / ${K.toFixed(5)}`;
+  el('gChunk').textContent = `chunk level ${chunkLevel()}, ${fmt(20 * 4 ** chunkLevel())} on the planet`;
+  el('gDetail').textContent = 'chunk widths from the player';
 }
 
 el('kDepth').oninput = (e) => {
-  state.depth = +e.target.value; remesh(); syncKnobs('depth'); draw();
-};
-el('kCell').oninput = (e) => {
-  state.blockSize = CELL_STEPS[+e.target.value]; syncKnobs('cell'); draw();
+  state.depth = +e.target.value;
+  state.selected = null;
+  rebuild(); syncKnobs(); resize();
 };
 el('kRadius').oninput = (e) => {
-  const asked = 2 ** (+e.target.value / 20 + 4);
-  state.depth = Math.max(1, Math.min(17, Math.round(Math.log2((K * asked) / state.blockSize))));
-  remesh(); syncKnobs('radius'); draw();
+  const [lo, hi] = radiusRange();
+  state.cellSize = (lerpLog(+e.target.value / 1000, lo, hi) * K) / 2 ** state.depth;
+  rebuild(); syncKnobs(); resize();
 };
-el('kSplit').oninput = (e) => {
-  state.split = +e.target.value; remesh(); syncKnobs('split'); draw();
+el('kCell').oninput = (e) => {
+  state.cellSize = lerpLog(+e.target.value / 1000, CELL_MIN, CELL_MAX);
+  rebuild(); syncKnobs(); resize();
 };
-for (const [id, key] of [['tCells', 'cells'], ['tSplits', 'splits'],
-                         ['tFaces', 'faces'], ['tShade', 'shade'], ['tSpin', 'spin']])
+el('kChunk').oninput = (e) => {
+  state.chunkBits = +e.target.value; rebuild(); syncKnobs(); draw();
+};
+el('kDetail').oninput = (e) => {
+  state.detail = +e.target.value / 10; rebuild(); syncKnobs(); draw();
+};
+for (const [id, key] of [['tSplits', 'splits'], ['tChunks', 'chunks'],
+                         ['tCells', 'cells'], ['tFaces', 'faces'], ['tSpin', 'spin']])
   el(id).onclick = () => {
     state[key] = !state[key];
     el(id).classList.toggle('on', state[key]);
+    if (key === 'cells') rebuild();
     draw();
   };
 
 // ---------------------------------------------------------------------------
-// mouse: a drag turns the ball, a click picks, the right button stands
 let down = null, dragged = false;
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
@@ -741,16 +788,15 @@ canvas.addEventListener('pointermove', (e) => {
   draw();
 });
 canvas.addEventListener('pointerup', (e) => {
-  if (!down) return;
-  if (!dragged) {
+  if (down && !dragged) {
     const box = canvas.getBoundingClientRect();
     const hit = pick(e.clientX - box.left, e.clientY - box.top);
     if (hit) {
-      if (down.button === 2) state.player = hit;
+      if (down.button === 2) { state.player = hit; state.selected = null; rebuild(); }
       else {
         const face = faceOf(hit);
         const [i, j] = hexRound(hit, face, 1 << state.depth);
-        state.selected = { face, i, j, dir: hit };
+        state.selected = { face, i, j };
       }
       draw();
     }
@@ -760,20 +806,19 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  state.zoom = Math.max(0.6, Math.min(3, state.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+  state.zoom = Math.max(0.6, Math.min(4000, state.zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
   resize();
 }, { passive: false });
 
 let last = 0;
 function frame(t) {
-  if (state.spin && t - last > 16) {
-    state.yaw += (t - last) * 0.00012; last = t; draw();
-  } else if (!state.spin) last = t;
+  if (state.spin && t - last > 16) { state.yaw += (t - last) * 0.00012; last = t; draw(); }
+  else if (!state.spin) last = t;
   requestAnimationFrame(frame);
 }
 window.addEventListener('resize', resize);
-syncKnobs();
-resize();
+state.player = unrotate([0, 0, 1]);   // start facing the eye
+rebuild(); syncKnobs(); resize();
 requestAnimationFrame(frame);
 </script>
 </body>
