@@ -103,7 +103,7 @@ export const COARSE_MAP_DEFAULTS = {
 	relief: 300,
 	landFraction: 0.3,
 	erosion: 0,
-	warpAmplitude: 0.35,
+	warpAmplitude: 0.8,
 	warpFrequency: 1.6,
 	creation: 0.35,
 	island: 0.0008,

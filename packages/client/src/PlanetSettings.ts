@@ -194,7 +194,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	lacunarity: 2,
 	offsetX: 0,
 	offsetY: 0,
-	warpAmplitude: 0.35,
+	warpAmplitude: 0.8,
 	warpScale: 4250,
 	relief: 300,
 	erosion: 0,
