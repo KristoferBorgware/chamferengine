@@ -196,25 +196,32 @@ export class TerrainGenerator {
 	/**
 	 * Which ground a block is made of, from how far under the surface it sits.
 	 *
-	 * Soil covers rock to a fixed depth, and two things replace the soil: the
-	 * bed under standing water is sand, and ground above the snow line is snow.
+	 * Soil covers rock to a fixed depth, and three things take the soil away.
+	 * The bed under standing water is sand. **Above the rock line the soil is
+	 * gone and the stone the ground is made of is what shows** -- through the
+	 * whole soil band, not only its top layer, so a hillside that high is rock
+	 * where it is cut into as well as where it is walked on. Above the snow
+	 * line the top layer is snow, lying on that same rock.
 	 *
-	 * **There was a third, and it read a whole stored field to place grey
-	 * slabs.** Ground past a cliff gradient came out as bare stone, which meant
-	 * carrying a slope field of `2.5 MB` for one boolean test -- and the slope
-	 * it read was the map cell's, not the block's, so the rock came out in
-	 * patches the size of map cells rather than as a cliff face.
+	 * The two lines are elevations and nothing else is read. **The third rule
+	 * this once had was a slope**, and it carried a stored field of `2.5 MB`
+	 * for one boolean test -- reading the map cell's gradient rather than the
+	 * block's, so its rock came out in patches the size of map cells instead
+	 * of as a cliff face. An elevation needs no field: the column already
+	 * knows how high it is.
 	 */
 	private material(column: TerrainColumn, depthBelow: number): BlockType {
 		const soil = this.settings.soilDepth * this.shape.blockSize;
 		if (depthBelow > soil) return BlockType.STONE;
 
-		const submerged = column.waterRadius > column.groundRadius;
-		const surface = depthBelow <= this.shape.blockSize;
-		if (!surface) return submerged ? BlockType.SAND : BlockType.DIRT;
+		// Sand from the bed down through the whole soil band.
+		if (column.waterRadius > column.groundRadius) return BlockType.SAND;
 
-		if (submerged) return BlockType.SAND;
-		if (column.elevation > this.settings.snowLine) return BlockType.SNOW;
+		const surface = depthBelow <= this.shape.blockSize;
+		if (surface && column.elevation > this.settings.snowLine)
+			return BlockType.SNOW;
+		if (column.elevation > this.settings.rockLine) return BlockType.STONE;
+		if (!surface) return BlockType.DIRT;
 		return BlockType.GRASS;
 	}
 }

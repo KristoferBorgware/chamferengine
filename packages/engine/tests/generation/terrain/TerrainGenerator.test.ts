@@ -29,7 +29,10 @@ beforeAll(() => {
 		relief: RELIEF,
 	});
 	shape = new WorldShape(1700, DEPTH, RELIEF, maxCrustDepth(DEPTH));
-	gen = new TerrainGenerator(map.seed, shape, map, { snowLine: 45 });
+	gen = new TerrainGenerator(map.seed, shape, map, {
+		rockLine: 28,
+		snowLine: 45,
+	});
 });
 
 /** Every column of one face, on a stride coarse enough to run in a test. */
@@ -285,23 +288,48 @@ describe("material", () => {
 		}
 	});
 
-	it("puts snow on high ground and grass on low", () => {
-		let snow = 0;
+	it("stacks grass, then bare rock, then snow, by elevation alone", () => {
 		let grass = 0;
+		let rock = 0;
+		let snow = 0;
 		for (const column of columns(16)) {
 			if (column.waterRadius > column.groundRadius) continue;
 			const top = gen.blockAt(column, column.groundLayer);
+			if (top === BlockType.GRASS) {
+				grass++;
+				expect(column.elevation).toBeLessThanOrEqual(28);
+			}
+			if (top === BlockType.STONE) {
+				rock++;
+				expect(column.elevation).toBeGreaterThan(28);
+				expect(column.elevation).toBeLessThanOrEqual(45);
+			}
 			if (top === BlockType.SNOW) {
 				snow++;
 				expect(column.elevation).toBeGreaterThan(45);
 			}
-			if (top === BlockType.GRASS) {
-				grass++;
-				expect(column.elevation).toBeLessThanOrEqual(45);
-			}
 		}
+		// Every band holds ground, and each one holds less than the one under
+		// it. A band nobody stands in is a band nobody sees.
 		expect(snow).toBeGreaterThan(0);
-		expect(grass).toBeGreaterThan(snow);
+		expect(rock).toBeGreaterThan(snow);
+		expect(grass).toBeGreaterThan(rock);
+	});
+
+	it("takes the soil away under bare rock and under snow", () => {
+		// The stone shows through where the ground is cut into as well as on
+		// top of it, so a hillside that high has no band of dirt inside it.
+		let checked = 0;
+		for (const column of columns(16)) {
+			if (column.waterRadius > column.groundRadius) continue;
+			if (column.elevation <= 28) continue;
+			checked++;
+			for (let down = 0; down < 4; down++)
+				expect([BlockType.SNOW, BlockType.STONE]).toContain(
+					gen.blockAt(column, column.groundLayer + down),
+				);
+		}
+		expect(checked).toBeGreaterThan(0);
 	});
 });
 

@@ -352,15 +352,42 @@ A second pass over cells already known to be solid, keyed on depth below the
 surface:
 
 ```
-depth 0                        → grass, sand, or snow
-depth 1–4                      → dirt
+under water, depth 0-4         → sand
+over the snow line, depth 0    → snow
+over the rock line, depth 0-4  → stone
+otherwise depth 0              → grass
+otherwise depth 1-4            → dirt
 deeper                         → stone
 not solid, and |p| < seaRadius → water
 otherwise                      → air
 ```
 
-Surface material comes from two more low-frequency 3D fields — temperature and
-humidity — sampled on the direction vector.
+**Two elevations cut the land into three bands, and nothing else is read.** The
+column already knows how high it stands, so a band costs one comparison and no
+stored field. Under the rock line the soil is grass over dirt; over it the soil
+is gone and the stone the ground is made of shows, through the whole soil band
+rather than only its top layer, so a hillside that high is rock where it is cut
+into as well as where it is walked on; over the snow line one layer of snow lies
+on that same rock.
+
+**Where the lines go is decided by how much land they leave to each band, not by
+taste.** They are fractions of the relief, so the shares hold at any stated
+height.
+
+> **[verified]** Land elevation over relief on the shipped world, at a land
+> fraction of 0.3: median `0.21`, 90th `0.51`, 99th `0.75`. A snow line at
+> `0.72` leaves **1.5%** of land above it — a cap, and on its own the only thing
+> between a green swell and a white speck. A rock line at `0.45` puts **14.9%**
+> above it, so bare rock takes **13.4%** of the land and reads as a
+> mountainside. On a world with more land the bands grow together: at a land
+> fraction of 0.65 the same two lines give 23.3% rock and 4.4% snow.
+
+**A third rule was tried and removed, and it is the reason these two are
+elevations.** Ground past a cliff *gradient* came out as bare stone — which
+meant carrying a slope field of `2.5 MB` for one boolean test, and the slope it
+read was the map cell's rather than the block's, so its rock arrived in patches
+the size of map cells instead of down a cliff face. An elevation needs no field
+at all.
 
 **Sea level is a radius, not a height.** And "up" is `normalize(position)`. Both
 of these ripple far beyond terrain — see [doc 13](13-gravity-and-orientation.md).

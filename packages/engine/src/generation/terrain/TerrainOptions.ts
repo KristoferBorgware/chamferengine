@@ -11,6 +11,16 @@ export interface TerrainOptions {
 	/** How deep the soil runs before stone starts, in blocks. */
 	readonly soilDepth?: number;
 
+	/**
+	 * Metres above sea level at which the soil runs out and bare rock shows.
+	 *
+	 * Under the snow line and over this one is the band that reads as a
+	 * mountainside rather than a green swell. It has to leave the grass most
+	 * of the land: measured on the shipped world, `0.45` of the relief puts
+	 * **14.9%** of land above it, against **1.5%** above the snow line.
+	 */
+	readonly rockLine?: number;
+
 	/** Metres above sea level at which the ground turns to snow. */
 	readonly snowLine?: number;
 
@@ -29,6 +39,7 @@ export interface TerrainOptions {
 
 export const TERRAIN_DEFAULTS = {
 	soilDepth: 4,
+	rockLine: 150,
 	snowLine: 240,
 	caves: false,
 	caveScale: 24,

@@ -719,7 +719,10 @@ export class PlanetSettings {
 	}
 
 	terrainOptions(): TerrainOptions {
-		return { snowLine: 0.72 * this.relief };
+		// Both lines are fractions of the relief, so the bands hold the same
+		// share of the land whatever height the world is stated at. Rock takes
+		// 13.4% of the land on the shipped world and snow the 1.5% above it.
+		return { rockLine: 0.45 * this.relief, snowLine: 0.72 * this.relief };
 	}
 
 	/**

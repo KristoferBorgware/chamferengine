@@ -737,6 +737,42 @@ and the number where it stops.
 ---
 ---
 
+### F-042 — The map's colors and the world's materials are on two different scales
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-19, adding the rock band between grass and snow
+**Where:** `packages/engine/src/generation/coarse/COARSE_FIELDS.ts`, the `ground`
+ramp; `packages/client/src/PlanetSettings.ts`, `terrainOptions()`
+
+**What happens.** The Ground map paints in **absolute metres** — a fixed ramp
+from `-400` to `400` with a stop every 100 m, grey rock at `300` and snow at
+`400`. The world picks its materials as **fractions of the relief** — rock at
+`0.45` and snow at `0.72`. The two agree only where relief is about `555 m`.
+On the shipped world, relief `300`, the map draws its highest ground as grass
+going on for dry earth and the world puts bare rock at `135 m` and snow at
+`216 m`. A player standing on white ground is looking at a green pixel on the
+map beside them.
+
+**Why it matters.** The release this sits in exists to make the world look like
+the map: *"the goal is to make the in game planet look like the maps"*. Colour
+is the one thing both of them draw, and it is the one thing they disagree
+about. The ramp's own comment states the intent that is not met — *"the shipped
+300 m of relief reaches bare rock and raising it walks the peaks up into
+snow"* — which is what the ramp does and not what the world does.
+
+**What would fix it.** One of the two has to move, and the ramp is the one with
+a written reason to stay absolute: a ramp scaled to each world would draw every
+world the same and make Relief a knob with no picture. So the world's two lines
+become the same absolute metres the ramp's stops use — rock at `300 m`, snow at
+`400 m`. That is a two-line change in `terrainOptions()` and it removes a knob's
+worth of coupling, but it is a visible change to every existing world: at the
+shipped relief of `300 m` nothing would reach snow at all, which is exactly what
+the ramp says should happen and is not what anyone has seen yet. Worth one look
+in a frame before it is taken.
+
 ### F-040 — `tools/bench.ts` still names three knobs that no longer exist
 
 **Kind:** bug

@@ -586,6 +586,21 @@ Violating any of these breaks the design. They are not tunable.
   `warpAmplitude: 0` is the plain field and **Warp scale** comes off the panel
   there. One file replaces four, and the shipped default world does not move:
   value noise's frequency multiplier is exactly 1.
+- **TWO ELEVATIONS CUT THE LAND INTO THREE BANDS** (`material`, doc 08). Grass
+  under the rock line, bare stone over it, one layer of snow over the snow line
+  — and over the rock line the soil is gone through its **whole** depth, so a
+  hillside that high is rock where it is cut into as well as where it is walked
+  on. Where the lines go was decided by how much land each band gets, not by
+  taste: land elevation over relief runs median `0.21`, 90th `0.51`, 99th `0.75`
+  on the shipped world, so the snow line at `0.72` leaves **1.5%** of land above
+  it — a speck — and a rock line at **`0.45`** puts 14.9% above it, giving rock
+  **13.4%** of the land. Both are fractions of relief, so the shares hold at any
+  stated height. **The rule this replaces was a slope**, and it carried a
+  `2.5 MB` field for one boolean test and read the **map cell's** gradient
+  rather than the block's; an elevation needs no field, because the column
+  already knows how high it stands. **The map and the world still disagree about
+  where the colors go** — the Ground ramp is absolute metres with rock at 300 m,
+  the world is fractions of relief — which is F-042 and not fixed.
 - **A row with no meaning comes off the panel, it is not greyed out**
   (`Knob.shownWhen`, `ParameterPanel`). **Spin** shows only under psrd,
   **Cells** and **Jitter** only under cellular, **Warp scale** only above a warp
