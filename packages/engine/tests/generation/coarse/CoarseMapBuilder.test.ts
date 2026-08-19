@@ -83,7 +83,6 @@ describe("CoarseMapBuilder", () => {
 		for (const option of [
 			"level",
 			"cellMetres",
-			"noiseSeed",
 			"frequency",
 			"octaves",
 			"persistence",

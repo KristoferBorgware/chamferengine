@@ -208,7 +208,10 @@ if (params.get("panel") === "1") {
 		(draft) => maps.changed(draft),
 	);
 	// The knobs that decide where the land is live under the map they decide,
-	// not in a panel on the other side of the screen.
+	// not in a panel on the other side of the screen. The seed goes with them:
+	// it is the one word that re-rolls a world, and hunting for a world is
+	// done looking at the map. It still seeds the clouds as well as the ground.
+	maps.hostKnobs(panel.section("Seed"));
 	maps.hostKnobs(panel.section("Where the land is"));
 	onPlayerMoved = (up) => maps.setPlayer(up);
 }

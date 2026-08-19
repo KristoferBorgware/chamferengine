@@ -101,9 +101,6 @@ export interface PlanetKnobs {
 	/** Metres across one cell of the height map, which is one step of ground. */
 	coarseSpacing: number;
 
-	/** Seed for the noise alone, so the ground can be re-rolled on its own. */
-	noiseSeed: number;
-
 	/** Metres across the widest feature the noise makes. */
 	noiseScale: number;
 
@@ -179,7 +176,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	coarseMap: true,
 	landform: "noise",
 	coarseSpacing: 32,
-	noiseSeed: 21,
 	noiseScale: 4500,
 	octaves: 4,
 	persistence: 0.5,
@@ -239,7 +235,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	coarseMap: { ...TOGGLE, rebuilds: true },
 	landform: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
-	noiseSeed: { low: 0, high: 999, step: 1, rebuilds: true, unit: "" },
 	noiseScale: {
 		low: 200,
 		high: 40000,
@@ -650,7 +645,6 @@ export class PlanetSettings {
 			landform: this.knobs.landform,
 			level: this.coarseLevel,
 			cellMetres: this.coarseCell,
-			noiseSeed: this.knobs.noiseSeed,
 			frequency: this.frequencyFor(this.knobs.noiseScale),
 			octaves: this.knobs.octaves,
 			persistence: this.knobs.persistence,

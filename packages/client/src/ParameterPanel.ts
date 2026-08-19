@@ -71,13 +71,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "noiseSeed",
-				map: true,
-				label: "Noise seed",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
 				key: "noiseScale",
 				map: true,
 				label: "Noise scale",
@@ -343,7 +336,7 @@ export class ParameterPanel {
 	private readonly onDraft: (settings: PlanetSettings) => void;
 	private readonly rows: Row[] = [];
 
-	/** Each group's own element, by title, so another pane can host one. */
+	/** Each named part's own element, so another pane can host one. */
 	private readonly sections = new Map<string, HTMLElement>();
 	private problems!: HTMLElement;
 	private derived!: HTMLElement;
@@ -365,7 +358,7 @@ export class ParameterPanel {
 	}
 
 	/**
-	 * One group's element, for a pane that wants to hold it instead.
+	 * One named part's element, for a pane that wants to hold it instead.
 	 *
 	 * The node is handed over rather than rebuilt, so moving it changes where
 	 * it is drawn and nothing else: this panel still owns the draft, the rows
@@ -401,6 +394,7 @@ export class ParameterPanel {
 			this.draft.seed = seedInput.value;
 			this.touch(true);
 		};
+		this.sections.set("Seed", seed);
 		body.appendChild(seed);
 
 		// A group is a fold, and only the first is open. Twenty-six rows at one

@@ -18,9 +18,6 @@ export interface CoarseMapOptions {
 	/** Metres across one cell of the map, which is what makes its heights metric. */
 	readonly cellMetres?: number;
 
-	/** Seed for the noise alone, so the ground can be re-rolled on its own. */
-	readonly noiseSeed?: number;
-
 	/** How many times the widest feature repeats around the planet. */
 	readonly frequency?: number;
 
@@ -88,7 +85,6 @@ export const COARSE_MAP_DEFAULTS = {
 	landform: "noise",
 	level: 8,
 	cellMetres: 32,
-	noiseSeed: 21,
 	frequency: 1.5,
 	octaves: 4,
 	persistence: 0.5,

@@ -79,7 +79,7 @@ export class CoarseMapBuilder {
 		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
-			this.raw = landformHeight(grid, settings);
+			this.raw = landformHeight(grid, seed, settings);
 			// Nothing downstream has run, so the ground is the noise itself with
 			// no sea in it. Drawing this shows what the octave knobs are turned
 			// against.

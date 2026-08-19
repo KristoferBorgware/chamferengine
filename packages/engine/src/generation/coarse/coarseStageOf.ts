@@ -15,7 +15,6 @@ import type { CoarseStage } from "./CoarseStage.js";
  */
 export function coarseStageOf(option: keyof CoarseMapOptions): CoarseStage {
 	switch (option) {
-		case "noiseSeed":
 		case "frequency":
 		case "octaves":
 		case "persistence":

@@ -21,6 +21,13 @@ const WIDTH = 512;
 const HEIGHT = 256;
 
 /** How long a knob has to stop moving before the map is rebuilt, in ms. */
+/**
+ * How long a level change waits for the knob to stop, in milliseconds.
+ *
+ * Only a level change waits. A grid is tens of megabytes and dropping one to
+ * build another is what ran a worker out of memory while a slider was being
+ * dragged; every other knob rebuilds as fast as the last build finishes.
+ */
 const SETTLE_MS = 250;
 
 /**
@@ -187,6 +194,7 @@ export class MapPanel {
 					"Raise Coarse cell, or lower Radius.";
 				// The level that failed is not held, so the next try rebuilds.
 				this.level = -1;
+				this.building = false;
 				return;
 			}
 			this.arrived(message as MapWorkerStep);
@@ -218,41 +226,63 @@ export class MapPanel {
 	/** Where the mark was last put, so an unmoved player costs nothing. */
 	private marked: { x: number; y: number; z: number } | null = null;
 
-	/** A rebuild waiting for the knob to stop moving. */
-	private waiting: ReturnType<typeof setTimeout> | null = null;
-
 	/**
 	 * A knob moved.
 	 *
-	 * Held until the knob stops. A slider dragged across its range fires on
-	 * every step, and a map is seconds of work and a grid of tens of megabytes,
-	 * so acting on each step queues both faster than either can be finished.
+	 * **One build in flight, and the newest values always next.** A slider
+	 * dragged across its range fires on every step, and a map is a second or
+	 * more of work, so acting on each one queues them faster than any of them
+	 * finishes. Waiting for the knob to stop instead was worse in the other
+	 * direction: the picture only appeared once the hand let go.
+	 *
+	 * So a change during a build is remembered rather than queued, and the
+	 * build that lands starts it. What is drawn keeps up with the hand to
+	 * within one build, and no work is done for a value already replaced.
+	 *
+	 * A new level is the exception, because it is a new grid rather than a
+	 * rebuild -- tens of megabytes -- and one of those is not started while a
+	 * knob is still moving.
 	 */
 	changed(settings: PlanetSettings): void {
 		const before = this.pending ?? this.settings;
 		this.pending = settings;
 		this.from = this.earliest(this.from, this.stageFor(before, settings));
+		if (this.building) return;
 		if (this.waiting) clearTimeout(this.waiting);
-		this.waiting = setTimeout(() => {
-			this.waiting = null;
-			const wanted = this.pending;
-			const from = this.from;
-			this.pending = null;
-			this.from = null;
-			if (!wanted) return;
-			this.settings = wanted;
-
-			// The level decides the grid, which the worker holds for its whole
-			// life, so a new level is a new grid rather than a rebuild.
-			if (wanted.coarseLevel !== this.level) {
-				this.level = wanted.coarseLevel;
-				this.setup();
-				this.rebuild("height");
-				return;
-			}
-			this.rebuild(from ?? "height");
-		}, SETTLE_MS);
+		this.waiting =
+			settings.coarseLevel === this.level
+				? null
+				: setTimeout(() => this.launch(), SETTLE_MS);
+		if (!this.waiting) this.launch();
 	}
+
+	/** Start the build the last change asked for, if one is still waiting. */
+	private launch(): void {
+		this.waiting = null;
+		const wanted = this.pending;
+		const from = this.from;
+		this.pending = null;
+		this.from = null;
+		if (!wanted) return;
+		this.settings = wanted;
+		this.building = true;
+
+		// The level decides the grid, which the worker holds for its whole
+		// life, so a new level is a new grid rather than a rebuild.
+		if (wanted.coarseLevel !== this.level) {
+			this.level = wanted.coarseLevel;
+			this.setup();
+			this.rebuild("height");
+			return;
+		}
+		this.rebuild(from ?? "height");
+	}
+
+	/** Whether a build is running, so a change is remembered and not queued. */
+	private building = false;
+
+	/** A grid rebuild waiting for the knob to stop moving. */
+	private waiting: ReturnType<typeof setTimeout> | null = null;
 
 	/** What is waiting, and the earliest step anything in it reaches. */
 	private pending: PlanetSettings | null = null;
@@ -303,8 +333,10 @@ export class MapPanel {
 		if (
 			COARSE_STAGES.indexOf(from) >
 			COARSE_STAGES.indexOf(this.field.stage)
-		)
+		) {
+			this.building = false;
 			return;
+		}
 		this.token++;
 		this.startedAt = performance.now();
 		this.status.textContent = `${COARSE_STAGE_SAYS[from]}...`;
@@ -329,6 +361,10 @@ export class MapPanel {
 		this.status.textContent = step.done
 			? `${this.level === 0 ? "" : `level ${this.level}, `}${this.map.count.toLocaleString()} cells, ${ms} ms`
 			: `${COARSE_STAGE_SAYS[step.stage]}... ${ms} ms`;
+		if (step.done) {
+			this.building = false;
+			if (this.pending) this.launch();
+		}
 	}
 
 	/**

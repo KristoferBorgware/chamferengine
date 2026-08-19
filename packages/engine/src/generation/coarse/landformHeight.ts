@@ -11,12 +11,17 @@ import { warpedHeight } from "./warpedHeight.js";
  * `[-1, 1]` and carrying no unit.
  *
  * One place so the two builders cannot drift, and one octave stack so the four
- * share every knob the panel shows: seed, frequency, octaves, persistence,
- * lacunarity and offset mean the same thing whichever is chosen, and what
- * differs between them is what the noise is laid on.
+ * share every knob the panel shows: frequency, octaves, persistence, lacunarity
+ * and offset mean the same thing whichever is chosen, and what differs between
+ * them is what the noise is laid on.
+ *
+ * The seed is the world's own, the one thing a person types. Everything drawn
+ * from it -- the ground here, and the droplets that erode it -- moves together
+ * when it changes, so one word is one planet.
  */
 export function landformHeight(
 	grid: CoarseGrid,
+	seed: number,
 	options: CoarseMapOptions = {},
 ): Float64Array {
 	const s = { ...COARSE_MAP_DEFAULTS, ...options };
@@ -24,7 +29,7 @@ export function landformHeight(
 		case "warped":
 			return warpedHeight(
 				grid,
-				s.noiseSeed,
+				seed,
 				s.frequency,
 				s.octaves,
 				s.persistence,
@@ -37,7 +42,7 @@ export function landformHeight(
 		case "grown":
 			return grownHeight(
 				grid,
-				s.noiseSeed,
+				seed,
 				s.creation,
 				s.island,
 				s.growthWeight,
@@ -51,7 +56,7 @@ export function landformHeight(
 		case "plates":
 			return plateHeight(
 				grid,
-				s.noiseSeed,
+				seed,
 				s.plates,
 				s.oceanShare,
 				s.biasWeight,
@@ -67,7 +72,7 @@ export function landformHeight(
 		default:
 			return noiseHeight(
 				grid,
-				s.noiseSeed,
+				seed,
 				s.frequency,
 				s.octaves,
 				s.persistence,

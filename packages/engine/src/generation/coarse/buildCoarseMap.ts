@@ -22,7 +22,7 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-	const raw = landformHeight(grid, settings);
+	const raw = landformHeight(grid, seed, settings);
 	const height = metreHeight(raw, settings.landFraction, settings.relief);
 	erodeDroplets(grid, height, seed, settings.erosion, settings.cellMetres);
 	return new CoarseMap(seed, grid, Float32Array.from(height));

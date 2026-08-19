@@ -51,21 +51,24 @@ describe("the coarse map", () => {
 	});
 
 	it("gives different maps for different seeds", () => {
-		const a = buildCoarseMap(1, { level: LEVEL, noiseSeed: 1 });
-		const b = buildCoarseMap(1, { level: LEVEL, noiseSeed: 2 });
+		const a = buildCoarseMap(1, { level: LEVEL });
+		const b = buildCoarseMap(2, { level: LEVEL });
 		let differ = 0;
 		for (let cell = 0; cell < a.count; cell++)
 			if (a.height[cell] !== b.height[cell]) differ++;
 		expect(differ).toBeGreaterThan(a.count / 2);
 	});
 
-	it("re-rolls the ground from the noise seed alone", () => {
-		// The world seed reaches the erosion and nothing else about the shape,
-		// so a person hunting for a continent they like moves one number.
-		const a = buildCoarseMap(1, { level: LEVEL, noiseSeed: 7, erosion: 0 });
-		const b = buildCoarseMap(9, { level: LEVEL, noiseSeed: 7, erosion: 0 });
+	it("moves the ground itself, not only what erodes it", () => {
+		// One seed for the whole world. There was a second one for a while, and
+		// it split them: typing a new word gave back the same continents with
+		// different channels cut into them.
+		const a = buildCoarseMap(1, { level: LEVEL, erosion: 0 });
+		const b = buildCoarseMap(2, { level: LEVEL, erosion: 0 });
+		let differ = 0;
 		for (let cell = 0; cell < a.count; cell++)
-			expect(a.height[cell]).toBe(b.height[cell]);
+			if (a.height[cell] !== b.height[cell]) differ++;
+		expect(differ).toBeGreaterThan(a.count / 2);
 	});
 });
 
