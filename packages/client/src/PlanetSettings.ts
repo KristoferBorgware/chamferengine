@@ -373,6 +373,20 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
 };
 
+/**
+ * Knobs that never travel in a query string, in either direction.
+ *
+ * Freeze view holds the camera the frame was drawn with, and that camera
+ * cannot be written into a link -- what a fresh page would freeze is its own
+ * spawn camera, 1.6 km over the shipped planet, which nobody chose. Every
+ * rebuild knob reloads the page through these params, so before this set
+ * existed, changing Chunk while frozen relatched the freeze at the spawn
+ * camera and the world came back stuck at face-level cells.
+ */
+export const TRANSIENT: ReadonlySet<keyof PlanetKnobs> = new Set([
+	"freezeView",
+] as (keyof PlanetKnobs)[]);
+
 /** The nearest power of two, for turning a size in metres into a level. */
 function levelFor(span: number, size: number): number {
 	return Math.max(0, Math.round(Math.log2(span / size)));
@@ -1005,6 +1019,7 @@ export class PlanetSettings {
 		for (const key of Object.keys(
 			PLANET_DEFAULTS,
 		) as (keyof PlanetKnobs)[]) {
+			if (TRANSIENT.has(key)) continue;
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
@@ -1051,6 +1066,7 @@ export class PlanetSettings {
 		for (const key of Object.keys(
 			PLANET_DEFAULTS,
 		) as (keyof PlanetKnobs)[]) {
+			if (TRANSIENT.has(key)) continue;
 			const value = this.knobs[key];
 			if (value !== PLANET_DEFAULTS[key]) params.set(key, String(value));
 		}

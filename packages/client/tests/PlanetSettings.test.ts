@@ -329,6 +329,23 @@ describe("boolean knobs round-trip through a query string", () => {
 		expect(back.knobs.coarseMap).toBe(true);
 		expect(back.knobs.paused).toBe(false);
 	});
+
+	it("never carries freeze view through a link, in either direction", () => {
+		// Freeze view holds the camera the frame was drawn with, and that
+		// camera cannot be written into a link. Every rebuild knob reloads
+		// the page through these params, so if it travelled, changing Chunk
+		// while frozen would relatch the freeze at the fresh page's spawn
+		// camera -- 1.6 km up -- and the world came back stuck at face-level
+		// cells, which read as level of detail being broken.
+		const params = new PlanetSettings({ freezeView: true }).toParams();
+		expect(params.get("freezeView")).toBe(null);
+
+		const back = PlanetSettings.fromParams(
+			new URLSearchParams("freezeView=true&chunkCells=8"),
+		);
+		expect(back.knobs.freezeView).toBe(false);
+		expect(back.knobs.chunkCells).toBe(8);
+	});
 });
 
 describe("a knob that did not get what it asked for says so", () => {
