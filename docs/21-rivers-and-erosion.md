@@ -249,6 +249,14 @@ run on the result unchanged.
 **Recommendation:** plates set the coarse heights, erosion carves them, rivers
 follow. In that order, because each stage needs the one before it.
 
+**Neither plates nor grown land is built.** The engine draws its surface from one
+field of octave noise, warped or not, over a choice of five noise bases
+([doc 08](08-terrain-generation.md)) — and the plate and grown-land builders that
+these measurements were taken from are gone from it. The numbers below stand as
+measurements of what those approaches give; they are not a description of what
+the editor offers. What removed them was the count of knobs each needed against
+what it moved in the picture, not any of the figures here.
+
 **A plate is laid out from hashed directions, not from angles.** A seed, a
 rotation axis and a rate are each three hashed components divided by their own
 length — a wrapping multiply and a square root, both pinned to the bit by IEEE

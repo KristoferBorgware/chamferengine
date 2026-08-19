@@ -1,6 +1,7 @@
 import type {
+	CellFeature,
 	CoarseMapOptions,
-	Landform,
+	NoiseBasis,
 	TerrainOptions,
 } from "chamfer/generation";
 import { CoarseMap, seedFromString } from "chamfer/generation";
@@ -95,8 +96,8 @@ export interface PlanetKnobs {
 	 */
 	coarseMap: boolean;
 
-	/** Which way the land is decided. */
-	landform: Landform;
+	/** Which noise function one octave is. */
+	noiseBasis: NoiseBasis;
 
 	/** Metres across one cell of the height map, which is one step of ground. */
 	coarseSpacing: number;
@@ -117,11 +118,20 @@ export interface PlanetKnobs {
 	offsetX: number;
 	offsetY: number;
 
-	/** How far a second field pushes the sample point. `warped` only. */
+	/** How far a second field pushes the sample point. Zero reads it where it stands. */
 	warpAmplitude: number;
 
 	/** Metres across the widest feature of the field doing the pushing. */
 	warpScale: number;
+
+	/** The angle every gradient is turned by, in radians. `psrd` only. */
+	spin: number;
+
+	/** How far a feature point may sit from its cell's middle. `cellular` only. */
+	jitter: number;
+
+	/** Which cellular distance is reported. `cellular` only. */
+	cellFeature: CellFeature;
 
 	/** Metres from sea level to the tallest ground. */
 	relief: number;
@@ -192,7 +202,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	blockSize: 1,
 	chunkCells: 32,
 	coarseMap: true,
-	landform: "warped",
+	noiseBasis: "value",
 	coarseSpacing: 32,
 	noiseScale: 4500,
 	octaves: 4,
@@ -202,6 +212,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	offsetY: 0,
 	warpAmplitude: 0.8,
 	warpScale: 4250,
+	spin: 0,
+	jitter: 1,
+	cellFeature: "f1",
 	relief: 300,
 	seaDepth: 120,
 	ridge: 0.6,
@@ -255,7 +268,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseMap: { ...TOGGLE, rebuilds: true },
-	landform: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
+	noiseBasis: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
+	cellFeature: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
 	noiseScale: {
 		low: 200,
@@ -289,6 +303,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: true,
 		unit: "m",
 	},
+	spin: { low: 0, high: 6.28, step: 0.02, rebuilds: true, unit: "rad" },
+	jitter: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
 	seaDepth: { low: 10, high: 1200, step: 10, rebuilds: true, unit: "m" },
 	ridge: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
@@ -680,7 +696,7 @@ export class PlanetSettings {
 
 	coarseOptions(): CoarseMapOptions {
 		return {
-			landform: this.knobs.landform,
+			basis: this.knobs.noiseBasis,
 			level: this.coarseLevel,
 			cellMetres: this.coarseCell,
 			frequency: this.frequencyFor(this.knobs.noiseScale),
@@ -691,6 +707,9 @@ export class PlanetSettings {
 			offsetY: this.knobs.offsetY,
 			warpAmplitude: this.knobs.warpAmplitude,
 			warpFrequency: this.frequencyFor(this.knobs.warpScale),
+			spin: this.knobs.spin,
+			jitter: this.knobs.jitter,
+			feature: this.knobs.cellFeature,
 			relief: this.relief,
 			seaDepth: this.seaDepth,
 			ridge: this.knobs.ridge,
@@ -952,7 +971,9 @@ export class PlanetSettings {
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
-			else if (key === "landform") knobs.landform = raw as Landform;
+			else if (key === "noiseBasis") knobs.noiseBasis = raw as NoiseBasis;
+			else if (key === "cellFeature")
+				knobs.cellFeature = raw as CellFeature;
 			else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";

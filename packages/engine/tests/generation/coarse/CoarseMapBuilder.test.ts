@@ -92,7 +92,10 @@ describe("CoarseMapBuilder", () => {
 			"relief",
 			"landFraction",
 			"erosion",
-			"landform",
+			"basis",
+			"spin",
+			"jitter",
+			"feature",
 		] as const)
 			expect(COARSE_STAGES).toContain(coarseStageOf(option));
 	});

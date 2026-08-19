@@ -5,7 +5,7 @@ import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { erodeDroplets } from "./erodeDroplets.js";
-import { landformHeight } from "./landformHeight.js";
+import { surfaceHeight } from "./surfaceHeight.js";
 import { metreHeight } from "./metreHeight.js";
 
 /** One step finished, and the map as it stands after it. */
@@ -79,7 +79,7 @@ export class CoarseMapBuilder {
 		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
-			this.raw = landformHeight(grid, seed, settings);
+			this.raw = surfaceHeight(grid, seed, settings);
 			// Nothing downstream has run, so the ground is the noise itself with
 			// no sea in it. Drawing this shows what the octave knobs are turned
 			// against.

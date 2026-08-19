@@ -737,6 +737,69 @@ and the number where it stops.
 ---
 ---
 
+### F-040 — `tools/bench.ts` still names three knobs that no longer exist
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-19, grepping for landform references while adding the noise
+basis dropdown
+**Where:** `tools/bench.ts`, the settings summary line near the end
+
+**What happens.** The line reads `settings.knobs.reliefFeature`,
+`settings.smallestLandform` and `settings.reliefOctaves`. The first and third
+were removed with the detail tier, so the line prints `undefined` twice. It does
+not fail the build because `tools/` is outside the TypeScript project and
+`npm run typecheck` never compiles it.
+
+**Why it matters.** The bench is run by hand to compare timings between
+sessions, and its own header line is what says which world was timed. A header
+naming knobs that do not exist makes two runs look comparable when nothing
+records whether they were.
+
+**What would fix it.** Replace the three with the knobs that decide the ground
+now — `noiseScale`, `octaves`, `ridge` — and add `tools/` to a typecheck so the
+next removal fails loudly. Half an hour.
+
+### F-041 — The psrd noise basis is the one field two machines may not agree on
+
+**Kind:** risk
+**Milestone:** 1.0.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-19, porting psrdnoise for the noise basis dropdown
+**Where:** `packages/engine/src/generation/noise/psrdNoise3.ts`, the four angle
+tables built at module load
+
+**What happens.** psrdnoise builds each gradient by rotating a hashed direction,
+and a rotation is a sine and a cosine. `Math.sin` is a library routine rather
+than an IEEE operation — one C source and one JavaScript runtime measured `1`
+ULP apart on `hypot` and `pow` in `verification/language.js`, and nothing says
+sine is better behaved. Every other basis indexes a gradient table or a
+polynomial permutation and stays inside the arithmetic
+[`docs/23-determinism.md`](docs/23-determinism.md) pins.
+
+The exposure is already bounded. There are only `289` distinct hashed indices,
+so the whole trigonometric part of the field is four tables of `289` entries
+built once at module load, and the spin angle becomes a sine and a cosine once
+per map build. Nothing on the sampling path computes one. But two runtimes may
+still fill those `1,156` table entries a bit apart, and a last-bit difference in
+a gradient moves a coastline somewhere on a planet of 41 million cells.
+
+**Why it matters.** Two clients regenerate the same planet from a seed and
+exchange no terrain, so a field they compute differently is two different
+worlds. It is not a crash and not visible on one machine, which is what makes it
+worth writing down rather than discovering from a player standing in someone
+else's ocean.
+
+**What would fix it.** Either fill the four tables from a pinned polynomial for
+sine and cosine over `[0, 2pi)` — the tables are built once, so cost is not the
+question and only reproducibility is — or refuse the basis for a shared world
+and leave it as a single-player choice. The first keeps the basis and needs a
+minimax polynomial written and its error measured against the reference; the
+second is a line in the panel. Nobody has decided which.
+
 ### F-039 — Droplet erosion cuts straight lattice-aligned gashes, not valleys
 
 **Kind:** bug

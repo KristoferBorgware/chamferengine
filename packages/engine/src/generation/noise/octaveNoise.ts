@@ -1,5 +1,7 @@
+import type { NoiseSettings } from "./NoiseSettings.js";
+import { BASIS_PITCH } from "./BASIS_PITCH.js";
+import { basisNoise3 } from "./basisNoise3.js";
 import { hash3 } from "./hash3.js";
-import { valueNoise3 } from "./valueNoise3.js";
 
 /**
  * How far an octave's own offset may reach, in lattice units.
@@ -8,7 +10,7 @@ import { valueNoise3 } from "./valueNoise3.js";
  * octaves never line up their features. The reference implementation this
  * follows draws from `-100000` to `100000`; a thousand is as good and keeps
  * the lattice coordinate small enough that the integer floor inside
- * `valueNoise3` is exact at every frequency the panel can reach.
+ * the noise basis is exact at every frequency the panel can reach.
  */
 const OCTAVE_SPREAD = 1000;
 
@@ -21,13 +23,14 @@ const OCTAVE_SPREAD = 1000;
 const RIDGE_GAIN = 2.2;
 
 /**
- * Octaves of {@link valueNoise3}, with the shape and the parameters of the
+ * Octaves of one noise basis, with the shape and the parameters of the
  * reference implementation, in `[-1, 1]`.
  *
- * `frequency` is how many times the largest feature repeats around the planet,
- * `persistence` is what each octave's amplitude is multiplied by, `lacunarity`
- * is what its frequency is multiplied by, and `offsetX` and `offsetY` slide the
- * sample point through the field so the same seed gives different ground.
+ * `settings.basis` chooses which noise function one octave is. `frequency` is
+ * how many times the largest feature repeats around the planet, `persistence`
+ * is what each octave's amplitude is multiplied by, `lacunarity` is what its
+ * frequency is multiplied by, and `offsetX` and `offsetY` slide the sample
+ * point through the field so the same seed gives different ground.
  *
  * Three things about the loop are fixed rather than incidental.
  *
@@ -55,32 +58,37 @@ const RIDGE_GAIN = 2.2;
  * control over shape rather than over height: adding an octave adds detail
  * without making the world taller. The result is bounded by `[-1, 1]` and does
  * not fill it -- over 200,000 directions the standard deviation is `0.244` of
- * the amplitude, so ground stated as 600 m tall swings about 150 m typically
- * and reaches 600 only where several octaves align.
+ * the amplitude for the value basis, so ground stated as 600 m tall swings
+ * about 150 m typically and reaches 600 only where several octaves align.
  */
 export function octaveNoise(
 	x: number,
 	y: number,
 	z: number,
 	seed: number,
-	frequency: number,
-	octaves: number,
-	persistence: number,
-	lacunarity: number,
-	offsetX: number,
-	offsetY: number,
-	ridge = 0,
+	settings: NoiseSettings,
 ): number {
 	let sum = 0;
 	let amplitude = 1;
 	let total = 0;
-	let f = frequency;
+	// Each basis draws a different number of features per lattice cell, so the
+	// frequency is brought onto one scale before the first octave.
+	let f = settings.frequency * BASIS_PITCH[settings.basis];
 	let weight = 1;
-	for (let o = 0; o < octaves; o++) {
-		const ox = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + offsetX;
-		const oy = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + offsetY;
+	const ridge = settings.ridge;
+	for (let o = 0; o < settings.octaves; o++) {
+		const ox =
+			(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetX;
+		const oy =
+			(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetY;
 		const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
-		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+		const n = basisNoise3(
+			x * f + ox,
+			y * f + oy,
+			z * f + oz,
+			seed,
+			settings,
+		);
 		let signal = n;
 		if (ridge > 0) {
 			// `1 - |n|` folds the octave at its own zero crossing, and the fold
@@ -96,8 +104,8 @@ export function octaveNoise(
 		}
 		sum += amplitude * signal;
 		total += amplitude;
-		amplitude *= persistence;
-		f *= lacunarity;
+		amplitude *= settings.persistence;
+		f *= settings.lacunarity;
 	}
 	return total > 0 ? sum / total : 0;
 }

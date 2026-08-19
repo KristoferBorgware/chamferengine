@@ -17,6 +17,16 @@ interface Knob {
 	 */
 	readonly enabledWhen?: (knobs: PlanetKnobs) => boolean;
 
+	/**
+	 * Whether this row is drawn at all, given the rest of the draft.
+	 *
+	 * A row that fails this is taken off the panel rather than greyed out. It
+	 * is for a knob that has no meaning under the current choice -- a jitter
+	 * with no feature points to jitter -- where a disabled row would be a
+	 * question the reader has to answer before dismissing.
+	 */
+	readonly shownWhen?: (knobs: PlanetKnobs) => boolean;
+
 	/** Whether the map pane redraws when this moves. */
 	readonly map?: boolean;
 
@@ -59,16 +69,44 @@ const GROUPS: Group[] = [
 		title: "Where the land is",
 		knobs: [
 			{
-				key: "landform",
+				key: "noiseBasis",
 				map: true,
-				label: "Landform",
+				label: "Noise",
 				choices: [
-					{ value: "noise", label: "Noise" },
-					{ value: "warped", label: "Warped" },
-					{ value: "grown", label: "Grown" },
-					{ value: "plates", label: "Plates" },
+					{ value: "value", label: "Value" },
+					{ value: "perlin", label: "Perlin" },
+					{ value: "simplex", label: "OpenSimplex2" },
+					{ value: "psrd", label: "Psrd" },
+					{ value: "cellular", label: "Cellular" },
 				],
 				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "cellFeature",
+				map: true,
+				label: "Cells",
+				choices: [
+					{ value: "f1", label: "Nearest" },
+					{ value: "f2f1", label: "Seams" },
+				],
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+				shownWhen: (k) => k.noiseBasis === "cellular",
+			},
+			{
+				key: "jitter",
+				map: true,
+				label: "Jitter",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+				shownWhen: (k) => k.noiseBasis === "cellular",
+			},
+			{
+				key: "spin",
+				map: true,
+				label: "Spin",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+				shownWhen: (k) => k.noiseBasis === "psrd",
 			},
 			{
 				key: "noiseScale",
@@ -117,16 +155,15 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Warp",
 				digits: 2,
-				enabledWhen: (k) =>
-					k.coarseMap && !k.plain && k.landform === "warped",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
 				key: "warpScale",
 				map: true,
 				label: "Warp scale",
 				digits: 0,
-				enabledWhen: (k) =>
-					k.coarseMap && !k.plain && k.landform === "warped",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+				shownWhen: (k) => k.warpAmplitude > 0,
 			},
 			{
 				key: "landFraction",
@@ -630,6 +667,11 @@ export class ParameterPanel {
 		const settings = this.settings;
 
 		for (const row of this.rows) {
+			// A row with no meaning under the current choices comes off the
+			// panel, so nothing has to be read and dismissed.
+			const shown = row.knob.shownWhen?.(this.draft) ?? true;
+			row.wrap.hidden = !shown;
+			if (!shown) continue;
 			row.write();
 			const on = row.knob.enabledWhen?.(this.draft) ?? true;
 			row.input.disabled = !on;

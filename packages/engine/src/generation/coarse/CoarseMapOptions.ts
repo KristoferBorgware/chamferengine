@@ -1,4 +1,5 @@
-import type { Landform } from "./Landform.js";
+import type { CellFeature } from "../noise/CellFeature.js";
+import type { NoiseBasis } from "../noise/NoiseBasis.js";
 
 /**
  * The knobs on a coarse map, all of them defaulted.
@@ -9,8 +10,8 @@ import type { Landform } from "./Landform.js";
  * multiplier applied after the map was drawn.
  */
 export interface CoarseMapOptions {
-	/** Which way the land is decided. */
-	readonly landform?: Landform;
+	/** Which noise function one octave is. */
+	readonly basis?: NoiseBasis;
 
 	/** Subdivision level of the map. Level 8 is 655,362 cells and 2.5 MB a field. */
 	readonly level?: number;
@@ -59,45 +60,30 @@ export interface CoarseMapOptions {
 	 */
 	readonly erosion?: number;
 
-	/** How far the warp pushes a sample point. `warped` only. */
+	/**
+	 * How far the warp pushes a sample point. Zero reads it where it stands.
+	 */
 	readonly warpAmplitude?: number;
 
-	/** Feature size of the field doing the pushing. `warped` only. */
+	/** Feature size of the field doing the pushing. */
 	readonly warpFrequency?: number;
 
-	/** How much of the coarsest level starts as land. `grown` only. */
-	readonly creation?: number;
-
-	/** How often a sea cell becomes land on its own. `grown` only. */
-	readonly island?: number;
-
-	/** How strongly a cell is pulled toward its neighbours. `grown` only. */
-	readonly growthWeight?: number;
-
-	/** How many plates the surface is cut into. `plates` only. */
-	readonly plates?: number;
-
-	/** How many of them are ocean floor. `plates` only. */
-	readonly oceanShare?: number;
+	/** The angle every gradient is turned by, in radians. `psrd` only. */
+	readonly spin?: number;
 
 	/**
-	 * How far apart ocean floor and continent stand. `plates` only.
-	 *
-	 * Land ends up a flat `2 x` this above sea level across a whole plate, so
-	 * it is the knob that decides whether a continent draws as lowland or as a
-	 * saturated slab.
+	 * How far a feature point may sit from its own cell's middle. `cellular`
+	 * only. Zero puts every one at a cell centre, which draws a lattice of
+	 * identical bumps.
 	 */
-	readonly biasWeight?: number;
+	readonly jitter?: number;
 
-	/** How high a range rises where two plates close. `plates` only. */
-	readonly upliftWeight?: number;
-
-	/** How far inland a range reaches, in cells at level 7. `plates` only. */
-	readonly upliftReach?: number;
+	/** Which cellular distance is reported. `cellular` only. */
+	readonly feature?: CellFeature;
 }
 
 export const COARSE_MAP_DEFAULTS = {
-	landform: "warped",
+	basis: "value",
 	level: 8,
 	cellMetres: 32,
 	frequency: 1.5,
@@ -113,12 +99,7 @@ export const COARSE_MAP_DEFAULTS = {
 	erosion: 0,
 	warpAmplitude: 0.8,
 	warpFrequency: 1.6,
-	creation: 0.35,
-	island: 0.0008,
-	growthWeight: 0.8,
-	plates: 36,
-	oceanShare: 0.6,
-	biasWeight: 0.15,
-	upliftWeight: 1.2,
-	upliftReach: 4,
+	spin: 0,
+	jitter: 1,
+	feature: "f1",
 } as const satisfies Required<CoarseMapOptions>;

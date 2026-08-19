@@ -3,7 +3,7 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { erodeDroplets } from "./erodeDroplets.js";
-import { landformHeight } from "./landformHeight.js";
+import { surfaceHeight } from "./surfaceHeight.js";
 import { metreHeight } from "./metreHeight.js";
 
 /**
@@ -22,7 +22,7 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-	const raw = landformHeight(grid, seed, settings);
+	const raw = surfaceHeight(grid, seed, settings);
 	const height = metreHeight(
 		raw,
 		settings.landFraction,

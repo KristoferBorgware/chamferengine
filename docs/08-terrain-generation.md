@@ -224,6 +224,80 @@ pinned function rather than from one that runs anything else.
 
 ---
 
+### The lattice is a choice, and the hash is not
+
+Everything above pins **one** noise function, and that function still ships. What
+it does not have to be is the only one available: the octave stack takes a
+**basis** — the thing one octave is — and the value noise above is one of five.
+The other four are ports of published implementations, each named for the work
+it comes from: **Perlin**, **OpenSimplex2**, **psrdnoise** and **cellular**.
+
+They are interchangeable because they agree on their interface. Each takes a
+point in 3D and a seed and returns a scalar in `[-1, 1]`, so frequency, octave
+count, persistence, lacunarity, offset and ridge mean the same thing under all
+five, and so does the sea-level percentile downstream.
+
+| Basis | Lattice | One octave draws |
+|---|---|---|
+| value | cubic, a value per corner | round blobs with a faint square weave |
+| Perlin | cubic, a gradient per corner | the same weave with a zero at every corner |
+| OpenSimplex2 | body-centred cubic | blobs with no direction to them |
+| psrd | simplex, gradients that turn | blobs whose lobes all face one way |
+| cellular | scattered feature points | plates with hard seams between them |
+
+**The same frequency did not mean the same feature size**, and that had to be
+corrected rather than documented. A frequency counts lattice cells, and the five
+do not draw one feature per cell.
+
+> **[verified]** Zero crossings along an 8,000-unit walk at frequency 1. One
+> feature runs **1.99** units in value noise, **1.30** in Perlin, **0.89** in
+> cellular, **0.82** in OpenSimplex2 and **0.78** in psrd — so a **Noise scale**
+> of 4,500 m drew continents 4,500 m across in one basis and **1,800 m** across
+> in another. Each basis's frequency is multiplied by its own width over value
+> noise's, which brings all five to within **0.9%** of each other and leaves
+> value noise at exactly 1.
+
+That correction reaches further than the label. The editor refuses a map too
+coarse to carry the narrowest octave, and it works that octave's width out in
+metres from the Noise scale and the lacunarity alone. Uncorrected, the refusal
+would have been right for one basis and wrong for the other four.
+
+**What is left to choose between them is the shape of one octave and the spread
+of the sum**, both of which show in the map picture.
+
+> **[verified]** 2,000,000 samples of one octave. Every basis fills `[-1, 1]`:
+> the extremes run `-0.999` to `1.000` for value, `-0.995` to `0.979` for
+> Perlin, `-0.996` to `1.000` for OpenSimplex2, `-1.000` to `1.000` for
+> cellular, and `-1.030` to `1.014` for psrd, which overshoots because the
+> reference's own normaliser does. Standard deviation separates them: **0.401**
+> for value, **0.389** OpenSimplex2, **0.380** psrd, **0.369** cellular and
+> **0.274** for Perlin — so a Perlin world keeps more of itself near the middle
+> and reaches the top in fewer places.
+
+**Nothing about this weakens the pinned hash.** Four of the five bases index
+their gradients with the `hash3` above, including the two whose references use a
+64-bit multiply, which is several operations in a runtime whose integers are 32
+bits and whose numbers are doubles. Cellular and psrd carry the polynomial
+permutation their references use, which is `+ − × ÷` and `floor` over integers
+under `289` — inside the set [doc 23](23-determinism.md) pins.
+
+**One basis is the exception.** psrdnoise
+builds each gradient by rotating a hashed direction, and a rotation is a sine
+and a cosine. A library sine is not an IEEE operation and two runtimes may
+return results a bit apart, so **a psrd world is the one that is not guaranteed
+identical on two machines**. The exposure is bounded rather than removed: there
+are only `289` distinct hashed indices, so the whole trigonometric part of the
+field is four tables of 289 entries built once, and the spin angle is turned
+into a sine and a cosine once per map. Nothing on the sampling path computes
+one. A world that has to be bit-identical between two clients uses one of the
+other four.
+
+**Cellular is the exception of a different kind: it is not smooth.** The other
+four are differentiable everywhere, and cellular has a crease along every plate
+boundary because the nearest feature point changes there. That crease is both
+the reason to reach for it and the reason not to — it survives the octave stack,
+which has nothing that rounds it off.
+
 ## Two levels of ambition
 
 ![A radial slice: a height field gives one surface per column, a density field opens caves and overhangs](figures/height-field-vs-density.svg)

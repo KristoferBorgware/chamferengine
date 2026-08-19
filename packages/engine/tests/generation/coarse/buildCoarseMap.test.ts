@@ -4,7 +4,7 @@ import {
 	buildCoarseMap,
 	erodeDroplets,
 	metreHeight,
-	noiseHeight,
+	surfaceHeight,
 	seaLevelFor,
 	seedFromString,
 } from "chamfer/generation";
@@ -110,7 +110,7 @@ describe("erodeDroplets", () => {
 	const grid = new CoarseGrid(LEVEL);
 	const ground = (): Float64Array =>
 		metreHeight(
-			noiseHeight(grid, 21, 1.5, 4, 0.5, 2, 0, 0, 0),
+			surfaceHeight(grid, 21, { ridge: 0, warpAmplitude: 0 }),
 			0.3,
 			600,
 			240,
