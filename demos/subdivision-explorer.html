@@ -456,10 +456,13 @@ function rebuild() {
   patch = [];
   withCells = 0;
   const base = cellPixels();
-  // Biggest cells first, so a budget stops the ones that would show least.
+  // Nearest first. A triangle whose cells are under a pixel never asks for
+  // them, so what a budget stops is always the furthest that wanted them --
+  // and never the ground the player is standing on, which is the one place
+  // the cells have to be right.
   let total = 0;
   budgeted = 0;
-  for (const t of [...tris].sort((a, b) => b.lod - a.lod)) {
+  for (const t of [...tris].sort((a, b) => a.away - b.away)) {
     const across = base * 2 ** t.lod;
     const wants = state.cells && across >= CELL_PIXELS;
     const tiled = wants && total <= CELL_BUDGET;
@@ -605,10 +608,7 @@ function draw() {
       if (!t.dirs.some((d) => rotate(d)[2] >= 1 / EYE)) continue;
       const color = lodColor(t.lod, maxLod, cells ? 0.55 : 0.62);
       if (!cells) {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        arc(t.dirs[0], t.dirs[1]); arc(t.dirs[1], t.dirs[2]); arc(t.dirs[2], t.dirs[0]);
-        ctx.closePath(); ctx.fill();
+        fillTriangle(t.dirs, color);
         filled++;
         continue;
       }
@@ -663,6 +663,32 @@ function draw() {
   if (state.selected) outlineSelected();
   marker(state.player);
   readout();
+}
+
+/**
+ * One triangle as a single closed path, for filling.
+ *
+ * {@link arc} starts a new subpath wherever an edge crosses the limb, which is
+ * what an outline wants and what a fill cannot use: three separate polylines
+ * enclose no area at all, so filling them paints nothing. This walks the three
+ * edges as one run and holds any point past the limb on it.
+ */
+function fillTriangle(dirs, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const STEPS = 8;
+  for (let e = 0; e < 3; e++) {
+    const u = dirs[e], v = dirs[(e + 1) % 3];
+    for (let s = 0; s < STEPS; s++) {
+      const t = s / STEPS;
+      const p = projectHeld(rotate(norm([
+        u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t, u[2] + (v[2] - u[2]) * t,
+      ])));
+      if (e === 0 && s === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+    }
+  }
+  ctx.closePath();
+  ctx.fill();
 }
 
 /** A great-circle segment, in enough pieces that the limb stays curved. */
