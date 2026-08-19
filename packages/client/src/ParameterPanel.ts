@@ -1,5 +1,6 @@
 import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
 import { KNOB_RANGES, PlanetSettings } from "./PlanetSettings.js";
+import { PLAYER_DEFAULTS } from "chamfer/player";
 
 /** One row of the panel. */
 interface Knob {
@@ -358,6 +359,10 @@ const GROUPS: Group[] = [
 				key: "seamOverlay",
 				label: "Seam overlay",
 			},
+			{
+				key: "freezeView",
+				label: "Freeze view",
+			},
 		],
 	},
 ];
@@ -697,7 +702,9 @@ export class ParameterPanel {
 				? `<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
 					`<span>ground <b>${settings.knobs.noiseScale.toFixed(0)} m</b> down to <b>${settings.smallestLandform.toFixed(0)} m</b> across, over <b>${settings.knobs.octaves}</b> octaves</span>`
 				: `<span>height map <b>off</b></span>`) +
-			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + 1.7))).toFixed(0)} m</b></span>` +
+			// The camera's own height, not a figure typed in beside it: the two
+			// drifted apart the moment one of them moved.
+			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + PLAYER_DEFAULTS.eyeHeight))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
 			`<span>cloud puff <b>${settings.cloudPuff.toFixed(0)} m</b>, level <b>${settings.cloudLevel}</b></span>` +

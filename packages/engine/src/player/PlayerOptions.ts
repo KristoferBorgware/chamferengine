@@ -9,7 +9,13 @@ export interface PlayerOptions {
 	/** Metres a second squared, toward the planet's centre. */
 	readonly gravity?: number;
 
-	/** How high the eye sits over the feet. */
+	/**
+	 * How high the camera sits over the feet.
+	 *
+	 * Separate from {@link PlayerOptions.height}, which is the yardstick the
+	 * water tests measure a chest against and nothing else. This one is where
+	 * the picture is taken from.
+	 */
 	readonly eyeHeight?: number;
 
 	/** How tall the player is, in metres. */
@@ -29,7 +35,7 @@ export const PLAYER_DEFAULTS = {
 	walkSpeed: 1.4,
 	flySpeed: 24,
 	gravity: 9.81,
-	eyeHeight: 1.6,
+	eyeHeight: 1.86,
 	height: 1.8,
 	stepHeight: 1.05,
 	swimSpeed: 2.2,
