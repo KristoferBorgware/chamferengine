@@ -99,6 +99,22 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
+				key: "warpAmplitude",
+				map: true,
+				label: "Warp",
+				digits: 2,
+				enabledWhen: (k) =>
+					k.coarseMap && !k.plain && k.landform === "warped",
+			},
+			{
+				key: "warpScale",
+				map: true,
+				label: "Warp scale",
+				digits: 0,
+				enabledWhen: (k) =>
+					k.coarseMap && !k.plain && k.landform === "warped",
+			},
+			{
 				key: "landFraction",
 				map: true,
 				label: "Land",

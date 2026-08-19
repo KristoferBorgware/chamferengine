@@ -117,6 +117,12 @@ export interface PlanetKnobs {
 	offsetX: number;
 	offsetY: number;
 
+	/** How far a second field pushes the sample point. `warped` only. */
+	warpAmplitude: number;
+
+	/** Metres across the widest feature of the field doing the pushing. */
+	warpScale: number;
+
 	/** Metres from sea level to the tallest ground. */
 	relief: number;
 
@@ -188,6 +194,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	lacunarity: 2,
 	offsetX: 0,
 	offsetY: 0,
+	warpAmplitude: 0.35,
+	warpScale: 4250,
 	relief: 300,
 	erosion: 0,
 	landFraction: 0.3,
@@ -259,6 +267,20 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	lacunarity: { low: 1.2, high: 4, step: 0.05, rebuilds: true, unit: "" },
 	offsetX: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
 	offsetY: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
+	warpAmplitude: {
+		low: 0,
+		high: 1.5,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	warpScale: {
+		low: 200,
+		high: 40000,
+		step: 100,
+		rebuilds: true,
+		unit: "m",
+	},
 	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
 	erosion: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	landFraction: {
@@ -657,6 +679,8 @@ export class PlanetSettings {
 			lacunarity: this.knobs.lacunarity,
 			offsetX: this.knobs.offsetX,
 			offsetY: this.knobs.offsetY,
+			warpAmplitude: this.knobs.warpAmplitude,
+			warpFrequency: this.frequencyFor(this.knobs.warpScale),
 			relief: this.relief,
 			landFraction: this.knobs.landFraction,
 			erosion: this.knobs.erosion,
