@@ -191,13 +191,16 @@ if (params.get("panel") === "1") {
 		},
 		(at) => onGoTo(at),
 	);
-	new ParameterPanel(
+	const panel = new ParameterPanel(
 		settings,
 		(live) => {
 			onLiveKnob(live);
 		},
 		(draft) => maps.changed(draft),
 	);
+	// The knobs that decide where the land is live under the map they decide,
+	// not in a panel on the other side of the screen.
+	maps.hostKnobs(panel.section("Where the land is"));
 	onPlayerMoved = (up) => maps.setPlayer(up);
 }
 

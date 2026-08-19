@@ -43,6 +43,9 @@ export class MapPanel {
 	private readonly image: ImageData;
 	private readonly sphere: SphereView;
 	private readonly status: HTMLElement;
+
+	/** Where a group of sliders sits, once one has been handed over. */
+	private readonly knobs: HTMLElement;
 	private readonly says: HTMLElement;
 	private readonly worker: Worker;
 	private readonly onApply: (settings: PlanetSettings) => void;
@@ -53,6 +56,17 @@ export class MapPanel {
 	private token = 0;
 	private level: number;
 	private startedAt = 0;
+
+	/**
+	 * Take a group of sliders into this pane, under the picture they decide.
+	 *
+	 * The element keeps whichever panel built it as its owner, so the draft,
+	 * the ranges and the settling stay in one place and this only decides where
+	 * the rows are drawn.
+	 */
+	hostKnobs(section: HTMLElement | null): void {
+		if (section) this.knobs.appendChild(section);
+	}
 
 	/** Where the player stands, as a direction, or nothing before there is one. */
 	private player: { x: number; y: number; z: number } | null = null;
@@ -139,6 +153,12 @@ export class MapPanel {
 		body.appendChild(ball);
 		this.sphere = new SphereView(ball);
 		this.sphere.picked(([x, y, z]) => onGoTo({ x, y, z }));
+
+		// Where the knobs that shape this map go, if somebody hands them over.
+		// The picture and the sliders that decide it belong in one pane.
+		this.knobs = document.createElement("div");
+		this.knobs.className = "maps-knobs";
+		body.appendChild(this.knobs);
 
 		this.status = document.createElement("div");
 		this.status.className = "maps-status";

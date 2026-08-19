@@ -424,6 +424,9 @@ export class ParameterPanel {
 	/** Told whenever the draft moves, so a pane drawing from it can keep up. */
 	private readonly onDraft: (settings: PlanetSettings) => void;
 	private readonly rows: Row[] = [];
+
+	/** Each group's own element, by title, so another pane can host one. */
+	private readonly sections = new Map<string, HTMLElement>();
 	private problems!: HTMLElement;
 	private derived!: HTMLElement;
 	private applyButton!: HTMLButtonElement;
@@ -441,6 +444,17 @@ export class ParameterPanel {
 		this.root.className = "knobs";
 		this.build();
 		document.body.appendChild(this.root);
+	}
+
+	/**
+	 * One group's element, for a pane that wants to hold it instead.
+	 *
+	 * The node is handed over rather than rebuilt, so moving it changes where
+	 * it is drawn and nothing else: this panel still owns the draft, the rows
+	 * and the settling, and every slider keeps working from wherever it lands.
+	 */
+	section(title: string): HTMLElement | null {
+		return this.sections.get(title) ?? null;
 	}
 
 	/** The world the sliders currently describe. */
@@ -496,6 +510,7 @@ export class ParameterPanel {
 				this.rows.push(row);
 				section.appendChild(row.wrap);
 			}
+			this.sections.set(group.title, section);
 			body.appendChild(section);
 		}
 

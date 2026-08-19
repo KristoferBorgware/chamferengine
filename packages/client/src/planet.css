@@ -88,14 +88,16 @@ body {
 .knobs.shut .knobs-body {
 	display: none;
 }
-.knobs h2 {
+.knobs h2,
+.maps-knobs h2 {
 	font-size: 10.5px;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
 	color: #8b93a7;
 	margin: 14px 0 2px;
 }
-.knobs section p {
+.knobs section p,
+.maps-knobs section p {
 	font-size: 11px;
 	color: #6d768c;
 	line-height: 1.5;
@@ -422,6 +424,14 @@ body {
 	background: #0b0d10;
 }
 
+/* The knobs that decide this map, sitting under the picture they decide. */
+.maps-knobs {
+	padding: 0 14px;
+}
+.maps-knobs h2 {
+	margin-top: 4px;
+}
+
 .maps-status {
 	margin-top: 8px;
 	color: #9aa4b2;
@@ -470,16 +480,20 @@ body {
 	opacity: 0.5;
 }
 
-.knobs section.shut .knobs-fold::after {
+.knobs section.shut .knobs-fold::after,
+.maps-knobs section.shut .knobs-fold::after {
 	content: " +";
 }
 
 .knobs section.shut p,
-.knobs section.shut .knob {
+.knobs section.shut .knob,
+.maps-knobs section.shut p,
+.maps-knobs section.shut .knob {
 	display: none;
 }
 
-.knobs label em {
+.knobs label em,
+.maps-knobs label em {
 	margin-left: 4px;
 	padding: 1px 4px;
 	background: #4b7bd633;
