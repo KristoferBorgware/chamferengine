@@ -394,13 +394,30 @@ async function main(): Promise<void> {
 	// place somewhere out of sight can be pointed at.
 	onGoTo = (at) => land(new Vec3(at.x, at.y, at.z));
 
-	/** Put the player on the ground at a direction, clear of it. */
+	/**
+	 * Put the player at a direction, as far over the surface as they are now.
+	 *
+	 * **Height above the local surface, not the radius.** Somebody looking at
+	 * the planet from 2,000 m up wants to arrive still looking at it, and a
+	 * radius kept across a teleport would bury them inside the first mountain
+	 * taller than the one they left. A standing player keeps standing, because
+	 * their height above the ground is already the 1.2 m floor below.
+	 */
 	function land(direction: Vec3): void {
+		const here = positionToCell(player.position, shape.n);
+		const from = terrain.columnAt(here.face, here.i, here.j);
+		const above =
+			player.position.length() -
+			Math.max(from.groundRadius, from.waterRadius);
+
 		const cell = positionToCell(direction, shape.n);
 		const column = terrain.columnAt(cell.face, cell.i, cell.j);
 		player.position = direction
 			.normalize()
-			.scale(Math.max(column.groundRadius, column.waterRadius) + 1.2);
+			.scale(
+				Math.max(column.groundRadius, column.waterRadius) +
+					Math.max(1.2, above),
+			);
 		player.heading = direction
 			.normalize()
 			.cross(new Vec3(0, 1, 0))

@@ -186,7 +186,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	blockSize: 1,
 	chunkCells: 32,
 	coarseMap: true,
-	landform: "noise",
+	landform: "warped",
 	coarseSpacing: 32,
 	noiseScale: 4500,
 	octaves: 4,

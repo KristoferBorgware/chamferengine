@@ -50,6 +50,12 @@ const FACES = [
 /** How finely the ball is cut. Level 5 is 20,480 triangles. */
 const LEVEL = 5;
 
+/** How long a finger is held still before it picks, in milliseconds. */
+const HOLD_MS = 450;
+
+/** How far it may wander in that time, in pixels, and still count as held. */
+const HOLD_SLOP = 10;
+
 /**
  * The same field, wrapped back onto a ball, turned by dragging.
  *
@@ -126,6 +132,17 @@ export class SphereView {
 		let dragging = false;
 		let lastX = 0,
 			lastY = 0;
+
+		// A finger has no second button, so a press held still picks instead.
+		// Held still is the whole of it: any movement past the slop cancels,
+		// which is what keeps a slow drag from teleporting somebody.
+		let mouse = true;
+		let holding: ReturnType<typeof setTimeout> | null = null;
+		const drop = () => {
+			if (holding !== null) clearTimeout(holding);
+			holding = null;
+		};
+
 		const down = (x: number, y: number) => {
 			dragging = true;
 			lastX = x;
@@ -142,23 +159,63 @@ export class SphereView {
 			lastY = y;
 			this.draw();
 		};
+
+		/** Point at a place on the ball, in canvas pixels. */
+		const pick = (x: number, y: number) => {
+			const at = this.directionAt(x, y);
+			if (at) this.onPick(at);
+		};
+
 		// Right-click picks rather than turns. The ball is the only place on
 		// screen showing the whole planet at once, so it is the only place a
 		// person can point at somewhere they cannot see.
 		canvas.oncontextmenu = (e) => {
+			// Always swallowed, so a long press on a touch screen does not
+			// raise the browser's own menu over the ball.
 			e.preventDefault();
-			const at = this.directionAt(e.offsetX, e.offsetY);
-			if (at) this.onPick(at);
+			if (mouse) pick(e.offsetX, e.offsetY);
 		};
 		canvas.onpointerdown = (e) => {
 			canvas.setPointerCapture(e.pointerId);
+			mouse = e.pointerType === "mouse";
 			down(e.clientX, e.clientY);
+			if (mouse) return;
+			const [ox, oy, sx, sy] = [
+				e.offsetX,
+				e.offsetY,
+				e.clientX,
+				e.clientY,
+			];
+			drop();
+			holding = setTimeout(() => {
+				holding = null;
+				dragging = false;
+				pick(ox, oy);
+			}, HOLD_MS);
+			// Held still is measured from here, so the slop check below has
+			// somewhere to measure from.
+			lastX = sx;
+			lastY = sy;
+			startX = sx;
+			startY = sy;
 		};
-		canvas.onpointermove = (e) => move(e.clientX, e.clientY);
+		let startX = 0,
+			startY = 0;
+		canvas.onpointermove = (e) => {
+			if (
+				holding !== null &&
+				Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) >
+					HOLD_SLOP
+			)
+				drop();
+			move(e.clientX, e.clientY);
+		};
 		canvas.onpointerup = () => {
+			drop();
 			dragging = false;
 		};
 		canvas.onpointercancel = () => {
+			drop();
 			dragging = false;
 		};
 	}
@@ -173,7 +230,7 @@ export class SphereView {
 		}
 	}
 
-	/** What to do when somebody right-clicks a place on the ball. */
+	/** What to do when somebody right-clicks, or holds a finger on, the ball. */
 	picked(handler: (at: [number, number, number]) => void): void {
 		this.onPick = handler;
 	}

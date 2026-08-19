@@ -91,7 +91,7 @@ export interface CoarseMapOptions {
 }
 
 export const COARSE_MAP_DEFAULTS = {
-	landform: "noise",
+	landform: "warped",
 	level: 8,
 	cellMetres: 32,
 	frequency: 1.5,
