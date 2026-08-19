@@ -13,7 +13,13 @@ export interface ChunkSelection {
 
 	readonly key: number;
 
-	/** Straight-line distance from the eye to the chunk's centre. */
+	/**
+	 * Straight-line distance from the eye to the chunk's ground.
+	 *
+	 * To the nearest radius its ground can occupy along its centre direction,
+	 * not to its centre at sea level -- the difference is the whole height of
+	 * a mountain for the chunk a player is standing on.
+	 */
 	readonly distance: number;
 }
 
@@ -85,21 +91,30 @@ export function selectChunks(
 		const extent = chunkCenter(address, depth, chunkLevel);
 		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
 		const spread = Math.acos(Math.min(1, extent.cosRadius));
+		const peak = peaks ? peaks.peakOf(address.key, chunkLevel) : peakHeight;
 		const horizon =
 			eyeHorizon +
 			(peaks
-				? horizonAngle(
-						surfaceRadius + peaks.peakOf(address.key, chunkLevel),
-						surfaceRadius,
-					)
+				? horizonAngle(surfaceRadius + peak, surfaceRadius)
 				: wholePlanet);
 		// Over the horizon by more than its own width: the whole triangle is on
 		// the far side of the planet.
 		if (cos < Math.cos(Math.min(Math.PI, horizon + spread))) return;
 
-		const dx = extent.x * surfaceRadius - eyeX;
-		const dy = extent.y * surfaceRadius - eyeY;
-		const dz = extent.z * surfaceRadius - eyeZ;
+		// The distance is to the chunk's ground, never to the sphere. Its
+		// ground fills the radii from the reference sphere up to its own
+		// tallest point, so the nearest of those to the eye is the eye's own
+		// radius, clamped into that span. Measuring the sphere instead put a
+		// player standing on 1,500 m ground 1,527 m from the chunk under
+		// their own feet, which was then drawn with 128 m cells -- ground
+		// underfoot at the level of detail of a skyline.
+		const ground = Math.max(
+			surfaceRadius,
+			Math.min(viewerRadius, surfaceRadius + peak),
+		);
+		const dx = extent.x * ground - eyeX;
+		const dy = extent.y * ground - eyeY;
+		const dz = extent.z * ground - eyeZ;
 		const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		const width = 2 * spread * surfaceRadius;
 

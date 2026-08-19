@@ -127,6 +127,50 @@ describe("selectChunks", () => {
 		expect(nearest.lod).toBeLessThan(furthest.lod);
 	});
 
+	it("keeps the ground underfoot at full detail on top of a mountain", () => {
+		// The regression that shipped as whole-chunk cells around the player:
+		// distance went to the chunk's centre at sea level, so a player
+		// standing on 1,500 m ground was 1,500-odd metres from the chunk
+		// under their own feet, and it was drawn at the level of detail that
+		// distance deserves. The distance is to the chunk's ground now, whose
+		// height the peak term already names.
+		const standingOn = 1500;
+		const peak = 1640;
+		for (const detail of [1, 2]) {
+			const chosen = selectChunks(
+				DEPTH,
+				FINEST,
+				VIEWER,
+				RADIUS + standingOn + 1.86,
+				RADIUS,
+				detail,
+				peak,
+			);
+			const under = chosen[0]!;
+			expect(under.lod).toBe(0);
+			// Metres from the eye to ground at its own height, not a figure
+			// carrying the whole mountain.
+			expect(under.distance).toBeLessThan(100);
+		}
+	});
+
+	it("still reads sea-level ground at its sea-level distance", () => {
+		// The clamp must not lift ground that is not there: on a smooth world
+		// the peak term is zero and the distances are to the sphere, so a
+		// flying viewer's underfoot chunk is exactly its altitude away.
+		const chosen = selectChunks(
+			DEPTH,
+			FINEST,
+			VIEWER,
+			RADIUS + 300,
+			RADIUS,
+			2,
+			0,
+		);
+		expect(chosen[0]!.distance).toBeGreaterThan(299);
+		expect(chosen[0]!.distance).toBeLessThan(320);
+	});
+
 	it("takes the whole planet from far enough out", () => {
 		const chosen = selectChunks(DEPTH, FINEST, VIEWER, RADIUS * 4, RADIUS);
 		// Half the sphere and a little, at the coarsest levels, and few enough

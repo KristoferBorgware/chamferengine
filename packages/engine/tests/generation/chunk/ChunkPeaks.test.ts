@@ -4,6 +4,7 @@ import {
 	ChunkAddress,
 	ChunkPeaks,
 	buildCoarseMap,
+	chunkOverlaps,
 	selectChunks,
 } from "chamfer/generation";
 
@@ -109,20 +110,29 @@ describe("ChunkPeaks", () => {
 				planetWide,
 				peaks,
 			);
-			const kept = new Set(tight.map((c) => c.key));
 			expect(tight.length).toBeLessThanOrEqual(wide.length);
 
-			// Everything the tight walk kept, the wide one kept too: the table
-			// only ever shortens the reach.
-			const wideKeys = new Set(wide.map((c) => c.key));
+			// The two walks split at different depths -- the distance term
+			// reads each chunk's own ground, and the wide walk lifts every
+			// chunk to the planet's tallest -- so the comparison is over
+			// ground, never keys. Everything the tight walk kept, the wide
+			// one covers: the table only ever shortens the reach.
 			for (const c of tight)
-				expect(wideKeys.has(c.key), `eye ${eye}, key ${c.key}`).toBe(
-					true,
-				);
+				expect(
+					wide.some((w) =>
+						chunkOverlaps(w.chunkLevel, w.key, c.chunkLevel, c.key),
+					),
+					`eye ${eye}, key ${c.key}`,
+				).toBe(true);
 
 			// Everything it dropped had ground too low to clear the horizon.
 			for (const c of wide) {
-				if (kept.has(c.key)) continue;
+				if (
+					tight.some((t) =>
+						chunkOverlaps(t.chunkLevel, t.key, c.chunkLevel, c.key),
+					)
+				)
+					continue;
 				const address = ChunkAddress.fromKey(c.key, c.chunkLevel);
 				expect(
 					peaks.peakOf(address.key, c.chunkLevel),
