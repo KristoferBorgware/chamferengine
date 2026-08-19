@@ -120,7 +120,13 @@ export interface PlanetKnobs {
 	/** Metres from sea level to the tallest ground. */
 	relief: number;
 
-	/** How hard the water cuts into the ground. */
+	/**
+	 * How hard the water cuts into the ground.
+	 *
+	 * Off, and off the panel, until F-039 is fixed: what the droplets cut is a
+	 * lattice pattern rather than valleys. Still reachable as `?erosion=0.5`
+	 * for whoever comes back to it.
+	 */
 	erosion: number;
 
 	/** How much of the surface stands above the sea. */
@@ -183,7 +189,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	offsetX: 0,
 	offsetY: 0,
 	relief: 300,
-	erosion: 0.3,
+	erosion: 0,
 	landFraction: 0.3,
 	crustMetres: 960,
 	atmosphereTop: 400,

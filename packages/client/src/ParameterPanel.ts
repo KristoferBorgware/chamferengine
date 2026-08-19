@@ -113,13 +113,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "erosion",
-				map: true,
-				label: "Erosion",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
 				key: "offsetX",
 				map: true,
 				label: "Offset X",

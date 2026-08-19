@@ -520,8 +520,14 @@ Violating any of these breaks the design. They are not tunable.
   slope for 0 dead ends, continents decide river length — for whoever revisits
   it. The coarse lookup is masking the low bits of **`(i, j)`**, not the path
   digits — those give a triangle, not a cell.
-- **Erosion is droplets, and both its constants came from measuring the wrong
-  answer** (`erodeDroplets`, doc 21, F-017 closed). A droplet walks downhill cell
+- **Erosion is droplets, it SHIPS OFF, and both its constants came from
+  measuring the wrong answer** (`erodeDroplets`, doc 21, F-017 closed, F-039
+  open). `erosion` defaults to `0` and its row is off the panel, because what
+  the droplets cut is **lattice-aligned gashes rather than valleys** — 60.2% of
+  their steps run eight or more cells in one unchanged direction, longest run
+  48, a whole droplet life in a straight line. The pass returns on its first
+  line at zero; `?erosion=0.5` still reaches it. Everything below still holds
+  and describes what it does when turned on. A droplet walks downhill cell
   to cell, cutting where it moves fast and depositing where it slows; it reads
   only its own cell and the six around it. **Capacity is a gradient, never a fall
   in metres times a cell width** — the second form made a droplet on flat ground

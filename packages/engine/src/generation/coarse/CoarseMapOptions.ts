@@ -41,7 +41,16 @@ export interface CoarseMapOptions {
 	/** Fraction of the surface left above sea level. Earth is near 0.3. */
 	readonly landFraction?: number;
 
-	/** How hard the water cuts. Zero leaves the noise exactly as it fell. */
+	/**
+	 * How hard the water cuts. Zero leaves the noise exactly as it fell.
+	 *
+	 * **Zero by default, and that is a decision rather than a placeholder.**
+	 * What the droplets currently cut is lattice-aligned gashes rather than
+	 * valleys -- 60.2% of their steps run eight or more cells in one unchanged
+	 * direction (F-039) -- so a world is better without them until the walk
+	 * carries momentum. `erodeDroplets` still runs and returns on its first
+	 * line when this is zero.
+	 */
 	readonly erosion?: number;
 
 	/** How far the warp pushes a sample point. `warped` only. */
@@ -93,7 +102,7 @@ export const COARSE_MAP_DEFAULTS = {
 	offsetY: 0,
 	relief: 300,
 	landFraction: 0.3,
-	erosion: 0.3,
+	erosion: 0,
 	warpAmplitude: 0.35,
 	warpFrequency: 1.6,
 	creation: 0.35,

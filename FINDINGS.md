@@ -773,6 +773,11 @@ the cliff rule and the slope field it read were removed. Every measurement taken
 the median slope barely moves, the tail grows, the ground shifts 8 m a cell at
 full strength — those numbers just do not say what shape the moved ground took.
 
+**Erosion ships off because of this.** `erosion` defaults to `0` and its row is
+off the panel, so `erodeDroplets` returns on its first line and nothing here
+reaches a world. It is still reachable as `?erosion=0.5` for whoever comes back
+to it, and the code is untouched.
+
 **What would fix it.** The standard droplet algorithm does not step cell to
 cell. It carries a **continuous position and a direction with momentum**,
 computes the height gradient by interpolating the field around that position,
