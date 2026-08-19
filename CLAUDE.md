@@ -608,6 +608,16 @@ Violating any of these breaks the design. They are not tunable.
   not a second material, so shading it drew sea floors the world does not have,
   and Height is the picture depth is read from. `Height` keeps its blend,
   because it answers a different question.
+- **A CRUST IS A COUNT OF LAYERS, AND THE SLIDER WAS STATING IT IN METRES**
+  (`KNOB_RANGES.crustMetres`). The layer field holds **1,024** layers and a
+  layer is a block tall, so the crust reaches `1,024 m` at a 1 m block and
+  **`4,096 m`** at a 4 m one — the largest any radius and block size in the
+  panel allow. **Crust reaches** was capped at `1,024` **metres**, which is the
+  layer count wearing the wrong unit, and because `rangeFor` only ever narrows
+  it could never widen back: every world with a block over a metre was held to
+  a fraction of the depth it could carry, a 2 m block to `1,024 m` of a possible
+  `1,740 m`. The cap is the largest ceiling any world reaches now, and each
+  world is narrowed to its own.
 - **A LINK COULD BUILD WHAT A SLIDER COULD NOT REACH** (`fromParams`). Every
   slider's ends move with the rest of the draft, and `fromParams` went straight
   past that — while **Copy link** is how a world travels. A query string naming

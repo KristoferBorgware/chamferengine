@@ -316,7 +316,12 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: true,
 		unit: "",
 	},
-	crustMetres: { low: 32, high: 1024, step: 16, rebuilds: true, unit: "m" },
+	// 1,024 is the layer field's whole count, and a crust is that many layers
+	// of whatever a block is: 1,024 m at a 1 m block and 4,096 m at a 4 m one,
+	// which is the largest any radius and block size here reach. Holding this
+	// at 1,024 m held every world with a block over a metre to a quarter of the
+	// depth it could carry, because `rangeFor` only ever narrows.
+	crustMetres: { low: 32, high: 4096, step: 16, rebuilds: true, unit: "m" },
 	atmosphereTop: {
 		low: 50,
 		high: 4000,

@@ -405,3 +405,46 @@ describe("a world read from a link", () => {
 		expect(settings.knobs.landFraction).toBe(0.4);
 	});
 });
+
+describe("how deep the crust may be asked to run", () => {
+	it("lets a bigger block buy the depth its layers can carry", () => {
+		// A crust is a number of layers, and a layer is a block tall, so the
+		// metres it reaches scale with the block. The slider's own maximum was
+		// 1,024 m, which is the layer count rather than a distance, and it held
+		// every world with a block over a metre to a fraction of what it could
+		// hold.
+		for (const blockSize of [1, 2, 4]) {
+			const settings = new PlanetSettings({ blockSize, radius: 6800 });
+			const range = settings.rangeFor("crustMetres");
+			expect(range.high, `${blockSize} m block`).toBeGreaterThanOrEqual(
+				settings.crustCeiling - KNOB_RANGES.crustMetres!.step,
+			);
+		}
+	});
+
+	it("never offers a crust the world cannot hold", () => {
+		// The narrowing only moves inward, so the stated maximum has to be at
+		// least the largest ceiling any world here reaches, and every single
+		// world has to be narrowed back to its own. Settled first, because a
+		// draft whose ground is taller than any crust it could have is a pair
+		// of constraints crossing, and there the lower end wins on purpose.
+		for (const blockSize of [0.5, 1, 2, 4])
+			for (const radius of [900, 6800, 19250, 25000]) {
+				const settings = new PlanetSettings(
+					PlanetSettings.settle({
+						...PLANET_DEFAULTS,
+						blockSize,
+						radius,
+					}),
+				);
+				expect(
+					settings.rangeFor("crustMetres").high,
+					`${blockSize} m block at ${radius} m`,
+				).toBeLessThanOrEqual(settings.crustCeiling);
+				expect(
+					settings.problems(),
+					`${blockSize} m block at ${radius} m`,
+				).toEqual([]);
+			}
+	});
+});
