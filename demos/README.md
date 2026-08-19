@@ -44,15 +44,21 @@ across 32 points. The last two buttons show the space-filling lattice cells.
 ### [`subdivision-explorer.html`](subdivision-explorer.html)
 Two things in one ball: how the subdivision works, and what level of detail does
 with it. **The splits go deep only where the player stands.** Right click to
-stand somewhere and the triangles halve their way toward you, each drawn in the
-colour of how many levels coarser than full detail it is; the ones that reach
-the chunk level are outlined in blue, and inside those the real cells are built
-at the world's own depth. Wheel all the way in and you are looking at 1 m
-hexagons on a 6.8 km planet.
+stand somewhere and the triangles halve their way toward you — and every one of
+them draws its own cells, at its own level. Coarse hexagons on the far side,
+fine ones underfoot, and the step between them is the level-of-detail seam.
 
-That is the number the demo exists for. At depth 13 with 32-cell chunks,
-**854 triangles cover the whole planet against 1,310,720** if every chunk were
-drawn at full detail. At depth 17 it is 1,307 against 335,544,320.
+**A chunk always holds the same number of cells.** One level coarser covers four
+times the area at half the resolution, so it is the same count at a wider
+spacing — level of detail is re-sampling the ground, never dropping cells out of
+a fine mesh. A few hundred triangles then cover a planet of hundreds of millions
+of cells: at depth 13 with 8-cell chunks, **1,079 triangles against
+20,971,520** if every one were at full detail.
+
+**Chunk decides how much ground is at full detail, and not how many chunks
+there are.** At `detail` 2 the full-detail region reaches two chunk widths, so
+8-cell chunks reach 16 m and 64-cell chunks reach 128 m — while the count of
+full-detail chunks stays near 150 either way.
 
 **Left click a cell** for its address — which face, the route down the splits
 with the chunk's own digits marked off, which corner of the last triangle, and
@@ -61,11 +67,12 @@ scale: `planet 12`, `face 5`, `path 2 x depth`, `corner 2`, `layer 11`, and
 whatever is left of the 64. Depth 4 leaves 26 bits over, depth 13 leaves 8, and
 depth 17 leaves none.
 
-**Depth, Radius and Cell size are one quantity written three ways** —
-`radius = cell x 2^depth / 1.20459` — so moving one moves another. Depth does
-not fix the radius on its own: at depth 13 it still runs from 3.40 km to
-27.20 km, which is the range of cell sizes. The ball is drawn to a compressed
-scale, because the radius runs over four orders of magnitude across the knobs.
+**Depth and Cell size are the knobs and Radius follows**, the way the engine has
+it: `radius = cell x 2^depth / 1.20459`. Depth alone does not fix it — at depth
+13 the radius still runs from 3.40 km to 27.20 km, which is the range of cell
+sizes — so the readout carries both the radius and the range its depth allows.
+The ball is drawn to a compressed scale, because the radius spans four orders of
+magnitude across the knobs.
 
 **Docs:** [02 — Choosing the geometry](../docs/02-geometry-choice.md),
 [03 — Addressing](../docs/03-addressing.md),

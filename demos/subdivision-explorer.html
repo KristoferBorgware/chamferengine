@@ -59,6 +59,9 @@
   .knob label b { color:#e6e8ee; font-weight:600; }
   .knob input[type=range] { width:100%; accent-color:#4f8ef7; }
   .knob .given { font-size:10.5px; color:#6b7488; min-height:13px; }
+  .knob.stat .bar { height:6px; margin:7px 0 5px; border-radius:3px; background:#1b2130;
+    box-shadow:inset 0 0 0 1px #2a3245; overflow:hidden; }
+  .knob.stat .bar div { height:100%; background:#4f8ef7; }
   .toggles { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   button {
     font:inherit; font-size:12.5px; font-weight:550;
@@ -88,9 +91,9 @@
     <input type="range" id="kDepth" min="3" max="17" step="1" value="13">
     <div class="given" id="gDepth"></div>
   </div>
-  <div class="knob">
+  <div class="knob stat">
     <label>Radius <b id="vRadius">—</b></label>
-    <input type="range" id="kRadius" min="0" max="1000" step="1" value="500">
+    <div class="bar"><div id="rBar"></div></div>
     <div class="given" id="gRadius"></div>
   </div>
   <div class="knob">
@@ -99,8 +102,8 @@
     <div class="given" id="gCell"></div>
   </div>
   <div class="knob">
-    <label>Chunk <b id="vChunk">32</b></label>
-    <input type="range" id="kChunk" min="3" max="6" step="1" value="5">
+    <label>Chunk <b id="vChunk">8</b></label>
+    <input type="range" id="kChunk" min="3" max="6" step="1" value="3">
     <div class="given" id="gChunk"></div>
   </div>
   <div class="knob">
@@ -315,94 +318,83 @@ function selectTriangles(player, finest, detail, radius) {
 
 // ---------------------------------------------------------------------------
 /**
- * The real cells inside a handful of chunks, at the world's own full depth.
+ * The cells of one triangle, at the resolution its own level asks for.
  *
- * Only the chunks nearest the player are built, which is the whole point: at
- * depth 13 the planet holds 671 million cells and one chunk holds 561 of them.
+ * **A chunk always holds the same number of cells.** One level coarser covers
+ * four times the area at half the resolution, so it is the same count of cells
+ * at a wider spacing -- level of detail here is re-sampling the ground, never
+ * dropping cells out of a fine mesh. That is why the whole planet can be
+ * covered by a few hundred triangles that each cost the same to build.
  *
- * Every triangle hands its own middle to each of its three corners, so two
- * cells sharing a triangle share that corner exactly and no seam can open
- * between them. A cell that did not collect a full ring sits on the edge of
- * what was built and is left undrawn rather than drawn as a fragment.
+ * Every triangle inside hands its own middle to each of its three corners, so
+ * two cells sharing a triangle share that corner exactly and no seam can open
+ * between them. The lattice is carried one step past the rim so the cells on
+ * the rim still close, and only the ones whose centre belongs to this triangle
+ * are kept.
+ *
+ * Where two triangles at **different** levels meet, their cells do not line up
+ * -- that is the level-of-detail seam, and it is real rather than a fault in
+ * the drawing. The engine closes it with an apron.
  */
-function buildPatch(chunks, depth) {
-  const n = 1 << depth;
-  const points = new Map();      // "i,j" -> [i, j], per face
-  const faces = new Map();       // face -> point map
-  const room = (face) => {
-    if (!faces.has(face)) faces.set(face, new Map());
-    return faces.get(face);
+function buildTriangleCells(t, chunkBits, depth) {
+  const level = Math.min(depth, t.level + chunkBits);
+  const m = 1 << (level - t.level);
+  const n = 1 << level;
+  const corners = triCorners(t).map(([i, j]) => [i * m, j * m]);
+  const [P, Q, R] = corners;
+  const area = (a, b, c) =>
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const whole = area(P, Q, R);
+  const inside = (i, j, slack) => {
+    const pt = [i, j];
+    return (
+      area(P, Q, pt) / whole >= -slack &&
+      area(Q, R, pt) / whole >= -slack &&
+      area(R, P, pt) / whole >= -slack
+    );
   };
-  for (const chunk of chunks) {
-    const m = 1 << (depth - chunk.level);
-    const [p, q, r] = triCorners(chunk).map(([i, j]) => [i * m, j * m]);
-    const loI = Math.min(p[0], q[0], r[0]) - 2, hiI = Math.max(p[0], q[0], r[0]) + 2;
-    const loJ = Math.min(p[1], q[1], r[1]) - 2, hiJ = Math.max(p[1], q[1], r[1]) + 2;
-    const inside = (i, j) => {
-      // Barycentric sign test in the lattice, so a down-triangle works too.
-      const s = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
-      const w = s(p, q, r), pt = [i, j];
-      const s1 = s(p, q, pt) / w, s2 = s(q, r, pt) / w, s3 = s(r, p, pt) / w;
-      return s1 >= -0.35 && s2 >= -0.35 && s3 >= -0.35;
-    };
-    const at = room(chunk.face);
-    for (let i = Math.max(0, loI); i <= Math.min(n, hiI); i++)
-      for (let j = Math.max(0, loJ); j <= Math.min(n - i, hiJ); j++)
-        if (inside(i, j)) at.set(i + ',' + j, [i, j]);
-  }
+  const loI = Math.max(0, Math.min(P[0], Q[0], R[0]) - 1);
+  const hiI = Math.min(n, Math.max(P[0], Q[0], R[0]) + 1);
+  const loJ = Math.max(0, Math.min(P[1], Q[1], R[1]) - 1);
+  const hiJ = Math.min(n, Math.max(P[1], Q[1], R[1]) + 1);
 
-  const cells = new Map();
-  const dirCache = new Map();
-  const dirAt = (face, i, j) => {
-    const key = face + ':' + i + ',' + j;
-    let d = dirCache.get(key);
-    if (!d) { d = latticeDir(face, n, i, j); dirCache.set(key, d); }
+  const dirs = new Map();
+  const dirAt = (i, j) => {
+    const key = i * 100000 + j;
+    let d = dirs.get(key);
+    if (!d) { d = latticeDir(t.face, n, i, j); dirs.set(key, d); }
     return d;
   };
-  const keyOf = (face, i, j) => {
-    const [a, b, c] = FACES[face];
-    const parts = [[a, n - i - j], [b, i], [c, j]].filter((x) => x[1] > 0);
-    parts.sort((x, y) => x[0] - y[0]);
-    return parts.map((x) => x[0] + ':' + x[1]).join('|');
-  };
-  const take = (face, i, j, middle) => {
-    const key = keyOf(face, i, j);
+  const held = (i, j) => i >= loI && i <= hiI && j >= loJ && j <= hiJ && i + j <= n;
+  const cells = new Map();
+  const take = (i, j, middle) => {
+    if (!inside(i, j, 1e-9)) return;                 // owned by a neighbour
+    const key = i * 100000 + j;
     let cell = cells.get(key);
-    if (!cell) {
-      cell = { dir: dirAt(face, i, j), corners: [], face, i, j, pent: isPentagon(n, i, j) };
-      cells.set(key, cell);
-    }
+    if (!cell) cells.set(key, (cell = { dir: dirAt(i, j), corners: [], i, j,
+      face: t.face, level, pent: isPentagon(n, i, j) }));
     cell.corners.push(middle);
   };
-  for (const [face, at] of faces) {
-    const has = (i, j) => at.has(i + ',' + j);
-    for (const [, [i, j]] of at) {
-      if (has(i + 1, j) && has(i, j + 1)) {
-        const up = norm(add3(dirAt(face, i, j), dirAt(face, i + 1, j), dirAt(face, i, j + 1)));
-        take(face, i, j, up); take(face, i + 1, j, up); take(face, i, j + 1, up);
+  for (let i = loI; i <= hiI; i++)
+    for (let j = loJ; i + j <= n && j <= hiJ; j++) {
+      if (held(i + 1, j) && held(i, j + 1)) {
+        const up = norm(add3(dirAt(i, j), dirAt(i + 1, j), dirAt(i, j + 1)));
+        take(i, j, up); take(i + 1, j, up); take(i, j + 1, up);
       }
-      if (has(i + 1, j) && has(i, j + 1) && has(i + 1, j + 1)) {
-        const down = norm(add3(dirAt(face, i + 1, j), dirAt(face, i, j + 1), dirAt(face, i + 1, j + 1)));
-        take(face, i + 1, j, down); take(face, i, j + 1, down); take(face, i + 1, j + 1, down);
+      if (held(i + 1, j) && held(i, j + 1) && held(i + 1, j + 1)) {
+        const down = norm(add3(dirAt(i + 1, j), dirAt(i, j + 1), dirAt(i + 1, j + 1)));
+        take(i + 1, j, down); take(i, j + 1, down); take(i + 1, j + 1, down);
       }
     }
-  }
   const out = [];
   for (const cell of cells.values()) {
-    const want = cell.pent ? 5 : 6;
-    if (cell.corners.length !== want) continue;      // on the rim of what was built
+    if (cell.corners.length < 3) continue;
     const up = cell.dir;
     const ref = Math.abs(up[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
     const east = norm(cross(up, ref));
     const north = cross(up, east);
-    cell.corners.sort((p, q) =>
-      Math.atan2(dot(p, north), dot(p, east)) - Math.atan2(dot(q, north), dot(q, east)));
-    // Which chunk owns it: the first `chunkLevel` digits of its own route down
-    // the splits, which is the same truncation the address makes.
-    const route = pathOf(cell.i, cell.j, depth).digits.slice(0, chunkLevel());
-    let h = cell.face * 7;
-    for (const d of route) h = (h * 4 + d) % 360;
-    cell.hue = (h * 61) % 360;
+    cell.corners.sort((a, b) =>
+      Math.atan2(dot(a, north), dot(a, east)) - Math.atan2(dot(b, north), dot(b, east)));
     out.push(cell);
   }
   return out;
@@ -412,7 +404,7 @@ function buildPatch(chunks, depth) {
 const state = {
   depth: 13,
   cellSize: 1,
-  chunkBits: 5,          // cells along a chunk edge = 2^chunkBits
+  chunkBits: 3,          // cells along a chunk edge = 2^chunkBits
   detail: 2,
   splits: true, chunks: true, cells: true, faces: true, spin: false,
   yaw: 0.6, pitch: 0.35, zoom: 1,
@@ -426,18 +418,61 @@ const radiusRange = () => [
 const chunkCells = () => 1 << state.chunkBits;
 const chunkLevel = () => Math.max(0, state.depth - state.chunkBits);
 
-/** How many chunks around the player get their real cells drawn. */
-const PATCH_CHUNKS = 12;
+/**
+ * How many cells the drawing is allowed, over the whole planet.
+ *
+ * Every triangle holds the same count, so the total is the triangle count times
+ * that -- and a 64-cell chunk on a deep world asks for over a million, which no
+ * canvas fills at a usable rate. Past the budget the coarsest triangles keep
+ * their outline and lose their cells, which is said out loud in the readout
+ * rather than left to look like a hole.
+ */
+const CELL_BUDGET = 55000;
 
-let tris = [], patch = [], patchChunks = 0;
+/** Under this many pixels across, a triangle is filled rather than tiled. */
+const CELL_PIXELS = 1.6;
+
+let drawnCells = 0, filled = 0, budgeted = 0;
+
+let tris = [], patch = [], withCells = 0;
+
+/** Built cells, kept between moves: a triangle that survives is not rebuilt. */
+let cache = new Map();
+let cacheKey = '';
+
+/**
+ * Choose the triangles, and build cells for the ones whose cells are big
+ * enough on screen to be worth having.
+ *
+ * A triangle whose cells are under a pixel is filled flat with its own level's
+ * colour instead, which leaves the same marks on the screen for one polygon
+ * rather than hundreds. Zoomed out on a deep world that is every triangle
+ * there is; zoom in and the near ones start tiling.
+ */
 function rebuild() {
   tris = selectTriangles(state.player, chunkLevel(), state.detail, radius());
-  const full = tris
-    .filter((t) => t.level === chunkLevel())
-    .sort((a, b) => a.away - b.away)
-    .slice(0, PATCH_CHUNKS);
-  patchChunks = full.length;
-  patch = state.cells && full.length ? buildPatch(full, state.depth) : [];
+  const key = state.depth + ':' + state.chunkBits;
+  if (key !== cacheKey) { cache = new Map(); cacheKey = key; }
+  patch = [];
+  withCells = 0;
+  const base = cellPixels();
+  // Biggest cells first, so a budget stops the ones that would show least.
+  let total = 0;
+  budgeted = 0;
+  for (const t of [...tris].sort((a, b) => b.lod - a.lod)) {
+    const across = base * 2 ** t.lod;
+    const wants = state.cells && across >= CELL_PIXELS;
+    const tiled = wants && total <= CELL_BUDGET;
+    if (wants && !tiled) budgeted++;
+    if (!tiled) { patch.push({ t, cells: null, across }); continue; }
+    const id = `${t.face}:${t.level}:${t.i}:${t.j}:${t.up ? 1 : 0}`;
+    let built = cache.get(id);
+    if (!built) { built = buildTriangleCells(t, state.chunkBits, state.depth); cache.set(id, built); }
+    patch.push({ t, cells: built, across });
+    total += built.length;
+    withCells++;
+  }
+  if (cache.size > 4000) cache = new Map();
 }
 
 // ---------------------------------------------------------------------------
@@ -475,7 +510,7 @@ function ballScale() {
   return (0.28 + 0.20 * Math.max(0, Math.min(1, span)));
 }
 
-function resize() {
+function layout() {
   const box = canvas.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   W = Math.max(1, Math.round(box.width)); H = Math.max(1, Math.round(box.height));
@@ -483,8 +518,10 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   cx = W / 2; cy = H / 2;
   scale = Math.min(W, H) * ballScale() * state.zoom;
-  draw();
 }
+
+/** Everything that has to happen when the world or the view changes. */
+function resize() { layout(); rebuild(); draw(); }
 
 /** Project a rotated unit direction. Behind the limb it returns nothing. */
 function project(v) {
@@ -556,22 +593,46 @@ function draw() {
     }
   }
 
-  // The real cells, at the world's own depth, in the chunks nearest the player.
+  // Every cell on the planet, each at the resolution its own triangle asks
+  // for. Colour is the level, so the bands are in the cells themselves.
+  //
+  // A triangle whose cells are under a pixel is filled with that same colour
+  // instead: forty-five polygons and one leave the same marks on the screen,
+  // and the whole far side of a deep world is in that state.
+  drawnCells = 0; filled = 0;
   if (state.cells) {
-    for (const cell of patch) {
-      const up = rotate(cell.dir);
-      if (up[2] < 1 / EYE) continue;
-      const path = new Path2D();
-      for (let k = 0; k < cell.corners.length; k++) {
-        const p = projectHeld(rotate(cell.corners[k]));
-        if (k === 0) path.moveTo(p[0], p[1]); else path.lineTo(p[0], p[1]);
+    for (const { t, cells, across } of patch) {
+      if (!t.dirs.some((d) => rotate(d)[2] >= 1 / EYE)) continue;
+      const color = lodColor(t.lod, maxLod, cells ? 0.55 : 0.62);
+      if (!cells) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        arc(t.dirs[0], t.dirs[1]); arc(t.dirs[1], t.dirs[2]); arc(t.dirs[2], t.dirs[0]);
+        ctx.closePath(); ctx.fill();
+        filled++;
+        continue;
       }
-      path.closePath();
-      ctx.fillStyle = cell.pent
-        ? 'rgba(242,84,61,.92)'
-        : `hsl(${cell.hue} 38% 52% / 0.62)`;
-      ctx.fill(path);
-      ctx.strokeStyle = 'rgba(11,14,20,.7)'; ctx.lineWidth = 0.6; ctx.stroke(path);
+      // Every cell of one triangle is one path with one fill. Filling them
+      // separately is the same marks on screen and several times the work,
+      // because the cost is in the call rather than in the polygon.
+      ctx.beginPath();
+      let pents = null;
+      for (const cell of cells) {
+        if (rotate(cell.dir)[2] < 1 / EYE) continue;
+        const into = cell.pent ? (pents || (pents = new Path2D())) : ctx;
+        for (let k = 0; k < cell.corners.length; k++) {
+          const p = projectHeld(rotate(cell.corners[k]));
+          if (k === 0) into.moveTo(p[0], p[1]); else into.lineTo(p[0], p[1]);
+        }
+        into.closePath();
+        drawnCells++;
+      }
+      ctx.fillStyle = color;
+      ctx.fill();
+      if (across > 3) {
+        ctx.strokeStyle = 'rgba(11,14,20,.6)'; ctx.lineWidth = 0.6; ctx.stroke();
+      }
+      if (pents) { ctx.fillStyle = 'rgba(242,84,61,.95)'; ctx.fill(pents); }
     }
   }
 
@@ -620,7 +681,10 @@ function arc(u, v) {
 
 function outlineSelected() {
   const s = state.selected;
-  const cell = patch.find((c) => c.face === s.face && c.i === s.i && c.j === s.j);
+  let cell = null;
+  for (const { cells } of patch)
+    for (const c of cells)
+      if (c.level === state.depth && c.face === s.face && c.i === s.i && c.j === s.j) cell = c;
   if (!cell) return;
   ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 2.4; ctx.lineJoin = 'round';
   ctx.beginPath();
@@ -654,6 +718,11 @@ function metres(m) {
   return (m * 100).toFixed(1) + ' cm';
 }
 
+/** How wide one cell is under the eye, in pixels, at this zoom. */
+function cellPixels() {
+  return (state.cellSize / radius()) * ((scale * EYE) / (EYE - 1));
+}
+
 function readout() {
   const D = state.depth;
   const C = chunkLevel();
@@ -670,13 +739,25 @@ function readout() {
     `<div class="row"><span>Chunk level</span><b>${C} of ${D}</b></div>` +
     `<div style="margin-top:6px" class="row"><span>Triangles drawn</span><b>${fmt(tris.length)}</b></div>` +
     `<div class="row"><span>At full detail</span><b>${fmt(tris.filter((t) => t.level === C).length)}</b></div>` +
-    `<div class="row"><span>Real cells drawn</span><b>${fmt(patch.length)}</b></div>` +
-    `<div class="row"><span>Chunks with cells built</span><b>${fmt(patchChunks)}</b></div>` +
+    `<div class="row"><span>Cells drawn</span><b>${fmt(drawnCells)}</b></div>` +
+    `<div class="row"><span>Too small to tile</span><b>${fmt(filled)} triangles filled flat</b></div>` +
+    `<div class="row"><span>Full detail out to</span><b>${metres(state.detail * chunkSpan)}</b></div>` +
+    `<div class="row"><span>One cell on screen</span><b>${cellPixels() < 0.4 ? 'under half a pixel' : cellPixels().toFixed(1) + ' px'}</b></div>` +
     `<div class="ramp">${ramp.join('')}</div>` +
     `<div class="rampkey"><span>full detail</span><span>${maxLod} levels coarser</span></div>` +
     `<div class="muted" style="margin-top:5px">` +
     `${fmt(tris.length)} triangles cover the whole planet, against ` +
-    `<b>${fmt(20 * 4 ** C)}</b> if every chunk were drawn at full detail.</div>`;
+    `<b>${fmt(20 * 4 ** C)}</b> if every one were at full detail — and each holds ` +
+    `the same <b>${fmt(chunkCells())}</b> cells to an edge whatever its level.</div>` +
+    (budgeted > 0
+      ? `<div class="warn" style="margin-top:4px">${fmt(budgeted)} triangles are past ` +
+        `the ${fmt(CELL_BUDGET)}-cell budget and keep their flat colour. Lower Chunk to ` +
+        `tile the whole planet at once.</div>`
+      : filled > 0
+        ? `<div class="muted" style="margin-top:4px">Every triangle has its cells. The ` +
+          `${fmt(filled)} whose cells are under ${CELL_PIXELS} px across are filled with ` +
+          `the same colour instead — zoom in and they tile.</div>`
+        : '');
 
   const card = document.getElementById('card');
   if (!state.selected) {
@@ -728,15 +809,15 @@ function syncKnobs(moved) {
   const [rLo, rHi] = radiusRange();
   el('kDepth').value = String(state.depth);
   el('vDepth').textContent = String(state.depth);
-  el('kRadius').value = String(Math.round(1000 * invLog(radius(), rLo, rHi)));
   el('vRadius').textContent = metres(radius());
+  el('rBar').style.width = `${(100 * invLog(radius(), rLo, rHi)).toFixed(1)}%`;
   el('kCell').value = String(Math.round(1000 * invLog(state.cellSize, CELL_MIN, CELL_MAX)));
   el('vCell').textContent = metres(state.cellSize);
   el('vChunk').textContent = String(chunkCells());
   el('vDetail').textContent = state.detail.toFixed(1);
   el('gDepth').textContent = `${fmt(10 * 4 ** state.depth + 2)} cells a layer`;
   el('gRadius').textContent =
-    `${metres(rLo)} to ${metres(rHi)} at this depth`;
+    `follows the other two — ${metres(rLo)} to ${metres(rHi)} at this depth`;
   el('gCell').textContent = `radius = cell x 2^depth / ${K.toFixed(5)}`;
   el('gChunk').textContent = `chunk level ${chunkLevel()}, ${fmt(20 * 4 ** chunkLevel())} on the planet`;
   el('gDetail').textContent = 'chunk widths from the player';
@@ -745,30 +826,24 @@ function syncKnobs(moved) {
 el('kDepth').oninput = (e) => {
   state.depth = +e.target.value;
   state.selected = null;
-  rebuild(); syncKnobs(); resize();
-};
-el('kRadius').oninput = (e) => {
-  const [lo, hi] = radiusRange();
-  state.cellSize = (lerpLog(+e.target.value / 1000, lo, hi) * K) / 2 ** state.depth;
-  rebuild(); syncKnobs(); resize();
+  syncKnobs(); resize();
 };
 el('kCell').oninput = (e) => {
   state.cellSize = lerpLog(+e.target.value / 1000, CELL_MIN, CELL_MAX);
-  rebuild(); syncKnobs(); resize();
+  syncKnobs(); resize();
 };
 el('kChunk').oninput = (e) => {
-  state.chunkBits = +e.target.value; rebuild(); syncKnobs(); draw();
+  state.chunkBits = +e.target.value; syncKnobs(); resize();
 };
 el('kDetail').oninput = (e) => {
-  state.detail = +e.target.value / 10; rebuild(); syncKnobs(); draw();
+  state.detail = +e.target.value / 10; syncKnobs(); resize();
 };
 for (const [id, key] of [['tSplits', 'splits'], ['tChunks', 'chunks'],
                          ['tCells', 'cells'], ['tFaces', 'faces'], ['tSpin', 'spin']])
   el(id).onclick = () => {
     state[key] = !state[key];
     el(id).classList.toggle('on', state[key]);
-    if (key === 'cells') rebuild();
-    draw();
+    resize();
   };
 
 // ---------------------------------------------------------------------------
@@ -782,8 +857,12 @@ canvas.addEventListener('pointermove', (e) => {
   const dx = e.clientX - down.x, dy = e.clientY - down.y;
   if (Math.abs(dx) + Math.abs(dy) > 4) dragged = true;
   if (!dragged || down.button !== 0) return;
-  state.yaw += dx * 0.006;
-  state.pitch = Math.max(-1.4, Math.min(1.4, state.pitch + dy * 0.006));
+  // Per pixel of drag, not per pixel of screen: a point on the ball moves the
+  // same distance under the cursor at any zoom, so turning it stays usable
+  // when one cell is thirty pixels across.
+  const rate = 0.0028 / state.zoom;
+  state.yaw += dx * rate;
+  state.pitch = Math.max(-1.4, Math.min(1.4, state.pitch + dy * rate));
   down.x = e.clientX; down.y = e.clientY;
   draw();
 });
@@ -792,7 +871,7 @@ canvas.addEventListener('pointerup', (e) => {
     const box = canvas.getBoundingClientRect();
     const hit = pick(e.clientX - box.left, e.clientY - box.top);
     if (hit) {
-      if (down.button === 2) { state.player = hit; state.selected = null; rebuild(); }
+      if (down.button === 2) { state.player = hit; state.selected = null; resize(); }
       else {
         const face = faceOf(hit);
         const [i, j] = hexRound(hit, face, 1 << state.depth);
@@ -806,7 +885,7 @@ canvas.addEventListener('pointerup', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  state.zoom = Math.max(0.6, Math.min(4000, state.zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
+  state.zoom = Math.max(0.6, Math.min(4000, state.zoom * (e.deltaY < 0 ? 1.25 : 1 / 1.25)));
   resize();
 }, { passive: false });
 
@@ -818,7 +897,7 @@ function frame(t) {
 }
 window.addEventListener('resize', resize);
 state.player = unrotate([0, 0, 1]);   // start facing the eye
-rebuild(); syncKnobs(); resize();
+layout(); syncKnobs(); resize();
 requestAnimationFrame(frame);
 </script>
 </body>
