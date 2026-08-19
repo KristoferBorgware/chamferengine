@@ -922,6 +922,38 @@ so the cap is the whole of the far ocean's geometry; what needs care is the
 shore column, where the cap must stop exactly where the ground cap rises past
 sea level or the two z-fight.
 
+### F-045 — "Full detail out to" understates the reach by 2.6 times
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-19, while explaining how a chunk's level is chosen
+**Where:** `demos/subdivision-explorer.html`, `readout`; `demos/README.md`
+
+**What happens.** The readout states the full-detail reach as `detail x chunk
+span` -- 16 m at the demo's defaults. Measured against the engine's own
+`selectChunks` on the shipped planet, the furthest chunk drawn at full detail
+sits **2.6 times** that: 23 m where 8 m is stated, 169 m where 64 m is, 185 m
+where 64 m is. The ratio holds across chunk spans of 8, 32 and 64 m and detail
+settings of 1, 2 and 3, until the horizon caps it instead.
+
+**Why it matters.** The figure is wrong in the direction that makes the demo
+look worse than the engine is. Someone reading it concludes that full detail
+stops three times nearer than it does, and reaches for a bigger Chunk or a
+higher Full detail to fix a problem that is not there. The same 2 m sentence
+went into `demos/README.md` and into an explanation given to the owner.
+
+**What would fix it.** The stated figure is the split test's threshold, and the
+test is applied to a triangle's **parent**, so a chunk is kept at full detail
+when its parent is inside `detail x parentWidth` -- twice the span. The width
+in the test is centre-to-corner rather than edge, another 1.155, and the
+measurement is to a child's own centre, which sits off the parent's. Multiply
+the three and it is 2.6. Either state `2.6 x detail x chunkSpan` and say it is
+approximate, or -- better, since the number is already in hand -- report the
+furthest full-detail chunk the selection actually returned, which is exact and
+moves with the horizon when the horizon is what binds.
+
 ---
 
 ## Closed
