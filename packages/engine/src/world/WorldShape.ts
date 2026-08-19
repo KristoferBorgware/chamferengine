@@ -57,11 +57,21 @@ export class WorldShape {
 	 */
 	atLod(lod: number): WorldShape {
 		if (lod === 0) return this;
+		// One layer past the rounded-up count, never exactly it. A surface
+		// fills only layers whose top face is at or below it, so ground lying
+		// inside the bottom layer's span fills the layer below the floor --
+		// which must exist, or the column writes nothing at all. The base
+		// level is guaranteed a floor below the deepest ground when the world
+		// is settled; here the margin needed is one coarse block, 256 m at
+		// eight levels out, and rounding up supplies at most a block minus a
+		// metre of it. Without this layer, whole deep-ocean chunks at the
+		// coarse levels held nothing and the far field of a large world was
+		// drawn with face-sized holes in it.
 		return new WorldShape(
 			this.seaLevelRadius,
 			this.subdivisionDepth - lod,
 			this.maxElevation,
-			Math.ceil(this.crustDepth / 2 ** lod),
+			Math.ceil(this.crustDepth / 2 ** lod) + 1,
 		);
 	}
 

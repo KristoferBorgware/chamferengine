@@ -265,12 +265,38 @@ describe("selectChunks", () => {
 describe("WorldShape.atLod", () => {
 	const base = new WorldShape(RADIUS, DEPTH, 150, maxCrustDepth(DEPTH));
 
-	it("doubles the cell and halves the layers each level", () => {
+	it("doubles the cell and halves the layers each level, plus a floor", () => {
+		// The extra layer is the floor's margin: a surface fills only layers
+		// whose top face is at or below it, so ground inside the bottom
+		// layer's span needs the layer under it to exist, and rounding the
+		// count up supplies at most a block minus a metre of that room.
 		for (let lod = 1; lod <= 4; lod++) {
 			const at = base.atLod(lod);
 			expect(at.subdivisionDepth).toBe(DEPTH - lod);
 			expect(at.blockSize).toBeCloseTo(base.blockSize * 2 ** lod, 9);
-			expect(at.crustDepth).toBe(Math.ceil(base.crustDepth / 2 ** lod));
+			expect(at.crustDepth).toBe(
+				Math.ceil(base.crustDepth / 2 ** lod) + 1,
+			);
+		}
+	});
+
+	it("holds every surface the base level holds, at every coarser one", () => {
+		// The regression that shipped as face-sized holes in the far field:
+		// the reported world's crust reached 4 m past its deepest sea floor,
+		// which is under one coarse block at every level past the second, so
+		// deep-ocean ground filled no layer at all and whole coarse chunks
+		// were empty. Every surface the base crust holds must land on a layer
+		// that exists at every level of detail.
+		const reported = new WorldShape(6801, 13, 1640, 1744);
+		for (let lod = 1; lod <= 10; lod++) {
+			const at = reported.atLod(lod);
+			for (const elevation of [-100, -46, 0, 240, 1610]) {
+				const surface = at.seaLevelRadius + elevation;
+				expect(
+					at.layerOfSurface(surface),
+					`lod ${lod}, elevation ${elevation}`,
+				).toBeLessThanOrEqual(at.crustDepth - 1);
+			}
 		}
 	});
 

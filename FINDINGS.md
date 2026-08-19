@@ -886,6 +886,42 @@ or blend the step direction with the previous one so a droplet cannot turn
 instantly. Neither is as good as momentum and both are an afternoon rather than
 a rewrite.
 
+### F-044 — The ocean surface disappears at levels whose block is deeper than the sea
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-19, while chasing empty coarse chunks in the far field
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`blockAt`; `packages/engine/src/mesh/buildChunkMesh.ts`
+
+**What happens.** Water exists in a column only as whole layers between the
+water surface's first layer and the ground's, so it needs the sea to be at
+least one block deep at the level asking. A world with a 100 m sea keeps its
+water to level of detail 6 -- 64 m blocks -- and loses it at 7 and beyond,
+where a 128 m block is deeper than the sea it should hold. The far ocean then
+draws as its sand floor, at the floor's own radius: a tan sea visibly below
+the blue one, switching to blue along the level boundary as the viewer
+approaches. On a 1,640 m relief world with 8-cell chunks the far field runs
+to level 10, so most of a distant hemisphere's ocean shows as floor.
+
+**Why it matters.** The ocean is the largest single surface on any world with
+land under 100%, and it is the one surface a viewer at altitude is mostly
+looking at. A sea that changes color with distance marks every coarse level's
+boundary on the water, which is exactly what level of detail is supposed to
+never do -- the ground's own levels blend because resampling moves nothing,
+and the water's do not because the water is simply gone.
+
+**What would fix it.** The mesher already carries every column's true water
+radius in `chunk.surface`, separately from the blocks. A water cap could be
+drawn from `waterRadius > groundRadius` directly, the way the ground cap is
+drawn from the ground radius, rather than from whether any whole layer of
+water fits under it. The generated world guarantees no vertical water faces,
+so the cap is the whole of the far ocean's geometry; what needs care is the
+shore column, where the cap must stop exactly where the ground cap rises past
+sea level or the two z-fight.
+
 ---
 
 ## Closed
