@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	ATMOSPHERE,
-	CloudField,
 	WIND_AXIS,
 	WIND_RATE,
-	buildCloudMesh,
 	planetAtmosphere,
 	scaledScaleHeight,
 	windRotation,
@@ -234,128 +232,6 @@ describe("wind", () => {
 		expect(round.x).toBeCloseTo(start.x, 9);
 		expect(round.y).toBeCloseTo(start.y, 9);
 		expect(round.z).toBeCloseTo(start.z, 9);
-	});
-});
-
-describe("clouds", () => {
-	const SHELLS = 4;
-	const SHELL_SPAN = 20;
-	const FEATURE_SIZE = 60;
-	const BASE_RADIUS = RADIUS + 220;
-	const field = new CloudField(4, SHELLS);
-
-	it("borrows the lattice and takes no address from it", () => {
-		expect(field.count).toBe(10 * 4 ** 4 + 2);
-		// A face and an offset name a lattice point, the way a vertex is named.
-		// There is no cell ID here, no chunk and no layer, and every store in
-		// the design is keyed by cell ID -- so a cloud cannot be stored.
-		expect(Object.keys(field)).not.toContain("layer");
-		expect(field.solid.length).toBe(field.count * SHELLS);
-		for (let at = 0; at < field.count; at++) {
-			expect(field.faces[at]).toBeLessThan(20);
-			const i = field.offsets[at * 2]!;
-			const j = field.offsets[at * 2 + 1]!;
-			expect(i + j).toBeLessThanOrEqual(field.n);
-			// The point looks itself up, the way a mesher finding a neighbour
-			// will.
-			expect(field.indexOf(field.faces[at]!, i, j)).toBe(at);
-		}
-	});
-
-	it("puts every point on the unit sphere, once", () => {
-		const seen = new Set<string>();
-		for (let at = 0; at < field.count; at++) {
-			const x = field.directions[at * 3]!;
-			const y = field.directions[at * 3 + 1]!;
-			const z = field.directions[at * 3 + 2]!;
-			expect(Math.sqrt(x * x + y * y + z * z)).toBeCloseTo(1, 12);
-			const key = `${Math.round(x * 1e6)},${Math.round(y * 1e6)},${Math.round(z * 1e6)}`;
-			expect(seen.has(key)).toBe(false);
-			seen.add(key);
-		}
-	});
-
-	it("moves the pattern when the wind turns, and keeps its shape", () => {
-		field.blow(WIND_AXIS, 0, 7, BASE_RADIUS, SHELL_SPAN, FEATURE_SIZE);
-		const before = Float32Array.from(field.cover);
-		const coverOf = (values: Float32Array) => {
-			let n = 0;
-			for (const value of values) if (value > 0) n++;
-			return n / values.length;
-		};
-		const share = coverOf(before);
-
-		field.blow(WIND_AXIS, 0.8, 7, BASE_RADIUS, SHELL_SPAN, FEATURE_SIZE);
-		let moved = 0;
-		for (let at = 0; at < field.count; at++)
-			if (Math.abs(before[at]! - field.cover[at]!) > 1e-6) moved++;
-		expect(moved).toBeGreaterThan(field.count / 10);
-		// The same amount of sky is covered: the pattern travelled rather than
-		// growing or thinning.
-		expect(coverOf(field.cover)).toBeCloseTo(share, 1);
-	});
-
-	it("draws only the points with a solid shell, never more than the cover fraction", () => {
-		field.blow(WIND_AXIS, 0.3, 7, BASE_RADIUS, SHELL_SPAN, FEATURE_SIZE);
-		const mesh = buildCloudMesh(field, BASE_RADIUS, SHELL_SPAN);
-
-		let solidPoints = 0;
-		let coveredPoints = 0;
-		for (let at = 0; at < field.count; at++) {
-			if (field.cover[at]! > 0.02) coveredPoints++;
-			for (let s = 0; s < SHELLS; s++)
-				if (field.solid[at * SHELLS + s]) {
-					solidPoints++;
-					break;
-				}
-		}
-		expect(mesh.puffs).toBe(solidPoints);
-		// The vertical margin never fills a shell where there is no cover, so
-		// this can only be a fraction of the points cover alone would carry.
-		expect(mesh.puffs).toBeLessThanOrEqual(coveredPoints);
-		expect(mesh.puffs).toBeGreaterThan(0);
-		expect(mesh.indices.length % 3).toBe(0);
-		expect(mesh.vertices.length % 4).toBe(0);
-	});
-
-	it("hangs every vertex inside the deck's own shells", () => {
-		field.blow(WIND_AXIS, 0.3, 7, BASE_RADIUS, SHELL_SPAN, FEATURE_SIZE);
-		const mesh = buildCloudMesh(field, BASE_RADIUS, SHELL_SPAN);
-		expect(mesh.vertices.length).toBeGreaterThan(0);
-		for (let v = 0; v < mesh.vertices.length; v += 4) {
-			const x = mesh.vertices[v]!;
-			const y = mesh.vertices[v + 1]!;
-			const z = mesh.vertices[v + 2]!;
-			const radius = Math.sqrt(x * x + y * y + z * z);
-			// The buffer is float32, so a radius in the thousands carries an
-			// absolute error of a few thousandths -- the tolerance is that
-			// rounding, not slack in the geometry.
-			expect(radius).toBeGreaterThanOrEqual(BASE_RADIUS - 1e-2);
-			expect(radius).toBeLessThanOrEqual(
-				BASE_RADIUS + SHELLS * SHELL_SPAN + 1e-2,
-			);
-		}
-	});
-
-	it("culls every face buried inside a fully solid sky", () => {
-		// Every point, every shell solid: no neighbour and no shell above or
-		// below is ever open air, except the very top and the very bottom.
-		// Every side face and every interior cap is buried and must not be
-		// drawn.
-		const full = new CloudField(3, SHELLS);
-		full.solid.fill(1);
-		full.cover.fill(1);
-		const mesh = buildCloudMesh(full, BASE_RADIUS, SHELL_SPAN);
-
-		expect(mesh.puffs).toBe(full.count);
-		const capTriangles = full.count * 2; // one bottom cap, one top cap
-		// A hexagon fans into four triangles, a pentagon into three -- the
-		// index count is somewhere in that range, and it is exactly the caps:
-		// no side face survives a fully solid neighbourhood.
-		expect(mesh.indices.length / 3).toBeGreaterThanOrEqual(
-			capTriangles * 3,
-		);
-		expect(mesh.indices.length / 3).toBeLessThanOrEqual(capTriangles * 4);
 	});
 });
 

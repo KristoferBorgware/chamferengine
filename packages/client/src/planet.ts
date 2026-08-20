@@ -41,7 +41,6 @@ import type { CloudPuffLayer } from "chamfer/sky";
 import {
 	WIND_AXIS,
 	WIND_RATE,
-	WorkerCloudSource,
 	planetAtmosphere,
 	windRotation,
 } from "chamfer/sky";
@@ -113,19 +112,6 @@ let DAY_LENGTH = settings.knobs.dayLength;
 
 /** The light a surface keeps after dark. */
 const NIGHT_LIGHT = 0.09;
-
-/**
- * The soonest the cloud buffer is thrown away and refilled, in seconds.
- *
- * A floor, not the achieved rate: two full-planet decks at the shipped puff
- * size take about a second to build between them, so `busy` (below) skips a
- * tick rather than queuing one behind a deck still building, and the real
- * cadence settles closer to 1.5-2 s. The wind turns a full circle in 900 s, so
- * a tick that arrives late has moved the pattern by a fraction of a degree --
- * imperceptible, which is what makes skipping ticks the right answer rather
- * than a second worker to hit 0.7 s exactly.
- */
-const CLOUD_INTERVAL = 0.7;
 
 /**
  * The moon, as an angle and a distance.
@@ -286,31 +272,6 @@ async function main(): Promise<void> {
 	// already a pure function of the seed and the wind angle, so it moves the
 	// way chunks moved.
 	//
-	const VOLUMETRIC_CLOUDS =
-		!PLAIN && settings.knobs.cloudStyle === "volumetric";
-	const BILLBOARD_CLOUDS =
-		!PLAIN && settings.knobs.cloudStyle === "billboards";
-
-	// Under the pause neither the worker nor the sky is built at all. That is
-	// the difference between a paused feature and a hidden one: no deck is
-	// filled and thrown away, and no scattering runs to be drawn over.
-	//
-	// Held rather than fixed, because the deck heights are live knobs and a
-	// worker is set up with the decks it will fill: moving one replaces the
-	// worker rather than telling it something new.
-	let cloudSource = VOLUMETRIC_CLOUDS ? makeCloudSource(settings) : null;
-	teardown.push(() => cloudSource?.dispose());
-
-	function makeCloudSource(live: PlanetSettings): WorkerCloudSource {
-		return new WorkerCloudSource(
-			() =>
-				new Worker(new URL("./cloudWorker.ts", import.meta.url), {
-					type: "module",
-				}),
-			{ kind: "setup", seed, decks: live.cloudDecks() },
-		);
-	}
-
 	/**
 	 * The two billboard decks a set of knobs describes.
 	 *
@@ -351,15 +312,15 @@ async function main(): Promise<void> {
 	// Scattered on the thread that draws rather than on a worker: a whole sky
 	// of hexagons is a few tens of milliseconds, which is a knob's worth of
 	// wait rather than a frame's.
-	const billboardClouds = BILLBOARD_CLOUDS
-		? new BillboardClouds(
+	const billboardClouds = PLAIN
+		? null
+		: new BillboardClouds(
 				ctx,
 				seed,
 				settings.knobs.cloudClusters,
 				settings.knobs.cloudDensity,
 				cloudLayers(settings),
-			)
-		: null;
+			);
 	if (billboardClouds) billboardClouds.visible = settings.knobs.cloudsDrawn;
 
 	// The sky is a layer over the terrain pass, and the renderer already treats
@@ -950,7 +911,6 @@ async function main(): Promise<void> {
 	refresh();
 
 	// Refilled on a timer, and again whenever a knob moves the decks.
-	let cloudsAt = -CLOUD_INTERVAL * 1000;
 
 	// Whether the sun and moon are frozen, and where -- as seconds on their own
 	// clock, `dayStarted` below. Paused freezes both at that reading; resuming
@@ -961,12 +921,11 @@ async function main(): Promise<void> {
 
 	// Every knob that decides what a deck is made of, as one string. A live
 	// knob hands over the whole draft on every move, so this is what says
-	// whether any of the seven that matter actually changed.
+	// whether any of the six that matter actually changed.
 	let cloudsShapedAs = [
 		settings.knobs.lowDeck,
 		settings.knobs.highDeck,
 		settings.knobs.cloudPuff,
-		settings.knobs.cloudShells,
 		settings.knobs.cloudClusters,
 		settings.knobs.cloudDensity,
 		settings.knobs.cloudSpread,
@@ -1020,8 +979,6 @@ async function main(): Promise<void> {
 		// does and shows the clouds where they would have been anyway.
 		if (live.knobs.cloudsDrawn !== cloudsDrawn) {
 			cloudsDrawn = live.knobs.cloudsDrawn;
-			if (!cloudsDrawn && sky)
-				sky.setClouds(new Float32Array(0), new Uint32Array(0));
 			if (billboardClouds) billboardClouds.visible = cloudsDrawn;
 		}
 
@@ -1033,7 +990,6 @@ async function main(): Promise<void> {
 			live.knobs.lowDeck,
 			live.knobs.highDeck,
 			live.knobs.cloudPuff,
-			live.knobs.cloudShells,
 			live.knobs.cloudClusters,
 			live.knobs.cloudDensity,
 			live.knobs.cloudSpread,
@@ -1046,12 +1002,6 @@ async function main(): Promise<void> {
 					live.knobs.cloudDensity,
 					cloudLayers(live),
 				);
-			if (cloudSource) {
-				cloudSource.dispose();
-				cloudSource = makeCloudSource(live);
-				cloudsAt = -CLOUD_INTERVAL * 1000;
-				if (sky) sky.setClouds(new Float32Array(0), new Uint32Array(0));
-			}
 		}
 		if (sky)
 			sky.atmosphere = planetAtmosphere(
@@ -1359,43 +1309,6 @@ async function main(): Promise<void> {
 		// day. Measuring it anywhere but under their feet holds the whole scene
 		// at whatever the light was where they spawned.
 		const day = PLAIN ? 1 : daylight(up.x, up.y, up.z, sun.x, sun.y, sun.z);
-
-		// The clouds are thrown away and refilled as the wind turns, on their
-		// own worker. There is no address to update in place, because a cloud
-		// has none, and `busy` skips a tick rather than queuing one behind a
-		// deck still building.
-		//
-		// Gated on `cloudsDrawn` too, not just applied after: a deck costs
-		// 500-900 ms to build and the wind ticks every 700 ms, so a rebuild
-		// nobody draws is close to one whole CPU core spent on nothing --
-		// measured at 76% of session time on a trace with clouds toggled off.
-		if (
-			sky &&
-			cloudSource &&
-			cloudsDrawn &&
-			!cloudSource.busy &&
-			now - cloudsAt > CLOUD_INTERVAL * 1000
-		) {
-			timer.enter("clouds", performance.now());
-			cloudsAt = now;
-			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
-			cloudSource
-				.request(WIND_AXIS, turned)
-				.then((mesh) => {
-					// cloudsDrawn can turn off again before a half-second
-					// build resolves, so it is read again here rather than
-					// assumed.
-					if (cloudsDrawn) sky.setClouds(mesh.vertices, mesh.indices);
-				})
-				.catch(() => {
-					// Moving a deck replaces the worker, and the worker it
-					// replaces gives up whatever it was part way through. A
-					// deck nobody is waiting for any more is not a failure:
-					// the settings that asked for it are gone, and the
-					// replacement fills the sky on its own next tick.
-				});
-			timer.leave("clouds", performance.now());
-		}
 
 		// The wind, not the day/night clock: paused freezes the sun, never
 		// this, for the same reason the volumetric wind above reads `started`

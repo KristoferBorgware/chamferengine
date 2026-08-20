@@ -313,15 +313,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
-				key: "cloudStyle",
-				label: "Style",
-				choices: [
-					{ value: "volumetric", label: "Volumetric" },
-					{ value: "billboards", label: "Billboards" },
-				],
-				enabledWhen: (k) => !k.plain,
-			},
-			{
 				key: "lowDeck",
 				label: "Low deck",
 				digits: 0,
@@ -338,39 +329,24 @@ const GROUPS: Group[] = [
 				label: "Puff",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-				given: (s) =>
-					s.knobs.cloudStyle !== "volumetric" ||
-					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
-						? null
-						: `${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}`,
-			},
-			{
-				key: "cloudShells",
-				label: "Shells",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
-				shownWhen: (k) => k.cloudStyle === "volumetric",
 			},
 			{
 				key: "cloudClusters",
 				label: "Formations",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-				shownWhen: (k) => k.cloudStyle === "billboards",
 			},
 			{
 				key: "cloudDensity",
 				label: "Puffs each",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-				shownWhen: (k) => k.cloudStyle === "billboards",
 			},
 			{
 				key: "cloudSpread",
 				label: "Formation across",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-				shownWhen: (k) => k.cloudStyle === "billboards",
 			},
 		],
 	},
@@ -794,7 +770,6 @@ export class ParameterPanel {
 			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + PLAYER_DEFAULTS.eyeHeight))).toFixed(0)} m</b></span>` +
 			`<span>crust <b>${settings.crustDepth}</b> layers</span>` +
 			`<span>tallest ground <b>${settings.maxElevation} m</b></span>` +
-			`<span>cloud puff <b>${settings.cloudPuff.toFixed(0)} m</b>, level <b>${settings.cloudLevel}</b></span>` +
 			`<span>cells a layer <b>${cells.toLocaleString("en-US")}</b></span>` +
 			`<span>cell address <b>${settings.addressBits} bits</b></span>`;
 	}

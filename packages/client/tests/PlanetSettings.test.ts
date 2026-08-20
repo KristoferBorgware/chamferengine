@@ -283,35 +283,6 @@ describe("the octave stack", () => {
 	});
 });
 
-describe("the cloud level budget", () => {
-	it("leaves the shipped default untouched", () => {
-		// Level 7 at 4 shells, 163,842 points a deck -- the heaviest deck this
-		// project has actually measured, and the number the budget is
-		// calibrated from.
-		const shipped = new PlanetSettings();
-		expect(shipped.cloudLevel).toBe(7);
-	});
-
-	it("caps a puff fine enough to have crashed the renderer", () => {
-		// The exact combination that filled a combined vertex buffer past the
-		// device's 256 MiB buffer limit on real hardware: a 0.75 m block asks
-		// for a small enough world that a 16 m puff rounds to level 9, and
-		// three shells on that many points is not a buffer any more.
-		const crashed = new PlanetSettings({
-			blockSize: 0.75,
-			cloudPuff: 16,
-			cloudShells: 3,
-		});
-		expect(crashed.cloudLevel).toBeLessThan(9);
-	});
-
-	it("lowers the level further as shells rise, at the same puff", () => {
-		const fewShells = new PlanetSettings({ cloudPuff: 8, cloudShells: 1 });
-		const manyShells = new PlanetSettings({ cloudPuff: 8, cloudShells: 8 });
-		expect(manyShells.cloudLevel).toBeLessThanOrEqual(fewShells.cloudLevel);
-	});
-});
-
 describe("boolean knobs round-trip through a query string", () => {
 	it("reads coarseMap, paused and timeOfDay back out", () => {
 		const params = new PlanetSettings({
@@ -353,24 +324,6 @@ describe("a knob that did not get what it asked for says so", () => {
 	// The report these answer: a Puff slider that felt "completely unaffected
 	// by the knob". It was clamped, and nothing on the row said which knob was
 	// doing the clamping or what the world actually held.
-
-	it("names the shell budget when it, not rounding, set the cloud level", () => {
-		const capped = new PlanetSettings({
-			subdivisionDepth: 15,
-			blockSize: 0.75,
-			cloudPuff: 8,
-			cloudShells: 4,
-		});
-		expect(capped.cloudLevelCapped).toBe(true);
-		// Asked for 8 m and the world holds 192 m: the whole 8-to-128 m slider
-		// is on the far side of the cap, so no value on it changes anything.
-		expect(capped.cloudPuff).toBeGreaterThan(128);
-	});
-
-	it("does not claim a cap when the puff only rounded to a level", () => {
-		const rounded = new PlanetSettings({ cloudPuff: 64, cloudShells: 1 });
-		expect(rounded.cloudLevelCapped).toBe(false);
-	});
 
 	it("names the coarse cap when a wide radius asks past level 9", () => {
 		const capped = new PlanetSettings({

@@ -60,7 +60,6 @@ describe("what a frame encodes", () => {
 			AIR,
 		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
-		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
 		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
@@ -73,7 +72,7 @@ describe("what a frame encodes", () => {
 				expect(drawn.bound.has(group)).toBe(true);
 	});
 
-	it("draws the sky before the ground and the clouds after it", () => {
+	it("draws the sky first, behind everything the ground puts over it", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
@@ -86,7 +85,6 @@ describe("what a frame encodes", () => {
 			AIR,
 		);
 		sky.inverseViewProj = VIEW_PROJ.inverse();
-		sky.setClouds(new Float32Array(4 * 3), new Uint32Array([0, 1, 2]));
 		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
@@ -95,10 +93,13 @@ describe("what a frame encodes", () => {
 		const kinds = gpu.commands
 			.filter((c) => c.what === "draw" || c.what === "drawIndexed")
 			.map((c) => c.what);
-		// The sky is the unindexed one: three vertices covering the screen.
+		// The sky is the unindexed one: three vertices covering the screen,
+		// drawn before any of the indexed geometry that stands in front of it.
 		expect(kinds[0]).toBe("draw");
-		expect(kinds[kinds.length - 1]).toBe("drawIndexed");
-		expect(kinds.length).toBe(4);
+		expect(kinds.slice(1).every((kind) => kind === "drawIndexed")).toBe(
+			true,
+		);
+		expect(kinds.length).toBeGreaterThan(1);
 	});
 
 	it("skips a chunk the camera is not looking at", () => {

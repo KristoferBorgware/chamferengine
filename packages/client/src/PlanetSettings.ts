@@ -7,7 +7,6 @@ import type {
 import { CoarseMap, GROUND_LINES, seedFromString } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
-import type { CloudDeckSetup } from "chamfer/sky";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 
 /**
@@ -26,9 +25,6 @@ export const FLAT_COARSE_LEVEL = 2;
  * is `29 + 2 x depth` bits wide and 64 of them run out at depth 17.
  */
 const MAX_DEPTH = 17;
-
-/** Which of the two cloud renderers draws the decks. */
-export type CloudStyle = "volumetric" | "billboards";
 
 /**
  * Metres across the smallest landform the coarse map carries.
@@ -55,7 +51,7 @@ const SMALLEST_LANDFORM = 64;
  * Level 9 -- 2,621,442 cells, 10 MB a field -- is the largest coarse map this
  * project has actually built and timed, at 13.8 s, when I-5 measured it
  * against the 32 m default. This is that number, not a guess: raising it
- * needs a new measurement, the same way `CLOUD_POINT_SHELL_BUDGET` does.
+ * needs a new measurement.
  */
 const MAX_COARSE_LEVEL = 9;
 
@@ -181,18 +177,12 @@ export interface PlanetKnobs {
 	/** Whether the cloud decks are drawn at all. */
 	cloudsDrawn: boolean;
 
-	/** Which cloud system draws them. */
-	cloudStyle: CloudStyle;
-
 	/** Metres to each cloud deck. */
 	lowDeck: number;
 	highDeck: number;
 
 	/** Metres across one cloud puff. */
 	cloudPuff: number;
-
-	/** How many shells deep a deck runs. One is a flat sheet. */
-	cloudShells: number;
 
 	/** How many cloud formations stand over the whole planet. */
 	cloudClusters: number;
@@ -322,11 +312,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	atmosphereTop: 2050,
 	zenithDepth: 0.272,
 	cloudsDrawn: true,
-	cloudStyle: "billboards",
 	lowDeck: 3000,
 	highDeck: 6000,
 	cloudPuff: 64,
-	cloudShells: 4,
 	cloudClusters: 1200,
 	cloudDensity: 100,
 	cloudSpread: 180,
@@ -450,11 +438,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	cloudsDrawn: { ...TOGGLE, rebuilds: false },
-	cloudStyle: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	lowDeck: { low: 100, high: 20000, step: 20, rebuilds: false, unit: "m" },
 	highDeck: { low: 200, high: 40000, step: 50, rebuilds: false, unit: "m" },
 	cloudPuff: { low: 8, high: 600, step: 4, rebuilds: false, unit: "m" },
-	cloudShells: { low: 1, high: 8, step: 1, rebuilds: false, unit: "shells" },
 	cloudClusters: {
 		low: 100,
 		high: 4000,
@@ -505,31 +491,6 @@ export const TRANSIENT: ReadonlySet<keyof PlanetKnobs> = new Set([
 /** The nearest power of two, for turning a size in metres into a level. */
 function levelFor(span: number, size: number): number {
 	return Math.max(0, Math.round(Math.log2(span / size)));
-}
-
-/**
- * How many lattice points times shells one cloud deck may hold.
- *
- * Calibrated from the shipped default -- level 7, 4 shells, 163,842 points,
- * measured at 500-900 ms to build -- the heaviest deck anyone has actually
- * run. A deck asking for more crashes the renderer rather than reading
- * expensive: two decks at level 9 and 3 shells filled a combined vertex
- * buffer past the device's 256 MiB buffer limit on real hardware. The budget
- * divides shells out of the ceiling it gives a level, so raising Shells
- * lowers what Puff is allowed to ask for -- the same trade the mesh already
- * makes between how deep a cloud reads and how finely it is drawn.
- */
-const CLOUD_POINT_SHELL_BUDGET = 700_000;
-
-/** The finest cloud level this many shells may run at, under the budget. */
-function cloudLevelBudget(shells: number): number {
-	let level = 10;
-	while (
-		level > 2 &&
-		(10 * 4 ** level + 2) * shells > CLOUD_POINT_SHELL_BUDGET
-	)
-		level--;
-	return level;
 }
 
 /**
@@ -649,23 +610,6 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * Which level the cloud lattice is taken from.
-	 *
-	 * A cloud borrows the lattice without being a cell of it, so this is asked
-	 * for as a puff size in metres and answered as a level, the same way the
-	 * coarse map is.
-	 */
-	get cloudLevel(): number {
-		return Math.max(
-			2,
-			Math.min(
-				cloudLevelBudget(this.knobs.cloudShells),
-				levelFor(CELL_CONSTANT * this.radius, this.knobs.cloudPuff),
-			),
-		);
-	}
-
-	/**
 	 * Which of the three caps on {@link PlanetSettings.crustDepth} bound it.
 	 *
 	 * `"asked"` means the knob got what it wanted. `"taper"` means the column
@@ -676,45 +620,6 @@ export class PlanetSettings {
 		const wanted = Math.ceil(this.knobs.crustMetres / this.knobs.blockSize);
 		if (wanted <= this.crustDepth) return "asked";
 		return maxCrustDepth(this.depth) <= LAYER_COUNT ? "taper" : "field";
-	}
-
-	/**
-	 * Whether the shell budget, rather than rounding, decided the cloud level.
-	 *
-	 * When it did, moving Puff alone changes nothing at all until it comes
-	 * back inside the budget, which is what a knob that feels dead looks like.
-	 */
-	get cloudLevelCapped(): boolean {
-		return (
-			cloudLevelBudget(this.knobs.cloudShells) <
-			levelFor(CELL_CONSTANT * this.radius, this.knobs.cloudPuff)
-		);
-	}
-
-	/** Metres across one cloud puff, once its level is rounded. */
-	get cloudPuff(): number {
-		return (CELL_CONSTANT * this.radius) / 2 ** this.cloudLevel;
-	}
-
-	/**
-	 * The two decks the engine builds, as the numbers a cloud worker takes.
-	 *
-	 * Shell spacing and the noise feature deciding a shell's shape both follow
-	 * the puff size rather than being asked for separately: a deck built from
-	 * wider puffs gets taller, wider shells to match, so raising Puff scales a
-	 * cloud rather than only its footprint.
-	 */
-	cloudDecks(): CloudDeckSetup[] {
-		const shellSpan = this.cloudPuff * 0.75;
-		const featureSize = this.cloudPuff * 1.5;
-		const deck = (height: number): CloudDeckSetup => ({
-			level: this.cloudLevel,
-			shells: this.knobs.cloudShells,
-			baseRadius: this.radius + height,
-			shellSpan,
-			featureSize,
-		});
-		return [deck(this.knobs.lowDeck), deck(this.knobs.highDeck)];
 	}
 
 	/**
@@ -1141,7 +1046,6 @@ export class PlanetSettings {
 			else if (key === "noiseBasis") knobs.noiseBasis = raw as NoiseBasis;
 			else if (key === "cellFeature")
 				knobs.cellFeature = raw as CellFeature;
-			else if (key === "cloudStyle") knobs.cloudStyle = raw as CloudStyle;
 			else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";

@@ -4,7 +4,6 @@ import type { Mat4 } from "../../math/Mat4.js";
 import type { PassLayer } from "../PassLayer.js";
 import type { Vec3 } from "../../math/Vec3.js";
 import type { PlanetAtmosphere } from "../../sky/ATMOSPHERE.js";
-import { CLOUD_SHADER } from "./CLOUD_SHADER.js";
 import { SKY_SHADER } from "./SKY_SHADER.js";
 
 /** Where the moon is, how big it looks, and how far off it stands. */
@@ -20,7 +19,7 @@ export interface Moon {
 const SKY_BYTES = 64 + 16 + 16 + 16 + 16;
 
 /**
- * Draws the sky before the terrain and the clouds after it.
+ * Draws the sky behind everything else.
  *
  * The atmosphere is the planet's own, built by {@link planetAtmosphere} from a
  * height and a wanted zenith depth. The camera's real position goes straight
@@ -30,16 +29,9 @@ const SKY_BYTES = 64 + 16 + 16 + 16 + 16;
 export class SkyRenderer implements PassLayer {
 	private readonly ctx: GpuContext;
 	private readonly skyPipeline: GPURenderPipeline;
-	private readonly cloudPipeline: GPURenderPipeline;
 	private readonly uniform: GPUBuffer;
 	private readonly bindGroup: GPUBindGroup;
 	private readonly data = new Float32Array(SKY_BYTES / 4);
-
-	private clouds: {
-		vertices: GPUBuffer;
-		indices: GPUBuffer;
-		count: number;
-	} | null = null;
 
 	/** The planet's own air, in its own metres. */
 	atmosphere: PlanetAtmosphere;
@@ -109,92 +101,6 @@ export class SkyRenderer implements PassLayer {
 				depthCompare: "always",
 			},
 		});
-
-		const cloudModule = device.createShaderModule({ code: CLOUD_SHADER });
-		this.cloudPipeline = device.createRenderPipeline({
-			layout: pipelineLayout,
-			vertex: {
-				module: cloudModule,
-				entryPoint: "vertexMain",
-				buffers: [
-					{
-						arrayStride: 16,
-						attributes: [
-							{
-								shaderLocation: 0,
-								offset: 0,
-								format: "float32x3",
-							},
-							{
-								shaderLocation: 1,
-								offset: 12,
-								format: "float32",
-							},
-						],
-					},
-				],
-			},
-			fragment: {
-				module: cloudModule,
-				entryPoint: "fragmentMain",
-				targets: [
-					{
-						format,
-						blend: {
-							color: {
-								srcFactor: "src-alpha",
-								dstFactor: "one-minus-src-alpha",
-								operation: "add",
-							},
-							alpha: {
-								srcFactor: "one",
-								dstFactor: "one-minus-src-alpha",
-								operation: "add",
-							},
-						},
-					},
-				],
-			},
-			primitive: { topology: "triangle-list", cullMode: "none" },
-			depthStencil: {
-				format: "depth24plus",
-				depthWriteEnabled: false,
-				depthCompare: "less",
-			},
-		});
-	}
-
-	/**
-	 * Replace the cloud geometry.
-	 *
-	 * A cloud has no address, so there is nothing to update in place: the
-	 * buffer is thrown away and refilled as the wind turns.
-	 */
-	setClouds(
-		vertices: Float32Array<ArrayBuffer>,
-		indices: Uint32Array<ArrayBuffer>,
-	): void {
-		this.clouds?.vertices.destroy();
-		this.clouds?.indices.destroy();
-		this.clouds = null;
-		if (indices.length === 0) return;
-
-		const { device } = this.ctx;
-		const vertexBuffer = device.createBuffer({
-			size: vertices.byteLength,
-			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-		});
-		device.queue.writeBuffer(vertexBuffer, 0, vertices);
-		const indexBuffer = device.createBuffer({
-			size: indices.byteLength,
-			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-		});
-		device.queue.writeBuffer(indexBuffer, 0, indices);
-		this.clouds = {
-			vertices: vertexBuffer,
-			indices: indexBuffer,
-			count: indices.length,
-		};
 	}
 
 	before(pass: GPURenderPassEncoder, frame: Frame): void {
@@ -229,16 +135,6 @@ export class SkyRenderer implements PassLayer {
 		pass.setPipeline(this.skyPipeline);
 		pass.setBindGroup(1, this.bindGroup);
 		pass.draw(3);
-		void frame;
-	}
-
-	after(pass: GPURenderPassEncoder, frame: Frame): void {
-		if (!this.clouds) return;
-		pass.setPipeline(this.cloudPipeline);
-		pass.setBindGroup(1, this.bindGroup);
-		pass.setVertexBuffer(0, this.clouds.vertices);
-		pass.setIndexBuffer(this.clouds.indices, "uint32");
-		pass.drawIndexed(this.clouds.count);
 		void frame;
 	}
 }

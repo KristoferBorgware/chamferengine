@@ -924,42 +924,6 @@ approximate, or -- better, since the number is already in hand -- report the
 furthest full-detail chunk the selection actually returned, which is exact and
 moves with the horizon when the horizon is what binds.
 
-### F-048 — The volumetric cloud deck costs a second to build and the billboards cost forty milliseconds
-
-**Kind:** question
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-20, adding the billboard clouds beside the volumetric ones
-**Where:** `packages/engine/src/sky/CloudField.ts`,
-`packages/engine/src/sky/buildCloudMesh.ts`,
-`packages/engine/src/render/clouds/BillboardClouds.ts`; the **Style** knob in
-`packages/client/src/ParameterPanel.ts`
-
-**What happens.** Two cloud systems ship, and one of them is 30 times the
-work of the other. The volumetric decks sample noise at 163,842 lattice
-points each and mesh hexagonal prisms from the result: 460 ms of noise and
-755 ms of meshing for both decks, **1,215 ms a rebuild**, on a wind that
-turns every 700 ms. The billboards scatter 22,481 camera-facing hexagons
-into one buffer in **45 ms**, once, and then move only a `f32` of elapsed
-time per frame. Both draw at the same frame rate.
-
-**Why it matters.** Style is now the one cloud knob that still reloads the
-world, because it decides which renderer is constructed at all; every other
-cloud knob became live in the same session. So the expensive system is also
-the awkward one to compare against, which is backwards -- the comparison is
-the only reason both exist.
-
-**What would fix it.** Decide. If the billboards are what ships, the
-volumetric field, its mesher, its worker and its four knobs come out
-together and `CLOUD_INTERVAL`, `CLOUD_POINT_SHELL_BUDGET` and the whole
-skip-a-tick-while-busy dance go with them. If both stay, construct both
-renderers at startup and make Style a live knob like the rest, which costs
-one idle worker and one buffer and removes the last cloud reload. Either is
-under an hour; what is not free is leaving it undecided, because the
-volumetric path is a second of CPU that only pays for itself if somebody
-prefers how it looks.
-
 ---
 
 ## Closed
@@ -1903,3 +1867,50 @@ it. Driven through five rebuilds in the browser, live worker targets stay flat
 at 4 where they had been growing by nine each time.
 
 ---
+
+### F-048 — The volumetric cloud deck costs a second to build and the billboards cost forty milliseconds
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-20, adding the billboard clouds beside the volumetric ones
+**Where:** `packages/engine/src/sky/CloudField.ts`,
+`packages/engine/src/sky/buildCloudMesh.ts`,
+`packages/engine/src/render/clouds/BillboardClouds.ts`; the **Style** knob in
+`packages/client/src/ParameterPanel.ts`
+
+**What happens.** Two cloud systems ship, and one of them is 30 times the
+work of the other. The volumetric decks sample noise at 163,842 lattice
+points each and mesh hexagonal prisms from the result: 460 ms of noise and
+755 ms of meshing for both decks, **1,215 ms a rebuild**, on a wind that
+turns every 700 ms. The billboards scatter 22,481 camera-facing hexagons
+into one buffer in **45 ms**, once, and then move only a `f32` of elapsed
+time per frame. Both draw at the same frame rate.
+
+**Why it matters.** Style is now the one cloud knob that still reloads the
+world, because it decides which renderer is constructed at all; every other
+cloud knob became live in the same session. So the expensive system is also
+the awkward one to compare against, which is backwards -- the comparison is
+the only reason both exist.
+
+**What would fix it.** Decide. If the billboards are what ships, the
+volumetric field, its mesher, its worker and its four knobs come out
+together and `CLOUD_INTERVAL`, `CLOUD_POINT_SHELL_BUDGET` and the whole
+skip-a-tick-while-busy dance go with them. If both stay, construct both
+renderers at startup and make Style a live knob like the rest, which costs
+one idle worker and one buffer and removes the last cloud reload. Either is
+under an hour; what is not free is leaving it undecided, because the
+volumetric path is a second of CPU that only pays for itself if somebody
+prefers how it looks.
+
+**Closed:** 2026-08-20, decided and removed. The billboards ship and the
+volumetric system is gone: `CloudField`, `buildCloudMesh`, `CloudWorkerCore`,
+`WorkerCloudSource`, `CloudJob`, the client's `cloudWorker`, `CLOUD_SHADER`
+and `SkyRenderer.setClouds` with its pipeline, and with them the **Style**
+and **Shells** knobs, `CLOUD_POINT_SHELL_BUDGET`, `cloudLevel`,
+`cloudLevelCapped`, `cloudDecks` and `CLOUD_INTERVAL`. `cloudPuff` stays, as
+metres across one billboard rather than a request rounded to a lattice level,
+so it no longer has a level to be capped at. Every cloud knob is live and no
+cloud work happens on a worker at all.
+
