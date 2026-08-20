@@ -6,8 +6,8 @@ import {
 	ChunkAddress,
 	TerrainGenerator,
 	ChunkPeaks,
+	addressesOverlap,
 	buildCoarseMap,
-	chunkOverlaps,
 	chunkCenter,
 	flatCoarseMap,
 	horizonAngle,
@@ -495,6 +495,20 @@ async function main(): Promise<void> {
 	let lastWanted: ChunkSelection[] = [];
 
 	/**
+	 * Every address in {@link lastWanted}, decoded once and kept alongside it.
+	 *
+	 * {@link dropReplaced} runs most frames and checks every retiring chunk
+	 * against the whole of `lastWanted`. Unpacking a key walks its path digit
+	 * by digit and builds a fresh array; decoding both sides on every pairing
+	 * turned that into tens of thousands of decodes a frame during a big
+	 * reselection, and the frame cost climbed with the backlog left to drain
+	 * -- 91 ms measured on the reported world, on a frame that otherwise costs
+	 * under a millisecond. Decoding each address once here, and once per
+	 * retiring chunk below, cuts that to a few hundred.
+	 */
+	let lastWantedAddrs: ChunkAddress[] = [];
+
+	/**
 	 * Chunks the selection no longer wants but which are still drawn.
 	 *
 	 * A chunk that leaves the selection is not dropped on the spot: its
@@ -510,16 +524,11 @@ async function main(): Promise<void> {
 	function dropReplaced(): void {
 		for (const id of [...retiring]) {
 			const old = selectionOf(id);
+			const oldAddress = ChunkAddress.fromKey(old.key, old.chunkLevel);
 			let replaced = true;
-			for (const wanted of lastWanted) {
-				if (
-					!chunkOverlaps(
-						old.chunkLevel,
-						old.key,
-						wanted.chunkLevel,
-						wanted.key,
-					)
-				)
+			for (let n = 0; n < lastWanted.length; n++) {
+				const wanted = lastWanted[n]!;
+				if (!addressesOverlap(oldAddress, lastWantedAddrs[n]!))
 					continue;
 				if (!drawn.has(selectionId(wanted.chunkLevel, wanted.key))) {
 					replaced = false;
@@ -647,6 +656,12 @@ async function main(): Promise<void> {
 		);
 		wantedNow = wanted.length;
 		lastWanted = wanted;
+		// Decoded once here rather than inside dropReplaced's own loop, which
+		// runs every frame there is a backlog to drain and would otherwise
+		// pay this decode again for every retiring chunk it checks.
+		lastWantedAddrs = wanted.map((selection) =>
+			ChunkAddress.fromKey(selection.key, selection.chunkLevel),
+		);
 		keep = new Set(
 			wanted.map((selection) =>
 				selectionId(selection.chunkLevel, selection.key),

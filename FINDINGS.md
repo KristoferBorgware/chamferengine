@@ -954,6 +954,47 @@ approximate, or -- better, since the number is already in hand -- report the
 furthest full-detail chunk the selection actually returned, which is exact and
 moves with the horizon when the horizon is what binds.
 
+### F-046 — Twice the chunk workers exist as `WORKERS` names, and half never build anything
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-20, reading a performance trace of the deployed client
+**Where:** `packages/engine/src/mesh/worker/WorkerMeshSource.ts`
+
+**What happens.** A 24.4 s DevTools trace of the shipped build carries 19
+distinct `DedicatedWorker thread`s running `chunkWorker-*.js`, `mapWorker-*.js`
+and `cloudWorker-*.js`, each with its own genuine Chromium `workerId` (not a
+tracing artifact -- confirmed by a `TracingSessionIdForWorker` entry per
+thread) and no navigation event anywhere in the trace to explain a second
+generation. That is **16 chunk-tagged threads** against the `WORKERS` constant
+of 8, and **2** map-tagged against the one `MapPanel` creates. Of the 16, only
+8 ever do real work -- the other 8 run from the first millisecond to the last
+at under 0.1% CPU, every one of their ~53 recorded tasks empty (`RunTask` with
+no nested GC, no `SchedulePostMessage`, no function calls), evenly spaced
+roughly every 500 ms for the whole capture. `WorkerMeshSource`'s constructor is
+the only place `new Worker(...chunkWorker...)` is called, in a loop of exactly
+`count`, and `main()` is called exactly once with no retry.
+
+**Why it matters.** It costs nothing measurable today -- the idle 8 threads
+sit at 0.8-3.3 ms of CPU a second in the trace's own busy-time table, against
+hundreds to low thousands of ms/s on the real 8 -- so it is not what makes
+this trace's stall (see the dropReplaced fix in the same session). But a
+genuinely doubled worker pool is 8 extra V8 isolates' worth of resident memory
+for the session's whole life, and if the mechanism ever changes to something
+that DOES cost CPU, it would be invisible until measured the same way this
+was.
+
+**What would fix it.** Not chased down: whether Chromium double-threads a
+`{type:"module"}` dedicated worker as a matter of course (a loader thread plus
+an execution thread, both long-lived and both carrying a `workerId`), or
+whether something really does construct two `WorkerMeshSource`s over this
+build's lifetime, wants a trace of a *fresh, controlled* load -- one `Rebuild`
+click, one `?panel=1` toggle, nothing else -- checked the same way: count
+`TracingSessionIdForWorker` entries against `WORKERS`, and check whether the
+same 1-real-to-1-idle pairing shows up for `MapPanel`'s single worker too.
+
 ---
 
 ## Closed

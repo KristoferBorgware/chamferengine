@@ -67,6 +67,7 @@ export { DETAIL, selectChunks } from "./chunk/selectChunks.js";
 export { CAPPED_LEVEL, ChunkPeaks } from "./chunk/ChunkPeaks.js";
 export { ChunkStore } from "./chunk/ChunkStore.js";
 export { selectionId, selectionOf } from "./chunk/selectionId.js";
+export { addressesOverlap } from "./chunk/addressesOverlap.js";
 export { chunkOverlaps } from "./chunk/chunkOverlaps.js";
 export type { Column } from "./chunk/Column.js";
 export type { ColumnSampler } from "./chunk/ColumnSampler.js";
