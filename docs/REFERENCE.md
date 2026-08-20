@@ -117,7 +117,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 279 ns -- a timing, so it moves run to run
+   this machine, now: 331 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1321,7 +1321,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 308M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1567,12 +1567,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 15x version is the one that
+       than choosing the language. And the 19x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
-       This machine, now: typed arrays 0.31 ms, one object a vertex
-       4.67 ms -- a layout gap of 15x. Both are timings and move run to
+       This machine, now: typed arrays 0.38 ms, one object a vertex
+       7.17 ms -- a layout gap of 19x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2556,7 +2556,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 653 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 966 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3272,6 +3272,28 @@ level 7: 163,842 columns, 60 m of relief, 1 m blocks
    aquarium in front of a lake is two surfaces, and no measurement of the
    generated world can bound what someone chooses to build.
 
+6. the ocean as blocks, against the ocean as one surface
+   water cells:                   1,589,689
+   block slots in the crust:      10,485,888 (163,842 columns x 64 layers)
+   share of the world that is water: 15.2%
+   surface faces at this level:   113,455
+   one shell, any planet:         24,448 triangles
+
+   level  7:       113,455 sea faces as blocks   vs 24,448 as a surface   (5x)
+   level  9:     1,815,259 sea faces as blocks   vs 24,448 as a surface   (74x)
+   level 11:    29,044,127 sea faces as blocks   vs 24,448 as a surface   (1188x)
+   level 13:   464,706,009 sea faces as blocks   vs 24,448 as a surface   (19008x)
+
+   THE FACES WERE NEVER THE COST -- section 1 measured them at 0.89% of the
+   naive count, and a 15% slice of the block slots is memory a chunk holds
+   rather than work a frame does. What decides it is the last column: the
+   sea drawn out of blocks grows with the planet, at 4x a level, and the
+   sea drawn as a shell is the same mesh at every size and every altitude.
+   At the shipped depth of 11 that is a factor of 1,188.
+   And the shell can do what a field of blocks cannot do at any price: a
+   wave, a sun sitting on it, and a colour that deepens with what the look
+   passes through. A block is one flat quad of one colour.
+
 verdict
    Water as blocks is cheaper than it sounds in every direction that matters.
    Interior faces cull like any other material, so the ocean draws as a skin
@@ -3280,6 +3302,10 @@ verdict
    there is. And because water fills columns from the bottom, a player almost
    never looks through more than one surface at a time -- so the transparency
    sorting doc 14 left open is a sort of very few things.
+   None of that saved it. Section 6 is why the OCEAN is a surface now: not
+   because blocks were expensive, but because the shell costs the same on
+   every planet and can carry a wave. Sections 1 to 5 still describe water
+   as a material, which is what a lake and a river will be built out of.
 ```
 
 ## `winding.js`

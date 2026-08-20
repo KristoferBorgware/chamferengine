@@ -169,7 +169,7 @@ script owns its numbers.
 | [22](docs/22-multiplayer-interest.md) | who to tell about an edit; why a patch is not an ID range | `interest.js` |
 | [23](docs/23-determinism.md) | which arithmetic is bit-identical everywhere, and what that forbids | `determinism.js` |
 | [24](docs/24-edits-and-global-processes.md) | the coarse map is read-only; what a dammed river actually does | `edits.js` |
-| [25](docs/25-water.md) | water is a block type; drawing a translucent ocean; floating vs colliding | `water.js` |
+| [25](docs/25-water.md) | the ocean is a surface, not blocks; water as a material; floating vs colliding | `water.js` |
 | [26](docs/26-implementation-readiness.md) | what blocks the first line of code, and the order to build in | — |
 | [27](docs/27-block-state.md) | what a block IS as bits; the registry; palette vs delta record | `blockstate.js` |
 | [28](docs/28-language-and-runtime.md) | the language: Rust, and why determinism did not decide it | `language.js` |
@@ -333,6 +333,8 @@ Violating any of these breaks the design. They are not tunable.
 | skirt walls in the cap plane | `85%` of rim columns at a LOD seam | 100% at a same-level one; why the skirt went | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
 | water faces drawn | `0.89%` of the naive count | 113,455 of 12,717,512; **0** sides | `water.js` |
+| ocean as blocks vs a shell | `1,188:1` at D11 | 29,044,127 faces against 24,448 | `water.js` |
+| ocean's share of block slots | `15.2%` | 1,589,689 of 10,485,888, 64-layer crust | `water.js` |
 | water surfaces in one view | `82.3%` see one, `0.6%` two | worst 3, over a 76 m horizon | `water.js` |
 | sea-surface merge span | `37` cells into one quad | sea level is a radius, so exactly flat | `water.js` |
 | depth at the water's edge | `85.3%` one block, `13.9%` two | over 4,189 shore columns | `water.js` |
@@ -692,10 +694,31 @@ Violating any of these breaks the design. They are not tunable.
   its **area**. So interest is **one dot product per player** (over 100M/s; the exact
   rate is a wall-clock timing and moves run to run), and the ID ordering earns its
   keep on **disk** — 5 runs fetch 62% of a region.
-- **Water is a block type, and there is no fluid system** (`water.js`, doc 25) —
-  translucent, no collision, written once by the generator, never simulated.
+- **THE OCEAN IS A SURFACE AND THE FACES WERE NEVER WHY** (`water.js` §6, doc
+  25, `SeaRenderer`). One translucent shell at the sea-level radius, drawn
+  around the camera; `blockAt` returns **air** above the ground even below sea
+  level, so a generated world holds **no water block at all** and the sea floor
+  is bare. Every measurement below still says blocks were cheap — 0.89% of the
+  naive faces, 15.2% of the crust's block slots — and none of it decided
+  anything. **What decides it is that the two scale apart**: block faces
+  quadruple per level while the shell does not, so at the shipped depth 11 it is
+  **29,044,127 faces against 24,448**, a factor of **1,188**. The second reason
+  reaches further than any number: **a shell carries a wave, a sun sitting on
+  it, and a colour that deepens with what the look passes through; a block is
+  one flat quad of one colour.** Two consequences that cost nothing: a player
+  **cannot remove the sea**, because there is no block there to break, and
+  being in water is a **radius test** rather than a block read. **A surface
+  radius must be snapped to the layer grid** (`seaSurfaceRadius`) or flat ground
+  at sea level measures a block under water and the player swims on the beach.
+  **Lakes and rivers are unaffected** — a bounded body's face count does not
+  grow with the planet — and water stays a block type for them and for the
+  bucket.
+- **Water is still a block type, and there is no fluid system** (`water.js`,
+  doc 25) — translucent, no collision, written once, never simulated. What
+  follows describes a **body of water made of blocks**, which is what a lake, a
+  river and a player-built aquarium are; the ocean is the one that outgrew it.
   Doc 21's erosion still runs, at world creation, and what it leaves behind is
-  blocks. Transparency turns out to be cheap in three separate ways: interior
+  ground. Transparency turns out to be cheap in three separate ways: interior
   faces cull like stone's, so 1,589,689 water cells draw **113,455 faces —
   0.89%**; generated water has **0 exposed sides**, because it is always held in
   by land at or above its own level (a vertical water face only exists where a

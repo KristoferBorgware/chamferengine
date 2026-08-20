@@ -243,6 +243,49 @@ console.log('\n5. what it costs when a player touches it');
   console.log('   generated world can bound what someone chooses to build.');
 }
 
+// ---- 6. blocks against a surface -------------------------------------------
+// Everything above prices the ocean as blocks and finds it cheap. This section
+// prices the alternative -- one shell around the camera -- and the two do not
+// scale the same way, which is what decides between them.
+console.log('\n6. the ocean as blocks, against the ocean as one surface');
+{
+  const CRUST = 64;                              // layers in use, doc 06
+  const slots = N * CRUST;
+  // The shell: a disc of RINGS by SECTORS carried onto the sphere, which is
+  // what the engine draws. It is built once, at every planet size.
+  const RINGS = 96, SECTORS = 128;
+  const shellTris = SECTORS + (RINGS - 1) * SECTORS * 2;
+
+  let tops = 0;
+  for (let v=0;v<N;v++) if (depth(v) > 0) tops++;
+
+  console.log(`   water cells:                   ${totalWaterCells.toLocaleString('en-US')}`);
+  console.log(`   block slots in the crust:      ${slots.toLocaleString('en-US')} (${N.toLocaleString('en-US')} columns x ${CRUST} layers)`);
+  console.log(`   share of the world that is water: ${(100*totalWaterCells/slots).toFixed(1)}%`);
+  console.log(`   surface faces at this level:   ${tops.toLocaleString('en-US')}`);
+  console.log(`   one shell, any planet:         ${shellTris.toLocaleString('en-US')} triangles`);
+  console.log('');
+  // N(L) = 10*4^L + 2, so columns quadruple per level and so does the sea
+  // surface drawn out of them. The shell does not move.
+  for (const level of [7, 9, 11, 13]) {
+    const columns = 10 * 4 ** level + 2;
+    const seaFaces = Math.round(tops * (columns / N));
+    console.log(`   level ${String(level).padStart(2)}: ${String(seaFaces.toLocaleString('en-US')).padStart(13)} sea faces as blocks`
+      + `   vs ${shellTris.toLocaleString('en-US')} as a surface`
+      + `   (${(seaFaces/shellTris).toFixed(0)}x)`);
+  }
+  console.log('');
+  console.log('   THE FACES WERE NEVER THE COST -- section 1 measured them at 0.89% of the');
+  console.log('   naive count, and a 15% slice of the block slots is memory a chunk holds');
+  console.log('   rather than work a frame does. What decides it is the last column: the');
+  console.log('   sea drawn out of blocks grows with the planet, at 4x a level, and the');
+  console.log('   sea drawn as a shell is the same mesh at every size and every altitude.');
+  console.log('   At the shipped depth of 11 that is a factor of 1,188.');
+  console.log('   And the shell can do what a field of blocks cannot do at any price: a');
+  console.log('   wave, a sun sitting on it, and a colour that deepens with what the look');
+  console.log('   passes through. A block is one flat quad of one colour.');
+}
+
 console.log('\nverdict');
 console.log('   Water as blocks is cheaper than it sounds in every direction that matters.');
 console.log('   Interior faces cull like any other material, so the ocean draws as a skin');
@@ -251,3 +294,7 @@ console.log('   the only genuinely flat thing on the planet and the best merging
 console.log('   there is. And because water fills columns from the bottom, a player almost');
 console.log('   never looks through more than one surface at a time -- so the transparency');
 console.log('   sorting doc 14 left open is a sort of very few things.');
+console.log('   None of that saved it. Section 6 is why the OCEAN is a surface now: not');
+console.log('   because blocks were expensive, but because the shell costs the same on');
+console.log('   every planet and can carry a wave. Sections 1 to 5 still describe water');
+console.log('   as a material, which is what a lake and a river will be built out of.');

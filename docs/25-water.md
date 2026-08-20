@@ -2,28 +2,40 @@
 
 ## What water is
 
-A block type. Translucent, placeable, with no collision, written by the generator
-at world creation and never simulated.
+**Two things, and the split is between the ocean and everything else.**
 
-That is the whole model, and it goes first because every instinct about water in
-a game pulls the other way. There is no flow, no pressure, no spreading, no
-level-seeking. **This is a construction toy, not a planetary
-simulator** — the nearest thing to it is a box of hexagonal Lego, and water is one
-of the pieces. A translucent one you can swim in.
+The **ocean is a surface**: one translucent shell at the sea-level radius,
+drawn around the camera, with waves on it. It is not made of anything. Below it
+the world is bare sea floor and air, and there is no water block anywhere in a
+generated world.
 
-[Doc 21](21-rivers-and-erosion.md)'s erosion and flow routing still run. They run
-**once**, at world creation, to decide where valleys go and where water sits.
-After that they are finished and what they leave behind is blocks.
+**Water is also a block type** — translucent, placeable, with no collision,
+written once and never simulated. That is the material a bucket carries, an
+aquarium is built from, and a lake or a river will be made of when
+[doc 21](21-rivers-and-erosion.md) grows them. It is not what the sea is made
+of.
+
+There is no flow, no pressure, no spreading, no level-seeking, in either.
+**This is a construction toy, not a planetary simulator** — the nearest thing
+to it is a box of hexagonal Lego, and water is one of the pieces. A translucent
+one you can swim in.
+
+[Doc 21](21-rivers-and-erosion.md)'s erosion still runs. It runs **once**, at
+world creation, to decide where valleys go. After that it is finished and what
+it leaves behind is ground.
 [Doc 24](24-edits-and-global-processes.md) takes that decision and says why.
 
-Two things follow from that, and they are the two halves of this document.
+Three things follow, and they are the three parts of this document.
 
-The first is what a world 69% covered in translucent blocks costs to **draw**,
-because transparency is the one thing a renderer genuinely finds hard, and
-[doc 14](14-meshing-and-lod.md) has carried it as an open question since it was
-written. It costs much less than it sounds, in three separate ways.
+The first is **why the ocean is not blocks**, which is not the answer the
+measurements first suggested.
 
-The second is what it means to **move** through a block that does not collide.
+The second is what a world 69% covered in translucent blocks *would have* cost
+to **draw** — because transparency is the one thing a renderer genuinely finds
+hard, [doc 14](14-meshing-and-lod.md) has carried it as an open question since
+it was written, and the answer still governs every lake and every aquarium.
+
+The third is what it means to **move** through a block that does not collide.
 No collision sounds like water should not be there at all — but you do not fall
 through water, you float in it. That turns out to be a different question from
 collision, asked of a different thing, and answered by machinery the design
@@ -31,7 +43,62 @@ already has.
 
 ---
 
-## The ocean is a skin, not a solid
+## The ocean is not blocks, and the faces were never why
+
+Everything in the next four sections prices the ocean as blocks and finds it
+**cheap**. Interior faces cull, so 1.6 million water cells draw 113,455 faces —
+0.89% of the naive count. Nothing about that argument is wrong, and none of it
+saved the block ocean.
+
+What decides it is that the two do not scale the same way. A sea built out of
+blocks is drawn out of columns, and columns quadruple with every level of
+subdivision. A sea drawn as a shell is one fixed mesh, at every planet size and
+every altitude.
+
+> **[verified]** `verification/water.js`, section 6. Level 7, 60 m of relief,
+> 1 m blocks, sea level set for 30% land; the shell is the disc the engine
+> actually draws, 96 rings by 128 sectors:
+>
+> | | |
+> |---|---|
+> | Water cells | 1,589,689 |
+> | Block slots in a 64-layer crust | 10,485,888 |
+> | Share of the world that was water | **15.2%** |
+> | Sea faces as blocks, level 7 | 113,455 |
+> | Sea faces as blocks, level 11 | **29,044,127** |
+> | One shell, any planet | **24,448 triangles** |
+> | Ratio at the shipped depth | **1,188×** |
+
+The 15.2% is memory a chunk holds rather than work a frame does, and the 0.89%
+is genuinely small. **The last row is the whole argument.**
+
+And there is a second reason that no amount of block work reaches. **A shell
+can carry a wave, a sun sitting on it, and a colour that deepens with how much
+water the look passes through. A block is one flat quad of one colour.** Sea
+level is a radius, so the shell is a sphere, and a sphere seen from a point on
+it is a disc reaching to the horizon — which is why the mesh is a disc, built
+once in its own flat unit circle and carried onto the planet in the vertex
+shader. Walking moves the sea without touching a buffer.
+
+Three consequences:
+
+- **The sea floor is bare.** Ground below sea level is sand and stone with air
+  above it. Anything drawn there is drawn through the shell.
+- **A player cannot remove the ocean**, and nothing had to be written to refuse
+  it. There is no block there to break.
+- **Being in water is a radius test**, not a block read: below the sea surface
+  radius and not inside something solid is in the sea. The surface radius is
+  snapped to the layer grid the ground is built on, or flat ground at sea level
+  measures a block under water and a player swims on the beach.
+
+---
+
+## A body of water is a skin, not a solid
+
+**This section and the four after it measure a body of water made of blocks**,
+which is what a lake, a river and a player-built aquarium are. A body of water
+is a body of water; the ocean's size is the only thing that put it on the other
+side of the scaling line above.
 
 A block that is completely surrounded by other blocks emits no faces. That rule
 already exists for stone ([doc 14](14-meshing-and-lod.md)), and nothing about
@@ -274,11 +341,14 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
 
 ## What this forces elsewhere
 
-- **[Doc 08](08-terrain-generation.md)**'s material pass gains water as a block
-  type: below the water surface and above the ground, place water. It is already
-  written that way — "not solid, and `|p| < seaRadius` → water".
+- **[Doc 08](08-terrain-generation.md)**'s material pass places **nothing**
+  below sea level: above the ground is air, whichever side of the sea it is on.
+  The water line still decides the shore's material, so a beach is sand.
 - **[Doc 14](14-meshing-and-lod.md)**'s open "water and transparency" question is
   closed: two draw passes, and a sort of one thing.
+- **The sea is one draw call, and it is the layer after the opaque terrain.**
+  It writes no depth and tests against the terrain's, so ground standing above
+  the water hides it without anything being sorted.
 - **The mesher needs two vertex streams per chunk** — opaque and translucent —
   which is standard and costs one extra buffer.
 - **Physics gains two rules, and they are separate.** Water blocks do not
@@ -323,15 +393,41 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
   channels about one coarse cell wide. A stream narrower than a block cannot be
   represented as blocks at all, so small watercourses either widen to one cell or
   do not exist.
+- **The shell reads its water depth from the wrong quantity.** How opaque the
+  sea is, and which of its two colours it takes, both come from how far the
+  fragment is from the camera. What decides both in every stylized water shader
+  is the **thickness of water the look passes through** — the depth of what is
+  behind the surface, minus the surface's own, through Beer-Lambert absorption.
+  The two agree standing on a beach and part company from the air, where a
+  metre of water over a sandbar draws as opaque as a kilometre of ocean. It
+  also blocks refraction, caustics and shoreline foam, which all want the same
+  number. The obstacle is structural: the sea draws inside the terrain's own
+  pass, and a pass cannot sample the depth it is testing against. Filed as
+  F-049 with what the two ways out cost.
+- **What a lake and a river are drawn as.** Neither exists yet. The scaling
+  argument that took the ocean out of blocks does not reach them — a lake is a
+  bounded thing whose face count does not grow with the planet — but nothing
+  has measured whether one shell per body is cheaper than the blocks, or how
+  two water surfaces at different radii meet where a river runs into the sea.
 
 ---
 
 ## In one breath
 
-- Water is **a block type** — translucent, no collision, generated once, never
-  simulated. There is no fluid system in this design.
-- **The ocean is a skin.** Interior faces cull like any other material: 1,589,689
-  water cells draw **113,455 faces — 0.89%** of the naive count.
+- **The ocean is a surface**, one translucent shell at the sea-level radius with
+  waves on it. Below it is bare sea floor and air. Water is **also a block
+  type** — translucent, no collision, never simulated — and that is what a
+  bucket carries and what a lake will be. There is no fluid system in this
+  design.
+- **The faces were never why.** As blocks the ocean drew **113,455 faces —
+  0.89%** of the naive count, and held **15.2%** of the crust's block slots.
+  What decided it is that block faces quadruple per level while a shell does
+  not: **29,044,127 against 24,448** at the shipped depth, a factor of
+  **1,188×**. And a shell carries a wave and a sun; a block is one flat quad.
+- **A player cannot remove the sea**, and nothing was written to refuse it.
+  There is no block there.
+- **A body of water is a skin.** Interior faces cull like any other material —
+  which is what governs every lake, river and aquarium.
 - **Generated water has no exposed sides at all.** A vertical face of water only
   exists where a player built one.
 - **The sea surface is the only exactly flat surface on the planet**, because sea
