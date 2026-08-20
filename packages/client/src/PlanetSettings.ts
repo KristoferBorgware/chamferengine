@@ -184,6 +184,33 @@ export interface PlanetKnobs {
 	/** Metres across one cloud puff. */
 	cloudPuff: number;
 
+	/** Whether the sea is drawn at all. */
+	seaDrawn: boolean;
+
+	/** Metres from the trough of a wave to its crest. */
+	waveHeight: number;
+
+	/** Metres between one crest and the next. */
+	waveScale: number;
+
+	/** How fast the waves travel. */
+	waveSpeed: number;
+
+	/** How narrow a wave crest is against its trough. `1` is a plain sine. */
+	seaChop: number;
+
+	/** How much white sits on a crest. */
+	seaFoam: number;
+
+	/** How solid the water reads where a look has barely entered it. */
+	seaOpacity: number;
+
+	/** How many metres of water a look reaches through before it stops. */
+	seaClarity: number;
+
+	/** How hard the sun's own highlight is on the water. */
+	seaGlint: number;
+
 	/** How many cloud formations stand over the whole planet. */
 	cloudClusters: number;
 
@@ -315,6 +342,15 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	lowDeck: 3000,
 	highDeck: 6000,
 	cloudPuff: 64,
+	seaDrawn: true,
+	waveHeight: 1.2,
+	waveScale: 35,
+	waveSpeed: 0.6,
+	seaChop: 3,
+	seaFoam: 0.35,
+	seaOpacity: 0.45,
+	seaClarity: 30,
+	seaGlint: 0.8,
 	cloudClusters: 1200,
 	cloudDensity: 100,
 	cloudSpread: 180,
@@ -441,6 +477,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	lowDeck: { low: 100, high: 20000, step: 20, rebuilds: false, unit: "m" },
 	highDeck: { low: 200, high: 40000, step: 50, rebuilds: false, unit: "m" },
 	cloudPuff: { low: 8, high: 600, step: 4, rebuilds: false, unit: "m" },
+	seaDrawn: { ...TOGGLE, rebuilds: false },
+	waveHeight: { low: 0, high: 12, step: 0.1, rebuilds: false, unit: "m" },
+	waveScale: { low: 5, high: 600, step: 5, rebuilds: false, unit: "m" },
+	waveSpeed: { low: 0, high: 4, step: 0.05, rebuilds: false, unit: "" },
+	seaChop: { low: 1, high: 6, step: 0.1, rebuilds: false, unit: "" },
+	seaFoam: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	seaOpacity: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
+	seaClarity: { low: 1, high: 300, step: 1, rebuilds: false, unit: "m" },
+	seaGlint: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	cloudClusters: {
 		low: 100,
 		high: 4000,

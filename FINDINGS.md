@@ -926,6 +926,77 @@ moves with the horizon when the horizon is what binds.
 
 ---
 
+### F-049 — The sea reads its water thickness from camera distance, not from what is behind it
+
+**Kind:** approximation
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-20, while building the sea as a surface
+**Where:** `packages/engine/src/render/sea/SEA_SHADER.ts`
+
+**What happens.** How opaque the water reads, and which of its two colors it
+takes, both come from how far the fragment is from the camera -- `smoothstep(0,
+clarity, length(eye - world))`. The quantity that decides both in the technique
+this is drawn from is the **thickness of water the look passes through**: the
+depth of whatever is behind the surface, minus the depth of the surface itself,
+put through Beer-Lambert absorption. Distance stands in for thickness, and the
+two agree only when the eye is near the surface.
+
+**Why it matters.** They part company exactly where a player looks at water
+worth looking at. Standing on a beach the two are close, because a look that
+travels far also travels far through water. From 300 m up, looking straight
+down at a metre of water over a sandbar, the distance is 300 m and the water
+draws fully opaque -- the sandbar disappears. The same error hides every reef,
+shoal and river mouth from the air, which is the altitude the shape of a coast
+is read from. It also blocks three things outright: **refraction** (offset the
+screen sample by the wave normal), **caustics** (project a moving pattern onto
+the sea floor, faded by thickness), and **shoreline foam** (a band drawn where
+thickness is under a metre, which is the foam a person actually notices --
+crest foam is the other kind and is already drawn).
+
+**What would fix it.** A depth texture the sea can sample, which it cannot do
+today: `SeaRenderer` is a `PassLayer`, so it draws **inside the same render
+pass as the terrain**, and a pass cannot read the depth attachment it is
+testing against. Either a depth prepass whose result is resolved to a sampled
+texture, or move the sea out into a second pass of its own after the opaque
+one, which also gives it the color attachment for refraction. The second is
+the smaller change and costs one extra pass; it would want measuring against
+the frame budget first, since the sea is one draw call today.
+
+---
+
+### F-050 — Cloud formation culling stops working as a formation's bound approaches the planet
+
+**Kind:** limitation
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-20, while culling the billboard clouds per formation
+**Where:** `packages/engine/src/render/BillboardClouds.ts`
+
+**What happens.** Formations are frustum-tested by a bounding sphere around
+their puffs and the surviving index runs are coalesced. A formation's spread is
+a knob, and at the shipped `cloudSpread` of 2,340 m against a planet radius of
+1,700 m a formation's bound is larger than the world it sits on. Every such
+sphere intersects every frustum, so the test passes everything and the
+coalescing then draws one run covering the whole buffer.
+
+**Why it matters.** Not a correctness problem -- the right pixels are drawn --
+but the cull is paid for and buys nothing at exactly the settings the shipped
+world uses, which is the case it was added for. It reads as working because
+the frame rate is fine; the frame rate is fine because the billboards are
+cheap, not because the cull is doing anything.
+
+**What would fix it.** Split a formation into several bounds when its spread
+passes some fraction of the radius, so a cluster on the far side of the planet
+is a separate sphere from one overhead. The subdivision is what costs the
+effort; the test itself is unchanged. Worth measuring first whether the cull
+earns anything at all at spreads where it *does* work, since the alternative is
+to take it out.
+
+---
+
 ## Closed
 
 ### F-042 — The map's colors and the world's materials are on two different scales

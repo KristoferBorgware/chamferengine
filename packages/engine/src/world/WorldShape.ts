@@ -122,4 +122,20 @@ export class WorldShape {
 	get seaLevelLayer(): number {
 		return this.layerOfRadius(this.seaLevelRadius);
 	}
+
+	/**
+	 * The radius the sea's own surface is drawn at, and stood in.
+	 *
+	 * **Sea level snapped onto the layer grid the ground already lands on.**
+	 * `seaLevelRadius` is where the terrain measures its elevations from and
+	 * is a continuous number; ground is built out of whole layers, so a
+	 * surface at exactly sea level is drawn at the boundary at or under it.
+	 * Left unsnapped, the two disagree by up to a block and every coast at
+	 * sea level stands in water it is not supposed to be in -- a flat world
+	 * measured 2 m under its own sea. Snapping the water the same way puts
+	 * ground at sea level exactly on the waterline.
+	 */
+	get seaSurfaceRadius(): number {
+		return this.radiusOfLayer(this.layerOfSurface(this.seaLevelRadius));
+	}
 }

@@ -1,7 +1,7 @@
 import type { BlockProbe } from "./BlockProbe.js";
 import type { PlayerOptions } from "./PlayerOptions.js";
 import type { WorldShape } from "../world/WorldShape.js";
-import { BlockType } from "../generation/terrain/BlockType.js";
+import { BlockType, isSolid } from "../generation/terrain/BlockType.js";
 import { PLAYER_DEFAULTS } from "./PlayerOptions.js";
 import { Vec3 } from "../math/Vec3.js";
 import { transport } from "./transport.js";
@@ -108,18 +108,35 @@ export class Player {
 		return this.position.length() - this.shape.seaLevelRadius;
 	}
 
-	/** Whether the player's chest is inside water. */
-	swimming(probe: BlockProbe): boolean {
-		const chest = this.position.add(
-			this.up.scale(this.settings.height * 0.6),
-		);
-		return probe.blockAtPosition(chest) === BlockType.WATER;
+	/**
+	 * Whether a point is inside water of any kind.
+	 *
+	 * Two kinds of water, one question. The sea is a surface at one radius
+	 * and holds no blocks, so being in it is being under that radius **with
+	 * nothing solid in the way** -- the ground's top face lands on a layer
+	 * boundary, which can leave a player standing on dry land up to a block
+	 * under sea level, and a rule that only compared radii would call them a
+	 * swimmer. A lake or a river is a body of its own and is blocks, so being
+	 * in one is a block of water at the point. Either answers.
+	 */
+	private inWater(at: Vec3, probe: BlockProbe): boolean {
+		const block = probe.blockAtPosition(at) as BlockType;
+		if (isSolid(block)) return false;
+		if (at.length() < this.shape.seaSurfaceRadius) return true;
+		return block === BlockType.WATER;
 	}
 
-	/** Whether the player's feet are inside water. */
+	/** Whether the player's chest is inside water. */
+	swimming(probe: BlockProbe): boolean {
+		return this.inWater(
+			this.position.add(this.up.scale(this.settings.height * 0.6)),
+			probe,
+		);
+	}
+
+	/** Whether the player's feet are inside water, sea or otherwise. */
 	wading(probe: BlockProbe): boolean {
-		const shin = this.position.add(this.up.scale(0.3));
-		return probe.blockAtPosition(shin) === BlockType.WATER;
+		return this.inWater(this.position.add(this.up.scale(0.3)), probe);
 	}
 
 	/** Whether the player is standing on something, so a jump would answer. */

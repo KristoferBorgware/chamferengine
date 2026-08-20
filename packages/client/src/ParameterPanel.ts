@@ -304,6 +304,65 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		title: "The sea",
+		folded: true,
+		knobs: [
+			{
+				key: "seaDrawn",
+				label: "Draw the sea",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "waveHeight",
+				label: "Wave height",
+				digits: 1,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "waveScale",
+				label: "Between crests",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "waveSpeed",
+				label: "Wave speed",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaChop",
+				label: "Chop",
+				digits: 1,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaFoam",
+				label: "Foam",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaOpacity",
+				label: "How solid",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaClarity",
+				label: "See into it",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaGlint",
+				label: "Sun on the water",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+		],
+	},
+	{
 		title: "The clouds",
 		folded: true,
 		knobs: [

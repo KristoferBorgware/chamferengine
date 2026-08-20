@@ -33,10 +33,12 @@ import {
 	FrameTimer,
 	MarkerRenderer,
 	NoWebGPUError,
+	SeaRenderer,
 	SkyRenderer,
 	createGpuContext,
 	resizeToDisplay,
 } from "chamfer/render";
+import type { SeaLook } from "chamfer/render";
 import type { CloudPuffLayer } from "chamfer/sky";
 import {
 	WIND_AXIS,
@@ -332,6 +334,35 @@ async function main(): Promise<void> {
 			);
 	if (billboardClouds) billboardClouds.visible = settings.knobs.cloudsDrawn;
 
+	/** What the sea looks like, from the knobs that shape it. */
+	function seaLook(live: PlanetSettings): SeaLook {
+		const k = live.knobs;
+		return {
+			waveHeight: k.waveHeight,
+			waveScale: k.waveScale,
+			waveSpeed: k.waveSpeed,
+			chop: k.seaChop,
+			foam: k.seaFoam,
+			opacity: k.seaOpacity,
+			clarity: k.seaClarity,
+			glint: k.seaGlint,
+			// Shallow is the water a look has barely entered, deep is the
+			// water it never leaves, and the sky does the horizon.
+			shallow: [0.11, 0.5, 0.53],
+			deep: [0.03, 0.17, 0.38],
+		};
+	}
+
+	// One shell around the camera rather than a body of blocks. Paused with
+	// everything else under the plain planet, which has no sea to draw.
+	const sea = PLAIN
+		? null
+		: new SeaRenderer(ctx, shape.seaSurfaceRadius, seaLook(settings));
+	if (sea) {
+		sea.visible = settings.knobs.seaDrawn;
+		teardown.push(() => sea.destroy());
+	}
+
 	// The sky is a layer over the terrain pass, and the renderer already treats
 	// that layer as optional. Leaving it off is what pauses the atmosphere, the
 	// stars and the moon together, without the engine learning what a pause is:
@@ -357,6 +388,9 @@ async function main(): Promise<void> {
 	const viewMarker = new MarkerRenderer(ctx);
 	renderer.layers = [
 		...(sky ? [sky] : []),
+		// After the ground, so the water is drawn over the floor it covers,
+		// and before the clouds, which are further off than any of it.
+		...(sea ? [sea] : []),
 		...(billboardClouds ? [billboardClouds] : []),
 		viewMarker,
 	];
@@ -972,6 +1006,10 @@ async function main(): Promise<void> {
 		DAY_LENGTH = live.knobs.dayLength;
 		player.setWalkSpeed(live.knobs.walkSpeed);
 		CULL_BUILD = live.knobs.buildCull;
+		if (sea) {
+			sea.visible = live.knobs.seaDrawn;
+			sea.look = seaLook(live);
+		}
 		CULL_SLACK = Math.tan((live.knobs.cullMargin * Math.PI) / 180);
 		source.nearestFirst = live.knobs.nearestFirst;
 
@@ -1363,10 +1401,35 @@ async function main(): Promise<void> {
 			};
 		}
 
-		const submerged = terrain.blockAtPosition(from) === BlockType.WATER;
+		// Under the surface is a radius now, not a block: the sea holds none.
+		const submerged =
+			from.length() < shape.seaSurfaceRadius ||
+			terrain.blockAtPosition(from) === BlockType.WATER;
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
+		// The sea follows the camera: where it stands, and how far it can see
+		// from there, which is its own horizon. The disc is stretched to
+		// exactly that, so it meets the skyline rather than stopping short of
+		// it or running past it. A camera at or under sea level has no horizon
+		// at all, and a disc of nothing is a sea that vanishes when a swimmer
+		// puts their eyes in the water -- so the reach never falls under the
+		// arc a standing player already sees.
+		if (sea) {
+			sea.eye = from;
+			sea.reach = Math.min(
+				Math.PI * 0.5,
+				Math.max(
+					horizonAngle(
+						shape.seaSurfaceRadius + 2,
+						shape.seaSurfaceRadius,
+					),
+					horizonAngle(from.length(), shape.seaSurfaceRadius),
+				) * 1.15,
+			);
+			sea.time = (now - started) / 1000;
+			sea.sky = renderer.sky;
+		}
 		const viewProj = projection.multiply(view);
 		// What the next selection reads: where the picture was actually taken
 		// from, and what it reached. The camera is not the player -- the wheel

@@ -97,8 +97,13 @@ export class TerrainGenerator {
 	blockAt(column: TerrainColumn, layer: number): BlockType {
 		if (layer < 0 || layer >= this.shape.crustDepth) return BlockType.AIR;
 
-		if (layer < column.groundLayer)
-			return layer < column.waterLayer ? BlockType.AIR : BlockType.WATER;
+		// Above the ground is air, even below sea level. The sea is a surface
+		// at one radius rather than a body of blocks, so an ocean is not
+		// something the generator fills in -- it is drawn where the ground is
+		// lower than sea level, and `waterRadius` still says where that is for
+		// the shore material and the map. A lake or a river, when there is
+		// one, is its own body of water and can be blocks.
+		if (layer < column.groundLayer) return BlockType.AIR;
 
 		const depthBelow =
 			(layer - column.groundLayer + 1) * this.shape.blockSize;

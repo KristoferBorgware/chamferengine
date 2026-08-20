@@ -15,4 +15,7 @@ export { markerGeometry } from "./marker/markerGeometry.js";
 export { SKY_SHADER } from "./sky/SKY_SHADER.js";
 export { SkyRenderer } from "./sky/SkyRenderer.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
+export type { SeaLook } from "./sea/SeaRenderer.js";
+export { SeaRenderer } from "./sea/SeaRenderer.js";
+export { seaDisc } from "./sea/seaDisc.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";

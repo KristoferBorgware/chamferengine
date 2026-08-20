@@ -163,25 +163,24 @@ describe("solidity", () => {
 });
 
 describe("water", () => {
-	it("fills from the water surface down to the ground", () => {
+	it("leaves the ocean empty, because the sea is a surface", () => {
+		// The sea is one shell at one radius, drawn rather than built, so a
+		// column under it holds nothing between its ground and that radius.
+		// `waterLayer` still says where the surface is, for the shore
+		// material and for the map; it no longer names blocks.
 		let checked = 0;
 		for (const column of columns(32)) {
-			// A water surface less than one block above the ground gives no
-			// water block at all. Depth is whole cells: there is no
-			// partly-filled block and so no chest-deep case anywhere.
 			if (column.waterLayer >= column.groundLayer) continue;
 			checked++;
-			expect(gen.blockAt(column, column.waterLayer - 1)).toBe(
-				BlockType.AIR,
-			);
-			expect(gen.blockAt(column, column.waterLayer)).toBe(
-				BlockType.WATER,
-			);
-			expect(gen.blockAt(column, column.groundLayer - 1)).toBe(
-				BlockType.WATER,
-			);
+			for (
+				let layer = column.waterLayer;
+				layer < column.groundLayer;
+				layer++
+			)
+				expect(gen.blockAt(column, layer)).toBe(BlockType.AIR);
+			// And the ground under it is still ground.
 			expect(gen.blockAt(column, column.groundLayer)).not.toBe(
-				BlockType.WATER,
+				BlockType.AIR,
 			);
 		}
 		expect(checked).toBeGreaterThan(0);
@@ -245,24 +244,22 @@ describe("blockAtPosition", () => {
 			}
 	});
 
-	it("says water for a point under a lake or the sea, and air above it", () => {
-		// Whether a camera is under the surface is this query and nothing else:
-		// water is a block, so there is no water volume to test against.
+	it("says air under the sea, which is drawn and not built", () => {
+		// Whether a camera is under the surface is a radius test now, not a
+		// block read: there are no water blocks in an ocean to find.
 		let wet = 0;
 		for (const column of columns(32)) {
 			if (column.waterLayer >= column.groundLayer) continue;
-			// The middle of the first water layer, and the middle of the air
-			// layer above it. The surface itself sits somewhere inside the air
-			// layer, so sampling at the surface reads whichever side of the
-			// boundary the rounding lands on.
 			const mid = (layer: number) =>
 				new Vec3(column.x, column.y, column.z).scale(
 					shape.radiusOfLayer(layer) - shape.blockSize * 0.5,
 				);
-			const under = mid(column.waterLayer);
-			const over = mid(column.waterLayer - 1);
-			expect(gen.blockAtPosition(under)).toBe(BlockType.WATER);
-			expect(gen.blockAtPosition(over)).toBe(BlockType.AIR);
+			expect(gen.blockAtPosition(mid(column.waterLayer))).toBe(
+				BlockType.AIR,
+			);
+			expect(gen.blockAtPosition(mid(column.waterLayer - 1))).toBe(
+				BlockType.AIR,
+			);
 			wet++;
 		}
 		expect(wet).toBeGreaterThan(0);
