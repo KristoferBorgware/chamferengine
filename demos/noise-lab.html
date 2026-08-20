@@ -69,6 +69,20 @@
 				image-rendering: pixelated;
 				background: #0b0e13;
 			}
+			#graph {
+				width: 100%;
+				height: auto;
+				display: block;
+				margin-top: 8px;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				background: #0b0e13;
+			}
+			#graphsays {
+				color: var(--dim);
+				font-size: 10.5px;
+				margin: 3px 0 0;
+			}
 			#legend {
 				display: flex;
 				gap: 2px;
@@ -139,6 +153,17 @@
 				padding: 3px 5px;
 				font: inherit;
 			}
+			.knob.switched {
+				grid-template-columns: auto 1fr auto;
+			}
+			.knob.switched > input[type="checkbox"] {
+				grid-column: auto;
+				width: auto;
+				margin: 0;
+			}
+			.knob input:disabled {
+				opacity: 0.35;
+			}
 			.knob.check {
 				grid-template-columns: auto 1fr;
 			}
@@ -187,6 +212,8 @@
 				<span style="background: #a3a3ac">rock</span>
 				<span style="background: #f3f6fa">snow</span>
 			</div>
+			<canvas id="graph" width="640" height="380"></canvas>
+			<div id="graphsays"></div>
 			<div id="facts"></div>
 			<div id="knobs"></div>
 		</div>
@@ -854,6 +881,7 @@
 						},
 						{
 							key: "octaves",
+							off: 1,
 							label: "Octaves",
 							low: 1,
 							high: 8,
@@ -863,6 +891,7 @@
 						},
 						{
 							key: "persistence",
+							off: 0,
 							label: "Persistence",
 							low: 0.1,
 							high: 0.9,
@@ -881,6 +910,7 @@
 						},
 						{
 							key: "ridge",
+							off: 0,
 							label: "Ridge",
 							low: 0,
 							high: 1,
@@ -890,6 +920,7 @@
 						},
 						{
 							key: "offsetX",
+							off: 0,
 							label: "Offset X",
 							low: -50,
 							high: 50,
@@ -899,6 +930,7 @@
 						},
 						{
 							key: "offsetY",
+							off: 0,
 							label: "Offset Y",
 							low: -50,
 							high: 50,
@@ -908,6 +940,7 @@
 						},
 						{
 							key: "spin",
+							off: 0,
 							label: "Spin",
 							low: 0,
 							high: 6.28,
@@ -918,6 +951,7 @@
 						},
 						{
 							key: "jitter",
+							off: 0,
 							label: "Jitter",
 							low: 0,
 							high: 1,
@@ -936,6 +970,7 @@
 						},
 						{
 							key: "warpAmplitude",
+							off: 0,
 							label: "Warp",
 							low: 0,
 							high: 2,
@@ -961,6 +996,7 @@
 					rows: [
 						{
 							key: "landFraction",
+							off: 0.5,
 							label: "Land",
 							low: 0.05,
 							high: 0.95,
@@ -970,6 +1006,7 @@
 						},
 						{
 							key: "relief",
+							off: 0,
 							label: "Relief",
 							low: 50,
 							high: 3000,
@@ -980,6 +1017,7 @@
 						},
 						{
 							key: "seaDepth",
+							off: 0,
 							label: "Sea depth",
 							low: 10,
 							high: 1000,
@@ -1033,6 +1071,27 @@
 					group: "The view — not the world",
 					rows: [
 						{
+							key: "picture",
+							label: "Picture",
+							type: "select",
+							value: "ground",
+							options: ["ground", "height", "raw"],
+						},
+						{
+							key: "surface",
+							label: "Surface",
+							type: "select",
+							value: "solid",
+							options: ["solid", "wire", "both"],
+						},
+						{
+							key: "graphX",
+							label: "Graph across",
+							type: "select",
+							value: "raw",
+							options: ["raw", "distance", "rank"],
+						},
+						{
 							key: "exaggeration",
 							label: "Height x",
 							low: 1,
@@ -1052,7 +1111,35 @@
 			];
 
 			const knobs = {};
-			for (const g of KNOBS) for (const r of g.rows) knobs[r.key] = r.value;
+			/**
+			 * Whether a knob is being applied at all.
+			 *
+			 * **Only knobs with a real neutral get a switch.** A knob is off when
+			 * it is set to the value that removes its own effect -- ridge 0 is
+			 * bit-for-bit the plain sum, warp 0 reads the point where it stands,
+			 * persistence 0 leaves one octave -- and for those, turning it off is
+			 * an exact statement about what it contributes. Noise scale,
+			 * lacunarity and map cell have no such value: without a frequency
+			 * there is no field, and a switch that quietly meant "back to the
+			 * default" would look like a measurement and not be one.
+			 */
+			const using = {};
+			for (const g of KNOBS)
+				for (const r of g.rows) {
+					knobs[r.key] = r.value;
+					if (r.off !== undefined) using[r.key] = true;
+				}
+
+			/** What a knob is worth right now, which is its neutral when it is off. */
+			function value(key) {
+				const row = rowOf(key);
+				return using[key] === false ? row.off : knobs[key];
+			}
+			const ROWS = new Map();
+			for (const g of KNOBS) for (const r of g.rows) ROWS.set(r.key, r);
+			function rowOf(key) {
+				return ROWS.get(key);
+			}
 
 			// ---------------------------------------------------------------
 			// The field: one patch of the planet, in metres above sea level.
@@ -1104,15 +1191,15 @@
 					frequency: radius / knobs.noiseScale,
 					warpFrequency: radius / knobs.warpScale,
 					basis: knobs.noiseBasis,
-					octaves: knobs.octaves,
-					persistence: knobs.persistence,
+					octaves: value("octaves"),
+					persistence: value("persistence"),
 					lacunarity: knobs.lacunarity,
-					ridge: knobs.ridge,
-					offsetX: knobs.offsetX,
-					offsetY: knobs.offsetY,
-					warpAmplitude: knobs.warpAmplitude,
-					spin: knobs.spin,
-					jitter: knobs.jitter,
+					ridge: value("ridge"),
+					offsetX: value("offsetX"),
+					offsetY: value("offsetY"),
+					warpAmplitude: value("warpAmplitude"),
+					spin: value("spin"),
+					jitter: value("jitter"),
 					feature: knobs.cellFeature,
 				};
 			}
@@ -1160,7 +1247,7 @@
 						k,
 						s,
 					);
-				const sea = seaLevelFor(raw, knobs.landFraction);
+				const sea = seaLevelFor(raw, value("landFraction"));
 				let peak = 0;
 				let trough = 0;
 				for (const v of raw) {
@@ -1168,8 +1255,8 @@
 					if (d > peak) peak = d;
 					if (d < trough) trough = d;
 				}
-				const up = peak > 0 ? knobs.relief / peak : 0;
-				const down = trough < 0 ? knobs.seaDepth / -trough : 0;
+				const up = peak > 0 ? value("relief") / peak : 0;
+				const down = trough < 0 ? value("seaDepth") / -trough : 0;
 
 				// Then the patch, laid out so a step across it is exactly one map
 				// cell -- the same metres per cell the engine's own map has, which
@@ -1177,12 +1264,18 @@
 				const n = cells;
 				const frame = patchFrame(knobs.latitude, knobs.longitude);
 				const height = new Float32Array((n + 1) * (n + 1));
+				// The unitless field as it fell, before sea level was taken off
+				// it and before either scale turned it into metres. The Raw
+				// picture and the graph's own x axis both read this.
+				const field0 = new Float32Array((n + 1) * (n + 1));
 				// A draft covers the same ground with fewer points, so the step
 				// grows as the count falls and the patch keeps its width.
 				const step = (knobs.cells / n) * k.cellMetres;
 				const half = (n / 2) * step;
 				let lowest = Infinity;
 				let highest = -Infinity;
+				let rawLow = Infinity;
+				let rawHigh = -Infinity;
 				let land = 0;
 				for (let r = 0; r <= n; r++) {
 					const dy = r * step - half;
@@ -1209,9 +1302,13 @@
 							z = frame.up[2] * c + (frame.east[2] * u + frame.north[2] * v) * sn;
 						}
 						const len = Math.hypot(x, y, z);
-						const d = surfaceAt(x / len, y / len, z / len, seed, k, s) - sea;
+						const unitless = surfaceAt(x / len, y / len, z / len, seed, k, s);
+						const d = unitless - sea;
 						const metres = d >= 0 ? d * up : d * down;
 						height[r * (n + 1) + q] = metres;
+						field0[r * (n + 1) + q] = unitless;
+						if (unitless < rawLow) rawLow = unitless;
+						if (unitless > rawHigh) rawHigh = unitless;
 						if (metres < lowest) lowest = metres;
 						if (metres > highest) highest = metres;
 						if (metres > 0) land++;
@@ -1222,6 +1319,18 @@
 					n,
 					step,
 					height,
+					raw: field0,
+					// **The field never fills its own range.** A stack of
+					// octaves divided by its summed amplitude is bounded by
+					// [-1, 1] and reaches maybe half of it, so a Raw picture
+					// drawn against the bounds is a flat grey wash. It is drawn
+					// against what this patch actually holds instead, and the
+					// axis says what that was.
+					rawLow,
+					rawHigh,
+					sea,
+					up,
+					down,
 					lowest,
 					highest,
 					landShare: land / ((n + 1) * (n + 1)),
@@ -1256,6 +1365,30 @@
 				for (let r = 0; r < n; r++) {
 					for (let q = 0; q < n; q++) {
 						const metres = field.height[r * (n + 1) + q];
+						const at = ((n - 1 - r) * n + q) * 4;
+						if (knobs.picture !== "ground") {
+							// Grey, and stopping at a different step of the
+							// build: Height reads elevation everywhere rather
+							// than naming a block, and Raw stops before sea
+							// level has been taken off the field at all.
+							const t =
+								knobs.picture === "raw"
+									? Math.max(
+											0,
+											Math.min(
+												1,
+												(field.raw[r * (n + 1) + q] - field.rawLow) /
+													Math.max(1e-6, field.rawHigh - field.rawLow),
+											),
+										)
+									: Math.max(0, Math.min(1, (metres + 400) / 800));
+							const v = 255 * Math.pow(t, 1 / 2.2);
+							px[at] = v;
+							px[at + 1] = v;
+							px[at + 2] = knobs.picture === "raw" ? v * 0.9 : v;
+							px[at + 3] = 255;
+							continue;
+						}
 						const band = BAND_COLORS[bandOf(metres)];
 						// Land shades by how far it stands above the band it
 						// started in, so a band is one material and still has
@@ -1281,7 +1414,6 @@
 						}
 						// The picture is written to a screen, so the linear block
 						// colors are given the curve a screen expects.
-						const at = ((n - 1 - r) * n + q) * 4;
 						px[at] = 255 * Math.pow(Math.min(1, c[0] * shade), 1 / 2.2);
 						px[at + 1] = 255 * Math.pow(Math.min(1, c[1] * shade), 1 / 2.2);
 						px[at + 2] = 255 * Math.pow(Math.min(1, c[2] * shade), 1 / 2.2);
@@ -1289,6 +1421,161 @@
 					}
 				}
 				mapCtx.putImageData(image, 0, 0);
+			}
+
+			// ---------------------------------------------------------------
+			// The graph: what a knob does to the shape of the ground, as a
+			// curve rather than as a picture.
+			// ---------------------------------------------------------------
+
+			const graphCanvas = document.getElementById("graph");
+			const graphCtx = graphCanvas.getContext("2d");
+			const graphSays = document.getElementById("graphsays");
+
+			/**
+			 * Height against one other quantity, drawn from the patch itself.
+			 *
+			 * **Raw is the one that explains the metre knobs.** The generator
+			 * produces a unitless field in `[-1, 1]`; sea level is a percentile
+			 * cut through it, and land and sea are then scaled apart. Plotted
+			 * against the raw value that whole step is two straight lines
+			 * meeting at sea level, and every knob that moves them shows as a
+			 * change of slope or a shift of the hinge -- Land slides the hinge
+			 * along, Relief tilts the upper line, Sea depth tilts the lower one.
+			 *
+			 * **Distance** is the ground itself, a section straight across the
+			 * middle of the patch, which is where ridges and octaves read.
+			 * **Rank** sorts every cell by height, so the curve says what
+			 * fraction of the patch stands below any elevation -- a flat middle
+			 * is a world of plains, a straight climb is a world of slopes.
+			 */
+			function drawGraph() {
+				// Drawn in a fixed logical box and scaled up to whatever the
+				// canvas is, so the text keeps its size on screen rather than
+				// shrinking with the panel.
+				const scale = graphCanvas.width / 320;
+				const width = 320;
+				const height = graphCanvas.height / scale;
+				const g0 = graphCtx;
+				g0.setTransform(1, 0, 0, 1, 0, 0);
+				g0.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+				g0.setTransform(scale, 0, 0, scale, 0, 0);
+				const pad = { left: 40, right: 8, top: 10, bottom: 24 };
+				const plotW = width - pad.left - pad.right;
+				const plotH = height - pad.top - pad.bottom;
+				const g = graphCtx;
+				g.fillStyle = "#0b0e13";
+				g.fillRect(0, 0, width, height);
+
+				const n = field.n;
+				const across = n + 1;
+				const points = [];
+				let xLow = 0;
+				let xHigh = 1;
+				let xLabel = "";
+				if (knobs.graphX === "raw") {
+					// Every cell, so the two slopes and the hinge are drawn by
+					// the data rather than by a formula.
+					for (let at = 0; at < across * across; at += 3)
+						points.push([field.raw[at], field.height[at]]);
+					xLow = Infinity;
+					xHigh = -Infinity;
+					for (const [x] of points) {
+						if (x < xLow) xLow = x;
+						if (x > xHigh) xHigh = x;
+					}
+					const edge = (xHigh - xLow) * 0.04 || 0.01;
+					xLow -= edge;
+					xHigh += edge;
+					xLabel = `raw noise ${xLow.toFixed(2)} to ${xHigh.toFixed(2)}`;
+				} else if (knobs.graphX === "distance") {
+					const row = n >> 1;
+					for (let q = 0; q <= n; q++)
+						points.push([q * field.step, field.height[row * across + q]]);
+					xLow = 0;
+					xHigh = n * field.step;
+					xLabel = "metres across the middle of the patch";
+				} else {
+					const sorted = Float32Array.from(field.height).sort();
+					for (let at = 0; at < sorted.length; at += 7)
+						points.push([at / (sorted.length - 1), sorted[at]]);
+					xLow = 0;
+					xHigh = 1;
+					xLabel = "fraction of the patch below that height";
+				}
+
+				let yLow = Math.min(field.lowest, 0);
+				let yHigh = Math.max(field.highest, 1);
+				const room = (yHigh - yLow) * 0.06 || 1;
+				yLow -= room;
+				yHigh += room;
+				const toX = (v) => pad.left + ((v - xLow) / (xHigh - xLow)) * plotW;
+				const toY = (v) =>
+					pad.top + plotH - ((v - yLow) / (yHigh - yLow)) * plotH;
+
+				// Sea level and the two material lines, so a curve can be read
+				// against the elevations that decide what the ground is made of.
+				const marks = [
+					[0, "#3b6ea8", "sea"],
+					[GROUND_LINES.rock, "#5a5a62", "rock"],
+					[GROUND_LINES.snow, "#8a8f98", "snow"],
+				];
+				g.font = "9.5px system-ui, sans-serif";
+				for (const [metres, color, name] of marks) {
+					if (metres < yLow || metres > yHigh) continue;
+					const y = toY(metres);
+					g.strokeStyle = color;
+					g.setLineDash(metres === 0 ? [] : [3, 3]);
+					g.beginPath();
+					g.moveTo(pad.left, y);
+					g.lineTo(width - pad.right, y);
+					g.stroke();
+					g.setLineDash([]);
+					g.fillStyle = color;
+					g.fillText(name, 4, y + 3);
+				}
+
+				// The axes, labelled in the units the knobs are stated in.
+				g.strokeStyle = "#2b3542";
+				g.beginPath();
+				g.moveTo(pad.left, pad.top);
+				g.lineTo(pad.left, pad.top + plotH);
+				g.lineTo(width - pad.right, pad.top + plotH);
+				g.stroke();
+				g.fillStyle = "#8b95a4";
+				g.fillText(`${Math.round(yHigh)} m`, 4, pad.top + 8);
+				g.fillText(`${Math.round(yLow)} m`, 4, pad.top + plotH - 1);
+				g.textAlign = "center";
+				g.fillText(xLabel, pad.left + plotW / 2, height - 6);
+				g.textAlign = "left";
+
+				if (knobs.graphX === "raw") {
+					// A cloud rather than a line: two cells with the same raw
+					// value land at the same height, so the scatter IS the
+					// transfer curve and any width in it would be a bug.
+					g.fillStyle = "#6fd0ff";
+					for (const [x, y] of points)
+						g.fillRect(toX(x) - 0.6, toY(y) - 0.6, 1.2, 1.2);
+				} else {
+					g.strokeStyle = "#6fd0ff";
+					g.lineWidth = 1.2;
+					g.beginPath();
+					points.forEach(([x, y], at) => {
+						if (at === 0) g.moveTo(toX(x), toY(y));
+						else g.lineTo(toX(x), toY(y));
+					});
+					g.stroke();
+					g.lineWidth = 1;
+				}
+
+				const off = Object.keys(using).filter((k) => !using[k]);
+				graphSays.textContent =
+					(knobs.graphX === "raw"
+						? `sea level cuts the field at ${field.sea.toFixed(3)}; land climbs ${(field.up).toFixed(0)} m per unit, the floor drops ${(field.down).toFixed(0)}`
+						: knobs.graphX === "distance"
+							? `one section across the patch, ${Math.round(field.span).toLocaleString()} m of it`
+							: `every cell sorted by height`) +
+					(off.length ? ` · ${off.length} knob${off.length > 1 ? "s" : ""} bypassed` : "");
 			}
 
 			// ---------------------------------------------------------------
@@ -1303,12 +1590,15 @@
 			layout(location = 0) in vec3 position;
 			layout(location = 1) in vec3 normal;
 			layout(location = 2) in float metres;
+			layout(location = 3) in float raw;
 			uniform mat4 viewProj;
 			out vec3 vNormal;
 			out float vMetres;
+			out float vRaw;
 			void main() {
 				vNormal = normal;
 				vMetres = metres;
+				vRaw = raw;
 				gl_Position = viewProj * vec4(position, 1.0);
 			}`;
 
@@ -1316,12 +1606,44 @@
 			precision highp float;
 			in vec3 vNormal;
 			in float vMetres;
+			in float vRaw;
 			uniform vec3 sun;
 			uniform float rockLine;
 			uniform float snowLine;
 			uniform float contours;
+			uniform int picture;
+			uniform int wire;
+			uniform vec2 rawRange;
 			out vec4 color;
 			void main() {
+				if (wire == 1) {
+					color = vec4(0.42, 0.82, 1.0, 1.0);
+					return;
+				}
+				// The grey pictures answer a different question from the bands:
+				// they read elevation everywhere rather than saying which of the
+				// four blocks stands there, and Raw stops before sea level has
+				// been taken off the field at all.
+				if (picture == 1) {
+					float t = clamp((vMetres + 400.0) / 800.0, 0.0, 1.0);
+					vec3 g = mix(vec3(0.03, 0.03, 0.04), vec3(1.0), t);
+					vec3 n1 = normalize(vNormal);
+					float l1 = 0.28 + 0.72 * max(0.0, dot(n1, normalize(sun)));
+					color = vec4(pow(g * l1, vec3(1.0 / 2.2)), 1.0);
+					return;
+				}
+				if (picture == 2) {
+					float t = clamp(
+						(vRaw - rawRange.x) / max(1e-6, rawRange.y - rawRange.x),
+						0.0,
+						1.0
+					);
+					vec3 g = mix(vec3(0.02, 0.04, 0.10), vec3(1.0, 0.98, 0.90), t);
+					vec3 n2 = normalize(vNormal);
+					float l2 = 0.35 + 0.65 * max(0.0, dot(n2, normalize(sun)));
+					color = vec4(pow(g * l2, vec3(1.0 / 2.2)), 1.0);
+					return;
+				}
 				vec3 tint;
 				if (vMetres <= 0.0) {
 					// Bare sand seen through water, because the ocean is a
@@ -1366,14 +1688,22 @@
 			const uRock = gl.getUniformLocation(program, "rockLine");
 			const uSnow = gl.getUniformLocation(program, "snowLine");
 			const uContours = gl.getUniformLocation(program, "contours");
+			const uPicture = gl.getUniformLocation(program, "picture");
+			const uWire = gl.getUniformLocation(program, "wire");
+			const uRawRange = gl.getUniformLocation(program, "rawRange");
 
 			const vao = gl.createVertexArray();
 			gl.bindVertexArray(vao);
 			const positionBuffer = gl.createBuffer();
 			const normalBuffer = gl.createBuffer();
 			const metreBuffer = gl.createBuffer();
+			const rawBuffer = gl.createBuffer();
 			const indexBuffer = gl.createBuffer();
+			// WebGL has no polygon mode, so a wireframe is a second index list
+			// over the same vertices -- one edge east and one north per point.
+			const lineBuffer = gl.createBuffer();
 			let indexCount = 0;
+			let lineCount = 0;
 			let meshCells = -1;
 
 			gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -1385,6 +1715,9 @@
 			gl.bindBuffer(gl.ARRAY_BUFFER, metreBuffer);
 			gl.enableVertexAttribArray(2);
 			gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 0, 0);
+			gl.bindBuffer(gl.ARRAY_BUFFER, rawBuffer);
+			gl.enableVertexAttribArray(3);
+			gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 0, 0);
 			gl.enable(gl.DEPTH_TEST);
 			gl.clearColor(0.027, 0.039, 0.055, 1);
 
@@ -1405,6 +1738,7 @@
 				const positions = new Float32Array(count * 3);
 				const normals = new Float32Array(count * 3);
 				const metres = new Float32Array(count);
+				const raws = new Float32Array(count);
 				const half = (n / 2) * cell;
 
 				for (let r = 0; r <= n; r++) {
@@ -1415,6 +1749,7 @@
 						positions[at * 3 + 1] = h * lift;
 						positions[at * 3 + 2] = r * cell - half;
 						metres[at] = h;
+						raws[at] = field.raw[at];
 					}
 				}
 				// A normal from the two neighbours each way, which is the slope
@@ -1441,6 +1776,8 @@
 				gl.bufferData(gl.ARRAY_BUFFER, normals, gl.DYNAMIC_DRAW);
 				gl.bindBuffer(gl.ARRAY_BUFFER, metreBuffer);
 				gl.bufferData(gl.ARRAY_BUFFER, metres, gl.DYNAMIC_DRAW);
+				gl.bindBuffer(gl.ARRAY_BUFFER, rawBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, raws, gl.DYNAMIC_DRAW);
 
 				// The index list only changes when the grid does.
 				if (meshCells !== n) {
@@ -1460,6 +1797,24 @@
 					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
 					gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 					indexCount = indices.length;
+
+					const lines = new Uint32Array(n * across * 4);
+					let line = 0;
+					for (let r = 0; r <= n; r++)
+						for (let q = 0; q <= n; q++) {
+							const a = r * across + q;
+							if (q < n) {
+								lines[line++] = a;
+								lines[line++] = a + 1;
+							}
+							if (r < n) {
+								lines[line++] = a;
+								lines[line++] = a + across;
+							}
+						}
+					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lineBuffer);
+					gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lines, gl.STATIC_DRAW);
+					lineCount = line;
 					meshCells = n;
 				}
 			}
@@ -1545,9 +1900,27 @@
 				gl.uniform1f(uRock, GROUND_LINES.rock);
 				gl.uniform1f(uSnow, GROUND_LINES.snow);
 				gl.uniform1f(uContours, knobs.contours ? 1 : 0);
+				gl.uniform2f(uRawRange, field.rawLow, field.rawHigh);
+				gl.uniform1i(
+					uPicture,
+					knobs.picture === "height" ? 1 : knobs.picture === "raw" ? 2 : 0,
+				);
 				gl.bindVertexArray(vao);
-				gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-				gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0);
+				if (knobs.surface !== "wire") {
+					gl.uniform1i(uWire, 0);
+					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+					gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0);
+				}
+				if (knobs.surface !== "solid") {
+					// Over the solid surface the lines would fight the triangles
+					// they sit on, so the depth test is loosened rather than the
+					// geometry moved.
+					gl.uniform1i(uWire, 1);
+					if (knobs.surface === "both") gl.depthFunc(gl.LEQUAL);
+					gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, lineBuffer);
+					gl.drawElements(gl.LINES, lineCount, gl.UNSIGNED_INT, 0);
+					gl.depthFunc(gl.LESS);
+				}
 			}
 
 			// ---------------------------------------------------------------
@@ -1596,10 +1969,30 @@
 							input.value = row.value;
 						}
 						const readout = document.createElement("output");
+						// A switch, where the knob has a value that removes its
+						// own effect. Unticked, the knob is set to that value and
+						// its slider greys: what is left on screen is the ground
+						// this knob is not contributing to, which is the only way
+						// to see what it was contributing.
+						let bypass = null;
+						if (row.off !== undefined) {
+							bypass = document.createElement("input");
+							bypass.type = "checkbox";
+							bypass.checked = true;
+							bypass.title = `off sets ${row.label} to ${row.off}`;
+							bypass.addEventListener("input", () => {
+								using[row.key] = bypass.checked;
+								input.disabled = !bypass.checked;
+								askForRedraw();
+							});
+						}
 						if (row.type === "check") wrap.append(input, label);
-						else wrap.append(label, readout, input);
+						else if (bypass) {
+							wrap.classList.add("switched");
+							wrap.append(bypass, label, readout, input);
+						} else wrap.append(label, readout, input);
 						set.append(wrap);
-						rows.set(row.key, { row, wrap, input, readout });
+						rows.set(row.key, { row, wrap, input, readout, bypass });
 						// **Every move redraws.** `input` rather than `change`, so
 						// the ground answers while the slider is still moving --
 						// which is the only way to feel what a knob does.
@@ -1680,6 +2073,7 @@
 					generate(draft ? Math.max(24, knobs.cells >> 1) : knobs.cells);
 					buildMesh();
 					drawMap();
+					drawGraph();
 					cost = performance.now() - started;
 					refreshPanel();
 					render();
@@ -1734,6 +2128,7 @@
 			generate();
 			buildMesh();
 			drawMap();
+			drawGraph();
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();

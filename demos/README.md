@@ -278,6 +278,21 @@ Two things it shows quickly. **Ridge** at 0 gives hills at every steepness and
 never a mountain. And the shipped `relief` of 1,100 m puts most land above the
 400 m snow line, so most of the world comes out white.
 
+**Every knob that has a value meaning "off" carries a switch.** Ridge 0 is
+bit-for-bit the plain sum, warp 0 reads the point where it stands, persistence 0
+leaves one octave; unticking sets the knob to that value, so what is left on
+screen is the ground the knob was not contributing to. Noise scale, lacunarity
+and map cell have no such value and get no switch — a switch that quietly meant
+"back to the default" would look like a measurement and not be one.
+
+**Picture** draws the ground as the world's four blocks, as a grey ramp in
+metres, or as the raw unitless field before sea level has been taken off it.
+**Surface** draws it solid, as a wireframe, or both. And the graph under the map
+plots height against a choice of x: the raw field, where sea level and the two
+metre scales show as a hinge and two slopes; a section straight across the
+patch; or every cell sorted, which says what fraction of the ground stands below
+any height.
+
 The noise is a hand copy of the engine's, kept honest by a test that digests the
 two against each other over every basis.
 
