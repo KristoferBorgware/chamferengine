@@ -1,5 +1,6 @@
 import type { CoarseMapSnapshot } from "../../generation/coarse/CoarseMapSnapshot.js";
 import type { Geometry } from "../Geometry.js";
+import type { GridParts } from "../GridPaint.js";
 import type { MeshTally } from "../meshChunk.js";
 import type { TerrainOptions } from "../../generation/terrain/TerrainOptions.js";
 
@@ -22,6 +23,13 @@ export interface MeshWorkerSetup {
 
 	/** Whether to paint the seams instead of hiding them. */
 	readonly debugSeams?: boolean;
+
+	/**
+	 * Draw the world as its own grid: a flat shell of hexagons at the crust
+	 * top, painted by these switches, in place of the terrain. The selection
+	 * and the levels are untouched -- this changes only what a chunk builds.
+	 */
+	readonly grid?: GridParts | undefined;
 
 	readonly terrain: TerrainOptions;
 }

@@ -343,6 +343,36 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		title: "The grid",
+		folded: true,
+		knobs: [
+			{
+				key: "gridMode",
+				label: "Grid",
+			},
+			{
+				key: "gridLevels",
+				label: "Levels",
+				shownWhen: (k) => k.gridMode,
+			},
+			{
+				key: "gridCells",
+				label: "Cells",
+				shownWhen: (k) => k.gridMode,
+			},
+			{
+				key: "gridChunks",
+				label: "Chunks",
+				shownWhen: (k) => k.gridMode,
+			},
+			{
+				key: "gridFaces",
+				label: "Faces",
+				shownWhen: (k) => k.gridMode,
+			},
+		],
+	},
+	{
 		title: "Drawing",
 		folded: true,
 		knobs: [

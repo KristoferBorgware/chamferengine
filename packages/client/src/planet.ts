@@ -381,7 +381,11 @@ async function main(): Promise<void> {
 		// Whichever of ground and water is higher is the lower layer number.
 		const surface = Math.min(column.groundLayer, column.waterLayer);
 		player.position = direction.scale(
-			shape.radiusOfLayer(Math.max(0, surface)),
+			// The grid shell sits at the crust top, wherever the real ground
+			// is; standing on the world means standing on what is drawn.
+			settings.knobs.gridMode
+				? shape.crustTopRadius
+				: shape.radiusOfLayer(Math.max(0, surface)),
 		);
 		player.fall = 0;
 		// Level, not aimed down at the ground. On a planet this small the
@@ -451,6 +455,16 @@ async function main(): Promise<void> {
 			crustDepth: shape.crustDepth,
 			apron: APRON,
 			debugSeams: settings.knobs.seamOverlay,
+			// The grid: the same selection and the same levels, built as a
+			// flat shell of hexagons at the world's highest point.
+			grid: settings.knobs.gridMode
+				? {
+						levels: settings.knobs.gridLevels,
+						cells: settings.knobs.gridCells,
+						chunks: settings.knobs.gridChunks,
+						faces: settings.knobs.gridFaces,
+					}
+				: undefined,
 			terrain: settings.terrainOptions(),
 		},
 	);
@@ -939,10 +953,25 @@ async function main(): Promise<void> {
 			[target.x, target.y, target.z],
 			[up.x, up.y, up.z],
 		);
+		// The near plane follows the height over the DRAWN surface, never
+		// over sea level. On a mountain -- or on the grid shell, which sits
+		// at the world's highest point everywhere -- the two differ by the
+		// whole of the ground's height, and a near plane a hundredth of the
+		// sea-level altitude clipped away the ground under the camera's own
+		// feet.
+		const standing = positionToCell(player.position, shape.n);
+		const under = terrain.columnAt(standing.face, standing.i, standing.j);
+		const overGround = Math.max(
+			0,
+			player.position.length() -
+				(settings.knobs.gridMode
+					? shape.crustTopRadius
+					: Math.max(under.groundRadius, under.waterRadius)),
+		);
 		const projection = Mat4.perspective(
 			FIELD_OF_VIEW,
 			canvas.width / canvas.height,
-			Math.max(0.2, player.altitude * 0.01),
+			Math.max(0.2, overGround * 0.01),
 			RADIUS * 20,
 		);
 
@@ -1037,7 +1066,7 @@ async function main(): Promise<void> {
 
 		onPlayerMoved(up);
 		const at = geographicOf(player.position, RADIUS);
-		const cell = positionToCell(player.position, shape.n);
+		const cell = standing;
 		report([
 			`seed "${seedText}"`,
 			`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,

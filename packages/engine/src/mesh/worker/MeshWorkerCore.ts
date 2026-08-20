@@ -1,4 +1,8 @@
+import type { Column } from "../../generation/chunk/Column.js";
+import type { GridParts } from "../GridPaint.js";
 import type { MeshJob, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
+import { BlockType } from "../../generation/terrain/BlockType.js";
+import { Chunk } from "../../generation/chunk/Chunk.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
@@ -35,6 +39,10 @@ export class MeshWorkerCore {
 	 */
 	private readonly byLod = new Map<number, TerrainGenerator>();
 
+	/** The grid switches, and the one flat column every grid cell reads. */
+	private readonly grid: GridParts | null;
+	private readonly flat: Column | null;
+
 	constructor(setup: MeshWorkerSetup) {
 		this.map = CoarseMap.fromSnapshot(setup.map);
 		this.shape = new WorldShape(
@@ -47,20 +55,41 @@ export class MeshWorkerCore {
 		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
 		this.options = setup.terrain;
+		this.grid = setup.grid ?? null;
+		// Two solid layers, so the top cap is the only face a cell has: the
+		// layer under the surface is solid too, and a bottom face is only
+		// emitted over air. Every column of every chunk is this one object --
+		// the shell is the same everywhere, which is the point of it.
+		const blocks = new Uint16Array(2).fill(BlockType.STONE);
+		this.flat = this.grid
+			? {
+					blocks,
+					first: 0,
+					last: -1,
+					groundRadius: this.shape.crustTopRadius,
+					waterRadius: 0,
+				}
+			: null;
 	}
 
 	run(job: MeshJob): MeshResult {
 		const shape = this.shape.atLod(job.lod);
-		const terrain = this.generator(job.lod);
-		const chunk = generateChunk(
-			terrain,
-			ChunkAddress.fromKey(job.key, job.chunkLevel),
-			job.chunkLevel,
-			shape.crustDepth,
-		);
+		const chunk =
+			this.grid && this.flat
+				? this.flatChunk(job, shape)
+				: generateChunk(
+						this.generator(job.lod),
+						ChunkAddress.fromKey(job.key, job.chunkLevel),
+						job.chunkLevel,
+						shape.crustDepth,
+					);
+		const sampler =
+			this.grid && this.flat
+				? { columnAt: () => this.flat! }
+				: new ChunkColumnSampler(chunk, this.generator(job.lod));
 		const mesh = buildChunkMesh(
 			chunk,
-			new ChunkColumnSampler(chunk, terrain),
+			sampler,
 			shape,
 			this.seed,
 			// Every level snaps its surface caps to the finest level's grid,
@@ -69,6 +98,15 @@ export class MeshWorkerCore {
 				apron: this.apron,
 				surfaceGrid: this.shape.blockSize,
 				debugSeams: this.debugSeams,
+				grid: this.grid
+					? {
+							...this.grid,
+							lod: job.lod,
+							// The finest chunk level, however coarse this
+							// chunk is: the two always sum to it.
+							finest: job.lod + job.chunkLevel,
+						}
+					: undefined,
 			},
 		);
 		return {
@@ -83,6 +121,32 @@ export class MeshWorkerCore {
 			translucent: mesh.translucent,
 			tally: mesh.tally,
 		};
+	}
+
+	/**
+	 * A chunk of the flat shell: every column solid to the crust top.
+	 *
+	 * The world's highest point, not the local ground -- one radius for the
+	 * whole planet, so the shell is exactly a sphere and the grid is the only
+	 * thing it shows. Nothing is generated: the terrain is still selected and
+	 * levelled as it always is, and this is the build step declining to run
+	 * the noise.
+	 */
+	private flatChunk(job: MeshJob, shape: WorldShape): Chunk {
+		const chunk = new Chunk(
+			ChunkAddress.fromKey(job.key, job.chunkLevel),
+			shape.subdivisionDepth,
+			job.chunkLevel,
+			2,
+		);
+		chunk.blocks.fill(BlockType.STONE);
+		for (let slot = 0; slot < chunk.slots; slot++) {
+			chunk.band[slot * 2] = 0;
+			chunk.band[slot * 2 + 1] = -1;
+			chunk.surface[slot * 2] = this.shape.crustTopRadius;
+			chunk.surface[slot * 2 + 1] = 0;
+		}
+		return chunk;
 	}
 
 	/** The buffers in a result, for a caller transferring rather than copying. */

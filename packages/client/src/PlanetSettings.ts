@@ -197,6 +197,28 @@ export interface PlanetKnobs {
 	seamOverlay: boolean;
 
 	/**
+	 * Whether the world is drawn as its own grid.
+	 *
+	 * On, every chunk is selected and levelled exactly as the terrain would
+	 * be, then built as a flat shell of hexagons at the world's highest point
+	 * instead of ground. The four switches below choose which structures the
+	 * shell shows.
+	 */
+	gridMode: boolean;
+
+	/** Whether each chunk of the grid is tinted by its level of detail. */
+	gridLevels: boolean;
+
+	/** Whether each grid cell keeps its own speckle, so the tiling reads. */
+	gridCells: boolean;
+
+	/** Whether grid cells on a chunk boundary are marked. */
+	gridChunks: boolean;
+
+	/** Whether grid cells on a face edge are marked. */
+	gridFaces: boolean;
+
+	/**
 	 * Whether the camera that decides what to draw is held where it is.
 	 *
 	 * On, the level of detail and the frustum cull go on reading the place and
@@ -252,6 +274,11 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	detail: 2,
 	apron: true,
 	seamOverlay: false,
+	gridMode: false,
+	gridLevels: true,
+	gridCells: true,
+	gridChunks: true,
+	gridFaces: true,
 	freezeView: false,
 	dayLength: 240,
 	paused: false,
@@ -367,6 +394,11 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
 	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
+	gridMode: { ...TOGGLE, rebuilds: true },
+	gridLevels: { ...TOGGLE, rebuilds: true },
+	gridCells: { ...TOGGLE, rebuilds: true },
+	gridChunks: { ...TOGGLE, rebuilds: true },
+	gridFaces: { ...TOGGLE, rebuilds: true },
 	freezeView: { ...TOGGLE, rebuilds: false },
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },

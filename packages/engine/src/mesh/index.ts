@@ -15,6 +15,8 @@ export type {
 	MeshWorkerMessage,
 	MeshWorkerSetup,
 } from "./worker/MeshJob.js";
+export type { GridPaint, GridParts } from "./GridPaint.js";
+export { gridCellColor } from "./gridCellColor.js";
 export { MeshWorkerCore } from "./worker/MeshWorkerCore.js";
 export type { MeshSource } from "./worker/MeshSource.js";
 export { InlineMeshSource } from "./worker/InlineMeshSource.js";

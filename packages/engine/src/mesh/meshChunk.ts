@@ -8,6 +8,7 @@ import type { WorldShape } from "../world/WorldShape.js";
 import { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
 import { MESH_DEFAULTS } from "./MeshOptions.js";
 import { blockColor } from "../generation/terrain/blockColor.js";
+import { gridCellColor } from "./gridCellColor.js";
 import { skyExposure } from "../light/skyExposure.js";
 import { canonicalCell } from "../addressing/neighbours/canonicalCell.js";
 import { cellCorners } from "../addressing/lattice/cellCorners.js";
@@ -34,6 +35,9 @@ export interface MeshTally {
 
 /** Scratch color, refilled per face rather than allocated per vertex. */
 const COLOR = new Float32Array(3);
+
+/** Fills {@link COLOR} for one cell: the block's color, or the grid's. */
+type CellPaint = (block: number, face: number, i: number, j: number) => void;
 
 /**
  * How many layers of neighbouring ground it takes to shut the sky out.
@@ -134,6 +138,12 @@ export function meshChunk(
 	const layers = chunk.layerCount;
 	const grid = settings.surfaceGrid || shape.blockSize;
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
+	const gridPaint = settings.grid;
+	const paint: CellPaint = gridPaint
+		? (_block, cellFace, i, j) =>
+				gridCellColor(gridPaint, cellFace, i, j, seed, COLOR, 0)
+		: (block, cellFace, i, j) =>
+				blockColor(block, cellFace, i, j, seed, COLOR, 0);
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
@@ -183,17 +193,23 @@ export function meshChunk(
 				}
 			}
 
+			// The same two marks serve the seam overlay and the grid: a
+			// face-edge cell and a chunk-boundary cell. The overlay paints
+			// both; the grid paints each under its own switch.
 			let tint = 0;
-			if (settings.debugSeams) {
+			if (settings.debugSeams || gridPaint) {
 				const w = latticeWeights(n, i, j);
-				if (w[0] === 0 || w[1] === 0 || w[2] === 0) tint = 2;
-				else if (outward.some(Boolean)) tint = 1;
+				const onFaceEdge = w[0] === 0 || w[1] === 0 || w[2] === 0;
+				const onRim = outward.some(Boolean);
+				if (settings.debugSeams) tint = onFaceEdge ? 2 : onRim ? 1 : 0;
+				else if (gridPaint!.faces && onFaceEdge) tint = 2;
+				else if (gridPaint!.chunks && onRim) tint = 1;
 			}
 
 			meshCell(
 				chunk,
 				shape,
-				seed,
+				paint,
 				origin,
 				face,
 				i,
@@ -257,7 +273,7 @@ export function meshChunk(
 			chunk,
 			sampler,
 			shape,
-			seed,
+			paint,
 			origin,
 			cell,
 			ring,
@@ -310,7 +326,7 @@ function owns(
 function meshCell(
 	chunk: Chunk,
 	shape: WorldShape,
-	seed: number,
+	paint: CellPaint,
 	origin: Vec3,
 	face: number,
 	i: number,
@@ -385,7 +401,7 @@ function meshCell(
 		const here = opacityOf(block);
 		if (here === 0) continue;
 		const sink = here === 1 ? translucent : opaque;
-		blockColor(block, face, i, j, seed, COLOR, 0);
+		paint(block, face, i, j);
 		shade(COLOR, sky);
 		debugTint(COLOR, tint);
 
@@ -425,7 +441,7 @@ function meshCell(
 	if (crustFloor && floor > to) {
 		const block = at(own, floor);
 		if (opacityOf(block) > 0) {
-			blockColor(block, face, i, j, seed, COLOR, 0);
+			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint);
 			emitCap(
@@ -461,7 +477,7 @@ function meshCell(
 			);
 			if (otherTop >= groundTop - 1e-9) continue;
 			const block = at(own, groundCap);
-			blockColor(block, face, i, j, seed, COLOR, 0);
+			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint);
 			emitSide(
@@ -502,7 +518,7 @@ function meshCell(
 			)
 				end++;
 
-			blockColor(block, face, i, j, seed, COLOR, 0);
+			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint);
 			emitSide(
@@ -539,7 +555,7 @@ function meshApronCell(
 	chunk: Chunk,
 	sampler: ColumnSampler,
 	shape: WorldShape,
-	seed: number,
+	paint: CellPaint,
 	origin: Vec3,
 	cell: { face: number; i: number; j: number },
 	ring: (Column | null)[],
@@ -611,7 +627,7 @@ function meshApronCell(
 		const here = opacityOf(block);
 		if (here === 0) continue;
 		if (opacityOf(at(own, layer - 1)) >= here) continue;
-		blockColor(block, face, i, j, seed, COLOR, 0);
+		paint(block, face, i, j);
 		shade(COLOR, sky);
 		debugTint(COLOR, tint);
 		emitCap(
@@ -641,7 +657,7 @@ function meshApronCell(
 			);
 			if (otherTop >= groundTop - 1e-9) continue;
 			const block = at(own, groundCap);
-			blockColor(block, face, i, j, seed, COLOR, 0);
+			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint);
 			emitSide(

@@ -1,3 +1,5 @@
+import type { GridPaint } from "./GridPaint.js";
+
 /** What a mesher draws beyond the visible surface. */
 export interface MeshOptions {
 	/**
@@ -54,6 +56,16 @@ export interface MeshOptions {
 	 * default.
 	 */
 	readonly debugSeams?: boolean;
+
+	/**
+	 * Paint the world as its own grid instead of as terrain.
+	 *
+	 * Cells take the chunk's level-of-detail color rather than a block's, and
+	 * the seam tints mark chunk boundaries and face edges under their own
+	 * switches. The blocks still decide the geometry -- grid mode feeds the
+	 * mesher a flat shell, and this is how that shell is painted.
+	 */
+	readonly grid?: GridPaint | undefined;
 }
 
 export const MESH_DEFAULTS = {
