@@ -265,7 +265,11 @@ moving it.
 
 The plane's quads are the coarse map's own cells — 32 m at the shipped settings —
 so the ratio of how wide a cell is to how tall the ground gets is the engine's,
-and a slope that reads as a hillside here reads as one in the world. Sea level
+and a slope that reads as a hillside here reads as one in the world. It opens at
+true scale and says so, with the relief as a percentage of the patch. The last
+group of knobs is marked **not the world**: **Height ×** and the contour lines
+change the picture and leave the ground where it was, and the readout warns
+whenever the plane is drawn taller than the world builds it. Sea level
 and the metre scale are read off the whole sphere rather than off the patch, so
 **Land** stays "how much of the planet" and **Relief** stays "how tall is the
 tallest mountain" however far the view wanders.

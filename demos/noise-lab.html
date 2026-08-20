@@ -1022,13 +1022,23 @@
 							value: 176,
 							digits: 0,
 						},
+					],
+				},
+				{
+					// **Nothing in this group is a world parameter.** Every other
+					// knob here is one the engine reads; these two change the
+					// picture and leave the ground where it was. They are kept
+					// apart so a reading taken off the plane is never a reading
+					// of something only this page does.
+					group: "The view — not the world",
+					rows: [
 						{
 							key: "exaggeration",
 							label: "Height x",
-							low: 0.5,
+							low: 1,
 							high: 8,
 							step: 0.25,
-							value: 2,
+							value: 1,
 							digits: 2,
 						},
 						{
@@ -1628,6 +1638,12 @@
 					`redrawn in <b>${cost.toFixed(0)} ms</b>` +
 					(field.draft ? " · settling" : "") +
 					"<br>" +
+					(knobs.exaggeration === 1
+						? `true scale · relief is <b>${(
+								(100 * (field.highest - field.lowest)) /
+								field.span
+							).toFixed(1)}%</b> of the patch<br>`
+						: `<span style="color:#ffb454">drawn <b>${knobs.exaggeration}x</b> taller than the world builds it</span><br>`) +
 					`narrowest octave <b>${Math.round(
 						knobs.noiseScale / knobs.lacunarity ** (knobs.octaves - 1),
 					).toLocaleString()} m</b>` +
