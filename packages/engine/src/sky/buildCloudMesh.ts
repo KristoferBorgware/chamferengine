@@ -60,6 +60,30 @@ export function buildCloudMesh(
 			return at;
 		};
 
+		// A neighbour lives at fixed lattice coordinates -- (face, i, j) plus a
+		// direction -- so it is the same point on every shell of this column.
+		// Looked up once here instead of once per shell, this is a table of at
+		// most 6 lookups reused by however many shells are solid, rather than
+		// one lookup per solid shell. `null` (direction 5 on a pentagon, which
+		// does not exist) is kept distinct from "not found by indexOf" -- the
+		// first never draws a side there, the second still does.
+		const hasNeighbour: boolean[] = new Array(6);
+		const neighbourPoints: number[] = new Array(6);
+		for (let k = 0; k < 6; k++) {
+			const nb = neighbour(face, field.n, i, j, k);
+			hasNeighbour[k] = nb !== null;
+			if (nb) {
+				const canon = canonicalCell(nb.face, field.n, nb.i, nb.j);
+				neighbourPoints[k] = field.indexOf(
+					canon.face,
+					canon.i,
+					canon.j,
+				);
+			} else {
+				neighbourPoints[k] = -1;
+			}
+		}
+
 		for (let s = 0; s < field.shells; s++) {
 			if (!field.solid[base + s]) continue;
 			const bottomRadius = baseRadius + s * shellSpan;
@@ -80,14 +104,8 @@ export function buildCloudMesh(
 			}
 
 			for (let k = 0; k < 6; k++) {
-				const nb = neighbour(face, field.n, i, j, k);
-				if (!nb) continue;
-				// A crossing hands back whichever face's coordinates the
-				// reflection lands on, and the field only registered each
-				// shared point once, under its lowest face -- so the lookup
-				// has to ask for the same name the field used.
-				const canon = canonicalCell(nb.face, field.n, nb.i, nb.j);
-				const nbPoint = field.indexOf(canon.face, canon.i, canon.j);
+				if (!hasNeighbour[k]) continue;
+				const nbPoint = neighbourPoints[k]!;
 				const nbSolid =
 					nbPoint >= 0 && field.solid[nbPoint * field.shells + s];
 				if (nbSolid) continue;
