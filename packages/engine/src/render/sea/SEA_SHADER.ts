@@ -1,18 +1,24 @@
 /**
- * The sea: one translucent shell around the camera, with waves on it.
+ * The sea: a spherical layer of the world at sea level, with waves on it.
  *
- * **Stylized, not simulated.** The waves are a sum of three travelling sines
- * rather than a spectrum, the light on them is a hard-edged highlight rather
- * than a reflection of anything, and the foam is drawn where the water is
- * steepest rather than where it meets the shore. What that buys is a sea that
- * costs one draw call and no state at all: nothing is stored between frames
- * and nothing is read back.
+ * **It is world geometry, not something carried around the camera.** Every
+ * vertex sits where its chunk's triangle puts it, and the wave at a point is a
+ * function of that point and the clock alone -- so walking past a wave leaves
+ * it where it was, and the surface a player sees is the same surface every
+ * other player sees. The sea is drawn out of the same chunks the terrain is,
+ * at the same levels of detail the terrain picked, which is what makes it
+ * finer underfoot than at the horizon.
  *
- * A phase is `dot(direction, axis)`, so a wave is a band wrapping the whole
- * planet rather than a plane travelling across a flat sheet. Three axes that
- * do not line up give a surface with no visible grain, and every one of them
- * is continuous everywhere on the sphere -- there is no seam to cross and no
- * pole to pinch, because a dot product does not have either.
+ * **Stylized, not simulated.** The waves are folded sines rather than a
+ * spectrum, the light on them is a hard-edged highlight rather than a
+ * reflection of anything, and the foam is drawn where the water is steepest
+ * rather than where it meets the shore. Nothing is stored between frames and
+ * nothing is read back.
+ *
+ * A phase is \`dot(direction, axis)\`, so a wave is a band wrapping the whole
+ * planet rather than a plane travelling across a flat sheet. It is continuous
+ * everywhere on the sphere -- no seam to cross and no pole to pinch, because a
+ * dot product has neither.
  */
 export const SEA_SHADER = /* wgsl */ `
 struct Frame {
@@ -27,10 +33,9 @@ struct Frame {
 struct Sea {
 	// xyz: the radial up under the camera. w: the sea's own radius.
 	up    : vec4f,
-	// xyz: east across that up. w: how far the disc reaches, in radians.
-	east  : vec4f,
-	// xyz: north across it. w: seconds, for the waves to travel on.
-	north : vec4f,
+	// x: the camera's horizon, in radians. y: seconds, for the waves to
+	// travel on. z, w: where the swell starts and stops being resolved.
+	view  : vec4f,
 	// height in metres, metres between crests, how fast they travel, foam.
 	wave  : vec4f,
 	// how solid the water reads close up, how hard the sun's highlight is,
@@ -159,57 +164,68 @@ struct SeaOut {
 };
 
 @vertex
-fn vertexMain(@location(0) local : vec2f) -> SeaOut {
-	// The flat disc laid onto the sphere: how far out the vertex sits becomes
-	// an angle from the camera's own up, and which way it sits becomes a
-	// direction in the tangent plane there.
-	let out = length(local);
-	let angle = out * sea.east.w;
-	var across = vec3f(0.0);
-	if (out > 1e-6) {
-		let side = local / out;
-		across = sea.east.xyz * side.x + sea.north.xyz * side.y;
-	}
-	let dir = normalize(sea.up.xyz * cos(angle) + across * sin(angle));
+fn vertexMain(
+	@location(0) bary    : vec2f,
+	@location(1) cornerA : vec3f,
+	@location(2) cornerB : vec3f,
+	@location(3) cornerC : vec3f,
+) -> SeaOut {
+	// **One barycentric blend, evaluated once, then normalised.** The patch
+	// is a flat triangle of weights and the instance is where its three
+	// corners point, so this is the same one-shot construction every cell
+	// centre in the world is placed by -- never repeated arc midpoints,
+	// which describe a different sphere.
+	let w = vec3f(1.0 - bary.x - bary.y, bary.x, bary.y);
+	let dir = normalize(cornerA * w.x + cornerB * w.y + cornerC * w.z);
 
 	// **A wave shorter than the gap between two vertices is noise, not a
-	// wave.** The disc packs its rings toward the middle, so underfoot they
-	// sit a couple of metres apart and out at the rim tens of metres apart
-	// -- and from altitude the rim is kilometres away, where a 30 m swell
-	// falls to a fleck per vertex that crawls as the camera moves. Flatten
-	// the swell as the rim approaches rather than drawing what cannot be
-	// resolved. Not to nothing: a dead flat sea reflects the sun as a single
+	// wave**, and how far apart the vertices are is decided by the level of
+	// detail the chunk was drawn at -- which grows with distance. So the
+	// swell flattens with distance.
+	//
+	// **Distance, and never the level itself.** A point kept by both a fine
+	// chunk and a coarse one has to stand at the same height in each, or the
+	// water moves whenever a chunk changes level and every LOD boundary is a
+	// step. Distance is a property of the point, so a coarse chunk draws a
+	// subset of the fine chunk's surface: incomplete rather than wrong.
+	//
+	// Not flattened to nothing: a dead flat sea reflects the sun as a single
 	// point, and what makes it a path is the last of the slope.
-	let seconds = sea.north.w;
-	let resolved = mix(1.0, 0.25, smoothstep(0.35, 0.85, out));
+	let seconds = sea.view.y;
+	let dist = length(frame.eye.xyz - dir * sea.up.w);
+	let resolved = mix(0.15, 1.0, 1.0 - smoothstep(sea.view.z, sea.view.w, dist));
 	let height = swell(dir, seconds) * resolved;
 	let world = dir * (sea.up.w + height);
 
-	// The normal, from how the swell changes a step east and a step north.
+	// The normal, from how the swell changes a step each way across the
+	// surface. Any two directions across the radial will do -- the slope of a
+	// surface does not depend on which frame it was measured in -- so this
+	// picks a pair rather than being handed one, and the switch where the
+	// helper axis runs out changes the answer nowhere.
+	var e1 = cross(vec3f(0.0, 1.0, 0.0), dir);
+	if (dot(e1, e1) < 1e-8) { e1 = cross(vec3f(1.0, 0.0, 0.0), dir); }
+	e1 = normalize(e1);
+	let e2 = normalize(cross(dir, e1));
 	// A step in angle rather than in metres, so it stays the same shape
 	// however big the planet is.
 	let step = 0.0004;
-	let eastDir = normalize(dir + sea.east.xyz * step);
-	let northDir = normalize(dir + sea.north.xyz * step);
 	let arc = sea.up.w * step;
-	let slopeEast = (swell(eastDir, seconds) * resolved - height) / arc;
-	let slopeNorth = (swell(northDir, seconds) * resolved - height) / arc;
+	let slope1 = (swell(normalize(dir + e1 * step), seconds) * resolved - height) / arc;
+	let slope2 = (swell(normalize(dir + e2 * step), seconds) * resolved - height) / arc;
 
 	var result : SeaOut;
 	result.clip = frame.viewProj * vec4f(world, 1.0);
 	result.world = world;
 	result.dir = dir;
 	// Tilted off the radial by the two slopes, which is the surface normal.
-	result.up = normalize(
-		dir - sea.east.xyz * slopeEast - sea.north.xyz * slopeNorth
-	);
+	result.up = normalize(dir - e1 * slope1 - e2 * slope2);
 	// How near this vertex is to the top of a wave, for the foam.
 	result.crest = height / max(0.001, sea.wave.x) + 0.5;
-	// How far out toward the horizon this vertex sits, which is the one
-	// measure of "near the horizon" that means the same thing underfoot and
-	// from orbit. The fragment reads it for both the sky reflection and the
-	// fade at the rim.
-	result.out = out;
+	// How near the viewer's own horizon this vertex is, as a fraction of the
+	// way to it: 0 underfoot and 1 at the skyline, at every altitude. The
+	// fragment reads it for the sky the water reflects.
+	let lean = acos(clamp(dot(sea.up.xyz, dir), -1.0, 1.0));
+	result.out = clamp(lean / max(1e-5, sea.view.x), 0.0, 1.0);
 	return result;
 }
 
@@ -226,7 +242,7 @@ fn vertexMain(@location(0) local : vec2f) -> SeaOut {
 fn wireMain(in : SeaOut) -> @location(0) vec4f {
 	let near = 1.0 - smoothstep(0.0, 0.7, in.out);
 	let line = mix(vec3f(0.25, 0.85, 1.0), vec3f(1.0, 0.95, 0.55), near);
-	return vec4f(line, 1.0 - smoothstep(0.92, 1.0, in.out));
+	return vec4f(line, 1.0);
 }
 
 @fragment
@@ -276,10 +292,7 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	// Lit by the same sun the ground takes, and never black at night.
 	let sunlit = clamp(dot(normal, frame.sun.xyz), 0.0, 1.0);
 	let shade = mix(frame.night.y, 0.55 + 0.45 * sunlit, day);
-	// An edge that simply stopped would draw a hard circle around the
-	// player, so the last stretch of the disc fades out instead.
-	let fade = 1.0 - smoothstep(0.92, 1.0, in.out);
 	let alpha = mix(sea.look.x, 1.0, through);
-	return vec4f(tint * shade, alpha * fade);
+	return vec4f(tint * shade, alpha);
 }
 `;

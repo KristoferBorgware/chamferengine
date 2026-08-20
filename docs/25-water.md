@@ -74,11 +74,31 @@ is genuinely small. **The last row is the whole argument.**
 
 And there is a second reason that no amount of block work reaches. **A shell
 can carry a wave, a sun sitting on it, and a colour that deepens with how much
-water the look passes through. A block is one flat quad of one colour.** Sea
-level is a radius, so the shell is a sphere, and a sphere seen from a point on
-it is a disc reaching to the horizon — which is why the mesh is a disc, built
-once in its own flat unit circle and carried onto the planet in the vertex
-shader. Walking moves the sea without touching a buffer.
+water the look passes through. A block is one flat quad of one colour.**
+
+**The shell is a layer of the world, not something carried around the camera.**
+Sea level is a radius, so the sea is a sphere, and that sphere is cut into the
+same triangles everything else is: each chunk the terrain selected gets a patch
+of water at the level of detail the terrain chose for it. A chunk's triangle
+subdivided is the same shape for every chunk at a level, so the meshes are
+built once per level and a chunk is one instance carrying three corner
+directions — which the vertex shader blends, one barycentric blend evaluated
+once, the same construction every cell centre in the world is placed by.
+
+Geometry that followed the camera instead is not what this is, and two things
+went wrong with it that no tuning reaches. **A disc has a centre**, and the
+sectors converging on the point under the viewer draw a starburst across the
+whole ocean from any height. And **its vertices move through the wave field as
+the player walks**, so the crests slide rather than staying where they are: a
+wave has to be a function of the place it is at, or it is not in the world.
+
+What the camera still decides is how far the swell is flattened, because a wave
+shorter than the gap between two vertices is noise. **That is read off distance
+and never off the level itself.** A point kept by both a fine patch and a
+coarse one has to stand at the same height in each, or the water moves whenever
+a chunk changes level — the same rule
+[doc 14](14-meshing-and-lod.md) found for the ground, arriving here for the
+same reason.
 
 ### The waves, and why a sphere changes the recipe
 
@@ -373,9 +393,11 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
   The water line still decides the shore's material, so a beach is sand.
 - **[Doc 14](14-meshing-and-lod.md)**'s open "water and transparency" question is
   closed: two draw passes, and a sort of one thing.
-- **The sea is one draw call, and it is the layer after the opaque terrain.**
-  It writes no depth and tests against the terrain's, so ground standing above
-  the water hides it without anything being sorted.
+- **The sea is a handful of instanced draws, one per level of detail in view,
+  and it is the layer after the opaque terrain.** It tests against the
+  terrain's depth, so ground above the water hides it without anything being
+  sorted, and it **writes** depth, so a cloud on the far side of the water does
+  not draw through it.
 - **The mesher needs two vertex streams per chunk** — opaque and translucent —
   which is standard and costs one extra buffer.
 - **Physics gains two rules, and they are separate.** Water blocks do not
@@ -446,6 +468,9 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
   type** — translucent, no collision, never simulated — and that is what a
   bucket carries and what a lake will be. There is no fluid system in this
   design.
+- **The sea is a layer of the world**, cut into the same chunks as the ground
+  and drawn at the levels the ground picked — finer underfoot, coarser at the
+  horizon. Nothing about it follows the camera.
 - **The faces were never why.** As blocks the ocean drew **113,455 faces —
   0.89%** of the naive count, and held **15.2%** of the crust's block slots.
   What decided it is that block faces quadruple per level while a shell does

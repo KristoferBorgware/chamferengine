@@ -357,7 +357,12 @@ async function main(): Promise<void> {
 	// everything else under the plain planet, which has no sea to draw.
 	const sea = PLAIN
 		? null
-		: new SeaRenderer(ctx, shape.seaSurfaceRadius, seaLook(settings));
+		: new SeaRenderer(
+				ctx,
+				shape.seaSurfaceRadius,
+				DEPTH,
+				seaLook(settings),
+			);
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;
 		sea.wireframe = settings.knobs.seaWireframe;
@@ -920,6 +925,19 @@ async function main(): Promise<void> {
 		// The queue outlives a selection, so what was asked for first is not
 		// what is nearest now. This is what a freed worker picks from.
 		source.reprioritize(wanted);
+		// The sea is cut from the same chunks at the same levels, so the water
+		// is finer underfoot than at the horizon for exactly the reason the
+		// ground is, and neither has an opinion about the other. A triangle
+		// whose LOWEST ground stands above sea level holds no water anywhere
+		// in it -- which the peak pyramid already knows, so the commonest case
+		// inland costs one array read.
+		if (sea)
+			sea.setChunks(
+				wanted.filter(
+					(selection) =>
+						peaks.troughOf(selection.key, selection.chunkLevel) < 0,
+				),
+			);
 		// Decoded once here rather than inside dropReplaced's own loop, which
 		// runs every frame there is a backlog to drain and would otherwise
 		// pay this decode again for every retiring chunk it checks.
@@ -1410,24 +1428,19 @@ async function main(): Promise<void> {
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
-		// The sea follows the camera: where it stands, and how far it can see
-		// from there, which is its own horizon. The disc is stretched to
-		// exactly that, so it meets the skyline rather than stopping short of
-		// it or running past it. A camera at or under sea level has no horizon
-		// at all, and a disc of nothing is a sea that vanishes when a swimmer
-		// puts their eyes in the water -- so the reach never falls under the
-		// arc a standing player already sees.
+		// The sea is world geometry and does not follow anything. What the
+		// camera decides is only how far round the planet it can see, which
+		// is what "near the horizon" means for the sky the water reflects. A
+		// camera at or under the surface has no horizon at all, so this never
+		// falls under the arc a standing player already has.
 		if (sea) {
 			sea.eye = from;
-			sea.reach = Math.min(
-				Math.PI * 0.5,
-				Math.max(
-					horizonAngle(
-						shape.seaSurfaceRadius + 2,
-						shape.seaSurfaceRadius,
-					),
-					horizonAngle(from.length(), shape.seaSurfaceRadius),
-				) * 1.15,
+			sea.horizon = Math.max(
+				horizonAngle(
+					shape.seaSurfaceRadius + 2,
+					shape.seaSurfaceRadius,
+				),
+				horizonAngle(from.length(), shape.seaSurfaceRadius),
 			);
 			sea.time = (now - started) / 1000;
 			sea.sky = renderer.sky;

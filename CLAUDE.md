@@ -713,6 +713,26 @@ Violating any of these breaks the design. They are not tunable.
   **Lakes and rivers are unaffected** — a bounded body's face count does not
   grow with the planet — and water stays a block type for them and for the
   bucket.
+- **THE SEA IS A LAYER OF THE WORLD, NOT A DISC ROUND THE CAMERA**
+  (`SeaRenderer`, `seaPatch`, doc 25). It is cut into the **same chunks the
+  terrain is**, at the **levels the terrain already picked** — so the water is
+  finer underfoot than at the horizon and nothing here decides that twice. A
+  chunk's triangle subdivided is the same shape for every chunk at a level, so
+  the meshes are built **once per level** and a chunk is **one instance
+  carrying its three corner directions**: the whole ocean in view is a handful
+  of instanced draws. The vertex shader does **one barycentric blend**, which is
+  invariant 12 arriving here unchanged. **Camera-following geometry was tried
+  and fails two ways no tuning reaches**: a disc has a **centre**, and the
+  sectors converging under the viewer draw a **starburst across the whole
+  ocean**; and its vertices **move through the wave field as the player walks**,
+  so crests slide instead of staying put. A wave must be a function of the place
+  it is at. What the camera still decides is how far the swell is flattened —
+  **off distance, never off the LOD level**, because a point kept by a fine
+  patch and a coarse one has to stand at the same height in each or the water
+  moves whenever a chunk changes level (doc 14's own rule, `lod.js`). Two
+  consequences that cost nothing: a triangle whose **lowest** ground is above
+  sea level is skipped with one `troughOf` read, and the sea **writes depth**
+  so a cloud on the far side of the water does not draw through it.
 - **A WAVE FIELD WITHOUT A DOMAIN WARP IS A LATTICE** (`SEA_SHADER`, doc 25).
   Fold a sine at its zero crossing, fold two bands and multiply, stack three
   octaves with two samples travelling opposite ways in each — and every bit of
@@ -724,14 +744,13 @@ Violating any of these breaks the design. They are not tunable.
   has no seamless spherical form (the hairy ball theorem again), which is
   invariant 4's rule arriving from a second direction. A phase stays a **dot
   product against a fixed axis** so the bands themselves never seam. **Show the
-  mesh** is a live toggle that draws the shell as lines — WebGPU has no fill
+  mesh** is a live toggle that draws the sea as lines — WebGPU has no fill
   mode, so it is a second `line-list` pipeline over its own index buffer, and
-  it is how you see whether a wavelength has the vertices to be a wave. The
-  disc is `96 x 128` — 12,289 vertices, 24,448 triangles, built once — with
-  rings packed toward the middle: at eye height the gaps run **0.9 m** in the
-  middle and **2.4 m** at the rim, against a **4.7 m** sector arc there, so the
-  **angular axis is the coarser one by about 2x** and that is the resolution
-  limit the swell has to be flattened toward.
+  it is how you see whether a wavelength has the vertices to be a wave. A patch
+  is cut to at most **16 pieces a side** (`FINEST`): a chunk is 32 m and the
+  default swell is 45 m between crests, so that is a vertex every **2 m** —
+  twenty-odd samples across a wave — where cutting to the block grid would cost
+  **1,024 triangles a chunk** to draw the same curve.
 - **Water is still a block type, and there is no fluid system** (`water.js`,
   doc 25) — translucent, no collision, written once, never simulated. What
   follows describes a **body of water made of blocks**, which is what a lake, a

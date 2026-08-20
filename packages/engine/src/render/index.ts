@@ -17,6 +17,6 @@ export { SkyRenderer } from "./sky/SkyRenderer.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";
 export { SeaRenderer } from "./sea/SeaRenderer.js";
-export { seaDisc } from "./sea/seaDisc.js";
+export { SEA_STRIDE, seaPatch } from "./sea/seaPatch.js";
 export { wireIndices } from "./sea/wireIndices.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
