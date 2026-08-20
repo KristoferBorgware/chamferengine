@@ -151,6 +151,15 @@ const WATER_FOG: readonly [number, number, number, number] = [
 /** Far enough that the fog term leaves the color alone. */
 const CLEAR_AIR = 1e9;
 
+/**
+ * How often the status readout is rebuilt, in milliseconds.
+ *
+ * It is prose for a person, and a person reads a line of it a few times a
+ * second at most. Rebuilding it every frame made it the most expensive named
+ * thing on the thread that draws.
+ */
+const REPORT_INTERVAL = 100;
+
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
 
@@ -577,6 +586,15 @@ async function main(): Promise<void> {
 	let lastWantedAddrs: ChunkAddress[] = [];
 
 	/**
+	 * Which entries of {@link lastWanted} stand on each of the twenty faces.
+	 *
+	 * A face is the first thing two addresses disagree about, so grouping by
+	 * it turns {@link dropReplaced}'s scan of the whole selection into a scan
+	 * of the twentieth of it that could possibly overlap.
+	 */
+	let lastWantedOnFace: (number[] | undefined)[] = [];
+
+	/**
 	 * Chunks the selection no longer wants but which are still drawn.
 	 *
 	 * A chunk that leaves the selection is not dropped on the spot: its
@@ -604,9 +622,17 @@ async function main(): Promise<void> {
 		for (const id of [...retiring]) {
 			const old = selectionOf(id);
 			const oldAddress = ChunkAddress.fromKey(old.key, old.chunkLevel);
+			// Only the selection standing on the same icosahedron face can
+			// cover this chunk's ground, and that is the first thing
+			// `addressesOverlap` checks. Asking the face index instead skips
+			// nineteen faces of the selection without a call, which matters
+			// because this runs on every frame that uploads and the view cull
+			// leaves far more chunks retired than it used to.
+			const wantedHere = lastWantedOnFace[oldAddress.face];
+			if (!wantedHere) continue;
 			let covering = 0;
 			let ready = true;
-			for (let n = 0; n < lastWanted.length; n++) {
+			for (const n of wantedHere) {
 				const wanted = lastWanted[n]!;
 				if (!addressesOverlap(oldAddress, lastWantedAddrs[n]!))
 					continue;
@@ -865,6 +891,11 @@ async function main(): Promise<void> {
 		lastWantedAddrs = wanted.map((selection) =>
 			ChunkAddress.fromKey(selection.key, selection.chunkLevel),
 		);
+		lastWantedOnFace = [];
+		for (let n = 0; n < lastWantedAddrs.length; n++) {
+			const face = lastWantedAddrs[n]!.face;
+			(lastWantedOnFace[face] ??= []).push(n);
+		}
 		keep = new Set(
 			wanted.map((selection) =>
 				selectionId(selection.chunkLevel, selection.key),
@@ -1156,6 +1187,9 @@ async function main(): Promise<void> {
 	// every time the day/night clock re-anchors itself on a resume.
 	let dayStarted = started;
 	let previous = started;
+
+	/** When the status readout was last rebuilt. */
+	let reportedAt = 0;
 	const timer = new FrameTimer();
 	const draw = (now: number) => {
 		timer.begin(now);
@@ -1380,27 +1414,37 @@ async function main(): Promise<void> {
 		timer.leave("draw", performance.now());
 
 		onPlayerMoved(up);
-		const at = geographicOf(player.position, RADIUS);
-		const cell = standing;
-		report([
-			`seed "${seedText}"`,
-			`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
-			`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
-				(building.size > 0 ? ` · ${building.size} building` : ""),
-			`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
-				(submerged ? " · under water" : ""),
-			// Where the decisions are being read from, and how far that is from
-			// where the picture is being taken. Without the distance a frozen
-			// view is a world that has simply stopped responding.
-			...(frozen
-				? [
-						`view frozen · ${height(geographicOf(frozen.position, RADIUS).altitude)} · ` +
-							`${height(player.position.sub(frozen.position).length())} from the camera`,
-					]
-				: []),
-			budget(timer, renderer),
-			"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
-		]);
+		// The readout is for a person to read, and a person cannot read a
+		// hundred of them a second. Rebuilt every frame it was the most
+		// expensive named thing on this thread -- 6.25% of it, ahead of the
+		// selection and the drawing -- because six template strings, a share
+		// code and a geographic conversion end in a `textContent` the page
+		// then has to lay out again. Ten a second reads the same and costs a
+		// tenth of that.
+		if (now - reportedAt >= REPORT_INTERVAL) {
+			reportedAt = now;
+			const at = geographicOf(player.position, RADIUS);
+			const cell = standing;
+			report([
+				`seed "${seedText}"`,
+				`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
+				`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
+					(building.size > 0 ? ` · ${building.size} building` : ""),
+				`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
+					(submerged ? " · under water" : ""),
+				// Where the decisions are being read from, and how far that is from
+				// where the picture is being taken. Without the distance a frozen
+				// view is a world that has simply stopped responding.
+				...(frozen
+					? [
+							`view frozen · ${height(geographicOf(frozen.position, RADIUS).altitude)} · ` +
+								`${height(player.position.sub(frozen.position).length())} from the camera`,
+						]
+					: []),
+				budget(timer, renderer),
+				"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
+			]);
+		}
 		timer.end(performance.now());
 		requestAnimationFrame(draw);
 	};
