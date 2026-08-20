@@ -222,7 +222,12 @@ export class Player {
 				break;
 			}
 		}
-		if (standing >= 0 && this.fall <= 0.001) {
+		// Settled onto it, rather than on the way up through it. `fall` is
+		// positive downward, so a jump makes it negative, and a test for
+		// "not falling" alone catches a rising player and puts them straight
+		// back on the ground they just left -- which cancels the jump on its
+		// own first tick.
+		if (standing >= 0 && Math.abs(this.fall) <= 0.001) {
 			this.fall = 0;
 			this.onGround = true;
 			return up.scale(shape.radiusOfLayer(standing));

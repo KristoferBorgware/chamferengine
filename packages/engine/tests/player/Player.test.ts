@@ -4,6 +4,7 @@ import {
 	BlockType,
 	TerrainGenerator,
 	buildCoarseMap,
+	flatCoarseMap,
 	seedFromString,
 } from "chamfer/generation";
 import {
@@ -318,6 +319,40 @@ describe("walking", () => {
 			(PLAYER_DEFAULTS.jumpSpeed * PLAYER_DEFAULTS.jumpSpeed) /
 			(2 * PLAYER_DEFAULTS.gravity);
 		expect(peak - ground).toBeLessThan(oneJump * 1.5);
+	});
+
+	it("leaves the ground on the very first tick of a jump", () => {
+		// The step-up rule -- ground a step high is walked onto rather than
+		// into -- reads `fall`, which is positive downward. A jump makes it
+		// negative, so a rule that fires on "not falling" fires on "rising"
+		// too and puts the player straight back on the ground they just left,
+		// cancelling the jump on the tick it started. It only showed on ground
+		// whose surface sits on a layer boundary, which a generated world's
+		// does and a bare radius does not, so this builds the world the client
+		// actually runs: a flat map through the real generator.
+		const flatMap = flatCoarseMap(seedFromString("chamfer"), 2);
+		const plain = new TerrainGenerator(flatMap.seed, shape, flatMap);
+		const player = new Player(
+			shape,
+			new Vec3(0.2, 0.9, 0.4).normalize().scale(RADIUS + 40),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 400; n++) player.step(STILL, 1 / 30, plain);
+		expect(player.standing).toBe(true);
+		const ground = player.position.length();
+
+		player.step({ ...STILL, jump: true }, 1 / 30, plain);
+		expect(player.standing).toBe(false);
+		expect(player.position.length()).toBeGreaterThan(ground);
+
+		// And it keeps going up rather than being caught a tick later.
+		let peak = player.position.length();
+		for (let n = 0; n < 90; n++) {
+			player.step(STILL, 1 / 30, plain);
+			peak = Math.max(peak, player.position.length());
+		}
+		expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+		expect(player.position.length()).toBeCloseTo(ground, 6);
 	});
 
 	it("jumps again once it has landed, at the same height every time", () => {
