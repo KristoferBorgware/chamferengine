@@ -209,14 +209,28 @@ export interface PlanetKnobs {
 	/**
 	 * Whether a chunk outside the view is selected and built at all.
 	 *
-	 * Off, the whole ring around the player is built and roughly a quarter of
-	 * it is drawn. On, the selection prunes to the view before it asks for
+	 * Off, the whole ring around the player is built and about a third of it
+	 * is drawn. On, the selection prunes to the view before it asks for
 	 * anything, and {@link PlanetKnobs.cullMargin} is how much beyond the edge
 	 * of the screen it keeps so turning has something to turn onto.
+	 *
+	 * **The picture does not change.** Measured at eye level on a settled
+	 * world, the same **104** chunks are drawn whether it is off, on at 25
+	 * degrees, or on at 0 -- what moves is how much is held to draw them:
+	 * 346 chunks resident off, 170 at 25 degrees, 107 at 0, and 232 selected
+	 * down to 115 and 77. That is the whole point of it: a third of what was
+	 * resident was on screen, and at no margin at all 97% of it is.
 	 */
 	buildCull: boolean;
 
-	/** Degrees past the edge of the view a chunk is still built for. */
+	/**
+	 * Degrees past the edge of the view a chunk is still built for.
+	 *
+	 * What a turn turns onto. At 0 the world holds almost exactly what is on
+	 * screen and a turn arrives on ground that has to be built; the wider it
+	 * goes the more is waiting, and past about 45 degrees on a 65-degree view
+	 * nothing is refused at all and it costs what leaving it off costs.
+	 */
 	cullMargin: number;
 
 	/**
