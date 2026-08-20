@@ -182,7 +182,7 @@
 			</p>
 			<canvas id="map" width="192" height="192"></canvas>
 			<div id="legend">
-				<span style="background: #2c5f96">sea</span>
+				<span style="background: #2c5f96">sea over sand</span>
 				<span style="background: #6b9553">grass</span>
 				<span style="background: #a3a3ac">rock</span>
 				<span style="background: #f3f6fa">snow</span>
@@ -758,13 +758,26 @@
 			/** The two elevations that cut land into three materials, in metres. */
 			const GROUND_LINES = { rock: 300, snow: 400 };
 
-			/** The world's own block colors, linear. */
+			/**
+			 * The world's own block colors, linear, in band order.
+			 *
+			 * **Under sea level the ground is sand, not water.** The ocean is a
+			 * surface at one radius rather than a body of blocks, so a sea floor
+			 * is bare and what makes it blue is the water a look passes through
+			 * on the way to it. Painting the floor water-colored would show a
+			 * material the world does not build there -- checked against the
+			 * generator over 31,329 columns, every one of which is sand.
+			 */
 			const BAND_COLORS = [
-				[0.12, 0.32, 0.55],
+				[0.76, 0.7, 0.5],
 				[0.26, 0.44, 0.19],
 				[0.42, 0.42, 0.45],
 				[0.92, 0.94, 0.97],
 			];
+
+			/** What the sea is, and how far a look reaches into it. */
+			const SEA_COLOR = [0.12, 0.32, 0.55];
+			const SEA_CLARITY = 45;
 
 			/**
 			 * How many directions the sea level and the metre scale are read
@@ -1233,14 +1246,23 @@
 				for (let r = 0; r < n; r++) {
 					for (let q = 0; q < n; q++) {
 						const metres = field.height[r * (n + 1) + q];
-						const c = BAND_COLORS[bandOf(metres)];
-						// Sea reads by how much water a look passes through, and
-						// land by how far it is above the band it started in --
-						// so a band is one material and still has shape in it.
+						const band = BAND_COLORS[bandOf(metres)];
+						// Land shades by how far it stands above the band it
+						// started in, so a band is one material and still has
+						// shape in it. Sea is the floor seen through water, so
+						// it shades by how much water is over it -- which is
+						// why a beach shows sand and a deep does not.
+						const c = [0, 0, 0];
 						let shade;
-						if (metres <= 0)
-							shade = 0.55 + 0.45 * Math.exp(metres / 260);
-						else shade = 0.72 + 0.28 * Math.min(1, (metres % 100) / 100);
+						if (metres <= 0) {
+							const through = 1 - Math.exp(metres / SEA_CLARITY);
+							for (let ch = 0; ch < 3; ch++)
+								c[ch] = band[ch] + (SEA_COLOR[ch] - band[ch]) * through;
+							shade = 1;
+						} else {
+							for (let ch = 0; ch < 3; ch++) c[ch] = band[ch];
+							shade = 0.72 + 0.28 * Math.min(1, (metres % 100) / 100);
+						}
 						if (knobs.contours) {
 							// A ring every hundred metres, on the same grid the
 							// two material lines sit on.
@@ -1292,9 +1314,11 @@
 			void main() {
 				vec3 tint;
 				if (vMetres <= 0.0) {
-					// One band, because water is one block. What makes deep
-					// water darker is how much of it a look passes through.
-					tint = vec3(0.12, 0.32, 0.55) * (0.55 + 0.45 * exp(vMetres / 260.0));
+					// Bare sand seen through water, because the ocean is a
+					// surface and holds no blocks. What makes a deep blue is
+					// how much water a look passes through to reach the floor.
+					tint = mix(vec3(0.76, 0.70, 0.50), vec3(0.12, 0.32, 0.55),
+						1.0 - exp(vMetres / 45.0));
 				} else if (vMetres < rockLine) {
 					tint = vec3(0.26, 0.44, 0.19);
 				} else if (vMetres < snowLine) {

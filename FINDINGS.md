@@ -997,6 +997,40 @@ to take it out.
 
 ---
 
+### F-051 — Nearly two thirds of the shipped world's land is above the snow line
+
+**Kind:** tuning
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-20, while checking the noise lab's bands against the generator
+**Where:** `packages/client/src/PlanetSettings.ts`, `GROUND_LINES`
+
+**What happens.** The material lines are absolute metres -- grass to 300, bare
+stone to 400, snow over it -- and the shipped `relief` is 1,100 m. Measured over
+the 31,329 columns of one 5.6 km patch at 45,-175, the surface comes out
+**63.4% snow**, 18.9% grass, 10.0% stone and 7.8% sea floor. The three land
+bands are drawn exactly where the generator puts them; there is nothing wrong
+with the rule. There is simply very little of the world under 400 m.
+
+**Why it matters.** It is most of why the terrain reads as one thing everywhere.
+Three of the four materials share 29% of the surface between them, and a player
+walking that patch is on snow almost the whole time -- so the bands, which exist
+to make one place look unlike another, are doing almost no work. It also wastes
+the rock band, which is 100 m wide against a 1,100 m range and shows as a thin
+collar under every summit rather than as terrain.
+
+**What would fix it.** Three candidates and nobody has measured between them.
+Lower `relief` until the bands share the range, which shortens the mountains.
+Raise the two lines with it, which gives up the property that a colour on the
+map names the block the world builds at that elevation on every planet. Or make
+the lines a stated fraction of `relief`, which was the rule before absolute
+metres replaced it and was dropped because fractions agreed at one relief and
+drifted everywhere else. `demos/noise-lab.html` shows the share for any setting,
+which is what the choice needs.
+
+---
+
 ## Closed
 
 ### F-042 — The map's colors and the world's materials are on two different scales
