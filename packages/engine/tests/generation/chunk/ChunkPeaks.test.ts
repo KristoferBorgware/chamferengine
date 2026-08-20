@@ -166,3 +166,54 @@ describe("ChunkPeaks", () => {
 		expect(after.map((c) => c.key)).toEqual(before.map((c) => c.key));
 	});
 });
+
+describe("ChunkPeaks troughs", () => {
+	// The pyramid stops at the finest chunk level when that is shallower.
+	const deepest = Math.min(CAPPED_LEVEL, FINEST);
+
+	it("never stands above its own peak, at any level", () => {
+		for (let level = 0; level <= deepest; level++)
+			for (let key = 0; key < 20 * 4 ** level; key++)
+				expect(peaks.troughOf(key, level)).toBeLessThanOrEqual(
+					peaks.peakOf(key, level),
+				);
+	});
+
+	it("gives a parent no more than every child gives", () => {
+		// The other direction from the peaks: a parent's lowest ground is the
+		// lowest of its children's, so a coarse triangle bounds a fine one.
+		for (let level = 0; level < deepest; level++)
+			for (let key = 0; key < 20 * 4 ** level; key++)
+				for (let child = 0; child < 4; child++)
+					expect(peaks.troughOf(key, level)).toBeLessThanOrEqual(
+						peaks.troughOf(key * 4 + child, level + 1),
+					);
+	});
+
+	it("reads an ancestor below the table, which never rises above it", () => {
+		// A triangle finer than the pyramid reads its deepest ancestor, and
+		// that figure has to stay conservative or the cull drops real ground.
+		for (let key = 0; key < 20 * 4 ** (deepest + 1); key += 97)
+			expect(peaks.troughOf(key, deepest + 1)).toBe(
+				peaks.troughOf(key >> 2, deepest),
+			);
+	});
+
+	it("is a narrower band than sea level to the planet's tallest", () => {
+		// The whole point of holding both ends: a triangle's own band has to
+		// be tighter than the one figure it replaces, or nothing is bounded.
+		const total = 20 * 4 ** deepest;
+		let tallest = 0;
+		for (let key = 0; key < total; key++)
+			tallest = Math.max(tallest, peaks.peakOf(key, deepest));
+
+		let narrower = 0;
+		for (let key = 0; key < total; key++)
+			if (
+				peaks.peakOf(key, deepest) - peaks.troughOf(key, deepest) <
+				tallest
+			)
+				narrower++;
+		expect(narrower / total).toBeGreaterThan(0.9);
+	});
+});

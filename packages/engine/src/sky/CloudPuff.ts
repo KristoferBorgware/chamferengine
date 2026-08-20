@@ -42,4 +42,13 @@ export interface CloudPuff {
 	 * rather than a heap of identical hexagons.
 	 */
 	readonly shade: number;
+
+	/**
+	 * Which formation this puff belongs to, counting from zero.
+	 *
+	 * Puffs come out of {@link generateCloudPuffs} formation by formation, so
+	 * one formation is a run of them. That is what lets a whole mass be culled
+	 * with one test and drawn with one call, rather than a hexagon at a time.
+	 */
+	readonly formation: number;
 }

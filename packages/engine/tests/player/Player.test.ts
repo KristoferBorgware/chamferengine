@@ -14,6 +14,7 @@ import {
 	turn,
 } from "chamfer/player";
 import { Vec3 } from "chamfer/math";
+import { positionToCell } from "chamfer/addressing";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 
 const RADIUS = 1700;
@@ -64,6 +65,23 @@ const STILL = {
 	jump: false,
 	flying: false,
 } as const;
+
+/** A direction the map puts well above sea level, for standing on. */
+function landAt(): Vec3 {
+	for (let n = 0; n < 4000; n++) {
+		const around = (n * 2.399963229728653) % (2 * Math.PI);
+		const z = 1 - (2 * (n % 997)) / 997;
+		const ring = Math.sqrt(Math.max(0, 1 - z * z));
+		const dir = new Vec3(
+			Math.cos(around) * ring,
+			z,
+			Math.sin(around) * ring,
+		).normalize();
+		const cell = positionToCell(dir, shape.n);
+		if (map.heightAt(cell.face, cell.i, cell.j, DEPTH) > 20) return dir;
+	}
+	throw new Error("the test map has no land in it");
+}
 
 describe("the frame a player stands in", () => {
 	it("takes up from the position and nothing else", () => {
@@ -302,6 +320,69 @@ describe("walking", () => {
 		expect(peak - ground).toBeLessThan(oneJump * 1.5);
 	});
 
+	it("jumps again once it has landed, at the same height every time", () => {
+		// Three jumps in a row, each from a standstill: the second has to
+		// answer, and the ground has to be the same ground every time. A
+		// landing that settles a layer high would climb a block a jump.
+		const probe = flatGround(RADIUS);
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 10; n++) player.step(STILL, 1 / 30, probe);
+		const ground = player.position.length();
+
+		const peaks: number[] = [];
+		const rests: number[] = [];
+		for (let jump = 0; jump < 3; jump++) {
+			expect(player.standing).toBe(true);
+			player.step({ ...STILL, jump: true }, 1 / 30, probe);
+			let peak = player.position.length();
+			for (let n = 0; n < 90; n++) {
+				player.step(STILL, 1 / 30, probe);
+				peak = Math.max(peak, player.position.length());
+			}
+			peaks.push(peak - ground);
+			rests.push(player.position.length());
+		}
+
+		for (const rest of rests) expect(rest).toBeCloseTo(ground, 6);
+		for (const height of peaks)
+			expect(height).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+		// Every jump the same jump, rather than drifting up or dying out.
+		expect(peaks[1]).toBeCloseTo(peaks[0]!, 6);
+		expect(peaks[2]).toBeCloseTo(peaks[0]!, 6);
+	});
+
+	it("jumps repeatedly while the key is simply held down", () => {
+		// Holding it must not climb -- that is the mid-air rule -- but it must
+		// not stick either: once the feet are down again it answers.
+		const probe = flatGround(RADIUS);
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 10; n++) player.step(STILL, 1 / 30, probe);
+		const ground = player.position.length();
+
+		let liftoffs = 0;
+		let wasStanding = player.standing;
+		for (let n = 0; n < 300; n++) {
+			player.step({ ...STILL, jump: true }, 1 / 30, probe);
+			if (wasStanding && !player.standing) liftoffs++;
+			wasStanding = player.standing;
+			// And never further up than one jump's worth.
+			expect(player.position.length() - ground).toBeLessThan(
+				(PLAYER_DEFAULTS.jumpSpeed * PLAYER_DEFAULTS.jumpSpeed) /
+					(2 * PLAYER_DEFAULTS.gravity) +
+					1,
+			);
+		}
+		expect(liftoffs).toBeGreaterThan(1);
+	});
+
 	it("does not jump while flying, which already has a way up", () => {
 		const probe = flatGround(RADIUS);
 		const player = new Player(
@@ -457,5 +538,38 @@ describe("on real terrain", () => {
 
 		// Standing on something, with nothing solid where the head is.
 		expect(terrain.blockAtPosition(player.eye)).not.toBe(BlockType.STONE);
+	});
+
+	it("jumps from real ground and comes back to the same real ground", () => {
+		// Flat ground cannot catch a landing that settles a layer high,
+		// because there every layer boundary is the same one. Generated
+		// ground has a surface that actually varies, and standing still on it
+		// between jumps is what says the height is being read and not drifted.
+		//
+		// On land, because a jump is refused in water: the chest-deep test is
+		// what tells swimming from standing, and a floating player has no
+		// ground to push off.
+		const place = landAt();
+		const player = new Player(
+			shape,
+			place.scale(RADIUS + 200),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 600; n++) player.step(STILL, 1 / 30, terrain);
+		expect(player.standing).toBe(true);
+		const ground = player.position.length();
+
+		for (let jump = 0; jump < 3; jump++) {
+			player.step({ ...STILL, jump: true }, 1 / 30, terrain);
+			expect(player.standing).toBe(false);
+			let peak = player.position.length();
+			for (let n = 0; n < 90; n++) {
+				player.step(STILL, 1 / 30, terrain);
+				peak = Math.max(peak, player.position.length());
+			}
+			expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+			expect(player.position.length()).toBeCloseTo(ground, 6);
+			expect(player.standing).toBe(true);
+		}
 	});
 });

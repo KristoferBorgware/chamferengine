@@ -59,6 +59,7 @@ export function generateCloudPuffs(
 	layers: readonly CloudPuffLayer[],
 ): CloudPuff[] {
 	const puffs: CloudPuff[] = [];
+	let formation = 0;
 	for (let deck = 0; deck < layers.length; deck++) {
 		const layer = layers[deck]!;
 		// Each deck reads the field somewhere else, or both decks would put
@@ -136,8 +137,10 @@ export function generateCloudPuffs(
 							(layer.thickness > 0
 								? (lift / layer.thickness + 1) / 2
 								: 1),
+					formation,
 				});
 			}
+			formation++;
 		}
 	}
 	return puffs;

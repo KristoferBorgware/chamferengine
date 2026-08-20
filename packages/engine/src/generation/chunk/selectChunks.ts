@@ -95,6 +95,7 @@ export function selectChunks(
 		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
 		const spread = Math.acos(Math.min(1, extent.cosRadius));
 		const peak = peaks ? peaks.peakOf(address.key, chunkLevel) : peakHeight;
+		const trough = peaks ? peaks.troughOf(address.key, chunkLevel) : 0;
 		const horizon =
 			eyeHorizon +
 			(peaks
@@ -126,17 +127,32 @@ export function selectChunks(
 		// whole subtree rather than testing every leaf of it -- which is where
 		// the saving is, because a level down is four times the triangles.
 		//
-		// The sphere holds the chunk's whole column of ground, from the
-		// reference sphere up to its own tallest point, or a mountain standing
-		// at the edge of the view would be cut off at whatever height the
-		// sphere stopped at. `slack` widens it by metres per metre of
-		// distance, so what is kept beyond the edge of the screen is an angle
-		// -- a fixed skirt would mean nothing far away and everything
-		// underfoot.
+		// The sphere holds the cap of ground this triangle actually has, from
+		// its own lowest point to its own highest -- both ends, or a chunk on
+		// a tall world gets a sphere reaching from sea level to the planet's
+		// tallest mountain whatever it holds itself. The sea floor is inside
+		// it because the water above is drawn through. `slack` then widens it
+		// by metres per metre of distance, so what is kept beyond the edge of
+		// the screen is an angle rather than a fixed skirt that would mean
+		// nothing far away and everything underfoot.
 		if (cull) {
-			const middle = surfaceRadius + peak / 2;
+			const high = surfaceRadius + Math.max(0, peak);
+			const low = surfaceRadius + Math.min(0, trough);
+			const middle = (low + high) / 2;
+			const sin = Math.sin(spread);
+			const cos = Math.cos(spread);
+			// The furthest corner of the cap from its own middle, taken at
+			// both ends: a sum of the two extents would be up to 41% wide of
+			// it, and this is exact.
+			const outX = high * sin;
+			const outY = high * cos - middle;
+			const inX = low * sin;
+			const inY = low * cos - middle;
 			const bound =
-				spread * (surfaceRadius + peak) + peak / 2 + distance * slack;
+				Math.sqrt(
+					Math.max(outX * outX + outY * outY, inX * inX + inY * inY),
+				) +
+				distance * slack;
 			if (
 				!cull.holds(
 					extent.x * middle,

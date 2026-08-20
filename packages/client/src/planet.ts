@@ -300,6 +300,16 @@ async function main(): Promise<void> {
 	 */
 	function cloudLayers(live: PlanetSettings): CloudPuffLayer[] {
 		const k = live.knobs;
+		// How much further off the high deck stands. Its puffs are scaled by
+		// it, because what a deck reads as from the ground is an angle: a deck
+		// twice as far away with puffs the same size draws them half as wide,
+		// and shrinking them on top of that -- which is what "a higher deck is
+		// finer" would mean -- takes a 45 m puff at 6 km down to 0.43 degrees,
+		// narrower than the moon, which reads as grit rather than as cloud.
+		// Slightly under the full ratio, so it still reads as the further of
+		// the two, and its formations spread less than they grow so it is the
+		// denser of the two as well.
+		const further = Math.max(1, k.highDeck / Math.max(1, k.lowDeck));
 		return [
 			{
 				radius: shape.crustTopRadius + k.lowDeck,
@@ -311,9 +321,9 @@ async function main(): Promise<void> {
 			{
 				radius: shape.crustTopRadius + k.highDeck,
 				windRate: (2 * Math.PI) / 1500,
-				size: k.cloudPuff * 0.7,
-				spread: k.cloudSpread * 0.7,
-				thickness: k.cloudPuff * 0.6,
+				size: k.cloudPuff * further * 0.9,
+				spread: k.cloudSpread * further * 0.75,
+				thickness: k.cloudPuff * further * 0.55,
 			},
 		];
 	}
@@ -709,6 +719,24 @@ async function main(): Promise<void> {
 	 */
 	let viewing: ViewCamera | null = null;
 
+	/**
+	 * Where the player was standing, and how, at the moment the view froze.
+	 *
+	 * Freezing is for flying out of a view and looking at where its edges
+	 * fell, so unfreezing has somewhere to go back to: the point of the trip
+	 * was the view, not the vantage the trip ended at. Held beside
+	 * {@link frozen} because that one is the camera and this is what the
+	 * camera is built out of -- a place, a heading, a pitch and how far the
+	 * view sits behind the player.
+	 */
+	let frozenPlayer: {
+		position: Vec3;
+		heading: Vec3;
+		pitch: number;
+		chase: number;
+		flying: boolean;
+	} | null = null;
+
 	/** Set by the knob, read by the next frame, which has a matrix to freeze. */
 	let freezeWanted = settings.knobs.freezeView;
 
@@ -933,12 +961,29 @@ async function main(): Promise<void> {
 		source.nearestFirst = live.knobs.nearestFirst;
 
 		// Freezing waits for the next frame, which has a matrix to hold.
-		// Unfreezing is immediate, and the refresh at the foot of this
-		// function catches the selection up to where the camera has got to.
+		// Unfreezing is immediate, and puts the player back where they were
+		// standing when it froze, facing the way they were facing: the flight
+		// out was to look at the frozen view from outside, so ending it
+		// somewhere else would leave them lost at whatever vantage the trip
+		// happened to finish at. The refresh at the foot of this function then
+		// selects for the camera they have been given back.
 		freezeWanted = live.knobs.freezeView;
 		if (!freezeWanted) {
 			frozen = null;
 			viewMarker.marker = null;
+			if (frozenPlayer) {
+				player.position = frozenPlayer.position;
+				player.heading = frozenPlayer.heading;
+				player.pitch = frozenPlayer.pitch;
+				player.fall = 0;
+				chase = frozenPlayer.chase;
+				flying = frozenPlayer.flying;
+				// Whatever the mouse had accumulated on the way out belongs to
+				// the vantage being left, not the view being returned to.
+				swing = 0;
+				tilt = 0;
+				frozenPlayer = null;
+			}
 		}
 
 		// Turning the clouds off empties the buffer, which is what stops the
@@ -1357,6 +1402,15 @@ async function main(): Promise<void> {
 		// rebuilt out of parts: what is held is a view that was on screen.
 		if (freezeWanted && !frozen) {
 			frozen = viewing;
+			// The player as well as the camera, so unfreezing can put them
+			// back rather than leaving them wherever they flew to.
+			frozenPlayer = {
+				position: player.position,
+				heading: player.heading,
+				pitch: player.pitch,
+				chase,
+				flying,
+			};
 			refresh();
 		}
 		if (frozen) markMarker(frozen);

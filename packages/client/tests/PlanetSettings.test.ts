@@ -217,10 +217,11 @@ describe("a slider narrowed by the rest of the draft", () => {
 		// planet. Split, the ceiling is the crust less the ocean's own share.
 		const s = new PlanetSettings();
 		expect(s.rangeFor("relief").high).toBeGreaterThan(600);
-		expect(s.rangeFor("relief").high).toBeCloseTo(
-			s.crustCeiling - s.seaDepth,
-			-1,
-		);
+		// Within a step of it: the ceiling is rounded down onto the slider's
+		// own notches, so it lands at or just under what is left over.
+		expect(
+			Math.abs(s.rangeFor("relief").high - (s.crustCeiling - s.seaDepth)),
+		).toBeLessThanOrEqual(KNOB_RANGES.relief!.step);
 	});
 
 	it("leaves no reachable combination that refuses", () => {
@@ -326,8 +327,8 @@ describe("boolean knobs round-trip through a query string", () => {
 
 	it("leaves an unset boolean at its default", () => {
 		const back = PlanetSettings.fromParams(new URLSearchParams());
-		expect(back.knobs.coarseMap).toBe(true);
-		expect(back.knobs.paused).toBe(false);
+		expect(back.knobs.coarseMap).toBe(PLANET_DEFAULTS.coarseMap);
+		expect(back.knobs.paused).toBe(PLANET_DEFAULTS.paused);
 	});
 
 	it("never carries freeze view through a link, in either direction", () => {

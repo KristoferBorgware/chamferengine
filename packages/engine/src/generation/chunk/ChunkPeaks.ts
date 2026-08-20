@@ -30,6 +30,20 @@ export class ChunkPeaks {
 	private readonly levels: Float32Array[];
 
 	/**
+	 * The other end of the same range: the lowest ground under each triangle.
+	 *
+	 * The peak alone says how far a chunk pokes over the horizon, which is what
+	 * the reach needs. Bounding a chunk to cull it needs both ends, or every
+	 * chunk on a tall world gets a sphere reaching from sea level to the
+	 * planet's tallest mountain -- 550 m of radius for a triangle 32 m across
+	 * at the shipped relief, which refuses almost nothing.
+	 *
+	 * Negative under the sea, and the sea floor is drawn through the water, so
+	 * it belongs inside the bound rather than being clamped away.
+	 */
+	private readonly floors: Float32Array[];
+
+	/**
 	 * @param margin metres to add to every figure. The map is the whole of the
 	 * terrain now, so nothing is missing from it and this can be zero; it stays
 	 * because a chunk's own interpolation reaches a shade past the coarse
@@ -38,13 +52,17 @@ export class ChunkPeaks {
 	constructor(map: CoarseMap, margin: number, finestChunkLevel: number) {
 		const deepest = Math.min(CAPPED_LEVEL, finestChunkLevel);
 		this.levels = [];
-		for (let level = 0; level <= deepest; level++)
+		this.floors = [];
+		for (let level = 0; level <= deepest; level++) {
 			this.levels.push(new Float32Array(20 * 4 ** level));
+			this.floors.push(new Float32Array(20 * 4 ** level));
+		}
 
 		// The deepest level reads the map; every coarser one is the largest of
 		// its four children, so the map is walked once rather than once a level.
 		const mapLevel = map.level;
 		const deep = this.levels[deepest]!;
+		const deepFloor = this.floors[deepest]!;
 		const m = 1 << Math.max(0, mapLevel - deepest);
 		for (let face = 0; face < 20; face++)
 			for (let value = 0; value < 4 ** deepest; value++) {
@@ -53,25 +71,34 @@ export class ChunkPeaks {
 					deepest,
 				);
 				let highest = -Infinity;
+				let lowest = Infinity;
 				for (let q = 0; q <= m; q++)
 					for (let r = 0; q + r <= m; r++) {
 						const [i, j] = joinPath(address.path, q, r, mapLevel);
 						const h = map.heightAt(face, i, j, mapLevel);
 						if (h > highest) highest = h;
+						if (h < lowest) lowest = h;
 					}
 				deep[address.key] = Math.max(0, highest + margin);
+				deepFloor[address.key] = lowest - margin;
 			}
 
 		for (let level = deepest - 1; level >= 0; level--) {
 			const here = this.levels[level]!;
 			const below = this.levels[level + 1]!;
+			const hereFloor = this.floors[level]!;
+			const belowFloor = this.floors[level + 1]!;
 			for (let key = 0; key < here.length; key++) {
 				let highest = 0;
+				let lowest = Infinity;
 				for (let child = 0; child < 4; child++) {
 					const value = below[key * 4 + child]!;
 					if (value > highest) highest = value;
+					const floor = belowFloor[key * 4 + child]!;
+					if (floor < lowest) lowest = floor;
 				}
 				here[key] = highest;
+				hereFloor[key] = lowest;
 			}
 		}
 	}
@@ -83,5 +110,19 @@ export class ChunkPeaks {
 		// Below the table, read the deepest ancestor that is in it.
 		const deepest = this.levels.length - 1;
 		return this.levels[deepest]![key >> (2 * (chunkLevel - deepest))]!;
+	}
+
+	/**
+	 * Metres of the lowest ground under one triangle, negative under the sea.
+	 *
+	 * Read the same way {@link ChunkPeaks.peakOf} is, and conservative in the
+	 * same direction: a triangle below the table reads an ancestor's figure,
+	 * which is never higher than its own.
+	 */
+	troughOf(key: number, chunkLevel: number): number {
+		if (chunkLevel < this.floors.length)
+			return this.floors[chunkLevel]![key]!;
+		const deepest = this.floors.length - 1;
+		return this.floors[deepest]![key >> (2 * (chunkLevel - deepest))]!;
 	}
 }
