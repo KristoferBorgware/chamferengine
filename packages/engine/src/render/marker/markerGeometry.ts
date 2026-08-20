@@ -96,27 +96,69 @@ export function markerGeometry(marker: ViewMarker): MarkerGeometry {
 			.add(up.scale(b))
 			.add(forward.scale(c));
 
+	// The box's own frame, independent of the cone's: away from the planet's
+	// centre, and two vectors perpendicular to that. Not the look-relative
+	// `right` and `forward` above -- those are only guaranteed perpendicular
+	// to each other and to the camera's own `up`, never to radial, and a
+	// camera looking straight along the radial itself puts one of them
+	// exactly on it. Building the box's own pair from radial directly is
+	// what guarantees it, for every camera orientation there is.
+	const radial = marker.position.normalize();
+	const boxSeed =
+		Math.abs(radial.x) < 0.9 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+	const boxRight = radial.cross(boxSeed).normalize();
+	const boxForward = boxRight.cross(radial).normalize();
+
 	const box: number[] = [];
 	BOX_FACES.forEach((face, index) => {
 		const shade = BOX_SHADE[index]!;
 		const corner = (k: number): Vec3 => {
 			const [a, b, c] = face[k]!;
-			return at(a * marker.size, b * marker.size, c * marker.size);
+			// The box sits ON the eye rather than straddling it: `b` runs
+			// 0 to 2 rather than -1 to 1, so its lowest point is the eye
+			// itself and every other point is further from the ground. A
+			// box centred on the eye the ordinary way put its underside
+			// below it whenever its half-width passed the eye height --
+			// 2 m against 1.86 m at the shipped block size, sinking the
+			// marker into the ground it was standing on.
+			return marker.position
+				.add(boxRight.scale(a * marker.size))
+				.add(radial.scale((b + 1) * marker.size))
+				.add(boxForward.scale(c * marker.size));
 		};
 		for (const k of [0, 1, 2, 0, 2, 3])
 			put(box, corner(k), BOX_COLOR, shade);
 	});
 
-	// The cone: apex on the box, rim at the reach, opening at the camera's own
-	// field of view. Everything the frozen camera could see is inside it.
+	// The cone: apex on the eye, rim at the reach, opening at the camera's
+	// own field of view -- clipped to where each edge actually meets the
+	// ground. A ray pointed level or downward reaches a nearby sphere in a
+	// few metres and a straight line runs on underground for the rest of
+	// `reach`; the true field of view a real camera has there is only the
+	// short stretch before the ground occludes it. A ray pointed above the
+	// horizon never meets the sphere at all and keeps its full reach into
+	// the sky.
 	const cone: number[] = [];
 	const radius = marker.reach * Math.tan(marker.spread);
-	const rim = (k: number): Vec3 =>
-		at(
-			Math.cos((2 * Math.PI * k) / SEGMENTS) * radius,
-			Math.sin((2 * Math.PI * k) / SEGMENTS) * radius,
+	const rim = (k: number): Vec3 => {
+		const angle = (2 * Math.PI * k) / SEGMENTS;
+		const point = at(
+			Math.cos(angle) * radius,
+			Math.sin(angle) * radius,
 			marker.reach,
 		);
+		const direction = point.sub(marker.position).normalize();
+		const clipped = groundClip(
+			marker.position,
+			direction,
+			marker.groundRadius,
+		);
+		return marker.position.add(
+			direction.scale(
+				Math.min(marker.reach / Math.cos(marker.spread), clipped),
+			),
+		);
+	};
 	for (let k = 0; k < SEGMENTS; k++) {
 		put(cone, rim(k), CONE_COLOR, 1);
 		put(cone, rim(k + 1), CONE_COLOR, 1);
@@ -127,6 +169,26 @@ export function markerGeometry(marker: ViewMarker): MarkerGeometry {
 	}
 
 	return { box: new Float32Array(box), cone: new Float32Array(cone) };
+}
+
+/**
+ * How far along a ray from a point outside a sphere it first meets that
+ * sphere, or `Infinity` when it never does.
+ *
+ * The sphere is centred on the planet, so the ray equation is the usual
+ * quadratic in the parameter along the direction with no offset to carry.
+ * Only the near root is wanted -- a ray from above ground meets the sphere
+ * once going in and once coming out the far side, and the marker only cares
+ * about the first crossing, where the real view would already be blocked.
+ */
+function groundClip(from: Vec3, direction: Vec3, radius: number): number {
+	const b = from.dot(direction);
+	const c = from.dot(from) - radius * radius;
+	const discriminant = b * b - c;
+	if (discriminant < 0) return Infinity;
+	const root = Math.sqrt(discriminant);
+	const near = -b - root;
+	return near >= 0 ? near : Infinity;
 }
 
 /** One vertex: where it is and what color it is drawn in. */

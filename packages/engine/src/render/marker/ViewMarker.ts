@@ -41,4 +41,18 @@ export interface ViewMarker {
 	 * could have drawn.
 	 */
 	readonly reach: number;
+
+	/**
+	 * The radius of the sphere the cone is clipped against.
+	 *
+	 * A ray pointed level or downward reaches the ground in a few metres --
+	 * an eye 1.86 m up and a 32.5° half-angle hits it at 3 m -- and a straight
+	 * line drawn on past that runs on underground for the rest of `reach`.
+	 * Every downward-facing edge of the cone is cut at its own true distance
+	 * to this sphere instead, so the wireframe hugs the ground where the real
+	 * view would be occluded by it and only reaches far where a ray genuinely
+	 * clears the curve. The same radius `reach` was computed against, so the
+	 * two stay consistent: {@link horizonAngle} in `chamfer/generation`.
+	 */
+	readonly groundRadius: number;
 }

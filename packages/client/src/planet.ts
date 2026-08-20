@@ -604,6 +604,14 @@ async function main(): Promise<void> {
 			// 2.9 km from 600 m up, so the cone grows with the altitude the
 			// way the selection does.
 			reach: RADIUS * horizonAngle(at.eyeRadius, RADIUS),
+			// The sphere `reach` was measured against, so a downward-facing
+			// edge of the cone is cut where it actually meets the ground
+			// rather than running on underground for the rest of its length.
+			// The grid's own shell in grid mode, since that -- not sea level
+			// -- is what stands under the marker there.
+			groundRadius: settings.knobs.gridMode
+				? shape.crustTopRadius
+				: RADIUS,
 		};
 	}
 
