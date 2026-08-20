@@ -629,13 +629,38 @@ async function main(): Promise<void> {
 	 * How far the player moves before the selection is worked out again.
 	 *
 	 * Two blocks. Which level a chunk is drawn at changes over tens of metres,
-	 * so this cannot step over a level change, and a selection costs up to
-	 * 4.9 ms at the worked settings, which is too much to spend every frame.
+	 * so this cannot step over a level change. Distance alone assumes a
+	 * selection costs about the same every time, which is not true (F-047):
+	 * `RESELECT_BUDGET` below is what actually bounds the time it may spend.
 	 */
 	const RESELECT_DISTANCE = Math.max(1, settings.knobs.blockSize * 2);
 
+	/**
+	 * The largest share of a second a movement-triggered reselect may spend.
+	 *
+	 * A distance threshold on its own assumes `selectChunks` costs about the
+	 * same every time it runs. It does not: measured against the real engine,
+	 * Full detail at its own maximum on a tall, rough world costs 13 ms and
+	 * returns 3,008 chunks, against 2.6 ms and 201 chunks at Full detail 1. A
+	 * player crossing `RESELECT_DISTANCE` faster than one call returns turns
+	 * "reselect every couple of metres" into "reselect every frame", which
+	 * measured 97-102% of the main thread for 1.5 s in a real trace (F-047).
+	 * This self-scales to whatever the last call actually cost instead of a
+	 * number that goes stale the moment a knob changes what the selection
+	 * does: after every `refresh()`, `nextReselectAt` is pushed out so that
+	 * the call just made was at most this fraction of the time since the one
+	 * before it. Only the movement-triggered call below is held to it --
+	 * a teleport, a knob change or unfreezing the view still refreshes at
+	 * once, because those are rare and deliberate rather than continuous.
+	 */
+	const RESELECT_BUDGET = 0.25;
+
+	/** The soonest `performance.now()` at which movement may reselect again. */
+	let nextReselectAt = 0;
+
 	/** Choose what should be drawn, and ask for what is missing. */
 	function refresh(): void {
+		const startedAt = performance.now();
 		selectedAt = player.position;
 		// The eye, not the feet: a viewer standing on ground at exactly the
 		// reference radius still sees to the eye-height horizon, and the feet
@@ -700,6 +725,9 @@ async function main(): Promise<void> {
 				});
 		}
 		dropReplaced();
+		const finishedAt = performance.now();
+		nextReselectAt =
+			finishedAt + (finishedAt - startedAt) * (1 / RESELECT_BUDGET - 1);
 	}
 
 	refresh();
@@ -966,7 +994,8 @@ async function main(): Promise<void> {
 		// which read as the world snapping resolution once they landed.
 		if (
 			!frozen &&
-			player.position.sub(selectedAt).length() > RESELECT_DISTANCE
+			player.position.sub(selectedAt).length() > RESELECT_DISTANCE &&
+			performance.now() >= nextReselectAt
 		)
 			refresh();
 

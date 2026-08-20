@@ -995,57 +995,6 @@ click, one `?panel=1` toggle, nothing else -- checked the same way: count
 `TracingSessionIdForWorker` entries against `WORKERS`, and check whether the
 same 1-real-to-1-idle pairing shows up for `MapPanel`'s single worker too.
 
-### F-047 — `RESELECT_DISTANCE` throttles by metres moved, and nothing bounds how often that fires
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-20, reading a trace where the frame rate collapsed while
-the player was moving and recovered while standing still
-**Where:** `packages/client/src/planet.ts`, `refresh`, `RESELECT_DISTANCE`;
-`packages/engine/src/generation/chunk/selectChunks.ts`
-
-**What happens.** `refresh()` re-runs `selectChunks()` every time the player
-has moved `RESELECT_DISTANCE` (`max(1, blockSize * 2)`, 2 m at the shipped
-block size) since the last selection, with no floor on how often that check
-can fire. `selectChunks()`'s own cost is not constant: at the trace's own
-settings (Full detail to 5 -- the knob's own maximum -- 1,100 m of relief,
-a 1,232 m crust) it returned **3,008 chunks** and cost **~13 ms**, measured
-against the real engine with the exact query string, against 201 chunks and
-2.6 ms at detail 1. The traced session was flying (`flySpeed` 24 m/s at
-ground level, faster with altitude), so 2 m of travel passed every ~80 ms --
-faster than one `selectChunks()` call returns. The main thread's own
-`RunTask` total went from 20-38% busy to 97-102% busy the moment the trace's
-flight reached the ground, sustained for 1.5 s, and a CPU profile of that
-window (decoded against a matching sourcemap) attributes 22.5% of it to the
-selection-and-drop pipeline by name -- `selectChunks`, `chunkCenter`,
-`joinPath`, `ChunkAddress`'s constructor and `fromKey`, `refresh` and
-`dropReplaced`/`addressesOverlap` -- against 61.3% in `(program)` and
-`postMessage`, consistent with a main thread saturated dispatching and
-bookkeeping several thousand chunk requests several times a second rather
-than drawing anything.
-
-**Why it matters.** The comment above `RESELECT_DISTANCE` already reasons
-about this trade-off -- "a selection costs up to 4.9 ms... too much to spend
-every frame" -- but the number it bounds against is the cost `selectChunks`
-had when that comment was written, at Full detail up to 3 (633 chunks). Full
-detail's own range goes to 5, is a live knob with no rebuild, and nothing
-connects its value to `RESELECT_DISTANCE`. A player who raises it, or opens a
-rough, tall world at the default, can cross the distance threshold faster
-than a single selection call returns, which turns an intentional "reselect
-every couple of metres" throttle into an unthrottled "reselect every frame,
-however long that takes."
-
-**What would fix it.** Add a time floor alongside the distance one, so
-`refresh()` cannot fire more than some bounded rate regardless of how far the
-player has travelled since the last one -- the existing retiring-chunk
-mechanism already draws stale chunks until their replacements arrive, so a
-throttled reselect costs a bounded amount of staleness under fast movement,
-not incorrectness. A distance-only threshold has no such bound because it
-assumes a roughly constant per-call cost, which this measurement shows is not
-true.
-
 ---
 
 ## Closed
@@ -1834,3 +1783,65 @@ and the measured claim, which is that the apron reaches **none** of the cave
 mouths rather than the skirt's 14. The README's summary line follows. The same
 pass corrected what the page said about how a level is chosen, which was
 altitude and is distance.
+
+### F-047 — `RESELECT_DISTANCE` throttles by metres moved, and nothing bounds how often that fires
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-20, reading a trace where the frame rate collapsed while
+the player was moving and recovered while standing still
+**Where:** `packages/client/src/planet.ts`, `refresh`, `RESELECT_DISTANCE`;
+`packages/engine/src/generation/chunk/selectChunks.ts`
+
+**What happens.** `refresh()` re-runs `selectChunks()` every time the player
+has moved `RESELECT_DISTANCE` (`max(1, blockSize * 2)`, 2 m at the shipped
+block size) since the last selection, with no floor on how often that check
+can fire. `selectChunks()`'s own cost is not constant: at the trace's own
+settings (Full detail to 5 -- the knob's own maximum -- 1,100 m of relief,
+a 1,232 m crust) it returned **3,008 chunks** and cost **~13 ms**, measured
+against the real engine with the exact query string, against 201 chunks and
+2.6 ms at detail 1. The traced session was flying (`flySpeed` 24 m/s at
+ground level, faster with altitude), so 2 m of travel passed every ~80 ms --
+faster than one `selectChunks()` call returns. The main thread's own
+`RunTask` total went from 20-38% busy to 97-102% busy the moment the trace's
+flight reached the ground, sustained for 1.5 s, and a CPU profile of that
+window (decoded against a matching sourcemap) attributes 22.5% of it to the
+selection-and-drop pipeline by name -- `selectChunks`, `chunkCenter`,
+`joinPath`, `ChunkAddress`'s constructor and `fromKey`, `refresh` and
+`dropReplaced`/`addressesOverlap` -- against 61.3% in `(program)` and
+`postMessage`, consistent with a main thread saturated dispatching and
+bookkeeping several thousand chunk requests several times a second rather
+than drawing anything.
+
+**Why it matters.** The comment above `RESELECT_DISTANCE` already reasons
+about this trade-off -- "a selection costs up to 4.9 ms... too much to spend
+every frame" -- but the number it bounds against is the cost `selectChunks`
+had when that comment was written, at Full detail up to 3 (633 chunks). Full
+detail's own range goes to 5, is a live knob with no rebuild, and nothing
+connects its value to `RESELECT_DISTANCE`. A player who raises it, or opens a
+rough, tall world at the default, can cross the distance threshold faster
+than a single selection call returns, which turns an intentional "reselect
+every couple of metres" throttle into an unthrottled "reselect every frame,
+however long that takes."
+
+**What would fix it.** Add a time floor alongside the distance one, so
+`refresh()` cannot fire more than some bounded rate regardless of how far the
+player has travelled since the last one -- the existing retiring-chunk
+mechanism already draws stale chunks until their replacements arrive, so a
+throttled reselect costs a bounded amount of staleness under fast movement,
+not incorrectness. A distance-only threshold has no such bound because it
+assumes a roughly constant per-call cost, which this measurement shows is not
+true.
+
+**Closed:** 2026-08-20, fixed in the same session it was written. The
+movement-triggered call to `refresh()` in the frame loop now also checks
+`performance.now() >= nextReselectAt`, a deadline `refresh()` itself pushes
+out after every call by `cost * (1 / RESELECT_BUDGET - 1)`, `RESELECT_BUDGET`
+being 0.25 -- so a movement-triggered reselect can spend at most a quarter of
+the time since the one before it, self-scaling to whatever the selection
+actually costs at the settings in play rather than a distance threshold sized
+against a cost that goes stale. The teleport, knob-change and unfreeze call
+sites stay unconditional, since those are rare and deliberate rather than
+continuous.
