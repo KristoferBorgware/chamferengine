@@ -14,3 +14,5 @@ export type { MarkerGeometry } from "./marker/markerGeometry.js";
 export { markerGeometry } from "./marker/markerGeometry.js";
 export { SKY_SHADER } from "./sky/SKY_SHADER.js";
 export { SkyRenderer } from "./sky/SkyRenderer.js";
+export { BillboardClouds } from "./clouds/BillboardClouds.js";
+export { buildPuffMesh } from "./clouds/buildPuffMesh.js";

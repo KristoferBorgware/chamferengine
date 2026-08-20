@@ -27,6 +27,9 @@ export const FLAT_COARSE_LEVEL = 2;
  */
 const MAX_DEPTH = 17;
 
+/** Which of the two cloud renderers draws the decks. */
+export type CloudStyle = "volumetric" | "billboards";
+
 /**
  * Metres across the smallest landform the coarse map carries.
  *
@@ -178,6 +181,9 @@ export interface PlanetKnobs {
 	/** Whether the cloud decks are drawn at all. */
 	cloudsDrawn: boolean;
 
+	/** Which cloud system draws them. */
+	cloudStyle: CloudStyle;
+
 	/** Metres to each cloud deck. */
 	lowDeck: number;
 	highDeck: number;
@@ -271,6 +277,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	atmosphereTop: 400,
 	zenithDepth: 0.134,
 	cloudsDrawn: true,
+	cloudStyle: "volumetric",
 	lowDeck: 400,
 	highDeck: 1200,
 	cloudPuff: 64,
@@ -392,6 +399,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	cloudsDrawn: { ...TOGGLE, rebuilds: false },
+	cloudStyle: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	lowDeck: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
 	highDeck: { low: 200, high: 6000, step: 50, rebuilds: true, unit: "m" },
 	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: true, unit: "m" },
@@ -1064,6 +1072,7 @@ export class PlanetSettings {
 			else if (key === "noiseBasis") knobs.noiseBasis = raw as NoiseBasis;
 			else if (key === "cellFeature")
 				knobs.cellFeature = raw as CellFeature;
+			else if (key === "cloudStyle") knobs.cloudStyle = raw as CloudStyle;
 			else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";

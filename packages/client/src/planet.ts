@@ -28,6 +28,7 @@ import {
 import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
+	BillboardClouds,
 	ChunkRenderer,
 	FrameTimer,
 	MarkerRenderer,
@@ -252,18 +253,42 @@ async function main(): Promise<void> {
 	// already a pure function of the seed and the wind angle, so it moves the
 	// way chunks moved.
 	//
+	const VOLUMETRIC_CLOUDS =
+		!PLAIN && settings.knobs.cloudStyle === "volumetric";
+	const BILLBOARD_CLOUDS =
+		!PLAIN && settings.knobs.cloudStyle === "billboards";
+
 	// Under the pause neither the worker nor the sky is built at all. That is
 	// the difference between a paused feature and a hidden one: no deck is
 	// filled and thrown away, and no scattering runs to be drawn over.
-	const cloudSource = PLAIN
-		? null
-		: new WorkerCloudSource(
+	const cloudSource = VOLUMETRIC_CLOUDS
+		? new WorkerCloudSource(
 				() =>
 					new Worker(new URL("./cloudWorker.ts", import.meta.url), {
 						type: "module",
 					}),
 				{ kind: "setup", seed, decks: settings.cloudDecks() },
-			);
+			)
+		: null;
+
+	// A puff's placement never changes once chosen, so this is built once
+	// here and never touched again outside the wind uniform -- there is no
+	// worker, because choosing a few hundred puffs costs under 2 ms.
+	const billboardClouds = BILLBOARD_CLOUDS
+		? new BillboardClouds(ctx, seed, 700, [
+				{
+					radius: shape.crustTopRadius + settings.knobs.lowDeck,
+					windRate: (2 * Math.PI) / 240,
+					size: 110,
+				},
+				{
+					radius: shape.crustTopRadius + settings.knobs.highDeck,
+					windRate: (2 * Math.PI) / 600,
+					size: 70,
+				},
+			])
+		: null;
+	if (billboardClouds) billboardClouds.visible = settings.knobs.cloudsDrawn;
 
 	// The sky is a layer over the terrain pass, and the renderer already treats
 	// that layer as optional. Leaving it off is what pauses the atmosphere, the
@@ -288,7 +313,11 @@ async function main(): Promise<void> {
 	// it is never behind either of them. It has nothing to draw until the view
 	// is frozen.
 	const viewMarker = new MarkerRenderer(ctx);
-	renderer.layers = sky ? [sky, viewMarker] : [viewMarker];
+	renderer.layers = [
+		...(sky ? [sky] : []),
+		...(billboardClouds ? [billboardClouds] : []),
+		viewMarker,
+	];
 
 	// One generator per level. A chunk one level coarser samples the terrain at
 	// twice the spacing over four times the area, so it holds the same 561 slots
@@ -772,6 +801,7 @@ async function main(): Promise<void> {
 			cloudsDrawn = live.knobs.cloudsDrawn;
 			if (!cloudsDrawn && sky)
 				sky.setClouds(new Float32Array(0), new Uint32Array(0));
+			if (billboardClouds) billboardClouds.visible = cloudsDrawn;
 		}
 		if (sky)
 			sky.atmosphere = planetAtmosphere(
@@ -1086,6 +1116,11 @@ async function main(): Promise<void> {
 			});
 			timer.leave("clouds", performance.now());
 		}
+
+		// The wind, not the day/night clock: paused freezes the sun, never
+		// this, for the same reason the volumetric wind above reads `started`
+		// rather than `dayStarted`.
+		if (billboardClouds) billboardClouds.time = (now - started) / 1000;
 
 		// The moon stands off at a distance rather than being painted on, so
 		// walking round the planet shifts it against the stars.

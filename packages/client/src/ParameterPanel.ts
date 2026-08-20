@@ -313,6 +313,15 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				key: "cloudStyle",
+				label: "Style",
+				choices: [
+					{ value: "volumetric", label: "Volumetric" },
+					{ value: "billboards", label: "Billboards" },
+				],
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "lowDeck",
 				label: "Low deck",
 				digits: 0,
@@ -329,6 +338,7 @@ const GROUPS: Group[] = [
 				label: "Puff",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
+				shownWhen: (k) => k.cloudStyle === "volumetric",
 				given: (s) =>
 					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
 						? null
@@ -339,6 +349,7 @@ const GROUPS: Group[] = [
 				label: "Shells",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
+				shownWhen: (k) => k.cloudStyle === "volumetric",
 			},
 		],
 	},

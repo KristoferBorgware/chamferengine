@@ -9,6 +9,8 @@ export { WIND_AXIS, WIND_RATE } from "./WIND_AXIS.js";
 export { windRotation } from "./windRotation.js";
 export { windSpeed } from "./windSpeed.js";
 export { CloudField } from "./CloudField.js";
+export type { CloudPuff, CloudPuffLayer } from "./CloudPuff.js";
+export { generateCloudPuffs } from "./generateCloudPuffs.js";
 export type { CloudMesh } from "./buildCloudMesh.js";
 export { buildCloudMesh } from "./buildCloudMesh.js";
 
