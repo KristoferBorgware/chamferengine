@@ -733,9 +733,11 @@ async function main(): Promise<void> {
 
 		// Turning the clouds off empties the buffer, which is what stops the
 		// pass -- the renderer draws nothing when it holds no cloud geometry.
-		// The decks go on being built and turned by the wind, so turning it
-		// back on shows them where they would have been rather than where they
-		// were left.
+		// The wind angle is a pure function of elapsed time -- turned below
+		// reads only `now - started` -- so nothing has to keep building while
+		// this is off for the next deck to land in the right place: the first
+		// rebuild after it goes back on reads the same clock everyone else
+		// does and shows the clouds where they would have been anyway.
 		if (live.knobs.cloudsDrawn !== cloudsDrawn) {
 			cloudsDrawn = live.knobs.cloudsDrawn;
 			if (!cloudsDrawn && sky)
@@ -1031,9 +1033,15 @@ async function main(): Promise<void> {
 		// own worker. There is no address to update in place, because a cloud
 		// has none, and `busy` skips a tick rather than queuing one behind a
 		// deck still building.
+		//
+		// Gated on `cloudsDrawn` too, not just applied after: a deck costs
+		// 500-900 ms to build and the wind ticks every 700 ms, so a rebuild
+		// nobody draws is close to one whole CPU core spent on nothing --
+		// measured at 76% of session time on a trace with clouds toggled off.
 		if (
 			sky &&
 			cloudSource &&
+			cloudsDrawn &&
 			!cloudSource.busy &&
 			now - cloudsAt > CLOUD_INTERVAL * 1000
 		) {
@@ -1041,6 +1049,8 @@ async function main(): Promise<void> {
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
 			cloudSource.request(WIND_AXIS, turned).then((mesh) => {
+				// cloudsDrawn can turn off again before a half-second build
+				// resolves, so it is read again here rather than assumed.
 				if (cloudsDrawn) sky.setClouds(mesh.vertices, mesh.indices);
 			});
 			timer.leave("clouds", performance.now());
