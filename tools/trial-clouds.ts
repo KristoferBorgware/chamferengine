@@ -2,7 +2,9 @@ import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
 import { generateCloudPuffs } from "chamfer/sky";
 import { buildPuffMesh } from "chamfer/render";
 
-const settings = new PlanetSettings({ cloudStyle: "billboards" });
+const settings = PlanetSettings.fromParams(
+	new URLSearchParams(process.argv[2] ?? "cloudStyle=billboards"),
+);
 const k = settings.knobs;
 const top = settings.radius;
 const further = Math.max(1, k.highDeck / Math.max(1, k.lowDeck));
