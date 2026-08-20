@@ -1,6 +1,6 @@
 import type { ChunkMesh } from "chamfer/mesh";
 import type { ChunkSelection } from "chamfer/generation";
-import { Mat4, Vec3 } from "chamfer/math";
+import { Frustum, Mat4, Vec3 } from "chamfer/math";
 import {
 	BlockType,
 	ChunkAddress,
@@ -37,6 +37,7 @@ import {
 	createGpuContext,
 	resizeToDisplay,
 } from "chamfer/render";
+import type { CloudPuffLayer } from "chamfer/sky";
 import {
 	WIND_AXIS,
 	WIND_RATE,
@@ -75,6 +76,19 @@ const seedText = settings.knobs.seed;
  * A live knob, starting at the same figure `selectChunks` defaults to.
  */
 let DETAIL = settings.knobs.detail;
+
+/** Whether the selection refuses a chunk the view does not reach. */
+let CULL_BUILD = settings.knobs.buildCull;
+
+/**
+ * How far past the edge of the view a chunk is still built for, as metres of
+ * slack per metre of distance.
+ *
+ * A tangent rather than the angle itself, because what the selection widens is
+ * a sphere's radius: at 25 degrees a chunk 100 m away is kept if it comes
+ * within 47 m of the edge of the screen, and one 1 km away within 470 m.
+ */
+let CULL_SLACK = Math.tan((settings.knobs.cullMargin * Math.PI) / 180);
 
 /**
  * Whether the world is held down to its lattice and nothing else.
@@ -261,32 +275,60 @@ async function main(): Promise<void> {
 	// Under the pause neither the worker nor the sky is built at all. That is
 	// the difference between a paused feature and a hidden one: no deck is
 	// filled and thrown away, and no scattering runs to be drawn over.
-	const cloudSource = VOLUMETRIC_CLOUDS
-		? new WorkerCloudSource(
-				() =>
-					new Worker(new URL("./cloudWorker.ts", import.meta.url), {
-						type: "module",
-					}),
-				{ kind: "setup", seed, decks: settings.cloudDecks() },
-			)
-		: null;
+	//
+	// Held rather than fixed, because the deck heights are live knobs and a
+	// worker is set up with the decks it will fill: moving one replaces the
+	// worker rather than telling it something new.
+	let cloudSource = VOLUMETRIC_CLOUDS ? makeCloudSource(settings) : null;
 
-	// A puff's placement never changes once chosen, so this is built once
-	// here and never touched again outside the wind uniform -- there is no
-	// worker, because choosing a few hundred puffs costs under 2 ms.
+	function makeCloudSource(live: PlanetSettings): WorkerCloudSource {
+		return new WorkerCloudSource(
+			() =>
+				new Worker(new URL("./cloudWorker.ts", import.meta.url), {
+					type: "module",
+				}),
+			{ kind: "setup", seed, decks: live.cloudDecks() },
+		);
+	}
+
+	/**
+	 * The two billboard decks a set of knobs describes.
+	 *
+	 * The high deck's formations are smaller, wider apart and thinner, and it
+	 * drifts more slowly, so the two read as two different heights of sky
+	 * rather than one pattern drawn twice.
+	 */
+	function cloudLayers(live: PlanetSettings): CloudPuffLayer[] {
+		const k = live.knobs;
+		return [
+			{
+				radius: shape.crustTopRadius + k.lowDeck,
+				windRate: (2 * Math.PI) / 900,
+				size: k.cloudPuff,
+				spread: k.cloudSpread,
+				thickness: k.cloudPuff * 1.1,
+			},
+			{
+				radius: shape.crustTopRadius + k.highDeck,
+				windRate: (2 * Math.PI) / 1500,
+				size: k.cloudPuff * 0.7,
+				spread: k.cloudSpread * 0.7,
+				thickness: k.cloudPuff * 0.6,
+			},
+		];
+	}
+
+	// Scattered on the thread that draws rather than on a worker: a whole sky
+	// of hexagons is a few tens of milliseconds, which is a knob's worth of
+	// wait rather than a frame's.
 	const billboardClouds = BILLBOARD_CLOUDS
-		? new BillboardClouds(ctx, seed, 700, [
-				{
-					radius: shape.crustTopRadius + settings.knobs.lowDeck,
-					windRate: (2 * Math.PI) / 240,
-					size: 110,
-				},
-				{
-					radius: shape.crustTopRadius + settings.knobs.highDeck,
-					windRate: (2 * Math.PI) / 600,
-					size: 70,
-				},
-			])
+		? new BillboardClouds(
+				ctx,
+				seed,
+				settings.knobs.cloudClusters,
+				settings.knobs.cloudDensity,
+				cloudLayers(settings),
+			)
 		: null;
 	if (billboardClouds) billboardClouds.visible = settings.knobs.cloudsDrawn;
 
@@ -550,22 +592,35 @@ async function main(): Promise<void> {
 	 */
 	const retiring = new Set<number>();
 
-	/** Drop every retiring chunk whose ground is drawn again. */
+	/**
+	 * Drop every retiring chunk whose ground is drawn again.
+	 *
+	 * **Ground nothing in the selection covers is kept, not dropped.** With
+	 * the view cull on, a chunk leaves the selection the moment it leaves the
+	 * screen, and there is then nothing wanted overlapping it -- so a rule of
+	 * "drop unless something still needed is missing" would throw away
+	 * everything behind the player and hand back a bare horizon the moment
+	 * they turned round. A chunk is replaced only when something that covers
+	 * its ground has actually been drawn; until then it goes on drawing, and
+	 * {@link trimRetired} is what bounds how many may.
+	 */
 	function dropReplaced(): void {
 		for (const id of [...retiring]) {
 			const old = selectionOf(id);
 			const oldAddress = ChunkAddress.fromKey(old.key, old.chunkLevel);
-			let replaced = true;
+			let covering = 0;
+			let ready = true;
 			for (let n = 0; n < lastWanted.length; n++) {
 				const wanted = lastWanted[n]!;
 				if (!addressesOverlap(oldAddress, lastWantedAddrs[n]!))
 					continue;
+				covering++;
 				if (!drawn.has(selectionId(wanted.chunkLevel, wanted.key))) {
-					replaced = false;
+					ready = false;
 					break;
 				}
 			}
-			if (replaced) {
+			if (covering > 0 && ready) {
 				retiring.delete(id);
 				drawn.delete(id);
 				renderer.drop(id);
@@ -573,8 +628,57 @@ async function main(): Promise<void> {
 		}
 	}
 
-	/** Where the player stood when the selection was last worked out. */
+	/**
+	 * How much ground may go on being drawn that the selection no longer asks
+	 * for, as a multiple of what it does ask for.
+	 *
+	 * Without the view cull almost nothing retires for long, because the
+	 * selection reaches all the way round the player and covers what it drops.
+	 * With it on, everything behind the player is retired and kept, and a
+	 * flight across the planet would hold every chunk it ever built. This is
+	 * the ceiling on that, and what goes first is whatever is furthest from
+	 * the camera.
+	 */
+	const RETIRE_BUDGET = 1;
+
+	/** Give up the furthest retired chunks once too many are being held. */
+	function trimRetired(from: Vec3): void {
+		const allowed = Math.max(64, lastWanted.length * RETIRE_BUDGET);
+		if (retiring.size <= allowed) return;
+		const byDistance = [...retiring]
+			.map((id) => {
+				const at = selectionOf(id);
+				const extent = chunkCenter(
+					ChunkAddress.fromKey(at.key, at.chunkLevel),
+					DEPTH,
+					at.chunkLevel,
+				);
+				const away = new Vec3(extent.x, extent.y, extent.z)
+					.scale(RADIUS)
+					.sub(from)
+					.length();
+				return { id, away };
+			})
+			.sort((a, b) => b.away - a.away);
+		for (const { id } of byDistance.slice(0, retiring.size - allowed)) {
+			retiring.delete(id);
+			drawn.delete(id);
+			renderer.drop(id);
+		}
+	}
+
+	/** Where the camera stood when the selection was last worked out. */
 	let selectedAt = player.position;
+
+	/** A camera the selection can be read from, and culled against. */
+	interface ViewCamera {
+		position: Vec3;
+		eyeRadius: number;
+		viewProj: Mat4;
+		frustum: Frustum;
+		eye: Vec3;
+		look: Vec3;
+	}
 
 	/**
 	 * The camera the drawing decisions are read from, when it is not the live
@@ -589,13 +693,21 @@ async function main(): Promise<void> {
 	 *
 	 * `null` is the ordinary case: every decision reads the live camera.
 	 */
-	let frozen: {
-		position: Vec3;
-		eyeRadius: number;
-		viewProj: Mat4;
-		eye: Vec3;
-		look: Vec3;
-	} | null = null;
+	let frozen: ViewCamera | null = null;
+
+	/**
+	 * The camera the last frame drew with.
+	 *
+	 * The selection reads this rather than the player, because they are not in
+	 * the same place: the wheel puts the camera up to 60 m behind and above,
+	 * and from there the horizon is a long way past the one the eye has at
+	 * 1.86 m. Reading the player instead selected for a viewer standing on the
+	 * ground while the picture was taken from the air, so a zoomed-out view
+	 * showed its own selection's rim.
+	 *
+	 * One frame stale, which the selection's own throttle makes moot.
+	 */
+	let viewing: ViewCamera | null = null;
 
 	/** Set by the knob, read by the next frame, which has a matrix to freeze. */
 	let freezeWanted = settings.knobs.freezeView;
@@ -687,18 +799,35 @@ async function main(): Promise<void> {
 	/** The soonest `performance.now()` at which movement may reselect again. */
 	let nextReselectAt = 0;
 
+	/** Which way the camera faced when the selection was last worked out. */
+	let selectedLook: Vec3 | null = null;
+
 	/** Choose what should be drawn, and ask for what is missing. */
 	function refresh(): void {
 		const startedAt = performance.now();
-		selectedAt = player.position;
 		// The eye, not the feet: a viewer standing on ground at exactly the
 		// reference radius still sees to the eye-height horizon, and the feet
 		// put the horizon at zero. The peak height reaches the ground that
 		// stands above the reference sphere beyond that horizon.
-		const from = frozen ?? {
-			position: player.position,
-			eyeRadius: player.eye.length(),
-		};
+		//
+		// The camera rather than the player, so a view pulled back sees to the
+		// horizon it actually has. Before either exists -- the first selection
+		// runs before the first frame -- the player is all there is.
+		const from = frozen ??
+			viewing ?? {
+				position: player.position,
+				eyeRadius: player.eye.length(),
+				frustum: null,
+				look: null,
+			};
+		selectedAt = from.position;
+		selectedLook = from.look;
+		// Everything outside the view is refused before it is asked for, which
+		// is where the building goes: a 65-degree view holds about a quarter
+		// of the ring the selection would otherwise reach round the player.
+		// The margin is what turning turns onto, and the retiring chunks keep
+		// the rest on screen until their replacements land.
+		const cull = CULL_BUILD ? (from.frustum ?? undefined) : undefined;
 		const wanted = selectChunks(
 			DEPTH,
 			CHUNK_LEVEL,
@@ -708,9 +837,14 @@ async function main(): Promise<void> {
 			DETAIL,
 			shape.maxElevation,
 			peaks,
+			cull,
+			CULL_SLACK,
 		);
 		wantedNow = wanted.length;
 		lastWanted = wanted;
+		// The queue outlives a selection, so what was asked for first is not
+		// what is nearest now. This is what a freed worker picks from.
+		source.reprioritize(wanted);
 		// Decoded once here rather than inside dropReplaced's own loop, which
 		// runs every frame there is a backlog to drain and would otherwise
 		// pay this decode again for every retiring chunk it checks.
@@ -754,6 +888,7 @@ async function main(): Promise<void> {
 				});
 		}
 		dropReplaced();
+		trimRetired(from.position);
 		const finishedAt = performance.now();
 		nextReselectAt =
 			finishedAt + (finishedAt - startedAt) * (1 / RESELECT_BUDGET - 1);
@@ -770,6 +905,19 @@ async function main(): Promise<void> {
 	// jumping to wherever it would have reached while frozen.
 	let paused = settings.knobs.paused;
 	let cloudsDrawn = settings.knobs.cloudsDrawn;
+
+	// Every knob that decides what a deck is made of, as one string. A live
+	// knob hands over the whole draft on every move, so this is what says
+	// whether any of the seven that matter actually changed.
+	let cloudsShapedAs = [
+		settings.knobs.lowDeck,
+		settings.knobs.highDeck,
+		settings.knobs.cloudPuff,
+		settings.knobs.cloudShells,
+		settings.knobs.cloudClusters,
+		settings.knobs.cloudDensity,
+		settings.knobs.cloudSpread,
+	].join();
 	let frozenAt = settings.knobs.timeOfDay * DAY_LENGTH;
 	let lastTimeOfDay = settings.knobs.timeOfDay;
 
@@ -780,6 +928,9 @@ async function main(): Promise<void> {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
 		player.setWalkSpeed(live.knobs.walkSpeed);
+		CULL_BUILD = live.knobs.buildCull;
+		CULL_SLACK = Math.tan((live.knobs.cullMargin * Math.PI) / 180);
+		source.nearestFirst = live.knobs.nearestFirst;
 
 		// Freezing waits for the next frame, which has a matrix to hold.
 		// Unfreezing is immediate, and the refresh at the foot of this
@@ -802,6 +953,35 @@ async function main(): Promise<void> {
 			if (!cloudsDrawn && sky)
 				sky.setClouds(new Float32Array(0), new Uint32Array(0));
 			if (billboardClouds) billboardClouds.visible = cloudsDrawn;
+		}
+
+		// What a deck is made of and where it sits are drawing, not terrain, so
+		// none of it reloads the world. The billboards are scattered again in
+		// place; the volumetric worker is set up with the decks it fills, so
+		// moving one replaces the worker and the next tick refills it.
+		const cloudShape = [
+			live.knobs.lowDeck,
+			live.knobs.highDeck,
+			live.knobs.cloudPuff,
+			live.knobs.cloudShells,
+			live.knobs.cloudClusters,
+			live.knobs.cloudDensity,
+			live.knobs.cloudSpread,
+		].join();
+		if (cloudShape !== cloudsShapedAs) {
+			cloudsShapedAs = cloudShape;
+			if (billboardClouds)
+				billboardClouds.rebuild(
+					live.knobs.cloudClusters,
+					live.knobs.cloudDensity,
+					cloudLayers(live),
+				);
+			if (cloudSource) {
+				cloudSource.dispose();
+				cloudSource = makeCloudSource(live);
+				cloudsAt = -CLOUD_INTERVAL * 1000;
+				if (sky) sky.setClouds(new Float32Array(0), new Uint32Array(0));
+			}
 		}
 		if (sky)
 			sky.atmosphere = planetAtmosphere(
@@ -1009,6 +1189,10 @@ async function main(): Promise<void> {
 				turn: swing,
 				pitch: tilt,
 				lift,
+				// The same key that rises while flying jumps while walking.
+				// The player answers it only with both feet down, so holding
+				// it walks off a ledge rather than climbing the air.
+				jump: held.has(" ") || touch.lift > 0,
 				flying,
 			},
 			seconds,
@@ -1022,9 +1206,25 @@ async function main(): Promise<void> {
 		// a fall off a ridge crosses several levels on the way. Keying off a
 		// direction key left all of that unnoticed until the next key press,
 		// which read as the world snapping resolution once they landed.
+		// The camera's own movement, not the player's, so pulling the view back
+		// on the wheel reselects too: it lifts the eye by up to 60 m and takes
+		// the horizon with it, and keying off the player left the world drawn
+		// for a viewer standing on the ground until they walked two metres.
+		//
+		// Turning counts as moving when the selection is culled to the view,
+		// because then it is the only thing that brings new ground into it.
+		// Half the margin, so the ground a turn arrives on was already asked
+		// for by the time it is on screen.
+		const cameraAt = viewing?.position ?? player.position;
+		const turned =
+			CULL_BUILD &&
+			selectedLook !== null &&
+			viewing !== null &&
+			viewing.look.dot(selectedLook) <
+				Math.cos(Math.max(0.17, CULL_SLACK / 2));
 		if (
 			!frozen &&
-			player.position.sub(selectedAt).length() > RESELECT_DISTANCE &&
+			(cameraAt.sub(selectedAt).length() > RESELECT_DISTANCE || turned) &&
 			performance.now() >= nextReselectAt
 		)
 			refresh();
@@ -1141,16 +1341,22 @@ async function main(): Promise<void> {
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);
 		const viewProj = projection.multiply(view);
+		// What the next selection reads: where the picture was actually taken
+		// from, and what it reached. The camera is not the player -- the wheel
+		// puts it up to 60 m back -- and from up there the horizon is a long
+		// way past the one a standing eye has.
+		viewing = {
+			position: from,
+			eyeRadius: from.length(),
+			viewProj,
+			frustum: new Frustum(viewProj),
+			eye: from,
+			look,
+		};
 		// Frozen with the frame it was asked for on, rather than from a camera
 		// rebuilt out of parts: what is held is a view that was on screen.
 		if (freezeWanted && !frozen) {
-			frozen = {
-				position: player.position,
-				eyeRadius: player.eye.length(),
-				viewProj,
-				eye: player.eye,
-				look,
-			};
+			frozen = viewing;
 			refresh();
 		}
 		if (frozen) markMarker(frozen);

@@ -54,6 +54,25 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly create: () => MeshWorkerHandle;
 	private readonly setup: MeshWorkerSetup;
 
+	/**
+	 * How far each waiting chunk now is, by selection id.
+	 *
+	 * A queued chunk's own `distance` is how far it was when it was asked
+	 * for, and the player has been moving since. {@link reprioritize} refills
+	 * this from the current selection, so the ground underfoot is built next
+	 * even when it was asked for last.
+	 */
+	private readonly nearness = new Map<number, number>();
+
+	/**
+	 * Whether a freed worker takes the nearest waiting chunk or the oldest.
+	 *
+	 * Nearest is what a player experiences as the world filling in around
+	 * them. Oldest is the order the requests arrived in, which is the order a
+	 * plain queue gives and is kept so the two can be compared.
+	 */
+	nearestFirst = true;
+
 	/** What each busy worker is building, so its death names a job. */
 	private readonly working = new Map<MeshWorkerHandle, ChunkSelection>();
 
@@ -197,10 +216,50 @@ export class WorkerMeshSource implements MeshSource {
 		this.pending.clear();
 	}
 
+	/**
+	 * Tell the pool how far away every chunk it is holding now is.
+	 *
+	 * The queue outlives a selection: a chunk asked for while it was on the
+	 * horizon is still waiting when the player has walked up to it, and a
+	 * plain queue would build it behind everything asked for since. Handing
+	 * the current selection back here is what lets a freed worker take the
+	 * nearest chunk rather than the oldest one.
+	 */
+	reprioritize(selections: readonly ChunkSelection[]): void {
+		this.nearness.clear();
+		for (const selection of selections)
+			this.nearness.set(
+				selectionId(selection.chunkLevel, selection.key),
+				selection.distance,
+			);
+	}
+
+	/** How far a waiting chunk is, as of the last selection. */
+	private awayFrom(selection: ChunkSelection): number {
+		const id = selectionId(selection.chunkLevel, selection.key);
+		return this.nearness.get(id) ?? selection.distance;
+	}
+
+	/** Where the nearest waiting chunk sits in the queue. */
+	private nearest(): number {
+		let at = 0;
+		let closest = Infinity;
+		for (let n = 0; n < this.queue.length; n++) {
+			const away = this.awayFrom(this.queue[n]!);
+			if (away < closest) {
+				closest = away;
+				at = n;
+			}
+		}
+		return at;
+	}
+
 	private pump(): void {
 		while (this.idle.length > 0 && this.queue.length > 0) {
 			const worker = this.idle.pop()!;
-			const selection = this.queue.shift()!;
+			const selection = this.nearestFirst
+				? this.queue.splice(this.nearest(), 1)[0]!
+				: this.queue.shift()!;
 			this.working.set(worker, selection);
 			worker.postMessage({
 				kind: "chunk",

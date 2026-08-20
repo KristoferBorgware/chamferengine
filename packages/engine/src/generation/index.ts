@@ -63,6 +63,7 @@ export { horizonAngle } from "./chunk/horizonAngle.js";
 export { ChunkAtlas } from "./chunk/ChunkAtlas.js";
 export { residentChunks } from "./chunk/residentChunks.js";
 export type { ChunkSelection } from "./chunk/selectChunks.js";
+export type { ChunkCull } from "./chunk/ChunkCull.js";
 export { DETAIL, selectChunks } from "./chunk/selectChunks.js";
 export { CAPPED_LEVEL, ChunkPeaks } from "./chunk/ChunkPeaks.js";
 export { ChunkStore } from "./chunk/ChunkStore.js";

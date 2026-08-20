@@ -302,36 +302,6 @@ the paused features, and judging a fix would mean turning it back on.
 
 ---
 
-### F-022 — The chase camera does not drive the chunk selection
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-17, fixing v0.1.2's I-4, where which radius the horizon
-belongs to was the whole item
-**Where:** `packages/client/src/planet.ts` — `refresh` reads `player.eye`, the
-frame loop's `from` is the camera, and the wheel handler changes `chase`
-
-**What happens.** The mouse wheel moves the camera up to 60 m up and behind
-the player. The selection keeps reading the player's eye, whose horizon at
-eye height is a tenth of the camera's from 60 m, and turning the wheel does
-not trigger a reselect at all — `refresh` runs on player movement alone.
-
-**Why it matters.** Zoomed out, the camera sees past the selection's rim: the
-mesh edge and the unselected ground beyond it are on screen until the player
-happens to walk two metres. The chase view exists for judging the level of
-detail from outside, which is v0.1.2's whole purpose, so the one view the
-release is for is the one the selection serves worst.
-
-**What would fix it.** Pass the camera's own radius to `selectChunks` — the
-frame loop already computes `from` — and call `refresh` when `chase` changes
-by more than a couple of metres, the same rule movement already uses.
-
----
-
----
-
 ### F-023 — The selection's peak term assumes the tallest ground is everywhere
 
 **Kind:** idea
@@ -994,6 +964,42 @@ build's lifetime, wants a trace of a *fresh, controlled* load -- one `Rebuild`
 click, one `?panel=1` toggle, nothing else -- checked the same way: count
 `TracingSessionIdForWorker` entries against `WORKERS`, and check whether the
 same 1-real-to-1-idle pairing shows up for `MapPanel`'s single worker too.
+
+### F-048 — The volumetric cloud deck costs a second to build and the billboards cost forty milliseconds
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-20, adding the billboard clouds beside the volumetric ones
+**Where:** `packages/engine/src/sky/CloudField.ts`,
+`packages/engine/src/sky/buildCloudMesh.ts`,
+`packages/engine/src/render/clouds/BillboardClouds.ts`; the **Style** knob in
+`packages/client/src/ParameterPanel.ts`
+
+**What happens.** Two cloud systems ship, and one of them is 30 times the
+work of the other. The volumetric decks sample noise at 163,842 lattice
+points each and mesh hexagonal prisms from the result: 460 ms of noise and
+755 ms of meshing for both decks, **1,215 ms a rebuild**, on a wind that
+turns every 700 ms. The billboards scatter 22,481 camera-facing hexagons
+into one buffer in **45 ms**, once, and then move only a `f32` of elapsed
+time per frame. Both draw at the same frame rate.
+
+**Why it matters.** Style is now the one cloud knob that still reloads the
+world, because it decides which renderer is constructed at all; every other
+cloud knob became live in the same session. So the expensive system is also
+the awkward one to compare against, which is backwards -- the comparison is
+the only reason both exist.
+
+**What would fix it.** Decide. If the billboards are what ships, the
+volumetric field, its mesher, its worker and its four knobs come out
+together and `CLOUD_INTERVAL`, `CLOUD_POINT_SHELL_BUDGET` and the whole
+skip-a-tick-while-busy dance go with them. If both stay, construct both
+renderers at startup and make Style a live knob like the rest, which costs
+one idle worker and one buffer and removes the last cloud reload. Either is
+under an hour; what is not free is leaving it undecided, because the
+volumetric path is a second of CPU that only pays for itself if somebody
+prefers how it looks.
 
 ---
 
@@ -1845,3 +1851,38 @@ actually costs at the settings in play rather than a distance threshold sized
 against a cost that goes stale. The teleport, knob-change and unfreeze call
 sites stay unconditional, since those are rare and deliberate rather than
 continuous.
+
+### F-022 — The chase camera does not drive the chunk selection
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-17, fixing v0.1.2's I-4, where which radius the horizon
+belongs to was the whole item
+**Where:** `packages/client/src/planet.ts` — `refresh` reads `player.eye`, the
+frame loop's `from` is the camera, and the wheel handler changes `chase`
+
+**What happens.** The mouse wheel moves the camera up to 60 m up and behind
+the player. The selection keeps reading the player's eye, whose horizon at
+eye height is a tenth of the camera's from 60 m, and turning the wheel does
+not trigger a reselect at all — `refresh` runs on player movement alone.
+
+**Why it matters.** Zoomed out, the camera sees past the selection's rim: the
+mesh edge and the unselected ground beyond it are on screen until the player
+happens to walk two metres. The chase view exists for judging the level of
+detail from outside, which is v0.1.2's whole purpose, so the one view the
+release is for is the one the selection serves worst.
+
+**What would fix it.** Pass the camera's own radius to `selectChunks` — the
+frame loop already computes `from` — and call `refresh` when `chase` changes
+by more than a couple of metres, the same rule movement already uses.
+
+**Closed:** 2026-08-20, fixed while culling the selection to the view. The
+frame loop keeps the camera it drew with -- position, radius and frustum --
+and `refresh` reads that rather than `player.eye`, falling back to the player
+only for the first selection, which runs before any frame. The reselect test
+moved to the camera's own movement as well, so pulling the view back on the
+wheel reselects the way walking does, and a turn counts too when the
+selection is culled to the view.
+

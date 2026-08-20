@@ -6,7 +6,13 @@ import {
 	buildCoarseMap,
 	seedFromString,
 } from "chamfer/generation";
-import { Player, holonomy, transport, turn } from "chamfer/player";
+import {
+	PLAYER_DEFAULTS,
+	Player,
+	holonomy,
+	transport,
+	turn,
+} from "chamfer/player";
 import { Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 
@@ -55,6 +61,7 @@ const STILL = {
 	turn: 0,
 	pitch: 0,
 	lift: 0,
+	jump: false,
 	flying: false,
 } as const;
 
@@ -207,7 +214,7 @@ describe("turn", () => {
 });
 
 describe("walking", () => {
-	it("covers 1.4 metres a second over the ground", () => {
+	it("covers its own walking speed over the ground in a second", () => {
 		const player = new Player(
 			shape,
 			new Vec3(0, 0, 1).scale(RADIUS),
@@ -223,7 +230,7 @@ describe("walking", () => {
 			Math.acos(
 				Math.min(1, start.normalize().dot(player.position.normalize())),
 			);
-		expect(travelled).toBeCloseTo(1.4, 1);
+		expect(travelled).toBeCloseTo(PLAYER_DEFAULTS.walkSpeed, 1);
 	});
 
 	it("covers the ground at a speed set live, not just the default", () => {
@@ -244,6 +251,68 @@ describe("walking", () => {
 				Math.min(1, start.normalize().dot(player.position.normalize())),
 			);
 		expect(travelled).toBeCloseTo(7, 1);
+	});
+
+	it("jumps clear of the ground and comes back down to it", () => {
+		const probe = flatGround(RADIUS);
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		// Settle first: a jump is answered from the ground, not from the air.
+		for (let n = 0; n < 10; n++) player.step(STILL, 1 / 30, probe);
+		expect(player.standing).toBe(true);
+		const ground = player.position.length();
+
+		player.step({ ...STILL, jump: true }, 1 / 30, probe);
+		expect(player.standing).toBe(false);
+
+		let peak = player.position.length();
+		for (let n = 0; n < 60; n++) {
+			player.step(STILL, 1 / 30, probe);
+			peak = Math.max(peak, player.position.length());
+		}
+		// Higher than a step, so it clears what walking cannot.
+		expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+		// And back down, standing again.
+		expect(player.position.length()).toBeCloseTo(ground, 6);
+		expect(player.standing).toBe(true);
+	});
+
+	it("refuses a second jump in mid-air, so holding it does not climb", () => {
+		const probe = flatGround(RADIUS);
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 10; n++) player.step(STILL, 1 / 30, probe);
+		const ground = player.position.length();
+
+		// Held down the whole way, which would be a flight if it answered.
+		let peak = ground;
+		for (let n = 0; n < 120; n++) {
+			player.step({ ...STILL, jump: true }, 1 / 30, probe);
+			peak = Math.max(peak, player.position.length());
+		}
+		const oneJump =
+			(PLAYER_DEFAULTS.jumpSpeed * PLAYER_DEFAULTS.jumpSpeed) /
+			(2 * PLAYER_DEFAULTS.gravity);
+		expect(peak - ground).toBeLessThan(oneJump * 1.5);
+	});
+
+	it("does not jump while flying, which already has a way up", () => {
+		const probe = flatGround(RADIUS);
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS + 200),
+			new Vec3(1, 0, 0),
+		);
+		for (let n = 0; n < 30; n++)
+			player.step({ ...STILL, jump: true, flying: true }, 1 / 30, probe);
+		expect(player.position.length()).toBeCloseTo(RADIUS + 200, 6);
+		expect(player.standing).toBe(false);
 	});
 
 	it("stops on the ground rather than sinking through it", () => {

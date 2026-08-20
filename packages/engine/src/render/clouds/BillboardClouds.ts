@@ -3,11 +3,10 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import type { CloudPuffLayer } from "../../sky/CloudPuff.js";
 import { generateCloudPuffs } from "../../sky/generateCloudPuffs.js";
-import { buildPuffMesh } from "./buildPuffMesh.js";
+import { PUFF_STRIDE, buildPuffMesh } from "./buildPuffMesh.js";
 import { BILLBOARD_CLOUD_SHADER } from "./BILLBOARD_CLOUD_SHADER.js";
 
-/** Direction(3), corner(2), size, cover, radius, windRate. */
-const VERTEX_STRIDE = 9 * 4;
+const VERTEX_STRIDE = PUFF_STRIDE * 4;
 
 const WIND_BYTES = 16;
 
@@ -27,9 +26,10 @@ export class BillboardClouds implements PassLayer {
 	private readonly windUniform: GPUBuffer;
 	private readonly windBindGroup: GPUBindGroup;
 	private readonly windData = new Float32Array(WIND_BYTES / 4);
-	private readonly vertexBuffer: GPUBuffer;
-	private readonly indexBuffer: GPUBuffer;
-	private readonly indexCount: number;
+	private readonly seed: number;
+	private vertexBuffer: GPUBuffer;
+	private indexBuffer: GPUBuffer;
+	private indexCount: number;
 
 	/** Whether anything is drawn at all. */
 	visible = true;
@@ -37,29 +37,30 @@ export class BillboardClouds implements PassLayer {
 	/** Seconds since the wind started turning. */
 	time = 0;
 
+	/** How many hexagons the sky is built out of. */
+	puffCount = 0;
+
 	constructor(
 		ctx: GpuContext,
 		seed: number,
-		candidatesPerLayer: number,
+		clusters: number,
+		perCluster: number,
 		layers: readonly CloudPuffLayer[],
 	) {
 		this.ctx = ctx;
+		this.seed = seed;
 		const { device, format } = ctx;
 
-		const puffs = generateCloudPuffs(seed, candidatesPerLayer, layers);
-		const { vertices, indices } = buildPuffMesh(puffs);
-		this.indexCount = indices.length;
-
 		this.vertexBuffer = device.createBuffer({
-			size: Math.max(4, vertices.byteLength),
+			size: 4,
 			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 		});
-		device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
 		this.indexBuffer = device.createBuffer({
-			size: Math.max(4, indices.byteLength),
+			size: 4,
 			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
 		});
-		device.queue.writeBuffer(this.indexBuffer, 0, indices);
+		this.indexCount = 0;
+		this.rebuild(clusters, perCluster, layers);
 
 		const frameLayout = device.createBindGroupLayout({
 			entries: [
@@ -132,6 +133,11 @@ export class BillboardClouds implements PassLayer {
 								offset: 32,
 								format: "float32",
 							},
+							{
+								shaderLocation: 6,
+								offset: 36,
+								format: "float32",
+							},
 						],
 					},
 				],
@@ -164,6 +170,44 @@ export class BillboardClouds implements PassLayer {
 				depthCompare: "less",
 			},
 		});
+	}
+
+	/**
+	 * Scatter the sky again, at a new size, height or density.
+	 *
+	 * Cheap enough to hang off a slider: the puffs are chosen and packed on
+	 * the thread that draws, and even a dense sky is a few tens of
+	 * milliseconds. The seed does not move, so a formation that was over a
+	 * place stays over it and only what it is built out of changes.
+	 */
+	rebuild(
+		clusters: number,
+		perCluster: number,
+		layers: readonly CloudPuffLayer[],
+	): void {
+		const { device } = this.ctx;
+		const puffs = generateCloudPuffs(
+			this.seed,
+			clusters,
+			perCluster,
+			layers,
+		);
+		this.puffCount = puffs.length;
+		const { vertices, indices } = buildPuffMesh(puffs);
+		this.indexCount = indices.length;
+
+		this.vertexBuffer.destroy();
+		this.indexBuffer.destroy();
+		this.vertexBuffer = device.createBuffer({
+			size: Math.max(4, vertices.byteLength),
+			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+		});
+		device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
+		this.indexBuffer = device.createBuffer({
+			size: Math.max(4, indices.byteLength),
+			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+		});
+		device.queue.writeBuffer(this.indexBuffer, 0, indices);
 	}
 
 	after(pass: GPURenderPassEncoder, frame: Frame): void {

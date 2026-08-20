@@ -338,8 +338,8 @@ const GROUPS: Group[] = [
 				label: "Puff",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-				shownWhen: (k) => k.cloudStyle === "volumetric",
 				given: (s) =>
+					s.knobs.cloudStyle !== "volumetric" ||
 					Math.abs(s.cloudPuff - s.knobs.cloudPuff) < 1
 						? null
 						: `${s.cloudPuff.toFixed(0)} m, level ${s.cloudLevel}`,
@@ -350,6 +350,27 @@ const GROUPS: Group[] = [
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
 				shownWhen: (k) => k.cloudStyle === "volumetric",
+			},
+			{
+				key: "cloudClusters",
+				label: "Formations",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+				shownWhen: (k) => k.cloudStyle === "billboards",
+			},
+			{
+				key: "cloudDensity",
+				label: "Puffs each",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+				shownWhen: (k) => k.cloudStyle === "billboards",
+			},
+			{
+				key: "cloudSpread",
+				label: "Formation across",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+				shownWhen: (k) => k.cloudStyle === "billboards",
 			},
 		],
 	},
@@ -391,6 +412,20 @@ const GROUPS: Group[] = [
 				key: "detail",
 				label: "Full detail to",
 				digits: 1,
+			},
+			{
+				key: "buildCull",
+				label: "Build only what is in view",
+			},
+			{
+				key: "cullMargin",
+				label: "Keep beyond the view",
+				digits: 0,
+				shownWhen: (k) => k.buildCull,
+			},
+			{
+				key: "nearestFirst",
+				label: "Build nearest first",
 			},
 			{
 				key: "apron",

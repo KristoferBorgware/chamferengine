@@ -1,6 +1,7 @@
 import { ChunkAddress } from "./ChunkAddress.js";
 import { chunkCenter } from "./chunkCenter.js";
 import { horizonAngle } from "./horizonAngle.js";
+import type { ChunkCull } from "./ChunkCull.js";
 import type { ChunkPeaks } from "./ChunkPeaks.js";
 
 /** One chunk to draw, and how coarsely. */
@@ -73,6 +74,8 @@ export function selectChunks(
 	detail = DETAIL,
 	peakHeight = 0,
 	peaks?: ChunkPeaks,
+	cull?: ChunkCull,
+	slack = 0,
 ): ChunkSelection[] {
 	const length = Math.sqrt(
 		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
@@ -117,6 +120,33 @@ export function selectChunks(
 		const dz = extent.z * ground - eyeZ;
 		const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		const width = 2 * spread * surfaceRadius;
+
+		// Out of view, and so is everything under it. A triangle's own sphere
+		// contains all four of its children's, so refusing it here prunes the
+		// whole subtree rather than testing every leaf of it -- which is where
+		// the saving is, because a level down is four times the triangles.
+		//
+		// The sphere holds the chunk's whole column of ground, from the
+		// reference sphere up to its own tallest point, or a mountain standing
+		// at the edge of the view would be cut off at whatever height the
+		// sphere stopped at. `slack` widens it by metres per metre of
+		// distance, so what is kept beyond the edge of the screen is an angle
+		// -- a fixed skirt would mean nothing far away and everything
+		// underfoot.
+		if (cull) {
+			const middle = surfaceRadius + peak / 2;
+			const bound =
+				spread * (surfaceRadius + peak) + peak / 2 + distance * slack;
+			if (
+				!cull.holds(
+					extent.x * middle,
+					extent.y * middle,
+					extent.z * middle,
+					bound,
+				)
+			)
+				return;
+		}
 
 		if (chunkLevel < finestChunkLevel && distance < detail * width) {
 			for (let child = 0; child < 4; child++)

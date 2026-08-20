@@ -20,6 +20,15 @@ export interface PlayerInput {
 	/** Metres a second straight up. Flying and swimming only. */
 	readonly lift: number;
 
+	/**
+	 * Whether to jump.
+	 *
+	 * Answered only with both feet on the ground and neither flying nor
+	 * swimming, so holding it does not climb: a player already in the air is
+	 * falling, and a second push would be a flight with extra steps.
+	 */
+	readonly jump: boolean;
+
 	/** Whether to leave the ground behind entirely. */
 	readonly flying: boolean;
 }
@@ -50,6 +59,9 @@ export class Player {
 	pitch = 0;
 
 	flying = false;
+
+	/** Whether the last step left the player standing on something. */
+	private onGround = false;
 
 	private readonly shape: WorldShape;
 	private settings: Required<PlayerOptions>;
@@ -110,6 +122,11 @@ export class Player {
 		return probe.blockAtPosition(shin) === BlockType.WATER;
 	}
 
+	/** Whether the player is standing on something, so a jump would answer. */
+	get standing(): boolean {
+		return this.onGround;
+	}
+
 	/** Move one tick. */
 	step(input: PlayerInput, seconds: number, probe: BlockProbe): void {
 		this.flying = input.flying;
@@ -131,6 +148,14 @@ export class Player {
 		const across =
 			length > 1e-9 ? along.scale(speed / length) : new Vec3(0, 0, 0);
 
+		// Off the ground the moment it is asked for, so `settle` below carries
+		// the jump the same way it carries a fall -- one speed along the
+		// column, tested against every layer it crosses.
+		if (input.jump && !this.flying && !swimming && this.onGround) {
+			this.fall = -this.settings.jumpSpeed;
+			this.onGround = false;
+		}
+
 		const before = this.position;
 		let moved = before.add(across.scale(seconds));
 		if (this.flying || swimming)
@@ -140,9 +165,12 @@ export class Player {
 		// travels with the player rather than being kept as a world vector.
 		this.heading = transport(this.heading, before, moved);
 
-		this.position = this.flying
-			? moved
-			: this.settle(moved, swimming, seconds, probe);
+		if (this.flying) {
+			this.onGround = false;
+			this.position = moved;
+			return;
+		}
+		this.position = this.settle(moved, swimming, seconds, probe);
 	}
 
 	/**
@@ -162,6 +190,7 @@ export class Player {
 	): Vec3 {
 		const up = moved.normalize();
 		const shape = this.shape;
+		this.onGround = false;
 
 		if (swimming) {
 			// Water does not hold a player up by colliding with them. It slows
@@ -195,6 +224,7 @@ export class Player {
 		}
 		if (standing >= 0 && this.fall <= 0.001) {
 			this.fall = 0;
+			this.onGround = true;
 			return up.scale(shape.radiusOfLayer(standing));
 		}
 
@@ -205,6 +235,7 @@ export class Player {
 			const floor = shape.radiusOfLayer(layer + 1);
 			if (solidAt(probe, up, floor + 0.05)) {
 				this.fall = 0;
+				this.onGround = true;
 				return up.scale(shape.radiusOfLayer(layer));
 			}
 		}

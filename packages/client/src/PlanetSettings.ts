@@ -194,8 +194,39 @@ export interface PlanetKnobs {
 	/** How many shells deep a deck runs. One is a flat sheet. */
 	cloudShells: number;
 
+	/** How many cloud formations stand over the whole planet. */
+	cloudClusters: number;
+
+	/** How many puffs one formation is built out of at its thickest. */
+	cloudDensity: number;
+
+	/** Metres across one formation. */
+	cloudSpread: number;
+
 	/** How many times its own width a chunk is away before it drops a level. */
 	detail: number;
+
+	/**
+	 * Whether a chunk outside the view is selected and built at all.
+	 *
+	 * Off, the whole ring around the player is built and roughly a quarter of
+	 * it is drawn. On, the selection prunes to the view before it asks for
+	 * anything, and {@link PlanetKnobs.cullMargin} is how much beyond the edge
+	 * of the screen it keeps so turning has something to turn onto.
+	 */
+	buildCull: boolean;
+
+	/** Degrees past the edge of the view a chunk is still built for. */
+	cullMargin: number;
+
+	/**
+	 * Whether a freed worker takes the nearest waiting chunk or the oldest.
+	 *
+	 * The queue outlives a selection, so the oldest is not the nearest: a
+	 * chunk asked for on the horizon is still waiting when the player has
+	 * walked up to it.
+	 */
+	nearestFirst: boolean;
 
 	/** Whether a chunk draws the ring of cells just beyond its rim. */
 	apron: boolean;
@@ -282,7 +313,13 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	highDeck: 1200,
 	cloudPuff: 64,
 	cloudShells: 4,
+	cloudClusters: 1200,
+	cloudDensity: 100,
+	cloudSpread: 180,
 	detail: 2,
+	buildCull: true,
+	cullMargin: 25,
+	nearestFirst: true,
 	apron: true,
 	seamOverlay: false,
 	gridMode: false,
@@ -400,11 +437,29 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	cloudsDrawn: { ...TOGGLE, rebuilds: false },
 	cloudStyle: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
-	lowDeck: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
-	highDeck: { low: 200, high: 6000, step: 50, rebuilds: true, unit: "m" },
-	cloudPuff: { low: 8, high: 128, step: 8, rebuilds: true, unit: "m" },
-	cloudShells: { low: 1, high: 8, step: 1, rebuilds: true, unit: "shells" },
+	lowDeck: { low: 100, high: 20000, step: 20, rebuilds: false, unit: "m" },
+	highDeck: { low: 200, high: 40000, step: 50, rebuilds: false, unit: "m" },
+	cloudPuff: { low: 8, high: 600, step: 4, rebuilds: false, unit: "m" },
+	cloudShells: { low: 1, high: 8, step: 1, rebuilds: false, unit: "shells" },
+	cloudClusters: {
+		low: 100,
+		high: 4000,
+		step: 100,
+		rebuilds: false,
+		unit: "",
+	},
+	cloudDensity: {
+		low: 4,
+		high: 400,
+		step: 2,
+		rebuilds: false,
+		unit: "puffs",
+	},
+	cloudSpread: { low: 40, high: 4000, step: 20, rebuilds: false, unit: "m" },
 	detail: { low: 1, high: 5, step: 0.5, rebuilds: false, unit: "widths" },
+	buildCull: { ...TOGGLE, rebuilds: false },
+	cullMargin: { low: 0, high: 90, step: 5, rebuilds: false, unit: "deg" },
+	nearestFirst: { ...TOGGLE, rebuilds: false },
 	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },

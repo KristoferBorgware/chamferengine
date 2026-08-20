@@ -318,3 +318,83 @@ describe("WorldShape.atLod", () => {
 		expect(base.atLod(0)).toBe(base);
 	});
 });
+
+describe("selecting against a view", () => {
+	/** A cull keeping a cone about one direction, refusing what misses it. */
+	function cone(look: Vec3, halfAngle: number) {
+		return {
+			holds(x: number, y: number, z: number, radius: number): boolean {
+				const at = new Vec3(x, y, z);
+				const away = at.length();
+				if (away < 1e-9) return true;
+				// What the sphere itself subtends, so one straddling the edge
+				// of the cone is kept the way a frustum keeps it.
+				const spread = Math.asin(Math.min(1, radius / away));
+				const between = Math.acos(
+					Math.min(1, Math.max(-1, at.scale(1 / away).dot(look))),
+				);
+				return between - spread <= halfAngle;
+			},
+		};
+	}
+
+	const HIGH = RADIUS + 400;
+	const EYE = VIEWER.scale(HIGH);
+	const ahead = (halfAngle: number, slack = 0) =>
+		selectChunks(
+			DEPTH,
+			FINEST,
+			EYE,
+			HIGH,
+			RADIUS,
+			undefined,
+			0,
+			undefined,
+			cone(VIEWER, halfAngle),
+			slack,
+		);
+	const all = () => selectChunks(DEPTH, FINEST, EYE, HIGH, RADIUS);
+
+	it("selects fewer chunks than the whole ring, and only ones it would have", () => {
+		const kept = ahead(0.25);
+		expect(kept.length).toBeGreaterThan(0);
+		expect(kept.length).toBeLessThan(all().length);
+
+		// Culling only removes. It never invents a chunk, and never moves one
+		// to a level the uncalled selection would not have drawn it at.
+		const before = new Set(
+			all().map((s) => `${s.chunkLevel}:${s.key}:${s.lod}`),
+		);
+		for (const selection of kept)
+			expect(
+				before.has(
+					`${selection.chunkLevel}:${selection.key}:${selection.lod}`,
+				),
+			).toBe(true);
+	});
+
+	it("keeps the ground under the viewer, which is what they stand on", () => {
+		expect(ahead(0.25).some((s) => holds(s, VIEWER))).toBe(true);
+	});
+
+	it("widens with the slack", () => {
+		expect(ahead(0.25, 1.5).length).toBeGreaterThan(ahead(0.25, 0).length);
+	});
+
+	it("is exactly the unculled selection when nothing is refused", () => {
+		expect(
+			selectChunks(
+				DEPTH,
+				FINEST,
+				EYE,
+				HIGH,
+				RADIUS,
+				undefined,
+				0,
+				undefined,
+				{ holds: () => true },
+				0,
+			),
+		).toEqual(all());
+	});
+});

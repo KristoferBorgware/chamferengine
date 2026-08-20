@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { generateCloudPuffs } from "chamfer/sky";
 import { buildPuffMesh } from "chamfer/render";
 
-const LAYERS = [{ radius: 6800, windRate: 0.02, size: 120 }];
-const STRIDE = 9;
+const LAYERS = [
+	{ radius: 6800, windRate: 0.02, size: 64, spread: 180, thickness: 70 },
+];
+const STRIDE = 10;
 
 describe("a puff as a hexagon fan", () => {
 	it("is seven vertices and six triangles per puff, every index in range", () => {
-		const puffs = generateCloudPuffs(42, 300, LAYERS);
+		const puffs = generateCloudPuffs(42, 120, 20, LAYERS);
 		const { vertices, indices } = buildPuffMesh(puffs);
 
 		expect(vertices.length).toBe(puffs.length * 7 * STRIDE);
@@ -20,9 +22,9 @@ describe("a puff as a hexagon fan", () => {
 	});
 
 	it("gives the centre vertex a zero corner and the rim its hexagon", () => {
-		const puffs = generateCloudPuffs(42, 300, LAYERS).slice(0, 1);
+		const puffs = generateCloudPuffs(42, 120, 20, LAYERS).slice(0, 1);
 		const { vertices } = buildPuffMesh(puffs);
-		// Centre: direction(3), corner(2) at offsets 3-4.
+		// Centre: direction takes the first three floats, the corner the next.
 		expect(vertices[3]).toBe(0);
 		expect(vertices[4]).toBe(0);
 		for (let k = 0; k < 6; k++) {
