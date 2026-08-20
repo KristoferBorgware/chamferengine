@@ -88,13 +88,20 @@ const TINTS: readonly (readonly [number, number, number])[] = [
 	[0.95, 0.45, 0.1],
 ];
 
-/** Paint a cell's faces toward its seam marker, for the overlay. */
-function debugTint(color: Float32Array, tint: number): void {
+/**
+ * Paint a cell's faces toward its seam marker.
+ *
+ * The overlay mixes hard, because it exists to be unmissable on top of
+ * terrain. The grid mixes softer: at 8-cell chunks nearly half the cells are
+ * rim cells, and a hard mark turns the shell into solid paint with the
+ * tiling unreadable inside it.
+ */
+function debugTint(color: Float32Array, tint: number, mix: number): void {
 	if (tint === 0) return;
 	const mark = TINTS[tint]!;
-	color[0] = color[0]! * 0.3 + mark[0] * 0.7;
-	color[1] = color[1]! * 0.3 + mark[1] * 0.7;
-	color[2] = color[2]! * 0.3 + mark[2] * 0.7;
+	color[0] = color[0]! * (1 - mix) + mark[0] * mix;
+	color[1] = color[1]! * (1 - mix) + mark[1] * mix;
+	color[2] = color[2]! * (1 - mix) + mark[2] * mix;
 }
 
 /** Multiply a color in place. */
@@ -139,6 +146,7 @@ export function meshChunk(
 	const grid = settings.surfaceGrid || shape.blockSize;
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
 	const gridPaint = settings.grid;
+	const mix = gridPaint ? 0.45 : 0.7;
 	const paint: CellPaint = gridPaint
 		? (_block, cellFace, i, j) =>
 				gridCellColor(gridPaint, cellFace, i, j, seed, COLOR, 0)
@@ -225,6 +233,7 @@ export function meshChunk(
 				settings.crustFloor,
 				grid,
 				tint,
+				mix,
 			);
 		}
 
@@ -263,12 +272,29 @@ export function meshChunk(
 			}
 		}
 
+	// Under the grid the apron sits flush rather than a centimetre low, and
+	// wears the same mark its real copy wears. A flat shell makes both safe
+	// and both necessary: the copy and the cell it duplicates take identical
+	// colors -- same canonical address, same flat light -- so their z-fight
+	// paints one color and is invisible, while the centimetre step showed as
+	// a dark slit along every level join when looked at along the surface.
+	// And an apron cell is always a rim cell of its own chunk -- adjacency to
+	// this chunk is what put it in the ring -- so under the chunk switch it
+	// takes the boundary mark, or the two copies would z-fight in two colors.
+	const drop = gridPaint ? 0 : APRON_DROP;
 	for (const cell of apron.values()) {
 		// Already canonical, so the chunk draws it exactly when it is on this
 		// chunk's own face and inside its triangle. `owns` is not this test:
 		// it never compares the faces, and another face's coordinates can
 		// path-match this triangle by coincidence.
 		if (cell.face === face && inChunk(chunk, cell.i, cell.j)) continue;
+		let apronTint = settings.debugSeams ? 3 : 0;
+		if (gridPaint) {
+			const w = latticeWeights(n, cell.i, cell.j);
+			const onFaceEdge = w[0] === 0 || w[1] === 0 || w[2] === 0;
+			if (gridPaint.faces && onFaceEdge) apronTint = 2;
+			else if (gridPaint.chunks) apronTint = 1;
+		}
 		meshApronCell(
 			chunk,
 			sampler,
@@ -282,7 +308,9 @@ export function meshChunk(
 			translucent,
 			tally,
 			grid,
-			settings.debugSeams ? 3 : 0,
+			apronTint,
+			mix,
+			drop,
 		);
 	}
 	return tally;
@@ -342,6 +370,7 @@ function meshCell(
 	crustFloor: boolean,
 	grid: number,
 	tint: number,
+	mix: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -403,7 +432,7 @@ function meshCell(
 		const sink = here === 1 ? translucent : opaque;
 		paint(block, face, i, j);
 		shade(COLOR, sky);
-		debugTint(COLOR, tint);
+		debugTint(COLOR, tint, mix);
 
 		if (opacityOf(at(own, layer - 1)) < here) {
 			emitCap(
@@ -443,7 +472,7 @@ function meshCell(
 		if (opacityOf(block) > 0) {
 			paint(block, face, i, j);
 			shade(COLOR, sky);
-			debugTint(COLOR, tint);
+			debugTint(COLOR, tint, mix);
 			emitCap(
 				opacityOf(block) === 1 ? translucent : opaque,
 				corners,
@@ -479,7 +508,7 @@ function meshCell(
 			const block = at(own, groundCap);
 			paint(block, face, i, j);
 			shade(COLOR, sky);
-			debugTint(COLOR, tint);
+			debugTint(COLOR, tint, mix);
 			emitSide(
 				opaque,
 				corners,
@@ -520,7 +549,7 @@ function meshCell(
 
 			paint(block, face, i, j);
 			shade(COLOR, sky);
-			debugTint(COLOR, tint);
+			debugTint(COLOR, tint, mix);
 			emitSide(
 				here === 1 ? translucent : opaque,
 				corners,
@@ -565,6 +594,8 @@ function meshApronCell(
 	tally: MeshTally,
 	grid: number,
 	tint: number,
+	mix: number,
+	drop: number,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -629,12 +660,12 @@ function meshApronCell(
 		if (opacityOf(at(own, layer - 1)) >= here) continue;
 		paint(block, face, i, j);
 		shade(COLOR, sky);
-		debugTint(COLOR, tint);
+		debugTint(COLOR, tint, mix);
 		emitCap(
 			here === 1 ? translucent : opaque,
 			corners,
 			degree,
-			capRadius(layer) - APRON_DROP,
+			capRadius(layer) - drop,
 			origin,
 			FACE_SHADE.top,
 			true,
@@ -659,14 +690,14 @@ function meshApronCell(
 			const block = at(own, groundCap);
 			paint(block, face, i, j);
 			shade(COLOR, sky);
-			debugTint(COLOR, tint);
+			debugTint(COLOR, tint, mix);
 			emitSide(
 				opaque,
 				corners,
 				degree,
 				k,
-				groundTop - APRON_DROP,
-				otherTop - APRON_DROP,
+				groundTop - drop,
+				otherTop - drop,
 				origin,
 				ring,
 				groundCap,

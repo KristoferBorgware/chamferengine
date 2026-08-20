@@ -3,11 +3,12 @@ import type { ChunkSelection } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
 import {
 	BlockType,
-	ChunkAtlas,
+	ChunkAddress,
 	TerrainGenerator,
 	ChunkPeaks,
 	buildCoarseMap,
 	chunkOverlaps,
+	chunkCenter,
 	flatCoarseMap,
 	horizonAngle,
 	seedFromString,
@@ -245,7 +246,6 @@ async function main(): Promise<void> {
 	// The map is the whole of the terrain, so nothing is missing from it and the
 	// margin is one block.
 	const peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
-	const atlas = new ChunkAtlas(DEPTH, CHUNK_LEVEL);
 
 	// Both decks are built on their own worker, off the thread that draws: a
 	// deck this size is unaffordable on the main thread, and the field is
@@ -309,21 +309,29 @@ async function main(): Promise<void> {
 	// it. Both the point and the height are what dragging and scrolling move.
 	//
 	// The opening view is the highest ground **near the equator**, found from
-	// the coarse map alone: three array reads a chunk against a noise
+	// the coarse map alone: three array reads a sample against a noise
 	// evaluation, which is 27 ms over the whole planet instead of a second.
 	//
-	// Near the equator because a pole is the one place on this planet where the
-	// picture lies. An equirectangular map stretches a polar row across its
-	// whole width, so a player who starts there cannot find themselves on it;
-	// and doc 20 puts an icosahedron vertex at each pole, which is a pentagon
-	// and the one cell shape nothing else on the planet has.
-	let ground: Vec3 = new Vec3(
-		atlas.extents[0]!.x,
-		atlas.extents[0]!.y,
-		atlas.extents[0]!.z,
-	);
+	// The scan walks triangles at its OWN fixed level, never at the chunk
+	// level. It once walked the chunk atlas, whose size follows the Chunk
+	// knob at 4x per level: at 8-cell chunks that was 21 million extents
+	// built and walked before the first frame -- 73 seconds, spent choosing
+	// one spawn point from a map whose cells are 32 m across anyway.
+	//
+	// Near the equator because a pole is the one place on this planet where
+	// the picture lies. An equirectangular map stretches a polar row across
+	// its whole width, so a player who starts there cannot find themselves on
+	// it; and doc 20 puts an icosahedron vertex at each pole, which is a
+	// pentagon and the one cell shape nothing else on the planet has.
+	const scanLevel = Math.min(6, CHUNK_LEVEL);
+	let ground: Vec3 = new Vec3(0, 0, 1);
 	let highest = -Infinity;
-	for (const extent of atlas.extents) {
+	for (let key = 0; key < 20 * 4 ** scanLevel; key++) {
+		const extent = chunkCenter(
+			ChunkAddress.fromKey(key, scanLevel),
+			DEPTH,
+			scanLevel,
+		);
 		const there = new Vec3(extent.x, extent.y, extent.z);
 		if (Math.abs(geographicOf(there, 1).latitude) > SPAWN_LATITUDE)
 			continue;
