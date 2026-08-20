@@ -16,6 +16,17 @@ export interface MeshWorkerHandle {
 	postMessage(message: unknown, transfer?: Transferable[]): void;
 	terminate(): void;
 	onmessage: ((event: MessageEvent<MeshResult>) => void) | null;
+
+	/**
+	 * Fired when the worker throws or dies. A real `Worker` has it; a fake
+	 * may leave it unset. The pool sets it, because a job whose worker
+	 * vanished without it would wait forever -- and everything the caller
+	 * holds open against that job would wait with it.
+	 *
+	 * Typed to match `Worker.onerror` exactly, which is what lets a real
+	 * `Worker` satisfy this interface with no cast at the call site.
+	 */
+	onerror?: ((event: ErrorEvent) => void) | null;
 }
 
 interface Pending {
@@ -40,6 +51,18 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly queue: ChunkSelection[] = [];
 	private readonly pending = new Map<number, Pending>();
 	private readonly cancelled = new Set<number>();
+	private readonly create: () => MeshWorkerHandle;
+	private readonly setup: MeshWorkerSetup;
+
+	/** What each busy worker is building, so its death names a job. */
+	private readonly working = new Map<MeshWorkerHandle, ChunkSelection>();
+
+	/** Jobs already given a second worker. A third failure is answered. */
+	private readonly retried = new Set<number>();
+
+	/** How many workers have died, capping how many are replaced. */
+	private failures = 0;
+
 	private nextId = 1;
 
 	constructor(
@@ -47,15 +70,66 @@ export class WorkerMeshSource implements MeshSource {
 		count: number,
 		setup: MeshWorkerSetup,
 	) {
-		for (let n = 0; n < count; n++) {
-			const worker = create();
-			worker.onmessage = (event) => {
-				this.finish(worker, event.data);
-			};
-			worker.postMessage(setup);
-			this.workers.push(worker);
-			this.idle.push(worker);
+		this.create = create;
+		this.setup = setup;
+		for (let n = 0; n < count; n++) this.spawn();
+	}
+
+	/** Make one worker, wired so its death is a handled event. */
+	private spawn(): void {
+		const worker = this.create();
+		worker.onmessage = (event) => {
+			this.finish(worker, event.data);
+		};
+		worker.onerror = () => {
+			this.fail(worker);
+		};
+		worker.postMessage(this.setup);
+		this.workers.push(worker);
+		this.idle.push(worker);
+	}
+
+	/**
+	 * A worker threw or was killed.
+	 *
+	 * Without this, three things leaked for the rest of the session: the
+	 * job's promise never settled, so the caller held the chunk as building
+	 * forever and never asked again; the worker never came back to the idle
+	 * list, so the pool lost a lane; and everything drawn while waiting for
+	 * that chunk -- a retiring chunk keeps drawing until its replacements
+	 * arrive -- stayed on screen for good.
+	 *
+	 * The worker is replaced and its job requeued once. A job that kills a
+	 * second worker is rejected instead: it would kill every worker it is
+	 * given, and the caller's next selection can ask again. Replacement stops
+	 * after enough deaths to say the workers themselves are broken -- a pool
+	 * respawning a worker whose script cannot run would spin forever.
+	 */
+	private fail(worker: MeshWorkerHandle): void {
+		const job = this.working.get(worker);
+		this.working.delete(worker);
+		worker.terminate();
+		const at = this.workers.indexOf(worker);
+		if (at >= 0) this.workers.splice(at, 1);
+		const rest = this.idle.indexOf(worker);
+		if (rest >= 0) this.idle.splice(rest, 1);
+
+		this.failures++;
+		if (this.failures <= 32) this.spawn();
+
+		if (job) {
+			const id = selectionId(job.chunkLevel, job.key);
+			if (this.pending.has(id) && !this.retried.has(id)) {
+				this.retried.add(id);
+				this.queue.push(job);
+			} else {
+				this.pending.get(id)?.reject(new Error("mesh worker died"));
+				this.pending.delete(id);
+				this.cancelled.delete(id);
+				this.retried.delete(id);
+			}
 		}
+		this.pump();
 	}
 
 	get workerCount(): number {
@@ -116,6 +190,8 @@ export class WorkerMeshSource implements MeshSource {
 		this.workers.length = 0;
 		this.idle.length = 0;
 		this.queue.length = 0;
+		this.working.clear();
+		this.retried.clear();
 		for (const waiting of this.pending.values())
 			waiting.reject(new Error("mesh source disposed"));
 		this.pending.clear();
@@ -125,6 +201,7 @@ export class WorkerMeshSource implements MeshSource {
 		while (this.idle.length > 0 && this.queue.length > 0) {
 			const worker = this.idle.pop()!;
 			const selection = this.queue.shift()!;
+			this.working.set(worker, selection);
 			worker.postMessage({
 				kind: "chunk",
 				id: this.nextId++,
@@ -137,7 +214,9 @@ export class WorkerMeshSource implements MeshSource {
 
 	private finish(worker: MeshWorkerHandle, result: MeshResult): void {
 		this.idle.push(worker);
+		this.working.delete(worker);
 		const id = selectionId(result.chunkLevel, result.key);
+		this.retried.delete(id);
 		const waiting = this.pending.get(id);
 		this.pending.delete(id);
 		if (waiting && !this.cancelled.has(id))

@@ -43,6 +43,7 @@ function pick(key: number): ChunkSelection {
  */
 class FakeWorker implements MeshWorkerHandle {
 	onmessage: ((event: MessageEvent<MeshResult>) => void) | null = null;
+	onerror: ((event: ErrorEvent) => void) | null = null;
 	readonly setups: MeshWorkerSetup[] = [];
 	readonly jobs: MeshJob[] = [];
 	terminated = false;
@@ -55,6 +56,17 @@ class FakeWorker implements MeshWorkerHandle {
 
 	terminate(): void {
 		this.terminated = true;
+	}
+
+	/**
+	 * Throw, the way a worker does when its script fails or it is killed.
+	 *
+	 * `ErrorEvent` is a browser global this test does not have, and `fail`
+	 * never reads the event -- only that one arrived -- so a bare object
+	 * stands in for it.
+	 */
+	die(): void {
+		this.onerror?.({ message: "worker died" } as ErrorEvent);
 	}
 
 	/** Answer the oldest outstanding job. */
@@ -126,6 +138,52 @@ describe("WorkerMeshSource", () => {
 		expect(workers[1]!.jobs.length).toBe(1);
 		expect(source.queued).toBe(2);
 		expect(source.running).toBe(2);
+		source.dispose();
+	});
+
+	it("replaces a dead worker and retries its job on the replacement", async () => {
+		// The leak this closes ran for the rest of a session: a job whose
+		// worker died settled neither way, the caller held the chunk as
+		// building forever and never asked again, and every retiring chunk
+		// waiting on that ground kept drawing until the page was closed.
+		const { source, workers } = pool(1);
+		const waiting = source.request(pick(7));
+		expect(workers[0]!.jobs.length).toBe(1);
+
+		workers[0]!.die();
+		expect(workers[0]!.terminated).toBe(true);
+		expect(source.workerCount).toBe(1);
+		expect(workers.length).toBe(2);
+		expect(workers[1]!.jobs.length).toBe(1);
+
+		workers[1]!.answer();
+		const mesh = await waiting;
+		expect(mesh.key).toBe(selectionId(CHUNK_LEVEL, 7));
+		source.dispose();
+	});
+
+	it("rejects a job that kills its second worker too", async () => {
+		// Such a job would kill every worker it is handed; the caller's next
+		// selection can ask again if it still wants the chunk.
+		const { source, workers } = pool(1);
+		const waiting = source.request(pick(7));
+		workers[0]!.die();
+		workers[1]!.die();
+		await expect(waiting).rejects.toThrow("mesh worker died");
+		// The pool itself survives, on its second replacement.
+		expect(source.workerCount).toBe(1);
+		const again = source.request(pick(8));
+		workers[2]!.answer();
+		expect((await again).key).toBe(selectionId(CHUNK_LEVEL, 8));
+		source.dispose();
+	});
+
+	it("replaces an idle worker that dies, keeping the pool's size", () => {
+		const { source, workers } = pool(2);
+		workers[0]!.die();
+		expect(source.workerCount).toBe(2);
+		expect(workers.length).toBe(3);
+		expect(workers[2]!.setups.length).toBe(1);
 		source.dispose();
 	});
 
