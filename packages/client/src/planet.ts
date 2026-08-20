@@ -360,6 +360,7 @@ async function main(): Promise<void> {
 		: new SeaRenderer(ctx, shape.seaSurfaceRadius, seaLook(settings));
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;
+		sea.wireframe = settings.knobs.seaWireframe;
 		teardown.push(() => sea.destroy());
 	}
 
@@ -1008,6 +1009,7 @@ async function main(): Promise<void> {
 		CULL_BUILD = live.knobs.buildCull;
 		if (sea) {
 			sea.visible = live.knobs.seaDrawn;
+			sea.wireframe = live.knobs.seaWireframe;
 			sea.look = seaLook(live);
 		}
 		CULL_SLACK = Math.tan((live.knobs.cullMargin * Math.PI) / 180);

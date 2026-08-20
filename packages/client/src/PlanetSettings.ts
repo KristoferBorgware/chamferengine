@@ -187,6 +187,9 @@ export interface PlanetKnobs {
 	/** Whether the sea is drawn at all. */
 	seaDrawn: boolean;
 
+	/** Whether the sea is drawn as its own mesh rather than as a surface. */
+	seaWireframe: boolean;
+
 	/** Metres from the trough of a wave to its crest. */
 	waveHeight: number;
 
@@ -343,10 +346,11 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	highDeck: 6000,
 	cloudPuff: 64,
 	seaDrawn: true,
-	waveHeight: 1.2,
-	waveScale: 35,
-	waveSpeed: 0.6,
-	seaChop: 3,
+	seaWireframe: false,
+	waveHeight: 4,
+	waveScale: 45,
+	waveSpeed: 0.8,
+	seaChop: 2.5,
 	seaFoam: 0.35,
 	seaOpacity: 0.45,
 	seaClarity: 30,
@@ -478,6 +482,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	highDeck: { low: 200, high: 40000, step: 50, rebuilds: false, unit: "m" },
 	cloudPuff: { low: 8, high: 600, step: 4, rebuilds: false, unit: "m" },
 	seaDrawn: { ...TOGGLE, rebuilds: false },
+	seaWireframe: { ...TOGGLE, rebuilds: false },
 	waveHeight: { low: 0, high: 12, step: 0.1, rebuilds: false, unit: "m" },
 	waveScale: { low: 5, high: 600, step: 5, rebuilds: false, unit: "m" },
 	waveSpeed: { low: 0, high: 4, step: 0.05, rebuilds: false, unit: "" },

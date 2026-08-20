@@ -80,6 +80,33 @@ it is a disc reaching to the horizon — which is why the mesh is a disc, built
 once in its own flat unit circle and carried onto the planet in the vertex
 shader. Walking moves the sea without touching a buffer.
 
+### The waves, and why a sphere changes the recipe
+
+The wave field is the standard stylized one: fold a sine at its own zero
+crossing so a crest is a crease rather than a dome, fold two bands that do not
+line up and multiply them so a crest has a length and a width, then stack
+three octaves at rising frequency and falling amplitude with two samples
+travelling opposite ways in each. One direction alone slides the whole ocean
+past the viewer like a conveyor; against each other they churn.
+
+**The one step that does not survive the move to a sphere is the domain warp,
+and it is the step that matters most.** The recipe warps its sample point by
+noise before folding, and without it everything above is exactly periodic —
+sines folded and multiplied are still sines — so the sea draws the same crest
+over and over on a regular grid. On flat ground the warp is 2D noise over the
+xz plane. There is no such plane here: a sphere has no seamless
+two-dimensional parameterisation, which is the hairy ball theorem again, the
+same one that forbids a global north
+([doc 13](13-gravity-and-orientation.md)). So the warp is **3D noise sampled
+from the direction vector**, exactly as the terrain samples in 3D world space
+rather than in face-local coordinates, and for exactly the same reason: a
+texture laid across a sphere tears along a seam, and a dot product against a
+fixed axis does not.
+
+A phase being a dot product is what makes the bands themselves seamless. A
+wave is a band wrapping the whole planet, continuous everywhere, with no face
+edge to cross and no pole to pinch.
+
 Three consequences:
 
 - **The sea floor is bare.** Ground below sea level is sand and stone with air

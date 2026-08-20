@@ -713,6 +713,25 @@ Violating any of these breaks the design. They are not tunable.
   **Lakes and rivers are unaffected** — a bounded body's face count does not
   grow with the planet — and water stays a block type for them and for the
   bucket.
+- **A WAVE FIELD WITHOUT A DOMAIN WARP IS A LATTICE** (`SEA_SHADER`, doc 25).
+  Fold a sine at its zero crossing, fold two bands and multiply, stack three
+  octaves with two samples travelling opposite ways in each — and every bit of
+  that is still **exactly periodic**, so the sea draws the same crest over and
+  over on a regular grid. The step that breaks it is warping the sample point
+  by noise first, and it is the step easiest to leave out because the shape
+  looks right without it until you see a wide view. **On a sphere the warp has
+  to be 3D noise on the direction vector**: a 2D texture over a ground plane
+  has no seamless spherical form (the hairy ball theorem again), which is
+  invariant 4's rule arriving from a second direction. A phase stays a **dot
+  product against a fixed axis** so the bands themselves never seam. **Show the
+  mesh** is a live toggle that draws the shell as lines — WebGPU has no fill
+  mode, so it is a second `line-list` pipeline over its own index buffer, and
+  it is how you see whether a wavelength has the vertices to be a wave. The
+  disc is `96 x 128` — 12,289 vertices, 24,448 triangles, built once — with
+  rings packed toward the middle: at eye height the gaps run **0.9 m** in the
+  middle and **2.4 m** at the rim, against a **4.7 m** sector arc there, so the
+  **angular axis is the coarser one by about 2x** and that is the resolution
+  limit the swell has to be flattened toward.
 - **Water is still a block type, and there is no fluid system** (`water.js`,
   doc 25) — translucent, no collision, written once, never simulated. What
   follows describes a **body of water made of blocks**, which is what a lake, a

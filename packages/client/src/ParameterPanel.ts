@@ -331,6 +331,11 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				key: "seaWireframe",
+				label: "Show the mesh",
+				enabledWhen: (k) => !k.plain && k.seaDrawn,
+			},
+			{
 				key: "seaChop",
 				label: "Chop",
 				digits: 1,

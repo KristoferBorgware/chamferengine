@@ -4,6 +4,7 @@ import type { PassLayer } from "../PassLayer.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { SEA_SHADER } from "./SEA_SHADER.js";
 import { SEA_STRIDE, seaDisc } from "./seaDisc.js";
+import { wireIndices } from "./wireIndices.js";
 
 /** How the sea looks, all of it live. */
 export interface SeaLook {
@@ -61,9 +62,22 @@ export class SeaRenderer implements PassLayer {
 	private readonly vertexBuffer: GPUBuffer;
 	private readonly indexBuffer: GPUBuffer;
 	private readonly indexCount: number;
+	private readonly wirePipeline: GPURenderPipeline;
+	private readonly wireBuffer: GPUBuffer;
+	private readonly wireCount: number;
 
 	/** Whether the sea is drawn at all. */
 	visible = true;
+
+	/**
+	 * Draw the shell as lines instead of a surface.
+	 *
+	 * The mesh is what decides how a wave is shaped, and a filled surface
+	 * hides it: this is how to see where the rings actually fall, how much
+	 * finer they are underfoot than at the horizon, and whether a wavelength
+	 * has enough vertices to be a wave rather than noise.
+	 */
+	wireframe = false;
 
 	/** Seconds the waves have been travelling. */
 	time = 0;
@@ -97,6 +111,14 @@ export class SeaRenderer implements PassLayer {
 			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
 		});
 		device.queue.writeBuffer(this.indexBuffer, 0, indices);
+
+		const wire = wireIndices(indices);
+		this.wireCount = wire.length;
+		this.wireBuffer = device.createBuffer({
+			size: wire.byteLength,
+			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+		});
+		device.queue.writeBuffer(this.wireBuffer, 0, wire);
 
 		const frameLayout = device.createBindGroupLayout({
 			entries: [
@@ -175,6 +197,59 @@ export class SeaRenderer implements PassLayer {
 				depthCompare: "less",
 			},
 		});
+
+		// The same vertices, the same uniforms and the same waves, drawn as
+		// lines. Depth-tested like the surface, so ground standing above the
+		// water still hides the mesh and the lines are read in place rather
+		// than floating over the whole picture.
+		this.wirePipeline = device.createRenderPipeline({
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [frameLayout, seaLayout],
+			}),
+			vertex: {
+				module,
+				entryPoint: "vertexMain",
+				buffers: [
+					{
+						arrayStride: SEA_STRIDE * 4,
+						attributes: [
+							{
+								shaderLocation: 0,
+								offset: 0,
+								format: "float32x2",
+							},
+						],
+					},
+				],
+			},
+			fragment: {
+				module,
+				entryPoint: "wireMain",
+				targets: [
+					{
+						format,
+						blend: {
+							color: {
+								srcFactor: "src-alpha",
+								dstFactor: "one-minus-src-alpha",
+								operation: "add",
+							},
+							alpha: {
+								srcFactor: "one",
+								dstFactor: "one-minus-src-alpha",
+								operation: "add",
+							},
+						},
+					},
+				],
+			},
+			primitive: { topology: "line-list" },
+			depthStencil: {
+				format: "depth24plus",
+				depthWriteEnabled: false,
+				depthCompare: "less",
+			},
+		});
 	}
 
 	/** The radius the sea's own surface sits at. */
@@ -204,11 +279,19 @@ export class SeaRenderer implements PassLayer {
 		this.data.set([...this.sky, 1], 28);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
-		pass.setPipeline(this.pipeline);
 		pass.setBindGroup(1, this.bindGroup);
 		pass.setVertexBuffer(0, this.vertexBuffer);
-		pass.setIndexBuffer(this.indexBuffer, "uint32");
-		pass.drawIndexed(this.indexCount);
+		// One or the other, never both: the lines are the surface seen a
+		// different way, and drawing the fill under them hides most of them.
+		if (this.wireframe) {
+			pass.setPipeline(this.wirePipeline);
+			pass.setIndexBuffer(this.wireBuffer, "uint32");
+			pass.drawIndexed(this.wireCount);
+		} else {
+			pass.setPipeline(this.pipeline);
+			pass.setIndexBuffer(this.indexBuffer, "uint32");
+			pass.drawIndexed(this.indexCount);
+		}
 		void frame;
 	}
 
@@ -216,6 +299,7 @@ export class SeaRenderer implements PassLayer {
 	destroy(): void {
 		this.vertexBuffer.destroy();
 		this.indexBuffer.destroy();
+		this.wireBuffer.destroy();
 		this.uniform.destroy();
 	}
 }

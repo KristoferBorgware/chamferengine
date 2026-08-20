@@ -46,21 +46,55 @@ struct Sea {
 
 const AXIS_A = vec3f(0.86, 0.36, 0.36);
 const AXIS_B = vec3f(-0.31, 0.80, 0.51);
-const AXIS_C = vec3f(0.44, -0.52, 0.73);
+
+/** One hashed value per lattice corner, from three wrapping multiplies. */
+fn hash13(p : vec3f) -> f32 {
+	let q = vec3u(vec3i(floor(p))) * vec3u(1597334677u, 3812015801u, 2798796415u);
+	let n = (q.x ^ q.y ^ q.z) * 1597334677u;
+	return f32(n) * (1.0 / 4294967295.0);
+}
 
 /**
- * One band of water, folded at its own zero crossing.
+ * Value noise in three dimensions, sampled from a direction.
  *
- * **A sine has a dome at the top and water does not.** One minus the
- * absolute value creases the wave where the sine crossed zero, and raising
- * that to a power past 1 pushes the broad part down: narrow crests standing
- * out of flat troughs, which is the shape of a real swell and the shape a
- * stylized sea is drawn with. It is the same fold the terrain's ridge knob
- * uses on its octaves, for the same reason -- a sum of smooth things is
- * smooth, and an absolute value is the only place an edge comes from.
+ * **The article warps its wave field with two-dimensional noise over the
+ * ground plane, and there is no such plane here.** A sphere has no seamless
+ * two-dimensional parameterisation -- that is the hairy ball theorem again,
+ * the same one that forbids a global north -- so any texture laid across one
+ * tears somewhere or pinches at a pole. Noise sampled from the direction
+ * vector in three dimensions has neither problem, which is exactly why the
+ * terrain samples in 3D world space rather than in face-local coordinates.
  */
-fn fold(phase : f32, chop : f32) -> f32 {
-	return pow(1.0 - abs(sin(phase)), chop);
+fn vnoise3(p : vec3f) -> f32 {
+	let i = floor(p);
+	let f = p - i;
+	// The quintic fade, not smoothstep: a smoothstep leaves a jump in
+	// curvature at every lattice plane, which shading shows as a grid.
+	let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+	let a = mix(hash13(i + vec3f(0.0, 0.0, 0.0)), hash13(i + vec3f(1.0, 0.0, 0.0)), u.x);
+	let b = mix(hash13(i + vec3f(0.0, 1.0, 0.0)), hash13(i + vec3f(1.0, 1.0, 0.0)), u.x);
+	let c = mix(hash13(i + vec3f(0.0, 0.0, 1.0)), hash13(i + vec3f(1.0, 0.0, 1.0)), u.x);
+	let d = mix(hash13(i + vec3f(0.0, 1.0, 1.0)), hash13(i + vec3f(1.0, 1.0, 1.0)), u.x);
+	return mix(mix(a, b, u.y), mix(c, d, u.y), u.z) * 2.0 - 1.0;
+}
+
+/**
+ * One octave of water: two folded bands, multiplied.
+ *
+ * **A single folded sine is a set of parallel stripes, however sharp its
+ * crests are.** Folding two bands that do not line up and multiplying them
+ * gives cells rather than bands -- a crest is where both fold at once, which
+ * is a peak with a length and a width. Blending the fold toward the
+ * complementary cosine, weighted by the fold itself, rounds the very top so
+ * a crest is a wave rather than a knife edge.
+ */
+fn octave(dir : vec3f, k : f32, drift : f32, chop : f32) -> f32 {
+	let a = dot(dir, AXIS_A) * k + drift;
+	let b = dot(dir, AXIS_B) * k + drift;
+	let wave = vec2f(1.0 - abs(sin(a)), 1.0 - abs(sin(b)));
+	let round = vec2f(abs(cos(a)), abs(cos(b)));
+	let w = mix(wave, round, wave);
+	return pow(1.0 - pow(w.x * w.y, 0.65), chop);
 }
 
 /** How high the water stands at a direction, in metres off the sea radius. */
@@ -68,17 +102,51 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 	// One turn of phase per wavelength around the planet, so the number a
 	// person sets in metres is the number of metres between two crests.
 	// A phase is a dot product, which is continuous over the whole sphere:
-	// no seam to cross, no pole to pinch, and no patch of flat water where
-	// a two-dimensional wave texture would have run out of parameterisation.
-	let k = 6.28318530718 * sea.up.w / max(1.0, sea.wave.y);
+	// no seam to cross and no pole to pinch, because a dot product has
+	// neither.
+	var k = 6.28318530718 * sea.up.w / max(1.0, sea.wave.y);
 	let speed = sea.wave.z;
-	let chop = max(1.0, sea.look.w);
-	var h = fold(dot(dir, AXIS_A) * k + seconds * speed, chop);
-	h += 0.55 * fold(dot(dir, AXIS_B) * k * 1.7 - seconds * speed * 1.3, chop);
-	h += 0.30 * fold(dot(dir, AXIS_C) * k * 3.1 + seconds * speed * 0.7, chop);
+	var chop = max(1.0, sea.look.w);
+
+	// **The domain warp is what stops the sea being a lattice.** Everything
+	// below it is periodic -- sines folded and multiplied are still sines --
+	// so without this the water draws the same crest over and over on a
+	// regular grid, which is what it looks like. Bending the direction by a
+	// noise field first means no two crests are laid out alike, and because
+	// the noise is smooth the surface stays smooth. A phase moves by one
+	// radian for a direction offset of 1/k, so the warp is measured in
+	// radians of phase and divided by k to become an offset.
+	let wf = k * 0.3;
+	let warp = vec3f(
+		vnoise3(dir * wf),
+		vnoise3(dir * wf + vec3f(19.3, 7.7, 3.1)),
+		vnoise3(dir * wf + vec3f(-5.2, 11.9, 23.4))
+	) * (1.6 / k);
+	var d = normalize(dir + warp);
+
+	var h = 0.0;
+	var amp = 1.0;
+	var total = 0.0;
+	var drift = seconds * speed;
+	for (var o = 0; o < 3; o++) {
+		// Two samples travelling opposite ways. One direction alone slides
+		// the whole ocean past the viewer like a conveyor; against each
+		// other they interfere, and the pattern churns instead of moving.
+		var band = octave(d, k, drift, chop);
+		band += octave(d, k, -drift, chop);
+		h += band * amp;
+		total += amp * 2.0;
+		// Turn the direction between octaves as well as raising the
+		// frequency, or every octave folds along the same two axes and the
+		// stack sharpens one pattern rather than building a second.
+		d = normalize(vec3f(d.y * 0.8 + d.z * 0.6, d.z * 0.8 - d.x * 0.6, d.x));
+		k *= 1.9;
+		amp *= 0.22;
+		chop = mix(chop, 1.0, 0.2);
+	}
 	// The fold runs 0 to 1 rather than -1 to 1, so centre it: the number a
 	// person sets is trough to crest, and the still water line is halfway.
-	return (h / 1.85 - 0.5) * sea.wave.x;
+	return (h / total - 0.5) * sea.wave.x;
 }
 
 struct SeaOut {
@@ -143,6 +211,22 @@ fn vertexMain(@location(0) local : vec2f) -> SeaOut {
 	// fade at the rim.
 	result.out = out;
 	return result;
+}
+
+/**
+ * The mesh itself, drawn as lines over the same geometry.
+ *
+ * Every knob still applies -- the wave shape, the rim fade and the reach are
+ * the vertex shader's, untouched -- so this shows where the vertices actually
+ * are while a wave is moving them, which is the one thing the filled surface
+ * cannot be asked. It is lit by nothing and coloured by how near the horizon
+ * a line is, so the packing of the rings reads as shading.
+ */
+@fragment
+fn wireMain(in : SeaOut) -> @location(0) vec4f {
+	let near = 1.0 - smoothstep(0.0, 0.7, in.out);
+	let line = mix(vec3f(0.25, 0.85, 1.0), vec3f(1.0, 0.95, 0.55), near);
+	return vec4f(line, 1.0 - smoothstep(0.92, 1.0, in.out));
 }
 
 @fragment
