@@ -226,6 +226,26 @@ describe("walking", () => {
 		expect(travelled).toBeCloseTo(1.4, 1);
 	});
 
+	it("covers the ground at a speed set live, not just the default", () => {
+		const player = new Player(
+			shape,
+			new Vec3(0, 0, 1).scale(RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		player.setWalkSpeed(7);
+		expect(player.walkSpeed).toBe(7);
+		const probe = flatGround(RADIUS);
+		const start = player.position;
+		for (let n = 0; n < 30; n++)
+			player.step({ ...STILL, ahead: 1 }, 1 / 30, probe);
+		const travelled =
+			RADIUS *
+			Math.acos(
+				Math.min(1, start.normalize().dot(player.position.normalize())),
+			);
+		expect(travelled).toBeCloseTo(7, 1);
+	});
+
 	it("stops on the ground rather than sinking through it", () => {
 		const player = new Player(
 			shape,

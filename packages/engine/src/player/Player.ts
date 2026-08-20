@@ -52,7 +52,7 @@ export class Player {
 	flying = false;
 
 	private readonly shape: WorldShape;
-	private readonly settings: Required<PlayerOptions>;
+	private settings: Required<PlayerOptions>;
 
 	constructor(
 		shape: WorldShape,
@@ -74,6 +74,16 @@ export class Player {
 	/** Across the heading, to the player's right. */
 	get right(): Vec3 {
 		return this.heading.cross(this.up).normalize();
+	}
+
+	/** How fast the player walks, in metres a second. */
+	get walkSpeed(): number {
+		return this.settings.walkSpeed;
+	}
+
+	/** Change how fast the player walks, without touching anything else about them. */
+	setWalkSpeed(walkSpeed: number): void {
+		this.settings = { ...this.settings, walkSpeed };
 	}
 
 	/** Where the eyes are. */

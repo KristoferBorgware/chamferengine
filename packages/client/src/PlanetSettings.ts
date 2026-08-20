@@ -8,6 +8,7 @@ import { CoarseMap, GROUND_LINES, seedFromString } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import type { CloudDeckSetup } from "chamfer/sky";
+import { PLAYER_DEFAULTS } from "chamfer/player";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -236,6 +237,9 @@ export interface PlanetKnobs {
 
 	/** The fraction of a day to show while paused, 0 at midnight to 1 at the next. */
 	timeOfDay: number;
+
+	/** How fast the player walks, in metres a second. */
+	walkSpeed: number;
 }
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
@@ -283,6 +287,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	dayLength: 240,
 	paused: false,
 	timeOfDay: 0.5,
+	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 };
 
 /**
@@ -403,6 +408,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
+	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 };
 
 /**

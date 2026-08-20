@@ -360,6 +360,7 @@ async function main(): Promise<void> {
 		shape,
 		ground.scale(RADIUS + shape.maxElevation),
 		ground.cross(new Vec3(0, 1, 0)).normalize(),
+		{ walkSpeed: settings.knobs.walkSpeed },
 	);
 	let flying = true;
 	let chase = 6;
@@ -721,6 +722,7 @@ async function main(): Promise<void> {
 	onLiveKnob = (live) => {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
+		player.setWalkSpeed(live.knobs.walkSpeed);
 
 		// Freezing waits for the next frame, which has a matrix to hold.
 		// Unfreezing is immediate, and the refresh at the foot of this

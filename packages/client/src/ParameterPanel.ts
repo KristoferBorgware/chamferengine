@@ -395,6 +395,17 @@ const GROUPS: Group[] = [
 			},
 		],
 	},
+	{
+		title: "The player",
+		folded: true,
+		knobs: [
+			{
+				key: "walkSpeed",
+				label: "Walk speed",
+				digits: 1,
+			},
+		],
+	},
 ];
 
 /**
