@@ -203,6 +203,19 @@ export class MapPanel {
 		this.rebuild("height");
 	}
 
+	/**
+	 * Give up the worker drawing the maps.
+	 *
+	 * A page leaving the screen is not a page whose threads have gone: the
+	 * browser may hold it, frozen, so going back is instant, and a worker held
+	 * with it goes on owning its own heap. Rebuilding the world is a fresh
+	 * load of this page, so without this every rebuild leaves another worker
+	 * behind for as long as the tab lives.
+	 */
+	dispose(): void {
+		this.worker.terminate();
+	}
+
 	/** Where the player is standing, so both pictures can mark it. */
 	setPlayer(at: { x: number; y: number; z: number }): void {
 		this.player = at;

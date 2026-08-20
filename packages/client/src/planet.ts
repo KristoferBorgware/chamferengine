@@ -208,6 +208,24 @@ let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
 /** Stand somewhere, once there is a world to stand in. */
 let onGoTo: (at: { x: number; y: number; z: number }) => void = () => {};
 
+/**
+ * Everything holding a thread, to be given up when this page goes away.
+ *
+ * **A page leaving the screen is not a page whose workers have gone.** The
+ * browser may keep it whole and frozen so that going back is instant, and a
+ * worker held with it keeps its own heap and its own thread for as long as the
+ * tab lives. Every rebuild is a fresh load of this page through
+ * `location.href`, so a pool that is not given up here is a pool that is still
+ * there after the next one starts: a trace of one session carried **48** chunk
+ * workers against the 8 this build asks for, and 6 map workers against 1, none
+ * of them doing any work and all of them still holding memory.
+ */
+const teardown: (() => void)[] = [];
+window.addEventListener("pagehide", () => {
+	for (const give of teardown) give();
+	teardown.length = 0;
+});
+
 if (params.get("panel") === "1") {
 	const maps = new MapPanel(
 		settings,
@@ -232,6 +250,7 @@ if (params.get("panel") === "1") {
 	maps.hostKnobs(panel.section("Seed"));
 	maps.hostKnobs(panel.section("Where the land is"));
 	onPlayerMoved = (up) => maps.setPlayer(up);
+	teardown.push(() => maps.dispose());
 }
 
 async function main(): Promise<void> {
@@ -280,6 +299,7 @@ async function main(): Promise<void> {
 	// worker is set up with the decks it will fill: moving one replaces the
 	// worker rather than telling it something new.
 	let cloudSource = VOLUMETRIC_CLOUDS ? makeCloudSource(settings) : null;
+	teardown.push(() => cloudSource?.dispose());
 
 	function makeCloudSource(live: PlanetSettings): WorkerCloudSource {
 		return new WorkerCloudSource(
@@ -558,6 +578,11 @@ async function main(): Promise<void> {
 			terrain: settings.terrainOptions(),
 		},
 	);
+	// The pool is the biggest thing this page holds a thread for: one worker
+	// per core, each with the whole terrain generator behind it.
+	teardown.push(() => {
+		source.dispose();
+	});
 
 	/** What is drawn, what is asked for, and what has come back unuploaded. */
 	const drawn = new Set<number>();
@@ -1354,11 +1379,21 @@ async function main(): Promise<void> {
 			timer.enter("clouds", performance.now());
 			cloudsAt = now;
 			const turned = ((now - started) / 1000) * WIND_RATE * 2 * Math.PI;
-			cloudSource.request(WIND_AXIS, turned).then((mesh) => {
-				// cloudsDrawn can turn off again before a half-second build
-				// resolves, so it is read again here rather than assumed.
-				if (cloudsDrawn) sky.setClouds(mesh.vertices, mesh.indices);
-			});
+			cloudSource
+				.request(WIND_AXIS, turned)
+				.then((mesh) => {
+					// cloudsDrawn can turn off again before a half-second
+					// build resolves, so it is read again here rather than
+					// assumed.
+					if (cloudsDrawn) sky.setClouds(mesh.vertices, mesh.indices);
+				})
+				.catch(() => {
+					// Moving a deck replaces the worker, and the worker it
+					// replaces gives up whatever it was part way through. A
+					// deck nobody is waiting for any more is not a failure:
+					// the settings that asked for it are gone, and the
+					// replacement fills the sky on its own next tick.
+				});
 			timer.leave("clouds", performance.now());
 		}
 
