@@ -2013,11 +2013,21 @@
 				for (const { row, wrap, readout } of rows.values()) {
 					const shown = row.shownWhen ? row.shownWhen(knobs) : true;
 					wrap.classList.toggle("hidden", !shown);
-					if (row.digits !== undefined)
-						readout.textContent =
+					if (row.digits !== undefined) {
+						let text =
 							Number(knobs[row.key]).toFixed(row.digits) +
 							(row.unit ? " " + row.unit : "");
-					else readout.textContent = "";
+						// **Say when a knob did not get what it asked for.** The
+						// map's fineness is a level, so its cell is the planet
+						// halved a whole number of times and stops at level 9:
+						// below that the slider moves and the map does not.
+						if (
+							row.key === "coarseSpacing" &&
+							Math.abs(field.k.cellMetres - knobs.coarseSpacing) >= 1
+						)
+							text += ` → ${field.k.cellMetres.toFixed(0)} m`;
+						readout.textContent = text;
+					} else readout.textContent = "";
 				}
 				const k = field.k;
 				facts.innerHTML =
