@@ -345,6 +345,7 @@
 				seed,
 				persistence = 0.5,
 				lacunarity = 2,
+				normalise = true,
 			) {
 				let sum = 0;
 				let amplitude = 1;
@@ -356,7 +357,14 @@
 					amplitude *= persistence;
 					f *= lacunarity;
 				}
-				return sum / total;
+				// **The reference implementations disagree here.** Musgrave's
+				// original returns the sum, and so does libnoise -- fBm is a
+				// fractal sum and being bounded is no part of its definition, so
+				// its reach grows toward `1 / (1 - gain)` as octaves are added.
+				// FastNoiseLite divides by the summed amplitude, which is this.
+				// Both are ordinary; what the choice decides is whether the
+				// octave count is a control over shape or over height.
+				return normalise ? sum / total : sum;
 			}
 
 			const OCTAVE_SPREAD = 1000;
@@ -405,6 +413,7 @@
 					amplitude *= s.persistence;
 					f *= s.lacunarity;
 				}
+				if (s.normalise === false) return sum;
 				return total > 0 ? sum / total : 0;
 			}
 
@@ -422,12 +431,14 @@
 					offsetX: k.offsetX,
 					offsetY: k.offsetY,
 					ridge: k.ridge,
+					normalise: k.normalise,
 				};
 				// The warp does not read the surface's octave settings: pushing
 				// a field by a copy of itself folds it along its own features
 				// and leaves the coast where it was.
 				const warp = {
 					...surface,
+					normalise: true,
 					frequency: k.warpFrequency,
 					octaves: WARP_OCTAVES,
 					persistence: 0.5,
@@ -459,6 +470,7 @@
 						seed,
 						s.persistence,
 						s.lacunarity,
+						s.normalise,
 					);
 				return octaveNoise(x, y, z, seed, s);
 			}
@@ -673,6 +685,20 @@
 							value: 9,
 							digits: 0,
 							shownWhen: (k) => k.stack === "octaves",
+						},
+						{
+							key: "octaveSum",
+							label: "Octave sum",
+							type: "select",
+							value: "normalised",
+							options: ["normalised", "raw"],
+						},
+						{
+							key: "metreScale",
+							label: "Metre scale",
+							type: "select",
+							value: "fit",
+							options: ["fit", "multiply"],
 						},
 						{
 							key: "warpAmplitude",
@@ -1033,6 +1059,8 @@
 					offsetY: value("offsetY"),
 					warpAmplitude: value("warpAmplitude"),
 					stack: knobs.stack,
+					normalise: knobs.octaveSum === "normalised",
+					fit: knobs.metreScale === "fit",
 				};
 			}
 
@@ -1087,8 +1115,25 @@
 					if (d > peak) peak = d;
 					if (d < trough) trough = d;
 				}
-				const up = peak > 0 ? value("relief") / peak : 0;
-				const down = trough < 0 ? value("seaDepth") / -trough : 0;
+				// **Two ways to turn a unitless field into metres, and they are
+				// what decides whether the octave sum above mattered.** `fit`
+				// divides by the field's own peak, so the tallest mountain is
+				// exactly Relief however the shape knobs are set -- and it
+				// renormalises whatever the octave stack handed it, which makes
+				// the divide up there redundant. `multiply` is the plain
+				// reading, metres per unit of field, and under it every knob
+				// that changes how far the field reaches changes how tall the
+				// world is.
+				const up = k.fit
+					? peak > 0
+						? value("relief") / peak
+						: 0
+					: value("relief");
+				const down = k.fit
+					? trough < 0
+						? value("seaDepth") / -trough
+						: 0
+					: value("seaDepth");
 
 				// Then the patch, laid out so a step across it is exactly one map
 				// cell -- the same metres per cell the engine's own map has, which
@@ -1894,6 +1939,14 @@
 							" — the noise is there, the scale that turns it into metres is not." +
 							"</span><br>"
 						: "") +
+					// **Which of the two is carrying the height.** Under `fit`
+					// the octave sum is renormalised downstream and the choice
+					// up there reaches nothing; under `multiply` it decides the
+					// whole vertical scale. Saying so is the only way the pair
+					// reads as one decision rather than two switches.
+					(knobs.metreScale === "fit"
+						? `metres <b>fit</b> — the tallest point is Relief exactly, so the octave sum above changes nothing here<br>`
+						: `metres <b>multiplied</b> — Relief is metres per unit of field, so octaves, persistence and ridge all move the height<br>`) +
 					// Frequency in the units the engine's panel states, so a
 					// setting found here can be carried across: the engine asks
 					// for the widest feature in metres, which is the radius

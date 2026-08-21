@@ -153,6 +153,24 @@ describe("the noise lab's copy of the engine's noise", () => {
 		);
 	});
 
+	it("normalises the octave sum unless told not to", () => {
+		// The lab can return the sum un-normalised, which is what Musgrave and
+		// libnoise do. An ABSENT flag has to mean the engine's behaviour, or
+		// every call the engine makes would quietly take the other branch.
+		const seed = seedFromString("chamfer");
+		const [x, y, z] = direction(11);
+		const plain = settings();
+		expect(demo.octaveNoise(x, y, z, seed, plain)).toBe(
+			octaveNoise(x, y, z, seed, plain),
+		);
+		const raw = { ...plain, normalise: false } as NoiseSettings & {
+			normalise: boolean;
+		};
+		expect(demo.octaveNoise(x, y, z, seed, raw)).not.toBe(
+			octaveNoise(x, y, z, seed, plain),
+		);
+	});
+
 	it.each([0, 0.4, 0.85])("stacks octaves at ridge %d exactly", (ridge) => {
 		const seed = seedFromString("chamfer");
 		const s = settings({ ridge });

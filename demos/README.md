@@ -311,6 +311,17 @@ wide, and the ends move as the rest of the draft moves. Swept over 7,776
 combinations of depth, block size, map cell, frequency, octaves and lacunarity,
 none reaches the warning; it stays as a backstop for a hand-edited link.
 
+**Octave sum** and **Metre scale** are one decision wearing two rows.
+Musgrave's fBm and libnoise return the octave sum as it falls, so its reach
+grows toward `1 / (1 - gain)` as octaves are added; FastNoiseLite divides by the
+summed amplitude, which bounds it to `[-1, 1]`. Downstream, `fit` divides by the
+field's own peak so the tallest point is Relief exactly, and `multiply` reads
+Relief as metres per unit of field. **Under `fit` the octave sum changes nothing
+at all** — the peak is 1,048 m either way, because the fit renormalises whatever
+it is handed. Under `multiply` it decides the vertical scale: 904 m normalised
+against 1,752 m raw, at the same five octaves. The readout says which of the two
+is carrying the height.
+
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.
 **Surface** draws it solid, as a wireframe, or both. The **Contour** panel at
