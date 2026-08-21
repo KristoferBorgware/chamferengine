@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+	CoarseGrid,
+	erodeDroplets,
 	hash3,
 	octaveNoise,
 	seaLevelFor,
@@ -9,6 +11,8 @@ import {
 	valueNoise3,
 } from "chamfer/generation";
 import type { NoiseSettings } from "chamfer/generation";
+import { barycentricOf, faceOf } from "chamfer/addressing";
+import { Vec3 } from "chamfer/math";
 
 /**
  * The demo carries its own copy of the noise, and a copy that has drifted is
@@ -26,6 +30,14 @@ import type { NoiseSettings } from "chamfer/generation";
  * and has been taken back out, because the lab's two layers are both octave
  * stacks and a function with no caller is a function that drifts unnoticed.
  * What is checked is everything the lab actually holds.
+ *
+ * **The lab carries a second block**, the coarse grid and the erosion pass,
+ * because water walks from cell to cell and cannot be read off a point. That
+ * block is a port of the addressing subsystem and of `erodeDroplets`, and it is
+ * checked the same way: the grid is built at a small level and compared cell for
+ * cell, and the pass is run over a field and compared value for value. Its
+ * erosion takes two of its constants as arguments so the panel can move them,
+ * and a five-argument call has to be the engine's pass exactly.
  */
 const HTML = fileURLToPath(
 	new URL("../../../../demos/noise-lab.html", import.meta.url),
@@ -33,6 +45,17 @@ const HTML = fileURLToPath(
 
 const BEGIN = "// ===== BEGIN engine noise kernel =====";
 const END = "// ===== END engine noise kernel =====";
+const COARSE_BEGIN = "// ===== BEGIN engine coarse grid =====";
+const COARSE_END = "// ===== END engine coarse grid =====";
+
+/** One marked block of the page, as source. */
+function block(page: string, begin: string, end: string): string {
+	const from = page.indexOf(begin);
+	const to = page.indexOf(end);
+	expect(from, `the opening marker ${begin}`).toBeGreaterThan(-1);
+	expect(to, `the closing marker ${end}`).toBeGreaterThan(from);
+	return page.slice(from + begin.length, to);
+}
 
 /** The demo's own functions, lifted out of the page and made callable. */
 function demoKernel(): {
@@ -47,17 +70,30 @@ function demoKernel(): {
 		s: NoiseSettings,
 	) => number;
 	seaLevelFor: typeof seaLevelFor;
+	CoarseGrid: new (level: number) => CoarseGrid;
+	erodeDroplets: (
+		grid: CoarseGrid,
+		height: Float64Array,
+		seed: number,
+		strength: number,
+		cellMetres: number,
+	) => number;
+	faceOf: (x: number, y: number, z: number) => number;
+	barycentricOf: (
+		face: number,
+		x: number,
+		y: number,
+		z: number,
+	) => [number, number, number];
 } {
 	const page = readFileSync(HTML, "utf8");
-	const from = page.indexOf(BEGIN);
-	const to = page.indexOf(END);
-	expect(from, "the kernel's opening marker").toBeGreaterThan(-1);
-	expect(to, "the kernel's closing marker").toBeGreaterThan(from);
-	const source = page.slice(from + BEGIN.length, to);
-	// The block is written to touch no document and no window, so it runs
-	// here exactly as it runs in the page.
+	// Both blocks together, because the erosion pass in the second one hashes
+	// with the first. They are written to touch no document and no window, so
+	// they run here exactly as they run in the page.
+	const source =
+		block(page, BEGIN, END) + block(page, COARSE_BEGIN, COARSE_END);
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, faceOf, barycentricOf };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -162,5 +198,87 @@ describe("the noise lab's copy of the engine's noise", () => {
 				(mine * 31 + Math.round(demo.octaveNoise(x, y, z, seed, s) * 1e9)) | 0;
 		}
 		expect(mine).toBe(theirs);
+	});
+});
+
+describe("the noise lab's copy of the engine's coarse grid", () => {
+	// Level 4 is 2,562 cells with every face edge and all twelve pentagons in
+	// it, which is what the numbering and the ring have to get right. Building
+	// the shipped level 8 twice would be 31 MB and half a second for the same
+	// answer.
+	const LEVEL = 4;
+	const mine = new demo.CoarseGrid(LEVEL);
+	const theirs = new CoarseGrid(LEVEL);
+
+	it("numbers the same cells in the same order", () => {
+		expect(mine.count).toBe(theirs.count);
+		expect(Array.from(mine.faceIndex)).toEqual(Array.from(theirs.faceIndex));
+	});
+
+	it("gives every cell the same ring, in the same order", () => {
+		expect(Array.from(mine.ring)).toEqual(Array.from(theirs.ring));
+	});
+
+	it("puts every cell at the same direction, to the bit", () => {
+		expect(Array.from(mine.directions)).toEqual(
+			Array.from(theirs.directions),
+		);
+	});
+
+	it("finds the same face and the same weights for a direction", () => {
+		for (let n = 0; n < 400; n++) {
+			const [x, y, z] = direction(n);
+			const face = demo.faceOf(x, y, z);
+			expect(face).toBe(faceOf(new Vec3(x, y, z)));
+			expect(demo.barycentricOf(face, x, y, z)).toEqual(
+				barycentricOf(face, new Vec3(x, y, z)),
+			);
+		}
+	});
+
+	it("cuts the same valleys into the same ground", () => {
+		const seed = seedFromString("chamfer");
+		const s = settings();
+		const start = new Float64Array(theirs.count);
+		for (let cell = 0; cell < theirs.count; cell++)
+			start[cell] =
+				400 *
+				octaveNoise(
+					theirs.directions[cell * 3]!,
+					theirs.directions[cell * 3 + 1]!,
+					theirs.directions[cell * 3 + 2]!,
+					seed,
+					s,
+				);
+		const a = Float64Array.from(start);
+		const b = Float64Array.from(start);
+		erodeDroplets(theirs, a, seed, 1, 32);
+		demo.erodeDroplets(mine, b, seed, 1, 32);
+		// Bit for bit. A droplet is a chain of comparisons against ground it has
+		// already moved, so one differing value would fan out over the map
+		// rather than staying where it started.
+		expect(Array.from(b)).toEqual(Array.from(a));
+	});
+
+	it("moves the ground it is asked to move", () => {
+		const seed = seedFromString("chamfer");
+		const s = settings();
+		const height = new Float64Array(mine.count);
+		for (let cell = 0; cell < mine.count; cell++)
+			height[cell] =
+				400 *
+				octaveNoise(
+					mine.directions[cell * 3]!,
+					mine.directions[cell * 3 + 1]!,
+					mine.directions[cell * 3 + 2]!,
+					seed,
+					s,
+				);
+		const before = Float64Array.from(height);
+		demo.erodeDroplets(mine, height, seed, 1, 32);
+		let moved = 0;
+		for (let cell = 0; cell < height.length; cell++)
+			moved += Math.abs(height[cell]! - before[cell]!);
+		expect(moved).toBeGreaterThan(0);
 	});
 });

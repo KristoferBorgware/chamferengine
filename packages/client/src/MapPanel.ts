@@ -102,6 +102,16 @@ export class MapPanel {
 		body.className = "maps-body";
 		this.root.appendChild(body);
 
+		// **Split like the noise lab: the preview stays put, only the knobs
+		// scroll.** With one map and a couple of sliders under it a single
+		// scroll region was harmless; two whole noise layers of knobs made it
+		// possible to scroll the picture itself off the top of the pane while
+		// reaching for Relief, which is the one thing a knob panel must never
+		// do to the picture it is a panel of.
+		const preview = document.createElement("div");
+		preview.className = "maps-preview";
+		body.appendChild(preview);
+
 		const list = document.createElement("div");
 		list.className = "maps-fields";
 		for (const field of COARSE_FIELDS) {
@@ -126,7 +136,7 @@ export class MapPanel {
 			if (field === this.field) button.classList.add("on");
 			list.appendChild(button);
 		}
-		body.appendChild(list);
+		preview.appendChild(list);
 
 		const pin = document.createElement("button");
 		pin.className = "maps-pin";
@@ -138,13 +148,13 @@ export class MapPanel {
 			this.drawOverlay();
 			this.sphere.setMarker(this.pinned ? this.player : null);
 		};
-		body.appendChild(pin);
+		preview.appendChild(pin);
 
 		this.canvas = document.createElement("canvas");
 		this.canvas.width = WIDTH;
 		this.canvas.height = HEIGHT;
 		this.canvas.className = "maps-canvas";
-		body.appendChild(this.canvas);
+		preview.appendChild(this.canvas);
 		this.context = this.canvas.getContext("2d")!;
 		this.image = this.context.createImageData(WIDTH, HEIGHT);
 
@@ -155,19 +165,30 @@ export class MapPanel {
 		ball.width = 260;
 		ball.height = 260;
 		ball.className = "maps-ball";
-		body.appendChild(ball);
+		preview.appendChild(ball);
 		this.sphere = new SphereView(ball);
 		this.sphere.picked(([x, y, z]) => onGoTo({ x, y, z }));
 
 		// Where the knobs that shape this map go, if somebody hands them over.
-		// The picture and the sliders that decide it belong in one pane.
+		// In its own scrolling region: the picture above stays in view while
+		// these are reached for, and the status and Apply below stay in view
+		// too, because they answer "did it work" and "commit it" and both
+		// belong in sight the whole time a knob is being dragged.
+		const scroll = document.createElement("div");
+		scroll.className = "maps-scroll";
+		body.appendChild(scroll);
+
 		this.knobs = document.createElement("div");
 		this.knobs.className = "maps-knobs";
-		body.appendChild(this.knobs);
+		scroll.appendChild(this.knobs);
+
+		const footer = document.createElement("div");
+		footer.className = "maps-footer";
+		body.appendChild(footer);
 
 		this.status = document.createElement("div");
 		this.status.className = "maps-status";
-		body.appendChild(this.status);
+		footer.appendChild(this.status);
 
 		const bar = document.createElement("div");
 		bar.className = "maps-bar";
@@ -175,7 +196,7 @@ export class MapPanel {
 		apply.textContent = "Apply to terrain";
 		apply.onclick = () => this.onApply(this.settings);
 		bar.appendChild(apply);
-		body.appendChild(bar);
+		footer.appendChild(bar);
 
 		document.body.appendChild(this.root);
 

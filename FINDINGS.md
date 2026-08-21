@@ -1216,7 +1216,99 @@ the second and a half.
 
 ---
 
-### F-056 — Sea patches split along a chunk seam wherever a wave lifts them
+### F-056 — Live rebuild flushes the terrain and nothing that follows from its shape
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-21, adding a way to rebuild the terrain without reloading
+**Where:** `packages/client/src/planet.ts`, `flushTerrain`; `PlanetSettings.LIVE_TERRAIN_KNOBS`
+
+**What happens.** **Live rebuild**, a checkbox on the parameter panel, replaces
+the coarse map and every chunk built from it the moment a terrain knob settles,
+with no page reload. It is deliberately narrow: `LIVE_TERRAIN_KNOBS` admits only
+the knobs that decide the map itself -- the two layers, Land, Relief, Sea depth,
+Sea level, Peak scale, Detail, the merge, erosion, the seed. Everything the
+*shape* of the world feeds into afterwards stays exactly where it was: the sea's
+own surface radius, the sky's atmosphere depth, the cloud decks' radii and the
+crust top are all computed once at page load from the old map's true peak and
+never revisited. A Relief raised far enough to move `crustTopRadius` a long way
+shows the new ground with the old sea floating at the wrong height above or
+through it, until the page is actually rebuilt with **Rebuild**.
+
+**Why it matters.** It is easy to read "live rebuild" as "the world updates" and
+drag Relief past where that stops being true. Nothing crashes and nothing looks
+obviously wrong at a glance from orbit -- the mismatch shows up as the sea
+sitting at the wrong height relative to the coastline, which is the kind of
+thing a person notices as "looks a bit off" rather than as a named bug, unless
+this entry tells them what to check.
+
+**What would fix it.** Recompute `shape.seaSurfaceRadius`, the atmosphere's
+`planetAtmosphere` inputs and the two cloud deck radii from the new map inside
+`flushTerrain`, the way `map`, `shape`, `peaks` and the generators already are,
+and hand the new numbers to `sea`, `sky` and `billboardClouds` -- each already
+exposes a live setter for its own look, so this is wiring rather than new
+machinery. Left undone because Relief is not in the default draft's habit of
+moving far enough to notice, and because it is a straightforward follow-up
+once someone is actually leaning on Live rebuild rather than trying it once.
+
+---
+
+### F-057 — The noise lab draws every world 11% taller than the engine builds it
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, while giving the lab a coarse grid so it could show
+erosion
+**Where:** `demos/noise-lab.html`, `SPHERE_SAMPLES` and `generate`;
+`packages/engine/src/generation/coarse/metreHeight.ts`
+
+**What happens.** Both the lab and the engine turn a unitless field into metres
+the same way: subtract the height that leaves `landFraction` of the surface
+above it, then divide by the field's own peak and multiply by `relief`, so the
+tallest point stands exactly `relief` metres up. They read that peak off
+different numbers of samples. The engine reads it off **every cell of the map**
+— 655,362 at level 8. The lab reads it off **6,000 directions** spread over the
+sphere by the golden angle.
+
+A peak is the largest of what you looked at, so a smaller sample finds a smaller
+one, and dividing by a smaller peak makes every height larger. Measured on the
+shipped world by drawing samples from the map's own field: 6,000 samples see a
+peak **11.7%** below the true one, 12,000 see 7.0% below, 24,000 4.3%, 96,000
+1.5%. So a mountain the lab draws at `1,100 m` is `1,219 m` of ground when the
+engine builds the same knobs.
+
+**Sea level is not affected, and that is why nobody has noticed.** It is a
+percentile rather than an extreme, and a percentile is what a few thousand
+samples are good at: the two readings differ by `2.45e-3` of the field, which is
+**0.7 m** of ground. The coastline the lab draws is the coastline the engine
+builds. Only the height above it is wrong.
+
+**Why it matters.** The lab is where Relief, the mountain balance and the two
+material lines were tuned, and the material lines are **absolute metres** — grass
+to 300 m, rock to 400 m, snow over it. A world tuned in the lab to 89% grass
+stands 11% higher when the engine builds it, which moves ground across both
+lines. The panel also states the shares of each material as a fact about the
+planet, and those shares are read off the same 6,000 samples, so the number on
+screen is not the number the world comes out at.
+
+**What would fix it.** Raising the sample count is the obvious one and it is
+poor: 96,000 samples is sixteen times the noise the sphere pass costs on every
+redraw and is still 1.5% out. The better one is now available: the lab builds a
+real coarse grid for erosion, so the fit can be read off that grid — the same
+cells the engine reads — whenever it exists. That leaves the question of what
+the fit is when erosion is off and there is no grid, and the honest answer is to
+build the grid anyway at the level Map cell names, which is 2.4 s at level 8 and
+would have to move off the redraw path. A third option is to leave the reading
+alone and say on the panel that heights are a sample and carry a percentage,
+which costs nothing and fixes nothing.
+
+---
+
+### F-058 — Sea patches split along a chunk seam wherever a wave lifts them
 
 **Kind:** bug
 **Milestone:** 0.5.0
@@ -1256,6 +1348,7 @@ neighbour's cap, but the sea has no cap plane and no depth-buffer tie to lose,
 so the objection does not carry over. The skirt is an hour; the snap is a day
 and gives an exactly closed surface.
 
+---
 
 ## Closed
 

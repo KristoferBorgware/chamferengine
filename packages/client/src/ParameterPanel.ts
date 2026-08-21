@@ -1,6 +1,17 @@
 import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
-import { KNOB_RANGES, PlanetSettings } from "./PlanetSettings.js";
-import { splineAt } from "chamfer/generation";
+import {
+	KNOB_RANGES,
+	LIVE_TERRAIN_KNOBS,
+	PlanetSettings,
+} from "./PlanetSettings.js";
+import {
+	MOUNTAIN_SEED_OFFSET,
+	TERRAIN_SEED_OFFSET,
+	layerNoiseSettings,
+	octaveNoise,
+	seedFromString,
+	splineAt,
+} from "chamfer/generation";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 
 /** One row of the panel. */
@@ -595,6 +606,14 @@ export class ParameterPanel {
 
 	/** Told whenever the draft moves, so a pane drawing from it can keep up. */
 	private readonly onDraft: (settings: PlanetSettings) => void;
+
+	/**
+	 * Told when a knob in {@link LIVE_TERRAIN_KNOBS} moves and **Live
+	 * rebuild** is on, instead of the knob only marking the Rebuild button
+	 * dirty. Never called for a knob outside that set: those still need the
+	 * device and the address width a full reload gives them.
+	 */
+	private readonly onLiveRebuild: (settings: PlanetSettings) => void;
 	private readonly rows: Row[] = [];
 
 	/** Each named part's own element, so another pane can host one. */
@@ -604,14 +623,27 @@ export class ParameterPanel {
 	private applyButton!: HTMLButtonElement;
 	private dirty = false;
 
+	/**
+	 * Whether a knob in {@link LIVE_TERRAIN_KNOBS} rebuilds the terrain on the
+	 * spot rather than waiting for **Rebuild**.
+	 *
+	 * Off by default. A live rebuild runs on the thread that draws -- there is
+	 * no worker for it, the way the map preview has one -- so a big map and a
+	 * fast drag can still be felt as a stutter. The checkbox is how someone
+	 * opts into that trade rather than finding it turned on for them.
+	 */
+	private liveRebuild = false;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
 		onDraft: (settings: PlanetSettings) => void = () => {},
+		onLiveRebuild: (settings: PlanetSettings) => void = () => {},
 	) {
 		this.draft = { ...settings.knobs };
 		this.onLive = onLive;
 		this.onDraft = onDraft;
+		this.onLiveRebuild = onLiveRebuild;
 		this.root = document.createElement("aside");
 		this.root.className = "knobs";
 		this.build();
@@ -653,7 +685,7 @@ export class ParameterPanel {
 		seedInput.value = this.draft.seed;
 		seedInput.oninput = () => {
 			this.draft.seed = seedInput.value;
-			this.touch(true);
+			this.touch(true, "seed");
 		};
 		this.sections.set("Seed", seed);
 		body.appendChild(seed);
@@ -690,6 +722,23 @@ export class ParameterPanel {
 		this.derived = document.createElement("div");
 		this.derived.className = "knobs-derived";
 		body.appendChild(this.derived);
+
+		// **Try it, do not default to it.** A live rebuild runs on the thread
+		// that draws, with no worker to keep the frame free the way the map
+		// preview's does, so a big map and a fast drag can be felt as a
+		// stutter. The checkbox is how that trade is opted into rather than
+		// discovered.
+		const live = document.createElement("div");
+		live.className = "knobs-live";
+		live.innerHTML =
+			'<label><input type="checkbox"> Live rebuild — flush the terrain ' +
+			"and rebuild it on every change, no reload</label>";
+		const liveInput = live.querySelector("input")!;
+		liveInput.checked = this.liveRebuild;
+		liveInput.onchange = () => {
+			this.liveRebuild = liveInput.checked;
+		};
+		body.appendChild(live);
 
 		const bar = document.createElement("div");
 		bar.className = "knobs-bar";
@@ -784,7 +833,7 @@ export class ParameterPanel {
 				(this.draft as unknown as Record<string, boolean>).paused =
 					true;
 
-			this.touch(range.rebuilds);
+			this.touch(range.rebuilds, knob.key);
 		};
 		return { knob, wrap, input, write };
 	}
@@ -824,11 +873,20 @@ export class ParameterPanel {
 			`<label>${knob.label}` +
 			' <i title="needs a rebuild">&#9679;</i>' +
 			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
-			'</label><canvas width="260" height="78"></canvas>' +
+			'</label><canvas width="280" height="84"></canvas>' +
 			"<u>drag \u00b7 click to add \u00b7 shift-click to remove</u>";
 		const canvas = wrap.querySelector("canvas")!;
 		const g = canvas.getContext("2d")!;
-		const pad = 5;
+		// **Resolution rather than a bigger box.** The canvas already fills
+		// its row at `width: 100%`; what made the curve blurry was drawing it
+		// at 260x78 intrinsic pixels and letting CSS stretch that, which on
+		// any display denser than one device pixel per CSS pixel is a scaled
+		// bitmap. Capped at 2x so a very dense display does not pay for detail
+		// nobody's eye resolves.
+		const dpr = Math.min(2, window.devicePixelRatio || 1);
+		canvas.width = 280 * dpr;
+		canvas.height = 84 * dpr;
+		const pad = 5 * dpr;
 		const toX = (v: number): number =>
 			pad + ((v + 1) / 2) * (canvas.width - pad * 2);
 		const toY = (v: number): number =>
@@ -840,11 +898,90 @@ export class ParameterPanel {
 		const points = (): [number, number][] =>
 			this.draft[knob.key] as unknown as [number, number][];
 
+		/** Which layer this curve reads, from the knob it belongs to. */
+		const layer: "terrain" | "mountain" =
+			knob.key === "terrainCurve" ? "terrain" : "mountain";
+
+		// **Where the world actually lands on this curve.** Behind the curve
+		// is a histogram of the layer's own field over the sphere, sampled the
+		// same way the lab's did: noise clusters around its own middle, so
+		// equal widths of a curve cover wildly unequal amounts of planet, and
+		// the histogram is the only way to see that rather than assume the
+		// axis is evenly populated. Recomputed only when the layer's own
+		// shape -- not the curve dragged over it -- changes, which is the
+		// same reason `refresh()` can call `write()` on every knob move
+		// without this row re-sampling the sphere every time.
+		const HIST_BINS = 28;
+		const HIST_SAMPLES = 1800;
+		const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+		let histKey = "";
+		let hist = new Float32Array(HIST_BINS);
+		let histMax = 0;
+		const refreshHistogram = (): void => {
+			const k = this.draft as unknown as Record<string, number>;
+			const key = [
+				this.draft.seed,
+				k[`${layer}Scale`],
+				k[`${layer}Octaves`],
+				k[`${layer}Persistence`],
+				k[`${layer}Lacunarity`],
+				k[`${layer}OffsetX`],
+				k[`${layer}OffsetY`],
+			].join(":");
+			if (key === histKey) return;
+			histKey = key;
+			const settings = layerNoiseSettings(this.settings.layerFor(layer));
+			const offset =
+				layer === "terrain"
+					? TERRAIN_SEED_OFFSET
+					: MOUNTAIN_SEED_OFFSET;
+			const seed = (seedFromString(this.draft.seed) + offset) | 0;
+			hist = new Float32Array(HIST_BINS);
+			histMax = 0;
+			for (let n = 0; n < HIST_SAMPLES; n++) {
+				const z = 1 - (2 * n + 1) / HIST_SAMPLES;
+				const ring = Math.sqrt(Math.max(0, 1 - z * z));
+				const a = n * GOLDEN;
+				const v = octaveNoise(
+					Math.cos(a) * ring,
+					z,
+					Math.sin(a) * ring,
+					seed,
+					settings,
+				);
+				const bin = Math.max(
+					0,
+					Math.min(
+						HIST_BINS - 1,
+						Math.floor(((v + 1) / 2) * HIST_BINS),
+					),
+				);
+				hist[bin]! += 1;
+				if (hist[bin]! > histMax) histMax = hist[bin]!;
+			}
+		};
+
 		const draw = (): void => {
+			refreshHistogram();
 			const curve = points();
 			g.clearRect(0, 0, canvas.width, canvas.height);
 			g.fillStyle = "#0b0e13";
 			g.fillRect(0, 0, canvas.width, canvas.height);
+			if (histMax > 0) {
+				g.fillStyle = "rgba(111, 208, 255, 0.16)";
+				const wide = (canvas.width - pad * 2) / HIST_BINS;
+				for (let n = 0; n < HIST_BINS; n++) {
+					const tall =
+						(hist[n]! / histMax) * (canvas.height - pad * 2);
+					if (tall <= 0) continue;
+					g.fillRect(
+						pad + n * wide,
+						canvas.height - pad - tall,
+						Math.max(1, wide - 0.5 * dpr),
+						tall,
+					);
+				}
+			}
 			g.strokeStyle = "#232b36";
 			g.beginPath();
 			g.moveTo(toX(0), pad);
@@ -862,7 +999,7 @@ export class ParameterPanel {
 					if (out > high) high = out;
 				}
 				g.strokeStyle = "rgba(255, 180, 84, 0.55)";
-				g.setLineDash([3, 3]);
+				g.setLineDash([3 * dpr, 3 * dpr]);
 				g.beginPath();
 				const at = toY(low + this.draft.mountainLine * (high - low));
 				g.moveTo(pad, at);
@@ -871,7 +1008,7 @@ export class ParameterPanel {
 				g.setLineDash([]);
 			}
 			g.strokeStyle = "#6fd0ff";
-			g.lineWidth = 1.5;
+			g.lineWidth = 1.5 * dpr;
 			g.beginPath();
 			for (let px = pad; px <= canvas.width - pad; px++) {
 				const y = toY(splineAt(curve, fromX(px)));
@@ -882,7 +1019,7 @@ export class ParameterPanel {
 			g.fillStyle = "#e8ecf2";
 			for (const [x, y] of curve) {
 				g.beginPath();
-				g.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+				g.arc(toX(x), toY(y), 3 * dpr, 0, Math.PI * 2);
 				g.fill();
 			}
 		};
@@ -898,7 +1035,7 @@ export class ParameterPanel {
 		const nearest = (px: number, py: number): number => {
 			const curve = points();
 			let best = -1;
-			let far = 12;
+			let far = 12 * dpr;
 			for (let n = 0; n < curve.length; n++) {
 				const d = Math.hypot(
 					toX(curve[n]![0]) - px,
@@ -922,7 +1059,7 @@ export class ParameterPanel {
 				if (curve.length > 2 && at > 0 && at < curve.length - 1) {
 					curve.splice(at, 1);
 					draw();
-					this.touch(true);
+					this.touch(true, knob.key);
 				}
 				return;
 			}
@@ -934,7 +1071,7 @@ export class ParameterPanel {
 				curve.sort((a, b) => a[0] - b[0]);
 				dragging = curve.findIndex((q) => q[0] === x && q[1] === y);
 				draw();
-				this.touch(true);
+				this.touch(true, knob.key);
 			}
 			canvas.setPointerCapture(e.pointerId);
 		});
@@ -951,7 +1088,7 @@ export class ParameterPanel {
 				);
 			curve[dragging]![1] = Math.max(0, Math.min(1, fromY(py)));
 			draw();
-			this.touch(true);
+			this.touch(true, knob.key);
 		});
 		const drop = (): void => {
 			dragging = -1;
@@ -988,7 +1125,7 @@ export class ParameterPanel {
 		select.onchange = () => {
 			(this.draft as unknown as Record<string, string>)[knob.key] =
 				select.value;
-			this.touch(true);
+			this.touch(true, knob.key);
 		};
 		return {
 			knob,
@@ -1004,7 +1141,7 @@ export class ParameterPanel {
 		};
 	}
 
-	private touch(rebuilds: boolean): void {
+	private touch(rebuilds: boolean, key: keyof PlanetKnobs): void {
 		// Pull every knob inside the range the rest of the draft leaves it,
 		// before anything downstream reads one. A slider that cannot reach a
 		// refusal is worth more than a refusal that explains itself.
@@ -1013,6 +1150,17 @@ export class ParameterPanel {
 		if (rebuilds) {
 			this.dirty = true;
 			this.applyButton.classList.add("wants");
+			// **Live rebuild only ever reaches the terrain.** The device, the
+			// chunk address width and the crust are still a real reload's job
+			// -- this panel has no way to know a knob outside
+			// `LIVE_TERRAIN_KNOBS` is safe to swap under a running world, so it
+			// does not try. `dirty` stays set either way: a live rebuild shows
+			// the new ground, not the new sea radius or the new sky, so
+			// Rebuild is still the way to see everything the knob changed.
+			if (this.liveRebuild && this.settings.problems().length === 0) {
+				if (LIVE_TERRAIN_KNOBS.has(key))
+					this.onLiveRebuild(this.settings);
+			}
 		} else {
 			this.onLive(this.settings);
 		}
