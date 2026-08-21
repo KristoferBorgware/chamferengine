@@ -333,7 +333,10 @@ roughness, calmest tenth against roughest tenth, one stack gives **1.3×**.
 to decide how the terrain behaves where they are read — a continent field that
 sets the base elevation, and a mountain field that sets how rugged the place is.
 Each is bent through a **curve you drag**: across is the field's own value, up
-is what it controls. **Behind the curve is where the world actually lands on
+is what it controls. **The four points it opens with are a starting shape, not
+the shape** — click the empty curve to add a point, shift-click one to take it
+away, and only the two ends are pinned, in x alone, so the curve always covers
+the whole range. **Behind the curve is where the world actually lands on
 it** — noise clusters around its own middle, so equal widths of a curve cover
 wildly unequal amounts of planet, and half the map sits inside a quarter of the
 axis. A drag near the middle repaints a fifth of the world; the same drag out at

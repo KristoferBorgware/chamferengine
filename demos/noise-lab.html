@@ -207,6 +207,12 @@
 				touch-action: none;
 				cursor: crosshair;
 			}
+			.curve-help {
+				font-size: 10px;
+				color: var(--dim);
+				margin: 2px 0 0;
+				line-height: 1.35;
+			}
 			.knob.check {
 				grid-template-columns: auto 1fr;
 			}
@@ -2414,7 +2420,18 @@
 						}
 						if (row.type === "spline") {
 							wrap.classList.add("curved");
-							wrap.append(label, input);
+							// **The curve takes as many points as you give it**,
+							// and nothing on screen said so -- the rule lived in
+							// a source comment, so the shipped four read as the
+							// four you get. The ends hold their x and nothing
+							// else is fixed.
+							const help = document.createElement("p");
+							help.className = "curve-help";
+							help.textContent =
+								"drag a point · click the curve to add one · " +
+								"shift-click a point to remove it · " +
+								"the two ends keep their left/right position, everything else is free";
+							wrap.append(label, input, help);
 							set.append(wrap);
 							const redraw = makeSpline(input, row.key, () =>
 								askForRedraw(),
