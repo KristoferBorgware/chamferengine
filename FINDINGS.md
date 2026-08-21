@@ -1308,6 +1308,55 @@ which costs nothing and fixes nothing.
 
 ---
 
+### F-058 — The lab and the engine no longer take the same set of knobs
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, cutting the lab's panel down to the knobs that decide
+something visible
+**Where:** `demos/noise-lab.html`, `layerSettings` and `KNOBS`;
+`packages/engine/src/generation/coarse/TerrainLayer.ts`;
+`packages/engine/src/generation/coarse/CoarseMapOptions.ts`;
+`packages/client/src/PlanetSettings.ts`
+
+**What happens.** The lab's panel now sets each noise layer with a **feature
+size in metres and a scale**, and it holds the rest of the stack fixed: the
+falloff is `0.5`, the step between octaves is `2`, and there is no offset. It
+also has no **Peak scale**. The engine still carries all five: `TerrainLayer`
+has `persistence`, `lacunarity`, `offsetX` and `offsetY`, `CoarseMapOptions` has
+`peakScale`, and the client's panel exposes every one of them.
+
+Three of the shipped defaults differ as a result. The engine's mountain layer
+runs a falloff of **0.55** where the lab now runs 0.5. The engine's two layers
+are offset by `(15, 9)` and `(-22, 61)` where the lab uses `(0, 0)`, which makes
+them different fields rather than the same field moved — the same seed draws a
+different planet in each. And the lab's layer sizes are `2,400 m` and `960 m`
+against the client's `2,267 m` and `945 m`.
+
+**Why it matters.** The lab exists so a setting can be found by dragging and
+then built by the engine. A setting found there cannot be carried across now: it
+names a world the engine will not draw, and the engine's own defaults name a
+world the lab's panel cannot reach. The lab also has no way to show what
+`peakScale` does, so the one knob that takes a world above Relief has no picture
+anywhere.
+
+**What would fix it.** Take the same four out of the engine and the client. The
+falloff and the octave step are what fBm is, and the metre fit renormalises
+whatever the stack reaches, so both move how rough the ground is and not how
+tall — a question the two layers and their curves already answer where it can be
+seen. Offsets slide a field sideways, which is what the seed already does and
+with every octave moved rather than the stack as a whole. `peakScale` is the
+harder one and it is a real knob, the only thing that takes the tallest point
+past Relief; taking it out means Relief is the whole answer to how tall a world
+is. Whichever way that goes, the two panels have to agree, and the client's
+single metre slider should become the same metres-and-scale pair, because one
+slider cannot hold a hundred metres and a hundred kilometres at a resolution
+anybody can drag.
+
+---
+
 ## Closed
 
 ### F-041 — The psrd noise basis is the one field two machines may not agree on

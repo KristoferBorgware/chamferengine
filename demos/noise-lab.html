@@ -447,10 +447,20 @@
 				return {
 					frequency: k[which + "Frequency"],
 					octaves: k[which + "Octaves"],
-					persistence: k[which + "Persistence"],
-					lacunarity: k[which + "Lacunarity"],
-					offsetX: k[which + "OffsetX"],
-					offsetY: k[which + "OffsetY"],
+					// **The falloff and the step between octaves are fixed.**
+					// Halving the amplitude and doubling the frequency each
+					// octave is what fBm is, and the metre fit divides whatever
+					// the stack reaches straight back out -- so moving either one
+					// changed how rough the ground was and not how tall, which is
+					// a question the two layers and their curves already answer
+					// where it can be seen.
+					persistence: 0.5,
+					lacunarity: 2,
+					// **There is no offset.** Sliding a field sideways names a
+					// different world, and the seed already does that -- with
+					// every octave moved rather than the stack as a whole.
+					offsetX: 0,
+					offsetY: 0,
 					// **The stack is always the octave stack, always summed low
 					// first, and always divided by the summed amplitude.** Both
 					// of the other readings were on the panel as choices and
@@ -1538,12 +1548,8 @@
 					report[2] = terrainRaw;
 					report[3] = mountainRaw;
 				}
+
 				const base = shaped * 2 - 1;
-				// **The mountain layer's whole contribution, reported on its
-				// own.** Peak scale multiplies it after the metre fit, which is
-				// the only place a scale on it can do anything: applied before,
-				// the fit divides it straight back out and the knob becomes
-				// `Detail on top` under another name.
 				let term;
 				if (k.merge === "gated") {
 					const over = Math.max(
@@ -1556,7 +1562,6 @@
 					);
 					term = mount * (over * over * (3 - 2 * over)) * k.detail;
 				} else term = terrainRaw * mount * k.detail;
-				if (report) report[4] = term;
 				return base + term;
 			}
 
@@ -1646,22 +1651,40 @@
 					open: true,
 					rows: [
 						{
-							key: "terrainFrequency",
-							label: "Frequency",
-							low: 0,
-							high: 1,
-							step: 0.005,
-							value: 0.5,
-							digits: 3,
+							// **A size in metres, because a frequency is a
+							// number about a sphere and a landform is a thing
+							// on the ground.** A frequency counts features from
+							// pole to pole, so the same setting draws hills on
+							// one planet and continents on another; metres mean
+							// the same everywhere, and changing the radius then
+							// moves the horizon and leaves the landforms alone.
+							// The coarse slider carries the decade and the fine
+							// one picks the value inside it, because one slider
+							// cannot hold a hundred metres and a hundred
+							// kilometres at a resolution anybody can drag.
+							key: "terrainFeature",
+							label: "Feature",
+							low: 100,
+							high: 1000,
+							step: 10,
+							value: 600,
+							digits: 0,
+							unit: "m",
 						},
 						{
-							key: "terrainFrequencyScale",
-							label: "Frequency scale",
+							key: "terrainFeatureScale",
+							label: "Feature scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 6,
+							value: 4,
 							digits: 0,
+							unit: "x",
+							note: () =>
+								field
+									? `widest <b>${Math.round(field.k.terrainMetres).toLocaleString()} m</b>, ` +
+										`narrowest <b>${Math.round(narrowestOf("terrain")).toLocaleString()} m</b>`
+									: "",
 						},
 						{
 							key: "terrainOctaves",
@@ -1674,47 +1697,8 @@
 							digits: 0,
 						},
 						{
-							key: "terrainPersistence",
-							off: 0,
-							label: "Persistence",
-							low: 0,
-							high: 0.95,
-							step: 0.01,
-							value: 0.5,
-							digits: 2,
-						},
-						{
-							key: "terrainLacunarity",
-							label: "Lacunarity",
-							low: 1.2,
-							high: 4,
-							step: 0.05,
-							value: 2,
-							digits: 2,
-						},
-						{
-							key: "terrainOffsetX",
-							off: 0,
-							label: "Offset X",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 15,
-							digits: 0,
-						},
-						{
-							key: "terrainOffsetY",
-							off: 0,
-							label: "Offset Y",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 9,
-							digits: 0,
-						},
-						{
 							key: "terrainSpline",
-							label: "Terrain → base height",
+							label: "Terrain \u2192 base height",
 							type: "spline",
 							// A shelf, a shore and a rise: flat sea floor over
 							// the low half, a short steep climb through the
@@ -1787,66 +1771,36 @@
 							// **Tuned against what the planet is made of, not by
 							// eye.** The material lines are absolute metres, so
 							// the balance between the two layers decides how much
-							// of the world is grass: at Relief 1,100 m this gives
-							// 48% grass, 9% rock and 7% snow over the whole
-							// sphere, where 1.5 gave 22% grass and 36% snow.
-							// **Tuned against what the planet is made of.** The material
-							// lines are absolute metres, so the balance between the
-							// two layers decides how much of the world is grass: at
-							// Relief 1,100 m the shipped set gives 50% grass, 8% rock
-							// and 7% snow over the whole sphere, where 1.5 gave 22%
-							// grass and 36% snow.
+							// of the world is grass.
 							value: 7,
 							digits: 2,
 						},
 						{
-							// **The one scale that survives the fit.** Every knob
-							// upstream of the metre step is divided back out by
-							// it -- the tallest point is Relief whatever they
-							// say -- so `Detail on top` can only change the
-							// balance between the layers, never how tall a peak
-							// is in metres. This multiplies what the mountain
-							// layer contributed AFTER the fit, so a range grows
-							// and the coast, the sea level and the terrain under
-							// it all stay exactly where they were. It is the one
-							// knob that takes the world above Relief, and the
-							// readout says how far.
-							key: "peakScale",
+							key: "mountainFeature",
 							enabledWhen: (k) => k.useMountain,
-							label: "Peak scale",
-							low: 1,
-							high: 6,
-							step: 0.1,
-							value: 1,
-							digits: 1,
-							unit: "x",
-							note: () =>
-								field && field.summit > 0
-									? `tallest point <b>${Math.round(field.summit).toLocaleString()} m</b>` +
-										(knobs.peakScale > 1
-											? ` — <b>${Math.round(field.summit - value("relief")).toLocaleString()} m</b> over Relief`
-											: " — Relief exactly")
-									: "",
+							label: "Feature",
+							low: 100,
+							high: 1000,
+							step: 10,
+							value: 480,
+							digits: 0,
+							unit: "m",
 						},
 						{
-							key: "mountainFrequency",
+							key: "mountainFeatureScale",
 							enabledWhen: (k) => k.useMountain,
-							label: "Frequency",
-							low: 0,
-							high: 1,
-							step: 0.005,
-							value: 0.45,
-							digits: 3,
-						},
-						{
-							key: "mountainFrequencyScale",
-							enabledWhen: (k) => k.useMountain,
-							label: "Frequency scale",
+							label: "Feature scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 16,
+							value: 2,
 							digits: 0,
+							unit: "x",
+							note: () =>
+								field
+									? `widest <b>${Math.round(field.k.mountainMetres).toLocaleString()} m</b>, ` +
+										`narrowest <b>${Math.round(narrowestOf("mountain")).toLocaleString()} m</b>`
+									: "",
 						},
 						{
 							key: "mountainOctaves",
@@ -1860,57 +1814,14 @@
 							// storing seven only meant `settle` pulled it back to
 							// four before the first frame -- a default nothing could
 							// reach. What stopped the ranges drawing as flat white
-							// mesas was the frequency and the falloff.
+							// mesas was the feature size and the octave count.
 							value: 4,
-							digits: 0,
-						},
-						{
-							key: "mountainPersistence",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Persistence",
-							low: 0,
-							high: 0.95,
-							step: 0.01,
-							value: 0.55,
-							digits: 2,
-						},
-						{
-							key: "mountainLacunarity",
-							enabledWhen: (k) => k.useMountain,
-							label: "Lacunarity",
-							low: 1.2,
-							high: 4,
-							step: 0.05,
-							value: 2,
-							digits: 2,
-						},
-						{
-							key: "mountainOffsetX",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Offset X",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: -22,
-							digits: 0,
-						},
-						{
-							key: "mountainOffsetY",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Offset Y",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 61,
 							digits: 0,
 						},
 						{
 							key: "mountainSpline",
 							enabledWhen: (k) => k.useMountain,
-							label: "Mountain → range height",
+							label: "Mountain \u2192 range height",
 							type: "spline",
 							// **Flat over the low half and steep over the high
 							// one.** A curve that climbs everywhere makes every
@@ -2333,23 +2244,24 @@
 						: null;
 				if (!layer) return row;
 				const what = row.key.slice(layer.length);
-				if (what !== "Octaves" && what !== "FrequencyScale") return row;
+				if (what !== "Octaves" && what !== "FeatureScale") return row;
 				const k = derived();
-				if (what === "FrequencyScale") {
+				if (what === "FeatureScale") {
 					// Even one octave has to be two map cells wide, and the fine
-					// slider reaches 1, so the coarse one stops where their
-					// product does. What is cut off is frequency the map could
-					// not carry at any octave count.
-					const most = k.radius / (2 * k.cellMetres);
+					// slider reaches its own bottom, so the coarse one starts
+					// where their product does. What is cut off is a landform the
+					// map could not draw at any octave count.
+					const least = (2 * k.cellMetres) / knobs[layer + "Feature"];
 					return {
 						...row,
-						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
+						low: Math.min(row.high, Math.max(row.low, Math.ceil(least))),
 					};
 				}
-				const widest = k.radius / Math.max(1e-6, k[layer + "Frequency"]);
-				const step = knobs[layer + "Lacunarity"];
+				// Each octave halves the width, so the count stops where the
+				// narrowest one is still two map cells across.
 				const room =
-					1 + Math.floor(Math.log(widest / (2 * k.cellMetres)) / Math.log(step));
+					1 +
+					Math.floor(Math.log2(featureMetres(layer) / (2 * k.cellMetres)));
 				return {
 					...row,
 					high: Math.max(row.low, Math.min(row.high, room)),
@@ -2403,6 +2315,26 @@
 			/** How many columns the histogram under a curve is drawn in. */
 			const SPLINE_BINS = 48;
 
+			/** Metres across a layer's widest octave, which is what its two rows set. */
+			function featureMetres(which) {
+				return Math.max(
+					1,
+					knobs[which + "Feature"] * knobs[which + "FeatureScale"],
+				);
+			}
+
+			/**
+			 * Metres across a layer's narrowest octave.
+			 *
+			 * Each octave is half as wide as the one above it, so the last is the
+			 * widest divided by two to the power of one less than the count.
+			 * **This is the number the map has to be fine enough to draw**:
+			 * ground the map cannot carry is ground the world does not have.
+			 */
+			function narrowestOf(which) {
+				return featureMetres(which) / 2 ** (value(which + "Octaves") - 1);
+			}
+
 			/** What the knobs come to, in the units the engine states them in. */
 			function derived() {
 				const radius =
@@ -2433,36 +2365,24 @@
 					radius,
 					level,
 					cellMetres,
-					// **Frequency is stated as a frequency.** The sample point
-					// is a unit direction, so this is how many times the widest
-					// octave repeats across the planet -- 1 is one hump from
-					// pole to pole, 40 is forty. A metre figure divided by the
-					// radius reaches the same number, and it hides how small the
-					// result gets: a scale of 29,400 m on a 6,801 m planet is a
-					// frequency of 0.23, which is less than one whole feature
-					// and is why so much of the ground came out muted. The
-					// coarse slider carries the decade and the fine one picks
-					// the value inside it.
-					terrainFrequency:
-						knobs.terrainFrequency * knobs.terrainFrequencyScale,
+					// **A layer is set in metres and the noise takes a
+					// frequency.** The sample point is a unit direction, so a
+					// frequency counts how many times the widest octave repeats
+					// across the whole planet: the same number is hills on one
+					// world and continents on another. Metres divided by the
+					// radius reach the frequency, and the number a person sets
+					// then means the same thing whatever size the planet is.
+					terrainMetres: featureMetres("terrain"),
+					terrainFrequency: radius / featureMetres("terrain"),
 					terrainOctaves: value("terrainOctaves"),
-					terrainPersistence: value("terrainPersistence"),
-					terrainLacunarity: knobs.terrainLacunarity,
-					terrainOffsetX: value("terrainOffsetX"),
-					terrainOffsetY: value("terrainOffsetY"),
 					terrainSpline: knobs.terrainSpline,
-					mountainFrequency:
-						knobs.mountainFrequency * knobs.mountainFrequencyScale,
+					mountainMetres: featureMetres("mountain"),
+					mountainFrequency: radius / featureMetres("mountain"),
 					mountainOctaves: value("mountainOctaves"),
-					mountainPersistence: value("mountainPersistence"),
-					mountainLacunarity: knobs.mountainLacunarity,
-					mountainOffsetX: value("mountainOffsetX"),
-					mountainOffsetY: value("mountainOffsetY"),
 					mountainSpline: knobs.mountainSpline,
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
 					mountainLine: knobs.mountainLine,
-					peakScale: value("peakScale"),
 					// **The line is a fraction of the terrain curve's own range,
 					// not a height on a fixed axis.** Drag that curve's top down
 					// and an absolute line would drift toward the summit until
@@ -2519,10 +2439,7 @@
 					terrainSpline: new Float32Array(SPLINE_BINS),
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
-				const heard = [0.5, 1, 0, 0, 0];
-				// What the mountain layer put in, kept apart so Peak scale can
-				// multiply it after the fit rather than before it.
-				const mountOf = new Float64Array(SPHERE_SAMPLES);
+				const heard = [0.5, 1, 0, 0];
 				// How much of the planet the gate is open over. Counted here
 				// rather than off the patch, because the line is a property of
 				// the world and a patch can be entirely on one side of it.
@@ -2544,7 +2461,6 @@
 					);
 					tally.terrainSpline[bin(heard[2])]++;
 					tally.mountainSpline[bin(heard[3])]++;
-					mountOf[n] = heard[4];
 					if (heard[0] > k.lineHeight) overLine++;
 				}
 				let tallest = 0;
@@ -2579,21 +2495,13 @@
 				// carries the ground up through them, so the share of each is a
 				// property of the world -- and a patch is a place, which can be
 				// all mountain or all sea whatever the planet is doing.
-				// **Only what the mountain layer pushed UP is exaggerated**, so
-				// the extra is continuous across the shoreline and a peak grows
-				// where a hollow does not. At a scale of one it is exactly zero
-				// and nothing here moves at all.
-				const over = value("peakScale") - 1;
 				const bands = [0, 0, 0, 0];
-				let summit = -Infinity;
 				for (let n = 0; n < raw.length; n++) {
 					const d = raw[n] - sea;
 					const m =
 						(d >= 0 ? d * up : d * down) +
-						Math.max(0, mountOf[n]) * up * over +
 						drained +
 						erosionAt(SPHERE[n * 3], SPHERE[n * 3 + 1], SPHERE[n * 3 + 2]);
-					if (m > summit) summit = m;
 					bands[bandOf(m)]++;
 				}
 				for (let n = 0; n < bands.length; n++) bands[n] /= SPHERE_SAMPLES;
@@ -2616,7 +2524,7 @@
 				// What erosion moved here, kept apart from the height so the
 				// Erosion picture can draw the cut on its own.
 				const cutField = new Float32Array((n + 1) * (n + 1));
-				const said = [0.5, 1, 0, 0, 0];
+				const said = [0.5, 1, 0, 0];
 				// A draft covers the same ground with fewer points, so the step
 				// grows as the count falls and the patch keeps its width.
 				const step = (knobs.cells / n) * k.cellMetres;
@@ -2664,8 +2572,7 @@
 						const d = unitless - sea;
 						const wet = d >= 0 ? d * up : d * down;
 						const cut = erosionAt(x / len, y / len, z / len);
-						const metres =
-							wet + Math.max(0, said[4]) * up * over + drained + cut;
+						const metres = wet + drained + cut;
 						height[r * (n + 1) + q] = metres;
 						cutField[r * (n + 1) + q] = cut;
 						field0[r * (n + 1) + q] = unitless;
@@ -2697,7 +2604,6 @@
 					exposedShare: (land - wasLand) / ((n + 1) * (n + 1)),
 					drained,
 					bands,
-					summit,
 					overLine: overLine / SPHERE_SAMPLES,
 					// The planet map redraws from these without regenerating,
 					// so the two pictures are always of one world.
@@ -2783,23 +2689,14 @@
 					k.level,
 					k.terrainFrequency,
 					k.terrainOctaves,
-					k.terrainPersistence,
-					k.terrainLacunarity,
-					k.terrainOffsetX,
-					k.terrainOffsetY,
 					knobs.terrainSpline,
 					k.mountainFrequency,
 					k.mountainOctaves,
-					k.mountainPersistence,
-					k.mountainLacunarity,
-					k.mountainOffsetX,
-					k.mountainOffsetY,
 					knobs.mountainSpline,
 					k.useMountain,
 					k.merge,
 					k.mountainLine,
 					k.detail,
-					k.peakScale,
 					value("landFraction"),
 					value("relief"),
 					value("seaDepth"),
@@ -2911,8 +2808,7 @@
 					const base = new Float64Array(grid.count);
 					const seed = seedFromString(knobs.seed);
 					const s = settingsFor(k);
-					const said = [0.5, 1, 0, 0, 0];
-					const over = k.peakScale - 1;
+					const said = [0.5, 1, 0, 0];
 					// The same two lines the patch runs, at the grid's own
 					// directions: the field, then sea level off it and the two
 					// scales onto it. Sea level and the metre fit come from the
@@ -2934,7 +2830,6 @@
 							const d = unitless - field.sea;
 							base[cell] =
 								(d >= 0 ? d * field.up : d * field.down) +
-								Math.max(0, said[4]) * field.up * over +
 								field.drained;
 						}
 						erosion.busy = "raising the ground";
@@ -3066,7 +2961,7 @@
 			 */
 			function planetHeights(wide, tall) {
 				const out = new Float32Array(wide * tall);
-				const said = [0.5, 1, 0, 0, 0];
+				const said = [0.5, 1, 0, 0];
 				const layer = new Float32Array(wide * tall);
 				const raw = new Float32Array(wide * tall);
 				const cut = new Float32Array(wide * tall);
@@ -3092,7 +2987,6 @@
 						cut[at] = erosionAt(x, y, z);
 						out[at] =
 							(d >= 0 ? d * field.up : d * field.down) +
-							Math.max(0, said[4]) * field.up * (field.k.peakScale - 1) +
 							field.drained +
 							cut[at];
 						raw[at] = unitless;
@@ -4228,23 +4122,18 @@
 								value("relief") + field.drained,
 							).toLocaleString()} m</b> above the water<br>`
 						: "") +
-					// Each layer's frequency in the units the engine's panel
-					// states, so a setting found here can be carried across: the
-					// engine asks for the widest feature in metres, which is the
-					// radius divided by the frequency. And the narrowest octave,
-					// because ground the map cannot draw is ground the world
-					// does not have.
+					// Each layer's widest and narrowest octave, in the metres
+					// both are set in, and how many times the widest repeats
+					// across the planet -- which is what the noise itself takes
+					// and what says whether a landform is a hill or a continent
+					// on this radius.
 					["terrain", "mountain"]
 						.map((which) => {
-							const frequency = Math.max(1e-6, k[which + "Frequency"]);
-							const widest = k.radius / frequency;
-							const narrowest =
-								widest /
-								knobs[which + "Lacunarity"] **
-									(value(which + "Octaves") - 1);
+							const widest = k[which + "Metres"];
+							const narrowest = narrowestOf(which);
 							return (
-								`${which} <b>${k[which + "Frequency"].toFixed(2)}</b> — ` +
-								`widest <b>${Math.round(widest).toLocaleString()} m</b>, ` +
+								`${which} <b>${Math.round(widest).toLocaleString()} m</b> — ` +
+								`<b>${k[which + "Frequency"].toFixed(2)}</b> across the planet, ` +
 								`narrowest <b>${Math.round(narrowest).toLocaleString()} m</b>` +
 								(narrowest < k.cellMetres
 									? ' <span style="color:#ffb454">narrower than a cell</span>'
