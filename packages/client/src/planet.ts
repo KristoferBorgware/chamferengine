@@ -363,6 +363,8 @@ async function main(): Promise<void> {
 			opacity: k.seaOpacity,
 			clarity: k.seaClarity,
 			glint: k.seaGlint,
+			ripple: k.seaRipple,
+			grouping: k.seaGrouping,
 			// Shallow is the water a look has barely entered, deep is the
 			// water it never leaves, and the sky does the horizon.
 			shallow: [0.11, 0.5, 0.53],

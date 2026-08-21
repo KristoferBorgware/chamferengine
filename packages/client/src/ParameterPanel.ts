@@ -435,6 +435,18 @@ const GROUPS: Group[] = [
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
+			{
+				key: "seaRipple",
+				label: "Ripple",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "seaGrouping",
+				label: "Calm and rough",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
 		],
 	},
 	{

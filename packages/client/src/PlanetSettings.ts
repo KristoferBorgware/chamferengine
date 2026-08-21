@@ -248,6 +248,25 @@ export interface PlanetKnobs {
 	/** How hard the sun's own highlight is on the water. */
 	seaGlint: number;
 
+	/**
+	 * How much of the texture below a wave the shading puts back.
+	 *
+	 * A sea patch carries a vertex every few metres, so the geometry stops at
+	 * a wave a few times that and the water between two crests is a sheet of
+	 * glass. This tilts the surface a fragment is shaded by, without moving a
+	 * vertex.
+	 */
+	seaRipple: number;
+
+	/**
+	 * How far the swell's own height rises and falls across the ocean.
+	 *
+	 * `0` runs one height everywhere. `0.5` leaves the calmest water half as
+	 * tall as the roughest, and the roughest keeps the height that was asked
+	 * for.
+	 */
+	seaGrouping: number;
+
 	/** How many cloud formations stand over the whole planet. */
 	cloudClusters: number;
 
@@ -400,6 +419,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seaOpacity: 0.45,
 	seaClarity: 30,
 	seaGlint: 0.8,
+	seaRipple: 0.7,
+	seaGrouping: 0.5,
 	cloudClusters: 1200,
 	cloudDensity: 100,
 	cloudSpread: 180,
@@ -612,6 +633,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	seaOpacity: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	seaClarity: { low: 1, high: 300, step: 1, rebuilds: false, unit: "m" },
 	seaGlint: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
+	seaRipple: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
+	seaGrouping: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	cloudClusters: {
 		low: 100,
 		high: 4000,

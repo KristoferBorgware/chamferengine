@@ -1359,6 +1359,66 @@ anybody can drag.
 
 ## Closed
 
+### F-058 — Sea patches split along a chunk seam wherever a wave lifts them
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, from the air over open ocean while measuring the wave field
+**Where:** `packages/engine/src/render/sea/SeaRenderer.ts`, `seaPatch.ts`
+
+**What happens.** Looking down at the sea from 140 m, thin dotted lines of sand
+colour run across the water in straight segments. They follow chunk edges. Set
+**Wave height** to 0 and all but three isolated pinholes vanish, so they are
+the waves opening the surface, not the shading.
+
+A patch is cut into `min(16, 2^(depth - chunkLevel) >> lod)` pieces a side, and
+two chunks that meet may have chosen different numbers. Where a fine patch puts
+a vertex halfway along an edge, the coarse patch beside it draws the straight
+line between its own two. The wave lifts the fine patch's middle vertex off
+that line, and the gap is a hole straight through to the sea floor. It is the
+ordinary T-junction crack, and the sea has none of the defences the ground has:
+no apron, no seam ownership, no skirt.
+
+**Why it matters.** The ocean covers a third of the surface and every one of
+these is a hole in it, so from any altitude the chunk grid is drawn on the
+water in dotted lines. It is worse the taller the waves, so it is a cap on the
+one knob a player is most likely to raise. The three pinholes that survive a
+flat sea are the same defect at a shared corner, where the two patches disagree
+about the corner direction itself.
+
+**What would fix it.** Either of two, and both are small. **Snap the edge**:
+have a patch build its rim vertices from the coarsest level any neighbour could
+have chosen, so a shared edge is the same polyline on both sides -- which needs
+the neighbour levels passed to `seaPatch`, and a mesh per rim combination
+rather than per level. Or **hang a skirt**: extend each patch a metre past its
+own rim, downward and outward, so the two overlap along the seam. A skirt is
+wrong on the ground because a curtain from the cap plane is coplanar with the
+neighbour's cap, but the sea has no cap plane and no depth-buffer tie to lose,
+so the objection does not carry over. The skirt is an hour; the snap is a day
+and gives an exactly closed surface.
+
+**Closed:** 2026-08-21, by a curtain. Each patch hangs a strip from each of its
+three rims, straight down, as deep as the swell is tall, carrying the rim
+vertex's own wave. Neither of the two fixes above: the snap needs neighbour
+levels the renderer does not have, and a plain skirt was the shape of the
+answer without the part that makes it work. **What makes it work is the draw
+order.** The sea is translucent and writes depth, so a curtain blended before a
+neighbour's surface is drawn over it leaves two layers of water on one pixel --
+a dark outline of every chunk, worse than the slit. The patch therefore puts
+its curtain last in the index list and `SeaRenderer` draws in two passes over
+the same instances, every surface and then every curtain, so the depth buffer
+already holds the nearest water by the time a curtain is rasterized and the
+test throws it away wherever the sea is closed. One extra draw call, 96
+triangles a patch against 256, and no dark band in shallow water where the
+curtain hangs into the sand.
+
+
+
+---
+
+
 ### F-041 — The psrd noise basis is the one field two machines may not agree on
 
 **Kind:** risk

@@ -46,6 +46,10 @@ struct Sea {
 	deep    : vec4f,
 	// What the sky is doing, for the water to reflect at the horizon.
 	sky     : vec4f,
+	// x: how much ripple slope a fragment is given. y: how far the swell's
+	// own strength rises and falls between one stretch of water and the next.
+	// z, w: unused.
+	detail  : vec4f,
 };
 @group(1) @binding(0) var<uniform> sea : Sea;
 
@@ -60,7 +64,7 @@ fn hash13(p : vec3f) -> f32 {
 }
 
 /**
- * Value noise in three dimensions, sampled from a direction.
+ * Value noise in three dimensions, and its gradient, from one set of corners.
  *
  * **The article warps its wave field with two-dimensional noise over the
  * ground plane, and there is no such plane here.** A sphere has no seamless
@@ -69,18 +73,50 @@ fn hash13(p : vec3f) -> f32 {
  * tears somewhere or pinches at a pole. Noise sampled from the direction
  * vector in three dimensions has neither problem, which is exactly why the
  * terrain samples in 3D world space rather than in face-local coordinates.
+ *
+ * \`x\` is the value over -1 to 1 and \`yzw\` is its gradient with respect to the
+ * sample point. The gradient falls out of the same eight hashed corners the
+ * value is built from, so a slope is one noise lookup rather than the four a
+ * difference would take. That is what makes a per-fragment slope affordable.
  */
-fn vnoise3(p : vec3f) -> f32 {
+fn vnoise3d(p : vec3f) -> vec4f {
 	let i = floor(p);
 	let f = p - i;
 	// The quintic fade, not smoothstep: a smoothstep leaves a jump in
 	// curvature at every lattice plane, which shading shows as a grid.
 	let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-	let a = mix(hash13(i + vec3f(0.0, 0.0, 0.0)), hash13(i + vec3f(1.0, 0.0, 0.0)), u.x);
-	let b = mix(hash13(i + vec3f(0.0, 1.0, 0.0)), hash13(i + vec3f(1.0, 1.0, 0.0)), u.x);
-	let c = mix(hash13(i + vec3f(0.0, 0.0, 1.0)), hash13(i + vec3f(1.0, 0.0, 1.0)), u.x);
-	let d = mix(hash13(i + vec3f(0.0, 1.0, 1.0)), hash13(i + vec3f(1.0, 1.0, 1.0)), u.x);
-	return mix(mix(a, b, u.y), mix(c, d, u.y), u.z) * 2.0 - 1.0;
+	let du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+	let a = hash13(i + vec3f(0.0, 0.0, 0.0));
+	let b = hash13(i + vec3f(1.0, 0.0, 0.0));
+	let c = hash13(i + vec3f(0.0, 1.0, 0.0));
+	let d = hash13(i + vec3f(1.0, 1.0, 0.0));
+	let e = hash13(i + vec3f(0.0, 0.0, 1.0));
+	let g = hash13(i + vec3f(1.0, 0.0, 1.0));
+	let h = hash13(i + vec3f(0.0, 1.0, 1.0));
+	let j = hash13(i + vec3f(1.0, 1.0, 1.0));
+	let k0 = a;
+	let k1 = b - a;
+	let k2 = c - a;
+	let k3 = e - a;
+	let k4 = a - b - c + d;
+	let k5 = a - c - e + h;
+	let k6 = a - b - e + g;
+	let k7 = -a + b + c - d + e - g - h + j;
+	let value =
+		k0 + k1 * u.x + k2 * u.y + k3 * u.z +
+		k4 * u.x * u.y + k5 * u.y * u.z + k6 * u.z * u.x +
+		k7 * u.x * u.y * u.z;
+	let grad = du * vec3f(
+		k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+		k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
+		k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y
+	);
+	return vec4f(value * 2.0 - 1.0, grad * 2.0);
+}
+
+/** The value alone, for a caller with no use for the slope. */
+fn vnoise3(p : vec3f) -> f32 {
+	return vnoise3d(p).x;
 }
 
 /**
@@ -92,17 +128,92 @@ fn vnoise3(p : vec3f) -> f32 {
  * is a peak with a length and a width. Blending the fold toward the
  * complementary cosine, weighted by the fold itself, rounds the very top so
  * a crest is a wave rather than a knife edge.
+ *
+ * **The two bands take a phase each rather than sharing one.** A shared
+ * offset slides the whole pattern sideways and leaves the angle its two
+ * families of crests cross at exactly where it was, which is a lattice
+ * carried to a new place rather than broken; two offsets shear it, so the
+ * crossing angle is one thing here and another a few wavelengths away.
+ * Measured over a 400 m patch, the slope directions of the shared form pile
+ * into one bin 2.7 times as full as the average and the sheared form 1.8, and
+ * a 1600 m patch reads 2.9 against 1.9.
  */
-fn octave(dir : vec3f, k : f32, drift : f32, chop : f32) -> f32 {
-	let a = dot(dir, AXIS_A) * k + drift;
-	let b = dot(dir, AXIS_B) * k + drift;
+fn octave(dir : vec3f, k : f32, phaseA : f32, phaseB : f32, chop : f32) -> f32 {
+	let a = dot(dir, AXIS_A) * k + phaseA;
+	let b = dot(dir, AXIS_B) * k + phaseB;
 	let wave = vec2f(1.0 - abs(sin(a)), 1.0 - abs(sin(b)));
 	let round = vec2f(abs(cos(a)), abs(cos(b)));
 	let w = mix(wave, round, wave);
 	return pow(1.0 - pow(w.x * w.y, 0.65), chop);
 }
 
-/** How high the water stands at a direction, in metres off the sea radius. */
+/**
+ * Radians of phase the bend field is worth, and how far one bend of it runs.
+ *
+ * The bend is read at a sixteenth of the octave's own frequency, so a crest
+ * holds its line over a train of them and the direction drifts across a bay
+ * rather than within one wave. Twelve radians over sixteen wavelengths is
+ * three quarters of a wavelength of sideways travel per wavelength of ground
+ * -- enough to turn a crest, far short of inventing one.
+ */
+const BEND_RADIANS = 12.0;
+const BEND_OVER = 16.0;
+
+/**
+ * How many octaves are bent before the rest are left along the fixed axes.
+ *
+ * Bending all three measures 1.80 against 1.85 for two on a 400 m patch, and
+ * each bent octave is two noise lookups. Bending only the first reads 2.13,
+ * which is a weave again.
+ */
+const BEND_OCTAVES = 2;
+
+/** What each octave is worth against the one before it. */
+const OCTAVE_GAIN = 0.4;
+
+/**
+ * How much slower the second band's clock runs than the first's.
+ *
+ * A band folded at its own zero crossing repeats every \`pi\` of phase, so one
+ * clock for both bands makes the whole field the field it was \`pi / speed\`
+ * seconds ago -- 3.93 seconds at the default speed, measured as a match of
+ * **1.000** against the surface three seconds earlier. Two clocks that share
+ * no whole-number ratio leave the crossings of the two bands travelling
+ * instead of pulsing in place.
+ */
+const AGAINST = 0.76;
+
+/**
+ * What one octave's clock is multiplied by for the next.
+ *
+ * A wave in deep water travels at the square root of its wavelength, so an
+ * octave at 1.9 times the frequency runs \`sqrt(1.9)\` times as fast. Giving
+ * every octave the same clock instead leaves the narrow ones crawling under
+ * the wide ones and hands all three the same period.
+ */
+const DISPERSION = 1.37840;
+
+/**
+ * How fast the bend field itself travels across the water, in metres a
+ * second.
+ *
+ * The bend is where the crests are, and a swell's groups move as well as its
+ * crests. It is the single largest part of the reading: with the bend held
+ * still the surface comes back to a **0.84** match of a moment 15 seconds
+ * earlier, and with it moving the best match over thirty seconds is **0.31**.
+ */
+const BEND_TRAVEL = 3.4;
+
+/**
+ * How high the water stands at a direction, in metres off the sea radius.
+ *
+ * Three octaves and no more. At the shipped settings a patch is cut to a
+ * vertex every 4 m and the third octave is a 12.5 m wave, which is three
+ * vertices across it; a fourth would be 6.6 m, under two vertices, so the
+ * crests it draws would move with the camera rather than stand in the world.
+ * Everything shorter than the third octave is a slope the fragment adds, not
+ * geometry -- see \`ripple\`.
+ */
 fn swell(dir : vec3f, seconds : f32) -> f32 {
 	// One turn of phase per wavelength around the planet, so the number a
 	// person sets in metres is the number of metres between two crests.
@@ -110,35 +221,42 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 	// no seam to cross and no pole to pinch, because a dot product has
 	// neither.
 	var k = 6.28318530718 * sea.up.w / max(1.0, sea.wave.y);
-	let speed = sea.wave.z;
+	var omega = sea.wave.z;
 	var chop = max(1.0, sea.look.w);
 
-	// **The domain warp is what stops the sea being a lattice.** Everything
-	// below it is periodic -- sines folded and multiplied are still sines --
-	// so without this the water draws the same crest over and over on a
-	// regular grid, which is what it looks like. Bending the direction by a
-	// noise field first means no two crests are laid out alike, and because
-	// the noise is smooth the surface stays smooth. A phase moves by one
-	// radian for a direction offset of 1/k, so the warp is measured in
-	// radians of phase and divided by k to become an offset.
-	let wf = k * 0.3;
-	let warp = vec3f(
-		vnoise3(dir * wf),
-		vnoise3(dir * wf + vec3f(19.3, 7.7, 3.1)),
-		vnoise3(dir * wf + vec3f(-5.2, 11.9, 23.4))
-	) * (1.6 / k);
-	var d = normalize(dir + warp);
-
+	var d = dir;
 	var h = 0.0;
 	var amp = 1.0;
 	var total = 0.0;
-	var drift = seconds * speed;
 	for (var o = 0; o < 3; o++) {
+		// **The bend is what stops the sea being a lattice.** Everything
+		// else here is periodic -- sines folded and multiplied are still
+		// sines -- so without it the water draws the same crest over and
+		// over on a regular grid. A phase moves by one radian for a
+		// direction offset of 1/k, so the bend is measured in radians and
+		// read off a noise field far below the octave's own frequency.
+		var bendA = 0.0;
+		var bendB = 0.0;
+		if (o < BEND_OCTAVES) {
+			let wf = k / BEND_OVER;
+			// The bend travels as well as the crests do. The sample point is
+			// the direction times wf, so a metre along the surface is
+			// wf / R of it, and that factor turns a speed in metres a second
+			// into one here.
+			let groups = AXIS_A * (seconds * BEND_TRAVEL * wf / sea.up.w);
+			let p = d * wf + groups;
+			bendA = vnoise3(p + vec3f(19.3, 7.7, 3.1)) * BEND_RADIANS;
+			bendB = vnoise3(p + vec3f(-5.2, 11.9, 23.4)) * BEND_RADIANS;
+		}
 		// Two samples travelling opposite ways. One direction alone slides
 		// the whole ocean past the viewer like a conveyor; against each
 		// other they interfere, and the pattern churns instead of moving.
-		var band = octave(d, k, drift, chop);
-		band += octave(d, k, -drift, chop);
+		// Only the clocks are mirrored, never the bend: the bend says where
+		// the crests are, and both copies are the same water.
+		let clockA = seconds * omega;
+		let clockB = -clockA * AGAINST;
+		var band = octave(d, k, clockA + bendA, clockB + bendB, chop);
+		band += octave(d, k, -clockA + bendA, -clockB + bendB, chop);
 		h += band * amp;
 		total += amp * 2.0;
 		// Turn the direction between octaves as well as raising the
@@ -146,12 +264,82 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 		// stack sharpens one pattern rather than building a second.
 		d = normalize(vec3f(d.y * 0.8 + d.z * 0.6, d.z * 0.8 - d.x * 0.6, d.x));
 		k *= 1.9;
-		amp *= 0.22;
+		omega *= DISPERSION;
+		amp *= OCTAVE_GAIN;
 		chop = mix(chop, 1.0, 0.2);
 	}
 	// The fold runs 0 to 1 rather than -1 to 1, so centre it: the number a
 	// person sets is trough to crest, and the still water line is halfway.
 	return (h / total - 0.5) * sea.wave.x;
+}
+
+/** How far one rise and fall of the swell's own strength runs, in waves. */
+const GROUP_OVER = 12.0;
+
+/**
+ * How much of its height the swell keeps here, from 1 down to \`1 - depth\`.
+ *
+ * Swell arrives in groups: a stretch of open water runs its full height and
+ * the next stretch is half of it. The factor never rises above 1, so the
+ * height a person sets stays the tallest wave on the planet rather than an
+ * average the field wanders either side of.
+ *
+ * A scale over the whole surface, not a term inside it, so the vertex shader
+ * applies the one value to the height and to both slopes and \`swell\` is
+ * called no more often than before.
+ */
+fn grouping(dir : vec3f, depth : f32) -> f32 {
+	let k = 6.28318530718 * sea.up.w / max(1.0, sea.wave.y);
+	let g = vnoise3(dir * (k / GROUP_OVER) + vec3f(51.1, 3.3, -8.8));
+	return 1.0 - depth * (0.5 - 0.5 * g);
+}
+
+/**
+ * The slope of the water below what a vertex can carry.
+ *
+ * A patch is cut to a vertex every 4 m at the shipped settings, so the
+ * geometry stops at a 12.5 m wave and the water between two crests is drawn
+ * as a sheet of glass. This puts the missing band back as a slope rather than
+ * as geometry: three octaves of noise read for their gradient, tilting the
+ * normal a fragment is shaded by without moving a vertex.
+ *
+ * **The gradient comes out of the same eight corners as the value**, so an
+ * octave is one lookup rather than the four a difference over the surface
+ * would take.
+ *
+ * The result is the part of the slope that lies across the surface, in metres
+ * of rise per metre travelled. A height of \`amp * noise(dir * k)\` changes by
+ * \`amp * k\` per unit of direction and a metre along the surface is \`1 / R\` of
+ * direction, so the two divide out against the radius.
+ */
+fn ripple(dir : vec3f, seconds : f32, strength : f32) -> vec3f {
+	// A quarter of the swell's wavelength is where the geometry gives out,
+	// and the octaves run down from there.
+	var k = 6.28318530718 * sea.up.w / max(0.5, sea.wave.y * 0.25);
+	// A fortieth of the swell's height at the widest. A ripple is read as a
+	// slope and never as a height, so what it is worth is how far it tilts
+	// the surface: this leaves the widest octave about 0.06 of tilt, which
+	// is texture on a wave. Past about 0.2 the highlight breaks into
+	// separate lit pixels and the water reads as glitter.
+	var amp = sea.wave.x * 0.025 * strength;
+	var slope = vec3f(0.0);
+	for (var o = 0; o < 3; o++) {
+		// Carried along an axis rather than folded, so the detail travels
+		// across the crests instead of pulsing in place. The sample point is
+		// the direction times k, so a metre along the surface is k / R of
+		// it: that factor turns the speed back into metres a second, and
+		// every octave travels at the same one. Alternating the axis stops
+		// the three of them moving as one sheet.
+		let axis = select(AXIS_B, AXIS_A, (o & 1) == 0);
+		let travel = axis * (seconds * sea.wave.z * 0.6 * k / sea.up.w);
+		let n = vnoise3d(dir * k + travel);
+		slope += n.yzw * (amp * k / sea.up.w);
+		k *= 2.3;
+		amp *= 0.45;
+	}
+	// Only the part across the surface: a slope along the radial is not a
+	// slope, it is a change of height.
+	return slope - dir * dot(slope, dir);
 }
 
 struct SeaOut {
@@ -161,15 +349,30 @@ struct SeaOut {
 	@location(2)       up    : vec3f,
 	@location(3)       crest : f32,
 	@location(4)       out   : f32,
+	@location(5)       detail : f32,
 };
+
+/**
+ * How far under the water a curtain vertex hangs, in metres.
+ *
+ * The slit a curtain fills is the difference between two readings of the same
+ * wave field, so it is never wider than trough to crest. The quarter metre on
+ * top covers the sphere's own curvature between two patches cut at different
+ * spacings, which is a millimetre at chunk scale and does not go away when
+ * the water is flat.
+ */
+fn curtainDrop() -> f32 {
+	return sea.wave.x + 0.25;
+}
 
 @vertex
 fn vertexMain(
-	@location(0) bary    : vec2f,
+	@location(0) place   : vec3f,
 	@location(1) cornerA : vec3f,
 	@location(2) cornerB : vec3f,
 	@location(3) cornerC : vec3f,
 ) -> SeaOut {
+	let bary = place.xy;
 	// **One barycentric blend, evaluated once, then normalised.** The patch
 	// is a flat triangle of weights and the instance is where its three
 	// corners point, so this is the same one-shot construction every cell
@@ -193,9 +396,12 @@ fn vertexMain(
 	// point, and what makes it a path is the last of the slope.
 	let seconds = sea.view.y;
 	let dist = length(frame.eye.xyz - dir * sea.up.w);
-	let resolved = mix(0.15, 1.0, 1.0 - smoothstep(sea.view.z, sea.view.w, dist));
+	let near = 1.0 - smoothstep(sea.view.z, sea.view.w, dist);
+	let resolved = mix(0.15, 1.0, near) * grouping(dir, sea.detail.y);
 	let height = swell(dir, seconds) * resolved;
-	let world = dir * (sea.up.w + height);
+	// A curtain vertex stands where its rim vertex stands and hangs under it,
+	// so it carries the rim's own wave rather than a second reading of one.
+	let world = dir * (sea.up.w + height - place.z * curtainDrop());
 
 	// The normal, from how the swell changes a step each way across the
 	// surface. Any two directions across the radial will do -- the slope of a
@@ -221,6 +427,10 @@ fn vertexMain(
 	result.up = normalize(dir - e1 * slope1 - e2 * slope2);
 	// How near this vertex is to the top of a wave, for the foam.
 	result.crest = height / max(0.001, sea.wave.x) + 0.5;
+	// How much of the ripple slope this fragment gets. It fades out over the
+	// same stretch the swell flattens over, because both give out for the
+	// same reason: a wave narrower than the pixels drawing it is a shimmer.
+	result.detail = near;
 	// How near the viewer's own horizon this vertex is, as a fraction of the
 	// way to it: 0 underfoot and 1 at the skyline, at every altitude. The
 	// fragment reads it for the sky the water reflects.
@@ -247,7 +457,19 @@ fn wireMain(in : SeaOut) -> @location(0) vec4f {
 
 @fragment
 fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
-	let normal = normalize(in.up);
+	// **The vertex normal is the slope of a 12.5 m wave and nothing
+	// narrower**, because a vertex stands every 4 m and a slope is measured
+	// between them. Tilting it here by a slope read from noise puts the
+	// metre-scale texture of water back without moving a vertex, and it is
+	// where the highlight stops being a polygon: a per-vertex normal
+	// interpolated across a triangle gives a hard threshold straight edges,
+	// and this breaks them at the fragment.
+	let dir = normalize(in.dir);
+	let strength = sea.detail.x * in.detail;
+	var normal = normalize(in.up);
+	if (strength > 0.001) {
+		normal = normalize(normal - ripple(dir, sea.view.y, strength));
+	}
 	let toEye = normalize(frame.eye.xyz - in.world);
 	let day = frame.night.x;
 
@@ -286,7 +508,13 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	tint += (sheen * 0.22 + glint * 0.85) * sea.look.y * day;
 
 	// Foam on the crests, banded rather than faded, so it reads as drawn.
-	let foam = smoothstep(1.0 - sea.wave.w * 0.6, 1.0 - sea.wave.w * 0.6 + 0.06, in.crest);
+	// The crest reading is one number a vertex, so a band of it drawn
+	// straight has the straight edges of the triangle it was interpolated
+	// over. Moving the edge by a noise field a metre or so across gives it
+	// the ragged outline foam has.
+	let ragged = vnoise3(dir * (6.28318530718 * sea.up.w / 3.0)) * 0.05 * strength;
+	let line = 1.0 - sea.wave.w * 0.6 + ragged;
+	let foam = smoothstep(line, line + 0.06, in.crest);
 	tint = mix(tint, vec3f(0.95, 0.98, 1.0), foam * sea.wave.w);
 
 	// Lit by the same sun the ground takes, and never black at night.

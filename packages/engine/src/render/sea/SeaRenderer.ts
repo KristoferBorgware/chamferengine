@@ -36,13 +36,31 @@ export interface SeaLook {
 	/** How hard the sun's highlight is. */
 	glint: number;
 
+	/**
+	 * How much slope a fragment is given below what a vertex can carry.
+	 *
+	 * A vertex stands every few metres, so the geometry stops at a wave a few
+	 * times that and the water between two crests is a sheet of glass. This is
+	 * how much of the missing metre-scale texture the shading puts back.
+	 */
+	ripple: number;
+
+	/**
+	 * How far the swell's own height rises and falls across the ocean.
+	 *
+	 * `0` runs one height everywhere. `0.5` leaves the calmest stretches half
+	 * as tall as the roughest, and the roughest keep the height that was
+	 * asked for.
+	 */
+	grouping: number;
+
 	/** The color of water a look barely enters, and of water it does not leave. */
 	shallow: readonly [number, number, number];
 	deep: readonly [number, number, number];
 }
 
-/** Placement and look, then the three colors. */
-const SEA_BYTES = 16 * 7;
+/** Placement and look, then the three colors, then the two detail knobs. */
+const SEA_BYTES = 16 * 8;
 
 /** Three corner directions an instance carries. */
 const INSTANCE_FLOATS = 9;
@@ -52,6 +70,10 @@ interface Patch {
 	vertices: GPUBuffer;
 	indices: GPUBuffer;
 	count: number;
+
+	/** Where the curtain starts, which is where the surface stops. */
+	surfaceCount: number;
+
 	wire: GPUBuffer;
 	wireCount: number;
 }
@@ -59,11 +81,13 @@ interface Patch {
 /**
  * The finest a sea patch is ever cut, in pieces per chunk side.
  *
- * **Water does not need the resolution the ground does.** A chunk is 32 m at
+ * **Water does not need the resolution the ground does.** A chunk is 64 m at
  * the shipped settings and the default swell runs 45 m between crests, so 16
- * pieces put a vertex every 2 m -- twenty-odd samples across a wave, and six
+ * pieces put a vertex every 4 m -- eleven samples across a wave, and three
  * across the narrowest octave of one. Cutting to the block grid instead would
- * cost 1,024 triangles a chunk to draw the same curve.
+ * cost 4,096 triangles a chunk to draw the same curve, and everything narrower
+ * than three vertices is a slope the fragment shader adds rather than
+ * geometry.
  */
 const FINEST = 16;
 
@@ -180,7 +204,7 @@ export class SeaRenderer implements PassLayer {
 				{
 					arrayStride: SEA_STRIDE * 4,
 					attributes: [
-						{ shaderLocation: 0, offset: 0, format: "float32x2" },
+						{ shaderLocation: 0, offset: 0, format: "float32x3" },
 					],
 				},
 				{
@@ -248,8 +272,10 @@ export class SeaRenderer implements PassLayer {
 		const held = this.patches.get(steps);
 		if (held) return held;
 		const { device } = this.ctx;
-		const { vertices, indices } = seaPatch(steps);
-		const lines = wireIndices(indices);
+		const { vertices, indices, surfaceIndices } = seaPatch(steps);
+		// The lines show the surface and never the curtain: a curtain is
+		// there to fill a slit, and drawing it doubles every rim.
+		const lines = wireIndices(indices.subarray(0, surfaceIndices));
 		const upload = (
 			data: Float32Array<ArrayBuffer> | Uint32Array<ArrayBuffer>,
 			usage: number,
@@ -265,6 +291,7 @@ export class SeaRenderer implements PassLayer {
 			vertices: upload(vertices, GPUBufferUsage.VERTEX),
 			indices: upload(indices, GPUBufferUsage.INDEX),
 			count: indices.length,
+			surfaceCount: surfaceIndices,
 			wire: upload(lines, GPUBufferUsage.INDEX),
 			wireCount: lines.length,
 		};
@@ -372,11 +399,14 @@ export class SeaRenderer implements PassLayer {
 		this.data.set([...look.shallow, 1], 16);
 		this.data.set([...look.deep, 1], 20);
 		this.data.set([...this.sky, 1], 24);
+		this.data.set([look.ripple, look.grouping, 0, 0], 28);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		pass.setPipeline(this.wireframe ? this.wirePipeline : this.pipeline);
 		pass.setBindGroup(1, this.bindGroup);
-		for (const group of this.groups) {
+
+		/** Bind one group's mesh and its slice of the instance buffer. */
+		const bind = (group: (typeof this.groups)[number]): Patch => {
 			const patch = this.patchFor(group.steps);
 			pass.setVertexBuffer(0, patch.vertices);
 			pass.setVertexBuffer(
@@ -384,13 +414,39 @@ export class SeaRenderer implements PassLayer {
 				this.instanceBuffer,
 				group.offset * INSTANCE_FLOATS * 4,
 			);
-			if (this.wireframe) {
+			return patch;
+		};
+
+		if (this.wireframe) {
+			for (const group of this.groups) {
+				const patch = bind(group);
 				pass.setIndexBuffer(patch.wire, "uint32");
 				pass.drawIndexed(patch.wireCount, group.count);
-			} else {
-				pass.setIndexBuffer(patch.indices, "uint32");
-				pass.drawIndexed(patch.count, group.count);
 			}
+			void frame;
+			return;
+		}
+
+		// **Every surface, then every curtain.** The surface writes depth, so
+		// a curtain drawn after all of it is thrown away by the depth test
+		// wherever water already covers the pixel, and survives only in the
+		// slits between two patches cut at different spacings. Interleaving
+		// the two would let a curtain blend under a surface drawn later, and
+		// a second layer of translucent water is a dark band along every
+		// chunk edge.
+		for (const group of this.groups) {
+			const patch = bind(group);
+			pass.setIndexBuffer(patch.indices, "uint32");
+			pass.drawIndexed(patch.surfaceCount, group.count);
+		}
+		for (const group of this.groups) {
+			const patch = bind(group);
+			pass.setIndexBuffer(patch.indices, "uint32");
+			pass.drawIndexed(
+				patch.count - patch.surfaceCount,
+				group.count,
+				patch.surfaceCount,
+			);
 		}
 		void frame;
 	}
