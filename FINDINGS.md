@@ -1031,8 +1031,6 @@ which is what the choice needs.
 
 ---
 
-## Closed
-
 ### F-052 — `Detail on top` is a ratio, so what it means in metres depends on the other layer's curve
 
 **Kind:** design
@@ -1040,51 +1038,50 @@ which is what the choice needs.
 **Priority:** medium
 **Effort:** medium
 **Found:** 2026-08-21, while answering what `Detail on top` does
-**Where:** `demos/noise-lab.html`, `layeredAt`; `tools/trial-layer-relief.ts`
+**Where:** `demos/noise-lab.html`, `fieldAt`; `tools/trial-layer-relief.ts`
 
-**What happens.** The layered field is `base + shape x mount x detail`, and the
-metre scale's `fit` rule then divides the whole sum by its own peak. So
-`detail` is a bare ratio between two terms, and the metres it buys depend on
-how far the *continent* curve happens to span. Measured with `detail` pinned at
-1.5 and `relief` pinned at 1,100 m, moving only the continent curve: the
-terrain term reaches **1,093 m** under the shipped shelf-and-rise curve,
-**1,611 m** under a shallow curve, **1,130 m** under one spanning the whole
-range. A **47% swing** in what a knob does, caused by a knob about the other
-layer.
+**What happens.** The world is two layers summed, `base + mountains x detail`,
+and the metre scale then divides the whole sum by its own peak. So `detail` is
+a bare ratio between two terms, and the metres it buys depend on how far the
+*terrain* curve happens to span. Measured on the arrangement this replaced,
+with `detail` pinned at 1.5 and `relief` pinned at 1,100 m and only the base
+curve moving: the second term reached **1,093 m**, **1,611 m** and **1,130 m**
+under three curves -- a **47% swing** in what one knob does, caused by a knob
+about the other layer.
 
 **Why it matters.** The ground bands are absolute metres, so "how many metres
-does the terrain add" is the question a person is actually asking when they
-drag this slider -- it decides whether a rough place can reach the rock line on
+does the mountain layer add" is the question a person is actually asking when
+they drag this slider -- it decides whether a range can reach the rock line on
 its own. A ratio cannot answer it, and the answer moves under them while they
-shape the continents.
+shape the terrain curve.
 
-**What would fix it.** Three candidates, measured, and nobody has chosen.
-**A readout** reuses the scale `fit` has already worked out, so the panel can
-print "continents 937 m, terrain 1,093 m" under the slider and update it live,
-changing no model and computing nothing new. **A share** replaces `detail` with the terrain's percentage
-of the relief and solves back for the raw ratio in closed form, which holds
-steady while the continent curve moves. **Two metre knobs**, one per layer, is
-the honest form and cannot keep `fit`: dividing by the field's own peak leaves
-only their ratio, so `(600, 300)` and `(1200, 600)` give a bit-identical world,
-and under `multiply` the tallest point lands **25-31%** below the two knobs
-added together, because the continent peak and the terrain peak are not in the
-same place. That last one gives up "Relief is how tall the tallest mountain is",
-which is the property `fit` exists for.
+**What would fix it.** Three candidates, measured. **A readout** reuses the
+scale the fit has already worked out, so the panel can print both halves in
+metres under the slider and update them live, changing no model. **A share**
+replaces `detail` with the mountain layer's percentage of the relief and solves
+back for the raw ratio in closed form, which holds steady while the terrain
+curve moves -- over the same three curves it took the spread from **47%** to
+**4.0%**. **Two metre knobs**, one per layer, is the honest form and cannot keep
+the fit: dividing by the field's own peak leaves only their ratio, so `(600,
+300)` and `(1200, 600)` give a bit-identical world, and without the fit the
+tallest point lands **25-31%** below the two knobs added together, because the
+two peaks are not in the same place. That last one gives up "Relief is how tall
+the tallest mountain is", which is the property the fit exists for.
 
-**Closed:** 2026-08-21, by the share. `Detail on top` is gone and **Terrain
-share** replaces it, a percentage of the relief solved back into the ratio
-against the two spans the field measures over the sphere -- one division, not a
-search, because neither span contains the ratio. Over the same three continent
-curves the terrain now reaches 1,113 m, 1,158 m and 1,158 m against 1,093 m,
-1,611 m and 1,130 m: a **4.0%** spread where it was **47%**, and all three land
-on exactly the share asked for. The residue is the curve's *shape* moving where
-land stands; its *scale* divides out, so a continent curve spanning 0.4 to 0.6
-and one spanning 0 to 1 now build the same world. The readout ships with it --
-both halves in metres under the slider, live -- which was the other candidate
-and cost nothing beside this one. Per-layer metre knobs were declined: `fit`
-cannot survive them.
+**Tried and reverted.** The share and the readout both shipped on 2026-08-21 and
+both came back out the same day, along with the arrangement they were built for.
+They are recorded here because the measurements stand and the candidates are
+still the candidates. What they solved was the wrong problem: the ratio was
+between a *control layer* and a shared base octave stack, and that stack no
+longer exists -- the panel now holds two peer layers, each its own noise, and
+the reason for having layers at all is to shape where the ground does what,
+which a balance knob does not touch. The share is also a worse knob to reach for
+first, because it reads as though it decides something about the *world* when it
+only decides a mix.
 
 ---
+
+## Closed
 
 ### F-042 — The map's colors and the world's materials are on two different scales
 

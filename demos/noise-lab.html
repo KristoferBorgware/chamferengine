@@ -140,18 +140,33 @@
 				color: var(--ink);
 				font-weight: 600;
 			}
-			fieldset {
-				border: 0;
+			.group {
 				border-top: 1px solid var(--edge);
 				margin: 10px 0 0;
-				padding: 8px 0 0;
+				padding: 0 0 6px;
 			}
-			legend {
-				padding: 0;
+			.group > summary {
+				padding: 8px 0 4px;
 				font-size: 11px;
 				text-transform: uppercase;
 				letter-spacing: 0.08em;
 				color: var(--dim);
+				cursor: pointer;
+				list-style: none;
+				user-select: none;
+			}
+			.group > summary::-webkit-details-marker {
+				display: none;
+			}
+			.group > summary::before {
+				content: "▸ ";
+				color: var(--edge);
+			}
+			.group[open] > summary::before {
+				content: "▾ ";
+			}
+			.group > summary:hover {
+				color: var(--live);
 			}
 			.knob {
 				display: grid;
@@ -354,60 +369,6 @@
 				return s * 2 - 1;
 			}
 
-			/**
-			 * Fractional Brownian motion: the original stack, in `[-1, 1]`.
-			 *
-			 * Octaves of value noise, each one `lacunarity` times finer and
-			 * `persistence` times quieter than the last, divided by the total
-			 * amplitude. **The engine's own copy pins those two at 2 and a
-			 * half**, which is what the defaults here are, so calling this with
-			 * six arguments is exactly the engine's function -- the last two are
-			 * the lab letting you move what the engine fixed.
-			 *
-			 * What it does not have, and the octave stack does, is a hashed
-			 * offset per octave and the ridge fold. That is the whole difference
-			 * between the two, which makes this the plain sum: the field with
-			 * nothing done to it.
-			 *
-			 * Two details are fixed rather than incidental. **Octaves accumulate
-			 * low frequency first**, because floating-point addition is not
-			 * associative -- the other order moves the result by `1.4e-17` at
-			 * four and five octaves and by nothing at six and eight, which is
-			 * the kind of error testing never finds. And **the sum is divided by
-			 * the total amplitude**, so adding an octave adds detail without
-			 * making the world taller.
-			 */
-			function fbm(
-				x,
-				y,
-				z,
-				frequency,
-				octaves,
-				seed,
-				persistence = 0.5,
-				lacunarity = 2,
-				normalise = true,
-			) {
-				let sum = 0;
-				let amplitude = 1;
-				let total = 0;
-				let f = frequency;
-				for (let o = 0; o < octaves; o++) {
-					sum += amplitude * valueNoise3(x * f, y * f, z * f, seed);
-					total += amplitude;
-					amplitude *= persistence;
-					f *= lacunarity;
-				}
-				// **The reference implementations disagree here.** Musgrave's
-				// original returns the sum, and so does libnoise -- fBm is a
-				// fractal sum and being bounded is no part of its definition, so
-				// its reach grows toward `1 / (1 - gain)` as octaves are added.
-				// FastNoiseLite divides by the summed amplitude, which is this.
-				// Both are ordinary; what the choice decides is whether the
-				// octave count is a control over shape or over height.
-				return normalise ? sum / total : sum;
-			}
-
 			const OCTAVE_SPREAD = 1000;
 			const RIDGE_GAIN = 2.2;
 
@@ -419,10 +380,19 @@
 			 * seeded lattice share zero crossings wherever their frequencies land
 			 * near a whole multiple and the ground grows a repeating grain.
 			 * Octaves accumulate low frequency first, because floating-point
-			 * addition is not associative. And `ridge` folds each octave at its
-			 * own zero crossing: a sum of smooth things is smooth, so plain
-			 * octaves give hills at any steepness, and the only place a crease
-			 * comes from is an absolute value.
+			 * addition is not associative -- the other order moves the result by
+			 * `1.4e-17` at four and five octaves and by nothing at six and
+			 * eight, which is the kind of error testing never finds. And the sum
+			 * is divided by the total amplitude, so adding an octave adds detail
+			 * without making the world taller.
+			 *
+			 * **`ridge` is in the engine and is not on this panel.** It folds
+			 * each octave at its own zero crossing, which creases a whole world
+			 * at once -- it moves the character of every place together, and
+			 * what a second layer exists for is to make places differ. Both
+			 * layers pass zero. The parameter stays because this block is the
+			 * engine's function and a copy that has dropped an argument is a
+			 * copy that has drifted.
 			 */
 			function octaveNoise(x, y, z, seed, s) {
 				let sum = 0;
@@ -458,89 +428,39 @@
 				return total > 0 ? sum / total : 0;
 			}
 
-			/** Offset from the noise seed, so the push is not the field it pushes. */
-			const WARP_SEED_OFFSET = 11;
-			const WARP_OCTAVES = 3;
-
-			/** Build the two settings objects one field needs. */
-			function settingsFor(k) {
-				const surface = {
-					frequency: k.frequency,
-					octaves: k.octaves,
-					persistence: k.persistence,
-					lacunarity: k.lacunarity,
-					offsetX: k.offsetX,
-					offsetY: k.offsetY,
-					ridge: k.ridge,
-					normalise: k.normalise,
-				};
-				// The warp does not read the surface's octave settings: pushing
-				// a field by a copy of itself folds it along its own features
-				// and leaves the coast where it was.
-				const warp = {
-					...surface,
-					normalise: true,
-					frequency: k.warpFrequency,
-					octaves: WARP_OCTAVES,
-					persistence: 0.5,
-					lacunarity: 2,
-					offsetX: 0,
-					offsetY: 0,
+			/**
+			 * The settings for one noise layer, read off that layer's own rows.
+			 *
+			 * **Every layer is a whole noise stack, not a frequency.** A layer
+			 * that shared the octave count and the falloff with its neighbour
+			 * could only ever say the same thing at a different size, and the
+			 * reason there are layers at all is to say different things: broad
+			 * smooth ground under one curve, narrow steep ranges under another.
+			 */
+			function layerSettings(k, which) {
+				return {
+					frequency: k[which + "Frequency"],
+					octaves: k[which + "Octaves"],
+					persistence: k[which + "Persistence"],
+					lacunarity: k[which + "Lacunarity"],
+					offsetX: k[which + "OffsetX"],
+					offsetY: k[which + "OffsetY"],
+					// **The stack is always the octave stack, always summed low
+					// first, and always divided by the summed amplitude.** Both
+					// of the other readings were on the panel as choices and
+					// neither one changed a world under `fit`, which renormalises
+					// whatever it is handed.
 					ridge: 0,
+					normalise: true,
 				};
-				return { surface, warp, stack: k.stack };
 			}
 
-			/**
-			 * One sample of whichever stack is selected.
-			 *
-			 * **fBm is the plain sum**: octaves of one field, each finer and
-			 * quieter than the last, and nothing else. No ridge, no offsets, no
-			 * per-octave hash. That is the point of having it -- it is the field
-			 * with nothing done to it, and the two stacks differ by exactly
-			 * those three things rather than by their parameters.
-			 */
-			function stackAt(x, y, z, seed, s, which) {
-				if (which === "fbm")
-					return fbm(
-						x,
-						y,
-						z,
-						s.frequency,
-						s.octaves,
-						seed,
-						s.persistence,
-						s.lacunarity,
-						s.normalise,
-					);
-				return octaveNoise(x, y, z, seed, s);
-			}
-
-			/**
-			 * The unitless surface field at one direction.
-			 *
-			 * Sampled in 3D world space and never from a face's own coordinates,
-			 * which is what makes the thirty face edges invisible.
-			 */
-			function surfaceAt(x, y, z, seed, k, s) {
-				const which = s.stack;
-				if (k.warpAmplitude === 0)
-					return stackAt(x, y, z, seed, s.surface, which);
-				const w = (seed + WARP_SEED_OFFSET) | 0;
-				const a = k.warpAmplitude;
-				// The warp is always the plain stack: it displaces the point the
-				// field is read at, so a step anywhere in it tears the field
-				// into two pieces that do not meet.
-				return stackAt(
-					x + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w),
-					y + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 1),
-					z + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 2),
-					// Six arguments, so gain and lacunarity stay where the
-					// engine pins them however the panel is set.
-					seed,
-					s.surface,
-					which,
-				);
+			/** Build the settings object for each of the two layers. */
+			function settingsFor(k) {
+				return {
+					terrain: layerSettings(k, "terrain"),
+					mountain: layerSettings(k, "mountain"),
+				};
 			}
 
 			/**
@@ -558,22 +478,7 @@
 			// ===== END engine noise kernel =====
 
 			// ---------------------------------------------------------------
-			// Layers: fields whose job is to control other fields.
-			//
-			// **A single octave stack can only make one kind of landscape.**
-			// fBm is homogeneous -- every octave applies everywhere at the same
-			// amplitude -- so one statistic describes the whole planet and there
-			// is no term that can say "be different here". Measured as the
-			// spread of local roughness, calmest tenth against roughest tenth,
-			// one stack gives 1.3x. Ridge does not help: it folds every octave
-			// everywhere, moving the character globally rather than carving
-			// regions out of it.
-			//
-			// What does help is a second kind of field. A **control** is never
-			// added to the height; it decides how the terrain behaves where it
-			// is read. It has to be slow -- much lower frequency than the ground
-			// -- because a kind of place that changed as fast as the ground
-			// would not read as a place at all.
+			// The world: two noise layers, each read through a curve.
 			// ---------------------------------------------------------------
 
 			/**
@@ -608,30 +513,6 @@
 				return last[1];
 			}
 
-			/**
-			 * The raw ratio that gives the terrain that share of the relief.
-			 *
-			 * **A ratio between two terms of a sum does not mean a fixed number
-			 * of metres.** What `detail` bought moved with the *continent*
-			 * curve, which is a knob about the other layer: pinned at 1.5 with
-			 * Relief pinned at 1,100 m, the terrain reached 1,093 m under the
-			 * shipped shelf-and-rise curve and 1,611 m under a shallow one, a
-			 * 47% swing (`tools/trial-layer-relief.ts`). A share is stated
-			 * against the two spans the field actually has, so it holds still
-			 * while the continents are being shaped.
-			 *
-			 * Neither span depends on `detail` -- the base does not contain it
-			 * and the terrain term is what it multiplies -- so this is one
-			 * solve rather than a search. The top of the range stops short of
-			 * a whole share because at exactly one the continents would have to
-			 * be scaled to nothing, which is a division rather than a setting.
-			 */
-			function detailForShare(share, baseSpan, terrainSpan) {
-				if (terrainSpan <= 1e-12) return 0;
-				const s = Math.max(0, Math.min(0.95, share));
-				return (s * baseSpan) / ((1 - s) * terrainSpan);
-			}
-
 			/** A spline as a query-string value, and back. */
 			function splineToText(points) {
 				return points.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`).join(",");
@@ -647,123 +528,77 @@
 				return out.length >= 2 ? out : null;
 			}
 
-			/** Offsets from the world seed, so the controls are their own fields. */
-			const CONTINENT_SEED_OFFSET = 101;
+			/** Offsets from the world seed, so the two layers are two fields. */
+			const TERRAIN_SEED_OFFSET = 101;
 			const MOUNTAIN_SEED_OFFSET = 211;
 
 			/**
-			 * The surface with the control layers applied.
+			 * The world, which is two noise layers and two curves.
 			 *
-			 * Three merge rules, because which one is right is the whole
-			 * question and the answer is easier to see than to argue:
+			 * **A single octave stack makes one kind of landscape.** fBm is
+			 * homogeneous -- every octave applies everywhere at one amplitude,
+			 * so one statistic describes the whole planet and nothing in it can
+			 * say *be different here*. Ridge did not help, because it folds
+			 * every octave everywhere: it moved the character of the world
+			 * rather than carving regions out of it. What draws a region is a
+			 * second field, slower than the ground, read through a **curve** --
+			 * across is that field's own value, up is what it controls -- and
+			 * the curve is what puts an *edge* on the region where the field
+			 * read straight is one long fade.
 			 *
-			 * **multiply** is the rule as it is usually written down --
-			 * continent times erosion times mountains. It gives the widest
-			 * spread of character and it reaches that by collapsing most of the
-			 * map toward flat, because multiplying toward zero pulls the ground
-			 * toward sea level. Under it, flat and low are the same thing and a
-			 * high plateau cannot exist.
+			 * **Terrain and continents are one layer**, because they are one
+			 * question at two sizes: this layer's widest octaves are where the
+			 * land is and its narrowest are what the ground does underfoot. Its
+			 * curve decides the coast -- a shelf, a short steep rise, then land
+			 * that keeps climbing.
 			 *
-			 * **amplitude** adds the base elevation and scales only the detail,
-			 * so how high a place is and how rough it is come apart. A high flat
-			 * plateau and a low rough badland are both reachable.
+			 * **Mountains are the second layer**, and the two ways it can reach
+			 * the ground are on the panel rather than argued here, because
+			 * which is right is easier to see than to reason about:
 			 *
-			 * **blend** does that and also chooses the SHAPE: a smooth stack
-			 * where the control is low, a creased one where it is high. This is
-			 * the one that gives hills in one place and a range in another,
-			 * rather than more or less of one thing everywhere.
+			 * **add** gives the mountain layer its own height. Its curve is
+			 * metres of range rising out of the terrain, so ground stands high
+			 * where that curve is high and the terrain layer is all you see
+			 * where it is low. A steep curve is a mountain front.
+			 *
+			 * **roughen** keeps it a per-place multiplier on the terrain
+			 * layer's own noise: mountains are rougher ground rather than
+			 * taller ground, and because the bumps and the base come out of one
+			 * field they line up instead of crossing.
 			 */
-			function layeredAt(x, y, z, seed, k, s, report) {
-				const plain = surfaceAt(x, y, z, seed, k, s);
-				// **Each layer switched off means the value that removes it, not
-				// zero.** A continent of nothing is flat ground, so its neutral
-				// is the middle of the range; a mountain layer of nothing is
-				// full detail everywhere, which is what the world looks like
-				// with no regions in it at all.
-				// Both controls are read whether or not they are switched on,
-				// because the histogram under each curve counts what the field
-				// said and a switched-off layer still has a curve to look at.
-				const contRaw = fbm(
-					x,
-					y,
-					z,
-					k.continentFrequency,
-					k.continentOctaves,
-					(seed + CONTINENT_SEED_OFFSET) | 0,
-				);
-				const mountRaw = fbm(
-					x,
-					y,
-					z,
-					k.mountainFrequency,
-					k.mountainOctaves,
-					(seed + MOUNTAIN_SEED_OFFSET) | 0,
-				);
-				const cont = k.useContinent
-					? splineAt(k.continentSpline, contRaw)
-					: 0.5;
-				const mount = k.useMountain ? splineAt(k.mountainSpline, mountRaw) : 1;
-				if (report) {
-					report[0] = cont;
-					report[1] = mount;
-					report[2] = contRaw;
-					report[3] = mountRaw;
-				}
-				const base = cont * 2 - 1;
-				// **The sum is reported in halves as well as summed.** The
-				// balance between them is asked for as a share of the relief,
-				// and a share can only be turned into a ratio once both spans
-				// are known -- so the caller reads the parts, measures them
-				// over the sphere, and comes back with `detail` settled.
-				if (k.merge === "multiply") {
-					if (report) {
-						report[4] = 0;
-						report[5] = 0;
-					}
-					return base * mount * ((plain + 1) / 2);
-				}
-				if (k.merge === "amplitude") {
-					const flat = plain * mount;
-					if (report) {
-						report[4] = base;
-						report[5] = flat;
-					}
-					return base + flat * k.detail;
-				}
-				// The creased twin of the same ground: same seed and the same
-				// frequency, so it lies over the plain one rather than beside
-				// it, and only the fold differs.
-				const creased = stackAt(
-					x,
-					y,
-					z,
-					seed,
-					{ ...s.surface, ridge: 0.85 },
-					"octaves",
-				);
-				const shape = plain * (1 - mount) + creased * mount;
-				const terrain = shape * mount;
-				if (report) {
-					report[4] = base;
-					report[5] = terrain;
-				}
-				return base + terrain * k.detail;
-			}
-
-			/** The field the world is built from, layered or not. */
 			function fieldAt(x, y, z, seed, k, s, report) {
-				if (!k.layers) {
-					if (report) {
-						report[0] = 0.5;
-						report[1] = 1;
-						report[2] = 0;
-						report[3] = 0;
-						report[4] = 0;
-						report[5] = 0;
-					}
-					return surfaceAt(x, y, z, seed, k, s);
+				const terrainRaw = octaveNoise(
+					x,
+					y,
+					z,
+					(seed + TERRAIN_SEED_OFFSET) | 0,
+					s.terrain,
+				);
+				const mountainRaw = octaveNoise(
+					x,
+					y,
+					z,
+					(seed + MOUNTAIN_SEED_OFFSET) | 0,
+					s.mountain,
+				);
+				const shaped = splineAt(k.terrainSpline, terrainRaw);
+				// **A layer switched off means the value that removes it.** For
+				// `add` that is no height at all; for `roughen` it is full
+				// roughness everywhere, which is the world with no regions in
+				// it. The curve is read either way, because the histogram under
+				// it counts what the field said and a switched-off layer still
+				// has a curve to look at.
+				const read = splineAt(k.mountainSpline, mountainRaw);
+				const mount = k.useMountain ? read : k.merge === "add" ? 0 : 1;
+				if (report) {
+					report[0] = shaped;
+					report[1] = read;
+					report[2] = terrainRaw;
+					report[3] = mountainRaw;
 				}
-				return layeredAt(x, y, z, seed, k, s, report);
+				const base = shaped * 2 - 1;
+				if (k.merge === "add") return base + mount * k.detail;
+				return base + terrainRaw * mount * k.detail;
 			}
 
 			/** `sqrt(8 pi / (10 sqrt 3))`, which ties block size to radius. */
@@ -813,6 +648,7 @@
 			const KNOBS = [
 				{
 					group: "The planet",
+					open: false,
 					rows: [
 						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
 						{
@@ -847,17 +683,11 @@
 					],
 				},
 				{
-					group: "The noise",
+					group: "Terrain & continents",
+					open: true,
 					rows: [
 						{
-							key: "stack",
-							label: "Stack",
-							type: "select",
-							value: "fbm",
-							options: ["fbm", "octaves"],
-						},
-						{
-							key: "frequency",
+							key: "terrainFrequency",
 							label: "Frequency",
 							low: 0,
 							high: 1,
@@ -866,194 +696,66 @@
 							digits: 3,
 						},
 						{
-							key: "frequencyScale",
+							key: "terrainFrequencyScale",
 							label: "Frequency scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 16,
+							value: 6,
 							digits: 0,
 						},
 						{
-							key: "octaves",
+							key: "terrainOctaves",
 							off: 1,
 							label: "Octaves",
 							low: 1,
-							high: 10,
+							high: 12,
 							step: 1,
-							value: 5,
+							value: 6,
 							digits: 0,
 						},
 						{
-							key: "persistence",
+							key: "terrainPersistence",
 							off: 0,
 							label: "Persistence",
-							low: 0.1,
-							high: 0.9,
-							step: 0.05,
+							low: 0,
+							high: 0.95,
+							step: 0.01,
 							value: 0.5,
 							digits: 2,
 						},
 						{
-							key: "lacunarity",
+							key: "terrainLacunarity",
 							label: "Lacunarity",
-							low: 1.5,
+							low: 1.2,
 							high: 4,
 							step: 0.05,
 							value: 2,
 							digits: 2,
 						},
 						{
-							key: "ridge",
-							off: 0,
-							label: "Ridge",
-							low: 0,
-							high: 1,
-							step: 0.05,
-							value: 0.85,
-							digits: 2,
-							shownWhen: (k) => k.stack === "octaves",
-						},
-						{
-							key: "offsetX",
+							key: "terrainOffsetX",
 							off: 0,
 							label: "Offset X",
-							low: -50,
-							high: 50,
+							low: -400,
+							high: 400,
 							step: 1,
 							value: 15,
 							digits: 0,
-							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
-							key: "offsetY",
+							key: "terrainOffsetY",
 							off: 0,
 							label: "Offset Y",
-							low: -50,
-							high: 50,
+							low: -400,
+							high: 400,
 							step: 1,
 							value: 9,
 							digits: 0,
-							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
-							key: "octaveSum",
-							label: "Octave sum",
-							type: "select",
-							value: "normalised",
-							options: ["normalised", "raw"],
-						},
-						{
-							key: "metreScale",
-							label: "Metre scale",
-							type: "select",
-							value: "fit",
-							options: ["fit", "multiply"],
-						},
-						{
-							key: "warpAmplitude",
-							off: 0,
-							label: "Warp",
-							low: 0,
-							high: 2,
-							step: 0.05,
-							value: 0.8,
-							digits: 2,
-						},
-						{
-							key: "warpFrequency",
-							label: "Warp frequency",
-							low: 0.05,
-							high: 20,
-							step: 0.05,
-							value: 2,
-							digits: 2,
-							shownWhen: (k) => k.warpAmplitude > 0,
-						},
-					],
-				},
-				{
-					group: "The layers",
-					rows: [
-						{
-							key: "layers",
-							label: "Use control layers",
-							type: "check",
-							value: false,
-						},
-						{
-							key: "merge",
-							label: "Merge rule",
-							type: "select",
-							value: "blend",
-							options: ["blend", "amplitude", "multiply"],
-							shownWhen: (k) => k.layers,
-						},
-						{
-							// **This is the balance between the layers and the
-							// stack, and it is asked for in the units the answer
-							// is wanted in.** It was a bare ratio, and a ratio
-							// does not name a height: the same 1.5 bought the
-							// terrain 1,093 m under one continent curve and
-							// 1,611 m under another. A share is solved back into
-							// that ratio against the spans the field has, so
-							// shaping the continents no longer moves the
-							// mountains. The note under the slider says what the
-							// share is worth in metres, which is the question
-							// the absolute ground bands make people ask.
-							key: "terrainShare",
-							label: "Terrain share",
-							low: 0,
-							high: 95,
-							step: 1,
-							value: 55,
-							digits: 0,
-							unit: "%",
-							shownWhen: (k) => k.layers && k.merge !== "multiply",
-							note: () =>
-								field && field.layerMetres
-									? `continents reach <b>${Math.round(
-											field.layerMetres.continents,
-										).toLocaleString()} m</b> · terrain adds <b>${Math.round(
-											field.layerMetres.terrain,
-										).toLocaleString()} m</b>`
-									: "",
-						},
-						{
-							key: "useContinent",
-							label: "Continent layer",
-							type: "check",
-							value: true,
-							shownWhen: (k) => k.layers,
-						},
-						{
-							key: "continentFrequency",
-							label: "Continent frequency",
-							low: 0.1,
-							high: 12,
-							step: 0.1,
-							// Slower than the ground, or a region would change as
-							// fast as the ground does and read as texture rather
-							// than as a place. Not so slow that one patch holds
-							// only one region: measured, this puts about four
-							// across the default patch.
-							value: 3,
-							digits: 1,
-							shownWhen: (k) => k.layers,
-						},
-						{
-							key: "continentOctaves",
-							label: "Continent octaves",
-							low: 1,
-							high: 4,
-							step: 1,
-							value: 2,
-							digits: 0,
-							shownWhen: (k) => k.layers,
-						},
-						{
-							key: "continentSpline",
-							label: "Continent → base height",
+							key: "terrainSpline",
+							label: "Terrain → base height",
 							type: "spline",
 							// A shelf, a shore and a rise: flat sea floor over
 							// the low half, a short steep climb through the
@@ -1065,61 +767,135 @@
 								[0.15, 0.62],
 								[1, 0.95],
 							],
-							shownWhen: (k) => k.layers,
 						},
+					],
+				},
+				{
+					group: "Mountains",
+					open: true,
+					rows: [
 						{
 							key: "useMountain",
 							label: "Mountain layer",
 							type: "check",
 							value: true,
-							shownWhen: (k) => k.layers,
+						},
+						{
+							// **Which of these is right is a measurement, not an
+							// argument**, so both are here until one of them has
+							// been looked at. `add` gives the layer its own
+							// height and its curve is a mountain front; `roughen`
+							// keeps it a multiplier on the terrain layer's own
+							// noise, so a range is rougher ground rather than
+							// taller ground.
+							key: "merge",
+							label: "Mountains",
+							type: "select",
+							value: "add",
+							options: ["add", "roughen"],
+						},
+						{
+							// The balance between the two layers. It is a ratio
+							// and not a number of metres, which is F-052 and is
+							// open: what it buys moves with the terrain curve.
+							key: "detail",
+							label: "Detail on top",
+							low: 0,
+							high: 5,
+							step: 0.05,
+							value: 1.5,
+							digits: 2,
 						},
 						{
 							key: "mountainFrequency",
-							label: "Mountain frequency",
-							low: 0.1,
-							high: 12,
-							step: 0.1,
-							value: 4.5,
-							digits: 1,
-							shownWhen: (k) => k.layers,
+							label: "Frequency",
+							low: 0,
+							high: 1,
+							step: 0.005,
+							value: 0.45,
+							digits: 3,
+						},
+						{
+							key: "mountainFrequencyScale",
+							label: "Frequency scale",
+							low: 1,
+							high: 100,
+							step: 1,
+							value: 10,
+							digits: 0,
 						},
 						{
 							key: "mountainOctaves",
-							label: "Mountain octaves",
+							off: 1,
+							label: "Octaves",
 							low: 1,
-							high: 4,
+							high: 12,
 							step: 1,
-							value: 2,
+							value: 4,
 							digits: 0,
-							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "mountainPersistence",
+							off: 0,
+							label: "Persistence",
+							low: 0,
+							high: 0.95,
+							step: 0.01,
+							value: 0.45,
+							digits: 2,
+						},
+						{
+							key: "mountainLacunarity",
+							label: "Lacunarity",
+							low: 1.2,
+							high: 4,
+							step: 0.05,
+							value: 2,
+							digits: 2,
+						},
+						{
+							key: "mountainOffsetX",
+							off: 0,
+							label: "Offset X",
+							low: -400,
+							high: 400,
+							step: 1,
+							value: -22,
+							digits: 0,
+						},
+						{
+							key: "mountainOffsetY",
+							off: 0,
+							label: "Offset Y",
+							low: -400,
+							high: 400,
+							step: 1,
+							value: 61,
+							digits: 0,
 						},
 						{
 							key: "mountainSpline",
-							label: "Mountain → how rugged",
+							label: "Mountain → range height",
 							type: "spline",
-							// **The left end is how rugged the calmest place is,
-							// and it must not be zero.** This curve scales the
-							// terrain stack, so a curve that starts at nothing
-							// multiplies ridge, octaves and the offsets down to
-							// nothing with it -- measured, ridge 0 to 0.85 moved
-							// the peak 2% when the low end was 0.02. A quarter
-							// leaves plains that are plainly made of the same
-							// noise as the mountains. The knee near the middle
-							// is the mountain front; without one the whole map
-							// is equally half-mountainous.
+							// **Flat over the low half and steep over the high
+							// one.** A curve that climbs everywhere makes every
+							// place equally half-mountainous, which is the thing
+							// a second layer exists to stop. The knee is the
+							// mountain front, and where the histogram behind the
+							// curve is dense is where moving it repaints the
+							// world.
 							value: [
-								[-1, 0.25],
-								[0.05, 0.32],
-								[0.45, 0.75],
+								[-1, 0],
+								[0.05, 0.06],
+								[0.45, 0.62],
 								[1, 1],
 							],
-							shownWhen: (k) => k.layers,
 						},
 					],
 				},
 				{
 					group: "The land",
+					open: true,
 					rows: [
 						{
 							key: "landFraction",
@@ -1130,6 +906,29 @@
 							step: 0.01,
 							value: 0.65,
 							digits: 2,
+						},
+						{
+							// **Land and Sea level are two different questions.**
+							// Land decides how much of the planet stands above
+							// the water, which moves the ground: it is the
+							// percentile the whole field is measured from. Sea
+							// level moves only the water, downward, leaving every
+							// height exactly where it was -- so what it uncovers
+							// is the shallow floor that was already there, which
+							// is where a beach comes from. The note says how much
+							// of the patch it just handed back.
+							key: "seaLevel",
+							label: "Sea level",
+							low: -400,
+							high: 0,
+							step: 5,
+							value: 0,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field && field.exposedShare > 0
+									? `uncovers <b>${(field.exposedShare * 100).toFixed(1)}%</b> of the patch — floor that was under water`
+									: "the water sits where Land put it",
 						},
 						{
 							key: "relief",
@@ -1163,6 +962,7 @@
 				},
 				{
 					group: "The patch",
+					open: false,
 					rows: [
 						{
 							key: "latitude",
@@ -1202,13 +1002,14 @@
 					// apart so a reading taken off the plane is never a reading
 					// of something only this page does.
 					group: "The view — not the world",
+					open: false,
 					rows: [
 						{
 							key: "picture",
 							label: "Picture",
 							type: "select",
 							value: "ground",
-							options: ["ground", "height", "raw", "continent", "mountain"],
+							options: ["ground", "height", "raw", "terrain", "mountain"],
 						},
 						{
 							key: "surface",
@@ -1304,11 +1105,6 @@
 				return out;
 			}
 
-			// A `detail=` link predates the share. What share it stands for
-			// depends on two spans only a generated field knows, so it is
-			// carried past the first one and converted from what that measured.
-			let legacyDetail = 0;
-
 			function fromParams(params) {
 				for (const g of KNOBS)
 					for (const r of g.rows) {
@@ -1332,13 +1128,6 @@
 					}
 				for (const key of Object.keys(using))
 					if (params.get("x" + key) === "0") using[key] = false;
-				const wasDetail = Number(params.get("detail"));
-				legacyDetail =
-					params.get("terrainShare") === null &&
-					Number.isFinite(wasDetail) &&
-					wasDetail > 0
-						? wasDetail
-						: 0;
 			}
 
 			/** Put the current draft in the address bar, without adding history. */
@@ -1367,9 +1156,22 @@
 			 * The narrowing only ever moves an end inward.
 			 */
 			function liveRange(row) {
-				if (row.key !== "octaves" && row.key !== "frequencyScale") return row;
+				// **The sea can be drained and no further.** Under `fit` the
+				// deepest point is exactly Sea depth below the water, so a
+				// lower sea level than that is a planet with no ocean and a
+				// slider position that means the same as the one beside it.
+				if (row.key === "seaLevel")
+					return { ...row, low: Math.max(row.low, -value("seaDepth")) };
+				const layer = row.key.startsWith("terrain")
+					? "terrain"
+					: row.key.startsWith("mountain")
+						? "mountain"
+						: null;
+				if (!layer) return row;
+				const what = row.key.slice(layer.length);
+				if (what !== "Octaves" && what !== "FrequencyScale") return row;
 				const k = derived();
-				if (row.key === "frequencyScale") {
+				if (what === "FrequencyScale") {
 					// Even one octave has to be two map cells wide, and the fine
 					// slider reaches 1, so the coarse one stops where their
 					// product does. What is cut off is frequency the map could
@@ -1380,8 +1182,8 @@
 						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
 					};
 				}
-				const widest = k.radius / Math.max(1e-6, k.frequency);
-				const step = knobs.lacunarity;
+				const widest = k.radius / Math.max(1e-6, k[layer + "Frequency"]);
+				const step = knobs[layer + "Lacunarity"];
 				const room =
 					1 + Math.floor(Math.log(widest / (2 * k.cellMetres)) / Math.log(step));
 				return {
@@ -1471,31 +1273,25 @@
 					// and is why so much of the ground came out muted. The
 					// coarse slider carries the decade and the fine one picks
 					// the value inside it.
-					frequency: knobs.frequency * knobs.frequencyScale,
-					warpFrequency: knobs.warpFrequency,
-					octaves: value("octaves"),
-					persistence: value("persistence"),
-					lacunarity: knobs.lacunarity,
-					ridge: value("ridge"),
-					offsetX: value("offsetX"),
-					offsetY: value("offsetY"),
-					warpAmplitude: value("warpAmplitude"),
-					stack: knobs.stack,
-					normalise: knobs.octaveSum === "normalised",
-					fit: knobs.metreScale === "fit",
-					layers: knobs.layers,
-					useContinent: knobs.useContinent,
+					terrainFrequency:
+						knobs.terrainFrequency * knobs.terrainFrequencyScale,
+					terrainOctaves: value("terrainOctaves"),
+					terrainPersistence: value("terrainPersistence"),
+					terrainLacunarity: knobs.terrainLacunarity,
+					terrainOffsetX: value("terrainOffsetX"),
+					terrainOffsetY: value("terrainOffsetY"),
+					terrainSpline: knobs.terrainSpline,
+					mountainFrequency:
+						knobs.mountainFrequency * knobs.mountainFrequencyScale,
+					mountainOctaves: value("mountainOctaves"),
+					mountainPersistence: value("mountainPersistence"),
+					mountainLacunarity: knobs.mountainLacunarity,
+					mountainOffsetX: value("mountainOffsetX"),
+					mountainOffsetY: value("mountainOffsetY"),
+					mountainSpline: knobs.mountainSpline,
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
-					// Settled by `generate` once both spans are measured; the
-					// panel asks for a share and this is what it solves to.
-					detail: 1,
-					continentFrequency: knobs.continentFrequency,
-					continentOctaves: knobs.continentOctaves,
-					continentSpline: knobs.continentSpline,
-					mountainFrequency: knobs.mountainFrequency,
-					mountainOctaves: knobs.mountainOctaves,
-					mountainSpline: knobs.mountainSpline,
+					detail: knobs.detail,
 				};
 			}
 
@@ -1540,15 +1336,10 @@
 				// at the end reaches two percent of it. Counted over the sphere
 				// rather than the patch, because the curve governs the planet.
 				const tally = {
-					continentSpline: new Float32Array(SPLINE_BINS),
+					terrainSpline: new Float32Array(SPLINE_BINS),
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
-				const heard = [0.5, 1, 0, 0, 0, 0];
-				// The two halves of the sum, kept for as long as it takes to
-				// measure how far each reaches. `multiply` has no sum to split.
-				const layered = k.layers && k.merge !== "multiply";
-				const baseOf = layered ? new Float64Array(SPHERE_SAMPLES) : null;
-				const terrainOf = layered ? new Float64Array(SPHERE_SAMPLES) : null;
+				const heard = [0.5, 1, 0, 0];
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -1564,43 +1355,8 @@
 						s,
 						heard,
 					);
-					if (k.layers) {
-						tally.continentSpline[bin(heard[2])]++;
-						tally.mountainSpline[bin(heard[3])]++;
-					}
-					if (layered) {
-						baseOf[n] = heard[4];
-						terrainOf[n] = heard[5];
-					}
-				}
-				// **The share becomes a ratio here, and the field is summed
-				// again with it.** Both spans are read off the sphere for the
-				// same reason sea level is: they must not move when the patch
-				// looks somewhere else. Neither one contains `detail`, so the
-				// first pass through the field above is only ever used for its
-				// parts and the sum it returned is thrown away.
-				let baseSpan = 0;
-				let terrainSpan = 0;
-				if (layered) {
-					let baseLow = Infinity;
-					let baseHigh = -Infinity;
-					let terrainLow = Infinity;
-					let terrainHigh = -Infinity;
-					for (let n = 0; n < SPHERE_SAMPLES; n++) {
-						if (baseOf[n] < baseLow) baseLow = baseOf[n];
-						if (baseOf[n] > baseHigh) baseHigh = baseOf[n];
-						if (terrainOf[n] < terrainLow) terrainLow = terrainOf[n];
-						if (terrainOf[n] > terrainHigh) terrainHigh = terrainOf[n];
-					}
-					baseSpan = baseHigh - baseLow;
-					terrainSpan = terrainHigh - terrainLow;
-					k.detail = detailForShare(
-						knobs.terrainShare / 100,
-						baseSpan,
-						terrainSpan,
-					);
-					for (let n = 0; n < SPHERE_SAMPLES; n++)
-						raw[n] = baseOf[n] + terrainOf[n] * k.detail;
+					tally.terrainSpline[bin(heard[2])]++;
+					tally.mountainSpline[bin(heard[3])]++;
 				}
 				let tallest = 0;
 				for (const counts of Object.values(tally))
@@ -1613,25 +1369,22 @@
 					if (d > peak) peak = d;
 					if (d < trough) trough = d;
 				}
-				// **Two ways to turn a unitless field into metres, and they are
-				// what decides whether the octave sum above mattered.** `fit`
-				// divides by the field's own peak, so the tallest mountain is
-				// exactly Relief however the shape knobs are set -- and it
-				// renormalises whatever the octave stack handed it, which makes
-				// the divide up there redundant. `multiply` is the plain
-				// reading, metres per unit of field, and under it every knob
-				// that changes how far the field reaches changes how tall the
-				// world is.
-				const up = k.fit
-					? peak > 0
-						? value("relief") / peak
-						: 0
-					: value("relief");
-				const down = k.fit
-					? trough < 0
-						? value("seaDepth") / -trough
-						: 0
-					: value("seaDepth");
+				// **Metres are fitted, always.** The field is divided by its own
+				// peak, so the tallest mountain is exactly Relief however the
+				// shape knobs are set. A plain multiplier was on the panel
+				// beside it and it made Relief mean metres-per-unit instead,
+				// which is a number nobody wants to read; the fit also
+				// renormalises whatever the octave stack hands it, so no knob
+				// upstream can change how tall the world is by accident.
+				const up = peak > 0 ? value("relief") / peak : 0;
+				const down = trough < 0 ? value("seaDepth") / -trough : 0;
+				// **The water drops and the ground does not.** Every height is
+				// measured from the level Land chose, and then the whole field
+				// is lifted by however far Sea level was pulled down -- which is
+				// the same picture as draining that much water and moves no
+				// ground at all. What comes out from under it is the shallow
+				// floor that was already there.
+				const drained = -knobs.seaLevel;
 
 				// Then the patch, laid out so a step across it is exactly one map
 				// cell -- the same metres per cell the engine's own map has, which
@@ -1646,7 +1399,7 @@
 				// What each control layer said here, so a picture can show one
 				// layer on its own rather than only the ground they make
 				// together.
-				const contField = new Float32Array((n + 1) * (n + 1));
+				const terrainField = new Float32Array((n + 1) * (n + 1));
 				const mountField = new Float32Array((n + 1) * (n + 1));
 				const said = [0.5, 1];
 				// A draft covers the same ground with fewer points, so the step
@@ -1658,6 +1411,7 @@
 				let rawLow = Infinity;
 				let rawHigh = -Infinity;
 				let land = 0;
+				let wasLand = 0;
 				for (let r = 0; r <= n; r++) {
 					const dy = r * step - half;
 					for (let q = 0; q <= n; q++) {
@@ -1693,16 +1447,18 @@
 							said,
 						);
 						const d = unitless - sea;
-						const metres = d >= 0 ? d * up : d * down;
+						const wet = d >= 0 ? d * up : d * down;
+						const metres = wet + drained;
 						height[r * (n + 1) + q] = metres;
 						field0[r * (n + 1) + q] = unitless;
-						contField[r * (n + 1) + q] = said[0];
+						terrainField[r * (n + 1) + q] = said[0];
 						mountField[r * (n + 1) + q] = said[1];
 						if (unitless < rawLow) rawLow = unitless;
 						if (unitless > rawHigh) rawHigh = unitless;
 						if (metres < lowest) lowest = metres;
 						if (metres > highest) highest = metres;
 						if (metres > 0) land++;
+						if (wet > 0) wasLand++;
 					}
 				}
 				field = {
@@ -1713,18 +1469,14 @@
 					raw: field0,
 					tally,
 					tallest,
-					continent: contField,
+					terrain: terrainField,
 					mountain: mountField,
-					// What the share is worth, in the units the ground bands are
-					// stated in. `up` is the land scale under either metre rule,
-					// so both halves are priced the same way the mountains are.
-					layerMetres: layered
-						? {
-								continents: baseSpan * up,
-								terrain: terrainSpan * k.detail * up,
-							}
-						: null,
-					layerSpans: layered ? { baseSpan, terrainSpan } : null,
+					// How much of the patch the drain handed back. The knob is
+					// in metres and what a person wants to know is how much
+					// beach it bought, which is a different number on every
+					// world and on every part of one.
+					exposedShare: (land - wasLand) / ((n + 1) * (n + 1)),
+					drained,
 					// **The field never fills its own range.** A stack of
 					// octaves divided by its summed amplitude is bounded by
 					// [-1, 1] and reaches maybe half of it, so a Raw picture
@@ -1772,13 +1524,13 @@
 						const metres = field.height[r * (n + 1) + q];
 						const at = ((n - 1 - r) * n + q) * 4;
 						if (
-							knobs.picture === "continent" ||
+							knobs.picture === "terrain" ||
 							knobs.picture === "mountain"
 						) {
 							const v =
 								(knobs.picture === "mountain"
 									? field.mountain
-									: field.continent)[r * (n + 1) + q];
+									: field.terrain)[r * (n + 1) + q];
 							const t = Math.max(0, Math.min(1, v));
 							px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
 							px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);
@@ -2168,7 +1920,7 @@
 				const raws = new Float32Array(count);
 				const layerOf = new Float32Array(count);
 				const shown =
-					knobs.picture === "mountain" ? field.mountain : field.continent;
+					knobs.picture === "mountain" ? field.mountain : field.terrain;
 				const half = (n / 2) * cell;
 
 				for (let r = 0; r <= n; r++) {
@@ -2340,7 +2092,7 @@
 						? 1
 						: knobs.picture === "raw"
 							? 2
-							: knobs.picture === "continent" || knobs.picture === "mountain"
+							: knobs.picture === "terrain" || knobs.picture === "mountain"
 								? 3
 								: 0,
 				);
@@ -2513,8 +2265,15 @@
 			function buildPanel() {
 				const host = document.getElementById("knobs");
 				for (const group of KNOBS) {
-					const set = document.createElement("fieldset");
-					const legend = document.createElement("legend");
+					// **A section folds, because two whole noise layers do not
+					// fit on one screen.** Each layer carries its own frequency,
+					// octave count, falloff and offsets, so the panel is long by
+					// construction rather than by neglect, and the one being
+					// tuned is the one that needs to be visible.
+					const set = document.createElement("details");
+					set.className = "group";
+					set.open = group.open !== false;
+					const legend = document.createElement("summary");
 					legend.textContent = group.group;
 					set.append(legend);
 					for (const row of group.rows) {
@@ -2718,35 +2477,36 @@
 							" — the noise is there, the scale that turns it into metres is not." +
 							"</span><br>"
 						: "") +
-					// **Which of the two is carrying the height.** Under `fit`
-					// the octave sum is renormalised downstream and the choice
-					// up there reaches nothing; under `multiply` it decides the
-					// whole vertical scale. Saying so is the only way the pair
-					// reads as one decision rather than two switches.
-					(knobs.metreScale === "fit"
-						? `metres <b>fit</b> — the tallest point is Relief exactly, so the octave sum above changes nothing here<br>`
-						: `metres <b>multiplied</b> — Relief is metres per unit of field, so octaves, persistence and ridge all move the height<br>`) +
-					// Frequency in the units the engine's panel states, so a
-					// setting found here can be carried across: the engine asks
-					// for the widest feature in metres, which is the radius
-					// divided by the frequency.
-					`frequency <b>${k.frequency.toFixed(2)}</b> — the engine's ` +
-					`Noise scale <b>${Math.round(
-						k.radius / Math.max(1e-6, k.frequency),
-					).toLocaleString()} m</b><br>` +
-					`narrowest octave <b>${Math.round(
-						k.radius /
-							Math.max(1e-6, k.frequency) /
-							knobs.lacunarity **
-								(value("octaves") - 1),
-					).toLocaleString()} m</b>` +
-					(k.radius /
-						Math.max(1e-6, k.frequency) /
-						knobs.lacunarity **
-							(value("octaves") - 1) <
-					k.cellMetres
-						? ' <span style="color:#ffb454">narrower than a cell</span>'
-						: "");
+					(field.drained > 0
+						? `sea drained <b>${field.drained.toLocaleString()} m</b> — ` +
+							`the tallest point is <b>${Math.round(
+								value("relief") + field.drained,
+							).toLocaleString()} m</b> above the water<br>`
+						: "") +
+					// Each layer's frequency in the units the engine's panel
+					// states, so a setting found here can be carried across: the
+					// engine asks for the widest feature in metres, which is the
+					// radius divided by the frequency. And the narrowest octave,
+					// because ground the map cannot draw is ground the world
+					// does not have.
+					["terrain", "mountain"]
+						.map((which) => {
+							const frequency = Math.max(1e-6, k[which + "Frequency"]);
+							const widest = k.radius / frequency;
+							const narrowest =
+								widest /
+								knobs[which + "Lacunarity"] **
+									(value(which + "Octaves") - 1);
+							return (
+								`${which} <b>${k[which + "Frequency"].toFixed(2)}</b> — ` +
+								`widest <b>${Math.round(widest).toLocaleString()} m</b>, ` +
+								`narrowest <b>${Math.round(narrowest).toLocaleString()} m</b>` +
+								(narrowest < k.cellMetres
+									? ' <span style="color:#ffb454">narrower than a cell</span>'
+									: "")
+							);
+						})
+						.join("<br>");
 			}
 
 			/**
@@ -2833,22 +2593,6 @@
 			const booted = performance.now();
 			settle();
 			generate();
-			if (legacyDetail && field.layerSpans) {
-				// The spans are known now, so the share that ratio meant is
-				// exact rather than a guess, and the world it built is the
-				// world the link named.
-				const { baseSpan, terrainSpan } = field.layerSpans;
-				const terrain = terrainSpan * legacyDetail;
-				knobs.terrainShare = Math.max(
-					0,
-					Math.min(
-						95,
-						Math.round((terrain / Math.max(1e-12, terrain + baseSpan)) * 100),
-					),
-				);
-				legacyDetail = 0;
-				generate();
-			}
 			buildMesh();
 			drawMap();
 			drawGraph();

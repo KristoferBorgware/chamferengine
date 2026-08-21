@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-	fbm,
 	hash3,
 	octaveNoise,
 	seaLevelFor,
@@ -22,9 +21,11 @@ import type { NoiseSettings } from "chamfer/generation";
  * that is not made to the other fails here rather than being found by tuning a
  * world that does not exist.
  *
- * **The lab carries value noise and nothing else.** The other four bases are
- * the engine's and are not ported, so there is nothing here to check about
- * them -- what is checked is everything the lab actually holds.
+ * **The lab carries value noise and the octave stack, and nothing else.** The
+ * other four bases are the engine's and are not ported; plain fBm was ported
+ * and has been taken back out, because the lab's two layers are both octave
+ * stacks and a function with no caller is a function that drifts unnoticed.
+ * What is checked is everything the lab actually holds.
  */
 const HTML = fileURLToPath(
 	new URL("../../../../demos/noise-lab.html", import.meta.url),
@@ -38,7 +39,6 @@ function demoKernel(): {
 	hash3: typeof hash3;
 	seedFromString: typeof seedFromString;
 	valueNoise3: typeof valueNoise3;
-	fbm: typeof fbm;
 	octaveNoise: (
 		x: number,
 		y: number,
@@ -57,7 +57,7 @@ function demoKernel(): {
 	// The block is written to touch no document and no window, so it runs
 	// here exactly as it runs in the page.
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, fbm, octaveNoise, seaLevelFor };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -114,45 +114,6 @@ describe("the noise lab's copy of the engine's noise", () => {
 		}
 	});
 
-	it.each([1, 3, 5, 8])("stacks %i octaves of fBm exactly", (octaves) => {
-		const seed = seedFromString("chamfer");
-		for (let n = 0; n < 300; n++) {
-			const [x, y, z] = direction(n);
-			expect(demo.fbm(x, y, z, 4, octaves, seed)).toBe(
-				fbm(x, y, z, 4, octaves, seed),
-			);
-		}
-	});
-
-	it("reduces to the engine's fBm when gain and lacunarity are stated", () => {
-		// The lab lets those two move, which the engine's own fBm pins at a
-		// half and 2. Stating them explicitly has to land on the engine's
-		// function exactly, or the extra reach has quietly become a fork.
-		const demoFbm = demo.fbm as unknown as (
-			x: number,
-			y: number,
-			z: number,
-			frequency: number,
-			octaves: number,
-			seed: number,
-			persistence?: number,
-			lacunarity?: number,
-		) => number;
-		const seed = seedFromString("chamfer");
-		for (let n = 0; n < 200; n++) {
-			const [x, y, z] = direction(n);
-			expect(demoFbm(x, y, z, 4, 5, seed, 0.5, 2)).toBe(
-				fbm(x, y, z, 4, 5, seed),
-			);
-		}
-		// And moving them has to actually move the field, or the rows on the
-		// panel are decoration.
-		const [x, y, z] = direction(7);
-		expect(demoFbm(x, y, z, 4, 5, seed, 0.8, 3.2)).not.toBe(
-			fbm(x, y, z, 4, 5, seed),
-		);
-	});
-
 	it("normalises the octave sum unless told not to", () => {
 		// The lab can return the sum un-normalised, which is what Musgrave and
 		// libnoise do. An ABSENT flag has to mean the engine's behaviour, or
@@ -195,14 +156,15 @@ describe("the noise lab's copy of the engine's noise", () => {
 
 	it("agrees on a whole field, digest for digest", () => {
 		const seed = seedFromString("chamfer");
+		const s = settings();
 		let theirs = 0;
 		let mine = 0;
 		for (let n = 0; n < 977; n++) {
 			const [x, y, z] = direction(n);
 			theirs =
-				(theirs * 31 + Math.round(fbm(x, y, z, 4, 5, seed) * 1e9)) | 0;
+				(theirs * 31 + Math.round(octaveNoise(x, y, z, seed, s) * 1e9)) | 0;
 			mine =
-				(mine * 31 + Math.round(demo.fbm(x, y, z, 4, 5, seed) * 1e9)) | 0;
+				(mine * 31 + Math.round(demo.octaveNoise(x, y, z, seed, s) * 1e9)) | 0;
 		}
 		expect(mine).toBe(theirs);
 	});
