@@ -298,31 +298,40 @@ the end reaches about two percent of it. The curve is what puts an *edge* on a
 region — a coastal shelf, a mountain front — where a control read straight is
 one long fade.
 
-**Three ways for the mountain layer to reach the ground, and which is right is
-a measurement rather than an argument.**
+**Two ways for the mountain layer to reach the ground, and which is right is a
+measurement rather than an argument.**
 
-- **above the line** is the shipped one. The mountain layer is let through in
-  proportion to how far the terrain already stands above **Mountain line** —
-  nothing at or below it, all of it at the top of the terrain's own range — so a
-  range can only grow where the ground was already high. The terrain layer draws
-  the land and says where it may become mountain; the mountain layer says what
-  the mountain looks like. The line is a fraction of the terrain curve's **own**
+- **gated** is the shipped one. The mountain layer is let through in proportion
+  to how far the terrain already stands above **Mountain line** — nothing at or
+  below it, all of it at the top of the terrain's own range — so a range can
+  only grow where the ground was already high. The terrain layer draws the land
+  and says where it may become mountain; the mountain layer says what the
+  mountain looks like. The line is a fraction of the terrain curve's **own**
   range rather than a height on a fixed axis, so dragging that curve's top down
   does not slowly close the gate, and it is **drawn across that curve** in amber
   — where the gate opens is a place on a picture, not a number in another group.
   The edge is smoothed, because a hard cut draws a contour line across every
   hillside at exactly the same height.
-- **add** gives the layer its own height and nothing gates it. Its curve is
-  metres of range rising out of the terrain, ground stands high where the curve
-  is high, and the terrain layer is all you see where it is low. What it does
-  not know is where it is: a range can start in the sea, and on the shipped
-  world it does.
 - **roughen** keeps it a per-place multiplier on the terrain layer's own noise,
   so a range is rougher ground rather than taller ground — and because the bumps
   and the base come out of one field, they line up instead of crossing.
 
+An ungated **add** was tried and taken out. Nothing told it where it was, so a
+range could start in the sea, and on the shipped world it did.
+
 **Detail on top** is the balance between the two layers. It is a ratio and not a
 number of metres, which is F-052 and is open.
+
+**Peak scale is the one scale that survives the fit.** Every knob upstream of
+the metre step is divided back out by it — the tallest point is Relief whatever
+they say — so `Detail on top` can only change the balance between the two
+layers, never how tall a peak is in metres. Peak scale multiplies what the
+mountain layer contributed **after** the fit, and only the part it pushed *up*,
+so the extra is continuous across the shoreline and a peak grows where a hollow
+does not. Measured on the shipped world, the summit goes 1,100 m at ×1 to
+1,924 m at ×2 and 4,004 m at ×4.5 while the sea cut does not move by a
+thousandth and the planet stays exactly 35% sea. It is the one knob that takes
+the world above Relief; the note under it says the tallest point and by how far.
 
 **Every knob that has a value meaning "off" carries a switch.** Persistence 0
 leaves one octave, an offset of 0 is the lattice unshifted; unticking sets the
@@ -390,7 +399,9 @@ grass and 36% snow.
 **Map shows** switches the picture above the knobs between the **patch** and
 the whole **planet** — longitude across, latitude down, at the same sea level
 and the same metre scale the plane is using, with the patch outlined in amber
-where it stands. A patch a few kilometres across says what the ground does
+where it stands. **Click the planet to stand somewhere on it.** A latitude and a
+longitude are a place and two sliders are not, so finding a range by dragging
+them is a search with the answer already on screen. A patch a few kilometres across says what the ground does
 underfoot and cannot say where the continents are; the planet answers the second
 question and stays flat, because a globe drawn small hides half of itself.
 

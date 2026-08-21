@@ -572,12 +572,6 @@
 			 * The gate is smoothed, because a hard cut draws a contour line
 			 * across every hillside at exactly the same height.
 			 *
-			 * **add** gives the mountain layer its own height and nothing
-			 * gates it. Its curve is metres of range rising out of the terrain,
-			 * so ground stands high where that curve is high and the terrain
-			 * layer is all you see where it is low. What it does not know is
-			 * where it is: a range can start in the sea.
-			 *
 			 * **roughen** keeps it a per-place multiplier on the terrain
 			 * layer's own noise: mountains are rougher ground rather than
 			 * taller ground, and because the bumps and the base come out of one
@@ -618,16 +612,25 @@
 					report[3] = mountainRaw;
 				}
 				const base = shaped * 2 - 1;
+				// **The mountain layer's whole contribution, reported on its
+				// own.** Peak scale multiplies it after the metre fit, which is
+				// the only place a scale on it can do anything: applied before,
+				// the fit divides it straight back out and the knob becomes
+				// `Detail on top` under another name.
+				let term;
 				if (k.merge === "gated") {
-					const line = k.mountainLine;
 					const over = Math.max(
 						0,
-						Math.min(1, (shaped - line) / Math.max(1e-6, 1 - line)),
+						Math.min(
+							1,
+							(shaped - k.lineHeight) /
+								Math.max(1e-6, k.terrainHigh - k.lineHeight),
+						),
 					);
-					return base + mount * (over * over * (3 - 2 * over)) * k.detail;
-				}
-				if (k.merge === "add") return base + mount * k.detail;
-				return base + terrainRaw * mount * k.detail;
+					term = mount * (over * over * (3 - 2 * over)) * k.detail;
+				} else term = terrainRaw * mount * k.detail;
+				if (report) report[4] = term;
+				return base + term;
 			}
 
 			/** `sqrt(8 pi / (10 sqrt 3))`, which ties block size to radius. */
@@ -822,7 +825,7 @@
 							label: "Mountains",
 							type: "select",
 							value: "gated",
-							options: ["gated", "add", "roughen"],
+							options: ["gated", "roughen"],
 						},
 						{
 							// **Read against the terrain curve, because that is
@@ -868,6 +871,35 @@
 							// grass and 36% snow.
 							value: 7,
 							digits: 2,
+						},
+						{
+							// **The one scale that survives the fit.** Every knob
+							// upstream of the metre step is divided back out by
+							// it -- the tallest point is Relief whatever they
+							// say -- so `Detail on top` can only change the
+							// balance between the layers, never how tall a peak
+							// is in metres. This multiplies what the mountain
+							// layer contributed AFTER the fit, so a range grows
+							// and the coast, the sea level and the terrain under
+							// it all stay exactly where they were. It is the one
+							// knob that takes the world above Relief, and the
+							// readout says how far.
+							key: "peakScale",
+							enabledWhen: (k) => k.useMountain,
+							label: "Peak scale",
+							low: 1,
+							high: 6,
+							step: 0.1,
+							value: 1,
+							digits: 1,
+							unit: "x",
+							note: () =>
+								field && field.summit > 0
+									? `tallest point <b>${Math.round(field.summit).toLocaleString()} m</b>` +
+										(knobs.peakScale > 1
+											? ` — <b>${Math.round(field.summit - value("relief")).toLocaleString()} m</b> over Relief`
+											: " — Relief exactly")
+									: "",
 						},
 						{
 							key: "mountainFrequency",
@@ -1350,6 +1382,12 @@
 					),
 				);
 				const cellMetres = (CELL_CONSTANT * radius) / 2 ** level;
+				let terrainLow = Infinity;
+				let terrainHigh = -Infinity;
+				for (const [, y] of knobs.terrainSpline) {
+					if (y < terrainLow) terrainLow = y;
+					if (y > terrainHigh) terrainHigh = y;
+				}
 				return {
 					radius,
 					level,
@@ -1383,6 +1421,15 @@
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
 					mountainLine: knobs.mountainLine,
+					peakScale: value("peakScale"),
+					// **The line is a fraction of the terrain curve's own range,
+					// not a height on a fixed axis.** Drag that curve's top down
+					// and an absolute line would drift toward the summit until
+					// the gate stopped opening at all -- so the line moves with
+					// the curve, and the number keeps meaning the same thing.
+					terrainHigh,
+					lineHeight:
+						terrainLow + knobs.mountainLine * (terrainHigh - terrainLow),
 					detail: knobs.detail,
 				};
 			}
@@ -1431,7 +1478,10 @@
 					terrainSpline: new Float32Array(SPLINE_BINS),
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
-				const heard = [0.5, 1, 0, 0];
+				const heard = [0.5, 1, 0, 0, 0];
+				// What the mountain layer put in, kept apart so Peak scale can
+				// multiply it after the fit rather than before it.
+				const mountOf = new Float64Array(SPHERE_SAMPLES);
 				// How much of the planet the gate is open over. Counted here
 				// rather than off the patch, because the line is a property of
 				// the world and a patch can be entirely on one side of it.
@@ -1453,7 +1503,8 @@
 					);
 					tally.terrainSpline[bin(heard[2])]++;
 					tally.mountainSpline[bin(heard[3])]++;
-					if (heard[0] > knobs.mountainLine) overLine++;
+					mountOf[n] = heard[4];
+					if (heard[0] > k.lineHeight) overLine++;
 				}
 				let tallest = 0;
 				for (const counts of Object.values(tally))
@@ -1487,10 +1538,21 @@
 				// carries the ground up through them, so the share of each is a
 				// property of the world -- and a patch is a place, which can be
 				// all mountain or all sea whatever the planet is doing.
+				// **Only what the mountain layer pushed UP is exaggerated**, so
+				// the extra is continuous across the shoreline and a peak grows
+				// where a hollow does not. At a scale of one it is exactly zero
+				// and nothing here moves at all.
+				const over = value("peakScale") - 1;
 				const bands = [0, 0, 0, 0];
-				for (const v of raw) {
-					const d = v - sea;
-					bands[bandOf((d >= 0 ? d * up : d * down) + drained)]++;
+				let summit = -Infinity;
+				for (let n = 0; n < raw.length; n++) {
+					const d = raw[n] - sea;
+					const m =
+						(d >= 0 ? d * up : d * down) +
+						Math.max(0, mountOf[n]) * up * over +
+						drained;
+					if (m > summit) summit = m;
+					bands[bandOf(m)]++;
 				}
 				for (let n = 0; n < bands.length; n++) bands[n] /= SPHERE_SAMPLES;
 
@@ -1509,7 +1571,7 @@
 				// together.
 				const terrainField = new Float32Array((n + 1) * (n + 1));
 				const mountField = new Float32Array((n + 1) * (n + 1));
-				const said = [0.5, 1];
+				const said = [0.5, 1, 0, 0, 0];
 				// A draft covers the same ground with fewer points, so the step
 				// grows as the count falls and the patch keeps its width.
 				const step = (knobs.cells / n) * k.cellMetres;
@@ -1556,7 +1618,7 @@
 						);
 						const d = unitless - sea;
 						const wet = d >= 0 ? d * up : d * down;
-						const metres = wet + drained;
+						const metres = wet + Math.max(0, said[4]) * up * over + drained;
 						height[r * (n + 1) + q] = metres;
 						field0[r * (n + 1) + q] = unitless;
 						terrainField[r * (n + 1) + q] = said[0];
@@ -1586,6 +1648,7 @@
 					exposedShare: (land - wasLand) / ((n + 1) * (n + 1)),
 					drained,
 					bands,
+					summit,
 					overLine: overLine / SPHERE_SAMPLES,
 					// The planet map redraws from these without regenerating,
 					// so the two pictures are always of one world.
@@ -1639,7 +1702,7 @@
 			 */
 			function planetHeights(wide, tall) {
 				const out = new Float32Array(wide * tall);
-				const said = [0.5, 1];
+				const said = [0.5, 1, 0, 0, 0];
 				const layer = new Float32Array(wide * tall);
 				const raw = new Float32Array(wide * tall);
 				for (let r = 0; r < tall; r++) {
@@ -1660,7 +1723,9 @@
 						const d = unitless - field.sea;
 						const at = r * wide + q;
 						out[at] =
-							(d >= 0 ? d * field.up : d * field.down) + field.drained;
+							(d >= 0 ? d * field.up : d * field.down) +
+							Math.max(0, said[4]) * field.up * (field.k.peakScale - 1) +
+							field.drained;
 						raw[at] = unitless;
 						layer[at] = knobs.picture === "mountain" ? said[1] : said[0];
 					}
@@ -1806,6 +1871,32 @@
 					}
 				mapCtx.putImageData(image, 0, 0);
 			}
+
+			/**
+			 * Click the planet to stand somewhere on it.
+			 *
+			 * **A latitude and a longitude are a place, and two sliders are
+			 * not.** Finding a range by dragging them is a search with the
+			 * answer already on screen, so the answer is what you click. The
+			 * projection is longitude across and latitude down, which inverts
+			 * to two divisions; the latitude is held inside its own slider's
+			 * ends, because the patch is a tangent square and the poles are
+			 * where that stops being one.
+			 */
+			mapCanvas.style.cursor = "crosshair";
+			mapCanvas.addEventListener("click", (e) => {
+				if (knobs.mapView !== "planet") return;
+				const box = mapCanvas.getBoundingClientRect();
+				const across = (e.clientX - box.left) / box.width;
+				const down = (e.clientY - box.top) / box.height;
+				const row = rowOf("latitude");
+				knobs.longitude = Math.round(across * 360 - 180);
+				knobs.latitude = Math.max(
+					row.low,
+					Math.min(row.high, Math.round((0.5 - down) * 180)),
+				);
+				askForRedraw(false);
+			});
 
 			// ---------------------------------------------------------------
 			// The graph: what a knob does to the shape of the ground, as a
@@ -2390,7 +2481,13 @@
 					// pictures at once. Above the amber line the mountain layer
 					// is let through; below it, nothing is.
 					if (key === "terrainSpline" && knobs.merge === "gated") {
-						const at = toY(knobs.mountainLine);
+						let lo = Infinity;
+						let hi = -Infinity;
+						for (const [, y] of points) {
+							if (y < lo) lo = y;
+							if (y > hi) hi = y;
+						}
+						const at = toY(lo + knobs.mountainLine * (hi - lo));
 						g.strokeStyle = "rgba(255, 180, 84, 0.55)";
 						g.setLineDash([3, 3]);
 						g.beginPath();
