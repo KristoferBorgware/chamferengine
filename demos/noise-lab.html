@@ -183,6 +183,18 @@
 			.knob input:disabled {
 				opacity: 0.35;
 			}
+			.knob.curved {
+				grid-template-columns: 1fr;
+			}
+			.curve {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				touch-action: none;
+				cursor: crosshair;
+			}
 			.knob.check {
 				grid-template-columns: auto 1fr;
 			}
@@ -516,6 +528,147 @@
 			}
 			// ===== END engine noise kernel =====
 
+			// ---------------------------------------------------------------
+			// Layers: fields whose job is to control other fields.
+			//
+			// **A single octave stack can only make one kind of landscape.**
+			// fBm is homogeneous -- every octave applies everywhere at the same
+			// amplitude -- so one statistic describes the whole planet and there
+			// is no term that can say "be different here". Measured as the
+			// spread of local roughness, calmest tenth against roughest tenth,
+			// one stack gives 1.3x. Ridge does not help: it folds every octave
+			// everywhere, moving the character globally rather than carving
+			// regions out of it.
+			//
+			// What does help is a second kind of field. A **control** is never
+			// added to the height; it decides how the terrain behaves where it
+			// is read. It has to be slow -- much lower frequency than the ground
+			// -- because a kind of place that changed as fast as the ground
+			// would not read as a place at all.
+			// ---------------------------------------------------------------
+
+			/**
+			 * A control field's value, bent through a curve of the reader's own.
+			 *
+			 * **The curve is what puts an edge on a region.** A control read
+			 * straight is linear and mushy: half of it gives half of whatever it
+			 * governs, everywhere, gradually. A curve can say "nothing at all
+			 * until two thirds, then flatten hard", which is what makes a
+			 * mountain front, a plateau rim and a coastal shelf rather than one
+			 * long fade.
+			 *
+			 * Piecewise linear between the points, held flat past the ends.
+			 * Straight segments rather than a smooth spline because a person
+			 * dragging a point should be able to predict what happens, and
+			 * because a curve that overshoots its own control points can send a
+			 * quantity outside the range it was promised.
+			 */
+			function splineAt(points, at) {
+				if (points.length === 0) return 0;
+				if (at <= points[0][0]) return points[0][1];
+				const last = points[points.length - 1];
+				if (at >= last[0]) return last[1];
+				for (let n = 1; n < points.length; n++) {
+					const [x1, y1] = points[n];
+					if (at > x1) continue;
+					const [x0, y0] = points[n - 1];
+					const span = x1 - x0;
+					if (span <= 1e-9) return y1;
+					return y0 + ((y1 - y0) * (at - x0)) / span;
+				}
+				return last[1];
+			}
+
+			/** A spline as a query-string value, and back. */
+			function splineToText(points) {
+				return points.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`).join(",");
+			}
+			function splineFromText(text) {
+				const out = [];
+				for (const pair of text.split(",")) {
+					const [x, y] = pair.split(":").map(Number);
+					if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+					out.push([Math.max(-1, Math.min(1, x)), Math.max(0, Math.min(1, y))]);
+				}
+				out.sort((a, b) => a[0] - b[0]);
+				return out.length >= 2 ? out : null;
+			}
+
+			/** Offsets from the world seed, so the controls are their own fields. */
+			const CONTINENT_SEED_OFFSET = 101;
+			const MOUNTAIN_SEED_OFFSET = 211;
+
+			/**
+			 * The surface with the control layers applied.
+			 *
+			 * Three merge rules, because which one is right is the whole
+			 * question and the answer is easier to see than to argue:
+			 *
+			 * **multiply** is the rule as it is usually written down --
+			 * continent times erosion times mountains. It gives the widest
+			 * spread of character and it reaches that by collapsing most of the
+			 * map toward flat, because multiplying toward zero pulls the ground
+			 * toward sea level. Under it, flat and low are the same thing and a
+			 * high plateau cannot exist.
+			 *
+			 * **amplitude** adds the base elevation and scales only the detail,
+			 * so how high a place is and how rough it is come apart. A high flat
+			 * plateau and a low rough badland are both reachable.
+			 *
+			 * **blend** does that and also chooses the SHAPE: a smooth stack
+			 * where the control is low, a creased one where it is high. This is
+			 * the one that gives hills in one place and a range in another,
+			 * rather than more or less of one thing everywhere.
+			 */
+			function layeredAt(x, y, z, seed, k, s) {
+				const plain = surfaceAt(x, y, z, seed, k, s);
+				const cont = splineAt(
+					k.continentSpline,
+					fbm(
+						x,
+						y,
+						z,
+						k.continentFrequency,
+						k.continentOctaves,
+						(seed + CONTINENT_SEED_OFFSET) | 0,
+					),
+				);
+				const mount = splineAt(
+					k.mountainSpline,
+					fbm(
+						x,
+						y,
+						z,
+						k.mountainFrequency,
+						k.mountainOctaves,
+						(seed + MOUNTAIN_SEED_OFFSET) | 0,
+					),
+				);
+				const base = cont * 2 - 1;
+				if (k.merge === "multiply") return base * mount * ((plain + 1) / 2);
+				if (k.merge === "amplitude") return base + plain * mount * k.detail;
+				// The creased twin of the same ground: same seed and the same
+				// frequency, so it lies over the plain one rather than beside
+				// it, and only the fold differs.
+				const creased = stackAt(
+					x,
+					y,
+					z,
+					seed,
+					{ ...s.surface, ridge: 0.85 },
+					"octaves",
+				);
+				const shape = plain * (1 - mount) + creased * mount;
+				return base + shape * mount * k.detail;
+			}
+
+			/** The field the world is built from, layered or not. */
+			function fieldAt(x, y, z, seed, k, s) {
+				return k.layers
+					? layeredAt(x, y, z, seed, k, s)
+					: surfaceAt(x, y, z, seed, k, s);
+			}
+
 			/** `sqrt(8 pi / (10 sqrt 3))`, which ties block size to radius. */
 			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
 
@@ -621,7 +774,7 @@
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 8,
+							value: 16,
 							digits: 0,
 						},
 						{
@@ -719,6 +872,111 @@
 							value: 2,
 							digits: 2,
 							shownWhen: (k) => k.warpAmplitude > 0,
+						},
+					],
+				},
+				{
+					group: "The layers",
+					rows: [
+						{
+							key: "layers",
+							label: "Use control layers",
+							type: "check",
+							value: false,
+						},
+						{
+							key: "merge",
+							label: "Merge rule",
+							type: "select",
+							value: "blend",
+							options: ["blend", "amplitude", "multiply"],
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "detail",
+							label: "Detail on top",
+							low: 0,
+							high: 1.5,
+							step: 0.05,
+							value: 0.8,
+							digits: 2,
+							shownWhen: (k) => k.layers && k.merge !== "multiply",
+						},
+						{
+							key: "continentFrequency",
+							label: "Continent frequency",
+							low: 0.1,
+							high: 12,
+							step: 0.1,
+							// Slower than the ground, or a region would change as
+							// fast as the ground does and read as texture rather
+							// than as a place. Not so slow that one patch holds
+							// only one region: measured, this puts about four
+							// across the default patch.
+							value: 3,
+							digits: 1,
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "continentOctaves",
+							label: "Continent octaves",
+							low: 1,
+							high: 4,
+							step: 1,
+							value: 2,
+							digits: 0,
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "continentSpline",
+							label: "Continent → base height",
+							type: "spline",
+							// A shelf, a shore and a rise: flat sea floor over
+							// the low half, a short steep climb through the
+							// coast, then land that keeps going up.
+							value: [
+								[-1, 0.08],
+								[-0.3, 0.2],
+								[-0.05, 0.34],
+								[0.15, 0.62],
+								[1, 0.95],
+							],
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "mountainFrequency",
+							label: "Mountain frequency",
+							low: 0.1,
+							high: 12,
+							step: 0.1,
+							value: 4.5,
+							digits: 1,
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "mountainOctaves",
+							label: "Mountain octaves",
+							low: 1,
+							high: 4,
+							step: 1,
+							value: 2,
+							digits: 0,
+							shownWhen: (k) => k.layers,
+						},
+						{
+							key: "mountainSpline",
+							label: "Mountain → how rugged",
+							type: "spline",
+							// Nothing for most of the range, then a hard climb:
+							// the knee is the mountain front, and without one
+							// the whole map is equally half-mountainous.
+							value: [
+								[-1, 0.02],
+								[0.1, 0.08],
+								[0.45, 0.55],
+								[1, 1],
+							],
+							shownWhen: (k) => k.layers,
 						},
 					],
 				},
@@ -874,7 +1132,10 @@
 			const using = {};
 			for (const g of KNOBS)
 				for (const r of g.rows) {
-					knobs[r.key] = r.value;
+					knobs[r.key] =
+						r.type === "spline"
+							? r.value.map((point) => [...point])
+							: r.value;
 					if (r.off !== undefined) using[r.key] = true;
 				}
 
@@ -892,6 +1153,11 @@
 				for (const g of KNOBS)
 					for (const r of g.rows) {
 						const v = knobs[r.key];
+						if (r.type === "spline") {
+							const now = splineToText(v);
+							if (now !== splineToText(r.value)) out.set(r.key, now);
+							continue;
+						}
 						if (v === r.value) continue;
 						out.set(r.key, r.type === "check" ? (v ? "1" : "0") : String(v));
 					}
@@ -905,7 +1171,10 @@
 					for (const r of g.rows) {
 						const raw = params.get(r.key);
 						if (raw === null) continue;
-						if (r.type === "check") knobs[r.key] = raw !== "0";
+						if (r.type === "spline") {
+							const points = splineFromText(raw);
+							if (points) knobs[r.key] = points;
+						} else if (r.type === "check") knobs[r.key] = raw !== "0";
 						else if (r.type === "select")
 							knobs[r.key] = r.options.includes(raw) ? raw : r.value;
 						else if (r.type === "text") knobs[r.key] = raw;
@@ -1061,6 +1330,15 @@
 					stack: knobs.stack,
 					normalise: knobs.octaveSum === "normalised",
 					fit: knobs.metreScale === "fit",
+					layers: knobs.layers,
+					merge: knobs.merge,
+					detail: knobs.detail,
+					continentFrequency: knobs.continentFrequency,
+					continentOctaves: knobs.continentOctaves,
+					continentSpline: knobs.continentSpline,
+					mountainFrequency: knobs.mountainFrequency,
+					mountainOctaves: knobs.mountainOctaves,
+					mountainSpline: knobs.mountainSpline,
 				};
 			}
 
@@ -1099,7 +1377,7 @@
 				// depend on where the patch is looking.
 				const raw = new Float64Array(SPHERE_SAMPLES);
 				for (let n = 0; n < SPHERE_SAMPLES; n++)
-					raw[n] = surfaceAt(
+					raw[n] = fieldAt(
 						SPHERE[n * 3],
 						SPHERE[n * 3 + 1],
 						SPHERE[n * 3 + 2],
@@ -1179,7 +1457,7 @@
 							z = frame.up[2] * c + (frame.east[2] * u + frame.north[2] * v) * sn;
 						}
 						const len = Math.hypot(x, y, z);
-						const unitless = surfaceAt(x / len, y / len, z / len, seed, k, s);
+						const unitless = fieldAt(x / len, y / len, z / len, seed, k, s);
 						const d = unitless - sea;
 						const metres = d >= 0 ? d * up : d * down;
 						height[r * (n + 1) + q] = metres;
@@ -1797,6 +2075,127 @@
 			const facts = document.getElementById("facts");
 			const rows = new Map();
 
+			/**
+			 * A curve you drag, over one control field's range.
+			 *
+			 * Across is the raw control value, `-1` to `1`. Up is what it
+			 * controls, `0` to `1`. Drag a point to move it, click the empty
+			 * curve to add one, shift-click a point to take it away. The two
+			 * ends keep their x so the curve always spans the whole range.
+			 */
+			function makeSpline(canvas, key, onChange) {
+				const g = canvas.getContext("2d");
+				const pad = 6;
+				const toX = (v) => pad + ((v + 1) / 2) * (canvas.width - pad * 2);
+				const toY = (v) => canvas.height - pad - v * (canvas.height - pad * 2);
+				const fromX = (px) =>
+					((px - pad) / (canvas.width - pad * 2)) * 2 - 1;
+				const fromY = (py) =>
+					(canvas.height - pad - py) / (canvas.height - pad * 2);
+
+				function draw() {
+					const points = knobs[key];
+					g.clearRect(0, 0, canvas.width, canvas.height);
+					g.fillStyle = "#0b0e13";
+					g.fillRect(0, 0, canvas.width, canvas.height);
+					// A line at the middle of the control's range, because that
+					// is where half the world sits and it is the only landmark
+					// on an otherwise featureless box.
+					g.strokeStyle = "#232b36";
+					g.beginPath();
+					g.moveTo(toX(0), pad);
+					g.lineTo(toX(0), canvas.height - pad);
+					g.stroke();
+					g.strokeStyle = "#6fd0ff";
+					g.lineWidth = 1.5;
+					g.beginPath();
+					for (let px = pad; px <= canvas.width - pad; px++) {
+						const y = toY(splineAt(points, fromX(px)));
+						if (px === pad) g.moveTo(px, y);
+						else g.lineTo(px, y);
+					}
+					g.stroke();
+					g.fillStyle = "#e8ecf2";
+					for (const [x, y] of points) {
+						g.beginPath();
+						g.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+						g.fill();
+					}
+				}
+
+				let dragging = -1;
+				const spot = (e) => {
+					const box = canvas.getBoundingClientRect();
+					return [
+						((e.clientX - box.left) / box.width) * canvas.width,
+						((e.clientY - box.top) / box.height) * canvas.height,
+					];
+				};
+				const nearest = (px, py) => {
+					const points = knobs[key];
+					let best = -1;
+					let far = 12;
+					for (let n = 0; n < points.length; n++) {
+						const d = Math.hypot(toX(points[n][0]) - px, toY(points[n][1]) - py);
+						if (d < far) {
+							far = d;
+							best = n;
+						}
+					}
+					return best;
+				};
+				canvas.addEventListener("pointerdown", (e) => {
+					e.preventDefault();
+					const [px, py] = spot(e);
+					const at = nearest(px, py);
+					const points = knobs[key];
+					if (at >= 0 && e.shiftKey) {
+						// Never below two, or the curve stops being a curve.
+						if (points.length > 2 && at > 0 && at < points.length - 1) {
+							points.splice(at, 1);
+							draw();
+							onChange();
+						}
+						return;
+					}
+					if (at >= 0) {
+						dragging = at;
+					} else {
+						const x = Math.max(-1, Math.min(1, fromX(px)));
+						const y = Math.max(0, Math.min(1, fromY(py)));
+						points.push([x, y]);
+						points.sort((a, b) => a[0] - b[0]);
+						dragging = points.findIndex((p) => p[0] === x && p[1] === y);
+						draw();
+						onChange();
+					}
+					canvas.setPointerCapture(e.pointerId);
+				});
+				canvas.addEventListener("pointermove", (e) => {
+					if (dragging < 0) return;
+					const points = knobs[key];
+					const [px, py] = spot(e);
+					const first = dragging === 0;
+					const last = dragging === points.length - 1;
+					// The ends hold their x, so the curve always covers the whole
+					// range and nothing has to guess what happens past it.
+					if (!first && !last)
+						points[dragging][0] = Math.max(
+							points[dragging - 1][0] + 0.01,
+							Math.min(points[dragging + 1][0] - 0.01, fromX(px)),
+						);
+					points[dragging][1] = Math.max(0, Math.min(1, fromY(py)));
+					draw();
+					onChange();
+				});
+				const drop = () => {
+					dragging = -1;
+				};
+				canvas.addEventListener("pointerup", drop);
+				canvas.addEventListener("pointercancel", drop);
+				return draw;
+			}
+
 			function buildPanel() {
 				const host = document.getElementById("knobs");
 				for (const group of KNOBS) {
@@ -1810,7 +2209,12 @@
 						const label = document.createElement("label");
 						label.textContent = row.label;
 						let input;
-						if (row.type === "select") {
+						if (row.type === "spline") {
+							input = document.createElement("canvas");
+							input.width = 280;
+							input.height = 84;
+							input.className = "curve";
+						} else if (row.type === "select") {
 							input = document.createElement("select");
 							for (const option of row.options) {
 								const o = document.createElement("option");
@@ -1834,6 +2238,16 @@
 							input.max = row.high;
 							input.step = row.step;
 							input.value = knobs[row.key];
+						}
+						if (row.type === "spline") {
+							wrap.classList.add("curved");
+							wrap.append(label, input);
+							set.append(wrap);
+							const redraw = makeSpline(input, row.key, () =>
+								askForRedraw(),
+							);
+							rows.set(row.key, { row, wrap, input, redraw });
+							continue;
 						}
 						const readout = document.createElement("output");
 						// A switch, where the knob has a value that removes its
@@ -1878,9 +2292,13 @@
 
 			/** Show a knob only where it means something, rather than greying it. */
 			function refreshPanel() {
-				for (const { row, wrap, readout, input } of rows.values()) {
+				for (const { row, wrap, readout, input, redraw } of rows.values()) {
 					const shown = row.shownWhen ? row.shownWhen(knobs) : true;
 					wrap.classList.toggle("hidden", !shown);
+					if (row.type === "spline") {
+						if (shown && redraw) redraw();
+						continue;
+					}
 					if (row.digits !== undefined && !row.type) {
 						const live = liveRange(row);
 						if (Number(input.min) !== live.low) input.min = live.low;

@@ -322,6 +322,29 @@ it is handed. Under `multiply` it decides the vertical scale: 904 m normalised
 against 1,752 m raw, at the same five octaves. The readout says which of the two
 is carrying the height.
 
+**The layers.** A single octave stack makes one kind of landscape, because fBm
+is homogeneous — every octave applies everywhere at the same amplitude, so one
+statistic describes the whole planet and nothing can say *be different here*.
+Ridge does not help: it folds every octave everywhere, moving the character
+globally rather than carving regions out of it. Measured as the spread of local
+roughness, calmest tenth against roughest tenth, one stack gives **1.3×**.
+
+**Use control layers** adds two slow fields whose job is not to be terrain but
+to decide how the terrain behaves where they are read — a continent field that
+sets the base elevation, and a mountain field that sets how rugged the place is.
+Each is bent through a **curve you drag**: across is the field's own value, up
+is what it controls. The curve is what puts an *edge* on a region — a coastal
+shelf, a mountain front — where a control read straight is one long fade.
+
+Three merge rules. **multiply** is the rule as it is usually written down, and
+under it flat and low are the same thing, because multiplying toward zero pulls
+the ground to sea level and a high plateau cannot exist. **amplitude** adds the
+base and scales only the detail, so how high a place is and how rough it is come
+apart. **blend** does that and also picks the shape, a smooth stack where the
+control is low and a creased one where it is high — the one that gives hills in
+one place and a range in another. On the shipped patch the three measure 16.9×,
+17.2× and 16.0× against 7.7× with the layers off.
+
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.
 **Surface** draws it solid, as a wireframe, or both. The **Contour** panel at
