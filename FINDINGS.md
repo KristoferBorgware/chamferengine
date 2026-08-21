@@ -821,6 +821,34 @@ or blend the step direction with the previous one so a droplet cannot turn
 instantly. Neither is as good as momentum and both are an afternoon rather than
 a rewrite.
 
+**Re-measured on 2026-08-21, and the headline number is no longer true.** The
+map this was found on was a single octave stack; the map now is two layers, a
+mountain gate and 1,100 m of relief, and it is much rougher ground for a droplet
+to walk over. Re-run at level 8 on a 32 m cell at strength 1 — 983,043 droplets,
+21,221,363 steps — **18.3%** of steps are part of a run of eight or more in one
+direction, not 60.2%, and the mean run is **2.42**, not 3.7. The longest run is
+still 48, a whole droplet life. Hillshaded, the straight gashes are no longer
+what the picture shows: at 1,100 m of relief the ground is already steeper than
+anything erosion adds, and at 300 m the eroded map reads as finer dendritic
+texture rather than as trenches. **The walk is still locked** — a walk that
+follows the ground rather than the lattice sits at a mean run of 1.09 to 1.49,
+measured below — but the visible symptom this entry is named for has been
+covered up by a rougher world rather than fixed. What is now the louder problem
+is F-053, and it has the same cause.
+
+**One of the two cheap half-measures above is measured and it is worse than
+doing nothing.** Blending the step direction with the previous one was tried on
+the six-way step, scoring each neighbour by its gradient plus an inertia term
+against the carried direction. At level 7 on a static field the shipped walk
+runs 7.0% of steps in runs of eight or more; the same walk at inertia 0.25 runs
+**62.7%**, at 0.5 **79.8%**, at 1 **89.8%** and at 2 **94.8%**. The reason is
+that momentum on a six-way choice cannot bend a walk — the result is still one
+of six directions, and the inertia term simply holds it on whichever one it
+picked. **Momentum only helps once the position is continuous.** The same
+inertia applied to a continuous position in `(i, j)` runs 3.0% at 0.3 and 7.4%
+at 0.6, against 1.4% for pure gradient descent. The hashed tie-break is still
+unmeasured.
+
 ### F-044 — The ocean surface disappears at levels whose block is deeper than the sea
 
 **Kind:** bug
@@ -1046,7 +1074,149 @@ only decides a mix.
 
 ---
 
-### F-053 — Live rebuild flushes the terrain and nothing that follows from its shape
+### F-053 — Droplet erosion raises the median hillslope by 41%, which is roughening and not carving
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-21, while measuring what it would take to put erosion back on
+the panel
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts`, the cut
+branch and its `CUT_SHARE` spread
+
+**What happens.** Doc 21 states the test this pass has to pass: the median slope
+holds and the tail grows, because that is the shape of a channel network cut
+into ground that is otherwise left alone, and "a knob whose median climbed with
+it is adding roughness, not carving". On the map the engine ships it fails that
+test. Measured at level 8 on a 32 m cell with the shipped knobs, seed `chamfer`,
+erosion at strength 1, slope being the steepest of a cell's six neighbours over
+land cells:
+
+| Relief | median | 90th | 99th | steepest | ground moved |
+|---|---|---|---|---|---|
+| 1,100 m, no erosion | 0.427 | 1.378 | 2.921 | 6.66 | — |
+| 1,100 m, erosion 1 | 0.602 (x1.41) | 1.939 (x1.41) | 3.833 (x1.31) | 13.10 | 12.46 m a cell |
+| 300 m, no erosion | 0.119 | 0.377 | 0.797 | 1.82 | — |
+| 300 m, erosion 1 | 0.164 (x1.38) | 0.576 (x1.53) | 1.188 (x1.49) | 3.56 | 4.95 m a cell |
+
+The median and the 99th grow by nearly the same factor, which is what a uniform
+roughening looks like. Doc 21's own table has the median moving `0.077` to
+`0.083`, a factor of 1.08, and it was taken at level 7 on a **100 m** cell. The
+shipped map is a 32 m cell, so a hillside is drawn three times more finely and
+every cut lands on three times less ground.
+
+**The cause is the shape of a single cut, not the amount of it.** `CUT_SHARE` is
+`0.5`, so half of every cut is taken from the cell the droplet stands on and the
+other half is divided over its six neighbours — one sixth of a half each. The
+centre therefore drops **six times** as far as any neighbour, which is a negative
+spike, and a pass built out of negative spikes adds high-frequency roughness by
+construction. Sweeping it at 1,100 m of relief, with everything else held: the
+median multiplier is x1.41 at `CUT_SHARE` 0.5, x1.30 at 0.25, x1.23 at 0.10 and
+x1.17 at 0. Halving `MAX_CUT` from 0.1 to 0.03 takes it to x1.15 on its own, and
+both together to **x1.07** — which is doc 21's number, reached by making the
+kernel flatter rather than by cutting less in total.
+
+**Why it matters.** Erosion is the only pass that shapes ground in a way noise
+cannot, and it is currently off. F-039 is the reason given for that, and F-039's
+symptom has faded while this one has not — so a fix aimed only at the walk would
+turn erosion back on and still hand back a rougher planet rather than a carved
+one. The two share a cause: a droplet that stands on exactly one cell can only
+ever cut a spike into it, and a droplet with a position between cells cannot.
+A continuous droplet spreading each cut over the three lattice points around it
+runs at **x1.10** on the median at 1,100 m of relief and moves 7.66 m a cell
+against 12.46 m, measured on the same map.
+
+**What would fix it.** Two, and they are not exclusive. The small one is to flatten
+the cut kernel — `CUT_SHARE` toward 0 and `MAX_CUT` toward 0.03 — which is two
+constants and gets the median multiplier to 1.07 without changing any structure.
+The large one is the continuous droplet F-039 asks for, which fixes the kernel as
+a side effect because a fractional position has three lattice points under it and
+no single cell to spike. Prefer the second, and measure the first first, because
+it says how much of the problem is the kernel alone.
+
+---
+
+### F-054 — The noise lab has no grid, so erosion cannot be shown in the tool the knobs are tuned in
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, while reading the lab to see where an erosion row would go
+**Where:** `demos/noise-lab.html`, `fieldAt` and `generate`
+
+**What happens.** Every picture the lab draws is a pure function of a direction.
+`fieldAt` takes `(x, y, z)` and returns a height; `generate` calls it once per
+patch vertex and once per sphere sample, and the planet map calls it once per
+pixel. Nothing in the file ever asks a sample about its neighbours, and there is
+no cell numbering, no ring and no coarse grid. Erosion is a pass over a
+neighbourhood, so there is nowhere in the lab to put it. The lab has no erosion
+row for that reason and not by choice.
+
+**Why it matters.** The lab is where the two layers, the two curves and the
+material bands were tuned, and it is the only place a knob can be dragged
+against a picture. Erosion is the one pass that would change the shape of the
+ground rather than its height, so it is exactly the knob that needs a picture —
+and it is the only world parameter the lab cannot show. The client's map editor
+does have the real grid and the real `erodeDroplets`, so the two tools would
+disagree about what the same query string builds the moment an erosion row
+appeared in one of them.
+
+**What would fix it.** Two, and they answer different questions. Erode the
+**patch** — the lab already lays out an `(n+1)` by `(n+1)` grid of heights at
+exactly one map cell per step, so a droplet walk over that array is a few dozen
+lines and needs no cell IDs. It would be wrong at the patch edges, because a
+droplet in the engine crosses ground the patch does not hold, and the lab's
+patch is 176 cells across against a droplet life of 48 steps, so a margin of 48
+cells makes the interior right. It also cannot show what erosion does to a
+coastline, because the sea level and the metre fit are read off the sphere and
+the sphere is not eroded. The other is to stop having two tools: the client's
+map editor already runs the real `CoarseMapBuilder` with the real erosion stage,
+and what it lacks against the lab is the curve editors and the contour graph.
+Prefer the second if the lab is going to keep growing, and the first if erosion
+is the last thing it needs.
+
+---
+
+### F-055 — Erosion costs more than the noise field it cuts into
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, timing a full map build with the erosion stage turned on
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts`;
+`packages/client/src/MapPanel.ts`
+
+**What happens.** A full build at level 8 costs 401 ms for the grid, 2,388 ms
+for the two noise layers and **3,354 ms** for erosion at strength 1. Turning the
+knob off zero therefore more than doubles a map build. `MapPanel` already says
+erosion is the slow step; this is the number. The droplet count is
+`strength x 1.5 x cellCount`, so it grows with the map exactly as the noise does
+and the ratio holds at every level: 60 ms against 168 ms at level 6, 381 ms
+against 689 ms at level 7.
+
+**Why it matters.** The map editor redraws while a knob is dragged, and the
+build chain is arranged so a change to a late option does not recompute the
+early ones — that arrangement is what makes Height redraw in 1.2 s against
+Ground's 5.5 s. Erosion is the last stage, so dragging its own knob pays only
+for erosion, which is the good case. Every other case is worse: a change to
+Relief now costs the metre fit plus 3.4 s of water. Nobody is hurt today because
+the knob is pinned at zero and `erodeDroplets` returns on its first line, and
+everybody is hurt the day it moves.
+
+**What would fix it.** The droplet count and the step count are both knobs
+nothing has swept — the pass runs 983,043 droplets of up to 48 steps at level 8
+and no measurement says either number is needed. Sweep them against the slope
+statistics in F-053 and take the cheapest pair that still carves. Beyond that
+the pass is a scalar walk over typed arrays with no allocation, so what is left
+is running it in the map worker at a lower level and resampling, or accepting
+the second and a half.
+
+---
+
+### F-056 — Live rebuild flushes the terrain and nothing that follows from its shape
 
 **Kind:** gap
 **Milestone:** 0.5.0
@@ -1082,7 +1252,6 @@ exposes a live setter for its own look, so this is wiring rather than new
 machinery. Left undone because Relief is not in the default draft's habit of
 moving far enough to notice, and because it is a straightforward follow-up
 once someone is actually leaning on Live rebuild rather than trying it once.
-
 
 ---
 
