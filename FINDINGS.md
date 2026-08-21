@@ -1046,6 +1046,46 @@ only decides a mix.
 
 ---
 
+### F-053 — Live rebuild flushes the terrain and nothing that follows from its shape
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-21, adding a way to rebuild the terrain without reloading
+**Where:** `packages/client/src/planet.ts`, `flushTerrain`; `PlanetSettings.LIVE_TERRAIN_KNOBS`
+
+**What happens.** **Live rebuild**, a checkbox on the parameter panel, replaces
+the coarse map and every chunk built from it the moment a terrain knob settles,
+with no page reload. It is deliberately narrow: `LIVE_TERRAIN_KNOBS` admits only
+the knobs that decide the map itself -- the two layers, Land, Relief, Sea depth,
+Sea level, Peak scale, Detail, the merge, erosion, the seed. Everything the
+*shape* of the world feeds into afterwards stays exactly where it was: the sea's
+own surface radius, the sky's atmosphere depth, the cloud decks' radii and the
+crust top are all computed once at page load from the old map's true peak and
+never revisited. A Relief raised far enough to move `crustTopRadius` a long way
+shows the new ground with the old sea floating at the wrong height above or
+through it, until the page is actually rebuilt with **Rebuild**.
+
+**Why it matters.** It is easy to read "live rebuild" as "the world updates" and
+drag Relief past where that stops being true. Nothing crashes and nothing looks
+obviously wrong at a glance from orbit -- the mismatch shows up as the sea
+sitting at the wrong height relative to the coastline, which is the kind of
+thing a person notices as "looks a bit off" rather than as a named bug, unless
+this entry tells them what to check.
+
+**What would fix it.** Recompute `shape.seaSurfaceRadius`, the atmosphere's
+`planetAtmosphere` inputs and the two cloud deck radii from the new map inside
+`flushTerrain`, the way `map`, `shape`, `peaks` and the generators already are,
+and hand the new numbers to `sea`, `sky` and `billboardClouds` -- each already
+exposes a live setter for its own look, so this is wiring rather than new
+machinery. Left undone because Relief is not in the default draft's habit of
+moving far enough to notice, and because it is a straightforward follow-up
+once someone is actually leaning on Live rebuild rather than trying it once.
+
+
+---
+
 ## Closed
 
 ### F-041 — The psrd noise basis is the one field two machines may not agree on

@@ -447,6 +447,48 @@ const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
 	unit: "",
 };
 
+/**
+ * The knobs Live rebuild is allowed to touch.
+ *
+ * Every one of these decides only the coarse map: the terrain, and the chunks
+ * read off it. Nothing here is read by the device, the chunk address width,
+ * the crust, the sea surface radius, the sky or the clouds -- those still need
+ * a real reload, because a live rebuild only replaces the map and the chunks
+ * built from it. `subdivisionDepth`, `blockSize`, `chunkCells` and every knob
+ * below "How high and how wet" in {@link KNOB_RANGES} are deliberately absent:
+ * swapping the address width or the worker count under a running world is not
+ * a smaller version of a reload, it is the reload with extra steps skipped.
+ */
+export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	"seed",
+	"coarseMap",
+	"coarseSpacing",
+	"terrainScale",
+	"terrainOctaves",
+	"terrainPersistence",
+	"terrainLacunarity",
+	"terrainOffsetX",
+	"terrainOffsetY",
+	"terrainCurve",
+	"mountainLayer",
+	"merge",
+	"mountainLine",
+	"mountainDetail",
+	"peakScale",
+	"mountainScale",
+	"mountainOctaves",
+	"mountainPersistence",
+	"mountainLacunarity",
+	"mountainOffsetX",
+	"mountainOffsetY",
+	"mountainCurve",
+	"landFraction",
+	"seaLevel",
+	"relief",
+	"seaDepth",
+	"erosion",
+] satisfies (keyof PlanetKnobs)[]);
+
 export const KNOB_RANGES: Record<string, KnobRange> = {
 	plain: { ...TOGGLE, rebuilds: true },
 	subdivisionDepth: { low: 4, high: 17, step: 1, rebuilds: true, unit: "" },
@@ -828,8 +870,14 @@ export class PlanetSettings {
 		);
 	}
 
-	/** One layer, as the engine takes it. */
-	private layerFor(layer: "terrain" | "mountain"): TerrainLayer {
+	/**
+	 * One layer, as the engine takes it.
+	 *
+	 * Public because the curve rows read it too, to sample the layer's own
+	 * field for the histogram behind the curve -- the same frequency the
+	 * generator will actually use, not a hand-converted approximation of it.
+	 */
+	layerFor(layer: "terrain" | "mountain"): TerrainLayer {
 		const k = this.knobs as unknown as Record<string, number>;
 		const curve =
 			layer === "terrain"
