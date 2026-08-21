@@ -483,6 +483,726 @@
 			}
 			// ===== END engine noise kernel =====
 
+			// ===== BEGIN engine coarse grid =====
+			// A hand port of packages/engine/src/addressing and of the coarse
+			// map's erosion pass. Same reason the noise above is a copy: a demo
+			// here carries no imports and no build step, and
+			// packages/engine/tests/demos/noiseLab.test.ts runs this block
+			// against the real classes, so a copy that has drifted fails a test
+			// rather than teaching a world the engine does not build.
+
+			/** The golden ratio, which is what puts the twelve vertices where they are. */
+			const PHI = (1 + Math.sqrt(5)) / 2;
+
+			/** Three components divided by their own length. */
+			function normalize3(v) {
+				const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+				return [v[0] / l, v[1] / l, v[2] / l];
+			}
+
+			/**
+			 * The twelve icosahedron vertices, as unit directions.
+			 *
+			 * A cell sits on a vertex of the subdivided icosahedron, so these
+			 * twelve are the twelve pentagons at every depth and in every world.
+			 * The order is fixed: vertices 0 and 3 carry the coordinate poles and
+			 * vertex 11 carries the prime meridian.
+			 */
+			const VERTICES = [
+				[-1, PHI, 0],
+				[1, PHI, 0],
+				[-1, -PHI, 0],
+				[1, -PHI, 0],
+				[0, -1, PHI],
+				[0, 1, PHI],
+				[0, -1, -PHI],
+				[0, 1, -PHI],
+				[PHI, 0, -1],
+				[PHI, 0, 1],
+				[-PHI, 0, -1],
+				[-PHI, 0, 1],
+			].map(normalize3);
+
+			/**
+			 * The twenty faces, each three indices into the vertex table.
+			 *
+			 * Every triple runs counter-clockwise seen from outside the sphere,
+			 * so a direction table written in one face's frame means the same
+			 * turn on all twenty.
+			 */
+			const FACES = [
+				[0, 11, 5],
+				[0, 5, 1],
+				[0, 1, 7],
+				[0, 7, 10],
+				[0, 10, 11],
+				[1, 5, 9],
+				[5, 11, 4],
+				[11, 10, 2],
+				[10, 7, 6],
+				[7, 1, 8],
+				[3, 9, 4],
+				[3, 4, 2],
+				[3, 2, 6],
+				[3, 6, 8],
+				[3, 8, 9],
+				[4, 9, 5],
+				[2, 4, 11],
+				[6, 2, 10],
+				[8, 6, 7],
+				[9, 8, 1],
+			];
+
+			/**
+			 * The direction of each face's centroid.
+			 *
+			 * The perpendicular bisector between two adjacent centroids contains
+			 * the edge those faces share, so the nearest centroid to a direction
+			 * names the face that direction falls in, exactly.
+			 */
+			const FACE_CENTROIDS = FACES.map(([a, b, c]) =>
+				normalize3([
+					VERTICES[a][0] + VERTICES[b][0] + VERTICES[c][0],
+					VERTICES[a][1] + VERTICES[b][1] + VERTICES[c][1],
+					VERTICES[a][2] + VERTICES[b][2] + VERTICES[c][2],
+				]),
+			);
+
+			/**
+			 * The six lattice steps, counter-clockwise seen from outside.
+			 *
+			 * Index 0 is the step from the face's vertex `A` toward `B`, the
+			 * offset `(+1, 0)`. That anchor is a property of the cell's own face,
+			 * so it never depends on how the cell was reached.
+			 */
+			const DIRECTIONS = [
+				[1, 0],
+				[0, 1],
+				[-1, 1],
+				[-1, 0],
+				[0, -1],
+				[1, -1],
+			];
+
+			/** How many lattice points a triangle of side `m` holds. */
+			function chunkSlots(m) {
+				return ((m + 1) * (m + 2)) / 2;
+			}
+
+			/**
+			 * The slot `(q, r)` occupies, laid out row after row.
+			 *
+			 * Row `r` starts after the rows above it and holds `m + 1 - r`
+			 * points, which sums to this and is a bijection onto
+			 * `0 .. (m+1)(m+2)/2 - 1`.
+			 */
+			function rank(q, r, m) {
+				return q + (r * (2 * m + 3 - r)) / 2;
+			}
+
+			/**
+			 * The barycentric weights of a lattice point on its face's vertices.
+			 *
+			 * Written this way a lattice point is a set of integer weights
+			 * attached to global vertex numbers, and that description never
+			 * mentions a face.
+			 */
+			function latticeWeights(n, i, j) {
+				return [n - i - j, i, j];
+			}
+
+			/**
+			 * The direction of lattice point `(i, j)` on `face`, at `n = 2^level`.
+			 *
+			 * One barycentric blend evaluated once at full depth, then one
+			 * normalize. Building the same point by repeated arc-midpoint
+			 * subdivision lands on a different sphere, 38.97 m out on a 1,700 m
+			 * planet, and the error is fixed in metres rather than shrinking with
+			 * depth.
+			 */
+			function latticePosition(face, n, i, j) {
+				const [ia, ib, ic] = FACES[face];
+				const [wa, wb, wc] = latticeWeights(n, i, j);
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				return normalize3([
+					a[0] * wa + b[0] * wb + c[0] * wc,
+					a[1] * wa + b[1] * wb + c[1] * wc,
+					a[2] * wa + b[2] * wb + c[2] * wc,
+				]);
+			}
+
+			/**
+			 * Every face-and-offset pair that names the same lattice point.
+			 *
+			 * A point strictly inside a face has one. A point on a face edge has
+			 * two, and a point at an icosahedron vertex has five, since five
+			 * faces meet there. The point is found by matching weights against
+			 * global vertex numbers, so no geometry is involved.
+			 */
+			function cellRepresentations(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				const ids = FACES[face];
+				const carried = new Map();
+				for (let x = 0; x < 3; x++) if (w[x] > 0) carried.set(ids[x], w[x]);
+				const out = [];
+				for (let g = 0; g < 20; g++) {
+					const gv = FACES[g];
+					let ok = true;
+					for (const v of carried.keys()) if (!gv.includes(v)) ok = false;
+					if (!ok) continue;
+					out.push({
+						face: g,
+						i: carried.get(gv[1]) ?? 0,
+						j: carried.get(gv[2]) ?? 0,
+					});
+				}
+				return out;
+			}
+
+			/**
+			 * The one representation a cell is numbered from: the lowest face.
+			 *
+			 * The same rule that awards a border cell to the lowest chunk
+			 * containing it, applied one level up.
+			 */
+			function canonicalCell(face, n, i, j) {
+				const all = cellRepresentations(face, n, i, j);
+				let best = all[0];
+				for (const c of all) if (c.face < best.face) best = c;
+				return best;
+			}
+
+			/**
+			 * Every cell of the planet at one subdivision level, with the ring of
+			 * neighbours around each.
+			 *
+			 * Erosion compares a cell against its neighbours and nothing else, so
+			 * it needs a dense index rather than the packed cell IDs the rest of
+			 * the engine uses. Numbering runs face by face and, inside a face, by
+			 * `rank(i, j)`, taking each shared cell the first time its own face
+			 * claims it. That order depends on nothing but the level, so two
+			 * machines number the planet identically.
+			 *
+			 * Every array here is typed and flat. At level 8 there are 655,362
+			 * cells, and one object apiece is the layout that measures 15x slower.
+			 */
+			class CoarseGrid {
+				constructor(level) {
+					const n = 1 << level;
+					this.level = level;
+					this.n = n;
+					this.count = 10 * 4 ** level + 2;
+					this.slots = chunkSlots(n);
+					this.faceIndex = new Int32Array(20 * this.slots).fill(-1);
+					this.directions = new Float64Array(this.count * 3);
+
+					// A cell strictly inside a face is named by that face alone. A
+					// cell on an edge or at an icosahedron vertex has up to five
+					// other names, and goes to the lowest face among them.
+					let next = 0;
+					for (let face = 0; face < 20; face++)
+						for (let i = 0; i <= n; i++)
+							for (let j = 0; i + j <= n; j++) {
+								const w = latticeWeights(n, i, j);
+								const shared = w[0] === 0 || w[1] === 0 || w[2] === 0;
+								if (shared && canonicalCell(face, n, i, j).face !== face)
+									continue;
+								const cell = next++;
+								this.faceIndex[face * this.slots + rank(i, j, n)] = cell;
+								const p = latticePosition(face, n, i, j);
+								this.directions[cell * 3] = p[0];
+								this.directions[cell * 3 + 1] = p[1];
+								this.directions[cell * 3 + 2] = p[2];
+							}
+
+					for (let face = 0; face < 20; face++)
+						for (let i = 0; i <= n; i++)
+							for (let j = 0; i + j <= n; j++) {
+								const at = face * this.slots + rank(i, j, n);
+								if (this.faceIndex[at] >= 0) continue;
+								const c = canonicalCell(face, n, i, j);
+								this.faceIndex[at] =
+									this.faceIndex[c.face * this.slots + rank(c.i, c.j, n)];
+							}
+
+					// A cell's six lattice steps stay inside its own face unless
+					// the cell sits on an edge, and there the faces on both sides
+					// each contribute the steps on their side. Every cell
+					// therefore ends up with a full ring without any face
+					// crossing being computed here.
+					this.ring = new Int32Array(this.count * 6).fill(-1);
+					for (let face = 0; face < 20; face++)
+						for (let i = 0; i <= n; i++)
+							for (let j = 0; i + j <= n; j++) {
+								const from =
+									this.faceIndex[face * this.slots + rank(i, j, n)];
+								for (const [di, dj] of DIRECTIONS) {
+									const ni = i + di;
+									const nj = j + dj;
+									if (ni < 0 || nj < 0 || ni + nj > n) continue;
+									this.link(
+										from,
+										this.faceIndex[
+											face * this.slots + rank(ni, nj, n)
+										],
+									);
+								}
+							}
+				}
+
+				/** Record `to` in `from`'s ring, unless it is already there. */
+				link(from, to) {
+					const base = from * 6;
+					for (let k = 0; k < 6; k++) {
+						const at = this.ring[base + k];
+						if (at === to) return;
+						if (at < 0) {
+							this.ring[base + k] = to;
+							return;
+						}
+					}
+				}
+
+				/** The cell a face-and-offset names. */
+				indexOf(face, i, j) {
+					return this.faceIndex[face * this.slots + rank(i, j, this.n)];
+				}
+
+				/** How many neighbours a cell has: 5 on the twelve pentagons, 6 elsewhere. */
+				degreeOf(cell) {
+					return this.ring[cell * 6 + 5] < 0 ? 5 : 6;
+				}
+			}
+
+			/**
+			 * Which of the twenty faces a direction falls in.
+			 *
+			 * Twenty dot products, take the largest. Exact rather than an
+			 * approximation: the perpendicular bisector plane between two
+			 * adjacent face centroids contains the two vertices of the edge they
+			 * share, so the face boundaries are the Voronoi boundaries of the
+			 * centroids.
+			 */
+			function faceOf(x, y, z) {
+				let best = 0;
+				let bestDot = -Infinity;
+				for (let f = 0; f < 20; f++) {
+					const c = FACE_CENTROIDS[f];
+					const d = x * c[0] + y * c[1] + z * c[2];
+					if (d > bestDot) {
+						bestDot = d;
+						best = f;
+					}
+				}
+				return best;
+			}
+
+			/**
+			 * Where a direction sits inside a face, as three weights summing to 1.
+			 *
+			 * Cramer's rule on `[A B C] w = dir`, rescaled, which is the same
+			 * blend `latticePosition` runs forwards. A negative weight means the
+			 * direction is outside this face.
+			 */
+			function barycentricOf(face, x, y, z) {
+				const [ia, ib, ic] = FACES[face];
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				const bc = [
+					b[1] * c[2] - b[2] * c[1],
+					b[2] * c[0] - b[0] * c[2],
+					b[0] * c[1] - b[1] * c[0],
+				];
+				const dc = [
+					y * c[2] - z * c[1],
+					z * c[0] - x * c[2],
+					x * c[1] - y * c[0],
+				];
+				const bd = [
+					b[1] * z - b[2] * y,
+					b[2] * x - b[0] * z,
+					b[0] * y - b[1] * x,
+				];
+				const det = a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2];
+				const wa = (x * bc[0] + y * bc[1] + z * bc[2]) / det;
+				const wb = (a[0] * dc[0] + a[1] * dc[1] + a[2] * dc[2]) / det;
+				const wc = (a[0] * bd[0] + a[1] * bd[1] + a[2] * bd[2]) / det;
+				const s = wa + wb + wc;
+				return [wa / s, wb / s, wc / s];
+			}
+
+			/** How many droplets one unit of the knob runs, per cell of the map. */
+			const DROPLETS_PER_CELL = 1.5;
+
+			/** How many cells a droplet may cross before it is abandoned. */
+			const MAX_STEPS = 48;
+
+			/**
+			 * How much a droplet may carry, as metres of height per unit of
+			 * gradient.
+			 *
+			 * Capacity is a **gradient** times this, never a fall in metres times
+			 * a cell width -- that made a droplet crossing flat ground on a 100 m
+			 * map want to carry `15 m` of material, and cut it out. The gradient
+			 * form means the same hillside erodes by the same amount whatever the
+			 * map's cell size is.
+			 */
+			const CAPACITY = 8;
+
+			/** A floor under the gradient, so a droplet on flat ground still carries. */
+			const MIN_GRADIENT = 0.01;
+
+			/** How much of the excess a slowing droplet puts down in one step. */
+			const DEPOSIT_RATE = 0.1;
+
+			/** How much of the shortfall a hungry droplet cuts out in one step. */
+			const EROSION_RATE = 0.05;
+
+			/**
+			 * The most of one step's fall a single droplet may cut, as a fraction.
+			 *
+			 * A cell is crossed by dozens of droplets, so a tenth each is still a
+			 * valley by the end, and the shapes come out graded rather than
+			 * pocked.
+			 */
+			const MAX_CUT = 0.1;
+
+			/** What a cell keeps of the material cut from it; the rest goes to the ring. */
+			const CUT_SHARE = 0.5;
+
+			/** How much speed a droplet gains per metre of fall. */
+			const GRAVITY = 4;
+
+			/** How much of a droplet's water is gone after one step. */
+			const EVAPORATION = 0.02;
+
+			/**
+			 * Cut valleys into a height field by running water over it.
+			 *
+			 * A droplet starts on a hashed cell and walks downhill, cell to cell,
+			 * taking the steepest step it can find. How much it can carry depends
+			 * on how fast it is going and how steeply the ground falls; where it
+			 * can carry more than it holds it cuts, and where it slows or runs
+			 * onto flat ground it puts material back down. It looks only at the
+			 * cell it stands on and the six around it -- no routing, no pit
+			 * filling, no stored flow.
+			 *
+			 * **Heights are metres and the grid is metres**, so every constant
+			 * above means something on the ground rather than in grid units: a
+			 * knob set once holds its meaning on a planet of any size and a map
+			 * drawn at any level.
+			 *
+			 * `over` carries what the panel changes and what a sliced run needs:
+			 * `maxCut`, `cutShare`, and a `from` and `take` that run part of the
+			 * droplets. Droplets run one after another, so a contiguous range is
+			 * the same arithmetic in the same order as the whole run. Called with
+			 * five arguments this is the engine's pass exactly.
+			 *
+			 * `maxCut` is the most of one step's fall a single droplet may take.
+			 * Without it a droplet meeting a tall step takes the whole thing at
+			 * once and leaves a pit for the next one to fall into. `cutShare` is
+			 * how much of a cut stays on the cell the droplet stands on, the rest
+			 * being divided over the ring: at `0.5` the centre drops six times as
+			 * far as any neighbour, which is a spike, and at `0` the cut is flat
+			 * across the seven.
+			 *
+			 * Every draw is hashed from the seed and the droplet's number rather
+			 * than taken from a running generator, and droplets run one after
+			 * another, so the result does not depend on anything but the seed.
+			 */
+			function erodeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
+				const maxCut = over.maxCut ?? MAX_CUT;
+				const cutShare = over.cutShare ?? CUT_SHARE;
+				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				if (droplets <= 0) return 0;
+				const from = over.from ?? 0;
+				const until = Math.min(droplets, from + (over.take ?? droplets));
+
+				for (let drop = from; drop < until; drop++) {
+					let cell = Math.min(
+						grid.count - 1,
+						Math.floor(
+							hash3(drop & 0xffff, drop >>> 16, 0, seed) * grid.count,
+						),
+					);
+					let sediment = 0;
+					let speed = 1;
+					let water = 1;
+
+					for (let step = 0; step < MAX_STEPS; step++) {
+						// The steepest of the six, which is where the water would
+						// actually go. A pentagon has five and the ring says so.
+						let next = -1;
+						let fall = 0;
+						for (let k = 0; k < 6; k++) {
+							const other = grid.ring[cell * 6 + k];
+							if (other < 0) continue;
+							const down = height[cell] - height[other];
+							if (down > fall) {
+								fall = down;
+								next = other;
+							}
+						}
+
+						// Nowhere lower: the droplet has reached a floor or the
+						// sea, and everything it was carrying settles here.
+						if (next < 0) {
+							height[cell] = height[cell] + sediment;
+							break;
+						}
+
+						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
+						const capacity = gradient * speed * water * CAPACITY;
+
+						if (sediment > capacity) {
+							const put = (sediment - capacity) * DEPOSIT_RATE;
+							sediment -= put;
+							height[cell] = height[cell] + put;
+						} else {
+							const cut = Math.min(
+								(capacity - sediment) * EROSION_RATE,
+								fall * maxCut,
+							);
+							sediment += cut;
+							// Spread most of it over the ring, so one cell does not
+							// become a spike of its own. What the ring cannot take
+							// stays here.
+							let taken = 0;
+							let degree = 0;
+							for (let k = 0; k < 6; k++)
+								if (grid.ring[cell * 6 + k] >= 0) degree++;
+							const share =
+								degree > 0 ? (cut * (1 - cutShare)) / degree : 0;
+							for (let k = 0; k < 6; k++) {
+								const other = grid.ring[cell * 6 + k];
+								if (other < 0) continue;
+								height[other] = height[other] - share;
+								taken += share;
+							}
+							height[cell] = height[cell] - (cut - taken);
+						}
+
+						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
+						water *= 1 - EVAPORATION;
+						cell = next;
+					}
+				}
+				return droplets;
+			}
+			// ===== END engine coarse grid =====
+
+			// ---------------------------------------------------------------
+			// The second droplet walk, which is not in the engine yet.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The two lattice axes as metres on the plane of a face, 60 degrees
+			 * apart. A step of one in `i` and a step of one in `j` are the same
+			 * length and are not at a right angle, so a direction cannot be read
+			 * off `(i, j)` without them.
+			 */
+			const LATTICE_I = [1, 0];
+			const LATTICE_J = [0.5, Math.sqrt(3) / 2];
+			const LATTICE_DET =
+				LATTICE_I[0] * LATTICE_J[1] - LATTICE_I[1] * LATTICE_J[0];
+
+			/**
+			 * How many droplets of the last free run ended at a face edge.
+			 *
+			 * A count rather than a return value, because the pass is run in
+			 * slices and the share is of the whole run.
+			 */
+			let strandedDroplets = 0;
+
+			/**
+			 * Cut valleys with a droplet that stands between cells rather than on
+			 * one.
+			 *
+			 * The cell-to-cell walk picks the steepest of six, which is a choice
+			 * between six fixed directions: on ground whose gradient is gentle
+			 * and smooth the same direction keeps winning, and the walk marches
+			 * along one axis of the lattice. Measured on the shipped map, 18.3%
+			 * of its steps are part of a run of eight or more in one unchanged
+			 * direction, against 1.4% for the walk here.
+			 *
+			 * This one carries a **position and a direction**. The position is a
+			 * fractional `(i, j)` in one face; the height under it is the blend of
+			 * the three lattice points around it, which is the same blend the
+			 * terrain generator reads the map with. The direction is the downhill
+			 * gradient of that blend, mixed with the direction the droplet already
+			 * had, so it cannot turn instantly and it is never one of six.
+			 *
+			 * **The cut is spread over the same three points by the same
+			 * weights.** A droplet standing on exactly one cell can only cut a
+			 * spike into it, and a pass built out of spikes adds high-frequency
+			 * roughness: the cell-to-cell walk takes the median hillslope from
+			 * 0.427 to 0.602 at full strength, where this takes it to 0.472.
+			 *
+			 * A droplet that reaches the edge of its face settles there and
+			 * stops. Crossing is the linear map on barycentric weights that the
+			 * neighbour function already uses, and it is not written here, so 11%
+			 * of droplets end early and the thirty face edges are cut a little
+			 * less than their surroundings.
+			 */
+			function erodeFreeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
+				const maxCut = over.maxCut ?? MAX_CUT;
+				const inertia = over.inertia ?? 0.3;
+				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				if (droplets <= 0) return 0;
+				const from = over.from ?? 0;
+				const until = Math.min(droplets, from + (over.take ?? droplets));
+				const n = grid.n;
+
+				// The three lattice points under a fractional position, and the
+				// weights to mix them with. Held outside the loop because this
+				// runs a few tens of millions of times and allocating three
+				// numbers each time is the whole cost.
+				const cells = [0, 0, 0];
+				const weights = [0, 0, 0];
+
+				/** Fill `cells` and `weights`, or report that the point is off the face. */
+				function corners(face, fi, fj) {
+					const i0 = Math.floor(fi);
+					const j0 = Math.floor(fj);
+					const a = fi - i0;
+					const b = fj - j0;
+					// The remainders land in one of the two triangles the square
+					// of steps is cut into, and which one decides the three
+					// corners.
+					const near = a + b <= 1;
+					const oi = near ? [i0, i0 + 1, i0] : [i0 + 1, i0, i0 + 1];
+					const oj = near ? [j0, j0, j0 + 1] : [j0, j0 + 1, j0 + 1];
+					weights[0] = near ? 1 - a - b : 1 - b;
+					weights[1] = near ? a : 1 - a;
+					weights[2] = near ? b : a + b - 1;
+					for (let t = 0; t < 3; t++) {
+						const i = oi[t];
+						const j = oj[t];
+						if (i < 0 || j < 0 || i + j > n) return false;
+						const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+						if (cell < 0) return false;
+						cells[t] = cell;
+					}
+					return true;
+				}
+
+				/** The ground under a fractional position, or `NaN` off the face. */
+				function groundAt(face, fi, fj) {
+					if (!corners(face, fi, fj)) return NaN;
+					return (
+						weights[0] * height[cells[0]] +
+						weights[1] * height[cells[1]] +
+						weights[2] * height[cells[2]]
+					);
+				}
+
+				/** Add `amount` to the three points the droplet is standing over. */
+				function spread(face, fi, fj, amount) {
+					if (!corners(face, fi, fj)) return;
+					for (let t = 0; t < 3; t++)
+						height[cells[t]] += weights[t] * amount;
+				}
+
+				for (let drop = from; drop < until; drop++) {
+					const start = Math.min(
+						grid.count - 1,
+						Math.floor(
+							hash3(drop & 0xffff, drop >>> 16, 0, seed) * grid.count,
+						),
+					);
+					// A cell's own face and offset, recovered from the direction
+					// the grid stored for it. A droplet starts anywhere in the
+					// cell rather than on its centre, or every droplet in a cell
+					// walks the same line.
+					const x = grid.directions[start * 3];
+					const y = grid.directions[start * 3 + 1];
+					const z = grid.directions[start * 3 + 2];
+					const face = faceOf(x, y, z);
+					const w = barycentricOf(face, x, y, z);
+					let fi = w[1] * n + hash3(drop, 5, 0, seed) - 0.5;
+					let fj = w[2] * n + hash3(drop, 9, 0, seed) - 0.5;
+					let sediment = 0;
+					let speed = 1;
+					let water = 1;
+					let vx = 0;
+					let vy = 0;
+
+					for (let step = 0; step < MAX_STEPS; step++) {
+						const here = groundAt(face, fi, fj);
+						if (!Number.isFinite(here)) break;
+						// The gradient of the blend, read half a step out on each
+						// axis. Half rather than one, because a whole step reaches
+						// past the three points the height itself came from.
+						const reach = 0.5;
+						const alongI = groundAt(face, fi + reach, fj);
+						const alongJ = groundAt(face, fi, fj + reach);
+						if (!Number.isFinite(alongI) || !Number.isFinite(alongJ)) {
+							spread(face, fi, fj, sediment);
+							strandedDroplets++;
+							break;
+						}
+						const gi = (alongI - here) / reach;
+						const gj = (alongJ - here) / reach;
+						// Downhill, on the plane the two axes span.
+						const px = -(gi * LATTICE_I[0] + gj * LATTICE_J[0]);
+						const py = -(gi * LATTICE_I[1] + gj * LATTICE_J[1]);
+						vx = vx * inertia + px * (1 - inertia);
+						vy = vy * inertia + py * (1 - inertia);
+						const length = Math.sqrt(vx * vx + vy * vy);
+						if (length < 1e-12) {
+							spread(face, fi, fj, sediment);
+							break;
+						}
+						const ux = vx / length;
+						const uy = vy / length;
+						// One cell of travel, turned back into a step in `(i, j)`.
+						const di =
+							(ux * LATTICE_J[1] - uy * LATTICE_J[0]) / LATTICE_DET;
+						const dj =
+							(LATTICE_I[0] * uy - LATTICE_I[1] * ux) / LATTICE_DET;
+						const ni = fi + di;
+						const nj = fj + dj;
+						const there = groundAt(face, ni, nj);
+						if (!Number.isFinite(there)) {
+							spread(face, fi, fj, sediment);
+							strandedDroplets++;
+							break;
+						}
+						const fall = here - there;
+						// Momentum can carry a droplet uphill. It has run into a
+						// wall, and what it was carrying settles where it stands.
+						if (fall <= 0) {
+							spread(face, fi, fj, sediment);
+							break;
+						}
+
+						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
+						const capacity = gradient * speed * water * CAPACITY;
+						if (sediment > capacity) {
+							const put = (sediment - capacity) * DEPOSIT_RATE;
+							sediment -= put;
+							spread(face, fi, fj, put);
+						} else {
+							const cut = Math.min(
+								(capacity - sediment) * EROSION_RATE,
+								fall * maxCut,
+							);
+							sediment += cut;
+							spread(face, fi, fj, -cut);
+						}
+
+						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
+						water *= 1 - EVAPORATION;
+						fi = ni;
+						fj = nj;
+					}
+				}
+				return droplets;
+			}
+
 			// ---------------------------------------------------------------
 			// The world: two noise layers, each read through a curve.
 			// ---------------------------------------------------------------
@@ -1069,6 +1789,111 @@
 					],
 				},
 				{
+					// **The one pass that is not a function of a point.** Every
+					// other row here is read at the place it is asked about;
+					// water walks, so these are read over the whole planet on
+					// one grid before any of the pictures can be drawn. That
+					// grid is the map's own -- Map cell decides how many cells
+					// it holds, and therefore how long a run takes.
+					group: "Erosion",
+					open: true,
+					rows: [
+						{
+							key: "erosion",
+							off: 0,
+							label: "Erosion",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0,
+							digits: 2,
+							note: () => {
+								if (erosion.busy)
+									return `<b>${erosion.busy}</b> — ${(erosion.done * 100).toFixed(0)}%`;
+								const r = erosion.report;
+								if (!r) return "the ground is the noise as it fell";
+								const move = (was, now) =>
+									`${was.toFixed(3)} → <b>${now.toFixed(3)}</b> ` +
+									`(x${(now / Math.max(1e-9, was)).toFixed(2)})`;
+								return (
+									`slope, median ${move(r.before.median, r.after.median)} · ` +
+									`99th ${move(r.before.ninetyNine, r.after.ninetyNine)}<br>` +
+									`ground moved <b>${r.moved.toFixed(2)} m</b> a cell, ` +
+									`deepest cut <b>${Math.round(r.deepest)} m</b><br>` +
+									`${r.droplets.toLocaleString()} droplets in ` +
+									`<b>${(r.ms / 1000).toFixed(1)} s</b>` +
+									(knobs.picture === "erosion"
+										? ` · picture saturates at <b>${r.scale.toFixed(1)} m</b>`
+										: "") +
+									(r.stranded > 0
+										? ` · <b>${(r.stranded * 100).toFixed(1)}%</b> stopped at a face edge`
+										: "")
+								);
+							},
+						},
+						{
+							// **A droplet that stands on one cell can only cut a
+							// spike into it.** The engine's walk steps cell to
+							// cell and takes the steepest of six, so its
+							// direction is one of six and its cut lands on one
+							// cell and its ring. The other carries a position
+							// between cells and a direction it does not throw
+							// away, and spreads each cut over the three cells it
+							// is standing over.
+							key: "erosionWalk",
+							enabledWhen: (k) => k.erosion > 0,
+							label: "Droplets",
+							type: "select",
+							value: "cell",
+							options: ["cell", "free"],
+						},
+						{
+							// How much of the previous direction a droplet keeps.
+							// At 0 it turns straight downhill every step, which
+							// is gradient descent; at 0.9 it runs almost
+							// straight and leaves the ground behind it.
+							key: "erosionInertia",
+							enabledWhen: (k) => k.erosion > 0,
+							label: "Keeps direction",
+							low: 0,
+							high: 0.9,
+							step: 0.05,
+							value: 0.3,
+							digits: 2,
+							shownWhen: (k) => k.erosionWalk === "free",
+						},
+						{
+							// What a cell keeps of the material cut from it, the
+							// rest going to the ring. At 0.5 the centre drops
+							// six times as far as any neighbour; at 0 the cut is
+							// flat across the seven.
+							key: "erosionCutShare",
+							enabledWhen: (k) => k.erosion > 0,
+							label: "Cut spread",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.5,
+							digits: 2,
+							shownWhen: (k) => k.erosionWalk === "cell",
+						},
+						{
+							// The most of one step's fall a droplet may take. A
+							// cell is crossed by dozens of them, so a tenth each
+							// is still a valley by the end and the shapes come
+							// out graded rather than pocked.
+							key: "erosionMaxCut",
+							enabledWhen: (k) => k.erosion > 0,
+							label: "Deepest cut",
+							low: 0.01,
+							high: 0.5,
+							step: 0.01,
+							value: 0.1,
+							digits: 2,
+						},
+					],
+				},
+				{
 					group: "The patch",
 					open: false,
 					rows: [
@@ -1134,7 +1959,14 @@
 							label: "Picture",
 							type: "select",
 							value: "ground",
-							options: ["ground", "height", "raw", "terrain", "mountain"],
+							options: [
+								"ground",
+								"height",
+								"raw",
+								"terrain",
+								"mountain",
+								"erosion",
+							],
 						},
 						{
 							key: "surface",
@@ -1552,7 +2384,8 @@
 					const m =
 						(d >= 0 ? d * up : d * down) +
 						Math.max(0, mountOf[n]) * up * over +
-						drained;
+						drained +
+						erosionAt(SPHERE[n * 3], SPHERE[n * 3 + 1], SPHERE[n * 3 + 2]);
 					if (m > summit) summit = m;
 					bands[bandOf(m)]++;
 				}
@@ -1573,6 +2406,9 @@
 				// together.
 				const terrainField = new Float32Array((n + 1) * (n + 1));
 				const mountField = new Float32Array((n + 1) * (n + 1));
+				// What erosion moved here, kept apart from the height so the
+				// Erosion picture can draw the cut on its own.
+				const cutField = new Float32Array((n + 1) * (n + 1));
 				const said = [0.5, 1, 0, 0, 0];
 				// A draft covers the same ground with fewer points, so the step
 				// grows as the count falls and the patch keeps its width.
@@ -1620,8 +2456,11 @@
 						);
 						const d = unitless - sea;
 						const wet = d >= 0 ? d * up : d * down;
-						const metres = wet + Math.max(0, said[4]) * up * over + drained;
+						const cut = erosionAt(x / len, y / len, z / len);
+						const metres =
+							wet + Math.max(0, said[4]) * up * over + drained + cut;
 						height[r * (n + 1) + q] = metres;
+						cutField[r * (n + 1) + q] = cut;
 						field0[r * (n + 1) + q] = unitless;
 						terrainField[r * (n + 1) + q] = said[0];
 						mountField[r * (n + 1) + q] = said[1];
@@ -1643,6 +2482,7 @@
 					tallest,
 					terrain: terrainField,
 					mountain: mountField,
+					cut: cutField,
 					// How much of the patch the drain handed back. The knob is
 					// in metres and what a person wants to know is how much
 					// beach it bought, which is a different number on every
@@ -1684,6 +2524,321 @@
 			}
 
 			// ---------------------------------------------------------------
+			// Erosion: the one pass that reads a neighbourhood.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The eroded planet, held between redraws and rebuilt in slices.
+			 *
+			 * **Every other picture on this page is a pure function of a
+			 * direction.** Hand `fieldAt` a point and it hands back a height
+			 * without looking at anything else, which is what lets the patch, the
+			 * planet map and the contour graph each sample wherever they like.
+			 * Water does not work that way: a droplet walks from cell to cell, so
+			 * erosion needs the whole planet on one grid before it can say what
+			 * any one place looks like.
+			 *
+			 * So the grid is built, the un-eroded ground is written onto it in
+			 * metres, the droplets are run over that, and what the pictures read
+			 * is the **difference** -- how far erosion moved the ground at each
+			 * cell, blended between the three cells around wherever they are
+			 * asking. At strength zero there is no grid, no difference and no
+			 * lookup, and every height on the page is what it was.
+			 *
+			 * The three stages are held apart because they are rebuilt at
+			 * different rates. The grid depends on the level alone. The ground
+			 * depends on every knob above the metre scale. The cutting depends on
+			 * the erosion rows, so dragging those re-runs the water and nothing
+			 * else.
+			 */
+			const erosion = {
+				grid: null,
+				level: -1,
+				/** The un-eroded ground in metres, one value per grid cell. */
+				base: null,
+				baseKey: "",
+				/** Metres erosion moved the ground, one value per grid cell. */
+				delta: null,
+				cutKey: "",
+				/** The key of the run in progress, so a redraw does not restart it. */
+				buildingKey: "",
+				/** Whether a build is running, and how far through it is. */
+				busy: "",
+				done: 0,
+				/** What the last finished run did, for the readout. */
+				report: null,
+			};
+
+			/** Which knobs each stage of the build depends on. */
+			function erosionKeys(k) {
+				const ground = JSON.stringify([
+					knobs.seed,
+					k.level,
+					k.terrainFrequency,
+					k.terrainOctaves,
+					k.terrainPersistence,
+					k.terrainLacunarity,
+					k.terrainOffsetX,
+					k.terrainOffsetY,
+					knobs.terrainSpline,
+					k.mountainFrequency,
+					k.mountainOctaves,
+					k.mountainPersistence,
+					k.mountainLacunarity,
+					k.mountainOffsetX,
+					k.mountainOffsetY,
+					knobs.mountainSpline,
+					k.useMountain,
+					k.merge,
+					k.mountainLine,
+					k.detail,
+					k.peakScale,
+					value("landFraction"),
+					value("relief"),
+					value("seaDepth"),
+					knobs.seaLevel,
+				]);
+				return {
+					ground,
+					cut: JSON.stringify([
+						ground,
+						value("erosion"),
+						knobs.erosionWalk,
+						knobs.erosionInertia,
+						knobs.erosionCutShare,
+						knobs.erosionMaxCut,
+					]),
+				};
+			}
+
+			/** Give the page a frame to paint the status line before the next slice. */
+			function breathe() {
+				return new Promise((resume) => setTimeout(resume, 0));
+			}
+
+			/**
+			 * How steep the ground is, as three percentiles of metres of fall per
+			 * metre travelled.
+			 *
+			 * The steepest of a cell's six neighbours, over land cells only,
+			 * because the number this answers is what a hillside does. **A pass
+			 * that carves moves the tail and leaves the middle alone**; one whose
+			 * median climbs with it is adding roughness everywhere instead.
+			 */
+			function slopeQuantiles(grid, height, cellMetres) {
+				const out = [];
+				for (let cell = 0; cell < grid.count; cell += 7) {
+					if (height[cell] <= 0) continue;
+					let worst = 0;
+					for (let k = 0; k < 6; k++) {
+						const other = grid.ring[cell * 6 + k];
+						if (other < 0) continue;
+						const fall = Math.abs(height[cell] - height[other]) / cellMetres;
+						if (fall > worst) worst = fall;
+					}
+					out.push(worst);
+				}
+				out.sort((a, b) => a - b);
+				const at = (p) =>
+					out.length === 0
+						? 0
+						: out[Math.min(out.length - 1, Math.floor(out.length * p))];
+				return { median: at(0.5), ninety: at(0.9), ninetyNine: at(0.99) };
+			}
+
+			/** A newer request abandons whatever build is running. */
+			let erosionRun = 0;
+
+			/**
+			 * Bring the eroded planet up to date with the knobs.
+			 *
+			 * Runs in slices with a wait between them, so the panel stays live
+			 * and the status line moves while a level-8 planet -- 655,362 cells
+			 * and 983,043 droplets at full strength -- is being cut. The pictures
+			 * keep drawing the previous difference until the new one lands, so
+			 * nothing blinks.
+			 */
+			async function refreshErosion() {
+				const k = derived();
+				const strength = value("erosion");
+				if (strength <= 0) {
+					// Turning the knob to nothing abandons whatever is running
+					// and puts the ground back where the noise left it.
+					if (erosion.delta === null && erosion.busy === "") return;
+					erosionRun++;
+					erosion.delta = null;
+					erosion.cutKey = "";
+					erosion.buildingKey = "";
+					erosion.busy = "";
+					erosion.report = null;
+					askForRedraw(false);
+					return;
+				}
+				const keys = erosionKeys(k);
+				if (keys.cut === erosion.cutKey) return;
+				// A redraw that changed none of these must not restart a run
+				// that is already cutting the same world.
+				if (erosion.busy !== "" && keys.cut === erosion.buildingKey) return;
+				const token = ++erosionRun;
+				erosion.buildingKey = keys.cut;
+				const started = performance.now();
+
+				if (erosion.level !== k.level) {
+					erosion.busy = "numbering the planet";
+					refreshPanel();
+					await breathe();
+					if (token !== erosionRun) return;
+					erosion.grid = new CoarseGrid(k.level);
+					erosion.level = k.level;
+					erosion.base = null;
+					erosion.baseKey = "";
+					// The difference is one value per cell of the grid it was cut
+					// on, so it goes with the grid. A redraw between here and the
+					// end of the run draws ground the water has not reached yet.
+					erosion.delta = null;
+					erosion.cutKey = "";
+				}
+				const grid = erosion.grid;
+
+				if (keys.ground !== erosion.baseKey) {
+					const base = new Float64Array(grid.count);
+					const seed = seedFromString(knobs.seed);
+					const s = settingsFor(k);
+					const said = [0.5, 1, 0, 0, 0];
+					const over = k.peakScale - 1;
+					// The same two lines the patch runs, at the grid's own
+					// directions: the field, then sea level off it and the two
+					// scales onto it. Sea level and the metre fit come from the
+					// sphere pass that has already run, so this grid is the same
+					// world the rest of the page is drawing.
+					const SLICE = 20000;
+					for (let from = 0; from < grid.count; from += SLICE) {
+						const until = Math.min(grid.count, from + SLICE);
+						for (let cell = from; cell < until; cell++) {
+							const unitless = fieldAt(
+								grid.directions[cell * 3],
+								grid.directions[cell * 3 + 1],
+								grid.directions[cell * 3 + 2],
+								seed,
+								k,
+								s,
+								said,
+							);
+							const d = unitless - field.sea;
+							base[cell] =
+								(d >= 0 ? d * field.up : d * field.down) +
+								Math.max(0, said[4]) * field.up * over +
+								field.drained;
+						}
+						erosion.busy = "raising the ground";
+						erosion.done = until / grid.count;
+						refreshPanel();
+						await breathe();
+						if (token !== erosionRun) return;
+					}
+					erosion.base = base;
+					erosion.baseKey = keys.ground;
+				}
+
+				const before = slopeQuantiles(grid, erosion.base, k.cellMetres);
+				const height = Float64Array.from(erosion.base);
+				const seed = seedFromString(knobs.seed);
+				const free = knobs.erosionWalk === "free";
+				strandedDroplets = 0;
+				const shared = {
+					maxCut: knobs.erosionMaxCut,
+					cutShare: knobs.erosionCutShare,
+					inertia: knobs.erosionInertia,
+				};
+				const cut = free ? erodeFreeDroplets : erodeDroplets;
+				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				const SLICE = 40000;
+				for (let from = 0; from < droplets; from += SLICE) {
+					cut(grid, height, seed, strength, k.cellMetres, {
+						...shared,
+						from,
+						take: SLICE,
+					});
+					erosion.busy = "cutting the valleys";
+					erosion.done = Math.min(1, (from + SLICE) / droplets);
+					refreshPanel();
+					await breathe();
+					if (token !== erosionRun) return;
+				}
+
+				const delta = new Float64Array(grid.count);
+				let moved = 0;
+				let deepest = 0;
+				for (let cell = 0; cell < grid.count; cell++) {
+					const d = height[cell] - erosion.base[cell];
+					delta[cell] = d;
+					moved += Math.abs(d);
+					if (-d > deepest) deepest = -d;
+				}
+				// What the Erosion picture saturates at. The deepest single cut
+				// is a spike and would leave the rest of the map grey, so this is
+				// the reach of all but the loudest fiftieth.
+				const sorted = Float64Array.from(delta, Math.abs).sort();
+				const scale = Math.max(
+					0.01,
+					sorted[Math.floor(sorted.length * 0.98)],
+				);
+				erosion.delta = delta;
+				erosion.cutKey = keys.cut;
+				erosion.busy = "";
+				erosion.report = {
+					droplets,
+					scale,
+					before,
+					after: slopeQuantiles(grid, height, k.cellMetres),
+					moved: moved / grid.count,
+					deepest,
+					stranded: free ? strandedDroplets / droplets : 0,
+					ms: performance.now() - started,
+				};
+				askForRedraw(false);
+			}
+
+			/**
+			 * How far erosion moved the ground under one direction, in metres.
+			 *
+			 * The three grid cells around the point, blended by the weights that
+			 * put it between them -- which is the lookup the terrain generator
+			 * uses to read the map, so a height here is a height the world would
+			 * build. Zero everywhere until a run has finished.
+			 */
+			function erosionAt(x, y, z) {
+				const delta = erosion.delta;
+				if (delta === null) return 0;
+				const grid = erosion.grid;
+				const n = grid.n;
+				const face = faceOf(x, y, z);
+				const w = barycentricOf(face, x, y, z);
+				const fi = Math.max(0, w[1] * n);
+				const fj = Math.max(0, w[2] * n);
+				const i0 = Math.min(n - 1, Math.floor(fi));
+				const j0 = Math.min(n - 1 - i0, Math.floor(fj));
+				const a = fi - i0;
+				const b = fj - j0;
+				const at = (i, j) => {
+					if (i < 0 || j < 0 || i + j > n) return 0;
+					const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+					return cell < 0 ? 0 : delta[cell];
+				};
+				if (a + b <= 1)
+					return (
+						(1 - a - b) * at(i0, j0) +
+						a * at(i0 + 1, j0) +
+						b * at(i0, j0 + 1)
+					);
+				return (
+					(1 - b) * at(i0 + 1, j0) +
+					(1 - a) * at(i0, j0 + 1) +
+					(a + b - 1) * at(i0 + 1, j0 + 1)
+				);
+			}
+
+			// ---------------------------------------------------------------
 			// The map, above the knobs.
 			// ---------------------------------------------------------------
 
@@ -1707,16 +2862,19 @@
 				const said = [0.5, 1, 0, 0, 0];
 				const layer = new Float32Array(wide * tall);
 				const raw = new Float32Array(wide * tall);
+				const cut = new Float32Array(wide * tall);
 				for (let r = 0; r < tall; r++) {
 					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
 					const ring = Math.cos(lat);
 					const y = Math.sin(lat);
 					for (let q = 0; q < wide; q++) {
 						const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
+						const x = ring * Math.cos(lon);
+						const z = ring * Math.sin(lon);
 						const unitless = fieldAt(
-							ring * Math.cos(lon),
+							x,
 							y,
-							ring * Math.sin(lon),
+							z,
 							field.seed,
 							field.k,
 							field.settings,
@@ -1724,15 +2882,17 @@
 						);
 						const d = unitless - field.sea;
 						const at = r * wide + q;
+						cut[at] = erosionAt(x, y, z);
 						out[at] =
 							(d >= 0 ? d * field.up : d * field.down) +
 							Math.max(0, said[4]) * field.up * (field.k.peakScale - 1) +
-							field.drained;
+							field.drained +
+							cut[at];
 						raw[at] = unitless;
 						layer[at] = knobs.picture === "mountain" ? said[1] : said[0];
 					}
 				}
-				return { out, raw, layer };
+				return { out, raw, layer, cut };
 			}
 
 			/** Where on the flat planet the patch is standing. */
@@ -1760,7 +2920,7 @@
 					mapCanvas.width = wide;
 					mapCanvas.height = tall;
 				}
-				const { out, raw, layer } = planetHeights(wide, tall);
+				const { out, raw, layer, cut } = planetHeights(wide, tall);
 				let low = Infinity;
 				let high = -Infinity;
 				for (const v of raw) {
@@ -1770,7 +2930,7 @@
 				const image = mapCtx.createImageData(wide, tall);
 				const px = image.data;
 				for (let n = 0; n < out.length; n++)
-					paintGround(px, n * 4, out[n], raw[n], layer[n], low, high);
+					paintGround(px, n * 4, out[n], raw[n], layer[n], low, high, cut[n]);
 				mapCtx.putImageData(image, 0, 0);
 				// The patch, outlined where it stands, so the plane and the map
 				// are one place rather than two pictures.
@@ -1786,7 +2946,29 @@
 			 * Shared by the patch and the planet, so the two never drift into
 			 * describing the same height with two different colors.
 			 */
-			function paintGround(px, at, metres, raw, layerValue, rawLow, rawHigh) {
+			function paintGround(px, at, metres, raw, layerValue, rawLow, rawHigh, cut) {
+				if (knobs.picture === "erosion") {
+					// **What the water did, on its own.** Cut is red and fill is
+					// blue, both against how many metres moved rather than
+					// against the height they moved from, so a valley floor a
+					// metre lower reads the same wherever it stands. Ground
+					// nothing touched is the grey in the middle.
+					//
+					// The scale is what this run reached rather than a fixed
+					// number of metres: how far erosion moves the ground depends
+					// on the relief, the cell and the strength, and a picture
+					// drawn against a constant is a flat wash on most worlds and
+					// saturated on the rest. The Erosion row says what the scale
+					// was.
+					const scale = erosion.report ? erosion.report.scale : 1;
+					const t = Math.max(-1, Math.min(1, (cut || 0) / scale));
+					const grey = 0.18;
+					px[at] = 255 * Math.pow(grey + Math.max(0, -t) * 0.75, 1 / 2.2);
+					px[at + 1] = 255 * Math.pow(grey, 1 / 2.2);
+					px[at + 2] = 255 * Math.pow(grey + Math.max(0, t) * 0.75, 1 / 2.2);
+					px[at + 3] = 255;
+					return;
+				}
 				if (knobs.picture === "terrain" || knobs.picture === "mountain") {
 					const t = Math.max(0, Math.min(1, layerValue));
 					px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
@@ -1869,6 +3051,7 @@
 							],
 							field.rawLow,
 							field.rawHigh,
+							field.cut[from],
 						);
 					}
 				mapCtx.putImageData(image, 0, 0);
@@ -2895,7 +4078,15 @@
 					drawGraph();
 					cost = performance.now() - started;
 					refreshPanel();
-					if (!draft) writeUrl();
+					if (!draft) {
+						writeUrl();
+						// **Water runs on the settled world, never on the
+						// draft.** A drag redraws the ground every frame and
+						// erosion is a pass over the whole planet, so it waits
+						// for the finger to stop -- and until it lands, the
+						// pictures keep the cut from the last run.
+						refreshErosion();
+					}
 					render();
 				});
 			}
@@ -2954,6 +4145,7 @@
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();
+			refreshErosion();
 		</script>
 	</body>
 </html>

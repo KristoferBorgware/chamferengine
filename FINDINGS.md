@@ -1216,6 +1216,59 @@ the second and a half.
 
 ---
 
+### F-056 — The noise lab draws every world 11% taller than the engine builds it
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, while giving the lab a coarse grid so it could show
+erosion
+**Where:** `demos/noise-lab.html`, `SPHERE_SAMPLES` and `generate`;
+`packages/engine/src/generation/coarse/metreHeight.ts`
+
+**What happens.** Both the lab and the engine turn a unitless field into metres
+the same way: subtract the height that leaves `landFraction` of the surface
+above it, then divide by the field's own peak and multiply by `relief`, so the
+tallest point stands exactly `relief` metres up. They read that peak off
+different numbers of samples. The engine reads it off **every cell of the map**
+— 655,362 at level 8. The lab reads it off **6,000 directions** spread over the
+sphere by the golden angle.
+
+A peak is the largest of what you looked at, so a smaller sample finds a smaller
+one, and dividing by a smaller peak makes every height larger. Measured on the
+shipped world by drawing samples from the map's own field: 6,000 samples see a
+peak **11.7%** below the true one, 12,000 see 7.0% below, 24,000 4.3%, 96,000
+1.5%. So a mountain the lab draws at `1,100 m` is `1,219 m` of ground when the
+engine builds the same knobs.
+
+**Sea level is not affected, and that is why nobody has noticed.** It is a
+percentile rather than an extreme, and a percentile is what a few thousand
+samples are good at: the two readings differ by `2.45e-3` of the field, which is
+**0.7 m** of ground. The coastline the lab draws is the coastline the engine
+builds. Only the height above it is wrong.
+
+**Why it matters.** The lab is where Relief, the mountain balance and the two
+material lines were tuned, and the material lines are **absolute metres** — grass
+to 300 m, rock to 400 m, snow over it. A world tuned in the lab to 89% grass
+stands 11% higher when the engine builds it, which moves ground across both
+lines. The panel also states the shares of each material as a fact about the
+planet, and those shares are read off the same 6,000 samples, so the number on
+screen is not the number the world comes out at.
+
+**What would fix it.** Raising the sample count is the obvious one and it is
+poor: 96,000 samples is sixteen times the noise the sphere pass costs on every
+redraw and is still 1.5% out. The better one is now available: the lab builds a
+real coarse grid for erosion, so the fit can be read off that grid — the same
+cells the engine reads — whenever it exists. That leaves the question of what
+the fit is when erosion is off and there is no grid, and the honest answer is to
+build the grid anyway at the level Map cell names, which is 2.4 s at level 8 and
+would have to move off the redraw path. A third option is to leave the reading
+alone and say on the panel that heights are a sample and carry a percentage,
+which costs nothing and fixes nothing.
+
+---
+
 ## Closed
 
 ### F-041 — The psrd noise basis is the one field two machines may not agree on
