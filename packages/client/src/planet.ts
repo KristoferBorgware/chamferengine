@@ -245,7 +245,9 @@ if (params.get("panel") === "1") {
 	// it is the one word that re-rolls a world, and hunting for a world is
 	// done looking at the map. It still seeds the clouds as well as the ground.
 	maps.hostKnobs(panel.section("Seed"));
-	maps.hostKnobs(panel.section("Where the land is"));
+	maps.hostKnobs(panel.section("The terrain layer"));
+	maps.hostKnobs(panel.section("The mountain layer"));
+	maps.hostKnobs(panel.section("How high and how wet"));
 	onPlayerMoved = (up) => maps.setPlayer(up);
 	teardown.push(() => maps.dispose());
 }

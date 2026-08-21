@@ -249,10 +249,11 @@ run on the result unchanged.
 **Recommendation:** plates set the coarse heights, erosion carves them, rivers
 follow. In that order, because each stage needs the one before it.
 
-**Neither plates nor grown land is built.** The engine draws its surface from one
-field of octave noise, warped or not, over a choice of five noise bases
-([doc 08](08-terrain-generation.md)) — and the plate and grown-land builders that
-these measurements were taken from are gone from it. The numbers below stand as
+**Neither plates nor grown land is built.** The engine draws its surface from
+two layers of value noise, each read through a curve
+([doc 08](08-terrain-generation.md)) — and the plate and grown-land builders
+that these measurements were taken from are gone from it, along with the domain
+warp and the four other noise bases they were compared against. The numbers below stand as
 measurements of what those approaches give; they are not a description of what
 the editor offers. What removed them was the count of knobs each needed against
 what it moved in the picture, not any of the figures here.

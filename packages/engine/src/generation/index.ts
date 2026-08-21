@@ -1,22 +1,16 @@
 export { hash3 } from "./noise/hash3.js";
 export { fade } from "./noise/fade.js";
 export { valueNoise3 } from "./noise/valueNoise3.js";
-export { perlinNoise3 } from "./noise/perlinNoise3.js";
-export { simplexNoise3 } from "./noise/simplexNoise3.js";
-export { psrdNoise3 } from "./noise/psrdNoise3.js";
-export { cellularNoise3 } from "./noise/cellularNoise3.js";
-export { basisNoise3 } from "./noise/basisNoise3.js";
-export { BASIS_PITCH } from "./noise/BASIS_PITCH.js";
-export type { NoiseBasis } from "./noise/NoiseBasis.js";
-export { NOISE_BASES } from "./noise/NoiseBasis.js";
-export type { CellFeature } from "./noise/CellFeature.js";
-export { CELL_FEATURES } from "./noise/CellFeature.js";
 export type { NoiseSettings } from "./noise/NoiseSettings.js";
 export { fbm } from "./noise/fbm.js";
 export { octaveNoise } from "./noise/octaveNoise.js";
 export { seedFromString } from "./seedFromString.js";
 
-export type { CoarseMapOptions } from "./coarse/CoarseMapOptions.js";
+export type {
+	CoarseMapOptions,
+	MountainMerge,
+} from "./coarse/CoarseMapOptions.js";
+export { MOUNTAIN_MERGES } from "./coarse/CoarseMapOptions.js";
 export { COARSE_MAP_DEFAULTS } from "./coarse/CoarseMapOptions.js";
 export { CoarseIndex } from "./coarse/CoarseIndex.js";
 export { CoarseGrid } from "./coarse/CoarseGrid.js";
@@ -37,7 +31,15 @@ export type {
 export { MapWorkerCore } from "./coarse/MapWorkerCore.js";
 export { flatCoarseMap } from "./coarse/flatCoarseMap.js";
 export { seaLevelFor } from "./coarse/seaLevelFor.js";
-export { surfaceHeight } from "./coarse/surfaceHeight.js";
+export type { MetreScale } from "./coarse/metreHeight.js";
+export type { LayeredField } from "./coarse/layeredHeight.js";
+export { layeredHeight } from "./coarse/layeredHeight.js";
+export { splineAt } from "./coarse/splineAt.js";
+export type { TerrainLayer } from "./coarse/TerrainLayer.js";
+export {
+	MOUNTAIN_LAYER_DEFAULT,
+	TERRAIN_LAYER_DEFAULT,
+} from "./coarse/TerrainLayer.js";
 export { metreHeight } from "./coarse/metreHeight.js";
 export { erodeDroplets } from "./coarse/erodeDroplets.js";
 export type { CoarseField, CoarseRamp } from "./coarse/CoarseField.js";

@@ -152,7 +152,7 @@ script owns its numbers.
 | [05](docs/05-face-adjacency.md) | crossing between the 20 faces; the 180-byte table | `adj.js` |
 | [06](docs/06-world-sizing.md) | block size ↔ radius ↔ level, crust depth, taper | `calc.js`, `scale.js`, `taper.js` |
 | [07](docs/07-data-structures.md) | what lives in RAM, on disk, and in code | — |
-| [08](docs/08-terrain-generation.md) | the octave stack; the five noise bases; why there is no detail tier | `volume.js` |
+| [08](docs/08-terrain-generation.md) | the two layers and their curves; one noise basis; why there is no detail tier | `volume.js` |
 | [09](docs/09-ray-traversal.md) | block picking as a grid walk | — |
 | [10](docs/10-pathfinding.md) | A* on hexes, hierarchical search on the triangle tree | — |
 | [11](docs/11-open-topics.md) | what is **not** designed yet | — |
@@ -557,37 +557,64 @@ Violating any of these breaks the design. They are not tunable.
   doc 25 never draws. Land and sea scale **apart** now, each to its own knob, so
   the span is `relief + seaDepth` and the tallest mountain a 1 m block allows
   goes from **320 m to 900 m**. Never bind Relief to the crust; bind the ocean.
-- **THE OCTAVE STACK TAKES A BASIS, and the frequency had to be corrected per
-  basis** (`BASIS_PITCH`, doc 08). One octave is value noise, Perlin,
-  OpenSimplex2, psrdnoise or cellular, chosen by a **Noise** dropdown; each is a
-  point and a seed giving `[-1, 1]`, so frequency, octaves, persistence,
-  lacunarity, offset and ridge mean the same thing under all five and the
-  sea-level percentile never learns which ran. **The same frequency did not mean
-  the same feature size**: measured as zero crossings along an 8,000-unit walk
-  at frequency 1, one feature runs `1.99` units in value noise and `0.78` in
-  psrd, so a **Noise scale** of 4,500 m drew continents 4,500 m across in one
-  basis and **1,800 m** in another. Each basis's frequency is multiplied by its
-  own width over value noise's, bringing all five within **0.9%** — which the
-  panel needs as well as the label, because it refuses a map too coarse for the
-  narrowest octave and works that width out from Noise scale and lacunarity
-  alone. Spread separates them where range does not: every basis fills
-  `[-1, 1]`, and the standard deviation of one octave is `0.401` value, `0.389`
-  OpenSimplex2, `0.380` psrd, `0.369` cellular and **`0.274` Perlin**. Four of
-  the five index gradients with the pinned `hash3`, including the two whose
-  references use a 64-bit multiply. **`psrd` is the one basis not guaranteed
-  bit-identical across runtimes** — a rotating gradient is a sine, and a library
-  sine is not an IEEE operation; the exposure is four tables of `289` entries
-  built once and nothing on the sampling path, and it is F-041, not fixed.
-  **`cellular` is the one basis that is not smooth**, with a crease along every
-  plate boundary that the octave stack has nothing to round off.
-- **A landform is not a mode, it is the warp amplitude** (`surfaceHeight`,
-  doc 21). `grown` and `plates` are **gone from the engine** — their coastline
-  measurements stand in doc 21 and `verification/coastline.js` as measurements
-  of approaches, not as a description of what the editor offers — and `noise`
-  versus `warped` differed by one number, so the setting went with them.
-  `warpAmplitude: 0` is the plain field and **Warp scale** comes off the panel
-  there. One file replaces four, and the shipped default world does not move:
-  value noise's frequency multiplier is exactly 1.
+- **THE SURFACE IS TWO NOISE LAYERS AND TWO CURVES** (`layeredHeight`, doc 08).
+  A single octave stack makes one kind of landscape: fBm is homogeneous, so one
+  statistic describes the whole planet — the spread of local roughness over one
+  map is **1.3x** plain and **1.4x** ridged (`trial-layers.ts`), and no term in
+  it can say *be different here*. So there are two whole stacks sharing **no**
+  parameter, each read through a **curve**: across is that layer's own noise, up
+  is what it controls. **Terrain and continents are one layer**, one question at
+  two sizes; the mountain layer is the second. `gated` lets the mountain layer
+  through in proportion to how far the terrain already stands above **Mountain
+  line** — a fraction of the terrain curve's **own** reach, so dragging that
+  curve's top down does not slowly close the gate — and `roughen` keeps it a
+  multiplier on the terrain layer's own noise. An ungated **add** was built and
+  removed: nothing told it where it was, so a range could start in the sea.
+  Shipped, that gives **35%** sea, **55%** grass, **5%** rock, **5%** snow
+  (`probe-bands.ts`); with the mountain layer off it is 14% grass and **47%**
+  snow, because the terrain layer alone then owns the whole range.
+- **ONE BASIS SHIPS, AND FOUR WERE MEASURED BEFORE THAT WAS DECIDED**
+  (`octaveNoise`, doc 08). Perlin, OpenSimplex2, psrdnoise and cellular are
+  **gone from the engine**; `verification/noise.js` still measures all five,
+  because the reason to keep one is a comparison. Their measurements stand and
+  none of them is a reason to carry five: every basis fills `[-1, 1]` and the
+  standard deviation of one octave is `0.401` value, `0.389` OpenSimplex2,
+  `0.380` psrd, `0.369` cellular and `0.274` Perlin — a difference **sea level
+  and the metre fit both renormalise away**, since one is a percentile and the
+  other divides by the field's own peak. Two of the four also cost something:
+  **`psrd` was the one basis not guaranteed bit-identical across runtimes** (a
+  rotating gradient is a sine, and a library sine is not an IEEE operation), and
+  **`cellular` is not smooth**, with a crease along every plate boundary the
+  octave stack has nothing to round off. What went with them is the per-basis
+  frequency correction — one feature ran `1.99` units in value noise and `0.78`
+  in psrd, so `BASIS_PITCH` existed to bring all five within `0.9%`, and with
+  one basis the widest octave is `radius / frequency` and there is nothing to
+  correct. **The domain warp went too**: `warpAmplitude` moved a coastline and
+  the layers decide where land is, so it was a second answer to a question that
+  now has one.
+- **RIDGE IS IN THE ENGINE AND NOTHING SETS IT** (`octaveNoise`, doc 08). The
+  fold is real and measured — `1 - |n|` at 0.6 takes the median land gradient
+  from `11.0°` to `24.3°` and the 99th from `37.5°` to `63.7°` — and it creases
+  the **whole world at once**, moving the character of every place together,
+  which is the one thing a landscape must not do. The mountain layer replaced
+  it because a layer says *where*. The parameter stays because doc 08 argues it
+  from that measurement and this is the function the measurement is of.
+- **THE ONE SCALE THE FIT CANNOT DIVIDE OUT IS PEAK SCALE** (`metreHeight`,
+  doc 08). The metre step divides by the field's own peak, so the tallest point
+  is Relief whatever the shape knobs say — which is what makes Relief
+  answerable, and also why the balance between the layers can never make a peak
+  taller. **Peak scale multiplies the mountain layer's contribution after that
+  division**, and only the part it pushed *up*, so the extra is continuous
+  across the shoreline and a peak grows where a hollow does not. At `x3` the
+  tallest point runs `1,100 m` to **`2,808 m`** while the sea keeps exactly its
+  35% of the surface; at `x1` the term is multiplied by zero and the world is
+  bit-for-bit the one without it.
+- **LAND AND SEA LEVEL ARE DIFFERENT QUESTIONS** (`metreHeight`, doc 08).
+  `landFraction` is the percentile every height is measured from, so moving it
+  moves the ground. **Sea level moves only the water**, downward, leaving every
+  height where it was — the same picture as draining that much ocean. Dropping
+  it `60 m` takes the shipped world from **35% sea to 14%**, and what comes out
+  from under it is the shallow floor that was already there.
 - **TWO ELEVATIONS CUT THE LAND INTO THREE BANDS, IN ABSOLUTE METRES**
   (`GROUND_LINES`, `material`, doc 08). Water under 0, grass to **300 m**, bare
   stone to **400 m**, snow over it — and over the rock line the soil is gone
@@ -647,9 +674,9 @@ Violating any of these breaks the design. They are not tunable.
   where the water should be, and low land missing with it. `fromParams` settles
   now; `problems()` stays for what settling cannot reach.
 - **A row with no meaning comes off the panel, it is not greyed out**
-  (`Knob.shownWhen`, `ParameterPanel`). **Spin** shows only under psrd,
-  **Cells** and **Jitter** only under cellular, **Warp scale** only above a warp
-  of zero. A disabled row is a question the reader has to answer before
+  (`Knob.shownWhen`, `ParameterPanel`). **Mountain line** shows only under the
+  gated merge, which is the only one with a gate. A disabled row is a question
+  the reader has to answer before
   dismissing; `enabledWhen` stays for a knob that still means something and is
   turned off elsewhere, such as every map row under **Plain planet**.
 - **The noise is the reference implementation's parameter set** (`octaveNoise`,

@@ -99,6 +99,32 @@ body {
 .knob {
 	margin-bottom: 11px;
 }
+/* A curve is dragged, not slid: across is the layer's own noise value and up
+   is what it controls. The hint under it is always shown, because clicking an
+   empty box to add a point is not something a box says on its own. */
+.knob canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid #2a3140;
+	border-radius: 3px;
+	background: #0b0e13;
+	touch-action: none;
+	cursor: crosshair;
+	margin-top: 2px;
+}
+.knob.curved u {
+	display: block;
+	font-size: 10px;
+	line-height: 1.4;
+	color: #6a7183;
+	text-decoration: none;
+	margin-top: 2px;
+}
+.knob.off canvas {
+	opacity: 0.4;
+	pointer-events: none;
+}
 /* What the world actually got, when a slider asked for something it could not
    have. Sits between the slider and its description, above the prose, because
    a knob that reads as broken is looked at before it is read about. */

@@ -39,7 +39,6 @@ function splineAt(points: Point[], at: number): number {
 
 function surface(over: Partial<NoiseSettings> = {}): NoiseSettings {
 	return {
-		basis: "value",
 		frequency: 8,
 		octaves: 5,
 		persistence: 0.5,
@@ -47,10 +46,6 @@ function surface(over: Partial<NoiseSettings> = {}): NoiseSettings {
 		offsetX: 15,
 		offsetY: 9,
 		ridge: 0,
-		jitter: 0,
-		feature: "f1",
-		spinSin: 0,
-		spinCos: 1,
 		...over,
 	};
 }

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { MetreScale } from "chamfer/generation";
 import {
 	CoarseGrid,
 	buildCoarseMap,
 	erodeDroplets,
+	layeredHeight,
 	metreHeight,
-	surfaceHeight,
 	seaLevelFor,
 	seedFromString,
 } from "chamfer/generation";
@@ -89,9 +90,23 @@ describe("the coarse map", () => {
 });
 
 describe("metreHeight", () => {
+	const scale = (
+		relief: number,
+		seaDepth: number,
+		over: Partial<MetreScale> = {},
+	): MetreScale => ({
+		landFraction: 0.5,
+		relief,
+		seaDepth,
+		peakScale: 1,
+		seaLevel: 0,
+		...over,
+	});
+	const flat = (n: number): Float64Array => new Float64Array(n);
+
 	it("puts the waterline at zero whatever the field was doing", () => {
 		const raw = Float64Array.from([-3, -1, 0, 2, 5, 9]);
-		const metres = metreHeight(raw, 0.5, 100, 100);
+		const metres = metreHeight(raw, flat(raw.length), scale(100, 100));
 		const sea = seaLevelFor(raw, 0.5);
 		for (let cell = 0; cell < raw.length; cell++)
 			expect(metres[cell]! > 0).toBe(raw[cell]! > sea);
@@ -99,22 +114,88 @@ describe("metreHeight", () => {
 
 	it("scales the sea floor by the same number as the peaks", () => {
 		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
-		const a = metreHeight(raw, 0.5, 100, 100);
-		const b = metreHeight(raw, 0.5, 400, 400);
+		const a = metreHeight(raw, flat(raw.length), scale(100, 100));
+		const b = metreHeight(raw, flat(raw.length), scale(400, 400));
 		for (let cell = 0; cell < raw.length; cell++)
 			expect(b[cell]).toBeCloseTo(4 * a[cell]!, 6);
+	});
+
+	it("does nothing at a peak scale of one", () => {
+		// The extra is `(peakScale - 1)` times the mountain term, so one is
+		// exactly zero rather than nearly zero: a knob at its neutral has to
+		// leave the world bit-for-bit alone.
+		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
+		const mountain = Float64Array.from([0, 0.2, -0.3, 0.5, 1, 0.1]);
+		const plain = metreHeight(raw, flat(raw.length), scale(100, 100));
+		const same = metreHeight(raw, mountain, scale(100, 100));
+		for (let cell = 0; cell < raw.length; cell++)
+			expect(same[cell]).toBe(plain[cell]);
+	});
+
+	it("raises a peak and never lowers anything", () => {
+		// Only what the mountain layer pushed UP is exaggerated, so a hollow
+		// does not deepen.
+		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
+		const mountain = Float64Array.from([0, 0.2, -0.3, 0.5, 1, 2]);
+		const plain = metreHeight(raw, mountain, scale(100, 100));
+		const tall = metreHeight(
+			raw,
+			mountain,
+			scale(100, 100, { peakScale: 3 }),
+		);
+		for (let cell = 0; cell < raw.length; cell++)
+			expect(tall[cell]! >= plain[cell]!).toBe(true);
+		expect(tall[5]!).toBeGreaterThan(plain[5]!);
+	});
+
+	it("leaves the shoreline where it was, on a gated field", () => {
+		// The gate hands the metre step a term that is zero wherever the
+		// terrain is low, which is what keeps a coast from walking when the
+		// peaks are exaggerated. `roughen` makes no such promise: its term is
+		// the terrain's own noise, which is nonzero under water.
+		const grid = new CoarseGrid(LEVEL);
+		const field = layeredHeight(grid, seedFromString("chamfer"));
+		const at = (peakScale: number): Float64Array =>
+			metreHeight(field.raw, field.mountain, {
+				landFraction: 0.65,
+				relief: 1100,
+				seaDepth: 130,
+				peakScale,
+				seaLevel: 0,
+			});
+		const plain = at(1);
+		const tall = at(4);
+		for (let cell = 0; cell < grid.count; cell++)
+			expect(tall[cell]! > 0).toBe(plain[cell]! > 0);
+	});
+
+	it("lifts every height by the metres the sea was dropped", () => {
+		// Draining moves the water, never the ground: the whole field shifts by
+		// one number and its shape is untouched.
+		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
+		const wet = metreHeight(raw, flat(raw.length), scale(100, 100));
+		const dry = metreHeight(
+			raw,
+			flat(raw.length),
+			scale(100, 100, { seaLevel: -30 }),
+		);
+		for (let cell = 0; cell < raw.length; cell++)
+			expect(dry[cell]).toBeCloseTo(wet[cell]! + 30, 9);
 	});
 });
 
 describe("erodeDroplets", () => {
 	const grid = new CoarseGrid(LEVEL);
-	const ground = (): Float64Array =>
-		metreHeight(
-			surfaceHeight(grid, 21, { ridge: 0, warpAmplitude: 0 }),
-			0.3,
-			600,
-			240,
-		);
+	const ground = (): Float64Array => {
+		const field = layeredHeight(grid, 21);
+		return metreHeight(field.raw, field.mountain, {
+			landFraction: 0.3,
+			relief: 600,
+			seaDepth: 240,
+			peakScale: 1,
+			seaLevel: 0,
+		});
+	};
 
 	it("does nothing at all at a strength of zero", () => {
 		const before = ground();

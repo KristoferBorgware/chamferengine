@@ -83,19 +83,18 @@ describe("CoarseMapBuilder", () => {
 		for (const option of [
 			"level",
 			"cellMetres",
-			"frequency",
-			"octaves",
-			"persistence",
-			"lacunarity",
-			"offsetX",
-			"offsetY",
+			"terrain",
+			"mountain",
+			"mountainLayer",
+			"merge",
+			"mountainLine",
+			"detail",
 			"relief",
+			"seaDepth",
 			"landFraction",
+			"peakScale",
+			"seaLevel",
 			"erosion",
-			"basis",
-			"spin",
-			"jitter",
-			"feature",
 		] as const)
 			expect(COARSE_STAGES).toContain(coarseStageOf(option));
 	});

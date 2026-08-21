@@ -1,5 +1,6 @@
 import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
 import { KNOB_RANGES, PlanetSettings } from "./PlanetSettings.js";
+import { splineAt } from "chamfer/generation";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 
 /** One row of the panel. */
@@ -40,6 +41,15 @@ interface Knob {
 	 */
 	readonly given?: (settings: PlanetSettings) => string | null;
 
+	/**
+	 * Whether this row is a curve rather than a number.
+	 *
+	 * A curve is dragged, not slid: across is the layer's own noise value and
+	 * up is what it controls, and the shape between two points is what puts an
+	 * edge on a region. There is no slider that says that.
+	 */
+	readonly curve?: boolean;
+
 	/** Named choices, for a knob that is one of a few things rather than a number. */
 	readonly choices?: readonly {
 		readonly value: string;
@@ -67,110 +77,172 @@ interface Group {
  */
 const GROUPS: Group[] = [
 	{
-		title: "Where the land is",
+		title: "The terrain layer",
 		knobs: [
 			{
-				key: "noiseBasis",
+				key: "terrainCurve",
 				map: true,
-				label: "Noise",
+				label: "Terrain \u2192 base height",
+				curve: true,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainScale",
+				map: true,
+				label: "Terrain scale",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainOctaves",
+				map: true,
+				label: "Terrain octaves",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainPersistence",
+				map: true,
+				label: "Terrain persistence",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainLacunarity",
+				map: true,
+				label: "Terrain lacunarity",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainOffsetX",
+				map: true,
+				label: "Terrain offset X",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainOffsetY",
+				map: true,
+				label: "Terrain offset Y",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "coarseMap",
+				map: true,
+				label: "Height map",
+				enabledWhen: (k) => !k.plain,
+			},
+		],
+	},
+	{
+		title: "The mountain layer",
+		knobs: [
+			{
+				key: "mountainLayer",
+				map: true,
+				label: "Mountain layer",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "merge",
+				map: true,
+				label: "Mountains",
 				choices: [
-					{ value: "value", label: "Value" },
-					{ value: "perlin", label: "Perlin" },
-					{ value: "simplex", label: "OpenSimplex2" },
-					{ value: "psrd", label: "Psrd" },
-					{ value: "cellular", label: "Cellular" },
+					{ value: "gated", label: "Above the line" },
+					{ value: "roughen", label: "Roughen" },
 				],
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "cellFeature",
+				key: "mountainLine",
 				map: true,
-				label: "Cells",
-				choices: [
-					{ value: "f1", label: "Nearest" },
-					{ value: "f2f1", label: "Seams" },
-				],
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-				shownWhen: (k) => k.noiseBasis === "cellular",
-			},
-			{
-				key: "jitter",
-				map: true,
-				label: "Jitter",
+				label: "Mountain line",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-				shownWhen: (k) => k.noiseBasis === "cellular",
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
+				shownWhen: (k) => k.merge === "gated",
 			},
 			{
-				key: "spin",
+				key: "mountainDetail",
 				map: true,
-				label: "Spin",
+				label: "Detail on top",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-				shownWhen: (k) => k.noiseBasis === "psrd",
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "noiseScale",
+				key: "peakScale",
 				map: true,
-				label: "Noise scale",
+				label: "Peak scale",
+				digits: 1,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
+			},
+			{
+				key: "mountainCurve",
+				map: true,
+				label: "Mountain \u2192 range height",
+				curve: true,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
+			},
+			{
+				key: "mountainScale",
+				map: true,
+				label: "Mountain scale",
 				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "octaves",
+				key: "mountainOctaves",
 				map: true,
-				label: "Octaves",
+				label: "Mountain octaves",
 				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "persistence",
+				key: "mountainPersistence",
 				map: true,
-				label: "Persistence",
+				label: "Mountain persistence",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "lacunarity",
+				key: "mountainLacunarity",
 				map: true,
-				label: "Lacunarity",
+				label: "Mountain lacunarity",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "ridge",
+				key: "mountainOffsetX",
 				map: true,
-				label: "Ridges",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "seaDepth",
-				map: true,
-				label: "Sea depth",
+				label: "Mountain offset X",
 				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "warpAmplitude",
+				key: "mountainOffsetY",
 				map: true,
-				label: "Warp",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "warpScale",
-				map: true,
-				label: "Warp scale",
+				label: "Mountain offset Y",
 				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-				shownWhen: (k) => k.warpAmplitude > 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
+		],
+	},
+	{
+		title: "How high and how wet",
+		knobs: [
 			{
 				key: "landFraction",
 				map: true,
 				label: "Land",
 				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "seaLevel",
+				map: true,
+				label: "Sea level",
+				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
@@ -181,24 +253,11 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "offsetX",
+				key: "seaDepth",
 				map: true,
-				label: "Offset X",
+				label: "Sea depth",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "offsetY",
-				map: true,
-				label: "Offset Y",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "coarseMap",
-				map: true,
-				label: "Height map",
-				enabledWhen: (k) => !k.plain,
 			},
 		],
 	},
@@ -642,6 +701,7 @@ export class ParameterPanel {
 	}
 
 	private row(knob: Knob): Row {
+		if (knob.curve) return this.curveRow(knob);
 		if (knob.choices) return this.choiceRow(knob);
 		const range = KNOB_RANGES[knob.key as string]!;
 		const toggle = typeof this.draft[knob.key] === "boolean";
@@ -730,6 +790,172 @@ export class ParameterPanel {
 	}
 
 	/** A change was made: either hand it over now, or wait for the button. */
+	/**
+	 * A knob that is a curve, dragged rather than slid.
+	 *
+	 * Across is the layer's own noise value, `-1` to `1`; up is what it
+	 * controls, `0` to `1`. Drag a point to move it, click the empty curve to
+	 * add one, shift-click a point to take it away. **The two ends keep their
+	 * x** so the curve always spans the whole range and nothing downstream has
+	 * to guess what happens past it; their heights are free like every other
+	 * point's.
+	 *
+	 * **The four points it opens with are a starting shape, not the shape.**
+	 * Where a drag matters is where the world actually lands on the curve --
+	 * noise clusters around its own middle, so equal widths cover wildly
+	 * unequal amounts of planet.
+	 */
+	private curveRow(knob: Knob): Row {
+		const wrap = document.createElement("div");
+		wrap.className = "knob curved";
+		wrap.innerHTML =
+			`<label>${knob.label}` +
+			' <i title="needs a rebuild">&#9679;</i>' +
+			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
+			'</label><canvas width="260" height="78"></canvas>' +
+			"<u>drag \u00b7 click to add \u00b7 shift-click to remove</u>";
+		const canvas = wrap.querySelector("canvas")!;
+		const g = canvas.getContext("2d")!;
+		const pad = 5;
+		const toX = (v: number): number =>
+			pad + ((v + 1) / 2) * (canvas.width - pad * 2);
+		const toY = (v: number): number =>
+			canvas.height - pad - v * (canvas.height - pad * 2);
+		const fromX = (px: number): number =>
+			((px - pad) / (canvas.width - pad * 2)) * 2 - 1;
+		const fromY = (py: number): number =>
+			(canvas.height - pad - py) / (canvas.height - pad * 2);
+		const points = (): [number, number][] =>
+			this.draft[knob.key] as unknown as [number, number][];
+
+		const draw = (): void => {
+			const curve = points();
+			g.clearRect(0, 0, canvas.width, canvas.height);
+			g.fillStyle = "#0b0e13";
+			g.fillRect(0, 0, canvas.width, canvas.height);
+			g.strokeStyle = "#232b36";
+			g.beginPath();
+			g.moveTo(toX(0), pad);
+			g.lineTo(toX(0), canvas.height - pad);
+			g.stroke();
+			// The gate is drawn on the curve it cuts: Mountain line is a
+			// height on this curve's own vertical axis, so saying it as a
+			// number in another group would make the reader hold two pictures
+			// at once.
+			if (knob.key === "terrainCurve" && this.draft.merge === "gated") {
+				let low = Infinity;
+				let high = -Infinity;
+				for (const [, out] of curve) {
+					if (out < low) low = out;
+					if (out > high) high = out;
+				}
+				g.strokeStyle = "rgba(255, 180, 84, 0.55)";
+				g.setLineDash([3, 3]);
+				g.beginPath();
+				const at = toY(low + this.draft.mountainLine * (high - low));
+				g.moveTo(pad, at);
+				g.lineTo(canvas.width - pad, at);
+				g.stroke();
+				g.setLineDash([]);
+			}
+			g.strokeStyle = "#6fd0ff";
+			g.lineWidth = 1.5;
+			g.beginPath();
+			for (let px = pad; px <= canvas.width - pad; px++) {
+				const y = toY(splineAt(curve, fromX(px)));
+				if (px === pad) g.moveTo(px, y);
+				else g.lineTo(px, y);
+			}
+			g.stroke();
+			g.fillStyle = "#e8ecf2";
+			for (const [x, y] of curve) {
+				g.beginPath();
+				g.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+				g.fill();
+			}
+		};
+
+		let dragging = -1;
+		const spot = (e: PointerEvent): [number, number] => {
+			const box = canvas.getBoundingClientRect();
+			return [
+				((e.clientX - box.left) / box.width) * canvas.width,
+				((e.clientY - box.top) / box.height) * canvas.height,
+			];
+		};
+		const nearest = (px: number, py: number): number => {
+			const curve = points();
+			let best = -1;
+			let far = 12;
+			for (let n = 0; n < curve.length; n++) {
+				const d = Math.hypot(
+					toX(curve[n]![0]) - px,
+					toY(curve[n]![1]) - py,
+				);
+				if (d < far) {
+					far = d;
+					best = n;
+				}
+			}
+			return best;
+		};
+		canvas.addEventListener("pointerdown", (e) => {
+			if (wrap.classList.contains("off")) return;
+			e.preventDefault();
+			const [px, py] = spot(e);
+			const at = nearest(px, py);
+			const curve = points();
+			if (at >= 0 && e.shiftKey) {
+				// Never below two, or the curve stops being a curve.
+				if (curve.length > 2 && at > 0 && at < curve.length - 1) {
+					curve.splice(at, 1);
+					draw();
+					this.touch(true);
+				}
+				return;
+			}
+			if (at >= 0) dragging = at;
+			else {
+				const x = Math.max(-1, Math.min(1, fromX(px)));
+				const y = Math.max(0, Math.min(1, fromY(py)));
+				curve.push([x, y]);
+				curve.sort((a, b) => a[0] - b[0]);
+				dragging = curve.findIndex((q) => q[0] === x && q[1] === y);
+				draw();
+				this.touch(true);
+			}
+			canvas.setPointerCapture(e.pointerId);
+		});
+		canvas.addEventListener("pointermove", (e) => {
+			if (dragging < 0) return;
+			const curve = points();
+			const [px, py] = spot(e);
+			const first = dragging === 0;
+			const last = dragging === curve.length - 1;
+			if (!first && !last)
+				curve[dragging]![0] = Math.max(
+					curve[dragging - 1]![0] + 0.01,
+					Math.min(curve[dragging + 1]![0] - 0.01, fromX(px)),
+				);
+			curve[dragging]![1] = Math.max(0, Math.min(1, fromY(py)));
+			draw();
+			this.touch(true);
+		});
+		const drop = (): void => {
+			dragging = -1;
+		};
+		canvas.addEventListener("pointerup", drop);
+		canvas.addEventListener("pointercancel", drop);
+
+		draw();
+		return {
+			knob,
+			wrap,
+			input: canvas as unknown as HTMLInputElement,
+			write: draw,
+		};
+	}
+
 	/** A knob that is one of a few named things rather than a number. */
 	private choiceRow(knob: Knob): Row {
 		const wrap = document.createElement("div");
@@ -827,7 +1053,10 @@ export class ParameterPanel {
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			(settings.knobs.coarseMap
 				? `<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
-					`<span>ground <b>${settings.knobs.noiseScale.toFixed(0)} m</b> down to <b>${settings.smallestLandform.toFixed(0)} m</b> across, over <b>${settings.knobs.octaves}</b> octaves</span>`
+					`<span>terrain <b>${settings.knobs.terrainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
+					(settings.knobs.mountainLayer
+						? `<span>mountains <b>${settings.knobs.mountainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
+						: `<span>mountain layer <b>off</b></span>`)
 				: `<span>height map <b>off</b></span>`) +
 			// The camera's own height, not a figure typed in beside it: the two
 			// drifted apart the moment one of them moved.

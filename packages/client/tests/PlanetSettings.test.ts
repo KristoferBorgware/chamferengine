@@ -257,16 +257,39 @@ describe("a slider narrowed by the rest of the draft", () => {
 	});
 });
 
-describe("the octave stack", () => {
-	it("names the narrowest octave the noise makes", () => {
+describe("the two layers", () => {
+	it("names the narrowest octave each layer makes", () => {
 		// Each octave is `lacunarity` times narrower than the one above, so
 		// four octaves at lacunarity 2 reach an eighth of the widest feature.
+		// The two layers are asked separately: they do not share a falloff.
 		const s = new PlanetSettings({
-			noiseScale: 4000,
-			octaves: 4,
-			lacunarity: 2,
+			terrainScale: 4000,
+			terrainOctaves: 4,
+			terrainLacunarity: 2,
+			mountainScale: 2000,
+			mountainOctaves: 3,
+			mountainLacunarity: 2,
 		});
+		expect(s.narrowestOf("terrain")).toBeCloseTo(500, 6);
+		expect(s.narrowestOf("mountain")).toBeCloseTo(500, 6);
 		expect(s.smallestLandform).toBeCloseTo(500, 6);
+	});
+
+	it("takes the narrower of the two, and ignores a layer that is off", () => {
+		const both = new PlanetSettings({
+			terrainScale: 4000,
+			terrainOctaves: 1,
+			mountainScale: 4000,
+			mountainOctaves: 4,
+			mountainLacunarity: 2,
+			mountainLayer: true,
+		});
+		expect(both.smallestLandform).toBeCloseTo(500, 6);
+		const alone = new PlanetSettings({
+			...both.knobs,
+			mountainLayer: false,
+		});
+		expect(alone.smallestLandform).toBeCloseTo(4000, 6);
 	});
 
 	it("refuses ground the map is too coarse to draw", () => {
@@ -275,11 +298,31 @@ describe("the octave stack", () => {
 		const tooFine = new PlanetSettings({
 			plain: false,
 			coarseMap: true,
-			noiseScale: 4000,
-			octaves: 8,
+			terrainScale: 4000,
+			terrainOctaves: 8,
 			coarseSpacing: 128,
 		});
 		expect(tooFine.problems().join(" ")).toMatch(/narrowest octave/);
+	});
+});
+
+describe("a curve round-trips through a query string", () => {
+	it("carries a dragged curve and leaves a default one out", () => {
+		const plain = new PlanetSettings({}).toParams();
+		expect(plain.get("terrainCurve")).toBeNull();
+		const moved = new PlanetSettings({
+			terrainCurve: [
+				[-1, 0.1],
+				[0.2, 0.4],
+				[1, 0.9],
+			],
+		});
+		const back = PlanetSettings.fromParams(moved.toParams());
+		expect(back.knobs.terrainCurve).toEqual([
+			[-1, 0.1],
+			[0.2, 0.4],
+			[1, 0.9],
+		]);
 	});
 });
 

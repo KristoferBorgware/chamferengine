@@ -26,8 +26,8 @@ import { positionToCell, splitPath } from "chamfer/addressing";
 import { Vec3 } from "chamfer/math";
 
 const QS =
-	"chunkCells=8&noiseBasis=perlin&noiseScale=29400&octaves=5&lacunarity=3.4" +
-	"&offsetX=15&offsetY=9&warpScale=8400&jitter=0.55&relief=1640&seaDepth=100" +
+	"chunkCells=8&terrainScale=2267&terrainOctaves=6&terrainLacunarity=2" +
+	"&terrainOffsetX=15&terrainOffsetY=9&relief=1640&seaDepth=100" +
 	"&ridge=0.7&landFraction=0.5&crustMetres=1744&detail=1";
 const settings = PlanetSettings.fromParams(new URLSearchParams(QS));
 const seed = seedFromString(settings.knobs.seed);

@@ -20,7 +20,6 @@ const STEP = 0.02;
 
 function base(over: Partial<NoiseSettings> = {}): NoiseSettings {
 	return {
-		basis: "value",
 		frequency: 1,
 		octaves: 6,
 		persistence: 0.5,
@@ -28,10 +27,6 @@ function base(over: Partial<NoiseSettings> = {}): NoiseSettings {
 		offsetX: 0,
 		offsetY: 0,
 		ridge: 0,
-		jitter: 0,
-		feature: "f1",
-		spinSin: 0,
-		spinCos: 1,
 		...over,
 	};
 }

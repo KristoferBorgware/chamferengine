@@ -72,10 +72,9 @@ function direction(n: number): [number, number, number] {
 	return [Math.cos(n * golden) * ring, z, Math.sin(n * golden) * ring];
 }
 
-/** The panel's own settings, with the value basis the lab is limited to. */
+/** The panel's own settings. */
 function settings(over: Partial<NoiseSettings> = {}): NoiseSettings {
 	return {
-		basis: "value",
 		frequency: 4,
 		octaves: 5,
 		persistence: 0.5,
@@ -83,10 +82,6 @@ function settings(over: Partial<NoiseSettings> = {}): NoiseSettings {
 		offsetX: 15,
 		offsetY: 9,
 		ridge: 0.85,
-		jitter: 0,
-		feature: "f1",
-		spinSin: 0,
-		spinCos: 1,
 		...over,
 	};
 }

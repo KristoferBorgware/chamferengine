@@ -5,7 +5,7 @@ import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { erodeDroplets } from "./erodeDroplets.js";
-import { surfaceHeight } from "./surfaceHeight.js";
+import { layeredHeight } from "./layeredHeight.js";
 import { metreHeight } from "./metreHeight.js";
 
 /** One step finished, and the map as it stands after it. */
@@ -43,6 +43,15 @@ export class CoarseMapBuilder {
 	/** The surface with no unit, held so a later step can start again. */
 	private raw?: Float64Array;
 
+	/**
+	 * What the mountain layer alone contributed, held for the same reason.
+	 *
+	 * The metre step needs it as well as the sum, because Peak scale multiplies
+	 * it after the fit -- so a run starting at the metre step has to be handed
+	 * both halves, not just the field.
+	 */
+	private mountain?: Float64Array;
+
 	/** The surface in metres before erosion, held for the same reason. */
 	private metres?: Float64Array;
 
@@ -79,7 +88,9 @@ export class CoarseMapBuilder {
 		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
-			this.raw = surfaceHeight(grid, seed, settings);
+			const field = layeredHeight(grid, seed, settings);
+			this.raw = field.raw;
+			this.mountain = field.mountain;
 			// Nothing downstream has run, so the ground is the noise itself with
 			// no sea in it. Drawing this shows what the octave knobs are turned
 			// against.
@@ -89,12 +100,7 @@ export class CoarseMapBuilder {
 		if (last <= 0) return;
 
 		if (at <= 1 || this.metres === undefined)
-			this.metres = metreHeight(
-				this.raw!,
-				settings.landFraction,
-				settings.relief,
-				settings.seaDepth,
-			);
+			this.metres = metreHeight(this.raw!, this.mountain!, settings);
 		if (at <= 1) {
 			this.height = Float64Array.from(this.metres!);
 			yield this.step("metres", last <= 1);

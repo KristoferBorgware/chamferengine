@@ -1,7 +1,6 @@
 import type { NoiseSettings } from "./NoiseSettings.js";
-import { BASIS_PITCH } from "./BASIS_PITCH.js";
-import { basisNoise3 } from "./basisNoise3.js";
 import { hash3 } from "./hash3.js";
+import { valueNoise3 } from "./valueNoise3.js";
 
 /**
  * How far an octave's own offset may reach, in lattice units.
@@ -23,10 +22,10 @@ const OCTAVE_SPREAD = 1000;
 const RIDGE_GAIN = 2.2;
 
 /**
- * Octaves of one noise basis, with the shape and the parameters of the
- * reference implementation, in `[-1, 1]`.
+ * Octaves of value noise, with the shape and the parameters of the reference
+ * implementation, in `[-1, 1]`.
  *
- * `settings.basis` chooses which noise function one octave is. `frequency` is
+ * `frequency` is
  * how many times the largest feature repeats around the planet, `persistence`
  * is what each octave's amplitude is multiplied by, `lacunarity` is what its
  * frequency is multiplied by, and `offsetX` and `offsetY` slide the sample
@@ -71,9 +70,7 @@ export function octaveNoise(
 	let sum = 0;
 	let amplitude = 1;
 	let total = 0;
-	// Each basis draws a different number of features per lattice cell, so the
-	// frequency is brought onto one scale before the first octave.
-	let f = settings.frequency * BASIS_PITCH[settings.basis];
+	let f = settings.frequency;
 	let weight = 1;
 	const ridge = settings.ridge;
 	for (let o = 0; o < settings.octaves; o++) {
@@ -82,13 +79,7 @@ export function octaveNoise(
 		const oy =
 			(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetY;
 		const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
-		const n = basisNoise3(
-			x * f + ox,
-			y * f + oy,
-			z * f + oz,
-			seed,
-			settings,
-		);
+		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 		let signal = n;
 		if (ridge > 0) {
 			// `1 - |n|` folds the octave at its own zero crossing, and the fold

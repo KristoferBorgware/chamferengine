@@ -929,10 +929,12 @@
 							low: 1,
 							high: 12,
 							step: 1,
-							// **Enough octaves that a summit is a summit.** At four the
-							// added height was smooth over a kilometre and the ranges
-							// drew as flat white mesas with steep sides.
-							value: 7,
+							// **Four, because four is what the map can carry**, and
+							// storing seven only meant `settle` pulled it back to
+							// four before the first frame -- a default nothing could
+							// reach. What stopped the ranges drawing as flat white
+							// mesas was the frequency and the falloff.
+							value: 4,
 							digits: 0,
 						},
 						{

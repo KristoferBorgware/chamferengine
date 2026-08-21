@@ -224,18 +224,19 @@ pinned function rather than from one that runs anything else.
 
 ---
 
-### The lattice is a choice, and the hash is not
+### One basis ships, and four were measured before that was decided
 
-Everything above pins **one** noise function, and that function still ships. What
-it does not have to be is the only one available: the octave stack takes a
-**basis** — the thing one octave is — and the value noise above is one of five.
-The other four are ports of published implementations, each named for the work
-it comes from: **Perlin**, **OpenSimplex2**, **psrdnoise** and **cellular**.
+Everything above pins **one** noise function, and that function is the only one
+the generator now carries. Four others were built and measured first — ports of
+published implementations, each named for the work it comes from: **Perlin**,
+**OpenSimplex2**, **psrdnoise** and **cellular**. `verification/noise.js` still
+measures all five, because the reason for keeping one is a comparison and a
+comparison needs the other four to exist.
 
-They are interchangeable because they agree on their interface. Each takes a
+They were interchangeable because they agreed on their interface. Each takes a
 point in 3D and a seed and returns a scalar in `[-1, 1]`, so frequency, octave
-count, persistence, lacunarity, offset and ridge mean the same thing under all
-five, and so does the sea-level percentile downstream.
+count, persistence, lacunarity and offset mean the same thing under all five,
+and so does the sea-level percentile downstream.
 
 | Basis | Lattice | One octave draws |
 |---|---|---|
@@ -245,25 +246,26 @@ five, and so does the sea-level percentile downstream.
 | psrd | simplex, gradients that turn | blobs whose lobes all face one way |
 | cellular | scattered feature points | plates with hard seams between them |
 
-**The same frequency did not mean the same feature size**, and that had to be
-corrected rather than documented. A frequency counts lattice cells, and the five
-do not draw one feature per cell.
+**The same frequency did not mean the same feature size**, and while five
+shipped that had to be corrected rather than documented. A frequency counts
+lattice cells, and the five do not draw one feature per cell.
 
 > **[verified]** Zero crossings along an 8,000-unit walk at frequency 1. One
 > feature runs **1.99** units in value noise, **1.30** in Perlin, **0.89** in
 > cellular, **0.82** in OpenSimplex2 and **0.78** in psrd — so a **Noise scale**
 > of 4,500 m drew continents 4,500 m across in one basis and **1,800 m** across
-> in another. Each basis's frequency is multiplied by its own width over value
-> noise's, which brings all five to within **0.9%** of each other and leaves
+> in another. Each basis's frequency was multiplied by its own width over value
+> noise's, which brought all five to within **0.9%** of each other and left
 > value noise at exactly 1.
 
-That correction reaches further than the label. The editor refuses a map too
+That correction reached further than the label. The editor refuses a map too
 coarse to carry the narrowest octave, and it works that octave's width out in
-metres from the Noise scale and the lacunarity alone. Uncorrected, the refusal
-would have been right for one basis and wrong for the other four.
+metres from the scale and the lacunarity alone. Uncorrected, the refusal would
+have been right for one basis and wrong for the other four. With one basis it
+is a division and there is nothing to correct.
 
-**What is left to choose between them is the shape of one octave and the spread
-of the sum**, both of which show in the map picture.
+**What was left to choose between them was the shape of one octave and the
+spread of the sum**, both of which show in the map picture.
 
 > **[verified]** 2,000,000 samples of one octave. Every basis fills `[-1, 1]`:
 > the extremes run `-0.999` to `1.000` for value, `-0.995` to `0.979` for
@@ -274,29 +276,30 @@ of the sum**, both of which show in the map picture.
 > **0.274** for Perlin — so a Perlin world keeps more of itself near the middle
 > and reaches the top in fewer places.
 
-**Nothing about this weakens the pinned hash.** Four of the five bases index
-their gradients with the `hash3` above, including the two whose references use a
-64-bit multiply, which is several operations in a runtime whose integers are 32
-bits and whose numbers are doubles. Cellular and psrd carry the polynomial
-permutation their references use, which is `+ − × ÷` and `floor` over integers
-under `289` — inside the set [doc 23](23-determinism.md) pins.
+**None of that is a reason to carry five.** A spread of `0.401` against `0.389`
+is not a landscape anyone can tell apart once sea level is a percentile and the
+metre scale divides by the field's own peak — both of which renormalise exactly
+the difference the table measures. What decides where a world's regions are is
+[the second layer](#two-layers-and-two-curves), and that is a decision about
+*where* rather than about the shape of one octave.
 
-**One basis is the exception.** psrdnoise
-builds each gradient by rotating a hashed direction, and a rotation is a sine
-and a cosine. A library sine is not an IEEE operation and two runtimes may
-return results a bit apart, so **a psrd world is the one that is not guaranteed
-identical on two machines**. The exposure is bounded rather than removed: there
-are only `289` distinct hashed indices, so the whole trigonometric part of the
-field is four tables of 289 entries built once, and the spin angle is turned
-into a sine and a cosine once per map. Nothing on the sampling path computes
-one. A world that has to be bit-identical between two clients uses one of the
-other four.
+Two of the four also cost something. **psrdnoise** builds each gradient by
+rotating a hashed direction, and a rotation is a sine and a cosine. A library
+sine is not an IEEE operation and two runtimes may return results a bit apart,
+so a psrd world was **the one not guaranteed identical on two machines** — the
+exposure was bounded rather than removed, four tables of `289` entries built
+once with nothing on the sampling path, but it was still the only part of the
+generator that needed that argument made. And **cellular is not smooth**: it has
+a crease along every plate boundary, because the nearest feature point changes
+there, and the octave stack has nothing that rounds it off.
 
-**Cellular is the exception of a different kind: it is not smooth.** The other
-four are differentiable everywhere, and cellular has a crease along every plate
-boundary because the nearest feature point changes there. That crease is both
-the reason to reach for it and the reason not to — it survives the octave stack,
-which has nothing that rounds it off.
+**Nothing about dropping them weakens the pinned hash.** Four of the five
+indexed their gradients with the `hash3` above, including the two whose
+references use a 64-bit multiply, which is several operations in a runtime whose
+integers are 32 bits and whose numbers are doubles. Cellular and psrd carried
+the polynomial permutation their references use, which is `+ − × ÷` and `floor`
+over integers under `289` — inside the set [doc 23](23-determinism.md) pins. The
+one that survives is the one that never needed the argument.
 
 ## Two levels of ambition
 
@@ -472,33 +475,124 @@ every valley a bowl. A photograph of a mountain range is a photograph of
 
 Steepness is not what separates them.
 
-> **[verified]** Land gradient over the shipped map, 300 m of relief at a 32 m
-> map cell: median **11.1°**, 90th **25.2°**, 99th **38.1°**, steepest
+> **[verified]** Land gradient over a single-stack map, 300 m of relief at a
+> 32 m map cell: median **11.1°**, 90th **25.2°**, 99th **38.1°**, steepest
 > **56.0°**. That is steep ground. It still reads as hills, because none of it
 > has an edge.
 
-**The only place a crease can come from is an absolute value.** `1 - |n|` folds
-an octave at its own zero crossing, and the fold is the ridge. Squaring it
-sharpens the fold and pulls the low ground down. Each ridged octave is then
-weighted by the one above it, so the fine detail lands on ground the coarse
-octaves already raised — which is what leaves the flats flat instead of
-crinkling the whole planet.
+**One place a crease can come from is an absolute value.** `1 - |n|` folds an
+octave at its own zero crossing, and the fold is the ridge. Squaring it sharpens
+the fold and pulls the low ground down. Each ridged octave is then weighted by
+the one above it, so the fine detail lands on ground the coarse octaves already
+raised — which is what leaves the flats flat instead of crinkling the whole
+planet.
 
-> **[verified]** The same seed and the same 300 m of relief, as the `ridge` knob
-> is turned:
+> **[verified]** The same seed and the same 300 m of relief, as the fold is
+> turned up:
 >
 > | Ridge | median | 90th | 99th | steepest |
 > |---|---|---|---|---|
 > | 0 | 11.0° | 24.9° | 37.5° | 55.4° |
 > | 0.2 | 19.1° | 42.9° | 58.8° | 72.9° |
 > | 0.4 | 25.9° | 51.3° | 67.2° | 79.6° |
-> | **0.6** | 24.3° | 47.8° | 63.7° | 77.0° |
+> | 0.6 | 24.3° | 47.8° | 63.7° | 77.0° |
 > | 0.8 | 24.2° | 46.8° | 62.4° | 75.9° |
 
 The gradient settles above about `0.4`, because the weighting starts taking back
 what the fold adds; what keeps changing past that is how much of the roughness
-sits on high ground rather than everywhere. **At `0` the field is bit-for-bit
-the plain sum**, so the knob adds a shape without taking one away.
+sits on high ground rather than everywhere. At `0` the field is bit-for-bit the
+plain sum.
+
+**The generator sets this to zero everywhere, and the next section is why.**
+`octaveNoise` takes the parameter and every measurement above describes what it
+does. What it cannot do is say *where*: a fold creases the **whole world at
+once**, moving the character of every place together, which is the one thing a
+landscape must not do.
+
+### Two layers and two curves
+
+**A single octave stack makes one kind of landscape.** fBm is homogeneous: every
+octave applies everywhere at one amplitude, so one statistic describes the whole
+planet and no term in it can say *be different here*.
+
+> **[verified]** `tools/trial-layers.ts`, the spread of local roughness —
+> calmest tenth against roughest tenth, over one map. One stack gives **1.3×**
+> plain and **1.4×** ridged. Ridge does not help, because it folds every octave
+> everywhere.
+
+So the surface is **two** stacks, each whole and neither borrowing from the
+other, and each read through a **curve**: across is that layer's own noise, up
+is what it controls. The curve is what puts an *edge* on a region — a coastal
+shelf, a mountain front — where a control read straight is one long fade. Where
+a drag on it matters is where the world actually lands on it: noise clusters
+around its own middle, so equal widths of a curve cover wildly unequal amounts
+of planet, and half a map sits inside a quarter of the axis.
+
+**Terrain and continents are one layer**, because they are one question at two
+sizes: its widest octaves are where the land is and its narrowest are what the
+ground does underfoot. Its curve decides the coast.
+
+**The mountain layer is the second**, and it reaches the ground one of two ways.
+
+`gated` lets it through in proportion to how far the terrain already stands
+above a **mountain line** — nothing at or below it, all of it at the top of the
+terrain curve's own range, smoothed between. A range can only grow where the
+ground was already high: the terrain layer draws the land and says where it may
+become mountain, the mountain layer says what the mountain looks like. The line
+is a fraction of that curve's **own** reach rather than a height on a fixed
+axis, so dragging the curve's top down does not slowly close the gate. The edge
+is smoothed because a hard cut draws a contour line across every hillside at
+exactly the same height.
+
+`roughen` keeps it a per-place multiplier on the terrain layer's own noise: a
+range is rougher ground rather than taller ground, and because the bumps and the
+base come out of one field they line up instead of crossing.
+
+An ungated third rule — the mountain layer simply added — was built and removed.
+Nothing told it where it was, so a range could start in the sea, and on the
+shipped world it did.
+
+**The two layers share no parameter.** A layer that borrowed its neighbour's
+octave count or falloff could only say the same thing at a different size, and
+saying different things is the reason there are two. It costs one refusal:
+[the map has to be fine enough](#the-map-is-the-terrain-and-there-is-no-second-tier)
+for the narrowest octave, and that is now asked of each layer against its own
+falloff rather than once against a shared one.
+
+> **[verified]** `tools/probe-bands.ts` over the shipped world at level 6:
+> **35%** sea, **55%** grass, **5%** bare rock, **5%** snow, tallest point
+> exactly the 1,100 m Relief asks for. The same world with the mountain layer
+> switched off is **14%** grass and **47%** snow — the terrain layer alone owns
+> the whole range, so the fit walks ordinary ground up through both material
+> lines.
+
+### The one scale the fit cannot divide out
+
+The metre step divides the field by its own peak, so **the tallest point is
+Relief whatever the shape knobs say**. That is what makes Relief answerable —
+"how tall is the highest mountain" rather than a multiplier on however far this
+seed happened to reach — and it is also why the balance between the two layers
+can never make a peak taller. Raise it and everything else gets shorter.
+
+**Peak scale multiplies the mountain layer's contribution after that division**,
+and only the part it pushed *up*, so the extra is continuous across the
+shoreline and a peak grows where a hollow does not.
+
+> **[verified]** `tools/probe-bands.ts`. At `×3` the tallest point goes from
+> 1,100 m to **2,808 m** while the sea keeps exactly its **35%** of the surface.
+> At `×1` the term is multiplied by zero, so the world is bit-for-bit the one
+> without it.
+
+### Land and sea level are different questions
+
+`landFraction` is the percentile every height is measured from, so moving it
+moves the ground. **Sea level moves only the water**, downward, leaving every
+height exactly where it was — the same picture as draining that much ocean, and
+what comes out from under it is the shallow floor that was already there.
+
+> **[verified]** `tools/probe-bands.ts`. Dropping the water 60 m takes the
+> shipped world from **35%** sea to **14%**, and the tallest point rises by
+> exactly the 60 m the field was lifted.
 
 ### The sea floor was spending the mountains' budget
 

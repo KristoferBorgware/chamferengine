@@ -3,6 +3,7 @@ import type { CoarseMap } from "chamfer/generation";
 import {
 	BlockType,
 	TerrainGenerator,
+	COARSE_MAP_DEFAULTS,
 	buildCoarseMap,
 	isSolid,
 	isTranslucent,
@@ -97,11 +98,15 @@ describe("the height field", () => {
 			total++;
 			if (column.waterRadius === column.groundRadius) dry++;
 		}
-		// The coarse map is built at 30% land, and the terrain follows it: the
-		// fine detail moves the ground, never the decision about whether there
-		// is water here.
-		expect(dry / total).toBeGreaterThan(0.25);
-		expect(dry / total).toBeLessThan(0.35);
+		// The map is built at the default land fraction and the terrain follows
+		// it: the fine detail moves the ground, never the decision about
+		// whether there is water here.
+		expect(dry / total).toBeGreaterThan(
+			COARSE_MAP_DEFAULTS.landFraction - 0.05,
+		);
+		expect(dry / total).toBeLessThan(
+			COARSE_MAP_DEFAULTS.landFraction + 0.05,
+		);
 	});
 });
 

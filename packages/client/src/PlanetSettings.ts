@@ -1,10 +1,16 @@
 import type {
-	CellFeature,
 	CoarseMapOptions,
-	NoiseBasis,
+	MountainMerge,
+	TerrainLayer,
 	TerrainOptions,
 } from "chamfer/generation";
-import { CoarseMap, GROUND_LINES, seedFromString } from "chamfer/generation";
+import {
+	CoarseMap,
+	GROUND_LINES,
+	MOUNTAIN_LAYER_DEFAULT,
+	TERRAIN_LAYER_DEFAULT,
+	seedFromString,
+} from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
@@ -63,6 +69,30 @@ const MAX_COARSE_LEVEL = 9;
  * from a size and a radius, and putting them in would have the dependency
  * backwards.
  */
+/**
+ * A curve a layer's value is read through, as `[in, out]` points.
+ *
+ * Across is that layer's own noise, `-1` to `1`; up is what it controls, `0`
+ * to `1`. The engine holds the same shape; this is the panel's mutable copy.
+ */
+export type Curve = readonly (readonly [number, number])[];
+
+/** A curve as one query-string value, and back. */
+export function curveToText(curve: Curve): string {
+	return curve.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`).join(",");
+}
+
+export function curveFromText(text: string): Curve | null {
+	const out: [number, number][] = [];
+	for (const pair of text.split(",")) {
+		const [x, y] = pair.split(":").map(Number);
+		if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+		out.push([Math.max(-1, Math.min(1, x!)), Math.max(0, Math.min(1, y!))]);
+	}
+	out.sort((a, b) => a[0] - b[0]);
+	return out.length >= 2 ? out : null;
+}
+
 export interface PlanetKnobs {
 	seed: string;
 
@@ -107,42 +137,46 @@ export interface PlanetKnobs {
 	 */
 	coarseMap: boolean;
 
-	/** Which noise function one octave is. */
-	noiseBasis: NoiseBasis;
-
 	/** Metres across one cell of the height map, which is one step of ground. */
 	coarseSpacing: number;
 
-	/** Metres across the widest feature the noise makes. */
-	noiseScale: number;
+	/**
+	 * The layer that draws the land: continents at its widest octaves, ground
+	 * underfoot at its narrowest.
+	 */
+	terrainScale: number;
+	terrainOctaves: number;
+	terrainPersistence: number;
+	terrainLacunarity: number;
+	terrainOffsetX: number;
+	terrainOffsetY: number;
 
-	/** How many octaves of noise are summed. */
-	octaves: number;
+	/** The curve that layer's value is read through, as `[in, out]` points. */
+	terrainCurve: Curve;
 
-	/** What each octave's amplitude is multiplied by. */
-	persistence: number;
+	/** Whether the mountain layer runs at all. */
+	mountainLayer: boolean;
 
-	/** What each octave's frequency is multiplied by. */
-	lacunarity: number;
+	/** How the mountain layer reaches the ground. */
+	merge: MountainMerge;
 
-	/** Slides the sample point through the noise field. */
-	offsetX: number;
-	offsetY: number;
+	/** Where the gate opens, as a fraction of the terrain curve's own reach. */
+	mountainLine: number;
 
-	/** How far a second field pushes the sample point. Zero reads it where it stands. */
-	warpAmplitude: number;
+	/** The balance between the two layers. */
+	mountainDetail: number;
 
-	/** Metres across the widest feature of the field doing the pushing. */
-	warpScale: number;
+	/** What the mountain layer is multiplied by after the metre fit. */
+	peakScale: number;
 
-	/** The angle every gradient is turned by, in radians. `psrd` only. */
-	spin: number;
-
-	/** How far a feature point may sit from its cell's middle. `cellular` only. */
-	jitter: number;
-
-	/** Which cellular distance is reported. `cellular` only. */
-	cellFeature: CellFeature;
+	/** The layer that draws the ranges. */
+	mountainScale: number;
+	mountainOctaves: number;
+	mountainPersistence: number;
+	mountainLacunarity: number;
+	mountainOffsetX: number;
+	mountainOffsetY: number;
+	mountainCurve: Curve;
 
 	/** Metres from sea level to the tallest ground. */
 	relief: number;
@@ -150,8 +184,8 @@ export interface PlanetKnobs {
 	/** Metres from sea level down to the deepest sea floor. */
 	seaDepth: number;
 
-	/** How much each octave is folded at its own zero crossing, for creases. */
-	ridge: number;
+	/** Metres the water is dropped below the level Land chose. Never above zero. */
+	seaLevel: number;
 
 	/**
 	 * How hard the water cuts into the ground.
@@ -320,22 +354,33 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	blockSize: 1,
 	chunkCells: 64,
 	coarseMap: true,
-	noiseBasis: "perlin",
 	coarseSpacing: 32,
-	noiseScale: 29400,
-	octaves: 5,
-	persistence: 0.5,
-	lacunarity: 3.4,
-	offsetX: 15,
-	offsetY: 9,
-	warpAmplitude: 0.8,
-	warpScale: 8400,
-	spin: 0,
-	jitter: 0.55,
-	cellFeature: "f1",
+	// **The scales are stated in metres and the engine takes frequencies.**
+	// A frequency counts features across the whole sphere, so it means a
+	// different landform on every planet; a size in metres does not. These are
+	// the lab's shipped frequencies of 3 and 7.2 on the shipped radius.
+	terrainScale: 2267,
+	terrainOctaves: 6,
+	terrainPersistence: 0.5,
+	terrainLacunarity: 2,
+	terrainOffsetX: 15,
+	terrainOffsetY: 9,
+	terrainCurve: TERRAIN_LAYER_DEFAULT.curve,
+	mountainLayer: true,
+	merge: "gated",
+	mountainLine: 0.5,
+	mountainDetail: 7,
+	peakScale: 1,
+	mountainScale: 945,
+	mountainOctaves: 4,
+	mountainPersistence: 0.55,
+	mountainLacunarity: 2,
+	mountainOffsetX: -22,
+	mountainOffsetY: 61,
+	mountainCurve: MOUNTAIN_LAYER_DEFAULT.curve,
 	relief: 1100,
 	seaDepth: 130,
-	ridge: 0.85,
+	seaLevel: 0,
 	erosion: 0,
 	landFraction: 0.65,
 	crustMetres: 1232,
@@ -408,46 +453,80 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseMap: { ...TOGGLE, rebuilds: true },
-	noiseBasis: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
-	cellFeature: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
-	noiseScale: {
+	terrainScale: {
 		low: 200,
 		high: 40000,
 		step: 100,
 		rebuilds: true,
 		unit: "m",
 	},
-	octaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
-	persistence: {
+	terrainOctaves: { low: 1, high: 12, step: 1, rebuilds: true, unit: "" },
+	terrainPersistence: {
 		low: 0.05,
 		high: 0.95,
 		step: 0.05,
 		rebuilds: true,
 		unit: "",
 	},
-	lacunarity: { low: 1.2, high: 4, step: 0.05, rebuilds: true, unit: "" },
-	offsetX: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
-	offsetY: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
-	warpAmplitude: {
-		low: 0,
-		high: 1.5,
+	terrainLacunarity: {
+		low: 1.2,
+		high: 4,
 		step: 0.05,
 		rebuilds: true,
 		unit: "",
 	},
-	warpScale: {
-		low: 200,
+	terrainOffsetX: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
+	terrainOffsetY: { low: -500, high: 500, step: 1, rebuilds: true, unit: "" },
+	terrainCurve: { ...TOGGLE, rebuilds: true },
+	mountainLayer: { ...TOGGLE, rebuilds: true },
+	merge: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
+	mountainLine: { low: 0, high: 0.95, step: 0.01, rebuilds: true, unit: "" },
+	mountainDetail: { low: 0, high: 10, step: 0.05, rebuilds: true, unit: "" },
+	peakScale: { low: 1, high: 6, step: 0.1, rebuilds: true, unit: "x" },
+	mountainScale: {
+		low: 100,
 		high: 40000,
 		step: 100,
 		rebuilds: true,
 		unit: "m",
 	},
-	spin: { low: 0, high: 6.28, step: 0.02, rebuilds: true, unit: "rad" },
-	jitter: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	mountainOctaves: { low: 1, high: 12, step: 1, rebuilds: true, unit: "" },
+	mountainPersistence: {
+		low: 0.05,
+		high: 0.95,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	mountainLacunarity: {
+		low: 1.2,
+		high: 4,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	mountainOffsetX: {
+		low: -500,
+		high: 500,
+		step: 1,
+		rebuilds: true,
+		unit: "",
+	},
+	mountainOffsetY: {
+		low: -500,
+		high: 500,
+		step: 1,
+		rebuilds: true,
+		unit: "",
+	},
+	mountainCurve: { ...TOGGLE, rebuilds: true },
 	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
 	seaDepth: { low: 10, high: 1200, step: 10, rebuilds: true, unit: "m" },
-	ridge: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	// The water can be drained and no further: under the fit the deepest point
+	// is exactly Sea depth down, so a lower level is a planet with no ocean and
+	// a slider position meaning the same as the one beside it.
+	seaLevel: { low: -1200, high: 0, step: 5, rebuilds: true, unit: "m" },
 	erosion: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	landFraction: {
 		low: 0.05,
@@ -728,10 +807,43 @@ export class PlanetSettings {
 	 * is the map.
 	 */
 	get smallestLandform(): number {
-		return (
-			this.knobs.noiseScale /
-			this.knobs.lacunarity ** (this.knobs.octaves - 1)
+		return Math.min(
+			this.narrowestOf("terrain"),
+			this.knobs.mountainLayer ? this.narrowestOf("mountain") : Infinity,
 		);
+	}
+
+	/**
+	 * Metres across the narrowest octave one layer makes.
+	 *
+	 * Each layer carries its own falloff, so the two are asked separately: a
+	 * map fine enough for the terrain layer's last octave may be far too coarse
+	 * for the mountain layer's, which is narrower by design.
+	 */
+	narrowestOf(layer: "terrain" | "mountain"): number {
+		const k = this.knobs as unknown as Record<string, number>;
+		return (
+			k[`${layer}Scale`]! /
+			k[`${layer}Lacunarity`]! ** (k[`${layer}Octaves`]! - 1)
+		);
+	}
+
+	/** One layer, as the engine takes it. */
+	private layerFor(layer: "terrain" | "mountain"): TerrainLayer {
+		const k = this.knobs as unknown as Record<string, number>;
+		const curve =
+			layer === "terrain"
+				? this.knobs.terrainCurve
+				: this.knobs.mountainCurve;
+		return {
+			frequency: this.frequencyFor(k[`${layer}Scale`]!),
+			octaves: k[`${layer}Octaves`]!,
+			persistence: k[`${layer}Persistence`]!,
+			lacunarity: k[`${layer}Lacunarity`]!,
+			offsetX: k[`${layer}OffsetX`]!,
+			offsetY: k[`${layer}OffsetY`]!,
+			curve,
+		};
 	}
 
 	/**
@@ -802,24 +914,19 @@ export class PlanetSettings {
 
 	coarseOptions(): CoarseMapOptions {
 		return {
-			basis: this.knobs.noiseBasis,
 			level: this.coarseLevel,
 			cellMetres: this.coarseCell,
-			frequency: this.frequencyFor(this.knobs.noiseScale),
-			octaves: this.knobs.octaves,
-			persistence: this.knobs.persistence,
-			lacunarity: this.knobs.lacunarity,
-			offsetX: this.knobs.offsetX,
-			offsetY: this.knobs.offsetY,
-			warpAmplitude: this.knobs.warpAmplitude,
-			warpFrequency: this.frequencyFor(this.knobs.warpScale),
-			spin: this.knobs.spin,
-			jitter: this.knobs.jitter,
-			feature: this.knobs.cellFeature,
+			terrain: this.layerFor("terrain"),
+			mountain: this.layerFor("mountain"),
+			mountainLayer: this.knobs.mountainLayer,
+			merge: this.knobs.merge,
+			mountainLine: this.knobs.mountainLine,
+			detail: this.knobs.mountainDetail,
+			peakScale: this.knobs.peakScale,
 			relief: this.relief,
 			seaDepth: this.seaDepth,
-			ridge: this.knobs.ridge,
 			landFraction: this.knobs.landFraction,
+			seaLevel: this.coarseMapRuns ? this.knobs.seaLevel : 0,
 			erosion: this.knobs.erosion,
 		};
 	}
@@ -845,6 +952,32 @@ export class PlanetSettings {
 	 * The narrowing only ever moves an end **inward**. Nothing here widens a
 	 * range past what {@link KNOB_RANGES} states.
 	 */
+	/**
+	 * The most octaves one layer may run before its narrowest is under two map
+	 * cells.
+	 *
+	 * Each layer is asked against its own falloff. They do not share one, so a
+	 * map fine enough for the terrain layer's last octave may be far too coarse
+	 * for the mountain layer's, which is narrower by design.
+	 */
+	private octaveWall(
+		layer: "terrain" | "mountain",
+		range: KnobRange,
+	): number {
+		const k = this.knobs as unknown as Record<string, number>;
+		return Math.max(
+			range.low,
+			Math.min(
+				range.high,
+				1 +
+					Math.floor(
+						Math.log(k[`${layer}Scale`]! / (2 * this.coarseCell)) /
+							Math.log(k[`${layer}Lacunarity`]!),
+					),
+			),
+		);
+	}
+
 	rangeFor(key: keyof PlanetKnobs): KnobRange {
 		const range = KNOB_RANGES[key as string]!;
 		const k = this.knobs;
@@ -900,23 +1033,14 @@ export class PlanetSettings {
 				return narrowed({ low: up(3 * k.blockSize) });
 
 			// The world is the map, so an octave narrower than two map cells is
-			// ground that would not exist.
-			case "octaves":
-				return narrowed({
-					high: Math.max(
-						range.low,
-						Math.min(
-							range.high,
-							1 +
-								Math.floor(
-									Math.log(
-										k.noiseScale / (2 * this.coarseCell),
-									) / Math.log(k.lacunarity),
-								),
-						),
-					),
-				});
-			case "noiseScale":
+			// ground that would not exist. Each layer is asked against its own
+			// falloff: they do not share one.
+			case "terrainOctaves":
+				return narrowed({ high: this.octaveWall("terrain", range) });
+			case "mountainOctaves":
+				return narrowed({ high: this.octaveWall("mountain", range) });
+			case "terrainScale":
+			case "mountainScale":
 				return narrowed({ low: up(2 * this.coarseCell) });
 
 			// The crust runs from above the tallest ground to under the deepest
@@ -982,10 +1106,13 @@ export class PlanetSettings {
 			"subdivisionDepth",
 			"chunkCells",
 			"coarseSpacing",
-			"noiseScale",
-			"octaves",
+			"terrainScale",
+			"terrainOctaves",
+			"mountainScale",
+			"mountainOctaves",
 			"relief",
 			"seaDepth",
+			"seaLevel",
 			"crustMetres",
 			"lowDeck",
 			"highDeck",
@@ -1042,15 +1169,17 @@ export class PlanetSettings {
 			// The world is the map, so a feature the map cannot draw is a
 			// feature the ground does not have. Two samples across it is the
 			// least that describes it.
-			if (this.coarseCell * 2 > this.smallestLandform) {
-				const largestOctaves =
-					1 +
-					Math.floor(
-						Math.log(k.noiseScale / (2 * this.coarseCell)) /
-							Math.log(k.lacunarity),
-					);
+			for (const layer of ["terrain", "mountain"] as const) {
+				if (layer === "mountain" && !k.mountainLayer) continue;
+				const narrowest = this.narrowestOf(layer);
+				if (this.coarseCell * 2 <= narrowest) continue;
+				const most = this.octaveWall(
+					layer,
+					KNOB_RANGES[`${layer}Octaves`]!,
+				);
+				const name = layer === "terrain" ? "Terrain" : "Mountain";
 				out.push(
-					`The narrowest octave is ${Math.round(this.smallestLandform)} m across and a map cell is ${Math.round(this.coarseCell)} m, so the map cannot draw the finest ground it is being asked for — and the world is the map, so that ground would not exist. Lower Octaves to ${Math.max(1, largestOctaves)}, raise Noise scale, or lower Map cell.`,
+					`The ${layer} layer's narrowest octave is ${Math.round(narrowest)} m across and a map cell is ${Math.round(this.coarseCell)} m, so the map cannot draw the finest ground it is being asked for — and the world is the map, so that ground would not exist. Lower ${name} octaves to ${Math.max(1, most)}, raise ${name} scale, or lower Map cell.`,
 				);
 			}
 		}
@@ -1093,10 +1222,11 @@ export class PlanetSettings {
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
-			else if (key === "noiseBasis") knobs.noiseBasis = raw as NoiseBasis;
-			else if (key === "cellFeature")
-				knobs.cellFeature = raw as CellFeature;
-			else if (typeof PLANET_DEFAULTS[key] === "boolean")
+			else if (key === "merge") knobs.merge = raw as MountainMerge;
+			else if (key === "terrainCurve" || key === "mountainCurve") {
+				const curve = curveFromText(raw);
+				if (curve) knobs[key] = curve;
+			} else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";
 			else {
@@ -1138,6 +1268,12 @@ export class PlanetSettings {
 		) as (keyof PlanetKnobs)[]) {
 			if (TRANSIENT.has(key)) continue;
 			const value = this.knobs[key];
+			if (key === "terrainCurve" || key === "mountainCurve") {
+				const now = curveToText(value as Curve);
+				if (now !== curveToText(PLANET_DEFAULTS[key]))
+					params.set(key, now);
+				continue;
+			}
 			if (value !== PLANET_DEFAULTS[key]) params.set(key, String(value));
 		}
 		return params;
