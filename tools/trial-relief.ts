@@ -60,7 +60,6 @@ const PLAIN = surface({ ridge: 0 });
 const CREASED = surface({ ridge: 0.85 });
 const WARP_AMPLITUDE = 0.8;
 const WARP_FREQUENCY = 2;
-const DETAIL = 1.5;
 
 /** The lab's warped read of the terrain stack. */
 function stack(x: number, y: number, z: number, s: NoiseSettings): number {
@@ -82,6 +81,7 @@ function fieldAt(
 	z: number,
 	mountain: Point[] | null,
 	continent: Point[],
+	detail = 1.5,
 ): number {
 	const contRaw = fbm(x, y, z, 3, 2, (SEED + CONTINENT_SEED_OFFSET) | 0);
 	const mountRaw = fbm(x, y, z, 4.5, 2, (SEED + MOUNTAIN_SEED_OFFSET) | 0);
@@ -91,7 +91,7 @@ function fieldAt(
 	const creased = stack(x, y, z, CREASED);
 	const base = cont * 2 - 1;
 	const shape = plain * (1 - mount) + creased * mount;
-	return base + shape * mount * DETAIL;
+	return base + shape * mount * detail;
 }
 
 /** The curve in the screenshot: a steep knee where the histogram is dense. */
@@ -110,7 +110,7 @@ const CONTINENT: Point[] = [
 ];
 
 /** A square of directions, so neighbours can be compared. */
-function patch(mountain: Point[] | null): Float64Array {
+function patch(mountain: Point[] | null, detail = 1.5): Float64Array {
 	const c: [number, number, number] = [0, 0.7071067811865476, 0.7071067811865476];
 	const u: [number, number, number] = [1, 0, 0];
 	const v: [number, number, number] = [0, 0.7071067811865476, -0.7071067811865476];
@@ -126,7 +126,7 @@ function patch(mountain: Point[] | null): Float64Array {
 			x /= len;
 			y /= len;
 			z /= len;
-			out[r * SIDE + q] = fieldAt(x, y, z, mountain, CONTINENT);
+			out[r * SIDE + q] = fieldAt(x, y, z, mountain, CONTINENT, detail);
 		}
 	return out;
 }
@@ -247,5 +247,36 @@ for (let n = 1; n < MOUNTAIN.length; n++) {
 		`   x ${x0.toFixed(2).padStart(5)} to ${x1.toFixed(2).padStart(5)}: ` +
 			`${((share * 100).toFixed(1) + "%").padStart(6)} of the map, ` +
 			`curve goes ${MOUNTAIN[n - 1]![1].toFixed(2)} to ${MOUNTAIN[n]![1].toFixed(2)}`,
+	);
+}
+
+console.log("\nE. is Detail on top just a Relief for the mountain term?");
+console.log("   Relief scales the whole sum, so it changes no ratio anywhere.");
+console.log("   Detail scales ONE TERM of the sum, so it changes the mix.");
+const at15 = patch(MOUNTAIN, 1.5);
+const at50 = patch(MOUNTAIN, 5);
+let dLow = 1e9;
+let dHigh = -1e9;
+for (let n = 0; n < at15.length; n++) {
+	if (Math.abs(at15[n]!) < 0.05) continue;
+	const ratio = at50[n]! / at15[n]!;
+	if (ratio < dLow) dLow = ratio;
+	if (ratio > dHigh) dHigh = ratio;
+}
+console.log(
+	`   Detail 5 divided by Detail 1.5, point by point: ${dLow.toFixed(2)} to ${dHigh.toFixed(2)}`,
+);
+console.log(
+	"   against Relief 1790 over Relief 50, which was 35.800000 to 35.800000.",
+);
+console.log("\n   Detail |  calm 10% | rough 10% | spread | field reaches");
+for (const detail of [0, 0.5, 1.5, 3, 5]) {
+	const p = patch(MOUNTAIN, detail);
+	const r = roughnessSpread(p);
+	let reach = 0;
+	for (const v of p) if (Math.abs(v) > reach) reach = Math.abs(v);
+	console.log(
+		`   ${detail.toFixed(1).padStart(6)} | ${r.low.toFixed(5).padStart(9)} | ${r.high.toFixed(5).padStart(9)} | ` +
+			`${(r.spread.toFixed(2) + "x").padStart(6)} | ${reach.toFixed(3).padStart(6)}`,
 	);
 }
