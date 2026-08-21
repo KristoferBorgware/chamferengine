@@ -2491,9 +2491,17 @@
 							input.value = knobs[row.key];
 					}
 					if (row.digits !== undefined) {
+						// **A switched-off knob shows the value in use, not the
+						// one its slider is parked at.** The slider greys, which
+						// says the knob is off; it does not say what off is
+						// worth, and a readout of 1790 beside a world built from
+						// 50 is a readout that lies.
+						const inUse = value(row.key);
 						let text =
-							Number(knobs[row.key]).toFixed(row.digits) +
+							Number(inUse).toFixed(row.digits) +
 							(row.unit ? " " + row.unit : "");
+						if (using[row.key] === false)
+							text = `${text} · off`;
 						// **Say when a knob did not get what it asked for.** The
 						// map's fineness is a level, so its cell is the planet
 						// halved a whole number of times and stops at level 9:
