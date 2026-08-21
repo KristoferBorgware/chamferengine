@@ -1031,6 +1031,46 @@ which is what the choice needs.
 
 ---
 
+### F-052 — `Detail on top` is a ratio, so what it means in metres depends on the other layer's curve
+
+**Kind:** design
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-21, while answering what `Detail on top` does
+**Where:** `demos/noise-lab.html`, `layeredAt`; `tools/trial-layer-relief.ts`
+
+**What happens.** The layered field is `base + shape x mount x detail`, and the
+metre scale's `fit` rule then divides the whole sum by its own peak. So
+`detail` is a bare ratio between two terms, and the metres it buys depend on
+how far the *continent* curve happens to span. Measured with `detail` pinned at
+1.5 and `relief` pinned at 1,100 m, moving only the continent curve: the
+terrain term reaches **1,093 m** under the shipped shelf-and-rise curve,
+**1,611 m** under a shallow curve, **1,130 m** under one spanning the whole
+range. A **47% swing** in what a knob does, caused by a knob about the other
+layer.
+
+**Why it matters.** The ground bands are absolute metres, so "how many metres
+does the terrain add" is the question a person is actually asking when they
+drag this slider -- it decides whether a rough place can reach the rock line on
+its own. A ratio cannot answer it, and the answer moves under them while they
+shape the continents.
+
+**What would fix it.** Three candidates, measured, and nobody has chosen.
+**A readout** reuses the scale `fit` has already worked out, so the panel can
+print "continents 937 m, terrain 1,093 m" under the slider and update it live,
+changing no model and computing nothing new. **A share** replaces `detail` with the terrain's percentage
+of the relief and solves back for the raw ratio in closed form, which holds
+steady while the continent curve moves. **Two metre knobs**, one per layer, is
+the honest form and cannot keep `fit`: dividing by the field's own peak leaves
+only their ratio, so `(600, 300)` and `(1200, 600)` give a bit-identical world,
+and under `multiply` the tallest point lands **25-31%** below the two knobs
+added together, because the continent peak and the terrain peak are not in the
+same place. That last one gives up "Relief is how tall the tallest mountain is",
+which is the property `fit` exists for.
+
+---
+
 ## Closed
 
 ### F-042 — The map's colors and the world's materials are on two different scales
