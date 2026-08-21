@@ -294,10 +294,19 @@ whole feature across the world. A coarse slider carries the decade and a fine
 one picks the value inside it, and the readout gives the metre figure so a
 setting found here can be typed into the engine.
 
-**Stack** chooses between plain fBm — value noise, lacunarity 2, gain a half,
-nothing else — and the panel's parameterised octaves with persistence,
-lacunarity, ridge and the offsets. fBm is the field with nothing done to it.
+**Stack** chooses between plain fBm and the octave stack, and they differ by
+exactly three things: a hashed offset per octave, the ridge fold, and the two
+offsets. Frequency, octaves, persistence and lacunarity mean the same under
+both — the engine's own fBm pins gain at a half and lacunarity at 2, and stating
+those two here lands on it exactly. fBm is the field with nothing done to it.
 Only value noise is carried; the engine's other four bases are not ported.
+
+**A slider cannot be moved into a refusal.** The world is the map, so an octave
+narrower than a map cell is ground the map cannot carry — so the octave count
+and the coarse frequency stop where the narrowest octave is still two cells
+wide, and the ends move as the rest of the draft moves. Swept over 7,776
+combinations of depth, block size, map cell, frequency, octaves and lacunarity,
+none reaches the warning; it stays as a backstop for a hand-edited link.
 
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.

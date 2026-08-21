@@ -316,11 +316,17 @@
 			/**
 			 * Fractional Brownian motion: the original stack, in `[-1, 1]`.
 			 *
-			 * Octaves of value noise at a fixed lacunarity of 2 and a fixed gain
-			 * of half, divided by the total amplitude. Nothing here is a knob
-			 * except how many octaves there are and how wide the first one is,
-			 * which is what makes it the thing to reach for when the question is
-			 * what the noise itself does rather than what the panel does to it.
+			 * Octaves of value noise, each one `lacunarity` times finer and
+			 * `persistence` times quieter than the last, divided by the total
+			 * amplitude. **The engine's own copy pins those two at 2 and a
+			 * half**, which is what the defaults here are, so calling this with
+			 * six arguments is exactly the engine's function -- the last two are
+			 * the lab letting you move what the engine fixed.
+			 *
+			 * What it does not have, and the octave stack does, is a hashed
+			 * offset per octave and the ridge fold. That is the whole difference
+			 * between the two, which makes this the plain sum: the field with
+			 * nothing done to it.
 			 *
 			 * Two details are fixed rather than incidental. **Octaves accumulate
 			 * low frequency first**, because floating-point addition is not
@@ -330,7 +336,16 @@
 			 * the total amplitude**, so adding an octave adds detail without
 			 * making the world taller.
 			 */
-			function fbm(x, y, z, frequency, octaves, seed) {
+			function fbm(
+				x,
+				y,
+				z,
+				frequency,
+				octaves,
+				seed,
+				persistence = 0.5,
+				lacunarity = 2,
+			) {
 				let sum = 0;
 				let amplitude = 1;
 				let total = 0;
@@ -338,8 +353,8 @@
 				for (let o = 0; o < octaves; o++) {
 					sum += amplitude * valueNoise3(x * f, y * f, z * f, seed);
 					total += amplitude;
-					amplitude *= 0.5;
-					f *= 2;
+					amplitude *= persistence;
+					f *= lacunarity;
 				}
 				return sum / total;
 			}
@@ -427,15 +442,24 @@
 			/**
 			 * One sample of whichever stack is selected.
 			 *
-			 * **fBm is the original and takes two numbers**: how wide the first
-			 * octave is and how many there are. Lacunarity is 2, gain is a half,
-			 * and there is no ridge, no offset and no per-octave hash -- which
-			 * is the point of having it, because it is the field with nothing
-			 * done to it.
+			 * **fBm is the plain sum**: octaves of one field, each finer and
+			 * quieter than the last, and nothing else. No ridge, no offsets, no
+			 * per-octave hash. That is the point of having it -- it is the field
+			 * with nothing done to it, and the two stacks differ by exactly
+			 * those three things rather than by their parameters.
 			 */
 			function stackAt(x, y, z, seed, s, which) {
 				if (which === "fbm")
-					return fbm(x, y, z, s.frequency, s.octaves, seed);
+					return fbm(
+						x,
+						y,
+						z,
+						s.frequency,
+						s.octaves,
+						seed,
+						s.persistence,
+						s.lacunarity,
+					);
 				return octaveNoise(x, y, z, seed, s);
 			}
 
@@ -458,6 +482,8 @@
 					x + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w),
 					y + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 1),
 					z + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 2),
+					// Six arguments, so gain and lacunarity stay where the
+					// engine pins them however the panel is set.
 					seed,
 					s.surface,
 					which,
@@ -605,7 +631,6 @@
 							step: 0.05,
 							value: 0.5,
 							digits: 2,
-							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "lacunarity",
@@ -615,7 +640,6 @@
 							step: 0.05,
 							value: 2,
 							digits: 2,
-							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "ridge",
@@ -863,6 +887,58 @@
 					"",
 					query ? `?${query}` : location.pathname,
 				);
+			}
+
+			/**
+			 * A knob's own ends, narrowed by the rest of the draft.
+			 *
+			 * **A slider that cannot be moved into a refusal beats a refusal
+			 * that explains itself.** The world is the map, so an octave
+			 * narrower than a map cell is ground the map cannot carry and the
+			 * world would not build -- it is drawn here and nowhere else. Rather
+			 * than let the slider reach that and then complain, the slider's own
+			 * end moves: the octave count stops where the narrowest octave is
+			 * still two cells wide. The warning stays as a backstop for a
+			 * hand-edited link, which is the one way a value can arrive from
+			 * outside the panel.
+			 *
+			 * The narrowing only ever moves an end inward.
+			 */
+			function liveRange(row) {
+				if (row.key !== "octaves" && row.key !== "frequencyScale") return row;
+				const k = derived();
+				if (row.key === "frequencyScale") {
+					// Even one octave has to be two map cells wide, and the fine
+					// slider reaches 1, so the coarse one stops where their
+					// product does. What is cut off is frequency the map could
+					// not carry at any octave count.
+					const most = k.radius / (2 * k.cellMetres);
+					return {
+						...row,
+						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
+					};
+				}
+				const widest = k.radius / Math.max(1e-6, k.frequency);
+				const step = knobs.lacunarity;
+				const room =
+					1 + Math.floor(Math.log(widest / (2 * k.cellMetres)) / Math.log(step));
+				return {
+					...row,
+					high: Math.max(row.low, Math.min(row.high, room)),
+				};
+			}
+
+			/** Pull every knob inside its own narrowed ends, inward only. */
+			function settle() {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						if (r.digits === undefined || r.type) continue;
+						const live = liveRange(r);
+						knobs[r.key] = Math.min(
+							live.high,
+							Math.max(live.low, knobs[r.key]),
+						);
+					}
 			}
 
 			/** What a knob is worth right now, which is its neutral when it is off. */
@@ -1740,9 +1816,16 @@
 
 			/** Show a knob only where it means something, rather than greying it. */
 			function refreshPanel() {
-				for (const { row, wrap, readout } of rows.values()) {
+				for (const { row, wrap, readout, input } of rows.values()) {
 					const shown = row.shownWhen ? row.shownWhen(knobs) : true;
 					wrap.classList.toggle("hidden", !shown);
+					if (row.digits !== undefined && !row.type) {
+						const live = liveRange(row);
+						if (Number(input.min) !== live.low) input.min = live.low;
+						if (Number(input.max) !== live.high) input.max = live.high;
+						if (Number(input.value) !== knobs[row.key])
+							input.value = knobs[row.key];
+					}
 					if (row.digits !== undefined) {
 						let text =
 							Number(knobs[row.key]).toFixed(row.digits) +
@@ -1788,12 +1871,12 @@
 					`narrowest octave <b>${Math.round(
 						k.radius /
 							Math.max(1e-6, k.frequency) /
-							(knobs.stack === "fbm" ? 2 : knobs.lacunarity) **
+							knobs.lacunarity **
 								(value("octaves") - 1),
 					).toLocaleString()} m</b>` +
 					(k.radius /
 						Math.max(1e-6, k.frequency) /
-						(knobs.stack === "fbm" ? 2 : knobs.lacunarity) **
+						knobs.lacunarity **
 							(value("octaves") - 1) <
 					k.cellMetres
 						? ' <span style="color:#ffb454">narrower than a cell</span>'
@@ -1814,16 +1897,17 @@
 			 * coastline does not walk while the slider does.
 			 */
 			let pending = false;
-			let settle = 0;
+			let settleTimer = 0;
 			let cost = 0;
 			function askForRedraw(draft = true) {
-				clearTimeout(settle);
-				if (draft) settle = setTimeout(() => askForRedraw(false), 200);
+				clearTimeout(settleTimer);
+				if (draft) settleTimer = setTimeout(() => askForRedraw(false), 200);
 				if (pending) return;
 				pending = true;
 				requestAnimationFrame(() => {
 					pending = false;
 					const started = performance.now();
+					settle();
 					generate(draft ? Math.max(24, knobs.cells >> 1) : knobs.cells);
 					buildMesh();
 					drawMap();
@@ -1881,6 +1965,7 @@
 			// The first draw goes through the same timed path every later one
 			// does, so the cost on screen is a real number from the start.
 			const booted = performance.now();
+			settle();
 			generate();
 			buildMesh();
 			drawMap();

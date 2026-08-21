@@ -124,6 +124,35 @@ describe("the noise lab's copy of the engine's noise", () => {
 		}
 	});
 
+	it("reduces to the engine's fBm when gain and lacunarity are stated", () => {
+		// The lab lets those two move, which the engine's own fBm pins at a
+		// half and 2. Stating them explicitly has to land on the engine's
+		// function exactly, or the extra reach has quietly become a fork.
+		const demoFbm = demo.fbm as unknown as (
+			x: number,
+			y: number,
+			z: number,
+			frequency: number,
+			octaves: number,
+			seed: number,
+			persistence?: number,
+			lacunarity?: number,
+		) => number;
+		const seed = seedFromString("chamfer");
+		for (let n = 0; n < 200; n++) {
+			const [x, y, z] = direction(n);
+			expect(demoFbm(x, y, z, 4, 5, seed, 0.5, 2)).toBe(
+				fbm(x, y, z, 4, 5, seed),
+			);
+		}
+		// And moving them has to actually move the field, or the rows on the
+		// panel are decoration.
+		const [x, y, z] = direction(7);
+		expect(demoFbm(x, y, z, 4, 5, seed, 0.8, 3.2)).not.toBe(
+			fbm(x, y, z, 4, 5, seed),
+		);
+	});
+
 	it.each([0, 0.4, 0.85])("stacks octaves at ridge %d exactly", (ridge) => {
 		const seed = seedFromString("chamfer");
 		const s = settings({ ridge });
