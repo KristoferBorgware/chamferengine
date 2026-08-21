@@ -281,20 +281,36 @@ never a mountain. And the shipped `relief` of 1,100 m puts most land above the
 **Every knob that has a value meaning "off" carries a switch.** Ridge 0 is
 bit-for-bit the plain sum, warp 0 reads the point where it stands, persistence 0
 leaves one octave; unticking sets the knob to that value, so what is left on
-screen is the ground the knob was not contributing to. Noise scale, lacunarity
-and map cell have no such value and get no switch — a switch that quietly meant
+screen is the ground the knob was not contributing to. Frequency, lacunarity and
+map cell have no such value and get no switch — a switch that quietly meant
 "back to the default" would look like a measurement and not be one.
+
+**Frequency is a frequency, not a distance in metres.** It is how many times the
+widest octave repeats across the planet: 1 is a single hump from pole to pole,
+40 is forty of them. The engine's own panel asks for the widest feature in
+metres, which divides out to the same number and hides how small it gets: a
+scale of 29,400 m on a 6,801 m planet is a frequency of `0.23`, less than one
+whole feature across the world. A coarse slider carries the decade and a fine
+one picks the value inside it, and the readout gives the metre figure so a
+setting found here can be typed into the engine.
+
+**Stack** chooses between plain fBm — value noise, lacunarity 2, gain a half,
+nothing else — and the panel's parameterised octaves with persistence,
+lacunarity, ridge and the offsets. fBm is the field with nothing done to it.
+Only value noise is carried; the engine's other four bases are not ported.
 
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.
-**Surface** draws it solid, as a wireframe, or both. And the graph under the map
-plots height against a choice of x: the raw field, where sea level and the two
-metre scales show as a hinge and two slopes; a section straight across the
-patch; or every cell sorted, which says what fraction of the ground stands below
-any height.
+**Surface** draws it solid, as a wireframe, or both. The **Contour** panel at
+the bottom draws every line of the patch over one another, so the silhouette
+carries where the ground stands as well as what shape it is.
+
+**Every knob is in the address bar**, switches included, and only where it
+differs from the default — so a world found by dragging is a link, and the link
+restores the panel as well as the ground.
 
 The noise is a hand copy of the engine's, kept honest by a test that digests the
-two against each other over every basis.
+two against each other.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

@@ -69,6 +69,25 @@
 				image-rendering: pixelated;
 				background: #0b0e13;
 			}
+			#profile {
+				margin-top: 12px;
+				border-top: 1px solid var(--edge);
+				padding-top: 8px;
+			}
+			#profile > summary {
+				cursor: pointer;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				list-style: none;
+			}
+			#profile > summary::before {
+				content: "▾ ";
+			}
+			#profile:not([open]) > summary::before {
+				content: "▸ ";
+			}
 			#graph {
 				width: 100%;
 				height: auto;
@@ -212,10 +231,13 @@
 				<span style="background: #a3a3ac">rock</span>
 				<span style="background: #f3f6fa">snow</span>
 			</div>
-			<canvas id="graph" width="640" height="380"></canvas>
-			<div id="graphsays"></div>
 			<div id="facts"></div>
 			<div id="knobs"></div>
+			<details id="profile" open>
+				<summary>Contour</summary>
+				<canvas id="graph" width="640" height="300"></canvas>
+				<div id="graphsays"></div>
+			</details>
 		</div>
 
 		<script>
@@ -291,377 +313,43 @@
 				return s * 2 - 1;
 			}
 
-			/** The twelve cube-edge midpoints, as Perlin's gradients. */
-			const PERLIN_GRADIENTS = new Float64Array([
-				1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0,
-				-1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1,
-			]);
-			const PERLIN_SCALE = 1.015;
-
-			/** Gradient noise, in `[-1, 1]`. */
-			function perlinNoise3(px, py, pz, seed) {
-				const xi = Math.floor(px);
-				const yi = Math.floor(py);
-				const zi = Math.floor(pz);
-				const fx = px - xi;
-				const fy = py - yi;
-				const fz = pz - zi;
-				const u = fade(fx);
-				const v = fade(fy);
-				const w = fade(fz);
-				let sum = 0;
-				for (let c = 0; c < 8; c++) {
-					const dx = c & 1;
-					const dy = (c >> 1) & 1;
-					const dz = (c >> 2) & 1;
-					const g =
-						3 * Math.floor(hash3(xi + dx, yi + dy, zi + dz, seed) * 12);
-					const dot =
-						PERLIN_GRADIENTS[g] * (fx - dx) +
-						PERLIN_GRADIENTS[g + 1] * (fy - dy) +
-						PERLIN_GRADIENTS[g + 2] * (fz - dz);
-					const wx = dx ? u : 1 - u;
-					const wy = dy ? v : 1 - v;
-					const wz = dz ? w : 1 - w;
-					sum += wx * wy * wz * dot;
-				}
-				return sum * PERLIN_SCALE;
-			}
-
-			const SIMPLEX_RADIUS_SQUARED = 0.6;
-			const SIMPLEX_ROTATE = 2 / 3;
-			const SIMPLEX_NORMALIZER = 0.07969837668935331;
-			const SIMPLEX_LATTICE_FLIP = 0x5e2b6c31;
-
-			/** Forty-eight directions, at the reference's own lengths. */
-			const SIMPLEX_GRADIENTS = new Float64Array([
-				2.22474487139, 2.22474487139, -1.0, 2.22474487139, 2.22474487139,
-				1.0, 3.0862664687972017, 1.1721513422464978, 0.0,
-				1.1721513422464978, 3.0862664687972017, 0.0, -2.22474487139,
-				2.22474487139, -1.0, -2.22474487139, 2.22474487139, 1.0,
-				-1.1721513422464978, 3.0862664687972017, 0.0,
-				-3.0862664687972017, 1.1721513422464978, 0.0, -1.0,
-				-2.22474487139, -2.22474487139, 1.0, -2.22474487139,
-				-2.22474487139, 0.0, -3.0862664687972017, -1.1721513422464978,
-				0.0, -1.1721513422464978, -3.0862664687972017, -1.0,
-				-2.22474487139, 2.22474487139, 1.0, -2.22474487139, 2.22474487139,
-				0.0, -1.1721513422464978, 3.0862664687972017, 0.0,
-				-3.0862664687972017, 1.1721513422464978, -2.22474487139,
-				-2.22474487139, -1.0, -2.22474487139, -2.22474487139, 1.0,
-				-3.0862664687972017, -1.1721513422464978, 0.0,
-				-1.1721513422464978, -3.0862664687972017, 0.0, -2.22474487139,
-				-1.0, -2.22474487139, -2.22474487139, 1.0, -2.22474487139,
-				-1.1721513422464978, 0.0, -3.0862664687972017,
-				-3.0862664687972017, 0.0, -1.1721513422464978, -2.22474487139,
-				-1.0, 2.22474487139, -2.22474487139, 1.0, 2.22474487139,
-				-3.0862664687972017, 0.0, 1.1721513422464978,
-				-1.1721513422464978, 0.0, 3.0862664687972017, -1.0, 2.22474487139,
-				-2.22474487139, 1.0, 2.22474487139, -2.22474487139, 0.0,
-				1.1721513422464978, -3.0862664687972017, 0.0, 3.0862664687972017,
-				-1.1721513422464978, -1.0, 2.22474487139, 2.22474487139, 1.0,
-				2.22474487139, 2.22474487139, 0.0, 3.0862664687972017,
-				1.1721513422464978, 0.0, 1.1721513422464978, 3.0862664687972017,
-				2.22474487139, -2.22474487139, -1.0, 2.22474487139,
-				-2.22474487139, 1.0, 1.1721513422464978, -3.0862664687972017, 0.0,
-				3.0862664687972017, -1.1721513422464978, 0.0, 2.22474487139, -1.0,
-				-2.22474487139, 2.22474487139, 1.0, -2.22474487139,
-				3.0862664687972017, 0.0, -1.1721513422464978, 1.1721513422464978,
-				0.0, -3.0862664687972017, 2.22474487139, -1.0, 2.22474487139,
-				2.22474487139, 1.0, 2.22474487139, 1.1721513422464978, 0.0,
-				3.0862664687972017, 3.0862664687972017, 0.0, 1.1721513422464978,
-			]);
-			for (let i = 0; i < SIMPLEX_GRADIENTS.length; i++)
-				SIMPLEX_GRADIENTS[i] /= SIMPLEX_NORMALIZER;
-
-			function simplexGrad(seed, xb, yb, zb, dx, dy, dz) {
-				const g = 3 * Math.floor(hash3(xb, yb, zb, seed) * 48);
-				return (
-					SIMPLEX_GRADIENTS[g] * dx +
-					SIMPLEX_GRADIENTS[g + 1] * dy +
-					SIMPLEX_GRADIENTS[g + 2] * dz
-				);
-			}
-
-			/** OpenSimplex2 on a body-centred cubic lattice, in `[-1, 1]`. */
-			function simplexNoise3(px, py, pz, seed) {
-				const r = SIMPLEX_ROTATE * (px + py + pz);
-				const xr = r - px;
-				const yr = r - py;
-				const zr = r - pz;
-				let xb = Math.floor(xr + 0.5);
-				let yb = Math.floor(yr + 0.5);
-				let zb = Math.floor(zr + 0.5);
-				let xi = xr - xb;
-				let yi = yr - yb;
-				let zi = zr - zb;
-				let xs = Math.trunc(-1 - xi) | 1;
-				let ys = Math.trunc(-1 - yi) | 1;
-				let zs = Math.trunc(-1 - zi) | 1;
-				let ax = xs * -xi;
-				let ay = ys * -yi;
-				let az = zs * -zi;
-				let value = 0;
-				let a = SIMPLEX_RADIUS_SQUARED - xi * xi - (yi * yi + zi * zi);
-				let lattice = seed | 0;
-				for (let copy = 0; ; copy++) {
-					if (a > 0)
-						value +=
-							a * a * a * a * simplexGrad(lattice, xb, yb, zb, xi, yi, zi);
-					if (ax >= ay && ax >= az) {
-						let b = a + ax + ax;
-						if (b > 1) {
-							b -= 1;
-							value +=
-								b *
-								b *
-								b *
-								b *
-								simplexGrad(lattice, xb - xs, yb, zb, xi + xs, yi, zi);
-						}
-					} else if (ay > ax && ay >= az) {
-						let b = a + ay + ay;
-						if (b > 1) {
-							b -= 1;
-							value +=
-								b *
-								b *
-								b *
-								b *
-								simplexGrad(lattice, xb, yb - ys, zb, xi, yi + ys, zi);
-						}
-					} else {
-						let b = a + az + az;
-						if (b > 1) {
-							b -= 1;
-							value +=
-								b *
-								b *
-								b *
-								b *
-								simplexGrad(lattice, xb, yb, zb - zs, xi, yi, zi + zs);
-						}
-					}
-					if (copy === 1) break;
-					ax = 0.5 - ax;
-					ay = 0.5 - ay;
-					az = 0.5 - az;
-					xi = xs * ax;
-					yi = ys * ay;
-					zi = zs * az;
-					a += 0.75 - ax - (ay + az);
-					xb += (xs >> 1) & 1;
-					yb += (ys >> 1) & 1;
-					zb += (zs >> 1) & 1;
-					xs = -xs;
-					ys = -ys;
-					zs = -zs;
-					lattice = (lattice ^ SIMPLEX_LATTICE_FLIP) | 0;
-				}
-				return value;
-			}
-
-			/** How many distinct values the permutation polynomial returns. */
-			const PERIOD = 289;
-
-			function wrapPeriod(x) {
-				return x - Math.floor(x / PERIOD) * PERIOD;
-			}
-			function permute(x) {
-				const m = wrapPeriod(x);
-				return wrapPeriod((m * 34 + 10) * m);
-			}
-
-			const THETA_PER_INDEX = 3.883222077;
-			const SZ_PER_INDEX = -0.006920415;
-			const SZ_BASE = 0.996539792;
-			const PSI_PER_INDEX = 0.108705628;
-			const PSRD_SCALE = 39.5;
-
-			// There are only 289 distinct indices, so the whole trigonometric
-			// part of this basis is four tables and no sample computes a sine.
-			const COS_THETA = new Float64Array(PERIOD);
-			const SIN_THETA = new Float64Array(PERIOD);
-			const COS_PSI = new Float64Array(PERIOD);
-			const SIN_PSI = new Float64Array(PERIOD);
-			for (let i = 0; i < PERIOD; i++) {
-				COS_THETA[i] = Math.cos(i * THETA_PER_INDEX);
-				SIN_THETA[i] = Math.sin(i * THETA_PER_INDEX);
-				COS_PSI[i] = Math.cos(i * PSI_PER_INDEX);
-				SIN_PSI[i] = Math.sin(i * PSI_PER_INDEX);
-			}
-
-			function psrdCorner(px, py, pz, cx, cy, cz, seed, spinSin, spinCos) {
-				const dx = px - 0.5 * (-cx + cy + cz);
-				const dy = py - 0.5 * (cx - cy + cz);
-				const dz = pz - 0.5 * (cx + cy - cz);
-				const w = 0.5 - (dx * dx + dy * dy + dz * dz);
-				if (w <= 0) return 0;
-				const h = permute(permute(permute(cz + seed) + cy) + cx);
-				const ct = COS_THETA[h];
-				const st = SIN_THETA[h];
-				const sz = h * SZ_PER_INDEX + SZ_BASE;
-				const sr = Math.sqrt(1 - sz * sz);
-				let gx = ct * sr;
-				let gy = st * sr;
-				let gz = sz;
-				if (spinSin !== 0) {
-					const sp = SIN_PSI[h];
-					const cp = COS_PSI[h];
-					const ctp = st * sp - ct * cp;
-					const qxa = ctp * st;
-					const qya = -ctp * ct;
-					const qx = qxa + sz * (sp - qxa);
-					const qy = qya + sz * (cp - qya);
-					const qz = -(gy * cp + gx * sp);
-					gx = spinCos * gx + spinSin * qx;
-					gy = spinCos * gy + spinSin * qy;
-					gz = spinCos * gz + spinSin * qz;
-				}
-				const w3 = w * w * w;
-				return w3 * (gx * dx + gy * dy + gz * dz);
-			}
-
-			/** Simplex noise with rotating gradients, in `[-1, 1]`. */
-			function psrdNoise3(px, py, pz, seed, spinSin, spinCos) {
-				const ux = py + pz;
-				const uy = px + pz;
-				const uz = px + py;
-				const i0x = Math.floor(ux);
-				const i0y = Math.floor(uy);
-				const i0z = Math.floor(uz);
-				const f0x = ux - i0x;
-				const f0y = uy - i0y;
-				const f0z = uz - i0z;
-				const gtx = f0y >= f0x ? 1 : 0;
-				const gty = f0z >= f0y ? 1 : 0;
-				const gtz = f0z >= f0x ? 1 : 0;
-				const ax = 1 - gtz;
-				const ay = gtx;
-				const az = gty;
-				const bx = 1 - gtx;
-				const by = 1 - gty;
-				const bz = gtz;
-				const o1x = Math.min(ax, bx);
-				const o1y = Math.min(ay, by);
-				const o1z = Math.min(az, bz);
-				const o2x = Math.max(ax, bx);
-				const o2y = Math.max(ay, by);
-				const o2z = Math.max(az, bz);
-				let sum = 0;
-				sum += psrdCorner(px, py, pz, i0x, i0y, i0z, seed, spinSin, spinCos);
-				sum += psrdCorner(
-					px, py, pz, i0x + o1x, i0y + o1y, i0z + o1z, seed, spinSin, spinCos,
-				);
-				sum += psrdCorner(
-					px, py, pz, i0x + o2x, i0y + o2y, i0z + o2z, seed, spinSin, spinCos,
-				);
-				sum += psrdCorner(
-					px, py, pz, i0x + 1, i0y + 1, i0z + 1, seed, spinSin, spinCos,
-				);
-				return PSRD_SCALE * sum;
-			}
-
-			const K = 1 / 7;
-			const K2 = 1 / 49;
-			const KZ = 1 / 6;
-			const K_OFFSET = 0.5 - K / 2;
-			const KZ_OFFSET = 0.5 - KZ / 2;
-			const F1_MIDDLE = 0.5238;
-			const F1_SPREAD = 0.466;
-			const F2F1_MIDDLE = 0.1584;
-			const F2F1_SPREAD = 0.657;
-
-			function wrap7(x) {
-				return x - Math.floor(x / 7) * 7;
-			}
-			function clampOne(v) {
-				return v < -1 ? -1 : v > 1 ? 1 : v;
-			}
-
 			/**
-			 * Distance to the nearest of a scattered set of points.
+			 * Fractional Brownian motion: the original stack, in `[-1, 1]`.
 			 *
-			 * The one basis here that is not smooth: it has a crease along every
-			 * plate boundary, because the nearest point changes there, and the
-			 * octave stack has nothing to round that off with.
-			 */
-			function cellularNoise3(px, py, pz, seed, jitter, feature) {
-				const bx = Math.floor(px);
-				const by = Math.floor(py);
-				const bz = Math.floor(pz);
-				const fx = px - bx;
-				const fy = py - by;
-				const fz = pz - bz;
-				const sx = Math.floor(hash3(0, 0, 0, seed) * PERIOD);
-				const sy = Math.floor(hash3(1, 0, 0, seed) * PERIOD);
-				const sz = Math.floor(hash3(2, 0, 0, seed) * PERIOD);
-				let near = Infinity;
-				let next = Infinity;
-				for (let ox = -1; ox <= 1; ox++) {
-					const hx = permute(bx + ox + sx);
-					for (let oy = -1; oy <= 1; oy++) {
-						const hy = permute(hx + by + oy + sy);
-						for (let oz = -1; oz <= 1; oz++) {
-							const h = permute(hy + bz + oz + sz);
-							const jx = (h * K - Math.floor(h * K) - K_OFFSET) * jitter;
-							const jy =
-								(wrap7(Math.floor(h * K)) * K - K_OFFSET) * jitter;
-							const jz = (Math.floor(h * K2) * KZ - KZ_OFFSET) * jitter;
-							const dx = ox + 0.5 + jx - fx;
-							const dy = oy + 0.5 + jy - fy;
-							const dz = oz + 0.5 + jz - fz;
-							const d = dx * dx + dy * dy + dz * dz;
-							if (d < near) {
-								next = near;
-								near = d;
-							} else if (d < next) next = d;
-						}
-					}
-				}
-				const f1 = Math.sqrt(near);
-				if (feature === "f1") return clampOne((F1_MIDDLE - f1) / F1_SPREAD);
-				return clampOne(
-					(Math.sqrt(next) - f1 - F2F1_MIDDLE) / F2F1_SPREAD,
-				);
-			}
-
-			/**
-			 * What each basis's frequency is multiplied by so one feature is the
-			 * same width in all of them.
+			 * Octaves of value noise at a fixed lacunarity of 2 and a fixed gain
+			 * of half, divided by the total amplitude. Nothing here is a knob
+			 * except how many octaves there are and how wide the first one is,
+			 * which is what makes it the thing to reach for when the question is
+			 * what the noise itself does rather than what the panel does to it.
 			 *
-			 * Measured as the distance between zero crossings: one feature runs
-			 * 1.99 units in value noise and 0.78 in psrd, so without this a Noise
-			 * scale of 4,500 m drew continents 4,500 m across in one basis and
-			 * 1,800 m across in another.
+			 * Two details are fixed rather than incidental. **Octaves accumulate
+			 * low frequency first**, because floating-point addition is not
+			 * associative -- the other order moves the result by `1.4e-17` at
+			 * four and five octaves and by nothing at six and eight, which is
+			 * the kind of error testing never finds. And **the sum is divided by
+			 * the total amplitude**, so adding an octave adds detail without
+			 * making the world taller.
 			 */
-			const BASIS_PITCH = {
-				value: 1,
-				perlin: 0.6506,
-				simplex: 0.4099,
-				psrd: 0.3935,
-				cellular: 0.4451,
-			};
-
-			function basisNoise3(x, y, z, seed, s) {
-				switch (s.basis) {
-					case "perlin":
-						return perlinNoise3(x, y, z, seed);
-					case "simplex":
-						return simplexNoise3(x, y, z, seed);
-					case "psrd":
-						return psrdNoise3(x, y, z, seed, s.spinSin, s.spinCos);
-					case "cellular":
-						return cellularNoise3(x, y, z, seed, s.jitter, s.feature);
-					default:
-						return valueNoise3(x, y, z, seed);
+			function fbm(x, y, z, frequency, octaves, seed) {
+				let sum = 0;
+				let amplitude = 1;
+				let total = 0;
+				let f = frequency;
+				for (let o = 0; o < octaves; o++) {
+					sum += amplitude * valueNoise3(x * f, y * f, z * f, seed);
+					total += amplitude;
+					amplitude *= 0.5;
+					f *= 2;
 				}
+				return sum / total;
 			}
 
 			const OCTAVE_SPREAD = 1000;
 			const RIDGE_GAIN = 2.2;
 
 			/**
-			 * Octaves of one basis, in `[-1, 1]`.
+			 * Octaves of value noise with the panel's own parameters, in
+			 * `[-1, 1]`.
 			 *
 			 * Every octave gets its own hashed offset, or two octaves of one
 			 * seeded lattice share zero crossings wherever their frequencies land
@@ -676,7 +364,7 @@
 				let sum = 0;
 				let amplitude = 1;
 				let total = 0;
-				let f = s.frequency * BASIS_PITCH[s.basis];
+				let f = s.frequency;
 				let weight = 1;
 				const ridge = s.ridge;
 				for (let o = 0; o < s.octaves; o++) {
@@ -685,7 +373,7 @@
 					const oy =
 						(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetY;
 					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
-					const n = basisNoise3(x * f + ox, y * f + oy, z * f + oz, seed, s);
+					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 					let signal = n;
 					if (ridge > 0) {
 						const fold = 1 - Math.abs(n);
@@ -712,7 +400,6 @@
 			/** Build the two settings objects one field needs. */
 			function settingsFor(k) {
 				const surface = {
-					basis: k.basis,
 					frequency: k.frequency,
 					octaves: k.octaves,
 					persistence: k.persistence,
@@ -720,20 +407,12 @@
 					offsetX: k.offsetX,
 					offsetY: k.offsetY,
 					ridge: k.ridge,
-					jitter: k.jitter,
-					feature: k.feature,
-					spinSin: Math.sin(k.spin),
-					spinCos: Math.cos(k.spin),
 				};
-				// The warp is always value noise, whatever the surface uses: it
-				// displaces the point a field is read at, so a step anywhere in
-				// it tears the field into two pieces that do not meet, and
-				// cellular has a crease along every plate boundary. It does not
-				// read the surface's octave settings either -- pushing a field by
-				// a copy of itself folds it along its own features.
+				// The warp does not read the surface's octave settings: pushing
+				// a field by a copy of itself folds it along its own features
+				// and leaves the coast where it was.
 				const warp = {
 					...surface,
-					basis: "value",
 					frequency: k.warpFrequency,
 					octaves: WARP_OCTAVES,
 					persistence: 0.5,
@@ -742,7 +421,22 @@
 					offsetY: 0,
 					ridge: 0,
 				};
-				return { surface, warp };
+				return { surface, warp, stack: k.stack };
+			}
+
+			/**
+			 * One sample of whichever stack is selected.
+			 *
+			 * **fBm is the original and takes two numbers**: how wide the first
+			 * octave is and how many there are. Lacunarity is 2, gain is a half,
+			 * and there is no ridge, no offset and no per-octave hash -- which
+			 * is the point of having it, because it is the field with nothing
+			 * done to it.
+			 */
+			function stackAt(x, y, z, seed, s, which) {
+				if (which === "fbm")
+					return fbm(x, y, z, s.frequency, s.octaves, seed);
+				return octaveNoise(x, y, z, seed, s);
 			}
 
 			/**
@@ -752,16 +446,21 @@
 			 * which is what makes the thirty face edges invisible.
 			 */
 			function surfaceAt(x, y, z, seed, k, s) {
+				const which = s.stack;
 				if (k.warpAmplitude === 0)
-					return octaveNoise(x, y, z, seed, s.surface);
+					return stackAt(x, y, z, seed, s.surface, which);
 				const w = (seed + WARP_SEED_OFFSET) | 0;
 				const a = k.warpAmplitude;
-				return octaveNoise(
-					x + a * octaveNoise(x, y, z, w, s.warp),
-					y + a * octaveNoise(x, y, z, w + 1, s.warp),
-					z + a * octaveNoise(x, y, z, w + 2, s.warp),
+				// The warp is always the plain stack: it displaces the point the
+				// field is read at, so a step anywhere in it tears the field
+				// into two pieces that do not meet.
+				return stackAt(
+					x + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w),
+					y + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 1),
+					z + a * fbm(x, y, z, s.warp.frequency, WARP_OCTAVES, w + 2),
 					seed,
 					s.surface,
+					which,
 				);
 			}
 
@@ -863,28 +562,36 @@
 					group: "The noise",
 					rows: [
 						{
-							key: "noiseBasis",
-							label: "Noise",
+							key: "stack",
+							label: "Stack",
 							type: "select",
-							value: "perlin",
-							options: ["value", "perlin", "simplex", "psrd", "cellular"],
+							value: "fbm",
+							options: ["fbm", "octaves"],
 						},
 						{
-							key: "noiseScale",
-							label: "Noise scale",
-							low: 300,
-							high: 60000,
-							step: 100,
-							value: 29400,
+							key: "frequency",
+							label: "Frequency",
+							low: 0,
+							high: 1,
+							step: 0.005,
+							value: 0.5,
+							digits: 3,
+						},
+						{
+							key: "frequencyScale",
+							label: "Frequency scale",
+							low: 1,
+							high: 100,
+							step: 1,
+							value: 8,
 							digits: 0,
-							unit: "m",
 						},
 						{
 							key: "octaves",
 							off: 1,
 							label: "Octaves",
 							low: 1,
-							high: 8,
+							high: 10,
 							step: 1,
 							value: 5,
 							digits: 0,
@@ -898,6 +605,7 @@
 							step: 0.05,
 							value: 0.5,
 							digits: 2,
+							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "lacunarity",
@@ -905,8 +613,9 @@
 							low: 1.5,
 							high: 4,
 							step: 0.05,
-							value: 3.4,
+							value: 2,
 							digits: 2,
+							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "ridge",
@@ -917,6 +626,7 @@
 							step: 0.05,
 							value: 0.85,
 							digits: 2,
+							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "offsetX",
@@ -927,6 +637,7 @@
 							step: 1,
 							value: 15,
 							digits: 0,
+							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "offsetY",
@@ -937,36 +648,7 @@
 							step: 1,
 							value: 9,
 							digits: 0,
-						},
-						{
-							key: "spin",
-							off: 0,
-							label: "Spin",
-							low: 0,
-							high: 6.28,
-							step: 0.02,
-							value: 0,
-							digits: 2,
-							shownWhen: (k) => k.noiseBasis === "psrd",
-						},
-						{
-							key: "jitter",
-							off: 0,
-							label: "Jitter",
-							low: 0,
-							high: 1,
-							step: 0.05,
-							value: 0.55,
-							digits: 2,
-							shownWhen: (k) => k.noiseBasis === "cellular",
-						},
-						{
-							key: "cellFeature",
-							label: "Cells",
-							type: "select",
-							value: "f1",
-							options: ["f1", "f2f1"],
-							shownWhen: (k) => k.noiseBasis === "cellular",
+							shownWhen: (k) => k.stack === "octaves",
 						},
 						{
 							key: "warpAmplitude",
@@ -979,14 +661,13 @@
 							digits: 2,
 						},
 						{
-							key: "warpScale",
-							label: "Warp scale",
-							low: 300,
-							high: 60000,
-							step: 100,
-							value: 8400,
-							digits: 0,
-							unit: "m",
+							key: "warpFrequency",
+							label: "Warp frequency",
+							low: 0.05,
+							high: 20,
+							step: 0.05,
+							value: 2,
+							digits: 2,
 							shownWhen: (k) => k.warpAmplitude > 0,
 						},
 					],
@@ -1086,10 +767,10 @@
 						},
 						{
 							key: "graphX",
-							label: "Graph across",
+							label: "Contour along",
 							type: "select",
-							value: "raw",
-							options: ["raw", "distance", "rank"],
+							value: "x",
+							options: ["x", "z"],
 						},
 						{
 							key: "exaggeration",
@@ -1129,6 +810,60 @@
 					knobs[r.key] = r.value;
 					if (r.off !== undefined) using[r.key] = true;
 				}
+
+			/**
+			 * The whole draft, as a query string, and back again.
+			 *
+			 * **A link is how a setting travels.** Every knob is a parameter and
+			 * every switch is one too, with an `x` prefix -- so a world found by
+			 * dragging can be handed to somebody else, or written down, rather
+			 * than described. The address bar is rewritten as the knobs move, so
+			 * the link in it is always the picture on screen.
+			 */
+			function toParams() {
+				const out = new URLSearchParams();
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						const v = knobs[r.key];
+						if (v === r.value) continue;
+						out.set(r.key, r.type === "check" ? (v ? "1" : "0") : String(v));
+					}
+				for (const key of Object.keys(using))
+					if (!using[key]) out.set("x" + key, "0");
+				return out;
+			}
+
+			function fromParams(params) {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						const raw = params.get(r.key);
+						if (raw === null) continue;
+						if (r.type === "check") knobs[r.key] = raw !== "0";
+						else if (r.type === "select")
+							knobs[r.key] = r.options.includes(raw) ? raw : r.value;
+						else if (r.type === "text") knobs[r.key] = raw;
+						else {
+							const n = Number(raw);
+							// A hand-edited link can name anything, so a slider's
+							// own ends are what the value is held inside.
+							knobs[r.key] = Number.isFinite(n)
+								? Math.min(r.high, Math.max(r.low, n))
+								: r.value;
+						}
+					}
+				for (const key of Object.keys(using))
+					if (params.get("x" + key) === "0") using[key] = false;
+			}
+
+			/** Put the current draft in the address bar, without adding history. */
+			function writeUrl() {
+				const query = toParams().toString();
+				history.replaceState(
+					null,
+					"",
+					query ? `?${query}` : location.pathname,
+				);
+			}
 
 			/** What a knob is worth right now, which is its neutral when it is off. */
 			function value(key) {
@@ -1185,12 +920,18 @@
 					radius,
 					level,
 					cellMetres,
-					// A frequency is how many times the widest feature repeats
-					// around the planet, so a metre scale becomes one by dividing
-					// the radius by it.
-					frequency: radius / knobs.noiseScale,
-					warpFrequency: radius / knobs.warpScale,
-					basis: knobs.noiseBasis,
+					// **Frequency is stated as a frequency.** The sample point
+					// is a unit direction, so this is how many times the widest
+					// octave repeats across the planet -- 1 is one hump from
+					// pole to pole, 40 is forty. A metre figure divided by the
+					// radius reaches the same number, and it hides how small the
+					// result gets: a scale of 29,400 m on a 6,801 m planet is a
+					// frequency of 0.23, which is less than one whole feature
+					// and is why so much of the ground came out muted. The
+					// coarse slider carries the decade and the fine one picks
+					// the value inside it.
+					frequency: knobs.frequency * knobs.frequencyScale,
+					warpFrequency: knobs.warpFrequency,
 					octaves: value("octaves"),
 					persistence: value("persistence"),
 					lacunarity: knobs.lacunarity,
@@ -1198,9 +939,7 @@
 					offsetX: value("offsetX"),
 					offsetY: value("offsetY"),
 					warpAmplitude: value("warpAmplitude"),
-					spin: value("spin"),
-					jitter: value("jitter"),
-					feature: knobs.cellFeature,
+					stack: knobs.stack,
 				};
 			}
 
@@ -1469,40 +1208,16 @@
 
 				const n = field.n;
 				const across = n + 1;
-				const points = [];
-				let xLow = 0;
-				let xHigh = 1;
-				let xLabel = "";
-				if (knobs.graphX === "raw") {
-					// Every cell, so the two slopes and the hinge are drawn by
-					// the data rather than by a formula.
-					for (let at = 0; at < across * across; at += 3)
-						points.push([field.raw[at], field.height[at]]);
-					xLow = Infinity;
-					xHigh = -Infinity;
-					for (const [x] of points) {
-						if (x < xLow) xLow = x;
-						if (x > xHigh) xHigh = x;
-					}
-					const edge = (xHigh - xLow) * 0.04 || 0.01;
-					xLow -= edge;
-					xHigh += edge;
-					xLabel = `raw noise ${xLow.toFixed(2)} to ${xHigh.toFixed(2)}`;
-				} else if (knobs.graphX === "distance") {
-					const row = n >> 1;
-					for (let q = 0; q <= n; q++)
-						points.push([q * field.step, field.height[row * across + q]]);
-					xLow = 0;
-					xHigh = n * field.step;
-					xLabel = "metres across the middle of the patch";
-				} else {
-					const sorted = Float32Array.from(field.height).sort();
-					for (let at = 0; at < sorted.length; at += 7)
-						points.push([at / (sorted.length - 1), sorted[at]]);
-					xLow = 0;
-					xHigh = 1;
-					xLabel = "fraction of the patch below that height";
-				}
+				// **Every line of the patch, over one another.** One section
+				// says what one line of ground does; all of them together draw
+				// the silhouette -- how high the whole patch stands, where its
+				// ridges are, and how much of it sits at any height. Which way
+				// the lines run does not matter, which is why the only choice
+				// here is x or z.
+				const alongX = knobs.graphX === "x";
+				const xLow = 0;
+				const xHigh = n * field.step;
+				const xLabel = `${Math.round(xHigh).toLocaleString()} m across the patch, every line of it`;
 
 				let yLow = Math.min(field.lowest, 0);
 				let yHigh = Math.max(field.highest, 1);
@@ -1549,32 +1264,46 @@
 				g.fillText(xLabel, pad.left + plotW / 2, height - 6);
 				g.textAlign = "left";
 
-				if (knobs.graphX === "raw") {
-					// A cloud rather than a line: two cells with the same raw
-					// value land at the same height, so the scatter IS the
-					// transfer curve and any width in it would be a bug.
-					g.fillStyle = "#6fd0ff";
-					for (const [x, y] of points)
-						g.fillRect(toX(x) - 0.6, toY(y) - 0.6, 1.2, 1.2);
-				} else {
-					g.strokeStyle = "#6fd0ff";
-					g.lineWidth = 1.2;
+				// Faint, and many: where the lines bunch is where most of the
+				// ground stands, so the silhouette carries the distribution as
+				// well as the shape.
+				const stride = Math.max(1, Math.floor(across / 90));
+				g.lineWidth = 0.4;
+				g.strokeStyle = "rgba(111, 208, 255, 0.15)";
+				for (let line = 0; line < across; line += stride) {
 					g.beginPath();
-					points.forEach(([x, y], at) => {
-						if (at === 0) g.moveTo(toX(x), toY(y));
-						else g.lineTo(toX(x), toY(y));
-					});
+					for (let at = 0; at <= n; at++) {
+						const h = alongX
+							? field.height[line * across + at]
+							: field.height[at * across + line];
+						const x = toX(at * field.step);
+						const y = toY(h);
+						if (at === 0) g.moveTo(x, y);
+						else g.lineTo(x, y);
+					}
 					g.stroke();
-					g.lineWidth = 1;
 				}
+				// The middle line solid, so there is one section to read
+				// against the elevations rather than only a mass.
+				g.lineWidth = 1.1;
+				g.strokeStyle = "#6fd0ff";
+				g.beginPath();
+				const mid = n >> 1;
+				for (let at = 0; at <= n; at++) {
+					const h = alongX
+						? field.height[mid * across + at]
+						: field.height[at * across + mid];
+					const x = toX(at * field.step);
+					const y = toY(h);
+					if (at === 0) g.moveTo(x, y);
+					else g.lineTo(x, y);
+				}
+				g.stroke();
+				g.lineWidth = 1;
 
 				const off = Object.keys(using).filter((k) => !using[k]);
 				graphSays.textContent =
-					(knobs.graphX === "raw"
-						? `sea level cuts the field at ${field.sea.toFixed(3)}; land climbs ${(field.up).toFixed(0)} m per unit, the floor drops ${(field.down).toFixed(0)}`
-						: knobs.graphX === "distance"
-							? `one section across the patch, ${Math.round(field.span).toLocaleString()} m of it`
-							: `every cell sorted by height`) +
+					`${Math.ceil(across / stride)} lines · ground ${Math.round(field.lowest)} to ${Math.round(field.highest)} m` +
 					(off.length ? ` · ${off.length} knob${off.length > 1 ? "s" : ""} bypassed` : "");
 			}
 
@@ -1951,22 +1680,22 @@
 								o.textContent = option;
 								input.append(o);
 							}
-							input.value = row.value;
+							input.value = knobs[row.key];
 						} else if (row.type === "text") {
 							input = document.createElement("input");
 							input.type = "text";
-							input.value = row.value;
+							input.value = knobs[row.key];
 						} else if (row.type === "check") {
 							input = document.createElement("input");
 							input.type = "checkbox";
-							input.checked = row.value;
+							input.checked = knobs[row.key];
 						} else {
 							input = document.createElement("input");
 							input.type = "range";
 							input.min = row.low;
 							input.max = row.high;
 							input.step = row.step;
-							input.value = row.value;
+							input.value = knobs[row.key];
 						}
 						const readout = document.createElement("output");
 						// A switch, where the knob has a value that removes its
@@ -1978,7 +1707,8 @@
 						if (row.off !== undefined) {
 							bypass = document.createElement("input");
 							bypass.type = "checkbox";
-							bypass.checked = true;
+							bypass.checked = using[row.key] !== false;
+							input.disabled = !bypass.checked;
 							bypass.title = `off sets ${row.label} to ${row.off}`;
 							bypass.addEventListener("input", () => {
 								using[row.key] = bypass.checked;
@@ -2047,10 +1777,24 @@
 								field.span
 							).toFixed(1)}%</b> of the patch<br>`
 						: `<span style="color:#ffb454">drawn <b>${knobs.exaggeration}x</b> taller than the world builds it</span><br>`) +
+					// Frequency in the units the engine's panel states, so a
+					// setting found here can be carried across: the engine asks
+					// for the widest feature in metres, which is the radius
+					// divided by the frequency.
+					`frequency <b>${k.frequency.toFixed(2)}</b> — the engine's ` +
+					`Noise scale <b>${Math.round(
+						k.radius / Math.max(1e-6, k.frequency),
+					).toLocaleString()} m</b><br>` +
 					`narrowest octave <b>${Math.round(
-						knobs.noiseScale / knobs.lacunarity ** (knobs.octaves - 1),
+						k.radius /
+							Math.max(1e-6, k.frequency) /
+							(knobs.stack === "fbm" ? 2 : knobs.lacunarity) **
+								(value("octaves") - 1),
 					).toLocaleString()} m</b>` +
-					(knobs.noiseScale / knobs.lacunarity ** (knobs.octaves - 1) <
+					(k.radius /
+						Math.max(1e-6, k.frequency) /
+						(knobs.stack === "fbm" ? 2 : knobs.lacunarity) **
+							(value("octaves") - 1) <
 					k.cellMetres
 						? ' <span style="color:#ffb454">narrower than a cell</span>'
 						: "");
@@ -2086,6 +1830,7 @@
 					drawGraph();
 					cost = performance.now() - started;
 					refreshPanel();
+					if (!draft) writeUrl();
 					render();
 				});
 			}
@@ -2131,6 +1876,7 @@
 			);
 			window.addEventListener("resize", render);
 
+			fromParams(new URLSearchParams(location.search));
 			buildPanel();
 			// The first draw goes through the same timed path every later one
 			// does, so the cost on screen is a real number from the start.
