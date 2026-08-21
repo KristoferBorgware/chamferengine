@@ -1860,6 +1860,23 @@
 								field.span
 							).toFixed(1)}%</b> of the patch<br>`
 						: `<span style="color:#ffb454">drawn <b>${knobs.exaggeration}x</b> taller than the world builds it</span><br>`) +
+					// **The field and the metres are two different things, and
+					// only one of them is noise.** Relief is what turns the
+					// unitless field into metres of land and Sea depth does the
+					// same for the floor, so at zero there is a perfectly good
+					// field and no ground -- which reads as "noise but no
+					// height" and looks like a broken generator. Say which knob
+					// it is.
+					(value("relief") === 0 || value("seaDepth") === 0
+						? `<span style="color:#ffb454">` +
+							(value("relief") === 0 && value("seaDepth") === 0
+								? "Relief and Sea depth are both <b>0</b>, so the field has no metres at all"
+								: value("relief") === 0
+									? "Relief is <b>0</b>, so land has no height"
+									: "Sea depth is <b>0</b>, so the floor is flat") +
+							" — the noise is there, the scale that turns it into metres is not." +
+							"</span><br>"
+						: "") +
 					// Frequency in the units the engine's panel states, so a
 					// setting found here can be carried across: the engine asks
 					// for the widest feature in metres, which is the radius
