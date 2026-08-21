@@ -584,6 +584,51 @@
 				[1, -1],
 			];
 
+			/**
+			 * For each face, where each of its three edges leads.
+			 *
+			 * Twenty faces times three edges is sixty entries, each a face number
+			 * and an edge number: 180 bytes for every seam on the planet. Edge
+			 * `e` runs from vertex `e` to vertex `(e + 1) % 3`. Every matched
+			 * pair is traversed in opposite directions by its two faces, which is
+			 * the signature of consistent outward winding, so no orientation flag
+			 * is stored.
+			 */
+			const FACE_ADJACENCY = FACES.map((f, at) =>
+				[0, 1, 2].map((e) => {
+					const a = f[e];
+					const b = f[(e + 1) % 3];
+					for (let g = 0; g < 20; g++) {
+						if (g === at) continue;
+						for (let other = 0; other < 3; other++) {
+							const c = FACES[g][other];
+							const d = FACES[g][(other + 1) % 3];
+							if ((a === c && b === d) || (a === d && b === c))
+								return { face: g, edge: other };
+						}
+					}
+					throw new Error(`face ${at} edge ${e} has no neighbour`);
+				}),
+			);
+
+			/**
+			 * Turn a set of weights on global vertex numbers into an offset on
+			 * `face`.
+			 *
+			 * The weights need not be whole. A lattice point carries integers and
+			 * a droplet standing between cells carries the fractions between
+			 * them, and both are the same three numbers attached to the same
+			 * three vertices.
+			 */
+			function offsetOn(face, weights) {
+				const ids = FACES[face];
+				return {
+					face,
+					i: weights.get(ids[1]) ?? 0,
+					j: weights.get(ids[2]) ?? 0,
+				};
+			}
+
 			/** How many lattice points a triangle of side `m` holds. */
 			function chunkSlots(m) {
 				return ((m + 1) * (m + 2)) / 2;
@@ -998,22 +1043,90 @@
 			// The second droplet walk, which is not in the engine yet.
 			// ---------------------------------------------------------------
 
-			/**
-			 * The two lattice axes as metres on the plane of a face, 60 degrees
-			 * apart. A step of one in `i` and a step of one in `j` are the same
-			 * length and are not at a right angle, so a direction cannot be read
-			 * off `(i, j)` without them.
-			 */
-			const LATTICE_I = [1, 0];
-			const LATTICE_J = [0.5, Math.sqrt(3) / 2];
-			const LATTICE_DET =
-				LATTICE_I[0] * LATTICE_J[1] - LATTICE_I[1] * LATTICE_J[0];
+			// ===== BEGIN lab face crossing =====
+			// The engine crosses a face edge inside `neighbour`, for one integer
+			// lattice step at a time. These two do the same reflection for a
+			// position that is not on a lattice point and for a direction, which
+			// is what a droplet needs, and
+			// packages/engine/tests/demos/noiseLab.test.ts checks them against
+			// `neighbour` on every cell of a small planet.
 
 			/**
-			 * How many droplets of the last free run ended at a face edge.
+			 * Move a set of weights across the edge opposite vertex `leaving`.
 			 *
-			 * A count rather than a return value, because the pass is run in
-			 * slices and the share is of the whole run.
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
+			}
+
+			/**
+			 * The cell at `(i, j)` on `face`, reaching one step past the face if
+			 * it has to.
+			 *
+			 * A blend reads the three lattice points around a position, and near
+			 * a face edge one of the three sits outside the triangle. It is a
+			 * real cell on the face over that edge, so the reflection names it
+			 * and the height runs across the seam without a break -- without
+			 * which a droplet approaching an edge reads a cliff that is not
+			 * there.
+			 *
+			 * **One reflection, so one weight may be negative and the other two
+			 * must be positive.** A point past an icosahedron vertex has a
+			 * negative weight on the far side of the reflection as well and
+			 * needs the pentagon's own ring; the three corners of a blend never
+			 * reach one, because they are the triangle the position stands in.
+			 * Anything the reflection cannot name comes back as `-1`, which the
+			 * walk reads as ground it cannot stand on.
+			 */
+			function cellAt(grid, face, i, j) {
+				const n = grid.n;
+				const a = n - i - j;
+				// The common case is a point inside its own face, which this
+				// runs tens of millions of times, so it reaches the index
+				// without building anything.
+				if (a >= 0 && i >= 0 && j >= 0)
+					return grid.faceIndex[face * grid.slots + rank(i, j, n)];
+				const w = [a, i, j];
+				let negative = -1;
+				for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+				const over = acrossEdge(face, w, negative);
+				if (over.i < 0 || over.j < 0 || over.i + over.j > n) return -1;
+				return grid.faceIndex[
+					over.face * grid.slots + rank(over.i, over.j, n)
+				];
+			}
+			// ===== END lab face crossing =====
+
+			/**
+			 * How many droplets of the last free run ended without a step to take.
+			 *
+			 * A count rather than a return value, because the pass runs in slices
+			 * and the share is of the whole run.
 			 */
 			let strandedDroplets = 0;
 
@@ -1029,25 +1142,38 @@
 			 * direction, against 1.4% for the walk here.
 			 *
 			 * This one carries a **position and a direction**. The position is a
-			 * fractional `(i, j)` in one face; the height under it is the blend of
+			 * fractional `(i, j)` on a face; the height under it is the blend of
 			 * the three lattice points around it, which is the same blend the
-			 * terrain generator reads the map with. The direction is the downhill
-			 * gradient of that blend, mixed with the direction the droplet already
-			 * had, so it cannot turn instantly and it is never one of six.
+			 * terrain generator reads the map with. The direction is downhill on
+			 * that blend, mixed with the direction the droplet already had, so it
+			 * cannot turn instantly and it is never one of six.
+			 *
+			 * **The two lattice axes are the same length and sixty degrees
+			 * apart**, so the steepest way down is not where the raw pair of
+			 * partial derivatives points. The metric between the axes is
+			 * `[[1, 0.5], [0.5, 1]]`, and downhill is its inverse applied to
+			 * those partials, which is where the thirds below come from. Reading
+			 * the pair straight tilts every droplet toward one axis, which is the
+			 * fault this walk exists to remove.
 			 *
 			 * **The cut is spread over the same three points by the same
 			 * weights.** A droplet standing on exactly one cell can only cut a
 			 * spike into it, and a pass built out of spikes adds high-frequency
 			 * roughness: the cell-to-cell walk takes the median hillslope from
-			 * 0.427 to 0.602 at full strength, where this takes it to 0.472.
+			 * 0.469 to 0.658 at full strength, where this takes it to 0.515.
 			 *
-			 * A droplet that reaches the edge of its face settles there and
-			 * stops. Crossing is the linear map on barycentric weights that the
-			 * neighbour function already uses, and it is not written here, so 11%
-			 * of droplets end early and the thirty face edges are cut a little
-			 * less than their surroundings.
+			 * **A step that leaves the face is cut at the edge and finished on
+			 * the other side**, so the twenty faces are one surface to a droplet
+			 * and the thirty seams take the same water as everywhere else.
 			 */
-			function erodeFreeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
+			function erodeFreeDroplets(
+				grid,
+				height,
+				seed,
+				strength,
+				cellMetres,
+				over = {},
+			) {
 				const maxCut = over.maxCut ?? MAX_CUT;
 				const inertia = over.inertia ?? 0.3;
 				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
@@ -1058,12 +1184,11 @@
 
 				// The three lattice points under a fractional position, and the
 				// weights to mix them with. Held outside the loop because this
-				// runs a few tens of millions of times and allocating three
-				// numbers each time is the whole cost.
+				// runs a few tens of millions of times.
 				const cells = [0, 0, 0];
 				const weights = [0, 0, 0];
 
-				/** Fill `cells` and `weights`, or report that the point is off the face. */
+				/** Fill `cells` and `weights`, or report that the point has no ground. */
 				function corners(face, fi, fj) {
 					const i0 = Math.floor(fi);
 					const j0 = Math.floor(fj);
@@ -1079,17 +1204,14 @@
 					weights[1] = near ? a : 1 - a;
 					weights[2] = near ? b : a + b - 1;
 					for (let t = 0; t < 3; t++) {
-						const i = oi[t];
-						const j = oj[t];
-						if (i < 0 || j < 0 || i + j > n) return false;
-						const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+						const cell = cellAt(grid, face, oi[t], oj[t]);
 						if (cell < 0) return false;
 						cells[t] = cell;
 					}
 					return true;
 				}
 
-				/** The ground under a fractional position, or `NaN` off the face. */
+				/** The ground under a fractional position, or `NaN` where there is none. */
 				function groundAt(face, fi, fj) {
 					if (!corners(face, fi, fj)) return NaN;
 					return (
@@ -1106,6 +1228,74 @@
 						height[cells[t]] += weights[t] * amount;
 				}
 
+				// Where a step ended, after however many face edges it crossed,
+				// and the two weight triples a step is tested against. Held out
+				// here for the same reason the corner arrays are.
+				const landed = { face: 0, i: 0, j: 0, vi: 0, vj: 0 };
+				const standing = [0, 0, 0];
+				const going = [0, 0, 0];
+
+				/**
+				 * Take one step, cut at each face edge it reaches and carried
+				 * onto the next face.
+				 *
+				 * Three passes, because a step of one cell can cross two edges
+				 * where faces meet at an icosahedron vertex, and the third is
+				 * what leaves the loop.
+				 */
+				function step(face, fi, fj, di, dj, vi, vj) {
+					let left = 1;
+					for (let crossing = 0; crossing < 3 && left > 1e-9; crossing++) {
+						standing[0] = n - fi - fj;
+						standing[1] = fi;
+						standing[2] = fj;
+						going[0] = -di - dj;
+						going[1] = di;
+						going[2] = dj;
+						// The first edge this step runs into, and how much of the
+						// step gets there.
+						let reached = left;
+						let leaving = -1;
+						for (let t = 0; t < 3; t++) {
+							if (going[t] >= 0) continue;
+							const share = standing[t] / -going[t];
+							if (share < reached) {
+								reached = share;
+								leaving = t;
+							}
+						}
+						fi += di * reached;
+						fj += dj * reached;
+						left -= reached;
+						if (leaving < 0) break;
+						// Standing on the edge. The position does not move; the
+						// step and the direction carried into it are rewritten
+						// under the neighbouring face's name.
+						standing[0] = n - fi - fj;
+						standing[1] = fi;
+						standing[2] = fj;
+						const at = acrossEdge(face, standing, leaving);
+						const walk = acrossEdge(face, going, leaving);
+						going[0] = -vi - vj;
+						going[1] = vi;
+						going[2] = vj;
+						const carried = acrossEdge(face, going, leaving);
+						face = at.face;
+						fi = at.i;
+						fj = at.j;
+						di = walk.i;
+						dj = walk.j;
+						vi = carried.i;
+						vj = carried.j;
+					}
+					landed.face = face;
+					landed.i = fi;
+					landed.j = fj;
+					landed.vi = vi;
+					landed.vj = vj;
+					return landed;
+				}
+
 				for (let drop = from; drop < until; drop++) {
 					const start = Math.min(
 						grid.count - 1,
@@ -1120,22 +1310,32 @@
 					const x = grid.directions[start * 3];
 					const y = grid.directions[start * 3 + 1];
 					const z = grid.directions[start * 3 + 2];
-					const face = faceOf(x, y, z);
+					let face = faceOf(x, y, z);
 					const w = barycentricOf(face, x, y, z);
 					let fi = w[1] * n + hash3(drop, 5, 0, seed) - 0.5;
 					let fj = w[2] * n + hash3(drop, 9, 0, seed) - 0.5;
+					// The scatter can push a start past its own face. Standing
+					// exactly on the cell is where it came from and is always
+					// inside.
+					if (fi < 0 || fj < 0 || fi + fj > n) {
+						fi = w[1] * n;
+						fj = w[2] * n;
+					}
 					let sediment = 0;
 					let speed = 1;
 					let water = 1;
-					let vx = 0;
-					let vy = 0;
+					let vi = 0;
+					let vj = 0;
 
-					for (let step = 0; step < MAX_STEPS; step++) {
+					for (let taken = 0; taken < MAX_STEPS; taken++) {
 						const here = groundAt(face, fi, fj);
-						if (!Number.isFinite(here)) break;
+						if (!Number.isFinite(here)) {
+							strandedDroplets++;
+							break;
+						}
 						// The gradient of the blend, read half a step out on each
-						// axis. Half rather than one, because a whole step reaches
-						// past the three points the height itself came from.
+						// axis. Half rather than one, because a whole step
+						// reaches past the three points the height came from.
 						const reach = 0.5;
 						const alongI = groundAt(face, fi + reach, fj);
 						const alongJ = groundAt(face, fi, fj + reach);
@@ -1146,26 +1346,29 @@
 						}
 						const gi = (alongI - here) / reach;
 						const gj = (alongJ - here) / reach;
-						// Downhill, on the plane the two axes span.
-						const px = -(gi * LATTICE_I[0] + gj * LATTICE_J[0]);
-						const py = -(gi * LATTICE_I[1] + gj * LATTICE_J[1]);
-						vx = vx * inertia + px * (1 - inertia);
-						vy = vy * inertia + py * (1 - inertia);
-						const length = Math.sqrt(vx * vx + vy * vy);
+						// Downhill, through the inverse of the metric the two
+						// axes span.
+						const pi = -(4 * gi - 2 * gj) / 3;
+						const pj = -(4 * gj - 2 * gi) / 3;
+						vi = vi * inertia + pi * (1 - inertia);
+						vj = vj * inertia + pj * (1 - inertia);
+						// The length of a step on axes sixty degrees apart is not
+						// the length of the pair that names it.
+						const length = Math.sqrt(vi * vi + vi * vj + vj * vj);
 						if (length < 1e-12) {
 							spread(face, fi, fj, sediment);
 							break;
 						}
-						const ux = vx / length;
-						const uy = vy / length;
-						// One cell of travel, turned back into a step in `(i, j)`.
-						const di =
-							(ux * LATTICE_J[1] - uy * LATTICE_J[0]) / LATTICE_DET;
-						const dj =
-							(LATTICE_I[0] * uy - LATTICE_I[1] * ux) / LATTICE_DET;
-						const ni = fi + di;
-						const nj = fj + dj;
-						const there = groundAt(face, ni, nj);
+						const moved = step(
+							face,
+							fi,
+							fj,
+							vi / length,
+							vj / length,
+							vi,
+							vj,
+						);
+						const there = groundAt(moved.face, moved.i, moved.j);
 						if (!Number.isFinite(there)) {
 							spread(face, fi, fj, sediment);
 							strandedDroplets++;
@@ -1173,7 +1376,7 @@
 						}
 						const fall = here - there;
 						// Momentum can carry a droplet uphill. It has run into a
-						// wall, and what it was carrying settles where it stands.
+						// wall, and what it holds settles where it stands.
 						if (fall <= 0) {
 							spread(face, fi, fj, sediment);
 							break;
@@ -1186,22 +1389,26 @@
 							sediment -= put;
 							spread(face, fi, fj, put);
 						} else {
-							const cut = Math.min(
+							const took = Math.min(
 								(capacity - sediment) * EROSION_RATE,
 								fall * maxCut,
 							);
-							sediment += cut;
-							spread(face, fi, fj, -cut);
+							sediment += took;
+							spread(face, fi, fj, -took);
 						}
 
 						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
 						water *= 1 - EVAPORATION;
-						fi = ni;
-						fj = nj;
+						face = moved.face;
+						fi = moved.i;
+						fj = moved.j;
+						vi = moved.vi;
+						vj = moved.vj;
 					}
 				}
 				return droplets;
 			}
+
 
 			// ---------------------------------------------------------------
 			// The world: two noise layers, each read through a curve.
