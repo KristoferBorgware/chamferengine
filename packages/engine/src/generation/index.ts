@@ -33,7 +33,12 @@ export { flatCoarseMap } from "./coarse/flatCoarseMap.js";
 export { seaLevelFor } from "./coarse/seaLevelFor.js";
 export type { MetreScale } from "./coarse/metreHeight.js";
 export type { LayeredField } from "./coarse/layeredHeight.js";
-export { layeredHeight } from "./coarse/layeredHeight.js";
+export {
+	MOUNTAIN_SEED_OFFSET,
+	TERRAIN_SEED_OFFSET,
+	layerNoiseSettings,
+	layeredHeight,
+} from "./coarse/layeredHeight.js";
 export { splineAt } from "./coarse/splineAt.js";
 export type { TerrainLayer } from "./coarse/TerrainLayer.js";
 export {

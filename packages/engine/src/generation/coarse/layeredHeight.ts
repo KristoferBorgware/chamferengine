@@ -6,9 +6,15 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { octaveNoise } from "../noise/octaveNoise.js";
 import { splineAt } from "./splineAt.js";
 
-/** Offsets from the world seed, so the two layers are two fields. */
-const TERRAIN_SEED_OFFSET = 101;
-const MOUNTAIN_SEED_OFFSET = 211;
+/**
+ * Offsets from the world seed, so the two layers are two fields.
+ *
+ * Exported so a caller can sample a layer's own field independently of a
+ * whole map build -- the panel's curve rows do, to draw the histogram of
+ * where the world actually lands on a curve.
+ */
+export const TERRAIN_SEED_OFFSET = 101;
+export const MOUNTAIN_SEED_OFFSET = 211;
 
 /** What one build of the surface hands to the metre step. */
 export interface LayeredField {
@@ -25,8 +31,14 @@ export interface LayeredField {
 	readonly mountain: Float64Array;
 }
 
-/** The settings for one layer, read off that layer's own knobs. */
-function settingsFor(layer: TerrainLayer): NoiseSettings {
+/**
+ * The octave-stack settings for one layer, read off its own knobs.
+ *
+ * Exported alongside the seed offsets above, for the same reason: a caller
+ * sampling one layer on its own needs to build exactly what this file passes
+ * to `octaveNoise` internally, not a hand-copied approximation of it.
+ */
+export function layerNoiseSettings(layer: TerrainLayer): NoiseSettings {
 	return {
 		frequency: layer.frequency,
 		octaves: layer.octaves,
@@ -88,8 +100,8 @@ export function layeredHeight(
 	options: CoarseMapOptions = {},
 ): LayeredField {
 	const s = { ...COARSE_MAP_DEFAULTS, ...options };
-	const terrain = settingsFor(s.terrain);
-	const mountain = settingsFor(s.mountain);
+	const terrain = layerNoiseSettings(s.terrain);
+	const mountain = layerNoiseSettings(s.mountain);
 	const terrainSeed = (seed + TERRAIN_SEED_OFFSET) | 0;
 	const mountainSeed = (seed + MOUNTAIN_SEED_OFFSET) | 0;
 

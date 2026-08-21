@@ -1,5 +1,6 @@
 import type { ChunkMesh } from "chamfer/mesh";
-import type { ChunkSelection } from "chamfer/generation";
+import type { ChunkSelection, CoarseMap } from "chamfer/generation";
+import type { WorldShape } from "chamfer/world";
 import { Frustum, Mat4, Vec3 } from "chamfer/math";
 import {
 	BlockType,
@@ -188,6 +189,15 @@ function paint(): Promise<void> {
 let onLiveKnob: (live: PlanetSettings) => void = () => {};
 
 /**
+ * What **Live rebuild** does, once there is a world to rebuild.
+ *
+ * Set once the terrain and the chunk pipeline exist, same as
+ * {@link onLiveKnob}; before that a checkbox with nothing to flush is a
+ * checkbox that does nothing, which is correct.
+ */
+let onLiveRebuild: (live: PlanetSettings) => void = () => {};
+
+/**
  * Editor mode.
  *
  * `?panel=1` turns it on, and it carries panes that show and hide on their own
@@ -239,6 +249,7 @@ if (params.get("panel") === "1") {
 			onLiveKnob(live);
 		},
 		(draft) => maps.changed(draft),
+		(live) => onLiveRebuild(live),
 	);
 	// The knobs that decide where the land is live under the map they decide,
 	// not in a panel on the other side of the screen. The seed goes with them:
@@ -265,20 +276,24 @@ async function main(): Promise<void> {
 	await paint();
 
 	const seed = seedFromString(seedText);
-	const map = settings.coarseMapRuns
+	// **Reassignable, all four.** Live rebuild replaces the map and derives
+	// everything below from it again; nothing else in this function -- the
+	// device, the renderer, the address width -- changes with it, which is
+	// the boundary that makes replacing them without a reload safe at all.
+	let map = settings.coarseMapRuns
 		? buildCoarseMap(seed, settings.coarseOptions())
 		: flatCoarseMap(seed, FLAT_COARSE_LEVEL);
 
 	// The crust top is placed at the map's own true peak, not a pre-build
 	// guess: a Land setting far from the default shifts sea level a long way,
 	// and a guessed crust top too low shears the mountains flat.
-	const shape = settings.shapeFor(map);
+	let shape = settings.shapeFor(map);
 
 	// How high the ground reaches under each triangle, so the selection reaches
 	// for the ground a chunk actually has rather than for the planet's tallest.
 	// The map is the whole of the terrain, so nothing is missing from it and the
 	// margin is one block.
-	const peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
+	let peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
 
 	// Both decks are built on their own worker, off the thread that draws: a
 	// deck this size is unaffordable on the main thread, and the field is
@@ -416,7 +431,7 @@ async function main(): Promise<void> {
 				settings.terrainOptions(),
 			),
 		);
-	const terrain = byLod[0]!;
+	let terrain = byLod[0]!;
 
 	// The camera looks at a point on the surface from a little behind and above
 	// it. Both the point and the height are what dragging and scrolling move.
@@ -559,39 +574,58 @@ async function main(): Promise<void> {
 		refresh();
 	}
 
+	/**
+	 * The message that hands a chunk worker the map it builds from.
+	 *
+	 * One function rather than one inline object, because live rebuild sends
+	 * this again with a fresh map and the same shape of message: keeping it
+	 * one function is what keeps a knob added to the setup message from being
+	 * added in one of the two places and not the other.
+	 */
+	function meshSetup(
+		builtMap: CoarseMap,
+		builtShape: WorldShape,
+		live: PlanetSettings,
+	) {
+		return {
+			kind: "setup" as const,
+			map: builtMap.toSnapshot(),
+			seaLevelRadius: RADIUS,
+			subdivisionDepth: DEPTH,
+			maxElevation: builtShape.maxElevation,
+			crustDepth: builtShape.crustDepth,
+			apron: APRON,
+			debugSeams: live.knobs.seamOverlay,
+			// The grid: the same selection and the same levels, built as a
+			// flat shell of hexagons at the world's highest point.
+			grid: live.knobs.gridMode
+				? {
+						levels: live.knobs.gridLevels,
+						cells: live.knobs.gridCells,
+						chunks: live.knobs.gridChunks,
+						faces: live.knobs.gridFaces,
+					}
+				: undefined,
+			terrain: live.terrainOptions(),
+		};
+	}
+
 	// Chunks are built on other threads and arrive as geometry. Blocks never
 	// cross back: a chunk is 478 KB of them and the thread that draws has no use
 	// for any of it, so generating and meshing are one job on the far side.
-	const source = new WorkerMeshSource(
+	let source = new WorkerMeshSource(
 		() =>
 			new Worker(new URL("./chunkWorker.ts", import.meta.url), {
 				type: "module",
 			}),
 		WORKERS,
-		{
-			kind: "setup",
-			map: map.toSnapshot(),
-			seaLevelRadius: RADIUS,
-			subdivisionDepth: DEPTH,
-			maxElevation: shape.maxElevation,
-			crustDepth: shape.crustDepth,
-			apron: APRON,
-			debugSeams: settings.knobs.seamOverlay,
-			// The grid: the same selection and the same levels, built as a
-			// flat shell of hexagons at the world's highest point.
-			grid: settings.knobs.gridMode
-				? {
-						levels: settings.knobs.gridLevels,
-						cells: settings.knobs.gridCells,
-						chunks: settings.knobs.gridChunks,
-						faces: settings.knobs.gridFaces,
-					}
-				: undefined,
-			terrain: settings.terrainOptions(),
-		},
+		meshSetup(map, shape, settings),
 	);
 	// The pool is the biggest thing this page holds a thread for: one worker
-	// per core, each with the whole terrain generator behind it.
+	// per core, each with the whole terrain generator behind it. Live rebuild
+	// replaces it wholesale rather than reconfiguring it in place, because the
+	// setup message a worker is given is fixed for its whole life -- the same
+	// reason the very first one is built this way.
 	teardown.push(() => {
 		source.dispose();
 	});
@@ -995,6 +1029,95 @@ async function main(): Promise<void> {
 	}
 
 	refresh();
+
+	/**
+	 * Replace the map and every chunk built from it, without reloading.
+	 *
+	 * **Live rebuild reaches the terrain and nothing past it.** The device,
+	 * the renderer, the chunk address width, the crust top and the sea and
+	 * sky radii that follow from it all stay exactly as they were, because
+	 * {@link LIVE_TERRAIN_KNOBS} is the only set of knobs allowed to call
+	 * this at all. A Relief large enough to move the sea's own radius still
+	 * shows the new ground here and the old sea until the page is actually
+	 * rebuilt -- Apply is what makes the two agree again.
+	 *
+	 * Synchronous and on the thread that draws, same as `buildCoarseMap`
+	 * itself: there is no worker standing between a knob and the terrain it
+	 * describes here, so a big map and a fast drag can be felt as a stutter.
+	 * That is the cost the checkbox names.
+	 */
+	async function flushTerrain(live: PlanetSettings): Promise<void> {
+		if (live.problems().length > 0) return;
+		report([`seed "${live.knobs.seed}"`, "rebuilding the terrain..."]);
+		// A synchronous rebuild never yields to the browser on its own, so the
+		// line above would never actually reach the screen without this.
+		await paint();
+
+		const nextSeed = seedFromString(live.knobs.seed);
+		map = live.coarseMapRuns
+			? buildCoarseMap(nextSeed, live.coarseOptions())
+			: flatCoarseMap(nextSeed, FLAT_COARSE_LEVEL);
+		shape = live.shapeFor(map);
+		peaks = new ChunkPeaks(map, live.knobs.blockSize, CHUNK_LEVEL);
+		byLod.length = 0;
+		for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
+			byLod.push(
+				new TerrainGenerator(
+					nextSeed,
+					shape.atLod(lod),
+					map,
+					live.terrainOptions(),
+				),
+			);
+		terrain = byLod[0]!;
+
+		// The setup a worker is given is fixed for its life, so a new map
+		// means a new pool rather than a message the old one could take.
+		source.dispose();
+		source = new WorkerMeshSource(
+			() =>
+				new Worker(new URL("./chunkWorker.ts", import.meta.url), {
+					type: "module",
+				}),
+			WORKERS,
+			meshSetup(map, shape, live),
+		);
+
+		// Every chunk on screen was built from the map that just left. None of
+		// it describes this one, so all of it goes -- back to nothing rather
+		// than to whatever the old selection happened to leave drawn, or the
+		// new ground would show through a patchwork of the last one until the
+		// selection caught up on its own.
+		for (const id of drawn) renderer.drop(id);
+		drawn.clear();
+		for (const id of retiring) renderer.drop(id);
+		retiring.clear();
+		building.clear();
+		arrived.length = 0;
+		wantedNow = 0;
+		keep = new Set();
+		lastWanted = [];
+		lastWantedAddrs = [];
+		lastWantedOnFace = [];
+
+		refresh();
+	}
+
+	/**
+	 * Debounced so a dragged slider flushes once it stops rather than once a
+	 * frame. `flushTerrain` blocks the thread that draws for as long as
+	 * `buildCoarseMap` takes, and a slider fires an `input` event far faster
+	 * than that -- the map preview settles a level change the same way, for
+	 * the same reason.
+	 */
+	const LIVE_REBUILD_SETTLE_MS = 350;
+	let liveRebuildTimer = 0;
+	onLiveRebuild = (live) => {
+		clearTimeout(liveRebuildTimer);
+		liveRebuildTimer = window.setTimeout(() => {
+			void flushTerrain(live);
+		}, LIVE_REBUILD_SETTLE_MS);
+	};
 
 	// Refilled on a timer, and again whenever a knob moves the decks.
 
