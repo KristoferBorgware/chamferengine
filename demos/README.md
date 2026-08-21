@@ -333,7 +333,11 @@ roughness, calmest tenth against roughest tenth, one stack gives **1.3×**.
 to decide how the terrain behaves where they are read — a continent field that
 sets the base elevation, and a mountain field that sets how rugged the place is.
 Each is bent through a **curve you drag**: across is the field's own value, up
-is what it controls. The curve is what puts an *edge* on a region — a coastal
+is what it controls. **Behind the curve is where the world actually lands on
+it** — noise clusters around its own middle, so equal widths of a curve cover
+wildly unequal amounts of planet, and half the map sits inside a quarter of the
+axis. A drag near the middle repaints a fifth of the world; the same drag out at
+the end reaches about two percent of it. The curve is what puts an *edge* on a region — a coastal
 shelf, a mountain front — where a control read straight is one long fade.
 
 Three merge rules. **multiply** is the rule as it is usually written down, and

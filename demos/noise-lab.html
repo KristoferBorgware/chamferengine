@@ -639,35 +639,34 @@
 				// is the middle of the range; a mountain layer of nothing is
 				// full detail everywhere, which is what the world looks like
 				// with no regions in it at all.
+				// Both controls are read whether or not they are switched on,
+				// because the histogram under each curve counts what the field
+				// said and a switched-off layer still has a curve to look at.
+				const contRaw = fbm(
+					x,
+					y,
+					z,
+					k.continentFrequency,
+					k.continentOctaves,
+					(seed + CONTINENT_SEED_OFFSET) | 0,
+				);
+				const mountRaw = fbm(
+					x,
+					y,
+					z,
+					k.mountainFrequency,
+					k.mountainOctaves,
+					(seed + MOUNTAIN_SEED_OFFSET) | 0,
+				);
 				const cont = k.useContinent
-					? splineAt(
-							k.continentSpline,
-							fbm(
-								x,
-								y,
-								z,
-								k.continentFrequency,
-								k.continentOctaves,
-								(seed + CONTINENT_SEED_OFFSET) | 0,
-							),
-						)
+					? splineAt(k.continentSpline, contRaw)
 					: 0.5;
-				const mount = k.useMountain
-					? splineAt(
-							k.mountainSpline,
-							fbm(
-								x,
-								y,
-								z,
-								k.mountainFrequency,
-								k.mountainOctaves,
-								(seed + MOUNTAIN_SEED_OFFSET) | 0,
-							),
-						)
-					: 1;
+				const mount = k.useMountain ? splineAt(k.mountainSpline, mountRaw) : 1;
 				if (report) {
 					report[0] = cont;
 					report[1] = mount;
+					report[2] = contRaw;
+					report[3] = mountRaw;
 				}
 				const base = cont * 2 - 1;
 				if (k.merge === "multiply") return base * mount * ((plain + 1) / 2);
@@ -693,6 +692,8 @@
 					if (report) {
 						report[0] = 0.5;
 						report[1] = 1;
+						report[2] = 0;
+						report[3] = 0;
 					}
 					return surfaceAt(x, y, z, seed, k, s);
 				}
@@ -1342,6 +1343,9 @@
 			}
 			const SPHERE = sphereDirections(SPHERE_SAMPLES);
 
+			/** How many columns the histogram under a curve is drawn in. */
+			const SPLINE_BINS = 48;
+
 			/** What the knobs come to, in the units the engine states them in. */
 			function derived() {
 				const radius =
@@ -1436,7 +1440,23 @@
 				// The whole sphere first, for the two numbers that must not
 				// depend on where the patch is looking.
 				const raw = new Float64Array(SPHERE_SAMPLES);
-				for (let n = 0; n < SPHERE_SAMPLES; n++)
+				// **Where the world actually lands on each curve.** Noise
+				// clusters around its own middle, so equal widths of a curve
+				// cover wildly unequal amounts of planet -- a small drag near
+				// the middle repaints a fifth of the world and the same drag out
+				// at the end reaches two percent of it. Counted over the sphere
+				// rather than the patch, because the curve governs the planet.
+				const tally = {
+					continentSpline: new Float32Array(SPLINE_BINS),
+					mountainSpline: new Float32Array(SPLINE_BINS),
+				};
+				const heard = [0.5, 1, 0, 0];
+				const bin = (v) =>
+					Math.max(
+						0,
+						Math.min(SPLINE_BINS - 1, Math.floor(((v + 1) / 2) * SPLINE_BINS)),
+					);
+				for (let n = 0; n < SPHERE_SAMPLES; n++) {
 					raw[n] = fieldAt(
 						SPHERE[n * 3],
 						SPHERE[n * 3 + 1],
@@ -1444,7 +1464,16 @@
 						seed,
 						k,
 						s,
+						heard,
 					);
+					if (k.layers) {
+						tally.continentSpline[bin(heard[2])]++;
+						tally.mountainSpline[bin(heard[3])]++;
+					}
+				}
+				let tallest = 0;
+				for (const counts of Object.values(tally))
+					for (const v of counts) if (v > tallest) tallest = v;
 				const sea = seaLevelFor(raw, value("landFraction"));
 				let peak = 0;
 				let trough = 0;
@@ -1551,6 +1580,8 @@
 					step,
 					height,
 					raw: field0,
+					tally,
+					tallest,
 					continent: contField,
 					mountain: mountField,
 					// **The field never fills its own range.** A stack of
@@ -2223,6 +2254,26 @@
 					// A line at the middle of the control's range, because that
 					// is where half the world sits and it is the only landmark
 					// on an otherwise featureless box.
+					// The world's own distribution, behind everything: how much
+					// planet sits under each slice of this curve. Dim, because
+					// it is context for the curve rather than the thing being
+					// edited.
+					const counts = field && field.tally ? field.tally[key] : null;
+					if (counts && field.tallest > 0) {
+						g.fillStyle = "rgba(111, 208, 255, 0.16)";
+						const wide = (canvas.width - pad * 2) / SPLINE_BINS;
+						for (let n = 0; n < SPLINE_BINS; n++) {
+							const tall =
+								(counts[n] / field.tallest) * (canvas.height - pad * 2);
+							if (tall <= 0) continue;
+							g.fillRect(
+								pad + n * wide,
+								canvas.height - pad - tall,
+								Math.max(1, wide - 0.5),
+								tall,
+							);
+						}
+					}
 					g.strokeStyle = "#232b36";
 					g.beginPath();
 					g.moveTo(toX(0), pad);
