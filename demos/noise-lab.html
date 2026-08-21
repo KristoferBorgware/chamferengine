@@ -168,6 +168,17 @@
 				color: var(--live);
 				font-size: 11.5px;
 			}
+			.knob-note {
+				grid-column: 1 / -1;
+				font-size: 10.5px;
+				color: var(--dim);
+				margin: 1px 0 0;
+			}
+			.knob-note b {
+				color: var(--live);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
 			.knob input[type="range"],
 			.knob select,
 			.knob input[type="text"] {
@@ -597,6 +608,30 @@
 				return last[1];
 			}
 
+			/**
+			 * The raw ratio that gives the terrain that share of the relief.
+			 *
+			 * **A ratio between two terms of a sum does not mean a fixed number
+			 * of metres.** What `detail` bought moved with the *continent*
+			 * curve, which is a knob about the other layer: pinned at 1.5 with
+			 * Relief pinned at 1,100 m, the terrain reached 1,093 m under the
+			 * shipped shelf-and-rise curve and 1,611 m under a shallow one, a
+			 * 47% swing (`tools/trial-layer-relief.ts`). A share is stated
+			 * against the two spans the field actually has, so it holds still
+			 * while the continents are being shaped.
+			 *
+			 * Neither span depends on `detail` -- the base does not contain it
+			 * and the terrain term is what it multiplies -- so this is one
+			 * solve rather than a search. The top of the range stops short of
+			 * a whole share because at exactly one the continents would have to
+			 * be scaled to nothing, which is a division rather than a setting.
+			 */
+			function detailForShare(share, baseSpan, terrainSpan) {
+				if (terrainSpan <= 1e-12) return 0;
+				const s = Math.max(0, Math.min(0.95, share));
+				return (s * baseSpan) / ((1 - s) * terrainSpan);
+			}
+
 			/** A spline as a query-string value, and back. */
 			function splineToText(points) {
 				return points.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`).join(",");
@@ -675,8 +710,26 @@
 					report[3] = mountRaw;
 				}
 				const base = cont * 2 - 1;
-				if (k.merge === "multiply") return base * mount * ((plain + 1) / 2);
-				if (k.merge === "amplitude") return base + plain * mount * k.detail;
+				// **The sum is reported in halves as well as summed.** The
+				// balance between them is asked for as a share of the relief,
+				// and a share can only be turned into a ratio once both spans
+				// are known -- so the caller reads the parts, measures them
+				// over the sphere, and comes back with `detail` settled.
+				if (k.merge === "multiply") {
+					if (report) {
+						report[4] = 0;
+						report[5] = 0;
+					}
+					return base * mount * ((plain + 1) / 2);
+				}
+				if (k.merge === "amplitude") {
+					const flat = plain * mount;
+					if (report) {
+						report[4] = base;
+						report[5] = flat;
+					}
+					return base + flat * k.detail;
+				}
 				// The creased twin of the same ground: same seed and the same
 				// frequency, so it lies over the plain one rather than beside
 				// it, and only the fold differs.
@@ -689,7 +742,12 @@
 					"octaves",
 				);
 				const shape = plain * (1 - mount) + creased * mount;
-				return base + shape * mount * k.detail;
+				const terrain = shape * mount;
+				if (report) {
+					report[4] = base;
+					report[5] = terrain;
+				}
+				return base + terrain * k.detail;
 			}
 
 			/** The field the world is built from, layered or not. */
@@ -700,6 +758,8 @@
 						report[1] = 1;
 						report[2] = 0;
 						report[3] = 0;
+						report[4] = 0;
+						report[5] = 0;
 					}
 					return surfaceAt(x, y, z, seed, k, s);
 				}
@@ -931,20 +991,33 @@
 						},
 						{
 							// **This is the balance between the layers and the
-							// stack**, and only the ratio matters, because the
-							// metre scale divides by the field's own peak. The
-							// base spans a whole unit of range, so a ceiling of
-							// 1.5 left the stack outnumbered about three to one
-							// and the base knobs reaching a tenth of what they
-							// reach with the layers off.
-							key: "detail",
-							label: "Detail on top",
+							// stack, and it is asked for in the units the answer
+							// is wanted in.** It was a bare ratio, and a ratio
+							// does not name a height: the same 1.5 bought the
+							// terrain 1,093 m under one continent curve and
+							// 1,611 m under another. A share is solved back into
+							// that ratio against the spans the field has, so
+							// shaping the continents no longer moves the
+							// mountains. The note under the slider says what the
+							// share is worth in metres, which is the question
+							// the absolute ground bands make people ask.
+							key: "terrainShare",
+							label: "Terrain share",
 							low: 0,
-							high: 5,
-							step: 0.1,
-							value: 1.5,
-							digits: 2,
+							high: 95,
+							step: 1,
+							value: 55,
+							digits: 0,
+							unit: "%",
 							shownWhen: (k) => k.layers && k.merge !== "multiply",
+							note: () =>
+								field && field.layerMetres
+									? `continents reach <b>${Math.round(
+											field.layerMetres.continents,
+										).toLocaleString()} m</b> · terrain adds <b>${Math.round(
+											field.layerMetres.terrain,
+										).toLocaleString()} m</b>`
+									: "",
 						},
 						{
 							key: "useContinent",
@@ -1231,6 +1304,11 @@
 				return out;
 			}
 
+			// A `detail=` link predates the share. What share it stands for
+			// depends on two spans only a generated field knows, so it is
+			// carried past the first one and converted from what that measured.
+			let legacyDetail = 0;
+
 			function fromParams(params) {
 				for (const g of KNOBS)
 					for (const r of g.rows) {
@@ -1254,6 +1332,13 @@
 					}
 				for (const key of Object.keys(using))
 					if (params.get("x" + key) === "0") using[key] = false;
+				const wasDetail = Number(params.get("detail"));
+				legacyDetail =
+					params.get("terrainShare") === null &&
+					Number.isFinite(wasDetail) &&
+					wasDetail > 0
+						? wasDetail
+						: 0;
 			}
 
 			/** Put the current draft in the address bar, without adding history. */
@@ -1402,7 +1487,9 @@
 					useContinent: knobs.useContinent,
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
-					detail: knobs.detail,
+					// Settled by `generate` once both spans are measured; the
+					// panel asks for a share and this is what it solves to.
+					detail: 1,
 					continentFrequency: knobs.continentFrequency,
 					continentOctaves: knobs.continentOctaves,
 					continentSpline: knobs.continentSpline,
@@ -1456,7 +1543,12 @@
 					continentSpline: new Float32Array(SPLINE_BINS),
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
-				const heard = [0.5, 1, 0, 0];
+				const heard = [0.5, 1, 0, 0, 0, 0];
+				// The two halves of the sum, kept for as long as it takes to
+				// measure how far each reaches. `multiply` has no sum to split.
+				const layered = k.layers && k.merge !== "multiply";
+				const baseOf = layered ? new Float64Array(SPHERE_SAMPLES) : null;
+				const terrainOf = layered ? new Float64Array(SPHERE_SAMPLES) : null;
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -1476,6 +1568,39 @@
 						tally.continentSpline[bin(heard[2])]++;
 						tally.mountainSpline[bin(heard[3])]++;
 					}
+					if (layered) {
+						baseOf[n] = heard[4];
+						terrainOf[n] = heard[5];
+					}
+				}
+				// **The share becomes a ratio here, and the field is summed
+				// again with it.** Both spans are read off the sphere for the
+				// same reason sea level is: they must not move when the patch
+				// looks somewhere else. Neither one contains `detail`, so the
+				// first pass through the field above is only ever used for its
+				// parts and the sum it returned is thrown away.
+				let baseSpan = 0;
+				let terrainSpan = 0;
+				if (layered) {
+					let baseLow = Infinity;
+					let baseHigh = -Infinity;
+					let terrainLow = Infinity;
+					let terrainHigh = -Infinity;
+					for (let n = 0; n < SPHERE_SAMPLES; n++) {
+						if (baseOf[n] < baseLow) baseLow = baseOf[n];
+						if (baseOf[n] > baseHigh) baseHigh = baseOf[n];
+						if (terrainOf[n] < terrainLow) terrainLow = terrainOf[n];
+						if (terrainOf[n] > terrainHigh) terrainHigh = terrainOf[n];
+					}
+					baseSpan = baseHigh - baseLow;
+					terrainSpan = terrainHigh - terrainLow;
+					k.detail = detailForShare(
+						knobs.terrainShare / 100,
+						baseSpan,
+						terrainSpan,
+					);
+					for (let n = 0; n < SPHERE_SAMPLES; n++)
+						raw[n] = baseOf[n] + terrainOf[n] * k.detail;
 				}
 				let tallest = 0;
 				for (const counts of Object.values(tally))
@@ -1590,6 +1715,16 @@
 					tallest,
 					continent: contField,
 					mountain: mountField,
+					// What the share is worth, in the units the ground bands are
+					// stated in. `up` is the land scale under either metre rule,
+					// so both halves are priced the same way the mountains are.
+					layerMetres: layered
+						? {
+								continents: baseSpan * up,
+								terrain: terrainSpan * k.detail * up,
+							}
+						: null,
+					layerSpans: layered ? { baseSpan, terrainSpan } : null,
 					// **The field never fills its own range.** A stack of
 					// octaves divided by its summed amplitude is bounded by
 					// [-1, 1] and reaches maybe half of it, so a Raw picture
@@ -2463,8 +2598,17 @@
 							wrap.classList.add("switched");
 							wrap.append(bypass, label, readout, input);
 						} else wrap.append(label, readout, input);
+						// **A knob whose number is a ratio says what the ratio
+						// is worth.** The readout can only repeat the slider;
+						// what the world did with it is a second line.
+						let note = null;
+						if (row.note) {
+							note = document.createElement("p");
+							note.className = "knob-note";
+							wrap.append(note);
+						}
 						set.append(wrap);
-						rows.set(row.key, { row, wrap, input, readout, bypass });
+						rows.set(row.key, { row, wrap, input, readout, bypass, note });
 						// **Every move redraws.** `input` rather than `change`, so
 						// the ground answers while the slider is still moving --
 						// which is the only way to feel what a knob does.
@@ -2482,9 +2626,17 @@
 
 			/** Show a knob only where it means something, rather than greying it. */
 			function refreshPanel() {
-				for (const { row, wrap, readout, input, redraw } of rows.values()) {
+				for (const {
+					row,
+					wrap,
+					readout,
+					input,
+					redraw,
+					note,
+				} of rows.values()) {
 					const shown = row.shownWhen ? row.shownWhen(knobs) : true;
 					wrap.classList.toggle("hidden", !shown);
+					if (note) note.innerHTML = shown ? row.note() : "";
 					if (row.type === "spline") {
 						if (shown && redraw) redraw();
 						continue;
@@ -2681,6 +2833,22 @@
 			const booted = performance.now();
 			settle();
 			generate();
+			if (legacyDetail && field.layerSpans) {
+				// The spans are known now, so the share that ratio meant is
+				// exact rather than a guess, and the world it built is the
+				// world the link named.
+				const { baseSpan, terrainSpan } = field.layerSpans;
+				const terrain = terrainSpan * legacyDetail;
+				knobs.terrainShare = Math.max(
+					0,
+					Math.min(
+						95,
+						Math.round((terrain / Math.max(1e-12, terrain + baseSpan)) * 100),
+					),
+				);
+				legacyDetail = 0;
+				generate();
+			}
 			buildMesh();
 			drawMap();
 			drawGraph();

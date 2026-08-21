@@ -361,8 +361,23 @@ everywhere.
 **The base knobs reach less with the layers on.** The stack is the detail over
 a base rather than the world itself, so its share is smaller: moving Ridge from
 0 to 0.85 shifts the ground 26% of the world's relief with the layers off and
-2.5% with them on. **Detail on top** is the balance between the two, and at its
-ceiling the same Ridge move reaches 7.7%.
+2.5% with them on. **Terrain share** is the balance between the two.
+
+**That balance is asked for in the units the answer is wanted in.** It used to
+be a bare ratio, and a ratio does not name a height: with the ratio pinned at
+1.5 and Relief pinned at 1,100 m, moving only the *continent* curve — a knob
+about the other layer — took what the terrain reached from 1,093 m to 1,611 m,
+a **47%** swing. The share is stated against the two spans the field actually
+has and solved back into the ratio, which is one division rather than a search
+because neither span contains it. Over the same three curves the terrain now
+reaches 1,113 m, 1,158 m and 1,158 m — a **4.0%** spread, all three at exactly
+the share asked for. What is left is the curve's shape genuinely moving where
+land stands; what is gone is its scale, which the solve divides out. **Under
+the slider is what the share is worth**, both halves in metres, live: the
+ground bands are absolute metres, so "can the terrain reach the rock line on
+its own" is the question the number has to answer. A link written with
+`detail=` still builds its world — the share that ratio meant is worked out
+from the first generated field and the world rebuilt from it.
 
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.

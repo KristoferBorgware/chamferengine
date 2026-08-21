@@ -215,3 +215,38 @@ for (const [contRelief, terrRelief] of [
 }
 console.log("   Same world. Two metre knobs under `fit` are one ratio knob wearing");
 console.log("   two hats, which is what `detail` already is.");
+
+console.log("\nD. the same three curves, with the balance asked for as a SHARE");
+console.log("   Detail is solved from the share against the two spans, so the");
+console.log("   share is exact and only the curve's SHAPE still moves the metres.");
+console.log("   continent curve            terrain reaches | continents reach | share");
+const SHARE = 0.55;
+for (const [label, curve] of CONTINENTS) {
+	const part = parts(curve);
+	let bl = Infinity;
+	let bh = -Infinity;
+	let tl = Infinity;
+	let th = -Infinity;
+	for (let n = 0; n < part.base.length; n++) {
+		if (part.base[n]! < bl) bl = part.base[n]!;
+		if (part.base[n]! > bh) bh = part.base[n]!;
+		if (part.terrain[n]! < tl) tl = part.terrain[n]!;
+		if (part.terrain[n]! > th) th = part.terrain[n]!;
+	}
+	const baseSpan = bh - bl;
+	const terrainSpan = th - tl;
+	const d = (SHARE * baseSpan) / ((1 - SHARE) * terrainSpan);
+	const field = new Float64Array(part.base.length);
+	for (let n = 0; n < field.length; n++)
+		field[n] = part.base[n]! + part.terrain[n]! * d;
+	const sea = seaCut(field);
+	let peak = 0;
+	for (const v of field) if (v - sea > peak) peak = v - sea;
+	const scale = 1100 / peak;
+	const t = terrainSpan * d * scale;
+	const b = baseSpan * scale;
+	console.log(
+		`   ${label.padEnd(24)} ${(t.toFixed(0) + " m").padStart(15)} | ` +
+			`${(b.toFixed(0) + " m").padStart(16)} | ${((t / (t + b)) * 100).toFixed(1).padStart(5)}%`,
+	);
+}

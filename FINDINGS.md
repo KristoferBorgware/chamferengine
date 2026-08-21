@@ -1031,6 +1031,8 @@ which is what the choice needs.
 
 ---
 
+## Closed
+
 ### F-052 — `Detail on top` is a ratio, so what it means in metres depends on the other layer's curve
 
 **Kind:** design
@@ -1069,9 +1071,20 @@ added together, because the continent peak and the terrain peak are not in the
 same place. That last one gives up "Relief is how tall the tallest mountain is",
 which is the property `fit` exists for.
 
----
+**Closed:** 2026-08-21, by the share. `Detail on top` is gone and **Terrain
+share** replaces it, a percentage of the relief solved back into the ratio
+against the two spans the field measures over the sphere -- one division, not a
+search, because neither span contains the ratio. Over the same three continent
+curves the terrain now reaches 1,113 m, 1,158 m and 1,158 m against 1,093 m,
+1,611 m and 1,130 m: a **4.0%** spread where it was **47%**, and all three land
+on exactly the share asked for. The residue is the curve's *shape* moving where
+land stands; its *scale* divides out, so a continent curve spanning 0.4 to 0.6
+and one spanning 0 to 1 now build the same world. The readout ships with it --
+both halves in metres under the slider, live -- which was the other candidate
+and cost nothing beside this one. Per-layer metre knobs were declined: `fit`
+cannot survive them.
 
-## Closed
+---
 
 ### F-042 — The map's colors and the world's materials are on two different scales
 
