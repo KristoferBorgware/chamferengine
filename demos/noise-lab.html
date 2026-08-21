@@ -711,7 +711,6 @@
 						},
 						{
 							key: "relief",
-							off: 0,
 							label: "Relief",
 							low: 50,
 							high: 3000,
@@ -722,7 +721,6 @@
 						},
 						{
 							key: "seaDepth",
-							off: 0,
 							label: "Sea depth",
 							low: 10,
 							high: 1000,
@@ -819,7 +817,14 @@
 			/**
 			 * Whether a knob is being applied at all.
 			 *
-			 * **Only knobs with a real neutral get a switch.** A knob is off when
+			 * **Only knobs with a real neutral get a switch, and the neutral has
+			 * to be a value the slider itself can reach.** Relief and Sea depth
+			 * fail the second test: their sliders bottom out at 50 m and 10 m,
+			 * and their arithmetic neutral is 0 -- which multiplies every height
+			 * by nothing and leaves a perfectly good field with no ground at
+			 * all. A switch that reaches a world the panel cannot otherwise
+			 * build is not measuring what the knob contributes, it is inventing
+			 * a state. Move the slider instead; that is what it is for. A knob is off when
 			 * it is set to the value that removes its own effect -- ridge 0 is
 			 * bit-for-bit the plain sum, warp 0 reads the point where it stands,
 			 * persistence 0 leaves one octave -- and for those, turning it off is
