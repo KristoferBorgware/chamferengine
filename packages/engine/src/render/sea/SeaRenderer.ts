@@ -36,13 +36,31 @@ export interface SeaLook {
 	/** How hard the sun's highlight is. */
 	glint: number;
 
+	/**
+	 * How much slope a fragment is given below what a vertex can carry.
+	 *
+	 * A vertex stands every few metres, so the geometry stops at a wave a few
+	 * times that and the water between two crests is a sheet of glass. This is
+	 * how much of the missing metre-scale texture the shading puts back.
+	 */
+	ripple: number;
+
+	/**
+	 * How far the swell's own height rises and falls across the ocean.
+	 *
+	 * `0` runs one height everywhere. `0.5` leaves the calmest stretches half
+	 * as tall as the roughest, and the roughest keep the height that was
+	 * asked for.
+	 */
+	grouping: number;
+
 	/** The color of water a look barely enters, and of water it does not leave. */
 	shallow: readonly [number, number, number];
 	deep: readonly [number, number, number];
 }
 
-/** Placement and look, then the three colors. */
-const SEA_BYTES = 16 * 7;
+/** Placement and look, then the three colors, then the two detail knobs. */
+const SEA_BYTES = 16 * 8;
 
 /** Three corner directions an instance carries. */
 const INSTANCE_FLOATS = 9;
@@ -59,11 +77,13 @@ interface Patch {
 /**
  * The finest a sea patch is ever cut, in pieces per chunk side.
  *
- * **Water does not need the resolution the ground does.** A chunk is 32 m at
+ * **Water does not need the resolution the ground does.** A chunk is 64 m at
  * the shipped settings and the default swell runs 45 m between crests, so 16
- * pieces put a vertex every 2 m -- twenty-odd samples across a wave, and six
+ * pieces put a vertex every 4 m -- eleven samples across a wave, and three
  * across the narrowest octave of one. Cutting to the block grid instead would
- * cost 1,024 triangles a chunk to draw the same curve.
+ * cost 4,096 triangles a chunk to draw the same curve, and everything narrower
+ * than three vertices is a slope the fragment shader adds rather than
+ * geometry.
  */
 const FINEST = 16;
 
@@ -372,6 +392,7 @@ export class SeaRenderer implements PassLayer {
 		this.data.set([...look.shallow, 1], 16);
 		this.data.set([...look.deep, 1], 20);
 		this.data.set([...this.sky, 1], 24);
+		this.data.set([look.ripple, look.grouping, 0, 0], 28);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		pass.setPipeline(this.wireframe ? this.wirePipeline : this.pipeline);

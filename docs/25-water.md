@@ -109,25 +109,116 @@ three octaves at rising frequency and falling amplitude with two samples
 travelling opposite ways in each. One direction alone slides the whole ocean
 past the viewer like a conveyor; against each other they churn.
 
-**The one step that does not survive the move to a sphere is the domain warp,
-and it is the step that matters most.** The recipe warps its sample point by
-noise before folding, and without it everything above is exactly periodic —
-sines folded and multiplied are still sines — so the sea draws the same crest
-over and over on a regular grid. On flat ground the warp is 2D noise over the
-xz plane. There is no such plane here: a sphere has no seamless
-two-dimensional parameterisation, which is the hairy ball theorem again, the
-same one that forbids a global north
-([doc 13](13-gravity-and-orientation.md)). So the warp is **3D noise sampled
-from the direction vector**, exactly as the terrain samples in 3D world space
-rather than in face-local coordinates, and for exactly the same reason: a
-texture laid across a sphere tears along a seam, and a dot product against a
+Fold two bands and you get a grid. That is not a flaw in the recipe, it is
+what the recipe is: a crest stands where both bands fold at once, so the
+crests sit on the crossings of two families of parallel lines, and if the two
+bands run the same way everywhere then the whole planet is one sheet of graph
+paper. Fly over it and you can see the weave.
+
+**Count it rather than argue about it.** Take a patch of the field, work out
+which way the surface tilts at every point, and sort those directions into 36
+bins of five degrees each. A field with no preferred direction fills every bin
+equally, so the fullest bin is 1.0 times the average. A field folded along two
+fixed axes piles into a few: measured over a 400 m patch of the two-band form
+the fullest bin runs **2.7 times** the average, and over 1600 m **2.9 times**.
+A second reading agrees: shift the patch sideways by a wavelength and see how
+well it still matches itself, and it comes back **0.46** — half the ocean
+lands back on top of itself one wave over.
+
+**The step that gets it wrong is the domain warp, and it gets it wrong by
+being one warp.** The recipe bends its sample point by a noise field before
+folding, which is what stops everything above being exactly periodic — sines
+folded and multiplied are still sines. But bending the *sample point* moves
+both bands together. The pattern slides to a new place with the angle its two
+families cross at exactly as it was. That is a lattice carried, not a lattice
+broken.
+
+Give each band its own bend instead and the lattice shears. The crossing angle
+is one thing here and another a few wavelengths away, so the crests curve and
+fan the way a real swell does. Same measurement: the fullest bin drops to
+**1.8** over 400 m and **1.9** over 1600 m, and the shifted-patch reading
+falls from 0.46 to **0.04**.
+
+Two numbers set how far the bend reaches. It carries **12 radians** of phase
+and it is read off a noise field a **sixteenth** of the octave's own
+frequency — one rise and fall of the bend across sixteen waves. Read it at the
+octave's own frequency instead and the bend has a slope of its own comparable
+to the wave's, so it stops turning crests and starts inventing them: the
+surface goes from water to crumpled foil. Only the **first two** octaves are
+bent. Bending all three measures 1.80 against 1.85 and each bent octave is two
+more noise lookups; bending only the first reads 2.13, which is a weave again.
+
+**And three octaves, not four.** A patch of sea is cut to at most 16 pieces a
+side and a chunk is 64 m, so a vertex stands every 4 m. The third octave is a
+12.5 m wave — three vertices across it, which is the last one the geometry can
+draw. A fourth would be 6.6 m, under two vertices, and a wave with two
+vertices across it is not a wave: its crests would sit wherever the sampling
+happened to land and move as the camera does. Measured, adding it changes the
+shifted-patch reading from 0.101 to 0.102, which is nothing.
+
+**On a sphere the bend has to be 3D noise on the direction vector.** On flat
+ground it would be 2D noise over the xz plane. There is no such plane here: a
+sphere has no seamless two-dimensional parameterisation, which is the hairy
+ball theorem again, the same one that forbids a global north
+([doc 13](13-gravity-and-orientation.md)). So it is noise sampled from the
+direction in three dimensions, exactly as the terrain samples in 3D world
+space rather than in face-local coordinates, and for exactly the same reason:
+a texture laid across a sphere tears along a seam, and a dot product against a
 fixed axis does not.
 
 A phase being a dot product is what makes the bands themselves seamless. A
 wave is a band wrapping the whole planet, continuous everywhere, with no face
 edge to cross and no pole to pinch.
 
-Three consequences:
+### Below the last wave the geometry can draw, the slope is painted on
+
+Stop at three octaves and the water between two crests is a sheet of glass.
+Everything from 12.5 m down — the metre-scale texture that makes water look
+wet — is missing, and it cannot be put back as geometry, because there are no
+vertices to put it on.
+
+Put it back as a **slope** instead. Nothing about shading needs a vertex to
+have moved: the sun on the water is a dot product against the surface normal,
+so tilting the normal at each pixel is indistinguishable from having bent the
+surface, right up until the silhouette. At 12.5 m and under there is no
+silhouette to get wrong.
+
+So the fragment shader reads three octaves of noise, takes their **gradient**
+rather than their value, and tilts the normal by it. The gradient is the
+useful trick: value noise mixes eight hashed lattice corners, and the
+derivative of that mix falls out of the same eight corners. One lookup gives
+both. Measuring the slope by sampling the height four times instead would cost
+four.
+
+How much tilt is the whole decision. A ripple is read as a slope and never as
+a height, so what it changes is how far the surface leans — the widest octave
+is set to about **0.06** of tilt. Past roughly 0.2 the sun's highlight
+stops being a path and breaks into separate lit pixels, and the water reads as
+glitter rather than as water. It fades out over the same stretch of distance
+the swell flattens over, and for the same reason: a wave narrower than the
+pixels drawing it is a shimmer.
+
+The same noise does one more job. Foam is a band drawn where the surface
+stands near the top of a wave, and how near is one number carried per vertex,
+so a band cut straight across it has the straight edges of the triangle it was
+interpolated over — foam in polygons. Moving the edge of the band by a noise
+field a few metres across gives it the ragged outline foam has.
+
+### Swell arrives in groups
+
+One more thing separates open water from a texture: real swell is not the same
+height everywhere. A stretch of sea runs its full height and the next stretch
+is half of it.
+
+That is one noise lookup over about twelve wavelengths, scaling the whole
+swell. It only ever scales **down**, from 1 to `1 - depth`, so the height a
+person asks for stays the tallest wave on the planet rather than an average
+the field wanders either side of. And it is a scale over the surface rather
+than a term inside it, so the vertex shader applies the one value to the
+height and to both slopes and the wave field is evaluated no more often than
+before.
+
+Three consequences:Three consequences:
 
 - **The sea floor is bare.** Ground below sea level is sand and stone with air
   above it. Anything drawn there is drawn through the shell.
@@ -471,6 +562,22 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
 - **The sea is a layer of the world**, cut into the same chunks as the ground
   and drawn at the levels the ground picked — finer underfoot, coarser at the
   horizon. Nothing about it follows the camera.
+- **Two folded bands multiplied make a grid, and one domain warp does not
+  break it.** Warping the sample point slides the lattice somewhere else with
+  its crossing angle intact. Giving each band its own bend shears it: the
+  slope directions of a 400 m patch go from piling into one bin **2.7×** the
+  average to **1.8×**, and the patch shifted a wavelength matches itself
+  **0.46 → 0.04**. Twelve radians of bend, read over sixteen wavelengths, on
+  the first two octaves of three.
+- **Three octaves and no more.** A vertex stands every 4 m, so the third is a
+  12.5 m wave at three vertices across and a fourth would be 6.6 m at under
+  two — crests that move with the camera. Adding it moves the repeat reading
+  from 0.101 to 0.102.
+- **Below 12.5 m the slope is painted, not built.** Three octaves of noise read
+  for their **gradient** — which falls out of the same eight lattice corners
+  as the value, so one lookup does both — tilt the normal per pixel. About
+  **0.06** of tilt at the widest; past 0.2 the sun's path breaks into separate
+  lit pixels and the water reads as glitter.
 - **The faces were never why.** As blocks the ocean drew **113,455 faces —
   0.89%** of the naive count, and held **15.2%** of the crust's block slots.
   What decided it is that block faces quadruple per level while a shell does

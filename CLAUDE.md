@@ -760,24 +760,57 @@ Violating any of these breaks the design. They are not tunable.
   consequences that cost nothing: a triangle whose **lowest** ground is above
   sea level is skipped with one `troughOf` read, and the sea **writes depth**
   so a cloud on the far side of the water does not draw through it.
-- **A WAVE FIELD WITHOUT A DOMAIN WARP IS A LATTICE** (`SEA_SHADER`, doc 25).
-  Fold a sine at its zero crossing, fold two bands and multiply, stack three
-  octaves with two samples travelling opposite ways in each — and every bit of
-  that is still **exactly periodic**, so the sea draws the same crest over and
-  over on a regular grid. The step that breaks it is warping the sample point
-  by noise first, and it is the step easiest to leave out because the shape
-  looks right without it until you see a wide view. **On a sphere the warp has
-  to be 3D noise on the direction vector**: a 2D texture over a ground plane
-  has no seamless spherical form (the hairy ball theorem again), which is
-  invariant 4's rule arriving from a second direction. A phase stays a **dot
-  product against a fixed axis** so the bands themselves never seam. **Show the
-  mesh** is a live toggle that draws the sea as lines — WebGPU has no fill
-  mode, so it is a second `line-list` pipeline over its own index buffer, and
-  it is how you see whether a wavelength has the vertices to be a wave. A patch
-  is cut to at most **16 pieces a side** (`FINEST`): a chunk is 32 m and the
-  default swell is 45 m between crests, so that is a vertex every **2 m** —
-  twenty-odd samples across a wave — where cutting to the block grid would cost
-  **1,024 triangles a chunk** to draw the same curve.
+- **TWO FOLDED BANDS MULTIPLIED ARE A GRID, AND ONE DOMAIN WARP DOES NOT BREAK
+  IT** (`SEA_SHADER`, doc 25, `tools/trial-waves.ts`). A crest stands where both
+  bands fold at once, so the crests sit on the crossings of two families of
+  parallel lines and the whole planet is one sheet of graph paper. Warping the
+  **sample point** moves both bands together: the lattice arrives somewhere else
+  with its crossing angle intact. Measured by sorting every slope direction in a
+  patch into 36 bins, the fullest bin runs **2.7x** the average over 400 m and
+  **2.9x** over 1600 m, and the patch shifted a wavelength matches itself
+  **0.46**. **Give each band its own bend and the lattice shears**: 1.8x and
+  1.9x, and the shifted reading falls to **0.04**. Twelve radians of phase, read
+  off noise a **sixteenth** of the octave's own frequency -- read at the
+  octave's own frequency the bend has a slope of its own comparable to the
+  wave's and the surface goes from water to crumpled foil. **Only the first two
+  octaves are bent**: three measures 1.80 against 1.85 for two and costs two
+  more noise lookups, one reads 2.13 and is a weave again. **And three octaves,
+  never four** -- a vertex stands every 4 m, so the third is a 12.5 m wave at
+  three vertices across and a fourth is 6.6 m at under two, which is crests that
+  move with the camera; adding it moves the repeat reading from 0.101 to 0.102.
+  **On a sphere the bend has to be 3D noise on the direction vector**: a 2D
+  texture over a ground plane has no seamless spherical form (the hairy ball
+  theorem again), which is invariant 4's rule arriving from a second direction.
+  A phase stays a **dot product against a fixed axis** so the bands themselves
+  never seam. **Show the mesh** is a live toggle that draws the sea as lines --
+  WebGPU has no fill mode, so it is a second `line-list` pipeline over its own
+  index buffer, and it is how you see whether a wavelength has the vertices to
+  be a wave. A patch is cut to at most **16 pieces a side** (`FINEST`): a chunk
+  is 64 m and the default swell is 45 m between crests, so that is a vertex
+  every **4 m** -- eleven samples across a wave -- where cutting to the block
+  grid would cost **4,096 triangles a chunk** to draw the same curve.
+- **BELOW THE LAST WAVE THE GEOMETRY CAN DRAW, THE SLOPE IS PAINTED ON**
+  (`ripple` in `SEA_SHADER`, doc 25). Three octaves stop at a 12.5 m wave and
+  the water between two crests is a sheet of glass, and it cannot be put back as
+  geometry because there are no vertices to put it on. Shading needs no vertex
+  to have moved: the sun on the water is a dot product against the normal, so
+  tilting the normal per pixel is indistinguishable from bending the surface
+  until the silhouette, and at 12.5 m and under there is no silhouette. The
+  fragment reads three octaves of noise for their **gradient**, which falls out
+  of the same eight hashed lattice corners as the value -- **one lookup where a
+  difference would take four**. **How much tilt is the whole decision**: about
+  **0.06** at the widest octave, and past roughly **0.2** the sun's highlight
+  stops being a path and breaks into separate lit pixels, which reads as
+  glitter. It fades over the same distance the swell flattens over. The same
+  noise ragged-edges the **foam**, whose band is cut across a per-vertex number
+  and otherwise has the straight edges of the triangle it was interpolated over.
+- **SWELL ARRIVES IN GROUPS** (`grouping` in `SEA_SHADER`, doc 25). One noise
+  lookup over about twelve wavelengths scales the whole swell, and it only ever
+  scales **down**, from 1 to `1 - depth`, so **Wave height** stays the tallest
+  wave on the planet rather than an average the field wanders either side of. A
+  scale over the surface rather than a term inside it, so the vertex shader
+  applies the one value to the height and to both slopes and the wave field is
+  evaluated no more often than before.
 - **Water is still a block type, and there is no fluid system** (`water.js`,
   doc 25) — translucent, no collision, written once, never simulated. What
   follows describes a **body of water made of blocks**, which is what a lake, a
