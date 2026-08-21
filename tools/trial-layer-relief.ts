@@ -78,7 +78,10 @@ const MOUNTAIN: Point[] = [
 ];
 
 /** The two halves of the sum, kept apart so each can be priced on its own. */
-function parts(continent: Point[]): { base: Float64Array; terrain: Float64Array } {
+function parts(
+	continent: Point[],
+	ridge = 0,
+): { base: Float64Array; terrain: Float64Array } {
 	const base = new Float64Array(SIDE * SIDE);
 	const terrain = new Float64Array(SIDE * SIDE);
 	for (let r = 0; r < SIDE; r++)
@@ -95,7 +98,7 @@ function parts(continent: Point[]): { base: Float64Array; terrain: Float64Array 
 			const contRaw = fbm(x, y, z, 3, 2, (SEED + CONTINENT_SEED_OFFSET) | 0);
 			const mountRaw = fbm(x, y, z, 4.5, 2, (SEED + MOUNTAIN_SEED_OFFSET) | 0);
 			const mount = splineAt(MOUNTAIN, mountRaw);
-			const plain = stack(x, y, z, PLAIN);
+			const plain = stack(x, y, z, ridge === 0 ? PLAIN : surface({ ridge }));
 			const creased = stack(x, y, z, CREASED);
 			const shape = plain * (1 - mount) + creased * mount;
 			base[r * SIDE + q] = splineAt(continent, contRaw) * 2 - 1;
@@ -248,5 +251,67 @@ for (const [label, curve] of CONTINENTS) {
 	console.log(
 		`   ${label.padEnd(24)} ${(t.toFixed(0) + " m").padStart(15)} | ` +
 			`${(b.toFixed(0) + " m").padStart(16)} | ${((t / (t + b)) * 100).toFixed(1).padStart(5)}%`,
+	);
+}
+
+console.log("\nE. how far the base knobs reach, as the share moves");
+console.log("   Ridge 0 to 0.85, and how far the ground moves for it -- as a");
+console.log("   share of the world's own relief, so the metre scale cancels.");
+const RELIEF = 1100;
+
+/** Metres, by the `fit` rule, from one field. */
+function toMetres(f: Float64Array): Float64Array {
+	const sea = seaCut(f);
+	let peak = 0;
+	for (const v of f) if (v - sea > peak) peak = v - sea;
+	const scale = peak > 0 ? RELIEF / peak : 0;
+	const out = new Float64Array(f.length);
+	for (let n = 0; n < f.length; n++) out[n] = (f[n]! - sea) * scale;
+	return out;
+}
+
+function moved(a: Float64Array, b: Float64Array): number {
+	let sum = 0;
+	for (let n = 0; n < a.length; n++) sum += Math.abs(a[n]! - b[n]!);
+	return sum / a.length / RELIEF;
+}
+
+// With the layers off the stack IS the world, so the whole field is the plain
+// one and ridge reaches all of it.
+{
+	const flat = new Float64Array(SIDE * SIDE);
+	const folded = new Float64Array(SIDE * SIDE);
+	const a = parts(CONTINENTS[0]![1], 0);
+	const b = parts(CONTINENTS[0]![1], 0.85);
+	for (let n = 0; n < flat.length; n++) {
+		flat[n] = a.terrain[n]!;
+		folded[n] = b.terrain[n]!;
+	}
+	console.log(
+		`   layers off          ridge moves the ground ${(moved(toMetres(flat), toMetres(folded)) * 100).toFixed(1).padStart(5)}% of relief`,
+	);
+}
+
+for (const share of [0, 0.25, 0.55, 0.75, 0.95]) {
+	const built = [0, 0.85].map((ridge) => {
+		const part = parts(CONTINENTS[0]![1], ridge);
+		let bl = Infinity;
+		let bh = -Infinity;
+		let tl = Infinity;
+		let th = -Infinity;
+		for (let n = 0; n < part.base.length; n++) {
+			if (part.base[n]! < bl) bl = part.base[n]!;
+			if (part.base[n]! > bh) bh = part.base[n]!;
+			if (part.terrain[n]! < tl) tl = part.terrain[n]!;
+			if (part.terrain[n]! > th) th = part.terrain[n]!;
+		}
+		const d = (share * (bh - bl)) / ((1 - share) * (th - tl));
+		const f = new Float64Array(part.base.length);
+		for (let n = 0; n < f.length; n++)
+			f[n] = part.base[n]! + part.terrain[n]! * d;
+		return toMetres(f);
+	});
+	console.log(
+		`   Terrain share ${((share * 100).toFixed(0) + "%").padStart(4)}  ridge moves the ground ${(moved(built[0]!, built[1]!) * 100).toFixed(1).padStart(5)}% of relief`,
 	);
 }
