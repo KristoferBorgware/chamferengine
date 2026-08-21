@@ -298,15 +298,31 @@ the end reaches about two percent of it. The curve is what puts an *edge* on a
 region — a coastal shelf, a mountain front — where a control read straight is
 one long fade.
 
-**Two ways for the mountain layer to reach the ground, and which is right is a
-measurement rather than an argument.** **add** gives the layer its own height:
-its curve is metres of range rising out of the terrain, ground stands high where
-the curve is high, and the terrain layer is all you see where it is low. A steep
-curve is a mountain front. **roughen** keeps it a per-place multiplier on the
-terrain layer's own noise, so a range is rougher ground rather than taller
-ground — and because the bumps and the base come out of one field, they line up
-instead of crossing. **Detail on top** is the balance between the two layers. It
-is a ratio and not a number of metres, which is F-052 and is open.
+**Three ways for the mountain layer to reach the ground, and which is right is
+a measurement rather than an argument.**
+
+- **above the line** is the shipped one. The mountain layer is let through in
+  proportion to how far the terrain already stands above **Mountain line** —
+  nothing at or below it, all of it at the top of the terrain's own range — so a
+  range can only grow where the ground was already high. The terrain layer draws
+  the land and says where it may become mountain; the mountain layer says what
+  the mountain looks like. The line is a fraction of the terrain curve's **own**
+  range rather than a height on a fixed axis, so dragging that curve's top down
+  does not slowly close the gate, and it is **drawn across that curve** in amber
+  — where the gate opens is a place on a picture, not a number in another group.
+  The edge is smoothed, because a hard cut draws a contour line across every
+  hillside at exactly the same height.
+- **add** gives the layer its own height and nothing gates it. Its curve is
+  metres of range rising out of the terrain, ground stands high where the curve
+  is high, and the terrain layer is all you see where it is low. What it does
+  not know is where it is: a range can start in the sea, and on the shipped
+  world it does.
+- **roughen** keeps it a per-place multiplier on the terrain layer's own noise,
+  so a range is rougher ground rather than taller ground — and because the bumps
+  and the base come out of one field, they line up instead of crossing.
+
+**Detail on top** is the balance between the two layers. It is a ratio and not a
+number of metres, which is F-052 and is open.
 
 **Every knob that has a value meaning "off" carries a switch.** Persistence 0
 leaves one octave, an offset of 0 is the lattice unshifted; unticking sets the
@@ -357,11 +373,33 @@ screen — each carries a frequency pair, an octave count, a falloff, two offset
 and a curve — so the panel is long by construction, and the layer being tuned is
 the one that needs to be open.
 
+**A row with no meaning comes off the panel; a row that cannot reach the world
+goes grey.** Those are different states. Mountain line is hidden under a merge
+that has no gate, because a disabled row is a question the reader has to answer
+before dismissing. Switching the mountain layer off greys its eleven rows
+instead, because each still means something and is turned off elsewhere — and
+the switch that turned them off stays live beside them.
+
+**The readout says what the whole planet is made of**, not what this patch is:
+the material lines are absolute metres and a patch is a place, so a patch can be
+all snow on a world that is mostly grass. That share is the number the balance
+between the layers is tuned against. The shipped set gives **35% sea, 50%
+grass, 8% rock, 7% snow**; a `Detail on top` of 1.5 in the same world gives 22%
+grass and 36% snow.
+
+**Map shows** switches the picture above the knobs between the **patch** and
+the whole **planet** — longitude across, latitude down, at the same sea level
+and the same metre scale the plane is using, with the patch outlined in amber
+where it stands. A patch a few kilometres across says what the ground does
+underfoot and cannot say where the continents are; the planet answers the second
+question and stays flat, because a globe drawn small hides half of itself.
+
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, as the raw unitless field before sea level has been taken off it, or as
-either layer on its own — the map shows that layer's own field, the plane shows
-the ground shaded by where it is speaking. **Surface** draws it solid, as a
-wireframe, or both. The **Contour** panel at the bottom draws every line of the
+either layer on its own. **A layer's own picture is the layer**, never the layer
+after something else has had a say: the mountain field draws where it is loud
+whether or not the gate is letting it through there. **Surface** draws it solid,
+as a wireframe, or both. The **Contour** panel at the bottom draws every line of the
 patch over one another, so the silhouette carries where the ground stands as
 well as what shape it is.
 

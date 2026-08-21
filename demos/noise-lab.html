@@ -183,6 +183,12 @@
 				color: var(--live);
 				font-size: 11.5px;
 			}
+			.knob.off {
+				opacity: 0.42;
+			}
+			.knob.off .curve {
+				pointer-events: none;
+			}
 			.knob-note {
 				grid-column: 1 / -1;
 				font-size: 10.5px;
@@ -556,10 +562,21 @@
 			 * the ground are on the panel rather than argued here, because
 			 * which is right is easier to see than to reason about:
 			 *
-			 * **add** gives the mountain layer its own height. Its curve is
-			 * metres of range rising out of the terrain, so ground stands high
-			 * where that curve is high and the terrain layer is all you see
-			 * where it is low. A steep curve is a mountain front.
+			 * **above the line** is `add` with the terrain layer holding the
+			 * gate. The mountain layer is let through in proportion to how far
+			 * the terrain already stands above **Mountain line** -- nothing at
+			 * or below it, all of it at the top of the terrain's own range --
+			 * so a range can only grow where the ground was already high. The
+			 * terrain layer draws the land and says where it may become
+			 * mountain; the mountain layer says what the mountain looks like.
+			 * The gate is smoothed, because a hard cut draws a contour line
+			 * across every hillside at exactly the same height.
+			 *
+			 * **add** gives the mountain layer its own height and nothing
+			 * gates it. Its curve is metres of range rising out of the terrain,
+			 * so ground stands high where that curve is high and the terrain
+			 * layer is all you see where it is low. What it does not know is
+			 * where it is: a range can start in the sea.
 			 *
 			 * **roughen** keeps it a per-place multiplier on the terrain
 			 * layer's own noise: mountains are rougher ground rather than
@@ -589,7 +606,11 @@
 				// it counts what the field said and a switched-off layer still
 				// has a curve to look at.
 				const read = splineAt(k.mountainSpline, mountainRaw);
-				const mount = k.useMountain ? read : k.merge === "add" ? 0 : 1;
+				const mount = k.useMountain ? read : k.merge === "roughen" ? 1 : 0;
+				// **A layer's own picture is the layer, never the layer after
+				// something else has had a say.** What is reported is what this
+				// curve returned, so Picture draws the mountain field where it
+				// is loud whether or not the gate is letting it through there.
 				if (report) {
 					report[0] = shaped;
 					report[1] = read;
@@ -597,6 +618,14 @@
 					report[3] = mountainRaw;
 				}
 				const base = shaped * 2 - 1;
+				if (k.merge === "gated") {
+					const line = k.mountainLine;
+					const over = Math.max(
+						0,
+						Math.min(1, (shaped - line) / Math.max(1e-6, 1 - line)),
+					);
+					return base + mount * (over * over * (3 - 2 * over)) * k.detail;
+				}
 				if (k.merge === "add") return base + mount * k.detail;
 				return base + terrainRaw * mount * k.detail;
 			}
@@ -789,25 +818,60 @@
 							// noise, so a range is rougher ground rather than
 							// taller ground.
 							key: "merge",
+							enabledWhen: (k) => k.useMountain,
 							label: "Mountains",
 							type: "select",
-							value: "add",
-							options: ["add", "roughen"],
+							value: "gated",
+							options: ["gated", "add", "roughen"],
+						},
+						{
+							// **Read against the terrain curve, because that is
+							// what it cuts.** The number is a height on that
+							// curve's own vertical axis, and the curve draws the
+							// line across itself, so where the gate opens is a
+							// place on a picture rather than a number in a box.
+							key: "mountainLine",
+							enabledWhen: (k) => k.useMountain,
+							label: "Mountain line",
+							low: 0,
+							high: 0.95,
+							step: 0.01,
+							value: 0.5,
+							digits: 2,
+							shownWhen: (k) => k.merge === "gated",
+							note: () =>
+								field && field.overLine !== undefined
+									? `<b>${(field.overLine * 100).toFixed(1)}%</b> of the planet is above the line`
+									: "",
 						},
 						{
 							// The balance between the two layers. It is a ratio
 							// and not a number of metres, which is F-052 and is
 							// open: what it buys moves with the terrain curve.
 							key: "detail",
+							enabledWhen: (k) => k.useMountain,
 							label: "Detail on top",
 							low: 0,
-							high: 5,
+							high: 10,
 							step: 0.05,
-							value: 1.5,
+							// **Tuned against what the planet is made of, not by
+							// eye.** The material lines are absolute metres, so
+							// the balance between the two layers decides how much
+							// of the world is grass: at Relief 1,100 m this gives
+							// 48% grass, 9% rock and 7% snow over the whole
+							// sphere, where 1.5 gave 22% grass and 36% snow.
+							// **Tuned against what the planet is made of.** The material
+							// lines are absolute metres, so the balance between the
+							// two layers decides how much of the world is grass: at
+							// Relief 1,100 m the shipped set gives 50% grass, 8% rock
+							// and 7% snow over the whole sphere, where 1.5 gave 22%
+							// grass and 36% snow.
+							value: 7,
 							digits: 2,
 						},
 						{
 							key: "mountainFrequency",
+							enabledWhen: (k) => k.useMountain,
 							label: "Frequency",
 							low: 0,
 							high: 1,
@@ -817,35 +881,42 @@
 						},
 						{
 							key: "mountainFrequencyScale",
+							enabledWhen: (k) => k.useMountain,
 							label: "Frequency scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 10,
+							value: 16,
 							digits: 0,
 						},
 						{
 							key: "mountainOctaves",
+							enabledWhen: (k) => k.useMountain,
 							off: 1,
 							label: "Octaves",
 							low: 1,
 							high: 12,
 							step: 1,
-							value: 4,
+							// **Enough octaves that a summit is a summit.** At four the
+							// added height was smooth over a kilometre and the ranges
+							// drew as flat white mesas with steep sides.
+							value: 7,
 							digits: 0,
 						},
 						{
 							key: "mountainPersistence",
+							enabledWhen: (k) => k.useMountain,
 							off: 0,
 							label: "Persistence",
 							low: 0,
 							high: 0.95,
 							step: 0.01,
-							value: 0.45,
+							value: 0.55,
 							digits: 2,
 						},
 						{
 							key: "mountainLacunarity",
+							enabledWhen: (k) => k.useMountain,
 							label: "Lacunarity",
 							low: 1.2,
 							high: 4,
@@ -855,6 +926,7 @@
 						},
 						{
 							key: "mountainOffsetX",
+							enabledWhen: (k) => k.useMountain,
 							off: 0,
 							label: "Offset X",
 							low: -400,
@@ -865,6 +937,7 @@
 						},
 						{
 							key: "mountainOffsetY",
+							enabledWhen: (k) => k.useMountain,
 							off: 0,
 							label: "Offset Y",
 							low: -400,
@@ -875,6 +948,7 @@
 						},
 						{
 							key: "mountainSpline",
+							enabledWhen: (k) => k.useMountain,
 							label: "Mountain → range height",
 							type: "spline",
 							// **Flat over the low half and steep over the high
@@ -980,7 +1054,10 @@
 							low: -180,
 							high: 180,
 							step: 1,
-							value: -175,
+							// A place with a coast, a plain and a range on it, so the
+							// page opens on all three rather than on whichever the
+							// middle of the map happened to be.
+							value: 20,
 							digits: 0,
 							unit: "°",
 						},
@@ -1004,6 +1081,20 @@
 					group: "The view — not the world",
 					open: false,
 					rows: [
+						{
+							// **The plane is one patch and the planet is the
+							// world.** A patch a few kilometres across says what
+							// the ground does underfoot and cannot say where the
+							// continents are; the map above the knobs answers the
+							// second question, flat, because a globe drawn small
+							// hides half of itself and a second 3D view would be
+							// a second thing to aim.
+							key: "mapView",
+							label: "Map shows",
+							type: "select",
+							value: "patch",
+							options: ["patch", "planet"],
+						},
 						{
 							key: "picture",
 							label: "Picture",
@@ -1291,6 +1382,7 @@
 					mountainSpline: knobs.mountainSpline,
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
+					mountainLine: knobs.mountainLine,
 					detail: knobs.detail,
 				};
 			}
@@ -1340,6 +1432,10 @@
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
 				const heard = [0.5, 1, 0, 0];
+				// How much of the planet the gate is open over. Counted here
+				// rather than off the patch, because the line is a property of
+				// the world and a patch can be entirely on one side of it.
+				let overLine = 0;
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -1357,6 +1453,7 @@
 					);
 					tally.terrainSpline[bin(heard[2])]++;
 					tally.mountainSpline[bin(heard[3])]++;
+					if (heard[0] > knobs.mountainLine) overLine++;
 				}
 				let tallest = 0;
 				for (const counts of Object.values(tally))
@@ -1385,6 +1482,17 @@
 				// ground at all. What comes out from under it is the shallow
 				// floor that was already there.
 				const drained = -knobs.seaLevel;
+				// **What the whole planet is made of, not what this patch is.**
+				// The material lines are absolute metres and Relief is what
+				// carries the ground up through them, so the share of each is a
+				// property of the world -- and a patch is a place, which can be
+				// all mountain or all sea whatever the planet is doing.
+				const bands = [0, 0, 0, 0];
+				for (const v of raw) {
+					const d = v - sea;
+					bands[bandOf((d >= 0 ? d * up : d * down) + drained)]++;
+				}
+				for (let n = 0; n < bands.length; n++) bands[n] /= SPHERE_SAMPLES;
 
 				// Then the patch, laid out so a step across it is exactly one map
 				// cell -- the same metres per cell the engine's own map has, which
@@ -1477,6 +1585,12 @@
 					// world and on every part of one.
 					exposedShare: (land - wasLand) / ((n + 1) * (n + 1)),
 					drained,
+					bands,
+					overLine: overLine / SPHERE_SAMPLES,
+					// The planet map redraws from these without regenerating,
+					// so the two pictures are always of one world.
+					settings: s,
+					seed,
 					// **The field never fills its own range.** A stack of
 					// octaves divided by its summed amplitude is bounded by
 					// [-1, 1] and reaches maybe half of it, so a Raw picture
@@ -1511,7 +1625,163 @@
 			const mapCanvas = document.getElementById("map");
 			const mapCtx = mapCanvas.getContext("2d");
 
+			/**
+			 * The whole planet, flat, at whatever the picture is asking for.
+			 *
+			 * Longitude across and latitude down, which stretches the poles and
+			 * is the only projection where a pixel's direction is two cosines
+			 * and no case analysis. It is a picture of where things are, not a
+			 * map anything is measured off.
+			 *
+			 * **Sea level, the metre scale and the drain all come from the
+			 * field that is already generated**, so this is the same world the
+			 * plane is drawing rather than a second one that happens to agree.
+			 */
+			function planetHeights(wide, tall) {
+				const out = new Float32Array(wide * tall);
+				const said = [0.5, 1];
+				const layer = new Float32Array(wide * tall);
+				const raw = new Float32Array(wide * tall);
+				for (let r = 0; r < tall; r++) {
+					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
+					const ring = Math.cos(lat);
+					const y = Math.sin(lat);
+					for (let q = 0; q < wide; q++) {
+						const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
+						const unitless = fieldAt(
+							ring * Math.cos(lon),
+							y,
+							ring * Math.sin(lon),
+							field.seed,
+							field.k,
+							field.settings,
+							said,
+						);
+						const d = unitless - field.sea;
+						const at = r * wide + q;
+						out[at] =
+							(d >= 0 ? d * field.up : d * field.down) + field.drained;
+						raw[at] = unitless;
+						layer[at] = knobs.picture === "mountain" ? said[1] : said[0];
+					}
+				}
+				return { out, raw, layer };
+			}
+
+			/** Where on the flat planet the patch is standing. */
+			function patchBox(wide, tall) {
+				const half = field.span / 2 / field.k.radius;
+				const lat = (knobs.latitude * Math.PI) / 180;
+				const across = half / Math.max(0.15, Math.cos(lat));
+				const x = ((knobs.longitude + 180) / 360) * wide;
+				const y = (0.5 - knobs.latitude / 180) * tall;
+				return {
+					x: x - (across / (2 * Math.PI)) * wide,
+					y: y - (half / Math.PI) * tall,
+					w: Math.max(2, ((across * 2) / (2 * Math.PI)) * wide),
+					h: Math.max(2, ((half * 2) / Math.PI) * tall),
+				};
+			}
+
+			function drawPlanet() {
+				// Half the samples while a knob is moving, for the same reason
+				// the plane draws half its points: a picture that arrives after
+				// the finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 128 : 256;
+				const tall = wide / 2;
+				if (mapCanvas.width !== wide) {
+					mapCanvas.width = wide;
+					mapCanvas.height = tall;
+				}
+				const { out, raw, layer } = planetHeights(wide, tall);
+				let low = Infinity;
+				let high = -Infinity;
+				for (const v of raw) {
+					if (v < low) low = v;
+					if (v > high) high = v;
+				}
+				const image = mapCtx.createImageData(wide, tall);
+				const px = image.data;
+				for (let n = 0; n < out.length; n++)
+					paintGround(px, n * 4, out[n], raw[n], layer[n], low, high);
+				mapCtx.putImageData(image, 0, 0);
+				// The patch, outlined where it stands, so the plane and the map
+				// are one place rather than two pictures.
+				const box = patchBox(wide, tall);
+				mapCtx.strokeStyle = "rgba(255, 180, 84, 0.9)";
+				mapCtx.lineWidth = 1;
+				mapCtx.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+			}
+
+			/**
+			 * One pixel of ground, in whichever picture is selected.
+			 *
+			 * Shared by the patch and the planet, so the two never drift into
+			 * describing the same height with two different colors.
+			 */
+			function paintGround(px, at, metres, raw, layerValue, rawLow, rawHigh) {
+				if (knobs.picture === "terrain" || knobs.picture === "mountain") {
+					const t = Math.max(0, Math.min(1, layerValue));
+					px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
+					px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);
+					px[at + 2] = 255 * Math.pow(0.09 + 0.91 * t, 1 / 2.2);
+					px[at + 3] = 255;
+					return;
+				}
+				if (knobs.picture !== "ground") {
+					// Grey, and stopping at a different step of the build:
+					// Height reads elevation everywhere rather than naming a
+					// block, and Raw stops before sea level has been taken off
+					// the field at all.
+					const t =
+						knobs.picture === "raw"
+							? Math.max(
+									0,
+									Math.min(
+										1,
+										(raw - rawLow) / Math.max(1e-6, rawHigh - rawLow),
+									),
+								)
+							: Math.max(0, Math.min(1, (metres + 400) / 800));
+					const v = 255 * Math.pow(t, 1 / 2.2);
+					px[at] = v;
+					px[at + 1] = v;
+					px[at + 2] = knobs.picture === "raw" ? v * 0.9 : v;
+					px[at + 3] = 255;
+					return;
+				}
+				const band = BAND_COLORS[bandOf(metres)];
+				// Land shades by how far it stands above the band it started in,
+				// so a band is one material and still has shape in it. Sea is the
+				// floor seen through water, so it shades by how much water is
+				// over it -- which is why a beach shows sand and a deep does not.
+				const c = [0, 0, 0];
+				let shade;
+				if (metres <= 0) {
+					const through = 1 - Math.exp(metres / SEA_CLARITY);
+					for (let ch = 0; ch < 3; ch++)
+						c[ch] = band[ch] + (SEA_COLOR[ch] - band[ch]) * through;
+					shade = 1;
+				} else {
+					for (let ch = 0; ch < 3; ch++) c[ch] = band[ch];
+					shade = 0.72 + 0.28 * Math.min(1, (metres % 100) / 100);
+				}
+				if (knobs.contours) {
+					// A ring every hundred metres, on the same grid the two
+					// material lines sit on.
+					const into = ((metres % 100) + 100) % 100;
+					if (into < 4) shade *= 0.6;
+				}
+				// The picture is written to a screen, so the linear block colors
+				// are given the curve a screen expects.
+				px[at] = 255 * Math.pow(Math.min(1, c[0] * shade), 1 / 2.2);
+				px[at + 1] = 255 * Math.pow(Math.min(1, c[1] * shade), 1 / 2.2);
+				px[at + 2] = 255 * Math.pow(Math.min(1, c[2] * shade), 1 / 2.2);
+				px[at + 3] = 255;
+			}
+
 			function drawMap() {
+				if (knobs.mapView === "planet") return drawPlanet();
 				const n = field.n;
 				if (mapCanvas.width !== n) {
 					mapCanvas.width = n;
@@ -1519,79 +1789,21 @@
 				}
 				const image = mapCtx.createImageData(n, n);
 				const px = image.data;
-				for (let r = 0; r < n; r++) {
+				for (let r = 0; r < n; r++)
 					for (let q = 0; q < n; q++) {
-						const metres = field.height[r * (n + 1) + q];
-						const at = ((n - 1 - r) * n + q) * 4;
-						if (
-							knobs.picture === "terrain" ||
-							knobs.picture === "mountain"
-						) {
-							const v =
-								(knobs.picture === "mountain"
-									? field.mountain
-									: field.terrain)[r * (n + 1) + q];
-							const t = Math.max(0, Math.min(1, v));
-							px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
-							px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);
-							px[at + 2] = 255 * Math.pow(0.09 + 0.91 * t, 1 / 2.2);
-							px[at + 3] = 255;
-							continue;
-						}
-						if (knobs.picture !== "ground") {
-							// Grey, and stopping at a different step of the
-							// build: Height reads elevation everywhere rather
-							// than naming a block, and Raw stops before sea
-							// level has been taken off the field at all.
-							const t =
-								knobs.picture === "raw"
-									? Math.max(
-											0,
-											Math.min(
-												1,
-												(field.raw[r * (n + 1) + q] - field.rawLow) /
-													Math.max(1e-6, field.rawHigh - field.rawLow),
-											),
-										)
-									: Math.max(0, Math.min(1, (metres + 400) / 800));
-							const v = 255 * Math.pow(t, 1 / 2.2);
-							px[at] = v;
-							px[at + 1] = v;
-							px[at + 2] = knobs.picture === "raw" ? v * 0.9 : v;
-							px[at + 3] = 255;
-							continue;
-						}
-						const band = BAND_COLORS[bandOf(metres)];
-						// Land shades by how far it stands above the band it
-						// started in, so a band is one material and still has
-						// shape in it. Sea is the floor seen through water, so
-						// it shades by how much water is over it -- which is
-						// why a beach shows sand and a deep does not.
-						const c = [0, 0, 0];
-						let shade;
-						if (metres <= 0) {
-							const through = 1 - Math.exp(metres / SEA_CLARITY);
-							for (let ch = 0; ch < 3; ch++)
-								c[ch] = band[ch] + (SEA_COLOR[ch] - band[ch]) * through;
-							shade = 1;
-						} else {
-							for (let ch = 0; ch < 3; ch++) c[ch] = band[ch];
-							shade = 0.72 + 0.28 * Math.min(1, (metres % 100) / 100);
-						}
-						if (knobs.contours) {
-							// A ring every hundred metres, on the same grid the
-							// two material lines sit on.
-							const into = ((metres % 100) + 100) % 100;
-							if (into < 4) shade *= 0.6;
-						}
-						// The picture is written to a screen, so the linear block
-						// colors are given the curve a screen expects.
-						px[at] = 255 * Math.pow(Math.min(1, c[0] * shade), 1 / 2.2);
-						px[at + 1] = 255 * Math.pow(Math.min(1, c[1] * shade), 1 / 2.2);
-						px[at + 2] = 255 * Math.pow(Math.min(1, c[2] * shade), 1 / 2.2);
-						px[at + 3] = 255;
+						const from = r * (n + 1) + q;
+						paintGround(
+							px,
+							((n - 1 - r) * n + q) * 4,
+							field.height[from],
+							field.raw[from],
+							(knobs.picture === "mountain" ? field.mountain : field.terrain)[
+								from
+							],
+							field.rawLow,
+							field.rawHigh,
+						);
 					}
-				}
 				mapCtx.putImageData(image, 0, 0);
 			}
 
@@ -2172,6 +2384,21 @@
 					g.moveTo(toX(0), pad);
 					g.lineTo(toX(0), canvas.height - pad);
 					g.stroke();
+					// **The gate is drawn on the curve it cuts.** Mountain line
+					// is a height on this curve's own vertical axis, so saying it
+					// as a number in another group would make the reader hold two
+					// pictures at once. Above the amber line the mountain layer
+					// is let through; below it, nothing is.
+					if (key === "terrainSpline" && knobs.merge === "gated") {
+						const at = toY(knobs.mountainLine);
+						g.strokeStyle = "rgba(255, 180, 84, 0.55)";
+						g.setLineDash([3, 3]);
+						g.beginPath();
+						g.moveTo(pad, at);
+						g.lineTo(canvas.width - pad, at);
+						g.stroke();
+						g.setLineDash([]);
+					}
 					g.strokeStyle = "#6fd0ff";
 					g.lineWidth = 1.5;
 					g.beginPath();
@@ -2330,7 +2557,7 @@
 							const redraw = makeSpline(input, row.key, () =>
 								askForRedraw(),
 							);
-							rows.set(row.key, { row, wrap, input, redraw });
+							rows.set(row.key, { row, wrap, redraw });
 							continue;
 						}
 						const readout = document.createElement("output");
@@ -2383,7 +2610,17 @@
 				}
 			}
 
-			/** Show a knob only where it means something, rather than greying it. */
+			/**
+			 * Put the panel back in step with the knobs.
+			 *
+			 * **A row with no meaning comes off; a row that cannot reach the
+			 * world goes grey.** Those are different states. `shownWhen` hides a
+			 * question that does not apply -- Mountain line under a merge that
+			 * has no gate -- because a disabled row is a question the reader has
+			 * to answer before dismissing. `enabledWhen` greys a row that still
+			 * means something and is turned off elsewhere, which is every row of
+			 * a layer whose switch is up.
+			 */
 			function refreshPanel() {
 				for (const {
 					row,
@@ -2392,14 +2629,25 @@
 					input,
 					redraw,
 					note,
+					bypass,
 				} of rows.values()) {
 					const shown = row.shownWhen ? row.shownWhen(knobs) : true;
 					wrap.classList.toggle("hidden", !shown);
+					// **A row that cannot reach the world goes grey.** Switching
+					// a layer off leaves eight sliders that still move and still
+					// write themselves into the link, describing a layer nothing
+					// is reading -- so they say so, and the switch that turned
+					// them off stays live beside them.
+					const live = row.enabledWhen ? row.enabledWhen(knobs) : true;
+					wrap.classList.toggle("off", !live);
+					if (input) input.disabled = !live || (bypass && !bypass.checked);
+					if (bypass) bypass.disabled = !live;
 					if (note) note.innerHTML = shown ? row.note() : "";
 					if (row.type === "spline") {
 						if (shown && redraw) redraw();
 						continue;
 					}
+
 					// **A widget must show what the knob holds.** Anything that
 					// changes a knob without going through its own input -- a
 					// link, a settle, another knob's narrowing -- leaves the
@@ -2451,6 +2699,14 @@
 					`ground <b>${Math.round(field.lowest)}</b> to ` +
 					`<b>${Math.round(field.highest)} m</b> · ` +
 					`land here <b>${Math.round(field.landShare * 100)}%</b><br>` +
+					// **The whole planet, not this patch.** The material lines
+					// are absolute metres and a patch is a place, so a patch can
+					// be all snow on a world that is mostly grass. This is the
+					// number to tune Relief against.
+					`planet: <b>${(field.bands[0] * 100).toFixed(0)}%</b> sea · ` +
+					`<b>${(field.bands[1] * 100).toFixed(0)}%</b> grass · ` +
+					`<b>${(field.bands[2] * 100).toFixed(0)}%</b> rock · ` +
+					`<b>${(field.bands[3] * 100).toFixed(0)}%</b> snow<br>` +
 					`redrawn in <b>${cost.toFixed(0)} ms</b>` +
 					(field.draft ? " · settling" : "") +
 					"<br>" +
