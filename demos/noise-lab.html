@@ -711,6 +711,13 @@
 						},
 						{
 							key: "relief",
+							// Off is the slider's own bottom, not zero. Zero is
+							// the arithmetic neutral and it multiplies every
+							// height by nothing, which leaves a full field of
+							// noise and no ground -- a world the panel has no
+							// other way to build, and one that reads as a broken
+							// generator rather than as a knob turned off.
+							off: 50,
 							label: "Relief",
 							low: 50,
 							high: 3000,
@@ -721,6 +728,7 @@
 						},
 						{
 							key: "seaDepth",
+							off: 10,
 							label: "Sea depth",
 							low: 10,
 							high: 1000,
@@ -817,14 +825,18 @@
 			/**
 			 * Whether a knob is being applied at all.
 			 *
-			 * **Only knobs with a real neutral get a switch, and the neutral has
-			 * to be a value the slider itself can reach.** Relief and Sea depth
-			 * fail the second test: their sliders bottom out at 50 m and 10 m,
-			 * and their arithmetic neutral is 0 -- which multiplies every height
-			 * by nothing and leaves a perfectly good field with no ground at
-			 * all. A switch that reaches a world the panel cannot otherwise
-			 * build is not measuring what the knob contributes, it is inventing
-			 * a state. Move the slider instead; that is what it is for. A knob is off when
+			 * **A knob's off has to remove its effect without removing the
+			 * world.** For most of them that is the arithmetic neutral -- ridge
+			 * 0 is bit-for-bit the plain sum, warp 0 reads the point where it
+			 * stands, persistence 0 leaves one octave. Relief and Sea depth are
+			 * the exception: their neutral is 0, which multiplies every height
+			 * by nothing and leaves a full field of noise with no ground at all,
+			 * a world the sliders cannot otherwise build and one that reads as a
+			 * broken generator. Theirs is the slider's own bottom instead, which
+			 * is as near to nothing as the panel goes and still a world.
+			 *
+			 * Either way the switch says which value it uses, so there is
+			 * nothing to infer. A knob is off when
 			 * it is set to the value that removes its own effect -- ridge 0 is
 			 * bit-for-bit the plain sum, warp 0 reads the point where it stands,
 			 * persistence 0 leaves one octave -- and for those, turning it off is

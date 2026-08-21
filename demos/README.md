@@ -281,7 +281,10 @@ never a mountain. And the shipped `relief` of 1,100 m puts most land above the
 **Every knob that has a value meaning "off" carries a switch.** Ridge 0 is
 bit-for-bit the plain sum, warp 0 reads the point where it stands, persistence 0
 leaves one octave; unticking sets the knob to that value, so what is left on
-screen is the ground the knob was not contributing to. Frequency, lacunarity and
+screen is the ground the knob was not contributing to. Relief and Sea depth use
+their slider's own bottom rather than zero — zero multiplies every height by
+nothing, which leaves a full field of noise and no ground at all. The switch
+names the value it uses. Frequency, lacunarity and
 map cell have no such value and get no switch — a switch that quietly meant
 "back to the default" would look like a measurement and not be one.
 
