@@ -1308,6 +1308,8 @@ which costs nothing and fixes nothing.
 
 ---
 
+## Closed
+
 ### F-058 — Sea patches split along a chunk seam wherever a wave lifts them
 
 **Kind:** bug
@@ -1348,9 +1350,25 @@ neighbour's cap, but the sea has no cap plane and no depth-buffer tie to lose,
 so the objection does not carry over. The skirt is an hour; the snap is a day
 and gives an exactly closed surface.
 
+**Closed:** 2026-08-21, by a curtain. Each patch hangs a strip from each of its
+three rims, straight down, as deep as the swell is tall, carrying the rim
+vertex's own wave. Neither of the two fixes above: the snap needs neighbour
+levels the renderer does not have, and a plain skirt was the shape of the
+answer without the part that makes it work. **What makes it work is the draw
+order.** The sea is translucent and writes depth, so a curtain blended before a
+neighbour's surface is drawn over it leaves two layers of water on one pixel --
+a dark outline of every chunk, worse than the slit. The patch therefore puts
+its curtain last in the index list and `SeaRenderer` draws in two passes over
+the same instances, every surface and then every curtain, so the depth buffer
+already holds the nearest water by the time a curtain is rasterized and the
+test throws it away wherever the sea is closed. One extra draw call, 96
+triangles a patch against 256, and no dark band in shallow water where the
+curtain hangs into the sand.
+
+
+
 ---
 
-## Closed
 
 ### F-041 — The psrd noise basis is the one field two machines may not agree on
 

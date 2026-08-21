@@ -20,10 +20,11 @@ mkdirSync(OUT, { recursive: true });
 /** The planet the client opens on. */
 const RADIUS = 6800.65;
 
-/** The default swell: metres between crests, and trough to crest. */
+/** The default swell: metres between crests, trough to crest, and speed. */
 const WAVE_SCALE = 45;
 const WAVE_HEIGHT = 4;
 const CHOP = 2.5;
+const SPEED = 0.8;
 
 type Vec = [number, number, number];
 
@@ -72,45 +73,187 @@ function vnoise3(x: number, y: number, z: number): number {
 const AXIS_A: Vec = [0.86, 0.36, 0.36];
 const AXIS_B: Vec = [-0.31, 0.8, 0.51];
 
-/** One octave of the shipped field: two folded bands, multiplied. */
-function shippedOctave(d: Vec, k: number, drift: number, chop: number): number {
-	const a = dot(d, AXIS_A) * k + drift;
-	const b = dot(d, AXIS_B) * k + drift;
+/** One octave: two folded bands, a phase each, multiplied. */
+function octave(
+	d: Vec,
+	k: number,
+	phaseA: number,
+	phaseB: number,
+	chop: number,
+): number {
+	const a = dot(d, AXIS_A) * k + phaseA;
+	const b = dot(d, AXIS_B) * k + phaseB;
 	const wa = 1 - Math.abs(Math.sin(a));
 	const wb = 1 - Math.abs(Math.sin(b));
-	const ra = Math.abs(Math.cos(a));
-	const rb = Math.abs(Math.cos(b));
-	const wx = wa + (ra - wa) * wa;
-	const wy = wb + (rb - wb) * wb;
+	const wx = wa + (Math.abs(Math.cos(a)) - wa) * wa;
+	const wy = wb + (Math.abs(Math.cos(b)) - wb) * wb;
 	return Math.pow(1 - Math.pow(wx * wy, 0.65), chop);
 }
 
-/** The shipped swell, in metres off the sea radius. */
-export function shippedSwell(dir: Vec, seconds: number): number {
+/** Radians of phase a band is bent by, and how far one bend runs. */
+const BEND_RADIANS = 12;
+const BEND_OVER = 16;
+const BEND_OCTAVES = 2;
+const OCTAVE_GAIN = 0.4;
+
+/**
+ * The field with one clock for every band and every octave.
+ *
+ * `1 - |sin(p)|` repeats every `pi` of phase, and the phase here is
+ * `dot(dir, axis) * k + speed * t` with the same `speed` in all six of them,
+ * so the whole field is exactly the field it was `pi / speed` seconds ago --
+ * 3.93 s at the default. And a pattern added to its own time-reverse is a
+ * standing wave: the crests go nowhere, they rise and fall in place.
+ */
+export function sharedClockSwell(dir: Vec, seconds: number): number {
 	let k = (2 * Math.PI * RADIUS) / Math.max(1, WAVE_SCALE);
 	let chop = Math.max(1, CHOP);
-	const wf = k * 0.3;
-	const warp: Vec = [
-		vnoise3(dir[0] * wf, dir[1] * wf, dir[2] * wf),
-		vnoise3(dir[0] * wf + 19.3, dir[1] * wf + 7.7, dir[2] * wf + 3.1),
-		vnoise3(dir[0] * wf - 5.2, dir[1] * wf + 11.9, dir[2] * wf + 23.4),
-	];
-	let d = norm(add(dir, scale(warp, 1.6 / k)));
+	let d = dir;
 	let h = 0;
 	let amp = 1;
 	let total = 0;
-	const drift = seconds * 0.8;
+	const drift = seconds * SPEED;
 	for (let o = 0; o < 3; o++) {
-		let band = shippedOctave(d, k, drift, chop);
-		band += shippedOctave(d, k, -drift, chop);
+		let bendA = 0;
+		let bendB = 0;
+		if (o < BEND_OCTAVES) {
+			const wf = k / BEND_OVER;
+			const p: Vec = [d[0] * wf, d[1] * wf, d[2] * wf];
+			bendA = vnoise3(p[0] + 19.3, p[1] + 7.7, p[2] + 3.1) * BEND_RADIANS;
+			bendB =
+				vnoise3(p[0] - 5.2, p[1] + 11.9, p[2] + 23.4) * BEND_RADIANS;
+		}
+		let band = octave(d, k, drift + bendA, drift + bendB, chop);
+		band += octave(d, k, -drift + bendA, -drift + bendB, chop);
 		h += band * amp;
 		total += amp * 2;
 		d = norm([d[1] * 0.8 + d[2] * 0.6, d[2] * 0.8 - d[0] * 0.6, d[0]]);
 		k *= 1.9;
-		amp *= 0.22;
+		amp *= OCTAVE_GAIN;
 		chop = chop + (1 - chop) * 0.2;
 	}
 	return (h / total - 0.5) * WAVE_HEIGHT;
+}
+
+export interface Travel {
+	/** How much slower the second band's clock runs than the first's. */
+	against: number;
+	/** What one octave's clock is multiplied by for the next. */
+	dispersion: number;
+	/** Radians a second the bend field itself turns over. */
+	bendDrift: number;
+	/** Whether a second sample of each octave travels the other way. */
+	mirrored: boolean;
+	/** Whether the mirrored sample keeps the bend or negates it with time. */
+	keepBend?: boolean;
+}
+
+/**
+ * The same field with a clock per band and per octave, travelling one way.
+ *
+ * Three changes, and each removes one way the field can repeat. **One sample
+ * an octave, not a pair**: a pattern plus its own time-reverse stands still
+ * and rocks. **A clock per band**: the two bands of an octave run at
+ * different rates, so their crossings travel rather than pulsing. **A clock
+ * per octave, from the dispersion of deep water**: a wave's speed goes as the
+ * square root of its wavelength, so an octave at `1.9` times the frequency
+ * runs `sqrt(1.9)` times as fast and the three share no period.
+ */
+export function travellingSwell(dir: Vec, seconds: number, t: Travel): number {
+	let k = (2 * Math.PI * RADIUS) / Math.max(1, WAVE_SCALE);
+	let chop = Math.max(1, CHOP);
+	let omega = SPEED;
+	let d = dir;
+	let h = 0;
+	let amp = 1;
+	let total = 0;
+	for (let o = 0; o < 3; o++) {
+		let bendA = 0;
+		let bendB = 0;
+		if (o < BEND_OCTAVES) {
+			const wf = k / BEND_OVER;
+			const turn = seconds * t.bendDrift;
+			const p: Vec = [d[0] * wf, d[1] * wf, d[2] * wf];
+			bendA =
+				vnoise3(p[0] + 19.3 + turn, p[1] + 7.7, p[2] + 3.1) *
+				BEND_RADIANS;
+			bendB =
+				vnoise3(p[0] - 5.2, p[1] + 11.9 + turn, p[2] + 23.4) *
+				BEND_RADIANS;
+		}
+		const phaseA = seconds * omega + bendA;
+		const phaseB = -seconds * omega * t.against + bendB;
+		let band = octave(d, k, phaseA, phaseB, chop);
+		total += amp;
+		if (t.mirrored) {
+			band += t.keepBend
+				? octave(
+						d,
+						k,
+						-seconds * omega + bendA,
+						seconds * omega * t.against + bendB,
+						chop,
+					)
+				: octave(d, k, -phaseA, -phaseB, chop);
+			total += amp;
+		}
+		h += band * amp;
+		d = norm([d[1] * 0.8 + d[2] * 0.6, d[2] * 0.8 - d[0] * 0.6, d[0]]);
+		k *= 1.9;
+		omega *= t.dispersion;
+		amp *= OCTAVE_GAIN;
+		chop = chop + (1 - chop) * 0.2;
+	}
+	return (h / total - 0.5) * WAVE_HEIGHT;
+}
+
+/**
+ * How well the surface at one moment matches the surface a lag later.
+ *
+ * The same reading as the spatial one, taken along the clock instead: hold a
+ * few thousand points still, sample them now and again at a lag, and
+ * correlate. Water that goes somewhere loses itself; water that rocks comes
+ * back to 1 every time the lag passes its period.
+ */
+function overTime(
+	field: (dir: Vec, seconds: number) => number,
+	lags: number[],
+): { lag: number; match: number }[] {
+	const centre = norm([0.31, 0.62, 0.72]);
+	const e1 = norm(cross([0, 1, 0], centre));
+	const e2 = norm(cross(centre, e1));
+	const points: Vec[] = [];
+	for (let n = 0; n < 3000; n++) {
+		const x = (hash13(n * 3 + 1, 7, 11) - 0.5) * 400;
+		const y = (hash13(n * 3 + 2, 13, 17) - 0.5) * 400;
+		points.push(
+			norm(
+				add(centre, add(scale(e1, x / RADIUS), scale(e2, y / RADIUS))),
+			),
+		);
+	}
+	const at = (seconds: number): Float64Array => {
+		const out = new Float64Array(points.length);
+		for (let n = 0; n < points.length; n++) out[n] = field(points[n]!, seconds);
+		let mean = 0;
+		for (const v of out) mean += v;
+		mean /= out.length;
+		for (let n = 0; n < out.length; n++) out[n] = out[n]! - mean;
+		return out;
+	};
+	const first = at(0);
+	let power = 0;
+	for (const v of first) power += v * v;
+	return lags.map((lag) => {
+		const later = at(lag);
+		let sum = 0;
+		let energy = 0;
+		for (let n = 0; n < first.length; n++) {
+			sum += first[n]! * later[n]!;
+			energy += later[n]! * later[n]!;
+		}
+		return { lag, match: sum / Math.sqrt(power * energy) };
+	});
 }
 
 /**
@@ -406,90 +549,6 @@ function anisotropy(
 	return { ratio: (peak * BINS) / total, degrees: (at * 180) / BINS };
 }
 
-/**
- * The shipped field with the two things that make it a weave taken out.
- *
- * The fold stays -- a crest with a length and a width is what makes it read as
- * water -- and two things change. **The two bands are given independent phase
- * offsets from noise instead of a shared offset of the sample point.** A
- * shared offset slides the whole pattern sideways and leaves its geometry
- * intact, which is why the crests still line up across a bay; two offsets
- * shear it, so the angle the crests cross at varies from place to place.
- * **And the octaves are given a gain the eye can see.** At 0.22 the second
- * octave is a fifth of the first and the third a twentieth, so the surface is
- * one wavelength wearing a texture; at 0.5 it is three.
- */
-export interface Shear {
-	/** Radians of phase each band is bent by, independently of the other. */
-	shear: number;
-	/** How many wavelengths one bend of the shear field runs over. */
-	shearOver: number;
-	/** How many octaves are given their own bend before the rest go unbent. */
-	shearOctaves: number;
-	/** How many octaves are summed. */
-	octaves: number;
-	/** What each octave is worth against the one before it. */
-	gain: number;
-	/** How far a slow field raises and flattens the whole swell. */
-	groups: number;
-}
-
-/** One octave, with a phase per band rather than one for both. */
-function shearedOctave(
-	d: Vec,
-	k: number,
-	phaseA: number,
-	phaseB: number,
-	chop: number,
-): number {
-	const a = dot(d, AXIS_A) * k + phaseA;
-	const b = dot(d, AXIS_B) * k + phaseB;
-	const wa = 1 - Math.abs(Math.sin(a));
-	const wb = 1 - Math.abs(Math.sin(b));
-	const wx = wa + (Math.abs(Math.cos(a)) - wa) * wa;
-	const wy = wb + (Math.abs(Math.cos(b)) - wb) * wb;
-	return Math.pow(1 - Math.pow(wx * wy, 0.65), chop);
-}
-
-export function shearedSwell(dir: Vec, seconds: number, s: Shear): number {
-	let k = (2 * Math.PI * RADIUS) / Math.max(1, WAVE_SCALE);
-	const k0 = k;
-	let chop = Math.max(1, CHOP);
-	let d = dir;
-	let h = 0;
-	let amp = 1;
-	let total = 0;
-	const drift = seconds * 0.8;
-	for (let o = 0; o < s.octaves; o++) {
-		// The bend is read well below this octave's own frequency, so the
-		// crests stay coherent over a train and the angle they cross at
-		// drifts over many of them.
-		let shearA = 0;
-		let shearB = 0;
-		if (o < s.shearOctaves) {
-			const wf = k / s.shearOver;
-			const p: Vec = [d[0] * wf, d[1] * wf, d[2] * wf];
-			shearA = vnoise3(p[0] + 19.3, p[1] + 7.7, p[2] + 3.1) * s.shear;
-			shearB = vnoise3(p[0] - 5.2, p[1] + 11.9, p[2] + 23.4) * s.shear;
-		}
-		let band = shearedOctave(d, k, drift + shearA, drift + shearB, chop);
-		band += shearedOctave(d, k, -drift + shearA, -drift + shearB, chop);
-		h += band * amp;
-		total += amp * 2;
-		d = norm([d[1] * 0.8 + d[2] * 0.6, d[2] * 0.8 - d[0] * 0.6, d[0]]);
-		k *= 1.9;
-		amp *= s.gain;
-		chop = chop + (1 - chop) * 0.2;
-	}
-	let height = h / total - 0.5;
-	if (s.groups > 0) {
-		const gf = k0 / 12;
-		const g = vnoise3(dir[0] * gf + 51.1, dir[1] * gf + 3.3, dir[2] * gf - 8.8);
-		height *= 1 + s.groups * g;
-	}
-	return height * WAVE_HEIGHT;
-}
-
 const SIZE = 512;
 const SPANS = [400, 1600];
 
@@ -500,11 +559,11 @@ const VERTEX_SPACING = 4;
 const NORMAL_ARC = 0.0004 * RADIUS;
 
 for (const span of SPANS) {
-	const heights = patch(shippedSwell, SIZE, span, 0);
-	writePng(`${OUT}/shipped-${span}m.png`, SIZE, shade(heights, SIZE, span));
+	const heights = patch(sharedClockSwell, SIZE, span, 0);
+	writePng(`${OUT}/field-${span}m.png`, SIZE, shade(heights, SIZE, span));
 	const score = regularity(heights, SIZE, span, WAVE_SCALE);
 	console.log(
-		`shipped field, ${span} m across: repeats at ${score.peak.toFixed(3)} ` +
+		`the field, ${span} m across: repeats at ${score.peak.toFixed(3)} ` +
 			`(lag ${score.atMetres.toFixed(0)} m, ${score.atDegrees.toFixed(0)} deg), ` +
 			`rms slope ${rmsSlope(heights, SIZE, span).toFixed(4)}`,
 	);
@@ -512,10 +571,10 @@ for (const span of SPANS) {
 
 // What survives the vertex grid, and what the shading is actually given.
 const span = 400;
-const truth = patch(shippedSwell, SIZE, span, 0);
-const mesh = throughTheMesh(shippedSwell, SIZE, span, 0, VERTEX_SPACING, NORMAL_ARC);
-writePng(`${OUT}/shipped-through-mesh-${span}m.png`, SIZE, shadeSlopes(mesh.normals, SIZE));
-writePng(`${OUT}/shipped-mesh-heights-${span}m.png`, SIZE, shade(mesh.heights, SIZE, span));
+const truth = patch(sharedClockSwell, SIZE, span, 0);
+const mesh = throughTheMesh(sharedClockSwell, SIZE, span, 0, VERTEX_SPACING, NORMAL_ARC);
+writePng(`${OUT}/through-mesh-${span}m.png`, SIZE, shadeSlopes(mesh.normals, SIZE));
+writePng(`${OUT}/mesh-heights-${span}m.png`, SIZE, shade(mesh.heights, SIZE, span));
 console.log(
 	`\nthrough the mesh, ${span} m across, a vertex every ${VERTEX_SPACING} m:`,
 );
@@ -531,68 +590,118 @@ console.log(
 		`(a ${NORMAL_ARC.toFixed(2)} m arm)`,
 );
 
+// How the surface moves, which is a different question from how it is laid
+// out. A field that repeats every few seconds rocks; one that does not,
+// travels.
+const LAGS: number[] = [];
+for (let lag = 0.25; lag <= 30; lag += 0.25) LAGS.push(Number(lag.toFixed(2)));
+
+function report(
+	name: string,
+	field: (dir: Vec, seconds: number) => number,
+): void {
+	const series = overTime(field, LAGS);
+	// Every smooth field matches itself at a very short lag, so start the
+	// search past a second.
+	const past = series.filter((s) => s.lag >= 1);
+	let best = past[0]!;
+	for (const s of past) if (s.match > best.match) best = s;
+	const at4 = series.find((s) => Math.abs(s.lag - 3.93) < 0.13)!;
+	console.log(
+		`${name.padEnd(34)} comes back to ${best.match.toFixed(3)} at ` +
+			`${best.lag.toFixed(2)} s; at 3.93 s it reads ${at4.match.toFixed(3)}`,
+	);
+}
+
+console.log("\nhow the surface moves, over a 400 m patch:");
+report("one clock, mirrored", sharedClockSwell);
+const TRIALS: { name: string; travel: Travel }[] = [
+	{
+		name: "one clock, not mirrored",
+		travel: { against: 1, dispersion: 1, bendDrift: 0, mirrored: false },
+	},
+	{
+		name: "clock per band",
+		travel: { against: 0.76, dispersion: 1, bendDrift: 0, mirrored: false },
+	},
+	{
+		name: "clock per band and octave",
+		travel: {
+			against: 0.76,
+			dispersion: Math.sqrt(1.9),
+			bendDrift: 0,
+			mirrored: false,
+		},
+	},
+	{
+		name: "and the bend turns over",
+		travel: {
+			against: 0.76,
+			dispersion: Math.sqrt(1.9),
+			bendDrift: 0.03,
+			mirrored: false,
+		},
+	},
+	{
+		name: "per band and octave, mirrored",
+		travel: {
+			against: 0.76,
+			dispersion: Math.sqrt(1.9),
+			bendDrift: 0.03,
+			mirrored: true,
+		},
+	},
+	{
+		name: "mirrored, bend kept",
+		travel: {
+			against: 0.76,
+			dispersion: Math.sqrt(1.9),
+			bendDrift: 0.03,
+			mirrored: true,
+			keepBend: true,
+		},
+	},
+	{
+		name: "mirrored, bend kept, no drift",
+		travel: {
+			against: 0.76,
+			dispersion: Math.sqrt(1.9),
+			bendDrift: 0,
+			mirrored: true,
+			keepBend: true,
+		},
+	},
+];
+for (const trial of TRIALS)
+	report(trial.name, (d, t) => travellingSwell(d, t, trial.travel));
+
+// The layout must survive the change of clock.
 console.log("");
 for (const across of SPANS) {
-	const field = patch(shippedSwell, SIZE, across, 0);
+	const field = patch(sharedClockSwell, SIZE, across, 0);
 	const a = anisotropy(field, SIZE, across);
+	const r = regularity(field, SIZE, across, WAVE_SCALE);
 	console.log(
-		`shipped                      ${String(across).padStart(5)} m: ` +
-			`slopes agree ${a.ratio.toFixed(2)}x at ${a.degrees.toFixed(0)} deg`,
+		`one clock          ${String(across).padStart(5)} m: slopes agree ` +
+			`${a.ratio.toFixed(2)}x, repeats at ${r.peak.toFixed(3)}`,
 	);
 }
-
-const BASE = { shear: 12, gain: 0.4, shearOver: 16, groups: 0.5, shearOctaves: 2 };
-const CANDIDATES: { name: string; shear: Shear }[] = [
-	{ name: "3 octaves, gain 0.4", shear: { ...BASE, octaves: 3 } },
-	{ name: "4 octaves, gain 0.4", shear: { ...BASE, octaves: 4 } },
-];
-console.log("");
-for (const candidate of CANDIDATES) {
-	for (const across of SPANS) {
-		const field = patch((d, t) => shearedSwell(d, t, candidate.shear), SIZE, across, 0);
-		const a = anisotropy(field, SIZE, across);
-		const r = regularity(field, SIZE, across, WAVE_SCALE);
-		const slug = candidate.name.replace(/[^a-z0-9]+/g, "-");
-		writePng(`${OUT}/${slug}-${across}m.png`, SIZE, shade(field, SIZE, across));
-		console.log(
-			`${candidate.name.padEnd(28)} ${String(across).padStart(5)} m: ` +
-				`slopes agree ${a.ratio.toFixed(2)}x at ${a.degrees.toFixed(0)} deg, ` +
-				`repeats at ${r.peak.toFixed(3)}, rms slope ${rmsSlope(field, SIZE, across).toFixed(4)}`,
-		);
-	}
-}
-
-// The chosen field, and what the vertex grid leaves of it. The narrowest
-// octave has to stay wide enough for the vertices to draw, or the surface
-// gains crests that move as the camera does.
-console.log("");
-for (const octaves of [3, 4]) {
-	const field = { ...BASE, octaves };
-	const across = 400;
-	const truthField = patch((d, t) => shearedSwell(d, t, field), SIZE, across, 0);
-	const through = throughTheMesh(
-		(d, t) => shearedSwell(d, t, field),
-		SIZE,
-		across,
-		0,
-		VERTEX_SPACING,
-		NORMAL_ARC,
-	);
-	writePng(
-		`${OUT}/chosen-${octaves}-through-mesh.png`,
-		SIZE,
-		shadeSlopes(through.normals, SIZE),
-	);
-	// How far the drawn surface stands from the field it is drawn from.
-	let error = 0;
-	for (let at = 0; at < SIZE * SIZE; at++)
-		error += (through.heights[at]! - truthField[at]!) ** 2;
+const CHOSEN: Travel = {
+	against: 0.76,
+	dispersion: Math.sqrt(1.9),
+	bendDrift: 0.03,
+	mirrored: true,
+	keepBend: true,
+};
+for (const across of SPANS) {
+	const field = patch((d, t) => travellingSwell(d, t, CHOSEN), SIZE, across, 0);
+	const a = anisotropy(field, SIZE, across);
+	const r = regularity(field, SIZE, across, WAVE_SCALE);
+	writePng(`${OUT}/travelling-${across}m.png`, SIZE, shade(field, SIZE, across));
 	console.log(
-		`${octaves} octaves at a vertex every ${VERTEX_SPACING} m: ` +
-			`narrowest wave ${(WAVE_SCALE / 1.9 ** (octaves - 1)).toFixed(1)} m, ` +
-			`rms slope ${rmsSlope(truthField, SIZE, across).toFixed(4)} field ` +
-			`-> ${rmsSlope(through.heights, SIZE, across).toFixed(4)} drawn, ` +
-			`rms miss ${Math.sqrt(error / (SIZE * SIZE)).toFixed(3)} m`,
+		`a clock each       ${String(across).padStart(5)} m: slopes agree ` +
+			`${a.ratio.toFixed(2)}x, repeats at ${r.peak.toFixed(3)}, ` +
+			`rms slope ${rmsSlope(field, SIZE, across).toFixed(4)}`,
 	);
 }
 

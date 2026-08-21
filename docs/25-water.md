@@ -170,6 +170,85 @@ A phase being a dot product is what makes the bands themselves seamless. A
 wave is a band wrapping the whole planet, continuous everywhere, with no face
 edge to cross and no pole to pinch.
 
+### A wave that rocks is a wave with one clock
+
+Lay the crests out well and the water can still look wrong the moment it
+moves. The recipe drifts its bands by adding `speed × time` to the phase, and
+that one line has two problems in it.
+
+**A folded band repeats every half wavelength of phase.** `1 - |sin(p)|` comes
+back to itself every `pi` of `p`, and `p` is `dot(direction, axis) × k + speed
+× time`. So after `pi / speed` seconds every band is exactly where it was — and
+if all six bands of all three octaves share one `speed`, the whole planet is.
+At the shipped speed that is **3.93 seconds**. Measure it the same way as the
+layout, along the clock instead of across the water: hold three thousand points
+still, sample them now and again later, and correlate. The one-clock field
+comes back to a match of **1.000**. Not nearly, not mostly — the same ocean,
+four seconds later, forever.
+
+**And a pattern added to its own time-reverse is a standing wave.** The recipe
+samples each octave twice, once drifting each way, on the argument that one
+direction alone slides the whole ocean past like a conveyor. That is true, and
+two mirrored copies of the *same* clock is the other failure: the crests go
+nowhere at all. They rise and fall in place. Rocking.
+
+Three changes, each removing one way the field can repeat, and none of them
+costing a lookup:
+
+- **A clock per band.** The two bands of an octave run at rates with no
+  whole-number ratio between them (0.76), so their crossings travel instead of
+  pulsing. That alone takes the 3.93-second reading from 1.000 to **0.498**.
+- **A clock per octave, from the dispersion of deep water.** A wave travels at
+  the square root of its wavelength, so an octave at 1.9 times the frequency
+  runs `sqrt(1.9)` times as fast. Physical, and it leaves the three octaves
+  sharing no period: **0.416**, and the worst match anywhere in thirty seconds
+  drops to 0.78.
+- **The bend travels too.** The crests move; so do the groups they arrive in.
+  Sliding the bend field along at 3.4 m/s is the largest single part of the
+  reading — with it held still the surface still comes back to **0.84** of a
+  moment fifteen seconds earlier, and with it moving the best match anywhere in
+  thirty seconds is **0.31**.
+
+The mirrored second sample stays, because with two different clocks it is no
+longer a mirror: it is the same water travelling the other way, and the two
+interfere and churn, which is what the original argument wanted. Only the
+clocks are mirrored and never the bend — the bend says *where* the crests are,
+and both copies are the same sea.
+
+The layout is untouched by all of this. Sampled at one instant the field is
+the same field, so the slope-direction reading stays at 1.7 and 1.9 and the
+shifted-patch reading at 0.09 and 0.04.
+
+### Two patches that meet are not the same size
+
+Sea patches are cut from the chunks the terrain picked, and the selection drops
+a chunk's level with distance: a chunk twice as wide as its neighbour cuts the
+shared edge into vertices twice as far apart. Where the finer side puts a
+vertex halfway along one of the coarser side's segments, the wave lifts it off
+the straight line the coarser side draws, and the two surfaces part along a
+slit that goes right through to the sea floor. From the air that reads as
+dotted lines of sand colour running along every chunk edge, and it gets worse
+the taller the waves — a cap on the one knob a player is most likely to raise.
+
+Set the wave height to zero and the lines all but vanish, which is what says
+they are the waves and not the shading.
+
+The fix is a **curtain**: each patch hangs a strip from each of its three rims,
+straight down, as deep as the swell is tall. A curtain vertex stands where its
+rim vertex stands and carries the rim's own wave, so the strip closes whatever
+gap the neighbour left.
+
+Hanging it is the easy half. **The order it is drawn in is the whole of the
+rest.** The sea is translucent and it writes depth, so two layers of water over
+one pixel is a dark band, and a curtain that blends before a neighbour's
+surface is drawn over it produces exactly that — a dark outline of every chunk,
+which is worse than the slit it closed. So the draw goes in two passes over the
+same patches: **every surface, then every curtain**. By the time a curtain is
+rasterized the depth buffer already holds the nearest water everywhere, so the
+depth test throws the curtain away wherever the sea is closed and keeps it only
+in the slits. It costs one extra draw call and 96 triangles a patch against
+256, and nothing at all where there is no gap.
+
 ### Below the last wave the geometry can draw, the slope is painted on
 
 Stop at three octaves and the water between two crests is a sheet of glass.
@@ -573,6 +652,20 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
   12.5 m wave at three vertices across and a fourth would be 6.6 m at under
   two — crests that move with the camera. Adding it moves the repeat reading
   from 0.101 to 0.102.
+- **One clock makes the whole planet repeat.** A folded band comes back to
+  itself every `pi` of phase, so one drift rate for every band and octave means
+  the same ocean every `pi / speed` seconds — **3.93 s** at the shipped speed,
+  measured as a **1.000** match against four seconds earlier. A rate per band,
+  a rate per octave from deep-water dispersion, and a bend field that travels
+  at 3.4 m/s take the worst match anywhere in thirty seconds to **0.31**. The
+  travelling bend is the biggest of the three: held still, the surface still
+  comes back to **0.84**.
+- **A curtain closes the seams, and the draw order is the whole of it.** Two
+  patches that meet are different sizes, so the finer one lifts a vertex off
+  the line the coarser one draws and the water splits. Each patch hangs a strip
+  from its rim as deep as the swell is tall — and every surface is drawn before
+  any curtain, so the depth test keeps a curtain only in the slits. Interleaved,
+  a second layer of translucent water outlines every chunk in the dark.
 - **Below 12.5 m the slope is painted, not built.** Three octaves of noise read
   for their **gradient** — which falls out of the same eight lattice corners
   as the value, so one lookup does both — tilt the normal per pixel. About

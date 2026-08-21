@@ -804,6 +804,45 @@ Violating any of these breaks the design. They are not tunable.
   glitter. It fades over the same distance the swell flattens over. The same
   noise ragged-edges the **foam**, whose band is cut across a per-vertex number
   and otherwise has the straight edges of the triangle it was interpolated over.
+- **A WAVE THAT ROCKS IS A WAVE WITH ONE CLOCK** (`swell` in `SEA_SHADER`, doc
+  25, `tools/trial-waves.ts`). `1 - |sin(p)|` repeats every `pi` of phase and
+  the phase is `dot(dir, axis) * k + speed * t`, so **one drift rate for every
+  band and octave makes the whole planet repeat every `pi / speed` seconds** --
+  **3.93 s** at the shipped speed, and measured by holding 3,000 points still
+  and correlating, it comes back to **1.000**. Sampling each octave twice, once
+  drifting each way, is a **standing wave** on top of that: the crests go
+  nowhere and rise and fall in place. Three fixes, none of them a lookup: a rate
+  per band (0.76, no whole-number ratio) takes the 3.93 s reading to **0.498**;
+  a rate per octave from **deep-water dispersion** (`sqrt(1.9)` per octave,
+  because a wave travels as the root of its wavelength) takes it to **0.416**;
+  and **the bend field travelling at 3.4 m/s** is the largest of the three --
+  held still the surface still returns to **0.84** of a moment 15 s earlier,
+  moving it the worst match in 30 s is **0.31**. The mirrored sample **stays**,
+  because with two clocks it is no longer a mirror but the same water going the
+  other way, which interferes and churns. **Only the clocks are mirrored, never
+  the bend** -- the bend says where the crests are and both copies are the same
+  sea. The layout is untouched: at one instant it is the same field, so the
+  slope-direction and shifted-patch readings do not move.
+- **A CURTAIN CLOSES A SEA SEAM, AND THE DRAW ORDER IS THE WHOLE OF IT**
+  (`seaPatch`, `SeaRenderer.after`, doc 25, F-058). Chunk level and lod drop
+  together, so every patch is cut **16 pieces a side** whatever its level -- and
+  a chunk twice as wide as its neighbour therefore spaces the shared edge twice
+  as far apart. The finer side lifts a mid-edge vertex off the line the coarser
+  side draws and the water **splits to the sea floor**: dotted sand-coloured
+  lines along every chunk edge, gone at **Wave height 0**, which is what says it
+  is the waves. Each patch now hangs a strip from each of its three rims,
+  straight down, `waveHeight + 0.25` m deep, carrying the rim vertex's own wave.
+  **Neither of the fixes the finding priced**: a rim snap needs neighbour levels
+  the renderer does not have, and a plain skirt is the shape of the answer
+  without the part that works. **The sea is translucent and writes depth**, so a
+  curtain blended before a neighbour's surface draws over it is two layers of
+  water on one pixel -- a dark outline of every chunk, worse than the slit. So
+  the curtain is **last in the index list** and the renderer draws **every
+  surface, then every curtain**: by then the depth buffer holds the nearest
+  water everywhere and the test throws the curtain away except in a slit. One
+  extra draw call, **96 triangles a patch against 256**, and no dark band in
+  shallow water where the curtain hangs into the sand. The wireframe draws the
+  surface indices alone.
 - **SWELL ARRIVES IN GROUPS** (`grouping` in `SEA_SHADER`, doc 25). One noise
   lookup over about twelve wavelengths scales the whole swell, and it only ever
   scales **down**, from 1 to `1 - depth`, so **Wave height** stays the tallest

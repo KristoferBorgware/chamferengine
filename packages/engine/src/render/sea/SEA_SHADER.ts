@@ -172,6 +172,39 @@ const BEND_OCTAVES = 2;
 const OCTAVE_GAIN = 0.4;
 
 /**
+ * How much slower the second band's clock runs than the first's.
+ *
+ * A band folded at its own zero crossing repeats every \`pi\` of phase, so one
+ * clock for both bands makes the whole field the field it was \`pi / speed\`
+ * seconds ago -- 3.93 seconds at the default speed, measured as a match of
+ * **1.000** against the surface three seconds earlier. Two clocks that share
+ * no whole-number ratio leave the crossings of the two bands travelling
+ * instead of pulsing in place.
+ */
+const AGAINST = 0.76;
+
+/**
+ * What one octave's clock is multiplied by for the next.
+ *
+ * A wave in deep water travels at the square root of its wavelength, so an
+ * octave at 1.9 times the frequency runs \`sqrt(1.9)\` times as fast. Giving
+ * every octave the same clock instead leaves the narrow ones crawling under
+ * the wide ones and hands all three the same period.
+ */
+const DISPERSION = 1.37840;
+
+/**
+ * How fast the bend field itself travels across the water, in metres a
+ * second.
+ *
+ * The bend is where the crests are, and a swell's groups move as well as its
+ * crests. It is the single largest part of the reading: with the bend held
+ * still the surface comes back to a **0.84** match of a moment 15 seconds
+ * earlier, and with it moving the best match over thirty seconds is **0.31**.
+ */
+const BEND_TRAVEL = 3.4;
+
+/**
  * How high the water stands at a direction, in metres off the sea radius.
  *
  * Three octaves and no more. At the shipped settings a patch is cut to a
@@ -188,14 +221,13 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 	// no seam to cross and no pole to pinch, because a dot product has
 	// neither.
 	var k = 6.28318530718 * sea.up.w / max(1.0, sea.wave.y);
-	let speed = sea.wave.z;
+	var omega = sea.wave.z;
 	var chop = max(1.0, sea.look.w);
 
 	var d = dir;
 	var h = 0.0;
 	var amp = 1.0;
 	var total = 0.0;
-	var drift = seconds * speed;
 	for (var o = 0; o < 3; o++) {
 		// **The bend is what stops the sea being a lattice.** Everything
 		// else here is periodic -- sines folded and multiplied are still
@@ -206,15 +238,25 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 		var bendA = 0.0;
 		var bendB = 0.0;
 		if (o < BEND_OCTAVES) {
-			let p = d * (k / BEND_OVER);
+			let wf = k / BEND_OVER;
+			// The bend travels as well as the crests do. The sample point is
+			// the direction times wf, so a metre along the surface is
+			// wf / R of it, and that factor turns a speed in metres a second
+			// into one here.
+			let groups = AXIS_A * (seconds * BEND_TRAVEL * wf / sea.up.w);
+			let p = d * wf + groups;
 			bendA = vnoise3(p + vec3f(19.3, 7.7, 3.1)) * BEND_RADIANS;
 			bendB = vnoise3(p + vec3f(-5.2, 11.9, 23.4)) * BEND_RADIANS;
 		}
 		// Two samples travelling opposite ways. One direction alone slides
 		// the whole ocean past the viewer like a conveyor; against each
 		// other they interfere, and the pattern churns instead of moving.
-		var band = octave(d, k, drift + bendA, drift + bendB, chop);
-		band += octave(d, k, -drift + bendA, -drift + bendB, chop);
+		// Only the clocks are mirrored, never the bend: the bend says where
+		// the crests are, and both copies are the same water.
+		let clockA = seconds * omega;
+		let clockB = -clockA * AGAINST;
+		var band = octave(d, k, clockA + bendA, clockB + bendB, chop);
+		band += octave(d, k, -clockA + bendA, -clockB + bendB, chop);
 		h += band * amp;
 		total += amp * 2.0;
 		// Turn the direction between octaves as well as raising the
@@ -222,6 +264,7 @@ fn swell(dir : vec3f, seconds : f32) -> f32 {
 		// stack sharpens one pattern rather than building a second.
 		d = normalize(vec3f(d.y * 0.8 + d.z * 0.6, d.z * 0.8 - d.x * 0.6, d.x));
 		k *= 1.9;
+		omega *= DISPERSION;
 		amp *= OCTAVE_GAIN;
 		chop = mix(chop, 1.0, 0.2);
 	}
@@ -309,13 +352,27 @@ struct SeaOut {
 	@location(5)       detail : f32,
 };
 
+/**
+ * How far under the water a curtain vertex hangs, in metres.
+ *
+ * The slit a curtain fills is the difference between two readings of the same
+ * wave field, so it is never wider than trough to crest. The quarter metre on
+ * top covers the sphere's own curvature between two patches cut at different
+ * spacings, which is a millimetre at chunk scale and does not go away when
+ * the water is flat.
+ */
+fn curtainDrop() -> f32 {
+	return sea.wave.x + 0.25;
+}
+
 @vertex
 fn vertexMain(
-	@location(0) bary    : vec2f,
+	@location(0) place   : vec3f,
 	@location(1) cornerA : vec3f,
 	@location(2) cornerB : vec3f,
 	@location(3) cornerC : vec3f,
 ) -> SeaOut {
+	let bary = place.xy;
 	// **One barycentric blend, evaluated once, then normalised.** The patch
 	// is a flat triangle of weights and the instance is where its three
 	// corners point, so this is the same one-shot construction every cell
@@ -342,7 +399,9 @@ fn vertexMain(
 	let near = 1.0 - smoothstep(sea.view.z, sea.view.w, dist);
 	let resolved = mix(0.15, 1.0, near) * grouping(dir, sea.detail.y);
 	let height = swell(dir, seconds) * resolved;
-	let world = dir * (sea.up.w + height);
+	// A curtain vertex stands where its rim vertex stands and hangs under it,
+	// so it carries the rim's own wave rather than a second reading of one.
+	let world = dir * (sea.up.w + height - place.z * curtainDrop());
 
 	// The normal, from how the swell changes a step each way across the
 	// surface. Any two directions across the radial will do -- the slope of a

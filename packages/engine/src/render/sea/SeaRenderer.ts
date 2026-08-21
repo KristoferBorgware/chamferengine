@@ -70,6 +70,10 @@ interface Patch {
 	vertices: GPUBuffer;
 	indices: GPUBuffer;
 	count: number;
+
+	/** Where the curtain starts, which is where the surface stops. */
+	surfaceCount: number;
+
 	wire: GPUBuffer;
 	wireCount: number;
 }
@@ -200,7 +204,7 @@ export class SeaRenderer implements PassLayer {
 				{
 					arrayStride: SEA_STRIDE * 4,
 					attributes: [
-						{ shaderLocation: 0, offset: 0, format: "float32x2" },
+						{ shaderLocation: 0, offset: 0, format: "float32x3" },
 					],
 				},
 				{
@@ -268,8 +272,10 @@ export class SeaRenderer implements PassLayer {
 		const held = this.patches.get(steps);
 		if (held) return held;
 		const { device } = this.ctx;
-		const { vertices, indices } = seaPatch(steps);
-		const lines = wireIndices(indices);
+		const { vertices, indices, surfaceIndices } = seaPatch(steps);
+		// The lines show the surface and never the curtain: a curtain is
+		// there to fill a slit, and drawing it doubles every rim.
+		const lines = wireIndices(indices.subarray(0, surfaceIndices));
 		const upload = (
 			data: Float32Array<ArrayBuffer> | Uint32Array<ArrayBuffer>,
 			usage: number,
@@ -285,6 +291,7 @@ export class SeaRenderer implements PassLayer {
 			vertices: upload(vertices, GPUBufferUsage.VERTEX),
 			indices: upload(indices, GPUBufferUsage.INDEX),
 			count: indices.length,
+			surfaceCount: surfaceIndices,
 			wire: upload(lines, GPUBufferUsage.INDEX),
 			wireCount: lines.length,
 		};
@@ -397,7 +404,9 @@ export class SeaRenderer implements PassLayer {
 
 		pass.setPipeline(this.wireframe ? this.wirePipeline : this.pipeline);
 		pass.setBindGroup(1, this.bindGroup);
-		for (const group of this.groups) {
+
+		/** Bind one group's mesh and its slice of the instance buffer. */
+		const bind = (group: (typeof this.groups)[number]): Patch => {
 			const patch = this.patchFor(group.steps);
 			pass.setVertexBuffer(0, patch.vertices);
 			pass.setVertexBuffer(
@@ -405,13 +414,39 @@ export class SeaRenderer implements PassLayer {
 				this.instanceBuffer,
 				group.offset * INSTANCE_FLOATS * 4,
 			);
-			if (this.wireframe) {
+			return patch;
+		};
+
+		if (this.wireframe) {
+			for (const group of this.groups) {
+				const patch = bind(group);
 				pass.setIndexBuffer(patch.wire, "uint32");
 				pass.drawIndexed(patch.wireCount, group.count);
-			} else {
-				pass.setIndexBuffer(patch.indices, "uint32");
-				pass.drawIndexed(patch.count, group.count);
 			}
+			void frame;
+			return;
+		}
+
+		// **Every surface, then every curtain.** The surface writes depth, so
+		// a curtain drawn after all of it is thrown away by the depth test
+		// wherever water already covers the pixel, and survives only in the
+		// slits between two patches cut at different spacings. Interleaving
+		// the two would let a curtain blend under a surface drawn later, and
+		// a second layer of translucent water is a dark band along every
+		// chunk edge.
+		for (const group of this.groups) {
+			const patch = bind(group);
+			pass.setIndexBuffer(patch.indices, "uint32");
+			pass.drawIndexed(patch.surfaceCount, group.count);
+		}
+		for (const group of this.groups) {
+			const patch = bind(group);
+			pass.setIndexBuffer(patch.indices, "uint32");
+			pass.drawIndexed(
+				patch.count - patch.surfaceCount,
+				group.count,
+				patch.surfaceCount,
+			);
 		}
 		void frame;
 	}
