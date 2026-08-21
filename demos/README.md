@@ -345,6 +345,18 @@ control is low and a creased one where it is high — the one that gives hills i
 one place and a range in another. On the shipped patch the three measure 16.9×,
 17.2× and 16.0× against 7.7× with the layers off.
 
+Each control layer has its own switch, and **Picture** will draw either of them
+on its own — the map shows the layer's own field, the plane shows the ground
+shaded by where that layer is speaking. Switched off, a layer takes the value
+that removes it: no continent is flat ground, no mountain layer is full detail
+everywhere.
+
+**The base knobs reach less with the layers on.** The stack is the detail over
+a base rather than the world itself, so its share is smaller: moving Ridge from
+0 to 0.85 shifts the ground 26% of the world's relief with the layers off and
+2.5% with them on. **Detail on top** is the balance between the two, and at its
+ceiling the same Ridge move reaches 7.7%.
+
 **Picture** draws the ground as the world's four blocks, as a grey ramp in
 metres, or as the raw unitless field before sea level has been taken off it.
 **Surface** draws it solid, as a wireframe, or both. The **Contour** panel at
