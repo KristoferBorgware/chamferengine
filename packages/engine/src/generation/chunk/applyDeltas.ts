@@ -52,6 +52,12 @@ export function applyDeltas(
 		);
 		if (!offset) continue;
 
+		// The deepest layer of the crust is the floor of the world and there is
+		// nothing under it. A record naming it is refused here as well as at
+		// the click, so the floor is a property of the world rather than of
+		// whatever wrote the record.
+		if (cell.layer === chunk.layerCount - 1) continue;
+
 		const block = typeOf(state);
 		const at =
 			rank(offset.q, offset.r, chunk.m) * chunk.layerCount + cell.layer;

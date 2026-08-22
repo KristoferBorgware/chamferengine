@@ -1124,9 +1124,10 @@ async function main(): Promise<void> {
 	function blockAt(cell: CellRef): BlockType {
 		if (cell.layer < 0 || cell.layer >= shape.crustDepth)
 			return BlockType.AIR;
+		// The floor of the world, before anything a record could say about it.
+		if (cell.layer === shape.crustDepth - 1) return BlockType.BEDROCK;
 		const changed = edits.read(cell);
 		if (changed !== undefined) return typeOf(changed) as BlockType;
-		if (cell.layer === shape.crustDepth - 1) return BlockType.BEDROCK;
 		const column = terrain.columnAt(cell.face, cell.i, cell.j);
 		return terrain.blockAt(column, cell.layer);
 	}
