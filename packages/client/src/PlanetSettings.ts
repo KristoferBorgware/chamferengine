@@ -450,6 +450,29 @@ export interface PlanetKnobs {
 	 */
 	shadowReach: number;
 
+	/**
+	 * How much light the moon throws on the ground.
+	 *
+	 * It is the only thing with a direction after dark, so at `0` every face
+	 * of a block takes the same light all night and a block is a silhouette
+	 * rather than a shape.
+	 */
+	moonLight: number;
+
+	/** What the whole picture is multiplied by on its way to the screen. */
+	exposure: number;
+
+	/**
+	 * How far the picture opens up as the light goes down.
+	 *
+	 * The world is drawn in light rather than in color, so ground at dawn is
+	 * genuinely a fraction as bright as ground at noon. An eye does not read
+	 * it that way: it opens. At `0` the picture is exposed the same however
+	 * dark it is; at `1` every hour of the day comes out equally bright and
+	 * nothing reads as evening at all.
+	 */
+	eyeAdapts: number;
+
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
 }
@@ -544,6 +567,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	sunShare: 0.58,
 	sunShadow: 1,
 	shadowReach: 1600,
+	moonLight: 0.16,
+	exposure: 1,
+	eyeAdapts: 0.6,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 };
 
@@ -772,6 +798,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	sunShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	shadowReach: { low: 0, high: 4000, step: 50, rebuilds: false, unit: "m" },
+	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
+	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 };
 

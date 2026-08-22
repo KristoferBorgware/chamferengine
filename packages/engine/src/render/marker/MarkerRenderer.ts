@@ -39,7 +39,7 @@ export class MarkerRenderer implements PassLayer {
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
-		const { device, format } = ctx;
+		const { device, sceneFormat: format } = ctx;
 
 		// The frame's own bindings, declared again so these pipelines can be
 		// laid out against them. Group 0 is bound once for the whole pass.

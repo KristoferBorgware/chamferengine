@@ -127,7 +127,7 @@ export class BillboardClouds implements PassLayer {
 	) {
 		this.ctx = ctx;
 		this.seed = seed;
-		const { device, format } = ctx;
+		const { device, sceneFormat: format } = ctx;
 
 		this.vertexBuffer = device.createBuffer({
 			size: 4,

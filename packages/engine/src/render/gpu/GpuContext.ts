@@ -1,10 +1,23 @@
 import { NoWebGPUError } from "./NoWebGPUError.js";
 
-/** A device, the canvas it draws to, and the format that canvas wants. */
+/** A device, the canvas it draws to, and the two formats it draws in. */
 export interface GpuContext {
 	readonly device: GPUDevice;
 	readonly context: GPUCanvasContext;
+
+	/** What the canvas itself wants, which is the last thing written. */
 	readonly format: GPUTextureFormat;
+
+	/**
+	 * What the world is drawn in before it reaches the canvas.
+	 *
+	 * Half floats rather than bytes, so a surface brighter than white can be
+	 * written down instead of being lost to the top of the range. Every
+	 * pipeline drawing into the frame declares this; only the pass that
+	 * exposes and rolls it off declares {@link GpuContext.format}.
+	 */
+	readonly sceneFormat: GPUTextureFormat;
+
 	readonly canvas: HTMLCanvasElement;
 }
 
@@ -54,7 +67,7 @@ export async function createGpuContext(
 
 	const format = navigator.gpu.getPreferredCanvasFormat();
 	context.configure({ device, format, alphaMode: "opaque" });
-	return { device, context, format, canvas };
+	return { device, context, format, sceneFormat: "rgba16float", canvas };
 }
 
 /**

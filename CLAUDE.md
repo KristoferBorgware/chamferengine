@@ -567,6 +567,36 @@ Violating any of these breaks the design. They are not tunable.
   `sin(elevation)` of the overhead figure, so at 8° a shadow can only take away
   14% of a light that was already the smaller half of the total. What makes it
   read is the exposure applied afterwards.
+- **AFTER DARK THE MOON IS THE ONLY THING WITH A DIRECTION** (`lightOn` in
+  `TERRAIN_SHADER`, doc 16). Take the sun away and the two-term model has one
+  term left and that term has no direction, so every face of every block reads
+  the same all night and a block is a silhouette. The moon is a second
+  directional source, one more dot product, gated by whether it is over **this
+  place's** horizon and faded out as the day comes up. **The floor under the
+  light has to sit under the sky term alone** -- `max(night, sky) + sun + moon`
+  rather than `max(night, sky + sun + moon)` -- or the moon has to beat 0.09
+  before it shows at all, which at any believable moonlight it does not.
+  Measured over 830,666 pixels of one night view: mean **20.2** with the moon
+  against **12.6** without, and the fifth percentile of the ratio is **0.455**,
+  so moon-facing faces are more than twice as bright.
+- **A PICTURE IS EXPOSED, AND A SHADOW AT SUNRISE NEEDS IT TO BE**
+  (`TonePass`, `TONE_SHADER`, doc 16). The world is drawn in light, so ground
+  at dawn is genuinely `sin(8°)` = **0.14** of the direct light noon ground
+  gets -- and a shadow across it takes the same fraction either way, so it only
+  reads once the picture is exposed for the light that is there. The frame goes
+  into an **`rgba16float`** image (`GpuContext.sceneFormat`; every pipeline
+  inside the frame's pass declares it and only the tone pass declares the
+  canvas format) and a full-screen pass exposes and rolls it off. **The
+  exposure comes from the light there actually is**: flat ground takes the
+  sky's share whenever the sun is up and the sun's share in proportion to its
+  height, and one over that raised to **Eye adapts** is the multiplier, floored
+  at `0.35` so a night does not ask for all the exposure there is. **The
+  roll-off is identity under the knee** and bends toward 1 above it, per
+  channel so a colour pushed past white loses its colour: at a knee of
+  **0.85** white comes out **0.925** and three times white **0.990**. The
+  drawing order matters -- `setBindGroup(2, ...)` goes on **after** the layers,
+  because a pipeline whose layout is shorter drops every binding past its own
+  end and the next terrain draw would be refused.
 - **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
   so holonomy and the pentagon direction deficit simply do not apply. 8 neighbours
   cost a flat 1.5×; radial sky light is as cheap as a flat world's because

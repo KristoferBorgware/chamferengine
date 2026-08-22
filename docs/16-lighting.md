@@ -418,6 +418,60 @@ only take away 14% of the light that was there — and the light that was there
 is the smaller half of a lit surface's total. The shadow is doing its job; what
 makes it read is the exposure applied afterwards, not the shadow.
 
+### After dark the moon is the only thing with a direction
+
+Take the sun away and the two-term model has one term left, and that term has
+no direction: every face of every block reads the same all night. A block
+becomes a silhouette rather than a shape.
+
+The moon fixes it and costs one more dot product. It is a directional source
+like the sun, gated the same way — by whether it is over *this place's*
+horizon, so it sets over a walking player as well as over a waiting one — and
+faded out as the day comes up rather than switched. Its colour is a colder
+white than the sun's.
+
+One structural detail decides whether it reads at all. The light after dark
+has a floor, so nothing is ever pure black, and the floor has to sit **under
+the sky term alone**. Put it under the total and the moon has to beat it
+before it shows, which at any believable moonlight it does not.
+
+> **[measured]** `tools/frame-diff.mjs`, one night view of moonlit ground,
+> 830,666 pixels. With the moon: mean 20.2. Without: **12.6**. The fifth
+> percentile of the ratio is 0.455, so the faces turned toward the moon are
+> more than twice as bright as they are without it.
+
+### A picture is exposed, and that is why a shadow at sunrise is visible
+
+The world is drawn in light rather than in colour, so ground at dawn is
+genuinely a fraction as bright as ground at noon: the direct term carries
+`sin(elevation)`, which at 8° is 0.14. Left alone, that is what reaches the
+screen, and a dawn is a dark picture in which nothing can be seen — including
+the shadow that is correctly being cast across it.
+
+An eye does not work that way. It opens.
+
+So the frame is drawn into a floating-point image and exposed on the way to
+the screen. Two things happen there:
+
+- **An exposure**, from the light there actually is. Flat ground takes the
+  sky's share whenever the sun is up at all and the sun's share in proportion
+  to how high it stands, which runs from 1 at noon to the sky's share alone at
+  sunrise. One over that, raised to how far the eye is allowed to adapt, is
+  the multiplier. At full adaptation every hour comes out equally bright and
+  nothing reads as evening; at none, the picture stays as dark as the light
+  it was drawn in. There is a floor, or a night with no sun in it asks for all
+  the exposure there is.
+- **A roll-off**, because a surface can now be brighter than white and a
+  screen has no such value. Everything under the knee passes through exactly
+  as it is — the great majority of any frame — and above it the curve bends
+  toward 1 and never reaches it. At a knee of 0.85 a surface at exactly white
+  comes out at 0.925 and one at three times white at 0.990, so a cloud stays a
+  cloud and sun on snow keeps its shape instead of clipping to a flat patch.
+
+The roll-off is per channel rather than on the brightness, which is what makes
+a colour the exposure pushed past white lose its colour as it goes — the way a
+glint on water reads as white rather than as a saturated blue.
+
 ---
 
 ## What this forces elsewhere
@@ -498,6 +552,17 @@ makes it read is the exposure applied afterwards, not the shadow.
   its slope beats the sun's height, and the shipped ground runs 11.1° at the
   median: **22.7%** of a patch is in full shadow at a 5° sun, **4.6%** at 20°
   and **0.0%** at 60°.
+- **After dark the moon is the only thing with a direction.** Without it every
+  face reads the same all night. The floor under the light has to sit under the
+  sky term alone, or the moon has to beat it before it shows: measured, moonlit
+  ground reads **20.2** against **12.6** without, and the faces turned toward
+  it are more than twice as bright.
+- **The frame is exposed on its way to the screen**, from the light there
+  actually is — which is why a shadow at sunrise is visible at all, since the
+  shadow takes the same fraction either way and the fraction only reads once
+  the picture is exposed for the light that is there. Above a knee of **0.85**
+  a roll-off bends toward 1: white comes out at 0.925 and three times white at
+  0.990, so nothing clips to a flat patch.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

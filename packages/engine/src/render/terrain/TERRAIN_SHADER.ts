@@ -18,6 +18,7 @@
  * is left of the light when it is not, and `night.z` is how much of the light
  * comes from the sun rather than from the sky. `sky.rgb` is what the sky is
  * doing, which is the color of everything the sun does not reach directly.
+ * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
 struct Frame {
@@ -27,6 +28,7 @@ struct Frame {
 	fog      : vec4f,
 	night    : vec4f,
 	sky      : vec4f,
+	moon     : vec4f,
 };
 struct Chunk {
 	origin : vec4f,
@@ -248,6 +250,13 @@ fn sunReach(world : vec3f, up : vec3f) -> f32 {
 }
 
 /**
+ * What moonlight is, which is sunlight seen twice and cold.
+ *
+ * A colder white than the sun's, because the eye reads a dim light as blue.
+ */
+const MOON_COLOR = vec3f(0.62, 0.72, 1.0);
+
+/**
  * The color of direct sunlight, which reddens as the sun goes down.
  *
  * A low sun is seen through more air, and air scatters blue out of it first.
@@ -308,10 +317,23 @@ fn lightOn(
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
 	let skyLight = tint * (ambient * openness * day);
 	let sunLight = sunColor(up) * (direct * lambert * day);
+	// **The moon is the only thing with a direction after dark.** Without it
+	// every face of a block takes the same light all night and a block is a
+	// silhouette rather than a shape. It is measured against the place's own
+	// up the way the sun is, so it sets over a walking player as well as over
+	// a waiting one, and it fades out as the day comes up rather than
+	// switching off.
+	let moonUp = clamp(dot(up, frame.moon.xyz) * 6.0, 0.0, 1.0);
+	let moonLambert = max(dot(normal, frame.moon.xyz), 0.0);
+	let moonLight =
+		MOON_COLOR * (frame.moon.w * moonLambert * moonUp * (1.0 - day));
 	// After dark the sky is what is left, and a face still sees more of it
-	// looking up than looking down.
+	// looking up than looking down. **The floor is under the ambient alone**,
+	// so the sun and the moon add on top of it rather than having to beat it:
+	// a moonlit face reads against an unlit one instead of both bottoming out
+	// at the same number.
 	let night = vec3f(frame.night.y * openness);
-	return max(night, skyLight + sunLight);
+	return max(night, skyLight) + sunLight + moonLight;
 }
 
 @fragment

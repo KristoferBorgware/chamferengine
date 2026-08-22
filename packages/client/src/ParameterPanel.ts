@@ -500,6 +500,22 @@ const GROUPS: Group[] = [
 				digits: 0,
 				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
 			},
+			{
+				key: "moonLight",
+				label: "Moonlight",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "exposure",
+				label: "Exposure",
+				digits: 2,
+			},
+			{
+				key: "eyeAdapts",
+				label: "Eye adapts",
+				digits: 2,
+			},
 		],
 	},
 	{

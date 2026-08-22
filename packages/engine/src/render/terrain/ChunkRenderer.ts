@@ -6,6 +6,7 @@ import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
 import { SunShadow } from "./SunShadow.js";
+import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
 /** One geometry uploaded, or nothing if it had no triangles. */
@@ -27,8 +28,8 @@ interface Resident {
 	readonly water: Buffers | null;
 }
 
-/** A matrix, the eye, the sun, the fog, the daylight, and the sky's own color. */
-const FRAME_BYTES = 64 + 16 + 16 + 16 + 16 + 16;
+/** A matrix, the eye, the sun, the fog, the daylight, the sky, and the moon. */
+const FRAME_BYTES = 64 + 16 + 16 + 16 + 16 + 16 + 16;
 
 /** A chunk's origin, padded to the alignment a uniform binding needs. */
 const CHUNK_BYTES = 256;
@@ -62,6 +63,15 @@ export class ChunkRenderer {
 	 */
 	readonly shadow: SunShadow;
 
+	/**
+	 * Where the frame is exposed and rolled off on its way to the canvas.
+	 *
+	 * Everything is drawn into a floating-point image first, so the sun, the
+	 * sky and the moon add together without anything over white being lost on
+	 * the way.
+	 */
+	readonly tone: TonePass;
+
 	/** How long the GPU spent on the last pass it would report. */
 	readonly clock: GpuClock;
 
@@ -81,9 +91,10 @@ export class ChunkRenderer {
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
-		const { device, format } = ctx;
+		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
 		this.shadow = new SunShadow(ctx);
+		this.tone = new TonePass(ctx);
 
 		const uniformEntry: GPUBindGroupLayoutEntry = {
 			binding: 0,
@@ -245,7 +256,7 @@ export class ChunkRenderer {
 	}
 
 	render(frame: Frame): void {
-		const { device, context } = this.ctx;
+		const { device, context, canvas } = this.ctx;
 		const depth = this.ensureDepth();
 
 		this.frameData.set(frame.viewProj.elements, 0);
@@ -258,6 +269,8 @@ export class ChunkRenderer {
 		// The sky is the color of every surface the sun does not reach, so the
 		// shader is given the same color the pass clears to.
 		this.frameData.set(this.sky, 32);
+		this.frameData.set(frame.moon, 36);
+		this.frameData[39] = frame.moonLight;
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
 		const encoder = device.createCommandEncoder();
@@ -266,7 +279,7 @@ export class ChunkRenderer {
 			...(timing ? { timestampWrites: timing } : {}),
 			colorAttachments: [
 				{
-					view: context.getCurrentTexture().createView(),
+					view: this.tone.target(canvas.width, canvas.height),
 					clearValue: {
 						r: this.sky[0],
 						g: this.sky[1],
@@ -289,10 +302,6 @@ export class ChunkRenderer {
 		// matrix from group 0, so a draw issued before it is bound is refused
 		// and the whole command buffer with it.
 		pass.setBindGroup(0, this.frameBindGroup);
-		// The map every terrain draw walks to find its shadow. A layer with
-		// its own pipeline layout replaces what it needs and this with it, so
-		// it goes back on before the water pass.
-		pass.setBindGroup(2, this.shadow.bindGroup);
 		for (const layer of this.layers) layer.before?.(pass, frame);
 
 		// Turning is instant and building a chunk is not, so what is held is a
@@ -319,6 +328,12 @@ export class ChunkRenderer {
 		this.lastDrawn = visible.length;
 
 		pass.setPipeline(this.opaquePipeline);
+		// **After the layers, not before them.** A pipeline whose layout is
+		// shorter than this one's drops every binding past the end of its own,
+		// so a sky drawn with two groups leaves group 2 unset -- and the next
+		// terrain draw is refused, taking the whole command buffer with it.
+		// The water pass sets it again for the same reason.
+		pass.setBindGroup(2, this.shadow.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
@@ -333,6 +348,11 @@ export class ChunkRenderer {
 
 		pass.end();
 		this.clock.resolve(encoder);
+		this.tone.resolve(
+			encoder,
+			context.getCurrentTexture().createView(),
+			frame.exposure,
+		);
 		device.queue.submit([encoder.finish()]);
 		this.clock.read();
 	}

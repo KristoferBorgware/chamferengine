@@ -1299,6 +1299,38 @@ so nothing else has to change.
 
 ---
 
+### F-063 — The sea takes neither the shadow nor the moon
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-22, adding the shadow march and the moon to the terrain
+**Where:** `packages/engine/src/render/sea/SEA_SHADER.ts`
+
+**What happens.** The terrain now walks the coarse map toward the sun and
+darkens what the walk runs into, and it takes a second directional term from
+the moon after dark. The sea shell does neither. Its shader has its own bind
+groups -- the frame and its own look -- and neither the height map nor the
+moon reaches it, so a mountain's shadow stops dead at the shoreline and the
+water is lit at night by one flat number.
+
+**Why it matters.** A headland at sunrise throws its shadow across the ground
+and not across the bay beside it, which is exactly the join a person is looking
+at from a beach. And the sea is the largest single surface in view from most
+places, so at night it is the largest flat-lit thing on screen.
+
+**What would fix it.** The march is already a function of a world position and
+an up, and the map's bind group is a public field on the renderer. Giving the
+sea pipeline the same group 2 and calling `sunReach` from its fragment is
+mostly a copy -- the two shaders would then hold the same march twice, which
+argues for lifting the map read and the walk into a WGSL string both include.
+The moon is smaller still: one more `vec4f` in the sea's uniform and one dot
+product beside the sun's. What neither answers is whether a wave should shadow
+the wave in front of it, which the coarse map cannot see and is a separate
+question.
+
+
 ## Closed
 
 ### F-062 — Nothing casts a shadow, and the coarse map could do it in one march

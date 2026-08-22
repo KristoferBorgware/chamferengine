@@ -164,7 +164,7 @@ export class SeaRenderer implements PassLayer {
 		this.radius = radius;
 		this.depth = depth;
 		this.look = look;
-		const { device, format } = ctx;
+		const { device, sceneFormat: format } = ctx;
 
 		const frameLayout = device.createBindGroupLayout({
 			entries: [

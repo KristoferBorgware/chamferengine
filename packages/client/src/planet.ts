@@ -1542,19 +1542,45 @@ async function main(): Promise<void> {
 		// rather than `dayStarted`.
 		if (billboardClouds) billboardClouds.time = (now - started) / 1000;
 
+		/**
+		 * What the picture is multiplied by, from the light there actually is.
+		 *
+		 * Flat ground takes the sky's share whenever the sun is up at all, and the
+		 * sun's share in proportion to how high it stands -- so the reading runs
+		 * from 1 at noon to the sky's share alone at sunrise. Dividing by it and
+		 * raising that to **Eye adapts** is an eye opening: at 1 every hour comes
+		 * out equally bright and nothing reads as evening, at 0 the picture is
+		 * exposed the same however dark it gets.
+		 *
+		 * The floor is what stops a night with no sun in it asking for all the
+		 * exposure there is. At 0.35 a night still comes out under a fifth as
+		 * bright as noon, which is dark and readable rather than black.
+		 */
+		const DARKEST = 0.35;
+
+		function exposureFor(day: number, sunUp: number): number {
+			const share = settings.knobs.sunShare;
+			const lit = day * (1 - share + share * Math.max(0, sunUp));
+			return (
+				settings.knobs.exposure *
+				Math.pow(1 / Math.max(DARKEST, lit), settings.knobs.eyeAdapts)
+			);
+		}
+
 		// The moon stands off at a distance rather than being painted on, so
-		// walking round the planet shifts it against the stars.
-		if (sky) {
-			const moonPlace = windRotation(
-				new Vec3(0.2, 0.55, 0.81).normalize(),
-				NORTH,
-				(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
-			).scale(MOON_DISTANCE);
+		// walking round the planet shifts it against the stars. Worked out
+		// whether or not a sky is drawn, because the ground is lit by it.
+		const moonPlace = windRotation(
+			new Vec3(0.2, 0.55, 0.81).normalize(),
+			NORTH,
+			(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
+		).scale(MOON_DISTANCE);
+		const moon = moonPlace.sub(from).normalize();
+		if (sky)
 			sky.moon = {
-				direction: moonPlace.sub(from).normalize(),
+				direction: moon,
 				angularRadius: MOON_ANGULAR_RADIUS,
 			};
-		}
 
 		// Under the surface is a radius now, not a block: the sea holds none.
 		const submerged =
@@ -1627,6 +1653,9 @@ async function main(): Promise<void> {
 				: [WATER_FOG[0], WATER_FOG[1], WATER_FOG[2], CLEAR_AIR],
 			daylight: day,
 			nightLight: NIGHT_LIGHT,
+			moon: [moon.x, moon.y, moon.z],
+			moonLight: PLAIN ? 0 : settings.knobs.moonLight,
+			exposure: exposureFor(day, up.dot(sun)),
 			sunShare: settings.knobs.sunShare,
 		});
 		timer.leave("draw", performance.now());

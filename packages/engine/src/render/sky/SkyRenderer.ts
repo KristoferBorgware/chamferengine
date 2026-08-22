@@ -46,7 +46,7 @@ export class SkyRenderer implements PassLayer {
 		this.ctx = ctx;
 		this.moon = moon;
 		this.atmosphere = atmosphere;
-		const { device, format } = ctx;
+		const { device, sceneFormat: format } = ctx;
 
 		const layout = device.createBindGroupLayout({
 			entries: [

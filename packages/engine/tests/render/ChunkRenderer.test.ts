@@ -22,6 +22,9 @@ const FRAME: Frame = {
 	daylight: 1,
 	nightLight: 0.09,
 	sunShare: 0.58,
+	moon: [0, -1, 0],
+	moonLight: 0.16,
+	exposure: 1,
 };
 
 /** One chunk's worth of geometry, with a triangle in each of the two buffers. */
@@ -96,11 +99,14 @@ describe("what a frame encodes", () => {
 			.map((c) => c.what);
 		// The sky is the unindexed one: three vertices covering the screen,
 		// drawn before any of the indexed geometry that stands in front of it.
+		// The last is the tone pass, three vertices over the screen again,
+		// after everything the frame put in front of the sky.
 		expect(kinds[0]).toBe("draw");
-		expect(kinds.slice(1).every((kind) => kind === "drawIndexed")).toBe(
+		expect(kinds[kinds.length - 1]).toBe("draw");
+		expect(kinds.slice(1, -1).every((kind) => kind === "drawIndexed")).toBe(
 			true,
 		);
-		expect(kinds.length).toBeGreaterThan(1);
+		expect(kinds.length).toBeGreaterThan(2);
 	});
 
 	it("skips a chunk the camera is not looking at", () => {
@@ -118,8 +124,9 @@ describe("what a frame encodes", () => {
 
 		expect(renderer.count).toBe(2);
 		expect(renderer.drawn).toBe(1);
-		// One opaque and one water buffer, from the one chunk in view.
-		expect(gpu.draws().length).toBe(2);
+		// One opaque and one water buffer, from the one chunk in view, and
+		// the tone pass over the screen after them.
+		expect(gpu.draws().length).toBe(3);
 	});
 
 	it("culls against a frozen matrix while drawing with the live one", () => {
@@ -166,8 +173,9 @@ describe("what a frame encodes", () => {
 
 		renderer.render(FRAME);
 
+		// The sky, and the tone pass that puts it on the canvas.
 		const draws = gpu.draws();
-		expect(draws.length).toBe(1);
+		expect(draws.length).toBe(2);
 		expect(draws[0]!.bound.has(0)).toBe(true);
 	});
 });

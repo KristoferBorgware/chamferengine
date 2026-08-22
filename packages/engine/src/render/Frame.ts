@@ -20,6 +20,29 @@ export interface Frame {
 	readonly sun: readonly [number, number, number];
 
 	/**
+	 * Unit direction toward the moon, and how bright it is.
+	 *
+	 * The moon is the only thing with a direction after dark. Without it the
+	 * night is one flat number over every face, and a block is a silhouette
+	 * rather than a shape. Its brightness is a fraction of what the sun is
+	 * worth, and it fades out as the day comes up rather than switching.
+	 */
+	readonly moon: readonly [number, number, number];
+	readonly moonLight: number;
+
+	/**
+	 * What the whole frame is multiplied by on its way to the screen.
+	 *
+	 * The world is drawn in light rather than in color, so a surface in full
+	 * sun and one at dawn differ by however much less light there is. An eye
+	 * does not: it opens. This is that, and it is why a shadow at sunrise is
+	 * visible at all -- the shadow takes away the same fraction either way,
+	 * and the fraction only reads once the picture is exposed for the light
+	 * that is actually there.
+	 */
+	readonly exposure: number;
+
+	/**
 	 * The color the view fades toward, and the distance it fades over.
 	 *
 	 * A camera above water sets a distance past the horizon, which leaves the
