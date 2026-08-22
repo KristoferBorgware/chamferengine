@@ -168,7 +168,7 @@ function draw(): void {
 		k.patchPicture === "mountain" ? world.mountain : world.terrain;
 	field = patchField(
 		world.cells,
-		{ height: world.height, raw: world.raw, layer },
+		{ height: world.height, raw: world.raw, layer, cut: world.delta },
 		{
 			frame,
 			cells: k.patchCells,
@@ -177,6 +177,7 @@ function draw(): void {
 		},
 	);
 
+	const cutScale = world.report?.scale ?? 1;
 	if (k.patchMap === "planet")
 		preview.planet(
 			world,
@@ -185,8 +186,9 @@ function draw(): void {
 			field.span,
 			k.patchPicture,
 			k.patchContours,
+			cutScale,
 		);
-	else preview.patch(field, k.patchPicture, k.patchContours);
+	else preview.patch(field, k.patchPicture, k.patchContours, cutScale);
 	graph.draw(field, k.patchAlong);
 
 	// The mesh is rebuilt when the ground under it moved or the patch did, and
@@ -241,11 +243,40 @@ function say(): void {
 				`${(progress.done * 100).toFixed(0)}%</span>`
 			: `map of <b>${cells.toLocaleString("en-US")}</b> cells in ` +
 				`<b>${(world.ms / 1000).toFixed(1)} s</b>`) +
+		// **The whole planet, not this patch.** The material lines are absolute
+		// metres and a patch is a place, so a patch can be all snow on a world
+		// that is mostly grass. This is the number to tune Relief against.
+		`<br>planet: <b>${(world.bands[0]! * 100).toFixed(0)}%</b> sea · ` +
+		`<b>${(world.bands[1]! * 100).toFixed(0)}%</b> grass · ` +
+		`<b>${(world.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
+		`<b>${(world.bands[3]! * 100).toFixed(0)}%</b> snow` +
+		(settings.knobs.patchLift === 1
+			? field
+				? `<br>true scale · relief is <b>${(
+						(100 * (field.highest - field.lowest)) /
+						Math.max(1, field.span)
+					).toFixed(1)}%</b> of the patch`
+				: ""
+			: `<br><span class="bench-busy">drawn <b>${settings.knobs.patchLift}x</b> ` +
+				"taller than the world builds it</span>") +
+		(settings.knobs.seaLevel < 0
+			? `<br>sea drained <b>${(-settings.knobs.seaLevel).toLocaleString("en-US")} m</b> — ` +
+				`the tallest point is <b>${Math.round(world.summit).toLocaleString("en-US")} m</b> ` +
+				"above the water"
+			: "") +
 		(report
-			? `<br>erosion moved <b>${report.moved.toFixed(2)} m</b> a cell · ` +
+			? `<br>erosion moved <b>${report.moved.toFixed(2)} m</b> a cell, ` +
+				`deepest cut <b>${Math.round(report.deepest)} m</b><br>` +
 				`slope median <b>${report.before.median.toFixed(3)}</b> → ` +
 				`<b>${report.after.median.toFixed(3)}</b> ` +
-				`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)})`
+				`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)}) · ` +
+				`99th <b>${report.before.ninetyNine.toFixed(3)}</b> → ` +
+				`<b>${report.after.ninetyNine.toFixed(3)}</b><br>` +
+				`${report.droplets.toLocaleString("en-US")} droplets in ` +
+				`<b>${(report.ms / 1000).toFixed(1)} s</b>` +
+				(settings.knobs.patchPicture === "erosion"
+					? ` · picture saturates at <b>${report.scale.toFixed(1)} m</b>`
+					: "")
 			: "");
 }
 

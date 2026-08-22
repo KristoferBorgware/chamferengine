@@ -29,6 +29,9 @@ export interface PatchField {
 	/** Whichever control layer the picture is showing. */
 	readonly layer: Float32Array;
 
+	/** Metres erosion moved the ground, zero everywhere when the water is off. */
+	readonly cut: Float32Array;
+
 	readonly lowest: number;
 	readonly highest: number;
 	readonly rawLow: number;
@@ -80,6 +83,7 @@ export function patchField(
 		readonly height: Float32Array;
 		readonly raw: Float32Array;
 		readonly layer: Float32Array;
+		readonly cut: Float32Array | null;
 	},
 	options: {
 		readonly frame: PatchFrame;
@@ -94,6 +98,7 @@ export function patchField(
 	const height = new Float32Array(count);
 	const raw = new Float32Array(count);
 	const layer = new Float32Array(count);
+	const cut = new Float32Array(count);
 	const half = (cells / 2) * step;
 	let lowest = Infinity;
 	let highest = -Infinity;
@@ -124,6 +129,7 @@ export function patchField(
 			height[at] = metres;
 			raw[at] = index.sampleAt(fields.raw, dir);
 			layer[at] = index.sampleAt(fields.layer, dir);
+			if (fields.cut) cut[at] = index.sampleAt(fields.cut, dir);
 			if (metres < lowest) lowest = metres;
 			if (metres > highest) highest = metres;
 			if (raw[at]! < rawLow) rawLow = raw[at]!;
@@ -139,6 +145,7 @@ export function patchField(
 		height,
 		raw,
 		layer,
+		cut,
 		lowest,
 		highest,
 		rawLow,

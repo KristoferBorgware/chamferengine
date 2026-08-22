@@ -1,5 +1,6 @@
 import type { CoarseStage } from "chamfer/generation";
 import type { PlanetSettings } from "./PlanetSettings.js";
+import { bandOf } from "./paintPatch.js";
 import {
 	CoarseGrid,
 	DROPLET,
@@ -94,6 +95,9 @@ export class BenchWorld {
 	private uneroded: Float64Array = new Float64Array(0);
 	height: Float32Array<ArrayBuffer> = new Float32Array(0);
 
+	/** Metres erosion moved the ground, or nothing when the water is off. */
+	delta: Float32Array<ArrayBuffer> | null = null;
+
 	private cutKey = "";
 	private buildingKey = "";
 
@@ -108,6 +112,19 @@ export class BenchWorld {
 
 	/** How long the last whole build took, in milliseconds. */
 	ms = 0;
+
+	/**
+	 * What the whole planet is made of, as a share of its cells.
+	 *
+	 * **The planet, not the patch.** The material lines are absolute metres and
+	 * Relief is what carries the ground up through them, so the share of each
+	 * is a property of the world -- and a patch is a place, which can be all
+	 * mountain or all sea whatever the planet is doing.
+	 */
+	bands: readonly number[] = [0, 0, 0, 0];
+
+	/** The tallest ground on the planet, in metres above sea level. */
+	summit = 0;
 
 	private run = 0;
 
@@ -208,10 +225,12 @@ export class BenchWorld {
 		const strength = options.erosion ?? 0;
 		if (strength <= 0) {
 			this.height = Float32Array.from(this.uneroded);
+			this.delta = null;
 			this.report = null;
 			this.cutKey = keys.cut;
 			this.progress = null;
 			this.ms = performance.now() - started;
+			this.countBands();
 			onStep();
 			return;
 		}
@@ -257,6 +276,7 @@ export class BenchWorld {
 		// of all but the loudest fiftieth.
 		const sorted = Float64Array.from(delta, Math.abs).sort();
 		this.height = Float32Array.from(cutting);
+		this.delta = Float32Array.from(delta);
 		this.report = {
 			droplets,
 			scale: Math.max(0.01, sorted[Math.floor(sorted.length * 0.98)]!),
@@ -269,7 +289,23 @@ export class BenchWorld {
 		this.cutKey = keys.cut;
 		this.progress = null;
 		this.ms = performance.now() - started;
+		this.countBands();
 		onStep();
+	}
+
+	/** Count the four materials over the planet, and find its tallest ground. */
+	private countBands(): void {
+		const counts = [0, 0, 0, 0];
+		let summit = -Infinity;
+		const height = this.height.length ? this.height : this.uneroded;
+		for (let cell = 0; cell < height.length; cell++) {
+			const m = height[cell]!;
+			if (m > summit) summit = m;
+			counts[bandOf(m)]!++;
+		}
+		const total = Math.max(1, height.length);
+		this.bands = counts.map((c) => c / total);
+		this.summit = Number.isFinite(summit) ? summit : 0;
 	}
 
 	/**

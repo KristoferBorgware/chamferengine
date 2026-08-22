@@ -6,7 +6,8 @@
  */
 
 /** Which step of the build the preview stops at. */
-export type PatchPicture = "ground" | "height" | "raw" | "terrain" | "mountain";
+export type PatchPicture =
+	"ground" | "height" | "raw" | "terrain" | "mountain" | "erosion";
 
 export const PATCH_PICTURES: readonly PatchPicture[] = [
 	"ground",
@@ -14,6 +15,7 @@ export const PATCH_PICTURES: readonly PatchPicture[] = [
 	"raw",
 	"terrain",
 	"mountain",
+	"erosion",
 ] as const;
 
 /** Whether the preview draws the surface, the cell rims, or both. */

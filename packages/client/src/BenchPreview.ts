@@ -48,7 +48,12 @@ export class BenchPreview {
 	private showing: "patch" | "planet" = "patch";
 
 	/** Draw the patch as it was sampled, one pixel a point. */
-	patch(field: PatchField, picture: PatchPicture, contours: boolean): void {
+	patch(
+		field: PatchField,
+		picture: PatchPicture,
+		contours: boolean,
+		cutScale: number,
+	): void {
 		this.showing = "patch";
 		const n = field.across - 1;
 		this.resize(n, n);
@@ -60,6 +65,8 @@ export class BenchPreview {
 					metres: field.height[from]!,
 					raw: field.raw[from]!,
 					layer: field.layer[from]!,
+					cut: field.cut[from]!,
+					cutScale,
 					rawLow: field.rawLow,
 					rawHigh: field.rawHigh,
 					picture,
@@ -83,6 +90,7 @@ export class BenchPreview {
 		span: number,
 		picture: PatchPicture,
 		contours: boolean,
+		cutScale: number,
 	): void {
 		this.showing = "planet";
 		const index = world.cells;
@@ -110,6 +118,8 @@ export class BenchPreview {
 					metres: index.sampleAt(world.height, dir),
 					raw: index.sampleAt(world.raw, dir),
 					layer: index.sampleAt(layer, dir),
+					cut: world.delta ? index.sampleAt(world.delta, dir) : 0,
+					cutScale,
 					rawLow,
 					rawHigh,
 					picture,

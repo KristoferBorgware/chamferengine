@@ -396,6 +396,7 @@ const GROUPS: Group[] = [
 					{ value: "raw", label: "Raw" },
 					{ value: "terrain", label: "Terrain layer" },
 					{ value: "mountain", label: "Mountain layer" },
+					{ value: "erosion", label: "What the water did" },
 				],
 			},
 			{
