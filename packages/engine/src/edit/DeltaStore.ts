@@ -3,6 +3,7 @@ import type { CellRef } from "./CellRef.js";
 import type { StoreHeader } from "./StoreHeader.js";
 import { ChunkDeltas } from "./ChunkDeltas.js";
 import { cellSlot } from "./cellSlot.js";
+import { chunksHolding } from "./chunksHolding.js";
 import { slotCell } from "./slotCell.js";
 
 /**
@@ -30,27 +31,43 @@ export class DeltaStore {
 		return this.rows.size;
 	}
 
-	/** How many cells have been changed, over every chunk. */
+	/**
+	 * How many records are held, over every chunk.
+	 *
+	 * A cell on a chunk border is held by each chunk whose triangle contains
+	 * it, so this counts records rather than cells.
+	 */
 	get count(): number {
 		let total = 0;
 		for (const row of this.rows.values()) total += row.size;
 		return total;
 	}
 
-	/** Write what a cell holds now, and say which chunk has to be rebuilt. */
-	write(cell: CellRef, state: BlockState): number {
-		const { chunkKey, slot } = cellSlot(
+	/**
+	 * Write what a cell holds now, and say which chunks have to be rebuilt.
+	 *
+	 * **Written into every chunk whose triangle contains the cell**, not only
+	 * the one that owns it. A chunk generates the slots on its own rim so the
+	 * mesher can decide whether to emit a face there without fetching a
+	 * neighbour, and a border cell sits in two triangles -- 17% of a chunk's
+	 * slots do. Writing to the owner alone leaves the others deciding from
+	 * ground that has moved.
+	 */
+	write(cell: CellRef, state: BlockState): number[] {
+		const holders = chunksHolding(
 			cell,
 			this.header.subdivisionDepth,
 			this.header.chunkLevel,
 		);
-		let row = this.rows.get(chunkKey);
-		if (!row) {
-			row = new ChunkDeltas();
-			this.rows.set(chunkKey, row);
+		for (const { chunkKey, slot } of holders) {
+			let row = this.rows.get(chunkKey);
+			if (!row) {
+				row = new ChunkDeltas();
+				this.rows.set(chunkKey, row);
+			}
+			row.set(slot, cell.layer, state);
 		}
-		row.set(slot, cell.layer, state);
-		return chunkKey;
+		return holders.map((holder) => holder.chunkKey);
 	}
 
 	/** What a cell holds now, or `undefined` where nobody has touched it. */

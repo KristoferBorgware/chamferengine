@@ -70,7 +70,9 @@ describe("DeltaStore", () => {
 		expect(typeOf(store.read(cell)!)).toBe(1);
 		store.write(cell, packBlockState(4));
 		expect(typeOf(store.read(cell)!)).toBe(4);
-		expect(store.count).toBe(1);
+		// One record per chunk whose triangle holds the cell: one for an
+		// interior cell, two or three on a chunk border.
+		expect(store.count).toBeLessThanOrEqual(3);
 	});
 
 	it("distinguishes a cell mined out from a cell never touched", () => {
@@ -99,24 +101,41 @@ describe("DeltaStore", () => {
 		}
 		let store = new DeltaStore(header(depth, 2));
 		for (const { cell, state } of cells) store.write(cell, state);
-		const before = store.count;
 
+		// The record count moves with the cut, because how many cells sit on a
+		// chunk border depends on how big a chunk is. What must not move is
+		// what any cell reads.
 		for (const to of [3, 5, 6, 4, 2]) {
 			store = store.recut(to);
 			expect(store.header.chunkLevel).toBe(to);
-			expect(store.count).toBe(before);
 			for (const { cell, state } of cells)
 				expect(store.read(cell)).toBe(state);
 		}
 	});
 
-	it("names the chunk an edit landed in, so one chunk is rebuilt", () => {
+	it("names the chunks an edit landed in, so only those are rebuilt", () => {
 		const store = new DeltaStore(header(11, 5));
 		const a = store.write({ face: 2, i: 100, j: 100, layer: 1 }, 1);
 		const b = store.write({ face: 2, i: 101, j: 100, layer: 1 }, 1);
 		const far = store.write({ face: 9, i: 100, j: 100, layer: 1 }, 1);
-		expect(a).toBe(b);
-		expect(far).not.toBe(a);
+		expect(a).toEqual(b);
+		expect(far.some((key) => a.includes(key))).toBe(false);
+	});
+
+	it("reaches every chunk that reads a cell on a chunk border", () => {
+		const depth = 8;
+		const chunkLevel = 4;
+		const store = new DeltaStore(header(depth, chunkLevel));
+		const m = 1 << (depth - chunkLevel);
+		// a lattice point on the boundary between two chunk triangles
+		const onBorder = { face: 5, i: m, j: 3, layer: 6 };
+		const keys = store.write(onBorder, packBlockState(3));
+		expect(keys.length).toBeGreaterThan(1);
+		for (const key of keys) {
+			const row = store.rowOf(key)!;
+			expect(row.size).toBe(1);
+		}
+		expect(store.read(onBorder)).toBe(packBlockState(3));
 	});
 });
 

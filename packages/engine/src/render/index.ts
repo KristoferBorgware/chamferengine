@@ -23,3 +23,7 @@ export { SeaRenderer } from "./sea/SeaRenderer.js";
 export { SEA_STRIDE, seaPatch } from "./sea/seaPatch.js";
 export { wireIndices } from "./sea/wireIndices.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
+
+export type { AimTarget } from "./aim/AimTarget.js";
+export { aimGeometry } from "./aim/aimGeometry.js";
+export { AimRenderer } from "./aim/AimRenderer.js";
