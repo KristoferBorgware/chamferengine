@@ -354,6 +354,52 @@ so any grid can sample it and no grid is privileged. The rule that keeps seams
 out of terrain is the same rule that makes LOD possible at all — it earns its
 keep twice.
 
+### An edit has no terrain function to re-evaluate
+
+A player's block is the one thing on the coarse grid that cannot be asked for
+again. Terrain is a function and answers at any spacing; a placed block is a
+record against one fine cell, and if nothing carries it outward a built
+structure is complete underfoot and gone entirely a few hundred metres back.
+
+**The centres nest and the areas do not**, and the difference is the whole
+problem. A coarse chunk keeps its path and drops the subdivision depth, so its
+lattice points really are the fine ones scaled by a power of two — which makes
+shifting a fine `(i, j)` right by the level look like the answer. It is not,
+because a cell is the Voronoi region around a lattice point and a shift is a
+floor.
+
+> **[verified]** `verification/delta.js`, section 3, against this document's own
+> pipeline run at the coarse level. Shifting `(i, j)` names the wrong cell for
+> **43.9%** of cells one level out and **79.3%** four levels out. Rounding `i`
+> and `j` separately is worse again at the first level — **53.8%** — for the
+> reason [doc 04](04-position-lookup.md) gives `hexRound`: two coordinates
+> cannot detect the error, so rounding them apart breaks the sum and names a
+> lattice point that is not there.
+
+**Scale the three barycentric weights and repair them.** A lattice point's
+barycentric recovers its own `(n−i−j, i, j)` exactly, because the one-shot blend
+*is* gnomonic projection, so the coarse lookup reduces to `hexRound` on those
+three numbers divided by `2^lod`. Three divisions, no position, no face search
+and no distance.
+
+> **[verified]** Same section. It disagrees with the full pipeline on **2.4% to
+> 32%** of cells and **every one of those is a tie** — the point sits exactly on
+> the boundary between two coarse cells, both are the same distance from it, and
+> the two roundings break the tie differently. **Zero cells, at every level
+> measured, land somewhere genuinely further away.**
+
+The layer needs none of this. Layers stack at a fixed thickness from a crust top
+that does not move with the level, so layer `L` falls in coarse layer `L >> lod`
+with no rounding to get wrong.
+
+What the mapping cannot avoid is that **many fine cells arrive at one coarse
+one** — `4^lod` across and `2^lod` down, so 8 at the first level and 4,096 at the
+fourth. A placed block therefore grows to the cell it lands in and reads as a
+16 m cube at the coarsest level anybody stands at. The rule for a collision is
+that **a placed block beats a broken one**: a coarse cell holding any placed
+block is solid and reads as air only when every fine cell inside it was broken,
+so a wall stays a wall at distance and a one-block hole in a hillside fills in.
+
 ---
 
 ## Terrain is generated, not stored — and that changes LOD
