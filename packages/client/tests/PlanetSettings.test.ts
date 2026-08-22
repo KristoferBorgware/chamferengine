@@ -12,6 +12,7 @@ import {
 	KNOB_RANGES,
 	PLANET_DEFAULTS,
 	PlanetSettings,
+	curveToText,
 } from "../src/PlanetSettings.js";
 
 describe("cell address", () => {
@@ -212,7 +213,11 @@ describe("a slider narrowed by the rest of the draft", () => {
 
 	it("leaves no reachable combination that refuses", () => {
 		// Every knob at each end of its own live range, settled, has to build.
-		const keys = Object.keys(KNOB_RANGES) as (keyof PlanetKnobs)[];
+		// The two curves have a range entry so the panel can read `rebuilds`
+		// off it, and no ends to sweep: a curve is dragged, not slid.
+		const keys = (Object.keys(KNOB_RANGES) as (keyof PlanetKnobs)[]).filter(
+			(key) => !Array.isArray(PLANET_DEFAULTS[key]),
+		);
 		for (const key of keys)
 			for (const end of ["low", "high"] as const) {
 				const live = new PlanetSettings().rangeFor(key);
@@ -378,6 +383,39 @@ describe("a curve round-trips through a query string", () => {
 			[0.2, 0.4],
 			[1, 0.9],
 		]);
+	});
+
+	/**
+	 * **A curve is the one knob that is an array, and the panel drags it in
+	 * place.** Shared, that drag reached `PLANET_DEFAULTS` itself: the default
+	 * moved with the draft, "does this differ from the default" answered no,
+	 * and the curve was left out of every link the world travelled in. The
+	 * work was on the screen and in no query string.
+	 */
+	it("gives every world its own curves", () => {
+		const was = curveToText(PLANET_DEFAULTS.terrainCurve);
+		const one = new PlanetSettings();
+		const two = new PlanetSettings();
+		expect(one.knobs.terrainCurve).not.toBe(PLANET_DEFAULTS.terrainCurve);
+		expect(one.knobs.terrainCurve).not.toBe(two.knobs.terrainCurve);
+
+		// Drag a point, the way the panel does.
+		(one.knobs.terrainCurve as [number, number][])[1]![1] = 0.77;
+		expect(curveToText(PLANET_DEFAULTS.terrainCurve)).toBe(was);
+		expect(curveToText(two.knobs.terrainCurve)).toBe(was);
+		expect(one.toParams().get("terrainCurve")).toBe(
+			curveToText(one.knobs.terrainCurve),
+		);
+	});
+
+	it("keeps the curve a caller handed in out of its own hands", () => {
+		const mine: [number, number][] = [
+			[-1, 0],
+			[1, 1],
+		];
+		const world = new PlanetSettings({ mountainCurve: mine });
+		(world.knobs.mountainCurve as [number, number][])[0]![1] = 0.5;
+		expect(mine[0]![1]).toBe(0);
 	});
 });
 

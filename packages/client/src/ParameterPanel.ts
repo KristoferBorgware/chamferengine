@@ -3,6 +3,7 @@ import {
 	KNOB_RANGES,
 	LIVE_TERRAIN_KNOBS,
 	PlanetSettings,
+	copyKnobs,
 } from "./PlanetSettings.js";
 import {
 	MOUNTAIN_SEED_OFFSET,
@@ -785,7 +786,9 @@ export class ParameterPanel {
 		options: { readonly bench?: boolean } = {},
 	) {
 		this.bench = options.bench ?? false;
-		this.draft = { ...settings.knobs };
+		// The draft is dragged, and a curve is an array: taken by reference it
+		// would be written back into whoever handed these over.
+		this.draft = copyKnobs(settings.knobs);
 		this.onLive = onLive;
 		this.onDraft = onDraft;
 		this.onLiveRebuild = onLiveRebuild;
