@@ -56,14 +56,8 @@ export interface BenchProgress {
 	readonly done: number;
 }
 
-/** How many cells one slice of a stage covers before the page gets a frame. */
-const FIELD_SLICE = 20000;
+/** How many droplets one slice of the erosion pass runs before it reports. */
 const DROPLET_SLICE = 40000;
-
-/** Give the page a frame to paint the status line before the next slice. */
-function breathe(): Promise<void> {
-	return new Promise((resume) => setTimeout(resume, 0));
-}
 
 /**
  * The planet's map, built for the bench and held between redraws.
@@ -126,44 +120,35 @@ export class BenchWorld {
 	/** The tallest ground on the planet, in metres above sea level. */
 	summit = 0;
 
-	private run = 0;
-
 	/** The grid the fields are indexed by, once there is one. */
 	get cells(): CoarseGrid | null {
 		return this.grid;
 	}
 
 	/**
-	 * Bring the map up to date, handing back control between slices.
+	 * Bring the map up to date, yielding what each stage is doing.
 	 *
-	 * `onStep` is called whenever the status line or the finished fields have
-	 * moved, so the caller redraws what it can rather than waiting for the end.
-	 * A newer call abandons whatever is running at the next slice.
+	 * Nothing is yielded at all when the world already matches, which is what
+	 * makes moving the patch or changing a picture cost no map work.
 	 */
-	async refresh(settings: PlanetSettings, onStep: () => void): Promise<void> {
+	*build(settings: PlanetSettings): Generator<BenchProgress> {
 		const options = settings.coarseOptions();
 		const keys = this.keysOf(settings);
 		if (keys.cut === this.cutKey) return;
-		// A redraw that changed none of these must not restart a run that is
-		// already building the same world.
-		if (this.progress !== null && keys.cut === this.buildingKey) return;
-		const token = ++this.run;
 		this.buildingKey = keys.cut;
 		const started = performance.now();
-		const say = async (
+		const say = (
 			stage: BenchProgress["stage"],
 			says: string,
 			done: number,
-		): Promise<boolean> => {
+		): BenchProgress => {
 			this.progress = { stage, says, done };
-			onStep();
-			await breathe();
-			return token === this.run;
+			return this.progress;
 		};
 
 		const level = options.level ?? 8;
 		if (this.level !== level) {
-			if (!(await say("grid", "numbering the planet", 0))) return;
+			yield say("grid", "numbering the planet", 0);
 			this.grid = new CoarseGrid(level);
 			this.level = level;
 			// Every field below is one value per cell of the grid it was
@@ -178,21 +163,19 @@ export class BenchWorld {
 
 		if (keys.shape !== this.shapeKey) {
 			// The whole field in one call, because it is the engine's own pass
-			// and splitting it would be a second copy of it. What is sliced is
-			// the wait: a level-8 field is a couple of seconds and the page
-			// gets a frame before and after.
-			if (!(await say("height", "raising the ground", 0))) return;
+			// and splitting it would be a second copy of it. Nothing waits on
+			// it: this is a worker, and the thread that draws is elsewhere.
+			yield say("height", "raising the ground", 0);
 			const field = layeredHeight(grid, seed, options);
 			this.raw = Float32Array.from(field.raw);
 			this.terrain = field.terrain as Float32Array<ArrayBuffer>;
 			this.mountain = field.mountain as Float32Array<ArrayBuffer>;
 			this.shapeKey = keys.shape;
 			this.metreKey = "";
-			if (!(await say("height", "raising the ground", 1))) return;
 		}
 
 		if (keys.metres !== this.metreKey) {
-			if (!(await say("metres", "filling the sea", 0))) return;
+			yield say("metres", "filling the sea", 0);
 			// **Sea level is a percentile and the scale is a maximum**, and
 			// both are read over the cells the world is built from. A few
 			// thousand directions find the percentile and miss the maximum --
@@ -231,7 +214,6 @@ export class BenchWorld {
 			this.progress = null;
 			this.ms = performance.now() - started;
 			this.countBands();
-			onStep();
 			return;
 		}
 
@@ -252,14 +234,11 @@ export class BenchWorld {
 				from,
 				take: DROPLET_SLICE,
 			});
-			if (
-				!(await say(
-					"erosion",
-					"cutting the valleys",
-					Math.min(1, (from + DROPLET_SLICE) / droplets),
-				))
-			)
-				return;
+			yield say(
+				"erosion",
+				"cutting the valleys",
+				Math.min(1, (from + DROPLET_SLICE) / droplets),
+			);
 		}
 
 		let moved = 0;
@@ -290,7 +269,6 @@ export class BenchWorld {
 		this.progress = null;
 		this.ms = performance.now() - started;
 		this.countBands();
-		onStep();
 	}
 
 	/** Count the four materials over the planet, and find its tallest ground. */

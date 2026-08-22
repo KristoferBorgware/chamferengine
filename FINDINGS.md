@@ -1296,37 +1296,6 @@ The picture is a fifth branch in `PATCH_SHADER` and a tenth float on the vertex,
 which is the cut in metres -- the mesh already rebuilds when the ground moves,
 so nothing else has to change.
 
----
-
-### F-061 — The bench builds its map on the thread that draws
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-22, timing the terrain bench against the map editor beside it
-**Where:** `packages/client/src/BenchWorld.ts`;
-`packages/client/src/mapWorker.ts`
-
-**What happens.** The map editor runs its builds on a worker, and the bench does
-not: `BenchWorld` calls `layeredHeight`, `metreHeight` and the droplet pass on
-the page's own thread, yielding between slices so the panel stays live. Measured
-on the shipped world at level 8, the field is `0.7 s` and a full-strength
-erosion run is another `7.9 s`. The status line moves and the knobs answer
-throughout, because the erosion pass is sliced 40,000 droplets at a time and the
-page gets a frame between slices.
-
-**Why it matters.** The field is one call and is not sliced, so a level-8 build
-holds the frame for its whole `0.7 s` -- long enough to feel as a stall when a
-noise knob settles. Nothing is wrong with what is drawn; what is wrong is that
-the page is deaf for that stretch. The erosion pass, which is ten times longer,
-does not have the problem at all, because it is the one that is sliced.
-
-**What would fix it.** The same worker the map editor already has. It builds the
-same three stages from the same options and hands back each one as it lands, so
-what the bench needs from it is the two layer fields it does not currently send.
-Slicing `layeredHeight` by cell range instead would keep the page live without a
-worker and is the smaller change, at the cost of a second copy of the loop.
 
 ---
 
@@ -1379,6 +1348,55 @@ hardware rather than on this container's software adapter.
 ---
 
 ## Closed
+
+### F-061 — The bench builds its map on the thread that draws
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, timing the terrain bench against the map editor beside it
+**Where:** `packages/client/src/BenchWorld.ts`;
+`packages/client/src/mapWorker.ts`
+
+**What happens.** The map editor runs its builds on a worker, and the bench does
+not: `BenchWorld` calls `layeredHeight`, `metreHeight` and the droplet pass on
+the page's own thread, yielding between slices so the panel stays live. Measured
+on the shipped world at level 8, the field is `0.7 s` and a full-strength
+erosion run is another `7.9 s`. The status line moves and the knobs answer
+throughout, because the erosion pass is sliced 40,000 droplets at a time and the
+page gets a frame between slices.
+
+**Why it matters.** The field is one call and is not sliced, so a level-8 build
+holds the frame for its whole `0.7 s` -- long enough to feel as a stall when a
+noise knob settles. Nothing is wrong with what is drawn; what is wrong is that
+the page is deaf for that stretch. The erosion pass, which is ten times longer,
+does not have the problem at all, because it is the one that is sliced.
+
+**What would fix it.** The same worker the map editor already has. It builds the
+same three stages from the same options and hands back each one as it lands, so
+what the bench needs from it is the two layer fields it does not currently send.
+Slicing `layeredHeight` by cell range instead would keep the page live without a
+worker and is the smaller change, at the cost of a second copy of the loop.
+
+**Closed:** 2026-08-22, fixed. `BenchWorkerCore` runs the grid, the noise, the
+water, the hexagon mesh and the flat picture on a worker, and hands back what a
+picture is made of -- a mesh, a row of heights and a rectangle of pixels -- with
+the buffers moved rather than copied. The thread that draws holds no grid and no
+field.
+
+Measured by watching the frame clock while a fresh world is built at level 8:
+the build takes `1,546 ms` with the water off and `4,195 ms` with it on, and the
+page runs frames throughout. The one long gap left, `1,380 ms`, is **not the
+build**: uploading the mesh is `8 ms` and drawing the contour graph is `5 ms`,
+and the same gap appears with nothing being built at all -- turning the camera
+over a 176-cell patch costs a worst frame of `1,257 ms` and a median of `83 ms`,
+against `54 ms` and `34 ms` over a 48-cell one. That is the software rasteriser
+drawing 163,476 triangles, which is what this container has instead of a
+graphics card, and it says nothing about how fast the same frame is elsewhere.
+
+
+---
 
 ### F-057 — The noise lab draws every world 11% taller than the engine builds it
 

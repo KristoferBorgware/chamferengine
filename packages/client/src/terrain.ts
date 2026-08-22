@@ -1,8 +1,6 @@
-import type { PatchField } from "./patchField.js";
+import type { BenchFacts, BenchReply, BenchSections } from "./BenchMessage.js";
 import type { PatchLook } from "chamfer/render";
 import { BenchGraph } from "./BenchGraph.js";
-import { BenchPreview } from "./BenchPreview.js";
-import { BenchWorld } from "./BenchWorld.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
 import { PATCH_KNOBS, PlanetSettings } from "./PlanetSettings.js";
@@ -12,8 +10,6 @@ import {
 	createGpuContext,
 	resizeToDisplay,
 } from "chamfer/render";
-import { coarsePatchMesh } from "chamfer/mesh";
-import { patchField, patchFrame } from "./patchField.js";
 
 /**
  * The terrain bench: one patch of a planet, and the knobs that shape it.
@@ -24,10 +20,11 @@ import { patchField, patchFrame } from "./patchField.js";
  * a residency loop: the map is the terrain, so a picture of the map is a
  * picture of the world.
  *
- * The patch is drawn **cell by cell**, one hexagon per map cell, because the
- * lattice is what the world is made of and a square grid of quads is a picture
- * of a different surface. A corner is where three cells meet and stands at the
- * height of all three, which is the blend the generator reads the map with.
+ * **And nothing here builds the map either.** The grid, the noise, the water,
+ * the hexagons and the flat picture are all a worker's; this file holds the
+ * knobs, the canvas and the camera, and paints what arrives. The patch is drawn
+ * cell by cell, one hexagon per map cell, because the lattice is what the world
+ * is made of and a square grid of quads is a picture of a different surface.
  */
 
 const canvas = document.getElementById("viewport") as HTMLCanvasElement;
@@ -40,6 +37,7 @@ const PICTURE_INDEX: Record<string, number> = {
 	raw: 2,
 	terrain: 3,
 	mountain: 3,
+	erosion: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -55,17 +53,6 @@ const panel = new ParameterPanel(
 	{ bench: true },
 );
 
-/** A knob moved, whichever kind it was. */
-function moved(draft: PlanetSettings): void {
-	settings = draft;
-	back.href = `./planet.html?${planetParams()}`;
-	if (building) {
-		pending = true;
-		return;
-	}
-	void build();
-}
-
 const head = document.createElement("div");
 head.className = "bench-head";
 
@@ -76,7 +63,9 @@ head.appendChild(back);
 
 const mapCanvas = document.createElement("canvas");
 mapCanvas.className = "bench-map";
+mapCanvas.style.cursor = "crosshair";
 head.appendChild(mapCanvas);
+const mapContext = mapCanvas.getContext("2d")!;
 
 const legend = document.createElement("div");
 legend.className = "bench-legend";
@@ -108,10 +97,27 @@ profile.appendChild(graphSays);
 panel.footer(profile);
 
 const graph = new BenchGraph(graphCanvas, graphSays);
-const preview = new BenchPreview(mapCanvas, (place) => {
+
+/**
+ * Click the planet to stand somewhere on it.
+ *
+ * **A latitude and a longitude are a place, and two sliders are not.** Finding
+ * a range by dragging them is a search with the answer already on screen, so
+ * the answer is what you click. The projection is longitude across and latitude
+ * down, which inverts to two divisions.
+ */
+mapCanvas.addEventListener("click", (event) => {
+	if (settings.knobs.patchMap !== "planet") return;
+	const box = mapCanvas.getBoundingClientRect();
+	const across = (event.clientX - box.left) / box.width;
+	const down = (event.clientY - box.top) / box.height;
+	const range = settings.rangeFor("patchLatitude");
 	panel.set({
-		patchLatitude: Math.round(place.latitude),
-		patchLongitude: Math.round(place.longitude),
+		patchLatitude: Math.max(
+			range.low,
+			Math.min(range.high, Math.round((0.5 - down) * 180)),
+		),
+		patchLongitude: Math.round(across * 360 - 180),
 	});
 });
 
@@ -125,17 +131,21 @@ function planetParams(): string {
 back.href = `./planet.html?${planetParams()}`;
 
 // ---------------------------------------------------------------------------
-// The map, and the three pictures drawn from it.
+// The worker, and the one rule for talking to it.
 // ---------------------------------------------------------------------------
 
-const world = new BenchWorld();
-let building = false;
+const worker = new Worker(new URL("./benchWorker.ts", import.meta.url), {
+	type: "module",
+});
+
+let token = 0;
+let busy = false;
 let pending = false;
-let field: PatchField | null = null;
-let cellsDrawn = 0;
-let span = 1;
-let meshKey = "";
+let says = "";
+let facts0: BenchFacts | null = null;
+let sections: BenchSections | null = null;
 let renderer: PatchRenderer | null = null;
+let span = 1;
 
 const look = {
 	picture: 0,
@@ -147,121 +157,130 @@ const look = {
 	rawHigh: 1,
 };
 
-async function build(): Promise<void> {
-	building = true;
-	do {
-		pending = false;
-		await world.refresh(settings, draw);
-	} while (pending);
-	building = false;
+/**
+ * A knob moved.
+ *
+ * **One build in flight, and the newest values always next.** A slider dragged
+ * across its range fires on every step and a map is most of a second, so acting
+ * on each one queues them faster than any of them finishes. A change during a
+ * build is remembered rather than queued, and the build that lands starts it.
+ */
+function moved(draft: PlanetSettings): void {
+	settings = draft;
+	back.href = `./planet.html?${planetParams()}`;
+	if (busy) {
+		pending = true;
+		return;
+	}
+	ask();
 }
 
-/** Redraw everything the map now says, and rebuild the patch if it moved. */
-function draw(): void {
-	const k = settings.knobs;
-	if (!world.cells || !world.fit) {
+function ask(): void {
+	busy = true;
+	pending = false;
+	says = "";
+	worker.postMessage({
+		kind: "build",
+		token: ++token,
+		knobs: { ...settings.knobs },
+	});
+}
+
+worker.onmessage = (event: MessageEvent<BenchReply>) => {
+	const reply = event.data;
+	if (reply.token !== token) return;
+	if (reply.kind === "step") {
+		says = `${reply.says} — ${(reply.done * 100).toFixed(0)}%`;
 		say();
 		return;
 	}
-	const frame = patchFrame(k.patchLatitude, k.patchLongitude);
-	const layer =
-		k.patchPicture === "mountain" ? world.mountain : world.terrain;
-	field = patchField(
-		world.cells,
-		{ height: world.height, raw: world.raw, layer, cut: world.delta },
-		{
-			frame,
-			cells: k.patchCells,
-			step: settings.coarseCell,
-			radius: settings.radius,
-		},
-	);
-
-	const cutScale = world.report?.scale ?? 1;
-	if (k.patchMap === "planet")
-		preview.planet(
-			world,
-			settings,
-			frame,
-			field.span,
-			k.patchPicture,
-			k.patchContours,
-			cutScale,
-		);
-	else preview.patch(field, k.patchPicture, k.patchContours, cutScale);
-	graph.draw(field, k.patchAlong);
-
-	// The mesh is rebuilt when the ground under it moved or the patch did, and
-	// never when only the picture changed: a picture is a uniform.
-	const wanted = JSON.stringify([
-		world.ms,
-		k.patchLatitude,
-		k.patchLongitude,
-		k.patchCells,
-		k.patchLift,
-		k.patchPicture === "mountain" ? "mountain" : "terrain",
-	]);
-	if (wanted !== meshKey && renderer) {
-		meshKey = wanted;
-		const patch = coarsePatchMesh(world.cells, {
-			at: frame.up,
-			cells: k.patchCells,
-			radius: settings.radius,
-			exaggeration: k.patchLift,
-			height: world.height,
-			raw: world.raw,
-			layer,
-		});
-		renderer.upload(patch);
-		cellsDrawn = patch.cellCount;
-		look.rawLow = patch.rawLow;
-		look.rawHigh = patch.rawHigh;
-		span = Math.max(1, patch.span);
+	if (reply.kind === "failed") {
+		busy = false;
+		says = reply.why;
+		say();
+		return;
 	}
+
+	facts0 = reply.facts;
+	sections = reply.sections;
+	span = Math.max(1, reply.facts.span);
+	if (reply.geometry && renderer) {
+		renderer.upload({
+			vertices: reply.geometry.vertices,
+			indices: reply.geometry.indices,
+			lines: reply.geometry.lines,
+			cellCount: reply.facts.cellsDrawn,
+			triangleCount: reply.geometry.triangleCount,
+			span: reply.facts.span,
+			lowest: reply.facts.lowest,
+			highest: reply.facts.highest,
+			rawLow: reply.geometry.rawLow,
+			rawHigh: reply.geometry.rawHigh,
+			landShare: reply.facts.landShare,
+		});
+		look.rawLow = reply.geometry.rawLow;
+		look.rawHigh = reply.geometry.rawHigh;
+	}
+	if (mapCanvas.width !== reply.picture.width) {
+		mapCanvas.width = reply.picture.width;
+		mapCanvas.height = reply.picture.height;
+	}
+	mapContext.putImageData(
+		new ImageData(reply.picture.pixels, reply.picture.width),
+		0,
+		0,
+	);
+	graph.draw(sections, settings.knobs.patchAlong);
+	says = "";
+	busy = false;
 	say();
 	render();
-}
+	if (pending) ask();
+};
 
 /** The lines under the picture: what this world is, and what the build is doing. */
 function say(): void {
-	const progress = world.progress;
-	const cells = world.cells?.count ?? 0;
-	const report = world.report;
+	const k = settings.knobs;
+	const f = facts0;
+	const report = f?.report ?? null;
 	facts.innerHTML =
 		`radius <b>${Math.round(settings.radius).toLocaleString("en-US")} m</b> · ` +
 		`map level <b>${settings.coarseLevel}</b> · ` +
 		`cell <b>${settings.coarseCell.toFixed(1)} m</b><br>` +
-		(field
-			? `patch <b>${Math.round(field.span).toLocaleString("en-US")} m</b> across, ` +
-				`<b>${cellsDrawn.toLocaleString("en-US")}</b> cells drawn<br>` +
-				`ground <b>${Math.round(field.lowest)}</b> to ` +
-				`<b>${Math.round(field.highest)} m</b> · ` +
-				`land here <b>${Math.round(field.landShare * 100)}%</b><br>`
+		(f
+			? `patch <b>${Math.round(f.span).toLocaleString("en-US")} m</b> across, ` +
+				`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> cells drawn<br>` +
+				`ground <b>${Math.round(f.lowest)}</b> to ` +
+				`<b>${Math.round(f.highest)} m</b> · ` +
+				`land here <b>${Math.round(f.landShare * 100)}%</b><br>`
 			: "") +
-		(progress
-			? `<span class="bench-busy">${progress.says} — ` +
-				`${(progress.done * 100).toFixed(0)}%</span>`
-			: `map of <b>${cells.toLocaleString("en-US")}</b> cells in ` +
-				`<b>${(world.ms / 1000).toFixed(1)} s</b>`) +
+		(says
+			? `<span class="bench-busy">${says}</span>`
+			: f
+				? `map of <b>${f.cells.toLocaleString("en-US")}</b> cells in ` +
+					`<b>${(f.ms / 1000).toFixed(1)} s</b>`
+				: "") +
 		// **The whole planet, not this patch.** The material lines are absolute
 		// metres and a patch is a place, so a patch can be all snow on a world
 		// that is mostly grass. This is the number to tune Relief against.
-		`<br>planet: <b>${(world.bands[0]! * 100).toFixed(0)}%</b> sea · ` +
-		`<b>${(world.bands[1]! * 100).toFixed(0)}%</b> grass · ` +
-		`<b>${(world.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
-		`<b>${(world.bands[3]! * 100).toFixed(0)}%</b> snow` +
-		(settings.knobs.patchLift === 1
-			? field
+		(f
+			? `<br>planet: <b>${(f.bands[0]! * 100).toFixed(0)}%</b> sea · ` +
+				`<b>${(f.bands[1]! * 100).toFixed(0)}%</b> grass · ` +
+				`<b>${(f.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
+				`<b>${(f.bands[3]! * 100).toFixed(0)}%</b> snow`
+			: "") +
+		(k.patchLift === 1
+			? f
 				? `<br>true scale · relief is <b>${(
-						(100 * (field.highest - field.lowest)) /
-						Math.max(1, field.span)
+						(100 * (f.highest - f.lowest)) /
+						Math.max(1, f.span)
 					).toFixed(1)}%</b> of the patch`
 				: ""
-			: `<br><span class="bench-busy">drawn <b>${settings.knobs.patchLift}x</b> ` +
+			: `<br><span class="bench-busy">drawn <b>${k.patchLift}x</b> ` +
 				"taller than the world builds it</span>") +
-		(settings.knobs.seaLevel < 0
-			? `<br>sea drained <b>${(-settings.knobs.seaLevel).toLocaleString("en-US")} m</b> — ` +
-				`the tallest point is <b>${Math.round(world.summit).toLocaleString("en-US")} m</b> ` +
+		(k.seaLevel < 0 && f
+			? `<br>sea drained <b>${(-k.seaLevel).toLocaleString("en-US")} m</b> — ` +
+				`the tallest point is <b>${Math.round(f.summit).toLocaleString("en-US")} m</b> ` +
 				"above the water"
 			: "") +
 		(report
@@ -274,7 +293,7 @@ function say(): void {
 				`<b>${report.after.ninetyNine.toFixed(3)}</b><br>` +
 				`${report.droplets.toLocaleString("en-US")} droplets in ` +
 				`<b>${(report.ms / 1000).toFixed(1)} s</b>` +
-				(settings.knobs.patchPicture === "erosion"
+				(k.patchPicture === "erosion"
 					? ` · picture saturates at <b>${report.scale.toFixed(1)} m</b>`
 					: "")
 			: "");
@@ -295,9 +314,9 @@ function render(): void {
 
 	const reach = span * camera.distance;
 	const eye = new Vec3(
-		Math.cos(camera.yaw) * Math.cos(camera.pitch) * reach,
-		Math.sin(camera.pitch) * reach + span * camera.lift,
 		Math.sin(camera.yaw) * Math.cos(camera.pitch) * reach,
+		Math.sin(camera.pitch) * reach + span * camera.lift,
+		Math.cos(camera.yaw) * Math.cos(camera.pitch) * reach,
 	);
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(
@@ -354,7 +373,8 @@ async function main(): Promise<void> {
 		render();
 	});
 	resizeToDisplay(ctx);
-	void build();
+	ask();
 }
 
+say();
 void main();
