@@ -9,7 +9,7 @@ import type { PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
-import { PATCH_KNOBS, PlanetSettings } from "./PlanetSettings.js";
+import { PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
@@ -153,10 +153,18 @@ mapCanvas.addEventListener("click", (event) => {
 	});
 });
 
-/** The world's own parameters, without the ones that only move the bench. */
+/**
+ * Everything the bench is holding, as the query string the planet takes.
+ *
+ * **Nothing is dropped, including the rows that only move the bench.** Where
+ * the patch was standing and which picture was on it are work too, and the way
+ * back here is through the planet's own link -- so leaving them out of this one
+ * means a walk to the planet and back puts the patch somewhere else. The
+ * planet reads them, keeps them, and hands them back; none of them reaches the
+ * ground it builds.
+ */
 function planetParams(): string {
 	const out = settings.toParams();
-	for (const key of PATCH_KNOBS) out.delete(key as string);
 	out.set("panel", "1");
 	return out.toString();
 }

@@ -94,6 +94,25 @@ const MAX_COARSE_LEVEL = 9;
  */
 export type Curve = readonly (readonly [number, number])[];
 
+/**
+ * A knobs object that shares nothing with the one it came from.
+ *
+ * **Every knob but two is a number, a string or a boolean, and those copy
+ * themselves.** The two curves are arrays, so a spread hands the same array to
+ * whoever takes the copy -- and the panel drags that array in place. Left
+ * shared, a dragged curve reaches `PLANET_DEFAULTS` itself: the default moves
+ * with the draft, so "does this differ from the default" answers no, and the
+ * curve is left out of every link the world travels in. The work is on screen
+ * and in no query string.
+ */
+export function copyKnobs(knobs: PlanetKnobs): PlanetKnobs {
+	return {
+		...knobs,
+		terrainCurve: knobs.terrainCurve.map(([x, y]) => [x, y]),
+		mountainCurve: knobs.mountainCurve.map(([x, y]) => [x, y]),
+	};
+}
+
 /** A curve as one query-string value, and back. */
 export function curveToText(curve: Curve): string {
 	return curve.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`).join(",");
@@ -896,23 +915,6 @@ export const TRANSIENT: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"freezeView",
 ] as (keyof PlanetKnobs)[]);
 
-/**
- * The knobs the terrain bench owns, which decide the picture and not the world.
- *
- * Kept as a set rather than a prefix test so a reader can see the whole list,
- * and so the bench can leave every one of them out of a link meant to describe
- * a planet.
- */
-export const PATCH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
-	"patchLatitude",
-	"patchLongitude",
-	"patchCells",
-	"patchPicture",
-	"patchSurface",
-	"patchMap",
-	"patchAlong",
-] as (keyof PlanetKnobs)[]);
-
 /** What each of the bench's named knobs may be, so a link cannot say otherwise. */
 const PATCH_CHOICES: Record<string, readonly string[]> = {
 	patchPicture: PATCH_PICTURES,
@@ -943,7 +945,7 @@ export class PlanetSettings {
 	readonly knobs: PlanetKnobs;
 
 	constructor(knobs: Partial<PlanetKnobs> = {}) {
-		this.knobs = { ...PLANET_DEFAULTS, ...knobs };
+		this.knobs = copyKnobs({ ...PLANET_DEFAULTS, ...knobs });
 	}
 
 	/** The seed as the generator takes it, hashed from what was typed. */
