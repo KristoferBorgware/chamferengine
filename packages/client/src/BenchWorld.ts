@@ -1,4 +1,4 @@
-import type { CoarseStage } from "chamfer/generation";
+import type { CoarseStage, LayerNoise } from "chamfer/generation";
 import type { PlanetSettings } from "./PlanetSettings.js";
 import { bandOf } from "./paintPatch.js";
 import {
@@ -6,24 +6,11 @@ import {
 	DROPLET,
 	erodeDroplets,
 	erodeFreeDroplets,
-	layeredHeight,
+	layerNoise,
 	metreHeight,
-	seaLevelFor,
 	seedFromString,
+	shapeLayers,
 } from "chamfer/generation";
-
-/** What the metre step read off the field, held so the pictures can use it. */
-export interface MetreFit {
-	/** The height that leaves the asked-for land above it. */
-	readonly sea: number;
-
-	/** What a unit of field above and below that is worth in metres. */
-	readonly up: number;
-	readonly down: number;
-
-	/** Metres the whole field was lifted by draining the sea. */
-	readonly drained: number;
-}
 
 /** What one erosion run did, in the numbers a carving pass is judged by. */
 export interface ErosionReport {
@@ -78,8 +65,32 @@ export class BenchWorld {
 	private grid: CoarseGrid | null = null;
 	private level = -1;
 
+	/**
+	 * Each layer's octave stack, before any curve is read off it.
+	 *
+	 * **A curve is dragged and a noise field is not.** The stacks answer to the
+	 * seed, the layer widths and the octave counts alone, and on the shipped
+	 * level-8 map they are `410 ms` of an `840 ms` rebuild -- so a curve drag,
+	 * which changes no noise whatever, was paying half its cost to compute the
+	 * same numbers again. Held here at `10.5 MB` against the grid's own 31 MB.
+	 */
+	private noiseKey = "";
+	private noise: LayerNoise | null = null;
+
 	/** The field with no unit, and what each layer's curve returned. */
 	private shapeKey = "";
+
+	/**
+	 * The field as the metre step takes it, and as the pictures read it.
+	 *
+	 * **The metre step is fed the same `float64` the engine feeds it.** Sea
+	 * level is a percentile of this field and the scale divides by its peak, so
+	 * rounding it to `float32` first and rounding back -- which is what reading
+	 * the picture's own copy did -- built a world a few last bits away from the
+	 * one the engine builds from the same knobs. The `float32` copy is for
+	 * looking at.
+	 */
+	private wide: Float64Array = new Float64Array(0);
 	raw: Float32Array<ArrayBuffer> = new Float32Array(0);
 	terrain: Float32Array<ArrayBuffer> = new Float32Array(0);
 	mountain: Float32Array<ArrayBuffer> = new Float32Array(0);
@@ -94,9 +105,6 @@ export class BenchWorld {
 
 	private cutKey = "";
 	private buildingKey = "";
-
-	/** What the metre step read, or nothing before a build has finished one. */
-	fit: MetreFit | null = null;
 
 	/** What the last erosion run did, or nothing when the water is off. */
 	report: ErosionReport | null = null;
@@ -161,20 +169,27 @@ export class BenchWorld {
 			this.level = level;
 			// Every field below is one value per cell of the grid it was
 			// computed on, so all of them go with the grid.
+			this.noiseKey = "";
 			this.shapeKey = "";
 			this.metreKey = "";
 			this.cutKey = "";
-			this.fit = null;
 		}
 		const grid = this.grid!;
 		const seed = seedFromString(settings.knobs.seed);
 
-		if (keys.shape !== this.shapeKey) {
-			// The whole field in one call, because it is the engine's own pass
-			// and splitting it would be a second copy of it. Nothing waits on
-			// it: this is a worker, and the thread that draws is elsewhere.
+		if (keys.noise !== this.noiseKey) {
+			// The engine's own pass, in one call: nothing waits on it, because
+			// this is a worker and the thread that draws is elsewhere.
 			yield say("height", "raising the ground", 0);
-			const field = layeredHeight(grid, seed, options);
+			this.noise = layerNoise(grid, seed, options);
+			this.noiseKey = keys.noise;
+			this.shapeKey = "";
+		}
+
+		if (keys.shape !== this.shapeKey) {
+			yield say("height", "reading the curves", 0.5);
+			const field = shapeLayers(this.noise!, options);
+			this.wide = field.raw;
 			this.raw = Float32Array.from(field.raw);
 			this.terrain = field.terrain as Float32Array<ArrayBuffer>;
 			this.mountain = field.mountain as Float32Array<ArrayBuffer>;
@@ -189,27 +204,12 @@ export class BenchWorld {
 			// both are read over the cells the world is built from. A few
 			// thousand directions find the percentile and miss the maximum --
 			// an extreme is the largest of whatever was looked at.
-			const raw = Float64Array.from(this.raw);
-			this.uneroded = metreHeight(raw, {
+			this.uneroded = metreHeight(this.wide, {
 				landFraction: options.landFraction!,
 				relief: options.relief!,
 				seaDepth: options.seaDepth!,
 				seaLevel: options.seaLevel!,
 			});
-			const sea = seaLevelFor(raw, options.landFraction!);
-			let peak = 0;
-			let trough = 0;
-			for (const v of raw) {
-				const d = v - sea;
-				if (d > peak) peak = d;
-				if (d < trough) trough = d;
-			}
-			this.fit = {
-				sea,
-				up: peak > 0 ? options.relief! / peak : 0,
-				down: trough < 0 ? options.seaDepth! / -trough : 0,
-				drained: -options.seaLevel!,
-			};
 			this.metreKey = keys.metres;
 			this.cutKey = "";
 		}
@@ -328,18 +328,30 @@ export class BenchWorld {
 
 	/** Which knobs each stage of the build depends on. */
 	private keysOf(settings: PlanetSettings): {
+		noise: string;
 		shape: string;
 		metres: string;
 		cut: string;
 	} {
 		const o = settings.coarseOptions();
-		const shape = JSON.stringify([
+		// **A layer's width and its octave count, never its curve.** These four
+		// are every number `layerNoiseSettings` reads; the curves are the whole
+		// of what the stage after this one takes, which is what makes dragging
+		// one cheap.
+		const noise = JSON.stringify([
 			settings.knobs.seed,
 			o.level,
 			o.cellMetres,
-			o.terrain,
-			o.mountain,
+			o.terrain!.metres,
+			o.terrain!.octaves,
+			o.mountain!.metres,
+			o.mountain!.octaves,
 			o.mountainLayer,
+		]);
+		const shape = JSON.stringify([
+			noise,
+			o.terrain!.curve,
+			o.mountain!.curve,
 			o.merge,
 			o.mountainLine,
 			o.detail,
@@ -352,6 +364,7 @@ export class BenchWorld {
 			o.seaLevel,
 		]);
 		return {
+			noise,
 			shape,
 			metres,
 			cut: JSON.stringify([

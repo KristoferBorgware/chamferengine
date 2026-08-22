@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { MetreScale } from "chamfer/generation";
+import type { CoarseMapOptions, MetreScale } from "chamfer/generation";
 import {
 	CoarseGrid,
+	TERRAIN_LAYER_DEFAULT,
 	buildCoarseMap,
 	erodeDroplets,
+	layerNoise,
 	layeredHeight,
 	metreHeight,
 	seaLevelFor,
 	seedFromString,
+	shapeLayers,
 } from "chamfer/generation";
 
 /** A map small enough to build several times in a test run. */
@@ -238,6 +241,59 @@ describe("sampling a fine cell", () => {
 				5,
 			);
 		}
+	});
+});
+
+describe("the two halves of the surface pass", () => {
+	const grid = new CoarseGrid(LEVEL);
+	const seed = seedFromString("chamfer");
+
+	/**
+	 * The reason the halves exist is speed, so the thing to guarantee is that
+	 * speed changed and nothing else. Bit-for-bit, not close to: the field is
+	 * what a spline is evaluated at and what a sea level is a percentile of.
+	 */
+	const same = (options: CoarseMapOptions): void => {
+		const whole = layeredHeight(grid, seed, options);
+		const halves = shapeLayers(layerNoise(grid, seed, options), options);
+		expect(halves.overLine).toBe(whole.overLine);
+		for (let cell = 0; cell < grid.count; cell++) {
+			expect(halves.raw[cell]).toBe(whole.raw[cell]);
+			expect(halves.terrain[cell]).toBe(whole.terrain[cell]);
+			expect(halves.mountain[cell]).toBe(whole.mountain[cell]);
+		}
+	};
+
+	it("gives the shipped world bit for bit", () => {
+		same({});
+	});
+
+	it("gives the roughen merge bit for bit", () => {
+		same({ merge: "roughen" });
+	});
+
+	it("gives a world with no mountain layer bit for bit", () => {
+		same({ mountainLayer: false });
+		same({ mountainLayer: false, merge: "roughen" });
+	});
+
+	/** What the cache is for: one field, read through two different curves. */
+	it("re-shapes one field into two worlds", () => {
+		const noise = layerNoise(grid, seed);
+		const straight = shapeLayers(noise, {
+			terrain: {
+				...TERRAIN_LAYER_DEFAULT,
+				curve: [
+					[-1, 0],
+					[1, 1],
+				],
+			},
+		});
+		const shipped = shapeLayers(noise, {});
+		let apart = 0;
+		for (let cell = 0; cell < grid.count; cell++)
+			if (straight.raw[cell] !== shipped.raw[cell]) apart++;
+		expect(apart).toBeGreaterThan(grid.count * 0.9);
 	});
 });
 

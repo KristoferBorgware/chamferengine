@@ -39,6 +39,9 @@ export {
 	layerNoiseSettings,
 	layeredHeight,
 } from "./coarse/layeredHeight.js";
+export type { LayerNoise } from "./coarse/layerNoise.js";
+export { layerNoise } from "./coarse/layerNoise.js";
+export { shapeLayers } from "./coarse/shapeLayers.js";
 export { splineAt } from "./coarse/splineAt.js";
 export type { TerrainLayer } from "./coarse/TerrainLayer.js";
 export {

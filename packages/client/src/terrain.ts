@@ -49,12 +49,12 @@ const canvas = document.getElementById("viewport") as HTMLCanvasElement;
  * patch and a redraw of the graph, all on this thread. Everything else -- the
  * world's own rows, and where the patch stands -- goes to the worker.
  */
-const VIEW_KNOBS: readonly (keyof PlanetKnobs)[] = [
+const VIEW_KNOBS: ReadonlySet<string> = new Set([
 	"patchPicture",
 	"patchSurface",
 	"patchMap",
 	"patchAlong",
-];
+]);
 let settings = PlanetSettings.fromParams(new URLSearchParams(location.search));
 
 /** Which number the shader's picture branch takes. */
@@ -169,6 +169,9 @@ let token = 0;
 let busy = false;
 let pending = false;
 let says = "";
+
+/** What the worker was last asked to build, so a picture is not a request. */
+let asked = "";
 let facts0: BenchFacts | null = null;
 let sections: BenchSections | null = null;
 let renderer: PatchRenderer | null = null;
@@ -202,10 +205,9 @@ const look = {
  * build is remembered rather than queued, and the build that lands starts it.
  */
 function moved(draft: PlanetSettings): void {
-	const was = settings.knobs;
 	settings = draft;
 	back.href = `./planet.html?${planetParams()}`;
-	if (onlyTheView(was, draft.knobs)) {
+	if (buildKey(draft.knobs) === asked) {
 		show();
 		return;
 	}
@@ -216,17 +218,29 @@ function moved(draft: PlanetSettings): void {
 	ask();
 }
 
-/** Whether everything that moved between two drafts is a picture. */
-function onlyTheView(was: PlanetKnobs, now: PlanetKnobs): boolean {
-	for (const key of Object.keys(now) as (keyof PlanetKnobs)[])
-		if (was[key] !== now[key] && !VIEW_KNOBS.includes(key)) return false;
-	return true;
+/**
+ * Everything the worker is asked for, as one string.
+ *
+ * **A curve is an array, and the panel drags the same array the last request
+ * was read from.** Two drafts a moment apart hold that one object between them,
+ * so comparing knob against knob says a dragged curve did not move and the
+ * ground stops following the pointer. Written out by value instead: what the
+ * worker was asked for is a string it can be compared against however the
+ * panel holds it.
+ */
+function buildKey(knobs: PlanetKnobs): string {
+	const out: Record<string, unknown> = {};
+	for (const key of Object.keys(knobs).sort())
+		if (!VIEW_KNOBS.has(key))
+			out[key] = (knobs as unknown as Record<string, unknown>)[key];
+	return JSON.stringify(out);
 }
 
 function ask(): void {
 	busy = true;
 	pending = false;
 	says = "";
+	asked = buildKey(settings.knobs);
 	worker.postMessage({
 		kind: "build",
 		token: ++token,

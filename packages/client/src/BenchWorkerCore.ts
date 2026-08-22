@@ -60,7 +60,7 @@ export class BenchWorkerCore {
 			};
 
 		const grid = this.world.cells;
-		if (!grid || !this.world.fit) return;
+		if (!grid || this.world.height.length === 0) return;
 		const k = settings.knobs;
 		const frame = patchFrame(k.patchLatitude, k.patchLongitude);
 

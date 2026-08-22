@@ -5,8 +5,8 @@ import type { TerrainLayer } from "./TerrainLayer.js";
 import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { LAYER_LACUNARITY, LAYER_PERSISTENCE } from "./TerrainLayer.js";
 import { CELL_CONSTANT } from "../../world/CELL_CONSTANT.js";
-import { octaveNoise } from "../noise/octaveNoise.js";
-import { splineAt } from "./splineAt.js";
+import { layerNoise } from "./layerNoise.js";
+import { shapeLayers } from "./shapeLayers.js";
 
 /**
  * Offsets from the world seed, so the two layers are two fields.
@@ -129,71 +129,16 @@ export function layerNoiseSettings(
  * The result carries no unit. The metre scale downstream puts sea level at the
  * percentile that leaves the asked-for land above it and scales what is left
  * into metres.
+ *
+ * **The pass is in two halves, and this is both of them.** `layerNoise` reads
+ * the octave stacks and `shapeLayers` reads the curves off them; a caller that
+ * changes only a curve runs the second alone. Anything building a map once
+ * wants this, and gets exactly what the two halves give.
  */
 export function layeredHeight(
 	grid: CoarseGrid,
 	seed: number,
 	options: CoarseMapOptions = {},
 ): LayeredField {
-	const s = { ...COARSE_MAP_DEFAULTS, ...options };
-	const radius = radiusOf(s.cellMetres, s.level);
-	const terrain = layerNoiseSettings(s.terrain, radius);
-	const mountain = layerNoiseSettings(s.mountain, radius);
-	const terrainSeed = (seed + TERRAIN_SEED_OFFSET) | 0;
-	const mountainSeed = (seed + MOUNTAIN_SEED_OFFSET) | 0;
-
-	// Where the terrain curve reaches, so the gate is stated against the curve
-	// rather than against an axis the curve may not touch.
-	let curveLow = Infinity;
-	let curveHigh = -Infinity;
-	for (const [, out] of s.terrain.curve) {
-		if (out < curveLow) curveLow = out;
-		if (out > curveHigh) curveHigh = out;
-	}
-	const lineHeight = curveLow + s.mountainLine * (curveHigh - curveLow);
-	const gateSpan = Math.max(1e-6, curveHigh - lineHeight);
-
-	const raw = new Float64Array(grid.count);
-	const terrainOf = new Float32Array(grid.count);
-	const mountainOf = new Float32Array(grid.count);
-	const gated = s.merge === "gated";
-	let aboveLine = 0;
-	for (let cell = 0; cell < grid.count; cell++) {
-		const x = grid.directions[cell * 3]!;
-		const y = grid.directions[cell * 3 + 1]!;
-		const z = grid.directions[cell * 3 + 2]!;
-		const terrainRaw = octaveNoise(x, y, z, terrainSeed, terrain);
-		const shaped = splineAt(s.terrain.curve, terrainRaw);
-		terrainOf[cell] = shaped;
-		if (shaped > lineHeight) aboveLine++;
-		let mount = 1;
-		if (s.mountainLayer) {
-			mount = splineAt(
-				s.mountain.curve,
-				octaveNoise(x, y, z, mountainSeed, mountain),
-			);
-			mountainOf[cell] = mount;
-		} else if (gated) {
-			// A layer switched off means the value that removes it: no height
-			// under `gated`, full roughness everywhere under `roughen`.
-			mount = 0;
-		}
-		let term;
-		if (gated) {
-			const over = Math.max(
-				0,
-				Math.min(1, (shaped - lineHeight) / gateSpan),
-			);
-			term = mount * (over * over * (3 - 2 * over)) * s.detail;
-		} else {
-			term = terrainRaw * mount * s.detail;
-		}
-		raw[cell] = shaped * 2 - 1 + term;
-	}
-	return {
-		raw,
-		terrain: terrainOf,
-		mountain: mountainOf,
-		overLine: aboveLine / Math.max(1, grid.count),
-	};
+	return shapeLayers(layerNoise(grid, seed, options), options);
 }
