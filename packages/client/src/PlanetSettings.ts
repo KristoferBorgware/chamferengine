@@ -362,6 +362,17 @@ export interface PlanetKnobs {
 	/** The fraction of a day to show while paused, 0 at midnight to 1 at the next. */
 	timeOfDay: number;
 
+	/**
+	 * How much of the light on the ground comes from the sun rather than the
+	 * sky.
+	 *
+	 * The two sum to 1, so flat ground under a noon sun reads the same at any
+	 * setting. At `0` every face of a block takes the same light whichever way
+	 * it points; at `1` a face turned away from the sun keeps only what the
+	 * ground throws back at it.
+	 */
+	sunShare: number;
+
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
 }
@@ -439,6 +450,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	dayLength: 3600,
 	paused: true,
 	timeOfDay: 0.18,
+	sunShare: 0.58,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 };
 
@@ -665,6 +677,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
+	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 };
 

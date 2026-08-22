@@ -1308,6 +1308,53 @@ which costs nothing and fixes nothing.
 
 ---
 
+### F-059 — Nothing casts a shadow, and the coarse map could do it in one march
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-22, after making the sun a directional light
+**Where:** `packages/engine/src/render/terrain/TERRAIN_SHADER.ts`
+
+**What happens.** The sun now lights a face by how square it is to the sun, so
+a slope facing the morning sun is bright and the slope behind it is dark. What
+it still does not do is ask whether anything stands between the face and the
+sun. A mountain lays no shadow across the valley beside it, a cliff none on the
+ground under it, and a block none on its neighbour. At a low sun this is at its
+most visible, because that is exactly when the shadow would be longest and when
+the lit faces are at their brightest against the unlit ones.
+
+**Why it matters.** Shape reads from shading, and half the shading is missing.
+A range of hills at sunrise is drawn with each face correctly lit and the whole
+range flat, because nothing in front occludes anything behind. It is the
+largest remaining gap between what the light does and what a person expects it
+to do.
+
+**What would fix it.** Two shapes, and the second is much the better fit here.
+
+**A shadow map** renders the terrain again from the sun and compares depths. It
+is the general answer and it costs a second geometry pass over every chunk in
+view, three or four times over for cascades, plus bias tuning against a world
+made entirely of hard edges. Doc 16 already bounds how far it would have to
+reach: below about 6 degrees of elevation a 10 m tower's shadow is longer than
+the 76 m horizon, so nothing needs to reach past the horizon.
+
+**A march against the coarse map** costs no second pass at all. The map is one
+height per coarse cell, it is small, the client already regenerates it rather
+than downloading it, and a shadow ray is a walk along the sun direction asking
+whether the ground ever stands above the ray. Uploaded as a texture it would
+give mountain-across-valley shadows -- the ones that carry the shape of a
+landscape -- for one loop in the fragment shader and no change to the mesher or
+the chunk pipeline. What it cannot give is a block shadowing the block beside
+it, because the map is coarser than a block; that is the shadow map's half of
+the job, and it is the half a player notices least at a distance.
+
+Worth measuring before choosing: how many steps the march needs to reach the
+horizon at the shipped map resolution, and what that costs a fragment on real
+hardware rather than on this container's software adapter.
+
+
 ## Closed
 
 ### F-058 — Sea patches split along a chunk seam wherever a wave lifts them

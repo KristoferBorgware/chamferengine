@@ -203,6 +203,87 @@ A flat world cannot have this. Its day and night are a single global number,
 because there is nowhere for a terminator to be. Here it falls out of the
 geometry at no cost, and it is the most visible thing the sphere gives back.
 
+### The terminator is not the shading, and using one for both gives ambient light
+
+`dot(sunDirection, up)` answers one question: **is the sun over this place's
+horizon?** It is a property of where you are standing, and it changes over
+hundreds of metres as the planet curves away.
+
+How bright a *surface* is asks something else: **how square is this face to the
+sun?** That is `dot(sunDirection, faceNormal)`, and it changes from one side of
+a block to the other.
+
+The two are easy to conflate, because on a sphere the ground's normal *is* `up`
+— for flat ground. For the wall of a block it is not, and a shader that uses
+`up` for both gives every face of every block the same light. A north-facing
+cliff and a south-facing cliff read identically. The sun then does nothing but
+turn a global dimmer, which is ambient light with a day/night cycle attached.
+
+There is a test that settles it in two frames. Take one picture with the sun in
+the morning sky and one with it in the evening, from the same camera at the
+same height of sun, and divide them pixel by pixel. Light that comes from a
+direction moves *between* faces — one side of every block gains what the other
+loses — so the ratios spread out. Light that does not is one number over the
+whole picture.
+
+> **[measured]** `tools/frame-diff.mjs`, 916,000 pixels of one view.
+>
+> | Normal used for the sun | Ratio, morning ÷ evening | Spread |
+> |---|---|---|
+> | `up` — the place's own | 1.198 | **0.6%** |
+> | the face's own | 0.803 | **58.6%** |
+>
+> With `up`, every pixel moved by the same factor: the fifth percentile is
+> 1.187 and the ninety-fifth 1.209. With the face's own normal the fifth is
+> 0.394 and the ninety-fifth 1.533 — some faces went two and a half times
+> darker while others went half again brighter.
+
+**The face normal is not stored.** Every face in this world is flat — a cell's
+cap is a planar hexagon and the wall between two cells is a planar quad — so
+two neighbouring pixels of one face differ by a step along its plane, and the
+cross product of the two steps *is* the normal, exactly. A graphics API gives
+those steps directly, as the change of any value across one pixel. So the
+mesher writes no normal, the vertex keeps its six floats, and nothing about the
+mesh format changes.
+
+One catch, and it is a precision one. The change across a pixel has to be taken
+on the **chunk-relative** position, never the world one. A world position here
+is a number near 6,800, where `float32` steps by about a millimetre; the change
+across one pixel of ground underfoot is a few millimetres, so the difference
+between two of them is two or three representable steps and the normal it gives
+is noise. Chunk-relative keeps the magnitude under a few hundred, where the
+step is 60 micrometres.
+
+### Light comes from two places, and only one of them has a direction
+
+Once the sun is directional, a wall facing away from it gets nothing, and
+"nothing" is wrong: it is a wall on a planet with a sky over it. So the light
+splits in two.
+
+- **The sun**, one direction, `max(0, dot(faceNormal, sunDirection))`, switched
+  off when the terminator says the sun is down.
+- **The sky**, no direction at all. A face looking straight up sees all of it,
+  one looking sideways sees half, and one looking down sees only what the
+  ground throws back. That is `dot(faceNormal, up)` again — the same quantity
+  the terminator uses, doing a different job.
+
+The two shares sum to 1, so flat ground under a noon sun reads the same
+whatever the balance, and only surfaces standing at an angle to the sun move
+when it is changed.
+
+The sky term takes the sky's **hue and not its brightness**. The color the sky
+is drawn in already fades from day to night, so multiplying by it whole would
+dim the ambient twice — once by that fade and once by the terminator — and
+would turn a dim blue sky into a dim light rather than a blue one. Dividing out
+its own luminance leaves a tint, and half of that tint is enough to read as sky
+without turning grey stone blue.
+
+Direct sunlight also carries a color of its own: a low sun is seen through more
+air, and air scatters the blue out of it first. That height is measured against
+the place's own up, so the light turns orange as the day runs **and** as a
+player walks around the planet — which on a world you can walk around in 2.12
+hours is the same motion.
+
 ### Day length is a gameplay dial, and it has a natural anchor
 
 The terminator sweeps at `circumference / dayLength`.
@@ -323,6 +404,19 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
   value per cell shrinks that part **32×**.
 - **The terminator is one dot product**: `dot(sun, up) > 0`, reusing gravity's
   `up`, with no shadow map. A flat world cannot have one at all.
+- **The terminator is not the shading.** `up` says whether the sun is over this
+  place's horizon; the **face's own normal** says how square a surface is to
+  it. Using `up` for both lights every face of a block the same, which is
+  ambient light with a day/night dimmer on it: two frames with the sun on
+  opposite sides of the sky divide out to one ratio with a **0.6%** spread,
+  against **58.6%** once each face has its own normal.
+- **No normal is stored.** Every face here is flat, so the change of position
+  across one pixel gives the plane's normal exactly — taken on the
+  chunk-relative position, because a world position on this planet steps by a
+  millimetre in `float32` and a pixel of ground underfoot spans a few.
+- **Light comes from two places and only one has a direction**: the sun, and a
+  sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
+  flat ground at noon reads the same at any balance.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

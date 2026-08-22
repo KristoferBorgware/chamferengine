@@ -505,6 +505,38 @@ Violating any of these breaks the design. They are not tunable.
   *local* problem. Doc 17 protects the cell (cheap, reversible, keeps
   seed variety) rather than flooding it (1% of the surface, fixes the macro map of
   every world, cannot be undone).
+- **THE TERMINATOR IS NOT THE SHADING** (`TERRAIN_SHADER`, doc 16,
+  `tools/frame-diff.mjs`). `dot(sun, up)` answers *is the sun over this place's
+  horizon*; `dot(sun, faceNormal)` answers *how square is this face to it*. The
+  shader used `up` for both, so **every face of every block took the same
+  light** and the sun was a global dimmer -- ambient light with a day and night
+  cycle on it. Measured over 916,000 pixels by taking one frame with the sun in
+  the morning sky and one in the evening and dividing them: with `up` the ratio
+  is **1.198 with a 0.6% spread** (5th 1.187, 95th 1.209), every pixel moving
+  together; with the face's own normal it is **0.803 with a 58.6% spread** (5th
+  **0.394**, 95th **1.533**), light moving *between* faces. **No normal is
+  stored**: every face here is flat, so the change of position across one pixel
+  gives the plane's normal exactly, and the mesher's six floats a vertex are
+  untouched. It must be taken on the **chunk-relative** position -- a world
+  position near 6,800 steps by a millimetre in `float32` and a pixel of ground
+  underfoot spans a few, so the difference of two world positions is two or
+  three representable steps and the normal is noise.
+- **LIGHT COMES FROM TWO PLACES AND ONLY ONE HAS A DIRECTION**
+  (`lightOn` in `TERRAIN_SHADER`, doc 16). The sun is
+  `max(0, dot(faceNormal, sun))` gated by the terminator; the sky is
+  `dot(faceNormal, up)`, from all of it looking up to `0.42` of it looking
+  down. The two shares sum to 1 (**Sun against sky**, default `0.58`), so flat
+  ground at noon reads the same at any balance and only what stands at an angle
+  moves. **`FACE_SHADE` is gone from the mesher** -- its 1 / 0.82 / 0.5 was a
+  three-step hemisphere the shader now computes continuously and correctly for
+  a face pointing any way, and baking it also dimmed **direct** sun on a wall
+  by 0.82 for no reason. The vertex color keeps albedo, the column's own sky
+  exposure and the corner's ambient occlusion, which are facts a shader cannot
+  see. The sky term takes the sky's **hue and not its brightness** -- the sky
+  color already fades with the day, so taking it whole dims the ambient twice
+  and makes a dim blue sky a dim light rather than a blue one. Direct sun
+  reddens below `0.30` of elevation, measured against the place's own up, so it
+  turns as the day runs **and** as a player walks around the planet.
 - **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
   so holonomy and the pentagon direction deficit simply do not apply. 8 neighbours
   cost a flat 1.5×; radial sky light is as cheap as a flat world's because

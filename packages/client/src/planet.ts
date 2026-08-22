@@ -1615,6 +1615,7 @@ async function main(): Promise<void> {
 				: [WATER_FOG[0], WATER_FOG[1], WATER_FOG[2], CLEAR_AIR],
 			daylight: day,
 			nightLight: NIGHT_LIGHT,
+			sunShare: settings.knobs.sunShare,
 		});
 		timer.leave("draw", performance.now());
 

@@ -5,17 +5,9 @@
  * cell itself and **two** others touching it, and the shade takes three values.
  * A cube's corner is shared by four cells and its vertex has three others, so
  * the tables written for cube worlds have four entries and do not carry over.
+ *
+ * This is the one shading term a vertex has to carry, because it is a fact
+ * about which cells stand around that corner and the shader cannot see them.
+ * Which way a face points is a fact the shader works out for itself.
  */
 export const AMBIENT_OCCLUSION: readonly number[] = [1, 0.76, 0.55];
-
-/**
- * How bright a face is before occlusion, by which way it points.
- *
- * A single directional term standing in for a sky: upward faces take the most
- * light, sides less, and downward faces least.
- */
-export const FACE_SHADE = {
-	top: 1,
-	side: 0.82,
-	bottom: 0.5,
-} as const;

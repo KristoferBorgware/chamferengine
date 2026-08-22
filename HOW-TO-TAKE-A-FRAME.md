@@ -148,9 +148,32 @@ recognised by hand. A band at 0.58 of the ground next to it is a side face with
 a corner occluded, not a lighting effect and not a hole.
 
 Two shader edits narrow it further, each one line in `TERRAIN_SHADER`.
-Returning `normalize(in.normal) * 0.5 + 0.5` shows the normal as a color, which
-separates geometry from shading. Returning `in.color * 2.0` shows what the
-mesher wrote, which separates the mesher from the renderer.
+Returning `normal * 0.5 + 0.5` shows the normal as a color, which separates
+geometry from shading — flat ground comes back one color and each wall of a
+hexagon another, and any speckle in it is the normal itself going wrong.
+Returning `in.color * 2.0` shows what the mesher wrote, which separates the
+mesher from the renderer.
+
+## Two frames and a division
+
+`tools/frame-diff.mjs` takes two PNGs of the same view and reports the spread of
+the ratio between them, pixel by pixel. It answers the questions a single frame
+cannot: **did this change move light between surfaces, or did it move all of
+them together?**
+
+```
+node tools/frame-diff.mjs a.png b.png [--skip 0,0,540,200]
+```
+
+`--skip` leaves out a box, and it defaults to the one the readout is drawn in,
+because that says different things in the two frames. Pixels too dark to carry
+a ratio are left out as well.
+
+A ratio of 1.198 with a **0.6%** spread is one number over the whole picture —
+every surface moved together, which is what ambient light does. The same view
+with a directional sun reads 0.803 with a **58.6%** spread, a fifth percentile
+of 0.394 and a ninety-fifth of 1.533: some faces went two and a half times
+darker while others went half again brighter.
 
 ## A frame here settles what is drawn, never how fast
 

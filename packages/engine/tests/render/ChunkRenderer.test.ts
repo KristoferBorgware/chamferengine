@@ -21,6 +21,7 @@ const FRAME: Frame = {
 	fog: [0, 0, 0, 1e9],
 	daylight: 1,
 	nightLight: 0.09,
+	sunShare: 0.58,
 };
 
 /** One chunk's worth of geometry, with a triangle in each of the two buffers. */

@@ -5,7 +5,7 @@ import type { MeshOptions } from "./MeshOptions.js";
 import type { MeshSink } from "./MeshSink.js";
 import type { Vec3 } from "../math/Vec3.js";
 import type { WorldShape } from "../world/WorldShape.js";
-import { AMBIENT_OCCLUSION, FACE_SHADE } from "./AMBIENT_OCCLUSION.js";
+import { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 import { MESH_DEFAULTS } from "./MeshOptions.js";
 import { blockColor } from "../generation/terrain/blockColor.js";
 import { gridCellColor } from "./gridCellColor.js";
@@ -441,7 +441,6 @@ function meshCell(
 				degree,
 				capRadius(layer),
 				origin,
-				FACE_SHADE.top,
 				true,
 				(corner) =>
 					occlusion(ring, degree, corner, corner + 1, layer - 1),
@@ -456,7 +455,6 @@ function meshCell(
 				degree,
 				shape.radiusOfLayer(layer + 1),
 				origin,
-				FACE_SHADE.bottom,
 				false,
 				() => 0,
 			);
@@ -479,7 +477,6 @@ function meshCell(
 				degree,
 				shape.radiusOfLayer(floor + 1),
 				origin,
-				FACE_SHADE.bottom,
 				false,
 				() => 0,
 			);
@@ -667,7 +664,6 @@ function meshApronCell(
 			degree,
 			capRadius(layer) - drop,
 			origin,
-			FACE_SHADE.top,
 			true,
 			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
 		);
@@ -724,7 +720,6 @@ function emitCap(
 	degree: number,
 	radius: number,
 	origin: Vec3,
-	shade: number,
 	upward: boolean,
 	occlude: (corner: number) => number,
 ): void {
@@ -732,7 +727,7 @@ function emitCap(
 	for (let c = 0; c < degree; c++) {
 		const at = upward ? c : degree - 1 - c;
 		const p = corners[at]!;
-		const light = shade * AMBIENT_OCCLUSION[occlude(at)]!;
+		const light = AMBIENT_OCCLUSION[occlude(at)]!;
 		first[c] = sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
@@ -780,7 +775,7 @@ function emitSide(
 		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
 	const put = (p: Vec3, radius: number, occ: number) => {
-		const light = FACE_SHADE.side * AMBIENT_OCCLUSION[occ]!;
+		const light = AMBIENT_OCCLUSION[occ]!;
 		return sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,

@@ -371,6 +371,12 @@ const GROUPS: Group[] = [
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
+			{
+				key: "sunShare",
+				label: "Sun against sky",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
 		],
 	},
 	{

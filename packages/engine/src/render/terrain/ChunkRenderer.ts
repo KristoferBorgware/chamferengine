@@ -26,8 +26,8 @@ interface Resident {
 	readonly water: Buffers | null;
 }
 
-/** A matrix, the eye, the sun, the fog, and how much daylight there is. */
-const FRAME_BYTES = 64 + 16 + 16 + 16 + 16;
+/** A matrix, the eye, the sun, the fog, the daylight, and the sky's own color. */
+const FRAME_BYTES = 64 + 16 + 16 + 16 + 16 + 16;
 
 /** A chunk's origin, padded to the alignment a uniform binding needs. */
 const CHUNK_BYTES = 256;
@@ -239,6 +239,10 @@ export class ChunkRenderer {
 		this.frameData.set(frame.fog, 24);
 		this.frameData[28] = frame.daylight;
 		this.frameData[29] = frame.nightLight;
+		this.frameData[30] = frame.sunShare;
+		// The sky is the color of every surface the sun does not reach, so the
+		// shader is given the same color the pass clears to.
+		this.frameData.set(this.sky, 32);
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
 		const encoder = device.createCommandEncoder();
