@@ -1161,16 +1161,18 @@ async function main(): Promise<void> {
 		from: Vec3,
 		look: Vec3,
 	): { hit: CellRef; place: CellRef | null } | null {
-		// Reach is the player's and is measured from the player, so however far
-		// the camera stands behind the eye is added back to the walk that
-		// starts at the camera. A chase camera then changes what the crosshair
-		// points at and not how far a player can touch.
+		// The walk starts where the player is, on the line the crosshair marks.
+		// The camera stands metres behind and above the eye and can be inside a
+		// hill the player is standing in front of; a walk starting there stops
+		// on its first cell and reports the ground behind the player's head.
+		// Stepping along the ray by that distance first puts the start beside
+		// the eye and keeps the line, so the reach is the player's own.
 		const behind = from.sub(player.eye).length();
 		const walked = rayWalk(
-			from,
+			from.add(look.scale(behind)),
 			look,
 			rayWorld,
-			REACH * shape.blockSize + behind,
+			REACH * shape.blockSize,
 		);
 		if (!walked) return null;
 		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
