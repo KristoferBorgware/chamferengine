@@ -172,6 +172,12 @@ export class TerrainGenerator {
 			into.fill(BlockType.STONE, offset + rock, offset + layers);
 			if (first === layers) first = rock;
 		}
+
+		// The deepest layer of the crust is the floor of the world, and there is
+		// nothing under it. Bedrock there refuses every break, so a column keeps
+		// a bottom however far a player digs.
+		into[offset + layers - 1] = BlockType.BEDROCK;
+		if (first === layers) first = layers - 1;
 		return { first, last };
 	}
 

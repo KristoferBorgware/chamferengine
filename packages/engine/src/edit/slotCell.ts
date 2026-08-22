@@ -31,10 +31,12 @@ export function slotCell(
 	const m = 1 << (subdivisionDepth - chunkLevel);
 	let r = 0;
 	let left = slot;
-	while (left > m - r) {
+	while (r <= m && left > m - r) {
 		left -= m - r + 1;
 		r++;
 	}
+	if (r > m)
+		throw new RangeError(`slot ${slot} is outside a chunk of side ${m}`);
 	const [i, j] = joinPath(path, left, r, subdivisionDepth);
 	return { face, i, j, layer };
 }

@@ -21,5 +21,6 @@ export { DeltaStore } from "./DeltaStore.js";
 export type { CellSlot } from "./cellSlot.js";
 export { cellSlot } from "./cellSlot.js";
 export { slotCell } from "./slotCell.js";
+export { offsetIn } from "./offsetIn.js";
 export { coarseCell } from "./coarseCell.js";
 export { worldKey } from "./worldKey.js";

@@ -18,6 +18,7 @@ export const BLOCK_COLORS: Readonly<
 	[BlockType.SAND]: [0.76, 0.7, 0.5],
 	[BlockType.SNOW]: [0.92, 0.94, 0.97],
 	[BlockType.WATER]: [0.12, 0.32, 0.55],
+	[BlockType.BEDROCK]: [0.17, 0.16, 0.19],
 };
 
 /**

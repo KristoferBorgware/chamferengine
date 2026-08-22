@@ -34,6 +34,18 @@ export interface MeshWorkerSetup {
 	readonly terrain: TerrainOptions;
 }
 
+/**
+ * One chunk's changed blocks, as the two arrays a structured clone carries.
+ *
+ * A record is a slot, a layer and sixteen bits of block state, and the slots
+ * are counted against the world's own subdivision depth and chunk level rather
+ * than against the level this job is drawn at.
+ */
+export interface JobDeltas {
+	readonly where: Uint32Array;
+	readonly what: Uint16Array;
+}
+
 /** One chunk asked for, at the level it is to be drawn at. */
 export interface MeshJob {
 	readonly kind: "chunk";
@@ -43,6 +55,16 @@ export interface MeshJob {
 
 	/** How many levels coarser than the finest the chunk is sampled. */
 	readonly lod: number;
+
+	/**
+	 * The blocks a player changed in this chunk, or absent where none were.
+	 *
+	 * They ride with the job rather than being held by the worker, so the
+	 * thread that owns the store is the only one that has to be right about
+	 * what is in it: a chunk is generated from the seed and then patched, once,
+	 * in the same call that meshes it.
+	 */
+	readonly deltas?: JobDeltas;
 }
 
 export type MeshWorkerMessage = MeshWorkerSetup | MeshJob;
