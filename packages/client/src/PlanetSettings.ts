@@ -148,12 +148,6 @@ export interface PlanetKnobs {
 	/** Cells along one edge of a chunk. */
 	chunkCells: number;
 
-	/**
-	 * Whether the height map runs at all. Off is a smooth sphere at sea level,
-	 * which is the only state the level of detail can be judged in.
-	 */
-	coarseMap: boolean;
-
 	/** Metres across one cell of the height map, which is one step of ground. */
 	coarseSpacing: number;
 
@@ -515,7 +509,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	subdivisionDepth: 13,
 	blockSize: 1,
 	chunkCells: 64,
-	coarseMap: true,
 	coarseSpacing: 32,
 	// **A layer is stated in metres and the engine takes a frequency.** A
 	// frequency counts features across the whole sphere, so it means a
@@ -647,7 +640,6 @@ const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
  */
 export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"seed",
-	"coarseMap",
 	"coarseSpacing",
 	"terrainFeature",
 	"terrainFeatureScale",
@@ -678,7 +670,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	subdivisionDepth: { low: 4, high: 17, step: 1, rebuilds: true, unit: "" },
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
-	coarseMap: { ...TOGGLE, rebuilds: true },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
 	terrainFeature: {
 		low: 100,
@@ -916,15 +907,16 @@ export class PlanetSettings {
 	}
 
 	/**
-	 * Whether continents, rivers and the sea run, once the pause is applied.
+	 * Whether continents and the sea run, or the world is a smooth sphere.
 	 *
-	 * `plain` overrides the knob rather than replacing it, so the setting a
-	 * person left behind is still there when they uncheck the pause. Every
-	 * reader inside this class goes through here rather than through
-	 * `knobs.coarseMap`, which is what keeps the override in one place.
+	 * **The map is the terrain and there is no second source of ground**, so
+	 * there is nothing to switch it off in favour of: the one state that is not
+	 * a map is the sphere the level of detail is judged against, and **Plain
+	 * planet** is what asks for it. Every reader inside this class goes through
+	 * here rather than through the knob, which keeps the pause in one place.
 	 */
 	get coarseMapRuns(): boolean {
-		return this.knobs.coarseMap && !this.knobs.plain;
+		return !this.knobs.plain;
 	}
 
 	/**

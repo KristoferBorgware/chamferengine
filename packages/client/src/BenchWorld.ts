@@ -125,8 +125,9 @@ export class BenchWorld {
 	 */
 	bands: readonly number[] = [0, 0, 0, 0];
 
-	/** The tallest ground on the planet, in metres above sea level. */
+	/** The tallest and the deepest ground on the planet, in metres from the sea. */
 	summit = 0;
+	floor = 0;
 
 	/**
 	 * How much of the planet stands above the mountain line, `0` to `1`.
@@ -284,15 +285,18 @@ export class BenchWorld {
 	private countBands(): void {
 		const counts = [0, 0, 0, 0];
 		let summit = -Infinity;
+		let floor = Infinity;
 		const height = this.height.length ? this.height : this.uneroded;
 		for (let cell = 0; cell < height.length; cell++) {
 			const m = height[cell]!;
 			if (m > summit) summit = m;
+			if (m < floor) floor = m;
 			counts[bandOf(m)]!++;
 		}
 		const total = Math.max(1, height.length);
 		this.bands = counts.map((c) => c / total);
 		this.summit = Number.isFinite(summit) ? summit : 0;
+		this.floor = Number.isFinite(floor) ? floor : 0;
 	}
 
 	/**
