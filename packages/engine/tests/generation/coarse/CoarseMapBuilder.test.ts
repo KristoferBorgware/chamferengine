@@ -92,9 +92,12 @@ describe("CoarseMapBuilder", () => {
 			"relief",
 			"seaDepth",
 			"landFraction",
-			"peakScale",
 			"seaLevel",
 			"erosion",
+			"erosionWalk",
+			"erosionMaxCut",
+			"erosionCutShare",
+			"erosionInertia",
 		] as const)
 			expect(COARSE_STAGES).toContain(coarseStageOf(option));
 	});

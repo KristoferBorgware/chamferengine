@@ -5,6 +5,7 @@ import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { erodeDroplets } from "./erodeDroplets.js";
+import { erodeFreeDroplets } from "./erodeFreeDroplets.js";
 import { layeredHeight } from "./layeredHeight.js";
 import { metreHeight } from "./metreHeight.js";
 
@@ -43,15 +44,6 @@ export class CoarseMapBuilder {
 	/** The surface with no unit, held so a later step can start again. */
 	private raw?: Float64Array;
 
-	/**
-	 * What the mountain layer alone contributed, held for the same reason.
-	 *
-	 * The metre step needs it as well as the sum, because Peak scale multiplies
-	 * it after the fit -- so a run starting at the metre step has to be handed
-	 * both halves, not just the field.
-	 */
-	private mountain?: Float64Array;
-
 	/** The surface in metres before erosion, held for the same reason. */
 	private metres?: Float64Array;
 
@@ -88,9 +80,7 @@ export class CoarseMapBuilder {
 		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
-			const field = layeredHeight(grid, seed, settings);
-			this.raw = field.raw;
-			this.mountain = field.mountain;
+			this.raw = layeredHeight(grid, seed, settings).raw;
 			// Nothing downstream has run, so the ground is the noise itself with
 			// no sea in it. Drawing this shows what the octave knobs are turned
 			// against.
@@ -100,7 +90,7 @@ export class CoarseMapBuilder {
 		if (last <= 0) return;
 
 		if (at <= 1 || this.metres === undefined)
-			this.metres = metreHeight(this.raw!, this.mountain!, settings);
+			this.metres = metreHeight(this.raw!, settings);
 		if (at <= 1) {
 			this.height = Float64Array.from(this.metres!);
 			yield this.step("metres", last <= 1);
@@ -110,13 +100,13 @@ export class CoarseMapBuilder {
 		// Erosion writes in place, so it starts from a copy of ground nothing
 		// has cut. That copy is why the metric field is held separately.
 		this.height = Float64Array.from(this.metres!);
-		erodeDroplets(
-			grid,
-			this.height,
-			seed,
-			settings.erosion,
-			settings.cellMetres,
-		);
+		const cut =
+			settings.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
+		cut(grid, this.height, seed, settings.erosion, settings.cellMetres, {
+			maxCut: settings.erosionMaxCut,
+			cutShare: settings.erosionCutShare,
+			inertia: settings.erosionInertia,
+		});
 		yield this.step("erosion", true);
 	}
 

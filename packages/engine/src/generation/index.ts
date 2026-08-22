@@ -42,11 +42,18 @@ export {
 export { splineAt } from "./coarse/splineAt.js";
 export type { TerrainLayer } from "./coarse/TerrainLayer.js";
 export {
+	LAYER_LACUNARITY,
+	LAYER_PERSISTENCE,
 	MOUNTAIN_LAYER_DEFAULT,
 	TERRAIN_LAYER_DEFAULT,
 } from "./coarse/TerrainLayer.js";
 export { metreHeight } from "./coarse/metreHeight.js";
 export { erodeDroplets } from "./coarse/erodeDroplets.js";
+export { erodeFreeDroplets } from "./coarse/erodeFreeDroplets.js";
+export type { ErosionOptions } from "./coarse/ErosionOptions.js";
+export type { ErosionWalk } from "./coarse/ErosionWalk.js";
+export { EROSION_WALKS } from "./coarse/ErosionWalk.js";
+export { DROPLET } from "./coarse/DROPLET.js";
 export type { CoarseField, CoarseRamp } from "./coarse/CoarseField.js";
 export { coarseFieldOf } from "./coarse/CoarseField.js";
 export { COARSE_FIELDS } from "./coarse/COARSE_FIELDS.js";

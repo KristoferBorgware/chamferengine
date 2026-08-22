@@ -3,6 +3,7 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
 import { erodeDroplets } from "./erodeDroplets.js";
+import { erodeFreeDroplets } from "./erodeFreeDroplets.js";
 import { layeredHeight } from "./layeredHeight.js";
 import { metreHeight } from "./metreHeight.js";
 
@@ -23,8 +24,16 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-	const { raw, mountain } = layeredHeight(grid, seed, settings);
-	const height = metreHeight(raw, mountain, settings);
-	erodeDroplets(grid, height, seed, settings.erosion, settings.cellMetres);
+	const height = metreHeight(
+		layeredHeight(grid, seed, settings).raw,
+		settings,
+	);
+	const cut =
+		settings.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
+	cut(grid, height, seed, settings.erosion, settings.cellMetres, {
+		maxCut: settings.erosionMaxCut,
+		cutShare: settings.erosionCutShare,
+		inertia: settings.erosionInertia,
+	});
 	return new CoarseMap(seed, grid, Float32Array.from(height));
 }

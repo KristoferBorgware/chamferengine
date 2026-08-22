@@ -730,6 +730,39 @@
 			}
 
 			/**
+			 * Move a set of weights across the edge opposite vertex `leaving`.
+			 *
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
+			}
+
+			/**
 			 * Every cell of the planet at one subdivision level, with the ring of
 			 * neighbours around each.
 			 *
@@ -825,6 +858,39 @@
 					return this.faceIndex[face * this.slots + rank(i, j, this.n)];
 				}
 
+				/**
+				 * The cell at `(i, j)`, reaching one step past the face if it
+				 * has to.
+				 *
+				 * A blend reads the three lattice points around a position, and
+				 * near a face edge one of the three sits outside the triangle. It
+				 * is a real cell on the face over that edge, so the reflection
+				 * names it and a field runs across the seam without a break --
+				 * without which a droplet approaching an edge reads a cliff that
+				 * is not there.
+				 *
+				 * **One reflection, so one weight may be negative and the other
+				 * two must be positive.** A point past an icosahedron vertex has
+				 * a negative weight on the far side of the reflection as well and
+				 * needs the pentagon's own ring; the three corners of a blend
+				 * never reach one, because they are the triangle the position
+				 * stands in. Anything the reflection cannot name comes back as
+				 * `-1`.
+				 */
+				indexNear(face, i, j) {
+					const w = latticeWeights(this.n, i, j);
+					let negative = -1;
+					for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+					if (negative < 0)
+						return this.faceIndex[face * this.slots + rank(i, j, this.n)];
+					const over = acrossEdge(face, w, negative);
+					if (over.i < 0 || over.j < 0 || over.i + over.j > this.n)
+						return -1;
+					return this.faceIndex[
+						over.face * this.slots + rank(over.i, over.j, this.n)
+					];
+				}
+
 				/** How many neighbours a cell has: 5 on the twelve pentagons, 6 elsewhere. */
 				degreeOf(cell) {
 					return this.ring[cell * 6 + 5] < 0 ? 5 : 6;
@@ -889,92 +955,110 @@
 				return [wa / s, wb / s, wc / s];
 			}
 
-			/** How many droplets one unit of the knob runs, per cell of the map. */
-			const DROPLETS_PER_CELL = 1.5;
+			/**
+			 * What a droplet does, in metres and fractions rather than in grid
+			 * units.
+			 *
+			 * **Heights are metres and the grid is metres**, so every number
+			 * here means something on the ground: a knob set once holds its
+			 * meaning on a planet of any size and a map drawn at any level.
+			 */
+			const DROPLET = {
+				/** How many droplets one unit of the erosion knob runs, per cell of the map. */
+				perCell: 1.5,
 
-			/** How many cells a droplet may cross before it is abandoned. */
-			const MAX_STEPS = 48;
+				/** How many cells a droplet may cross before it is abandoned. */
+				maxSteps: 48,
+
+				/**
+				 * How much a droplet may carry, as metres of height per unit of
+				 * gradient.
+				 *
+				 * Capacity is a **gradient** times this, never a fall in metres
+				 * times a cell width -- that made a droplet crossing flat ground
+				 * on a 100 m map want to carry `15 m` of material, and cut it
+				 * out. The gradient form means the same hillside erodes by the
+				 * same amount whatever the map's cell size is.
+				 */
+				capacity: 8,
+
+				/** A floor under the gradient, so a droplet on flat ground still carries. */
+				minGradient: 0.01,
+
+				/** How much of the excess a slowing droplet puts down in one step. */
+				depositRate: 0.1,
+
+				/** How much of the shortfall a hungry droplet cuts out in one step. */
+				erosionRate: 0.05,
+
+				/**
+				 * The most of one step's fall a single droplet may cut, as a
+				 * fraction.
+				 *
+				 * A cell is crossed by dozens of droplets, so a tenth each is
+				 * still a valley by the end, and the shapes come out graded
+				 * rather than pocked.
+				 */
+				maxCut: 0.1,
+
+				/**
+				 * What a cell keeps of the material a cell-to-cell droplet cut
+				 * from it; the rest is divided over the ring.
+				 *
+				 * At `0.5` the centre drops six times as far as any neighbour,
+				 * which is a spike, and a pass built out of spikes adds
+				 * roughness rather than carving.
+				 */
+				cutShare: 0.5,
+
+				/** How much of the previous direction a free droplet keeps. */
+				inertia: 0.3,
+
+				/** How much speed a droplet gains per metre of fall. */
+				gravity: 4,
+
+				/** How much of a droplet's water is gone after one step. */
+				evaporation: 0.02,
+			};
 
 			/**
-			 * How much a droplet may carry, as metres of height per unit of
-			 * gradient.
+			 * Cut valleys into a height field by running water over it, cell to
+			 * cell.
 			 *
-			 * Capacity is a **gradient** times this, never a fall in metres times
-			 * a cell width -- that made a droplet crossing flat ground on a 100 m
-			 * map want to carry `15 m` of material, and cut it out. The gradient
-			 * form means the same hillside erodes by the same amount whatever the
-			 * map's cell size is.
+			 * A droplet starts on a hashed cell and walks downhill, taking the
+			 * steepest step it can find. How much it can carry depends on how
+			 * fast it is going and how steeply the ground falls; where it can
+			 * carry more than it holds it cuts, and where it slows or runs onto
+			 * flat ground it puts material back down.
+			 *
+			 * **No routing, no pits, no rivers.** A droplet only ever looks at
+			 * the cell it is standing on and the six around it.
+			 *
+			 * **The direction is one of six, and the cut lands on one cell and
+			 * its ring.** On ground whose gradient is gentle and smooth the same
+			 * neighbour keeps winning, so the walk locks to a lattice axis; and
+			 * half of each cut is taken from the centre against a twelfth from
+			 * each neighbour, which is a spike.
+			 *
+			 * `options` carries the two constants the panel moves and the range
+			 * a sliced run needs. Droplets run one after another, so a
+			 * contiguous range is the same arithmetic in the same order as the
+			 * whole run.
 			 */
-			const CAPACITY = 8;
-
-			/** A floor under the gradient, so a droplet on flat ground still carries. */
-			const MIN_GRADIENT = 0.01;
-
-			/** How much of the excess a slowing droplet puts down in one step. */
-			const DEPOSIT_RATE = 0.1;
-
-			/** How much of the shortfall a hungry droplet cuts out in one step. */
-			const EROSION_RATE = 0.05;
-
-			/**
-			 * The most of one step's fall a single droplet may cut, as a fraction.
-			 *
-			 * A cell is crossed by dozens of droplets, so a tenth each is still a
-			 * valley by the end, and the shapes come out graded rather than
-			 * pocked.
-			 */
-			const MAX_CUT = 0.1;
-
-			/** What a cell keeps of the material cut from it; the rest goes to the ring. */
-			const CUT_SHARE = 0.5;
-
-			/** How much speed a droplet gains per metre of fall. */
-			const GRAVITY = 4;
-
-			/** How much of a droplet's water is gone after one step. */
-			const EVAPORATION = 0.02;
-
-			/**
-			 * Cut valleys into a height field by running water over it.
-			 *
-			 * A droplet starts on a hashed cell and walks downhill, cell to cell,
-			 * taking the steepest step it can find. How much it can carry depends
-			 * on how fast it is going and how steeply the ground falls; where it
-			 * can carry more than it holds it cuts, and where it slows or runs
-			 * onto flat ground it puts material back down. It looks only at the
-			 * cell it stands on and the six around it -- no routing, no pit
-			 * filling, no stored flow.
-			 *
-			 * **Heights are metres and the grid is metres**, so every constant
-			 * above means something on the ground rather than in grid units: a
-			 * knob set once holds its meaning on a planet of any size and a map
-			 * drawn at any level.
-			 *
-			 * `over` carries what the panel changes and what a sliced run needs:
-			 * `maxCut`, `cutShare`, and a `from` and `take` that run part of the
-			 * droplets. Droplets run one after another, so a contiguous range is
-			 * the same arithmetic in the same order as the whole run. Called with
-			 * five arguments this is the engine's pass exactly.
-			 *
-			 * `maxCut` is the most of one step's fall a single droplet may take.
-			 * Without it a droplet meeting a tall step takes the whole thing at
-			 * once and leaves a pit for the next one to fall into. `cutShare` is
-			 * how much of a cut stays on the cell the droplet stands on, the rest
-			 * being divided over the ring: at `0.5` the centre drops six times as
-			 * far as any neighbour, which is a spike, and at `0` the cut is flat
-			 * across the seven.
-			 *
-			 * Every draw is hashed from the seed and the droplet's number rather
-			 * than taken from a running generator, and droplets run one after
-			 * another, so the result does not depend on anything but the seed.
-			 */
-			function erodeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
-				const maxCut = over.maxCut ?? MAX_CUT;
-				const cutShare = over.cutShare ?? CUT_SHARE;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+			function erodeDroplets(
+				grid,
+				height,
+				seed,
+				strength,
+				cellMetres,
+				options = {},
+			) {
+				const maxCut = options.maxCut ?? DROPLET.maxCut;
+				const cutShare = options.cutShare ?? DROPLET.cutShare;
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				if (droplets <= 0) return 0;
-				const from = over.from ?? 0;
-				const until = Math.min(droplets, from + (over.take ?? droplets));
+				const from = options.from ?? 0;
+				const until = Math.min(droplets, from + (options.take ?? droplets));
 
 				for (let drop = from; drop < until; drop++) {
 					let cell = Math.min(
@@ -987,7 +1071,7 @@
 					let speed = 1;
 					let water = 1;
 
-					for (let step = 0; step < MAX_STEPS; step++) {
+					for (let step = 0; step < DROPLET.maxSteps; step++) {
 						// The steepest of the six, which is where the water would
 						// actually go. A pentagon has five and the ring says so.
 						let next = -1;
@@ -1009,22 +1093,25 @@
 							break;
 						}
 
-						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
-						const capacity = gradient * speed * water * CAPACITY;
+						const gradient = Math.max(
+							fall / cellMetres,
+							DROPLET.minGradient,
+						);
+						const capacity = gradient * speed * water * DROPLET.capacity;
 
 						if (sediment > capacity) {
-							const put = (sediment - capacity) * DEPOSIT_RATE;
+							const put = (sediment - capacity) * DROPLET.depositRate;
 							sediment -= put;
 							height[cell] = height[cell] + put;
 						} else {
 							const cut = Math.min(
-								(capacity - sediment) * EROSION_RATE,
+								(capacity - sediment) * DROPLET.erosionRate,
 								fall * maxCut,
 							);
 							sediment += cut;
-							// Spread most of it over the ring, so one cell does not
-							// become a spike of its own. What the ring cannot take
-							// stays here.
+							// Spread most of it over the ring, so one cell does
+							// not become a spike of its own. What the ring cannot
+							// take stays here.
 							let taken = 0;
 							let degree = 0;
 							for (let k = 0; k < 6; k++)
@@ -1040,106 +1127,15 @@
 							height[cell] = height[cell] - (cut - taken);
 						}
 
-						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
-						water *= 1 - EVAPORATION;
+						speed = Math.sqrt(
+							Math.max(0, speed * speed + fall * DROPLET.gravity),
+						);
+						water *= 1 - DROPLET.evaporation;
 						cell = next;
 					}
 				}
 				return droplets;
 			}
-			// ===== END engine coarse grid =====
-
-			// ---------------------------------------------------------------
-			// The second droplet walk, which is not in the engine yet.
-			// ---------------------------------------------------------------
-
-			// ===== BEGIN lab face crossing =====
-			// The engine crosses a face edge inside `neighbour`, for one integer
-			// lattice step at a time. These two do the same reflection for a
-			// position that is not on a lattice point and for a direction, which
-			// is what a droplet needs, and
-			// packages/engine/tests/demos/noiseLab.test.ts checks them against
-			// `neighbour` on every cell of a small planet.
-
-			/**
-			 * Move a set of weights across the edge opposite vertex `leaving`.
-			 *
-			 * A point on a face is three weights on that face's three **global**
-			 * vertex numbers, and that description never mentions a face. Sending
-			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
-			 * `gamma` being the weight on the vertex left behind, and the third
-			 * vertex the one the face over the edge carries instead -- writes the
-			 * same point under the other face's name. At a `gamma` of zero, which
-			 * is a point standing exactly on the edge, it moves nothing at all.
-			 *
-			 * The map is linear, so it carries a **direction** as readily as a
-			 * position: hand it the three components of a step and it hands back
-			 * that step continuing onto the other face. That is what lets a
-			 * droplet walk off one face and keep going.
-			 */
-			function acrossEdge(face, weights, leaving) {
-				const here = FACES[face];
-				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
-				const gamma = weights[leaving];
-				const u = here[(leaving + 1) % 3];
-				const v = here[(leaving + 2) % 3];
-				const third = FACES[link.face].find((x) => x !== u && x !== v);
-				return offsetOn(
-					link.face,
-					new Map([
-						[u, weights[(leaving + 1) % 3] + gamma],
-						[v, weights[(leaving + 2) % 3] + gamma],
-						[third, -gamma],
-					]),
-				);
-			}
-
-			/**
-			 * The cell at `(i, j)` on `face`, reaching one step past the face if
-			 * it has to.
-			 *
-			 * A blend reads the three lattice points around a position, and near
-			 * a face edge one of the three sits outside the triangle. It is a
-			 * real cell on the face over that edge, so the reflection names it
-			 * and the height runs across the seam without a break -- without
-			 * which a droplet approaching an edge reads a cliff that is not
-			 * there.
-			 *
-			 * **One reflection, so one weight may be negative and the other two
-			 * must be positive.** A point past an icosahedron vertex has a
-			 * negative weight on the far side of the reflection as well and
-			 * needs the pentagon's own ring; the three corners of a blend never
-			 * reach one, because they are the triangle the position stands in.
-			 * Anything the reflection cannot name comes back as `-1`, which the
-			 * walk reads as ground it cannot stand on.
-			 */
-			function cellAt(grid, face, i, j) {
-				const n = grid.n;
-				const a = n - i - j;
-				// The common case is a point inside its own face, which this
-				// runs tens of millions of times, so it reaches the index
-				// without building anything.
-				if (a >= 0 && i >= 0 && j >= 0)
-					return grid.faceIndex[face * grid.slots + rank(i, j, n)];
-				const w = [a, i, j];
-				let negative = -1;
-				for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
-				const over = acrossEdge(face, w, negative);
-				if (over.i < 0 || over.j < 0 || over.i + over.j > n) return -1;
-				return grid.faceIndex[
-					over.face * grid.slots + rank(over.i, over.j, n)
-				];
-			}
-			// ===== END lab face crossing =====
-
-			/**
-			 * How many droplets of the last free run ended without a step to take.
-			 *
-			 * A count rather than a return value, because the pass runs in slices
-			 * and the share is of the whole run.
-			 */
-			let strandedDroplets = 0;
-
 			/**
 			 * Cut valleys with a droplet that stands between cells rather than on
 			 * one.
@@ -1182,14 +1178,14 @@
 				seed,
 				strength,
 				cellMetres,
-				over = {},
+				options = {},
 			) {
-				const maxCut = over.maxCut ?? MAX_CUT;
-				const inertia = over.inertia ?? 0.3;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				const maxCut = options.maxCut ?? DROPLET.maxCut;
+				const inertia = options.inertia ?? DROPLET.inertia;
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				if (droplets <= 0) return 0;
-				const from = over.from ?? 0;
-				const until = Math.min(droplets, from + (over.take ?? droplets));
+				const from = options.from ?? 0;
+				const until = Math.min(droplets, from + (options.take ?? droplets));
 				const n = grid.n;
 
 				// The three lattice points under a fractional position, and the
@@ -1197,6 +1193,8 @@
 				// runs a few tens of millions of times.
 				const cells = [0, 0, 0];
 				const weights = [0, 0, 0];
+				const cornerI = [0, 0, 0];
+				const cornerJ = [0, 0, 0];
 
 				/** Fill `cells` and `weights`, or report that the point has no ground. */
 				function corners(face, fi, fj) {
@@ -1207,14 +1205,29 @@
 					// The remainders land in one of the two triangles the square
 					// of steps is cut into, and which one decides the three
 					// corners.
-					const near = a + b <= 1;
-					const oi = near ? [i0, i0 + 1, i0] : [i0 + 1, i0, i0 + 1];
-					const oj = near ? [j0, j0, j0 + 1] : [j0, j0 + 1, j0 + 1];
-					weights[0] = near ? 1 - a - b : 1 - b;
-					weights[1] = near ? a : 1 - a;
-					weights[2] = near ? b : a + b - 1;
+					if (a + b <= 1) {
+						cornerI[0] = i0;
+						cornerJ[0] = j0;
+						cornerI[1] = i0 + 1;
+						cornerJ[1] = j0;
+						cornerI[2] = i0;
+						cornerJ[2] = j0 + 1;
+						weights[0] = 1 - a - b;
+						weights[1] = a;
+						weights[2] = b;
+					} else {
+						cornerI[0] = i0 + 1;
+						cornerJ[0] = j0;
+						cornerI[1] = i0;
+						cornerJ[1] = j0 + 1;
+						cornerI[2] = i0 + 1;
+						cornerJ[2] = j0 + 1;
+						weights[0] = 1 - b;
+						weights[1] = 1 - a;
+						weights[2] = a + b - 1;
+					}
 					for (let t = 0; t < 3; t++) {
-						const cell = cellAt(grid, face, oi[t], oj[t]);
+						const cell = grid.indexNear(face, cornerI[t], cornerJ[t]);
 						if (cell < 0) return false;
 						cells[t] = cell;
 					}
@@ -1337,12 +1350,9 @@
 					let vi = 0;
 					let vj = 0;
 
-					for (let taken = 0; taken < MAX_STEPS; taken++) {
+					for (let taken = 0; taken < DROPLET.maxSteps; taken++) {
 						const here = groundAt(face, fi, fj);
-						if (!Number.isFinite(here)) {
-							strandedDroplets++;
-							break;
-						}
+						if (!Number.isFinite(here)) break;
 						// The gradient of the blend, read half a step out on each
 						// axis. Half rather than one, because a whole step
 						// reaches past the three points the height came from.
@@ -1351,7 +1361,6 @@
 						const alongJ = groundAt(face, fi, fj + reach);
 						if (!Number.isFinite(alongI) || !Number.isFinite(alongJ)) {
 							spread(face, fi, fj, sediment);
-							strandedDroplets++;
 							break;
 						}
 						const gi = (alongI - here) / reach;
@@ -1381,7 +1390,6 @@
 						const there = groundAt(moved.face, moved.i, moved.j);
 						if (!Number.isFinite(there)) {
 							spread(face, fi, fj, sediment);
-							strandedDroplets++;
 							break;
 						}
 						const fall = here - there;
@@ -1392,23 +1400,23 @@
 							break;
 						}
 
-						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
-						const capacity = gradient * speed * water * CAPACITY;
+						const gradient = Math.max(fall / cellMetres, DROPLET.minGradient);
+						const capacity = gradient * speed * water * DROPLET.capacity;
 						if (sediment > capacity) {
-							const put = (sediment - capacity) * DEPOSIT_RATE;
+							const put = (sediment - capacity) * DROPLET.depositRate;
 							sediment -= put;
 							spread(face, fi, fj, put);
 						} else {
 							const took = Math.min(
-								(capacity - sediment) * EROSION_RATE,
+								(capacity - sediment) * DROPLET.erosionRate,
 								fall * maxCut,
 							);
 							sediment += took;
 							spread(face, fi, fj, -took);
 						}
 
-						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
-						water *= 1 - EVAPORATION;
+						speed = Math.sqrt(Math.max(0, speed * speed + fall * DROPLET.gravity));
+						water *= 1 - DROPLET.evaporation;
 						face = moved.face;
 						fi = moved.i;
 						fj = moved.j;
@@ -1564,6 +1572,7 @@
 				} else term = terrainRaw * mount * k.detail;
 				return base + term;
 			}
+			// ===== END engine coarse grid =====
 
 			/** `sqrt(8 pi / (10 sqrt 3))`, which ties block size to radius. */
 			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
@@ -1942,9 +1951,6 @@
 									`<b>${(r.ms / 1000).toFixed(1)} s</b>` +
 									(knobs.picture === "erosion"
 										? ` · picture saturates at <b>${r.scale.toFixed(1)} m</b>`
-										: "") +
-									(r.stranded > 0
-										? ` · <b>${(r.stranded * 100).toFixed(1)}%</b> stopped at a face edge`
 										: "")
 								);
 							},
@@ -2846,14 +2852,13 @@
 				const height = Float64Array.from(erosion.base);
 				const seed = seedFromString(knobs.seed);
 				const free = knobs.erosionWalk === "free";
-				strandedDroplets = 0;
 				const shared = {
 					maxCut: knobs.erosionMaxCut,
 					cutShare: knobs.erosionCutShare,
 					inertia: knobs.erosionInertia,
 				};
 				const cut = free ? erodeFreeDroplets : erodeDroplets;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				const SLICE = 40000;
 				for (let from = 0; from < droplets; from += SLICE) {
 					cut(grid, height, seed, strength, k.cellMetres, {
@@ -2895,7 +2900,6 @@
 					after: slopeQuantiles(grid, height, k.cellMetres),
 					moved: moved / grid.count,
 					deepest,
-					stranded: free ? strandedDroplets / droplets : 0,
 					ms: performance.now() - started,
 				};
 				askForRedraw(false);

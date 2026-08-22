@@ -1306,9 +1306,12 @@ would have to move off the redraw path. A third option is to leave the reading
 alone and say on the panel that heights are a sample and carry a percentage,
 which costs nothing and fixes nothing.
 
+
 ---
 
-### F-058 — The lab and the engine no longer take the same set of knobs
+## Closed
+
+### F-059 — The lab and the engine no longer take the same set of knobs
 
 **Kind:** gap
 **Milestone:** 0.5.0
@@ -1355,9 +1358,14 @@ single metre slider should become the same metres-and-scale pair, because one
 slider cannot hold a hundred metres and a hundred kilometres at a resolution
 anybody can drag.
 
+**Closed:** 2026-08-22, fixed. The four knobs are out of `TerrainLayer` and
+`CoarseMapOptions`, `TerrainLayer` carries `metres` rather than a frequency, and
+the client's single metre slider is the same feature-and-scale pair the lab
+uses. Both panels build the same world from the same numbers.
+
+
 ---
 
-## Closed
 
 ### F-058 — Sea patches split along a chunk seam wherever a wave lifts them
 

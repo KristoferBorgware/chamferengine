@@ -1,4 +1,6 @@
+import type { ErosionWalk } from "./ErosionWalk.js";
 import type { TerrainLayer } from "./TerrainLayer.js";
+import { DROPLET } from "./DROPLET.js";
 import {
 	MOUNTAIN_LAYER_DEFAULT,
 	TERRAIN_LAYER_DEFAULT,
@@ -56,19 +58,6 @@ export interface CoarseMapOptions {
 	 */
 	readonly detail?: number;
 
-	/**
-	 * What the mountain layer's contribution is multiplied by, after the fit.
-	 *
-	 * **The one scale the fit cannot divide out.** Every knob upstream of the
-	 * metre step is renormalised by it -- the tallest point is `relief` whatever
-	 * they say -- so `detail` can only change the balance between the layers,
-	 * never how tall a peak is in metres. This multiplies what the mountain
-	 * layer pushed **up**, after the fit, so the extra is continuous across the
-	 * shoreline and a peak grows where a hollow does not. At `1` it is exactly
-	 * nothing.
-	 */
-	readonly peakScale?: number;
-
 	/** Metres from sea level to the tallest ground, before the peak scale. */
 	readonly relief?: number;
 
@@ -94,13 +83,25 @@ export interface CoarseMapOptions {
 	 * How hard the water cuts. Zero leaves the noise exactly as it fell.
 	 *
 	 * **Zero by default, and that is a decision rather than a placeholder.**
-	 * What the droplets currently cut is lattice-aligned gashes rather than
-	 * valleys -- 60.2% of their steps run eight or more cells in one unchanged
-	 * direction (F-039) -- so a world is better without them until the walk
-	 * carries momentum. `erodeDroplets` still runs and returns on its first
+	 * Neither walk passes the test a carving pass has to pass -- the median
+	 * hillslope has to hold while the tail grows, and at full strength `cell`
+	 * takes the median up `1.40x` and `free` up `1.11x`. A world is better
+	 * without that until one of them sits at one. The pass returns on its first
 	 * line when this is zero.
 	 */
 	readonly erosion?: number;
+
+	/** How a droplet moves over the map. */
+	readonly erosionWalk?: ErosionWalk;
+
+	/** The most of one step's fall a single droplet may cut, as a fraction. */
+	readonly erosionMaxCut?: number;
+
+	/** What a cell keeps of the material cut from it. `cell` walk only. */
+	readonly erosionCutShare?: number;
+
+	/** How much of the previous direction a droplet keeps. `free` walk only. */
+	readonly erosionInertia?: number;
 }
 
 export const COARSE_MAP_DEFAULTS = {
@@ -112,10 +113,13 @@ export const COARSE_MAP_DEFAULTS = {
 	merge: "gated",
 	mountainLine: 0.5,
 	detail: 7,
-	peakScale: 1,
 	relief: 1100,
 	seaDepth: 130,
 	landFraction: 0.65,
 	seaLevel: 0,
 	erosion: 0,
+	erosionWalk: "cell",
+	erosionMaxCut: DROPLET.maxCut,
+	erosionCutShare: DROPLET.cutShare,
+	erosionInertia: DROPLET.inertia,
 } as const satisfies Required<CoarseMapOptions>;

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	CoarseGrid,
 	erodeDroplets,
+	erodeFreeDroplets,
 	hash3,
 	octaveNoise,
 	seaLevelFor,
@@ -54,8 +55,6 @@ const BEGIN = "// ===== BEGIN engine noise kernel =====";
 const END = "// ===== END engine noise kernel =====";
 const COARSE_BEGIN = "// ===== BEGIN engine coarse grid =====";
 const COARSE_END = "// ===== END engine coarse grid =====";
-const CROSSING_BEGIN = "// ===== BEGIN lab face crossing =====";
-const CROSSING_END = "// ===== END lab face crossing =====";
 
 /** One marked block of the page, as source. */
 function block(page: string, begin: string, end: string): string {
@@ -99,18 +98,22 @@ function demoKernel(): {
 		weights: readonly number[],
 		leaving: number,
 	) => { face: number; i: number; j: number };
-	cellAt: (grid: CoarseGrid, face: number, i: number, j: number) => number;
+	erodeFreeDroplets: (
+		grid: CoarseGrid,
+		height: Float64Array,
+		seed: number,
+		strength: number,
+		cellMetres: number,
+	) => number;
 } {
 	const page = readFileSync(HTML, "utf8");
 	// Both blocks together, because the erosion pass in the second one hashes
 	// with the first. They are written to touch no document and no window, so
 	// they run here exactly as they run in the page.
 	const source =
-		block(page, BEGIN, END) +
-		block(page, COARSE_BEGIN, COARSE_END) +
-		block(page, CROSSING_BEGIN, CROSSING_END);
+		block(page, BEGIN, END) + block(page, COARSE_BEGIN, COARSE_END);
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, faceOf, barycentricOf, acrossEdge, cellAt };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, erodeFreeDroplets, faceOf, barycentricOf, acrossEdge };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -253,20 +256,26 @@ describe("the noise lab's copy of the engine's coarse grid", () => {
 		}
 	});
 
-	it("cuts the same valleys into the same ground", () => {
-		const seed = seedFromString("chamfer");
+	/** Ground in metres, so the pass is run on the shape it is written for. */
+	function ground(grid: CoarseGrid, seed: number): Float64Array {
 		const s = settings();
-		const start = new Float64Array(theirs.count);
-		for (let cell = 0; cell < theirs.count; cell++)
-			start[cell] =
+		const out = new Float64Array(grid.count);
+		for (let cell = 0; cell < grid.count; cell++)
+			out[cell] =
 				400 *
 				octaveNoise(
-					theirs.directions[cell * 3]!,
-					theirs.directions[cell * 3 + 1]!,
-					theirs.directions[cell * 3 + 2]!,
+					grid.directions[cell * 3]!,
+					grid.directions[cell * 3 + 1]!,
+					grid.directions[cell * 3 + 2]!,
 					seed,
 					s,
 				);
+		return out;
+	}
+
+	it("cuts the same valleys into the same ground, cell to cell", () => {
+		const seed = seedFromString("chamfer");
+		const start = ground(theirs, seed);
 		const a = Float64Array.from(start);
 		const b = Float64Array.from(start);
 		erodeDroplets(theirs, a, seed, 1, 32);
@@ -277,26 +286,27 @@ describe("the noise lab's copy of the engine's coarse grid", () => {
 		expect(Array.from(b)).toEqual(Array.from(a));
 	});
 
-	it("moves the ground it is asked to move", () => {
+	it("cuts the same valleys into the same ground, free position", () => {
 		const seed = seedFromString("chamfer");
-		const s = settings();
-		const height = new Float64Array(mine.count);
-		for (let cell = 0; cell < mine.count; cell++)
-			height[cell] =
-				400 *
-				octaveNoise(
-					mine.directions[cell * 3]!,
-					mine.directions[cell * 3 + 1]!,
-					mine.directions[cell * 3 + 2]!,
-					seed,
-					s,
-				);
-		const before = Float64Array.from(height);
-		demo.erodeDroplets(mine, height, seed, 1, 32);
-		let moved = 0;
-		for (let cell = 0; cell < height.length; cell++)
-			moved += Math.abs(height[cell]! - before[cell]!);
-		expect(moved).toBeGreaterThan(0);
+		const start = ground(theirs, seed);
+		const a = Float64Array.from(start);
+		const b = Float64Array.from(start);
+		erodeFreeDroplets(theirs, a, seed, 1, 32);
+		demo.erodeFreeDroplets(mine, b, seed, 1, 32);
+		expect(Array.from(b)).toEqual(Array.from(a));
+	});
+
+	it("moves the ground either walk is asked to move", () => {
+		const seed = seedFromString("chamfer");
+		const start = ground(mine, seed);
+		for (const cut of [demo.erodeDroplets, demo.erodeFreeDroplets]) {
+			const height = Float64Array.from(start);
+			cut(mine, height, seed, 1, 32);
+			let moved = 0;
+			for (let cell = 0; cell < height.length; cell++)
+				moved += Math.abs(height[cell]! - start[cell]!);
+			expect(moved).toBeGreaterThan(0);
+		}
 	});
 });
 
@@ -328,7 +338,7 @@ describe("the noise lab's face crossing", () => {
 						if (ni >= 0 && nj >= 0 && ni + nj <= n) continue;
 						crossings++;
 						const over = neighbour(face, n, i, j, k)!;
-						expect(demo.cellAt(grid, face, ni, nj)).toBe(
+						expect(grid.indexNear(face, ni, nj)).toBe(
 							grid.indexOf(over.face, over.i, over.j),
 						);
 					}

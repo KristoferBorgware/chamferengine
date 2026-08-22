@@ -37,6 +37,7 @@ export { degree } from "./neighbours/degree.js";
 export { pentagonVertex } from "./neighbours/pentagonVertex.js";
 export { pentagonRing } from "./neighbours/pentagonRing.js";
 export { cellRepresentations } from "./neighbours/cellRepresentations.js";
+export { acrossEdge } from "./neighbours/acrossEdge.js";
 export { canonicalCell } from "./neighbours/canonicalCell.js";
 
 export type { CellFields } from "./id/CellFields.js";

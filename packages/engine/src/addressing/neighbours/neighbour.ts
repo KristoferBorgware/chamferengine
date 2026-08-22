@@ -1,9 +1,7 @@
 import type { FaceCell } from "./FaceCell.js";
 import { DIRECTIONS } from "./DIRECTIONS.js";
-import { FACES } from "../solid/icosahedron.js";
-import { FACE_ADJACENCY } from "../solid/faceAdjacency.js";
+import { acrossEdge } from "./acrossEdge.js";
 import { latticeWeights } from "../lattice/latticeWeights.js";
-import { offsetOn } from "./offsetOn.js";
 import { pentagonRing } from "./pentagonRing.js";
 import { pentagonVertex } from "./pentagonVertex.js";
 
@@ -41,24 +39,7 @@ export function neighbour(
 	for (let x = 0; x < 3; x++) if (w[x]! < 0) negative = x;
 	if (negative < 0) return { face, i: ni, j: nj };
 
-	// The edge opposite the vertex whose weight went negative is the one crossed.
-	const edge = (negative + 1) % 3;
-	const link = FACE_ADJACENCY[face]![edge]!;
-	const here = FACES[face]!;
-
-	const gamma = w[negative]!;
-	const u = here[(negative + 1) % 3]!;
-	const v = here[(negative + 2) % 3]!;
-	const alpha = w[(negative + 1) % 3]!;
-	const beta = w[(negative + 2) % 3]!;
-	const third = FACES[link.face]!.find((x) => x !== u && x !== v)!;
-
-	return offsetOn(
-		link.face,
-		new Map([
-			[u, alpha + gamma],
-			[v, beta + gamma],
-			[third, -gamma],
-		]),
-	);
+	// The edge opposite the vertex whose weight went negative is the one
+	// crossed, and the reflection over it is the whole of the step.
+	return acrossEdge(face, w, negative);
 }

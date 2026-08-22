@@ -3,6 +3,8 @@ import type { CoarseMapOptions } from "./CoarseMapOptions.js";
 import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import type { TerrainLayer } from "./TerrainLayer.js";
 import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
+import { LAYER_LACUNARITY, LAYER_PERSISTENCE } from "./TerrainLayer.js";
+import { CELL_CONSTANT } from "../../world/CELL_CONSTANT.js";
 import { octaveNoise } from "../noise/octaveNoise.js";
 import { splineAt } from "./splineAt.js";
 
@@ -20,15 +22,18 @@ export const MOUNTAIN_SEED_OFFSET = 211;
 export interface LayeredField {
 	/** The unitless field, in roughly `[-1, 1]`, one entry per grid cell. */
 	readonly raw: Float64Array;
+}
 
-	/**
-	 * What the mountain layer alone contributed at each cell.
-	 *
-	 * Kept apart because Peak scale multiplies it **after** the metre fit.
-	 * Applied before, the fit divides it straight back out and the knob becomes
-	 * the balance knob under another name.
-	 */
-	readonly mountain: Float64Array;
+/**
+ * The planet's radius, from the two numbers that describe its map.
+ *
+ * A map cell is `CELL_CONSTANT * radius / 2^level` metres across, so a map
+ * stated in metres at a level already says how big the planet is. That is what
+ * lets a layer be set in metres: the frequency the noise takes is this divided
+ * by the layer's own width.
+ */
+export function radiusOf(cellMetres: number, level: number): number {
+	return (cellMetres * 2 ** level) / CELL_CONSTANT;
 }
 
 /**
@@ -38,14 +43,22 @@ export interface LayeredField {
  * sampling one layer on its own needs to build exactly what this file passes
  * to `octaveNoise` internally, not a hand-copied approximation of it.
  */
-export function layerNoiseSettings(layer: TerrainLayer): NoiseSettings {
+export function layerNoiseSettings(
+	layer: TerrainLayer,
+	radius: number,
+): NoiseSettings {
 	return {
-		frequency: layer.frequency,
+		// A frequency counts how many times the widest octave repeats around
+		// the planet, and the layer is set as how wide that octave is.
+		frequency: radius / Math.max(1, layer.metres),
 		octaves: layer.octaves,
-		persistence: layer.persistence,
-		lacunarity: layer.lacunarity,
-		offsetX: layer.offsetX,
-		offsetY: layer.offsetY,
+		persistence: LAYER_PERSISTENCE,
+		lacunarity: LAYER_LACUNARITY,
+		// **There is no offset.** Sliding a field sideways names a different
+		// world, and the seed already does that -- with every octave moved
+		// rather than the stack as a whole.
+		offsetX: 0,
+		offsetY: 0,
 		// The stack is always the plain octave stack. What the fold used to do
 		// -- crease a whole world at once -- is what the second layer replaces.
 		ridge: 0,
@@ -100,8 +113,9 @@ export function layeredHeight(
 	options: CoarseMapOptions = {},
 ): LayeredField {
 	const s = { ...COARSE_MAP_DEFAULTS, ...options };
-	const terrain = layerNoiseSettings(s.terrain);
-	const mountain = layerNoiseSettings(s.mountain);
+	const radius = radiusOf(s.cellMetres, s.level);
+	const terrain = layerNoiseSettings(s.terrain, radius);
+	const mountain = layerNoiseSettings(s.mountain, radius);
 	const terrainSeed = (seed + TERRAIN_SEED_OFFSET) | 0;
 	const mountainSeed = (seed + MOUNTAIN_SEED_OFFSET) | 0;
 
@@ -117,7 +131,6 @@ export function layeredHeight(
 	const gateSpan = Math.max(1e-6, curveHigh - lineHeight);
 
 	const raw = new Float64Array(grid.count);
-	const mountainOf = new Float64Array(grid.count);
 	const gated = s.merge === "gated";
 	for (let cell = 0; cell < grid.count; cell++) {
 		const x = grid.directions[cell * 3]!;
@@ -146,8 +159,7 @@ export function layeredHeight(
 		} else {
 			term = terrainRaw * mount * s.detail;
 		}
-		mountainOf[cell] = term;
 		raw[cell] = shaped * 2 - 1 + term;
 	}
-	return { raw, mountain: mountainOf };
+	return { raw };
 }

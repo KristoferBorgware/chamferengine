@@ -98,9 +98,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "terrainScale",
+				key: "terrainFeature",
 				map: true,
-				label: "Terrain scale",
+				label: "Terrain feature",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainFeatureScale",
+				map: true,
+				label: "Terrain feature scale",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
@@ -108,34 +115,6 @@ const GROUPS: Group[] = [
 				key: "terrainOctaves",
 				map: true,
 				label: "Terrain octaves",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainPersistence",
-				map: true,
-				label: "Terrain persistence",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainLacunarity",
-				map: true,
-				label: "Terrain lacunarity",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainOffsetX",
-				map: true,
-				label: "Terrain offset X",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainOffsetY",
-				map: true,
-				label: "Terrain offset Y",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
@@ -182,13 +161,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "peakScale",
-				map: true,
-				label: "Peak scale",
-				digits: 1,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
 				key: "mountainCurve",
 				map: true,
 				label: "Mountain \u2192 range height",
@@ -196,9 +168,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "mountainScale",
+				key: "mountainFeature",
 				map: true,
-				label: "Mountain scale",
+				label: "Mountain feature",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
+			},
+			{
+				key: "mountainFeatureScale",
+				map: true,
+				label: "Mountain feature scale",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
@@ -206,34 +185,6 @@ const GROUPS: Group[] = [
 				key: "mountainOctaves",
 				map: true,
 				label: "Mountain octaves",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainPersistence",
-				map: true,
-				label: "Mountain persistence",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainLacunarity",
-				map: true,
-				label: "Mountain lacunarity",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainOffsetX",
-				map: true,
-				label: "Mountain offset X",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainOffsetY",
-				map: true,
-				label: "Mountain offset Y",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
@@ -269,6 +220,58 @@ const GROUPS: Group[] = [
 				label: "Sea depth",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+		],
+	},
+	{
+		// **The one pass that is not a function of a point.** Every other knob
+		// here is read at the place it is asked about; water walks, so these
+		// are read over the whole planet on one grid before any of it can be
+		// drawn. Folded, because zero is what it is set to and neither walk
+		// carves yet: both take the median hillslope up rather than leaving it
+		// alone while the tail grows.
+		title: "Erosion",
+		folded: true,
+		knobs: [
+			{
+				key: "erosion",
+				map: true,
+				label: "Erosion",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "erosionWalk",
+				map: true,
+				label: "Droplets",
+				choices: [
+					{ value: "cell", label: "Cell to cell" },
+					{ value: "free", label: "Free position" },
+				],
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+			},
+			{
+				key: "erosionInertia",
+				map: true,
+				label: "Keeps direction",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				shownWhen: (k) => k.erosionWalk === "free",
+			},
+			{
+				key: "erosionCutShare",
+				map: true,
+				label: "Cut spread",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				shownWhen: (k) => k.erosionWalk === "cell",
+			},
+			{
+				key: "erosionMaxCut",
+				map: true,
+				label: "Deepest cut",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
 			},
 		],
 	},
@@ -921,16 +924,16 @@ export class ParameterPanel {
 			const k = this.draft as unknown as Record<string, number>;
 			const key = [
 				this.draft.seed,
-				k[`${layer}Scale`],
+				k[`${layer}Feature`],
+				k[`${layer}FeatureScale`],
 				k[`${layer}Octaves`],
-				k[`${layer}Persistence`],
-				k[`${layer}Lacunarity`],
-				k[`${layer}OffsetX`],
-				k[`${layer}OffsetY`],
 			].join(":");
 			if (key === histKey) return;
 			histKey = key;
-			const settings = layerNoiseSettings(this.settings.layerFor(layer));
+			const settings = layerNoiseSettings(
+				this.settings.layerFor(layer),
+				this.settings.radius,
+			);
 			const offset =
 				layer === "terrain"
 					? TERRAIN_SEED_OFFSET
@@ -1213,9 +1216,9 @@ export class ParameterPanel {
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			(settings.knobs.coarseMap
 				? `<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
-					`<span>terrain <b>${settings.knobs.terrainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
+					`<span>terrain <b>${settings.widestOf("terrain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
 					(settings.knobs.mountainLayer
-						? `<span>mountains <b>${settings.knobs.mountainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
+						? `<span>mountains <b>${settings.widestOf("mountain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
 						: `<span>mountain layer <b>off</b></span>`)
 				: `<span>height map <b>off</b></span>`) +
 			// The camera's own height, not a figure typed in beside it: the two
