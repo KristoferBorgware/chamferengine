@@ -22,6 +22,17 @@ export const MOUNTAIN_SEED_OFFSET = 211;
 export interface LayeredField {
 	/** The unitless field, in roughly `[-1, 1]`, one entry per grid cell. */
 	readonly raw: Float64Array;
+
+	/**
+	 * What each layer's curve returned at each cell, `0` to `1`.
+	 *
+	 * The sum says what the ground is and hides which layer said it. A picture
+	 * of one layer on its own is how a curve is judged -- dark where that layer
+	 * says nothing, bright where it says most -- and these are what it draws.
+	 * `float32` because they are looked at rather than computed with.
+	 */
+	readonly terrain: Float32Array;
+	readonly mountain: Float32Array;
 }
 
 /**
@@ -131,6 +142,8 @@ export function layeredHeight(
 	const gateSpan = Math.max(1e-6, curveHigh - lineHeight);
 
 	const raw = new Float64Array(grid.count);
+	const terrainOf = new Float32Array(grid.count);
+	const mountainOf = new Float32Array(grid.count);
 	const gated = s.merge === "gated";
 	for (let cell = 0; cell < grid.count; cell++) {
 		const x = grid.directions[cell * 3]!;
@@ -138,12 +151,14 @@ export function layeredHeight(
 		const z = grid.directions[cell * 3 + 2]!;
 		const terrainRaw = octaveNoise(x, y, z, terrainSeed, terrain);
 		const shaped = splineAt(s.terrain.curve, terrainRaw);
+		terrainOf[cell] = shaped;
 		let mount = 1;
 		if (s.mountainLayer) {
 			mount = splineAt(
 				s.mountain.curve,
 				octaveNoise(x, y, z, mountainSeed, mountain),
 			);
+			mountainOf[cell] = mount;
 		} else if (gated) {
 			// A layer switched off means the value that removes it: no height
 			// under `gated`, full roughness everywhere under `roughen`.
@@ -161,5 +176,5 @@ export function layeredHeight(
 		}
 		raw[cell] = shaped * 2 - 1 + term;
 	}
-	return { raw };
+	return { raw, terrain: terrainOf, mountain: mountainOf };
 }

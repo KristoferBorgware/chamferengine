@@ -1,4 +1,16 @@
 import type {
+	PatchAlong,
+	PatchMap,
+	PatchPicture,
+	PatchSurface,
+} from "./PatchLook.js";
+import {
+	PATCH_ALONGS,
+	PATCH_MAPS,
+	PATCH_PICTURES,
+	PATCH_SURFACES,
+} from "./PatchLook.js";
+import type {
 	CoarseMapOptions,
 	ErosionWalk,
 	MountainMerge,
@@ -211,6 +223,38 @@ export interface PlanetKnobs {
 	/** How much of the surface stands above the sea. */
 	landFraction: number;
 
+	/**
+	 * Where the terrain bench is standing and what it draws.
+	 *
+	 * **None of these is a world parameter.** Every other knob here is one the
+	 * engine reads; these move the preview and leave the ground where it was,
+	 * which is why they are kept apart from the rest and why a link carrying
+	 * them builds the same planet.
+	 */
+	patchLatitude: number;
+	patchLongitude: number;
+
+	/** How many map cells across the bench's patch is. */
+	patchCells: number;
+
+	/** Which step of the build the preview stops at. */
+	patchPicture: PatchPicture;
+
+	/** Whether the preview draws the surface, the cell rims, or both. */
+	patchSurface: PatchSurface;
+
+	/** Whether the small map shows the patch or the whole planet. */
+	patchMap: PatchMap;
+
+	/** Which way the contour graph's sections run. */
+	patchAlong: PatchAlong;
+
+	/** How much taller than the world the preview draws the ground. */
+	patchLift: number;
+
+	/** Whether the preview rings the ground every hundred metres. */
+	patchContours: boolean;
+
 	/** Metres from the top of the tallest ground to the floor of the world. */
 	crustMetres: number;
 
@@ -417,6 +461,17 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	erosionCutShare: DROPLET.cutShare,
 	erosionInertia: DROPLET.inertia,
 	landFraction: 0.65,
+	// A place with a coast, a plain and a range on it, so the bench opens on
+	// all three rather than on whichever the middle of the map happened to be.
+	patchLatitude: 45,
+	patchLongitude: 20,
+	patchCells: 176,
+	patchPicture: "ground",
+	patchSurface: "solid",
+	patchMap: "patch",
+	patchAlong: "x",
+	patchLift: 1,
+	patchContours: true,
 	crustMetres: 1232,
 	atmosphereTop: 2050,
 	zenithDepth: 0.272,
@@ -584,6 +639,27 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	erosionCutShare: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	erosionInertia: { low: 0, high: 0.9, step: 0.05, rebuilds: true, unit: "" },
+	patchLatitude: {
+		low: -85,
+		high: 85,
+		step: 1,
+		rebuilds: false,
+		unit: "\u00b0",
+	},
+	patchLongitude: {
+		low: -180,
+		high: 180,
+		step: 1,
+		rebuilds: false,
+		unit: "\u00b0",
+	},
+	patchCells: { low: 48, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	patchAlong: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	patchLift: { low: 1, high: 8, step: 0.25, rebuilds: false, unit: "x" },
+	patchContours: { ...TOGGLE, rebuilds: false },
 	landFraction: {
 		low: 0.05,
 		high: 0.8,
@@ -674,6 +750,33 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 export const TRANSIENT: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"freezeView",
 ] as (keyof PlanetKnobs)[]);
+
+/**
+ * The knobs the terrain bench owns, which decide the picture and not the world.
+ *
+ * Kept as a set rather than a prefix test so a reader can see the whole list,
+ * and so the bench can leave every one of them out of a link meant to describe
+ * a planet.
+ */
+export const PATCH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	"patchLatitude",
+	"patchLongitude",
+	"patchCells",
+	"patchPicture",
+	"patchSurface",
+	"patchMap",
+	"patchAlong",
+	"patchLift",
+	"patchContours",
+] as (keyof PlanetKnobs)[]);
+
+/** What each of the bench's named knobs may be, so a link cannot say otherwise. */
+const PATCH_CHOICES: Record<string, readonly string[]> = {
+	patchPicture: PATCH_PICTURES,
+	patchSurface: PATCH_SURFACES,
+	patchMap: PATCH_MAPS,
+	patchAlong: PATCH_ALONGS,
+};
 
 /** The nearest power of two, for turning a size in metres into a level. */
 function levelFor(span: number, size: number): number {
@@ -1316,6 +1419,9 @@ export class PlanetSettings {
 			} else if (key === "erosionWalk") {
 				if (EROSION_WALKS.includes(raw as ErosionWalk))
 					knobs.erosionWalk = raw as ErosionWalk;
+			} else if (PATCH_CHOICES[key as string]) {
+				if (PATCH_CHOICES[key as string]!.includes(raw))
+					(knobs as unknown as Record<string, string>)[key] = raw;
 			} else if (key === "terrainCurve" || key === "mountainCurve") {
 				const curve = curveFromText(raw);
 				if (curve) knobs[key] = curve;

@@ -639,3 +639,149 @@ body {
 	font: inherit;
 	font-size: 12px;
 }
+
+/*
+ * The terrain bench.
+ *
+ * Its own page: the patch fills the window and the panel stands beside it, so
+ * nothing is drawn behind the thing being judged. The head of the panel is
+ * fixed and only the rows scroll -- reaching for a knob must never carry the
+ * picture off the top of the panel it is a panel of.
+ */
+body.bench {
+	background: var(--void);
+}
+
+body.bench #viewport {
+	cursor: grab;
+}
+
+body.bench #viewport:active {
+	cursor: grabbing;
+}
+
+body.bench .knobs {
+	background: rgba(18, 22, 29, 0.94);
+}
+
+/* No fold on the bench: the panel is half of what the page is for. */
+body.bench .knobs-head {
+	display: none;
+}
+
+.bench-hint {
+	position: fixed;
+	left: 1rem;
+	bottom: 0.9rem;
+	color: var(--dim);
+	font-size: 12px;
+	pointer-events: none;
+}
+
+.bench-head {
+	flex: 0 0 auto;
+	padding: 10px 14px 8px;
+	border-bottom: 1px solid var(--edge);
+}
+
+.bench-back {
+	display: inline-block;
+	margin-bottom: 8px;
+	color: var(--live);
+	text-decoration: none;
+	font-size: 12px;
+}
+
+.bench-back:hover {
+	text-decoration: underline;
+}
+
+.bench-map {
+	display: block;
+	width: 100%;
+	height: auto;
+	image-rendering: pixelated;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	background: var(--sunk);
+	cursor: crosshair;
+}
+
+.bench-legend {
+	display: flex;
+	gap: 2px;
+	margin-top: 6px;
+	font-size: 10px;
+	line-height: 1.25;
+}
+
+.bench-legend span {
+	flex: 1;
+	padding: 2px 3px;
+	color: #0b0e13;
+	text-align: center;
+	border-radius: 2px;
+}
+
+.bench-facts {
+	margin-top: 7px;
+	color: var(--dim);
+	font-size: 11px;
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+}
+
+.bench-facts b {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.bench-busy {
+	color: var(--warn);
+}
+
+.bench-profile {
+	margin: 10px 14px 16px;
+	border-top: 1px solid var(--edge);
+	padding-top: 8px;
+}
+
+.bench-profile summary {
+	cursor: pointer;
+	color: var(--dim);
+	font-size: 11px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.bench-profile canvas {
+	display: block;
+	width: 100%;
+	height: auto;
+	margin-top: 6px;
+	border-radius: 3px;
+}
+
+.bench-says {
+	margin-top: 4px;
+	color: var(--dim);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* The way in, on the planet's own panel. */
+.knobs-bar a {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 0.7rem;
+	border: 1px solid var(--edge-lit);
+	border-radius: 3px;
+	background: var(--sunk);
+	color: var(--live);
+	text-decoration: none;
+	font-size: 12px;
+}
+
+.knobs-bar a:hover {
+	border-color: var(--live-deep);
+}

@@ -75,6 +75,16 @@ interface Group {
 	/** Whether the group starts folded away. */
 	readonly folded?: boolean;
 
+	/**
+	 * Which panel the group is drawn on.
+	 *
+	 * The bench and the planet share every knob that decides the map, and
+	 * neither has any use for the other's. There is no sky on the bench and no
+	 * preview patch on the planet, so a row for either on the wrong page is a
+	 * row that moves nothing. Groups say `world` unless told otherwise.
+	 */
+	readonly where?: "world" | "bench" | "both";
+
 	readonly knobs: Knob[];
 }
 
@@ -89,6 +99,7 @@ interface Group {
 const GROUPS: Group[] = [
 	{
 		title: "The terrain layer",
+		where: "both",
 		knobs: [
 			{
 				key: "terrainCurve",
@@ -128,6 +139,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The mountain layer",
+		where: "both",
 		knobs: [
 			{
 				key: "mountainLayer",
@@ -192,6 +204,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "How high and how wet",
+		where: "both",
 		knobs: [
 			{
 				key: "landFraction",
@@ -233,6 +246,7 @@ const GROUPS: Group[] = [
 		// neither walk carves yet: both take the median hillslope up rather
 		// than leaving it alone while the tail grows.
 		title: "Erosion",
+		where: "both",
 		folded: true,
 		knobs: [
 			{
@@ -285,6 +299,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "How finely it is drawn",
+		where: "both",
 		folded: true,
 		knobs: [
 			{
@@ -310,6 +325,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The cell grid",
+		where: "both",
 		folded: true,
 		knobs: [
 			{
@@ -330,6 +346,83 @@ const GROUPS: Group[] = [
 					s.crustCap === "asked"
 						? null
 						: `${(s.crustDepth * s.knobs.blockSize).toFixed(0)} m, ${s.crustDepth} layers`,
+			},
+		],
+	},
+	{
+		// **The patch is a place, and where it stands is not a world
+		// parameter.** Every other group here is read by the engine; these two
+		// move the bench and leave the ground exactly where it was, so a link
+		// carrying them describes the same planet.
+		title: "The patch",
+		where: "bench",
+		knobs: [
+			{
+				key: "patchLatitude",
+				label: "Latitude",
+				digits: 0,
+			},
+			{
+				key: "patchLongitude",
+				label: "Longitude",
+				digits: 0,
+			},
+			{
+				key: "patchCells",
+				label: "Cells across",
+				digits: 0,
+			},
+		],
+	},
+	{
+		title: "The view \u2014 not the world",
+		where: "bench",
+		folded: true,
+		knobs: [
+			{
+				key: "patchMap",
+				label: "Map shows",
+				choices: [
+					{ value: "patch", label: "The patch" },
+					{ value: "planet", label: "The planet" },
+				],
+			},
+			{
+				key: "patchPicture",
+				label: "Picture",
+				choices: [
+					{ value: "ground", label: "Ground" },
+					{ value: "height", label: "Height" },
+					{ value: "raw", label: "Raw" },
+					{ value: "terrain", label: "Terrain layer" },
+					{ value: "mountain", label: "Mountain layer" },
+				],
+			},
+			{
+				key: "patchSurface",
+				label: "Surface",
+				choices: [
+					{ value: "solid", label: "Solid" },
+					{ value: "wire", label: "Cell rims" },
+					{ value: "both", label: "Both" },
+				],
+			},
+			{
+				key: "patchAlong",
+				label: "Contour along",
+				choices: [
+					{ value: "x", label: "East" },
+					{ value: "z", label: "North" },
+				],
+			},
+			{
+				key: "patchLift",
+				label: "Height x",
+				digits: 2,
+			},
+			{
+				key: "patchContours",
+				label: "Ring every 100 m",
 			},
 		],
 	},
@@ -645,12 +738,17 @@ export class ParameterPanel {
 	 */
 	private liveRebuild = false;
 
+	/** Whether the bench's own rows are on this panel. */
+	private readonly bench: boolean;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
 		onDraft: (settings: PlanetSettings) => void = () => {},
 		onLiveRebuild: (settings: PlanetSettings) => void = () => {},
+		options: { readonly bench?: boolean } = {},
 	) {
+		this.bench = options.bench ?? false;
 		this.draft = { ...settings.knobs };
 		this.onLive = onLive;
 		this.onDraft = onDraft;
@@ -659,6 +757,35 @@ export class ParameterPanel {
 		this.root.className = "knobs";
 		this.build();
 		document.body.appendChild(this.root);
+	}
+
+	/**
+	 * Put an element at the top of the panel, above every row and fixed there.
+	 *
+	 * **The picture is the reference; the knobs are the work.** Scrolling to
+	 * reach a knob must never carry the picture off the top of the panel, which
+	 * is the one thing a panel must not do to the thing it is a panel of. What
+	 * is mounted here stays while the rows below it move.
+	 */
+	mount(element: HTMLElement): void {
+		this.root.insertBefore(element, this.root.children[1] ?? null);
+	}
+
+	/** Put an element at the bottom of the scrolling rows. */
+	footer(element: HTMLElement): void {
+		this.root.querySelector(".knobs-body")?.appendChild(element);
+	}
+
+	/**
+	 * Move some knobs from outside the panel, as if their rows had been dragged.
+	 *
+	 * A place clicked on a map is a latitude and a longitude, and the two rows
+	 * that hold them have to agree with it or the panel is describing a patch
+	 * that is not the one on screen.
+	 */
+	set(values: Partial<PlanetKnobs>): void {
+		Object.assign(this.draft, values);
+		this.touch(false, "patchLatitude");
 	}
 
 	/**
@@ -706,6 +833,9 @@ export class ParameterPanel {
 		// they are in is what each one decides rather than which subsystem
 		// happens to read it.
 		for (const group of GROUPS) {
+			const where = group.where ?? "world";
+			if (where !== "both" && (where === "bench") !== this.bench)
+				continue;
 			const section = document.createElement("section");
 			if (group.folded) section.classList.add("shut");
 
@@ -767,6 +897,18 @@ export class ParameterPanel {
 			void navigator.clipboard?.writeText(this.href());
 		};
 		bar.append(this.applyButton, reset, copy);
+		// **The way to the bench, carrying this world with it.** Choosing
+		// terrain numbers is looking at ground, and the bench is a page where
+		// the ground is the whole window rather than a picture over one.
+		if (!this.bench) {
+			const bench = document.createElement("a");
+			bench.textContent = "Terrain bench";
+			bench.href = "./terrain.html";
+			bench.onclick = () => {
+				bench.href = `./terrain.html?${this.settings.toParams().toString()}`;
+			};
+			bar.appendChild(bench);
+		}
 		body.appendChild(bar);
 
 		this.refresh();
