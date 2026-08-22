@@ -1,8 +1,13 @@
 import type { PatchPicture } from "./PatchLook.js";
-import { GROUND_LINES } from "chamfer/generation";
+import { BLOCK_COLORS, BlockType, GROUND_LINES } from "chamfer/generation";
+import { SEA_CLARITY, SEA_COLORS } from "chamfer/render";
 
 /**
  * The world's own block colors, linear, in band order.
+ *
+ * **The engine's, not a copy of them.** A picture of the map is a picture of
+ * what the world builds there, so a colour chosen twice is two worlds -- and
+ * the two would drift the first time either was retuned.
  *
  * **Under sea level the ground is sand, not water.** The ocean is a surface at
  * one radius rather than a body of blocks, so a sea floor is bare and what
@@ -10,15 +15,11 @@ import { GROUND_LINES } from "chamfer/generation";
  * the floor water-colored would show a material the world does not build.
  */
 export const BAND_COLORS: readonly (readonly [number, number, number])[] = [
-	[0.76, 0.7, 0.5],
-	[0.26, 0.44, 0.19],
-	[0.42, 0.42, 0.45],
-	[0.92, 0.94, 0.97],
+	BLOCK_COLORS[BlockType.SAND]!,
+	BLOCK_COLORS[BlockType.GRASS]!,
+	BLOCK_COLORS[BlockType.STONE]!,
+	BLOCK_COLORS[BlockType.SNOW]!,
 ];
-
-/** What the sea is, and how far a look reaches into it. */
-const SEA_COLOR: readonly [number, number, number] = [0.12, 0.32, 0.55];
-const SEA_CLARITY = 45;
 
 /** Which of the four materials stands at a height. */
 export function bandOf(metres: number): number {
@@ -122,19 +123,29 @@ export function paintPatch(
 	const color: [number, number, number] = [0, 0, 0];
 	let shade: number;
 	if (pixel.metres <= 0) {
+		// **The sea's own two colours, the ones the shell in the world is
+		// drawn with.** How much of the look is water decides both how far the
+		// floor shows through and which of the two it is seen against: a shore
+		// is sand under a tint, and open water never gets back out.
 		const through = 1 - Math.exp(pixel.metres / SEA_CLARITY);
-		for (let ch = 0; ch < 3; ch++)
-			color[ch] = band[ch]! + (SEA_COLOR[ch]! - band[ch]!) * through;
+		for (let ch = 0; ch < 3; ch++) {
+			const water =
+				SEA_COLORS.shallow[ch]! +
+				(SEA_COLORS.deep[ch]! - SEA_COLORS.shallow[ch]!) * through;
+			color[ch] = band[ch]! + (water - band[ch]!) * through;
+		}
 		shade = 1;
 	} else {
 		for (let ch = 0; ch < 3; ch++) color[ch] = band[ch]!;
 		shade = 0.72 + 0.28 * Math.min(1, (pixel.metres % 100) / 100);
+		// A ring every hundred metres, on the same grid the two material lines
+		// sit on and the same one the patch draws. A flat picture has no
+		// shading at all, so this is the whole of what says how steep anything
+		// is. **Land only**: the sea is a surface at one radius, so a contour
+		// on it would be a ring drawn on water that is everywhere level.
+		const into = pixel.metres % 100;
+		if (into < 4) shade *= 0.6;
 	}
-	// A ring every hundred metres, on the same grid the two material lines sit
-	// on and the same one the patch draws. A flat picture has no shading at
-	// all, so this is the whole of what says how steep anything is.
-	const into = ((pixel.metres % 100) + 100) % 100;
-	if (into < 4) shade *= 0.6;
 	px[at] = 255 * Math.pow(Math.min(1, color[0] * shade), 1 / 2.2);
 	px[at + 1] = 255 * Math.pow(Math.min(1, color[1] * shade), 1 / 2.2);
 	px[at + 2] = 255 * Math.pow(Math.min(1, color[2] * shade), 1 / 2.2);

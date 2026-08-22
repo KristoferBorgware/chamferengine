@@ -1,3 +1,12 @@
+import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
+import { BlockType } from "../../generation/terrain/BlockType.js";
+import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
+
+/** One linear colour as the constant a shader takes. */
+function wgsl(color: readonly [number, number, number]): string {
+	return `vec3f(${color[0]}, ${color[1]}, ${color[2]})`;
+}
+
 /**
  * The patch shader: one preview of the ground, and the pictures it can be
  * drawn as.
@@ -10,8 +19,25 @@
  * The light is a fixed direction rather than the world's sun. This is a bench
  * for choosing numbers, and a bench with a moving light is one where the same
  * setting looks different at different times of day.
+ *
+ * **Every colour in it is the engine's own**, written in from the block
+ * registry and the sea rather than typed out here. A preview whose green is a
+ * near-miss of the world's green is a preview that answers a slightly different
+ * question than the one asked of it, and two lists of colours drift apart the
+ * first time either is retuned.
  */
 export const PATCH_SHADER = /* wgsl */ `
+/** The world's own materials, and its water. */
+const SAND = ${wgsl(BLOCK_COLORS[BlockType.SAND]!)};
+const GRASS = ${wgsl(BLOCK_COLORS[BlockType.GRASS]!)};
+const STONE = ${wgsl(BLOCK_COLORS[BlockType.STONE]!)};
+const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
+const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
+const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
+
+/** Metres of water a look passes through before it is all water. */
+const SEA_CLARITY = ${SEA_CLARITY}.0;
+
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
@@ -165,20 +191,19 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 
 	var tint : vec3f;
 	if (in.metres <= 0.0) {
-		// Bare sand seen through water, because the ocean is a surface and
-		// holds no blocks. What makes a deep blue is how much water a look
-		// passes through to reach the floor.
-		tint = mix(
-			vec3f(0.76, 0.70, 0.50),
-			vec3f(0.12, 0.32, 0.55),
-			1.0 - exp(in.metres / 45.0),
-		);
+		// **Bare sand seen through the sea's own two colours.** The ocean is a
+		// surface at one radius and holds no blocks, so the floor is bare; how
+		// much water a look passes through decides both how far that floor
+		// shows and which of the two colours it is seen against. A shore is
+		// sand under a tint and open water never gets back out.
+		let through = 1.0 - exp(in.metres / SEA_CLARITY);
+		tint = mix(SAND, mix(SEA_SHALLOW, SEA_DEEP, through), through);
 	} else if (in.metres < view.lines.x) {
-		tint = vec3f(0.26, 0.44, 0.19);
+		tint = GRASS;
 	} else if (in.metres < view.lines.y) {
-		tint = vec3f(0.42, 0.42, 0.45);
+		tint = STONE;
 	} else {
-		tint = vec3f(0.92, 0.94, 0.97);
+		tint = SNOW;
 	}
 	return shade(contoured(tint, in.height), in.normal, 0.62);
 }

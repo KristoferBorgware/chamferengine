@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { BenchSheet } from "../src/BenchMessage.js";
+import { BLOCK_COLORS, BlockType } from "chamfer/generation";
+import { BAND_COLORS, paintPatch } from "../src/paintPatch.js";
 import { PATCH_PICTURES } from "../src/PatchLook.js";
+import { SEA_COLORS } from "chamfer/render";
 import { outlinePatch } from "../src/outlinePatch.js";
 import { paintSheet } from "../src/paintSheet.js";
 
@@ -58,6 +61,43 @@ describe("paintSheet", () => {
 		expect(paint("terrain").join(",")).not.toBe(
 			paint("mountain").join(","),
 		);
+	});
+});
+
+describe("the bench's colours", () => {
+	/**
+	 * **A preview whose green is a near-miss of the world's green answers a
+	 * slightly different question than the one asked of it.** The bands used to
+	 * be four literals typed beside the engine's four, which is two lists that
+	 * drift apart the first time either is retuned.
+	 */
+	it("paints with the engine's own block colours", () => {
+		expect(BAND_COLORS[0]).toBe(BLOCK_COLORS[BlockType.SAND]);
+		expect(BAND_COLORS[1]).toBe(BLOCK_COLORS[BlockType.GRASS]);
+		expect(BAND_COLORS[2]).toBe(BLOCK_COLORS[BlockType.STONE]);
+		expect(BAND_COLORS[3]).toBe(BLOCK_COLORS[BlockType.SNOW]);
+	});
+
+	it("takes deep water to the sea's own deep colour", () => {
+		const px = new Uint8ClampedArray(4);
+		// Far under the water, where a look reaches no floor at all.
+		paintPatch(px, 0, {
+			metres: -400,
+			raw: 0,
+			layer: 0,
+			cut: 0,
+			cutScale: 1,
+			rawLow: -1,
+			rawHigh: 1,
+			low: -400,
+			high: 400,
+			picture: "ground",
+		});
+		const want = SEA_COLORS.deep.map((v) =>
+			Math.round(255 * Math.pow(v, 1 / 2.2)),
+		);
+		for (let ch = 0; ch < 3; ch++)
+			expect(Math.abs(px[ch]! - want[ch]!)).toBeLessThanOrEqual(1);
 	});
 });
 
