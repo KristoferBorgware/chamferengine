@@ -23,6 +23,21 @@ export interface PatchLook {
 	readonly rawHigh: number;
 }
 
+/**
+ * What one upload carries.
+ *
+ * The vertices every time, the indices only when the patch moved: a
+ * {@link PatchGeometry} satisfies this, and so does a fill of a layout that is
+ * being kept. Nothing for the indices means the ones already uploaded still
+ * describe this mesh.
+ */
+export interface PatchUpload {
+	readonly vertices: Float32Array<ArrayBuffer>;
+	readonly indices: Uint32Array<ArrayBuffer> | null;
+	readonly lines: Uint32Array<ArrayBuffer> | null;
+	readonly triangleCount: number;
+}
+
 /** A matrix, the light, the mode, and the four numbers the pictures read. */
 const VIEW_BYTES = 64 + 16 + 16 + 16;
 
@@ -132,16 +147,38 @@ export class PatchRenderer {
 	}
 
 	/** Put a freshly built patch on the GPU, dropping whatever was there. */
-	upload(patch: PatchGeometry): void {
+	upload(patch: PatchUpload): void {
 		const { device } = this.ctx;
 		this.vertices?.destroy();
-		this.indices?.destroy();
-		this.lines?.destroy();
 		this.vertices = null;
-		this.indices = null;
-		this.lines = null;
 		this.triangleCount = patch.triangleCount;
-		this.lineCount = patch.lines.length;
+		// **Indices only when the patch moved.** A patch whose ground changed
+		// draws the same triangles between the same vertices -- the shape of a
+		// patch is where it stands, not what stands on it -- so the index
+		// buffers are left alone and only the vertices are written again.
+		if (patch.indices) {
+			this.indices?.destroy();
+			this.indices = null;
+			if (patch.indices.length > 0) {
+				this.indices = device.createBuffer({
+					size: patch.indices.byteLength,
+					usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+				});
+				device.queue.writeBuffer(this.indices, 0, patch.indices);
+			}
+		}
+		if (patch.lines) {
+			this.lines?.destroy();
+			this.lines = null;
+			this.lineCount = patch.lines.length;
+			if (patch.lines.length > 0) {
+				this.lines = device.createBuffer({
+					size: patch.lines.byteLength,
+					usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+				});
+				device.queue.writeBuffer(this.lines, 0, patch.lines);
+			}
+		}
 		if (patch.vertices.length === 0) return;
 
 		this.vertices = device.createBuffer({
@@ -149,18 +186,6 @@ export class PatchRenderer {
 			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
 		});
 		device.queue.writeBuffer(this.vertices, 0, patch.vertices);
-		this.indices = device.createBuffer({
-			size: patch.indices.byteLength,
-			usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-		});
-		device.queue.writeBuffer(this.indices, 0, patch.indices);
-		if (patch.lines.length > 0) {
-			this.lines = device.createBuffer({
-				size: patch.lines.byteLength,
-				usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-			});
-			device.queue.writeBuffer(this.lines, 0, patch.lines);
-		}
 	}
 
 	/** Draw the patch through one view matrix. */
