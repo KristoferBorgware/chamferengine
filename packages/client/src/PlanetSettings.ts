@@ -31,6 +31,7 @@ import {
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+import { SUN_SHARE } from "chamfer/light";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -638,8 +639,17 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	freezeView: false,
 	dayLength: 3600,
 	paused: true,
-	timeOfDay: 0.18,
-	sunShare: 0.58,
+	// **A world opens in daylight.** The clock is paused by default, so
+	// whatever time it is frozen at is the light every look at this world is
+	// taken in -- and this was `0.18`, which puts the sun **24.6 degrees under
+	// the horizon** at the place the shipped seed spawns on. The ground was
+	// being judged, and its colours compared against the terrain bench's, in
+	// the dark. This is the sun 44.6 degrees up over that spawn: bright, and
+	// still low enough to model a hillside rather than flatten it the way noon
+	// does. A different seed spawns at a different longitude, where the same
+	// number is a different hour; the row above the slider is one drag.
+	timeOfDay: 0.75,
+	sunShare: SUN_SHARE,
 	sunShadow: 1,
 	mapShadows: true,
 	cascadeShadows: true,

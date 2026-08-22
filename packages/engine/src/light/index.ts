@@ -1,3 +1,4 @@
+export { SUN_SHARE } from "./SUN_SHARE.js";
 export { skyDiscCells } from "./skyDiscCells.js";
 export { pentagonDiscCells } from "./pentagonDiscCells.js";
 export { sunDirection } from "./sunDirection.js";
