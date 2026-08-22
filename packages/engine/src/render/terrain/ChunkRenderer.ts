@@ -5,6 +5,7 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
+import { SunShadow } from "./SunShadow.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
 /** One geometry uploaded, or nothing if it had no triangles. */
@@ -52,6 +53,15 @@ export class ChunkRenderer {
 	private readonly resident = new Map<number, Resident>();
 	private depth: GPUTexture | null = null;
 
+	/**
+	 * The coarse height map on the GPU, which is what casts the shadows.
+	 *
+	 * It exists from the start, holding one texel a face, because a binding
+	 * declared by a pipeline has to be filled whether or not a world has been
+	 * built yet. {@link setShadowMap} replaces it with the real thing.
+	 */
+	readonly shadow: SunShadow;
+
 	/** How long the GPU spent on the last pass it would report. */
 	readonly clock: GpuClock;
 
@@ -73,6 +83,7 @@ export class ChunkRenderer {
 		this.ctx = ctx;
 		const { device, format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
+		this.shadow = new SunShadow(ctx);
 
 		const uniformEntry: GPUBindGroupLayoutEntry = {
 			binding: 0,
@@ -88,7 +99,11 @@ export class ChunkRenderer {
 
 		const common = {
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [this.frameLayout, this.chunkLayout],
+				bindGroupLayouts: [
+					this.frameLayout,
+					this.chunkLayout,
+					this.shadow.layout,
+				],
 			}),
 			vertex: {
 				module,
@@ -274,6 +289,10 @@ export class ChunkRenderer {
 		// matrix from group 0, so a draw issued before it is bound is refused
 		// and the whole command buffer with it.
 		pass.setBindGroup(0, this.frameBindGroup);
+		// The map every terrain draw walks to find its shadow. A layer with
+		// its own pipeline layout replaces what it needs and this with it, so
+		// it goes back on before the water pass.
+		pass.setBindGroup(2, this.shadow.bindGroup);
 		for (const layer of this.layers) layer.before?.(pass, frame);
 
 		// Turning is instant and building a chunk is not, so what is held is a
@@ -305,6 +324,7 @@ export class ChunkRenderer {
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
+		pass.setBindGroup(2, this.shadow.bindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);

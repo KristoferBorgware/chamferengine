@@ -429,6 +429,27 @@ export interface PlanetKnobs {
 	 */
 	sunShare: number;
 
+	/**
+	 * How much of the direct sun a shadow takes away.
+	 *
+	 * `0` marches nothing and costs nothing. `1` leaves a shadowed face lit by
+	 * the sky alone, which is what a face turned away from the sun already
+	 * gets.
+	 */
+	sunShadow: number;
+
+	/**
+	 * How many metres along the sun a shadow ray looks for something in the
+	 * way.
+	 *
+	 * What it has to reach is the shadow of the tallest thing that could stand
+	 * between: a peak of `h` metres at an elevation of `e` throws
+	 * `h / tan(e)`, so a 600 m range at 20 degrees reaches 1,650 m. Past the
+	 * horizon there is nothing to reach, because the curve of the planet has
+	 * already hidden whatever would cast it.
+	 */
+	shadowReach: number;
+
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
 }
@@ -521,6 +542,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	paused: true,
 	timeOfDay: 0.18,
 	sunShare: 0.58,
+	sunShadow: 1,
+	shadowReach: 1600,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 };
 
@@ -747,6 +770,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
 	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
+	sunShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	shadowReach: { low: 0, high: 4000, step: 50, rebuilds: false, unit: "m" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 };
 

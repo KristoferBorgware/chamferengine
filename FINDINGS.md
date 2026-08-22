@@ -1299,6 +1299,8 @@ so nothing else has to change.
 
 ---
 
+## Closed
+
 ### F-062 — Nothing casts a shadow, and the coarse map could do it in one march
 
 **Kind:** gap
@@ -1345,9 +1347,25 @@ Worth measuring before choosing: how many steps the march needs to reach the
 horizon at the shipped map resolution, and what that costs a fragment on real
 hardware rather than on this container's software adapter.
 
----
+**Closed:** 2026-08-22, by the march. The coarse map goes to the GPU as one
+`r32float` layer per icosahedron face -- each face's triangle of lattice points
+in the corner of a square, 2.6 MB at the shipped level -- and a fragment walks
+24 growing steps toward the sun asking whether the ground ever stands above the
+walk. No second pass over the geometry and nothing rendered from the sun's
+point of view. The face is rechecked rather than searched at each step, because
+a face edge is 7,100 m and a ray is a kilometre or two. A near miss softens for
+free: the clearance over the distance travelled is the angle the ray missed by,
+and the smallest one along the walk is the penumbra.
 
-## Closed
+What it turned up is that this world has almost nowhere for a shadow to fall.
+Ground shades itself only where its own slope beats the sun's height, and the
+shipped ground runs 11.1 degrees at the median -- so a 3,000 m patch is 22.7%
+fully shadowed at a 5 degree sun, 4.6% at 20 and 0.0% at 60. Shadows here are a
+dawn and dusk feature, which is a property of the terrain rather than of the
+march.
+
+
+---
 
 ### F-061 — The bench builds its map on the thread that draws
 

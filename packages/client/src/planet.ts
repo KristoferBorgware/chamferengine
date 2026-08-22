@@ -298,6 +298,10 @@ async function main(): Promise<void> {
 	// margin is one block.
 	let peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
 
+	// The same map, on the GPU, where a fragment walks it toward the sun to
+	// find out whether anything stands in the way.
+	renderer.shadow.upload(map, shape.seaLevelRadius);
+
 	// Both decks are built on their own worker, off the thread that draws: a
 	// deck this size is unaffordable on the main thread, and the field is
 	// already a pure function of the seed and the wind angle, so it moves the
@@ -1064,6 +1068,7 @@ async function main(): Promise<void> {
 			: flatCoarseMap(nextSeed, FLAT_COARSE_LEVEL);
 		shape = live.shapeFor(map);
 		peaks = new ChunkPeaks(map, live.knobs.blockSize, CHUNK_LEVEL);
+		renderer.shadow.upload(map, shape.seaLevelRadius);
 		byLod.length = 0;
 		for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 			byLod.push(
@@ -1555,6 +1560,10 @@ async function main(): Promise<void> {
 		const submerged =
 			from.length() < shape.seaSurfaceRadius ||
 			terrain.blockAtPosition(from) === BlockType.WATER;
+		renderer.shadow.setLook(
+			PLAIN ? 0 : settings.knobs.sunShadow,
+			settings.knobs.shadowReach,
+		);
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
 			: mix(NIGHT_SKY, DAY_SKY, day);

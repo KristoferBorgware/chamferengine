@@ -346,6 +346,78 @@ Below about 6° of elevation a 10 m tower's shadow is **longer than the visible
 world**. So a shadow scheme never needs to reach further than the horizon —
 beyond that, curvature has already hidden both the shadow and whatever cast it.
 
+### The map is already the answer, so a shadow costs no second pass
+
+The usual way to shadow terrain is to render it again from the sun's point of
+view and compare depths. That is a second pass over every chunk in view, three
+or four times over for cascades, against a world made entirely of hard edges.
+
+There is a cheaper answer here, and it comes from something this design already
+has. **The coarse map is the terrain** ([doc 08](08-terrain-generation.md)):
+one height per coarse cell, and the generator reads a height off it and adds
+nothing. So the question a shadow asks — *is anything between this point and
+the sun* — is a question the map can answer directly. Walk from the point
+toward the sun, and at each step ask whether the ground stands above the walk.
+
+The map is small enough to hand to the GPU whole. One layer per icosahedron
+face, each holding that face's triangle of lattice points in the corner of a
+square: **2.6 MB** at the shipped map level, with just under half of each
+square wasted and no indirection to read it. A direction gives a face and two
+lattice coordinates, and those *are* the texture coordinates.
+
+Three things make the walk cheap:
+
+- **The steps grow.** Near ground has to be sampled finely enough to catch the
+  bank a few metres away; far ground has to be reached at all. Twenty-four
+  steps spread geometrically from 6 m to the reach cover both.
+- **The face rarely changes.** A face edge is 7,100 m long and a shadow ray is
+  a kilometre or two, so a ray almost never leaves the face it started in.
+  Checking the face it was last in is three dot products; finding a new one is
+  twenty.
+- **A near miss softens for nothing.** Divide how far the ray cleared the
+  ground by how far it had travelled and that is the angle it missed by. Take
+  the smallest such angle along the walk and a shadow has a soft edge with no
+  second sample. One over that number is the width of the penumbra: 60 puts it
+  at a degree either side, against the sun's own half-degree.
+
+The march starts on the **map's** own surface, not on the block the fragment
+belongs to. The two agree to within the block the height was rounded into, and
+a ray starting under the map is in shadow from its first step.
+
+What this cannot give is a block shadowing the block beside it: a map cell is
+32 m and a block is 1 m. It gives the shadows that carry the shape of a
+landscape and leaves the metre-scale ones to the corner darkening the mesher
+already bakes.
+
+### A gentle world has almost nowhere for a shadow to fall
+
+Ground shadows itself only where its own slope is steeper than the sun is
+high. That makes the shipped world's shadows a dawn and dusk feature, and the
+measurement says so plainly.
+
+> **[measured]** `tools/trial-shadow.ts`, a 3,000 m patch of the shipped
+> world, 65,536 points, shadow reach 1,600 m.
+>
+> | Sun above the horizon | Fully shadowed | Partly |
+> |---|---|---|
+> | 5° | **22.7%** | 13.9% |
+> | 10° | **15.2%** | 7.1% |
+> | 20° | 4.6% | 2.1% |
+> | 35° | 0.1% | 0.1% |
+> | 60° | 0.0% | 0.0% |
+
+That is the terrain's own gradient answering: the shipped ground runs
+**11.1°** at the median and 38.1° at the 99th percentile
+([doc 08](08-terrain-generation.md)), so by the time the sun is a third of the
+way up the sky there is almost nothing left standing steeply enough to shade
+anything.
+
+It also explains why a shadow is easy to under-sell. The direct term is
+`sin(elevation)` of what the sun would give overhead, so at 8° a shadow can
+only take away 14% of the light that was there — and the light that was there
+is the smaller half of a lit surface's total. The shadow is doing its job; what
+makes it read is the exposure applied afterwards, not the shadow.
+
 ---
 
 ## What this forces elsewhere
@@ -417,6 +489,15 @@ beyond that, curvature has already hidden both the shadow and whatever cast it.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
+- **A shadow needs no second pass.** The coarse map is the terrain, so a
+  fragment walks toward the sun and asks the map whether the ground ever stands
+  above the walk — 24 growing steps, one texture per face, **2.6 MB**. It
+  cannot shadow a block by its neighbour; it gives the shadows that carry the
+  shape of a landscape.
+- **Shadows here are a dawn and dusk feature.** Ground shades itself only where
+  its slope beats the sun's height, and the shipped ground runs 11.1° at the
+  median: **22.7%** of a patch is in full shadow at a 5° sun, **4.6%** at 20°
+  and **0.0%** at 60°.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

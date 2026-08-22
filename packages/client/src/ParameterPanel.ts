@@ -476,11 +476,29 @@ const GROUPS: Group[] = [
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
+		],
+	},
+	{
+		title: "The light",
+		folded: true,
+		knobs: [
 			{
 				key: "sunShare",
 				label: "Sun against sky",
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "sunShadow",
+				label: "Shadows",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "shadowReach",
+				label: "Shadows reach",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
 			},
 		],
 	},

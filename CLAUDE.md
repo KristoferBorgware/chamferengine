@@ -537,6 +537,36 @@ Violating any of these breaks the design. They are not tunable.
   and makes a dim blue sky a dim light rather than a blue one. Direct sun
   reddens below `0.30` of elevation, measured against the place's own up, so it
   turns as the day runs **and** as a player walks around the planet.
+- **A SHADOW NEEDS NO SECOND PASS, BECAUSE THE MAP IS ALREADY THE ANSWER**
+  (`SunShadow`, `sunReach` in `TERRAIN_SHADER`, doc 16, F-062).
+  The coarse map is the terrain, so *is anything between this point and the
+  sun* is a question the map answers directly: walk toward the sun and ask
+  whether the ground ever stands above the walk. It goes to the GPU whole as
+  **one `r32float` layer per icosahedron face** -- that face's triangle of
+  lattice points in the corner of a square, just under half of it wasted,
+  **2.6 MB** at the shipped level -- so a direction gives a face and two
+  lattice coordinates and those *are* the texture coordinates. **24 steps
+  spread geometrically** from 6 m to the reach. **The face is rechecked, not
+  searched**: an edge is 7,100 m and a ray is a kilometre or two, so testing
+  the face the ray was last in is three dot products against twenty for a new
+  one. **A near miss softens for nothing** -- the clearance over the distance
+  travelled is the angle the ray missed by, and the smallest one along the
+  walk is the penumbra, `1/60` of a radian against the sun's own half degree.
+  The march starts on the **map's** own surface, not the block's, or a ray
+  begins under the ground it came from. The row past each face's long edge is
+  filled from the face over it, which is the only place a blend can reach
+  outside the triangle. It cannot shadow a block by its neighbour: a map cell
+  is 32 m and a block is 1 m.
+- **A GENTLE WORLD HAS ALMOST NOWHERE FOR A SHADOW TO FALL**
+  (`tools/trial-shadow.ts`, doc 16). Ground shades itself only where its own
+  slope beats the sun's height, and the shipped ground runs **11.1°** at the
+  median. Over a 3,000 m patch: **22.7%** in full shadow at a 5° sun, 15.2% at
+  10°, 4.6% at 20°, **0.1%** at 35° and **0.0%** at 60°. So shadows here are a
+  dawn and dusk feature, and that is the terrain's property rather than the
+  march's. It is also why a shadow is easy to under-sell: the direct term is
+  `sin(elevation)` of the overhead figure, so at 8° a shadow can only take away
+  14% of a light that was already the smaller half of the total. What makes it
+  read is the exposure applied afterwards.
 - **Lighting is where the sphere costs least** (`light.js`). Light is a *scalar*,
   so holonomy and the pentagon direction deficit simply do not apply. 8 neighbours
   cost a flat 1.5×; radial sky light is as cheap as a flat world's because
