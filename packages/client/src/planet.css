@@ -1,3 +1,39 @@
+/*
+ * The palette, in one place.
+ *
+ * A blue-grey rather than a near-black: the panel sits over a world that is
+ * mostly sky and sea, and a cold black beside it reads as a hole rather than
+ * as a surface in front of the picture. Every color below is one of these or a
+ * transparency of one, so the whole application shifts together.
+ */
+:root {
+	color-scheme: dark;
+
+	/* Behind everything, where no world is drawn. */
+	--void: #070a0e;
+
+	/* A panel standing in front of the world, and the sunken well inside one. */
+	--panel: #12161d;
+	--sunk: #171c25;
+
+	/* Every rule and border. The lit one is for what the pointer is over. */
+	--edge: #232b36;
+	--edge-lit: #2e3a48;
+
+	/* Type: what is read, and what is only glanced at. */
+	--ink: #e8ecf2;
+	--dim: #8b95a4;
+
+	/* What answers to the hand: a slider's fill, a thumb, a focused control. */
+	--live: #6fd0ff;
+	--live-deep: #2f7fa8;
+
+	/* What is worth stopping for, and what is wrong. */
+	--warn: #ffb454;
+	--bad: var(--bad);
+	--good: #7bcf8a;
+}
+
 * {
 	box-sizing: border-box;
 }
@@ -5,8 +41,8 @@
 body {
 	margin: 0;
 	overflow: hidden;
-	background: #05070a;
-	color: #e6ecf3;
+	background: var(--void);
+	color: var(--ink);
 	font:
 		14px/1.5 system-ui,
 		sans-serif;
@@ -32,8 +68,8 @@ body {
 	max-width: min(32rem, calc(100vw - 2rem));
 	white-space: pre-line;
 	padding: 0.5rem 0.75rem;
-	background: #0d1219cc;
-	border: 1px solid #26303d;
+	background: rgba(18, 22, 29, 0.85);
+	border: 1px solid var(--edge);
 	border-radius: 4px;
 	font-variant-numeric: tabular-nums;
 }
@@ -53,8 +89,8 @@ body {
 	width: min(320px, 92vw);
 	display: flex;
 	flex-direction: column;
-	background: rgba(11, 14, 20, 0.93);
-	border-left: 1px solid #222839;
+	background: rgba(18, 22, 29, 0.94);
+	border-left: 1px solid var(--edge);
 	backdrop-filter: blur(9px);
 	font-size: 12px;
 	z-index: 20;
@@ -69,14 +105,14 @@ body {
 	text-align: left;
 	background: none;
 	border: none;
-	border-bottom: 1px solid #222839;
+	border-bottom: 1px solid var(--edge);
 	padding: 10px 12px;
 	cursor: pointer;
 }
 .knobs-head::after {
 	content: "▾";
 	float: right;
-	color: #6d768c;
+	color: var(--dim);
 }
 .knobs.shut .knobs-head::after {
 	content: "▸";
@@ -93,7 +129,7 @@ body {
 	font-size: 10.5px;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
-	color: #8b93a7;
+	color: var(--dim);
 	margin: 14px 0 2px;
 }
 .knob {
@@ -106,9 +142,9 @@ body {
 	display: block;
 	width: 100%;
 	height: auto;
-	border: 1px solid #2a3140;
+	border: 1px solid var(--edge);
 	border-radius: 3px;
-	background: #0b0e13;
+	background: var(--panel);
 	touch-action: none;
 	cursor: crosshair;
 	margin-top: 2px;
@@ -117,7 +153,7 @@ body {
 	display: block;
 	font-size: 10px;
 	line-height: 1.4;
-	color: #6a7183;
+	color: var(--dim);
 	text-decoration: none;
 	margin-top: 2px;
 }
@@ -133,17 +169,17 @@ body {
 }
 /* A slider whose own ends have been pulled in by another knob. */
 .knob.bound input[type="range"]::-webkit-slider-runnable-track {
-	background: #3a3320;
+	background: rgba(255, 180, 84, 0.18);
 }
 .knob.bound input[type="range"]::-moz-range-track {
-	background: #3a3320;
+	background: rgba(255, 180, 84, 0.18);
 }
 
 .knob u.some {
 	display: block;
 	font-size: 10.5px;
 	line-height: 1.45;
-	color: #f0c274;
+	color: var(--warn);
 	text-decoration: none;
 	margin-top: 1px;
 }
@@ -152,7 +188,7 @@ body {
 	display: flex;
 	align-items: baseline;
 	font-size: 11px;
-	color: #8b93a7;
+	color: var(--dim);
 }
 .knob label b {
 	margin-left: auto;
@@ -161,7 +197,7 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 .knob label i {
-	color: #4f8ef7;
+	color: var(--live);
 	font-size: 8px;
 	font-style: normal;
 	margin-left: 4px;
@@ -174,12 +210,12 @@ body {
 }
 .knob input[type="range"]::-webkit-slider-runnable-track {
 	height: 4px;
-	background: #222a3a;
+	background: var(--edge);
 	border-radius: 2px;
 }
 .knob input[type="range"]::-moz-range-track {
 	height: 4px;
-	background: #222a3a;
+	background: var(--edge);
 	border-radius: 2px;
 }
 .knob input[type="range"]::-webkit-slider-thumb {
@@ -187,23 +223,23 @@ body {
 	width: 15px;
 	height: 15px;
 	border-radius: 50%;
-	background: #4f8ef7;
+	background: var(--live);
 	margin-top: -5.5px;
-	border: 2px solid #0b0e14;
+	border: 2px solid var(--panel);
 }
 .knob input[type="range"]::-moz-range-thumb {
 	width: 15px;
 	height: 15px;
 	border-radius: 50%;
-	background: #4f8ef7;
-	border: 2px solid #0b0e14;
+	background: var(--live);
+	border: 2px solid var(--panel);
 }
 .knob input[type="text"] {
 	width: 100%;
 	font: inherit;
-	background: #131826;
-	color: #e6e8ee;
-	border: 1px solid #2a3245;
+	background: var(--sunk);
+	color: var(--ink);
+	border: 1px solid var(--edge-lit);
 	border-radius: 6px;
 	padding: 5px 7px;
 }
@@ -211,7 +247,7 @@ body {
 	width: 15px;
 	height: 15px;
 	margin: 2px 0 0 auto;
-	accent-color: #4f8ef7;
+	accent-color: var(--live);
 }
 .knob input:disabled {
 	opacity: 0.35;
@@ -223,11 +259,11 @@ body {
 	margin-top: 12px;
 }
 .knobs-problems.some {
-	border-left: 2px solid #ff9b8a;
+	border-left: 2px solid var(--bad);
 	padding-left: 8px;
 }
 .knobs-problems p {
-	color: #ff9b8a;
+	color: var(--bad);
 	font-size: 11px;
 	line-height: 1.5;
 	margin-bottom: 5px;
@@ -235,15 +271,15 @@ body {
 .knobs-derived {
 	margin-top: 12px;
 	padding-top: 9px;
-	border-top: 1px solid #1b2130;
+	border-top: 1px solid var(--sunk);
 	display: flex;
 	flex-wrap: wrap;
 	gap: 3px 10px;
 	font-size: 11px;
-	color: #6d768c;
+	color: var(--dim);
 }
 .knobs-derived b {
-	color: #dfe3ec;
+	color: var(--ink);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
@@ -252,9 +288,9 @@ body {
 .knobs-live {
 	margin-top: 10px;
 	padding: 7px 8px;
-	border: 1px solid #4a3d1f;
+	border: 1px solid rgba(255, 180, 84, 0.3);
 	border-radius: 7px;
-	background: #221c0e;
+	background: rgba(255, 180, 84, 0.1);
 }
 .knobs-live label {
 	display: flex;
@@ -262,7 +298,7 @@ body {
 	gap: 6px;
 	font-size: 11px;
 	line-height: 1.4;
-	color: #d8c48a;
+	color: var(--warn);
 	cursor: pointer;
 }
 .knobs-live input {
@@ -280,13 +316,13 @@ body {
 	padding: 6px 9px;
 	border-radius: 7px;
 	cursor: pointer;
-	background: #1a2130;
-	color: #dfe3ec;
-	border: 1px solid #2a3245;
+	background: var(--sunk);
+	color: var(--ink);
+	border: 1px solid var(--edge-lit);
 }
 .knobs-bar button.wants {
-	background: #4f8ef7;
-	border-color: #4f8ef7;
+	background: var(--live);
+	border-color: var(--live);
 	color: #fff;
 }
 .knobs-bar button:disabled {
@@ -327,8 +363,8 @@ body {
 	width: 8.5rem;
 	height: 8.5rem;
 	border-radius: 50%;
-	background: #0d1219aa;
-	border: 1px solid #26303d;
+	background: rgba(18, 22, 29, 0.7);
+	border: 1px solid var(--edge);
 	display: grid;
 	place-items: center;
 }
@@ -337,8 +373,8 @@ body {
 	width: 3.25rem;
 	height: 3.25rem;
 	border-radius: 50%;
-	background: #26303dcc;
-	border: 1px solid #3d4a5c;
+	background: rgba(35, 43, 54, 0.85);
+	border: 1px solid var(--edge-lit);
 }
 
 .touch-side {
@@ -351,9 +387,9 @@ body {
 	width: 3.75rem;
 	height: 3.75rem;
 	border-radius: 50%;
-	background: #0d1219cc;
-	border: 1px solid #26303d;
-	color: #e6ecf3;
+	background: rgba(18, 22, 29, 0.85);
+	border: 1px solid var(--edge);
+	color: var(--ink);
 	font: inherit;
 	font-size: 1.1rem;
 	touch-action: none;
@@ -361,7 +397,7 @@ body {
 }
 
 .touch-button:active {
-	background: #26303dcc;
+	background: rgba(35, 43, 54, 0.85);
 }
 
 .touch-tap {
@@ -384,14 +420,14 @@ body {
 	/* The pane itself never scrolls -- .maps-scroll does, alone, so the
 	   preview above it and the status/Apply below it stay put. */
 	overflow: hidden;
-	background: #14161acc;
+	background: rgba(18, 22, 29, 0.85);
 	backdrop-filter: blur(6px);
 	border-right: 1px solid #ffffff1a;
 	border-bottom: 1px solid #ffffff1a;
 	font:
 		13px/1.5 system-ui,
 		sans-serif;
-	color: #dfe3ea;
+	color: var(--ink);
 }
 
 .maps-head {
@@ -464,8 +500,8 @@ body {
 }
 
 .maps-fields button.on {
-	background: #4b7bd6;
-	border-color: #6f9ae8;
+	background: var(--live-deep);
+	border-color: var(--live);
 	color: #fff;
 }
 
@@ -475,7 +511,7 @@ body {
 	height: auto;
 	border-radius: 3px;
 	image-rendering: pixelated;
-	background: #0b0d10;
+	background: var(--panel);
 }
 
 /* The knobs that decide this map, in the pane's scrolling middle. */
@@ -490,7 +526,7 @@ body {
 }
 
 .maps-status {
-	color: #9aa4b2;
+	color: var(--dim);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -501,8 +537,8 @@ body {
 .maps-bar button {
 	width: 100%;
 	padding: 9px;
-	background: #4b7bd6;
-	border: 1px solid #6f9ae8;
+	background: var(--live-deep);
+	border: 1px solid var(--live);
 	border-radius: 4px;
 	color: #fff;
 	font:
@@ -545,9 +581,9 @@ body {
 .maps-knobs label em {
 	margin-left: 4px;
 	padding: 1px 4px;
-	background: #4b7bd633;
+	background: rgba(111, 208, 255, 0.2);
 	border-radius: 3px;
-	color: #8fb0ea;
+	color: var(--live);
 	font:
 		9px/1.4 system-ui,
 		sans-serif;
@@ -564,7 +600,7 @@ body {
 	height: auto;
 	margin: 10px auto 0;
 	border-radius: 6px;
-	background: #0b0d10;
+	background: var(--panel);
 	cursor: grab;
 	touch-action: none;
 }
@@ -579,7 +615,7 @@ body {
 	background: #ffffff10;
 	border: 1px solid #ffffff1a;
 	border-radius: 4px;
-	color: #9aa4b2;
+	color: var(--dim);
 	font:
 		12px/1 system-ui,
 		sans-serif;
@@ -587,8 +623,8 @@ body {
 }
 
 .maps-pin.on {
-	background: #3d6b3d;
-	border-color: #5c9c5c;
+	background: rgba(123, 207, 138, 0.35);
+	border-color: var(--good);
 	color: #fff;
 }
 
@@ -596,10 +632,10 @@ body {
 	width: 100%;
 	margin-top: 4px;
 	padding: 5px 6px;
-	background: #131a28;
-	border: 1px solid #2a3245;
+	background: var(--sunk);
+	border: 1px solid var(--edge-lit);
 	border-radius: 4px;
-	color: #dfe3ec;
+	color: var(--ink);
 	font: inherit;
 	font-size: 12px;
 }
