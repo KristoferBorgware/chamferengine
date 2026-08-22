@@ -1161,7 +1161,17 @@ async function main(): Promise<void> {
 		from: Vec3,
 		look: Vec3,
 	): { hit: CellRef; place: CellRef | null } | null {
-		const walked = rayWalk(from, look, rayWorld, REACH * shape.blockSize);
+		// Reach is the player's and is measured from the player, so however far
+		// the camera stands behind the eye is added back to the walk that
+		// starts at the camera. A chase camera then changes what the crosshair
+		// points at and not how far a player can touch.
+		const behind = from.sub(player.eye).length();
+		const walked = rayWalk(
+			from,
+			look,
+			rayWorld,
+			REACH * shape.blockSize + behind,
+		);
 		if (!walked) return null;
 		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
 		const free =
@@ -1757,14 +1767,16 @@ async function main(): Promise<void> {
 				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
 		const target = player.eye.add(look.scale(50));
 
-		// The ray a click acts along leaves the eye rather than the camera:
-		// with the chase camera pulled back, the two stand metres apart and the
-		// reach belongs to the player.
-		aimedFrom = player.eye;
-		aimedLook = look;
+		// The ray the crosshair stands on: from the camera, toward the point
+		// the camera is aimed at. The camera sits `chase` metres behind the eye
+		// and looks at a point ahead of the eye rather than ahead of itself, so
+		// screen centre is this line and not `look` from `player.eye`. In first
+		// person the camera is the eye and the two are one line.
+		aimedFrom = from;
+		aimedLook = target.sub(from).normalize();
 		// One walk a frame, read by the outline, the readout and the next
 		// click alike, so all three agree about what is being aimed at.
-		aimed = frozen ? null : aiming(player.eye, look);
+		aimed = frozen ? null : aiming(aimedFrom, aimedLook);
 		aim.target = aimed?.place
 			? outlineOf(aimed.place)
 			: aimed
