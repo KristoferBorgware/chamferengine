@@ -463,19 +463,13 @@ export interface PlanetKnobs {
 	shadowReach: number;
 
 	/**
-	 * How much light the moon throws on the ground.
-	 *
-	 * It is the only thing with a direction after dark, so at `0` every face
-	 * of a block takes the same light all night and a block is a silhouette
-	 * rather than a shape.
-	 */
-	/**
 	 * How many texels a side each of the sun's three shadow maps holds.
 	 *
 	 * The maps are what shadow a block by its neighbour, and later anything
 	 * that moves; the walk over the coarse map is what shadows a valley by the
 	 * range beside it. More texels is a sharper edge and a larger picture to
-	 * draw the world into three times over.
+	 * draw the world into three times over. The sun's cloud cover takes the
+	 * same count, so one row says how finely the sun sees anything at all.
 	 */
 	shadowTexels: number;
 
@@ -489,6 +483,45 @@ export interface PlanetKnobs {
 	 */
 	cascadeReach: number;
 
+	/**
+	 * Whether the clouds throw shadows on the ground.
+	 *
+	 * The third of the three, and the only one about something that is not
+	 * terrain: the coarse map is a picture of the generated ground, and the
+	 * cascades reach a few hundred metres, so a deck three kilometres up is
+	 * invisible to both. Off, the sun's cloud cover is not drawn.
+	 */
+	cloudShadows: boolean;
+
+	/**
+	 * How much of the sun a cloud directly overhead takes away.
+	 *
+	 * Its own knob rather than a share of How dark, because a cloud is
+	 * translucent and a hill is not: one number that read right on a mountain
+	 * would black the ground out under a cumulus.
+	 */
+	cloudShadow: number;
+
+	/**
+	 * How many metres across the ground the sun's cloud cover reaches.
+	 *
+	 * Wide rather than deep, because of where the decks are: the low one
+	 * stands 3,000 m over a planet 1,700 m in radius, so the cloud whose
+	 * shadow falls on a player is a kilometre to the side of overhead even
+	 * with the sun high, and further as it drops. The default spans the
+	 * planet's own diameter. Under that the shadows stop at a circle around
+	 * the player; over it the same texels are spread thinner and every cloud
+	 * edge softens.
+	 */
+	cloudShadowReach: number;
+
+	/**
+	 * How much light the moon throws on the ground.
+	 *
+	 * It is the only thing with a direction after dark, so at `0` every face
+	 * of a block takes the same light all night and a block is a silhouette
+	 * rather than a shape.
+	 */
 	moonLight: number;
 
 	/** What the whole picture is multiplied by on its way to the screen. */
@@ -601,6 +634,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	shadowReach: 1600,
 	shadowTexels: 1024,
 	cascadeReach: 260,
+	cloudShadows: true,
+	cloudShadow: 0.55,
+	cloudShadowReach: 4000,
 	moonLight: 0.16,
 	exposure: 1,
 	eyeAdapts: 0.6,
@@ -840,6 +876,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	cascadeReach: { low: 0, high: 1200, step: 20, rebuilds: false, unit: "m" },
+	cloudShadows: { ...TOGGLE, rebuilds: false },
+	cloudShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	cloudShadowReach: {
+		low: 500,
+		high: 20000,
+		step: 250,
+		rebuilds: false,
+		unit: "m",
+	},
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },

@@ -5,8 +5,11 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
+import type { CloudCaster } from "../light/CloudShadow.js";
 import type { ShadowCaster } from "../light/ShadowCaster.js";
 import { CascadeShadow } from "../light/CascadeShadow.js";
+import { CloudShadow } from "../light/CloudShadow.js";
+import { SunViews } from "../light/SunViews.js";
 import { SunShadow } from "../light/SunShadow.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
@@ -85,6 +88,27 @@ export class ChunkRenderer implements ShadowCaster {
 	readonly casters: ShadowCaster[] = [];
 
 	/**
+	 * What the sun sees of the clouds, as how much light each beam loses.
+	 *
+	 * A second thing the sun looks at, and nothing like the first: the decks
+	 * sit kilometres up, so no cascade box reaches them, and a cloud is
+	 * translucent, so what is recorded is how much of it a beam passes through
+	 * rather than how far away the nearest surface is.
+	 */
+	readonly cloudShadow: CloudShadow;
+
+	/** Everything that draws itself into that cover -- the cloud renderer. */
+	readonly cloudCasters: CloudCaster[] = [];
+
+	/**
+	 * The cascades and the cloud cover as one bind group.
+	 *
+	 * WebGPU guarantees four groups and the world spends all four, so the two
+	 * things the sun looks at share the last one.
+	 */
+	readonly sunViews: SunViews;
+
+	/**
 	 * Where the frame is exposed and rolled off on its way to the canvas.
 	 *
 	 * Everything is drawn into a floating-point image first, so the sun, the
@@ -129,6 +153,8 @@ export class ChunkRenderer implements ShadowCaster {
 			entries: [uniformEntry],
 		});
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
+		this.cloudShadow = new CloudShadow(ctx, 1024);
+		this.sunViews = new SunViews(ctx, this.cascades, this.cloudShadow);
 		this.casters.push(this);
 
 		const common = {
@@ -137,7 +163,7 @@ export class ChunkRenderer implements ShadowCaster {
 					this.frameLayout,
 					this.chunkLayout,
 					this.shadow.layout,
-					this.cascades.layout,
+					this.sunViews.layout,
 				],
 			}),
 			vertex: {
@@ -317,10 +343,15 @@ export class ChunkRenderer implements ShadowCaster {
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
 		this.cascades.update(frame);
+		// Centred on the ground under the camera rather than on the camera: a
+		// player a kilometre up would otherwise carry the box up with them and
+		// spend half of it on air.
+		this.cloudShadow.update(frame, this.shadow.seaRadius);
 		const encoder = device.createCommandEncoder();
-		// The sun looks first. Its passes write depth the frame then reads, so
+		// The sun looks first. Its passes write what the frame then reads, so
 		// they go into the same encoder ahead of everything else.
 		this.cascades.render(encoder, this.casters);
+		this.cloudShadow.render(encoder, this.cloudCasters);
 		const timing = this.clock.writes();
 		const pass = encoder.beginRenderPass({
 			...(timing ? { timestampWrites: timing } : {}),
@@ -381,14 +412,14 @@ export class ChunkRenderer implements ShadowCaster {
 		// terrain draw is refused, taking the whole command buffer with it.
 		// The water pass sets it again for the same reason.
 		pass.setBindGroup(2, this.shadow.bindGroup);
-		pass.setBindGroup(3, this.cascades.bindGroup);
+		pass.setBindGroup(3, this.sunViews.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setBindGroup(2, this.shadow.bindGroup);
-		pass.setBindGroup(3, this.cascades.bindGroup);
+		pass.setBindGroup(3, this.sunViews.bindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);

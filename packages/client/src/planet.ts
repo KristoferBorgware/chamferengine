@@ -186,6 +186,19 @@ function paint(): Promise<void> {
  * give one still shows the parameters and still lets someone change them and
  * try again. Until the world exists a live knob has nothing to do.
  */
+/**
+ * The settings as they stand right now, which is not the ones the page loaded
+ * with.
+ *
+ * A knob that only changes how the world is drawn takes effect without a
+ * rebuild, and the panel hands the whole draft to {@link onLiveKnob} when one
+ * moves. Anything the frame reads has to read it from **here**: reading the
+ * loaded \`settings\` instead is how a row ends up doing nothing at all in the
+ * panel while still working from a query string, which is the hardest kind of
+ * dead control to notice.
+ */
+let current = settings;
+
 let onLiveKnob: (live: PlanetSettings) => void = () => {};
 
 /**
@@ -355,8 +368,14 @@ async function main(): Promise<void> {
 				settings.knobs.cloudClusters,
 				settings.knobs.cloudDensity,
 				cloudLayers(settings),
+				renderer.cloudShadow,
 			);
-	if (billboardClouds) billboardClouds.visible = settings.knobs.cloudsDrawn;
+	if (billboardClouds) {
+		billboardClouds.visible = settings.knobs.cloudsDrawn;
+		// The clouds are the only moving thing on the planet, so they are the
+		// only thing with a shadow the coarse map could never hold.
+		renderer.cloudCasters.push(billboardClouds);
+	}
 
 	/** What the sea looks like, from the knobs that shape it. */
 	function seaLook(live: PlanetSettings): SeaLook {
@@ -389,7 +408,7 @@ async function main(): Promise<void> {
 				DEPTH,
 				seaLook(settings),
 				renderer.shadow,
-				renderer.cascades,
+				renderer.sunViews,
 			);
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;
@@ -1158,6 +1177,7 @@ async function main(): Promise<void> {
 	// changes how the world is drawn; the ones that change what it is reload
 	// the page and never reach here.
 	onLiveKnob = (live) => {
+		current = live;
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
 		player.setWalkSpeed(live.knobs.walkSpeed);
@@ -1507,7 +1527,7 @@ async function main(): Promise<void> {
 		const overGround = Math.max(
 			0,
 			player.position.length() -
-				(settings.knobs.gridMode
+				(current.knobs.gridMode
 					? shape.crustTopRadius
 					: Math.max(under.groundRadius, under.waterRadius)),
 		);
@@ -1561,11 +1581,11 @@ async function main(): Promise<void> {
 		const DARKEST = 0.35;
 
 		function exposureFor(day: number, sunUp: number): number {
-			const share = settings.knobs.sunShare;
+			const share = current.knobs.sunShare;
 			const lit = day * (1 - share + share * Math.max(0, sunUp));
 			return (
-				settings.knobs.exposure *
-				Math.pow(1 / Math.max(DARKEST, lit), settings.knobs.eyeAdapts)
+				current.knobs.exposure *
+				Math.pow(1 / Math.max(DARKEST, lit), current.knobs.eyeAdapts)
 			);
 		}
 
@@ -1591,15 +1611,26 @@ async function main(): Promise<void> {
 		// Each half of the answer is switched on its own: the walk reaches the
 		// horizon and knows only generated ground, the maps reach a few
 		// hundred metres and hold anything that drew itself.
-		const dark = PLAIN ? 0 : settings.knobs.sunShadow;
+		const dark = PLAIN ? 0 : current.knobs.sunShadow;
 		renderer.shadow.setLook(
-			settings.knobs.mapShadows ? dark : 0,
-			settings.knobs.shadowReach,
+			current.knobs.mapShadows ? dark : 0,
+			current.knobs.shadowReach,
 		);
-		renderer.cascades.setSize(settings.knobs.shadowTexels);
+		renderer.cascades.setSize(current.knobs.shadowTexels);
 		renderer.cascades.setLook(
-			settings.knobs.cascadeShadows ? dark : 0,
-			settings.knobs.cascadeReach,
+			current.knobs.cascadeShadows ? dark : 0,
+			current.knobs.cascadeReach,
+		);
+		// A cloud's shadow is the one the map can never hold: the map is the
+		// generated ground and a cloud is neither ground nor generated into
+		// it. Its own darkness, because a cloud is translucent and a hill is
+		// not, so the two would not read the same at one setting.
+		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
+		renderer.cloudShadow.setLook(
+			PLAIN || !current.knobs.cloudShadows
+				? 0
+				: current.knobs.cloudShadow,
+			current.knobs.cloudShadowReach,
 		);
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)
@@ -1665,9 +1696,9 @@ async function main(): Promise<void> {
 			daylight: day,
 			nightLight: NIGHT_LIGHT,
 			moon: [moon.x, moon.y, moon.z],
-			moonLight: PLAIN ? 0 : settings.knobs.moonLight,
+			moonLight: PLAIN ? 0 : current.knobs.moonLight,
 			exposure: exposureFor(day, up.dot(sun)),
-			sunShare: settings.knobs.sunShare,
+			sunShare: current.knobs.sunShare,
 		});
 		timer.leave("draw", performance.now());
 

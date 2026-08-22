@@ -1,3 +1,4 @@
+import type { CloudCaster, CloudShadow } from "../light/CloudShadow.js";
 import type { Frame } from "../Frame.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
@@ -9,6 +10,7 @@ import { generateCloudPuffs } from "../../sky/generateCloudPuffs.js";
 import { windRotation } from "../../sky/windRotation.js";
 import { PUFF_STRIDE, buildPuffMesh } from "./buildPuffMesh.js";
 import { BILLBOARD_CLOUD_SHADER } from "./BILLBOARD_CLOUD_SHADER.js";
+import { CLOUD_SHADOW_SHADER } from "../light/CLOUD_SHADOW_SHADER.js";
 
 /**
  * Gather a run of puffs per formation, with a sphere that holds all of it.
@@ -81,6 +83,23 @@ interface Formation {
 
 const VERTEX_STRIDE = PUFF_STRIDE * 4;
 
+/**
+ * What a puff vertex carries, read the same way by both pipelines.
+ *
+ * The drawn pass and the shadow pass walk one buffer, so they declare one
+ * layout: a puff that moved in the picture and not in its shadow would be a
+ * cloud floating off its own shade.
+ */
+const PUFF_ATTRIBUTES: GPUVertexAttribute[] = [
+	{ shaderLocation: 0, offset: 0, format: "float32x3" },
+	{ shaderLocation: 1, offset: 12, format: "float32x2" },
+	{ shaderLocation: 2, offset: 20, format: "float32" },
+	{ shaderLocation: 3, offset: 24, format: "float32" },
+	{ shaderLocation: 4, offset: 28, format: "float32" },
+	{ shaderLocation: 5, offset: 32, format: "float32" },
+	{ shaderLocation: 6, offset: 36, format: "float32" },
+];
+
 const WIND_BYTES = 16;
 
 /**
@@ -93,9 +112,13 @@ const WIND_BYTES = 16;
  * `f32` written before every draw -- turning every puff, and facing every
  * puff to the eye, both happen in the vertex shader.
  */
-export class BillboardClouds implements PassLayer {
+export class BillboardClouds implements PassLayer, CloudCaster {
 	private readonly ctx: GpuContext;
 	private readonly pipeline: GPURenderPipeline;
+
+	/** What the sun's cloud cover is drawn with, when there is one to fill. */
+	private readonly castPipeline: GPURenderPipeline | null = null;
+	private readonly cover: CloudShadow | null;
 	private readonly windUniform: GPUBuffer;
 	private readonly windBindGroup: GPUBindGroup;
 	private readonly windData = new Float32Array(WIND_BYTES / 4);
@@ -124,9 +147,11 @@ export class BillboardClouds implements PassLayer {
 		clusters: number,
 		perCluster: number,
 		layers: readonly CloudPuffLayer[],
+		cover: CloudShadow | null = null,
 	) {
 		this.ctx = ctx;
 		this.seed = seed;
+		this.cover = cover;
 		const { device, sceneFormat: format } = ctx;
 
 		this.vertexBuffer = device.createBuffer({
@@ -180,43 +205,7 @@ export class BillboardClouds implements PassLayer {
 				buffers: [
 					{
 						arrayStride: VERTEX_STRIDE,
-						attributes: [
-							{
-								shaderLocation: 0,
-								offset: 0,
-								format: "float32x3",
-							},
-							{
-								shaderLocation: 1,
-								offset: 12,
-								format: "float32x2",
-							},
-							{
-								shaderLocation: 2,
-								offset: 20,
-								format: "float32",
-							},
-							{
-								shaderLocation: 3,
-								offset: 24,
-								format: "float32",
-							},
-							{
-								shaderLocation: 4,
-								offset: 28,
-								format: "float32",
-							},
-							{
-								shaderLocation: 5,
-								offset: 32,
-								format: "float32",
-							},
-							{
-								shaderLocation: 6,
-								offset: 36,
-								format: "float32",
-							},
-						],
+						attributes: PUFF_ATTRIBUTES,
 					},
 				],
 			},
@@ -248,6 +237,81 @@ export class BillboardClouds implements PassLayer {
 				depthCompare: "less",
 			},
 		});
+
+		if (!cover) return;
+		const castModule = device.createShaderModule({
+			code: CLOUD_SHADOW_SHADER,
+		});
+		this.castPipeline = device.createRenderPipeline({
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [cover.castLayout, windLayout],
+			}),
+			vertex: {
+				module: castModule,
+				entryPoint: "vertexMain",
+				buffers: [
+					{
+						arrayStride: VERTEX_STRIDE,
+						attributes: PUFF_ATTRIBUTES,
+					},
+				],
+			},
+			fragment: {
+				module: castModule,
+				entryPoint: "fragmentMain",
+				targets: [
+					{
+						format: cover.coverFormat,
+						// One puff composited over the last: what is left is
+						// `1 - s` of what was left, so overlapping puffs stop
+						// more light than one and the total saturates at all
+						// of it rather than running past.
+						blend: {
+							color: {
+								srcFactor: "one",
+								dstFactor: "one-minus-src",
+								operation: "add",
+							},
+							alpha: {
+								srcFactor: "one",
+								dstFactor: "one-minus-src",
+								operation: "add",
+							},
+						},
+					},
+				],
+			},
+			// **No depth at all.** A shadow map keeps the nearest surface and
+			// throws the rest away; a coverage map has to add up everything
+			// the beam passes through, so there is nothing to test against.
+			primitive: { topology: "triangle-list", cullMode: "none" },
+		});
+	}
+
+	/**
+	 * Draw the masses the sun's box holds into the cloud cover.
+	 *
+	 * The same runs, the same buffers and the same wind as the drawn pass --
+	 * only the frame the puff is turned to face and what the fragment writes
+	 * are different, so a shadow is under the cloud that casts it by
+	 * construction rather than by two pieces of code agreeing.
+	 */
+	castCloudShadow(pass: GPURenderPassEncoder): void {
+		const cover = this.cover;
+		if (!this.visible || !cover || !this.castPipeline) return;
+		if (this.indexCount === 0) return;
+		// The cover is filled before the picture is drawn, so the wind is
+		// written here as well: reading the one the last frame left would put
+		// every cloud's shadow a frame behind the cloud.
+		this.windData[0] = this.time;
+		this.ctx.device.queue.writeBuffer(this.windUniform, 0, this.windData);
+		pass.setPipeline(this.castPipeline);
+		pass.setBindGroup(1, this.windBindGroup);
+		pass.setVertexBuffer(0, this.vertexBuffer);
+		pass.setIndexBuffer(this.indexBuffer, "uint32");
+		this.drawRuns(pass, (turned, bound) =>
+			cover.holds([turned.x, turned.y, turned.z], bound),
+		);
 	}
 
 	/**
@@ -315,6 +379,23 @@ export class BillboardClouds implements PassLayer {
 		pass.setIndexBuffer(this.indexBuffer, "uint32");
 
 		const view = new Frustum(frame.cullViewProj ?? frame.viewProj);
+		this.drawnFormations = this.drawRuns(pass, (turned, bound) =>
+			view.holds(turned.x, turned.y, turned.z, bound),
+		);
+	}
+
+	/**
+	 * Draw every mass a test keeps, neighbours in one call.
+	 *
+	 * Shared by the picture and by the sun's cloud cover, so the two send the
+	 * same puffs turned by the same wind and differ only in what keeps a mass
+	 * and what the fragment writes. Returns how many masses were kept.
+	 */
+	private drawRuns(
+		pass: GPURenderPassEncoder,
+		keeps: (turned: Vec3, bound: number) => boolean,
+	): number {
+		let kept = 0;
 		let runFirst = -1;
 		let runEnd = 0;
 		for (const mass of this.formations) {
@@ -323,8 +404,8 @@ export class BillboardClouds implements PassLayer {
 				WIND_AXIS,
 				this.time * mass.windRate,
 			);
-			if (view.holds(turned.x, turned.y, turned.z, mass.bound)) {
-				this.drawnFormations++;
+			if (keeps(turned, mass.bound)) {
+				kept++;
 				if (runFirst < 0) runFirst = mass.first;
 				runEnd = mass.first + mass.count;
 				continue;
@@ -335,6 +416,7 @@ export class BillboardClouds implements PassLayer {
 			}
 		}
 		if (runFirst >= 0) pass.drawIndexed(runEnd - runFirst, 1, runFirst);
+		return kept;
 	}
 
 	/** Throw the GPU buffers away. */

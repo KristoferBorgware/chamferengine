@@ -609,6 +609,32 @@ Violating any of these breaks the design. They are not tunable.
   **How dark** is one setting over both. Measured at a 18° sun over terraced ground, turning the
   cascades off leaves the 95th percentile of the ratio at **1.429**: some faces
   are 43% brighter without them.
+- **THE CLOUDS ARE THE ONLY MOVING THING, SO THEY GET A THIRD SHADOW**
+  (`CloudShadow`, `CLOUD_SHADOW_SHADER`, `cloudReach` in `SHADOW_WGSL`, doc 16).
+  Neither ground shadow can put a cloud on the ground: the coarse map is a
+  picture of the **generated** ground, and the cascades reach 260 m while the
+  low deck stands **3,000 m** over a planet **6,801 m** in radius. **It is a
+  coverage map, not a shadow map** -- a shadow map holds how far the nearest
+  surface is, which is a yes or a no, and a cloud is translucent, thinner at its
+  rim, and darker where two stack. So a puff writes **how much light it stops**,
+  one composited over the last, **no depth buffer at all**, and the total
+  saturates at all of the light. **It multiplies where the two ground shadows
+  take the darker**: a hill is in the way or it is not, a cloud leaves a
+  *fraction*, so a cloud shadow inside a hill's shadow takes its share of what
+  the hill left. Its own darkness knob, because one number right on a mountain
+  blacks the ground out under a cumulus. One orthographic box along the sun,
+  centred on the ground **under** the camera and spanning the planet's diameter;
+  the cull is a **cylinder open at the far end and closed at the near one** --
+  a cloud shadowing ground in the box is up-sun of it, so its distance from the
+  axis is the ground's own, while a cloud on the night side would otherwise
+  shadow ground it stands under. The puff drawn into the cover is the **same
+  run of indices and the same wind** as the drawn one, turned to face the sun.
+  **How much it darkens is the sky's property, not the shadow's**
+  (`tools/trial-cloud-shadow.ts`): the shipped sky is **3.50%** cloud straight
+  up, and a 4,000 m patch runs **0.00%** shaded at a 10° sun, 1.40% at 40° and
+  **3.24%** at 70% -- nothing under about 30° because the beam leaves the deck
+  **17 km** away over a different sky. At 5,000 clusters against the shipped
+  1,200 the fifth percentile of the on-against-off ratio is **0.915**.
 - **A GENTLE WORLD HAS ALMOST NOWHERE FOR A SHADOW TO FALL**
   (`tools/trial-shadow.ts`, doc 16). Ground shades itself only where its own
   slope beats the sun's height, and the shipped ground runs **11.1°** at the
@@ -817,6 +843,15 @@ Violating any of these breaks the design. They are not tunable.
   **entirely under the bottom of the world**: no blocks, nothing drawn, space
   where the water should be, and low land missing with it. `fromParams` settles
   now; `problems()` stays for what settling cannot reach.
+- **A KNOB THE FRAME READS MUST BE READ FROM THE LIVE DRAFT, NEVER THE LOADED
+  ONE** (`current` in `planet.ts`). The panel hands the whole draft to
+  `onLiveKnob` whenever a row moves, and the frame loop was reading the
+  module-level `settings` -- the settings the **page loaded with**. So every row
+  in **The light** did nothing at all in the panel while still working from a
+  query string, which is the hardest kind of dead control to notice: a link
+  proves the feature works and the checkbox proves nothing. Ten rows were dead
+  this way, both shadow toggles among them. The frame reads `current`, which
+  `onLiveKnob` reassigns; anything else that a frame reads goes there too.
 - **A row with no meaning comes off the panel, it is not greyed out**
   (`Knob.shownWhen`, `ParameterPanel`). **Mountain line** shows only under the
   gated merge, which is the only one with a gate. A disabled row is a question

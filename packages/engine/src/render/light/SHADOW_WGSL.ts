@@ -41,6 +41,22 @@ struct Cascade {
 @group(3) @binding(0) var<uniform> cascade : Cascade;
 @group(3) @binding(1) var cascadeMap : texture_depth_2d_array;
 @group(3) @binding(2) var cascadeDepth : sampler_comparison;
+
+/**
+ * What the sun sees of the clouds.
+ *
+ * \`toLight\` is the one box, \`look.y\` is how much of the sun a cloud may take
+ * and \`look.x\` is unused. There is one box and no cascades because a cloud
+ * deck is kilometres wide and kilometres up: nothing about it is near, so
+ * there is nothing to spend resolution on being near.
+ */
+struct CloudCover {
+	toLight : mat4x4f,
+	look    : vec4f,
+};
+@group(3) @binding(3) var<uniform> cloud : CloudCover;
+@group(3) @binding(4) var cloudMap : texture_2d<f32>;
+@group(3) @binding(5) var cloudSample : sampler;
 /** Which of the twenty faces a direction falls in: the nearest centroid. */
 fn faceOf(dir : vec3f) -> i32 {
 	var best = 0;
@@ -270,6 +286,39 @@ fn cascadeReach(world : vec3f, normal : vec3f, away : f32) -> f32 {
 }
 
 /**
+ * How much of the sun the clouds leave, as what the coverage map holds.
+ *
+ * **A multiplier, not a minimum.** The ground shadows are a yes or a no --
+ * the hill is either in the way or it is not -- so the darker of the two is
+ * the answer. A cloud is neither: it thins toward its edge and two of them
+ * stacked stop more than one, so the coverage is a *fraction of the light
+ * left*, and a cloud shadow falling inside a hill's shadow takes its share of
+ * what the hill already left rather than being ignored.
+ *
+ * The read is one filtered lookup. The map is metres to a texel and a cloud
+ * edge is soft, so the hardware's own blend between texels is most of what
+ * makes the edge of a cloud shadow look like the edge of a cloud.
+ */
+const PROBE = 0.0;
+fn cloudReach(world : vec3f) -> f32 {
+	let strength = cloud.look.y;
+	if (strength <= 0.0) {
+		return 1.0;
+	}
+	let clip = cloud.toLight * vec4f(world, 1.0);
+	let ndc = clip.xyz / clip.w;
+	let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+	// Outside the box there is no cloud recorded, which is not the same as
+	// there being no cloud -- but the box is kilometres across and centred on
+	// the player, so the ground outside it is past the horizon.
+	if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) {
+		return 1.0;
+	}
+	let cover = textureSampleLevel(cloudMap, cloudSample, uv, 0.0).r;
+	return 1.0 - strength * clamp(cover + PROBE, 0.0, 1.0);
+}
+
+/**
  * How much of the sun reaches a point, from both of the things that know.
  *
  * The walk over the coarse map reaches the horizon and knows only where the
@@ -279,6 +328,7 @@ fn cascadeReach(world : vec3f, normal : vec3f, away : f32) -> f32 {
  * two says it is.
  */
 fn sunLight(world : vec3f, up : vec3f, sun : vec3f, normal : vec3f, away : f32) -> f32 {
-	return min(sunReach(world, up, sun), cascadeReach(world, normal, away));
+	let ground = min(sunReach(world, up, sun), cascadeReach(world, normal, away));
+	return ground * cloudReach(world);
 }
 `;

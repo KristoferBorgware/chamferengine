@@ -10,6 +10,40 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-066 — A steep slope is a staircase with no antialiasing, and it crawls
+
+**Kind:** idea
+**Milestone:** unscheduled
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-22, while checking whether banding on a mountainside was a
+shadow artifact
+**Where:** `packages/engine/src/render/gpu/GpuContext.ts`,
+`packages/engine/src/render/terrain/ChunkRenderer.ts`
+
+**What happens.** A hillside steeper than about 40° is a staircase one block
+per step, and at a low sun the flat top of each step takes `sin(elevation)` of
+the direct light while the vertical face of the same step takes
+`cos(elevation)`. At an 8° sun that is a factor of seven between two surfaces
+one metre apart, so the slope reads as hard alternating stripes. Under a moving
+camera the stripes crawl, because a mountain a kilometre off packs each step
+into two or three pixels and there is no antialiasing anywhere in the renderer
+— no pipeline sets `multisample`, and the scene target is single-sampled.
+
+**Why it matters.** It reads as a rendering fault, and the first guess is
+always shadow acne or depth fighting. It is neither: taking the same view with
+the coarse-map walk off, the cascades off, and `sunShadow` at 0 leaves the
+stripes untouched, and rendering it at 2× and box-filtering back down leaves
+them untouched as well, so the pattern is real geometry rather than pixel
+aliasing. What the camera adds is only the crawl.
+
+**What would fix it.** Two separate things, and they are worth separating.
+The crawl is antialiasing: 4× MSAA on the scene target and a resolve in the
+tone pass, which every in-frame pipeline would have to declare. The stripes
+themselves are the terracing, and the only things that touch them are a
+smaller block, a mesher that chamfers a step, or accepting them as what a
+voxel world looks like.
+
 ### F-005 — Nothing checks that the renderer produces a picture
 
 **Kind:** gap

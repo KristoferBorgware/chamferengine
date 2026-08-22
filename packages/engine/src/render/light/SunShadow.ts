@@ -95,6 +95,15 @@ export class SunShadow {
 	}
 
 	/**
+	 * The radius sea level sits at, which is where the ground is to within
+	 * the relief. Read by anything that has to put a box on the ground under
+	 * a camera that may be a kilometre above it.
+	 */
+	get seaRadius(): number {
+		return this.data[1]!;
+	}
+
+	/**
 	 * How dark a shadow goes and how far the march looks for one.
 	 *
 	 * Strength `0` skips the march entirely, which is what the shader tests

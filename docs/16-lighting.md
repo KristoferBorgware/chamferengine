@@ -502,6 +502,78 @@ only take away 14% of the light that was there — and the light that was there
 is the smaller half of a lit surface's total. The shadow is doing its job; what
 makes it read is the exposure applied afterwards, not the shadow.
 
+### The clouds are the only moving thing, so they get a third shadow
+
+Neither of the two shadows above can put a cloud on the ground. The coarse map
+is a picture of the **generated** ground, and a cloud is neither ground nor
+generated into it. The cascades are fitted to a sphere around what the camera
+sees and reach 260 m at the shipped settings, while the low deck stands
+**3,000 m** over a planet **6,801 m** in radius
+([doc 32](32-sky-clouds-and-moon.md)) — so no cascade box comes within a
+kilometre of a cloud, and stretching one up the sun until it did would spend
+every texel on empty air.
+
+So the sun takes a third picture, and it is not a shadow map. **A shadow map
+records how far the nearest surface is**, which answers *is something in the
+way* with a yes or a no. That is the right question for a wall and the wrong
+one for a cloud: a cloud is translucent, its rim is thinner than its middle,
+and two of them stacked stop more light than one does. What is recorded here
+is **how much cloud a sunbeam passes through**, accumulated, with nothing
+tested for being nearest and no depth buffer at all. One puff composites over
+the last — what is left is `1 − s` of what was left — so the total saturates at
+all of the light rather than running past it.
+
+One orthographic box along the sun, centred on the ground **under** the camera
+rather than on the camera, because a player a kilometre up would otherwise
+carry the box up with them and spend half of it on air. It is wide rather than
+deep, and where the decks are says why:
+
+> **[measured]** `tools/trial-cloud-shadow.ts`, the shipped world. A cloud on
+> the low deck throws its shadow **1,092 m** along the ground at a 70° sun,
+> **3,575 m** at 40° and **17,014 m** at 10°.
+
+The default reach spans the planet's own diameter. The cull is a **cylinder
+along the light and open at the far end**: a cloud that shadows ground inside
+the box is up-sun of that ground, and up-sun means along the axis, so its
+distance from the axis is the ground's own distance from the box centre and
+nothing more. It is closed at the near end, because without that a cloud on the
+night side of the planet — inside the cylinder, but behind the ground rather
+than in front of it — would write its shape into the cover and shadow ground it
+stands under.
+
+The puff drawn into the cover is the **same puff, the same run of indices and
+the same wind** as the one drawn into the picture, turned to face the sun
+instead of the eye and writing its opacity instead of its colour. A cloud
+floating off its own shade is then impossible rather than merely unlikely.
+
+**A cloud shadow multiplies, where the two ground shadows take the darker of
+themselves.** The hill is either in the way or it is not, so the darker of the
+walk and the cascades is the answer. A cloud is neither, so what it leaves is a
+*fraction of the light still there* — and a cloud shadow falling inside a
+hill's shadow takes its share of what the hill already left.
+
+It also has its own darkness rather than a share of **How dark**, because one
+number that read right on a mountain would black the ground out under a
+cumulus.
+
+How much it darkens is set by how much cloud there is, and the shipped sky
+is thinner than it looks:
+
+> **[measured]** `tools/trial-cloud-shadow.ts`, 40,000 directions straight out
+> from the surface. The sky is **3.50%** cloud. Over a 4,000 m patch at
+> 12°N 40°E the ground shaded runs **0.00%** at a 10° sun, **1.40%** at 40°,
+> **3.24%** at 70° and 0.93% at 88°.
+>
+> Nothing is shaded below about 30° because the beam then leaves the deck
+> **17 km** away, over a different sky entirely — which is the same reason a
+> low sun moves a cloud's shadow off the ground the cloud is over.
+
+That is the sky's property and not the shadow's: at a denser sky the same code
+draws far more. Measured at 5,000 clusters against the shipped 1,200, a 72° sun
+and the cascades and the walk both off, the fifth percentile of the on-against-
+off ratio is **0.915** — the most shadowed twentieth of the ground is 8.5%
+darker — over 916,000 pixels.
+
 ### After dark the moon is the only thing with a direction
 
 Take the sun away and the two-term model has one term left, and that term has

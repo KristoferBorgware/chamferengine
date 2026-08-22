@@ -509,10 +509,28 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain && k.cascadeShadows,
 			},
 			{
+				key: "cloudShadows",
+				label: "Cloud shadows",
+				enabledWhen: (k) => !k.plain && k.cloudsDrawn,
+			},
+			{
+				key: "cloudShadow",
+				label: "How dark a cloud",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.cloudsDrawn && k.cloudShadows,
+			},
+			{
+				key: "cloudShadowReach",
+				label: "Cloud shadow reach",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.cloudsDrawn && k.cloudShadows,
+			},
+			{
 				key: "shadowTexels",
 				label: "Shadow map texels",
 				digits: 0,
-				enabledWhen: (k) => !k.plain && k.cascadeShadows,
+				enabledWhen: (k) =>
+					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
 				key: "moonLight",

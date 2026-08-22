@@ -76,9 +76,8 @@ export class CascadeShadow {
 	private depth: GPUTexture;
 	private views: GPUTextureView[] = [];
 
-	readonly layout: GPUBindGroupLayout;
-
-	bindGroup: GPUBindGroup;
+	/** Bumped whenever the texture is replaced, so a bind group can follow. */
+	revision = 0;
 
 	/** Texels along one side of each cascade. */
 	private size = 0;
@@ -120,29 +119,6 @@ export class CascadeShadow {
 				},
 			],
 		});
-		this.layout = device.createBindGroupLayout({
-			entries: [
-				{
-					binding: 0,
-					visibility: GPUShaderStage.FRAGMENT,
-					buffer: { type: "uniform" },
-				},
-				{
-					binding: 1,
-					visibility: GPUShaderStage.FRAGMENT,
-					texture: {
-						sampleType: "depth",
-						viewDimension: "2d-array",
-					},
-				},
-				{
-					binding: 2,
-					visibility: GPUShaderStage.FRAGMENT,
-					sampler: { type: "comparison" },
-				},
-			],
-		});
-
 		this.slots = device.createBuffer({
 			size: CASCADES * SLOT_BYTES,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -217,11 +193,21 @@ export class CascadeShadow {
 				back: 1,
 			});
 		this.depth = this.makeDepth(size);
-		this.bindGroup = this.makeBindGroup(sampler);
 		this.sampler = sampler;
 	}
 
-	private readonly sampler: GPUSampler;
+	/** The comparison sampler a shader reads the maps through. */
+	readonly sampler: GPUSampler;
+
+	/** The buffer holding the three matrices and how they are sampled. */
+	get uniformBuffer(): GPUBuffer {
+		return this.look;
+	}
+
+	/** All three cascades as one array a shader indexes by slot. */
+	get arrayView(): GPUTextureView {
+		return this.depth.createView({ dimension: "2d-array" });
+	}
 
 	/** How far the furthest cascade carries, and how dark a shadow goes. */
 	private reach = 240;
@@ -239,7 +225,7 @@ export class CascadeShadow {
 		if (wanted === this.size) return;
 		this.depth.destroy();
 		this.depth = this.makeDepth(wanted);
-		this.bindGroup = this.makeBindGroup(this.sampler);
+		this.revision++;
 	}
 
 	/**
@@ -466,20 +452,6 @@ export class CascadeShadow {
 				}),
 			);
 		return texture;
-	}
-
-	private makeBindGroup(sampler: GPUSampler): GPUBindGroup {
-		return this.ctx.device.createBindGroup({
-			layout: this.layout,
-			entries: [
-				{ binding: 0, resource: { buffer: this.look } },
-				{
-					binding: 1,
-					resource: this.depth.createView({ dimension: "2d-array" }),
-				},
-				{ binding: 2, resource: sampler },
-			],
-		});
 	}
 }
 
