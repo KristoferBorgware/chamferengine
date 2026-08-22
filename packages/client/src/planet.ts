@@ -197,6 +197,7 @@ const REPORT_INTERVAL = 100;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
+const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
 
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
@@ -1161,19 +1162,13 @@ async function main(): Promise<void> {
 		from: Vec3,
 		look: Vec3,
 	): { hit: CellRef; place: CellRef | null } | null {
-		// The walk starts where the player is, on the line the crosshair marks.
-		// The camera stands metres behind and above the eye and can be inside a
-		// hill the player is standing in front of; a walk starting there stops
-		// on its first cell and reports the ground behind the player's head.
-		// Stepping along the ray by that distance first puts the start beside
-		// the eye and keeps the line, so the reach is the player's own.
-		const behind = from.sub(player.eye).length();
-		const walked = rayWalk(
-			from.add(look.scale(behind)),
-			look,
-			rayWorld,
-			REACH * shape.blockSize,
-		);
+		// **The reach is an arm, so the ray is the player's own** -- from the
+		// eye, along the way they face. The camera takes no part: it stands
+		// metres behind and above, so a ray through the middle of the screen
+		// passes four metres over the player's head and needs twelve to come
+		// down to ground an arm reaches in six. The crosshair is moved to where
+		// this ray lands instead of being pinned to the middle of the screen.
+		const walked = rayWalk(from, look, rayWorld, REACH * shape.blockSize);
 		if (!walked) return null;
 		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
 		const free =
@@ -1769,13 +1764,11 @@ async function main(): Promise<void> {
 				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
 		const target = player.eye.add(look.scale(50));
 
-		// The ray the crosshair stands on: from the camera, toward the point
-		// the camera is aimed at. The camera sits `chase` metres behind the eye
-		// and looks at a point ahead of the eye rather than ahead of itself, so
-		// screen centre is this line and not `look` from `player.eye`. In first
-		// person the camera is the eye and the two are one line.
-		aimedFrom = from;
-		aimedLook = target.sub(from).normalize();
+		// The ray a click acts along is the player's own. Where it lands on
+		// screen is where the crosshair goes, computed once the projection
+		// below is built.
+		aimedFrom = player.eye;
+		aimedLook = look;
 		// One walk a frame, read by the outline, the readout and the next
 		// click alike, so all three agree about what is being aimed at.
 		aimed = frozen ? null : aiming(aimedFrom, aimedLook);
@@ -1812,6 +1805,33 @@ async function main(): Promise<void> {
 			Math.max(0.2, overGround * 0.01),
 			RADIUS * 20,
 		);
+
+		// **The crosshair stands where the arm points, not in the middle of the
+		// screen.** With the camera pulled back the two are different lines,
+		// and a mark pinned to the middle points at ground several metres past
+		// anything a player can touch. Projecting the far end of the reach puts
+		// it on the cell the click acts on, and leaves it in the middle in
+		// first person, where the camera is the eye.
+		{
+			const end = player.eye.add(look.scale(REACH * shape.blockSize));
+			const m = projection.multiply(view).elements;
+			let cx = 0;
+			let cy = 0;
+			let cw = 0;
+			for (let r = 0; r < 4; r++) {
+				const v = [end.x, end.y, end.z, 1];
+				let sum = 0;
+				for (let k = 0; k < 4; k++) sum += m[k * 4 + r]! * v[k]!;
+				if (r === 0) cx = sum;
+				else if (r === 1) cy = sum;
+				else if (r === 3) cw = sum;
+			}
+			if (cw > 0) {
+				crosshair.style.display = "";
+				crosshair.style.left = `${((cx / cw) * 0.5 + 0.5) * 100}%`;
+				crosshair.style.top = `${(0.5 - (cy / cw) * 0.5) * 100}%`;
+			} else crosshair.style.display = "none";
+		}
 
 		// The sun turns about the planet's own polar axis, and how lit a place is
 		// comes from one dot product against its own up. Paused reads a frozen
