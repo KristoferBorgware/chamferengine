@@ -38,9 +38,12 @@ export interface BenchFacts {
 	/** How long the whole build took, in milliseconds. */
 	readonly ms: number;
 
-	/** What the planet is made of, as a share of its cells, and its tallest ground. */
+	/** What the planet is made of, as a share of its cells. */
 	readonly bands: readonly number[];
+
+	/** Its tallest and deepest ground, in metres from the sea. */
 	readonly summit: number;
+	readonly floor: number;
 
 	/** What the erosion run did, or nothing when the water is off. */
 	readonly report: ErosionReport | null;

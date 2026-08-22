@@ -10,6 +10,7 @@ import { BenchGraph } from "./BenchGraph.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
 import { PATCH_KNOBS, PlanetSettings } from "./PlanetSettings.js";
+import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
 import { paintSheet } from "./paintSheet.js";
@@ -103,10 +104,14 @@ legend.innerHTML =
 	'<span style="background:#f3f6fa">snow</span>';
 head.appendChild(legend);
 
+panel.mount(head);
+
+// **What the world came out as, on the other side of the window.** The knobs
+// that decide the ground are on the right and what they came to is on the
+// left, so reading an answer never means scrolling past the question.
 const facts = document.createElement("div");
 facts.className = "bench-facts";
-head.appendChild(facts);
-panel.mount(head);
+panel.section("General")?.appendChild(facts);
 
 const profile = document.createElement("details");
 profile.className = "bench-profile";
@@ -332,58 +337,87 @@ function say(): void {
 	const k = settings.knobs;
 	const f = facts0;
 	const report = f?.report ?? null;
+	const metres = (v: number): string =>
+		`${Math.round(v).toLocaleString("en-US")} m`;
+	const line = (text: string): string => `<p>${text}</p>`;
+
 	facts.innerHTML =
-		`radius <b>${Math.round(settings.radius).toLocaleString("en-US")} m</b> · ` +
-		`map level <b>${settings.coarseLevel}</b> · ` +
-		`cell <b>${settings.coarseCell.toFixed(1)} m</b><br>` +
+		(says ? line(`<span class="bench-busy">${says}</span>`) : "") +
+		// **The world, in the numbers that describe a place rather than a
+		// build.** Radius, depth and the crust say how big it is and how far
+		// down it goes; the map cell says how finely the ground is drawn. What
+		// is not here is what a knob already says on its own row.
+		line(
+			`radius <b>${metres(settings.radius)}</b> · ` +
+				`depth <b>${settings.depth}</b> · ` +
+				`crust <b>${settings.crustDepth.toLocaleString("en-US")}</b> layers`,
+		) +
+		line(
+			`map cell <b>${settings.coarseCell.toFixed(0)} m</b> at level ` +
+				`<b>${settings.coarseLevel}</b> · chunk ` +
+				`<b>${settings.chunkSpan.toFixed(0)} m</b> · block ` +
+				`<b>${k.blockSize} m</b>`,
+		) +
+		// **What the ground came to, measured, not asked for.** Relief says how
+		// tall the tallest point is meant to be; this is where it landed once
+		// sea level had been taken off, which is the number a mountain is
+		// judged by.
 		(f
-			? `patch <b>${Math.round(f.span).toLocaleString("en-US")} m</b> across, ` +
-				`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> cells drawn<br>` +
-				`ground <b>${Math.round(f.lowest)}</b> to ` +
-				`<b>${Math.round(f.highest)} m</b> · ` +
-				`land here <b>${Math.round(f.landShare * 100)}%</b><br>`
+			? line(
+					`tallest ground <b>${metres(f.summit)}</b> over the water · ` +
+						`deepest <b>${metres(-f.floor)}</b> under it`,
+				) +
+				// **The whole planet, not this patch.** The material lines are
+				// absolute metres and a patch is a place, so a patch can be all
+				// snow on a world that is mostly grass. This is what to tune
+				// Relief against.
+				line(
+					`<b>${(f.bands[0]! * 100).toFixed(0)}%</b> sea · ` +
+						`<b>${(f.bands[1]! * 100).toFixed(0)}%</b> grass · ` +
+						`<b>${(f.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
+						`<b>${(f.bands[3]! * 100).toFixed(0)}%</b> snow`,
+				)
 			: "") +
-		(says
-			? `<span class="bench-busy">${says}</span>`
-			: f
-				? `map of <b>${f.cells.toLocaleString("en-US")}</b> cells in ` +
-					`<b>${(f.ms / 1000).toFixed(1)} s</b>`
-				: "") +
-		// **The whole planet, not this patch.** The material lines are absolute
-		// metres and a patch is a place, so a patch can be all snow on a world
-		// that is mostly grass. This is the number to tune Relief against.
+		(k.seaLevel < 0
+			? line(`sea drained <b>${metres(-k.seaLevel)}</b>`)
+			: "") +
+		line(
+			`horizon at eye height <b>${metres(
+				settings.radius *
+					Math.acos(
+						settings.radius /
+							(settings.radius + PLAYER_DEFAULTS.eyeHeight),
+					),
+			)}</b>`,
+		) +
+		// The patch is a place on that world, and every number about it is
+		// about that place rather than about the planet.
 		(f
-			? `<br>planet: <b>${(f.bands[0]! * 100).toFixed(0)}%</b> sea · ` +
-				`<b>${(f.bands[1]! * 100).toFixed(0)}%</b> grass · ` +
-				`<b>${(f.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
-				`<b>${(f.bands[3]! * 100).toFixed(0)}%</b> snow`
-			: "") +
-		// **True scale, always.** A patch drawn taller than the world builds it
-		// is a picture of a planet nobody can walk on, and the number it was
-		// there to make visible is this one.
-		(f
-			? `<br>true scale · relief is <b>${(
-					(100 * (f.highest - f.lowest)) /
-					Math.max(1, f.span)
-				).toFixed(1)}%</b> of the patch`
-			: "") +
-		(k.seaLevel < 0 && f
-			? `<br>sea drained <b>${(-k.seaLevel).toLocaleString("en-US")} m</b> — ` +
-				`the tallest point is <b>${Math.round(f.summit).toLocaleString("en-US")} m</b> ` +
-				"above the water"
+			? line(
+					`patch <b>${metres(f.span)}</b> across · ` +
+						`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> cells`,
+				) +
+				line(
+					`ground <b>${metres(f.lowest)}</b> to <b>${metres(f.highest)}</b> · ` +
+						`land <b>${Math.round(f.landShare * 100)}%</b>`,
+				)
 			: "") +
 		(report
-			? `<br>erosion moved <b>${report.moved.toFixed(2)} m</b> a cell, ` +
-				`deepest cut <b>${Math.round(report.deepest)} m</b><br>` +
-				`slope median <b>${report.before.median.toFixed(3)}</b> → ` +
-				`<b>${report.after.median.toFixed(3)}</b> ` +
-				`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)}) · ` +
-				`99th <b>${report.before.ninetyNine.toFixed(3)}</b> → ` +
-				`<b>${report.after.ninetyNine.toFixed(3)}</b><br>` +
-				`${report.droplets.toLocaleString("en-US")} droplets in ` +
-				`<b>${(report.ms / 1000).toFixed(1)} s</b>` +
+			? line(
+					`erosion moved <b>${report.moved.toFixed(2)} m</b> a cell, ` +
+						`deepest cut <b>${metres(report.deepest)}</b>`,
+				) +
+				line(
+					`slope median <b>${report.before.median.toFixed(3)}</b> → ` +
+						`<b>${report.after.median.toFixed(3)}</b> ` +
+						`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)}) · ` +
+						`99th <b>${report.before.ninetyNine.toFixed(3)}</b> → ` +
+						`<b>${report.after.ninetyNine.toFixed(3)}</b>`,
+				) +
 				(k.patchPicture === "erosion"
-					? ` · picture saturates at <b>${report.scale.toFixed(1)} m</b>`
+					? line(
+							`the cut picture saturates at <b>${report.scale.toFixed(1)} m</b>`,
+						)
 					: "")
 			: "");
 }

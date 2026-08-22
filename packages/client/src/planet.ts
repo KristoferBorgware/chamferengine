@@ -269,9 +269,10 @@ if (params.get("panel") === "1") {
 	// it is the one word that re-rolls a world, and hunting for a world is
 	// done looking at the map. It still seeds the clouds as well as the ground.
 	maps.hostKnobs(panel.section("Seed"));
-	maps.hostKnobs(panel.section("The terrain layer"));
-	maps.hostKnobs(panel.section("The mountain layer"));
-	maps.hostKnobs(panel.section("How high and how wet"));
+	maps.hostKnobs(panel.section("Terrain"));
+	maps.hostKnobs(panel.section("Mountains"));
+	maps.hostKnobs(panel.section("Land"));
+	maps.hostKnobs(panel.section("Sea"));
 	// Erosion changes the map and nothing else, and the map is the picture of
 	// what it did, so its rows live under that picture with the rest.
 	maps.hostKnobs(panel.section("Erosion"));

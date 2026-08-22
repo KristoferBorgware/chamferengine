@@ -177,6 +177,7 @@ export class BenchWorkerCore {
 				ms: this.world.ms,
 				bands: this.world.bands,
 				summit: this.world.summit,
+				floor: this.world.floor,
 				report: this.world.report,
 				overLine: this.world.overLine,
 				span,
