@@ -1588,13 +1588,17 @@ async function main(): Promise<void> {
 		const submerged =
 			from.length() < shape.seaSurfaceRadius ||
 			terrain.blockAtPosition(from) === BlockType.WATER;
+		// Each half of the answer is switched on its own: the walk reaches the
+		// horizon and knows only generated ground, the maps reach a few
+		// hundred metres and hold anything that drew itself.
+		const dark = PLAIN ? 0 : settings.knobs.sunShadow;
 		renderer.shadow.setLook(
-			PLAIN ? 0 : settings.knobs.sunShadow,
+			settings.knobs.mapShadows ? dark : 0,
 			settings.knobs.shadowReach,
 		);
 		renderer.cascades.setSize(settings.knobs.shadowTexels);
 		renderer.cascades.setLook(
-			PLAIN ? 0 : settings.knobs.sunShadow,
+			settings.knobs.cascadeShadows ? dark : 0,
 			settings.knobs.cascadeReach,
 		);
 		renderer.sky = submerged

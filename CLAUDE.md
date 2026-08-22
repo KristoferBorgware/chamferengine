@@ -601,7 +601,10 @@ Violating any of these breaks the design. They are not tunable.
   valley a kilometre off, which no cascade has the box for; the cascades carry
   one block's shadow on the next, which the map cannot represent. They **hand
   over rather than meeting at a line** -- the furthest cascade fades over the
-  last 15% of its reach. Measured at a 18° sun over terraced ground, turning the
+  last 15% of its reach. **Each is switched on its own** (**Far shadows**,
+  **Near shadows**), because they cost different things: the walk is the
+  per-fragment expense and the maps are three more passes over the geometry.
+  **How dark** is one setting over both. Measured at a 18° sun over terraced ground, turning the
   cascades off leaves the 95th percentile of the ratio at **1.429**: some faces
   are 43% brighter without them.
 - **A GENTLE WORLD HAS ALMOST NOWHERE FOR A SHADOW TO FALL**

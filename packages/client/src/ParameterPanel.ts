@@ -481,27 +481,38 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "sunShadow",
-				label: "Shadows",
+				label: "How dark",
 				digits: 2,
+				enabledWhen: (k) =>
+					!k.plain && (k.mapShadows || k.cascadeShadows),
+			},
+			{
+				key: "mapShadows",
+				label: "Far shadows",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "shadowReach",
-				label: "Shadows reach",
+				label: "Far shadows reach",
 				digits: 0,
-				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
+				enabledWhen: (k) => !k.plain && k.mapShadows,
+			},
+			{
+				key: "cascadeShadows",
+				label: "Near shadows",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				key: "cascadeReach",
+				label: "Near shadows reach",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.cascadeShadows,
 			},
 			{
 				key: "shadowTexels",
 				label: "Shadow map",
 				digits: 0,
-				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
-			},
-			{
-				key: "cascadeReach",
-				label: "Shadow maps reach",
-				digits: 0,
-				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
+				enabledWhen: (k) => !k.plain && k.cascadeShadows,
 			},
 			{
 				key: "moonLight",

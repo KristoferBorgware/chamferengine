@@ -466,6 +466,13 @@ cannot represent at all. A point is as lit as the darker of the two says.
 They hand over rather than meeting at a line: the furthest cascade fades out
 over the last 15% of its reach, and past that the walk is the only answer.
 
+**Each is switched on its own**, because they cost different things and fail
+differently. The walk is the expensive one per fragment and it is the one to
+turn off on a weak machine; the maps are three more passes over the world's
+geometry and they are the one to turn off when there is nothing dynamic in the
+scene to need them. How dark a shadow goes is one setting over both, so
+turning one off does not change the depth of the other.
+
 ### A gentle world has almost nowhere for a shadow to fall
 
 Ground shadows itself only where its own slope is steeper than the sun is

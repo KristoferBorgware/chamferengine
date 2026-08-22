@@ -426,11 +426,29 @@ export interface PlanetKnobs {
 	/**
 	 * How much of the direct sun a shadow takes away.
 	 *
-	 * `0` marches nothing and costs nothing. `1` leaves a shadowed face lit by
-	 * the sky alone, which is what a face turned away from the sun already
-	 * gets.
+	 * `0` leaves a shadow doing nothing whichever way it was found. `1` leaves
+	 * a shadowed face lit by the sky alone, which is what a face turned away
+	 * from the sun already gets.
 	 */
 	sunShadow: number;
+
+	/**
+	 * Whether a fragment walks the coarse map toward the sun.
+	 *
+	 * The far half of the answer: it reaches the horizon at the map's own 32 m
+	 * resolution, and it can only ever see ground that was generated. Off, it
+	 * costs nothing at all -- the walk is the expensive one of the two.
+	 */
+	mapShadows: boolean;
+
+	/**
+	 * Whether the sun renders its own depth buffers of what stands near.
+	 *
+	 * The near half: sharp enough to shadow one block by the next, and the
+	 * only one of the two that can hold a thing nobody generated. Off, the
+	 * world is not drawn the three extra times.
+	 */
+	cascadeShadows: boolean;
 
 	/**
 	 * How many metres along the sun a shadow ray looks for something in the
@@ -578,6 +596,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	timeOfDay: 0.18,
 	sunShare: 0.58,
 	sunShadow: 1,
+	mapShadows: true,
+	cascadeShadows: true,
 	shadowReach: 1600,
 	shadowTexels: 1024,
 	cascadeReach: 260,
@@ -809,6 +829,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
 	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	sunShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	mapShadows: { ...TOGGLE, rebuilds: false },
+	cascadeShadows: { ...TOGGLE, rebuilds: false },
 	shadowReach: { low: 0, high: 4000, step: 50, rebuilds: false, unit: "m" },
 	shadowTexels: {
 		low: 256,
