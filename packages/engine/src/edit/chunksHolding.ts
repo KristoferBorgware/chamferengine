@@ -45,10 +45,19 @@ export function chunksHolding(
 		for (let k = 0; k < 6; k++) {
 			const ring = neighbour(named.face, n, named.i, named.j, k);
 			if (ring)
-				candidates.push({ ...here, face: ring.face, i: ring.i, j: ring.j });
+				candidates.push({
+					...here,
+					face: ring.face,
+					i: ring.i,
+					j: ring.j,
+				});
 		}
 		for (const candidate of candidates) {
-			const key = cellSlot(candidate, subdivisionDepth, chunkLevel).chunkKey;
+			const key = cellSlot(
+				candidate,
+				subdivisionDepth,
+				chunkLevel,
+			).chunkKey;
 			// The face is checked before the key is marked seen. A ring
 			// neighbour across a face edge produces a key under its own face,
 			// which this cell is not in -- marking that key first would hide
@@ -66,7 +75,11 @@ export function chunksHolding(
 			if (!offset) continue;
 			out.push({
 				chunkKey: key,
-				slot: rank(offset.q, offset.r, 1 << (subdivisionDepth - chunkLevel)),
+				slot: rank(
+					offset.q,
+					offset.r,
+					1 << (subdivisionDepth - chunkLevel),
+				),
 			});
 		}
 	}

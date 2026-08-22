@@ -1167,9 +1167,8 @@ async function main(): Promise<void> {
 	}
 
 	/** What the crosshair is on, and what each button would do with it. */
-	function aimingSays(): string {
+	function aimingSays(at: ReturnType<typeof aiming>): string {
 		if (!aimedFrom || !aimedLook) return "aiming at nothing";
-		const at = aiming(aimedFrom, aimedLook);
 		if (!at) return "out of reach";
 		const name = BLOCK_NAMES[blockAt(at.hit)] ?? "unknown";
 		const breaks = isBreakable(blockAt(at.hit));
@@ -1209,20 +1208,23 @@ async function main(): Promise<void> {
 		refresh();
 	}
 
-	/** Break the block under the crosshair. */
-	function pick(from: Vec3, look: Vec3): void {
-		const at = aiming(from, look);
-		if (!at) return;
-		if (!isBreakable(blockAt(at.hit))) return;
-		change(at.hit, BlockType.AIR);
+	/**
+	 * Break the block under the crosshair.
+	 *
+	 * The frame's own walk rather than a fresh one, so what was outlined is
+	 * exactly what goes.
+	 */
+	function pick(): void {
+		if (!aimed) return;
+		if (!isBreakable(blockAt(aimed.hit))) return;
+		change(aimed.hit, BlockType.AIR);
 	}
 
 	/** Put a block on top of the one under the crosshair. */
-	function place(from: Vec3, look: Vec3): void {
-		const at = aiming(from, look);
-		if (!at?.place) return;
+	function place(): void {
+		if (!aimed?.place) return;
 		const type = PLACEABLE[Math.floor(Math.random() * PLACEABLE.length)]!;
-		change(at.place, type);
+		change(aimed.place, type);
 	}
 
 	// The pool asks for a chunk's changes as each job leaves, so a chunk asked
@@ -1610,9 +1612,8 @@ async function main(): Promise<void> {
 		down.delete(e.pointerId);
 		pinchFrom = 0;
 		if (!press || press.moved > CLICK_SLOP || down.size > 0) return;
-		if (!aimedFrom || !aimedLook) return;
-		if (press.button === 0) pick(aimedFrom, aimedLook);
-		else if (press.button === 2) place(aimedFrom, aimedLook);
+		if (press.button === 0) pick();
+		else if (press.button === 2) place();
 	};
 	canvas.addEventListener("pointerup", lift);
 	canvas.addEventListener("pointercancel", lift);
@@ -1634,6 +1635,9 @@ async function main(): Promise<void> {
 	 */
 	let aimedFrom: Vec3 | null = null;
 	let aimedLook: Vec3 | null = null;
+
+	/** What that ray found, walked once a frame. */
+	let aimed: { hit: CellRef; place: CellRef | null } | null = null;
 
 	const started = performance.now();
 
@@ -1755,11 +1759,13 @@ async function main(): Promise<void> {
 		// reach belongs to the player.
 		aimedFrom = player.eye;
 		aimedLook = look;
-		const at = frozen ? null : aiming(player.eye, look);
-		aim.target = at?.place
-			? outlineOf(at.place)
-			: at
-				? outlineOf(at.hit)
+		// One walk a frame, read by the outline, the readout and the next
+		// click alike, so all three agree about what is being aimed at.
+		aimed = frozen ? null : aiming(player.eye, look);
+		aim.target = aimed?.place
+			? outlineOf(aimed.place)
+			: aimed
+				? outlineOf(aimed.hit)
 				: null;
 
 		const eye: [number, number, number] = [from.x, from.y, from.z];
@@ -1975,7 +1981,7 @@ async function main(): Promise<void> {
 					(submerged ? " · under water" : ""),
 				// What a click would do, and how much of this world is a
 				// player's rather than the seed's.
-				`${aimingSays()} · ${edits.count} changed`,
+				`${aimingSays(aimed)} · ${edits.count} changed`,
 				// Where the decisions are being read from, and how far that is from
 				// where the picture is being taken. Without the distance a frozen
 				// view is a world that has simply stopped responding.

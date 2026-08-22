@@ -61,7 +61,10 @@ export class EditDb {
 
 		const rows = new Map<number, ChunkDeltas>();
 		found.keys.forEach((key, at) =>
-			rows.set(key, ChunkDeltas.unpack(found.where[at]!, found.what[at]!)),
+			rows.set(
+				key,
+				ChunkDeltas.unpack(found.where[at]!, found.what[at]!),
+			),
 		);
 		const store = new DeltaStore(found.header, rows);
 		return { store: store.recut(want.chunkLevel), stale: false };

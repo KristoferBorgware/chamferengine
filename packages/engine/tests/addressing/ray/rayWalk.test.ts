@@ -151,52 +151,70 @@ describe("rayWalk", () => {
 		return out;
 	}
 
-	it("reports the cell a fine march converges to", () => {
-		let checked = 0;
-		let same = 0;
-		for (const { eye, look } of rays(150)) {
-			const hit = rayWalk(eye, look, w, reach);
-			const seen = march(eye, look, w, reach, w.block / 2000);
-			if (!hit) continue;
-			checked++;
-			const id = `${cellKey(hit.cell.face, w.n, hit.cell.i, hit.cell.j)}@${hit.cell.layer}`;
-			if (id === seen[seen.length - 1]) same++;
-		}
-		expect(checked).toBeGreaterThan(100);
-		expect(same).toBe(checked);
-	});
+	/**
+	 * A march fine enough to miss nothing is hundreds of thousands of cell
+	 * lookups, so these two run a sample rather than a survey. The statistics
+	 * are `verification/ray.js`, over 3,000 rays; these guard the walk against
+	 * a change that breaks it.
+	 */
+	const SAMPLE = 60;
+	const SLOW = 30_000;
 
-	it("steps through every cell the march finds, in order", () => {
-		for (const { eye, look } of rays(120)) {
-			const walked: string[] = [];
-			const trace: RayWorld = {
-				...w,
-				solidAt(cell) {
-					walked.push(
-						`${cellKey(cell.face, w.n, cell.i, cell.j)}@${cell.layer}`,
-					);
-					return w.solidAt(cell);
-				},
-			};
-			rayWalk(eye, look, trace, reach);
-			const seen = march(eye, look, w, reach, w.block / 2000);
-			let at = 0;
-			for (const id of seen) {
-				const found = walked.indexOf(id, at);
-				expect(found, `${id} missing from the walk`).toBeGreaterThan(
-					-1,
-				);
-				at = found + 1;
+	it(
+		"reports the cell a fine march converges to",
+		() => {
+			let checked = 0;
+			let same = 0;
+			for (const { eye, look } of rays(SAMPLE)) {
+				const hit = rayWalk(eye, look, w, reach);
+				const seen = march(eye, look, w, reach, w.block / 2000);
+				if (!hit) continue;
+				checked++;
+				const id = `${cellKey(hit.cell.face, w.n, hit.cell.i, hit.cell.j)}@${hit.cell.layer}`;
+				if (id === seen[seen.length - 1]) same++;
 			}
-		}
-	});
+			expect(checked).toBeGreaterThan(SAMPLE / 2);
+			expect(same).toBe(checked);
+		},
+		SLOW,
+	);
+
+	it(
+		"steps through every cell the march finds, in order",
+		() => {
+			for (const { eye, look } of rays(SAMPLE)) {
+				const walked: string[] = [];
+				const trace: RayWorld = {
+					...w,
+					solidAt(cell) {
+						walked.push(
+							`${cellKey(cell.face, w.n, cell.i, cell.j)}@${cell.layer}`,
+						);
+						return w.solidAt(cell);
+					},
+				};
+				rayWalk(eye, look, trace, reach);
+				const seen = march(eye, look, w, reach, w.block / 2000);
+				let at = 0;
+				for (const id of seen) {
+					const found = walked.indexOf(id, at);
+					expect(
+						found,
+						`${id} missing from the walk`,
+					).toBeGreaterThan(-1);
+					at = found + 1;
+				}
+			}
+		},
+		SLOW,
+	);
 
 	it("costs the same on planets three orders of magnitude apart", () => {
 		const counts = [6, 8, 10, 12].map((d) => {
 			const wd = world(d, radius);
 			let stepped = 0;
 			let n = 0;
-			for (const { eye, look } of rays(150)) {
+			for (const { eye, look } of rays(SAMPLE)) {
 				const scaled = {
 					eye: eye
 						.normalize()
