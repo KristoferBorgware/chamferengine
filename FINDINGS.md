@@ -1256,45 +1256,6 @@ once someone is actually leaning on Live rebuild rather than trying it once.
 
 ---
 
-### F-064 — The patch mesh is rebuilt whole whenever the ground moves, and only its heights changed
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-22, timing a curve drag on the terrain bench after taking the
-noise pass out of it
-**Where:** `packages/engine/src/mesh/coarsePatchMesh.ts`;
-`packages/client/src/BenchWorkerCore.ts`, the `patchKey` cache
-
-**What happens.** A knob that moves the ground rebuilds the patch from nothing:
-a scan of every cell on the planet to find the ones in the patch (660,000 dot
-products at level 8), then `cellCorners` and six `neighbour` calls per selected
-cell, then 190,000 vertices pushed into a plain array. Measured in the browser
-on the shipped world, that is about **130 ms of a 410 ms** live update, and in
-node against the other stages it is `513 ms` where the whole surface pass is
-`1,465 ms`.
-
-**None of it depends on the heights.** Which cells the patch holds, where their
-corners sit in the flat frame, which three cells meet at each corner, and every
-index and line — all of that answers to where the patch stands and how wide it
-is. A curve drag moves the patch not at all. What changes is four floats a
-vertex: the height, the field, and the two layers.
-
-**Why it matters.** It is the largest remaining cost of a live drag now that
-the octave stacks are cached, and it is paid on every update of every knob that
-touches the ground — which on this page is nearly all of them.
-
-**What would fix it.** The same split the surface pass just took: a
-`patchLayout(grid, {at, cells, radius})` holding the cell list, the flat
-positions, the corner triples, the indices and the lines, and a
-`patchVertices(layout, fields)` that fills the buffer. The worker already
-carries a `patchKey` saying whether the patch moved, so it would hold the
-layout under exactly that key and refill under the ground's. `coarsePatchMesh`
-stays as the two of them called together, the way `layeredHeight` now is.
-
----
-
 ### F-063 — Two things the noise lab does that the terrain bench does not
 
 **Kind:** gap
@@ -1457,6 +1418,48 @@ fully shadowed at a 5 degree sun, 4.6% at 20 and 0.0% at 60. Shadows here are a
 dawn and dusk feature, which is a property of the terrain rather than of the
 march.
 
+
+---
+
+### F-064 — The patch mesh is rebuilt whole whenever the ground moves, and only its heights changed
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, timing a curve drag on the terrain bench after taking the
+noise pass out of it
+**Closed:** 2026-08-22, fixed — `patchLayout` and `patchVertices`, held under
+two keys in the bench's worker; measured in the browser the mesh in a curve
+update went from `200 ms` to `30 ms`
+**Where:** `packages/engine/src/mesh/coarsePatchMesh.ts`;
+`packages/client/src/BenchWorkerCore.ts`, the `patchKey` cache
+
+**What happens.** A knob that moves the ground rebuilds the patch from nothing:
+a scan of every cell on the planet to find the ones in the patch (660,000 dot
+products at level 8), then `cellCorners` and six `neighbour` calls per selected
+cell, then 190,000 vertices pushed into a plain array. Measured in the browser
+on the shipped world, that is about **130 ms of a 410 ms** live update, and in
+node against the other stages it is `513 ms` where the whole surface pass is
+`1,465 ms`.
+
+**None of it depends on the heights.** Which cells the patch holds, where their
+corners sit in the flat frame, which three cells meet at each corner, and every
+index and line — all of that answers to where the patch stands and how wide it
+is. A curve drag moves the patch not at all. What changes is four floats a
+vertex: the height, the field, and the two layers.
+
+**Why it matters.** It is the largest remaining cost of a live drag now that
+the octave stacks are cached, and it is paid on every update of every knob that
+touches the ground — which on this page is nearly all of them.
+
+**What would fix it.** The same split the surface pass just took: a
+`patchLayout(grid, {at, cells, radius})` holding the cell list, the flat
+positions, the corner triples, the indices and the lines, and a
+`patchVertices(layout, fields)` that fills the buffer. The worker already
+carries a `patchKey` saying whether the patch moved, so it would hold the
+layout under exactly that key and refill under the ground's. `coarsePatchMesh`
+stays as the two of them called together, the way `layeredHeight` now is.
 
 ---
 

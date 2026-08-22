@@ -89,8 +89,17 @@ export interface BenchSheet {
 /** The patch as the renderer takes it: the buffers, moved rather than copied. */
 export interface BenchGeometry {
 	readonly vertices: Float32Array<ArrayBuffer>;
-	readonly indices: Uint32Array<ArrayBuffer>;
-	readonly lines: Uint32Array<ArrayBuffer>;
+
+	/**
+	 * The triangles and the rim lines, or nothing when the patch did not move.
+	 *
+	 * **A patch whose ground changed draws the same triangles between the same
+	 * vertices.** The shape of a patch is where it stands, not what stands on
+	 * it, so the indices are sent when it is laid out and left alone after
+	 * that -- three megabytes not crossed and not re-uploaded on every knob.
+	 */
+	readonly indices: Uint32Array<ArrayBuffer> | null;
+	readonly lines: Uint32Array<ArrayBuffer> | null;
 	readonly triangleCount: number;
 
 	/** What the field reached in this patch, which the Raw picture is drawn against. */
@@ -127,7 +136,7 @@ export interface BenchReady {
 	 */
 	readonly planet: BenchSheet | null;
 
-	/** The patch mesh, or nothing when only the picture changed. */
+	/** The patch mesh, or nothing when the ground under it did not move. */
 	readonly geometry: BenchGeometry | null;
 
 	readonly sections: BenchSections;

@@ -8,8 +8,10 @@ import type {
 } from "./BenchMessage.js";
 import { BenchWorld } from "./BenchWorld.js";
 import { PlanetSettings } from "./PlanetSettings.js";
-import { coarsePatchMesh } from "chamfer/mesh";
+import type { PatchLayout } from "chamfer/mesh";
+import { patchLayout, patchVertices } from "chamfer/mesh";
 import { patchField, patchFrame } from "./patchField.js";
+import { makeBlend, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
 
 /** How many pixels across the flat planet is drawn. */
@@ -42,8 +44,17 @@ const PLANET_WIDE = 256;
 export class BenchWorkerCore {
 	private readonly world = new BenchWorld();
 
-	/** What the last finished build drew, so an unmoved patch is not rebuilt. */
+	/**
+	 * Where the patch was laid out, and what came of it.
+	 *
+	 * **Two keys, because a patch has two halves.** Where it stands decides
+	 * which cells it holds and where their corners sit; what stands on them
+	 * decides four floats a vertex. A knob that moves the ground -- which on
+	 * this page is nearly all of them -- keeps the first and runs the second.
+	 */
 	private patchKey = "";
+	private layout: PatchLayout | null = null;
+	private groundKey = "";
 	private cellsDrawn = 0;
 
 	/** Which world the last sent planet sheet was of, so an unmoved one is not resent. */
@@ -81,47 +92,60 @@ export class BenchWorkerCore {
 			},
 		);
 
-		// The mesh is rebuilt when the ground under it moved or the patch did,
-		// and never when only the picture changed: a picture is a uniform, and
-		// both control layers ride on the vertex so neither is a rebuild
-		// either.
+		// **The patch is laid out when it moves and filled when the ground
+		// does.** Neither is a picture: both control layers ride on the vertex,
+		// so choosing one is a uniform and reaches none of this.
+		const place = {
+			at: frame.up,
+			cells: k.patchCells,
+			radius: settings.radius,
+		};
 		const wanted = JSON.stringify([
-			this.world.ms,
 			k.patchLatitude,
 			k.patchLongitude,
 			k.patchCells,
+			settings.radius,
+			settings.coarseLevel,
 		]);
-		let geometry: BenchGeometry | null = null;
-		let cellsDrawn = this.cellsDrawn;
-		let span = field.span;
-		if (wanted !== this.patchKey) {
+		let laidOut = false;
+		if (wanted !== this.patchKey || !this.layout) {
 			this.patchKey = wanted;
+			this.groundKey = "";
 			yield {
 				kind: "step",
 				token: request.token,
 				says: "cutting the patch",
 				done: 0,
 			};
-			const patch = coarsePatchMesh(grid, {
-				at: frame.up,
-				cells: k.patchCells,
-				radius: settings.radius,
+			this.layout = patchLayout(grid, place);
+			this.cellsDrawn = this.layout.cellCount;
+			laidOut = true;
+		}
+		const layout = this.layout;
+
+		let geometry: BenchGeometry | null = null;
+		const cellsDrawn = this.cellsDrawn;
+		const span = layout.span;
+		if (laidOut || String(this.world.ms) !== this.groundKey) {
+			this.groundKey = String(this.world.ms);
+			const fill = patchVertices(layout, {
 				height: this.world.height,
 				raw: this.world.raw,
 				terrain: this.world.terrain,
 				mountain: this.world.mountain,
 			});
 			geometry = {
-				vertices: patch.vertices,
-				indices: patch.indices,
-				lines: patch.lines,
-				triangleCount: patch.triangleCount,
-				rawLow: patch.rawLow,
-				rawHigh: patch.rawHigh,
+				vertices: fill.vertices,
+				// **Copied, because a sent buffer is a gone buffer.** The
+				// layout is kept here and handing its own arrays over would
+				// detach them; this is paid when the patch moves and never
+				// while the ground does.
+				indices: laidOut ? Uint32Array.from(layout.indices) : null,
+				lines: laidOut ? Uint32Array.from(layout.lines) : null,
+				triangleCount: layout.triangleCount,
+				rawLow: fill.rawLow,
+				rawHigh: fill.rawHigh,
 			};
-			cellsDrawn = patch.cellCount;
-			this.cellsDrawn = cellsDrawn;
-			span = patch.span;
 		}
 
 		// The planet sheet is the whole map read at one pixel a place, so it
@@ -179,12 +203,11 @@ export class BenchWorkerCore {
 					sheet.mountain.buffer,
 					sheet.cut.buffer,
 				);
-		if (reply.geometry)
-			out.push(
-				reply.geometry.vertices.buffer,
-				reply.geometry.indices.buffer,
-				reply.geometry.lines.buffer,
-			);
+		if (reply.geometry) {
+			out.push(reply.geometry.vertices.buffer);
+			if (reply.geometry.indices) out.push(reply.geometry.indices.buffer);
+			if (reply.geometry.lines) out.push(reply.geometry.lines.buffer);
+		}
 		return out;
 	}
 
@@ -234,18 +257,21 @@ export class BenchWorkerCore {
 			if (v < rawLow) rawLow = v;
 			if (v > rawHigh) rawHigh = v;
 		}
+		// One lookup a pixel, five fields read off it.
+		const blend = makeBlend();
 		for (let r = 0; r < tall; r++) {
 			const latitude = (0.5 - (r + 0.5) / tall) * 180;
 			for (let q = 0; q < wide; q++) {
 				const longitude = ((q + 0.5) / wide) * 360 - 180;
 				const dir = positionOf({ latitude, longitude, altitude: 0 }, 1);
 				const at = r * wide + q;
-				sheet.metres[at] = grid.sampleAt(this.world.height, dir);
-				sheet.raw[at] = grid.sampleAt(this.world.raw, dir);
-				sheet.terrain[at] = grid.sampleAt(this.world.terrain, dir);
-				sheet.mountain[at] = grid.sampleAt(this.world.mountain, dir);
+				grid.blendInto(dir, blend);
+				sheet.metres[at] = readBlend(this.world.height, blend);
+				sheet.raw[at] = readBlend(this.world.raw, blend);
+				sheet.terrain[at] = readBlend(this.world.terrain, blend);
+				sheet.mountain[at] = readBlend(this.world.mountain, blend);
 				if (this.world.delta)
-					sheet.cut[at] = grid.sampleAt(this.world.delta, dir);
+					sheet.cut[at] = readBlend(this.world.delta, blend);
 			}
 		}
 		return {

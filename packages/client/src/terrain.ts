@@ -273,14 +273,7 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 			vertices: reply.geometry.vertices,
 			indices: reply.geometry.indices,
 			lines: reply.geometry.lines,
-			cellCount: reply.facts.cellsDrawn,
 			triangleCount: reply.geometry.triangleCount,
-			span: reply.facts.span,
-			lowest: reply.facts.lowest,
-			highest: reply.facts.highest,
-			rawLow: reply.geometry.rawLow,
-			rawHigh: reply.geometry.rawHigh,
-			landShare: reply.facts.landShare,
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
