@@ -92,26 +92,17 @@ describe("the pause", () => {
 		expect(new PlanetSettings().knobs.plain).toBe(false);
 	});
 
-	it("overrides the height map without losing the setting", () => {
-		const paused = new PlanetSettings({
-			plain: true,
-			coarseMap: true,
-			relief: 700,
-		});
+	it("holds the ground still without losing the setting", () => {
+		const paused = new PlanetSettings({ plain: true, relief: 700 });
 		expect(paused.coarseMapRuns).toBe(false);
 		expect(paused.relief).toBe(0);
 
 		// The settings a person left behind are still there to come back to.
-		expect(paused.knobs.coarseMap).toBe(true);
 		expect(paused.knobs.relief).toBe(700);
 	});
 
 	it("gives it back when the pause is lifted", () => {
-		const live = new PlanetSettings({
-			plain: false,
-			coarseMap: true,
-			relief: 700,
-		});
+		const live = new PlanetSettings({ plain: false, relief: 700 });
 		expect(live.coarseMapRuns).toBe(true);
 		expect(live.relief).toBe(700);
 	});
@@ -160,26 +151,22 @@ describe("the pause", () => {
 	});
 });
 
-describe("the height map off", () => {
-	// The pause forces the height map off, so these carry `plain: false` to
-	// reach the knob's own behaviour.
+describe("the plain planet", () => {
+	// **There is one switch, and it is the pause.** The map is the terrain and
+	// nothing else makes ground, so the only state that is not a map is the
+	// smooth sphere the level of detail is judged against.
 	it("takes the ground to nothing at all", () => {
-		const off = new PlanetSettings({
-			plain: false,
-			coarseMap: false,
-			relief: 900,
-		});
+		const off = new PlanetSettings({ plain: true, relief: 900 });
 		expect(off.relief).toBe(0);
 		expect(off.maxElevation).toBe(1);
 		expect(off.groundSpan).toBe(2);
 	});
 
-	it("skips the map-resolution problems, since nothing reads that knob", () => {
+	it("skips the map-resolution problems, since nothing reads the map", () => {
 		// This combination would refuse for being too fine a map cell if the
-		// height map were on.
+		// map were running.
 		const off = new PlanetSettings({
-			plain: false,
-			coarseMap: false,
+			plain: true,
 			coarseSpacing: 1,
 			blockSize: 4,
 		});
@@ -191,7 +178,6 @@ describe("the height map off", () => {
 		// the two knobs into each other before either is read.
 		const shallow = new PlanetSettings({
 			plain: false,
-			coarseMap: true,
 			relief: 900,
 			crustMetres: 200,
 		});
@@ -311,7 +297,6 @@ describe("the two layers", () => {
 		// ground that would not exist. Refusing beats building it invisibly.
 		const tooFine = new PlanetSettings({
 			plain: false,
-			coarseMap: true,
 			terrainFeature: 500,
 			terrainFeatureScale: 8,
 			terrainOctaves: 8,
@@ -397,21 +382,21 @@ describe("a curve round-trips through a query string", () => {
 });
 
 describe("boolean knobs round-trip through a query string", () => {
-	it("reads coarseMap, paused and timeOfDay back out", () => {
+	it("reads plain, paused and timeOfDay back out", () => {
 		const params = new PlanetSettings({
-			coarseMap: false,
+			plain: true,
 			paused: true,
 			timeOfDay: 0.75,
 		}).toParams();
 		const back = PlanetSettings.fromParams(params);
-		expect(back.knobs.coarseMap).toBe(false);
+		expect(back.knobs.plain).toBe(true);
 		expect(back.knobs.paused).toBe(true);
 		expect(back.knobs.timeOfDay).toBe(0.75);
 	});
 
 	it("leaves an unset boolean at its default", () => {
 		const back = PlanetSettings.fromParams(new URLSearchParams());
-		expect(back.knobs.coarseMap).toBe(PLANET_DEFAULTS.coarseMap);
+		expect(back.knobs.plain).toBe(PLANET_DEFAULTS.plain);
 		expect(back.knobs.paused).toBe(PLANET_DEFAULTS.paused);
 	});
 

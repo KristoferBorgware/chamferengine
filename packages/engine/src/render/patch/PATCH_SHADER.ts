@@ -28,6 +28,17 @@ struct VertexOut {
 	@location(1)       metres : f32,
 	@location(2)       raw    : f32,
 	@location(3)       layer  : f32,
+	/**
+	 * The height of the surface itself, which is not the metres above it.
+	 *
+	 * **A cell's numbers are flat across it and its surface is not.** Every
+	 * vertex of a hexagon carries that cell's own height, because the material
+	 * bands are per cell in the world too -- so metres does not change across a
+	 * cell and nothing can be measured off how fast it changes. The y of the
+	 * position is the surface: corners stand at the blend of the three cells
+	 * meeting there, so it runs smoothly from one cell into the next.
+	 */
+	@location(4)       height : f32,
 };
 
 @vertex
@@ -42,12 +53,38 @@ fn vertexMain(
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
+	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
 	// Both layers are on the vertex and the uniform picks one, so choosing a
 	// picture of one of them costs a frame rather than a rebuilt mesh.
 	out.layer = select(terrain, mountain, view.mode.z > 0.5);
 	return out;
+}
+
+/**
+ * A ring every hundred metres, on the same grid the two material lines sit on.
+ *
+ * **Shading says which way a hillside faces and never says how far it fell.**
+ * A contour is the only thing on the picture a height can be read off, and it
+ * is what turns an even green slope into a shape.
+ *
+ * **The line is a width on the screen, not a band of metres.** Three metres of
+ * elevation is half a cell on a steep face and a whole hillside on a gentle
+ * one, so a band stated in metres draws hairlines across the mountains and
+ * blotches across the plain -- which is a picture of nothing. The change in
+ * height across one pixel says how wide a pixel is in metres of climb, so
+ * dividing by it gives a line one pixel wide wherever it lands, and no line at
+ * all where the ground is too flat for one to mean anything.
+ */
+fn contoured(tint : vec3f, height : f32) -> vec3f {
+	let rings = height / 100.0;
+	let across = fwidth(rings);
+	if (across <= 0.0) {
+		return tint;
+	}
+	let to = abs(fract(rings - 0.5) - 0.5) / across;
+	return tint * mix(0.5, 1.0, clamp(to - 1.2, 0.0, 1.0));
 }
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
@@ -109,6 +146,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	} else {
 		tint = vec3f(0.92, 0.94, 0.97);
 	}
-	return shade(tint, in.normal, 0.28);
+	return shade(contoured(tint, in.height), in.normal, 0.28);
 }
 `;
