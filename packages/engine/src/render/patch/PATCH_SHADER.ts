@@ -15,7 +15,7 @@ export const PATCH_SHADER = /* wgsl */ `
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
-	/** x: which picture. y: lines rather than surface. z: contour rings on. */
+	/** x: which picture. y: lines rather than surface. z: which control layer. */
 	mode     : vec4f,
 	/** The two material lines in metres, and the field's own range here. */
 	lines    : vec4f,
@@ -36,14 +36,17 @@ fn vertexMain(
 	@location(1) normal   : vec3f,
 	@location(2) metres   : f32,
 	@location(3) raw      : f32,
-	@location(4) layer    : f32,
+	@location(4) terrain  : f32,
+	@location(5) mountain : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
 	out.metres = metres;
 	out.raw = raw;
-	out.layer = layer;
+	// Both layers are on the vertex and the uniform picks one, so choosing a
+	// picture of one of them costs a frame rather than a rebuilt mesh.
+	out.layer = select(terrain, mountain, view.mode.z > 0.5);
 	return out;
 }
 
@@ -105,11 +108,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		tint = vec3f(0.42, 0.42, 0.45);
 	} else {
 		tint = vec3f(0.92, 0.94, 0.97);
-	}
-	if (view.mode.z > 0.5) {
-		let into = fract(in.metres / 100.0) * 100.0;
-		let edge = smoothstep(0.0, 3.0, into) * smoothstep(100.0, 97.0, into);
-		tint *= mix(0.62, 1.0, edge);
 	}
 	return shade(tint, in.normal, 0.28);
 }

@@ -1,10 +1,18 @@
-import type { BenchFacts, BenchReply, BenchSections } from "./BenchMessage.js";
+import type {
+	BenchFacts,
+	BenchReply,
+	BenchSections,
+	BenchSheet,
+} from "./BenchMessage.js";
 import type { PatchLook } from "chamfer/render";
+import type { PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { Mat4, Vec3 } from "chamfer/math";
 import { PATCH_KNOBS, PlanetSettings } from "./PlanetSettings.js";
 import { ParameterPanel } from "./ParameterPanel.js";
+import { outlinePatch } from "./outlinePatch.js";
+import { paintSheet } from "./paintSheet.js";
 import {
 	PatchRenderer,
 	createGpuContext,
@@ -20,14 +28,33 @@ import {
  * a residency loop: the map is the terrain, so a picture of the map is a
  * picture of the world.
  *
- * **And nothing here builds the map either.** The grid, the noise, the water,
- * the hexagons and the flat picture are all a worker's; this file holds the
- * knobs, the canvas and the camera, and paints what arrives. The patch is drawn
- * cell by cell, one hexagon per map cell, because the lattice is what the world
- * is made of and a square grid of quads is a picture of a different surface.
+ * **And nothing here builds the map either.** The grid, the noise, the water
+ * and the hexagons are all a worker's; this file holds the knobs, the canvas
+ * and the camera, and paints what arrives. The patch is drawn cell by cell, one
+ * hexagon per map cell, because the lattice is what the world is made of and a
+ * square grid of quads is a picture of a different surface.
+ *
+ * **Every knob is live, and the ones that only choose a picture never leave
+ * this thread.** What the worker sends is samples rather than pixels and both
+ * control layers rather than one, so a different picture is a repaint and a
+ * uniform -- no map, no field, no mesh, and nothing to wait for.
  */
 
 const canvas = document.getElementById("viewport") as HTMLCanvasElement;
+
+/**
+ * The knobs that decide what is drawn rather than what is there.
+ *
+ * A change to one of these is a repaint of the small picture, a uniform on the
+ * patch and a redraw of the graph, all on this thread. Everything else -- the
+ * world's own rows, and where the patch stands -- goes to the worker.
+ */
+const VIEW_KNOBS: readonly (keyof PlanetKnobs)[] = [
+	"patchPicture",
+	"patchSurface",
+	"patchMap",
+	"patchAlong",
+];
 let settings = PlanetSettings.fromParams(new URLSearchParams(location.search));
 
 /** Which number the shader's picture branch takes. */
@@ -147,10 +174,14 @@ let sections: BenchSections | null = null;
 let renderer: PatchRenderer | null = null;
 let span = 1;
 
+/** The last sheet of samples for each picture, which every repaint is drawn from. */
+let patchSheet: BenchSheet | null = null;
+let planetSheet: BenchSheet | null = null;
+
 const look = {
 	picture: 0,
 	surface: "solid" as PatchLook["surface"],
-	contours: true,
+	layer: "terrain" as PatchLook["layer"],
 	rockLine: GROUND_LINES.rock,
 	snowLine: GROUND_LINES.snow,
 	rawLow: -1,
@@ -160,19 +191,36 @@ const look = {
 /**
  * A knob moved.
  *
+ * **A picture is never a build.** Choosing what to look at is a choice made
+ * while looking at the last thing, so it happens on this thread and in this
+ * frame -- even mid-build, which is when a reader is most likely to be reaching
+ * for it.
+ *
  * **One build in flight, and the newest values always next.** A slider dragged
  * across its range fires on every step and a map is most of a second, so acting
  * on each one queues them faster than any of them finishes. A change during a
  * build is remembered rather than queued, and the build that lands starts it.
  */
 function moved(draft: PlanetSettings): void {
+	const was = settings.knobs;
 	settings = draft;
 	back.href = `./planet.html?${planetParams()}`;
+	if (onlyTheView(was, draft.knobs)) {
+		show();
+		return;
+	}
 	if (busy) {
 		pending = true;
 		return;
 	}
 	ask();
+}
+
+/** Whether everything that moved between two drafts is a picture. */
+function onlyTheView(was: PlanetKnobs, now: PlanetKnobs): boolean {
+	for (const key of Object.keys(now) as (keyof PlanetKnobs)[])
+		if (was[key] !== now[key] && !VIEW_KNOBS.includes(key)) return false;
+	return true;
 }
 
 function ask(): void {
@@ -204,6 +252,8 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 	facts0 = reply.facts;
 	sections = reply.sections;
 	span = Math.max(1, reply.facts.span);
+	patchSheet = reply.patch;
+	if (reply.planet) planetSheet = reply.planet;
 	if (reply.geometry && renderer) {
 		renderer.upload({
 			vertices: reply.geometry.vertices,
@@ -221,22 +271,54 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
 	}
-	if (mapCanvas.width !== reply.picture.width) {
-		mapCanvas.width = reply.picture.width;
-		mapCanvas.height = reply.picture.height;
-	}
-	mapContext.putImageData(
-		new ImageData(reply.picture.pixels, reply.picture.width),
-		0,
-		0,
-	);
-	graph.draw(sections, settings.knobs.patchAlong);
 	says = "";
 	busy = false;
-	say();
-	render();
+	// **The share the gate is open over is a count, not a number the row
+	// holds.** Mountain line is a fraction of the terrain curve's own reach, so
+	// the same 0.5 opens the gate over a third of one planet and a fiftieth of
+	// another; only a finished map says which.
+	panel.note(
+		"mountainLine",
+		`${(reply.facts.overLine * 100).toFixed(1)}% of the planet is above it`,
+	);
+	show();
 	if (pending) ask();
 };
+
+/**
+ * Draw everything this thread owns, from what the last build handed over.
+ *
+ * The small picture, the contour graph, the facts and the patch -- all four
+ * from buffers already here, so a knob that only chooses a picture costs one
+ * pass over a rectangle of samples and a frame.
+ */
+function show(): void {
+	paint();
+	if (sections) graph.draw(sections, settings.knobs.patchAlong);
+	say();
+	render();
+}
+
+/** The small picture: whichever sheet is asked for, in whichever picture. */
+function paint(): void {
+	const planet = settings.knobs.patchMap === "planet";
+	const sheet = planet ? planetSheet : patchSheet;
+	if (!sheet) return;
+	if (mapCanvas.width !== sheet.width || mapCanvas.height !== sheet.height) {
+		mapCanvas.width = sheet.width;
+		mapCanvas.height = sheet.height;
+	}
+	const image = mapContext.createImageData(sheet.width, sheet.height);
+	paintSheet(sheet, settings.knobs.patchPicture, image.data);
+	if (planet && facts0)
+		outlinePatch(image.data, sheet.width, sheet.height, {
+			latitude: settings.knobs.patchLatitude,
+			longitude: settings.knobs.patchLongitude,
+			span: facts0.span,
+			radius: settings.radius,
+		});
+	mapContext.putImageData(image, 0, 0);
+}
 
 /** The lines under the picture: what this world is, and what the build is doing. */
 function say(): void {
@@ -269,15 +351,15 @@ function say(): void {
 				`<b>${(f.bands[2]! * 100).toFixed(0)}%</b> rock · ` +
 				`<b>${(f.bands[3]! * 100).toFixed(0)}%</b> snow`
 			: "") +
-		(k.patchLift === 1
-			? f
-				? `<br>true scale · relief is <b>${(
-						(100 * (f.highest - f.lowest)) /
-						Math.max(1, f.span)
-					).toFixed(1)}%</b> of the patch`
-				: ""
-			: `<br><span class="bench-busy">drawn <b>${k.patchLift}x</b> ` +
-				"taller than the world builds it</span>") +
+		// **True scale, always.** A patch drawn taller than the world builds it
+		// is a picture of a planet nobody can walk on, and the number it was
+		// there to make visible is this one.
+		(f
+			? `<br>true scale · relief is <b>${(
+					(100 * (f.highest - f.lowest)) /
+					Math.max(1, f.span)
+				).toFixed(1)}%</b> of the patch`
+			: "") +
 		(k.seaLevel < 0 && f
 			? `<br>sea drained <b>${(-k.seaLevel).toLocaleString("en-US")} m</b> — ` +
 				`the tallest point is <b>${Math.round(f.summit).toLocaleString("en-US")} m</b> ` +
@@ -310,7 +392,7 @@ function render(): void {
 	const k = settings.knobs;
 	look.picture = PICTURE_INDEX[k.patchPicture] ?? 0;
 	look.surface = k.patchSurface;
-	look.contours = k.patchContours;
+	look.layer = k.patchPicture === "mountain" ? "mountain" : "terrain";
 
 	const reach = span * camera.distance;
 	const eye = new Vec3(

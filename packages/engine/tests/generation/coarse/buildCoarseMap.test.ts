@@ -240,3 +240,46 @@ describe("sampling a fine cell", () => {
 		}
 	});
 });
+
+describe("the mountain line", () => {
+	const grid = new CoarseGrid(LEVEL);
+	const share = (mountainLine: number): number =>
+		layeredHeight(grid, seedFromString("chamfer"), { mountainLine })
+			.overLine;
+
+	/**
+	 * The number the row shows is a count, and this is why it is worth showing:
+	 * the line is a fraction of the terrain curve's own reach and the curve
+	 * decides how much world lands in the top of it, so the same fraction opens
+	 * the gate over wildly different amounts of planet.
+	 */
+	it("falls as the line rises, and never rises", () => {
+		let last = 1.0001;
+		for (const line of [0, 0.25, 0.5, 0.75, 0.95]) {
+			const now = share(line);
+			expect(now).toBeLessThanOrEqual(last);
+			last = now;
+		}
+	});
+
+	it("is the whole planet at the bottom of the curve and little at the top", () => {
+		expect(share(0)).toBeGreaterThan(0.99);
+		expect(share(0.95)).toBeLessThan(0.1);
+	});
+
+	it("counts the cells the map is built from", () => {
+		const line = 0.5;
+		const field = layeredHeight(grid, seedFromString("chamfer"), {
+			mountainLine: line,
+		});
+		// Every cell whose terrain curve stands above the line, counted here
+		// the long way round: the share is that count over the grid's own
+		// cells, so a hundredth of a cell of rounding is a real disagreement.
+		expect(field.overLine * grid.count).toBeCloseTo(
+			Math.round(field.overLine * grid.count),
+			9,
+		);
+		expect(field.overLine).toBeGreaterThan(0);
+		expect(field.overLine).toBeLessThan(1);
+	});
+});

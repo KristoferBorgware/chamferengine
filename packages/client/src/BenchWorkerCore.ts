@@ -3,12 +3,12 @@ import type {
 	BenchReady,
 	BenchRequest,
 	BenchSections,
+	BenchSheet,
 	BenchStep,
 } from "./BenchMessage.js";
 import { BenchWorld } from "./BenchWorld.js";
 import { PlanetSettings } from "./PlanetSettings.js";
 import { coarsePatchMesh } from "chamfer/mesh";
-import { paintPatch } from "./paintPatch.js";
 import { patchField, patchFrame } from "./patchField.js";
 import { positionOf } from "chamfer/coordinates";
 
@@ -21,9 +21,15 @@ const PLANET_WIDE = 256;
  * **The thread that draws holds no map, no grid and no field.** A level-8 grid
  * is 31 MB of directions and rings, the noise pass over it is most of a second,
  * and the droplet pass is ten times that; all three happen here, and what
- * crosses back is what a picture is made of -- a mesh, a row of heights, and a
- * rectangle of pixels. The buffers are moved rather than copied, so a patch of
- * seven megabytes costs a pointer.
+ * crosses back is what a picture is made of -- a mesh, a row of heights, and
+ * two rectangles of samples. The buffers are moved rather than copied, so a
+ * patch of seven megabytes costs a pointer.
+ *
+ * **Samples cross back rather than pixels, and that is what makes a picture
+ * free.** Which picture is drawn is chosen while looking at the last one, so a
+ * round trip to a worker for it would be a choice made and then waited for.
+ * Every picture is a colour per sample of the same five fields, so the fields
+ * cross once and the thread that draws paints whichever is asked for.
  *
  * Nothing in this file mentions `Worker` or `postMessage`, so it is tested
  * rather than only exercised. The browser half is the file that receives a
@@ -38,6 +44,10 @@ export class BenchWorkerCore {
 
 	/** What the last finished build drew, so an unmoved patch is not rebuilt. */
 	private patchKey = "";
+	private cellsDrawn = 0;
+
+	/** Which world the last sent planet sheet was of, so an unmoved one is not resent. */
+	private planetKey = "";
 
 	*steps(request: BenchRequest): Generator<BenchStep | BenchReady> {
 		const settings = new PlanetSettings(request.knobs);
@@ -53,17 +63,14 @@ export class BenchWorkerCore {
 		if (!grid || !this.world.fit) return;
 		const k = settings.knobs;
 		const frame = patchFrame(k.patchLatitude, k.patchLongitude);
-		const layer =
-			k.patchPicture === "mountain"
-				? this.world.mountain
-				: this.world.terrain;
 
 		const field = patchField(
 			grid,
 			{
 				height: this.world.height,
 				raw: this.world.raw,
-				layer,
+				terrain: this.world.terrain,
+				mountain: this.world.mountain,
 				cut: this.world.delta,
 			},
 			{
@@ -75,17 +82,17 @@ export class BenchWorkerCore {
 		);
 
 		// The mesh is rebuilt when the ground under it moved or the patch did,
-		// and never when only the picture changed: a picture is a uniform.
+		// and never when only the picture changed: a picture is a uniform, and
+		// both control layers ride on the vertex so neither is a rebuild
+		// either.
 		const wanted = JSON.stringify([
 			this.world.ms,
 			k.patchLatitude,
 			k.patchLongitude,
 			k.patchCells,
-			k.patchLift,
-			k.patchPicture === "mountain" ? "mountain" : "terrain",
 		]);
 		let geometry: BenchGeometry | null = null;
-		let cellsDrawn = 0;
+		let cellsDrawn = this.cellsDrawn;
 		let span = field.span;
 		if (wanted !== this.patchKey) {
 			this.patchKey = wanted;
@@ -99,10 +106,10 @@ export class BenchWorkerCore {
 				at: frame.up,
 				cells: k.patchCells,
 				radius: settings.radius,
-				exaggeration: k.patchLift,
 				height: this.world.height,
 				raw: this.world.raw,
-				layer,
+				terrain: this.world.terrain,
+				mountain: this.world.mountain,
 			});
 			geometry = {
 				vertices: patch.vertices,
@@ -113,13 +120,20 @@ export class BenchWorkerCore {
 				rawHigh: patch.rawHigh,
 			};
 			cellsDrawn = patch.cellCount;
+			this.cellsDrawn = cellsDrawn;
 			span = patch.span;
 		}
 
-		const picture =
-			k.patchMap === "planet"
-				? this.planet(settings, field.span)
-				: this.patch(field, settings);
+		// The planet sheet is the whole map read at one pixel a place, so it
+		// moves when the ground does and not when the patch walks across it.
+		// A sent buffer is gone from here, so what stands in for sending it
+		// again is sending nothing.
+		const planetKey = String(this.world.ms);
+		let planet: BenchSheet | null = null;
+		if (planetKey !== this.planetKey) {
+			this.planetKey = planetKey;
+			planet = this.planet();
+		}
 
 		const sections: BenchSections = {
 			across: field.across,
@@ -140,12 +154,14 @@ export class BenchWorkerCore {
 				bands: this.world.bands,
 				summit: this.world.summit,
 				report: this.world.report,
+				overLine: this.world.overLine,
 				span,
 				lowest: field.lowest,
 				highest: field.highest,
 				landShare: field.landShare,
 			},
-			picture,
+			patch: this.patch(field),
+			planet,
 			geometry,
 			sections,
 		};
@@ -153,10 +169,16 @@ export class BenchWorkerCore {
 
 	/** The buffers a reply carries, so the caller can hand them over rather than copy. */
 	transfers(reply: BenchReady): ArrayBuffer[] {
-		const out: ArrayBuffer[] = [
-			reply.picture.pixels.buffer,
-			reply.sections.height.buffer,
-		];
+		const out: ArrayBuffer[] = [reply.sections.height.buffer];
+		for (const sheet of [reply.patch, reply.planet])
+			if (sheet)
+				out.push(
+					sheet.metres.buffer,
+					sheet.raw.buffer,
+					sheet.terrain.buffer,
+					sheet.mountain.buffer,
+					sheet.cut.buffer,
+				);
 		if (reply.geometry)
 			out.push(
 				reply.geometry.vertices.buffer,
@@ -166,30 +188,32 @@ export class BenchWorkerCore {
 		return out;
 	}
 
-	/** The patch, one pixel a sampled point. */
-	private patch(
-		field: ReturnType<typeof patchField>,
-		settings: PlanetSettings,
-	): BenchReady["picture"] {
+	/**
+	 * The patch, one sample a pixel.
+	 *
+	 * The rows are turned over here rather than where they are painted: north
+	 * is up on a picture and the field is read from the south edge outward, and
+	 * a picture that is drawn six ways should be flipped once.
+	 */
+	private patch(field: ReturnType<typeof patchField>): BenchSheet {
 		const n = field.across - 1;
-		const pixels = new Uint8ClampedArray(n * n * 4);
-		const cutScale = this.world.report?.scale ?? 1;
+		const sheet = this.sheet(n, n);
 		for (let r = 0; r < n; r++)
 			for (let q = 0; q < n; q++) {
 				const from = r * field.across + q;
-				paintPatch(pixels, ((n - 1 - r) * n + q) * 4, {
-					metres: field.height[from]!,
-					raw: field.raw[from]!,
-					layer: field.layer[from]!,
-					cut: field.cut[from]!,
-					cutScale,
-					rawLow: field.rawLow,
-					rawHigh: field.rawHigh,
-					picture: settings.knobs.patchPicture,
-					contours: settings.knobs.patchContours,
-				});
+				const to = (n - 1 - r) * n + q;
+				sheet.metres[to] = field.height[from]!;
+				sheet.raw[to] = field.raw[from]!;
+				sheet.terrain[to] = field.terrain[from]!;
+				sheet.mountain[to] = field.mountain[from]!;
+				sheet.cut[to] = field.cut[from]!;
 			}
-		return { width: n, height: n, pixels };
+		return {
+			...sheet,
+			rawLow: field.rawLow,
+			rawHigh: field.rawHigh,
+			cutScale: this.world.report?.scale ?? 1,
+		};
 	}
 
 	/**
@@ -199,20 +223,11 @@ export class BenchWorkerCore {
 	 * and no case analysis. It stretches the poles, and it is a picture of where
 	 * things are rather than a map anything is measured off.
 	 */
-	private planet(
-		settings: PlanetSettings,
-		patchSpan: number,
-	): BenchReady["picture"] {
+	private planet(): BenchSheet {
 		const grid = this.world.cells!;
 		const wide = PLANET_WIDE;
 		const tall = wide / 2;
-		const pixels = new Uint8ClampedArray(wide * tall * 4);
-		const k = settings.knobs;
-		const layer =
-			k.patchPicture === "mountain"
-				? this.world.mountain
-				: this.world.terrain;
-		const cutScale = this.world.report?.scale ?? 1;
+		const sheet = this.sheet(wide, tall);
 		let rawLow = Infinity;
 		let rawHigh = -Infinity;
 		for (const v of this.world.raw) {
@@ -224,64 +239,37 @@ export class BenchWorkerCore {
 			for (let q = 0; q < wide; q++) {
 				const longitude = ((q + 0.5) / wide) * 360 - 180;
 				const dir = positionOf({ latitude, longitude, altitude: 0 }, 1);
-				paintPatch(pixels, (r * wide + q) * 4, {
-					metres: grid.sampleAt(this.world.height, dir),
-					raw: grid.sampleAt(this.world.raw, dir),
-					layer: grid.sampleAt(layer, dir),
-					cut: this.world.delta
-						? grid.sampleAt(this.world.delta, dir)
-						: 0,
-					cutScale,
-					rawLow,
-					rawHigh,
-					picture: k.patchPicture,
-					contours: k.patchContours,
-				});
+				const at = r * wide + q;
+				sheet.metres[at] = grid.sampleAt(this.world.height, dir);
+				sheet.raw[at] = grid.sampleAt(this.world.raw, dir);
+				sheet.terrain[at] = grid.sampleAt(this.world.terrain, dir);
+				sheet.mountain[at] = grid.sampleAt(this.world.mountain, dir);
+				if (this.world.delta)
+					sheet.cut[at] = grid.sampleAt(this.world.delta, dir);
 			}
 		}
-		this.outline(pixels, wide, tall, settings, patchSpan);
-		return { width: wide, height: tall, pixels };
+		return {
+			...sheet,
+			rawLow,
+			rawHigh,
+			cutScale: this.world.report?.scale ?? 1,
+		};
 	}
 
-	/** Where the patch is standing, so the two pictures are one place. */
-	private outline(
-		pixels: Uint8ClampedArray,
-		wide: number,
-		tall: number,
-		settings: PlanetSettings,
-		patchSpan: number,
-	): void {
-		const k = settings.knobs;
-		const half = patchSpan / 2 / settings.radius;
-		const lat = (k.patchLatitude * Math.PI) / 180;
-		const across = half / Math.max(0.15, Math.cos(lat));
-		const left = Math.round(
-			((k.patchLongitude + 180) / 360) * wide -
-				(across / (2 * Math.PI)) * wide,
-		);
-		const top = Math.round(
-			(0.5 - k.patchLatitude / 180) * tall - (half / Math.PI) * tall,
-		);
-		const width = Math.max(
-			2,
-			Math.round(((across * 2) / (2 * Math.PI)) * wide),
-		);
-		const height = Math.max(2, Math.round(((half * 2) / Math.PI) * tall));
-		const dot = (x: number, y: number): void => {
-			if (x < 0 || y < 0 || x >= wide || y >= tall) return;
-			const at = (y * wide + x) * 4;
-			pixels[at] = 255;
-			pixels[at + 1] = 180;
-			pixels[at + 2] = 84;
-			pixels[at + 3] = 255;
+	/** Five empty fields of one size, which is what every picture is drawn from. */
+	private sheet(
+		width: number,
+		height: number,
+	): Omit<BenchSheet, "rawLow" | "rawHigh" | "cutScale"> {
+		const count = width * height;
+		return {
+			width,
+			height,
+			metres: new Float32Array(count),
+			raw: new Float32Array(count),
+			terrain: new Float32Array(count),
+			mountain: new Float32Array(count),
+			cut: new Float32Array(count),
 		};
-		for (let x = left; x <= left + width; x++) {
-			dot(x, top);
-			dot(x, top + height);
-		}
-		for (let y = top; y <= top + height; y++) {
-			dot(left, y);
-			dot(left + width, y);
-		}
 	}
 }

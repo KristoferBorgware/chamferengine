@@ -120,6 +120,14 @@ export class BenchWorld {
 	/** The tallest ground on the planet, in metres above sea level. */
 	summit = 0;
 
+	/**
+	 * How much of the planet stands above the mountain line, `0` to `1`.
+	 *
+	 * A property of the shape stage, so it survives an erosion run: what the
+	 * gate lets through is decided before a single droplet falls.
+	 */
+	overLine = 0;
+
 	/** The grid the fields are indexed by, once there is one. */
 	get cells(): CoarseGrid | null {
 		return this.grid;
@@ -170,6 +178,7 @@ export class BenchWorld {
 			this.raw = Float32Array.from(field.raw);
 			this.terrain = field.terrain as Float32Array<ArrayBuffer>;
 			this.mountain = field.mountain as Float32Array<ArrayBuffer>;
+			this.overLine = field.overLine;
 			this.shapeKey = keys.shape;
 			this.metreKey = "";
 		}

@@ -40,7 +40,6 @@ export interface PatchPixel {
 	readonly rawLow: number;
 	readonly rawHigh: number;
 	readonly picture: PatchPicture;
-	readonly contours: boolean;
 }
 
 /**
@@ -119,12 +118,6 @@ export function paintPatch(
 	} else {
 		for (let ch = 0; ch < 3; ch++) color[ch] = band[ch]!;
 		shade = 0.72 + 0.28 * Math.min(1, (pixel.metres % 100) / 100);
-	}
-	if (pixel.contours) {
-		// A ring every hundred metres, on the same grid the two material lines
-		// sit on.
-		const into = ((pixel.metres % 100) + 100) % 100;
-		if (into < 4) shade *= 0.6;
 	}
 	px[at] = 255 * Math.pow(Math.min(1, color[0] * shade), 1 / 2.2);
 	px[at + 1] = 255 * Math.pow(Math.min(1, color[1] * shade), 1 / 2.2);

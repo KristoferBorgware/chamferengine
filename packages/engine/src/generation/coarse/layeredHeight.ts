@@ -33,6 +33,18 @@ export interface LayeredField {
 	 */
 	readonly terrain: Float32Array;
 	readonly mountain: Float32Array;
+
+	/**
+	 * How much of the planet stands above the mountain line, `0` to `1`.
+	 *
+	 * The gate is what decides where a range may grow, and where that is is
+	 * not readable off the line's own number: the line is a fraction of the
+	 * terrain curve's reach and the curve decides how much world lands in the
+	 * top of it, so `0.5` can open the gate over a third of a planet or over a
+	 * fiftieth of one. Counted over every cell of the map, because the line is
+	 * a property of the world and a patch can be entirely on one side of it.
+	 */
+	readonly overLine: number;
 }
 
 /**
@@ -145,6 +157,7 @@ export function layeredHeight(
 	const terrainOf = new Float32Array(grid.count);
 	const mountainOf = new Float32Array(grid.count);
 	const gated = s.merge === "gated";
+	let aboveLine = 0;
 	for (let cell = 0; cell < grid.count; cell++) {
 		const x = grid.directions[cell * 3]!;
 		const y = grid.directions[cell * 3 + 1]!;
@@ -152,6 +165,7 @@ export function layeredHeight(
 		const terrainRaw = octaveNoise(x, y, z, terrainSeed, terrain);
 		const shaped = splineAt(s.terrain.curve, terrainRaw);
 		terrainOf[cell] = shaped;
+		if (shaped > lineHeight) aboveLine++;
 		let mount = 1;
 		if (s.mountainLayer) {
 			mount = splineAt(
@@ -176,5 +190,10 @@ export function layeredHeight(
 		}
 		raw[cell] = shaped * 2 - 1 + term;
 	}
-	return { raw, terrain: terrainOf, mountain: mountainOf };
+	return {
+		raw,
+		terrain: terrainOf,
+		mountain: mountainOf,
+		overLine: aboveLine / Math.max(1, grid.count),
+	};
 }

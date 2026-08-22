@@ -14,10 +14,12 @@
  *
  * Every vertex carries what the pictures need, so switching between them is a
  * uniform rather than a rebuild: the ground in metres, the field before sea
- * level was taken off it, and whichever control layer is being shown.
+ * level was taken off it, and **both** control layers. Carrying only the one
+ * being shown would make the picture a property of the mesh, and choosing a
+ * picture would cost a rebuild of the thing the picture is of.
  */
 export interface PatchGeometry {
-	/** Position, normal, metres, raw and layer per vertex: 9 floats. */
+	/** Position, normal, metres, raw and the two layers per vertex: 10 floats. */
 	readonly vertices: Float32Array<ArrayBuffer>;
 
 	/** Triangles, three indices each. */
@@ -46,5 +48,5 @@ export interface PatchGeometry {
 	readonly landShare: number;
 }
 
-/** Floats per vertex: position, normal, metres, raw, layer. */
-export const PATCH_STRIDE = 9;
+/** Floats per vertex: position, normal, metres, raw, terrain, mountain. */
+export const PATCH_STRIDE = 10;
