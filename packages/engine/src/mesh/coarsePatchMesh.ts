@@ -17,17 +17,15 @@ export interface PatchOptions {
 	/** The planet's radius in metres, which turns an angle into a distance. */
 	readonly radius: number;
 
-	/** How much taller than the world the ground is drawn. */
-	readonly exaggeration: number;
-
 	/** The ground in metres above sea level, one value per cell. */
 	readonly height: Float32Array;
 
 	/** The field before sea level was taken off it, one value per cell. */
 	readonly raw: Float32Array;
 
-	/** Whichever control layer the picture is showing, one value per cell. */
-	readonly layer: Float32Array;
+	/** What each layer's curve returned, one value per cell. */
+	readonly terrain: Float32Array;
+	readonly mountain: Float32Array;
 }
 
 /** The three axes of the patch: out of the ground, east, and north. */
@@ -62,7 +60,7 @@ export function coarsePatchMesh(
 	grid: CoarseGrid,
 	options: PatchOptions,
 ): PatchGeometry {
-	const { at, cells, radius, exaggeration, height, raw, layer } = options;
+	const { at, cells, radius, height, raw, terrain, mountain } = options;
 	const n = grid.n;
 	const frame = frameAt(at);
 	// One cell is `CELL_CONSTANT * radius / n` metres across, so it subtends
@@ -139,7 +137,8 @@ export function coarsePatchMesh(
 				const degree = rim.length;
 				const metres = height[cell]!;
 				const unitless = raw[cell]!;
-				const control = layer[cell]!;
+				const onTerrain = terrain[cell]!;
+				const onMountain = mountain[cell]!;
 				if (metres < lowest) lowest = metres;
 				if (metres > highest) highest = metres;
 				if (unitless < rawLow) rawLow = unitless;
@@ -154,18 +153,25 @@ export function coarsePatchMesh(
 				// The normal starts at nothing and every triangle round the
 				// cell adds its own, so what comes out is the cell's own plane.
 				const push = (x: number, y: number, z: number): void => {
-					corners.push(x, y, z, 0, 0, 0, metres, unitless, control);
+					corners.push(
+						x,
+						y,
+						z,
+						0,
+						0,
+						0,
+						metres,
+						unitless,
+						onTerrain,
+						onMountain,
+					);
 				};
-				push(flat[0], metres * exaggeration, flat[1]);
+				push(flat[0], metres, flat[1]);
 				for (let k = 0; k < degree; k++) {
 					const a = neighbour(face, n, i, j, k);
 					const b = neighbour(face, n, i, j, (k + 1) % degree);
 					flatten(rim[k]!, flat);
-					push(
-						flat[0],
-						cornerHeight(face, i, j, a, b) * exaggeration,
-						flat[1],
-					);
+					push(flat[0], cornerHeight(face, i, j, a, b), flat[1]);
 				}
 				for (let k = 0; k < degree; k++) {
 					const one = base + 1 + k;

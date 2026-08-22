@@ -249,12 +249,6 @@ export interface PlanetKnobs {
 	/** Which way the contour graph's sections run. */
 	patchAlong: PatchAlong;
 
-	/** How much taller than the world the preview draws the ground. */
-	patchLift: number;
-
-	/** Whether the preview rings the ground every hundred metres. */
-	patchContours: boolean;
-
 	/** Metres from the top of the tallest ground to the floor of the world. */
 	crustMetres: number;
 
@@ -525,8 +519,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchSurface: "solid",
 	patchMap: "patch",
 	patchAlong: "x",
-	patchLift: 1,
-	patchContours: true,
 	crustMetres: 1232,
 	atmosphereTop: 2050,
 	zenithDepth: 0.272,
@@ -719,8 +711,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchAlong: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
-	patchLift: { low: 1, high: 8, step: 0.25, rebuilds: false, unit: "x" },
-	patchContours: { ...TOGGLE, rebuilds: false },
 	landFraction: {
 		low: 0.05,
 		high: 0.8,
@@ -833,8 +823,6 @@ export const PATCH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"patchSurface",
 	"patchMap",
 	"patchAlong",
-	"patchLift",
-	"patchContours",
 ] as (keyof PlanetKnobs)[]);
 
 /** What each of the bench's named knobs may be, so a link cannot say otherwise. */

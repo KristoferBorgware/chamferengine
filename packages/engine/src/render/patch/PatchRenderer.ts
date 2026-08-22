@@ -11,8 +11,8 @@ export interface PatchLook {
 	/** Whether the surface, the cell rims, or both are drawn. */
 	readonly surface: "solid" | "wire" | "both";
 
-	/** Whether a ring is drawn every hundred metres. */
-	readonly contours: boolean;
+	/** Which control layer a picture of one layer draws. */
+	readonly layer: "terrain" | "mountain";
 
 	/** The two elevations that cut land into three materials, in metres. */
 	readonly rockLine: number;
@@ -101,6 +101,7 @@ export class PatchRenderer {
 					{ shaderLocation: 2, offset: 24, format: "float32" },
 					{ shaderLocation: 3, offset: 28, format: "float32" },
 					{ shaderLocation: 4, offset: 32, format: "float32" },
+					{ shaderLocation: 5, offset: 36, format: "float32" },
 				],
 			},
 		];
@@ -182,7 +183,10 @@ export class PatchRenderer {
 		// A light from over the viewer's left shoulder, fixed, so the same
 		// setting looks the same whenever it is looked at.
 		this.data.set([0.42, 0.78, 0.46, 0], 16);
-		this.data.set([look.picture, 0, look.contours ? 1 : 0, 0], 20);
+		this.data.set(
+			[look.picture, 0, look.layer === "mountain" ? 1 : 0, 0],
+			20,
+		);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,

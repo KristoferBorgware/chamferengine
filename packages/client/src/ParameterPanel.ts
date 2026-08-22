@@ -98,6 +98,75 @@ interface Group {
  */
 const GROUPS: Group[] = [
 	{
+		// **The patch is a place, and where it stands is not a world
+		// parameter.** Every other group here is read by the engine; these two
+		// move the bench and leave the ground exactly where it was, so a link
+		// carrying them describes the same planet.
+		title: "The patch",
+		where: "bench",
+		knobs: [
+			{
+				key: "patchLatitude",
+				label: "Latitude",
+				digits: 0,
+			},
+			{
+				key: "patchLongitude",
+				label: "Longitude",
+				digits: 0,
+			},
+			{
+				key: "patchCells",
+				label: "Cells across",
+				digits: 0,
+			},
+		],
+	},
+	{
+		title: "The view \u2014 not the world",
+		where: "bench",
+		folded: true,
+		knobs: [
+			{
+				key: "patchMap",
+				label: "Map shows",
+				choices: [
+					{ value: "patch", label: "The patch" },
+					{ value: "planet", label: "The planet" },
+				],
+			},
+			{
+				key: "patchPicture",
+				label: "Picture",
+				choices: [
+					{ value: "ground", label: "Ground" },
+					{ value: "height", label: "Height" },
+					{ value: "raw", label: "Raw" },
+					{ value: "terrain", label: "Terrain layer" },
+					{ value: "mountain", label: "Mountain layer" },
+					{ value: "erosion", label: "What the water did" },
+				],
+			},
+			{
+				key: "patchSurface",
+				label: "Surface",
+				choices: [
+					{ value: "solid", label: "Solid" },
+					{ value: "wire", label: "Cell rims" },
+					{ value: "both", label: "Both" },
+				],
+			},
+			{
+				key: "patchAlong",
+				label: "Contour along",
+				choices: [
+					{ value: "x", label: "East" },
+					{ value: "z", label: "North" },
+				],
+			},
+		],
+	},
+	{
 		title: "The terrain layer",
 		where: "both",
 		knobs: [
@@ -299,7 +368,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "How finely it is drawn",
-		where: "both",
+		where: "bench",
 		folded: true,
 		knobs: [
 			{
@@ -325,7 +394,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The cell grid",
-		where: "both",
+		where: "bench",
 		folded: true,
 		knobs: [
 			{
@@ -346,84 +415,6 @@ const GROUPS: Group[] = [
 					s.crustCap === "asked"
 						? null
 						: `${(s.crustDepth * s.knobs.blockSize).toFixed(0)} m, ${s.crustDepth} layers`,
-			},
-		],
-	},
-	{
-		// **The patch is a place, and where it stands is not a world
-		// parameter.** Every other group here is read by the engine; these two
-		// move the bench and leave the ground exactly where it was, so a link
-		// carrying them describes the same planet.
-		title: "The patch",
-		where: "bench",
-		knobs: [
-			{
-				key: "patchLatitude",
-				label: "Latitude",
-				digits: 0,
-			},
-			{
-				key: "patchLongitude",
-				label: "Longitude",
-				digits: 0,
-			},
-			{
-				key: "patchCells",
-				label: "Cells across",
-				digits: 0,
-			},
-		],
-	},
-	{
-		title: "The view \u2014 not the world",
-		where: "bench",
-		folded: true,
-		knobs: [
-			{
-				key: "patchMap",
-				label: "Map shows",
-				choices: [
-					{ value: "patch", label: "The patch" },
-					{ value: "planet", label: "The planet" },
-				],
-			},
-			{
-				key: "patchPicture",
-				label: "Picture",
-				choices: [
-					{ value: "ground", label: "Ground" },
-					{ value: "height", label: "Height" },
-					{ value: "raw", label: "Raw" },
-					{ value: "terrain", label: "Terrain layer" },
-					{ value: "mountain", label: "Mountain layer" },
-					{ value: "erosion", label: "What the water did" },
-				],
-			},
-			{
-				key: "patchSurface",
-				label: "Surface",
-				choices: [
-					{ value: "solid", label: "Solid" },
-					{ value: "wire", label: "Cell rims" },
-					{ value: "both", label: "Both" },
-				],
-			},
-			{
-				key: "patchAlong",
-				label: "Contour along",
-				choices: [
-					{ value: "x", label: "East" },
-					{ value: "z", label: "North" },
-				],
-			},
-			{
-				key: "patchLift",
-				label: "Height x",
-				digits: 2,
-			},
-			{
-				key: "patchContours",
-				label: "Ring every 100 m",
 			},
 		],
 	},
@@ -763,6 +754,18 @@ export class ParameterPanel {
 
 	/** Each named part's own element, so another pane can host one. */
 	private readonly sections = new Map<string, HTMLElement>();
+
+	/**
+	 * What a build measured about a knob, shown under it.
+	 *
+	 * **A knob whose number does not say what it does needs one.** Mountain
+	 * line is a fraction of the terrain curve's own reach, so the same `0.5`
+	 * opens the gate over a third of one planet and a fiftieth of another; the
+	 * share it actually reaches is a count over the map, which only a finished
+	 * build holds. `given` cannot say it, because a row is written from the
+	 * draft alone.
+	 */
+	private readonly measured = new Map<string, string>();
 	private problems!: HTMLElement;
 	private derived!: HTMLElement;
 	private applyButton!: HTMLButtonElement;
@@ -815,6 +818,17 @@ export class ParameterPanel {
 	/** Put an element at the bottom of the scrolling rows. */
 	footer(element: HTMLElement): void {
 		this.root.querySelector(".knobs-body")?.appendChild(element);
+	}
+
+	/**
+	 * Say what a build measured about one knob, under that knob's row.
+	 *
+	 * Text rather than a number, because what is worth saying differs per row
+	 * and the panel is not the thing that measured it. An empty string clears.
+	 */
+	note(key: keyof PlanetKnobs, text: string): void {
+		this.measured.set(key as string, text);
+		this.refresh();
 	}
 
 	/**
@@ -920,13 +934,18 @@ export class ParameterPanel {
 		liveInput.onchange = () => {
 			this.liveRebuild = liveInput.checked;
 		};
-		body.appendChild(live);
+		// **The bench is live and has nothing to opt into.** Its build runs in
+		// a worker and its picture is a repaint, so there is no trade to
+		// present: a checkbox for a thing that is always on is a question with
+		// one answer.
+		if (!this.bench) body.appendChild(live);
 
 		const bar = document.createElement("div");
 		bar.className = "knobs-bar";
 		this.applyButton = document.createElement("button");
 		this.applyButton.textContent = "Rebuild";
 		this.applyButton.onclick = () => this.rebuild();
+		// Kept off the bench for the same reason: nothing there waits for it.
 		const reset = document.createElement("button");
 		reset.textContent = "Defaults";
 		reset.onclick = () => {
@@ -937,7 +956,7 @@ export class ParameterPanel {
 		copy.onclick = () => {
 			void navigator.clipboard?.writeText(this.href());
 		};
-		bar.append(this.applyButton, reset, copy);
+		bar.append(...(this.bench ? [] : [this.applyButton]), reset, copy);
 		// **The way to the bench, carrying this world with it.** Choosing
 		// terrain numbers is looking at ground, and the bench is a page where
 		// the ground is the whole window rather than a picture over one.
@@ -965,11 +984,19 @@ export class ParameterPanel {
 		const digits = knob.digits ?? 0;
 		wrap.innerHTML =
 			`<label>${knob.label}` +
-			(range.rebuilds ? ' <i title="needs a rebuild">&#9679;</i>' : "") +
+			// **Neither marker means anything on the bench.** Every row there
+			// is live and every row redraws the ground, so a dot saying this
+			// one needs a rebuild and a tag saying this one reaches the map
+			// are two labels that are true of all of them.
+			(range.rebuilds && !this.bench
+				? ' <i title="needs a rebuild">&#9679;</i>'
+				: "") +
 			// The map pane answers to five knobs and not the other nineteen, and
 			// nothing on a slider used to say which. Turning Height scale and
 			// watching the map sit still is the shape of complaint this marks.
-			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
+			(knob.map && !this.bench
+				? ' <em title="the map redraws for this">map</em>'
+				: "") +
 			(toggle ? "" : "<b></b>") +
 			`</label><input type="${toggle ? "checkbox" : "range"}">` +
 			"<u></u>";
@@ -1006,7 +1033,10 @@ export class ParameterPanel {
 			}
 			const given = knob.given?.(this.settings) ?? null;
 			const wall = toggle ? null : this.wallOf(knob, range);
-			const said = [wall, given].filter(Boolean).join(" ");
+			const measured = this.measured.get(knob.key as string) || null;
+			const said = [wall, given, measured]
+				.filter(Boolean)
+				.join(" \u00b7 ");
 			answer.textContent = said;
 			answer.classList.toggle("some", said.length > 0);
 		};
@@ -1065,8 +1095,10 @@ export class ParameterPanel {
 		wrap.className = "knob curved";
 		wrap.innerHTML =
 			`<label>${knob.label}` +
-			' <i title="needs a rebuild">&#9679;</i>' +
-			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
+			(this.bench ? "" : ' <i title="needs a rebuild">&#9679;</i>') +
+			(knob.map && !this.bench
+				? ' <em title="the map redraws for this">map</em>'
+				: "") +
 			'</label><canvas width="280" height="84"></canvas>' +
 			"<u>drag \u00b7 click to add \u00b7 shift-click to remove</u>";
 		const canvas = wrap.querySelector("canvas")!;
@@ -1305,8 +1337,10 @@ export class ParameterPanel {
 		wrap.className = "knob";
 		wrap.innerHTML =
 			`<label>${knob.label}` +
-			' <i title="needs a rebuild">&#9679;</i>' +
-			(knob.map ? ' <em title="the map redraws for this">map</em>' : "") +
+			(this.bench ? "" : ' <i title="needs a rebuild">&#9679;</i>') +
+			(knob.map && !this.bench
+				? ' <em title="the map redraws for this">map</em>'
+				: "") +
 			`</label><select></select>`;
 		const select = wrap.querySelector("select")!;
 		for (const choice of knob.choices!) {

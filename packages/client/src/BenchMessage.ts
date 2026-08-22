@@ -53,6 +53,37 @@ export interface BenchFacts {
 
 	/** How much of the patch stands above the water. */
 	readonly landShare: number;
+
+	/** How much of the planet stands above the mountain line, `0` to `1`. */
+	readonly overLine: number;
+}
+
+/**
+ * One rectangle of the map, one entry per pixel of a flat picture.
+ *
+ * **Samples, not pixels.** Which picture is drawn is a choice made while
+ * looking at the last one, so it must cost nothing: the worker sends what every
+ * picture is drawn from and the thread that draws paints whichever is asked
+ * for. Five fields over a 256-wide planet is 640 KB moved rather than copied,
+ * against a whole map build for the alternative.
+ */
+export interface BenchSheet {
+	readonly width: number;
+	readonly height: number;
+
+	/** The ground in metres, the field with no unit, and each layer's curve. */
+	readonly metres: Float32Array<ArrayBuffer>;
+	readonly raw: Float32Array<ArrayBuffer>;
+	readonly terrain: Float32Array<ArrayBuffer>;
+	readonly mountain: Float32Array<ArrayBuffer>;
+
+	/** Metres erosion moved the ground, and what a picture of it saturates at. */
+	readonly cut: Float32Array<ArrayBuffer>;
+	readonly cutScale: number;
+
+	/** What the field reached here, which the Raw picture is drawn against. */
+	readonly rawLow: number;
+	readonly rawHigh: number;
 }
 
 /** The patch as the renderer takes it: the buffers, moved rather than copied. */
@@ -83,12 +114,18 @@ export interface BenchReady {
 	readonly token: number;
 	readonly facts: BenchFacts;
 
-	/** The flat picture, already painted, as rows of `RGBA`. */
-	readonly picture: {
-		readonly width: number;
-		readonly height: number;
-		readonly pixels: Uint8ClampedArray<ArrayBuffer>;
-	};
+	/** The patch as a flat rectangle, which the small map draws one of. */
+	readonly patch: BenchSheet;
+
+	/**
+	 * The whole planet as a flat rectangle, or nothing when it did not change.
+	 *
+	 * A buffer is moved rather than copied, so the worker no longer holds one
+	 * it has sent: what it can do instead of sending again is say nothing, and
+	 * the thread that draws keeps the one it has. Moving the patch leaves the
+	 * planet exactly where it was.
+	 */
+	readonly planet: BenchSheet | null;
 
 	/** The patch mesh, or nothing when only the picture changed. */
 	readonly geometry: BenchGeometry | null;

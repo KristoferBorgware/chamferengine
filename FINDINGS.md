@@ -1256,23 +1256,61 @@ once someone is actually leaning on Live rebuild rather than trying it once.
 
 ---
 
-### F-060 — Three things the noise lab does that the terrain bench does not
+### F-064 — The patch mesh is rebuilt whole whenever the ground moves, and only its heights changed
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, timing a curve drag on the terrain bench after taking the
+noise pass out of it
+**Where:** `packages/engine/src/mesh/coarsePatchMesh.ts`;
+`packages/client/src/BenchWorkerCore.ts`, the `patchKey` cache
+
+**What happens.** A knob that moves the ground rebuilds the patch from nothing:
+a scan of every cell on the planet to find the ones in the patch (660,000 dot
+products at level 8), then `cellCorners` and six `neighbour` calls per selected
+cell, then 190,000 vertices pushed into a plain array. Measured in the browser
+on the shipped world, that is about **130 ms of a 410 ms** live update, and in
+node against the other stages it is `513 ms` where the whole surface pass is
+`1,465 ms`.
+
+**None of it depends on the heights.** Which cells the patch holds, where their
+corners sit in the flat frame, which three cells meet at each corner, and every
+index and line — all of that answers to where the patch stands and how wide it
+is. A curve drag moves the patch not at all. What changes is four floats a
+vertex: the height, the field, and the two layers.
+
+**Why it matters.** It is the largest remaining cost of a live drag now that
+the octave stacks are cached, and it is paid on every update of every knob that
+touches the ground — which on this page is nearly all of them.
+
+**What would fix it.** The same split the surface pass just took: a
+`patchLayout(grid, {at, cells, radius})` holding the cell list, the flat
+positions, the corner triples, the indices and the lines, and a
+`patchVertices(layout, fields)` that fills the buffer. The worker already
+carries a `patchKey` saying whether the patch moved, so it would hold the
+layout under exactly that key and refill under the ground's. `coarsePatchMesh`
+stays as the two of them called together, the way `layeredHeight` now is.
+
+---
+
+### F-063 — Two things the noise lab does that the terrain bench does not
 
 **Kind:** gap
 **Milestone:** 0.5.0
 **Priority:** low
 **Effort:** small
-**Found:** 2026-08-22, checking the bench against the lab row by row before the
-lab is retired
+**Found:** 2026-08-22, closing F-060's first item and finding the other two
+still standing
 **Where:** `packages/client/src/terrain.ts`;
-`packages/client/src/ParameterPanel.ts`, the bench's groups
+`packages/engine/src/render/patch/PATCH_SHADER.ts`
 
 **What happens.** The bench carries every knob the lab has, both flat pictures,
-the contour graph, the curve editors and every line of the readout but three.
-
-**A note under Mountain line** saying what share of the planet stands above it.
-The lab counts that while it samples the sphere; the bench would have to count
-it over the map's cells, which is a pass it does not otherwise make.
+the contour graph, the curve editors and every line of the readout but two.
+F-060 named three; the note under **Mountain line** is now there, counted over
+the map's own cells while it is built and shown as *40.3% of the planet is
+above it* on the shipped world.
 
 **A note under Sea level** saying how much of the patch draining just handed
 back. It is the number that says what the knob bought, and what a person wants
@@ -1285,17 +1323,15 @@ them -- so this is parity rather than a regression, and it is still the one
 picture that has to be read on a map instead of on the ground.
 
 **Why it matters.** Nobody is hurt while the lab is still there. It matters the
-day the lab is deleted, because these are the three things somebody would go
-back to it for, and going back would mean tuning against a page whose metres are
+day the lab is deleted, because these are the two things somebody would go back
+to it for, and going back would mean tuning against a page whose metres are
 fitted differently from the engine's.
 
-**What would fix it.** The two notes are the same shape as the bench's other
-readout lines: count the cells above the line while the map is built, and count
-the patch's own cells that came out from under the water when the drain moved.
-The picture is a fifth branch in `PATCH_SHADER` and a tenth float on the vertex,
-which is the cut in metres -- the mesh already rebuilds when the ground moves,
-so nothing else has to change.
-
+**What would fix it.** The note is the same shape as the bench's other readout
+lines: count the patch's own cells that came out from under the water when the
+drain moved. The picture is a fifth branch in `PATCH_SHADER` reading the cut in
+metres, which is an eleventh float on the vertex -- the mesh already rebuilds
+when the ground moves, so nothing else has to change.
 
 ---
 
@@ -1396,6 +1432,50 @@ fully shadowed at a 5 degree sun, 4.6% at 20 and 0.0% at 60. Shadows here are a
 dawn and dusk feature, which is a property of the terrain rather than of the
 march.
 
+
+---
+
+### F-060 — Three things the noise lab does that the terrain bench does not
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-22, checking the bench against the lab row by row before the
+lab is retired
+**Closed:** 2026-08-22, part fixed — the Mountain line note is on the bench;
+the other two carry on as F-063
+**Where:** `packages/client/src/terrain.ts`;
+`packages/client/src/ParameterPanel.ts`, the bench's groups
+
+**What happens.** The bench carries every knob the lab has, both flat pictures,
+the contour graph, the curve editors and every line of the readout but three.
+
+**A note under Mountain line** saying what share of the planet stands above it.
+The lab counts that while it samples the sphere; the bench would have to count
+it over the map's cells, which is a pass it does not otherwise make.
+
+**A note under Sea level** saying how much of the patch draining just handed
+back. It is the number that says what the knob bought, and what a person wants
+to know about a knob stated in metres.
+
+**The erosion picture in the plane.** Picking *What the water did* redraws the
+flat map in red and blue and leaves the patch drawn as ground. The lab does the
+same -- its plane shader carries four pictures and the erosion one is not among
+them -- so this is parity rather than a regression, and it is still the one
+picture that has to be read on a map instead of on the ground.
+
+**Why it matters.** Nobody is hurt while the lab is still there. It matters the
+day the lab is deleted, because these are the three things somebody would go
+back to it for, and going back would mean tuning against a page whose metres are
+fitted differently from the engine's.
+
+**What would fix it.** The two notes are the same shape as the bench's other
+readout lines: count the cells above the line while the map is built, and count
+the patch's own cells that came out from under the water when the drain moved.
+The picture is a fifth branch in `PATCH_SHADER` and a tenth float on the vertex,
+which is the cut in metres -- the mesh already rebuilds when the ground moves,
+so nothing else has to change.
 
 ---
 

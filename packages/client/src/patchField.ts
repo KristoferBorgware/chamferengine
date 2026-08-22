@@ -26,8 +26,9 @@ export interface PatchField {
 	/** The field before sea level was taken off it. */
 	readonly raw: Float32Array;
 
-	/** Whichever control layer the picture is showing. */
-	readonly layer: Float32Array;
+	/** What each layer's curve returned, so a picture of either costs no rebuild. */
+	readonly terrain: Float32Array;
+	readonly mountain: Float32Array;
 
 	/** Metres erosion moved the ground, zero everywhere when the water is off. */
 	readonly cut: Float32Array;
@@ -82,7 +83,8 @@ export function patchField(
 	fields: {
 		readonly height: Float32Array;
 		readonly raw: Float32Array;
-		readonly layer: Float32Array;
+		readonly terrain: Float32Array;
+		readonly mountain: Float32Array;
 		readonly cut: Float32Array | null;
 	},
 	options: {
@@ -97,7 +99,8 @@ export function patchField(
 	const count = across * across;
 	const height = new Float32Array(count);
 	const raw = new Float32Array(count);
-	const layer = new Float32Array(count);
+	const terrain = new Float32Array(count);
+	const mountain = new Float32Array(count);
 	const cut = new Float32Array(count);
 	const half = (cells / 2) * step;
 	let lowest = Infinity;
@@ -128,7 +131,8 @@ export function patchField(
 			const metres = index.sampleAt(fields.height, dir);
 			height[at] = metres;
 			raw[at] = index.sampleAt(fields.raw, dir);
-			layer[at] = index.sampleAt(fields.layer, dir);
+			terrain[at] = index.sampleAt(fields.terrain, dir);
+			mountain[at] = index.sampleAt(fields.mountain, dir);
 			if (fields.cut) cut[at] = index.sampleAt(fields.cut, dir);
 			if (metres < lowest) lowest = metres;
 			if (metres > highest) highest = metres;
@@ -144,7 +148,8 @@ export function patchField(
 		span: cells * step,
 		height,
 		raw,
-		layer,
+		terrain,
+		mountain,
 		cut,
 		lowest,
 		highest,
