@@ -1,6 +1,7 @@
 import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
+import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
@@ -37,6 +38,15 @@ const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
 
 /** Metres of water a look passes through before it is all water. */
 const SEA_CLARITY = ${SEA_CLARITY}.0;
+
+/**
+ * How much of the light comes from the sun rather than from the sky.
+ *
+ * The world's own balance, so a patch of ground here is lit the way the same
+ * ground is lit there. What is left of the difference between the two pictures
+ * is the sun's height, which is the time of day and not a property of either.
+ */
+const SUN_SHARE = ${SUN_SHARE};
 
 struct View {
 	viewProj : mat4x4f,
@@ -205,6 +215,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	} else {
 		tint = SNOW;
 	}
-	return shade(contoured(tint, in.height), in.normal, 0.62);
+	return shade(contoured(tint, in.height), in.normal, SUN_SHARE);
 }
 `;
