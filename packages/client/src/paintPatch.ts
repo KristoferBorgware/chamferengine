@@ -39,6 +39,10 @@ export interface PatchPixel {
 	readonly cutScale: number;
 	readonly rawLow: number;
 	readonly rawHigh: number;
+
+	/** The ground's own range here, which Height is drawn against. */
+	readonly low: number;
+	readonly high: number;
 	readonly picture: PatchPicture;
 }
 
@@ -94,7 +98,14 @@ export function paintPatch(
 								Math.max(1e-6, pixel.rawHigh - pixel.rawLow),
 						),
 					)
-				: Math.max(0, Math.min(1, (pixel.metres + 400) / 800));
+				: Math.max(
+						0,
+						Math.min(
+							1,
+							(pixel.metres - pixel.low) /
+								Math.max(1, pixel.high - pixel.low),
+						),
+					);
 		const v = 255 * Math.pow(t, 1 / 2.2);
 		px[at] = v;
 		px[at + 1] = v;

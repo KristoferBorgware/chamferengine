@@ -202,6 +202,8 @@ const look = {
 	snowLine: GROUND_LINES.snow,
 	rawLow: -1,
 	rawHigh: 1,
+	low: 0,
+	high: 1,
 };
 
 /**
@@ -290,6 +292,8 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
+		look.low = reply.facts.lowest;
+		look.high = reply.facts.highest;
 	}
 	says = "";
 	busy = false;

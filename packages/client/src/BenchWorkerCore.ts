@@ -236,6 +236,8 @@ export class BenchWorkerCore {
 			...sheet,
 			rawLow: field.rawLow,
 			rawHigh: field.rawHigh,
+			low: field.lowest,
+			high: field.highest,
 			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
@@ -279,6 +281,10 @@ export class BenchWorkerCore {
 			...sheet,
 			rawLow,
 			rawHigh,
+			// The whole planet's own range, because this picture is of the
+			// whole planet: a patch's ends would blow out everything taller.
+			low: this.world.floor,
+			high: this.world.summit,
 			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
@@ -287,7 +293,7 @@ export class BenchWorkerCore {
 	private sheet(
 		width: number,
 		height: number,
-	): Omit<BenchSheet, "rawLow" | "rawHigh" | "cutScale"> {
+	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high" | "cutScale"> {
 		const count = width * height;
 		return {
 			width,

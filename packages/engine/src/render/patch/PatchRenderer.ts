@@ -21,6 +21,19 @@ export interface PatchLook {
 	/** What the field reached in this patch, which Raw is drawn against. */
 	readonly rawLow: number;
 	readonly rawHigh: number;
+
+	/**
+	 * The ground this patch reached in metres, which Height is drawn against.
+	 *
+	 * **A fixed scale in metres is a picture that is white wherever the world
+	 * is tall.** Height used to run a `-400 m` to `400 m` ramp whatever stood
+	 * there, so on the shipped world -- which reaches `1,100 m` -- everything
+	 * above the rock line was one flat white and the picture said nothing about
+	 * the shape of it. It reads the patch's own range now, the way Raw already
+	 * did.
+	 */
+	readonly low: number;
+	readonly high: number;
 }
 
 /**
@@ -39,7 +52,7 @@ export interface PatchUpload {
 }
 
 /** A matrix, the light, the mode, and the four numbers the pictures read. */
-const VIEW_BYTES = 64 + 16 + 16 + 16;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16;
 
 /**
  * Draws one patch of the surface, cell by cell.
@@ -205,13 +218,19 @@ export class PatchRenderer {
 		}
 
 		this.data.set(viewProj, 0);
-		// A light from over the viewer's left shoulder, fixed, so the same
-		// setting looks the same whenever it is looked at.
-		this.data.set([0.42, 0.78, 0.46, 0], 16);
+		// **A low sun from over the viewer's left shoulder**, fixed, so the same
+		// setting looks the same whenever it is looked at. Low is the whole
+		// point: at 52 degrees up, which is where this used to sit, a hillside
+		// of 11 degrees -- the median of this world's land -- turns the light
+		// by a tenth and the ground reads as one flat colour. At 35 it turns it
+		// by a quarter. Left, because relief is read the way it is drawn on a
+		// map, with the light over the reader's shoulder.
+		this.data.set([-0.82, 0.57, 0.08, 0], 16);
 		this.data.set(
 			[look.picture, 0, look.layer === "mountain" ? 1 : 0, 0],
 			20,
 		);
+		this.data.set([look.low, look.high, 0, 0], 28);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,

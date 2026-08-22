@@ -23,6 +23,8 @@ function sheet(): BenchSheet {
 		cutScale: 4,
 		rawLow: -1,
 		rawHigh: 1,
+		low: -300,
+		high: 900,
 	};
 }
 

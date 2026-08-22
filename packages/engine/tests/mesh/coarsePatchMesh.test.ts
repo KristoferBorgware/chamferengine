@@ -95,6 +95,38 @@ describe("the two halves of the patch", () => {
 		expect([...layout.lines]).toEqual([...fresh.lines]);
 	});
 
+	/**
+	 * **A normal pointing into the ground is a surface no light reaches.** A
+	 * cell's rim is wound counter-clockwise as seen from outside the sphere, in
+	 * east and north, and a patch vertex is laid out as `(east, up, north)` --
+	 * which swaps two axes and flips the handedness. Taken the wrong way round,
+	 * every land normal came out more than 90 degrees from vertical, the sun's
+	 * dot product clamped to zero over the whole surface, and the preview was
+	 * lit by its ambient term alone.
+	 */
+	it("points its normals at the sky", () => {
+		const layout = patchLayout(grid, place);
+		const fill = patchVertices(layout, tall);
+		let up = 0;
+		let down = 0;
+		for (let v = 0; v < layout.of.length; v++) {
+			const y = fill.vertices[v * PATCH_STRIDE + 4]!;
+			if (y > 0) up++;
+			else down++;
+		}
+		expect(down).toBe(0);
+		expect(up).toBe(layout.of.length);
+
+		// And a normal is a unit vector, because the light divides by nothing.
+		for (let v = 0; v < layout.of.length; v += 37) {
+			const at = v * PATCH_STRIDE;
+			const x = fill.vertices[at + 3]!;
+			const y = fill.vertices[at + 4]!;
+			const z = fill.vertices[at + 5]!;
+			expect(Math.sqrt(x * x + y * y + z * z)).toBeCloseTo(1, 5);
+		}
+	});
+
 	it("moves the ground and nothing else", () => {
 		const layout = patchLayout(grid, place);
 		const high = patchVertices(layout, tall);

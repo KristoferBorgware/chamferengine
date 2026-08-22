@@ -19,6 +19,8 @@ struct View {
 	mode     : vec4f,
 	/** The two material lines in metres, and the field's own range here. */
 	lines    : vec4f,
+	/** The ground's own range in metres here, which Height is drawn against. */
+	ground   : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -87,10 +89,37 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
 	return tint * mix(0.5, 1.0, clamp(to - 1.2, 0.0, 1.0));
 }
 
+/**
+ * How much light reaches a face: a sun with a direction, and a sky without one.
+ *
+ * **A flat term for the sky is why a preview reads flat.** The old rule was one
+ * ambient number plus a dot product against the sun, so every face that turned
+ * away from the sun bottomed out at the same brightness whichever way it
+ * turned, and a landscape whose slopes are mostly gentle came out as one shade
+ * of green. This is the world's own two-term model (doc 16): the **sun** is one
+ * dot product against the face, and the **sky** is how much of it the face can
+ * see -- all of it looking up, and only what the ground throws back looking
+ * down. Both terms move with the normal, so a slope is lit differently from the
+ * ground beside it in shade as well as in sun.
+ *
+ * Up is +y: a patch is laid out in its own flat frame, east and north across
+ * and metres of ground up.
+ *
+ * The sun's share is what is passed in and the sky takes the rest, so the two
+ * sum to 1 and flat ground reads the same whatever the balance -- only what
+ * stands at an angle moves. A picture of a number rather than of a place takes
+ * less of it: the light is there to show the shape, not to be read off.
+ */
+fn lightOn(normal : vec3f, direct : f32) -> f32 {
+	let n = normalize(normal);
+	let lambert = max(0.0, dot(n, normalize(view.sun.xyz)));
+	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
+	return direct * lambert + (1.0 - direct) * openness;
+}
+
 /** A tint, lit by the fixed light and given the curve a screen expects. */
-fn shade(tint : vec3f, normal : vec3f, ambient : f32) -> vec4f {
-	let lit = ambient + (1.0 - ambient) * max(0.0, dot(normalize(normal), normalize(view.sun.xyz)));
-	return vec4f(pow(tint * lit, vec3f(1.0 / 2.2)), 1.0);
+fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
+	return vec4f(pow(tint * lightOn(normal, direct), vec3f(1.0 / 2.2)), 1.0);
 }
 
 @fragment
@@ -104,8 +133,13 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// elevation everywhere rather than saying which of the four blocks stands
 	// there, and Raw stops before sea level has been taken off the field.
 	if (picture == 1) {
-		let t = clamp((in.metres + 400.0) / 800.0, 0.0, 1.0);
-		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.28);
+		let t = clamp(
+			(in.metres - view.ground.x) /
+				max(1.0, view.ground.y - view.ground.x),
+			0.0,
+			1.0,
+		);
+		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.4);
 	}
 	if (picture == 2) {
 		let t = clamp(
@@ -125,7 +159,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return shade(
 			mix(vec3f(0.04, 0.05, 0.09), vec3f(0.6, 0.85, 1.0), clamp(in.layer, 0.0, 1.0)),
 			in.normal,
-			0.45,
+			0.3,
 		);
 	}
 
@@ -146,6 +180,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	} else {
 		tint = vec3f(0.92, 0.94, 0.97);
 	}
-	return shade(contoured(tint, in.height), in.normal, 0.28);
+	return shade(contoured(tint, in.height), in.normal, 0.62);
 }
 `;

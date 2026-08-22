@@ -27,6 +27,8 @@ export function paintSheet(
 			cutScale: sheet.cutScale,
 			rawLow: sheet.rawLow,
 			rawHigh: sheet.rawHigh,
+			low: sheet.low,
+			high: sheet.high,
 			picture,
 		});
 }
