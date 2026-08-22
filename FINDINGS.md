@@ -1296,7 +1296,10 @@ The picture is a fifth branch in `PATCH_SHADER` and a tenth float on the vertex,
 which is the cut in metres -- the mesh already rebuilds when the ground moves,
 so nothing else has to change.
 
+
 ---
+
+## Closed
 
 ### F-061 — The bench builds its map on the thread that draws
 
@@ -1328,9 +1331,25 @@ what the bench needs from it is the two layer fields it does not currently send.
 Slicing `layeredHeight` by cell range instead would keep the page live without a
 worker and is the smaller change, at the cost of a second copy of the loop.
 
+**Closed:** 2026-08-22, fixed. `BenchWorkerCore` runs the grid, the noise, the
+water, the hexagon mesh and the flat picture on a worker, and hands back what a
+picture is made of -- a mesh, a row of heights and a rectangle of pixels -- with
+the buffers moved rather than copied. The thread that draws holds no grid and no
+field.
+
+Measured by watching the frame clock while a fresh world is built at level 8:
+the build takes `1,546 ms` with the water off and `4,195 ms` with it on, and the
+page runs frames throughout. The one long gap left, `1,380 ms`, is **not the
+build**: uploading the mesh is `8 ms` and drawing the contour graph is `5 ms`,
+and the same gap appears with nothing being built at all -- turning the camera
+over a 176-cell patch costs a worst frame of `1,257 ms` and a median of `83 ms`,
+against `54 ms` and `34 ms` over a 48-cell one. That is the software rasteriser
+drawing 163,476 triangles, which is what this container has instead of a
+graphics card, and it says nothing about how fast the same frame is elsewhere.
+
+
 ---
 
-## Closed
 
 ### F-057 — The noise lab draws every world 11% taller than the engine builds it
 

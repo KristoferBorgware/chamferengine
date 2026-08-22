@@ -1,5 +1,5 @@
+import type { BenchSections } from "./BenchMessage.js";
 import type { PatchAlong } from "./PatchLook.js";
-import type { PatchField } from "./patchField.js";
 import { GROUND_LINES } from "chamfer/generation";
 
 /** The logical width the graph is drawn in, then scaled to the canvas. */
@@ -36,7 +36,7 @@ export class BenchGraph {
 		this.says = says;
 	}
 
-	draw(field: PatchField, along: PatchAlong): void {
+	draw(field: BenchSections, along: PatchAlong): void {
 		const scale = this.canvas.width / WIDTH;
 		const height = this.canvas.height / scale;
 		const g = this.ctx;
