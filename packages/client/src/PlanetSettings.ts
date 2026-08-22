@@ -184,11 +184,16 @@ export interface PlanetKnobs {
 	seaLevel: number;
 
 	/**
-	 * How hard the water cuts into the ground.
+	 * Whether water cuts into the ground at all.
 	 *
 	 * Off by default: neither walk passes the test a carving pass has to pass,
-	 * which is that the median hillslope holds while the tail grows.
+	 * which is that the median hillslope holds while the tail grows. It is the
+	 * slowest step of a map build by a wide margin, so turning it on costs a
+	 * rebuild that turning any other knob does not.
 	 */
+	erosionOn: boolean;
+
+	/** How hard the water cuts, once it is cutting at all. */
 	erosion: number;
 
 	/** How a droplet moves over the map. */
@@ -402,7 +407,11 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	relief: 1100,
 	seaDepth: 130,
 	seaLevel: 0,
-	erosion: 0,
+	erosionOn: false,
+	// **A strength the switch can actually reach.** Zero is what turns erosion
+	// off, and with a switch above it that is a slider position meaning the
+	// same as the switch: ticking the box would build the same world.
+	erosion: 0.5,
 	erosionWalk: "cell",
 	erosionMaxCut: DROPLET.maxCut,
 	erosionCutShare: DROPLET.cutShare,
@@ -506,6 +515,7 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"seaLevel",
 	"relief",
 	"seaDepth",
+	"erosionOn",
 	"erosion",
 	"erosionWalk",
 	"erosionMaxCut",
@@ -562,7 +572,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	// is exactly Sea depth down, so a lower level is a planet with no ocean and
 	// a slider position meaning the same as the one beside it.
 	seaLevel: { low: -1200, high: 0, step: 5, rebuilds: true, unit: "m" },
-	erosion: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	erosionOn: { ...TOGGLE, rebuilds: true },
+	erosion: { low: 0.05, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	erosionWalk: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
 	erosionMaxCut: {
 		low: 0.01,
@@ -975,7 +986,10 @@ export class PlanetSettings {
 			seaDepth: this.seaDepth,
 			landFraction: this.knobs.landFraction,
 			seaLevel: this.coarseMapRuns ? this.knobs.seaLevel : 0,
-			erosion: this.knobs.erosion,
+			// The switch is what turns the pass off, and off is a strength of
+			// zero: the pass returns on its first line and the ground is the
+			// noise exactly as it fell.
+			erosion: this.knobs.erosionOn ? this.knobs.erosion : 0,
 			erosionWalk: this.knobs.erosionWalk,
 			erosionMaxCut: this.knobs.erosionMaxCut,
 			erosionCutShare: this.knobs.erosionCutShare,

@@ -342,6 +342,7 @@ describe("the erosion rows", () => {
 
 	it("hands every erosion row to the engine", () => {
 		const options = new PlanetSettings({
+			erosionOn: true,
 			erosion: 0.4,
 			erosionWalk: "free",
 			erosionMaxCut: 0.03,
@@ -353,6 +354,25 @@ describe("the erosion rows", () => {
 		expect(options.erosionMaxCut).toBeCloseTo(0.03, 9);
 		expect(options.erosionCutShare).toBeCloseTo(0.1, 9);
 		expect(options.erosionInertia).toBeCloseTo(0.6, 9);
+	});
+
+	it("hands the engine a strength of zero when the switch is off", () => {
+		// Off is a strength of zero rather than a flag the pass reads: the pass
+		// returns on its first line and the ground is the noise exactly as it
+		// fell. That also means the map editor routes the switch to the erosion
+		// step, because it compares the options the engine is handed.
+		const off = new PlanetSettings({ erosionOn: false, erosion: 1 });
+		expect(off.coarseOptions().erosion).toBe(0);
+		const on = new PlanetSettings({ erosionOn: true, erosion: 1 });
+		expect(on.coarseOptions().erosion).toBe(1);
+	});
+
+	it("keeps the strength off its own bottom, because the switch is the off", () => {
+		// A slider that reaches zero beside a switch that means zero is a
+		// position meaning the same as the switch.
+		expect(new PlanetSettings({}).rangeFor("erosion").low).toBeGreaterThan(
+			0,
+		);
 	});
 });
 

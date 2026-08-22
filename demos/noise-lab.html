@@ -1921,18 +1921,31 @@
 					// water walks, so these are read over the whole planet on
 					// one grid before any of the pictures can be drawn. That
 					// grid is the map's own -- Map cell decides how many cells
-					// it holds, and therefore how long a run takes.
+					// it holds, and therefore how long a run takes, which is
+					// why the switch above the strength is what a person
+					// reaches for rather than dragging the slider to nothing.
 					group: "Erosion",
 					open: true,
 					rows: [
 						{
-							key: "erosion",
-							off: 0,
+							key: "erosionOn",
 							label: "Erosion",
-							low: 0,
+							type: "check",
+							value: false,
+						},
+						{
+							// **A strength the switch can actually reach.** Zero
+							// is what turns erosion off, and with a switch above
+							// it that is a slider position meaning the same as
+							// the switch: ticking the box would build the same
+							// world.
+							key: "erosion",
+							enabledWhen: (k) => k.erosionOn,
+							label: "Strength",
+							low: 0.05,
 							high: 1,
 							step: 0.05,
-							value: 0,
+							value: 0.5,
 							digits: 2,
 							note: () => {
 								if (erosion.busy)
@@ -1965,7 +1978,7 @@
 							// away, and spreads each cut over the three cells it
 							// is standing over.
 							key: "erosionWalk",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Droplets",
 							type: "select",
 							value: "cell",
@@ -1977,7 +1990,7 @@
 							// is gradient descent; at 0.9 it runs almost
 							// straight and leaves the ground behind it.
 							key: "erosionInertia",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Keeps direction",
 							low: 0,
 							high: 0.9,
@@ -1992,7 +2005,7 @@
 							// six times as far as any neighbour; at 0 the cut is
 							// flat across the seven.
 							key: "erosionCutShare",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Cut spread",
 							low: 0,
 							high: 1,
@@ -2007,7 +2020,7 @@
 							// is still a valley by the end and the shapes come
 							// out graded rather than pocked.
 							key: "erosionMaxCut",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Deepest cut",
 							low: 0.01,
 							high: 0.5,
@@ -2712,7 +2725,8 @@
 					ground,
 					cut: JSON.stringify([
 						ground,
-						value("erosion"),
+						knobs.erosionOn,
+						knobs.erosion,
 						knobs.erosionWalk,
 						knobs.erosionInertia,
 						knobs.erosionCutShare,
@@ -2770,7 +2784,7 @@
 			 */
 			async function refreshErosion() {
 				const k = derived();
-				const strength = value("erosion");
+				const strength = knobs.erosionOn ? knobs.erosion : 0;
 				if (strength <= 0) {
 					// Turning the knob to nothing abandons whatever is running
 					// and puts the ground back where the noise left it.

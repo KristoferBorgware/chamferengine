@@ -227,18 +227,26 @@ const GROUPS: Group[] = [
 		// **The one pass that is not a function of a point.** Every other knob
 		// here is read at the place it is asked about; water walks, so these
 		// are read over the whole planet on one grid before any of it can be
-		// drawn. Folded, because zero is what it is set to and neither walk
-		// carves yet: both take the median hillslope up rather than leaving it
-		// alone while the tail grows.
+		// drawn -- and that grid is the slowest step of a map build by a wide
+		// margin, so the switch above the strength is what a person reaches for
+		// rather than dragging the slider to nothing. Folded and off, because
+		// neither walk carves yet: both take the median hillslope up rather
+		// than leaving it alone while the tail grows.
 		title: "Erosion",
 		folded: true,
 		knobs: [
 			{
-				key: "erosion",
+				key: "erosionOn",
 				map: true,
 				label: "Erosion",
-				digits: 2,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "erosion",
+				map: true,
+				label: "Strength",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
 			},
 			{
 				key: "erosionWalk",
@@ -248,14 +256,14 @@ const GROUPS: Group[] = [
 					{ value: "cell", label: "Cell to cell" },
 					{ value: "free", label: "Free position" },
 				],
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
 			},
 			{
 				key: "erosionInertia",
 				map: true,
 				label: "Keeps direction",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
 				shownWhen: (k) => k.erosionWalk === "free",
 			},
 			{
@@ -263,7 +271,7 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Cut spread",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
 				shownWhen: (k) => k.erosionWalk === "cell",
 			},
 			{
@@ -271,7 +279,7 @@ const GROUPS: Group[] = [
 				map: true,
 				label: "Deepest cut",
 				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosion > 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
 			},
 		],
 	},
