@@ -283,6 +283,43 @@ so a band cut straight across it has the straight edges of the triangle it was
 interpolated over — foam in polygons. Moving the edge of the band by a noise
 field a few metres across gives it the ragged outline foam has.
 
+### The sea is in the shade of everything, being the lowest thing there is
+
+Sea level is the bottom of the world, so anything standing anywhere between the
+water and the sun is between the water and the sun. A headland at sunrise
+throws its shadow across the bay beside it as surely as across the ground
+behind it — and the shoreline is exactly where a person standing on a beach is
+looking, so a shadow that stopped there would stop in the one place it is most
+obvious.
+
+The water therefore walks the coarse map toward the sun, the same walk the
+ground takes ([doc 16](16-lighting.md)). It is the same walk in the literal
+sense: one piece of shader source, included by both, declaring its own bind
+group and taking the sun as an argument so it depends on nothing either shader
+has to hand it. Two copies of a march that reads a height map and steps toward
+a light would drift apart at the first tuning.
+
+What the shadow takes from the water is the sun's share and not the sky's: the
+hard highlight and the sunlit half of the tint go, and the sky the surface
+reflects stays exactly where it was. That is the same split the ground uses,
+and it is why shadowed water reads as darker water rather than as a hole.
+
+> **[measured]** `tools/frame-diff.mjs`, 48,400 pixels of a lake under a
+> mountain range at a low sun. Lit: mean 60.0. Shadowed: **53.5**, with the
+> ninety-fifth percentile of the ratio at **1.376** — the deepest part of the
+> shadow is more than a third darker than the same water in the open.
+
+### At night the moon lays a path across it
+
+The sun's highlight has a twin. The same half-vector, the moon's direction, a
+colder colour and a much dimmer one, gated by whether the moon is over this
+place's horizon and faded in as the day goes down.
+
+It is cut looser than the sun's — 0.975 against 0.985 — because a moon path on
+real water is a broad smear rather than a hard glint, and a threshold as tight
+as the sun's on a light that dim draws a handful of lit pixels rather than a
+path.
+
 ### Swell arrives in groups
 
 One more thing separates open water from a texture: real swell is not the same
@@ -660,6 +697,14 @@ triggers ([doc 14](14-meshing-and-lod.md)), at the same cost.
   at 3.4 m/s take the worst match anywhere in thirty seconds to **0.31**. The
   travelling bend is the biggest of the three: held still, the surface still
   comes back to **0.84**.
+- **The sea is in the shade of everything**, being the lowest thing there is.
+  It walks the coarse map toward the sun with the same shader source the ground
+  uses, and the shadow takes the sun's share and leaves the sky's: a lake under
+  a range reads **53.5** against **60.0** in the open, and the deepest part of
+  it is more than a third darker.
+- **At night the moon lays a path across it** — the sun's highlight with the
+  moon's direction, cut looser because a moon path is a smear rather than a
+  glint.
 - **A curtain closes the seams, and the draw order is the whole of it.** Two
   patches that meet are different sizes, so the finer one lifts a vertex off
   the line the coarser one draws and the water splits. Each patch hangs a strip

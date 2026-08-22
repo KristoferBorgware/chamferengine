@@ -389,6 +389,12 @@ What this cannot give is a block shadowing the block beside it: a map cell is
 landscape and leaves the metre-scale ones to the corner darkening the mesher
 already bakes.
 
+**The ground and the sea run the same walk**, as one piece of shader source
+both include. It declares its own bind group and takes the sun as an argument,
+so it depends on nothing either shader has to hand it — and the sea needs it
+most, being at sea level and therefore in the shade of anything at all
+([doc 25](25-water.md)).
+
 ### A gentle world has almost nowhere for a shadow to fall
 
 Ground shadows itself only where its own slope is steeper than the sun is

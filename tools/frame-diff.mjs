@@ -91,6 +91,10 @@ const flag = (name, fallback) => {
 // The readout is drawn over the world and says different things in the two
 // frames, so it is left out.
 const [sx, sy, sw, sh] = flag("--skip", "0,0,540,200").split(",").map(Number);
+// A box to compare and nothing else, for a question about one thing in the
+// picture rather than about the whole of it.
+const only = flag("--only", "");
+const [ox, oy, ow, oh] = only ? only.split(",").map(Number) : [0, 0, 0, 0];
 
 const ratios = [];
 let sumA = 0;
@@ -100,6 +104,8 @@ let counted = 0;
 for (let y = 0; y < a.height; y++) {
 	for (let x = 0; x < a.width; x++) {
 		if (x >= sx && x < sx + sw && y >= sy && y < sy + sh) continue;
+		if (only && (x < ox || x >= ox + ow || y < oy || y >= oy + oh))
+			continue;
 		const at = (y * a.width + x) * 3;
 		const la = (a.rgb[at] + a.rgb[at + 1] + a.rgb[at + 2]) / 3;
 		const lb = (b.rgb[at] + b.rgb[at + 1] + b.rgb[at + 2]) / 3;

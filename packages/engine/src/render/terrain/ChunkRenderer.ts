@@ -5,7 +5,7 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
-import { SunShadow } from "./SunShadow.js";
+import { SunShadow } from "../light/SunShadow.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 

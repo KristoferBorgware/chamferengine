@@ -1335,7 +1335,9 @@ when the ground moves, so nothing else has to change.
 
 ---
 
-### F-063 — The sea takes neither the shadow nor the moon
+## Closed
+
+### F-065 — The sea takes neither the shadow nor the moon
 
 **Kind:** gap
 **Milestone:** 0.5.0
@@ -1366,8 +1368,31 @@ product beside the sun's. What neither answers is whether a wave should shadow
 the wave in front of it, which the coarse map cannot see and is a separate
 question.
 
+**Closed:** 2026-08-22, and the march is shared rather than copied. It lives in
+`render/light/SHADOW_WGSL.ts` as one piece of shader source both the ground and
+the water include: it declares its own bind group and takes the sun as an
+argument, so it depends on nothing an including shader has to hand it. The
+`SunShadow` that owns the height map moved to `render/light/` with it, because
+a resource two subsystems read does not belong inside one of them.
 
-## Closed
+The sea's pipeline gains group 2 and sets it itself rather than relying on
+whatever drew before -- a pipeline with a shorter layout drops every binding
+past its own end. The shadow takes the sun's share of the water and leaves the
+sky's, so shadowed water reads as darker water rather than as a hole: measured
+over a lake under a mountain range at a low sun, 53.5 against 60.0 in the open,
+with the deepest part of the shadow more than a third darker.
+
+The moon gets its own highlight on the water, the sun's half-vector with the
+moon's direction and a colder, dimmer colour, cut looser at 0.975 against 0.985
+because a moon path is a broad smear and a threshold as tight as the sun's on a
+light that dim draws a handful of lit pixels. The sea reads the moon out of the
+frame the ground already writes, so nothing was added to its own uniform.
+
+Still unanswered, and a different question: whether a wave should shadow the
+wave in front of it. The coarse map cannot see one.
+
+
+---
 
 ### F-062 — Nothing casts a shadow, and the coarse map could do it in one march
 

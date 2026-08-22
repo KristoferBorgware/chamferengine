@@ -557,6 +557,22 @@ Violating any of these breaks the design. They are not tunable.
   filled from the face over it, which is the only place a blend can reach
   outside the triangle. It cannot shadow a block by its neighbour: a map cell
   is 32 m and a block is 1 m.
+- **THE GROUND AND THE SEA RUN ONE MARCH, NOT TWO** (`SHADOW_WGSL`, doc 16,
+  doc 25, F-065). The walk lives in `render/light/SHADOW_WGSL.ts` as one piece
+  of shader source both `TERRAIN_SHADER` and `SEA_SHADER` include; it declares
+  its own **group 2** and takes the sun as an **argument**, so it depends on
+  nothing an including shader has to hand it, and `SunShadow` moved to
+  `render/light/` because a resource two subsystems read does not belong inside
+  one of them. **Sea level is the bottom of the world**, so the water is in the
+  shade of anything at all -- and the shoreline is where a person on a beach is
+  looking, so a shadow stopping there stops where it is most obvious. The
+  shadow takes the sun's share and leaves the sky's, so shadowed water is
+  darker water rather than a hole: a lake under a range reads **53.5** against
+  **60.0** in the open, the 95th percentile of the ratio **1.376**. The moon
+  gets the sun's half-vector with its own direction, cut looser (**0.975**
+  against 0.985) because a moon path is a smear and the sun's threshold on a
+  light that dim draws a handful of pixels. **Each pipeline sets group 2
+  itself** -- one with a shorter layout drops every binding past its own end.
 - **A GENTLE WORLD HAS ALMOST NOWHERE FOR A SHADOW TO FALL**
   (`tools/trial-shadow.ts`, doc 16). Ground shades itself only where its own
   slope beats the sun's height, and the shipped ground runs **11.1°** at the

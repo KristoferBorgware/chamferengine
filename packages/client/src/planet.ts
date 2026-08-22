@@ -388,6 +388,7 @@ async function main(): Promise<void> {
 				shape.seaSurfaceRadius,
 				DEPTH,
 				seaLook(settings),
+				renderer.shadow,
 			);
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;

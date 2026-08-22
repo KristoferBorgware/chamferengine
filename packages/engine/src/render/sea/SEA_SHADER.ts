@@ -1,3 +1,5 @@
+import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
+
 /**
  * The sea: a spherical layer of the world at sea level, with waves on it.
  *
@@ -21,12 +23,15 @@
  * dot product has neither.
  */
 export const SEA_SHADER = /* wgsl */ `
+${SHADOW_WGSL}
 struct Frame {
 	viewProj : mat4x4f,
 	eye      : vec4f,
 	sun      : vec4f,
 	fog      : vec4f,
 	night    : vec4f,
+	sky      : vec4f,
+	moon     : vec4f,
 };
 @group(0) @binding(0) var<uniform> frame : Frame;
 
@@ -55,6 +60,9 @@ struct Sea {
 
 const AXIS_A = vec3f(0.86, 0.36, 0.36);
 const AXIS_B = vec3f(-0.31, 0.80, 0.51);
+
+/** What the moon lays on the water: a cold white, and never a bright one. */
+const MOON_ON_WATER = vec3f(0.40, 0.48, 0.62);
 
 /** One hashed value per lattice corner, from three wrapping multiplies. */
 fn hash13(p : vec3f) -> f32 {
@@ -501,11 +509,26 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	// waves default to 1.2 m over 90 m, which tilts the surface about five
 	// degrees, so the path is about ten degrees wide and it narrows to
 	// nothing if the waves are turned off.
+	// **What stands between the water and the sun is the same walk the ground
+	// takes.** A headland at sunrise throws its shadow across the bay beside
+	// it as well as across the ground, and the sea is at sea level -- the
+	// lowest thing there is -- so it is in the shade of anything at all.
+	let lit = sunReach(in.world, dir, frame.sun.xyz);
 	let half = normalize(toEye + frame.sun.xyz);
 	let raw = clamp(dot(normal, half), 0.0, 1.0);
 	let sheen = smoothstep(0.985, 0.996, raw);
 	let glint = smoothstep(0.9992, 0.9997, raw);
-	tint += (sheen * 0.22 + glint * 0.85) * sea.look.y * day;
+	tint += (sheen * 0.22 + glint * 0.85) * sea.look.y * day * lit;
+
+	// The same highlight for the moon, wider and far dimmer, so a night sea
+	// carries a path across it rather than being one flat sheet. Cut looser
+	// than the sun's: a moon path on real water is a broad smear, and a
+	// threshold as tight as the sun's would draw a handful of lit pixels.
+	let moonHalf = normalize(toEye + frame.moon.xyz);
+	let moonRaw = clamp(dot(normal, moonHalf), 0.0, 1.0);
+	let moonUp = clamp(dot(sea.up.xyz, frame.moon.xyz) * 6.0, 0.0, 1.0);
+	let moonPath = smoothstep(0.975, 0.995, moonRaw);
+	tint += MOON_ON_WATER * (moonPath * frame.moon.w * moonUp * (1.0 - day));
 
 	// Foam on the crests, banded rather than faded, so it reads as drawn.
 	// The crest reading is one number a vertex, so a band of it drawn
@@ -517,8 +540,10 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	let foam = smoothstep(line, line + 0.06, in.crest);
 	tint = mix(tint, vec3f(0.95, 0.98, 1.0), foam * sea.wave.w);
 
-	// Lit by the same sun the ground takes, and never black at night.
-	let sunlit = clamp(dot(normal, frame.sun.xyz), 0.0, 1.0);
+	// Lit by the same sun the ground takes, and never black at night. The
+	// shadow takes the sun's share of it and leaves the sky's, the way it
+	// does on land.
+	let sunlit = clamp(dot(normal, frame.sun.xyz), 0.0, 1.0) * lit;
 	let shade = mix(frame.night.y, 0.55 + 0.45 * sunlit, day);
 	let alpha = mix(sea.look.x, 1.0, through);
 	return vec4f(tint * shade, alpha);
