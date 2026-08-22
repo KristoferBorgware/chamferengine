@@ -87,6 +87,10 @@ export interface BenchSheet {
 	/** What the field reached here, which the Raw picture is drawn against. */
 	readonly rawLow: number;
 	readonly rawHigh: number;
+
+	/** What the ground reached here, which the Height picture is drawn against. */
+	readonly low: number;
+	readonly high: number;
 }
 
 /** The patch as the renderer takes it: the buffers, moved rather than copied. */
