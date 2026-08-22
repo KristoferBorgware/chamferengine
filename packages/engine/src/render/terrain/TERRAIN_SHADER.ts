@@ -134,6 +134,7 @@ fn lightOn(
 	normal : vec3f,
 	up : vec3f,
 	world : vec3f,
+	away : f32,
 	ambient : f32,
 	direct : f32,
 ) -> vec3f {
@@ -142,7 +143,7 @@ fn lightOn(
 	// Whether anything stands between here and the sun. Asked only where the
 	// sun would reach anyway, so a face already turned away costs nothing.
 	if (lambert > 0.0) {
-		lambert = lambert * sunReach(world, up, frame.sun.xyz);
+		lambert = lambert * sunLight(world, up, frame.sun.xyz, normal, away);
 	}
 	// How much of the sky this face can see, from all of it to the fraction a
 	// downward face gets back off the ground.
@@ -155,8 +156,8 @@ fn lightOn(
 	// that tint is enough to read as sky without turning grey stone blue.
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
-	let skyLight = tint * (ambient * openness * day);
-	let sunLight = sunColor(up) * (direct * lambert * day);
+	let fromSky = tint * (ambient * openness * day);
+	let fromSun = sunColor(up) * (direct * lambert * day);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a
 	// silhouette rather than a shape. It is measured against the place's own
@@ -165,7 +166,7 @@ fn lightOn(
 	// switching off.
 	let moonUp = clamp(dot(up, frame.moon.xyz) * 6.0, 0.0, 1.0);
 	let moonLambert = max(dot(normal, frame.moon.xyz), 0.0);
-	let moonLight =
+	let fromMoon =
 		MOON_COLOR * (frame.moon.w * moonLambert * moonUp * (1.0 - day));
 	// After dark the sky is what is left, and a face still sees more of it
 	// looking up than looking down. **The floor is under the ambient alone**,
@@ -173,7 +174,7 @@ fn lightOn(
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
 	let night = vec3f(frame.night.y * openness);
-	return max(night, skyLight) + sunLight + moonLight;
+	return max(night, fromSky) + fromSun + fromMoon;
 }
 
 @fragment
@@ -185,7 +186,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// moves.
 	let direct = frame.night.z;
 	let lit =
-		in.color * lightOn(normal, normalize(in.up), world, 1.0 - direct, direct);
+		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -202,7 +203,7 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = frame.night.z * 0.78;
 	let lit =
-		in.color * lightOn(normal, normalize(in.up), world, 1.0 - direct, direct);
+		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

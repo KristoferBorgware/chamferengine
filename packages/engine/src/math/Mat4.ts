@@ -28,6 +28,24 @@ export class Mat4 {
 		return new Mat4(m);
 	}
 
+	/**
+	 * A box projection for WebGPU's clip space, whose depth runs 0 to 1.
+	 *
+	 * What a sun needs rather than what a camera does: sunlight arrives along
+	 * parallel lines, so there is no vanishing point and a thing does not
+	 * shrink with distance. `near` and `far` are measured along the direction
+	 * of view, positive going away from it.
+	 */
+	static orthographic(half: number, near: number, far: number): Mat4 {
+		const m = new Float32Array(16);
+		m[0] = 1 / half;
+		m[5] = 1 / half;
+		m[10] = 1 / (near - far);
+		m[14] = near / (near - far);
+		m[15] = 1;
+		return new Mat4(m);
+	}
+
 	/** A view matrix looking from `eye` toward `target`. */
 	static lookAt(
 		eye: readonly [number, number, number],

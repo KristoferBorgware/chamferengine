@@ -5,6 +5,7 @@ import type { PassLayer } from "../PassLayer.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { SEA_SHADER } from "./SEA_SHADER.js";
+import type { CascadeShadow } from "../light/CascadeShadow.js";
 import type { SunShadow } from "../light/SunShadow.js";
 import { SEA_STRIDE, seaPatch } from "./seaPatch.js";
 import { joinPath } from "../../addressing/lattice/joinPath.js";
@@ -170,18 +171,23 @@ export class SeaRenderer implements PassLayer {
 	 */
 	private readonly shadow: SunShadow;
 
+	/** The sun's own view of what stands near, shared with the ground. */
+	private readonly cascades: CascadeShadow;
+
 	constructor(
 		ctx: GpuContext,
 		radius: number,
 		depth: number,
 		look: SeaLook,
 		shadow: SunShadow,
+		cascades: CascadeShadow,
 	) {
 		this.ctx = ctx;
 		this.radius = radius;
 		this.depth = depth;
 		this.look = look;
 		this.shadow = shadow;
+		this.cascades = cascades;
 		const { device, sceneFormat: format } = ctx;
 
 		const frameLayout = device.createBindGroupLayout({
@@ -213,7 +219,12 @@ export class SeaRenderer implements PassLayer {
 
 		const module = device.createShaderModule({ code: SEA_SHADER });
 		const layout = device.createPipelineLayout({
-			bindGroupLayouts: [frameLayout, seaLayout, shadow.layout],
+			bindGroupLayouts: [
+				frameLayout,
+				seaLayout,
+				shadow.layout,
+				cascades.layout,
+			],
 		});
 		const vertex: GPUVertexState = {
 			module,
@@ -426,6 +437,7 @@ export class SeaRenderer implements PassLayer {
 		// had a shorter pipeline layout, which drops every binding past its
 		// own end.
 		pass.setBindGroup(2, this.shadow.bindGroup);
+		pass.setBindGroup(3, this.cascades.bindGroup);
 
 		/** Bind one group's mesh and its slice of the instance buffer. */
 		const bind = (group: (typeof this.groups)[number]): Patch => {

@@ -492,6 +492,18 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
 			},
 			{
+				key: "shadowTexels",
+				label: "Shadow map",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
+			},
+			{
+				key: "cascadeReach",
+				label: "Shadow maps reach",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.sunShadow > 0,
+			},
+			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,

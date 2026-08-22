@@ -134,6 +134,7 @@ export class RecordingGpu {
 			},
 			createBuffer: buffer,
 			createBindGroup: () => ({}),
+			createSampler: () => ({}),
 			createTexture: () => ({
 				width: 0,
 				height: 0,
@@ -150,6 +151,7 @@ export class RecordingGpu {
 			device,
 			context: { getCurrentTexture: () => ({ createView: () => ({}) }) },
 			format: "bgra8unorm",
+			sceneFormat: "rgba16float",
 			canvas: { width: 800, height: 600 },
 		} as unknown as GpuContext;
 	}

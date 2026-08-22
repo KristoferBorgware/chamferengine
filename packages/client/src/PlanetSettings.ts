@@ -451,6 +451,26 @@ export interface PlanetKnobs {
 	 * of a block takes the same light all night and a block is a silhouette
 	 * rather than a shape.
 	 */
+	/**
+	 * How many texels a side each of the sun's three shadow maps holds.
+	 *
+	 * The maps are what shadow a block by its neighbour, and later anything
+	 * that moves; the walk over the coarse map is what shadows a valley by the
+	 * range beside it. More texels is a sharper edge and a larger picture to
+	 * draw the world into three times over.
+	 */
+	shadowTexels: number;
+
+	/**
+	 * How far from the eye the sun's shadow maps carry, in metres.
+	 *
+	 * The three of them split that distance, each covering a quarter of the
+	 * one beyond it, so the nearest is the sharpest. Past it the walk over the
+	 * coarse map is the only answer, and the two fade into each other rather
+	 * than meeting at a line.
+	 */
+	cascadeReach: number;
+
 	moonLight: number;
 
 	/** What the whole picture is multiplied by on its way to the screen. */
@@ -559,6 +579,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	sunShare: 0.58,
 	sunShadow: 1,
 	shadowReach: 1600,
+	shadowTexels: 1024,
+	cascadeReach: 260,
 	moonLight: 0.16,
 	exposure: 1,
 	eyeAdapts: 0.6,
@@ -788,6 +810,14 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	sunShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	shadowReach: { low: 0, high: 4000, step: 50, rebuilds: false, unit: "m" },
+	shadowTexels: {
+		low: 256,
+		high: 4096,
+		step: 256,
+		rebuilds: false,
+		unit: "",
+	},
+	cascadeReach: { low: 0, high: 1200, step: 20, rebuilds: false, unit: "m" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },

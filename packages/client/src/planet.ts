@@ -389,6 +389,7 @@ async function main(): Promise<void> {
 				DEPTH,
 				seaLook(settings),
 				renderer.shadow,
+				renderer.cascades,
 			);
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;
@@ -1590,6 +1591,11 @@ async function main(): Promise<void> {
 		renderer.shadow.setLook(
 			PLAIN ? 0 : settings.knobs.sunShadow,
 			settings.knobs.shadowReach,
+		);
+		renderer.cascades.setSize(settings.knobs.shadowTexels);
+		renderer.cascades.setLook(
+			PLAIN ? 0 : settings.knobs.sunShadow,
+			settings.knobs.cascadeReach,
 		);
 		renderer.sky = submerged
 			? mix(NIGHT_SKY, [0.05, 0.16, 0.28], day)

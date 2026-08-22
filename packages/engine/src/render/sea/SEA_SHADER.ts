@@ -513,7 +513,7 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	// takes.** A headland at sunrise throws its shadow across the bay beside
 	// it as well as across the ground, and the sea is at sea level -- the
 	// lowest thing there is -- so it is in the shade of anything at all.
-	let lit = sunReach(in.world, dir, frame.sun.xyz);
+	let lit = sunLight(in.world, dir, frame.sun.xyz, normal, length(frame.eye.xyz - in.world));
 	let half = normalize(toEye + frame.sun.xyz);
 	let raw = clamp(dot(normal, half), 0.0, 1.0);
 	let sheen = smoothstep(0.985, 0.996, raw);

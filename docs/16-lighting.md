@@ -395,6 +395,77 @@ so it depends on nothing either shader has to hand it — and the sea needs it
 most, being at sea level and therefore in the shade of anything at all
 ([doc 25](25-water.md)).
 
+### The map cannot see a thing that was not generated, so the sun looks too
+
+The walk over the coarse map has a hard limit, and it is not resolution. The
+map is one height per 32 m cell **of the generated world**. It does not hold a
+block anybody placed, it does not hold a mob, and it will never hold a player.
+Every shadow it can cast is a shadow of terrain that was there before anyone
+arrived.
+
+So the sun also takes its own picture: a depth buffer rendered from the sun's
+direction, holding how far the nearest surface is along the light. Anything
+that can draw itself can be in it. Reading it is one question — *is this point
+further along the light than whatever the sun saw here?* — and if it is,
+something is in the way.
+
+One buffer covering everything in view spends its texels wrong. It holds a
+fixed number of them however far it is stretched, so the ground underfoot and
+the hillside at the edge of sight get the same share — and it is the ground
+underfoot being looked at. **Cascades** fix that: cut the view into slices by
+distance and give each slice its own buffer at the same size. Three of them
+here, each covering four times the span of the one before, so the nearest is
+the sharpest.
+
+> At the shipped 260 m reach the splits fall at **16 m**, **65 m** and
+> **260 m**. At 1,024 texels a side that is about **2 cm** per texel in the
+> nearest cascade and **23 cm** in the furthest, against a 1 m block. Three
+> `depth32float` layers of 1,024 come to **12.6 MB**.
+
+Two things stop the shadows crawling, and both are about what the box is fitted
+to rather than about how it is sampled.
+
+- **Fit each cascade to a sphere, not to the slice.** A slice of a view frustum
+  changes shape as the camera turns, so a box fitted to it grows and shrinks
+  and every texel lands somewhere new each frame. A sphere around that slice is
+  the same size whichever way the camera points.
+- **Snap the sphere's centre to whole texels** along the light's own two
+  lateral axes. Without it the box slides continuously as the player walks,
+  each texel covers a slightly different patch of ground every frame, and the
+  edge of every shadow shimmers.
+
+A surface drawn into the buffer records its own depth, so reading the buffer at
+that same surface asks whether a face is in front of itself — and the answer is
+a coin toss, which comes out as stripes across everything lit. The sample is
+therefore pushed off the surface along **its own normal** by rather more than
+one texel of the cascade it is read from. Along the normal rather than deeper,
+because moving it deeper detaches a shadow from the thing casting it.
+
+The read is nine comparisons rather than nine depths. A comparison sampler
+answers *nearer than this?* per texel and averages the answers, so the
+hardware's own filtering softens the edge. Averaging the depths instead would
+put a shadow halfway up a wall.
+
+### The two shadows are each other's blind spot
+
+Neither technique is a replacement for the other, and the combination is one
+`min`.
+
+|  | The walk over the map | The sun's own picture |
+|---|---|---|
+| Reaches | the horizon | 260 m |
+| Resolution | 32 m | 2 cm near, 23 cm far |
+| Costs | no extra pass | the world drawn three more times |
+| Sees | generated terrain | anything that draws itself |
+
+The walk carries the shadow of a range across a valley a kilometre away, which
+no cascade has the box for. The cascades carry the shadow of one block on the
+block beside it, and of anything placed, carried or moving, which the map
+cannot represent at all. A point is as lit as the darker of the two says.
+
+They hand over rather than meeting at a line: the furthest cascade fades out
+over the last 15% of its reach, and past that the walk is the only answer.
+
 ### A gentle world has almost nowhere for a shadow to fall
 
 Ground shadows itself only where its own slope is steeper than the sun is
@@ -554,6 +625,12 @@ glint on water reads as white rather than as a saturated blue.
   above the walk — 24 growing steps, one texture per face, **2.6 MB**. It
   cannot shadow a block by its neighbour; it gives the shadows that carry the
   shape of a landscape.
+- **And the sun takes its own picture as well**, in **three cascades** splitting
+  the near 260 m at 16, 65 and 260 m — **2 cm** a texel in the nearest and
+  **23 cm** in the furthest, **12.6 MB** in all. Fitted to a sphere and snapped
+  to whole texels so nothing crawls. The map can only ever shadow generated
+  terrain; a cascade holds anything that draws itself, which is the only way a
+  mob or a placed block will ever cast one.
 - **Shadows here are a dawn and dusk feature.** Ground shades itself only where
   its slope beats the sun's height, and the shipped ground runs 11.1° at the
   median: **22.7%** of a patch is in full shadow at a 5° sun, **4.6%** at 20°

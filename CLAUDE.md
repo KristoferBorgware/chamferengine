@@ -573,6 +573,37 @@ Violating any of these breaks the design. They are not tunable.
   against 0.985) because a moon path is a smear and the sun's threshold on a
   light that dim draws a handful of pixels. **Each pipeline sets group 2
   itself** -- one with a shorter layout drops every binding past its own end.
+- **THE MAP CANNOT SEE WHAT WAS NOT GENERATED, SO THE SUN TAKES ITS OWN
+  PICTURE** (`CascadeShadow`, `cascadeReach` in `SHADOW_WGSL`, doc 16). The
+  coarse map holds one height per 32 m cell **of the generated world** -- no
+  placed block, no mob, no player, ever. So a depth buffer is rendered from
+  the sun as well, and **anything that draws itself can be in it**
+  (`ShadowCaster`; `ChunkRenderer` is the first and pushes itself onto
+  `casters`). **Three cascades**, each covering four times the span of the one
+  before: at the shipped 260 m reach the splits are **16 / 65 / 260 m**, which
+  at 1,024 texels is **2 cm** a texel near and **23 cm** far against a 1 m
+  block, `depth32float`, **12.6 MB**. **Fitted to a sphere, not to the frustum
+  slice** -- a slice changes shape as the camera turns and the box would grow
+  and shrink -- and the sphere's centre is **snapped to whole texels** along the
+  light's two lateral axes, or the box slides as the player walks and every
+  shadow edge crawls. The sample is pushed off the surface **along its own
+  normal** by ~1.7 texels: a surface records its own depth, so reading it at
+  itself is a coin toss that comes out as stripes, and pushing *deeper* instead
+  detaches a shadow from what casts it. The read is **nine comparisons, not
+  nine depths** -- a comparison sampler filters the answers, and filtering the
+  depths would put a shadow halfway up a wall. The depth pass culls **nothing**
+  (`cullMode: "none"`): a chunk mesh is a shell with no underside, so culling
+  by facing would drop the faces whose own shadow this records.
+- **THE TWO SHADOWS ARE EACH OTHER'S BLIND SPOT, AND THE COMBINATION IS ONE
+  `min`** (`sunLight` in `SHADOW_WGSL`, doc 16). The walk reaches the horizon at
+  32 m resolution and sees generated terrain only; the cascades reach 260 m at
+  centimetres and see anything drawn. The walk carries a range's shadow across a
+  valley a kilometre off, which no cascade has the box for; the cascades carry
+  one block's shadow on the next, which the map cannot represent. They **hand
+  over rather than meeting at a line** -- the furthest cascade fades over the
+  last 15% of its reach. Measured at a 18° sun over terraced ground, turning the
+  cascades off leaves the 95th percentile of the ratio at **1.429**: some faces
+  are 43% brighter without them.
 - **A GENTLE WORLD HAS ALMOST NOWHERE FOR A SHADOW TO FALL**
   (`tools/trial-shadow.ts`, doc 16). Ground shades itself only where its own
   slope beats the sun's height, and the shipped ground runs **11.1°** at the

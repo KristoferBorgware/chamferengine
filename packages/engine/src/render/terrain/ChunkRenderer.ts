@@ -5,6 +5,8 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
+import type { ShadowCaster } from "../light/ShadowCaster.js";
+import { CascadeShadow } from "../light/CascadeShadow.js";
 import { SunShadow } from "../light/SunShadow.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
@@ -42,7 +44,7 @@ const CHUNK_BYTES = 256;
  * per chunk rather than per triangle: a view crosses one water surface 82.3% of
  * the time and generated water has no vertical sides to interpenetrate with.
  */
-export class ChunkRenderer {
+export class ChunkRenderer implements ShadowCaster {
 	private readonly ctx: GpuContext;
 	private readonly opaquePipeline: GPURenderPipeline;
 	private readonly waterPipeline: GPURenderPipeline;
@@ -62,6 +64,25 @@ export class ChunkRenderer {
 	 * built yet. {@link setShadowMap} replaces it with the real thing.
 	 */
 	readonly shadow: SunShadow;
+
+	/**
+	 * The sun's own view of what stands near the camera.
+	 *
+	 * The chunks put themselves into it, and anything else that wants a shadow
+	 * adds itself to {@link ChunkRenderer.casters}.
+	 */
+	readonly cascades: CascadeShadow;
+
+	/**
+	 * Everything that draws itself into the shadow maps.
+	 *
+	 * The chunks are always the first of them. A mob, a player or anything
+	 * else with geometry joins the list and is drawn into each cascade with
+	 * its own pipeline -- which is the whole reason the maps exist beside the
+	 * walk over the coarse map, because the map is a picture of the generated
+	 * world and holds nothing anybody put there.
+	 */
+	readonly casters: ShadowCaster[] = [];
 
 	/**
 	 * Where the frame is exposed and rolled off on its way to the canvas.
@@ -107,6 +128,8 @@ export class ChunkRenderer {
 		this.chunkLayout = device.createBindGroupLayout({
 			entries: [uniformEntry],
 		});
+		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
+		this.casters.push(this);
 
 		const common = {
 			layout: device.createPipelineLayout({
@@ -114,6 +137,7 @@ export class ChunkRenderer {
 					this.frameLayout,
 					this.chunkLayout,
 					this.shadow.layout,
+					this.cascades.layout,
 				],
 			}),
 			vertex: {
@@ -255,6 +279,25 @@ export class ChunkRenderer {
 		for (const key of [...this.resident.keys()]) this.drop(key);
 	}
 
+	/**
+	 * Every chunk the sun can see, drawn into one cascade.
+	 *
+	 * Not the chunks the camera can see: a wall standing behind the viewer
+	 * still throws its shadow into the view. What is tested instead is the
+	 * column of world the cascade's box sweeps out along the light.
+	 */
+	castShadow(pass: GPURenderPassEncoder, cascade: number): void {
+		const box = this.cascades.boxOf(cascade);
+		for (const chunk of this.resident.values()) {
+			if (!chunk.opaque) continue;
+			if (!box.holds(chunk.center, chunk.radius)) continue;
+			pass.setBindGroup(1, chunk.bindGroup);
+			pass.setVertexBuffer(0, chunk.opaque.vertices);
+			pass.setIndexBuffer(chunk.opaque.indices, "uint32");
+			pass.drawIndexed(chunk.opaque.count);
+		}
+	}
+
 	render(frame: Frame): void {
 		const { device, context, canvas } = this.ctx;
 		const depth = this.ensureDepth();
@@ -273,7 +316,11 @@ export class ChunkRenderer {
 		this.frameData[39] = frame.moonLight;
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);
 
+		this.cascades.update(frame);
 		const encoder = device.createCommandEncoder();
+		// The sun looks first. Its passes write depth the frame then reads, so
+		// they go into the same encoder ahead of everything else.
+		this.cascades.render(encoder, this.casters);
 		const timing = this.clock.writes();
 		const pass = encoder.beginRenderPass({
 			...(timing ? { timestampWrites: timing } : {}),
@@ -334,12 +381,14 @@ export class ChunkRenderer {
 		// terrain draw is refused, taking the whole command buffer with it.
 		// The water pass sets it again for the same reason.
 		pass.setBindGroup(2, this.shadow.bindGroup);
+		pass.setBindGroup(3, this.cascades.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setBindGroup(2, this.shadow.bindGroup);
+		pass.setBindGroup(3, this.cascades.bindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
