@@ -794,3 +794,59 @@ body.bench .knobs-head {
 .knobs-bar a:hover {
 	border-color: var(--live-deep);
 }
+
+/*
+ * Where the aiming ray leaves from, at the centre of the view.
+ *
+ * Drawn whatever the ray finds, including nothing, so aiming at the sky still
+ * says where aiming happens -- without it there is no telling a miss from a ray
+ * that reached its limit. Two bars with a gap in the middle, so the block being
+ * aimed at is never covered by the thing pointing at it. The gap is a
+ * transparent band in a gradient rather than a cut-out, which needs no shape to
+ * be described twice.
+ */
+.crosshair {
+	position: fixed;
+	left: 50%;
+	top: 50%;
+	width: 18px;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	pointer-events: none;
+	/* A dark halo under the white, so it reads against snow as well as stone. */
+	filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.75));
+}
+
+.crosshair::before,
+.crosshair::after {
+	content: "";
+	position: absolute;
+}
+
+.crosshair::before {
+	left: 50%;
+	top: 0;
+	width: 1px;
+	height: 18px;
+	margin-left: -0.5px;
+	background: linear-gradient(
+		to bottom,
+		rgba(255, 255, 255, 0.9) 0 6px,
+		transparent 6px 12px,
+		rgba(255, 255, 255, 0.9) 12px 18px
+	);
+}
+
+.crosshair::after {
+	top: 50%;
+	left: 0;
+	height: 1px;
+	width: 18px;
+	margin-top: -0.5px;
+	background: linear-gradient(
+		to right,
+		rgba(255, 255, 255, 0.9) 0 6px,
+		transparent 6px 12px,
+		rgba(255, 255, 255, 0.9) 12px 18px
+	);
+}

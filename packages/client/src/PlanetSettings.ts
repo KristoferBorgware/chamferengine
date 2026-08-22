@@ -730,6 +730,28 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"erosionInertia",
 ] satisfies (keyof PlanetKnobs)[]);
 
+/**
+ * The knobs that decide where a cell is or what block sits there.
+ *
+ * A world's stored edits are named by these, so a change to any of them is a
+ * different world with its own empty set of them, and setting them back reaches
+ * the earlier one again.
+ *
+ * **`chunkCells` is deliberately absent.** It decides how the address is cut
+ * for loading and drawing and moves no block: the terrain reads a face and a
+ * lattice offset and never sees the cut, so a world at eight cells a chunk and
+ * the same world at sixty-four hold the same ground in the same places. So are
+ * the knobs that decide only how the world is drawn -- the light, the sky, the
+ * clouds, the sea's surface and every level-of-detail setting.
+ */
+export const WORLD_SHAPE_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	...LIVE_TERRAIN_KNOBS,
+	"plain",
+	"subdivisionDepth",
+	"blockSize",
+	"crustMetres",
+] satisfies (keyof PlanetKnobs)[]);
+
 export const KNOB_RANGES: Record<string, KnobRange> = {
 	plain: { ...TOGGLE, rebuilds: true },
 	subdivisionDepth: { low: 4, high: 17, step: 1, rebuilds: true, unit: "" },
@@ -1006,6 +1028,19 @@ export class PlanetSettings {
 	 */
 	get radius(): number {
 		return (this.knobs.blockSize * 2 ** this.depth) / CELL_CONSTANT;
+	}
+
+	/**
+	 * The knobs this world's stored edits are named by, as a plain record.
+	 *
+	 * Values at full precision: two worlds a millimetre apart are two worlds.
+	 */
+	worldShape(): Record<string, number | string> {
+		const knobs = this.knobs as unknown as Record<string, number | string>;
+		const out: Record<string, number | string> = {};
+		for (const name of [...WORLD_SHAPE_KNOBS].sort())
+			out[name] = knobs[name]!;
+		return out;
 	}
 
 	get chunkLevel(): number {

@@ -3,12 +3,14 @@ import type { GridParts } from "../GridPaint.js";
 import type { MeshJob, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { Chunk } from "../../generation/chunk/Chunk.js";
+import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
+import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
 
 /**
@@ -83,6 +85,13 @@ export class MeshWorkerCore {
 						job.chunkLevel,
 						shape.crustDepth,
 					);
+		if (job.deltas && !this.grid)
+			applyDeltas(
+				chunk,
+				ChunkDeltas.unpack(job.deltas.where, job.deltas.what),
+				this.shape.subdivisionDepth,
+				job.lod,
+			);
 		const sampler =
 			this.grid && this.flat
 				? { columnAt: () => this.flat! }

@@ -1,6 +1,6 @@
 import type { ChunkMesh } from "../ChunkMesh.js";
 import type { ChunkSelection } from "../../generation/chunk/selectChunks.js";
-import type { MeshResult, MeshWorkerSetup } from "./MeshJob.js";
+import type { JobDeltas, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
 import type { MeshSource } from "./MeshSource.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { selectionId } from "../../generation/chunk/selectionId.js";
@@ -53,6 +53,15 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly cancelled = new Set<number>();
 	private readonly create: () => MeshWorkerHandle;
 	private readonly setup: MeshWorkerSetup;
+
+	/**
+	 * What a player has changed in a chunk, asked for as each job is posted.
+	 *
+	 * The pool never holds a store: it asks whoever owns one, at the moment the
+	 * job leaves, so a chunk asked for again after a click carries the click.
+	 * Left unset, chunks are built from the seed alone.
+	 */
+	deltas: ((chunkKey: number) => JobDeltas | undefined) | null = null;
 
 	/**
 	 * How far each waiting chunk now is, by selection id.
@@ -267,6 +276,7 @@ export class WorkerMeshSource implements MeshSource {
 				key: selection.key,
 				chunkLevel: selection.chunkLevel,
 				lod: selection.lod,
+				deltas: this.deltas?.(selection.key),
 			});
 		}
 	}

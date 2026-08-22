@@ -22,6 +22,7 @@ export type {
 	MeshResult,
 	MeshWorkerMessage,
 	MeshWorkerSetup,
+	JobDeltas,
 } from "./worker/MeshJob.js";
 export type { GridPaint, GridParts } from "./GridPaint.js";
 export { gridCellColor } from "./gridCellColor.js";

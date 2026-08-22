@@ -3,6 +3,7 @@ import type { ChunkSelection, CoarseMap } from "chamfer/generation";
 import type { WorldShape } from "chamfer/world";
 import { Frustum, Mat4, Vec3 } from "chamfer/math";
 import {
+	BLOCK_NAMES,
 	BlockType,
 	ChunkAddress,
 	TerrainGenerator,
@@ -12,13 +13,23 @@ import {
 	chunkCenter,
 	flatCoarseMap,
 	horizonAngle,
+	isBreakable,
 	seedFromString,
 	selectChunks,
 	selectionId,
 	selectionOf,
 } from "chamfer/generation";
 import { WorkerMeshSource } from "chamfer/mesh";
-import { positionToCell } from "chamfer/addressing";
+import type { CellRef } from "chamfer/edit";
+import {
+	DeltaStore,
+	STORE_VERSION,
+	packBlockState,
+	typeOf,
+	worldKey,
+} from "chamfer/edit";
+import type { RayWorld } from "chamfer/addressing";
+import { cellCorners, positionToCell, rayWalk } from "chamfer/addressing";
 import { Player } from "chamfer/player";
 import {
 	geographicOf,
@@ -29,6 +40,7 @@ import {
 import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
+	AimRenderer,
 	BillboardClouds,
 	ChunkRenderer,
 	FrameTimer,
@@ -51,6 +63,7 @@ import {
 import { MapPanel } from "./MapPanel.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
+import { EditDb } from "./EditDb.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 
 const params = new URLSearchParams(location.search);
@@ -146,6 +159,24 @@ const WORKERS = Math.max(
 
 /** How many finished meshes are uploaded in one frame. */
 const UPLOAD_PER_FRAME = 2;
+
+/** How far a player can reach to break or place a block, in blocks. */
+const REACH = 6;
+
+/** The color the outline over the aimed-at cell is drawn in. */
+const AIM_COLOR: [number, number, number] = [0.98, 0.86, 0.35];
+
+/**
+ * The block types a click may place, which is every solid one a player can put
+ * back. Bedrock is not among them: it is the floor of the world.
+ */
+const PLACEABLE: readonly BlockType[] = [
+	BlockType.STONE,
+	BlockType.DIRT,
+	BlockType.GRASS,
+	BlockType.SAND,
+	BlockType.SNOW,
+];
 
 /** The color the view fades toward under water, and over what distance. */
 const WATER_FOG: readonly [number, number, number, number] = [
@@ -442,6 +473,10 @@ async function main(): Promise<void> {
 	// it is never behind either of them. It has nothing to draw until the view
 	// is frozen.
 	const viewMarker = new MarkerRenderer(ctx);
+	// The outline over the cell a click would act on. Last, so it stands over
+	// the water as well as the ground: it says where a click goes rather than
+	// being a thing that lives in the world.
+	const aim = new AimRenderer(ctx);
 	renderer.layers = [
 		...(sky ? [sky] : []),
 		// After the ground, so the water is drawn over the floor it covers,
@@ -449,6 +484,7 @@ async function main(): Promise<void> {
 		...(sea ? [sea] : []),
 		...(billboardClouds ? [billboardClouds] : []),
 		viewMarker,
+		aim,
 	];
 
 	// One generator per level. A chunk one level coarser samples the terrain at
@@ -1061,6 +1097,169 @@ async function main(): Promise<void> {
 			finishedAt + (finishedAt - startedAt) * (1 / RESELECT_BUDGET - 1);
 	}
 
+	// ---------------------------------------------------------------------
+	// Editing: which cell a click acts on, what it writes, and where that is
+	// kept between visits.
+	// ---------------------------------------------------------------------
+
+	/**
+	 * The name of the world these changes belong to.
+	 *
+	 * Every knob that decides where a cell is or what block sits there goes
+	 * into it, so blocks placed in one world never appear in a differently
+	 * shaped one, and setting the knobs back reaches the earlier set again.
+	 * The chunk size stays out: it moves no block, so dragging it keeps the
+	 * world it was dragged in and the rows are re-cut on the way back in.
+	 */
+	const editWorld = worldKey({ ...settings.worldShape(), seed: seedText });
+	const editDb = new EditDb();
+	let edits = new DeltaStore({
+		version: STORE_VERSION,
+		subdivisionDepth: DEPTH,
+		chunkLevel: CHUNK_LEVEL,
+		registry: BLOCK_NAMES,
+	});
+
+	/** What is at a cell: a change where somebody made one, the terrain otherwise. */
+	function blockAt(cell: CellRef): BlockType {
+		if (cell.layer < 0 || cell.layer >= shape.crustDepth)
+			return BlockType.AIR;
+		const changed = edits.read(cell);
+		if (changed !== undefined) return typeOf(changed) as BlockType;
+		if (cell.layer === shape.crustDepth - 1) return BlockType.BEDROCK;
+		const column = terrain.columnAt(cell.face, cell.i, cell.j);
+		return terrain.blockAt(column, cell.layer);
+	}
+
+	/**
+	 * What a ray walk asks the world about.
+	 *
+	 * Nothing here reads a chunk. `terrain` evaluates a column from the seed
+	 * and the store answers for the cells somebody has touched, so a walk costs
+	 * the same whether the ground it crosses has been meshed or not.
+	 */
+	const rayWorld: RayWorld = {
+		get n() {
+			return shape.n;
+		},
+		radiusOfLayer: (layer) => shape.radiusOfLayer(layer),
+		layerOfRadius: (radius) => shape.layerOfRadius(radius),
+		solidAt: (cell) => blockAt(cell) !== BlockType.AIR,
+	};
+
+	/**
+	 * The cell under the crosshair and the one a block would go in.
+	 *
+	 * You aim at the block you are building on and the new one goes on top of
+	 * it, which is one answer wherever on that block the crosshair sits.
+	 * Reading whichever face the ray crossed instead flips between two cells
+	 * for a pixel of movement near an edge. A column is straight -- the same
+	 * face, the same offset, one layer up -- so above is a subtraction.
+	 */
+	function aiming(
+		from: Vec3,
+		look: Vec3,
+	): { hit: CellRef; place: CellRef | null } | null {
+		const walked = rayWalk(from, look, rayWorld, REACH * shape.blockSize);
+		if (!walked) return null;
+		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
+		const free =
+			above.layer >= 0 && blockAt(above) === BlockType.AIR ? above : null;
+		return { hit: walked.cell, place: free };
+	}
+
+	/** What the crosshair is on, and what each button would do with it. */
+	function aimingSays(at: ReturnType<typeof aiming>): string {
+		if (!aimedFrom || !aimedLook) return "aiming at nothing";
+		if (!at) return "out of reach";
+		const name = BLOCK_NAMES[blockAt(at.hit)] ?? "unknown";
+		const breaks = isBreakable(blockAt(at.hit));
+		return (
+			`${name.replace("chamfer:", "")}` +
+			(breaks ? "" : " · will not break") +
+			(at.place ? " · room above" : " · nothing fits above")
+		);
+	}
+
+	/** A cell as the outline of its own layer, corners and both radii. */
+	function outlineOf(cell: CellRef) {
+		return {
+			corners: cellCorners(cell.face, shape.n, cell.i, cell.j),
+			inner: shape.radiusOfLayer(cell.layer + 1),
+			outer: shape.radiusOfLayer(cell.layer),
+			color: AIM_COLOR,
+		};
+	}
+
+	/**
+	 * Write a change, and ask again for every chunk that reads the cell.
+	 *
+	 * A chunk generates the slots on its own rim so the mesher can decide
+	 * whether to emit a face there, so a cell on a chunk border is read by two
+	 * or three chunks and all of them are rebuilt. The old geometry keeps
+	 * drawing until the new mesh arrives, because uploading a chunk replaces
+	 * whatever is resident under the same key.
+	 */
+	function change(cell: CellRef, block: BlockType): void {
+		for (const key of edits.write(cell, packBlockState(block))) {
+			const id = selectionId(CHUNK_LEVEL, key);
+			drawn.delete(id);
+			building.delete(id);
+		}
+		void editDb.save(editWorld, edits);
+		refresh();
+	}
+
+	/**
+	 * Break the block under the crosshair.
+	 *
+	 * The frame's own walk rather than a fresh one, so what was outlined is
+	 * exactly what goes.
+	 */
+	function pick(): void {
+		if (!aimed) return;
+		if (!isBreakable(blockAt(aimed.hit))) return;
+		change(aimed.hit, BlockType.AIR);
+	}
+
+	/** Put a block on top of the one under the crosshair. */
+	function place(): void {
+		if (!aimed?.place) return;
+		const type = PLACEABLE[Math.floor(Math.random() * PLACEABLE.length)]!;
+		change(aimed.place, type);
+	}
+
+	// The pool asks for a chunk's changes as each job leaves, so a chunk asked
+	// for again after a click carries the click.
+	const attachDeltas = (): void => {
+		source.deltas = (key) => edits.rowOf(key)?.pack();
+	};
+	attachDeltas();
+
+	// What is on disk, once. A world opened at a different chunk size to the
+	// one it was written at is re-cut on the way in.
+	void editDb
+		.load(editWorld, {
+			version: STORE_VERSION,
+			subdivisionDepth: DEPTH,
+			chunkLevel: CHUNK_LEVEL,
+			registry: BLOCK_NAMES,
+		})
+		.then(({ store, stale }) => {
+			if (stale)
+				console.warn(
+					"stored changes were written against a different block list and were not loaded",
+				);
+			if (store.count === 0) return;
+			edits = store;
+			for (const [key] of edits.entries()) {
+				const id = selectionId(CHUNK_LEVEL, key);
+				drawn.delete(id);
+				building.delete(id);
+			}
+			refresh();
+		});
+
 	refresh();
 
 	/**
@@ -1351,16 +1550,42 @@ async function main(): Promise<void> {
 		return Math.hypot(a.x - b.x, a.y - b.y);
 	}
 
+	/**
+	 * Where each pointer went down and which button it was, so a press that
+	 * did not move can be told from a drag.
+	 *
+	 * Dragging looks around, so every press is a candidate for both. A press
+	 * that travels further than this many pixels was a look and never becomes
+	 * a click.
+	 */
+	const CLICK_SLOP = 5;
+	const pressed = new Map<
+		number,
+		{ x: number; y: number; button: number; moved: number }
+	>();
+
 	canvas.addEventListener("pointerdown", (e) => {
 		if (e.pointerType === "touch") touch.reveal();
 		canvas.setPointerCapture(e.pointerId);
 		down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		pressed.set(e.pointerId, {
+			x: e.clientX,
+			y: e.clientY,
+			button: e.button,
+			moved: 0,
+		});
 		if (down.size === 2) {
 			pinchFrom = spread();
 			pinchChase = chase;
 		}
 	});
+
+	// The right button places, so the menu it would otherwise open never does.
+	canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	canvas.addEventListener("pointermove", (e) => {
+		const press = pressed.get(e.pointerId);
+		if (press)
+			press.moved += Math.hypot(e.clientX - press.x, e.clientY - press.y);
 		const was = down.get(e.pointerId);
 		if (!was) return;
 		const dx = e.clientX - was.x;
@@ -1384,8 +1609,13 @@ async function main(): Promise<void> {
 		}
 	});
 	const lift = (e: PointerEvent) => {
+		const press = pressed.get(e.pointerId);
+		pressed.delete(e.pointerId);
 		down.delete(e.pointerId);
 		pinchFrom = 0;
+		if (!press || press.moved > CLICK_SLOP || down.size > 0) return;
+		if (press.button === 0) pick();
+		else if (press.button === 2) place();
 	};
 	canvas.addEventListener("pointerup", lift);
 	canvas.addEventListener("pointercancel", lift);
@@ -1397,6 +1627,19 @@ async function main(): Promise<void> {
 		},
 		{ passive: false },
 	);
+
+	/**
+	 * Where the aiming ray leaves from and where it points, as the last frame
+	 * drew it.
+	 *
+	 * A click reuses the frame's own ray rather than casting its own, so what
+	 * is outlined is exactly what the click acts on.
+	 */
+	let aimedFrom: Vec3 | null = null;
+	let aimedLook: Vec3 | null = null;
+
+	/** What that ray found, walked once a frame. */
+	let aimed: { hit: CellRef; place: CellRef | null } | null = null;
 
 	const started = performance.now();
 
@@ -1512,6 +1755,20 @@ async function main(): Promise<void> {
 				? player.eye
 				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
 		const target = player.eye.add(look.scale(50));
+
+		// The ray a click acts along leaves the eye rather than the camera:
+		// with the chase camera pulled back, the two stand metres apart and the
+		// reach belongs to the player.
+		aimedFrom = player.eye;
+		aimedLook = look;
+		// One walk a frame, read by the outline, the readout and the next
+		// click alike, so all three agree about what is being aimed at.
+		aimed = frozen ? null : aiming(player.eye, look);
+		aim.target = aimed?.place
+			? outlineOf(aimed.place)
+			: aimed
+				? outlineOf(aimed.hit)
+				: null;
 
 		const eye: [number, number, number] = [from.x, from.y, from.z];
 		const view = Mat4.lookAt(
@@ -1724,6 +1981,9 @@ async function main(): Promise<void> {
 					(building.size > 0 ? ` · ${building.size} building` : ""),
 				`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
 					(submerged ? " · under water" : ""),
+				// What a click would do, and how much of this world is a
+				// player's rather than the seed's.
+				`${aimingSays(aimed)} · ${edits.count} changed`,
 				// Where the decisions are being read from, and how far that is from
 				// where the picture is being taken. Without the distance a frozen
 				// view is a world that has simply stopped responding.

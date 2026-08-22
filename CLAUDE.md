@@ -68,7 +68,8 @@ and duplicates information found there.
   artifact produced for this project.
 - `packages/engine` is the engine, published as `chamfer`; `packages/client` is
   the browser app. Subsystems are reached by subpath — `chamfer/math`,
-  `chamfer/addressing`, `chamfer/generation`, `chamfer/mesh`, `chamfer/render` —
+  `chamfer/addressing`, `chamfer/generation`, `chamfer/mesh`, `chamfer/edit`,
+  `chamfer/render` —
   and each is a folder under `src/` with a barrel. Tests are in
   `packages/engine/tests/`, mirroring `src/` path for path, and import through
   those subpaths rather than reaching into `src/`.
@@ -278,6 +279,13 @@ Violating any of these breaks the design. They are not tunable.
 | `hypot` vs `sqrt` | `hypot` differs `1` ULP between runtimes | `sqrt(x*x+y*y+z*z)` never does | `language.js` |
 | delta record | `29 + 11 + 16` = `56` of 64 bits | planet implied by the file; 8 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
+| stored edit record | `[slot 12][layer 11][state 16]` = `39` bits | 6 bytes; the row's key supplies the chunk | `delta.js` |
+| re-cut across chunk sizes | `1,666,320` records, `0` moved | the store's one header is what allows it | `delta.js` |
+| coarse cell of a fine one | `hexRound` on the weights ÷ `2^lod` | a shift is wrong for `43.9–79.3%` of cells | `delta.js` |
+| ray walk, 12-block reach | `7.85` cells; `8.42` to `7.75` over `4,096x` planet | a third of the steps are radial | `ray.js` |
+| walk against a march | same hit on `99.90%`; refine `25x` and all agree | the march is wrong, not the walk | `ray.js` |
+| a cell's three boundary families | pairs `(a−b)`, `(b−c)`, `(c−a)` | one coordinate alone holds for `75%` | `ray.js` |
+| face reflection on a direction | `2.28°` mean, `6.47°` worst | names a cell, does not re-frame a ray | `ray.js` |
 | side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
 | entity rekey rate | every `0.71` s = 21 frames | why entities are NOT keyed by cell | `blockstate.js` |
 | planet field | `12` bits = 4,096 worlds | word is 52 of 64 at D11 | `id.js` |
@@ -1373,6 +1381,82 @@ Violating any of these breaks the design. They are not tunable.
   not useless. They decide how tall the ground stands, how finely it is drawn,
   and how deep it runs. The panel groups by what a knob decides and folds all
   but the first group; nothing is cut.
+- **DOC 09 NAMED THE WRONG HEXAGON, AND IT IS THE ROTATED ONE** (`ray.js`, doc
+  09). The walk's three horizontal families were given as one per barycentric
+  **coordinate** -- a cell being `|x − x₀| ≤ ½` on each -- and those three slabs
+  cut out the hexagon turned **30°** from the cell: measured over 200,000 points
+  rounded by `hexRound`, it holds for **75%**, so a quarter of every cell falls
+  outside it and part of every neighbour falls inside, and a walk stepping on
+  those planes crosses where no boundary is. A bisector between two lattice
+  points is where a **difference** of two weights is halfway, so the families are
+  the three **pairs** -- `|(a−b) − (A−B)| ≤ 1` and its rotations, **100%** -- and
+  crossing one moves `+1` on one weight and `−1` on another, exactly the six
+  neighbours `neighbour.js` lists.
+- **A FACE EDGE IS NOT A CELL BOUNDARY, AND THE REFLECTION IS AN UNFOLDING**
+  (`ray.js`, `rayWalk`, doc 09). Cells straddle a face edge, so nothing is
+  entered and nothing is left -- the same cell is written under the other face's
+  name. Two things change and one tool does not do both. Doc 05's
+  `(α,β,γ) → (α+γ, β+γ, −γ)` lands on the right **cell** every time, and on a
+  continuous point it moves the direction **2.28° on average and 6.47° at
+  worst**, because it unfolds the two faces flat rather than turning one frame
+  into the other; used for the frame it changes the cells walked on **52%** of
+  the rays that cross an edge. Solve the neighbour's three weights from the ray
+  again -- one 3×3 solve at **0.02** crossings a ray, the rarest step in the
+  loop. And **rename** the cell rather than rounding the position into one
+  again, which skips a cell wherever the edge and a hexagon boundary fall within
+  a step of each other.
+- **THE WALK IS WHAT A MARCH CONVERGES TO, AND ITS COST DOES NOT KNOW HOW BIG
+  THE PLANET IS** (`ray.js`, doc 09). Against a march at 1/400 of a block over
+  3,000 rays it reports the same hit cell on **99.90%**, and refining the march
+  **25×** removes every disagreement -- it is not close to the sampled answer, it
+  is the answer the sampling converges to. The march is wrong on **43.0%** of
+  hits at one sample a block, **11.4%** at a quarter and **1.1%** at a
+  twenty-fifth, which costs **102** cell lookups a ray; the walk carries its cell
+  and looks nothing up. The same twelve-block reach at depths 6, 8, 10 and 12 --
+  40,962 surface cells up to **167,772,162** -- steps **8.42, 7.83, 7.74** and
+  **7.75** cells. A third of the steps are **radial**, and doc 09's "about five
+  cells" counts the hexagons alone.
+- **A CHANGE IS STORED RELATIVE TO ITS ROW, AND ONE HEADER MAKES THAT SAFE**
+  (`delta.js`, `DeltaStore`, doc 27). The store is a row per chunk, so an address
+  naming the whole planet repeats what the key already said: `[slot 12][layer
+  11][state 16]` is **39 bits, 6 bytes** against the full word's 8, and a million
+  edits is 5.7 MB rather than 7.6 MB. **The size is not the argument** -- the
+  mesher lays a slot straight into the chunk's own array and reads every record
+  on every build, where a whole word has to be taken apart first. **A slot means
+  nothing on its own**: it is a rank inside a triangle whose side the chunk level
+  sets, and the chunk level is the `chunkCells` knob, which **moves no block**
+  -- the terrain is `columnAt(face, i, j)` and never sees where the address is
+  cut. So the store carries **one header** naming the depth and the chunk level
+  its slots were counted against, and a change of chunk size converts rather than
+  being lost: **1,666,320 records over every pair of cuts at depths 4, 5 and 6,
+  0 landed on a different cell.** One header for the store and not one per row,
+  because both numbers are properties of the world.
+- **CARRYING AN EDIT INTO A COARSE CHUNK IS NOT A SHIFT** (`delta.js`,
+  `coarseCell`, doc 14). A coarse chunk keeps its path and drops the subdivision
+  depth, so its lattice points really are the fine ones scaled by a power of two
+  -- which makes shifting `(i, j)` right by the level look like the answer. It
+  names the wrong cell for **43.9%** of cells one level out and **79.3%** four
+  levels out, because a cell is a Voronoi region and a shift is a floor; rounding
+  `i` and `j` apart is worse again at the first level, **53.8%**, for the reason
+  doc 04 gives `hexRound`. **Scale the three barycentric weights and repair
+  them**: a lattice point's barycentric recovers its own `(n−i−j, i, j)` exactly,
+  because the one-shot blend is gnomonic projection, so the coarse lookup is
+  `hexRound` on those three divided by `2^lod`. It disagrees on **2.4% to 32%**
+  of cells and **every one of those is a tie** -- the point sits exactly on the
+  boundary and both cells are the same distance away -- with **zero** landing
+  further off. The layer is the one place a shift is right, because layers stack
+  at a fixed thickness from a crust top that does not move with the level.
+- **A CHANGE GOES TO EVERY CHUNK THAT READS THE CELL, NOT THE ONE THAT OWNS IT**
+  (`DeltaStore.write`, `chunksHolding`). A chunk generates the slots on its own
+  rim so the mesher can decide whether to emit a face there without fetching a
+  neighbour, and **17%** of a chunk's slots sit on a border (`rank.js`). Writing
+  to the owner alone leaves the others deciding from ground that has moved, which
+  draws as a face missing or standing along a chunk edge. What a coarse cell
+  reads when several changes land in it is **a placed block beats a broken one**:
+  it is air only when every change inside it was a break, so a wall stays a wall
+  at distance and a one-block hole in a hillside closes up. At `4^lod` cells
+  across and `2^lod` down, a lone placed block reads as an **8 m** cube three
+  levels out and **16 m** at LOD 4, the coarsest anybody stands at.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

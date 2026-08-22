@@ -10,6 +10,96 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-067 — The chunk selection reads the ground the seed made, not the ground a player built
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-22, wiring the edit path into the residency loop
+**Where:** `packages/engine/src/generation/chunk/ChunkPeaks.ts`, and
+`selectChunks` where it reads them
+
+**What happens.** Which chunks are drawn, and at what level, comes from how high
+the ground stands under each triangle. `ChunkPeaks` builds that pyramid once,
+from the coarse map, which is a picture of the **generated** world -- no placed
+block is in it and none can be. A tower a player builds a hundred metres up
+stands over a triangle whose recorded peak is the hillside it was built on.
+
+**Why it matters.** The selection uses the peak to decide whether a chunk is
+worth drawing at all and which level to draw it at. Ground that stands higher
+than the pyramid says is ground the selection under-reaches for, so a tall build
+can be dropped or coarsened at a distance where the hill beside it is not. The
+same gap is what the cascade shadows exist for -- they render anything that draws
+itself, exactly because the map cannot hold a placed block -- so the shape of the
+answer is known and the selection has not been given it.
+
+**What would fix it.** Raise the pyramid where a chunk holds changes: the delta
+store knows which chunks those are and the highest layer written in each, and a
+layer is a radius. It is one number per changed chunk, maintained on write, and
+the selection already reads a number per triangle. What is undecided is where it
+lives, since the pyramid is built on the thread that draws and the store is
+loaded after it.
+
+---
+
+### F-068 — Every click rewrites the whole world's record
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-22, writing `EditDb`
+**Where:** `packages/client/src/EditDb.ts`, `save`
+
+**What happens.** One record per world holds every chunk's changes, so `save`
+packs every row and writes all of them. A click writes one cell and rewrites the
+lot.
+
+**Why it matters.** Not at all yet: a record is six bytes, and a world somebody
+has played in for an evening is tens of kilobytes, which the browser writes
+without noticing. It grows with the world rather than with the change, so it is
+the shape of the problem rather than its size -- ten million edits is 76 MB
+rewritten per click, and nothing warns on the way there.
+
+**What would fix it.** One database record per chunk rather than per world,
+keyed by the world's name and the chunk's key together. That is the shape the
+hosted store already commits to -- chunk ID to a blob, one `get` and one `put` --
+so it is the migration arriving early rather than a new idea. What it costs is
+that opening a world becomes a range query rather than one read, and the header
+needs a record of its own.
+
+---
+
+### F-069 — A change is written into two or three chunks and nothing collapses them
+
+**Kind:** limitation
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, making an edit on a chunk border reach every chunk that
+reads it
+**Where:** `packages/engine/src/edit/DeltaStore.ts`, `write`
+
+**What happens.** A chunk generates the slots on its own rim so the mesher can
+decide whether to emit a face there without fetching a neighbour, so a cell on a
+chunk border is read by two or three chunks and the record is written into each.
+`rank.js` measures 17% of a chunk's slots as sitting on its border.
+
+**Why it matters.** The store is a little larger than the count of changed cells
+-- around 17% of edits stored twice or three times, so a few per cent overall --
+and `count` reports records rather than cells. Neither is wrong, and both are
+easy to read as a bug by whoever next opens the file. The duplicates stay in
+step because every write goes through one call; a second writer, or a merge
+between two clients, would have to keep them in step by hand.
+
+**What would fix it.** Either say so where it can be seen -- a `cells` alongside
+`count` -- or store canonically and gather a chunk's neighbours' rows when a job
+is posted, which moves the work from the write to the read and needs each record
+to carry the chunk it was written under.
+
+---
+
 ### F-066 — A steep slope is a staircase with no antialiasing, and it crawls
 
 **Kind:** idea
