@@ -2,7 +2,8 @@ import { GROUND_LINES, buildCoarseMap, seedFromString } from "chamfer/generation
 
 for (const [label, over] of [
 	["shipped", {}],
-	["peak 3x", { peakScale: 3 }],
+	["erosion 1", { erosion: 1 }],
+	["erosion 1, free", { erosion: 1, erosionWalk: "free" as const }],
 	["drained 60 m", { seaLevel: -60 }],
 	["roughen", { merge: "roughen" as const }],
 	["no mountains", { mountainLayer: false }],

@@ -1253,7 +1253,132 @@ machinery. Left undone because Relief is not in the default draft's habit of
 moving far enough to notice, and because it is a straightforward follow-up
 once someone is actually leaning on Live rebuild rather than trying it once.
 
+
 ---
+
+### F-060 — Three things the noise lab does that the terrain bench does not
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-22, checking the bench against the lab row by row before the
+lab is retired
+**Where:** `packages/client/src/terrain.ts`;
+`packages/client/src/ParameterPanel.ts`, the bench's groups
+
+**What happens.** The bench carries every knob the lab has, both flat pictures,
+the contour graph, the curve editors and every line of the readout but three.
+
+**A note under Mountain line** saying what share of the planet stands above it.
+The lab counts that while it samples the sphere; the bench would have to count
+it over the map's cells, which is a pass it does not otherwise make.
+
+**A note under Sea level** saying how much of the patch draining just handed
+back. It is the number that says what the knob bought, and what a person wants
+to know about a knob stated in metres.
+
+**The erosion picture in the plane.** Picking *What the water did* redraws the
+flat map in red and blue and leaves the patch drawn as ground. The lab does the
+same -- its plane shader carries four pictures and the erosion one is not among
+them -- so this is parity rather than a regression, and it is still the one
+picture that has to be read on a map instead of on the ground.
+
+**Why it matters.** Nobody is hurt while the lab is still there. It matters the
+day the lab is deleted, because these are the three things somebody would go
+back to it for, and going back would mean tuning against a page whose metres are
+fitted differently from the engine's.
+
+**What would fix it.** The two notes are the same shape as the bench's other
+readout lines: count the cells above the line while the map is built, and count
+the patch's own cells that came out from under the water when the drain moved.
+The picture is a fifth branch in `PATCH_SHADER` and a tenth float on the vertex,
+which is the cut in metres -- the mesh already rebuilds when the ground moves,
+so nothing else has to change.
+
+---
+
+### F-061 — The bench builds its map on the thread that draws
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, timing the terrain bench against the map editor beside it
+**Where:** `packages/client/src/BenchWorld.ts`;
+`packages/client/src/mapWorker.ts`
+
+**What happens.** The map editor runs its builds on a worker, and the bench does
+not: `BenchWorld` calls `layeredHeight`, `metreHeight` and the droplet pass on
+the page's own thread, yielding between slices so the panel stays live. Measured
+on the shipped world at level 8, the field is `0.7 s` and a full-strength
+erosion run is another `7.9 s`. The status line moves and the knobs answer
+throughout, because the erosion pass is sliced 40,000 droplets at a time and the
+page gets a frame between slices.
+
+**Why it matters.** The field is one call and is not sliced, so a level-8 build
+holds the frame for its whole `0.7 s` -- long enough to feel as a stall when a
+noise knob settles. Nothing is wrong with what is drawn; what is wrong is that
+the page is deaf for that stretch. The erosion pass, which is ten times longer,
+does not have the problem at all, because it is the one that is sliced.
+
+**What would fix it.** The same worker the map editor already has. It builds the
+same three stages from the same options and hands back each one as it lands, so
+what the bench needs from it is the two layer fields it does not currently send.
+Slicing `layeredHeight` by cell range instead would keep the page live without a
+worker and is the smaller change, at the cost of a second copy of the loop.
+
+---
+
+### F-062 — Nothing casts a shadow, and the coarse map could do it in one march
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-22, after making the sun a directional light
+**Where:** `packages/engine/src/render/terrain/TERRAIN_SHADER.ts`
+
+**What happens.** The sun now lights a face by how square it is to the sun, so
+a slope facing the morning sun is bright and the slope behind it is dark. What
+it still does not do is ask whether anything stands between the face and the
+sun. A mountain lays no shadow across the valley beside it, a cliff none on the
+ground under it, and a block none on its neighbour. At a low sun this is at its
+most visible, because that is exactly when the shadow would be longest and when
+the lit faces are at their brightest against the unlit ones.
+
+**Why it matters.** Shape reads from shading, and half the shading is missing.
+A range of hills at sunrise is drawn with each face correctly lit and the whole
+range flat, because nothing in front occludes anything behind. It is the
+largest remaining gap between what the light does and what a person expects it
+to do.
+
+**What would fix it.** Two shapes, and the second is much the better fit here.
+
+**A shadow map** renders the terrain again from the sun and compares depths. It
+is the general answer and it costs a second geometry pass over every chunk in
+view, three or four times over for cascades, plus bias tuning against a world
+made entirely of hard edges. Doc 16 already bounds how far it would have to
+reach: below about 6 degrees of elevation a 10 m tower's shadow is longer than
+the 76 m horizon, so nothing needs to reach past the horizon.
+
+**A march against the coarse map** costs no second pass at all. The map is one
+height per coarse cell, it is small, the client already regenerates it rather
+than downloading it, and a shadow ray is a walk along the sun direction asking
+whether the ground ever stands above the ray. Uploaded as a texture it would
+give mountain-across-valley shadows -- the ones that carry the shape of a
+landscape -- for one loop in the fragment shader and no change to the mesher or
+the chunk pipeline. What it cannot give is a block shadowing the block beside
+it, because the map is coarser than a block; that is the shadow map's half of
+the job, and it is the half a player notices least at a distance.
+
+Worth measuring before choosing: how many steps the march needs to reach the
+horizon at the shipped map resolution, and what that costs a fragment on real
+hardware rather than on this container's software adapter.
+
+---
+
+## Closed
 
 ### F-057 — The noise lab draws every world 11% taller than the engine builds it
 
@@ -1306,56 +1431,76 @@ would have to move off the redraw path. A third option is to leave the reading
 alone and say on the panel that heights are a sample and carry a percentage,
 which costs nothing and fixes nothing.
 
+**Closed:** 2026-08-22, fixed. The lab builds the planet's map -- the same grid
+at the same level the engine builds, staged and in slices so the panel stays
+live -- and reads sea level and the two scales off it with the same arithmetic
+`metreHeight` runs. Measured on the shipped world the two now agree to the bit:
+sea `-0.3439934551715851` and a land scale of `258.40559000034904` on both
+sides. The patch's tallest ground goes from `748 m` to `662 m`, which is the
+11% coming off. What it costs is a pass over every cell of the planet on every
+change to a shape knob, `2.6 s` at level 8 and `0.1 s` at level 6; the pictures
+keep the last map's fit until the new one lands, and the readout says which
+cells the metres were fitted over.
+
+
 ---
 
-### F-059 — Nothing casts a shadow, and the coarse map could do it in one march
+
+### F-059 — The lab and the engine no longer take the same set of knobs
 
 **Kind:** gap
 **Milestone:** 0.5.0
 **Priority:** medium
 **Effort:** medium
-**Found:** 2026-08-22, after making the sun a directional light
-**Where:** `packages/engine/src/render/terrain/TERRAIN_SHADER.ts`
+**Found:** 2026-08-21, cutting the lab's panel down to the knobs that decide
+something visible
+**Where:** `demos/noise-lab.html`, `layerSettings` and `KNOBS`;
+`packages/engine/src/generation/coarse/TerrainLayer.ts`;
+`packages/engine/src/generation/coarse/CoarseMapOptions.ts`;
+`packages/client/src/PlanetSettings.ts`
 
-**What happens.** The sun now lights a face by how square it is to the sun, so
-a slope facing the morning sun is bright and the slope behind it is dark. What
-it still does not do is ask whether anything stands between the face and the
-sun. A mountain lays no shadow across the valley beside it, a cliff none on the
-ground under it, and a block none on its neighbour. At a low sun this is at its
-most visible, because that is exactly when the shadow would be longest and when
-the lit faces are at their brightest against the unlit ones.
+**What happens.** The lab's panel now sets each noise layer with a **feature
+size in metres and a scale**, and it holds the rest of the stack fixed: the
+falloff is `0.5`, the step between octaves is `2`, and there is no offset. It
+also has no **Peak scale**. The engine still carries all five: `TerrainLayer`
+has `persistence`, `lacunarity`, `offsetX` and `offsetY`, `CoarseMapOptions` has
+`peakScale`, and the client's panel exposes every one of them.
 
-**Why it matters.** Shape reads from shading, and half the shading is missing.
-A range of hills at sunrise is drawn with each face correctly lit and the whole
-range flat, because nothing in front occludes anything behind. It is the
-largest remaining gap between what the light does and what a person expects it
-to do.
+Three of the shipped defaults differ as a result. The engine's mountain layer
+runs a falloff of **0.55** where the lab now runs 0.5. The engine's two layers
+are offset by `(15, 9)` and `(-22, 61)` where the lab uses `(0, 0)`, which makes
+them different fields rather than the same field moved — the same seed draws a
+different planet in each. And the lab's layer sizes are `2,400 m` and `960 m`
+against the client's `2,267 m` and `945 m`.
 
-**What would fix it.** Two shapes, and the second is much the better fit here.
+**Why it matters.** The lab exists so a setting can be found by dragging and
+then built by the engine. A setting found there cannot be carried across now: it
+names a world the engine will not draw, and the engine's own defaults name a
+world the lab's panel cannot reach. The lab also has no way to show what
+`peakScale` does, so the one knob that takes a world above Relief has no picture
+anywhere.
 
-**A shadow map** renders the terrain again from the sun and compares depths. It
-is the general answer and it costs a second geometry pass over every chunk in
-view, three or four times over for cascades, plus bias tuning against a world
-made entirely of hard edges. Doc 16 already bounds how far it would have to
-reach: below about 6 degrees of elevation a 10 m tower's shadow is longer than
-the 76 m horizon, so nothing needs to reach past the horizon.
+**What would fix it.** Take the same four out of the engine and the client. The
+falloff and the octave step are what fBm is, and the metre fit renormalises
+whatever the stack reaches, so both move how rough the ground is and not how
+tall — a question the two layers and their curves already answer where it can be
+seen. Offsets slide a field sideways, which is what the seed already does and
+with every octave moved rather than the stack as a whole. `peakScale` is the
+harder one and it is a real knob, the only thing that takes the tallest point
+past Relief; taking it out means Relief is the whole answer to how tall a world
+is. Whichever way that goes, the two panels have to agree, and the client's
+single metre slider should become the same metres-and-scale pair, because one
+slider cannot hold a hundred metres and a hundred kilometres at a resolution
+anybody can drag.
 
-**A march against the coarse map** costs no second pass at all. The map is one
-height per coarse cell, it is small, the client already regenerates it rather
-than downloading it, and a shadow ray is a walk along the sun direction asking
-whether the ground ever stands above the ray. Uploaded as a texture it would
-give mountain-across-valley shadows -- the ones that carry the shape of a
-landscape -- for one loop in the fragment shader and no change to the mesher or
-the chunk pipeline. What it cannot give is a block shadowing the block beside
-it, because the map is coarser than a block; that is the shadow map's half of
-the job, and it is the half a player notices least at a distance.
-
-Worth measuring before choosing: how many steps the march needs to reach the
-horizon at the shipped map resolution, and what that costs a fragment on real
-hardware rather than on this container's software adapter.
+**Closed:** 2026-08-22, fixed. The four knobs are out of `TerrainLayer` and
+`CoarseMapOptions`, `TerrainLayer` carries `metres` rather than a frequency, and
+the client's single metre slider is the same feature-and-scale pair the lab
+uses. Both panels build the same world from the same numbers.
 
 
-## Closed
+---
+
 
 ### F-058 — Sea patches split along a chunk seam wherever a wave lifts them
 

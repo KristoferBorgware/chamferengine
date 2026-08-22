@@ -2,26 +2,24 @@
  * One whole noise stack, with the curve its value is read through.
  *
  * **A layer is a stack, not a frequency.** A layer that shared its octave count
- * and its falloff with its neighbour could only ever say the same thing at a
- * different size, and the reason there are layers at all is to say different
- * things: broad smooth ground under one curve, narrow steep ranges under
- * another.
+ * with its neighbour could only ever say the same thing at a different size,
+ * and the reason there are layers at all is to say different things: broad
+ * smooth ground under one curve, narrow steep ranges under another.
  */
 export interface TerrainLayer {
-	/** How many times the widest octave repeats around the planet. */
-	readonly frequency: number;
+	/**
+	 * Metres across the widest octave.
+	 *
+	 * **A size, because a frequency is a number about a sphere and a landform
+	 * is a thing on the ground.** The noise is sampled from a unit direction,
+	 * so its frequency counts features from pole to pole: the same number is
+	 * hills on one planet and continents on another. Stated in metres, the
+	 * number means the same on every radius, and changing the radius then moves
+	 * the horizon and leaves the landforms alone.
+	 */
+	readonly metres: number;
 
 	readonly octaves: number;
-
-	/** What each octave's amplitude is multiplied by. Under 1. */
-	readonly persistence: number;
-
-	/** What each octave's frequency is multiplied by. Over 1. */
-	readonly lacunarity: number;
-
-	/** Slides the sample point through the field. */
-	readonly offsetX: number;
-	readonly offsetY: number;
 
 	/**
 	 * The curve the layer's value is read through, as `[in, out]` points.
@@ -39,16 +37,24 @@ export interface TerrainLayer {
 }
 
 /**
+ * What every layer's octave stack does between its octaves.
+ *
+ * Halving the amplitude and doubling the frequency each octave is what fBm is,
+ * and the metre fit downstream divides whatever the stack reaches straight back
+ * out -- so moving either one changes how rough the ground is and not how tall.
+ * That is a question the two layers and their curves already answer, in a place
+ * where the answer can be seen.
+ */
+export const LAYER_PERSISTENCE = 0.5;
+export const LAYER_LACUNARITY = 2;
+
+/**
  * A shelf, a shore and a rise: flat sea floor over the low half, a short steep
  * climb through the coast, then land that keeps going up.
  */
 export const TERRAIN_LAYER_DEFAULT: TerrainLayer = {
-	frequency: 3,
+	metres: 2400,
 	octaves: 6,
-	persistence: 0.5,
-	lacunarity: 2,
-	offsetX: 15,
-	offsetY: 9,
 	curve: [
 		[-1, 0.08],
 		[-0.3, 0.2],
@@ -65,20 +71,14 @@ export const TERRAIN_LAYER_DEFAULT: TerrainLayer = {
  * which is the thing a second layer exists to stop. The knee is the mountain
  * front.
  *
- * **What stopped the ranges drawing as flat white mesas was the frequency and
- * the falloff, not the octave count.** Four octaves is what the map can carry:
- * at a 32 m cell and this width the fifth would be 59 m across, under the two
- * cells it takes to draw one, and the panel refuses it. The fix was a narrower
- * widest octave and a slower falloff, so the four that do run carry more of
- * the shape.
+ * **What stopped the ranges drawing as flat white mesas was the width and the
+ * octave count.** Four octaves is what the map can carry: at a 32 m cell and
+ * this width the fifth would be 60 m across, under the two cells it takes to
+ * draw one, and the panel refuses it.
  */
 export const MOUNTAIN_LAYER_DEFAULT: TerrainLayer = {
-	frequency: 7.2,
+	metres: 960,
 	octaves: 4,
-	persistence: 0.55,
-	lacunarity: 2,
-	offsetX: -22,
-	offsetY: 61,
 	curve: [
 		[-1, 0],
 		[0.05, 0.06],

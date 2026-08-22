@@ -10,9 +10,6 @@ export interface MetreScale {
 	/** Metres from sea level down to the deepest floor. */
 	readonly seaDepth: number;
 
-	/** What the mountain layer's contribution is multiplied by, after the fit. */
-	readonly peakScale: number;
-
 	/** Metres the water is dropped below the level the land fraction chose. */
 	readonly seaLevel: number;
 }
@@ -42,15 +39,10 @@ export interface MetreScale {
  * visible only where it meets the shore. Split, the crust spans `relief +
  * seaDepth` and Relief is free to be the number it says it is.
  *
- * **Then the mountain layer is scaled again, and this is the only place it can
- * be.** The fit above divides the field by its own peak, so every knob upstream
- * of it is renormalised away -- the tallest point is `relief` whatever they
- * say. `peakScale` multiplies what the mountain layer contributed after that
- * division, and only the part it pushed **up**, so the extra is continuous
- * across the shoreline and a peak grows where a hollow does not. Measured on
- * the shipped world the summit runs 1,100 m at `1`, 1,924 m at `2` and 4,004 m
- * at `4.5`, while the sea cut does not move by a thousandth and the planet
- * stays exactly 35% sea.
+ * **The fit is the whole answer to how tall a world is.** Dividing by the
+ * field's own peak means the tallest point stands exactly `relief` metres up
+ * whatever every knob upstream says, so no shape knob can change the height of
+ * the world by accident and `relief` is a number that can be asked for.
  *
  * **Last the water is dropped**, which lifts the whole field rather than moving
  * any of it: draining `seaLevel` metres uncovers the shallow floor that was
@@ -59,7 +51,6 @@ export interface MetreScale {
  */
 export function metreHeight(
 	raw: Float64Array,
-	mountain: Float64Array,
 	scale: MetreScale,
 ): Float64Array {
 	const sea = seaLevelFor(raw, scale.landFraction);
@@ -72,15 +63,11 @@ export function metreHeight(
 	}
 	const up = peak > 0 ? scale.relief / peak : 0;
 	const down = trough < 0 ? scale.seaDepth / -trough : 0;
-	const over = scale.peakScale - 1;
 	const drained = -scale.seaLevel;
 	const height = new Float64Array(raw.length);
 	for (let cell = 0; cell < raw.length; cell++) {
 		const d = raw[cell]! - sea;
-		height[cell] =
-			(d >= 0 ? d * up : d * down) +
-			Math.max(0, mountain[cell]!) * up * over +
-			drained;
+		height[cell] = (d >= 0 ? d * up : d * down) + drained;
 	}
 	return height;
 }

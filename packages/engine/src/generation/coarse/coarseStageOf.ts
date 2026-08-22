@@ -29,10 +29,13 @@ export function coarseStageOf(option: keyof CoarseMapOptions): CoarseStage {
 		case "landFraction":
 		case "relief":
 		case "seaDepth":
-		case "peakScale":
 		case "seaLevel":
 			return "metres";
 		case "erosion":
+		case "erosionWalk":
+		case "erosionMaxCut":
+		case "erosionCutShare":
+		case "erosionInertia":
 			return "erosion";
 	}
 }

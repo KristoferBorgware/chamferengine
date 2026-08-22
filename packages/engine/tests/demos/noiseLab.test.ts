@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
 	CoarseGrid,
 	erodeDroplets,
+	erodeFreeDroplets,
 	hash3,
 	octaveNoise,
 	seaLevelFor,
@@ -11,7 +12,14 @@ import {
 	valueNoise3,
 } from "chamfer/generation";
 import type { NoiseSettings } from "chamfer/generation";
-import { barycentricOf, faceOf } from "chamfer/addressing";
+import {
+	barycentricOf,
+	DIRECTIONS,
+	faceOf,
+	latticePosition,
+	latticeWeights,
+	neighbour,
+} from "chamfer/addressing";
 import { Vec3 } from "chamfer/math";
 
 /**
@@ -85,6 +93,18 @@ function demoKernel(): {
 		y: number,
 		z: number,
 	) => [number, number, number];
+	acrossEdge: (
+		face: number,
+		weights: readonly number[],
+		leaving: number,
+	) => { face: number; i: number; j: number };
+	erodeFreeDroplets: (
+		grid: CoarseGrid,
+		height: Float64Array,
+		seed: number,
+		strength: number,
+		cellMetres: number,
+	) => number;
 } {
 	const page = readFileSync(HTML, "utf8");
 	// Both blocks together, because the erosion pass in the second one hashes
@@ -93,7 +113,7 @@ function demoKernel(): {
 	const source =
 		block(page, BEGIN, END) + block(page, COARSE_BEGIN, COARSE_END);
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, faceOf, barycentricOf };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, erodeFreeDroplets, faceOf, barycentricOf, acrossEdge };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -236,20 +256,26 @@ describe("the noise lab's copy of the engine's coarse grid", () => {
 		}
 	});
 
-	it("cuts the same valleys into the same ground", () => {
-		const seed = seedFromString("chamfer");
+	/** Ground in metres, so the pass is run on the shape it is written for. */
+	function ground(grid: CoarseGrid, seed: number): Float64Array {
 		const s = settings();
-		const start = new Float64Array(theirs.count);
-		for (let cell = 0; cell < theirs.count; cell++)
-			start[cell] =
+		const out = new Float64Array(grid.count);
+		for (let cell = 0; cell < grid.count; cell++)
+			out[cell] =
 				400 *
 				octaveNoise(
-					theirs.directions[cell * 3]!,
-					theirs.directions[cell * 3 + 1]!,
-					theirs.directions[cell * 3 + 2]!,
+					grid.directions[cell * 3]!,
+					grid.directions[cell * 3 + 1]!,
+					grid.directions[cell * 3 + 2]!,
 					seed,
 					s,
 				);
+		return out;
+	}
+
+	it("cuts the same valleys into the same ground, cell to cell", () => {
+		const seed = seedFromString("chamfer");
+		const start = ground(theirs, seed);
 		const a = Float64Array.from(start);
 		const b = Float64Array.from(start);
 		erodeDroplets(theirs, a, seed, 1, 32);
@@ -260,25 +286,107 @@ describe("the noise lab's copy of the engine's coarse grid", () => {
 		expect(Array.from(b)).toEqual(Array.from(a));
 	});
 
-	it("moves the ground it is asked to move", () => {
+	it("cuts the same valleys into the same ground, free position", () => {
 		const seed = seedFromString("chamfer");
-		const s = settings();
-		const height = new Float64Array(mine.count);
-		for (let cell = 0; cell < mine.count; cell++)
-			height[cell] =
-				400 *
-				octaveNoise(
-					mine.directions[cell * 3]!,
-					mine.directions[cell * 3 + 1]!,
-					mine.directions[cell * 3 + 2]!,
-					seed,
-					s,
-				);
-		const before = Float64Array.from(height);
-		demo.erodeDroplets(mine, height, seed, 1, 32);
-		let moved = 0;
-		for (let cell = 0; cell < height.length; cell++)
-			moved += Math.abs(height[cell]! - before[cell]!);
-		expect(moved).toBeGreaterThan(0);
+		const start = ground(theirs, seed);
+		const a = Float64Array.from(start);
+		const b = Float64Array.from(start);
+		erodeFreeDroplets(theirs, a, seed, 1, 32);
+		demo.erodeFreeDroplets(mine, b, seed, 1, 32);
+		expect(Array.from(b)).toEqual(Array.from(a));
+	});
+
+	it("moves the ground either walk is asked to move", () => {
+		const seed = seedFromString("chamfer");
+		const start = ground(mine, seed);
+		for (const cut of [demo.erodeDroplets, demo.erodeFreeDroplets]) {
+			const height = Float64Array.from(start);
+			cut(mine, height, seed, 1, 32);
+			let moved = 0;
+			for (let cell = 0; cell < height.length; cell++)
+				moved += Math.abs(height[cell]! - start[cell]!);
+			expect(moved).toBeGreaterThan(0);
+		}
+	});
+});
+
+describe("the noise lab's face crossing", () => {
+	// Level 3 is 642 cells, which is every face edge and every icosahedron
+	// vertex with room to spare, and small enough to check every cell against
+	// the engine one direction at a time.
+	const LEVEL = 3;
+	const grid = new demo.CoarseGrid(LEVEL);
+	const n = grid.n;
+
+	it("names the same cell the engine's neighbour does, one step off a face", () => {
+		let crossings = 0;
+		for (let face = 0; face < 20; face++)
+			for (let i = 0; i <= n; i++)
+				for (let j = 0; i + j <= n; j++) {
+					// The twelve pentagons sit at the icosahedron vertices, and
+					// a step off a face from one of those lands past the vertex
+					// rather than over an edge: one reflection leaves a weight
+					// still negative, and the engine reads the pentagon's own
+					// ring instead. A blend's three corners are the triangle the
+					// position stands in, so they never reach that case.
+					const w = latticeWeights(n, i, j);
+					if (w.filter((x) => x === 0).length >= 2) continue;
+					for (let k = 0; k < 6; k++) {
+						const [di, dj] = DIRECTIONS[k]!;
+						const ni = i + di;
+						const nj = j + dj;
+						if (ni >= 0 && nj >= 0 && ni + nj <= n) continue;
+						crossings++;
+						const over = neighbour(face, n, i, j, k)!;
+						expect(grid.indexNear(face, ni, nj)).toBe(
+							grid.indexOf(over.face, over.i, over.j),
+						);
+					}
+				}
+		expect(crossings).toBeGreaterThan(400);
+	});
+
+	it("leaves a point on the edge exactly where it stood", () => {
+		// The reflection is written for whole lattice points and it is linear,
+		// so it has to hold for a position between them too. On the edge the
+		// weight being left is zero, which is where the two faces agree.
+		for (let face = 0; face < 20; face++)
+			for (let leaving = 0; leaving < 3; leaving++)
+				for (let step = 1; step < 8; step++) {
+					const along = (step * n) / 8;
+					const weights = [0, 0, 0];
+					weights[leaving] = 0;
+					weights[(leaving + 1) % 3] = n - along;
+					weights[(leaving + 2) % 3] = along;
+					const over = demo.acrossEdge(face, weights, leaving);
+					const before = latticePosition(
+						face,
+						n,
+						weights[1]!,
+						weights[2]!,
+					);
+					const after = latticePosition(over.face, n, over.i, over.j);
+					expect(after.x).toBeCloseTo(before.x, 12);
+					expect(after.y).toBeCloseTo(before.y, 12);
+					expect(after.z).toBeCloseTo(before.z, 12);
+				}
+	});
+
+	it("keeps a direction pointing the way it was going", () => {
+		// A step straight off an edge has to arrive pointing into the face on
+		// the other side, which is a weight growing on that face's own third
+		// vertex.
+		for (let face = 0; face < 20; face++)
+			for (let leaving = 0; leaving < 3; leaving++) {
+				const walk = [0, 0, 0];
+				walk[leaving] = -1;
+				walk[(leaving + 1) % 3] = 0.5;
+				walk[(leaving + 2) % 3] = 0.5;
+				const over = demo.acrossEdge(face, walk, leaving);
+				const carried = [-over.i - over.j, over.i, over.j];
+				expect(carried[0]! + carried[1]! + carried[2]!).toBeCloseTo(0, 12);
+				// One of the three grows by exactly what the old one lost.
+				expect(Math.max(...carried)).toBeCloseTo(1, 12);
+			}
 	});
 });

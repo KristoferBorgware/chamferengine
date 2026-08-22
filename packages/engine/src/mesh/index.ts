@@ -1,4 +1,8 @@
 export type { Geometry } from "./Geometry.js";
+export type { PatchGeometry } from "./PatchGeometry.js";
+export { PATCH_STRIDE } from "./PatchGeometry.js";
+export type { PatchOptions } from "./coarsePatchMesh.js";
+export { coarsePatchMesh } from "./coarsePatchMesh.js";
 export type { MeshSink } from "./MeshSink.js";
 export type { MeshOptions } from "./MeshOptions.js";
 export { MESH_DEFAULTS } from "./MeshOptions.js";

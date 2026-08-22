@@ -259,6 +259,9 @@ if (params.get("panel") === "1") {
 	maps.hostKnobs(panel.section("The terrain layer"));
 	maps.hostKnobs(panel.section("The mountain layer"));
 	maps.hostKnobs(panel.section("How high and how wet"));
+	// Erosion changes the map and nothing else, and the map is the picture of
+	// what it did, so its rows live under that picture with the rest.
+	maps.hostKnobs(panel.section("Erosion"));
 	onPlayerMoved = (up) => maps.setPlayer(up);
 	teardown.push(() => maps.dispose());
 }

@@ -75,6 +75,16 @@ interface Group {
 	/** Whether the group starts folded away. */
 	readonly folded?: boolean;
 
+	/**
+	 * Which panel the group is drawn on.
+	 *
+	 * The bench and the planet share every knob that decides the map, and
+	 * neither has any use for the other's. There is no sky on the bench and no
+	 * preview patch on the planet, so a row for either on the wrong page is a
+	 * row that moves nothing. Groups say `world` unless told otherwise.
+	 */
+	readonly where?: "world" | "bench" | "both";
+
 	readonly knobs: Knob[];
 }
 
@@ -89,6 +99,7 @@ interface Group {
 const GROUPS: Group[] = [
 	{
 		title: "The terrain layer",
+		where: "both",
 		knobs: [
 			{
 				key: "terrainCurve",
@@ -98,9 +109,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
 			{
-				key: "terrainScale",
+				key: "terrainFeature",
 				map: true,
-				label: "Terrain scale",
+				label: "Terrain feature",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "terrainFeatureScale",
+				map: true,
+				label: "Terrain feature scale",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
@@ -108,34 +126,6 @@ const GROUPS: Group[] = [
 				key: "terrainOctaves",
 				map: true,
 				label: "Terrain octaves",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainPersistence",
-				map: true,
-				label: "Terrain persistence",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainLacunarity",
-				map: true,
-				label: "Terrain lacunarity",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainOffsetX",
-				map: true,
-				label: "Terrain offset X",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain,
-			},
-			{
-				key: "terrainOffsetY",
-				map: true,
-				label: "Terrain offset Y",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain,
 			},
@@ -149,6 +139,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The mountain layer",
+		where: "both",
 		knobs: [
 			{
 				key: "mountainLayer",
@@ -182,13 +173,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "peakScale",
-				map: true,
-				label: "Peak scale",
-				digits: 1,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
 				key: "mountainCurve",
 				map: true,
 				label: "Mountain \u2192 range height",
@@ -196,9 +180,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
 			{
-				key: "mountainScale",
+				key: "mountainFeature",
 				map: true,
-				label: "Mountain scale",
+				label: "Mountain feature",
+				digits: 0,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
+			},
+			{
+				key: "mountainFeatureScale",
+				map: true,
+				label: "Mountain feature scale",
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
@@ -209,38 +200,11 @@ const GROUPS: Group[] = [
 				digits: 0,
 				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
 			},
-			{
-				key: "mountainPersistence",
-				map: true,
-				label: "Mountain persistence",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainLacunarity",
-				map: true,
-				label: "Mountain lacunarity",
-				digits: 2,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainOffsetX",
-				map: true,
-				label: "Mountain offset X",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainOffsetY",
-				map: true,
-				label: "Mountain offset Y",
-				digits: 0,
-				enabledWhen: (k) => k.coarseMap && !k.plain && k.mountainLayer,
-			},
 		],
 	},
 	{
 		title: "How high and how wet",
+		where: "both",
 		knobs: [
 			{
 				key: "landFraction",
@@ -273,7 +237,69 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **The one pass that is not a function of a point.** Every other knob
+		// here is read at the place it is asked about; water walks, so these
+		// are read over the whole planet on one grid before any of it can be
+		// drawn -- and that grid is the slowest step of a map build by a wide
+		// margin, so the switch above the strength is what a person reaches for
+		// rather than dragging the slider to nothing. Folded and off, because
+		// neither walk carves yet: both take the median hillslope up rather
+		// than leaving it alone while the tail grows.
+		title: "Erosion",
+		where: "both",
+		folded: true,
+		knobs: [
+			{
+				key: "erosionOn",
+				map: true,
+				label: "Erosion",
+				enabledWhen: (k) => k.coarseMap && !k.plain,
+			},
+			{
+				key: "erosion",
+				map: true,
+				label: "Strength",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
+			},
+			{
+				key: "erosionWalk",
+				map: true,
+				label: "Droplets",
+				choices: [
+					{ value: "cell", label: "Cell to cell" },
+					{ value: "free", label: "Free position" },
+				],
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
+			},
+			{
+				key: "erosionInertia",
+				map: true,
+				label: "Keeps direction",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
+				shownWhen: (k) => k.erosionWalk === "free",
+			},
+			{
+				key: "erosionCutShare",
+				map: true,
+				label: "Cut spread",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
+				shownWhen: (k) => k.erosionWalk === "cell",
+			},
+			{
+				key: "erosionMaxCut",
+				map: true,
+				label: "Deepest cut",
+				digits: 2,
+				enabledWhen: (k) => k.coarseMap && !k.plain && k.erosionOn,
+			},
+		],
+	},
+	{
 		title: "How finely it is drawn",
+		where: "both",
 		folded: true,
 		knobs: [
 			{
@@ -299,6 +325,7 @@ const GROUPS: Group[] = [
 	},
 	{
 		title: "The cell grid",
+		where: "both",
 		folded: true,
 		knobs: [
 			{
@@ -319,6 +346,84 @@ const GROUPS: Group[] = [
 					s.crustCap === "asked"
 						? null
 						: `${(s.crustDepth * s.knobs.blockSize).toFixed(0)} m, ${s.crustDepth} layers`,
+			},
+		],
+	},
+	{
+		// **The patch is a place, and where it stands is not a world
+		// parameter.** Every other group here is read by the engine; these two
+		// move the bench and leave the ground exactly where it was, so a link
+		// carrying them describes the same planet.
+		title: "The patch",
+		where: "bench",
+		knobs: [
+			{
+				key: "patchLatitude",
+				label: "Latitude",
+				digits: 0,
+			},
+			{
+				key: "patchLongitude",
+				label: "Longitude",
+				digits: 0,
+			},
+			{
+				key: "patchCells",
+				label: "Cells across",
+				digits: 0,
+			},
+		],
+	},
+	{
+		title: "The view \u2014 not the world",
+		where: "bench",
+		folded: true,
+		knobs: [
+			{
+				key: "patchMap",
+				label: "Map shows",
+				choices: [
+					{ value: "patch", label: "The patch" },
+					{ value: "planet", label: "The planet" },
+				],
+			},
+			{
+				key: "patchPicture",
+				label: "Picture",
+				choices: [
+					{ value: "ground", label: "Ground" },
+					{ value: "height", label: "Height" },
+					{ value: "raw", label: "Raw" },
+					{ value: "terrain", label: "Terrain layer" },
+					{ value: "mountain", label: "Mountain layer" },
+					{ value: "erosion", label: "What the water did" },
+				],
+			},
+			{
+				key: "patchSurface",
+				label: "Surface",
+				choices: [
+					{ value: "solid", label: "Solid" },
+					{ value: "wire", label: "Cell rims" },
+					{ value: "both", label: "Both" },
+				],
+			},
+			{
+				key: "patchAlong",
+				label: "Contour along",
+				choices: [
+					{ value: "x", label: "East" },
+					{ value: "z", label: "North" },
+				],
+			},
+			{
+				key: "patchLift",
+				label: "Height x",
+				digits: 2,
+			},
+			{
+				key: "patchContours",
+				label: "Ring every 100 m",
 			},
 		],
 	},
@@ -640,12 +745,17 @@ export class ParameterPanel {
 	 */
 	private liveRebuild = false;
 
+	/** Whether the bench's own rows are on this panel. */
+	private readonly bench: boolean;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
 		onDraft: (settings: PlanetSettings) => void = () => {},
 		onLiveRebuild: (settings: PlanetSettings) => void = () => {},
+		options: { readonly bench?: boolean } = {},
 	) {
+		this.bench = options.bench ?? false;
 		this.draft = { ...settings.knobs };
 		this.onLive = onLive;
 		this.onDraft = onDraft;
@@ -654,6 +764,35 @@ export class ParameterPanel {
 		this.root.className = "knobs";
 		this.build();
 		document.body.appendChild(this.root);
+	}
+
+	/**
+	 * Put an element at the top of the panel, above every row and fixed there.
+	 *
+	 * **The picture is the reference; the knobs are the work.** Scrolling to
+	 * reach a knob must never carry the picture off the top of the panel, which
+	 * is the one thing a panel must not do to the thing it is a panel of. What
+	 * is mounted here stays while the rows below it move.
+	 */
+	mount(element: HTMLElement): void {
+		this.root.insertBefore(element, this.root.children[1] ?? null);
+	}
+
+	/** Put an element at the bottom of the scrolling rows. */
+	footer(element: HTMLElement): void {
+		this.root.querySelector(".knobs-body")?.appendChild(element);
+	}
+
+	/**
+	 * Move some knobs from outside the panel, as if their rows had been dragged.
+	 *
+	 * A place clicked on a map is a latitude and a longitude, and the two rows
+	 * that hold them have to agree with it or the panel is describing a patch
+	 * that is not the one on screen.
+	 */
+	set(values: Partial<PlanetKnobs>): void {
+		Object.assign(this.draft, values);
+		this.touch(false, "patchLatitude");
 	}
 
 	/**
@@ -701,6 +840,9 @@ export class ParameterPanel {
 		// they are in is what each one decides rather than which subsystem
 		// happens to read it.
 		for (const group of GROUPS) {
+			const where = group.where ?? "world";
+			if (where !== "both" && (where === "bench") !== this.bench)
+				continue;
 			const section = document.createElement("section");
 			if (group.folded) section.classList.add("shut");
 
@@ -762,6 +904,18 @@ export class ParameterPanel {
 			void navigator.clipboard?.writeText(this.href());
 		};
 		bar.append(this.applyButton, reset, copy);
+		// **The way to the bench, carrying this world with it.** Choosing
+		// terrain numbers is looking at ground, and the bench is a page where
+		// the ground is the whole window rather than a picture over one.
+		if (!this.bench) {
+			const bench = document.createElement("a");
+			bench.textContent = "Terrain bench";
+			bench.href = "./terrain.html";
+			bench.onclick = () => {
+				bench.href = `./terrain.html?${this.settings.toParams().toString()}`;
+			};
+			bar.appendChild(bench);
+		}
 		body.appendChild(bar);
 
 		this.refresh();
@@ -927,16 +1081,16 @@ export class ParameterPanel {
 			const k = this.draft as unknown as Record<string, number>;
 			const key = [
 				this.draft.seed,
-				k[`${layer}Scale`],
+				k[`${layer}Feature`],
+				k[`${layer}FeatureScale`],
 				k[`${layer}Octaves`],
-				k[`${layer}Persistence`],
-				k[`${layer}Lacunarity`],
-				k[`${layer}OffsetX`],
-				k[`${layer}OffsetY`],
 			].join(":");
 			if (key === histKey) return;
 			histKey = key;
-			const settings = layerNoiseSettings(this.settings.layerFor(layer));
+			const settings = layerNoiseSettings(
+				this.settings.layerFor(layer),
+				this.settings.radius,
+			);
 			const offset =
 				layer === "terrain"
 					? TERRAIN_SEED_OFFSET
@@ -1219,9 +1373,9 @@ export class ParameterPanel {
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			(settings.knobs.coarseMap
 				? `<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
-					`<span>terrain <b>${settings.knobs.terrainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
+					`<span>terrain <b>${settings.widestOf("terrain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
 					(settings.knobs.mountainLayer
-						? `<span>mountains <b>${settings.knobs.mountainScale.toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
+						? `<span>mountains <b>${settings.widestOf("mountain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
 						: `<span>mountain layer <b>off</b></span>`)
 				: `<span>height map <b>off</b></span>`) +
 			// The camera's own height, not a figure typed in beside it: the two

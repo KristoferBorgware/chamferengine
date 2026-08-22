@@ -258,17 +258,30 @@ describe("a slider narrowed by the rest of the draft", () => {
 });
 
 describe("the two layers", () => {
-	it("names the narrowest octave each layer makes", () => {
-		// Each octave is `lacunarity` times narrower than the one above, so
-		// four octaves at lacunarity 2 reach an eighth of the widest feature.
-		// The two layers are asked separately: they do not share a falloff.
+	it("multiplies the two rows that set a layer's width", () => {
+		// The coarse slider carries the decade and the fine one picks the value
+		// inside it, so what the layer is set to is the product.
 		const s = new PlanetSettings({
-			terrainScale: 4000,
+			terrainFeature: 500,
+			terrainFeatureScale: 8,
+			mountainFeature: 250,
+			mountainFeatureScale: 8,
+		});
+		expect(s.widestOf("terrain")).toBeCloseTo(4000, 6);
+		expect(s.widestOf("mountain")).toBeCloseTo(2000, 6);
+	});
+
+	it("names the narrowest octave each layer makes", () => {
+		// Each octave is half as wide as the one above, so four octaves reach
+		// an eighth of the widest feature. The two layers are asked separately:
+		// they carry their own width and their own count.
+		const s = new PlanetSettings({
+			terrainFeature: 500,
+			terrainFeatureScale: 8,
 			terrainOctaves: 4,
-			terrainLacunarity: 2,
-			mountainScale: 2000,
+			mountainFeature: 250,
+			mountainFeatureScale: 8,
 			mountainOctaves: 3,
-			mountainLacunarity: 2,
 		});
 		expect(s.narrowestOf("terrain")).toBeCloseTo(500, 6);
 		expect(s.narrowestOf("mountain")).toBeCloseTo(500, 6);
@@ -277,11 +290,12 @@ describe("the two layers", () => {
 
 	it("takes the narrower of the two, and ignores a layer that is off", () => {
 		const both = new PlanetSettings({
-			terrainScale: 4000,
+			terrainFeature: 500,
+			terrainFeatureScale: 8,
 			terrainOctaves: 1,
-			mountainScale: 4000,
+			mountainFeature: 500,
+			mountainFeatureScale: 8,
 			mountainOctaves: 4,
-			mountainLacunarity: 2,
 			mountainLayer: true,
 		});
 		expect(both.smallestLandform).toBeCloseTo(500, 6);
@@ -298,11 +312,67 @@ describe("the two layers", () => {
 		const tooFine = new PlanetSettings({
 			plain: false,
 			coarseMap: true,
-			terrainScale: 4000,
+			terrainFeature: 500,
+			terrainFeatureScale: 8,
 			terrainOctaves: 8,
 			coarseSpacing: 128,
 		});
 		expect(tooFine.problems().join(" ")).toMatch(/narrowest octave/);
+	});
+});
+
+describe("the erosion rows", () => {
+	it("carries the walk through a query string, and refuses a name off the list", () => {
+		// A link is how a world travels, and it can say anything: a knob that
+		// names one of a fixed set keeps the value it had rather than taking a
+		// word nothing in the engine answers to.
+		const chosen = PlanetSettings.fromParams(
+			new URLSearchParams(
+				"erosion=0.6&erosionWalk=free&erosionInertia=0.45",
+			),
+		);
+		expect(chosen.knobs.erosionWalk).toBe("free");
+		expect(chosen.knobs.erosionInertia).toBeCloseTo(0.45, 9);
+		expect(chosen.toParams().get("erosionWalk")).toBe("free");
+		const nonsense = PlanetSettings.fromParams(
+			new URLSearchParams("erosionWalk=sideways"),
+		);
+		expect(nonsense.knobs.erosionWalk).toBe("cell");
+	});
+
+	it("hands every erosion row to the engine", () => {
+		const options = new PlanetSettings({
+			erosionOn: true,
+			erosion: 0.4,
+			erosionWalk: "free",
+			erosionMaxCut: 0.03,
+			erosionCutShare: 0.1,
+			erosionInertia: 0.6,
+		}).coarseOptions();
+		expect(options.erosion).toBeCloseTo(0.4, 9);
+		expect(options.erosionWalk).toBe("free");
+		expect(options.erosionMaxCut).toBeCloseTo(0.03, 9);
+		expect(options.erosionCutShare).toBeCloseTo(0.1, 9);
+		expect(options.erosionInertia).toBeCloseTo(0.6, 9);
+	});
+
+	it("hands the engine a strength of zero when the switch is off", () => {
+		// Off is a strength of zero rather than a flag the pass reads: the pass
+		// returns on its first line and the ground is the noise exactly as it
+		// fell. That also means the map editor routes the switch to the erosion
+		// step, because it compares the options the engine is handed.
+		const off = new PlanetSettings({ erosionOn: false, erosion: 1 });
+		expect(off.coarseOptions().erosion).toBe(0);
+		const on = new PlanetSettings({ erosionOn: true, erosion: 1 });
+		expect(on.coarseOptions().erosion).toBe(1);
+	});
+
+	it("keeps the strength off its own bottom, because the switch is the off", () => {
+		// A slider that reaches zero beside a switch that means zero is a
+		// position meaning the same as the switch.
+		expect(new PlanetSettings({}).rangeFor("erosion").low).toBeGreaterThan(
+			0,
+		);
 	});
 });
 

@@ -447,10 +447,20 @@
 				return {
 					frequency: k[which + "Frequency"],
 					octaves: k[which + "Octaves"],
-					persistence: k[which + "Persistence"],
-					lacunarity: k[which + "Lacunarity"],
-					offsetX: k[which + "OffsetX"],
-					offsetY: k[which + "OffsetY"],
+					// **The falloff and the step between octaves are fixed.**
+					// Halving the amplitude and doubling the frequency each
+					// octave is what fBm is, and the metre fit divides whatever
+					// the stack reaches straight back out -- so moving either one
+					// changed how rough the ground was and not how tall, which is
+					// a question the two layers and their curves already answer
+					// where it can be seen.
+					persistence: 0.5,
+					lacunarity: 2,
+					// **There is no offset.** Sliding a field sideways names a
+					// different world, and the seed already does that -- with
+					// every octave moved rather than the stack as a whole.
+					offsetX: 0,
+					offsetY: 0,
 					// **The stack is always the octave stack, always summed low
 					// first, and always divided by the summed amplitude.** Both
 					// of the other readings were on the panel as choices and
@@ -584,6 +594,51 @@
 				[1, -1],
 			];
 
+			/**
+			 * For each face, where each of its three edges leads.
+			 *
+			 * Twenty faces times three edges is sixty entries, each a face number
+			 * and an edge number: 180 bytes for every seam on the planet. Edge
+			 * `e` runs from vertex `e` to vertex `(e + 1) % 3`. Every matched
+			 * pair is traversed in opposite directions by its two faces, which is
+			 * the signature of consistent outward winding, so no orientation flag
+			 * is stored.
+			 */
+			const FACE_ADJACENCY = FACES.map((f, at) =>
+				[0, 1, 2].map((e) => {
+					const a = f[e];
+					const b = f[(e + 1) % 3];
+					for (let g = 0; g < 20; g++) {
+						if (g === at) continue;
+						for (let other = 0; other < 3; other++) {
+							const c = FACES[g][other];
+							const d = FACES[g][(other + 1) % 3];
+							if ((a === c && b === d) || (a === d && b === c))
+								return { face: g, edge: other };
+						}
+					}
+					throw new Error(`face ${at} edge ${e} has no neighbour`);
+				}),
+			);
+
+			/**
+			 * Turn a set of weights on global vertex numbers into an offset on
+			 * `face`.
+			 *
+			 * The weights need not be whole. A lattice point carries integers and
+			 * a droplet standing between cells carries the fractions between
+			 * them, and both are the same three numbers attached to the same
+			 * three vertices.
+			 */
+			function offsetOn(face, weights) {
+				const ids = FACES[face];
+				return {
+					face,
+					i: weights.get(ids[1]) ?? 0,
+					j: weights.get(ids[2]) ?? 0,
+				};
+			}
+
 			/** How many lattice points a triangle of side `m` holds. */
 			function chunkSlots(m) {
 				return ((m + 1) * (m + 2)) / 2;
@@ -672,6 +727,39 @@
 				let best = all[0];
 				for (const c of all) if (c.face < best.face) best = c;
 				return best;
+			}
+
+			/**
+			 * Move a set of weights across the edge opposite vertex `leaving`.
+			 *
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
 			}
 
 			/**
@@ -770,6 +858,39 @@
 					return this.faceIndex[face * this.slots + rank(i, j, this.n)];
 				}
 
+				/**
+				 * The cell at `(i, j)`, reaching one step past the face if it
+				 * has to.
+				 *
+				 * A blend reads the three lattice points around a position, and
+				 * near a face edge one of the three sits outside the triangle. It
+				 * is a real cell on the face over that edge, so the reflection
+				 * names it and a field runs across the seam without a break --
+				 * without which a droplet approaching an edge reads a cliff that
+				 * is not there.
+				 *
+				 * **One reflection, so one weight may be negative and the other
+				 * two must be positive.** A point past an icosahedron vertex has
+				 * a negative weight on the far side of the reflection as well and
+				 * needs the pentagon's own ring; the three corners of a blend
+				 * never reach one, because they are the triangle the position
+				 * stands in. Anything the reflection cannot name comes back as
+				 * `-1`.
+				 */
+				indexNear(face, i, j) {
+					const w = latticeWeights(this.n, i, j);
+					let negative = -1;
+					for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+					if (negative < 0)
+						return this.faceIndex[face * this.slots + rank(i, j, this.n)];
+					const over = acrossEdge(face, w, negative);
+					if (over.i < 0 || over.j < 0 || over.i + over.j > this.n)
+						return -1;
+					return this.faceIndex[
+						over.face * this.slots + rank(over.i, over.j, this.n)
+					];
+				}
+
 				/** How many neighbours a cell has: 5 on the twelve pentagons, 6 elsewhere. */
 				degreeOf(cell) {
 					return this.ring[cell * 6 + 5] < 0 ? 5 : 6;
@@ -834,92 +955,110 @@
 				return [wa / s, wb / s, wc / s];
 			}
 
-			/** How many droplets one unit of the knob runs, per cell of the map. */
-			const DROPLETS_PER_CELL = 1.5;
+			/**
+			 * What a droplet does, in metres and fractions rather than in grid
+			 * units.
+			 *
+			 * **Heights are metres and the grid is metres**, so every number
+			 * here means something on the ground: a knob set once holds its
+			 * meaning on a planet of any size and a map drawn at any level.
+			 */
+			const DROPLET = {
+				/** How many droplets one unit of the erosion knob runs, per cell of the map. */
+				perCell: 1.5,
 
-			/** How many cells a droplet may cross before it is abandoned. */
-			const MAX_STEPS = 48;
+				/** How many cells a droplet may cross before it is abandoned. */
+				maxSteps: 48,
+
+				/**
+				 * How much a droplet may carry, as metres of height per unit of
+				 * gradient.
+				 *
+				 * Capacity is a **gradient** times this, never a fall in metres
+				 * times a cell width -- that made a droplet crossing flat ground
+				 * on a 100 m map want to carry `15 m` of material, and cut it
+				 * out. The gradient form means the same hillside erodes by the
+				 * same amount whatever the map's cell size is.
+				 */
+				capacity: 8,
+
+				/** A floor under the gradient, so a droplet on flat ground still carries. */
+				minGradient: 0.01,
+
+				/** How much of the excess a slowing droplet puts down in one step. */
+				depositRate: 0.1,
+
+				/** How much of the shortfall a hungry droplet cuts out in one step. */
+				erosionRate: 0.05,
+
+				/**
+				 * The most of one step's fall a single droplet may cut, as a
+				 * fraction.
+				 *
+				 * A cell is crossed by dozens of droplets, so a tenth each is
+				 * still a valley by the end, and the shapes come out graded
+				 * rather than pocked.
+				 */
+				maxCut: 0.1,
+
+				/**
+				 * What a cell keeps of the material a cell-to-cell droplet cut
+				 * from it; the rest is divided over the ring.
+				 *
+				 * At `0.5` the centre drops six times as far as any neighbour,
+				 * which is a spike, and a pass built out of spikes adds
+				 * roughness rather than carving.
+				 */
+				cutShare: 0.5,
+
+				/** How much of the previous direction a free droplet keeps. */
+				inertia: 0.3,
+
+				/** How much speed a droplet gains per metre of fall. */
+				gravity: 4,
+
+				/** How much of a droplet's water is gone after one step. */
+				evaporation: 0.02,
+			};
 
 			/**
-			 * How much a droplet may carry, as metres of height per unit of
-			 * gradient.
+			 * Cut valleys into a height field by running water over it, cell to
+			 * cell.
 			 *
-			 * Capacity is a **gradient** times this, never a fall in metres times
-			 * a cell width -- that made a droplet crossing flat ground on a 100 m
-			 * map want to carry `15 m` of material, and cut it out. The gradient
-			 * form means the same hillside erodes by the same amount whatever the
-			 * map's cell size is.
+			 * A droplet starts on a hashed cell and walks downhill, taking the
+			 * steepest step it can find. How much it can carry depends on how
+			 * fast it is going and how steeply the ground falls; where it can
+			 * carry more than it holds it cuts, and where it slows or runs onto
+			 * flat ground it puts material back down.
+			 *
+			 * **No routing, no pits, no rivers.** A droplet only ever looks at
+			 * the cell it is standing on and the six around it.
+			 *
+			 * **The direction is one of six, and the cut lands on one cell and
+			 * its ring.** On ground whose gradient is gentle and smooth the same
+			 * neighbour keeps winning, so the walk locks to a lattice axis; and
+			 * half of each cut is taken from the centre against a twelfth from
+			 * each neighbour, which is a spike.
+			 *
+			 * `options` carries the two constants the panel moves and the range
+			 * a sliced run needs. Droplets run one after another, so a
+			 * contiguous range is the same arithmetic in the same order as the
+			 * whole run.
 			 */
-			const CAPACITY = 8;
-
-			/** A floor under the gradient, so a droplet on flat ground still carries. */
-			const MIN_GRADIENT = 0.01;
-
-			/** How much of the excess a slowing droplet puts down in one step. */
-			const DEPOSIT_RATE = 0.1;
-
-			/** How much of the shortfall a hungry droplet cuts out in one step. */
-			const EROSION_RATE = 0.05;
-
-			/**
-			 * The most of one step's fall a single droplet may cut, as a fraction.
-			 *
-			 * A cell is crossed by dozens of droplets, so a tenth each is still a
-			 * valley by the end, and the shapes come out graded rather than
-			 * pocked.
-			 */
-			const MAX_CUT = 0.1;
-
-			/** What a cell keeps of the material cut from it; the rest goes to the ring. */
-			const CUT_SHARE = 0.5;
-
-			/** How much speed a droplet gains per metre of fall. */
-			const GRAVITY = 4;
-
-			/** How much of a droplet's water is gone after one step. */
-			const EVAPORATION = 0.02;
-
-			/**
-			 * Cut valleys into a height field by running water over it.
-			 *
-			 * A droplet starts on a hashed cell and walks downhill, cell to cell,
-			 * taking the steepest step it can find. How much it can carry depends
-			 * on how fast it is going and how steeply the ground falls; where it
-			 * can carry more than it holds it cuts, and where it slows or runs
-			 * onto flat ground it puts material back down. It looks only at the
-			 * cell it stands on and the six around it -- no routing, no pit
-			 * filling, no stored flow.
-			 *
-			 * **Heights are metres and the grid is metres**, so every constant
-			 * above means something on the ground rather than in grid units: a
-			 * knob set once holds its meaning on a planet of any size and a map
-			 * drawn at any level.
-			 *
-			 * `over` carries what the panel changes and what a sliced run needs:
-			 * `maxCut`, `cutShare`, and a `from` and `take` that run part of the
-			 * droplets. Droplets run one after another, so a contiguous range is
-			 * the same arithmetic in the same order as the whole run. Called with
-			 * five arguments this is the engine's pass exactly.
-			 *
-			 * `maxCut` is the most of one step's fall a single droplet may take.
-			 * Without it a droplet meeting a tall step takes the whole thing at
-			 * once and leaves a pit for the next one to fall into. `cutShare` is
-			 * how much of a cut stays on the cell the droplet stands on, the rest
-			 * being divided over the ring: at `0.5` the centre drops six times as
-			 * far as any neighbour, which is a spike, and at `0` the cut is flat
-			 * across the seven.
-			 *
-			 * Every draw is hashed from the seed and the droplet's number rather
-			 * than taken from a running generator, and droplets run one after
-			 * another, so the result does not depend on anything but the seed.
-			 */
-			function erodeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
-				const maxCut = over.maxCut ?? MAX_CUT;
-				const cutShare = over.cutShare ?? CUT_SHARE;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+			function erodeDroplets(
+				grid,
+				height,
+				seed,
+				strength,
+				cellMetres,
+				options = {},
+			) {
+				const maxCut = options.maxCut ?? DROPLET.maxCut;
+				const cutShare = options.cutShare ?? DROPLET.cutShare;
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				if (droplets <= 0) return 0;
-				const from = over.from ?? 0;
-				const until = Math.min(droplets, from + (over.take ?? droplets));
+				const from = options.from ?? 0;
+				const until = Math.min(droplets, from + (options.take ?? droplets));
 
 				for (let drop = from; drop < until; drop++) {
 					let cell = Math.min(
@@ -932,7 +1071,7 @@
 					let speed = 1;
 					let water = 1;
 
-					for (let step = 0; step < MAX_STEPS; step++) {
+					for (let step = 0; step < DROPLET.maxSteps; step++) {
 						// The steepest of the six, which is where the water would
 						// actually go. A pentagon has five and the ring says so.
 						let next = -1;
@@ -954,22 +1093,25 @@
 							break;
 						}
 
-						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
-						const capacity = gradient * speed * water * CAPACITY;
+						const gradient = Math.max(
+							fall / cellMetres,
+							DROPLET.minGradient,
+						);
+						const capacity = gradient * speed * water * DROPLET.capacity;
 
 						if (sediment > capacity) {
-							const put = (sediment - capacity) * DEPOSIT_RATE;
+							const put = (sediment - capacity) * DROPLET.depositRate;
 							sediment -= put;
 							height[cell] = height[cell] + put;
 						} else {
 							const cut = Math.min(
-								(capacity - sediment) * EROSION_RATE,
+								(capacity - sediment) * DROPLET.erosionRate,
 								fall * maxCut,
 							);
 							sediment += cut;
-							// Spread most of it over the ring, so one cell does not
-							// become a spike of its own. What the ring cannot take
-							// stays here.
+							// Spread most of it over the ring, so one cell does
+							// not become a spike of its own. What the ring cannot
+							// take stays here.
 							let taken = 0;
 							let degree = 0;
 							for (let k = 0; k < 6; k++)
@@ -985,38 +1127,15 @@
 							height[cell] = height[cell] - (cut - taken);
 						}
 
-						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
-						water *= 1 - EVAPORATION;
+						speed = Math.sqrt(
+							Math.max(0, speed * speed + fall * DROPLET.gravity),
+						);
+						water *= 1 - DROPLET.evaporation;
 						cell = next;
 					}
 				}
 				return droplets;
 			}
-			// ===== END engine coarse grid =====
-
-			// ---------------------------------------------------------------
-			// The second droplet walk, which is not in the engine yet.
-			// ---------------------------------------------------------------
-
-			/**
-			 * The two lattice axes as metres on the plane of a face, 60 degrees
-			 * apart. A step of one in `i` and a step of one in `j` are the same
-			 * length and are not at a right angle, so a direction cannot be read
-			 * off `(i, j)` without them.
-			 */
-			const LATTICE_I = [1, 0];
-			const LATTICE_J = [0.5, Math.sqrt(3) / 2];
-			const LATTICE_DET =
-				LATTICE_I[0] * LATTICE_J[1] - LATTICE_I[1] * LATTICE_J[0];
-
-			/**
-			 * How many droplets of the last free run ended at a face edge.
-			 *
-			 * A count rather than a return value, because the pass is run in
-			 * slices and the share is of the whole run.
-			 */
-			let strandedDroplets = 0;
-
 			/**
 			 * Cut valleys with a droplet that stands between cells rather than on
 			 * one.
@@ -1029,41 +1148,55 @@
 			 * direction, against 1.4% for the walk here.
 			 *
 			 * This one carries a **position and a direction**. The position is a
-			 * fractional `(i, j)` in one face; the height under it is the blend of
+			 * fractional `(i, j)` on a face; the height under it is the blend of
 			 * the three lattice points around it, which is the same blend the
-			 * terrain generator reads the map with. The direction is the downhill
-			 * gradient of that blend, mixed with the direction the droplet already
-			 * had, so it cannot turn instantly and it is never one of six.
+			 * terrain generator reads the map with. The direction is downhill on
+			 * that blend, mixed with the direction the droplet already had, so it
+			 * cannot turn instantly and it is never one of six.
+			 *
+			 * **The two lattice axes are the same length and sixty degrees
+			 * apart**, so the steepest way down is not where the raw pair of
+			 * partial derivatives points. The metric between the axes is
+			 * `[[1, 0.5], [0.5, 1]]`, and downhill is its inverse applied to
+			 * those partials, which is where the thirds below come from. Reading
+			 * the pair straight tilts every droplet toward one axis, which is the
+			 * fault this walk exists to remove.
 			 *
 			 * **The cut is spread over the same three points by the same
 			 * weights.** A droplet standing on exactly one cell can only cut a
 			 * spike into it, and a pass built out of spikes adds high-frequency
 			 * roughness: the cell-to-cell walk takes the median hillslope from
-			 * 0.427 to 0.602 at full strength, where this takes it to 0.472.
+			 * 0.469 to 0.658 at full strength, where this takes it to 0.515.
 			 *
-			 * A droplet that reaches the edge of its face settles there and
-			 * stops. Crossing is the linear map on barycentric weights that the
-			 * neighbour function already uses, and it is not written here, so 11%
-			 * of droplets end early and the thirty face edges are cut a little
-			 * less than their surroundings.
+			 * **A step that leaves the face is cut at the edge and finished on
+			 * the other side**, so the twenty faces are one surface to a droplet
+			 * and the thirty seams take the same water as everywhere else.
 			 */
-			function erodeFreeDroplets(grid, height, seed, strength, cellMetres, over = {}) {
-				const maxCut = over.maxCut ?? MAX_CUT;
-				const inertia = over.inertia ?? 0.3;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+			function erodeFreeDroplets(
+				grid,
+				height,
+				seed,
+				strength,
+				cellMetres,
+				options = {},
+			) {
+				const maxCut = options.maxCut ?? DROPLET.maxCut;
+				const inertia = options.inertia ?? DROPLET.inertia;
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				if (droplets <= 0) return 0;
-				const from = over.from ?? 0;
-				const until = Math.min(droplets, from + (over.take ?? droplets));
+				const from = options.from ?? 0;
+				const until = Math.min(droplets, from + (options.take ?? droplets));
 				const n = grid.n;
 
 				// The three lattice points under a fractional position, and the
 				// weights to mix them with. Held outside the loop because this
-				// runs a few tens of millions of times and allocating three
-				// numbers each time is the whole cost.
+				// runs a few tens of millions of times.
 				const cells = [0, 0, 0];
 				const weights = [0, 0, 0];
+				const cornerI = [0, 0, 0];
+				const cornerJ = [0, 0, 0];
 
-				/** Fill `cells` and `weights`, or report that the point is off the face. */
+				/** Fill `cells` and `weights`, or report that the point has no ground. */
 				function corners(face, fi, fj) {
 					const i0 = Math.floor(fi);
 					const j0 = Math.floor(fj);
@@ -1072,24 +1205,36 @@
 					// The remainders land in one of the two triangles the square
 					// of steps is cut into, and which one decides the three
 					// corners.
-					const near = a + b <= 1;
-					const oi = near ? [i0, i0 + 1, i0] : [i0 + 1, i0, i0 + 1];
-					const oj = near ? [j0, j0, j0 + 1] : [j0, j0 + 1, j0 + 1];
-					weights[0] = near ? 1 - a - b : 1 - b;
-					weights[1] = near ? a : 1 - a;
-					weights[2] = near ? b : a + b - 1;
+					if (a + b <= 1) {
+						cornerI[0] = i0;
+						cornerJ[0] = j0;
+						cornerI[1] = i0 + 1;
+						cornerJ[1] = j0;
+						cornerI[2] = i0;
+						cornerJ[2] = j0 + 1;
+						weights[0] = 1 - a - b;
+						weights[1] = a;
+						weights[2] = b;
+					} else {
+						cornerI[0] = i0 + 1;
+						cornerJ[0] = j0;
+						cornerI[1] = i0;
+						cornerJ[1] = j0 + 1;
+						cornerI[2] = i0 + 1;
+						cornerJ[2] = j0 + 1;
+						weights[0] = 1 - b;
+						weights[1] = 1 - a;
+						weights[2] = a + b - 1;
+					}
 					for (let t = 0; t < 3; t++) {
-						const i = oi[t];
-						const j = oj[t];
-						if (i < 0 || j < 0 || i + j > n) return false;
-						const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+						const cell = grid.indexNear(face, cornerI[t], cornerJ[t]);
 						if (cell < 0) return false;
 						cells[t] = cell;
 					}
 					return true;
 				}
 
-				/** The ground under a fractional position, or `NaN` off the face. */
+				/** The ground under a fractional position, or `NaN` where there is none. */
 				function groundAt(face, fi, fj) {
 					if (!corners(face, fi, fj)) return NaN;
 					return (
@@ -1106,6 +1251,74 @@
 						height[cells[t]] += weights[t] * amount;
 				}
 
+				// Where a step ended, after however many face edges it crossed,
+				// and the two weight triples a step is tested against. Held out
+				// here for the same reason the corner arrays are.
+				const landed = { face: 0, i: 0, j: 0, vi: 0, vj: 0 };
+				const standing = [0, 0, 0];
+				const going = [0, 0, 0];
+
+				/**
+				 * Take one step, cut at each face edge it reaches and carried
+				 * onto the next face.
+				 *
+				 * Three passes, because a step of one cell can cross two edges
+				 * where faces meet at an icosahedron vertex, and the third is
+				 * what leaves the loop.
+				 */
+				function step(face, fi, fj, di, dj, vi, vj) {
+					let left = 1;
+					for (let crossing = 0; crossing < 3 && left > 1e-9; crossing++) {
+						standing[0] = n - fi - fj;
+						standing[1] = fi;
+						standing[2] = fj;
+						going[0] = -di - dj;
+						going[1] = di;
+						going[2] = dj;
+						// The first edge this step runs into, and how much of the
+						// step gets there.
+						let reached = left;
+						let leaving = -1;
+						for (let t = 0; t < 3; t++) {
+							if (going[t] >= 0) continue;
+							const share = standing[t] / -going[t];
+							if (share < reached) {
+								reached = share;
+								leaving = t;
+							}
+						}
+						fi += di * reached;
+						fj += dj * reached;
+						left -= reached;
+						if (leaving < 0) break;
+						// Standing on the edge. The position does not move; the
+						// step and the direction carried into it are rewritten
+						// under the neighbouring face's name.
+						standing[0] = n - fi - fj;
+						standing[1] = fi;
+						standing[2] = fj;
+						const at = acrossEdge(face, standing, leaving);
+						const walk = acrossEdge(face, going, leaving);
+						going[0] = -vi - vj;
+						going[1] = vi;
+						going[2] = vj;
+						const carried = acrossEdge(face, going, leaving);
+						face = at.face;
+						fi = at.i;
+						fj = at.j;
+						di = walk.i;
+						dj = walk.j;
+						vi = carried.i;
+						vj = carried.j;
+					}
+					landed.face = face;
+					landed.i = fi;
+					landed.j = fj;
+					landed.vi = vi;
+					landed.vj = vj;
+					return landed;
+				}
+
 				for (let drop = from; drop < until; drop++) {
 					const start = Math.min(
 						grid.count - 1,
@@ -1120,88 +1333,100 @@
 					const x = grid.directions[start * 3];
 					const y = grid.directions[start * 3 + 1];
 					const z = grid.directions[start * 3 + 2];
-					const face = faceOf(x, y, z);
+					let face = faceOf(x, y, z);
 					const w = barycentricOf(face, x, y, z);
 					let fi = w[1] * n + hash3(drop, 5, 0, seed) - 0.5;
 					let fj = w[2] * n + hash3(drop, 9, 0, seed) - 0.5;
+					// The scatter can push a start past its own face. Standing
+					// exactly on the cell is where it came from and is always
+					// inside.
+					if (fi < 0 || fj < 0 || fi + fj > n) {
+						fi = w[1] * n;
+						fj = w[2] * n;
+					}
 					let sediment = 0;
 					let speed = 1;
 					let water = 1;
-					let vx = 0;
-					let vy = 0;
+					let vi = 0;
+					let vj = 0;
 
-					for (let step = 0; step < MAX_STEPS; step++) {
+					for (let taken = 0; taken < DROPLET.maxSteps; taken++) {
 						const here = groundAt(face, fi, fj);
 						if (!Number.isFinite(here)) break;
 						// The gradient of the blend, read half a step out on each
-						// axis. Half rather than one, because a whole step reaches
-						// past the three points the height itself came from.
+						// axis. Half rather than one, because a whole step
+						// reaches past the three points the height came from.
 						const reach = 0.5;
 						const alongI = groundAt(face, fi + reach, fj);
 						const alongJ = groundAt(face, fi, fj + reach);
 						if (!Number.isFinite(alongI) || !Number.isFinite(alongJ)) {
 							spread(face, fi, fj, sediment);
-							strandedDroplets++;
 							break;
 						}
 						const gi = (alongI - here) / reach;
 						const gj = (alongJ - here) / reach;
-						// Downhill, on the plane the two axes span.
-						const px = -(gi * LATTICE_I[0] + gj * LATTICE_J[0]);
-						const py = -(gi * LATTICE_I[1] + gj * LATTICE_J[1]);
-						vx = vx * inertia + px * (1 - inertia);
-						vy = vy * inertia + py * (1 - inertia);
-						const length = Math.sqrt(vx * vx + vy * vy);
+						// Downhill, through the inverse of the metric the two
+						// axes span.
+						const pi = -(4 * gi - 2 * gj) / 3;
+						const pj = -(4 * gj - 2 * gi) / 3;
+						vi = vi * inertia + pi * (1 - inertia);
+						vj = vj * inertia + pj * (1 - inertia);
+						// The length of a step on axes sixty degrees apart is not
+						// the length of the pair that names it.
+						const length = Math.sqrt(vi * vi + vi * vj + vj * vj);
 						if (length < 1e-12) {
 							spread(face, fi, fj, sediment);
 							break;
 						}
-						const ux = vx / length;
-						const uy = vy / length;
-						// One cell of travel, turned back into a step in `(i, j)`.
-						const di =
-							(ux * LATTICE_J[1] - uy * LATTICE_J[0]) / LATTICE_DET;
-						const dj =
-							(LATTICE_I[0] * uy - LATTICE_I[1] * ux) / LATTICE_DET;
-						const ni = fi + di;
-						const nj = fj + dj;
-						const there = groundAt(face, ni, nj);
+						const moved = step(
+							face,
+							fi,
+							fj,
+							vi / length,
+							vj / length,
+							vi,
+							vj,
+						);
+						const there = groundAt(moved.face, moved.i, moved.j);
 						if (!Number.isFinite(there)) {
 							spread(face, fi, fj, sediment);
-							strandedDroplets++;
 							break;
 						}
 						const fall = here - there;
 						// Momentum can carry a droplet uphill. It has run into a
-						// wall, and what it was carrying settles where it stands.
+						// wall, and what it holds settles where it stands.
 						if (fall <= 0) {
 							spread(face, fi, fj, sediment);
 							break;
 						}
 
-						const gradient = Math.max(fall / cellMetres, MIN_GRADIENT);
-						const capacity = gradient * speed * water * CAPACITY;
+						const gradient = Math.max(fall / cellMetres, DROPLET.minGradient);
+						const capacity = gradient * speed * water * DROPLET.capacity;
 						if (sediment > capacity) {
-							const put = (sediment - capacity) * DEPOSIT_RATE;
+							const put = (sediment - capacity) * DROPLET.depositRate;
 							sediment -= put;
 							spread(face, fi, fj, put);
 						} else {
-							const cut = Math.min(
-								(capacity - sediment) * EROSION_RATE,
+							const took = Math.min(
+								(capacity - sediment) * DROPLET.erosionRate,
 								fall * maxCut,
 							);
-							sediment += cut;
-							spread(face, fi, fj, -cut);
+							sediment += took;
+							spread(face, fi, fj, -took);
 						}
 
-						speed = Math.sqrt(Math.max(0, speed * speed + fall * GRAVITY));
-						water *= 1 - EVAPORATION;
-						fi = ni;
-						fj = nj;
+						speed = Math.sqrt(Math.max(0, speed * speed + fall * DROPLET.gravity));
+						water *= 1 - DROPLET.evaporation;
+						face = moved.face;
+						fi = moved.i;
+						fj = moved.j;
+						vi = moved.vi;
+						vj = moved.vj;
 					}
 				}
 				return droplets;
 			}
+
 
 			// ---------------------------------------------------------------
 			// The world: two noise layers, each read through a curve.
@@ -1331,12 +1556,8 @@
 					report[2] = terrainRaw;
 					report[3] = mountainRaw;
 				}
+
 				const base = shaped * 2 - 1;
-				// **The mountain layer's whole contribution, reported on its
-				// own.** Peak scale multiplies it after the metre fit, which is
-				// the only place a scale on it can do anything: applied before,
-				// the fit divides it straight back out and the knob becomes
-				// `Detail on top` under another name.
 				let term;
 				if (k.merge === "gated") {
 					const over = Math.max(
@@ -1349,9 +1570,9 @@
 					);
 					term = mount * (over * over * (3 - 2 * over)) * k.detail;
 				} else term = terrainRaw * mount * k.detail;
-				if (report) report[4] = term;
 				return base + term;
 			}
+			// ===== END engine coarse grid =====
 
 			/** `sqrt(8 pi / (10 sqrt 3))`, which ties block size to radius. */
 			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
@@ -1439,22 +1660,40 @@
 					open: true,
 					rows: [
 						{
-							key: "terrainFrequency",
-							label: "Frequency",
-							low: 0,
-							high: 1,
-							step: 0.005,
-							value: 0.5,
-							digits: 3,
+							// **A size in metres, because a frequency is a
+							// number about a sphere and a landform is a thing
+							// on the ground.** A frequency counts features from
+							// pole to pole, so the same setting draws hills on
+							// one planet and continents on another; metres mean
+							// the same everywhere, and changing the radius then
+							// moves the horizon and leaves the landforms alone.
+							// The coarse slider carries the decade and the fine
+							// one picks the value inside it, because one slider
+							// cannot hold a hundred metres and a hundred
+							// kilometres at a resolution anybody can drag.
+							key: "terrainFeature",
+							label: "Feature",
+							low: 100,
+							high: 1000,
+							step: 10,
+							value: 600,
+							digits: 0,
+							unit: "m",
 						},
 						{
-							key: "terrainFrequencyScale",
-							label: "Frequency scale",
+							key: "terrainFeatureScale",
+							label: "Feature scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 6,
+							value: 4,
 							digits: 0,
+							unit: "x",
+							note: () =>
+								field
+									? `widest <b>${Math.round(field.k.terrainMetres).toLocaleString()} m</b>, ` +
+										`narrowest <b>${Math.round(narrowestOf("terrain")).toLocaleString()} m</b>`
+									: "",
 						},
 						{
 							key: "terrainOctaves",
@@ -1467,47 +1706,8 @@
 							digits: 0,
 						},
 						{
-							key: "terrainPersistence",
-							off: 0,
-							label: "Persistence",
-							low: 0,
-							high: 0.95,
-							step: 0.01,
-							value: 0.5,
-							digits: 2,
-						},
-						{
-							key: "terrainLacunarity",
-							label: "Lacunarity",
-							low: 1.2,
-							high: 4,
-							step: 0.05,
-							value: 2,
-							digits: 2,
-						},
-						{
-							key: "terrainOffsetX",
-							off: 0,
-							label: "Offset X",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 15,
-							digits: 0,
-						},
-						{
-							key: "terrainOffsetY",
-							off: 0,
-							label: "Offset Y",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 9,
-							digits: 0,
-						},
-						{
 							key: "terrainSpline",
-							label: "Terrain → base height",
+							label: "Terrain \u2192 base height",
 							type: "spline",
 							// A shelf, a shore and a rise: flat sea floor over
 							// the low half, a short steep climb through the
@@ -1580,66 +1780,36 @@
 							// **Tuned against what the planet is made of, not by
 							// eye.** The material lines are absolute metres, so
 							// the balance between the two layers decides how much
-							// of the world is grass: at Relief 1,100 m this gives
-							// 48% grass, 9% rock and 7% snow over the whole
-							// sphere, where 1.5 gave 22% grass and 36% snow.
-							// **Tuned against what the planet is made of.** The material
-							// lines are absolute metres, so the balance between the
-							// two layers decides how much of the world is grass: at
-							// Relief 1,100 m the shipped set gives 50% grass, 8% rock
-							// and 7% snow over the whole sphere, where 1.5 gave 22%
-							// grass and 36% snow.
+							// of the world is grass.
 							value: 7,
 							digits: 2,
 						},
 						{
-							// **The one scale that survives the fit.** Every knob
-							// upstream of the metre step is divided back out by
-							// it -- the tallest point is Relief whatever they
-							// say -- so `Detail on top` can only change the
-							// balance between the layers, never how tall a peak
-							// is in metres. This multiplies what the mountain
-							// layer contributed AFTER the fit, so a range grows
-							// and the coast, the sea level and the terrain under
-							// it all stay exactly where they were. It is the one
-							// knob that takes the world above Relief, and the
-							// readout says how far.
-							key: "peakScale",
+							key: "mountainFeature",
 							enabledWhen: (k) => k.useMountain,
-							label: "Peak scale",
-							low: 1,
-							high: 6,
-							step: 0.1,
-							value: 1,
-							digits: 1,
-							unit: "x",
-							note: () =>
-								field && field.summit > 0
-									? `tallest point <b>${Math.round(field.summit).toLocaleString()} m</b>` +
-										(knobs.peakScale > 1
-											? ` — <b>${Math.round(field.summit - value("relief")).toLocaleString()} m</b> over Relief`
-											: " — Relief exactly")
-									: "",
+							label: "Feature",
+							low: 100,
+							high: 1000,
+							step: 10,
+							value: 480,
+							digits: 0,
+							unit: "m",
 						},
 						{
-							key: "mountainFrequency",
+							key: "mountainFeatureScale",
 							enabledWhen: (k) => k.useMountain,
-							label: "Frequency",
-							low: 0,
-							high: 1,
-							step: 0.005,
-							value: 0.45,
-							digits: 3,
-						},
-						{
-							key: "mountainFrequencyScale",
-							enabledWhen: (k) => k.useMountain,
-							label: "Frequency scale",
+							label: "Feature scale",
 							low: 1,
 							high: 100,
 							step: 1,
-							value: 16,
+							value: 2,
 							digits: 0,
+							unit: "x",
+							note: () =>
+								field
+									? `widest <b>${Math.round(field.k.mountainMetres).toLocaleString()} m</b>, ` +
+										`narrowest <b>${Math.round(narrowestOf("mountain")).toLocaleString()} m</b>`
+									: "",
 						},
 						{
 							key: "mountainOctaves",
@@ -1653,57 +1823,14 @@
 							// storing seven only meant `settle` pulled it back to
 							// four before the first frame -- a default nothing could
 							// reach. What stopped the ranges drawing as flat white
-							// mesas was the frequency and the falloff.
+							// mesas was the feature size and the octave count.
 							value: 4,
-							digits: 0,
-						},
-						{
-							key: "mountainPersistence",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Persistence",
-							low: 0,
-							high: 0.95,
-							step: 0.01,
-							value: 0.55,
-							digits: 2,
-						},
-						{
-							key: "mountainLacunarity",
-							enabledWhen: (k) => k.useMountain,
-							label: "Lacunarity",
-							low: 1.2,
-							high: 4,
-							step: 0.05,
-							value: 2,
-							digits: 2,
-						},
-						{
-							key: "mountainOffsetX",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Offset X",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: -22,
-							digits: 0,
-						},
-						{
-							key: "mountainOffsetY",
-							enabledWhen: (k) => k.useMountain,
-							off: 0,
-							label: "Offset Y",
-							low: -400,
-							high: 400,
-							step: 1,
-							value: 61,
 							digits: 0,
 						},
 						{
 							key: "mountainSpline",
 							enabledWhen: (k) => k.useMountain,
-							label: "Mountain → range height",
+							label: "Mountain \u2192 range height",
 							type: "spline",
 							// **Flat over the low half and steep over the high
 							// one.** A curve that climbs everywhere makes every
@@ -1794,23 +1921,36 @@
 					// water walks, so these are read over the whole planet on
 					// one grid before any of the pictures can be drawn. That
 					// grid is the map's own -- Map cell decides how many cells
-					// it holds, and therefore how long a run takes.
+					// it holds, and therefore how long a run takes, which is
+					// why the switch above the strength is what a person
+					// reaches for rather than dragging the slider to nothing.
 					group: "Erosion",
 					open: true,
 					rows: [
 						{
-							key: "erosion",
-							off: 0,
+							key: "erosionOn",
 							label: "Erosion",
-							low: 0,
+							type: "check",
+							value: false,
+						},
+						{
+							// **A strength the switch can actually reach.** Zero
+							// is what turns erosion off, and with a switch above
+							// it that is a slider position meaning the same as
+							// the switch: ticking the box would build the same
+							// world.
+							key: "erosion",
+							enabledWhen: (k) => k.erosionOn,
+							label: "Strength",
+							low: 0.05,
 							high: 1,
 							step: 0.05,
-							value: 0,
+							value: 0.5,
 							digits: 2,
 							note: () => {
-								if (erosion.busy)
-									return `<b>${erosion.busy}</b> — ${(erosion.done * 100).toFixed(0)}%`;
-								const r = erosion.report;
+								if (coarse.busy)
+									return `<b>${coarse.busy}</b> — ${(coarse.done * 100).toFixed(0)}%`;
+								const r = coarse.report;
 								if (!r) return "the ground is the noise as it fell";
 								const move = (was, now) =>
 									`${was.toFixed(3)} → <b>${now.toFixed(3)}</b> ` +
@@ -1824,9 +1964,6 @@
 									`<b>${(r.ms / 1000).toFixed(1)} s</b>` +
 									(knobs.picture === "erosion"
 										? ` · picture saturates at <b>${r.scale.toFixed(1)} m</b>`
-										: "") +
-									(r.stranded > 0
-										? ` · <b>${(r.stranded * 100).toFixed(1)}%</b> stopped at a face edge`
 										: "")
 								);
 							},
@@ -1841,7 +1978,7 @@
 							// away, and spreads each cut over the three cells it
 							// is standing over.
 							key: "erosionWalk",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Droplets",
 							type: "select",
 							value: "cell",
@@ -1853,7 +1990,7 @@
 							// is gradient descent; at 0.9 it runs almost
 							// straight and leaves the ground behind it.
 							key: "erosionInertia",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Keeps direction",
 							low: 0,
 							high: 0.9,
@@ -1868,7 +2005,7 @@
 							// six times as far as any neighbour; at 0 the cut is
 							// flat across the seven.
 							key: "erosionCutShare",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Cut spread",
 							low: 0,
 							high: 1,
@@ -1883,7 +2020,7 @@
 							// is still a valley by the end and the shapes come
 							// out graded rather than pocked.
 							key: "erosionMaxCut",
-							enabledWhen: (k) => k.erosion > 0,
+							enabledWhen: (k) => k.erosionOn,
 							label: "Deepest cut",
 							low: 0.01,
 							high: 0.5,
@@ -2126,23 +2263,24 @@
 						: null;
 				if (!layer) return row;
 				const what = row.key.slice(layer.length);
-				if (what !== "Octaves" && what !== "FrequencyScale") return row;
+				if (what !== "Octaves" && what !== "FeatureScale") return row;
 				const k = derived();
-				if (what === "FrequencyScale") {
+				if (what === "FeatureScale") {
 					// Even one octave has to be two map cells wide, and the fine
-					// slider reaches 1, so the coarse one stops where their
-					// product does. What is cut off is frequency the map could
-					// not carry at any octave count.
-					const most = k.radius / (2 * k.cellMetres);
+					// slider reaches its own bottom, so the coarse one starts
+					// where their product does. What is cut off is a landform the
+					// map could not draw at any octave count.
+					const least = (2 * k.cellMetres) / knobs[layer + "Feature"];
 					return {
 						...row,
-						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
+						low: Math.min(row.high, Math.max(row.low, Math.ceil(least))),
 					};
 				}
-				const widest = k.radius / Math.max(1e-6, k[layer + "Frequency"]);
-				const step = knobs[layer + "Lacunarity"];
+				// Each octave halves the width, so the count stops where the
+				// narrowest one is still two map cells across.
 				const room =
-					1 + Math.floor(Math.log(widest / (2 * k.cellMetres)) / Math.log(step));
+					1 +
+					Math.floor(Math.log2(featureMetres(layer) / (2 * k.cellMetres)));
 				return {
 					...row,
 					high: Math.max(row.low, Math.min(row.high, room)),
@@ -2196,6 +2334,26 @@
 			/** How many columns the histogram under a curve is drawn in. */
 			const SPLINE_BINS = 48;
 
+			/** Metres across a layer's widest octave, which is what its two rows set. */
+			function featureMetres(which) {
+				return Math.max(
+					1,
+					knobs[which + "Feature"] * knobs[which + "FeatureScale"],
+				);
+			}
+
+			/**
+			 * Metres across a layer's narrowest octave.
+			 *
+			 * Each octave is half as wide as the one above it, so the last is the
+			 * widest divided by two to the power of one less than the count.
+			 * **This is the number the map has to be fine enough to draw**:
+			 * ground the map cannot carry is ground the world does not have.
+			 */
+			function narrowestOf(which) {
+				return featureMetres(which) / 2 ** (value(which + "Octaves") - 1);
+			}
+
 			/** What the knobs come to, in the units the engine states them in. */
 			function derived() {
 				const radius =
@@ -2226,36 +2384,24 @@
 					radius,
 					level,
 					cellMetres,
-					// **Frequency is stated as a frequency.** The sample point
-					// is a unit direction, so this is how many times the widest
-					// octave repeats across the planet -- 1 is one hump from
-					// pole to pole, 40 is forty. A metre figure divided by the
-					// radius reaches the same number, and it hides how small the
-					// result gets: a scale of 29,400 m on a 6,801 m planet is a
-					// frequency of 0.23, which is less than one whole feature
-					// and is why so much of the ground came out muted. The
-					// coarse slider carries the decade and the fine one picks
-					// the value inside it.
-					terrainFrequency:
-						knobs.terrainFrequency * knobs.terrainFrequencyScale,
+					// **A layer is set in metres and the noise takes a
+					// frequency.** The sample point is a unit direction, so a
+					// frequency counts how many times the widest octave repeats
+					// across the whole planet: the same number is hills on one
+					// world and continents on another. Metres divided by the
+					// radius reach the frequency, and the number a person sets
+					// then means the same thing whatever size the planet is.
+					terrainMetres: featureMetres("terrain"),
+					terrainFrequency: radius / featureMetres("terrain"),
 					terrainOctaves: value("terrainOctaves"),
-					terrainPersistence: value("terrainPersistence"),
-					terrainLacunarity: knobs.terrainLacunarity,
-					terrainOffsetX: value("terrainOffsetX"),
-					terrainOffsetY: value("terrainOffsetY"),
 					terrainSpline: knobs.terrainSpline,
-					mountainFrequency:
-						knobs.mountainFrequency * knobs.mountainFrequencyScale,
+					mountainMetres: featureMetres("mountain"),
+					mountainFrequency: radius / featureMetres("mountain"),
 					mountainOctaves: value("mountainOctaves"),
-					mountainPersistence: value("mountainPersistence"),
-					mountainLacunarity: knobs.mountainLacunarity,
-					mountainOffsetX: value("mountainOffsetX"),
-					mountainOffsetY: value("mountainOffsetY"),
 					mountainSpline: knobs.mountainSpline,
 					useMountain: knobs.useMountain,
 					merge: knobs.merge,
 					mountainLine: knobs.mountainLine,
-					peakScale: value("peakScale"),
 					// **The line is a fraction of the terrain curve's own range,
 					// not a height on a fixed axis.** Drag that curve's top down
 					// and an absolute line would drift toward the summit until
@@ -2312,10 +2458,7 @@
 					terrainSpline: new Float32Array(SPLINE_BINS),
 					mountainSpline: new Float32Array(SPLINE_BINS),
 				};
-				const heard = [0.5, 1, 0, 0, 0];
-				// What the mountain layer put in, kept apart so Peak scale can
-				// multiply it after the fit rather than before it.
-				const mountOf = new Float64Array(SPHERE_SAMPLES);
+				const heard = [0.5, 1, 0, 0];
 				// How much of the planet the gate is open over. Counted here
 				// rather than off the patch, because the line is a property of
 				// the world and a patch can be entirely on one side of it.
@@ -2337,56 +2480,60 @@
 					);
 					tally.terrainSpline[bin(heard[2])]++;
 					tally.mountainSpline[bin(heard[3])]++;
-					mountOf[n] = heard[4];
 					if (heard[0] > k.lineHeight) overLine++;
 				}
 				let tallest = 0;
 				for (const counts of Object.values(tally))
 					for (const v of counts) if (v > tallest) tallest = v;
-				const sea = seaLevelFor(raw, value("landFraction"));
-				let peak = 0;
-				let trough = 0;
-				for (const v of raw) {
-					const d = v - sea;
-					if (d > peak) peak = d;
-					if (d < trough) trough = d;
-				}
-				// **Metres are fitted, always.** The field is divided by its own
-				// peak, so the tallest mountain is exactly Relief however the
-				// shape knobs are set. A plain multiplier was on the panel
-				// beside it and it made Relief mean metres-per-unit instead,
-				// which is a number nobody wants to read; the fit also
-				// renormalises whatever the octave stack hands it, so no knob
-				// upstream can change how tall the world is by accident.
-				const up = peak > 0 ? value("relief") / peak : 0;
-				const down = trough < 0 ? value("seaDepth") / -trough : 0;
-				// **The water drops and the ground does not.** Every height is
-				// measured from the level Land chose, and then the whole field
-				// is lifted by however far Sea level was pulled down -- which is
-				// the same picture as draining that much water and moves no
-				// ground at all. What comes out from under it is the shallow
-				// floor that was already there.
-				const drained = -knobs.seaLevel;
+				// **Metres are fitted, always, and the fit is read off the map.**
+				// The field is divided by its own tallest value, so the tallest
+				// mountain is exactly Relief however the shape knobs are set --
+				// and a maximum is the largest of whatever was looked at, so it
+				// has to be looked for over the cells the world is built from.
+				// A few thousand directions spread over the sphere find sea
+				// level, which is a percentile, and miss the peak by enough to
+				// draw every world a tenth taller than it is built.
+				//
+				// The map is built in the background, so until the first one
+				// lands there is nothing to read and the sphere samples stand in
+				// -- which is what the readout means when it says the heights
+				// are a sample.
+				const fitted = coarse.fit !== null;
+				const sample = () => {
+					const sea = seaLevelFor(raw, value("landFraction"));
+					let peak = 0;
+					let trough = 0;
+					for (const v of raw) {
+						const d = v - sea;
+						if (d > peak) peak = d;
+						if (d < trough) trough = d;
+					}
+					return {
+						sea,
+						up: peak > 0 ? value("relief") / peak : 0,
+						down: trough < 0 ? value("seaDepth") / -trough : 0,
+						// **The water drops and the ground does not.** Every
+						// height is measured from the level Land chose, and the
+						// whole field is then lifted by however far Sea level was
+						// pulled down -- the same picture as draining that much
+						// water, which moves no ground at all. What comes out
+						// from under it is the shallow floor that was there.
+						drained: -knobs.seaLevel,
+					};
+				};
+				const { sea, up, down, drained } = fitted ? coarse.fit : sample();
 				// **What the whole planet is made of, not what this patch is.**
 				// The material lines are absolute metres and Relief is what
 				// carries the ground up through them, so the share of each is a
 				// property of the world -- and a patch is a place, which can be
 				// all mountain or all sea whatever the planet is doing.
-				// **Only what the mountain layer pushed UP is exaggerated**, so
-				// the extra is continuous across the shoreline and a peak grows
-				// where a hollow does not. At a scale of one it is exactly zero
-				// and nothing here moves at all.
-				const over = value("peakScale") - 1;
 				const bands = [0, 0, 0, 0];
-				let summit = -Infinity;
 				for (let n = 0; n < raw.length; n++) {
 					const d = raw[n] - sea;
 					const m =
 						(d >= 0 ? d * up : d * down) +
-						Math.max(0, mountOf[n]) * up * over +
 						drained +
 						erosionAt(SPHERE[n * 3], SPHERE[n * 3 + 1], SPHERE[n * 3 + 2]);
-					if (m > summit) summit = m;
 					bands[bandOf(m)]++;
 				}
 				for (let n = 0; n < bands.length; n++) bands[n] /= SPHERE_SAMPLES;
@@ -2409,7 +2556,7 @@
 				// What erosion moved here, kept apart from the height so the
 				// Erosion picture can draw the cut on its own.
 				const cutField = new Float32Array((n + 1) * (n + 1));
-				const said = [0.5, 1, 0, 0, 0];
+				const said = [0.5, 1, 0, 0];
 				// A draft covers the same ground with fewer points, so the step
 				// grows as the count falls and the patch keeps its width.
 				const step = (knobs.cells / n) * k.cellMetres;
@@ -2457,8 +2604,7 @@
 						const d = unitless - sea;
 						const wet = d >= 0 ? d * up : d * down;
 						const cut = erosionAt(x / len, y / len, z / len);
-						const metres =
-							wet + Math.max(0, said[4]) * up * over + drained + cut;
+						const metres = wet + drained + cut;
 						height[r * (n + 1) + q] = metres;
 						cutField[r * (n + 1) + q] = cut;
 						field0[r * (n + 1) + q] = unitless;
@@ -2490,7 +2636,6 @@
 					exposedShare: (land - wasLand) / ((n + 1) * (n + 1)),
 					drained,
 					bands,
-					summit,
 					overLine: overLine / SPHERE_SAMPLES,
 					// The planet map redraws from these without regenerating,
 					// so the two pictures are always of one world.
@@ -2507,6 +2652,7 @@
 					sea,
 					up,
 					down,
+					fitted,
 					lowest,
 					highest,
 					landShare: land / ((n + 1) * (n + 1)),
@@ -2524,39 +2670,40 @@
 			}
 
 			// ---------------------------------------------------------------
-			// Erosion: the one pass that reads a neighbourhood.
+			// The coarse map: the whole planet on one grid, which is the world.
 			// ---------------------------------------------------------------
 
 			/**
-			 * The eroded planet, held between redraws and rebuilt in slices.
+			 * The planet's own map, held between redraws and rebuilt in slices.
 			 *
-			 * **Every other picture on this page is a pure function of a
-			 * direction.** Hand `fieldAt` a point and it hands back a height
-			 * without looking at anything else, which is what lets the patch, the
-			 * planet map and the contour graph each sample wherever they like.
-			 * Water does not work that way: a droplet walks from cell to cell, so
-			 * erosion needs the whole planet on one grid before it can say what
-			 * any one place looks like.
+			 * **Every picture on this page is drawn from a point, and two things
+			 * are not properties of a point.** The metre scale divides the field
+			 * by its own tallest value, which is a maximum over the whole planet;
+			 * and water walks from cell to cell, which needs its neighbours. Both
+			 * are read off this grid -- the same cells the engine reads, so the
+			 * numbers on screen are the numbers the world is built from.
 			 *
-			 * So the grid is built, the un-eroded ground is written onto it in
-			 * metres, the droplets are run over that, and what the pictures read
-			 * is the **difference** -- how far erosion moved the ground at each
-			 * cell, blended between the three cells around wherever they are
-			 * asking. At strength zero there is no grid, no difference and no
-			 * lookup, and every height on the page is what it was.
-			 *
-			 * The three stages are held apart because they are rebuilt at
-			 * different rates. The grid depends on the level alone. The ground
-			 * depends on every knob above the metre scale. The cutting depends on
-			 * the erosion rows, so dragging those re-runs the water and nothing
-			 * else.
+			 * Three stages, held apart because they are rebuilt at different
+			 * rates. The grid depends on the level alone. The unitless field
+			 * depends on every knob that decides the shape of the ground. The
+			 * cutting depends on the erosion rows, so dragging those runs the
+			 * water and nothing else.
 			 */
-			const erosion = {
+			const coarse = {
 				grid: null,
 				level: -1,
-				/** The un-eroded ground in metres, one value per grid cell. */
-				base: null,
-				baseKey: "",
+				/** The field with no unit, one value per grid cell. */
+				raw: null,
+				rawKey: "",
+				/**
+				 * What the metre step reads off that field: the height that
+				 * leaves Land above it, and how far the field reaches either
+				 * side of it.
+				 */
+				fit: null,
+				fitKey: "",
+				/** The ground in metres before erosion, one value per grid cell. */
+				metres: null,
 				/** Metres erosion moved the ground, one value per grid cell. */
 				delta: null,
 				cutKey: "",
@@ -2565,44 +2712,41 @@
 				/** Whether a build is running, and how far through it is. */
 				busy: "",
 				done: 0,
-				/** What the last finished run did, for the readout. */
+				/** How long the last build took, and what its erosion run did. */
+				ms: 0,
 				report: null,
 			};
 
 			/** Which knobs each stage of the build depends on. */
-			function erosionKeys(k) {
-				const ground = JSON.stringify([
+			function coarseKeys(k) {
+				const shape = JSON.stringify([
 					knobs.seed,
 					k.level,
 					k.terrainFrequency,
 					k.terrainOctaves,
-					k.terrainPersistence,
-					k.terrainLacunarity,
-					k.terrainOffsetX,
-					k.terrainOffsetY,
 					knobs.terrainSpline,
 					k.mountainFrequency,
 					k.mountainOctaves,
-					k.mountainPersistence,
-					k.mountainLacunarity,
-					k.mountainOffsetX,
-					k.mountainOffsetY,
 					knobs.mountainSpline,
 					k.useMountain,
 					k.merge,
 					k.mountainLine,
 					k.detail,
-					k.peakScale,
+				]);
+				const metres = JSON.stringify([
+					shape,
 					value("landFraction"),
 					value("relief"),
 					value("seaDepth"),
 					knobs.seaLevel,
 				]);
 				return {
-					ground,
+					shape,
+					metres,
 					cut: JSON.stringify([
-						ground,
-						value("erosion"),
+						metres,
+						knobs.erosionOn,
+						knobs.erosion,
 						knobs.erosionWalk,
 						knobs.erosionInertia,
 						knobs.erosionCutShare,
@@ -2647,75 +2791,61 @@
 			}
 
 			/** A newer request abandons whatever build is running. */
-			let erosionRun = 0;
+			let coarseRun = 0;
 
 			/**
-			 * Bring the eroded planet up to date with the knobs.
+			 * Bring the map up to date with the knobs.
 			 *
 			 * Runs in slices with a wait between them, so the panel stays live
-			 * and the status line moves while a level-8 planet -- 655,362 cells
-			 * and 983,043 droplets at full strength -- is being cut. The pictures
-			 * keep drawing the previous difference until the new one lands, so
-			 * nothing blinks.
+			 * and the status line moves while a level-8 planet -- 655,362 cells,
+			 * and 983,043 droplets if the water is on -- is built. The pictures
+			 * keep drawing the last finished map until the new one lands, so
+			 * nothing blinks and nothing waits.
 			 */
-			async function refreshErosion() {
+			async function refreshCoarse() {
 				const k = derived();
-				const strength = value("erosion");
-				if (strength <= 0) {
-					// Turning the knob to nothing abandons whatever is running
-					// and puts the ground back where the noise left it.
-					if (erosion.delta === null && erosion.busy === "") return;
-					erosionRun++;
-					erosion.delta = null;
-					erosion.cutKey = "";
-					erosion.buildingKey = "";
-					erosion.busy = "";
-					erosion.report = null;
-					askForRedraw(false);
-					return;
-				}
-				const keys = erosionKeys(k);
-				if (keys.cut === erosion.cutKey) return;
+				const keys = coarseKeys(k);
+				if (keys.cut === coarse.cutKey) return;
 				// A redraw that changed none of these must not restart a run
-				// that is already cutting the same world.
-				if (erosion.busy !== "" && keys.cut === erosion.buildingKey) return;
-				const token = ++erosionRun;
-				erosion.buildingKey = keys.cut;
+				// that is already building the same world.
+				if (coarse.busy !== "" && keys.cut === coarse.buildingKey) return;
+				const token = ++coarseRun;
+				coarse.buildingKey = keys.cut;
 				const started = performance.now();
-
-				if (erosion.level !== k.level) {
-					erosion.busy = "numbering the planet";
+				const say = async (what, done) => {
+					coarse.busy = what;
+					coarse.done = done;
 					refreshPanel();
 					await breathe();
-					if (token !== erosionRun) return;
-					erosion.grid = new CoarseGrid(k.level);
-					erosion.level = k.level;
-					erosion.base = null;
-					erosion.baseKey = "";
-					// The difference is one value per cell of the grid it was cut
-					// on, so it goes with the grid. A redraw between here and the
-					// end of the run draws ground the water has not reached yet.
-					erosion.delta = null;
-					erosion.cutKey = "";
-				}
-				const grid = erosion.grid;
+					return token === coarseRun;
+				};
 
-				if (keys.ground !== erosion.baseKey) {
-					const base = new Float64Array(grid.count);
+				if (coarse.level !== k.level) {
+					if (!(await say("numbering the planet", 0))) return;
+					coarse.grid = new CoarseGrid(k.level);
+					coarse.level = k.level;
+					// Every field below is one value per cell of the grid it was
+					// computed on, so all of them go with the grid.
+					coarse.raw = null;
+					coarse.rawKey = "";
+					coarse.fit = null;
+					coarse.fitKey = "";
+					coarse.metres = null;
+					coarse.delta = null;
+					coarse.cutKey = "";
+				}
+				const grid = coarse.grid;
+
+				if (keys.shape !== coarse.rawKey) {
+					const raw = new Float64Array(grid.count);
 					const seed = seedFromString(knobs.seed);
 					const s = settingsFor(k);
-					const said = [0.5, 1, 0, 0, 0];
-					const over = k.peakScale - 1;
-					// The same two lines the patch runs, at the grid's own
-					// directions: the field, then sea level off it and the two
-					// scales onto it. Sea level and the metre fit come from the
-					// sphere pass that has already run, so this grid is the same
-					// world the rest of the page is drawing.
+					const said = [0.5, 1, 0, 0];
 					const SLICE = 20000;
 					for (let from = 0; from < grid.count; from += SLICE) {
 						const until = Math.min(grid.count, from + SLICE);
-						for (let cell = from; cell < until; cell++) {
-							const unitless = fieldAt(
+						for (let cell = from; cell < until; cell++)
+							raw[cell] = fieldAt(
 								grid.directions[cell * 3],
 								grid.directions[cell * 3 + 1],
 								grid.directions[cell * 3 + 2],
@@ -2724,34 +2854,69 @@
 								s,
 								said,
 							);
-							const d = unitless - field.sea;
-							base[cell] =
-								(d >= 0 ? d * field.up : d * field.down) +
-								Math.max(0, said[4]) * field.up * over +
-								field.drained;
-						}
-						erosion.busy = "raising the ground";
-						erosion.done = until / grid.count;
-						refreshPanel();
-						await breathe();
-						if (token !== erosionRun) return;
+						if (!(await say("raising the ground", until / grid.count)))
+							return;
 					}
-					erosion.base = base;
-					erosion.baseKey = keys.ground;
+					coarse.raw = raw;
+					coarse.rawKey = keys.shape;
+					coarse.fitKey = "";
 				}
 
-				const before = slopeQuantiles(grid, erosion.base, k.cellMetres);
-				const height = Float64Array.from(erosion.base);
+				if (keys.metres !== coarse.fitKey) {
+					if (!(await say("filling the sea", 0))) return;
+					// **Sea level is a percentile and the scale is a maximum**,
+					// and both are read over the cells the world is built from.
+					// A few thousand directions find the percentile and miss the
+					// maximum -- an extreme is the largest of whatever was
+					// looked at, so a smaller sample finds a smaller one and
+					// every height comes out taller for it.
+					const sea = seaLevelFor(coarse.raw, value("landFraction"));
+					let peak = 0;
+					let trough = 0;
+					for (const v of coarse.raw) {
+						const d = v - sea;
+						if (d > peak) peak = d;
+						if (d < trough) trough = d;
+					}
+					const up = peak > 0 ? value("relief") / peak : 0;
+					const down = trough < 0 ? value("seaDepth") / -trough : 0;
+					const drained = -knobs.seaLevel;
+					const metres = new Float64Array(grid.count);
+					for (let cell = 0; cell < grid.count; cell++) {
+						const d = coarse.raw[cell] - sea;
+						metres[cell] = (d >= 0 ? d * up : d * down) + drained;
+					}
+					coarse.fit = { sea, up, down, drained };
+					coarse.metres = metres;
+					coarse.fitKey = keys.metres;
+					coarse.cutKey = "";
+				}
+
+				// What the map cost, which is worth saying: it is a pass over
+				// every cell of the planet and the only thing on this page that
+				// is not a few tens of milliseconds.
+				coarse.ms = performance.now() - started;
+				const strength = knobs.erosionOn ? knobs.erosion : 0;
+				if (strength <= 0) {
+					coarse.delta = null;
+					coarse.report = null;
+					coarse.cutKey = keys.cut;
+					coarse.busy = "";
+					askForRedraw(false);
+					return;
+				}
+
+				const before = slopeQuantiles(coarse.grid, coarse.metres, k.cellMetres);
+				const height = Float64Array.from(coarse.metres);
 				const seed = seedFromString(knobs.seed);
-				const free = knobs.erosionWalk === "free";
-				strandedDroplets = 0;
+				const cut =
+					knobs.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
 				const shared = {
 					maxCut: knobs.erosionMaxCut,
 					cutShare: knobs.erosionCutShare,
 					inertia: knobs.erosionInertia,
 				};
-				const cut = free ? erodeFreeDroplets : erodeDroplets;
-				const droplets = Math.round(strength * DROPLETS_PER_CELL * grid.count);
+				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				const SLICE = 40000;
 				for (let from = 0; from < droplets; from += SLICE) {
 					cut(grid, height, seed, strength, k.cellMetres, {
@@ -2759,18 +2924,20 @@
 						from,
 						take: SLICE,
 					});
-					erosion.busy = "cutting the valleys";
-					erosion.done = Math.min(1, (from + SLICE) / droplets);
-					refreshPanel();
-					await breathe();
-					if (token !== erosionRun) return;
+					if (
+						!(await say(
+							"cutting the valleys",
+							Math.min(1, (from + SLICE) / droplets),
+						))
+					)
+						return;
 				}
 
 				const delta = new Float64Array(grid.count);
 				let moved = 0;
 				let deepest = 0;
 				for (let cell = 0; cell < grid.count; cell++) {
-					const d = height[cell] - erosion.base[cell];
+					const d = height[cell] - coarse.metres[cell];
 					delta[cell] = d;
 					moved += Math.abs(d);
 					if (-d > deepest) deepest = -d;
@@ -2779,21 +2946,17 @@
 				// is a spike and would leave the rest of the map grey, so this is
 				// the reach of all but the loudest fiftieth.
 				const sorted = Float64Array.from(delta, Math.abs).sort();
-				const scale = Math.max(
-					0.01,
-					sorted[Math.floor(sorted.length * 0.98)],
-				);
-				erosion.delta = delta;
-				erosion.cutKey = keys.cut;
-				erosion.busy = "";
-				erosion.report = {
+				const scale = Math.max(0.01, sorted[Math.floor(sorted.length * 0.98)]);
+				coarse.delta = delta;
+				coarse.cutKey = keys.cut;
+				coarse.busy = "";
+				coarse.report = {
 					droplets,
 					scale,
 					before,
 					after: slopeQuantiles(grid, height, k.cellMetres),
 					moved: moved / grid.count,
 					deepest,
-					stranded: free ? strandedDroplets / droplets : 0,
 					ms: performance.now() - started,
 				};
 				askForRedraw(false);
@@ -2808,9 +2971,9 @@
 			 * build. Zero everywhere until a run has finished.
 			 */
 			function erosionAt(x, y, z) {
-				const delta = erosion.delta;
+				const delta = coarse.delta;
 				if (delta === null) return 0;
-				const grid = erosion.grid;
+				const grid = coarse.grid;
 				const n = grid.n;
 				const face = faceOf(x, y, z);
 				const w = barycentricOf(face, x, y, z);
@@ -2821,15 +2984,12 @@
 				const a = fi - i0;
 				const b = fj - j0;
 				const at = (i, j) => {
-					if (i < 0 || j < 0 || i + j > n) return 0;
-					const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+					const cell = grid.indexNear(face, i, j);
 					return cell < 0 ? 0 : delta[cell];
 				};
 				if (a + b <= 1)
 					return (
-						(1 - a - b) * at(i0, j0) +
-						a * at(i0 + 1, j0) +
-						b * at(i0, j0 + 1)
+						(1 - a - b) * at(i0, j0) + a * at(i0 + 1, j0) + b * at(i0, j0 + 1)
 					);
 				return (
 					(1 - b) * at(i0 + 1, j0) +
@@ -2859,7 +3019,7 @@
 			 */
 			function planetHeights(wide, tall) {
 				const out = new Float32Array(wide * tall);
-				const said = [0.5, 1, 0, 0, 0];
+				const said = [0.5, 1, 0, 0];
 				const layer = new Float32Array(wide * tall);
 				const raw = new Float32Array(wide * tall);
 				const cut = new Float32Array(wide * tall);
@@ -2885,7 +3045,6 @@
 						cut[at] = erosionAt(x, y, z);
 						out[at] =
 							(d >= 0 ? d * field.up : d * field.down) +
-							Math.max(0, said[4]) * field.up * (field.k.peakScale - 1) +
 							field.drained +
 							cut[at];
 						raw[at] = unitless;
@@ -2960,7 +3119,7 @@
 					// drawn against a constant is a flat wash on most worlds and
 					// saturated on the rest. The Erosion row says what the scale
 					// was.
-					const scale = erosion.report ? erosion.report.scale : 1;
+					const scale = coarse.report ? coarse.report.scale : 1;
 					const t = Math.max(-1, Math.min(1, (cut || 0) / scale));
 					const grey = 0.18;
 					px[at] = 255 * Math.pow(grey + Math.max(0, -t) * 0.75, 1 / 2.2);
@@ -3991,6 +4150,16 @@
 					`<b>${(field.bands[3] * 100).toFixed(0)}%</b> snow<br>` +
 					`redrawn in <b>${cost.toFixed(0)} ms</b>` +
 					(field.draft ? " · settling" : "") +
+					// **Which cells the metres were fitted over.** The scale
+					// divides by the field's tallest value, and a maximum found
+					// over a few thousand directions is smaller than the one
+					// over the map's own cells, which draws every height taller.
+					// While the map is being built there is nothing else to read.
+					(coarse.busy
+						? ` · <span style="color:#ffb454">${coarse.busy}</span>`
+						: field.fitted
+							? ` · map of <b>${coarse.grid.count.toLocaleString()}</b> cells in <b>${(coarse.ms / 1000).toFixed(1)} s</b>`
+							: ' · <span style="color:#ffb454">heights are a sample, not the map</span>') +
 					"<br>" +
 					(knobs.exaggeration === 1
 						? `true scale · relief is <b>${(
@@ -4021,23 +4190,18 @@
 								value("relief") + field.drained,
 							).toLocaleString()} m</b> above the water<br>`
 						: "") +
-					// Each layer's frequency in the units the engine's panel
-					// states, so a setting found here can be carried across: the
-					// engine asks for the widest feature in metres, which is the
-					// radius divided by the frequency. And the narrowest octave,
-					// because ground the map cannot draw is ground the world
-					// does not have.
+					// Each layer's widest and narrowest octave, in the metres
+					// both are set in, and how many times the widest repeats
+					// across the planet -- which is what the noise itself takes
+					// and what says whether a landform is a hill or a continent
+					// on this radius.
 					["terrain", "mountain"]
 						.map((which) => {
-							const frequency = Math.max(1e-6, k[which + "Frequency"]);
-							const widest = k.radius / frequency;
-							const narrowest =
-								widest /
-								knobs[which + "Lacunarity"] **
-									(value(which + "Octaves") - 1);
+							const widest = k[which + "Metres"];
+							const narrowest = narrowestOf(which);
 							return (
-								`${which} <b>${k[which + "Frequency"].toFixed(2)}</b> — ` +
-								`widest <b>${Math.round(widest).toLocaleString()} m</b>, ` +
+								`${which} <b>${Math.round(widest).toLocaleString()} m</b> — ` +
+								`<b>${k[which + "Frequency"].toFixed(2)}</b> across the planet, ` +
 								`narrowest <b>${Math.round(narrowest).toLocaleString()} m</b>` +
 								(narrowest < k.cellMetres
 									? ' <span style="color:#ffb454">narrower than a cell</span>'
@@ -4080,12 +4244,13 @@
 					refreshPanel();
 					if (!draft) {
 						writeUrl();
-						// **Water runs on the settled world, never on the
-						// draft.** A drag redraws the ground every frame and
-						// erosion is a pass over the whole planet, so it waits
+						// **The map is built on the settled world, never on
+						// the draft.** A drag redraws the ground every frame and
+						// the map is a pass over the whole planet, so it waits
 						// for the finger to stop -- and until it lands, the
-						// pictures keep the cut from the last run.
-						refreshErosion();
+						// pictures keep the last map's fit and the last run's
+						// cut.
+						refreshCoarse();
 					}
 					render();
 				});
@@ -4145,7 +4310,7 @@
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();
-			refreshErosion();
+			refreshCoarse();
 		</script>
 	</body>
 </html>
