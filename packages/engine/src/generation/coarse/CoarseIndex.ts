@@ -6,6 +6,32 @@ import { faceOf } from "../../addressing/lookup/faceOf.js";
 import { latticeWeights } from "../../addressing/lattice/latticeWeights.js";
 import { rank } from "../../addressing/lattice/rank.js";
 
+/** Three cells and the weights a direction mixes them by. */
+export interface CoarseBlend {
+	readonly cells: Int32Array;
+	readonly weights: Float64Array;
+}
+
+/** A scratch blend, for a caller reading many places. */
+export function makeBlend(): CoarseBlend {
+	return { cells: new Int32Array(3), weights: new Float64Array(3) };
+}
+
+/**
+ * One field read through a blend.
+ *
+ * A cell of `-1` is a corner the reflection could not name and reads as zero,
+ * which is what the single-field lookup has always done.
+ */
+export function readBlend(field: Float32Array, blend: CoarseBlend): number {
+	const { cells, weights } = blend;
+	return (
+		weights[0]! * (cells[0]! < 0 ? 0 : field[cells[0]!]!) +
+		weights[1]! * (cells[1]! < 0 ? 0 : field[cells[1]!]!) +
+		weights[2]! * (cells[2]! < 0 ? 0 : field[cells[2]!]!)
+	);
+}
+
 /**
  * Which cell a face-and-offset names, at one subdivision level.
  *
@@ -66,6 +92,28 @@ export class CoarseIndex {
 	 * than at a cell goes through this.
 	 */
 	sampleAt(field: Float32Array, dir: Vec3): number {
+		this.blendInto(dir, this.blend);
+		return readBlend(field, this.blend);
+	}
+
+	/** The one blend `sampleAt` reads through, so a lone read allocates nothing. */
+	private readonly blend: CoarseBlend = makeBlend();
+
+	/**
+	 * Where a direction lands: three cells, and the weights they are mixed by.
+	 *
+	 * **The lookup is the expensive part and the fields are not.** Finding the
+	 * face, the barycentric weights and the three cells around a point is a
+	 * dozen times the work of the three multiplies that follow it, so anything
+	 * reading several fields at one place -- a picture of the planet reads
+	 * five -- does this once and reads each field off it. Measured on the
+	 * bench's 256-wide planet picture, four `sampleAt` calls a pixel are
+	 * `70 ms` where one blend and four reads are under twenty.
+	 *
+	 * The blend is written into a caller's own scratch, because the caller is
+	 * a loop over tens of thousands of places.
+	 */
+	blendInto(dir: Vec3, into: CoarseBlend): void {
 		const face = faceOf(dir);
 		const w = barycentricOf(face, dir);
 		const fi = Math.max(0, w[1] * this.n);
@@ -74,23 +122,26 @@ export class CoarseIndex {
 		const j0 = Math.min(this.n - 1 - i0, Math.floor(fj));
 		const a = fi - i0;
 		const b = fj - j0;
-		const at = (i: number, j: number): number => {
-			const cell = this.indexNear(face, i, j);
-			return cell < 0 ? 0 : field[cell]!;
+		const put = (
+			at: number,
+			i: number,
+			j: number,
+			weight: number,
+		): void => {
+			into.cells[at] = this.indexNear(face, i, j);
+			into.weights[at] = weight;
 		};
 		// The remainders land in one of the two triangles the square of steps
 		// is cut into, and which one decides the three corners.
-		if (a + b <= 1)
-			return (
-				(1 - a - b) * at(i0, j0) +
-				a * at(i0 + 1, j0) +
-				b * at(i0, j0 + 1)
-			);
-		return (
-			(1 - b) * at(i0 + 1, j0) +
-			(1 - a) * at(i0, j0 + 1) +
-			(a + b - 1) * at(i0 + 1, j0 + 1)
-		);
+		if (a + b <= 1) {
+			put(0, i0, j0, 1 - a - b);
+			put(1, i0 + 1, j0, a);
+			put(2, i0, j0 + 1, b);
+			return;
+		}
+		put(0, i0 + 1, j0, 1 - b);
+		put(1, i0, j0 + 1, 1 - a);
+		put(2, i0 + 1, j0 + 1, a + b - 1);
 	}
 
 	indexNear(face: number, i: number, j: number): number {

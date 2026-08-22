@@ -1,5 +1,6 @@
 import type { CoarseIndex } from "chamfer/generation";
 import { Vec3 } from "chamfer/math";
+import { makeBlend, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
 
 /** The three axes of a patch: out of the ground, east, and north. */
@@ -109,6 +110,11 @@ export function patchField(
 	let rawHigh = -Infinity;
 	let land = 0;
 
+	// One lookup a point, five fields read off it: finding the three cells a
+	// direction stands between is a dozen times the work of the three
+	// multiplies that follow, and every field here is read at the same place.
+	const blend = makeBlend();
+
 	for (let r = 0; r < across; r++) {
 		const dy = r * step - half;
 		for (let q = 0; q < across; q++) {
@@ -128,12 +134,13 @@ export function patchField(
 				).normalize();
 			}
 			const at = r * across + q;
-			const metres = index.sampleAt(fields.height, dir);
+			index.blendInto(dir, blend);
+			const metres = readBlend(fields.height, blend);
 			height[at] = metres;
-			raw[at] = index.sampleAt(fields.raw, dir);
-			terrain[at] = index.sampleAt(fields.terrain, dir);
-			mountain[at] = index.sampleAt(fields.mountain, dir);
-			if (fields.cut) cut[at] = index.sampleAt(fields.cut, dir);
+			raw[at] = readBlend(fields.raw, blend);
+			terrain[at] = readBlend(fields.terrain, blend);
+			mountain[at] = readBlend(fields.mountain, blend);
+			if (fields.cut) cut[at] = readBlend(fields.cut, blend);
 			if (metres < lowest) lowest = metres;
 			if (metres > highest) highest = metres;
 			if (raw[at]! < rawLow) rawLow = raw[at]!;

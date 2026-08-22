@@ -12,7 +12,8 @@ export type {
 } from "./coarse/CoarseMapOptions.js";
 export { MOUNTAIN_MERGES } from "./coarse/CoarseMapOptions.js";
 export { COARSE_MAP_DEFAULTS } from "./coarse/CoarseMapOptions.js";
-export { CoarseIndex } from "./coarse/CoarseIndex.js";
+export type { CoarseBlend } from "./coarse/CoarseIndex.js";
+export { CoarseIndex, makeBlend, readBlend } from "./coarse/CoarseIndex.js";
 export { CoarseGrid } from "./coarse/CoarseGrid.js";
 export type { CoarseMapSnapshot } from "./coarse/CoarseMapSnapshot.js";
 export { CoarseMap } from "./coarse/CoarseMap.js";

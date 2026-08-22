@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CoarseGrid } from "chamfer/generation";
+import { CoarseGrid, makeBlend, readBlend } from "chamfer/generation";
+import { Vec3 } from "chamfer/math";
 import { cellKey, degree, neighbour } from "chamfer/addressing";
 
 describe("CoarseGrid", () => {
@@ -98,5 +99,42 @@ describe("CoarseGrid", () => {
 			const z = grid.directions[cell * 3 + 2]!;
 			expect(Math.sqrt(x * x + y * y + z * z)).toBeCloseTo(1, 14);
 		}
+	});
+});
+
+describe("reading many fields at one place", () => {
+	const grid = new CoarseGrid(5);
+	const one = Float32Array.from({ length: grid.count }, (_, at) => at % 37);
+	const two = Float32Array.from({ length: grid.count }, (_, at) =>
+		Math.sin(at),
+	);
+
+	/**
+	 * The blend exists to be read several times, so the guarantee is that it
+	 * gives exactly what the single-field lookup gives -- bit for bit, because
+	 * the map is what the ground is read off and a last bit is a real
+	 * disagreement.
+	 */
+	it("gives what the single lookup gives, at 4,000 directions", () => {
+		const blend = makeBlend();
+		const golden = Math.PI * (3 - Math.sqrt(5));
+		for (let n = 0; n < 4000; n++) {
+			const z = 1 - (2 * n + 1) / 4000;
+			const ring = Math.sqrt(Math.max(0, 1 - z * z));
+			const a = n * golden;
+			const dir = new Vec3(Math.cos(a) * ring, z, Math.sin(a) * ring);
+			grid.blendInto(dir, blend);
+			expect(readBlend(one, blend)).toBe(grid.sampleAt(one, dir));
+			expect(readBlend(two, blend)).toBe(grid.sampleAt(two, dir));
+		}
+	});
+
+	it("weighs three cells, and the weights are a whole one", () => {
+		const blend = makeBlend();
+		grid.blendInto(new Vec3(0.3, 0.6, 0.74).normalize(), blend);
+		expect(blend.cells.length).toBe(3);
+		expect(
+			blend.weights[0]! + blend.weights[1]! + blend.weights[2]!,
+		).toBeCloseTo(1, 12);
 	});
 });
