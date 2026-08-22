@@ -1253,7 +1253,10 @@ machinery. Left undone because Relief is not in the default draft's habit of
 moving far enough to notice, and because it is a straightforward follow-up
 once someone is actually leaning on Live rebuild rather than trying it once.
 
+
 ---
+
+## Closed
 
 ### F-057 — The noise lab draws every world 11% taller than the engine builds it
 
@@ -1306,10 +1309,20 @@ would have to move off the redraw path. A third option is to leave the reading
 alone and say on the panel that heights are a sample and carry a percentage,
 which costs nothing and fixes nothing.
 
+**Closed:** 2026-08-22, fixed. The lab builds the planet's map -- the same grid
+at the same level the engine builds, staged and in slices so the panel stays
+live -- and reads sea level and the two scales off it with the same arithmetic
+`metreHeight` runs. Measured on the shipped world the two now agree to the bit:
+sea `-0.3439934551715851` and a land scale of `258.40559000034904` on both
+sides. The patch's tallest ground goes from `748 m` to `662 m`, which is the
+11% coming off. What it costs is a pass over every cell of the planet on every
+change to a shape knob, `2.6 s` at level 8 and `0.1 s` at level 6; the pictures
+keep the last map's fit until the new one lands, and the readout says which
+cells the metres were fitted over.
+
 
 ---
 
-## Closed
 
 ### F-059 — The lab and the engine no longer take the same set of knobs
 

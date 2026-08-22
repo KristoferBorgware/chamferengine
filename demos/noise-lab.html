@@ -1948,9 +1948,9 @@
 							value: 0.5,
 							digits: 2,
 							note: () => {
-								if (erosion.busy)
-									return `<b>${erosion.busy}</b> — ${(erosion.done * 100).toFixed(0)}%`;
-								const r = erosion.report;
+								if (coarse.busy)
+									return `<b>${coarse.busy}</b> — ${(coarse.done * 100).toFixed(0)}%`;
+								const r = coarse.report;
 								if (!r) return "the ground is the noise as it fell";
 								const move = (was, now) =>
 									`${was.toFixed(3)} → <b>${now.toFixed(3)}</b> ` +
@@ -2485,30 +2485,43 @@
 				let tallest = 0;
 				for (const counts of Object.values(tally))
 					for (const v of counts) if (v > tallest) tallest = v;
-				const sea = seaLevelFor(raw, value("landFraction"));
-				let peak = 0;
-				let trough = 0;
-				for (const v of raw) {
-					const d = v - sea;
-					if (d > peak) peak = d;
-					if (d < trough) trough = d;
-				}
-				// **Metres are fitted, always.** The field is divided by its own
-				// peak, so the tallest mountain is exactly Relief however the
-				// shape knobs are set. A plain multiplier was on the panel
-				// beside it and it made Relief mean metres-per-unit instead,
-				// which is a number nobody wants to read; the fit also
-				// renormalises whatever the octave stack hands it, so no knob
-				// upstream can change how tall the world is by accident.
-				const up = peak > 0 ? value("relief") / peak : 0;
-				const down = trough < 0 ? value("seaDepth") / -trough : 0;
-				// **The water drops and the ground does not.** Every height is
-				// measured from the level Land chose, and then the whole field
-				// is lifted by however far Sea level was pulled down -- which is
-				// the same picture as draining that much water and moves no
-				// ground at all. What comes out from under it is the shallow
-				// floor that was already there.
-				const drained = -knobs.seaLevel;
+				// **Metres are fitted, always, and the fit is read off the map.**
+				// The field is divided by its own tallest value, so the tallest
+				// mountain is exactly Relief however the shape knobs are set --
+				// and a maximum is the largest of whatever was looked at, so it
+				// has to be looked for over the cells the world is built from.
+				// A few thousand directions spread over the sphere find sea
+				// level, which is a percentile, and miss the peak by enough to
+				// draw every world a tenth taller than it is built.
+				//
+				// The map is built in the background, so until the first one
+				// lands there is nothing to read and the sphere samples stand in
+				// -- which is what the readout means when it says the heights
+				// are a sample.
+				const fitted = coarse.fit !== null;
+				const sample = () => {
+					const sea = seaLevelFor(raw, value("landFraction"));
+					let peak = 0;
+					let trough = 0;
+					for (const v of raw) {
+						const d = v - sea;
+						if (d > peak) peak = d;
+						if (d < trough) trough = d;
+					}
+					return {
+						sea,
+						up: peak > 0 ? value("relief") / peak : 0,
+						down: trough < 0 ? value("seaDepth") / -trough : 0,
+						// **The water drops and the ground does not.** Every
+						// height is measured from the level Land chose, and the
+						// whole field is then lifted by however far Sea level was
+						// pulled down -- the same picture as draining that much
+						// water, which moves no ground at all. What comes out
+						// from under it is the shallow floor that was there.
+						drained: -knobs.seaLevel,
+					};
+				};
+				const { sea, up, down, drained } = fitted ? coarse.fit : sample();
 				// **What the whole planet is made of, not what this patch is.**
 				// The material lines are absolute metres and Relief is what
 				// carries the ground up through them, so the share of each is a
@@ -2639,6 +2652,7 @@
 					sea,
 					up,
 					down,
+					fitted,
 					lowest,
 					highest,
 					landShare: land / ((n + 1) * (n + 1)),
@@ -2656,39 +2670,40 @@
 			}
 
 			// ---------------------------------------------------------------
-			// Erosion: the one pass that reads a neighbourhood.
+			// The coarse map: the whole planet on one grid, which is the world.
 			// ---------------------------------------------------------------
 
 			/**
-			 * The eroded planet, held between redraws and rebuilt in slices.
+			 * The planet's own map, held between redraws and rebuilt in slices.
 			 *
-			 * **Every other picture on this page is a pure function of a
-			 * direction.** Hand `fieldAt` a point and it hands back a height
-			 * without looking at anything else, which is what lets the patch, the
-			 * planet map and the contour graph each sample wherever they like.
-			 * Water does not work that way: a droplet walks from cell to cell, so
-			 * erosion needs the whole planet on one grid before it can say what
-			 * any one place looks like.
+			 * **Every picture on this page is drawn from a point, and two things
+			 * are not properties of a point.** The metre scale divides the field
+			 * by its own tallest value, which is a maximum over the whole planet;
+			 * and water walks from cell to cell, which needs its neighbours. Both
+			 * are read off this grid -- the same cells the engine reads, so the
+			 * numbers on screen are the numbers the world is built from.
 			 *
-			 * So the grid is built, the un-eroded ground is written onto it in
-			 * metres, the droplets are run over that, and what the pictures read
-			 * is the **difference** -- how far erosion moved the ground at each
-			 * cell, blended between the three cells around wherever they are
-			 * asking. At strength zero there is no grid, no difference and no
-			 * lookup, and every height on the page is what it was.
-			 *
-			 * The three stages are held apart because they are rebuilt at
-			 * different rates. The grid depends on the level alone. The ground
-			 * depends on every knob above the metre scale. The cutting depends on
-			 * the erosion rows, so dragging those re-runs the water and nothing
-			 * else.
+			 * Three stages, held apart because they are rebuilt at different
+			 * rates. The grid depends on the level alone. The unitless field
+			 * depends on every knob that decides the shape of the ground. The
+			 * cutting depends on the erosion rows, so dragging those runs the
+			 * water and nothing else.
 			 */
-			const erosion = {
+			const coarse = {
 				grid: null,
 				level: -1,
-				/** The un-eroded ground in metres, one value per grid cell. */
-				base: null,
-				baseKey: "",
+				/** The field with no unit, one value per grid cell. */
+				raw: null,
+				rawKey: "",
+				/**
+				 * What the metre step reads off that field: the height that
+				 * leaves Land above it, and how far the field reaches either
+				 * side of it.
+				 */
+				fit: null,
+				fitKey: "",
+				/** The ground in metres before erosion, one value per grid cell. */
+				metres: null,
 				/** Metres erosion moved the ground, one value per grid cell. */
 				delta: null,
 				cutKey: "",
@@ -2697,13 +2712,14 @@
 				/** Whether a build is running, and how far through it is. */
 				busy: "",
 				done: 0,
-				/** What the last finished run did, for the readout. */
+				/** How long the last build took, and what its erosion run did. */
+				ms: 0,
 				report: null,
 			};
 
 			/** Which knobs each stage of the build depends on. */
-			function erosionKeys(k) {
-				const ground = JSON.stringify([
+			function coarseKeys(k) {
+				const shape = JSON.stringify([
 					knobs.seed,
 					k.level,
 					k.terrainFrequency,
@@ -2716,15 +2732,19 @@
 					k.merge,
 					k.mountainLine,
 					k.detail,
+				]);
+				const metres = JSON.stringify([
+					shape,
 					value("landFraction"),
 					value("relief"),
 					value("seaDepth"),
 					knobs.seaLevel,
 				]);
 				return {
-					ground,
+					shape,
+					metres,
 					cut: JSON.stringify([
-						ground,
+						metres,
 						knobs.erosionOn,
 						knobs.erosion,
 						knobs.erosionWalk,
@@ -2771,74 +2791,61 @@
 			}
 
 			/** A newer request abandons whatever build is running. */
-			let erosionRun = 0;
+			let coarseRun = 0;
 
 			/**
-			 * Bring the eroded planet up to date with the knobs.
+			 * Bring the map up to date with the knobs.
 			 *
 			 * Runs in slices with a wait between them, so the panel stays live
-			 * and the status line moves while a level-8 planet -- 655,362 cells
-			 * and 983,043 droplets at full strength -- is being cut. The pictures
-			 * keep drawing the previous difference until the new one lands, so
-			 * nothing blinks.
+			 * and the status line moves while a level-8 planet -- 655,362 cells,
+			 * and 983,043 droplets if the water is on -- is built. The pictures
+			 * keep drawing the last finished map until the new one lands, so
+			 * nothing blinks and nothing waits.
 			 */
-			async function refreshErosion() {
+			async function refreshCoarse() {
 				const k = derived();
-				const strength = knobs.erosionOn ? knobs.erosion : 0;
-				if (strength <= 0) {
-					// Turning the knob to nothing abandons whatever is running
-					// and puts the ground back where the noise left it.
-					if (erosion.delta === null && erosion.busy === "") return;
-					erosionRun++;
-					erosion.delta = null;
-					erosion.cutKey = "";
-					erosion.buildingKey = "";
-					erosion.busy = "";
-					erosion.report = null;
-					askForRedraw(false);
-					return;
-				}
-				const keys = erosionKeys(k);
-				if (keys.cut === erosion.cutKey) return;
+				const keys = coarseKeys(k);
+				if (keys.cut === coarse.cutKey) return;
 				// A redraw that changed none of these must not restart a run
-				// that is already cutting the same world.
-				if (erosion.busy !== "" && keys.cut === erosion.buildingKey) return;
-				const token = ++erosionRun;
-				erosion.buildingKey = keys.cut;
+				// that is already building the same world.
+				if (coarse.busy !== "" && keys.cut === coarse.buildingKey) return;
+				const token = ++coarseRun;
+				coarse.buildingKey = keys.cut;
 				const started = performance.now();
-
-				if (erosion.level !== k.level) {
-					erosion.busy = "numbering the planet";
+				const say = async (what, done) => {
+					coarse.busy = what;
+					coarse.done = done;
 					refreshPanel();
 					await breathe();
-					if (token !== erosionRun) return;
-					erosion.grid = new CoarseGrid(k.level);
-					erosion.level = k.level;
-					erosion.base = null;
-					erosion.baseKey = "";
-					// The difference is one value per cell of the grid it was cut
-					// on, so it goes with the grid. A redraw between here and the
-					// end of the run draws ground the water has not reached yet.
-					erosion.delta = null;
-					erosion.cutKey = "";
-				}
-				const grid = erosion.grid;
+					return token === coarseRun;
+				};
 
-				if (keys.ground !== erosion.baseKey) {
-					const base = new Float64Array(grid.count);
+				if (coarse.level !== k.level) {
+					if (!(await say("numbering the planet", 0))) return;
+					coarse.grid = new CoarseGrid(k.level);
+					coarse.level = k.level;
+					// Every field below is one value per cell of the grid it was
+					// computed on, so all of them go with the grid.
+					coarse.raw = null;
+					coarse.rawKey = "";
+					coarse.fit = null;
+					coarse.fitKey = "";
+					coarse.metres = null;
+					coarse.delta = null;
+					coarse.cutKey = "";
+				}
+				const grid = coarse.grid;
+
+				if (keys.shape !== coarse.rawKey) {
+					const raw = new Float64Array(grid.count);
 					const seed = seedFromString(knobs.seed);
 					const s = settingsFor(k);
 					const said = [0.5, 1, 0, 0];
-					// The same two lines the patch runs, at the grid's own
-					// directions: the field, then sea level off it and the two
-					// scales onto it. Sea level and the metre fit come from the
-					// sphere pass that has already run, so this grid is the same
-					// world the rest of the page is drawing.
 					const SLICE = 20000;
 					for (let from = 0; from < grid.count; from += SLICE) {
 						const until = Math.min(grid.count, from + SLICE);
-						for (let cell = from; cell < until; cell++) {
-							const unitless = fieldAt(
+						for (let cell = from; cell < until; cell++)
+							raw[cell] = fieldAt(
 								grid.directions[cell * 3],
 								grid.directions[cell * 3 + 1],
 								grid.directions[cell * 3 + 2],
@@ -2847,31 +2854,68 @@
 								s,
 								said,
 							);
-							const d = unitless - field.sea;
-							base[cell] =
-								(d >= 0 ? d * field.up : d * field.down) +
-								field.drained;
-						}
-						erosion.busy = "raising the ground";
-						erosion.done = until / grid.count;
-						refreshPanel();
-						await breathe();
-						if (token !== erosionRun) return;
+						if (!(await say("raising the ground", until / grid.count)))
+							return;
 					}
-					erosion.base = base;
-					erosion.baseKey = keys.ground;
+					coarse.raw = raw;
+					coarse.rawKey = keys.shape;
+					coarse.fitKey = "";
 				}
 
-				const before = slopeQuantiles(grid, erosion.base, k.cellMetres);
-				const height = Float64Array.from(erosion.base);
+				if (keys.metres !== coarse.fitKey) {
+					if (!(await say("filling the sea", 0))) return;
+					// **Sea level is a percentile and the scale is a maximum**,
+					// and both are read over the cells the world is built from.
+					// A few thousand directions find the percentile and miss the
+					// maximum -- an extreme is the largest of whatever was
+					// looked at, so a smaller sample finds a smaller one and
+					// every height comes out taller for it.
+					const sea = seaLevelFor(coarse.raw, value("landFraction"));
+					let peak = 0;
+					let trough = 0;
+					for (const v of coarse.raw) {
+						const d = v - sea;
+						if (d > peak) peak = d;
+						if (d < trough) trough = d;
+					}
+					const up = peak > 0 ? value("relief") / peak : 0;
+					const down = trough < 0 ? value("seaDepth") / -trough : 0;
+					const drained = -knobs.seaLevel;
+					const metres = new Float64Array(grid.count);
+					for (let cell = 0; cell < grid.count; cell++) {
+						const d = coarse.raw[cell] - sea;
+						metres[cell] = (d >= 0 ? d * up : d * down) + drained;
+					}
+					coarse.fit = { sea, up, down, drained };
+					coarse.metres = metres;
+					coarse.fitKey = keys.metres;
+					coarse.cutKey = "";
+				}
+
+				// What the map cost, which is worth saying: it is a pass over
+				// every cell of the planet and the only thing on this page that
+				// is not a few tens of milliseconds.
+				coarse.ms = performance.now() - started;
+				const strength = knobs.erosionOn ? knobs.erosion : 0;
+				if (strength <= 0) {
+					coarse.delta = null;
+					coarse.report = null;
+					coarse.cutKey = keys.cut;
+					coarse.busy = "";
+					askForRedraw(false);
+					return;
+				}
+
+				const before = slopeQuantiles(coarse.grid, coarse.metres, k.cellMetres);
+				const height = Float64Array.from(coarse.metres);
 				const seed = seedFromString(knobs.seed);
-				const free = knobs.erosionWalk === "free";
+				const cut =
+					knobs.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
 				const shared = {
 					maxCut: knobs.erosionMaxCut,
 					cutShare: knobs.erosionCutShare,
 					inertia: knobs.erosionInertia,
 				};
-				const cut = free ? erodeFreeDroplets : erodeDroplets;
 				const droplets = Math.round(strength * DROPLET.perCell * grid.count);
 				const SLICE = 40000;
 				for (let from = 0; from < droplets; from += SLICE) {
@@ -2880,18 +2924,20 @@
 						from,
 						take: SLICE,
 					});
-					erosion.busy = "cutting the valleys";
-					erosion.done = Math.min(1, (from + SLICE) / droplets);
-					refreshPanel();
-					await breathe();
-					if (token !== erosionRun) return;
+					if (
+						!(await say(
+							"cutting the valleys",
+							Math.min(1, (from + SLICE) / droplets),
+						))
+					)
+						return;
 				}
 
 				const delta = new Float64Array(grid.count);
 				let moved = 0;
 				let deepest = 0;
 				for (let cell = 0; cell < grid.count; cell++) {
-					const d = height[cell] - erosion.base[cell];
+					const d = height[cell] - coarse.metres[cell];
 					delta[cell] = d;
 					moved += Math.abs(d);
 					if (-d > deepest) deepest = -d;
@@ -2900,14 +2946,11 @@
 				// is a spike and would leave the rest of the map grey, so this is
 				// the reach of all but the loudest fiftieth.
 				const sorted = Float64Array.from(delta, Math.abs).sort();
-				const scale = Math.max(
-					0.01,
-					sorted[Math.floor(sorted.length * 0.98)],
-				);
-				erosion.delta = delta;
-				erosion.cutKey = keys.cut;
-				erosion.busy = "";
-				erosion.report = {
+				const scale = Math.max(0.01, sorted[Math.floor(sorted.length * 0.98)]);
+				coarse.delta = delta;
+				coarse.cutKey = keys.cut;
+				coarse.busy = "";
+				coarse.report = {
 					droplets,
 					scale,
 					before,
@@ -2928,9 +2971,9 @@
 			 * build. Zero everywhere until a run has finished.
 			 */
 			function erosionAt(x, y, z) {
-				const delta = erosion.delta;
+				const delta = coarse.delta;
 				if (delta === null) return 0;
-				const grid = erosion.grid;
+				const grid = coarse.grid;
 				const n = grid.n;
 				const face = faceOf(x, y, z);
 				const w = barycentricOf(face, x, y, z);
@@ -2941,15 +2984,12 @@
 				const a = fi - i0;
 				const b = fj - j0;
 				const at = (i, j) => {
-					if (i < 0 || j < 0 || i + j > n) return 0;
-					const cell = grid.faceIndex[face * grid.slots + rank(i, j, n)];
+					const cell = grid.indexNear(face, i, j);
 					return cell < 0 ? 0 : delta[cell];
 				};
 				if (a + b <= 1)
 					return (
-						(1 - a - b) * at(i0, j0) +
-						a * at(i0 + 1, j0) +
-						b * at(i0, j0 + 1)
+						(1 - a - b) * at(i0, j0) + a * at(i0 + 1, j0) + b * at(i0, j0 + 1)
 					);
 				return (
 					(1 - b) * at(i0 + 1, j0) +
@@ -3079,7 +3119,7 @@
 					// drawn against a constant is a flat wash on most worlds and
 					// saturated on the rest. The Erosion row says what the scale
 					// was.
-					const scale = erosion.report ? erosion.report.scale : 1;
+					const scale = coarse.report ? coarse.report.scale : 1;
 					const t = Math.max(-1, Math.min(1, (cut || 0) / scale));
 					const grey = 0.18;
 					px[at] = 255 * Math.pow(grey + Math.max(0, -t) * 0.75, 1 / 2.2);
@@ -4110,6 +4150,16 @@
 					`<b>${(field.bands[3] * 100).toFixed(0)}%</b> snow<br>` +
 					`redrawn in <b>${cost.toFixed(0)} ms</b>` +
 					(field.draft ? " · settling" : "") +
+					// **Which cells the metres were fitted over.** The scale
+					// divides by the field's tallest value, and a maximum found
+					// over a few thousand directions is smaller than the one
+					// over the map's own cells, which draws every height taller.
+					// While the map is being built there is nothing else to read.
+					(coarse.busy
+						? ` · <span style="color:#ffb454">${coarse.busy}</span>`
+						: field.fitted
+							? ` · map of <b>${coarse.grid.count.toLocaleString()}</b> cells in <b>${(coarse.ms / 1000).toFixed(1)} s</b>`
+							: ' · <span style="color:#ffb454">heights are a sample, not the map</span>') +
 					"<br>" +
 					(knobs.exaggeration === 1
 						? `true scale · relief is <b>${(
@@ -4194,12 +4244,13 @@
 					refreshPanel();
 					if (!draft) {
 						writeUrl();
-						// **Water runs on the settled world, never on the
-						// draft.** A drag redraws the ground every frame and
-						// erosion is a pass over the whole planet, so it waits
+						// **The map is built on the settled world, never on
+						// the draft.** A drag redraws the ground every frame and
+						// the map is a pass over the whole planet, so it waits
 						// for the finger to stop -- and until it lands, the
-						// pictures keep the cut from the last run.
-						refreshErosion();
+						// pictures keep the last map's fit and the last run's
+						// cut.
+						refreshCoarse();
 					}
 					render();
 				});
@@ -4259,7 +4310,7 @@
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();
-			refreshErosion();
+			refreshCoarse();
 		</script>
 	</body>
 </html>
