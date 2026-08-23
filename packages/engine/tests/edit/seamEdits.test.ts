@@ -274,14 +274,11 @@ describe("an edit seen from a distance", () => {
 		const shrunk = shape.atLod(lod);
 		const level = CHUNK_LEVEL - lod;
 		const at = new ChunkAddress(address.face, address.path.slice(0, level));
+		const terrain = new TerrainGenerator(map.seed, shrunk, map);
 		return {
 			at,
-			chunk: generateChunk(
-				new TerrainGenerator(map.seed, shrunk, map),
-				at,
-				level,
-				LAYERS,
-			),
+			terrain,
+			chunk: generateChunk(terrain, at, level, LAYERS),
 			level,
 		};
 	}
@@ -313,6 +310,38 @@ describe("an edit seen from a distance", () => {
 			expect(moved, `nothing landed at lod ${lod}`).toBeGreaterThan(0);
 			expect([...chunk.blocks]).toContain(BlockType.SNOW);
 		}
+	});
+
+	// The gap chunkReaders closes: an edit deep inside the neighbour's own
+	// territory, not merely one fine cell over the shared boundary. A
+	// fine-to-fine chase never finds this one; a ring computed in the coarse
+	// chunk's own lattice does.
+	it("reaches an edit made well inside the neighbouring chunk, once coarse", () => {
+		const store = new DeltaStore(header());
+		// Verified against tools/probe-coarse-reach.ts: this cell coarsens
+		// into chunk 216's outside ring at lod 1, and chunk 216 is the
+		// coarse-3 ancestor of `address` (face 3, path [1,2,0,3]).
+		const level = CHUNK_LEVEL - 1;
+		const ancestorKey = coarseChunkKey(address.key, CHUNK_LEVEL, level);
+		expect(ancestorKey).toBe(216);
+		store.write(
+			{ face: 3, i: 125, j: 67, layer: 20 },
+			packBlockState(BlockType.SNOW),
+		);
+
+		const { at, chunk, terrain: shrunk } = coarse(1);
+		expect(at.key).toBe(ancestorKey);
+		const rows = store.rowsUnder(at.key, level);
+		expect(rows.length).toBeGreaterThan(0);
+
+		// The cell is in the ring, not the triangle: it lands in the
+		// sampler's outside blocks rather than the chunk's own array, and it
+		// is the sampler that draws it.
+		const outside = applyDeltas(chunk, rows, DEPTH, 1);
+		expect(outside.size).toBeGreaterThan(0);
+		const sampler = new ChunkColumnSampler(chunk, shrunk, outside);
+		const column = sampler.columnAt(3, 63, 33);
+		expect([...column.blocks]).toContain(BlockType.SNOW);
 	});
 
 	it("names the same triangle at every level", () => {
