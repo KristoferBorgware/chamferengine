@@ -33,6 +33,7 @@ import {
 import type { RayWorld } from "chamfer/addressing";
 import { cellCorners, positionToCell, rayWalk } from "chamfer/addressing";
 import { Player } from "chamfer/player";
+import { clickIntent } from "./clickIntent.js";
 import { worldBlocks } from "./worldBlocks.js";
 import {
 	geographicOf,
@@ -1717,24 +1718,19 @@ async function main(): Promise<void> {
 
 	canvas.addEventListener("pointerdown", (e) => {
 		if (e.pointerType === "touch") touch.reveal();
-		// The first click captures the mouse and does nothing else, which is
-		// what every game with free look does: a click that both grabs the
-		// pointer and breaks a block breaks one every time the player comes
-		// back from the panel.
-		if (
-			e.pointerType === "mouse" &&
-			!looking() &&
-			performance.now() - deniedAt > DENIED_FOR
-		) {
-			askForMouse();
-			return;
-		}
-		if (looking()) {
-			// No slop test: the pointer is captured, so a press is a press.
+		const intent = clickIntent({
+			pointerType: e.pointerType,
+			captured: looking(),
+			canCapture: performance.now() - deniedAt > DENIED_FOR,
+		});
+		if (intent.capture) askForMouse();
+		if (intent.act) {
+			// No slop test: this press is a press, and the capture it may also
+			// be asking for does not make it any less of one.
 			if (e.button === 0) pick();
 			else if (e.button === 2) place();
-			return;
 		}
+		if (!intent.drag) return;
 		canvas.setPointerCapture(e.pointerId);
 		down.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		pressed.set(e.pointerId, {
