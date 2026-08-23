@@ -476,6 +476,29 @@ Violating any of these breaks the design. They are not tunable.
   `chunksHolding` already verifies, just run over a whole rim instead of one
   cell. Cross-checked at chunk level 0 against the icosahedron's own
   face-adjacency table, a wholly independent definition.
+- **HOLDING A CELL AND OWNING IT ARE DIFFERENT QUESTIONS**
+  (`ChunkColumnSampler`, `owns`, `plans/v0.4.1.md` I-14). A border cell sits in
+  two or three triangles; the border rule awards it to the lowest key and that
+  decides **only who draws it**. Every chunk containing the cell generates and
+  patches a slot for it, which is the whole reason a chunk can mesh its rim
+  without fetching a neighbour. `applyDeltas` writes by **containment**
+  (`offsetIn`); the sampler decided whether to read that slot back by
+  **ownership** (`splitPath`, the same descent `owns` uses) -- and the two
+  disagree on exactly the chunk's own border. Measured at depth 8 cut at chunk
+  level 4: a chunk holds **153** cells, the sampler served **120** from the
+  chunk's own array and regenerated **33** from the seed, and those 33 are
+  precisely the cells it holds but does not own. **The whole rim.** An edit was
+  written into the array and read back out of the generator three lines away.
+  Both symptoms follow: the neighbour's **apron** drew the seed's cap, so a
+  broken block kept a lid floating a centimetre over the hole; and a rim cell
+  asking its ring whether to draw a wall was told solid where the player had
+  dug, so the view ran through the planet -- worsening with depth, because the
+  stale column also gives a stale **band** and the layer walk stopped above the
+  bottom of the shaft. **The invariant that makes a stale cap impossible rather
+  than merely unobserved is that two chunks both holding a cell serve the
+  identical column for it after an edit.** `owns` is right and must stay: which
+  chunk *draws* a shared cell is still the border rule, or two would draw the
+  same cap.
 - **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
   THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
   the ring around them whether to draw a side face and its apron draws that ring
