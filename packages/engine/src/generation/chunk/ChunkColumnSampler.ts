@@ -4,9 +4,10 @@ import type { ColumnSampler } from "./ColumnSampler.js";
 import type { OutsideBlocks } from "./OutsideBlocks.js";
 import type { TerrainGenerator } from "../terrain/TerrainGenerator.js";
 import { BlockType } from "../terrain/BlockType.js";
+import { cellRepresentations } from "../../addressing/neighbours/cellRepresentations.js";
+import { offsetIn } from "../../edit/offsetIn.js";
 import { outsideKey } from "./OutsideBlocks.js";
 import { rank } from "../../addressing/lattice/rank.js";
-import { splitPath } from "../../addressing/lattice/splitPath.js";
 
 /**
  * Blocks for one chunk and for the cells just outside it.
@@ -26,6 +27,20 @@ import { splitPath } from "../../addressing/lattice/splitPath.js";
  * column: without it the apron drew ground somebody had already dug away, and a
  * rim cell asking whether to draw a wall was told there was rock where there
  * was a tunnel.
+ *
+ * **HOLDING A CELL AND OWNING IT ARE DIFFERENT QUESTIONS, AND THIS ASKS THE
+ * FIRST.** A cell on a chunk border sits in two or three triangles; the border
+ * rule awards it to the lowest key, and that decides only **who draws it**. A
+ * chunk generates and patches a slot for every cell of its own triangle,
+ * owned or not, which is the whole reason it can mesh its rim without fetching
+ * a neighbour. Asking the ownership question here -- `splitPath`, the descent
+ * that picks the winner -- makes a chunk regenerate its own rim from the seed
+ * while holding a patched slot for it three lines away: **33 of 153 cells** at
+ * depth 8 cut at chunk level 4, which is the entire rim. Every edit on a seam
+ * was written into the array and then read back from the seed, so a broken
+ * block kept its cap and a rim cell asking whether to draw a wall was told
+ * there was rock where the tunnel was. {@link offsetIn} is the containment
+ * question and is what belongs here.
  */
 export class ChunkColumnSampler implements ColumnSampler {
 	private readonly chunk: Chunk;
@@ -56,14 +71,8 @@ export class ChunkColumnSampler implements ColumnSampler {
 
 		const chunk = this.chunk;
 		let made: Column | null = null;
-		if (face === chunk.address.face) {
-			const split = splitPath(i, j, chunk.depth, chunk.chunkLevel);
-			let same = true;
-			for (let level = 0; level < split.path.length; level++)
-				if (split.path[level] !== chunk.address.path[level])
-					same = false;
-			if (same) made = chunk.columnOf(rank(split.q, split.r, chunk.m));
-		}
+		const mine = this.slotOf(face, i, j);
+		if (mine !== null) made = chunk.columnOf(mine);
 
 		if (!made) {
 			const blocks = new Uint16Array(chunk.layerCount);
@@ -75,8 +84,10 @@ export class ChunkColumnSampler implements ColumnSampler {
 				chunk.layerCount,
 			);
 			let { first, last } = band;
+			let { groundRadius, waterRadius } = column;
 			const written = this.changed?.get(outsideKey(face, i, j));
 			if (written) {
+				const wasFirst = first;
 				for (const [layer, block] of written)
 					if (layer >= 0 && layer < chunk.layerCount)
 						blocks[layer] = block;
@@ -93,18 +104,57 @@ export class ChunkColumnSampler implements ColumnSampler {
 					} else last = layer;
 					if (block === BlockType.WATER) last = layer;
 				}
+				// The same rule a held column gets: a changed top is no
+				// longer the terrain's surface, and a chunk generating this
+				// cell has to reach the same column as the chunk holding it.
+				if (first !== wasFirst) {
+					groundRadius = 0;
+					waterRadius = 0;
+				}
 			}
 			made = {
 				blocks,
 				first,
 				last,
-				groundRadius: column.groundRadius,
-				waterRadius: column.waterRadius,
+				groundRadius,
+				waterRadius,
 			};
 			this.outside++;
 		}
 
 		this.held.set(key, made);
 		return made;
+	}
+
+	/**
+	 * This chunk's own slot for a cell, or `null` where it holds none.
+	 *
+	 * **Containment, not ownership**: every cell of the triangle has a slot
+	 * here, including the border cells a neighbour draws.
+	 *
+	 * A cell on an icosahedron face edge has a name under each face meeting
+	 * there and the mesher's ring walk reaches it under whichever one it
+	 * produced, so a name on another face is translated before being refused.
+	 * The translation only runs when the cell is actually on a face edge --
+	 * a lattice weight of zero -- which is the only case that has a second
+	 * name at all.
+	 */
+	private slotOf(face: number, i: number, j: number): number | null {
+		const chunk = this.chunk;
+		if (face === chunk.address.face) {
+			const at = offsetIn(chunk.address.path, i, j, chunk.depth);
+			return at ? rank(at.q, at.r, chunk.m) : null;
+		}
+		for (const named of cellRepresentations(face, 1 << chunk.depth, i, j)) {
+			if (named.face !== chunk.address.face) continue;
+			const at = offsetIn(
+				chunk.address.path,
+				named.i,
+				named.j,
+				chunk.depth,
+			);
+			if (at) return rank(at.q, at.r, chunk.m);
+		}
+		return null;
 	}
 }

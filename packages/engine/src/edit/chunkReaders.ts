@@ -1,6 +1,8 @@
+import type { FaceCell } from "../addressing/neighbours/FaceCell.js";
+import { MESHER_REACH } from "./MESHER_REACH.js";
 import { chunksHolding } from "./chunksHolding.js";
 import { joinPath } from "../addressing/lattice/joinPath.js";
-import { neighbour } from "../addressing/neighbours/neighbour.js";
+import { ringAround } from "./ringAround.js";
 
 /**
  * Every same-level chunk a chunk's own mesher can read from, itself included.
@@ -38,20 +40,20 @@ export function chunkReaders(
 	const m = 1 << (subdivisionDepth - chunkLevel);
 	const keys = new Set<number>([chunkKey]);
 
+	const rim: FaceCell[] = [];
 	for (let q = 0; q <= m; q++)
 		for (let r = 0; q + r <= m; r++) {
 			if (q > 0 && r > 0 && q + r < m) continue; // interior: nothing outside
 			const [i, j] = joinPath(path, q, r, subdivisionDepth);
-			for (let k = 0; k < 6; k++) {
-				const nb = neighbour(face, n, i, j, k);
-				if (!nb) continue;
-				for (const { chunkKey: holder } of chunksHolding(
-					{ ...nb, layer: 0 },
-					subdivisionDepth,
-					chunkLevel,
-				))
-					keys.add(holder);
-			}
+			rim.push({ face, i, j });
 		}
+	for (const near of ringAround(rim, n, MESHER_REACH))
+		for (const { chunkKey: holder } of chunksHolding(
+			{ ...near, layer: 0 },
+			subdivisionDepth,
+			chunkLevel,
+		))
+			keys.add(holder);
+
 	return [...keys];
 }

@@ -1,7 +1,7 @@
 import type { CellRef } from "./CellRef.js";
-import { cellRepresentations } from "../addressing/neighbours/cellRepresentations.js";
+import { MESHER_REACH } from "./MESHER_REACH.js";
 import { chunksHolding } from "./chunksHolding.js";
-import { neighbour } from "../addressing/neighbours/neighbour.js";
+import { ringAround } from "./ringAround.js";
 
 /**
  * Every chunk whose mesher reads a cell, which is wider than the set that
@@ -21,9 +21,9 @@ import { neighbour } from "../addressing/neighbours/neighbour.js";
  * and drew no wall, so the side of the tunnel was missing and the far side of
  * the planet showed through.
  *
- * A chunk reads a cell when it holds it, or when it holds any neighbour of it.
- * So this is the holders of the cell and of each cell in its ring -- which is
- * the candidate walk `chunksHolding` already makes, kept rather than discarded.
+ * A chunk reads a cell when it holds it, or when it holds a cell within
+ * {@link MESHER_REACH} steps of it. So this is the holders of the cell and of
+ * every cell in that ring.
  */
 export function chunksReading(
 	cell: CellRef,
@@ -32,22 +32,12 @@ export function chunksReading(
 ): number[] {
 	const n = 1 << subdivisionDepth;
 	const keys = new Set<number>();
-	const add = (at: CellRef): void => {
+	for (const near of ringAround([cell], n, MESHER_REACH))
 		for (const { chunkKey } of chunksHolding(
-			at,
+			{ ...cell, ...near },
 			subdivisionDepth,
 			chunkLevel,
 		))
 			keys.add(chunkKey);
-	};
-
-	add(cell);
-	// The ring under each face the cell has a name on: a cell on a face edge
-	// has neighbours the other face's coordinates are the only way to reach.
-	for (const named of cellRepresentations(cell.face, n, cell.i, cell.j))
-		for (let k = 0; k < 6; k++) {
-			const ring = neighbour(named.face, n, named.i, named.j, k);
-			if (ring) add({ ...cell, face: ring.face, i: ring.i, j: ring.j });
-		}
 	return [...keys];
 }

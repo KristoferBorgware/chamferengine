@@ -148,6 +148,59 @@ describe("WorkerMeshSource", () => {
 		source.dispose();
 	});
 
+	// **A job's identity is the chunk AND the store it was posted with.** The
+	// rows are read as the job leaves, so a chunk already on a worker carries
+	// the world as it was then. `request` treats a repeat as the same job and
+	// chains onto the promise without posting anything, so a block broken while
+	// its own chunk was in flight came back drawn from before the break -- and
+	// the caller had already marked the chunk built, so nothing asked again.
+	// The commonest case is a world opening: the first jobs go out against an
+	// empty store while the save is still loading.
+	it("rebuilds a chunk whose records changed while it was on a worker", async () => {
+		const { source, workers } = pool(1);
+		let rows: readonly {
+			chunkKey: number;
+			where: Uint32Array;
+			what: Uint16Array;
+		}[] = [];
+		source.deltas = () => rows;
+
+		const waiting = source.request(pick(7));
+		expect(workers[0]!.jobs.length).toBe(1);
+		expect(workers[0]!.jobs[0]!.deltas).toEqual([]);
+
+		// The player breaks a block in this chunk while it is being built.
+		rows = [
+			{
+				chunkKey: 7,
+				where: new Uint32Array([1]),
+				what: new Uint16Array([0]),
+			},
+		];
+		source.invalidate(CHUNK_LEVEL, 7);
+
+		// The stale result comes back and is put straight back on a worker,
+		// rather than handed over as the answer.
+		workers[0]!.answer();
+		expect(workers[0]!.jobs.length).toBe(1);
+		expect(workers[0]!.jobs[0]!.deltas).toEqual(rows);
+
+		workers[0]!.answer();
+		await expect(waiting).resolves.toBeTruthy();
+		source.dispose();
+	});
+
+	it("leaves a job alone when nothing changed under it", async () => {
+		const { source, workers } = pool(1);
+		const waiting = source.request(pick(7));
+		// Nothing is running for this other chunk, so there is nothing stale.
+		source.invalidate(CHUNK_LEVEL, 9);
+		workers[0]!.answer();
+		await expect(waiting).resolves.toBeTruthy();
+		expect(workers[0]!.jobs.length).toBe(0);
+		source.dispose();
+	});
+
 	it("replaces a dead worker and retries its job on the replacement", async () => {
 		// The leak this closes ran for the rest of a session: a job whose
 		// worker died settled neither way, the caller held the chunk as

@@ -93,6 +93,25 @@ export class WorkerMeshSource implements MeshSource {
 	/** Jobs already given a second worker. A third failure is answered. */
 	private readonly retried = new Set<number>();
 
+	/**
+	 * Jobs whose world changed after they were posted.
+	 *
+	 * **A job's real identity is the chunk AND the records it was posted
+	 * with.** The rows are read as the job leaves, so a chunk already on a
+	 * worker carries the store as it was then. {@link request} treats a repeat
+	 * as the same job and chains onto the promise without posting anything, so
+	 * a block broken while its own chunk was in flight was drawn from before
+	 * the break -- and the chunk was already marked built, so nothing asked
+	 * again. The commonest case is the world opening: the first jobs go out
+	 * against an empty store while the save is still loading, and every edit
+	 * in it lands on a chunk that never rebuilds.
+	 *
+	 * Marked here and re-posted when the stale result comes back, rather than
+	 * killed: the worker is most of the way through, and a rebuild that starts
+	 * now finishes sooner than one that starts after a cancellation unwinds.
+	 */
+	private readonly stale = new Set<number>();
+
 	/** How many workers have died, capping how many are replaced. */
 	private failures = 0;
 
@@ -204,6 +223,22 @@ export class WorkerMeshSource implements MeshSource {
 		});
 	}
 
+	/**
+	 * Say that a chunk's records changed, so a job already running for it is
+	 * answering for a world that has moved.
+	 *
+	 * Only a job actually on a worker needs this. One still in the queue reads
+	 * the rows when it is posted, which has not happened yet.
+	 */
+	invalidate(chunkLevel: number, key: number): void {
+		const id = selectionId(chunkLevel, key);
+		for (const selection of this.working.values())
+			if (selectionId(selection.chunkLevel, selection.key) === id) {
+				this.stale.add(id);
+				return;
+			}
+	}
+
 	cancel(selection: ChunkSelection): void {
 		const id = selectionId(selection.chunkLevel, selection.key);
 		if (this.pending.has(id)) this.cancelled.add(id);
@@ -290,10 +325,22 @@ export class WorkerMeshSource implements MeshSource {
 	}
 
 	private finish(worker: MeshWorkerHandle, result: MeshResult): void {
+		const was = this.working.get(worker);
 		this.idle.push(worker);
 		this.working.delete(worker);
 		const id = selectionId(result.chunkLevel, result.key);
 		this.retried.delete(id);
+		// Built against a store that has since moved. Put it back rather than
+		// handing it over: the caller has already been told this chunk is on
+		// its way, so resolving with the old world is the one outcome nothing
+		// ever corrects.
+		if (this.stale.has(id) && was && !this.cancelled.has(id)) {
+			this.stale.delete(id);
+			this.queue.push(was);
+			this.pump();
+			return;
+		}
+		this.stale.delete(id);
 		const waiting = this.pending.get(id);
 		this.pending.delete(id);
 		if (waiting && !this.cancelled.has(id))
