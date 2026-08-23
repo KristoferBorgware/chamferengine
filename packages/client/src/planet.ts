@@ -165,6 +165,9 @@ const UPLOAD_PER_FRAME = 2;
 /** How far a player can reach to break or place a block, in blocks. */
 const REACH = 6;
 
+/** How often the culling volumes are gathered again, in milliseconds. */
+const BOUNDS_INTERVAL = 250;
+
 /** The color the outline over the aimed-at cell is drawn in. */
 const AIM_COLOR: [number, number, number] = [0.98, 0.86, 0.35];
 
@@ -1709,6 +1712,9 @@ async function main(): Promise<void> {
 	 * A click reuses the frame's own ray rather than casting its own, so what
 	 * is outlined is exactly what the click acts on.
 	 */
+	/** When the culling volumes were last gathered. */
+	let boundsAt = -Infinity;
+
 	let aimedFrom: Vec3 | null = null;
 	let aimedLook: Vec3 | null = null;
 
@@ -1872,17 +1878,25 @@ async function main(): Promise<void> {
 			RADIUS * 20,
 		);
 
-		// The two culling volumes, when either switch is on. Built here rather
-		// than held, because the patch balls move as chunks arrive and retire.
+		// **The two culling volumes, rebuilt a few times a second and not every
+		// frame.** A selection is hundreds of chunks and the renderer holds
+		// thousands, so the list is three rings each over some thousands of
+		// balls -- half a million vertices, which cost 2.2 seconds a frame to
+		// rebuild and re-upload when this ran with the rest of the frame. What
+		// they show moves at walking pace, so it is read at walking pace, and
+		// the same array is handed back in between for the renderer to skip.
 		if (current.knobs.selectBounds || current.knobs.patchBounds) {
-			const show = [];
-			if (current.knobs.selectBounds)
-				for (const ball of selectionBalls)
-					show.push({ ...ball, color: SELECT_BOUND_COLOR });
-			if (current.knobs.patchBounds)
-				for (const ball of renderer.bounds())
-					show.push({ ...ball, color: PATCH_BOUND_COLOR });
-			bounds.balls = show;
+			if (now - boundsAt >= BOUNDS_INTERVAL) {
+				boundsAt = now;
+				const show = [];
+				if (current.knobs.selectBounds)
+					for (const ball of selectionBalls)
+						show.push({ ...ball, color: SELECT_BOUND_COLOR });
+				if (current.knobs.patchBounds)
+					for (const ball of renderer.bounds())
+						show.push({ ...ball, color: PATCH_BOUND_COLOR });
+				bounds.balls = show;
+			}
 		} else if (bounds.balls.length > 0) bounds.balls = [];
 
 		// **The crosshair stands where the arm points, not in the middle of the

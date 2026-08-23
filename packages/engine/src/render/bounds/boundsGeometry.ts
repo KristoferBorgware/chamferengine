@@ -2,7 +2,7 @@ import type { BoundsBall } from "./BoundsBall.js";
 import { MARKER_STRIDE } from "../marker/markerGeometry.js";
 
 /** How many segments each ring is drawn with. */
-const SEGMENTS = 24;
+const SEGMENTS = 16;
 
 /**
  * A list of balls as three rings each, one on each pair of world axes.
