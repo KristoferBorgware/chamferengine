@@ -10,6 +10,52 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-070 — The ground pyramid stops two levels above the map, so the smallest chunks are over-credited
+
+**Kind:** limitation
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-23, measuring why the cull balls were larger than the chunks
+inside them
+**Where:** `packages/engine/src/generation/chunk/ChunkPeaks.ts`, `CAPPED_LEVEL`
+
+**What happens.** `ChunkPeaks` records how high and how low the ground reaches
+under each triangle, as a pyramid, and the pyramid stops at level 6. A triangle
+finer than that has no entry and reads its deepest ancestor's, which is
+conservative in the safe direction — a parent's ground is never lower than a
+child's, so nothing visible is dropped.
+
+What it costs is measured (`tools/trial-bounds.ts`). On a world cut at 16 cells
+a chunk — chunk level 9 — a chunk reads a triangle **64 times its own size** and
+is credited with **1.62×** the floor-to-peak span its own ground has, 45.2 m
+against 27.8 m. That shows up as the ball it is culled by: **2.53×** its own
+half-width at the finest level against **1.13 to 1.20×** at every coarser one,
+because the coarser chunks are nearer the cap or above it.
+
+**Why it matters.** Less than it looks, for two reasons, which is why it was
+left. **The default world is cut at chunk level 7**, one level below the cap, so
+the borrowing is a single step and the effect is small; it took a deliberately
+small chunk size to make it visible. And the frustum change took the large
+slack out already — the balls were 8.2× before the margin moved off them and
+onto the view.
+
+**What would fix it, and what it costs.** Carry the pyramid to level 8, which
+is **1,747,626 entries and about 7 MB** against level 6's 109,220 and 437 KB,
+plus the build time at world load.
+
+**Level 8 is the whole of the fix, and there is no point going further.** The
+coarse map is itself level 8 on the shipped world — one cell is 52.8 m — so a
+pyramid deeper than the map copies the same numbers into more slots and records
+nothing new. Whatever is decided here, the cap belongs at the map's level and
+never below it.
+
+A side table for the levels under the cap, filled only for triangles a
+selection actually visits, would buy the same thing for a fraction of the
+memory. Nobody has priced it.
+
+---
+
 ### F-067 — The chunk selection reads the ground the seed made, not the ground a player built
 
 **Kind:** gap
