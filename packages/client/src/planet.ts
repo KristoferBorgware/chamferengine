@@ -2094,7 +2094,9 @@ async function main(): Promise<void> {
 		const halfAcross = Math.atan(Math.tan(halfUp) * aspect);
 		const wideUp = Math.max(
 			halfUp + CULL_MARGIN,
-			Math.atan(Math.tan(Math.min(1.5, halfAcross + CULL_MARGIN)) / aspect),
+			Math.atan(
+				Math.tan(Math.min(1.5, halfAcross + CULL_MARGIN)) / aspect,
+			),
 		);
 		const cullViewProj = Mat4.perspective(
 			Math.min(3.0, 2 * wideUp),
