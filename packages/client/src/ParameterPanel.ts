@@ -228,6 +228,16 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **The one picture the world cannot draw of itself.** Standing on the
+		// ground says nothing about where the land is; this is the whole planet
+		// as the map holds it, flat and on a ball, with the player marked on
+		// both. Nothing in it is a knob -- the page that owns the map fills it
+		// in.
+		title: "The map",
+		where: "world",
+		knobs: [],
+	},
+	{
 		title: "Terrain",
 		where: "both",
 		knobs: [

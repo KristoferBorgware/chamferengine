@@ -31,48 +31,49 @@ const HEIGHT = 256;
 const SETTLE_MS = 250;
 
 /**
- * The maps, drawn while they are still being built.
+ * The whole planet as a picture, flat and as a ball, inside the knob panel.
  *
  * A knob change rebuilds the map at the level the world will use and redraws
  * it, and nothing else happens: no device, no mesher, no chunk. The map is
- * therefore the map, not a smaller stand-in for it, and what is on screen is
- * what **Apply** will build the terrain from.
+ * therefore the map, not a smaller stand-in for it -- the same field the
+ * terrain is built from, drawn while the ground is still being cut.
+ *
+ * **What is drawn is the ground, and only the ground.** This was a map editor
+ * with its own pane, its own copy of the terrain rows, a picture per step of
+ * the build and a button to commit one -- a second place to do what the panel
+ * already does, and a second answer to what the world is. What is left is the
+ * one picture worth having beside the knobs: where the land is on this planet,
+ * flat and on a ball, and where the player is standing on it.
  *
  * The build runs on a worker and hands back each step as it lands, so the
- * height field is on screen after about a quarter of the wait rather than at
- * the end of it. A knob turned again while a build runs supersedes it at the
- * next step boundary.
+ * field is on screen after about a quarter of the wait rather than at the end
+ * of it. A knob turned again while a build runs supersedes it at the next step
+ * boundary.
  */
-export class MapPanel {
+export class MapPreview {
 	private readonly root: HTMLElement;
 	private readonly canvas: HTMLCanvasElement;
 	private readonly context: CanvasRenderingContext2D;
 	private readonly image: ImageData;
 	private readonly sphere: SphereView;
 	private readonly status: HTMLElement;
-
-	/** Where a group of sliders sits, once one has been handed over. */
-	private readonly knobs: HTMLElement;
 	private readonly worker: Worker;
-	private readonly onApply: (settings: PlanetSettings) => void;
 
 	private settings: PlanetSettings;
-	private field: CoarseField = COARSE_FIELDS[0]!;
+
+	/**
+	 * The ground, and never the steps before it.
+	 *
+	 * Height stopped at the metre scale and Ground runs the erosion, so the two
+	 * were a picture each of one build. A picture of a step is a thing to
+	 * explain; a picture of the ground is the planet.
+	 */
+	private readonly field: CoarseField =
+		COARSE_FIELDS.find((one) => one.id === "ground") ?? COARSE_FIELDS[0]!;
 	private map: CoarseMap | null = null;
 	private token = 0;
 	private level: number;
 	private startedAt = 0;
-
-	/**
-	 * Take a group of sliders into this pane, under the picture they decide.
-	 *
-	 * The element keeps whichever panel built it as its owner, so the draft,
-	 * the ranges and the settling stay in one place and this only decides where
-	 * the rows are drawn.
-	 */
-	hostKnobs(section: HTMLElement | null): void {
-		if (section) this.knobs.appendChild(section);
-	}
 
 	/** Where the player stands, as a direction, or nothing before there is one. */
 	private player: { x: number; y: number; z: number } | null = null;
@@ -82,64 +83,19 @@ export class MapPanel {
 
 	constructor(
 		settings: PlanetSettings,
-		onApply: (settings: PlanetSettings) => void,
+		into: HTMLElement,
 		onGoTo: (at: { x: number; y: number; z: number }) => void = () => {},
 	) {
 		this.settings = settings;
-		this.onApply = onApply;
 		this.level = settings.coarseLevel;
 
-		this.root = document.createElement("aside");
-		this.root.className = "maps";
+		this.root = document.createElement("div");
+		this.root.className = "map-preview";
 
-		const head = document.createElement("button");
-		head.className = "maps-head";
-		head.textContent = "Maps";
-		head.onclick = () => this.root.classList.toggle("shut");
-		this.root.appendChild(head);
-
-		const body = document.createElement("div");
-		body.className = "maps-body";
-		this.root.appendChild(body);
-
-		// **Split like the noise lab: the preview stays put, only the knobs
-		// scroll.** With one map and a couple of sliders under it a single
-		// scroll region was harmless; two whole noise layers of knobs made it
-		// possible to scroll the picture itself off the top of the pane while
-		// reaching for Relief, which is the one thing a knob panel must never
-		// do to the picture it is a panel of.
-		const preview = document.createElement("div");
-		preview.className = "maps-preview";
-		body.appendChild(preview);
-
-		const list = document.createElement("div");
-		list.className = "maps-fields";
-		for (const field of COARSE_FIELDS) {
-			const button = document.createElement("button");
-			button.textContent = field.label;
-			button.onclick = () => {
-				const was = this.field;
-				this.field = field;
-				for (const other of list.children) other.classList.remove("on");
-				button.classList.add("on");
-				// Each pane names how far down the build it needs. Going deeper
-				// runs the steps between; coming back up runs the one this pane
-				// stops at, so the picture is the ground that pane describes
-				// rather than whatever the other one left behind.
-				this.rebuild(
-					COARSE_STAGES.indexOf(field.stage) >
-						COARSE_STAGES.indexOf(was.stage)
-						? COARSE_STAGES[COARSE_STAGES.indexOf(was.stage) + 1]!
-						: field.stage,
-				);
-			};
-			if (field === this.field) button.classList.add("on");
-			list.appendChild(button);
-		}
-		preview.appendChild(list);
+		const preview = this.root;
 
 		const pin = document.createElement("button");
-		pin.className = "maps-pin";
+		pin.className = "map-pin";
 		pin.textContent = "Pin the player";
 		pin.classList.toggle("on", this.pinned);
 		pin.onclick = () => {
@@ -153,7 +109,7 @@ export class MapPanel {
 		this.canvas = document.createElement("canvas");
 		this.canvas.width = WIDTH;
 		this.canvas.height = HEIGHT;
-		this.canvas.className = "maps-canvas";
+		this.canvas.className = "map-flat";
 		preview.appendChild(this.canvas);
 		this.context = this.canvas.getContext("2d")!;
 		this.image = this.context.createImageData(WIDTH, HEIGHT);
@@ -164,41 +120,16 @@ export class MapPanel {
 		const ball = document.createElement("canvas");
 		ball.width = 260;
 		ball.height = 260;
-		ball.className = "maps-ball";
+		ball.className = "map-ball";
 		preview.appendChild(ball);
 		this.sphere = new SphereView(ball);
 		this.sphere.picked(([x, y, z]) => onGoTo({ x, y, z }));
 
-		// Where the knobs that shape this map go, if somebody hands them over.
-		// In its own scrolling region: the picture above stays in view while
-		// these are reached for, and the status and Apply below stay in view
-		// too, because they answer "did it work" and "commit it" and both
-		// belong in sight the whole time a knob is being dragged.
-		const scroll = document.createElement("div");
-		scroll.className = "maps-scroll";
-		body.appendChild(scroll);
-
-		this.knobs = document.createElement("div");
-		this.knobs.className = "maps-knobs";
-		scroll.appendChild(this.knobs);
-
-		const footer = document.createElement("div");
-		footer.className = "maps-footer";
-		body.appendChild(footer);
-
 		this.status = document.createElement("div");
-		this.status.className = "maps-status";
-		footer.appendChild(this.status);
+		this.status.className = "map-says";
+		preview.appendChild(this.status);
 
-		const bar = document.createElement("div");
-		bar.className = "maps-bar";
-		const apply = document.createElement("button");
-		apply.textContent = "Apply to terrain";
-		apply.onclick = () => this.onApply(this.settings);
-		bar.appendChild(apply);
-		footer.appendChild(bar);
-
-		document.body.appendChild(this.root);
+		into.appendChild(this.root);
 
 		this.worker = new Worker(new URL("./mapWorker.ts", import.meta.url), {
 			type: "module",
