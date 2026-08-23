@@ -1,5 +1,5 @@
 import type { Chunk } from "./Chunk.js";
-import type { ChunkDeltas } from "../../edit/ChunkDeltas.js";
+import type { ChunkRow } from "../../edit/ChunkRows.js";
 import { BlockType } from "../terrain/BlockType.js";
 import { coarseCell } from "../../edit/coarseCell.js";
 import { offsetIn } from "../../edit/offsetIn.js";
@@ -15,6 +15,10 @@ import { typeOf } from "../../edit/typeOf.js";
  * first time, rebuilt after a click, or built again at a different level of
  * detail.
  *
+ * **A row carries the chunk its slots were counted in**, which is not always
+ * this one: a cell on a border belongs to one triangle and is read by two or
+ * three, so a chunk is handed the owner's rows alongside its own.
+ *
  * **A record names a cell of the full-depth world and a coarse chunk holds
  * fewer.** `4 ^ lod` cells across and `2 ^ lod` down arrive at one coarse cell,
  * so a placed block grows to fill the cell it lands in. Where several records
@@ -28,44 +32,46 @@ import { typeOf } from "../../edit/typeOf.js";
  */
 export function applyDeltas(
 	chunk: Chunk,
-	deltas: ChunkDeltas,
+	rows: readonly ChunkRow[],
 	fineDepth: number,
 	lod: number,
 ): void {
 	const touched = new Set<number>();
 	const placed = new Set<number>();
-	for (const [slot, layer, state] of deltas.records()) {
-		const fine = slotCell(
-			chunk.address.key,
-			slot,
-			layer,
-			fineDepth,
-			chunk.chunkLevel,
-		);
-		const cell = lod === 0 ? fine : coarseCell(fine, fineDepth, lod);
-		if (cell.layer >= chunk.layerCount) continue;
-		const offset = offsetIn(
-			chunk.address.path,
-			cell.i,
-			cell.j,
-			chunk.depth,
-		);
-		if (!offset) continue;
+	for (const row of rows)
+		for (const [slot, layer, state] of row.deltas.records()) {
+			const fine = slotCell(
+				row.chunkKey,
+				slot,
+				layer,
+				fineDepth,
+				chunk.chunkLevel,
+			);
+			const cell = lod === 0 ? fine : coarseCell(fine, fineDepth, lod);
+			if (cell.layer >= chunk.layerCount) continue;
+			const offset = offsetIn(
+				chunk.address.path,
+				cell.i,
+				cell.j,
+				chunk.depth,
+			);
+			if (!offset) continue;
 
-		// The deepest layer of the crust is the floor of the world and there is
-		// nothing under it. A record naming it is refused here as well as at
-		// the click, so the floor is a property of the world rather than of
-		// whatever wrote the record.
-		if (cell.layer === chunk.layerCount - 1) continue;
+			// The deepest layer of the crust is the floor of the world and there is
+			// nothing under it. A record naming it is refused here as well as at
+			// the click, so the floor is a property of the world rather than of
+			// whatever wrote the record.
+			if (cell.layer === chunk.layerCount - 1) continue;
 
-		const block = typeOf(state);
-		const at =
-			rank(offset.q, offset.r, chunk.m) * chunk.layerCount + cell.layer;
-		if (block === BlockType.AIR && placed.has(at)) continue;
-		if (block !== BlockType.AIR) placed.add(at);
-		chunk.blocks[at] = block;
-		touched.add(rank(offset.q, offset.r, chunk.m));
-	}
+			const block = typeOf(state);
+			const at =
+				rank(offset.q, offset.r, chunk.m) * chunk.layerCount +
+				cell.layer;
+			if (block === BlockType.AIR && placed.has(at)) continue;
+			if (block !== BlockType.AIR) placed.add(at);
+			chunk.blocks[at] = block;
+			touched.add(rank(offset.q, offset.r, chunk.m));
+		}
 
 	for (const slot of touched) {
 		const base = slot * chunk.layerCount;

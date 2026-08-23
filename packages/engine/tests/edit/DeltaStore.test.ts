@@ -122,20 +122,68 @@ describe("DeltaStore", () => {
 		expect(far.some((key) => a.includes(key))).toBe(false);
 	});
 
-	it("reaches every chunk that reads a cell on a chunk border", () => {
+	it("stores a border cell once and hands it to every chunk that reads it", () => {
 		const depth = 8;
 		const chunkLevel = 4;
 		const store = new DeltaStore(header(depth, chunkLevel));
 		const m = 1 << (depth - chunkLevel);
 		// a lattice point on the boundary between two chunk triangles
 		const onBorder = { face: 5, i: m, j: 3, layer: 6 };
-		const keys = store.write(onBorder, packBlockState(3));
-		expect(keys.length).toBeGreaterThan(1);
-		for (const key of keys) {
-			const row = store.rowOf(key)!;
-			expect(row.size).toBe(1);
+		const readers = store.write(onBorder, packBlockState(3));
+		expect(readers.length).toBeGreaterThan(1);
+
+		// One record, in one chunk. The others are listed rather than copied.
+		expect(store.count).toBe(1);
+		const owning = readers.filter((key) => store.rowOf(key));
+		expect(owning).toHaveLength(1);
+
+		// Every chunk that reads the cell is handed the row holding it, under
+		// the key its slots were counted in.
+		for (const key of readers) {
+			const rows = store.rowsFor(key);
+			expect(rows.length).toBeGreaterThan(0);
+			const held = rows.flatMap((row) => [...row.deltas.records()]);
+			expect(held).toHaveLength(1);
+			expect(rows[0]!.chunkKey).toBe(owning[0]);
 		}
 		expect(store.read(onBorder)).toBe(packBlockState(3));
+	});
+
+	it("counts cells rather than records", () => {
+		const store = new DeltaStore(header(8, 4));
+		for (let j = 0; j < 5; j++)
+			store.write({ face: 5, i: 16, j, layer: 6 }, packBlockState(1));
+		expect(store.count).toBe(5);
+	});
+
+	it("rebuilds what each chunk reads when a store is loaded", () => {
+		const depth = 8;
+		const chunkLevel = 4;
+		const m = 1 << (depth - chunkLevel);
+		const onBorder = { face: 5, i: m, j: 3, layer: 6 };
+		const written = new DeltaStore(header(depth, chunkLevel));
+		const readers = written.write(onBorder, packBlockState(3));
+
+		// The same rows, arriving from storage with nothing derived from them.
+		const loaded = new DeltaStore(header(depth, chunkLevel), [
+			...written.entries(),
+		]);
+		for (const key of readers)
+			expect(loaded.rowsFor(key).length).toBeGreaterThan(0);
+		expect(loaded.read(onBorder)).toBe(packBlockState(3));
+	});
+
+	it("reports how far a placed block reaches, and ignores a broken one", () => {
+		const store = new DeltaStore(header(11, 5));
+		const cell = { face: 1, i: 300, j: 200, layer: 40 };
+		const key = store.write(cell, packBlockState(0))[0]!;
+		expect(store.reachOf(key), "air is not ground").toBeUndefined();
+
+		store.write({ ...cell, layer: 30 }, packBlockState(2));
+		store.write({ ...cell, layer: 44 }, packBlockState(2));
+		const reach = store.reachOf(key)!;
+		expect(reach.top).toBe(30);
+		expect(reach.bottom).toBe(44);
 	});
 });
 

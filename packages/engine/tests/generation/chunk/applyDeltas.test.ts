@@ -68,7 +68,7 @@ describe("applyDeltas", () => {
 		);
 		deltas.set(above.slot, ground - 1, packBlockState(BlockType.SNOW));
 		deltas.set(above.slot, ground, packBlockState(BlockType.AIR));
-		applyDeltas(patched, deltas, DEPTH, 0);
+		applyDeltas(patched, [{ chunkKey: address.key, deltas }], DEPTH, 0);
 
 		expect(patched.blocks[SLOT * LAYERS + ground - 1]).toBe(BlockType.SNOW);
 		expect(patched.blocks[SLOT * LAYERS + ground]).toBe(BlockType.AIR);
@@ -82,7 +82,7 @@ describe("applyDeltas", () => {
 		const deltas = new ChunkDeltas();
 		const at = cellSlot({ ...cell, layer: ground - 2 }, DEPTH, CHUNK_LEVEL);
 		deltas.set(at.slot, ground - 2, packBlockState(BlockType.STONE));
-		applyDeltas(chunk, deltas, DEPTH, 0);
+		applyDeltas(chunk, [{ chunkKey: address.key, deltas }], DEPTH, 0);
 		expect(chunk.columnOf(SLOT).first).toBe(ground - 2);
 	});
 
@@ -95,7 +95,7 @@ describe("applyDeltas", () => {
 			const deltas = new ChunkDeltas();
 			const at = cellSlot({ ...cell, layer: 4 }, DEPTH, CHUNK_LEVEL);
 			deltas.set(at.slot, 4, packBlockState(BlockType.SNOW));
-			applyDeltas(chunk, deltas, DEPTH, lod);
+			applyDeltas(chunk, [{ chunkKey: address.key, deltas }], DEPTH, lod);
 
 			const moved = [...chunk.blocks].filter(
 				(b, x) => b !== before[x],
@@ -122,7 +122,7 @@ describe("applyDeltas", () => {
 			);
 			deltas.set(at.slot, 8, packBlockState(block));
 		}
-		applyDeltas(chunk, deltas, DEPTH, 2);
+		applyDeltas(chunk, [{ chunkKey: address.key, deltas }], DEPTH, 2);
 		expect([...chunk.blocks]).toContain(BlockType.SNOW);
 	});
 

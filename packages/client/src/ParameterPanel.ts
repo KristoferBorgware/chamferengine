@@ -751,6 +751,14 @@ const GROUPS: Group[] = [
 				label: "Seam overlay",
 			},
 			{
+				key: "selectBounds",
+				label: "Selection bounds",
+			},
+			{
+				key: "patchBounds",
+				label: "Patch bounds",
+			},
+			{
 				key: "freezeView",
 				label: "Freeze view",
 			},

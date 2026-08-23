@@ -55,13 +55,16 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly setup: MeshWorkerSetup;
 
 	/**
-	 * What a player has changed in a chunk, asked for as each job is posted.
+	 * What a player has changed that a chunk reads, asked for as each job is
+	 * posted.
 	 *
-	 * The pool never holds a store: it asks whoever owns one, at the moment the
-	 * job leaves, so a chunk asked for again after a click carries the click.
-	 * Left unset, chunks are built from the seed alone.
+	 * One entry per chunk the records were written under -- the chunk's own,
+	 * and those owning cells inside its triangle. The pool never holds a store:
+	 * it asks whoever owns one, at the moment the job leaves, so a chunk asked
+	 * for again after a click carries the click. Left unset, chunks are built
+	 * from the seed alone.
 	 */
-	deltas: ((chunkKey: number) => JobDeltas | undefined) | null = null;
+	deltas: ((chunkKey: number) => readonly JobDeltas[]) | null = null;
 
 	/**
 	 * How far each waiting chunk now is, by selection id.

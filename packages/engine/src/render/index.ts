@@ -28,3 +28,7 @@ export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
 export type { AimTarget } from "./aim/AimTarget.js";
 export { aimGeometry } from "./aim/aimGeometry.js";
 export { AimRenderer } from "./aim/AimRenderer.js";
+
+export type { BoundsBall } from "./bounds/BoundsBall.js";
+export { boundsGeometry } from "./bounds/boundsGeometry.js";
+export { BoundsRenderer } from "./bounds/BoundsRenderer.js";

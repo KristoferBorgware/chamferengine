@@ -24,6 +24,7 @@ import type { CellRef } from "chamfer/edit";
 import {
 	DeltaStore,
 	STORE_VERSION,
+	cellSlot,
 	packBlockState,
 	typeOf,
 	worldKey,
@@ -42,6 +43,7 @@ import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
 	AimRenderer,
 	BillboardClouds,
+	BoundsRenderer,
 	ChunkRenderer,
 	FrameTimer,
 	MarkerRenderer,
@@ -165,6 +167,17 @@ const REACH = 6;
 
 /** The color the outline over the aimed-at cell is drawn in. */
 const AIM_COLOR: [number, number, number] = [0.98, 0.86, 0.35];
+
+/**
+ * The two culling volumes, in colors that stay apart when both are on.
+ *
+ * The selection's ball is the one tested before a chunk is asked for; the
+ * patch's is the ball its built geometry fits inside, tested before it is
+ * drawn. Which of the two is refusing a chunk is the usual question, so they
+ * are never the same color.
+ */
+const SELECT_BOUND_COLOR: [number, number, number] = [0.35, 0.75, 1];
+const PATCH_BOUND_COLOR: [number, number, number] = [1, 0.45, 0.65];
 
 /**
  * The block types a click may place, which is every solid one a player can put
@@ -478,6 +491,8 @@ async function main(): Promise<void> {
 	// the water as well as the ground: it says where a click goes rather than
 	// being a thing that lives in the world.
 	const aim = new AimRenderer(ctx);
+	// The volumes the culling tests against, drawn only when asked for.
+	const bounds = new BoundsRenderer(ctx);
 	renderer.layers = [
 		...(sky ? [sky] : []),
 		// After the ground, so the water is drawn over the floor it covers,
@@ -486,6 +501,7 @@ async function main(): Promise<void> {
 		...(billboardClouds ? [billboardClouds] : []),
 		viewMarker,
 		aim,
+		bounds,
 	];
 
 	// One generator per level. A chunk one level coarser samples the terrain at
@@ -699,6 +715,12 @@ async function main(): Promise<void> {
 	teardown.push(() => {
 		source.dispose();
 	});
+
+	/** The balls the last selection tested, for the diagnostic view to draw. */
+	let selectionBalls: {
+		readonly center: readonly [number, number, number];
+		readonly radius: number;
+	}[] = [];
 
 	/** What is drawn, what is asked for, and what has come back unuploaded. */
 	const drawn = new Set<number>();
@@ -1044,6 +1066,16 @@ async function main(): Promise<void> {
 						peaks.troughOf(selection.key, selection.chunkLevel) < 0,
 				),
 			);
+		// The balls the walk tested, kept so a frame can draw them. Held rather
+		// than recomputed: the selection runs on movement and the frame runs
+		// always, and re-walking the hierarchy to draw a diagnostic would cost
+		// more than the diagnostic.
+		selectionBalls = wanted.flatMap((selection) =>
+			selection.bound && selection.bound.radius > 0
+				? [selection.bound]
+				: [],
+		);
+
 		// Decoded once here rather than inside dropReplaced's own loop, which
 		// runs every frame there is a backlog to drain and would otherwise
 		// pay this decode again for every retiring chunk it checks.
@@ -1209,13 +1241,38 @@ async function main(): Promise<void> {
 	 * whatever is resident under the same key.
 	 */
 	function change(cell: CellRef, block: BlockType): void {
+		const owner = cellSlot(cell, DEPTH, CHUNK_LEVEL).chunkKey;
 		for (const key of edits.write(cell, packBlockState(block))) {
 			const id = selectionId(CHUNK_LEVEL, key);
 			drawn.delete(id);
 			building.delete(id);
 		}
-		void editDb.save(editWorld, edits);
+		// The ground the selection is credited with, so a build is not culled
+		// with the hillside it stands on.
+		liftPeaks(owner);
+		// One chunk written, because only one chunk's records changed.
+		void editDb.save(editWorld, edits, owner);
 		refresh();
+	}
+
+	/**
+	 * Tell the selection how high a chunk's ground reaches now.
+	 *
+	 * `ChunkPeaks` is built from the coarse map, which is a picture of the
+	 * generated world and holds no placed block. The selection reads it to
+	 * decide whether a triangle pokes back over the horizon and how big a ball
+	 * to test against the view, so a tower standing out of the top of the ball
+	 * built for its hillside is culled along with the hillside.
+	 */
+	function liftPeaks(chunkKey: number): void {
+		const reach = edits.reachOf(chunkKey);
+		if (!reach) return;
+		peaks.raise(
+			chunkKey,
+			CHUNK_LEVEL,
+			shape.radiusOfLayer(reach.top) - RADIUS,
+			shape.radiusOfLayer(reach.bottom + 1) - RADIUS,
+		);
 	}
 
 	/**
@@ -1240,7 +1297,11 @@ async function main(): Promise<void> {
 	// The pool asks for a chunk's changes as each job leaves, so a chunk asked
 	// for again after a click carries the click.
 	const attachDeltas = (): void => {
-		source.deltas = (key) => edits.rowOf(key)?.pack();
+		source.deltas = (key) =>
+			edits.rowsFor(key).map((row) => ({
+				chunkKey: row.chunkKey,
+				...row.deltas.pack(),
+			}));
 	};
 	attachDeltas();
 
@@ -1260,7 +1321,12 @@ async function main(): Promise<void> {
 				);
 			if (store.count === 0) return;
 			edits = store;
-			for (const [key] of edits.entries()) {
+			// A store opened at a different chunk size arrives re-cut, so its
+			// rows are written back under the cut they are now filed by.
+			if (store.header.chunkLevel !== CHUNK_LEVEL)
+				void editDb.saveAll(editWorld, edits);
+			for (const key of edits.touched()) {
+				liftPeaks(key);
 				const id = selectionId(CHUNK_LEVEL, key);
 				drawn.delete(id);
 				building.delete(id);
@@ -1805,6 +1871,19 @@ async function main(): Promise<void> {
 			Math.max(0.2, overGround * 0.01),
 			RADIUS * 20,
 		);
+
+		// The two culling volumes, when either switch is on. Built here rather
+		// than held, because the patch balls move as chunks arrive and retire.
+		if (current.knobs.selectBounds || current.knobs.patchBounds) {
+			const show = [];
+			if (current.knobs.selectBounds)
+				for (const ball of selectionBalls)
+					show.push({ ...ball, color: SELECT_BOUND_COLOR });
+			if (current.knobs.patchBounds)
+				for (const ball of renderer.bounds())
+					show.push({ ...ball, color: PATCH_BOUND_COLOR });
+			bounds.balls = show;
+		} else if (bounds.balls.length > 0) bounds.balls = [];
 
 		// **The crosshair stands where the arm points, not in the middle of the
 		// screen.** With the camera pulled back the two are different lines,

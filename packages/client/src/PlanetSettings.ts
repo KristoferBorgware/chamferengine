@@ -385,6 +385,12 @@ export interface PlanetKnobs {
 	/** Whether the terrain paints its seams: face edges, chunk rims, aprons. */
 	seamOverlay: boolean;
 
+	/** Draw the ball the selection tests before asking for a chunk. */
+	selectBounds: boolean;
+
+	/** Draw the ball the renderer tests before drawing a resident chunk. */
+	patchBounds: boolean;
+
 	/**
 	 * Whether the world is drawn as its own grid.
 	 *
@@ -631,6 +637,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	nearestFirst: true,
 	apron: true,
 	seamOverlay: false,
+	selectBounds: false,
+	patchBounds: false,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -896,6 +904,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	nearestFirst: { ...TOGGLE, rebuilds: false },
 	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
+	selectBounds: { ...TOGGLE, rebuilds: false },
+	patchBounds: { ...TOGGLE, rebuilds: false },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },

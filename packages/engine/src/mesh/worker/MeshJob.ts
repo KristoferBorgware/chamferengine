@@ -40,8 +40,13 @@ export interface MeshWorkerSetup {
  * A record is a slot, a layer and sixteen bits of block state, and the slots
  * are counted against the world's own subdivision depth and chunk level rather
  * than against the level this job is drawn at.
+ *
+ * `chunkKey` says which chunk they were counted in, which is not always the
+ * chunk being built: a cell on a border belongs to one triangle and is read by
+ * two or three, so a job carries the owner's rows alongside its own.
  */
 export interface JobDeltas {
+	readonly chunkKey: number;
 	readonly where: Uint32Array;
 	readonly what: Uint16Array;
 }
@@ -57,14 +62,17 @@ export interface MeshJob {
 	readonly lod: number;
 
 	/**
-	 * The blocks a player changed in this chunk, or absent where none were.
+	 * The blocks a player changed that this chunk reads, or absent where none
+	 * were.
 	 *
-	 * They ride with the job rather than being held by the worker, so the
-	 * thread that owns the store is the only one that has to be right about
-	 * what is in it: a chunk is generated from the seed and then patched, once,
-	 * in the same call that meshes it.
+	 * One entry per chunk the records were written under: this chunk's own, and
+	 * those owning cells that sit inside its triangle. They ride with the job
+	 * rather than being held by the worker, so the thread that owns the store
+	 * is the only one that has to be right about what is in it -- a chunk is
+	 * generated from the seed and then patched, once, in the call that meshes
+	 * it.
 	 */
-	readonly deltas?: JobDeltas;
+	readonly deltas?: readonly JobDeltas[];
 }
 
 export type MeshWorkerMessage = MeshWorkerSetup | MeshJob;

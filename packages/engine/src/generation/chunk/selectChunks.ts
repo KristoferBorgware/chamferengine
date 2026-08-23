@@ -22,6 +22,23 @@ export interface ChunkSelection {
 	 * a mountain for the chunk a player is standing on.
 	 */
 	readonly distance: number;
+
+	/**
+	 * The ball the view was tested against, in world space.
+	 *
+	 * What decided whether this chunk was asked for at all: the cap of ground
+	 * the triangle holds, from its own lowest point to its own highest, widened
+	 * by the margin that grows with distance. Reported so it can be drawn --
+	 * the camera that decides it cannot see it, and a selection that refuses
+	 * too much looks from there exactly like one that does not.
+	 *
+	 * Optional because a selection can be written by hand, by a caller that
+	 * wants one chunk built and has no walk behind it.
+	 */
+	readonly bound?: {
+		readonly center: readonly [number, number, number];
+		readonly radius: number;
+	};
 }
 
 /**
@@ -91,6 +108,10 @@ export function selectChunks(
 
 	const out: ChunkSelection[] = [];
 	const walk = (address: ChunkAddress, chunkLevel: number): void => {
+		let ballX = 0;
+		let ballY = 0;
+		let ballZ = 0;
+		let ballRadius = 0;
 		const extent = chunkCenter(address, depth, chunkLevel);
 		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
 		const spread = Math.acos(Math.min(1, extent.cosRadius));
@@ -135,7 +156,7 @@ export function selectChunks(
 		// by metres per metre of distance, so what is kept beyond the edge of
 		// the screen is an angle rather than a fixed skirt that would mean
 		// nothing far away and everything underfoot.
-		if (cull) {
+		{
 			const high = surfaceRadius + Math.max(0, peak);
 			const low = surfaceRadius + Math.min(0, trough);
 			const middle = (low + high) / 2;
@@ -153,15 +174,11 @@ export function selectChunks(
 					Math.max(outX * outX + outY * outY, inX * inX + inY * inY),
 				) +
 				distance * slack;
-			if (
-				!cull.holds(
-					extent.x * middle,
-					extent.y * middle,
-					extent.z * middle,
-					bound,
-				)
-			)
-				return;
+			ballX = extent.x * middle;
+			ballY = extent.y * middle;
+			ballZ = extent.z * middle;
+			ballRadius = bound;
+			if (cull && !cull.holds(ballX, ballY, ballZ, bound)) return;
 		}
 
 		if (chunkLevel < finestChunkLevel && distance < detail * width) {
@@ -177,6 +194,7 @@ export function selectChunks(
 			chunkLevel,
 			key: address.key,
 			distance,
+			bound: { center: [ballX, ballY, ballZ], radius: ballRadius },
 		});
 	};
 

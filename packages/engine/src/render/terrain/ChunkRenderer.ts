@@ -120,6 +120,20 @@ export class ChunkRenderer implements ShadowCaster {
 	/** How long the GPU spent on the last pass it would report. */
 	readonly clock: GpuClock;
 
+	/**
+	 * The ball each resident chunk is tested against before it is drawn.
+	 *
+	 * The ball the built geometry actually fits inside, which is a different
+	 * question from the one the selection asked before the chunk was built.
+	 * Reported so both can be looked at.
+	 */
+	bounds(): { center: readonly [number, number, number]; radius: number }[] {
+		const out = [];
+		for (const chunk of this.resident.values())
+			out.push({ center: chunk.center, radius: chunk.radius });
+		return out;
+	}
+
 	/** How many resident chunks the last frame actually drew. */
 	private lastDrawn = 0;
 

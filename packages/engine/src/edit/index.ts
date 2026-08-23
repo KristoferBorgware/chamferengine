@@ -15,6 +15,7 @@ export { rotationOf } from "./rotationOf.js";
 export { BlockRegistry } from "./BlockRegistry.js";
 export type { StoreHeader } from "./StoreHeader.js";
 export { STORE_VERSION } from "./StoreHeader.js";
+export type { ChunkRow } from "./ChunkRows.js";
 export { ChunkDeltas } from "./ChunkDeltas.js";
 export { DeltaStore } from "./DeltaStore.js";
 

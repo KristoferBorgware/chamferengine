@@ -85,10 +85,13 @@ export class MeshWorkerCore {
 						job.chunkLevel,
 						shape.crustDepth,
 					);
-		if (job.deltas && !this.grid)
+		if (job.deltas?.length && !this.grid)
 			applyDeltas(
 				chunk,
-				ChunkDeltas.unpack(job.deltas.where, job.deltas.what),
+				job.deltas.map((row) => ({
+					chunkKey: row.chunkKey,
+					deltas: ChunkDeltas.unpack(row.where, row.what),
+				})),
 				this.shape.subdivisionDepth,
 				job.lod,
 			);
