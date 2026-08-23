@@ -92,7 +92,6 @@ export function selectChunks(
 	peakHeight = 0,
 	peaks?: ChunkPeaks,
 	cull?: ChunkCull,
-	slack = 0,
 ): ChunkSelection[] {
 	const length = Math.sqrt(
 		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
@@ -152,10 +151,15 @@ export function selectChunks(
 		// its own lowest point to its own highest -- both ends, or a chunk on
 		// a tall world gets a sphere reaching from sea level to the planet's
 		// tallest mountain whatever it holds itself. The sea floor is inside
-		// it because the water above is drawn through. `slack` then widens it
-		// by metres per metre of distance, so what is kept beyond the edge of
-		// the screen is an angle rather than a fixed skirt that would mean
-		// nothing far away and everything underfoot.
+		// it because the water above is drawn through.
+		//
+		// **The ball is the ground and nothing else.** Keeping a margin beyond
+		// the edge of the screen is the frustum's job, and doing it here
+		// instead -- by adding metres of radius per metre of distance -- made
+		// every ball 8.2 times the half-width of its own chunk, which is 512
+		// times the volume, all of it voting to be kept. It also pushed the
+		// ball at the near and far planes and behind the camera, where no
+		// margin was ever wanted.
 		{
 			const high = surfaceRadius + Math.max(0, peak);
 			const low = surfaceRadius + Math.min(0, trough);
@@ -169,11 +173,9 @@ export function selectChunks(
 			const outY = high * cos - middle;
 			const inX = low * sin;
 			const inY = low * cos - middle;
-			const bound =
-				Math.sqrt(
-					Math.max(outX * outX + outY * outY, inX * inX + inY * inY),
-				) +
-				distance * slack;
+			const bound = Math.sqrt(
+				Math.max(outX * outX + outY * outY, inX * inX + inY * inY),
+			);
 			ballX = extent.x * middle;
 			ballY = extent.y * middle;
 			ballZ = extent.z * middle;

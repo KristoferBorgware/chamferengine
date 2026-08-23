@@ -108,7 +108,7 @@ let CULL_BUILD = settings.knobs.buildCull;
  * a sphere's radius: at 25 degrees a chunk 100 m away is kept if it comes
  * within 47 m of the edge of the screen, and one 1 km away within 470 m.
  */
-let CULL_SLACK = Math.tan((settings.knobs.cullMargin * Math.PI) / 180);
+let CULL_MARGIN = (settings.knobs.cullMargin * Math.PI) / 180;
 
 /**
  * Whether the world is held down to its lattice and nothing else.
@@ -1062,7 +1062,6 @@ async function main(): Promise<void> {
 			shape.maxElevation,
 			peaks,
 			cull,
-			CULL_SLACK,
 		);
 		wantedNow = wanted.length;
 		lastWanted = wanted;
@@ -1479,7 +1478,7 @@ async function main(): Promise<void> {
 			sea.wireframe = live.knobs.seaWireframe;
 			sea.look = seaLook(live);
 		}
-		CULL_SLACK = Math.tan((live.knobs.cullMargin * Math.PI) / 180);
+		CULL_MARGIN = (live.knobs.cullMargin * Math.PI) / 180;
 		source.nearestFirst = live.knobs.nearestFirst;
 
 		// Freezing waits for the next frame, which has a matrix to hold.
@@ -1830,7 +1829,7 @@ async function main(): Promise<void> {
 			selectedLook !== null &&
 			viewing !== null &&
 			viewing.look.dot(selectedLook) <
-				Math.cos(Math.max(0.17, CULL_SLACK / 2));
+				Math.cos(Math.max(0.17, CULL_MARGIN / 2));
 		if (
 			!frozen &&
 			(cameraAt.sub(selectedAt).length() > RESELECT_DISTANCE || turned) &&
@@ -2081,6 +2080,31 @@ async function main(): Promise<void> {
 			sea.sky = renderer.sky;
 		}
 		const viewProj = projection.multiply(view);
+		// **The margin beyond the edge of the screen is an angle on the
+		// frustum, not metres on every chunk.** What is kept is ground a turn
+		// could bring on screen, which is a widening of the four side planes
+		// and of nothing else; adding the same reach to each chunk's own test
+		// volume grew it 8.2 times in radius and 512 times in volume, and
+		// pushed it at the near and far planes as well.
+		//
+		// The vertical angle is widened enough that the horizontal one grows by
+		// the margin too. The aspect ratio turns a vertical widening into a
+		// smaller horizontal one, so taking the vertical figure alone would
+		// keep less to the sides than the knob asks for -- and the sides are
+		// where turning brings ground on.
+		const halfUp = FIELD_OF_VIEW / 2;
+		const aspect = canvas.width / canvas.height;
+		const halfAcross = Math.atan(Math.tan(halfUp) * aspect);
+		const wideUp = Math.max(
+			halfUp + CULL_MARGIN,
+			Math.atan(Math.tan(Math.min(1.5, halfAcross + CULL_MARGIN)) / aspect),
+		);
+		const cullViewProj = Mat4.perspective(
+			Math.min(3.0, 2 * wideUp),
+			aspect,
+			Math.max(0.2, overGround * 0.01),
+			RADIUS * 20,
+		).multiply(view);
 		// What the next selection reads: where the picture was actually taken
 		// from, and what it reached. The camera is not the player -- the wheel
 		// puts it up to 60 m back -- and from up there the horizon is a long
@@ -2089,7 +2113,7 @@ async function main(): Promise<void> {
 			position: from,
 			eyeRadius: from.length(),
 			viewProj,
-			frustum: new Frustum(viewProj),
+			frustum: new Frustum(cullViewProj),
 			eye: from,
 			look,
 		};

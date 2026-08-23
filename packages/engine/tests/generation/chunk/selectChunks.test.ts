@@ -340,7 +340,7 @@ describe("selecting against a view", () => {
 
 	const HIGH = RADIUS + 400;
 	const EYE = VIEWER.scale(HIGH);
-	const ahead = (halfAngle: number, slack = 0) =>
+	const ahead = (halfAngle: number) =>
 		selectChunks(
 			DEPTH,
 			FINEST,
@@ -351,7 +351,6 @@ describe("selecting against a view", () => {
 			0,
 			undefined,
 			cone(VIEWER, halfAngle),
-			slack,
 		);
 	const all = () => selectChunks(DEPTH, FINEST, EYE, HIGH, RADIUS);
 
@@ -377,8 +376,11 @@ describe("selecting against a view", () => {
 		expect(ahead(0.25).some((s) => holds(s, VIEWER))).toBe(true);
 	});
 
-	it("widens with the slack", () => {
-		expect(ahead(0.25, 1.5).length).toBeGreaterThan(ahead(0.25, 0).length);
+	// The margin beyond the edge of the screen is an angle on the view, so
+	// widening the view is what keeps more -- a chunk's own ball is the ground
+	// it holds and nothing else.
+	it("keeps more as the view widens", () => {
+		expect(ahead(0.4).length).toBeGreaterThan(ahead(0.25).length);
 	});
 
 	it("is exactly the unculled selection when nothing is refused", () => {
@@ -393,7 +395,6 @@ describe("selecting against a view", () => {
 				0,
 				undefined,
 				{ holds: () => true },
-				0,
 			),
 		).toEqual(all());
 	});
