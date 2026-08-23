@@ -10,7 +10,143 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-067 — The cloud decks stand outside the atmosphere
+### F-070 — The ground pyramid stops two levels above the map, so the smallest chunks are over-credited
+
+**Kind:** limitation
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-23, measuring why the cull balls were larger than the chunks
+inside them
+**Where:** `packages/engine/src/generation/chunk/ChunkPeaks.ts`, `CAPPED_LEVEL`
+
+**What happens.** `ChunkPeaks` records how high and how low the ground reaches
+under each triangle, as a pyramid, and the pyramid stops at level 6. A triangle
+finer than that has no entry and reads its deepest ancestor's, which is
+conservative in the safe direction — a parent's ground is never lower than a
+child's, so nothing visible is dropped.
+
+What it costs is measured (`tools/trial-bounds.ts`). On a world cut at 16 cells
+a chunk — chunk level 9 — a chunk reads a triangle **64 times its own size** and
+is credited with **1.62×** the floor-to-peak span its own ground has, 45.2 m
+against 27.8 m. That shows up as the ball it is culled by: **2.53×** its own
+half-width at the finest level against **1.13 to 1.20×** at every coarser one,
+because the coarser chunks are nearer the cap or above it.
+
+**Why it matters.** Less than it looks, for two reasons, which is why it was
+left. **The default world is cut at chunk level 7**, one level below the cap, so
+the borrowing is a single step and the effect is small; it took a deliberately
+small chunk size to make it visible. And the frustum change took the large
+slack out already — the balls were 8.2× before the margin moved off them and
+onto the view.
+
+**What would fix it, and what it costs.** Carry the pyramid to level 8, which
+is **1,747,626 entries and about 7 MB** against level 6's 109,220 and 437 KB,
+plus the build time at world load.
+
+**Level 8 is the whole of the fix, and there is no point going further.** The
+coarse map is itself level 8 on the shipped world — one cell is 52.8 m — so a
+pyramid deeper than the map copies the same numbers into more slots and records
+nothing new. Whatever is decided here, the cap belongs at the map's level and
+never below it.
+
+A side table for the levels under the cap, filled only for triangles a
+selection actually visits, would buy the same thing for a fraction of the
+memory. Nobody has priced it.
+
+---
+
+### F-067 — The chunk selection reads the ground the seed made, not the ground a player built
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-22, wiring the edit path into the residency loop
+**Where:** `packages/engine/src/generation/chunk/ChunkPeaks.ts`, and
+`selectChunks` where it reads them
+
+**What happens.** Which chunks are drawn, and at what level, comes from how high
+the ground stands under each triangle. `ChunkPeaks` builds that pyramid once,
+from the coarse map, which is a picture of the **generated** world -- no placed
+block is in it and none can be. A tower a player builds a hundred metres up
+stands over a triangle whose recorded peak is the hillside it was built on.
+
+**Why it matters.** The selection uses the peak to decide whether a chunk is
+worth drawing at all and which level to draw it at. Ground that stands higher
+than the pyramid says is ground the selection under-reaches for, so a tall build
+can be dropped or coarsened at a distance where the hill beside it is not. The
+same gap is what the cascade shadows exist for -- they render anything that draws
+itself, exactly because the map cannot hold a placed block -- so the shape of the
+answer is known and the selection has not been given it.
+
+**What would fix it.** Raise the pyramid where a chunk holds changes: the delta
+store knows which chunks those are and the highest layer written in each, and a
+layer is a radius. It is one number per changed chunk, maintained on write, and
+the selection already reads a number per triangle. What is undecided is where it
+lives, since the pyramid is built on the thread that draws and the store is
+loaded after it.
+
+---
+
+### F-068 — Every click rewrites the whole world's record
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-22, writing `EditDb`
+**Where:** `packages/client/src/EditDb.ts`, `save`
+
+**What happens.** One record per world holds every chunk's changes, so `save`
+packs every row and writes all of them. A click writes one cell and rewrites the
+lot.
+
+**Why it matters.** Not at all yet: a record is six bytes, and a world somebody
+has played in for an evening is tens of kilobytes, which the browser writes
+without noticing. It grows with the world rather than with the change, so it is
+the shape of the problem rather than its size -- ten million edits is 76 MB
+rewritten per click, and nothing warns on the way there.
+
+**What would fix it.** One database record per chunk rather than per world,
+keyed by the world's name and the chunk's key together. That is the shape the
+hosted store already commits to -- chunk ID to a blob, one `get` and one `put` --
+so it is the migration arriving early rather than a new idea. What it costs is
+that opening a world becomes a range query rather than one read, and the header
+needs a record of its own.
+
+---
+
+### F-069 — A change is written into two or three chunks and nothing collapses them
+
+**Kind:** limitation
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-22, making an edit on a chunk border reach every chunk that
+reads it
+**Where:** `packages/engine/src/edit/DeltaStore.ts`, `write`
+
+**What happens.** A chunk generates the slots on its own rim so the mesher can
+decide whether to emit a face there without fetching a neighbour, so a cell on a
+chunk border is read by two or three chunks and the record is written into each.
+`rank.js` measures 17% of a chunk's slots as sitting on its border.
+
+**Why it matters.** The store is a little larger than the count of changed cells
+-- around 17% of edits stored twice or three times, so a few per cent overall --
+and `count` reports records rather than cells. Neither is wrong, and both are
+easy to read as a bug by whoever next opens the file. The duplicates stay in
+step because every write goes through one call; a second writer, or a merge
+between two clients, would have to keep them in step by hand.
+
+**What would fix it.** Either say so where it can be seen -- a `cells` alongside
+`count` -- or store canonically and gather a chunk's neighbours' rows when a job
+is posted, which moves the work from the write to the read and needs each record
+to carry the chunk it was written under.
+
+---
+
+### F-072 — The cloud decks stand outside the atmosphere
 
 **Kind:** question
 **Milestone:** 0.5.0
@@ -19,6 +155,9 @@ and how to write one. The open list stays in the order things were found.
 **Found:** 2026-08-23, while building the atmosphere and looking at the planet
 from outside it
 **Where:** `packages/client/src/PlanetSettings.ts`
+
+*(Written down as F-067 in the commit that found it, before master turned out
+to be spending that number on something else.)*
 
 **What happens.** The low cloud deck sits `3,000 m` over the crust top, which on
 a planet `6,801 m` in radius puts it at a radius of `10,901 m` — **1.6 times the
@@ -39,6 +178,8 @@ Lowering the decks costs nothing but changes how big a cloud looks from the
 ground, since a nearer puff of the same size covers more sky; raising **Air
 reaches** past `7,100 m` would enclose both decks but makes the shell taller
 than the planet is wide.
+
+---
 
 ### F-066 — A steep slope is a staircase with no antialiasing, and it crawls
 
@@ -1361,6 +1502,95 @@ when the ground moves, so nothing else has to change.
 ---
 
 ## Closed
+
+### F-071 — A chunk meshes 54 cells it can never be told about, so an edit at a chunk border leaves a wall standing and a hole to see through
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-23, from the owner digging into a mountain and getting
+triangle-shaped ridges along every chunk edge
+**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`,
+`packages/engine/src/edit/chunksHolding.ts`,
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** A chunk meshes more cells than it holds. Its rim cells ask the
+ring around them whether to draw a side face, and the apron draws that ring
+outright — and those cells sit one step past the rim, which puts them **strictly
+inside the neighbouring chunk's triangle**. `ChunkColumnSampler` generates them
+on demand from the terrain function, which is a pure function of the seed and
+knows nothing about any change a player made.
+
+`chunksHolding` hands a change to every chunk whose triangle **contains** the
+cell. That is the right set for the delta store and the wrong set for the
+mesher, which reads a ring wider than its own triangle.
+
+> **[measured]** `tools/probe-seam-edit.ts`, at depth 8 cut at chunk level 4.
+> A chunk holds **153** slots and reads **54** more from one step past its rim.
+> Of those 54, a change is handed to it for **0**. The first of them belongs to
+> chunks 878 and 879; the chunk reading it is 867.
+
+Two symptoms, one cause, and they are the two the owner saw.
+
+**A wall left standing.** Break a block just across a chunk boundary and the
+neighbour's apron still draws the seed's cap there, a centimetre low. Mine out a
+region spanning several chunks and what is left is a one-cell ridge along every
+chunk edge — a triangle outline of ground nobody removed.
+
+**A hole to see through.** A rim cell decides whether to emit a side face by
+asking the column across the boundary. If a player dug that column away the rim
+cell still reads solid ground and emits **no** face, so the wall of the tunnel
+is missing and the far side of the planet shows through it. The mirror case is
+the same bug: place a block across the boundary and the rim cell reads air and
+emits a face that should not be there.
+
+**Why it matters.** It is not a corner case. **17%** of a chunk's slots sit on a
+border (`rank.js`), and the ring past the rim is a third as many cells again as
+the chunk holds. Digging is the second thing a player does, and a tunnel that
+cannot be dug through a chunk edge without breaking the picture is the whole
+feature. It is also the one class of artefact that does not heal: the geometry
+is wrong on both sides and stays wrong until something else forces a rebuild.
+
+**Closed:** 2026-08-23, and it turned out to be two bugs rather than one.
+`chunksReading` is the wider set the store now routes by, and `applyDeltas`
+hands back what fell outside the triangle for `ChunkColumnSampler` to write over
+the columns it generates. So a chunk generating a cell past its rim gets the
+same column the chunk that owns it holds -- which is the invariant the whole
+scheme rests on, and there is now a test for it.
+
+**The second bug was underneath.** `chunksHolding` found its candidates by
+asking the cell's own ring which chunks owned them, and that misses a chunk at
+its own triangle's **corner**: the only neighbours a corner has inside its
+triangle sit on that triangle's two edges, so both are shared, and where the
+border rule awards both to lower-keyed chunks the triangle whose corner it is
+never appears. Measured over every chunk of one face at depth 8 cut at chunk
+level 4, **155 of 39,168** cell-and-chunk pairs went unreported. It descends the
+triangles now -- they nest, so a chunk containing a point has an ancestor
+containing it at every level, and at most six paths stay live however deep the
+cut. **0 of 39,168** now.
+
+**What fixed it.** The records have to reach the chunk, and then the sampler
+has to apply them.
+
+1. **Widen who is told.** A second set beside `chunksHolding` — every chunk
+   whose *mesher reads* the cell, which is every chunk holding any neighbour of
+   it. The store already walks the ring to find the holders, so this is the
+   candidate list it currently throws away.
+2. **Patch the sampler, not the chunk.** `applyDeltas` writes into
+   `chunk.blocks`, which has no slot for a cell outside the triangle. The
+   generated-column path in `ChunkColumnSampler` is where the same records
+   belong: build the column from the terrain, then write the records naming it.
+
+The alternative — holding the neighbouring chunks resident before meshing — is
+the one `ChunkColumnSampler` exists to avoid, and it should stay avoided.
+
+**Not to be confused with the LOD seam**, F-025, the cave mouth crossing a
+level join. That is two levels
+disagreeing about generated ground. This is one level disagreeing about ground a
+player changed, and it happens with every chunk at the same level.
+
+---
 
 ### F-065 — The sea takes neither the shadow nor the moon
 

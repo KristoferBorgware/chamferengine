@@ -59,3 +59,8 @@ export { barycentricOf } from "./lookup/barycentricOf.js";
 export { directionToCell } from "./lookup/directionToCell.js";
 export { positionToCell } from "./lookup/positionToCell.js";
 export { layerOf } from "./lookup/layerOf.js";
+
+export type { RayWorld } from "./ray/RayWorld.js";
+export type { RayHit } from "./ray/RayHit.js";
+export { faceWeights } from "./ray/faceWeights.js";
+export { rayWalk } from "./ray/rayWalk.js";

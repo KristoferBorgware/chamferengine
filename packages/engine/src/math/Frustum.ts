@@ -1,3 +1,4 @@
+import type { Box } from "./Box.js";
 import type { Mat4 } from "./Mat4.js";
 
 /**
@@ -68,6 +69,39 @@ export class Frustum {
 				this.planes[at + 2]! * z +
 				this.planes[at + 3]!;
 			if (distance < -radius) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether a box in any orientation is anywhere inside.
+	 *
+	 * The same plane-at-a-time test a sphere gets, with the box's reach along
+	 * each plane's normal standing in for the radius: a box's furthest point
+	 * toward a plane is the sum of its three half-widths, each scaled by how
+	 * much its axis points that way. A box outside one plane is outside the
+	 * frustum; one inside all six may still clear a corner, and is reported as
+	 * inside, which is the trade culling wants.
+	 *
+	 * This is what a chunk is tested by. A chunk is a wedge -- a small triangle
+	 * on the surface, extruded down through the crust -- and a ball around a
+	 * wedge dug a hundred metres deep has to be a hundred metres wide as well.
+	 */
+	holdsBox(box: Box): boolean {
+		const [cx, cy, cz] = box.center;
+		const [ax, ay, az] = box.axes;
+		const [hx, hy, hz] = box.halves;
+		for (let p = 0; p < 6; p++) {
+			const at = p * 4;
+			const nx = this.planes[at]!;
+			const ny = this.planes[at + 1]!;
+			const nz = this.planes[at + 2]!;
+			const distance = nx * cx + ny * cy + nz * cz + this.planes[at + 3]!;
+			const reach =
+				Math.abs(nx * ax[0]! + ny * ax[1]! + nz * ax[2]!) * hx +
+				Math.abs(nx * ay[0]! + ny * ay[1]! + nz * ay[2]!) * hy +
+				Math.abs(nx * az[0]! + ny * az[1]! + nz * az[2]!) * hz;
+			if (distance < -reach) return false;
 		}
 		return true;
 	}

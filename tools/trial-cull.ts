@@ -64,7 +64,6 @@ function count(height: number, slack: number): number {
 		shape.maxElevation,
 		peaks,
 		frustum,
-		slack,
 	).length;
 }
 

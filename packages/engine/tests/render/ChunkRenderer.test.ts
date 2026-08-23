@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ChunkRenderer, SkyRenderer } from "chamfer/render";
-import { Mat4, Vec3 } from "chamfer/math";
+import { Mat4, Vec3, type Box } from "chamfer/math";
 import type { ChunkMesh } from "chamfer/mesh";
 import type { Frame } from "chamfer/render";
 import { planetAtmosphere } from "chamfer/sky";
@@ -28,6 +28,19 @@ const FRAME: Frame = {
 };
 
 /** One chunk's worth of geometry, with a triangle in each of the two buffers. */
+/** A cube on the world axes, which is every bound these tests need. */
+function ball(center: [number, number, number], half: number): Box {
+	return {
+		center,
+		axes: [
+			[1, 0, 0],
+			[0, 1, 0],
+			[0, 0, 1],
+		],
+		halves: [half, half, half],
+	};
+}
+
 function mesh(key: number): ChunkMesh {
 	const geometry = () => ({
 		vertices: new Float32Array(3 * 6),
@@ -38,8 +51,7 @@ function mesh(key: number): ChunkMesh {
 	return {
 		key,
 		origin: new Vec3(0, 0, 1700),
-		center: [0, 0, 1700],
-		radius: 20,
+		bound: ball([0, 0, 1700], 20),
 		opaque: geometry(),
 		translucent: geometry(),
 		tally: { cells: 1, faces: 2, merged: 0, apron: 0 },
@@ -112,7 +124,7 @@ describe("what a frame encodes", () => {
 		const renderer = new ChunkRenderer(ctx);
 		renderer.upload(mesh(1));
 		// Behind the camera: it looks inward from 1760 toward the surface.
-		renderer.upload({ ...mesh(2), center: [0, 0, 2400], radius: 20 });
+		renderer.upload({ ...mesh(2), bound: ball([0, 0, 2400], 20) });
 
 		renderer.render(FRAME);
 

@@ -1,3 +1,4 @@
+import type { Box } from "../../math/Box.js";
 import type { Frame } from "../Frame.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { ShadowCaster } from "./ShadowCaster.js";
@@ -309,27 +310,40 @@ export class CascadeShadow {
 	 * casts into it is anything within that ball's radius of the light axis
 	 * through its centre and not so far back up the light as to be outside the
 	 * depth the pass records.
+	 *
+	 * A caster names an oriented box, so how far it reaches along the light and
+	 * how far it stands off the axis are each a sum over its three axes: the
+	 * cosine of an axis against the light for the first and the sine for the
+	 * second. A shaft dug straight down under a low sun barely widens the
+	 * second sum, where the ball around it would.
 	 */
-	boxOf(at: number): {
-		holds: (
-			centre: readonly [number, number, number],
-			radius: number,
-		) => boolean;
-	} {
+	boxOf(at: number): { holds: (bound: Box) => boolean } {
 		const box = this.boxes[at]!;
 		return {
-			holds: (centre, radius) => {
-				const dx = centre[0] - box.centre[0];
-				const dy = centre[1] - box.centre[1];
-				const dz = centre[2] - box.centre[2];
+			holds: (bound) => {
+				const dx = bound.center[0] - box.centre[0];
+				const dy = bound.center[1] - box.centre[1];
+				const dz = bound.center[2] - box.centre[2];
+				let reach = 0;
+				let wide = 0;
+				for (let n = 0; n < 3; n++) {
+					const axis = bound.axes[n]!;
+					const half = bound.halves[n]!;
+					const cosine =
+						axis[0] * box.sun[0] +
+						axis[1] * box.sun[1] +
+						axis[2] * box.sun[2];
+					reach += Math.abs(cosine) * half;
+					wide += Math.sqrt(Math.max(0, 1 - cosine * cosine)) * half;
+				}
 				const along =
 					dx * box.sun[0] + dy * box.sun[1] + dz * box.sun[2];
-				if (along > box.radius + box.back + radius) return false;
-				if (along < -box.radius - radius) return false;
+				if (along > box.radius + box.back + reach) return false;
+				if (along < -box.radius - reach) return false;
 				const across = Math.sqrt(
 					Math.max(0, dx * dx + dy * dy + dz * dz - along * along),
 				);
-				return across <= box.radius + radius;
+				return across <= box.radius + wide;
 			},
 		};
 	}

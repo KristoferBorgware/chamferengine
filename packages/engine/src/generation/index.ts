@@ -66,17 +66,28 @@ export type { ColumnBand } from "./terrain/ColumnBand.js";
 export type { TerrainColumn } from "./terrain/TerrainColumn.js";
 export type { TerrainOptions } from "./terrain/TerrainOptions.js";
 export { TERRAIN_DEFAULTS } from "./terrain/TerrainOptions.js";
-export { BlockType, isSolid, isTranslucent } from "./terrain/BlockType.js";
+export {
+	BLOCK_NAMES,
+	BlockType,
+	isBreakable,
+	isSolid,
+	isTranslucent,
+} from "./terrain/BlockType.js";
 export { TerrainGenerator } from "./terrain/TerrainGenerator.js";
 export { caveDensity } from "./terrain/caveDensity.js";
-export { blockColor, BLOCK_COLORS } from "./terrain/blockColor.js";
+export { blockColor, BLOCK_COLORS, SPECKLE } from "./terrain/blockColor.js";
 export { GROUND_LINES } from "./terrain/GROUND_LINES.js";
 
 export { ChunkAddress } from "./chunk/ChunkAddress.js";
 export { Chunk } from "./chunk/Chunk.js";
 export { generateChunk } from "./chunk/generateChunk.js";
+export type { OutsideBlocks } from "./chunk/OutsideBlocks.js";
+export { outsideKey } from "./chunk/OutsideBlocks.js";
+export { applyDeltas } from "./chunk/applyDeltas.js";
 export type { ChunkExtent } from "./chunk/chunkCenter.js";
 export { chunkCenter } from "./chunk/chunkCenter.js";
+export { chunkWedge } from "./chunk/chunkWedge.js";
+export { coarseChunkKey } from "./chunk/coarseChunkKey.js";
 export { horizonAngle } from "./chunk/horizonAngle.js";
 export { ChunkAtlas } from "./chunk/ChunkAtlas.js";
 export { residentChunks } from "./chunk/residentChunks.js";

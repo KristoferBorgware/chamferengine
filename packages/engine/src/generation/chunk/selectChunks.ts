@@ -1,7 +1,9 @@
 import { ChunkAddress } from "./ChunkAddress.js";
 import { chunkCenter } from "./chunkCenter.js";
+import { chunkWedge } from "./chunkWedge.js";
 import { horizonAngle } from "./horizonAngle.js";
 import type { ChunkCull } from "./ChunkCull.js";
+import type { Box } from "../../math/Box.js";
 import type { ChunkPeaks } from "./ChunkPeaks.js";
 
 /** One chunk to draw, and how coarsely. */
@@ -22,6 +24,20 @@ export interface ChunkSelection {
 	 * a mountain for the chunk a player is standing on.
 	 */
 	readonly distance: number;
+
+	/**
+	 * The box the view was tested against, in world space.
+	 *
+	 * What decided whether this chunk was asked for at all: the wedge of ground
+	 * the triangle holds, from its own lowest point to its own highest.
+	 * Reported so it can be drawn -- the camera that decides it cannot see it,
+	 * and a selection that refuses too much looks from there exactly like one
+	 * that does not.
+	 *
+	 * Optional because a selection can be written by hand, by a caller that
+	 * wants one chunk built and has no walk behind it.
+	 */
+	readonly bound?: Box;
 }
 
 /**
@@ -75,7 +91,6 @@ export function selectChunks(
 	peakHeight = 0,
 	peaks?: ChunkPeaks,
 	cull?: ChunkCull,
-	slack = 0,
 ): ChunkSelection[] {
 	const length = Math.sqrt(
 		viewer.x * viewer.x + viewer.y * viewer.y + viewer.z * viewer.z,
@@ -91,6 +106,7 @@ export function selectChunks(
 
 	const out: ChunkSelection[] = [];
 	const walk = (address: ChunkAddress, chunkLevel: number): void => {
+		let wedge: Box | undefined;
 		const extent = chunkCenter(address, depth, chunkLevel);
 		const cos = ux * extent.x + uy * extent.y + uz * extent.z;
 		const spread = Math.acos(Math.min(1, extent.cosRadius));
@@ -122,48 +138,41 @@ export function selectChunks(
 		const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		const width = 2 * spread * surfaceRadius;
 
-		// Out of view, and so is everything under it. A triangle's own sphere
+		// Out of view, and so is everything under it. A triangle's own box
 		// contains all four of its children's, so refusing it here prunes the
 		// whole subtree rather than testing every leaf of it -- which is where
 		// the saving is, because a level down is four times the triangles.
 		//
-		// The sphere holds the cap of ground this triangle actually has, from
-		// its own lowest point to its own highest -- both ends, or a chunk on
-		// a tall world gets a sphere reaching from sea level to the planet's
-		// tallest mountain whatever it holds itself. The sea floor is inside
-		// it because the water above is drawn through. `slack` then widens it
-		// by metres per metre of distance, so what is kept beyond the edge of
-		// the screen is an angle rather than a fixed skirt that would mean
-		// nothing far away and everything underfoot.
-		if (cull) {
+		// The box holds the wedge of world this triangle actually has, from its
+		// own lowest point to its own highest -- both ends, or a chunk on a
+		// tall world gets a volume reaching from sea level to the planet's
+		// tallest mountain whatever it holds itself. The sea floor is inside it
+		// because the water above is drawn through.
+		//
+		// **A box and not a ball, because a chunk is a wedge into the planet.**
+		// Ground alone is a thin cap that either shape fits, and a chunk dug to
+		// the bottom of the crust is a shaft hundreds of metres deep: a 16 m
+		// chunk down a 1,232 m crust wants a 616 m ball, 77 times its own
+		// half-width and some thousands of times the volume it holds. A box
+		// grows downward without growing sideways.
+		//
+		// **And it is the world and nothing else.** Keeping a margin beyond the
+		// edge of the screen is the frustum's job, and doing it here instead --
+		// by adding metres per metre of distance -- made every volume 8.2 times
+		// the half-width of its own chunk, which is 512 times the volume, all
+		// of it voting to be kept. It also pushed the volume at the near and
+		// far planes and behind the camera, where no margin was ever wanted.
+		{
 			const high = surfaceRadius + Math.max(0, peak);
 			const low = surfaceRadius + Math.min(0, trough);
-			const middle = (low + high) / 2;
-			const sin = Math.sin(spread);
-			const cos = Math.cos(spread);
-			// The furthest corner of the cap from its own middle, taken at
-			// both ends: a sum of the two extents would be up to 41% wide of
-			// it, and this is exact.
-			const outX = high * sin;
-			const outY = high * cos - middle;
-			const inX = low * sin;
-			const inY = low * cos - middle;
-			const bound =
-				Math.sqrt(
-					Math.max(outX * outX + outY * outY, inX * inX + inY * inY),
-				) +
-				distance * slack;
-			if (
-				!cull.holds(
-					extent.x * middle,
-					extent.y * middle,
-					extent.z * middle,
-					bound,
-				)
-			)
-				return;
+			wedge = chunkWedge(extent, low, high);
+			if (cull && !cull.holdsBox(wedge)) return;
 		}
 
+		// Near enough to be worth four smaller triangles, and there is a
+		// smaller one to be had. The whole point of the walk: a chunk is
+		// chosen coarse in the distance and fine underfoot, and the test is
+		// against the chunk's own width so one number works at every level.
 		if (chunkLevel < finestChunkLevel && distance < detail * width) {
 			for (let child = 0; child < 4; child++)
 				walk(
@@ -172,11 +181,13 @@ export function selectChunks(
 				);
 			return;
 		}
+
 		out.push({
 			lod: finestChunkLevel - chunkLevel,
 			chunkLevel,
 			key: address.key,
 			distance,
+			bound: wedge,
 		});
 	};
 

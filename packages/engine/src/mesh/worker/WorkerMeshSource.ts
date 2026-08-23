@@ -1,6 +1,6 @@
 import type { ChunkMesh } from "../ChunkMesh.js";
 import type { ChunkSelection } from "../../generation/chunk/selectChunks.js";
-import type { MeshResult, MeshWorkerSetup } from "./MeshJob.js";
+import type { JobDeltas, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
 import type { MeshSource } from "./MeshSource.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { selectionId } from "../../generation/chunk/selectionId.js";
@@ -53,6 +53,20 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly cancelled = new Set<number>();
 	private readonly create: () => MeshWorkerHandle;
 	private readonly setup: MeshWorkerSetup;
+
+	/**
+	 * What a player has changed that a chunk reads, asked for as each job is
+	 * posted.
+	 *
+	 * One entry per chunk the records were written under -- the chunk's own,
+	 * and those owning cells inside its triangle. The pool never holds a store:
+	 * it asks whoever owns one, at the moment the job leaves, so a chunk asked
+	 * for again after a click carries the click. Left unset, chunks are built
+	 * from the seed alone.
+	 */
+	deltas:
+		| ((chunkKey: number, chunkLevel: number) => readonly JobDeltas[])
+		| null = null;
 
 	/**
 	 * How far each waiting chunk now is, by selection id.
@@ -267,6 +281,10 @@ export class WorkerMeshSource implements MeshSource {
 				key: selection.key,
 				chunkLevel: selection.chunkLevel,
 				lod: selection.lod,
+				// **By key and level.** The same ground has a different key at
+				// every chunk level, so a coarse chunk asking with its own key
+				// alone asks for a triangle that is not the one it is drawing.
+				deltas: this.deltas?.(selection.key, selection.chunkLevel),
 			});
 		}
 	}
@@ -282,8 +300,7 @@ export class WorkerMeshSource implements MeshSource {
 			waiting.resolve({
 				key: id,
 				origin: new Vec3(...result.origin),
-				center: result.center,
-				radius: result.radius,
+				bound: result.bound,
 				opaque: result.opaque,
 				translucent: result.translucent,
 				tally: result.tally,

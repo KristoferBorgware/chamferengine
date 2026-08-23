@@ -200,6 +200,39 @@ And the 9 spare bits are not padding. They are room to widen block state later
 **without changing the record size**, which is what a version number in the
 header is for.
 
+### The same argument reaches one field further
+
+The planet leaves the record because the file supplies it. **The chunk leaves it
+for the same reason**, because the store is a row per chunk and the row is
+keyed by one — so an address that names the whole planet is repeating what the
+key already said. What is left is the slot inside the chunk, the layer and the
+state.
+
+> **[verified]** `verification/delta.js`, section 1. A 64-cell chunk holds
+> 2,145 slots, so `[ slot 12 ][ layer 11 ][ state 16 ]` is **39 bits** —
+> a `uint32` and a `uint16`, **6 bytes** against the whole word's 8. A million
+> edits is **5.7 MB** rather than 7.6 MB.
+
+**The saving is not the argument.** A million edits is a couple of megabytes
+either way. What decides it is that a slot is what the mesher wants: it reads
+every record on every chunk build and lays it straight into the chunk's own
+array, where a whole-word record has to be taken apart first.
+
+**A slot means nothing on its own, and that is the cost.** It is a rank inside
+a triangle whose side the chunk level sets, and the chunk level is a knob —
+`chunkCells`, 8 to 64 — that **moves no block**: the terrain is
+`columnAt(face, i, j)` and never sees where the address is cut. So a drawing
+decision must not be able to lose a build, and the store carries **one header**
+naming the depth and the chunk level its slots were counted against. Depth and
+chunk level are properties of the world rather than of any chunk in it, so
+writing them per row would repeat two numbers a few thousand times over — the
+very thing this section is about.
+
+> **[verified]** `verification/delta.js`, section 2. Every cell of a planet
+> converted between every pair of chunk cuts, at depths 4, 5 and 6:
+> **1,666,320 records, 0 landed on a different cell.** The header is the whole
+> of what makes that possible — without it there is nothing to convert from.
+
 ---
 
 ## The side table, and the word in it that does not belong

@@ -3,12 +3,15 @@ import type { GridParts } from "../GridPaint.js";
 import type { MeshJob, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { Chunk } from "../../generation/chunk/Chunk.js";
+import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
+import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
+import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
 
 /**
@@ -28,6 +31,7 @@ export class MeshWorkerCore {
 	private readonly seed: number;
 	private readonly apron: boolean;
 	private readonly debugSeams: boolean;
+	private readonly speckle: number;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -54,6 +58,7 @@ export class MeshWorkerCore {
 		this.seed = setup.map.seed;
 		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
+		this.speckle = setup.speckle ?? SPECKLE;
 		this.options = setup.terrain;
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
@@ -83,10 +88,29 @@ export class MeshWorkerCore {
 						job.chunkLevel,
 						shape.crustDepth,
 					);
+		// What lands in the triangle is written into the chunk; what lands on
+		// the ring past its rim comes back and goes to the sampler, which is
+		// the only thing that ever reads those cells.
+		const outside =
+			job.deltas?.length && !this.grid
+				? applyDeltas(
+						chunk,
+						job.deltas.map((row) => ({
+							chunkKey: row.chunkKey,
+							deltas: ChunkDeltas.unpack(row.where, row.what),
+						})),
+						this.shape.subdivisionDepth,
+						job.lod,
+					)
+				: null;
 		const sampler =
 			this.grid && this.flat
 				? { columnAt: () => this.flat! }
-				: new ChunkColumnSampler(chunk, this.generator(job.lod));
+				: new ChunkColumnSampler(
+						chunk,
+						this.generator(job.lod),
+						outside,
+					);
 		const mesh = buildChunkMesh(
 			chunk,
 			sampler,
@@ -98,6 +122,7 @@ export class MeshWorkerCore {
 				apron: this.apron,
 				surfaceGrid: this.shape.blockSize,
 				debugSeams: this.debugSeams,
+				speckle: this.speckle,
 				grid: this.grid
 					? {
 							...this.grid,
@@ -115,8 +140,7 @@ export class MeshWorkerCore {
 			chunkLevel: job.chunkLevel,
 			lod: job.lod,
 			origin: [mesh.origin.x, mesh.origin.y, mesh.origin.z],
-			center: mesh.center,
-			radius: mesh.radius,
+			bound: mesh.bound,
 			opaque: mesh.opaque,
 			translucent: mesh.translucent,
 			tally: mesh.tally,

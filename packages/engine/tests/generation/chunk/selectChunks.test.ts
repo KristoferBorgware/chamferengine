@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ChunkAddress, selectChunks } from "chamfer/generation";
-import { Vec3 } from "chamfer/math";
+import { Vec3, type Box } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import { positionToCell, splitPath } from "chamfer/addressing";
 
@@ -323,12 +323,18 @@ describe("selecting against a view", () => {
 	/** A cull keeping a cone about one direction, refusing what misses it. */
 	function cone(look: Vec3, halfAngle: number) {
 		return {
-			holds(x: number, y: number, z: number, radius: number): boolean {
-				const at = new Vec3(x, y, z);
+			holdsBox(box: Box): boolean {
+				const at = new Vec3(...box.center);
 				const away = at.length();
 				if (away < 1e-9) return true;
-				// What the sphere itself subtends, so one straddling the edge
-				// of the cone is kept the way a frustum keeps it.
+				// The ball around the box, so one straddling the edge of the
+				// cone is kept the way a frustum keeps it. Looser than the box
+				// itself, which is the safe direction for a cull to be loose in.
+				const radius = Math.sqrt(
+					box.halves[0] * box.halves[0] +
+						box.halves[1] * box.halves[1] +
+						box.halves[2] * box.halves[2],
+				);
 				const spread = Math.asin(Math.min(1, radius / away));
 				const between = Math.acos(
 					Math.min(1, Math.max(-1, at.scale(1 / away).dot(look))),
@@ -340,7 +346,7 @@ describe("selecting against a view", () => {
 
 	const HIGH = RADIUS + 400;
 	const EYE = VIEWER.scale(HIGH);
-	const ahead = (halfAngle: number, slack = 0) =>
+	const ahead = (halfAngle: number) =>
 		selectChunks(
 			DEPTH,
 			FINEST,
@@ -351,7 +357,6 @@ describe("selecting against a view", () => {
 			0,
 			undefined,
 			cone(VIEWER, halfAngle),
-			slack,
 		);
 	const all = () => selectChunks(DEPTH, FINEST, EYE, HIGH, RADIUS);
 
@@ -377,8 +382,11 @@ describe("selecting against a view", () => {
 		expect(ahead(0.25).some((s) => holds(s, VIEWER))).toBe(true);
 	});
 
-	it("widens with the slack", () => {
-		expect(ahead(0.25, 1.5).length).toBeGreaterThan(ahead(0.25, 0).length);
+	// The margin beyond the edge of the screen is an angle on the view, so
+	// widening the view is what keeps more -- a chunk's own ball is the ground
+	// it holds and nothing else.
+	it("keeps more as the view widens", () => {
+		expect(ahead(0.4).length).toBeGreaterThan(ahead(0.25).length);
 	});
 
 	it("is exactly the unculled selection when nothing is refused", () => {
@@ -392,8 +400,7 @@ describe("selecting against a view", () => {
 				undefined,
 				0,
 				undefined,
-				{ holds: () => true },
-				0,
+				{ holdsBox: () => true },
 			),
 		).toEqual(all());
 	});

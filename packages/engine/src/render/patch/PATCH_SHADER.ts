@@ -1,3 +1,13 @@
+import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
+import { BlockType } from "../../generation/terrain/BlockType.js";
+import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
+import { SUN_SHARE } from "../../light/SUN_SHARE.js";
+
+/** One linear colour as the constant a shader takes. */
+function wgsl(color: readonly [number, number, number]): string {
+	return `vec3f(${color[0]}, ${color[1]}, ${color[2]})`;
+}
+
 /**
  * The patch shader: one preview of the ground, and the pictures it can be
  * drawn as.
@@ -10,8 +20,34 @@
  * The light is a fixed direction rather than the world's sun. This is a bench
  * for choosing numbers, and a bench with a moving light is one where the same
  * setting looks different at different times of day.
+ *
+ * **Every colour in it is the engine's own**, written in from the block
+ * registry and the sea rather than typed out here. A preview whose green is a
+ * near-miss of the world's green is a preview that answers a slightly different
+ * question than the one asked of it, and two lists of colours drift apart the
+ * first time either is retuned.
  */
 export const PATCH_SHADER = /* wgsl */ `
+/** The world's own materials, and its water. */
+const SAND = ${wgsl(BLOCK_COLORS[BlockType.SAND]!)};
+const GRASS = ${wgsl(BLOCK_COLORS[BlockType.GRASS]!)};
+const STONE = ${wgsl(BLOCK_COLORS[BlockType.STONE]!)};
+const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
+const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
+const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
+
+/** Metres of water a look passes through before it is all water. */
+const SEA_CLARITY = ${SEA_CLARITY}.0;
+
+/**
+ * How much of the light comes from the sun rather than from the sky.
+ *
+ * The world's own balance, so a patch of ground here is lit the way the same
+ * ground is lit there. What is left of the difference between the two pictures
+ * is the sun's height, which is the time of day and not a property of either.
+ */
+const SUN_SHARE = ${SUN_SHARE};
+
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
@@ -19,6 +55,8 @@ struct View {
 	mode     : vec4f,
 	/** The two material lines in metres, and the field's own range here. */
 	lines    : vec4f,
+	/** The ground's own range in metres here, which Height is drawn against. */
+	ground   : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -87,10 +125,37 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
 	return tint * mix(0.5, 1.0, clamp(to - 1.2, 0.0, 1.0));
 }
 
+/**
+ * How much light reaches a face: a sun with a direction, and a sky without one.
+ *
+ * **A flat term for the sky is why a preview reads flat.** The old rule was one
+ * ambient number plus a dot product against the sun, so every face that turned
+ * away from the sun bottomed out at the same brightness whichever way it
+ * turned, and a landscape whose slopes are mostly gentle came out as one shade
+ * of green. This is the world's own two-term model (doc 16): the **sun** is one
+ * dot product against the face, and the **sky** is how much of it the face can
+ * see -- all of it looking up, and only what the ground throws back looking
+ * down. Both terms move with the normal, so a slope is lit differently from the
+ * ground beside it in shade as well as in sun.
+ *
+ * Up is +y: a patch is laid out in its own flat frame, east and north across
+ * and metres of ground up.
+ *
+ * The sun's share is what is passed in and the sky takes the rest, so the two
+ * sum to 1 and flat ground reads the same whatever the balance -- only what
+ * stands at an angle moves. A picture of a number rather than of a place takes
+ * less of it: the light is there to show the shape, not to be read off.
+ */
+fn lightOn(normal : vec3f, direct : f32) -> f32 {
+	let n = normalize(normal);
+	let lambert = max(0.0, dot(n, normalize(view.sun.xyz)));
+	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
+	return direct * lambert + (1.0 - direct) * openness;
+}
+
 /** A tint, lit by the fixed light and given the curve a screen expects. */
-fn shade(tint : vec3f, normal : vec3f, ambient : f32) -> vec4f {
-	let lit = ambient + (1.0 - ambient) * max(0.0, dot(normalize(normal), normalize(view.sun.xyz)));
-	return vec4f(pow(tint * lit, vec3f(1.0 / 2.2)), 1.0);
+fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
+	return vec4f(pow(tint * lightOn(normal, direct), vec3f(1.0 / 2.2)), 1.0);
 }
 
 @fragment
@@ -104,8 +169,13 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// elevation everywhere rather than saying which of the four blocks stands
 	// there, and Raw stops before sea level has been taken off the field.
 	if (picture == 1) {
-		let t = clamp((in.metres + 400.0) / 800.0, 0.0, 1.0);
-		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.28);
+		let t = clamp(
+			(in.metres - view.ground.x) /
+				max(1.0, view.ground.y - view.ground.x),
+			0.0,
+			1.0,
+		);
+		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.4);
 	}
 	if (picture == 2) {
 		let t = clamp(
@@ -125,27 +195,26 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return shade(
 			mix(vec3f(0.04, 0.05, 0.09), vec3f(0.6, 0.85, 1.0), clamp(in.layer, 0.0, 1.0)),
 			in.normal,
-			0.45,
+			0.3,
 		);
 	}
 
 	var tint : vec3f;
 	if (in.metres <= 0.0) {
-		// Bare sand seen through water, because the ocean is a surface and
-		// holds no blocks. What makes a deep blue is how much water a look
-		// passes through to reach the floor.
-		tint = mix(
-			vec3f(0.76, 0.70, 0.50),
-			vec3f(0.12, 0.32, 0.55),
-			1.0 - exp(in.metres / 45.0),
-		);
+		// **Bare sand seen through the sea's own two colours.** The ocean is a
+		// surface at one radius and holds no blocks, so the floor is bare; how
+		// much water a look passes through decides both how far that floor
+		// shows and which of the two colours it is seen against. A shore is
+		// sand under a tint and open water never gets back out.
+		let through = 1.0 - exp(in.metres / SEA_CLARITY);
+		tint = mix(SAND, mix(SEA_SHALLOW, SEA_DEEP, through), through);
 	} else if (in.metres < view.lines.x) {
-		tint = vec3f(0.26, 0.44, 0.19);
+		tint = GRASS;
 	} else if (in.metres < view.lines.y) {
-		tint = vec3f(0.42, 0.42, 0.45);
+		tint = STONE;
 	} else {
-		tint = vec3f(0.92, 0.94, 0.97);
+		tint = SNOW;
 	}
-	return shade(contoured(tint, in.height), in.normal, 0.28);
+	return shade(contoured(tint, in.height), in.normal, SUN_SHARE);
 }
 `;

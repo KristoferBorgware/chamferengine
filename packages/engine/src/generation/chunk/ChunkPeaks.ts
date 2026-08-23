@@ -103,6 +103,39 @@ export class ChunkPeaks {
 		}
 	}
 
+	/**
+	 * Widen a triangle's range to hold ground the map cannot know about.
+	 *
+	 * The map is a picture of the generated world, so no placed block is in it
+	 * and none can be. The selection reads these figures three times -- whether
+	 * a triangle pokes back over the horizon, how big a ball to test against
+	 * the view, and how far away its ground is -- and the first two decide
+	 * whether a chunk is drawn at all. A tower standing out of the top of the
+	 * ball built for the hillside under it is culled with the hillside.
+	 *
+	 * Every ancestor is widened too, because a parent's figures are the
+	 * envelope of its children's and the walk refuses a whole subtree on the
+	 * parent's.
+	 *
+	 * `high` and `low` are metres above the sea-level radius, the same as
+	 * everything else here.
+	 */
+	raise(key: number, chunkLevel: number, high: number, low: number): void {
+		// A triangle below the table is answered by its deepest ancestor, so
+		// that is the entry to widen.
+		const deepest = this.levels.length - 1;
+		let at = chunkLevel <= deepest ? chunkLevel : deepest;
+		let where =
+			chunkLevel <= deepest ? key : key >> (2 * (chunkLevel - deepest));
+		for (; at >= 0; at--) {
+			const peaks = this.levels[at]!;
+			const floors = this.floors[at]!;
+			if (high > peaks[where]!) peaks[where] = high;
+			if (low < floors[where]!) floors[where] = low;
+			where >>= 2;
+		}
+	}
+
 	/** Metres of ground above the sea-level radius under one triangle. */
 	peakOf(key: number, chunkLevel: number): number {
 		if (chunkLevel < this.levels.length)

@@ -18,8 +18,17 @@ export { markerGeometry } from "./marker/markerGeometry.js";
 export { SKY_SHADER } from "./sky/SKY_SHADER.js";
 export { SkyRenderer } from "./sky/SkyRenderer.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
+export { SEA_CLARITY, SEA_COLORS } from "./sea/SEA_COLORS.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";
 export { SeaRenderer } from "./sea/SeaRenderer.js";
 export { SEA_STRIDE, seaPatch } from "./sea/seaPatch.js";
 export { wireIndices } from "./sea/wireIndices.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
+
+export type { AimTarget } from "./aim/AimTarget.js";
+export { aimGeometry } from "./aim/aimGeometry.js";
+export { AimRenderer } from "./aim/AimRenderer.js";
+
+export type { BoundsBox } from "./bounds/BoundsBox.js";
+export { boundsGeometry } from "./bounds/boundsGeometry.js";
+export { BoundsRenderer } from "./bounds/BoundsRenderer.js";

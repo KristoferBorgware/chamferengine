@@ -7,9 +7,11 @@ import type {
 import type { PatchLook } from "chamfer/render";
 import type { PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
+import { BAND_COLORS } from "./paintPatch.js";
 import { GROUND_LINES } from "chamfer/generation";
+import { SEA_COLORS } from "chamfer/render";
 import { Mat4, Vec3 } from "chamfer/math";
-import { PATCH_KNOBS, PlanetSettings } from "./PlanetSettings.js";
+import { PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
@@ -58,6 +60,24 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
 ]);
 let settings = PlanetSettings.fromParams(new URLSearchParams(location.search));
 
+/** One linear colour part of the way to another. */
+function mixed(
+	from: readonly number[],
+	to: readonly number[],
+	by: number,
+): number[] {
+	return [0, 1, 2].map((ch) => from[ch]! + (to[ch]! - from[ch]!) * by);
+}
+
+/** A linear colour as the hex a stylesheet takes, through the screen's curve. */
+function screenColor(color: readonly number[]): string {
+	const byte = (v: number): string =>
+		Math.round(255 * Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2))
+			.toString(16)
+			.padStart(2, "0");
+	return `#${byte(color[0]!)}${byte(color[1]!)}${byte(color[2]!)}`;
+}
+
 /** Which number the shader's picture branch takes. */
 const PICTURE_INDEX: Record<string, number> = {
 	ground: 0,
@@ -97,11 +117,21 @@ const mapContext = mapCanvas.getContext("2d")!;
 
 const legend = document.createElement("div");
 legend.className = "bench-legend";
-legend.innerHTML =
-	'<span style="background:#2c5f96">sea over sand</span>' +
-	'<span style="background:#6b9553">grass</span>' +
-	'<span style="background:#a3a3ac">rock</span>' +
-	'<span style="background:#f3f6fa">snow</span>';
+// **The swatches are the colours the pictures paint with**, taken from the same
+// list rather than typed as hex beside them: a legend whose green is a shade
+// off the ground's green is a legend that has to be ignored.
+legend.innerHTML = [
+	// Water over its floor, at the depth the picture calls deep.
+	[mixed(BAND_COLORS[0]!, SEA_COLORS.deep, 0.85), "sea over sand"],
+	[BAND_COLORS[1]!, "grass"],
+	[BAND_COLORS[2]!, "rock"],
+	[BAND_COLORS[3]!, "snow"],
+]
+	.map(
+		([color, name]) =>
+			`<span style="background:${screenColor(color as number[])}">${name}</span>`,
+	)
+	.join("");
 head.appendChild(legend);
 
 panel.mount(head);
@@ -153,10 +183,18 @@ mapCanvas.addEventListener("click", (event) => {
 	});
 });
 
-/** The world's own parameters, without the ones that only move the bench. */
+/**
+ * Everything the bench is holding, as the query string the planet takes.
+ *
+ * **Nothing is dropped, including the rows that only move the bench.** Where
+ * the patch was standing and which picture was on it are work too, and the way
+ * back here is through the planet's own link -- so leaving them out of this one
+ * means a walk to the planet and back puts the patch somewhere else. The
+ * planet reads them, keeps them, and hands them back; none of them reaches the
+ * ground it builds.
+ */
 function planetParams(): string {
 	const out = settings.toParams();
-	for (const key of PATCH_KNOBS) out.delete(key as string);
 	out.set("panel", "1");
 	return out.toString();
 }
@@ -194,6 +232,8 @@ const look = {
 	snowLine: GROUND_LINES.snow,
 	rawLow: -1,
 	rawHigh: 1,
+	low: 0,
+	high: 1,
 };
 
 /**
@@ -282,6 +322,8 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
+		look.low = reply.facts.lowest;
+		look.high = reply.facts.highest;
 	}
 	says = "";
 	busy = false;

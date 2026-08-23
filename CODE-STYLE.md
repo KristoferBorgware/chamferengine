@@ -33,6 +33,7 @@ chamfer/math         vectors and matrices
 chamfer/addressing   cell IDs, the lattice, neighbours, the lookup
 chamfer/generation   noise, terrain, the coarse map
 chamfer/mesh         surface extraction, and the geometry it produces
+chamfer/edit         block state, the delta store, the block registry
 chamfer/render       WebGPU device, pipelines, passes
 ```
 

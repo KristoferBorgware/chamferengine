@@ -68,7 +68,8 @@ and duplicates information found there.
   artifact produced for this project.
 - `packages/engine` is the engine, published as `chamfer`; `packages/client` is
   the browser app. Subsystems are reached by subpath — `chamfer/math`,
-  `chamfer/addressing`, `chamfer/generation`, `chamfer/mesh`, `chamfer/render` —
+  `chamfer/addressing`, `chamfer/generation`, `chamfer/mesh`, `chamfer/edit`,
+  `chamfer/render` —
   and each is a folder under `src/` with a barrel. Tests are in
   `packages/engine/tests/`, mirroring `src/` path for path, and import through
   those subpaths rather than reaching into `src/`.
@@ -278,6 +279,13 @@ Violating any of these breaks the design. They are not tunable.
 | `hypot` vs `sqrt` | `hypot` differs `1` ULP between runtimes | `sqrt(x*x+y*y+z*z)` never does | `language.js` |
 | delta record | `29 + 11 + 16` = `56` of 64 bits | planet implied by the file; 8 spare | `blockstate.js` |
 | chunk palette | `2` bits/cell typical = `8.8` KB | 12.5% of a flat 16-bit field | `blockstate.js` |
+| stored edit record | `[slot 12][layer 11][state 16]` = `39` bits | 6 bytes; the row's key supplies the chunk | `delta.js` |
+| re-cut across chunk sizes | `1,666,320` records, `0` moved | the store's one header is what allows it | `delta.js` |
+| coarse cell of a fine one | `hexRound` on the weights ÷ `2^lod` | a shift is wrong for `43.9–79.3%` of cells | `delta.js` |
+| ray walk, 12-block reach | `7.85` cells; `8.42` to `7.75` over `4,096x` planet | a third of the steps are radial | `ray.js` |
+| walk against a march | same hit on `99.90%`; refine `25x` and all agree | the march is wrong, not the walk | `ray.js` |
+| a cell's three boundary families | pairs `(a−b)`, `(b−c)`, `(c−a)` | one coordinate alone holds for `75%` | `ray.js` |
+| face reflection on a direction | `2.28°` mean, `6.47°` worst | names a cell, does not re-frame a ray | `ray.js` |
 | side table entry | chest `~108` B, sign `~240` B | 1,000 in a chunk = 117 KB | `blockstate.js` |
 | entity rekey rate | every `0.71` s = 21 frames | why entities are NOT keyed by cell | `blockstate.js` |
 | planet field | `12` bits = 4,096 worlds | word is 52 of 64 at D11 | `id.js` |
@@ -429,6 +437,99 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- **A CHUNK KEY MEANS A DIFFERENT TRIANGLE AT EVERY LEVEL** (`rowsUnder`,
+  `coarseChunkKey`, `plans/v0.4.1.md` I-12). A key is
+  `face x 4^chunkLevel + path`, and the delta store is filed at **one** level --
+  the finest -- so anything holding chunks at more than one level at once must
+  **convert rather than compare**. The mesh pool asked the store for a chunk's
+  records with that chunk's own key: right at full detail, and at every coarser
+  level a key naming some other triangle, which returned **0 rows at lod 1, 2
+  and 3**. So a change was drawn while its chunk was finest and vanished the
+  moment the selection dropped it a level -- a **distance**, not an event, which
+  reads as edits evaporating as you walk away. Two faults hid behind it: a slot
+  is a rank inside a triangle whose side the chunk level sets, so a coarse chunk
+  must decode against `chunk.chunkLevel + lod` (**the two always sum to the
+  finest**) and not its own; and an edit must drop `selectionId` at **every**
+  level, or the chunk actually on screen is never rebuilt. **A coarse triangle
+  contains exactly the fine ones whose path begins with its own**, so gathering
+  its rows is a filter over what the store holds -- there may be a million fine
+  chunks under it and only ever as many rows as chunks somebody touched.
+  **A coarse chunk drops its chunk level as well as its depth**, which is what
+  keeps every chunk the same slot count while four become one; a test building
+  one with the finest level and a reduced depth is modelling a chunk that does
+  not exist, and that is what hid all three.
+- **A COARSE CHUNK'S OWN RING REACHES FURTHER THAN A FINE CHASE CAN FOLLOW**
+  (`chunkReaders`, `rowsUnder`, `plans/v0.4.1.md` I-13). Fixing the routing
+  (I-12) left the *reach* wrong: `rowsUnder` chased the store's fine-level "who
+  reads whom" relationships, which only ever span **one fine cell** across a
+  boundary -- the reach a chunk at the store's own finest level has. A chunk
+  drawn `lod` levels coarse generates at a **reduced subdivision depth**, so its
+  own outside ring is one **coarse** cell, roughly `4^lod` fine cells, not one.
+  An edit a few fine cells deep in the neighbour, past the shared fine
+  boundary, has no relationship recorded at any level and is invisible forever
+  at every coarse level -- not "not yet close enough", genuinely unreachable.
+  Measured (`tools/probe-coarse-reach.ts`): over every outside-ring cell of one
+  chunk at lod 1-3, a one-hop fine chase never reaches **47%** of them. The fix
+  computes the ring **in the lattice the chunk is actually drawn at**: walk the
+  chunk's own rim at its reduced depth, and whichever same-level chunk holds
+  each boundary point's six neighbours is a reader -- the same primitive
+  `chunksHolding` already verifies, just run over a whole rim instead of one
+  cell. Cross-checked at chunk level 0 against the icosahedron's own
+  face-adjacency table, a wholly independent definition.
+- **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
+  THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
+  the ring around them whether to draw a side face and its apron draws that ring
+  outright, and a cell one step past the rim sits **inside the neighbour's
+  triangle** -- so `chunksHolding`, which names every chunk whose triangle
+  *contains* a cell, is the right set for the store and the wrong one for the
+  mesher. Measured at depth 11 cut at chunk level 6 the ratio is the same shape
+  as at depth 8 / level 4, where a chunk holds **153** slots and reads **54**
+  more, and a change reached it for **0** of them
+  (`tools/probe-seam-edit.ts`). Two symptoms, one cause: break a block across a
+  boundary and the neighbour's apron went on drawing the seed's cap, so mining
+  across a chunk edge left a **one-cell ridge along it**; and a rim cell asking
+  about a column somebody had dug was told there was rock, emitted no wall, and
+  the far side of the planet showed through the tunnel. The fix is
+  `chunksReading` -- every chunk holding the cell **or any neighbour of it** --
+  plus `applyDeltas` handing back what fell outside the triangle for the sampler
+  to write over the columns it generates. **The invariant to test is that the
+  column a chunk GENERATES for a cell past its rim equals the column the chunk
+  that OWNS it holds**, blocks and band alike; generating rather than fetching
+  is only sound while that is true, and terrain is a pure function of the
+  address while a player's changes are not.
+- **A TRIANGLE'S OWN CORNER CAN BE INVISIBLE TO A RING WALK** (`chunksHolding`,
+  F-071). Finding the chunks containing a cell by asking the cell's ring which
+  chunks **own** those neighbours misses the triangle whose **corner** the cell
+  is: a corner's only neighbours inside its own triangle sit on that triangle's
+  two edges, so both are shared, and where the border rule awards both to
+  lower-keyed chunks that triangle never becomes a candidate. **155 of 39,168**
+  cell-and-chunk pairs went unreported over one face at depth 8 cut at chunk
+  level 4. **Descend the triangles instead**: they nest, so a chunk containing a
+  point has an ancestor containing it at every level above, and at most six
+  paths stay live however deep the cut -- **0 of 39,168**.
+- **A CHUNK IS A WEDGE INTO THE PLANET, AND A BALL CANNOT HOLD ONE**
+  (`Box`, `chunkWedge`, `Frustum.holdsBox`, `plans/v0.4.1.md`). Every volume a
+  chunk was tested against was a ball -- the selection's, the renderer's and the
+  shadow cascade's -- and a ball fits the *ground*, which is a thin cap. It does
+  not fit the *world* a chunk holds: a small triangle extruded straight down
+  through as much crust as anybody has dug. **A ball cannot be grown downward
+  alone.** Measured on the shipped world (`tools/trial-bounds.ts`), a 76 m chunk
+  over a 1,232 m crust: holding the ground it needs a box 44 m deep and a ball
+  round that is **3x** the volume; dug a quarter of the way down, **13x**; dug
+  to the bottom the ball is **640 m** in radius against a 76 m chunk, **148x**
+  the volume, every cubic metre voting to be drawn. A `Box` is a centre, three
+  perpendicular unit axes and a half-width along each, and a plane test is the
+  sphere test with the box's reach along the normal -- the sum of each
+  half-width scaled by how much its axis points that way -- standing in for the
+  radius. The mesh sink measures itself along **axes it is handed** rather than
+  the world's, three dot products a vertex against three comparisons. The
+  cascade's cylinder takes the same box: a **cosine** per axis for how far it
+  reaches along the light and a **sine** for how far it stands off the axis, so
+  a shaft under a low sun barely widens the second. **And breaking counts as
+  much as placing**: `DeltaStore` left broken blocks out of a chunk's reach on
+  the reasoning that taking ground away adds no geometry, and the walls of a
+  hole are geometry standing where the map says solid ground is -- which culled
+  a player at the bottom of their own mine and left them in an empty room.
 - **THE MAP IS THE TERRAIN, and there is no detail term** (doc 08, doc 21,
   `plans/v0.3.0.md`). `columnAt` reads a height off the coarse map and adds
   **nothing** — no second noise field, no multiplier. The map is stored in
@@ -1405,6 +1506,82 @@ Violating any of these breaks the design. They are not tunable.
   not useless. They decide how tall the ground stands, how finely it is drawn,
   and how deep it runs. The panel groups by what a knob decides and folds all
   but the first group; nothing is cut.
+- **DOC 09 NAMED THE WRONG HEXAGON, AND IT IS THE ROTATED ONE** (`ray.js`, doc
+  09). The walk's three horizontal families were given as one per barycentric
+  **coordinate** -- a cell being `|x − x₀| ≤ ½` on each -- and those three slabs
+  cut out the hexagon turned **30°** from the cell: measured over 200,000 points
+  rounded by `hexRound`, it holds for **75%**, so a quarter of every cell falls
+  outside it and part of every neighbour falls inside, and a walk stepping on
+  those planes crosses where no boundary is. A bisector between two lattice
+  points is where a **difference** of two weights is halfway, so the families are
+  the three **pairs** -- `|(a−b) − (A−B)| ≤ 1` and its rotations, **100%** -- and
+  crossing one moves `+1` on one weight and `−1` on another, exactly the six
+  neighbours `neighbour.js` lists.
+- **A FACE EDGE IS NOT A CELL BOUNDARY, AND THE REFLECTION IS AN UNFOLDING**
+  (`ray.js`, `rayWalk`, doc 09). Cells straddle a face edge, so nothing is
+  entered and nothing is left -- the same cell is written under the other face's
+  name. Two things change and one tool does not do both. Doc 05's
+  `(α,β,γ) → (α+γ, β+γ, −γ)` lands on the right **cell** every time, and on a
+  continuous point it moves the direction **2.28° on average and 6.47° at
+  worst**, because it unfolds the two faces flat rather than turning one frame
+  into the other; used for the frame it changes the cells walked on **52%** of
+  the rays that cross an edge. Solve the neighbour's three weights from the ray
+  again -- one 3×3 solve at **0.02** crossings a ray, the rarest step in the
+  loop. And **rename** the cell rather than rounding the position into one
+  again, which skips a cell wherever the edge and a hexagon boundary fall within
+  a step of each other.
+- **THE WALK IS WHAT A MARCH CONVERGES TO, AND ITS COST DOES NOT KNOW HOW BIG
+  THE PLANET IS** (`ray.js`, doc 09). Against a march at 1/400 of a block over
+  3,000 rays it reports the same hit cell on **99.90%**, and refining the march
+  **25×** removes every disagreement -- it is not close to the sampled answer, it
+  is the answer the sampling converges to. The march is wrong on **43.0%** of
+  hits at one sample a block, **11.4%** at a quarter and **1.1%** at a
+  twenty-fifth, which costs **102** cell lookups a ray; the walk carries its cell
+  and looks nothing up. The same twelve-block reach at depths 6, 8, 10 and 12 --
+  40,962 surface cells up to **167,772,162** -- steps **8.42, 7.83, 7.74** and
+  **7.75** cells. A third of the steps are **radial**, and doc 09's "about five
+  cells" counts the hexagons alone.
+- **A CHANGE IS STORED RELATIVE TO ITS ROW, AND ONE HEADER MAKES THAT SAFE**
+  (`delta.js`, `DeltaStore`, doc 27). The store is a row per chunk, so an address
+  naming the whole planet repeats what the key already said: `[slot 12][layer
+  11][state 16]` is **39 bits, 6 bytes** against the full word's 8, and a million
+  edits is 5.7 MB rather than 7.6 MB. **The size is not the argument** -- the
+  mesher lays a slot straight into the chunk's own array and reads every record
+  on every build, where a whole word has to be taken apart first. **A slot means
+  nothing on its own**: it is a rank inside a triangle whose side the chunk level
+  sets, and the chunk level is the `chunkCells` knob, which **moves no block**
+  -- the terrain is `columnAt(face, i, j)` and never sees where the address is
+  cut. So the store carries **one header** naming the depth and the chunk level
+  its slots were counted against, and a change of chunk size converts rather than
+  being lost: **1,666,320 records over every pair of cuts at depths 4, 5 and 6,
+  0 landed on a different cell.** One header for the store and not one per row,
+  because both numbers are properties of the world.
+- **CARRYING AN EDIT INTO A COARSE CHUNK IS NOT A SHIFT** (`delta.js`,
+  `coarseCell`, doc 14). A coarse chunk keeps its path and drops the subdivision
+  depth, so its lattice points really are the fine ones scaled by a power of two
+  -- which makes shifting `(i, j)` right by the level look like the answer. It
+  names the wrong cell for **43.9%** of cells one level out and **79.3%** four
+  levels out, because a cell is a Voronoi region and a shift is a floor; rounding
+  `i` and `j` apart is worse again at the first level, **53.8%**, for the reason
+  doc 04 gives `hexRound`. **Scale the three barycentric weights and repair
+  them**: a lattice point's barycentric recovers its own `(n−i−j, i, j)` exactly,
+  because the one-shot blend is gnomonic projection, so the coarse lookup is
+  `hexRound` on those three divided by `2^lod`. It disagrees on **2.4% to 32%**
+  of cells and **every one of those is a tie** -- the point sits exactly on the
+  boundary and both cells are the same distance away -- with **zero** landing
+  further off. The layer is the one place a shift is right, because layers stack
+  at a fixed thickness from a crust top that does not move with the level.
+- **A CHANGE GOES TO EVERY CHUNK THAT READS THE CELL, NOT THE ONE THAT OWNS IT**
+  (`DeltaStore.write`, `chunksHolding`). A chunk generates the slots on its own
+  rim so the mesher can decide whether to emit a face there without fetching a
+  neighbour, and **17%** of a chunk's slots sit on a border (`rank.js`). Writing
+  to the owner alone leaves the others deciding from ground that has moved, which
+  draws as a face missing or standing along a chunk edge. What a coarse cell
+  reads when several changes land in it is **a placed block beats a broken one**:
+  it is air only when every change inside it was a break, so a wall stays a wall
+  at distance and a one-block hole in a hillside closes up. At `4^lod` cells
+  across and `2^lod` down, a lone placed block reads as an **8 m** cube three
+  levels out and **16 m** at LOD 4, the coarsest anybody stands at.
 - **ID → position does not accumulate error.** Flat across depths 4 to 23: the
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate

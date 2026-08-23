@@ -1,25 +1,42 @@
 import type { ChunkMesh } from "chamfer/mesh";
 import type { ChunkSelection, CoarseMap } from "chamfer/generation";
 import type { WorldShape } from "chamfer/world";
-import { Frustum, Mat4, Vec3 } from "chamfer/math";
+import { Frustum, Mat4, Vec3, type Box } from "chamfer/math";
 import {
+	BLOCK_NAMES,
 	BlockType,
 	ChunkAddress,
+	SPECKLE,
 	TerrainGenerator,
 	ChunkPeaks,
 	addressesOverlap,
 	buildCoarseMap,
 	chunkCenter,
+	coarseChunkKey,
 	flatCoarseMap,
 	horizonAngle,
+	isBreakable,
 	seedFromString,
 	selectChunks,
 	selectionId,
 	selectionOf,
 } from "chamfer/generation";
 import { WorkerMeshSource } from "chamfer/mesh";
-import { positionToCell } from "chamfer/addressing";
+import type { BoundsBox } from "chamfer/render";
+import type { CellRef } from "chamfer/edit";
+import {
+	DeltaStore,
+	STORE_VERSION,
+	cellSlot,
+	packBlockState,
+	typeOf,
+	worldKey,
+} from "chamfer/edit";
+import type { RayWorld } from "chamfer/addressing";
+import { cellCorners, positionToCell, rayWalk } from "chamfer/addressing";
 import { Player } from "chamfer/player";
+import { clickIntent } from "./clickIntent.js";
+import { worldBlocks } from "./worldBlocks.js";
 import {
 	geographicOf,
 	landmarks,
@@ -29,11 +46,14 @@ import {
 import { NORTH } from "chamfer/addressing";
 import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
 import {
+	AimRenderer,
 	BillboardClouds,
+	BoundsRenderer,
 	ChunkRenderer,
 	FrameTimer,
 	MarkerRenderer,
 	NoWebGPUError,
+	SEA_COLORS,
 	SeaRenderer,
 	SkyRenderer,
 	createGpuContext,
@@ -47,9 +67,10 @@ import {
 	planetAtmosphere,
 	windRotation,
 } from "chamfer/sky";
-import { MapPanel } from "./MapPanel.js";
+import { MapPreview } from "./MapPreview.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
+import { EditDb } from "./EditDb.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 
 const params = new URLSearchParams(location.search);
@@ -90,7 +111,7 @@ let CULL_BUILD = settings.knobs.buildCull;
  * a sphere's radius: at 25 degrees a chunk 100 m away is kept if it comes
  * within 47 m of the edge of the screen, and one 1 km away within 470 m.
  */
-let CULL_SLACK = Math.tan((settings.knobs.cullMargin * Math.PI) / 180);
+let CULL_MARGIN = (settings.knobs.cullMargin * Math.PI) / 180;
 
 /**
  * Whether the world is held down to its lattice and nothing else.
@@ -146,6 +167,44 @@ const WORKERS = Math.max(
 /** How many finished meshes are uploaded in one frame. */
 const UPLOAD_PER_FRAME = 2;
 
+/** How often the culling volumes are gathered again, in milliseconds. */
+const BOUNDS_INTERVAL = 250;
+
+/**
+ * How many culling volumes are drawn, nearest first.
+ *
+ * Three rings each, so this is 38,400 line vertices. Every ball a selection and
+ * a renderer hold between them is some thousands, which is most of a planet of
+ * rings seen edge on -- unreadable, and over a second a frame to draw.
+ */
+const BOUNDS_LIMIT = 400;
+
+/** The color the outline over the aimed-at cell is drawn in. */
+const AIM_COLOR: [number, number, number] = [0.98, 0.86, 0.35];
+
+/**
+ * The two culling volumes, in colors that stay apart when both are on.
+ *
+ * The selection's ball is the one tested before a chunk is asked for; the
+ * patch's is the ball its built geometry fits inside, tested before it is
+ * drawn. Which of the two is refusing a chunk is the usual question, so they
+ * are never the same color.
+ */
+const SELECT_BOUND_COLOR: [number, number, number] = [0.35, 0.75, 1];
+const PATCH_BOUND_COLOR: [number, number, number] = [1, 0.45, 0.65];
+
+/**
+ * The block types a click may place, which is every solid one a player can put
+ * back. Bedrock is not among them: it is the floor of the world.
+ */
+const PLACEABLE: readonly BlockType[] = [
+	BlockType.STONE,
+	BlockType.DIRT,
+	BlockType.GRASS,
+	BlockType.SAND,
+	BlockType.SNOW,
+];
+
 /** The color the view fades toward under water, and over what distance. */
 const WATER_FOG: readonly [number, number, number, number] = [
 	0.05, 0.16, 0.28, 34,
@@ -165,6 +224,7 @@ const REPORT_INTERVAL = 100;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
+const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
 
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
@@ -213,14 +273,17 @@ let onLiveRebuild: (live: PlanetSettings) => void = () => {};
 /**
  * Editor mode.
  *
- * `?panel=1` turns it on, and it carries panes that show and hide on their own
- * heads: the world knobs, and the maps. A pane is open because it is being
- * used, not because the mode is on.
+ * `?panel=1` turns it on, and it is one panel: every knob, and a fold at the
+ * top holding the planet as a picture. **The map pane is gone** -- it stood
+ * down the other side of the screen carrying its own copy of the terrain rows,
+ * its own picture per step of the map build, and its own button to commit a
+ * world, which is three ways of saying it was a second place to do what the
+ * panel does. What it had that nothing else does is the picture, and that is
+ * what was kept.
  *
- * The map pane draws the maps while they are still being built and never
- * touches the terrain. **Apply** is what rebuilds the world, and it does that
- * the way every knob used to: by reloading with the settings in the query
- * string, which is the one path that rebuilds the device, the map and every
+ * The picture is built on its own worker and never touches the terrain.
+ * **Rebuild** is what builds a world, by reloading with the settings in the
+ * query string -- the one path that rebuilds the device, the map and every
  * chunk together.
  */
 let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
@@ -247,37 +310,37 @@ window.addEventListener("pagehide", () => {
 });
 
 if (params.get("panel") === "1") {
-	const maps = new MapPanel(
-		settings,
-		(chosen) => {
-			const wanted = chosen.toParams();
-			wanted.set("panel", "1");
-			location.href = `${location.pathname}?${wanted.toString()}`;
-		},
-		(at) => onGoTo(at),
-	);
+	// The panel is built first because the picture stands inside it, and the
+	// picture is told about a knob by the panel: neither can be made without
+	// the other, so one of them is named before it exists.
+	let maps: MapPreview | null = null;
 	const panel = new ParameterPanel(
 		settings,
 		(live) => {
 			onLiveKnob(live);
 		},
-		(draft) => maps.changed(draft),
+		(draft) => maps?.changed(draft),
 		(live) => onLiveRebuild(live),
 	);
-	// The knobs that decide where the land is live under the map they decide,
-	// not in a panel on the other side of the screen. The seed goes with them:
-	// it is the one word that re-rolls a world, and hunting for a world is
-	// done looking at the map. It still seeds the clouds as well as the ground.
-	maps.hostKnobs(panel.section("Seed"));
-	maps.hostKnobs(panel.section("Terrain"));
-	maps.hostKnobs(panel.section("Mountains"));
-	maps.hostKnobs(panel.section("Land"));
-	maps.hostKnobs(panel.section("Sea"));
-	// Erosion changes the map and nothing else, and the map is the picture of
-	// what it did, so its rows live under that picture with the rest.
-	maps.hostKnobs(panel.section("Erosion"));
-	onPlayerMoved = (up) => maps.setPlayer(up);
-	teardown.push(() => maps.dispose());
+	// **The picture of the planet lives in the panel, in a fold of its own.**
+	// It was a pane down the other side of the screen with its own copy of the
+	// terrain rows and its own button to commit them -- a second place to do
+	// what the panel already does. What it is worth keeping for is the one
+	// thing the world itself cannot show from the ground: where the land is.
+	// **The readout goes into the panel with everything else.** A box of
+	// numbers over the top-left corner of the view stands on the ground it is
+	// describing; the panel is where what the world is doing belongs, beside
+	// the knobs that change it. Without the panel it stays where it was, which
+	// is the only place there is.
+	panel.section("Readout")?.appendChild(status);
+	maps = new MapPreview(
+		settings,
+		panel.section("The map") ?? document.body,
+		(at) => onGoTo(at),
+	);
+	const preview = maps;
+	onPlayerMoved = (up) => preview.setPlayer(up);
+	teardown.push(() => preview.dispose());
 }
 
 async function main(): Promise<void> {
@@ -393,9 +456,10 @@ async function main(): Promise<void> {
 			ripple: k.seaRipple,
 			grouping: k.seaGrouping,
 			// Shallow is the water a look has barely entered, deep is the
-			// water it never leaves, and the sky does the horizon.
-			shallow: [0.11, 0.5, 0.53],
-			deep: [0.03, 0.17, 0.38],
+			// water it never leaves, and the sky does the horizon. Both come
+			// from the engine, because the bench paints the same sea.
+			shallow: SEA_COLORS.shallow,
+			deep: SEA_COLORS.deep,
 		};
 	}
 
@@ -442,6 +506,12 @@ async function main(): Promise<void> {
 	// it is never behind either of them. It has nothing to draw until the view
 	// is frozen.
 	const viewMarker = new MarkerRenderer(ctx);
+	// The outline over the cell a click would act on. Last, so it stands over
+	// the water as well as the ground: it says where a click goes rather than
+	// being a thing that lives in the world.
+	const aim = new AimRenderer(ctx);
+	// The volumes the culling tests against, drawn only when asked for.
+	const bounds = new BoundsRenderer(ctx);
 	renderer.layers = [
 		...(sky ? [sky] : []),
 		// After the ground, so the water is drawn over the floor it covers,
@@ -449,6 +519,8 @@ async function main(): Promise<void> {
 		...(sea ? [sea] : []),
 		...(billboardClouds ? [billboardClouds] : []),
 		viewMarker,
+		aim,
+		bounds,
 	];
 
 	// One generator per level. A chunk one level coarser samples the terrain at
@@ -629,6 +701,8 @@ async function main(): Promise<void> {
 			crustDepth: builtShape.crustDepth,
 			apron: APRON,
 			debugSeams: live.knobs.seamOverlay,
+			// Zero is off, and off is the flat colour the registry names.
+			speckle: live.knobs.speckle ? SPECKLE : 0,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode
@@ -662,6 +736,9 @@ async function main(): Promise<void> {
 	teardown.push(() => {
 		source.dispose();
 	});
+
+	/** The boxes the last selection tested, for the diagnostic view to draw. */
+	let selectionBoxes: Box[] = [];
 
 	/** What is drawn, what is asked for, and what has come back unuploaded. */
 	const drawn = new Set<number>();
@@ -987,7 +1064,6 @@ async function main(): Promise<void> {
 			shape.maxElevation,
 			peaks,
 			cull,
-			CULL_SLACK,
 		);
 		wantedNow = wanted.length;
 		lastWanted = wanted;
@@ -1007,6 +1083,14 @@ async function main(): Promise<void> {
 						peaks.troughOf(selection.key, selection.chunkLevel) < 0,
 				),
 			);
+		// The boxes the walk tested, kept so a frame can draw them. Held rather
+		// than recomputed: the selection runs on movement and the frame runs
+		// always, and re-walking the hierarchy to draw a diagnostic would cost
+		// more than the diagnostic.
+		selectionBoxes = wanted.flatMap((selection) =>
+			selection.bound ? [selection.bound] : [],
+		);
+
 		// Decoded once here rather than inside dropReplaced's own loop, which
 		// runs every frame there is a backlog to drain and would otherwise
 		// pay this decode again for every retiring chunk it checks.
@@ -1060,6 +1144,227 @@ async function main(): Promise<void> {
 		nextReselectAt =
 			finishedAt + (finishedAt - startedAt) * (1 / RESELECT_BUDGET - 1);
 	}
+
+	// ---------------------------------------------------------------------
+	// Editing: which cell a click acts on, what it writes, and where that is
+	// kept between visits.
+	// ---------------------------------------------------------------------
+
+	/**
+	 * The name of the world these changes belong to.
+	 *
+	 * Every knob that decides where a cell is or what block sits there goes
+	 * into it, so blocks placed in one world never appear in a differently
+	 * shaped one, and setting the knobs back reaches the earlier set again.
+	 * The chunk size stays out: it moves no block, so dragging it keeps the
+	 * world it was dragged in and the rows are re-cut on the way back in.
+	 */
+	const editWorld = worldKey({ ...settings.worldShape(), seed: seedText });
+	const editDb = new EditDb();
+	let edits = new DeltaStore({
+		version: STORE_VERSION,
+		subdivisionDepth: DEPTH,
+		chunkLevel: CHUNK_LEVEL,
+		registry: BLOCK_NAMES,
+	});
+
+	/** What is at a cell: a change where somebody made one, the terrain otherwise. */
+	// One answer to "what is here", for the aiming walk, the outline, a click
+	// and the player's own collision alike. The store is passed as a function
+	// because it is replaced when a saved world finishes loading.
+	const { blockAt, probe } = worldBlocks(terrain, shape, () => edits);
+
+	/**
+	 * What a ray walk asks the world about.
+	 *
+	 * Nothing here reads a chunk. `terrain` evaluates a column from the seed
+	 * and the store answers for the cells somebody has touched, so a walk costs
+	 * the same whether the ground it crosses has been meshed or not.
+	 */
+	const rayWorld: RayWorld = {
+		get n() {
+			return shape.n;
+		},
+		radiusOfLayer: (layer) => shape.radiusOfLayer(layer),
+		layerOfRadius: (radius) => shape.layerOfRadius(radius),
+		solidAt: (cell) => blockAt(cell) !== BlockType.AIR,
+	};
+
+	/**
+	 * The cell under the crosshair and the one a block would go in.
+	 *
+	 * You aim at the block you are building on and the new one goes on top of
+	 * it, which is one answer wherever on that block the crosshair sits.
+	 * Reading whichever face the ray crossed instead flips between two cells
+	 * for a pixel of movement near an edge. A column is straight -- the same
+	 * face, the same offset, one layer up -- so above is a subtraction.
+	 */
+	function aiming(
+		from: Vec3,
+		look: Vec3,
+	): { hit: CellRef; place: CellRef | null } | null {
+		// **The reach is an arm, so the ray is the player's own** -- from the
+		// eye, along the way they face. The camera takes no part: it stands
+		// metres behind and above, so a ray through the middle of the screen
+		// passes four metres over the player's head and needs twelve to come
+		// down to ground an arm reaches in six. The crosshair is moved to where
+		// this ray lands instead of being pinned to the middle of the screen.
+		// Read from the live draft rather than the settings the page loaded
+		// with, so the row moves the arm as it is dragged.
+		const walked = rayWalk(
+			from,
+			look,
+			rayWorld,
+			current.knobs.reach * shape.blockSize,
+		);
+		if (!walked) return null;
+		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
+		const free =
+			above.layer >= 0 && blockAt(above) === BlockType.AIR ? above : null;
+		return { hit: walked.cell, place: free };
+	}
+
+	/** What the crosshair is on, and what each button would do with it. */
+	function aimingSays(at: ReturnType<typeof aiming>): string {
+		if (!aimedFrom || !aimedLook) return "aiming at nothing";
+		if (!at) return "out of reach";
+		const name = BLOCK_NAMES[blockAt(at.hit)] ?? "unknown";
+		const breaks = isBreakable(blockAt(at.hit));
+		return (
+			`${name.replace("chamfer:", "")}` +
+			(breaks ? "" : " · will not break") +
+			(at.place ? " · room above" : " · nothing fits above")
+		);
+	}
+
+	/** A cell as the outline of its own layer, corners and both radii. */
+	function outlineOf(cell: CellRef) {
+		return {
+			corners: cellCorners(cell.face, shape.n, cell.i, cell.j),
+			inner: shape.radiusOfLayer(cell.layer + 1),
+			outer: shape.radiusOfLayer(cell.layer),
+			color: AIM_COLOR,
+		};
+	}
+
+	/**
+	 * Write a change, and ask again for every chunk that reads the cell.
+	 *
+	 * A chunk generates the slots on its own rim so the mesher can decide
+	 * whether to emit a face there, so a cell on a chunk border is read by two
+	 * or three chunks and all of them are rebuilt. The old geometry keeps
+	 * drawing until the new mesh arrives, because uploading a chunk replaces
+	 * whatever is resident under the same key.
+	 */
+	function change(cell: CellRef, block: BlockType): void {
+		const owner = cellSlot(cell, DEPTH, CHUNK_LEVEL).chunkKey;
+		for (const key of edits.write(cell, packBlockState(block))) {
+			// **At every level, not just the finest.** The chunk showing this
+			// ground is whichever level the selection picked for it, and its
+			// key is a different number at each -- so dropping the finest id
+			// alone leaves a coarse chunk drawing the ground as it was, which
+			// reads as the change appearing only once you walk close enough.
+			for (let level = CHUNK_LEVEL; level >= 0; level--) {
+				const id = selectionId(
+					level,
+					coarseChunkKey(key, CHUNK_LEVEL, level),
+				);
+				drawn.delete(id);
+				building.delete(id);
+			}
+			// Every chunk that reads the cell, not just the one that stores
+			// it: a chunk's apron draws the ring past its own rim, so a shaft
+			// dug just across the boundary is geometry this chunk puts on the
+			// screen and its cull volume has to hold.
+			liftPeaks(key);
+		}
+		// One chunk written, because only one chunk's records changed.
+		void editDb.save(editWorld, edits, owner);
+		refresh();
+	}
+
+	/**
+	 * Tell the selection how high a chunk's ground reaches now.
+	 *
+	 * `ChunkPeaks` is built from the coarse map, which is a picture of the
+	 * generated world and holds no placed block. The selection reads it to
+	 * decide whether a triangle pokes back over the horizon and how big a ball
+	 * to test against the view, so a tower standing out of the top of the ball
+	 * built for its hillside is culled along with the hillside.
+	 */
+	function liftPeaks(chunkKey: number): void {
+		const reach = edits.reachOf(chunkKey);
+		if (!reach) return;
+		peaks.raise(
+			chunkKey,
+			CHUNK_LEVEL,
+			shape.radiusOfLayer(reach.top) - RADIUS,
+			shape.radiusOfLayer(reach.bottom + 1) - RADIUS,
+		);
+	}
+
+	/**
+	 * Break the block under the crosshair.
+	 *
+	 * The frame's own walk rather than a fresh one, so what was outlined is
+	 * exactly what goes.
+	 */
+	function pick(): void {
+		if (!aimed) return;
+		if (!isBreakable(blockAt(aimed.hit))) return;
+		change(aimed.hit, BlockType.AIR);
+	}
+
+	/** Put a block on top of the one under the crosshair. */
+	function place(): void {
+		if (!aimed?.place) return;
+		const type = PLACEABLE[Math.floor(Math.random() * PLACEABLE.length)]!;
+		change(aimed.place, type);
+	}
+
+	// The pool asks for a chunk's changes as each job leaves, so a chunk asked
+	// for again after a click carries the click. **By key and level**: the same
+	// ground has a different key at every chunk level and the store is filed at
+	// the finest, so a coarse chunk asking with its own key alone gets nothing
+	// and the change disappears as soon as the player is far enough away for
+	// its chunk to drop a level.
+	const attachDeltas = (): void => {
+		source.deltas = (key, chunkLevel) =>
+			edits.rowsUnder(key, chunkLevel).map((row) => ({
+				chunkKey: row.chunkKey,
+				...row.deltas.pack(),
+			}));
+	};
+	attachDeltas();
+
+	// What is on disk, once. A world opened at a different chunk size to the
+	// one it was written at is re-cut on the way in.
+	void editDb
+		.load(editWorld, {
+			version: STORE_VERSION,
+			subdivisionDepth: DEPTH,
+			chunkLevel: CHUNK_LEVEL,
+			registry: BLOCK_NAMES,
+		})
+		.then(({ store, stale }) => {
+			if (stale)
+				console.warn(
+					"stored changes were written against a different block list and were not loaded",
+				);
+			if (store.count === 0) return;
+			edits = store;
+			// A store opened at a different chunk size arrives re-cut, so its
+			// rows are written back under the cut they are now filed by.
+			if (store.header.chunkLevel !== CHUNK_LEVEL)
+				void editDb.saveAll(editWorld, edits);
+			for (const key of edits.touched()) {
+				liftPeaks(key);
+				const id = selectionId(CHUNK_LEVEL, key);
+				drawn.delete(id);
+				building.delete(id);
+			}
+			refresh();
+		});
 
 	refresh();
 
@@ -1190,7 +1495,7 @@ async function main(): Promise<void> {
 			sea.wireframe = live.knobs.seaWireframe;
 			sea.look = seaLook(live);
 		}
-		CULL_SLACK = Math.tan((live.knobs.cullMargin * Math.PI) / 180);
+		CULL_MARGIN = (live.knobs.cullMargin * Math.PI) / 180;
 		source.nearestFirst = live.knobs.nearestFirst;
 
 		// Freezing waits for the next frame, which has a matrix to hold.
@@ -1351,16 +1656,133 @@ async function main(): Promise<void> {
 		return Math.hypot(a.x - b.x, a.y - b.y);
 	}
 
+	/**
+	 * Where each pointer went down and which button it was, so a press that
+	 * did not move can be told from a drag.
+	 *
+	 * This is the **unlocked** path: with the pointer captured a click is
+	 * unambiguous, and here every press is a candidate for both a look and a
+	 * click. A press that travels further than this many pixels was a look and
+	 * never becomes a click.
+	 */
+	const CLICK_SLOP = 5;
+	const pressed = new Map<
+		number,
+		{ x: number; y: number; button: number; moved: number }
+	>();
+
+	/**
+	 * Whether the mouse is captured by the canvas.
+	 *
+	 * **Free look, rather than a button held down.** Looking around is what a
+	 * player does constantly and clicking is what they do occasionally, so the
+	 * one that costs nothing should be the constant one. Holding a button to
+	 * turn also makes every press ambiguous -- the same gesture starts a look
+	 * and breaks a block, and only how far it travelled tells them apart --
+	 * which is a rule the player has to know and a block broken by accident
+	 * whenever a small drag falls under the threshold.
+	 *
+	 * Captured, the two are different actions: the mouse turns the view and a
+	 * press is a press. It also takes the cursor off the canvas, which is the
+	 * other half of the same thing -- an arrow sitting over the world points at
+	 * a cell the crosshair is not aiming at.
+	 *
+	 * **Touch never captures**, so a finger keeps the drag path below, and so
+	 * does a browser that refuses. `Escape` gives the cursor back, which is how
+	 * the parameter panel is reached.
+	 */
+	const looking = (): boolean => document.pointerLockElement === canvas;
+
+	/**
+	 * When the last request was refused, and how long the drag stands in.
+	 *
+	 * Refusal is usually **temporary**: a browser will not re-capture within
+	 * about a second of letting go, so a player who presses `Escape` and clicks
+	 * straight back in is refused once. Latching that permanently would leave
+	 * them dragging for the rest of the session, so it lapses and the next
+	 * click tries again.
+	 */
+	const DENIED_FOR = 3000;
+	let deniedAt = -Infinity;
+
+	/**
+	 * Ask for the mouse, and note it if the answer is no.
+	 *
+	 * **Refusal arrives two ways and both have to be caught.** The older shape
+	 * fires `pointerlockerror` on the document; the newer one returns a promise
+	 * and rejects it, which is silent unless it is caught -- and left uncaught
+	 * it is an unhandled rejection in the console *and* a fallback that never
+	 * arms, so a browser that refuses gets a canvas where clicking does nothing
+	 * at all: no look, and no block broken either.
+	 */
+	const askForMouse = (): void => {
+		const asked = canvas.requestPointerLock() as unknown;
+		if (asked instanceof Promise)
+			asked.catch(() => {
+				deniedAt = performance.now();
+			});
+	};
+
+	document.addEventListener("pointerlockerror", () => {
+		deniedAt = performance.now();
+	});
+	document.addEventListener("pointerlockchange", () => {
+		if (looking()) {
+			deniedAt = -Infinity;
+			// Whatever was mid-gesture belongs to the unlocked path and would
+			// otherwise turn the view once more on the next move.
+			down.clear();
+			pressed.clear();
+		}
+		// Captured, the browser takes the cursor off the canvas itself. Let go
+		// and it comes back, which is what makes the parameter panel reachable
+		// and says which mode this is without a word of text.
+	});
+
 	canvas.addEventListener("pointerdown", (e) => {
 		if (e.pointerType === "touch") touch.reveal();
+		const intent = clickIntent({
+			pointerType: e.pointerType,
+			captured: looking(),
+			canCapture: performance.now() - deniedAt > DENIED_FOR,
+		});
+		if (intent.capture) askForMouse();
+		if (intent.act) {
+			// No slop test: this press is a press, and the capture it may also
+			// be asking for does not make it any less of one.
+			if (e.button === 0) pick();
+			else if (e.button === 2) place();
+		}
+		if (!intent.drag) return;
 		canvas.setPointerCapture(e.pointerId);
 		down.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		pressed.set(e.pointerId, {
+			x: e.clientX,
+			y: e.clientY,
+			button: e.button,
+			moved: 0,
+		});
 		if (down.size === 2) {
 			pinchFrom = spread();
 			pinchChase = chase;
 		}
 	});
+
+	// The right button places, so the menu it would otherwise open never does.
+	canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	canvas.addEventListener("pointermove", (e) => {
+		if (looking()) {
+			// Captured, so the pointer has no position on the page and the
+			// movement is all there is. Same angle a pixel as the drag, so
+			// nothing about how far a turn feels changes with the mode.
+			const perPixel = Math.PI / (2 * viewHeight());
+			swing -= e.movementX * perPixel;
+			tilt -= e.movementY * perPixel;
+			return;
+		}
+		const press = pressed.get(e.pointerId);
+		if (press)
+			press.moved += Math.hypot(e.clientX - press.x, e.clientY - press.y);
 		const was = down.get(e.pointerId);
 		if (!was) return;
 		const dx = e.clientX - was.x;
@@ -1384,8 +1806,13 @@ async function main(): Promise<void> {
 		}
 	});
 	const lift = (e: PointerEvent) => {
+		const press = pressed.get(e.pointerId);
+		pressed.delete(e.pointerId);
 		down.delete(e.pointerId);
 		pinchFrom = 0;
+		if (!press || press.moved > CLICK_SLOP || down.size > 0) return;
+		if (press.button === 0) pick();
+		else if (press.button === 2) place();
 	};
 	canvas.addEventListener("pointerup", lift);
 	canvas.addEventListener("pointercancel", lift);
@@ -1397,6 +1824,23 @@ async function main(): Promise<void> {
 		},
 		{ passive: false },
 	);
+
+	/**
+	 * Where the aiming ray leaves from and where it points, as the last frame
+	 * drew it.
+	 *
+	 * A click reuses the frame's own ray rather than casting its own, so what
+	 * is outlined is exactly what the click acts on.
+	 */
+	/** When the culling volumes were last gathered, and how many there were. */
+	let boundsAt = -Infinity;
+	let boundsHeld = 0;
+
+	let aimedFrom: Vec3 | null = null;
+	let aimedLook: Vec3 | null = null;
+
+	/** What that ray found, walked once a frame. */
+	let aimed: { hit: CellRef; place: CellRef | null } | null = null;
 
 	const started = performance.now();
 
@@ -1468,7 +1912,7 @@ async function main(): Promise<void> {
 				flying,
 			},
 			seconds,
-			terrain,
+			probe,
 		);
 		timer.leave("player", performance.now());
 		swing = 0;
@@ -1493,7 +1937,7 @@ async function main(): Promise<void> {
 			selectedLook !== null &&
 			viewing !== null &&
 			viewing.look.dot(selectedLook) <
-				Math.cos(Math.max(0.17, CULL_SLACK / 2));
+				Math.cos(Math.max(0.17, CULL_MARGIN / 2));
 		if (
 			!frozen &&
 			(cameraAt.sub(selectedAt).length() > RESELECT_DISTANCE || turned) &&
@@ -1512,6 +1956,20 @@ async function main(): Promise<void> {
 				? player.eye
 				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
 		const target = player.eye.add(look.scale(50));
+
+		// The ray a click acts along is the player's own. Where it lands on
+		// screen is where the crosshair goes, computed once the projection
+		// below is built.
+		aimedFrom = player.eye;
+		aimedLook = look;
+		// One walk a frame, read by the outline, the readout and the next
+		// click alike, so all three agree about what is being aimed at.
+		aimed = frozen ? null : aiming(aimedFrom, aimedLook);
+		aim.target = aimed?.place
+			? outlineOf(aimed.place)
+			: aimed
+				? outlineOf(aimed.hit)
+				: null;
 
 		const eye: [number, number, number] = [from.x, from.y, from.z];
 		const view = Mat4.lookAt(
@@ -1540,6 +1998,79 @@ async function main(): Promise<void> {
 			Math.max(0.2, overGround * 0.01),
 			RADIUS * 20,
 		);
+
+		// **The two culling volumes, the nearest few hundred, gathered a few
+		// times a second.**
+		//
+		// A selection is hundreds of chunks and the renderer holds thousands,
+		// so all of them at once is three rings over some thousands of balls --
+		// 320,000 line vertices, which cost over a second a frame to draw and
+		// are unreadable anyway, being most of a planet of rings seen edge on.
+		// What answers the question is the ones near the camera and the ones
+		// just outside the view, so the list is cut to the nearest by distance
+		// and the readout says when it was cut.
+		//
+		// Gathered on a clock rather than every frame, and the same array is
+		// handed back in between for the renderer to skip on. The clock is
+		// checked against the frame's own time, so a frame slower than the
+		// interval still gathers once and not twice.
+		if (current.knobs.selectBounds || current.knobs.patchBounds) {
+			if (now - boundsAt >= BOUNDS_INTERVAL) {
+				boundsAt = now;
+				const near: { box: BoundsBox; away: number }[] = [];
+				const add = (
+					box: Box,
+					color: [number, number, number],
+				): void => {
+					const dx = box.center[0] - from.x;
+					const dy = box.center[1] - from.y;
+					const dz = box.center[2] - from.z;
+					near.push({
+						box: { ...box, color },
+						away: dx * dx + dy * dy + dz * dz,
+					});
+				};
+				if (current.knobs.selectBounds)
+					for (const box of selectionBoxes)
+						add(box, SELECT_BOUND_COLOR);
+				if (current.knobs.patchBounds)
+					for (const box of renderer.bounds())
+						add(box, PATCH_BOUND_COLOR);
+				boundsHeld = near.length;
+				near.sort((a, b) => a.away - b.away);
+				near.length = Math.min(near.length, BOUNDS_LIMIT);
+				bounds.boxes = near.map((one) => one.box);
+			}
+		} else if (bounds.boxes.length > 0) bounds.boxes = [];
+
+		// **The crosshair stands where the arm points, not in the middle of the
+		// screen.** With the camera pulled back the two are different lines,
+		// and a mark pinned to the middle points at ground several metres past
+		// anything a player can touch. Projecting the far end of the reach puts
+		// it on the cell the click acts on, and leaves it in the middle in
+		// first person, where the camera is the eye.
+		{
+			const end = player.eye.add(
+				look.scale(current.knobs.reach * shape.blockSize),
+			);
+			const m = projection.multiply(view).elements;
+			let cx = 0;
+			let cy = 0;
+			let cw = 0;
+			for (let r = 0; r < 4; r++) {
+				const v = [end.x, end.y, end.z, 1];
+				let sum = 0;
+				for (let k = 0; k < 4; k++) sum += m[k * 4 + r]! * v[k]!;
+				if (r === 0) cx = sum;
+				else if (r === 1) cy = sum;
+				else if (r === 3) cw = sum;
+			}
+			if (cw > 0) {
+				crosshair.style.display = "";
+				crosshair.style.left = `${((cx / cw) * 0.5 + 0.5) * 100}%`;
+				crosshair.style.top = `${(0.5 - (cy / cw) * 0.5) * 100}%`;
+			} else crosshair.style.display = "none";
+		}
 
 		// The sun turns about the planet's own polar axis, and how lit a place is
 		// comes from one dot product against its own up. Paused reads a frozen
@@ -1610,7 +2141,7 @@ async function main(): Promise<void> {
 		// Under the surface is a radius now, not a block: the sea holds none.
 		const submerged =
 			from.length() < shape.seaSurfaceRadius ||
-			terrain.blockAtPosition(from) === BlockType.WATER;
+			probe.blockAtPosition(from) === BlockType.WATER;
 		// Each half of the answer is switched on its own: the walk reaches the
 		// horizon and knows only generated ground, the maps reach a few
 		// hundred metres and hold anything that drew itself.
@@ -1659,6 +2190,33 @@ async function main(): Promise<void> {
 			sea.sky = renderer.sky;
 		}
 		const viewProj = projection.multiply(view);
+		// **The margin beyond the edge of the screen is an angle on the
+		// frustum, not metres on every chunk.** What is kept is ground a turn
+		// could bring on screen, which is a widening of the four side planes
+		// and of nothing else; adding the same reach to each chunk's own test
+		// volume grew it 8.2 times in radius and 512 times in volume, and
+		// pushed it at the near and far planes as well.
+		//
+		// The vertical angle is widened enough that the horizontal one grows by
+		// the margin too. The aspect ratio turns a vertical widening into a
+		// smaller horizontal one, so taking the vertical figure alone would
+		// keep less to the sides than the knob asks for -- and the sides are
+		// where turning brings ground on.
+		const halfUp = FIELD_OF_VIEW / 2;
+		const aspect = canvas.width / canvas.height;
+		const halfAcross = Math.atan(Math.tan(halfUp) * aspect);
+		const wideUp = Math.max(
+			halfUp + CULL_MARGIN,
+			Math.atan(
+				Math.tan(Math.min(1.5, halfAcross + CULL_MARGIN)) / aspect,
+			),
+		);
+		const cullViewProj = Mat4.perspective(
+			Math.min(3.0, 2 * wideUp),
+			aspect,
+			Math.max(0.2, overGround * 0.01),
+			RADIUS * 20,
+		).multiply(view);
 		// What the next selection reads: where the picture was actually taken
 		// from, and what it reached. The camera is not the player -- the wheel
 		// puts it up to 60 m back -- and from up there the horizon is a long
@@ -1667,7 +2225,7 @@ async function main(): Promise<void> {
 			position: from,
 			eyeRadius: from.length(),
 			viewProj,
-			frustum: new Frustum(viewProj),
+			frustum: new Frustum(cullViewProj),
 			eye: from,
 			look,
 		};
@@ -1725,8 +2283,16 @@ async function main(): Promise<void> {
 				`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
 				`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
 					(building.size > 0 ? ` · ${building.size} building` : ""),
-				`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
+				`${clock(day)} · ${flying ? "flying" : player.swimming(probe) ? "swimming" : "walking"}` +
 					(submerged ? " · under water" : ""),
+				// What a click would do, and how much of this world is a
+				// player's rather than the seed's.
+				`${aimingSays(aimed)} · ${edits.count} changed`,
+				...(bounds.boxes.length > 0
+					? [
+							`${bounds.boxes.length} of ${boundsHeld} bounds drawn, nearest first`,
+						]
+					: []),
 				// Where the decisions are being read from, and how far that is from
 				// where the picture is being taken. Without the distance a frozen
 				// view is a world that has simply stopped responding.
@@ -1737,7 +2303,9 @@ async function main(): Promise<void> {
 						]
 					: []),
 				budget(timer, renderer),
-				"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
+				looking()
+					? "WASD move · mouse look · click break · right click place · Esc cursor · E eye level · F fly · T next pentagon · G go to"
+					: "WASD move · click the world to look around · E eye level · F fly · T next pentagon · G go to",
 			]);
 		}
 		timer.end(performance.now());

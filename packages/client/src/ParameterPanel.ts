@@ -3,6 +3,7 @@ import {
 	KNOB_RANGES,
 	LIVE_TERRAIN_KNOBS,
 	PlanetSettings,
+	copyKnobs,
 } from "./PlanetSettings.js";
 import {
 	MOUNTAIN_SEED_OFFSET,
@@ -225,6 +226,26 @@ const GROUPS: Group[] = [
 				],
 			},
 		],
+	},
+	{
+		// **What the world is doing, where the knobs that change it are.** It
+		// sat over the top-left corner of the view, which is a box of numbers
+		// standing on the ground it describes; in the panel it is one fold
+		// among the rest and the window is the world again. The page that owns
+		// the readout fills it in -- nothing here is a knob.
+		title: "Readout",
+		where: "world",
+		knobs: [],
+	},
+	{
+		// **The one picture the world cannot draw of itself.** Standing on the
+		// ground says nothing about where the land is; this is the whole planet
+		// as the map holds it, flat and on a ball, with the player marked on
+		// both. Nothing in it is a knob -- the page that owns the map fills it
+		// in.
+		title: "The map",
+		where: "world",
+		knobs: [],
 	},
 	{
 		title: "Terrain",
@@ -752,8 +773,26 @@ const GROUPS: Group[] = [
 				label: "Apron",
 			},
 			{
+				// **A cell is the colour its block registry names, or it is
+				// not.** The speckle moves every cell up to 6% either way from
+				// a hash of its own address, which is what keeps a hillside of
+				// one block type from reading as a sheet -- and it is the one
+				// thing between the ground and the list of colours the map
+				// pictures are painted from.
+				key: "speckle",
+				label: "Speckle",
+			},
+			{
 				key: "seamOverlay",
 				label: "Seam overlay",
+			},
+			{
+				key: "selectBounds",
+				label: "Selection bounds",
+			},
+			{
+				key: "patchBounds",
+				label: "Patch bounds",
 			},
 			{
 				key: "freezeView",
@@ -769,6 +808,11 @@ const GROUPS: Group[] = [
 				key: "walkSpeed",
 				label: "Walk speed",
 				digits: 1,
+			},
+			{
+				key: "reach",
+				label: "Reach",
+				digits: 0,
 			},
 		],
 	},
@@ -866,7 +910,9 @@ export class ParameterPanel {
 		options: { readonly bench?: boolean } = {},
 	) {
 		this.bench = options.bench ?? false;
-		this.draft = { ...settings.knobs };
+		// The draft is dragged, and a curve is an array: taken by reference it
+		// would be written back into whoever handed these over.
+		this.draft = copyKnobs(settings.knobs);
 		this.onLive = onLive;
 		this.onDraft = onDraft;
 		this.onLiveRebuild = onLiveRebuild;

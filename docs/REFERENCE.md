@@ -27,6 +27,7 @@ numbered documents.
 | [`check.js`](../verification/check.js) | verify the rhombic triacontahedron construction before putting it in the artifact | [02](02-geometry-choice.md) |
 | [`coastline.js`](../verification/coastline.js) | Where does a coastline come from? Today the coarse map sums two tiers of fBm and cuts the result at the percentile that leaves the intended land fraction standing, and a percentile cut through a smooth field draws a smooth curve. This measures how smooth, against two other ways of deciding where the land is: the sample direction warped before the continent lookup, and a land mask grown level by level up the subdivision hierarchy. The measurement that carries the answer is not the shape of one coast but how fast its perimeter grows as the map gets finer. A smooth curve doubles its step count when the cells halve; a ragged one more than doubles, and the excess is what "ragged" means as a number. | [21](21-rivers-and-erosion.md) |
 | [`coords.js`](../verification/coords.js) | Player-facing coordinates. "x: 412, y: 68, z: -190" says nothing useful on a sphere, so the readout has to be latitude, longitude and altitude. That raises three questions a design has to answer: where the axis goes, how many decimal places actually name a cell, and whether a rounded readout is precise enough to share. | [20](20-player-coordinates.md) |
+| [`delta.js`](../verification/delta.js) | The delta record -- v0.4.0 makes the world editable, so something has to write down what a player did. Doc 27 fixed the fields and left the store's shape open, and the v0.4.0 plan chose to store each record relative to the chunk row that holds it, with one header for the whole store saying which cut the numbers were counted against. That choice rests on three claims nobody had checked: that the record really is smaller, that a chunk-size change can be converted rather than lost, and that an edit can be carried into a chunk drawn coarse. This measures all three. | [14](14-meshing-and-lod.md) [27](27-block-state.md) |
 | [`detail.js`](../verification/detail.js) | Which level of detail a chunk is drawn at, and where on the ground the steps between levels land. | [14](14-meshing-and-lod.md) |
 | [`determinism.js`](../verification/determinism.js) | Do two machines agree? Doc 15 left this open and doc 22 now leans on it: a client can only regenerate the coarse map instead of downloading it if the noise comes out bit for bit. IEEE 754 specifies some operations exactly and leaves others to the platform's maths library, so the answer depends entirely on which ones each path uses. | [23](23-determinism.md) |
 | [`edits.js`](../verification/edits.js) | A player dams a river. The coarse map from doc 21 is computed once at world creation and read only, so it still says the river runs there. Something has to give. Before choosing what, measure how far a single edit actually reaches -- upstream, downstream, and how often an edit touches a river at all. | [24](24-edits-and-global-processes.md) |
@@ -46,6 +47,7 @@ numbered documents.
 | [`precision.js`](../verification/precision.js) | Floating-point precision at planet scale: what a float can resolve, where the ID->position conversion loses accuracy, and how much a chunk-local origin buys back. | [15](15-precision-and-origin.md) |
 | [`qr.js`](../verification/qr.js) | walk (i,j) at depth D down C levels -> path digits + leftover (q,r) + orientation | [03](03-addressing.md) |
 | [`rank.js`](../verification/rank.js) | rank(q, r) -- doc 07 gives a chunk's storage layout as index = rank(q, r) * layerCount + layer and that is the only time rank appears in the specification. It is never defined, and it is not a plain triangular number, because doc 03's border rule (the lowest chunk ID wins) means a chunk owns some of the cells on its own edges and not others. So two questions wear one name: how many cells does a chunk hold, and which slot does a given (q, r) sit in. This answers both, and prices the only real choice between them. | [07](07-data-structures.md) [11](11-open-topics.md) |
+| [`ray.js`](../verification/ray.js) | The ray walk -- doc 09 designs block picking as a cell-to-cell walk and nothing has ever built one. v0.4.0 needs it twice: to say which hexagon a player is aiming at, and because doc 25 requires a swept segment rather than an endpoint for a falling player. This builds it from doc 09's construction and checks it against a march fine enough to miss nothing, over rays that cross face edges and pass pentagons. It also prices the march itself, which was the candidate the walk was chosen over. | [09](09-ray-traversal.md) |
 | [`rivers.js`](../verification/rivers.js) | Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river. | [21](21-rivers-and-erosion.md) |
 | [`rotation.js`](../verification/rotation.js) | Directional blocks: rails, pipes, conveyors. A rotation here is an index into a cell's neighbour ring, so three questions decide the design. How evenly are those six directions spread, since a player aims at one of them? How often does a build actually run into a pentagon, given placement is refused there? And how often does a closed circuit enclose one, which is the case that does not close. | [19](19-directional-blocks.md) |
 | [`s2.js`](../verification/s2.js) | — | [01](01-prior-art.md) |
@@ -117,7 +119,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 331 ns -- a timing, so it moves run to run
+   this machine, now: 336 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -790,6 +792,107 @@ verdict
    if the code names the planet as well.
 ```
 
+## `delta.js`
+
+The delta record -- v0.4.0 makes the world editable, so something has to write down what a player did. Doc 27 fixed the fields and left the store's shape open, and the v0.4.0 plan chose to store each record relative to the chunk row that holds it, with one header for the whole store saying which cut the numbers were counted against. That choice rests on three claims nobody had checked: that the record really is smaller, that a chunk-size change can be converted rather than lost, and that an edit can be carried into a chunk drawn coarse. This measures all three.
+
+Cited by [doc 14](14-meshing-and-lod.md), [doc 27](27-block-state.md).
+
+```
+1. the record, priced
+   Doc 27 writes an edit as [address 29][layer 11][state 16]. That address
+   is planet-wide, so it repeats the chunk the row is already keyed by.
+   A record relative to its row needs only the slot inside the chunk.
+
+   chunk    m   slots  slot bits  + layer 11 + state 16   packed as
+       8    8      45          6                     33   uint32 + uint16, 6 B
+      16   16     153          8                     35   uint32 + uint16, 6 B
+      32   32     561         10                     37   uint32 + uint16, 6 B
+      64   64    2145         12                     39   uint32 + uint16, 6 B
+
+   The whole word is 56 bits, which is past the 53 a JavaScript number
+   counts exactly, so it is two 32-bit halves: 8 bytes a record.
+   At the shipped 64-cell chunk the relative form is 6 bytes, 25% less.
+
+   edits      whole word      relative       saved
+       100         800 B         600 B       200 B
+      1000        7.8 KB        5.9 KB      2.0 KB
+     10000       78.1 KB       58.6 KB     19.5 KB
+    100000      781.3 KB      585.9 KB    195.3 KB
+   1000000        7.6 MB        5.7 MB      1.9 MB
+   The saving is real and it is not the argument. A million edits is 2 MB
+   either way, and doc 27 already prices ten million raw at 76 MB.
+   What decides it is section 3: the relative form is read with nothing
+   to decode, and the mesher reads every record on every chunk build.
+
+2. the re-cut -- every record converted between every pair of chunk sizes
+   depth 4: 6 pairs of cuts, 32,160 records converted, 0 landed on a different cell
+   depth 5: 12 pairs of cuts, 229,680 records converted, 0 landed on a different cell
+   depth 6: 20 pairs of cuts, 1,404,480 records converted, 0 landed on a different cell
+   Every record converts. The header is the whole of what makes it possible:
+   a slot is a rank inside a triangle whose side the cut sets, so without
+   one written down there is nothing to convert from.
+
+3. carrying an edit into a coarse chunk
+   Three ways to name the coarse cell a fine one falls in, measured against
+   doc 04's own pipeline run at the coarse level: position, face, barycentric,
+   hexRound. The first three columns are how often each disagrees with it.
+
+   fine  coarse    checked   shift i,j   round i,j   scale the weights   of those, tied   worse
+      7       6      18920       43.9%       53.8%               30.1%           100.0%       0
+      7       5      18920       67.9%       25.2%                8.8%           100.0%       0
+      7       4      18920       75.2%       18.9%                6.0%           100.0%       0
+      8       7      74820       45.5%       53.4%               32.0%           100.0%       0
+      8       6      74820       67.8%       26.0%                7.6%           100.0%       0
+      8       4      74820       79.3%       16.9%                2.4%           100.0%       0
+
+   SHIFTING IS NOT THE MAPPING, and it is the one that looks right. A coarse
+   chunk's lattice really is the fine one scaled by a power of two, so a
+   shift lands on a coarse point that exists -- it is simply the wrong one
+   up to four times in five, because a cell is a Voronoi region
+   (invariant 14) and a shift is a floor. Rounding i and j apart is worse
+   again at the first level, for the reason doc 04 gives hexRound: two
+   coordinates cannot detect the error, and rounding them separately breaks
+   the sum and names a lattice point that is not there.
+
+   SCALE THE THREE WEIGHTS AND REPAIR THEM, and NOTHING IS EVER PLACED
+   FURTHER AWAY. The remaining disagreements are 2% to 32% of cells and
+   every one of them is a tie: the continuous point sits exactly on the
+   boundary between two coarse cells, both are the same distance from it,
+   and doc 04's repair and this one break the tie differently. Zero cells,
+   at every level measured, land on a cell that is genuinely worse.
+
+   It is exact by construction rather than by luck: the one-shot blend is
+   gnomonic projection (verification/uniform.js), so the barycentric of a
+   lattice point recovers its own (n-i-j, i, j) with nothing lost, and the
+   coarse pipeline then reduces to hexRound on those three numbers divided
+   by 2^lod. No position, no face search, no distance -- three divisions and
+   the repair doc 04 already specifies. The layer is the one place a shift
+   IS right: layers stack at a fixed thickness from a crust top that does
+   not move with the level, so layer L falls in coarse layer L >> lod with
+   no rounding to get wrong.
+
+4. what collapses onto one coarse cell
+   A coarse chunk keeps the same triangle and the same slot count, so cells
+   double in width per level and layers double in height with them.
+
+   lod   cells across   layers down   fine cells per coarse one   a 1 m block reads as
+     1              4             2                           8                     2 m
+     2             16             4                          64                     4 m
+     3             64             8                         512                     8 m
+     4            256            16                        4096                    16 m
+     5           1024            32                       32768                    32 m
+     6           4096            64                      262144                    64 m
+
+   That is the price of carrying an edit outward rather than pinning the
+   chunk at full detail: one placed block grows to the coarse cell it lands
+   in, so it reads as an 8 m cube three levels out. The selection draws
+   nothing coarser than LOD 4 at eye height (verification/lod.js), where a
+   block reads as 16 m -- and a wall of them reads as a wall, which is what
+   the precedence rule is for: a coarse cell holding any placed block is
+   solid, and reads as air only when every fine cell inside it was broken.
+```
+
 ## `detail.js`
 
 Which level of detail a chunk is drawn at, and where on the ground the steps between levels land.
@@ -1321,7 +1424,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 333M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 235M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1567,12 +1670,12 @@ language.js -- which language and runtime, decided by running the kernel
 
        THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
        Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 19x version is the one that
+       than choosing the language. And the 13x version is the one that
        allocates -- 42,000 objects per rebuild, which IS the GC case.
        The fast version allocates nothing and never collects.
 
        This machine, now: typed arrays 0.38 ms, one object a vertex
-       7.17 ms -- a layout gap of 19x. Both are timings and move run to
+       5.00 ms -- a layout gap of 13x. Both are timings and move run to
        run; the ratio between them is the part that does not.
 
    SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
@@ -2505,6 +2608,113 @@ verdict
    having.
 ```
 
+## `ray.js`
+
+The ray walk -- doc 09 designs block picking as a cell-to-cell walk and nothing has ever built one. v0.4.0 needs it twice: to say which hexagon a player is aiming at, and because doc 25 requires a swept segment rather than an endpoint for a falling player. This builds it from doc 09's construction and checks it against a march fine enough to miss nothing, over rays that cross face edges and pass pentagons. It also prices the march itself, which was the candidate the walk was chosen over.
+
+Cited by [doc 09](09-ray-traversal.md).
+
+```
+1. the boundary a step actually crosses
+   200,000 random points, each rounded to its cell by hexRound:
+   inside |coordinate - centre| <= 1/2 ......... 75.1%  (doc 09)
+   inside |difference - centre's| <= 1 ......... 100.0%
+
+   DOC 09 NAMES THE WRONG HEXAGON, and it is the rotated one rather than a
+   loose bound: the three slabs |x-x0| <= 1/2 cut out a hexagon turned 30
+   degrees from the cell, so a quarter of every cell falls outside it and
+   part of every neighbour falls inside. A walk stepping on those planes
+   crosses where no boundary is. The cell is the Voronoi region of the
+   lattice point, and a bisector between two lattice points is where a
+   DIFFERENCE of weights is halfway, so the three families a walk steps on
+   are (a-b), (b-c) and (c-a) -- one per pair, not one per coordinate.
+   Crossing one moves a step of +1 on one weight and -1 on another, which
+   is exactly the six neighbours verification/neighbour.js lists.
+
+2. crossing a face edge -- two things change, and they are not the same thing
+   20,000 points just past a face edge, re-expressed by the reflection:
+   the direction it describes moves by 2.31 degrees on average, 6.50 at worst
+
+   SO USE IT FOR THE NAME AND NOT FOR THE FRAME. On a lattice point it
+   lands on the right cell every time -- verification/neighbour.js checks
+   that against the geometric graph at every cell of depths 3 to 5 -- and
+   on a continuous point it moves the direction by over two degrees,
+   because it unfolds the two faces flat rather than turning one frame
+   into the other. A walk that re-frames a ray through it leaves the line
+   it was on at every crossing.
+
+   Solve the neighbour's three weights from the ray again instead. It is
+   one three-by-three solve, and a ray crosses a face edge 0.02 times in
+   section 3, so it is the rarest step in the loop. What the other choice
+   costs, over the same rays section 3 walks:
+   rays crossing a face edge: 67; walked differently when the
+   reflection is used for the frame as well as the name: 35 (52%)
+
+   And a face edge is NOT a cell boundary: cells straddle it, so nothing is
+   entered and nothing is left. Rename the cell already held -- which is
+   what the reflection is for -- rather than rounding the position into a
+   cell again, which skips one wherever the edge and a hexagon boundary
+   fall within a step of each other.
+
+3. the walk against a march fine enough to miss nothing
+   3000 rays, depth 8, reach 12 blocks, march step 1/400 of a block
+   the same cell hit ......................... 2982/2985 (99.90%)
+   the march's cells all appear, in order .... 2997/3000 (99.90%)
+
+   Then ask again where they differed, with the march 25 times finer:
+   sequences that then agree ................. 3, still differing 0
+   hit cells that then agree ................. 3, still differing 0
+
+   EVERY DISAGREEMENT IS THE MARCH'S. Refine the sampling and all of them
+   go, at 3,000 rays out of 3,000 -- so the walk is not close to the
+   sampled answer, it is the answer the sampling converges to. That is
+   what doc 09 claims and it had never been checked: the ground track is a
+   straight line in barycentric coordinates and every boundary it crosses
+   is straight in the same coordinates, so each crossing is one division
+   and nothing is approximated anywhere in the loop.
+
+   cells the walk steps, per ray ............. 7.85
+   distinct cells the march finds, per ray ... 7.82
+   face edges crossed, per ray .............. 0.023
+   layer boundaries crossed, per ray ........ 2.49
+   rays that met nothing within reach ........ 15
+
+   Doc 09 says about five cells for a five-block reach, and twelve blocks
+   of reach costs 7.9 here. A THIRD of the steps are RADIAL: a look
+   aimed down at the ground crosses 2.49 layer boundaries a ray against
+   4.34 hexagon ones, and doc 09 counts only the hexagons.
+
+4. the candidate the walk was chosen over
+   A march has one knob and it trades the same thing both ways: a step too
+   coarse cuts a corner and reports the block behind the one aimed at, and
+   a step fine enough not to costs a full cell lookup every step.
+
+   step (of a block)   lookups per ray   hit cell differs from the walk
+                 1/1                 6                           43.0%
+                 1/2                10                           22.2%
+                 1/4                18                           11.4%
+                1/10                42                            4.4%
+                1/25               102                            1.1%
+                1/50               203                            0.4%
+
+   The walk answers with one division per candidate boundary and no lookup
+   at all: a cell is carried, not asked for.
+
+5. the same reach on planets three orders of magnitude apart
+   depth   cells on the surface   block size   cells stepped per ray
+       6                 40,962       1.8822                    8.42
+       8                655,362       0.4705                    7.83
+      10             10,485,762       0.1176                    7.74
+      12            167,772,162       0.0294                    7.75
+
+   The planet grows 4,096 times over those four rows and the walk steps the
+   same cells, because a reach of twelve blocks is twelve blocks whatever a
+   block is. Nothing in the loop reads a chunk, a mesh or a collider: the
+   cell is carried in three integers and a layer, and the next boundary is
+   a division. That is the argument for a walk over a physics query, and
+   it is now measured rather than asserted.
+```
+
 ## `rivers.js`
 
 Rivers, erosion and continents are the three things fBm cannot make, because all three are GLOBAL: where water goes depends on the whole planet, not on the neighbourhood. Doc 08 sketches a coarse stored map to carry them. This measures whether that works -- how the coarse map is looked up, what flow routing costs on a hex sphere, and how much of the planet ends up river.
@@ -2556,7 +2766,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 966 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 845 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3373,4 +3583,4 @@ verdict
 
 ---
 
-_38 scripts. Every number above is reproduced by running them._
+_40 scripts. Every number above is reproduced by running them._

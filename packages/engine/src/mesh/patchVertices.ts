@@ -75,6 +75,16 @@ export function patchVertices(
 	// A flat normal per triangle would need its own vertices; these are shared
 	// round a cell, so the normal is the cell's own plane -- which is the slope
 	// of the ground there and is what the light is wanted for.
+	//
+	// **The cross product is taken the other way round, and that is not a
+	// detail.** A cell's rim is wound counter-clockwise as seen from outside
+	// the sphere, in east and north; a patch vertex is laid out as
+	// `(east, up, north)`, which swaps two axes and so flips the handedness --
+	// so `cross(b - a, c - a)` comes out pointing into the ground. Measured on
+	// the shipped world, every land vertex had a normal 160 degrees or more
+	// from vertical, which put `dot(normal, sun)` at zero over the whole
+	// surface: the sun contributed nothing anywhere, the ambient term was the
+	// entire picture, and the preview had no shape in it at all.
 	const tris = layout.indices;
 	for (let t = 0; t < tris.length; t += 3) {
 		const a = tris[t]! * PATCH_STRIDE;
@@ -86,9 +96,9 @@ export function patchVertices(
 		const vx = vertices[c]! - vertices[a]!;
 		const vy = vertices[c + 1]! - vertices[a + 1]!;
 		const vz = vertices[c + 2]! - vertices[a + 2]!;
-		const nx = uy * vz - uz * vy;
-		const ny = uz * vx - ux * vz;
-		const nz = ux * vy - uy * vx;
+		const nx = vy * uz - vz * uy;
+		const ny = vz * ux - vx * uz;
+		const nz = vx * uy - vy * ux;
 		for (const at of [a, b, c]) {
 			vertices[at + 3] = vertices[at + 3]! + nx;
 			vertices[at + 4] = vertices[at + 4]! + ny;

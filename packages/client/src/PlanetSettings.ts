@@ -31,6 +31,7 @@ import {
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+import { SUN_SHARE } from "chamfer/light";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -93,6 +94,25 @@ const MAX_COARSE_LEVEL = 9;
  * to `1`. The engine holds the same shape; this is the panel's mutable copy.
  */
 export type Curve = readonly (readonly [number, number])[];
+
+/**
+ * A knobs object that shares nothing with the one it came from.
+ *
+ * **Every knob but two is a number, a string or a boolean, and those copy
+ * themselves.** The two curves are arrays, so a spread hands the same array to
+ * whoever takes the copy -- and the panel drags that array in place. Left
+ * shared, a dragged curve reaches `PLANET_DEFAULTS` itself: the default moves
+ * with the draft, so "does this differ from the default" answers no, and the
+ * curve is left out of every link the world travels in. The work is on screen
+ * and in no query string.
+ */
+export function copyKnobs(knobs: PlanetKnobs): PlanetKnobs {
+	return {
+		...knobs,
+		terrainCurve: knobs.terrainCurve.map(([x, y]) => [x, y]),
+		mountainCurve: knobs.mountainCurve.map(([x, y]) => [x, y]),
+	};
+}
 
 /** A curve as one query-string value, and back. */
 export function curveToText(curve: Curve): string {
@@ -375,6 +395,24 @@ export interface PlanetKnobs {
 	/** Whether the terrain paints its seams: face edges, chunk rims, aprons. */
 	seamOverlay: boolean;
 
+	/** Draw the ball the selection tests before asking for a chunk. */
+	selectBounds: boolean;
+
+	/** Draw the ball the renderer tests before drawing a resident chunk. */
+	patchBounds: boolean;
+
+	/**
+	 * Whether a cell's colour drifts a little from its block's own.
+	 *
+	 * On, every cell is moved up to 6% either way by a hash of its own address.
+	 * **Off by default**, so a cell is exactly the colour the block registry
+	 * names: the ground reads as the material it is made of, and a picture of
+	 * the world can be held against a picture of the map. What the drift buys
+	 * is that a hillside of one block type is not one flat sheet, and the light
+	 * and the block terraces already say most of that.
+	 */
+	speckle: boolean;
+
 	/**
 	 * Whether the world is drawn as its own grid.
 	 *
@@ -544,6 +582,17 @@ export interface PlanetKnobs {
 
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
+
+	/**
+	 * How far a player can reach to break or place a block, in blocks.
+	 *
+	 * **In blocks, not metres**, so it means the same thing on a world built
+	 * of 1 m blocks and one built of 4 m blocks: how many blocks along the
+	 * line of sight the arm gets to. It is what the aiming walk is given as
+	 * its length, so the outline, the crosshair and the click all take it
+	 * together and none of them can disagree about where the arm stops.
+	 */
+	reach: number;
 }
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
@@ -622,6 +671,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	nearestFirst: true,
 	apron: true,
 	seamOverlay: false,
+	selectBounds: false,
+	patchBounds: false,
+	speckle: false,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -630,8 +682,17 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	freezeView: false,
 	dayLength: 3600,
 	paused: true,
-	timeOfDay: 0.18,
-	sunShare: 0.58,
+	// **A world opens in daylight.** The clock is paused by default, so
+	// whatever time it is frozen at is the light every look at this world is
+	// taken in -- and this was `0.18`, which puts the sun **24.6 degrees under
+	// the horizon** at the place the shipped seed spawns on. The ground was
+	// being judged, and its colours compared against the terrain bench's, in
+	// the dark. This is the sun 44.6 degrees up over that spawn: bright, and
+	// still low enough to model a hillside rather than flatten it the way noon
+	// does. A different seed spawns at a different longitude, where the same
+	// number is a different hour; the row above the slider is one drag.
+	timeOfDay: 0.75,
+	sunShare: SUN_SHARE,
 	sunShadow: 1,
 	mapShadows: true,
 	cascadeShadows: true,
@@ -645,6 +706,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	exposure: 1,
 	eyeAdapts: 0.6,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
+	reach: 6,
 };
 
 /**
@@ -710,6 +772,32 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"erosionMaxCut",
 	"erosionCutShare",
 	"erosionInertia",
+	// Not a terrain knob at all: the ground is where it was and only its
+	// colour moved. It is here because what it takes to see the change is
+	// exactly what a terrain knob takes -- every chunk meshed again.
+	"speckle",
+] satisfies (keyof PlanetKnobs)[]);
+
+/**
+ * The knobs that decide where a cell is or what block sits there.
+ *
+ * A world's stored edits are named by these, so a change to any of them is a
+ * different world with its own empty set of them, and setting them back reaches
+ * the earlier one again.
+ *
+ * **`chunkCells` is deliberately absent.** It decides how the address is cut
+ * for loading and drawing and moves no block: the terrain reads a face and a
+ * lattice offset and never sees the cut, so a world at eight cells a chunk and
+ * the same world at sixty-four hold the same ground in the same places. So are
+ * the knobs that decide only how the world is drawn -- the light, the sky, the
+ * clouds, the sea's surface and every level-of-detail setting.
+ */
+export const WORLD_SHAPE_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	...LIVE_TERRAIN_KNOBS,
+	"plain",
+	"subdivisionDepth",
+	"blockSize",
+	"crustMetres",
 ] satisfies (keyof PlanetKnobs)[]);
 
 export const KNOB_RANGES: Record<string, KnobRange> = {
@@ -863,6 +951,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	nearestFirst: { ...TOGGLE, rebuilds: false },
 	apron: { ...TOGGLE, rebuilds: true },
 	seamOverlay: { ...TOGGLE, rebuilds: true },
+	selectBounds: { ...TOGGLE, rebuilds: false },
+	patchBounds: { ...TOGGLE, rebuilds: false },
+	speckle: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },
@@ -898,6 +989,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
+	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };
 
 /**
@@ -912,23 +1004,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
  */
 export const TRANSIENT: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"freezeView",
-] as (keyof PlanetKnobs)[]);
-
-/**
- * The knobs the terrain bench owns, which decide the picture and not the world.
- *
- * Kept as a set rather than a prefix test so a reader can see the whole list,
- * and so the bench can leave every one of them out of a link meant to describe
- * a planet.
- */
-export const PATCH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
-	"patchLatitude",
-	"patchLongitude",
-	"patchCells",
-	"patchPicture",
-	"patchSurface",
-	"patchMap",
-	"patchAlong",
 ] as (keyof PlanetKnobs)[]);
 
 /** What each of the bench's named knobs may be, so a link cannot say otherwise. */
@@ -961,7 +1036,7 @@ export class PlanetSettings {
 	readonly knobs: PlanetKnobs;
 
 	constructor(knobs: Partial<PlanetKnobs> = {}) {
-		this.knobs = { ...PLANET_DEFAULTS, ...knobs };
+		this.knobs = copyKnobs({ ...PLANET_DEFAULTS, ...knobs });
 	}
 
 	/** The seed as the generator takes it, hashed from what was typed. */
@@ -1012,6 +1087,19 @@ export class PlanetSettings {
 	 */
 	get radius(): number {
 		return (this.knobs.blockSize * 2 ** this.depth) / CELL_CONSTANT;
+	}
+
+	/**
+	 * The knobs this world's stored edits are named by, as a plain record.
+	 *
+	 * Values at full precision: two worlds a millimetre apart are two worlds.
+	 */
+	worldShape(): Record<string, number | string> {
+		const knobs = this.knobs as unknown as Record<string, number | string>;
+		const out: Record<string, number | string> = {};
+		for (const name of [...WORLD_SHAPE_KNOBS].sort())
+			out[name] = knobs[name]!;
+		return out;
 	}
 
 	get chunkLevel(): number {
