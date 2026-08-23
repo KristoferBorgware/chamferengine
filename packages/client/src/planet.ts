@@ -21,6 +21,7 @@ import {
 	selectionOf,
 } from "chamfer/generation";
 import { WorkerMeshSource } from "chamfer/mesh";
+import type { BoundsBall } from "chamfer/render";
 import type { CellRef } from "chamfer/edit";
 import {
 	DeltaStore,
@@ -168,6 +169,15 @@ const REACH = 6;
 
 /** How often the culling volumes are gathered again, in milliseconds. */
 const BOUNDS_INTERVAL = 250;
+
+/**
+ * How many culling volumes are drawn, nearest first.
+ *
+ * Three rings each, so this is 38,400 line vertices. Every ball a selection and
+ * a renderer hold between them is some thousands, which is most of a planet of
+ * rings seen edge on -- unreadable, and over a second a frame to draw.
+ */
+const BOUNDS_LIMIT = 400;
 
 /** The color the outline over the aimed-at cell is drawn in. */
 const AIM_COLOR: [number, number, number] = [0.98, 0.86, 0.35];
@@ -1715,8 +1725,9 @@ async function main(): Promise<void> {
 	 * A click reuses the frame's own ray rather than casting its own, so what
 	 * is outlined is exactly what the click acts on.
 	 */
-	/** When the culling volumes were last gathered. */
+	/** When the culling volumes were last gathered, and how many there were. */
 	let boundsAt = -Infinity;
+	let boundsHeld = 0;
 
 	let aimedFrom: Vec3 | null = null;
 	let aimedLook: Vec3 | null = null;
@@ -1881,24 +1892,50 @@ async function main(): Promise<void> {
 			RADIUS * 20,
 		);
 
-		// **The two culling volumes, rebuilt a few times a second and not every
-		// frame.** A selection is hundreds of chunks and the renderer holds
-		// thousands, so the list is three rings each over some thousands of
-		// balls -- half a million vertices, which cost 2.2 seconds a frame to
-		// rebuild and re-upload when this ran with the rest of the frame. What
-		// they show moves at walking pace, so it is read at walking pace, and
-		// the same array is handed back in between for the renderer to skip.
+		// **The two culling volumes, the nearest few hundred, gathered a few
+		// times a second.**
+		//
+		// A selection is hundreds of chunks and the renderer holds thousands,
+		// so all of them at once is three rings over some thousands of balls --
+		// 320,000 line vertices, which cost over a second a frame to draw and
+		// are unreadable anyway, being most of a planet of rings seen edge on.
+		// What answers the question is the ones near the camera and the ones
+		// just outside the view, so the list is cut to the nearest by distance
+		// and the readout says when it was cut.
+		//
+		// Gathered on a clock rather than every frame, and the same array is
+		// handed back in between for the renderer to skip on. The clock is
+		// checked against the frame's own time, so a frame slower than the
+		// interval still gathers once and not twice.
 		if (current.knobs.selectBounds || current.knobs.patchBounds) {
 			if (now - boundsAt >= BOUNDS_INTERVAL) {
 				boundsAt = now;
-				const show = [];
+				const near: { ball: BoundsBall; away: number }[] = [];
+				const add = (
+					ball: {
+						center: readonly [number, number, number];
+						radius: number;
+					},
+					color: [number, number, number],
+				): void => {
+					const dx = ball.center[0] - from.x;
+					const dy = ball.center[1] - from.y;
+					const dz = ball.center[2] - from.z;
+					near.push({
+						ball: { ...ball, color },
+						away: dx * dx + dy * dy + dz * dz,
+					});
+				};
 				if (current.knobs.selectBounds)
 					for (const ball of selectionBalls)
-						show.push({ ...ball, color: SELECT_BOUND_COLOR });
+						add(ball, SELECT_BOUND_COLOR);
 				if (current.knobs.patchBounds)
 					for (const ball of renderer.bounds())
-						show.push({ ...ball, color: PATCH_BOUND_COLOR });
-				bounds.balls = show;
+						add(ball, PATCH_BOUND_COLOR);
+				boundsHeld = near.length;
+				near.sort((a, b) => a.away - b.away);
+				near.length = Math.min(near.length, BOUNDS_LIMIT);
+				bounds.balls = near.map((one) => one.ball);
 			}
 		} else if (bounds.balls.length > 0) bounds.balls = [];
 
@@ -2115,6 +2152,11 @@ async function main(): Promise<void> {
 				// What a click would do, and how much of this world is a
 				// player's rather than the seed's.
 				`${aimingSays(aimed)} · ${edits.count} changed`,
+				...(bounds.balls.length > 0
+					? [
+							`${bounds.balls.length} of ${boundsHeld} bounds drawn, nearest first`,
+						]
+					: []),
 				// Where the decisions are being read from, and how far that is from
 				// where the picture is being taken. Without the distance a frozen
 				// view is a world that has simply stopped responding.
