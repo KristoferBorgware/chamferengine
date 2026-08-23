@@ -75,7 +75,7 @@ export class BoundsRenderer implements PassLayer {
 				targets: [{ format }],
 			},
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				depthWriteEnabled: false,
 				depthCompare: "less",
 			},
