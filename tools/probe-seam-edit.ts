@@ -70,6 +70,48 @@ console.log(
 	`   of those ${outside.length} cells, an edit is handed to this chunk for ${told}.`,
 );
 
+// And whether the chunks a cell sits in are all found, corners included.
+let corners = 0;
+for (let q = 0; q <= M; q++)
+	for (let r = 0; q + r <= M; r++) {
+		const [i, j] = joinPath(path, q, r, DEPTH);
+		if (!chunksHolding({ face, i, j, layer: 0 }, DEPTH, CHUNK_LEVEL).some((h) => h.chunkKey === key))
+			corners++;
+	}
+console.log(
+	`   of this chunk's own ${((M + 1) * (M + 2)) / 2} cells, ${corners} are not reported as held by it.`,
+);
+
+// Over every chunk of one face, not just this one.
+let missed = 0;
+let checked = 0;
+for (let n = 0; n < 4 ** CHUNK_LEVEL; n++) {
+	let value = n;
+	const digits = new Array<number>(CHUNK_LEVEL);
+	for (let level = CHUNK_LEVEL - 1; level >= 0; level--) {
+		digits[level] = value % 4;
+		value = Math.floor(value / 4);
+	}
+	const at = new ChunkAddress(face, digits);
+	for (let q = 0; q <= M; q++)
+		for (let r = 0; q + r <= M; r++) {
+			const [i, j] = joinPath(digits, q, r, DEPTH);
+			checked++;
+			if (
+				!chunksHolding(
+					{ face, i, j, layer: 0 },
+					DEPTH,
+					CHUNK_LEVEL,
+				).some((h) => h.chunkKey === at.key)
+			)
+				missed++;
+		}
+}
+console.log(
+	`   over all ${4 ** CHUNK_LEVEL} chunks of face ${face}: ${missed} of ${checked} ` +
+		`cell-and-chunk pairs are not reported.`,
+);
+
 // And what the mesher sees when it asks for one.
 const holders = chunksHolding(
 	{ face, i: outside[0]!.i, j: outside[0]!.j, layer: 20 },

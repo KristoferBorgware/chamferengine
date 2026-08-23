@@ -24,6 +24,7 @@ export { cellSlot } from "./cellSlot.js";
 export { slotCell } from "./slotCell.js";
 export type { HoldingChunk } from "./chunksHolding.js";
 export { chunksHolding } from "./chunksHolding.js";
+export { chunksReading } from "./chunksReading.js";
 export { offsetIn } from "./offsetIn.js";
 export { coarseCell } from "./coarseCell.js";
 export { worldKey } from "./worldKey.js";

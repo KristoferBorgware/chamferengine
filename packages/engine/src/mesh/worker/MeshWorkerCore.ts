@@ -85,20 +85,29 @@ export class MeshWorkerCore {
 						job.chunkLevel,
 						shape.crustDepth,
 					);
-		if (job.deltas?.length && !this.grid)
-			applyDeltas(
-				chunk,
-				job.deltas.map((row) => ({
-					chunkKey: row.chunkKey,
-					deltas: ChunkDeltas.unpack(row.where, row.what),
-				})),
-				this.shape.subdivisionDepth,
-				job.lod,
-			);
+		// What lands in the triangle is written into the chunk; what lands on
+		// the ring past its rim comes back and goes to the sampler, which is
+		// the only thing that ever reads those cells.
+		const outside =
+			job.deltas?.length && !this.grid
+				? applyDeltas(
+						chunk,
+						job.deltas.map((row) => ({
+							chunkKey: row.chunkKey,
+							deltas: ChunkDeltas.unpack(row.where, row.what),
+						})),
+						this.shape.subdivisionDepth,
+						job.lod,
+					)
+				: null;
 		const sampler =
 			this.grid && this.flat
 				? { columnAt: () => this.flat! }
-				: new ChunkColumnSampler(chunk, this.generator(job.lod));
+				: new ChunkColumnSampler(
+						chunk,
+						this.generator(job.lod),
+						outside,
+					);
 		const mesh = buildChunkMesh(
 			chunk,
 			sampler,
