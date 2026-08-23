@@ -392,6 +392,16 @@ export interface PlanetKnobs {
 	patchBounds: boolean;
 
 	/**
+	 * Whether a cell's colour drifts a little from its block's own.
+	 *
+	 * On, every cell is moved up to 6% either way by a hash of its own address,
+	 * which is what stops a hillside of one block type reading as one flat
+	 * sheet. Off, a cell is exactly the colour the block registry names -- the
+	 * state to compare the world against a picture of the map in.
+	 */
+	speckle: boolean;
+
+	/**
 	 * Whether the world is drawn as its own grid.
 	 *
 	 * On, every chunk is selected and levelled exactly as the terrain would
@@ -639,6 +649,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seamOverlay: false,
 	selectBounds: false,
 	patchBounds: false,
+	speckle: true,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -736,6 +747,10 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"erosionMaxCut",
 	"erosionCutShare",
 	"erosionInertia",
+	// Not a terrain knob at all: the ground is where it was and only its
+	// colour moved. It is here because what it takes to see the change is
+	// exactly what a terrain knob takes -- every chunk meshed again.
+	"speckle",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -906,6 +921,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	seamOverlay: { ...TOGGLE, rebuilds: true },
 	selectBounds: { ...TOGGLE, rebuilds: false },
 	patchBounds: { ...TOGGLE, rebuilds: false },
+	speckle: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },

@@ -151,7 +151,16 @@ export function meshChunk(
 		? (_block, cellFace, i, j) =>
 				gridCellColor(gridPaint, cellFace, i, j, seed, COLOR, 0)
 		: (block, cellFace, i, j) =>
-				blockColor(block, cellFace, i, j, seed, COLOR, 0);
+				blockColor(
+					block,
+					cellFace,
+					i,
+					j,
+					seed,
+					COLOR,
+					0,
+					settings.speckle,
+				);
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);

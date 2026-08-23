@@ -24,6 +24,9 @@ export interface MeshWorkerSetup {
 	/** Whether to paint the seams instead of hiding them. */
 	readonly debugSeams?: boolean;
 
+	/** How far a cell's color may drift from its type's base. Zero is off. */
+	readonly speckle?: number;
+
 	/**
 	 * Draw the world as its own grid: a flat shell of hexagons at the crust
 	 * top, painted by these switches, in place of the terrain. The selection

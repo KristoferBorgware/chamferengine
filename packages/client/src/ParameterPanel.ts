@@ -747,6 +747,16 @@ const GROUPS: Group[] = [
 				label: "Apron",
 			},
 			{
+				// **A cell is the colour its block registry names, or it is
+				// not.** The speckle moves every cell up to 6% either way from
+				// a hash of its own address, which is what keeps a hillside of
+				// one block type from reading as a sheet -- and it is the one
+				// thing between the ground and the list of colours the map
+				// pictures are painted from.
+				key: "speckle",
+				label: "Speckle",
+			},
+			{
 				key: "seamOverlay",
 				label: "Seam overlay",
 			},

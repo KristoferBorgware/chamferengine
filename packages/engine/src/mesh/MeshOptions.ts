@@ -1,4 +1,5 @@
 import type { GridPaint } from "./GridPaint.js";
+import { SPECKLE } from "../generation/terrain/blockColor.js";
 
 /** What a mesher draws beyond the visible surface. */
 export interface MeshOptions {
@@ -66,6 +67,19 @@ export interface MeshOptions {
 	 * mesher a flat shell, and this is how that shell is painted.
 	 */
 	readonly grid?: GridPaint | undefined;
+
+	/**
+	 * How far a cell's color may drift from its type's base, per channel.
+	 *
+	 * The speckle is what stops a hillside of one block type reading as one
+	 * flat sheet of colour, and it costs nothing: the drift comes from the
+	 * cell's own address through the integer hash, so it is the same on every
+	 * machine and needs no texture and no second pass. **Zero turns it off**,
+	 * and then a cell is exactly the colour the block registry names -- which
+	 * is the state to compare a picture of the world against a picture of the
+	 * map in.
+	 */
+	readonly speckle?: number;
 }
 
 export const MESH_DEFAULTS = {
@@ -73,4 +87,5 @@ export const MESH_DEFAULTS = {
 	apron: false,
 	surfaceGrid: 0,
 	debugSeams: false,
+	speckle: SPECKLE,
 } as const satisfies MeshOptions;
