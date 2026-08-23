@@ -62,8 +62,26 @@ const view = Mat4.lookAt(
 	[target.x, target.y, target.z],
 	[ground.x, ground.y, ground.z],
 );
-const projection = Mat4.perspective(FIELD_OF_VIEW, 1280 / 800, 0.2, RADIUS * 20);
-const frustum = new Frustum(projection.multiply(view));
+const aspect = 1280 / 800;
+const projection = Mat4.perspective(FIELD_OF_VIEW, aspect, 0.2, RADIUS * 20);
+
+/** The client's widened cull frustum: the margin as an angle on the view. */
+const margin = (settings.knobs.cullMargin * Math.PI) / 180;
+const halfUp = FIELD_OF_VIEW / 2;
+const halfAcross = Math.atan(Math.tan(halfUp) * aspect);
+const wideUp = Math.max(
+	halfUp + margin,
+	Math.atan(Math.tan(Math.min(1.5, halfAcross + margin)) / aspect),
+);
+const frustum = new Frustum(
+	Mat4.perspective(
+		Math.min(3.0, 2 * wideUp),
+		aspect,
+		0.2,
+		RADIUS * 20,
+	).multiply(view),
+);
+const tight = new Frustum(projection.multiply(view));
 
 const wanted = selectChunks(
 	DEPTH,
@@ -75,10 +93,24 @@ const wanted = selectChunks(
 	shape.maxElevation,
 	peaks,
 	frustum,
-	slack,
 );
 
-console.log(`\n${wanted.length} chunks selected from where a player stands.`);
+const onScreen = selectChunks(
+	DEPTH,
+	CHUNK_LEVEL,
+	eye,
+	eye.length(),
+	RADIUS,
+	settings.knobs.detail,
+	shape.maxElevation,
+	peaks,
+	tight,
+);
+console.log(
+	`\n${wanted.length} chunks selected from where a player stands ` +
+		`(${onScreen.length} with no margin at all, so the margin keeps ` +
+		`${wanted.length - onScreen.length} more).`,
+);
 
 // ---- 1. the ball against the chunk it stands for ---------------------------
 console.log("\n1. how big the ball is, against the chunk inside it");
@@ -126,13 +158,12 @@ console.log("\n1. how big the ball is, against the chunk inside it");
 	console.log("   cull cannot refuse.");
 }
 
-// ---- 2. where the extra comes from -----------------------------------------
-console.log("\n2. what each part contributes to the radius");
+// ---- 2. what the radius is made of, and what the margin keeps --------------
+console.log("\n2. what the radius is made of");
 {
 	let n = 0;
 	let fromSpan = 0;
 	let fromWidth = 0;
-	let fromSlack = 0;
 	let worstSpan = 0;
 	for (const selection of wanted) {
 		if (!selection.bound) continue;
@@ -142,28 +173,25 @@ console.log("\n2. what each part contributes to the radius");
 		const peak = peaks.peakOf(selection.key, selection.chunkLevel);
 		const trough = peaks.troughOf(selection.key, selection.chunkLevel);
 		const span = Math.max(0, peak) - Math.min(0, trough);
-		// The ball has to hold a cap: half its vertical span, and half its width.
-		const half = span / 2;
-		const across = spread * (RADIUS + Math.max(0, peak));
 		n++;
-		fromSpan += half;
-		fromWidth += across;
-		fromSlack += selection.distance * slack;
+		fromSpan += span / 2;
+		fromWidth += spread * (RADIUS + Math.max(0, peak));
 		if (span > worstSpan) worstSpan = span;
 	}
-	const total = fromSpan + fromWidth + fromSlack;
+	const total = fromSpan + fromWidth;
 	const share = (part: number) => `${((100 * part) / total).toFixed(1)}%`;
-	console.log(`   averaged over ${n} chunks, the radius is made of:`);
+	console.log(`   averaged over ${n} chunks, and the ball holds both at once:`);
 	console.log(
 		`   the triangle's own width ...... ${(fromWidth / n).toFixed(1).padStart(8)} m   ${share(fromWidth)}`,
 	);
 	console.log(
 		`   half its floor-to-peak span ... ${(fromSpan / n).toFixed(1).padStart(8)} m   ${share(fromSpan)}`,
 	);
-	console.log(
-		`   the margin, at its distance ... ${(fromSlack / n).toFixed(1).padStart(8)} m   ${share(fromSlack)}`,
-	);
 	console.log(`   the widest floor-to-peak span found: ${worstSpan.toFixed(0)} m`);
+	console.log("");
+	console.log("   The margin is not in this list. It is an angle on the view, so it");
+	console.log("   widens the four side planes and leaves every ball the size of the");
+	console.log("   ground inside it.");
 }
 
 // ---- 3. what the cap on the pyramid costs ----------------------------------
