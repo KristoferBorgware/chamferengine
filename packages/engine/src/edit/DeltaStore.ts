@@ -166,6 +166,52 @@ export class DeltaStore {
 	 * The rows a chunk has to read: its own, and those of the chunks holding
 	 * cells inside its triangle.
 	 */
+	/**
+	 * The rows a chunk needs at whatever level it is being drawn.
+	 *
+	 * **A coarse chunk is not in the store's numbering at all.** A chunk key is
+	 * `face x 4^chunkLevel + path`, so the same ground has a different number
+	 * at every level, and the store is filed at one: the finest. Asking it for
+	 * a chunk two levels out is asking for a key that means some other
+	 * triangle, and what came back was nothing -- so every change vanished the
+	 * moment its chunk dropped a level, which is a distance rather than an
+	 * event and reads as edits evaporating as you walk away.
+	 *
+	 * A coarse triangle contains exactly the fine ones whose path begins with
+	 * its own, so this is a filter over what the store holds rather than a walk
+	 * over the `4 ^ lod` fine chunks under it -- there may be a million of
+	 * those and there are only ever as many rows as chunks somebody has
+	 * touched.
+	 *
+	 * The reading map is filtered the same way, so a coarse chunk inherits
+	 * every row its fine chunks read past their own rims as well as the ones
+	 * they own.
+	 */
+	rowsUnder(chunkKey: number, chunkLevel: number): ChunkRow[] {
+		const fine = this.header.chunkLevel;
+		if (chunkLevel >= fine) return this.rowsFor(chunkKey);
+
+		const span = 4 ** chunkLevel;
+		const face = Math.floor(chunkKey / span);
+		const path = chunkKey % span;
+		const fineSpan = 4 ** fine;
+		const inside = (key: number): boolean =>
+			Math.floor(key / fineSpan) === face &&
+			Math.floor((key % fineSpan) / 4 ** (fine - chunkLevel)) === path;
+
+		const wanted = new Set<number>();
+		for (const key of this.rows.keys()) if (inside(key)) wanted.add(key);
+		for (const [reader, owners] of this.alsoReads)
+			if (inside(reader)) for (const owner of owners) wanted.add(owner);
+
+		const out: ChunkRow[] = [];
+		for (const key of wanted) {
+			const row = this.rows.get(key);
+			if (row) out.push({ chunkKey: key, deltas: row });
+		}
+		return out;
+	}
+
 	rowsFor(chunkKey: number): ChunkRow[] {
 		const out: ChunkRow[] = [];
 		const own = this.rows.get(chunkKey);

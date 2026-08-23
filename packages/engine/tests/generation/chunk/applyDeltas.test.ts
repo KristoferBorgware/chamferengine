@@ -38,13 +38,23 @@ function chunkAt(at: TerrainGenerator, address: ChunkAddress) {
 	return generateChunk(at, address, CHUNK_LEVEL, LAYERS);
 }
 
-/** The same world sampled `lod` levels coarser. */
+/**
+ * The same ground, drawn `lod` levels coarser, exactly as the worker builds it.
+ *
+ * **A coarse chunk drops its chunk level as well as its depth**, and the two
+ * always sum to the finest level -- which is what keeps every chunk the same
+ * number of slots while four of them become one. Building it with the finest
+ * chunk level and a reduced depth, as this test used to, is a chunk that never
+ * exists, and it hid the fact that a record's slot is filed against the finest
+ * level and has to be read back against that one.
+ */
 function coarseChunk(lod: number) {
 	const coarse = shape.atLod(lod);
+	const level = CHUNK_LEVEL - lod;
 	return generateChunk(
 		new TerrainGenerator(map.seed, coarse, map),
-		address,
-		CHUNK_LEVEL,
+		new ChunkAddress(address.face, address.path.slice(0, level)),
+		level,
 		coarse.crustDepth,
 	);
 }

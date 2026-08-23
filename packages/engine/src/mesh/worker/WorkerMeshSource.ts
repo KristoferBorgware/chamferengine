@@ -64,7 +64,9 @@ export class WorkerMeshSource implements MeshSource {
 	 * for again after a click carries the click. Left unset, chunks are built
 	 * from the seed alone.
 	 */
-	deltas: ((chunkKey: number) => readonly JobDeltas[]) | null = null;
+	deltas:
+		| ((chunkKey: number, chunkLevel: number) => readonly JobDeltas[])
+		| null = null;
 
 	/**
 	 * How far each waiting chunk now is, by selection id.
@@ -279,7 +281,10 @@ export class WorkerMeshSource implements MeshSource {
 				key: selection.key,
 				chunkLevel: selection.chunkLevel,
 				lod: selection.lod,
-				deltas: this.deltas?.(selection.key),
+				// **By key and level.** The same ground has a different key at
+				// every chunk level, so a coarse chunk asking with its own key
+				// alone asks for a triangle that is not the one it is drawing.
+				deltas: this.deltas?.(selection.key, selection.chunkLevel),
 			});
 		}
 	}

@@ -87,6 +87,7 @@ export { applyDeltas } from "./chunk/applyDeltas.js";
 export type { ChunkExtent } from "./chunk/chunkCenter.js";
 export { chunkCenter } from "./chunk/chunkCenter.js";
 export { chunkWedge } from "./chunk/chunkWedge.js";
+export { coarseChunkKey } from "./chunk/coarseChunkKey.js";
 export { horizonAngle } from "./chunk/horizonAngle.js";
 export { ChunkAtlas } from "./chunk/ChunkAtlas.js";
 export { residentChunks } from "./chunk/residentChunks.js";

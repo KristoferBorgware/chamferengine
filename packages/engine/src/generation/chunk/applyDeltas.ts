@@ -22,6 +22,10 @@ import { typeOf } from "../../edit/typeOf.js";
  * this one: a cell on a border belongs to one triangle and is read by two or
  * three, so a chunk is handed the owner's rows alongside its own.
  *
+ * **A record is filed at the finest chunk level and read at any of them.** Its
+ * slot is a rank inside a triangle whose side the chunk level sets, so a coarse
+ * chunk decoding one against its own level reads a different cell entirely.
+ *
  * **A record names a cell of the full-depth world and a coarse chunk holds
  * fewer.** `4 ^ lod` cells across and `2 ^ lod` down arrive at one coarse cell,
  * so a placed block grows to fill the cell it lands in. Where several records
@@ -62,7 +66,11 @@ export function applyDeltas(
 				slot,
 				layer,
 				fineDepth,
-				chunk.chunkLevel,
+				// **The level the record was filed at, not this chunk's.** A
+				// slot is a rank inside a triangle whose side the chunk level
+				// sets, and the store is filed at the finest one however
+				// coarse the chunk reading it is. The two always sum to it.
+				chunk.chunkLevel + lod,
 			);
 			const cell = lod === 0 ? fine : coarseCell(fine, fineDepth, lod);
 			if (cell.layer >= chunk.layerCount) continue;
