@@ -327,6 +327,12 @@ if (params.get("panel") === "1") {
 	// terrain rows and its own button to commit them -- a second place to do
 	// what the panel already does. What it is worth keeping for is the one
 	// thing the world itself cannot show from the ground: where the land is.
+	// **The readout goes into the panel with everything else.** A box of
+	// numbers over the top-left corner of the view stands on the ground it is
+	// describing; the panel is where what the world is doing belongs, beside
+	// the knobs that change it. Without the panel it stays where it was, which
+	// is the only place there is.
+	panel.section("Readout")?.appendChild(status);
 	maps = new MapPreview(
 		settings,
 		panel.section("The map") ?? document.body,

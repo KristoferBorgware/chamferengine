@@ -74,6 +74,18 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 
+/* In the panel it is a fold like any other: no box, no corner of its own. */
+.knobs .status {
+	position: static;
+	max-width: none;
+	padding: 0;
+	background: none;
+	border: 0;
+	color: var(--dim);
+	font-size: 11px;
+	line-height: 1.5;
+}
+
 /*
  * The parameter panel, behind ?panel=1.
  *
