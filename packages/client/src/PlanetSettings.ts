@@ -394,10 +394,12 @@ export interface PlanetKnobs {
 	/**
 	 * Whether a cell's colour drifts a little from its block's own.
 	 *
-	 * On, every cell is moved up to 6% either way by a hash of its own address,
-	 * which is what stops a hillside of one block type reading as one flat
-	 * sheet. Off, a cell is exactly the colour the block registry names -- the
-	 * state to compare the world against a picture of the map in.
+	 * On, every cell is moved up to 6% either way by a hash of its own address.
+	 * **Off by default**, so a cell is exactly the colour the block registry
+	 * names: the ground reads as the material it is made of, and a picture of
+	 * the world can be held against a picture of the map. What the drift buys
+	 * is that a hillside of one block type is not one flat sheet, and the light
+	 * and the block terraces already say most of that.
 	 */
 	speckle: boolean;
 
@@ -649,7 +651,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seamOverlay: false,
 	selectBounds: false,
 	patchBounds: false,
-	speckle: true,
+	speckle: false,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,

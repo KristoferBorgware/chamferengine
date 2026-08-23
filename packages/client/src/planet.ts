@@ -63,7 +63,7 @@ import {
 	planetAtmosphere,
 	windRotation,
 } from "chamfer/sky";
-import { MapPanel } from "./MapPanel.js";
+import { MapPreview } from "./MapPreview.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
@@ -263,14 +263,17 @@ let onLiveRebuild: (live: PlanetSettings) => void = () => {};
 /**
  * Editor mode.
  *
- * `?panel=1` turns it on, and it carries panes that show and hide on their own
- * heads: the world knobs, and the maps. A pane is open because it is being
- * used, not because the mode is on.
+ * `?panel=1` turns it on, and it is one panel: every knob, and a fold at the
+ * top holding the planet as a picture. **The map pane is gone** -- it stood
+ * down the other side of the screen carrying its own copy of the terrain rows,
+ * its own picture per step of the map build, and its own button to commit a
+ * world, which is three ways of saying it was a second place to do what the
+ * panel does. What it had that nothing else does is the picture, and that is
+ * what was kept.
  *
- * The map pane draws the maps while they are still being built and never
- * touches the terrain. **Apply** is what rebuilds the world, and it does that
- * the way every knob used to: by reloading with the settings in the query
- * string, which is the one path that rebuilds the device, the map and every
+ * The picture is built on its own worker and never touches the terrain.
+ * **Rebuild** is what builds a world, by reloading with the settings in the
+ * query string -- the one path that rebuilds the device, the map and every
  * chunk together.
  */
 let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
@@ -297,37 +300,31 @@ window.addEventListener("pagehide", () => {
 });
 
 if (params.get("panel") === "1") {
-	const maps = new MapPanel(
-		settings,
-		(chosen) => {
-			const wanted = chosen.toParams();
-			wanted.set("panel", "1");
-			location.href = `${location.pathname}?${wanted.toString()}`;
-		},
-		(at) => onGoTo(at),
-	);
+	// The panel is built first because the picture stands inside it, and the
+	// picture is told about a knob by the panel: neither can be made without
+	// the other, so one of them is named before it exists.
+	let maps: MapPreview | null = null;
 	const panel = new ParameterPanel(
 		settings,
 		(live) => {
 			onLiveKnob(live);
 		},
-		(draft) => maps.changed(draft),
+		(draft) => maps?.changed(draft),
 		(live) => onLiveRebuild(live),
 	);
-	// The knobs that decide where the land is live under the map they decide,
-	// not in a panel on the other side of the screen. The seed goes with them:
-	// it is the one word that re-rolls a world, and hunting for a world is
-	// done looking at the map. It still seeds the clouds as well as the ground.
-	maps.hostKnobs(panel.section("Seed"));
-	maps.hostKnobs(panel.section("Terrain"));
-	maps.hostKnobs(panel.section("Mountains"));
-	maps.hostKnobs(panel.section("Land"));
-	maps.hostKnobs(panel.section("Sea"));
-	// Erosion changes the map and nothing else, and the map is the picture of
-	// what it did, so its rows live under that picture with the rest.
-	maps.hostKnobs(panel.section("Erosion"));
-	onPlayerMoved = (up) => maps.setPlayer(up);
-	teardown.push(() => maps.dispose());
+	// **The picture of the planet lives in the panel, in a fold of its own.**
+	// It was a pane down the other side of the screen with its own copy of the
+	// terrain rows and its own button to commit them -- a second place to do
+	// what the panel already does. What it is worth keeping for is the one
+	// thing the world itself cannot show from the ground: where the land is.
+	maps = new MapPreview(
+		settings,
+		panel.section("The map") ?? document.body,
+		(at) => onGoTo(at),
+	);
+	const preview = maps;
+	onPlayerMoved = (up) => preview.setPlayer(up);
+	teardown.push(() => preview.dispose());
 }
 
 async function main(): Promise<void> {

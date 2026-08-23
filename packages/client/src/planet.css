@@ -126,15 +126,13 @@ body {
 }
 /* Every group is ruled off from the one above it, so a fold reads as a section
    of the panel rather than as a line of text in a list of rows. */
-.knobs section,
-.maps-knobs section {
+.knobs section {
 	border-top: 1px solid var(--edge);
 	margin-top: 10px;
 	padding-bottom: 4px;
 }
 
-.knobs h2,
-.maps-knobs h2 {
+.knobs h2 {
 	font-size: 10.5px;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
@@ -390,147 +388,67 @@ body {
 	font-size: 0.8rem;
 }
 
-/* The map pane. A second pane of editor mode, on the other side from the
-   knobs, so a knob and the map it moves are both in view at once. */
-.maps {
-	position: fixed;
-	/* Clear of the readout, which is the other thing in this corner. */
-	top: 210px;
-	left: 0;
-	z-index: 5;
-	width: 544px;
-	max-width: 100vw;
-	max-height: calc(100vh - 220px);
-	display: flex;
-	flex-direction: column;
-	/* The pane itself never scrolls -- .maps-scroll does, alone, so the
-	   preview above it and the status/Apply below it stay put. */
-	overflow: hidden;
-	background: rgba(18, 22, 29, 0.85);
-	backdrop-filter: blur(6px);
-	border-right: 1px solid #ffffff1a;
-	border-bottom: 1px solid #ffffff1a;
-	font:
-		13px/1.5 system-ui,
-		sans-serif;
-	color: var(--ink);
+/*
+ * The planet as a picture, inside the knob panel.
+ *
+ * A fold like every other, so it is folded away when the knobs are the work and
+ * open when the question is where the land is. It was a pane of its own down
+ * the other side of the screen; what a second pane bought was a second place
+ * to keep the terrain rows.
+ */
+.map-preview {
+	padding-bottom: 4px;
 }
 
-.maps-head {
-	width: 100%;
-	padding: 10px 14px;
-	background: none;
-	border: 0;
-	border-bottom: 1px solid #ffffff14;
-	color: inherit;
-	font:
-		600 13px/1 system-ui,
-		sans-serif;
-	letter-spacing: 0.04em;
-	text-align: left;
-	text-transform: uppercase;
-	cursor: pointer;
-}
-
-.maps-head::after {
-	content: " –";
-}
-
-.maps.shut .maps-head::after {
-	content: " +";
-}
-
-.maps.shut .maps-body {
-	display: none;
-}
-
-.maps-body {
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	flex: 1 1 auto;
-}
-.maps-preview {
-	flex: 0 0 auto;
-	padding: 12px 14px 8px;
-}
-.maps-scroll {
-	flex: 1 1 auto;
-	min-height: 72px;
-	overflow-y: auto;
-	padding: 0 14px;
-}
-.maps-footer {
-	flex: 0 0 auto;
-	padding: 8px 14px 14px;
-	border-top: 1px solid #ffffff14;
-}
-
-.maps-fields {
-	display: flex;
-	gap: 6px;
-	margin-bottom: 10px;
-}
-
-.maps-fields button {
-	flex: 1;
-	padding: 6px 4px;
-	background: #ffffff10;
-	border: 1px solid #ffffff1a;
-	border-radius: 4px;
-	color: inherit;
-	font:
-		12px/1 system-ui,
-		sans-serif;
-	cursor: pointer;
-}
-
-.maps-fields button.on {
-	background: var(--live-deep);
-	border-color: var(--live);
-	color: #fff;
-}
-
-.maps-canvas {
+.map-flat {
 	display: block;
 	width: 100%;
 	height: auto;
+	margin-top: 6px;
 	border-radius: 3px;
 	image-rendering: pixelated;
 	background: var(--panel);
 }
 
-/* The knobs that decide this map, in the pane's scrolling middle. */
-.maps-knobs {
-	padding-bottom: 4px;
-}
-.maps-knobs h2 {
-	margin-top: 4px;
-}
-.maps-knobs h2:first-child {
-	margin-top: 0;
-}
-
-.maps-status {
-	color: var(--dim);
-	font-variant-numeric: tabular-nums;
-}
-
-.maps-bar {
-	margin-top: 8px;
-}
-
-.maps-bar button {
+.map-ball {
+	display: block;
 	width: 100%;
-	padding: 9px;
-	background: var(--live-deep);
-	border: 1px solid var(--live);
+	max-width: 260px;
+	height: auto;
+	margin: 8px auto 0;
+	border-radius: 6px;
+	background: var(--panel);
+	cursor: grab;
+	touch-action: none;
+}
+
+.map-ball:active {
+	cursor: grabbing;
+}
+
+.map-pin {
+	padding: 4px 8px;
+	background: #ffffff10;
+	border: 1px solid #ffffff1a;
 	border-radius: 4px;
-	color: #fff;
+	color: var(--dim);
 	font:
-		600 13px/1 system-ui,
+		11px/1 system-ui,
 		sans-serif;
 	cursor: pointer;
+}
+
+.map-pin.on {
+	background: rgba(123, 207, 138, 0.35);
+	border-color: var(--good);
+	color: #fff;
+}
+
+.map-says {
+	margin-top: 6px;
+	color: var(--dim);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
 }
 
 /* A group is a fold. Only the first is open, so the rows that decide where the
@@ -553,18 +471,15 @@ body {
 	opacity: 0.5;
 }
 
-.knobs section.shut .knobs-fold::after,
-.maps-knobs section.shut .knobs-fold::after {
+.knobs section.shut .knobs-fold::after {
 	content: " +";
 }
 
-.knobs section.shut > *:not(h2),
-.maps-knobs section.shut > *:not(h2) {
+.knobs section.shut > *:not(h2) {
 	display: none;
 }
 
-.knobs label em,
-.maps-knobs label em {
+.knobs label em {
 	margin-left: 4px;
 	padding: 1px 4px;
 	background: rgba(111, 208, 255, 0.2);
@@ -577,41 +492,6 @@ body {
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	vertical-align: 1px;
-}
-
-.maps-ball {
-	display: block;
-	width: 260px;
-	max-width: 100%;
-	height: auto;
-	margin: 10px auto 0;
-	border-radius: 6px;
-	background: var(--panel);
-	cursor: grab;
-	touch-action: none;
-}
-
-.maps-ball:active {
-	cursor: grabbing;
-}
-
-.maps-pin {
-	flex: 0 0 auto;
-	padding: 6px 10px;
-	background: #ffffff10;
-	border: 1px solid #ffffff1a;
-	border-radius: 4px;
-	color: var(--dim);
-	font:
-		12px/1 system-ui,
-		sans-serif;
-	cursor: pointer;
-}
-
-.maps-pin.on {
-	background: rgba(123, 207, 138, 0.35);
-	border-color: var(--good);
-	color: #fff;
 }
 
 .knobs .knob select {
