@@ -63,7 +63,15 @@ export class Player {
 	/** Whether the last step left the player standing on something. */
 	private onGround = false;
 
-	private readonly shape: WorldShape;
+	/**
+	 * The world's layer grid.
+	 *
+	 * **Not readonly, because the world is rebuilt under a live player.**
+	 * Moving a terrain knob makes a new `WorldShape` -- `maxElevation` moves
+	 * the crust top, so every layer boundary moves with it -- and a player
+	 * holding the old one falls through ground that is no longer where it was.
+	 */
+	shape: WorldShape;
 	private settings: Required<PlayerOptions>;
 
 	constructor(

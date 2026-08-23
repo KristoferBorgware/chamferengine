@@ -10,6 +10,36 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-072 — `erodeFreeDroplets`'s slicing test fails under load and passes on its own
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-23, running the suite while auditing the seam routing
+**Where:** `packages/engine/tests/generation/coarse/erodeFreeDroplets.test.ts`
+
+**What happens.** *leaves the same field whether it runs in one call or in
+slices* failed once in a full-suite run and passed immediately afterwards, both
+alone and in another full run. Nothing in that run touched erosion.
+
+**Why it matters.** The claim under test is a **determinism** claim — that
+slicing the work changes nothing — and doc 23 makes bit-identical arithmetic a
+requirement the whole multiplayer design rests on. A test of that which is
+sometimes true is either a real non-determinism, which matters a great deal, or
+a test that measures something other than what it says, which will mislead
+whoever next changes the erosion. Both are worth an hour.
+
+**What would fix it.** Run it a few hundred times under parallel load and see
+whether it is the arithmetic or the harness. If the field really differs, the
+first suspects are a shared accumulator that survives between slices and a
+reduction whose order depends on how the work was cut — the same order-of-
+accumulation hazard `noise.js` measured for fBm, where 4 and 5 octaves differ by
+`1.4e-17` and 6 and 8 do not. If the field is identical every time, the failure
+is in the timing and the test needs to say so.
+
+---
+
 ### F-070 — The ground pyramid stops two levels above the map, so the smallest chunks are over-credited
 
 **Kind:** limitation

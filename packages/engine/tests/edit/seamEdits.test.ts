@@ -247,6 +247,8 @@ describe("an edit at a chunk border", () => {
 			).toEqual([...held.blocks]);
 			expect(generated.first).toBe(held.first);
 			expect(generated.last).toBe(held.last);
+			expect(generated.groundRadius).toBe(held.groundRadius);
+			expect(generated.waterRadius).toBe(held.waterRadius);
 		}
 	});
 
@@ -279,7 +281,12 @@ describe("an edit seen from a distance", () => {
 		return {
 			at,
 			terrain,
-			chunk: generateChunk(terrain, at, level, LAYERS),
+			// **The coarse crust depth, not the finest.** Layers double in
+			// height with the cells, so `atLod` halves the count -- and
+			// `MeshWorkerCore` passes that. Handing the finest count models a
+			// chunk the worker never builds, and every layer-bounded branch on
+			// the coarse path then runs at a value production never sees.
+			chunk: generateChunk(terrain, at, level, shrunk.crustDepth),
 			level,
 		};
 	}
@@ -431,6 +438,10 @@ describe("a chunk's own rim", () => {
 			).toEqual([...held.blocks]);
 			expect(served.first).toBe(held.first);
 			expect(served.last).toBe(held.last);
+			// The radii too: the mesher snaps the surface cap to them, so two
+			// chunks disagreeing about them draw one hillside at two heights.
+			expect(served.groundRadius).toBe(held.groundRadius);
+			expect(served.waterRadius).toBe(held.waterRadius);
 		}
 	});
 
@@ -562,6 +573,11 @@ describe("two chunks sharing a cell", () => {
 				).toEqual([...a.blocks]);
 				expect(b.first).toBe(a.first);
 				expect(b.last).toBe(a.last);
+				expect(
+					b.groundRadius,
+					`chunk ${other} snaps ${cell.i}:${cell.j} elsewhere`,
+				).toBe(a.groundRadius);
+				expect(b.waterRadius).toBe(a.waterRadius);
 				compared++;
 			}
 		expect(compared).toBeGreaterThan(20);

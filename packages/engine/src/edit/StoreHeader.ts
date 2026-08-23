@@ -23,5 +23,14 @@ export interface StoreHeader {
 	readonly registry: readonly string[];
 }
 
-/** The format this build writes. */
-export const STORE_VERSION = 1;
+/**
+ * The format this build writes.
+ *
+ * **2** files a cell on an icosahedron face edge under its canonical name.
+ * Version 1 keyed it by whichever face the caller happened to hand in, so one
+ * cell could hold two rows and a break written under one name never reached the
+ * block drawn from the other. A store written that way cannot be re-keyed
+ * safely -- the two rows may disagree about the same cell -- so it is refused
+ * rather than converted.
+ */
+export const STORE_VERSION = 2;

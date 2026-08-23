@@ -84,8 +84,10 @@ export class ChunkColumnSampler implements ColumnSampler {
 				chunk.layerCount,
 			);
 			let { first, last } = band;
+			let { groundRadius, waterRadius } = column;
 			const written = this.changed?.get(outsideKey(face, i, j));
 			if (written) {
+				const wasFirst = first;
 				for (const [layer, block] of written)
 					if (layer >= 0 && layer < chunk.layerCount)
 						blocks[layer] = block;
@@ -102,13 +104,20 @@ export class ChunkColumnSampler implements ColumnSampler {
 					} else last = layer;
 					if (block === BlockType.WATER) last = layer;
 				}
+				// The same rule a held column gets: a changed top is no
+				// longer the terrain's surface, and a chunk generating this
+				// cell has to reach the same column as the chunk holding it.
+				if (first !== wasFirst) {
+					groundRadius = 0;
+					waterRadius = 0;
+				}
 			}
 			made = {
 				blocks,
 				first,
 				last,
-				groundRadius: column.groundRadius,
-				waterRadius: column.waterRadius,
+				groundRadius,
+				waterRadius,
 			};
 			this.outside++;
 		}

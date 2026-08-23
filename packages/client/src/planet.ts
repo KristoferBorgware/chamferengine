@@ -28,6 +28,7 @@ import {
 	DeltaStore,
 	STORE_VERSION,
 	cellSlot,
+	chunkReaders,
 	packBlockState,
 	typeOf,
 	worldKey,
@@ -607,19 +608,18 @@ async function main(): Promise<void> {
 	 */
 	function standHere(): void {
 		const direction = player.position.normalize();
-		const cell = positionToCell(direction, shape.n);
-		const column = terrain.columnAt(cell.face, cell.i, cell.j);
-		// The face that is actually drawn, not the radius the height field
-		// returned: a surface is the top of a block, so the two differ by up to
-		// one block and standing on the second leaves the feet in the air.
-		// Whichever of ground and water is higher is the lower layer number.
-		const surface = Math.min(column.groundLayer, column.waterLayer);
 		player.position = direction.scale(
 			// The grid shell sits at the crust top, wherever the real ground
 			// is; standing on the world means standing on what is drawn.
-			settings.knobs.gridMode
+			//
+			// `standingRadius` reads the blocks rather than the height field:
+			// a surface is the top of a block, so the field's radius differs
+			// from the face that is drawn by up to one block, and the field
+			// knows nothing about a tower somebody built here or a pit they
+			// dug.
+			current.knobs.gridMode
 				? shape.crustTopRadius
-				: shape.radiusOfLayer(Math.max(0, surface)),
+				: standingRadius(direction),
 		);
 		player.fall = 0;
 		// Level, not aimed down at the ground. On a planet this small the
@@ -649,26 +649,43 @@ async function main(): Promise<void> {
 	 * their height above the ground is already the 1.2 m floor below.
 	 */
 	function land(direction: Vec3): void {
-		const here = positionToCell(player.position, shape.n);
-		const from = terrain.columnAt(here.face, here.i, here.j);
 		const above =
-			player.position.length() -
-			Math.max(from.groundRadius, from.waterRadius);
-
-		const cell = positionToCell(direction, shape.n);
-		const column = terrain.columnAt(cell.face, cell.i, cell.j);
+			player.position.length() - standingRadius(player.position);
 		player.position = direction
 			.normalize()
-			.scale(
-				Math.max(column.groundRadius, column.waterRadius) +
-					Math.max(1.2, above),
-			);
+			.scale(standingRadius(direction) + Math.max(1.2, above));
 		player.heading = direction
 			.normalize()
 			.cross(new Vec3(0, 1, 0))
 			.normalize();
 		player.fall = 0;
 		refresh();
+	}
+
+	/**
+	 * The radius of the top of whatever a player would stand on, under a
+	 * direction.
+	 *
+	 * **The seed's surface is not the world's.** A teleport that reads the
+	 * generator lands 1.2 m over the ground as it was generated, which is
+	 * inside a tower somebody built there and well above the floor of a pit
+	 * somebody dug. The generator gives the starting point and {@link blockAt}
+	 * corrects it: up while there is still something solid overhead, down while
+	 * there is nothing underfoot.
+	 */
+	function standingRadius(direction: Vec3): number {
+		const cell = positionToCell(direction, shape.n);
+		const column = terrain.columnAt(cell.face, cell.i, cell.j);
+		const surface = Math.max(column.groundRadius, column.waterRadius);
+		const floor = shape.crustDepth - 1;
+		let layer = Math.max(0, Math.min(floor, shape.layerOfSurface(surface)));
+		const solid = (at: number): boolean =>
+			at >= 0 &&
+			at <= floor &&
+			blockAt({ ...cell, layer: at }) !== BlockType.AIR;
+		if (solid(layer)) while (layer > 0 && solid(layer - 1)) layer--;
+		else while (layer < floor && !solid(layer)) layer++;
+		return shape.radiusOfLayer(layer);
 	}
 
 	/**
@@ -1162,9 +1179,15 @@ async function main(): Promise<void> {
 
 	/** What is at a cell: a change where somebody made one, the terrain otherwise. */
 	// One answer to "what is here", for the aiming walk, the outline, a click
-	// and the player's own collision alike. The store is passed as a function
-	// because it is replaced when a saved world finishes loading.
-	const { blockAt, probe } = worldBlocks(terrain, shape, () => edits);
+	// and the player's own collision alike. All three are passed as functions
+	// because all three are replaced: the store when a saved world finishes
+	// loading, the generator and the shape whenever a terrain knob rebuilds
+	// the world.
+	const { blockAt, probe } = worldBlocks(
+		() => terrain,
+		() => shape,
+		() => edits,
+	);
 
 	/**
 	 * What a ray walk asks the world about.
@@ -1251,28 +1274,40 @@ async function main(): Promise<void> {
 	function change(cell: CellRef, block: BlockType): void {
 		const owner = cellSlot(cell, DEPTH, CHUNK_LEVEL).chunkKey;
 		for (const key of edits.write(cell, packBlockState(block))) {
-			// **At every level, not just the finest.** The chunk showing this
-			// ground is whichever level the selection picked for it, and its
-			// key is a different number at each -- so dropping the finest id
-			// alone leaves a coarse chunk drawing the ground as it was, which
-			// reads as the change appearing only once you walk close enough.
-			for (let level = CHUNK_LEVEL; level >= 0; level--) {
-				const id = selectionId(
-					level,
-					coarseChunkKey(key, CHUNK_LEVEL, level),
-				);
-				drawn.delete(id);
-				building.delete(id);
-			}
+			dropChunk(key);
 			// Every chunk that reads the cell, not just the one that stores
 			// it: a chunk's apron draws the ring past its own rim, so a shaft
 			// dug just across the boundary is geometry this chunk puts on the
 			// screen and its cull volume has to hold.
-			liftPeaks(key);
+			liftReaders(key);
 		}
 		// One chunk written, because only one chunk's records changed.
 		void editDb.save(editWorld, edits, owner);
 		refresh();
+	}
+
+	/**
+	 * Forget everything drawn or being built for a chunk whose records moved.
+	 *
+	 * **At every level, not just the finest.** The chunk showing this ground is
+	 * whichever level the selection picked for it, and its key is a different
+	 * number at each -- so dropping the finest id alone leaves a coarse chunk
+	 * drawing the ground as it was, which reads as the change appearing only
+	 * once you walk close enough.
+	 *
+	 * **And a job already on a worker carries the store as it was when it left**,
+	 * so it is told as well. Without that, a block broken while its own chunk
+	 * was in flight came back drawn from before the break, and the chunk was
+	 * marked built, so nothing ever asked again.
+	 */
+	function dropChunk(key: number): void {
+		for (let level = CHUNK_LEVEL; level >= 0; level--) {
+			const at = coarseChunkKey(key, CHUNK_LEVEL, level);
+			const id = selectionId(level, at);
+			drawn.delete(id);
+			building.delete(id);
+			source.invalidate(level, at);
+		}
 	}
 
 	/**
@@ -1293,6 +1328,36 @@ async function main(): Promise<void> {
 			shape.radiusOfLayer(reach.top) - RADIUS,
 			shape.radiusOfLayer(reach.bottom + 1) - RADIUS,
 		);
+	}
+
+	/**
+	 * Widen the ground credited to every chunk that will draw a change, at
+	 * every level one of them might be drawn at.
+	 *
+	 * `liftPeaks` widens a triangle and its own ancestors, which covers the
+	 * chunks named in the fine lattice. A coarse chunk is chosen by a different
+	 * rule -- its ring is computed in the lattice it is drawn at, which reaches
+	 * further -- so a coarse chunk can be handed a row for ground its own
+	 * pyramid entry knows nothing about, and be culled against a wedge bounded
+	 * by generated ground while holding a tower.
+	 */
+	function liftReaders(key: number): void {
+		liftPeaks(key);
+		for (let level = CHUNK_LEVEL - 1; level >= 0; level--)
+			for (const reader of chunkReaders(
+				coarseChunkKey(key, CHUNK_LEVEL, level),
+				DEPTH - (CHUNK_LEVEL - level),
+				level,
+			)) {
+				const reach = edits.reachOf(key);
+				if (!reach) continue;
+				peaks.raise(
+					reader,
+					level,
+					shape.radiusOfLayer(reach.top) - RADIUS,
+					shape.radiusOfLayer(reach.bottom + 1) - RADIUS,
+				);
+			}
 	}
 
 	/**
@@ -1349,11 +1414,12 @@ async function main(): Promise<void> {
 			// rows are written back under the cut they are now filed by.
 			if (store.header.chunkLevel !== CHUNK_LEVEL)
 				void editDb.saveAll(editWorld, edits);
+			// The first jobs went out against an empty store while this was
+			// still loading, so every chunk a saved edit touches is holding or
+			// building a picture of the world before anybody played in it.
 			for (const key of edits.touched()) {
-				liftPeaks(key);
-				const id = selectionId(CHUNK_LEVEL, key);
-				drawn.delete(id);
-				building.delete(id);
+				liftReaders(key);
+				dropChunk(key);
 			}
 			refresh();
 		});
@@ -1401,6 +1467,10 @@ async function main(): Promise<void> {
 				),
 			);
 		terrain = byLod[0]!;
+		// The crust top moves with `maxElevation`, so every layer boundary
+		// moves with it. A player holding the shape the world had before the
+		// knob falls through ground that is no longer where it was.
+		player.shape = shape;
 
 		// The setup a worker is given is fixed for its life, so a new map
 		// means a new pool rather than a message the old one could take.
@@ -1413,6 +1483,12 @@ async function main(): Promise<void> {
 			WORKERS,
 			meshSetup(map, shape, live),
 		);
+		// **A new pool is a new hook.** The pool asks for a chunk's changes as
+		// each job leaves, and a fresh one has no hook at all -- so without
+		// this every chunk built after a terrain knob moved carried no record
+		// of anything anybody had done, and the whole world's edits vanished
+		// until the page was reloaded.
+		attachDeltas();
 
 		// Every chunk on screen was built from the map that just left. None of
 		// it describes this one, so all of it goes -- back to nothing rather
@@ -1430,6 +1506,12 @@ async function main(): Promise<void> {
 		lastWanted = [];
 		lastWantedAddrs = [];
 		lastWantedOnFace = [];
+
+		// The peak pyramid was rebuilt from the new map, which is a picture of
+		// the generated world and holds nothing anybody placed. Without this a
+		// tower is culled with the hillside it stands on the moment a knob
+		// moves, exactly as it was before it was ever told about.
+		for (const key of edits.touched()) liftReaders(key);
 
 		refresh();
 	}

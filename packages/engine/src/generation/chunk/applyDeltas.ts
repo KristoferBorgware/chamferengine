@@ -120,14 +120,23 @@ export function applyDeltas(
 			const at =
 				rank(offset.q, offset.r, chunk.m) * chunk.layerCount +
 				cell.layer;
-			if (block === BlockType.AIR && placed.has(at)) continue;
-			if (block !== BlockType.AIR) placed.add(at);
+			// **The coarse case only.** `4 ^ lod` fine cells arrive at one
+			// coarse cell there, so several records meet and a placed block
+			// has to beat a broken one or a wall dissolves into pinholes at
+			// distance. At full detail each cell has exactly one record, and
+			// applying the same rule turns any duplicate into a block that can
+			// never be broken again however many times it is clicked.
+			if (lod > 0) {
+				if (block === BlockType.AIR && placed.has(at)) continue;
+				if (block !== BlockType.AIR) placed.add(at);
+			}
 			chunk.blocks[at] = block;
 			touched.add(rank(offset.q, offset.r, chunk.m));
 		}
 
 	for (const slot of touched) {
 		const base = slot * chunk.layerCount;
+		const wasFirst = chunk.band[slot * 2]!;
 		let first = chunk.layerCount;
 		let last = -1;
 		for (let layer = 0; layer < chunk.layerCount; layer++) {
@@ -139,6 +148,19 @@ export function applyDeltas(
 		}
 		chunk.band[slot * 2] = first;
 		chunk.band[slot * 2 + 1] = last;
+		// **A changed top is no longer the terrain's surface.** The radii are
+		// where the generator put the ground and the water before either was
+		// rounded to a layer, and the mesher snaps the surface cap to them so
+		// two levels of detail agree about one hillside. Dig that top away or
+		// build on it and the new top is a layer boundary, which needs no
+		// snapping and must not borrow the old one -- left in place, the cap
+		// of a block placed on the ground is lifted to where the ground's own
+		// surface was and the wall of the ground is drawn inside it. Zero is
+		// what the mesher already reads as "nobody recorded them".
+		if (first !== wasFirst) {
+			chunk.surface[slot * 2] = 0;
+			chunk.surface[slot * 2 + 1] = 0;
+		}
 	}
 	return outside;
 }

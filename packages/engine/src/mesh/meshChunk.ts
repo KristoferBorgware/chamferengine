@@ -325,7 +325,19 @@ export function meshChunk(
 	return tally;
 }
 
-/** Whether a lattice point falls inside this chunk's triangle. */
+/**
+ * Whether the descent for a lattice point lands on this chunk's triangle.
+ *
+ * **This is the ownership question, not containment.** A point on a chunk edge
+ * is *inside* two or three triangles; `splitPath` picks the one the border rule
+ * awards it to, so this is true for exactly one of them. Both callers want that
+ * -- they are deciding what to draw, where drawing a shared cell twice is the
+ * fault -- and both already combine it with `owns`, which runs the same
+ * descent. Anything asking whether this chunk *holds* data for a point wants
+ * `offsetIn` instead, which answers for the triangle asked rather than the
+ * winner: reading a chunk's own rim through this one is what made a chunk
+ * regenerate its own border from the seed.
+ */
 function inChunk(chunk: Chunk, i: number, j: number): boolean {
 	const split = splitPath(i, j, chunk.depth, chunk.chunkLevel);
 	for (let level = 0; level < split.path.length; level++)
@@ -609,16 +621,13 @@ function meshApronCell(
 	const degree = corners.length;
 	const own = sampler.columnAt(face, i, j);
 
-	const away: boolean[] = new Array<boolean>(6).fill(false);
+	// The ring, for the band to walk, the corner occlusion and the sky
+	// exposure. There is no skirt: a curtain hanging from the cap plane is
+	// coplanar with the neighbour's own cap wherever the two agree, which drew
+	// a dashed outline along every chunk boundary, so the apron replaced it.
 	for (let k = 0; k < 6; k++) {
 		const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 		ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
-		// The edges facing away from the chunk carry the skirt; the inner ones
-		// are buried in the rim cells the chunk already drew.
-		away[k] =
-			nb === null ||
-			nb.face !== chunk.address.face ||
-			!inChunk(chunk, nb.i, nb.j);
 	}
 
 	let bandTop = own.first;

@@ -60,7 +60,11 @@ describe("worldBlocks", () => {
 	it("answers a point in space from the changes, not the seed", () => {
 		const { at, layer } = somewhereOnLand();
 		let edits = new DeltaStore(header());
-		const world = worldBlocks(terrain, shape, () => edits);
+		const world = worldBlocks(
+			() => terrain,
+			() => shape,
+			() => edits,
+		);
 
 		const surface = at.scale(shape.radiusOfLayer(layer) - 0.5);
 		expect(world.probe.blockAtPosition(surface)).not.toBe(BlockType.AIR);
@@ -83,10 +87,56 @@ describe("worldBlocks", () => {
 		expect(world.probe.blockAtPosition(surface)).not.toBe(BlockType.AIR);
 	});
 
+	// A terrain knob rebuilds the map, the generator and the shape, and the
+	// pool with them. Anything holding one of those by value goes on answering
+	// for the planet that was there before the knob moved -- so the player
+	// collides with old ground and a click reads an old block.
+	it("follows the world when a knob rebuilds it", () => {
+		const { at, layer } = somewhereOnLand();
+		let live = terrain;
+		let liveShape = shape;
+		const edits = new DeltaStore(header());
+		const world = worldBlocks(
+			() => live,
+			() => liveShape,
+			() => edits,
+		);
+
+		const surface = at.scale(liveShape.radiusOfLayer(layer) - 0.5);
+		const before = world.probe.blockAtPosition(surface);
+		expect(before).not.toBe(BlockType.AIR);
+
+		// A different seed is a different planet. What is at this point is now
+		// whatever the new one puts there, not what the old one did.
+		const other = buildCoarseMap(seedFromString("elsewhere"), {
+			level: 6,
+			cellMetres: 100,
+			relief: 400,
+		});
+		liveShape = new WorldShape(RADIUS, DEPTH, 400, maxCrustDepth(DEPTH));
+		live = new TerrainGenerator(other.seed, liveShape, other);
+
+		// The probe has to be reading the new generator. Asking the new one
+		// directly is the ground truth, and the probe must agree with it.
+		const direct = live.blockAt(
+			live.columnAt(
+				positionToCell(at, liveShape.n).face,
+				positionToCell(at, liveShape.n).i,
+				positionToCell(at, liveShape.n).j,
+			),
+			liveShape.layerOfRadius(surface.length()),
+		);
+		expect(world.probe.blockAtPosition(surface)).toBe(direct);
+	});
+
 	it("keeps the floor of the world under everything a record can say", () => {
 		const { at } = somewhereOnLand();
 		const edits = new DeltaStore(header());
-		const world = worldBlocks(terrain, shape, () => edits);
+		const world = worldBlocks(
+			() => terrain,
+			() => shape,
+			() => edits,
+		);
 		const floor = shape.crustDepth - 1;
 		const cell = { ...positionToCell(at, shape.n), layer: floor };
 		edits.write(cell, packBlockState(BlockType.AIR));

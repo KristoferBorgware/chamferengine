@@ -11,7 +11,13 @@ import {
 	typeOf,
 	worldKey,
 } from "chamfer/edit";
-import { cellKey, directionToCell, latticePosition } from "chamfer/addressing";
+import {
+	canonicalCell,
+	cellKey,
+	cellRepresentations,
+	directionToCell,
+	latticePosition,
+} from "chamfer/addressing";
 import { Vec3 } from "chamfer/math";
 
 const header = (subdivisionDepth: number, chunkLevel: number) => ({
@@ -34,11 +40,17 @@ describe("block state", () => {
 });
 
 describe("cellSlot", () => {
+	// **Up to renaming**, because a cell has more than one name. Five faces
+	// meet at an icosahedron vertex and two along every edge, so a cell there
+	// can be asked for under any of them -- and the store files it under one,
+	// the canonical name, or the same cell would get a row per name and a
+	// break written under one would never reach the block drawn from another.
 	it("round-trips every cell of a chunk at every cut", () => {
 		const depth = 6;
 		for (const chunkLevel of [1, 2, 3, 4, 5]) {
 			const n = 1 << depth;
 			let checked = 0;
+			let renamed = 0;
 			for (let i = 0; i <= n; i += 3)
 				for (let j = 0; i + j <= n; j += 3) {
 					const cell = { face: 7, i, j, layer: 11 };
@@ -54,11 +66,40 @@ describe("cellSlot", () => {
 						depth,
 						chunkLevel,
 					);
-					expect(back).toEqual(cell);
+					const named = canonicalCell(cell.face, n, cell.i, cell.j);
+					expect(back).toEqual({ ...named, layer: 11 });
+					if (named.face !== cell.face) renamed++;
 					checked++;
 				}
 			expect(checked).toBeGreaterThan(100);
+			// The face-edge cells are a real share of the sample, so the
+			// assertion above is not vacuously the identity.
+			expect(renamed).toBeGreaterThan(0);
 		}
+	});
+
+	// The bug this rule exists for: one cell, two names, two rows.
+	it("gives a face-edge cell one row whichever face names it", () => {
+		const depth = 8;
+		const chunkLevel = 4;
+		const n = 1 << depth;
+		let compared = 0;
+		for (let i = 0; i <= n; i += 7) {
+			const cell = { face: 0, i, j: 0, layer: 3 };
+			const names = cellRepresentations(0, n, i, 0);
+			if (names.length < 2) continue;
+			const first = cellSlot(cell, depth, chunkLevel);
+			for (const named of names) {
+				const other = cellSlot(
+					{ ...named, layer: 3 },
+					depth,
+					chunkLevel,
+				);
+				expect(other).toEqual(first);
+				compared++;
+			}
+		}
+		expect(compared).toBeGreaterThan(10);
 	});
 });
 

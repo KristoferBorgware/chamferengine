@@ -125,14 +125,13 @@ export class ChunkPeaks {
 		// that is the entry to widen.
 		const deepest = this.levels.length - 1;
 		let at = chunkLevel <= deepest ? chunkLevel : deepest;
-		let where =
-			chunkLevel <= deepest ? key : key >> (2 * (chunkLevel - deepest));
+		let where = fold(key, chunkLevel, at);
 		for (; at >= 0; at--) {
 			const peaks = this.levels[at]!;
 			const floors = this.floors[at]!;
 			if (high > peaks[where]!) peaks[where] = high;
 			if (low < floors[where]!) floors[where] = low;
-			where >>= 2;
+			where = Math.floor(where / 4);
 		}
 	}
 
@@ -142,7 +141,7 @@ export class ChunkPeaks {
 			return this.levels[chunkLevel]![key]!;
 		// Below the table, read the deepest ancestor that is in it.
 		const deepest = this.levels.length - 1;
-		return this.levels[deepest]![key >> (2 * (chunkLevel - deepest))]!;
+		return this.levels[deepest]![fold(key, chunkLevel, deepest)]!;
 	}
 
 	/**
@@ -156,6 +155,25 @@ export class ChunkPeaks {
 		if (chunkLevel < this.floors.length)
 			return this.floors[chunkLevel]![key]!;
 		const deepest = this.floors.length - 1;
-		return this.floors[deepest]![key >> (2 * (chunkLevel - deepest))]!;
+		return this.floors[deepest]![fold(key, chunkLevel, deepest)]!;
 	}
+}
+
+/**
+ * A chunk key read at a coarser level of the table.
+ *
+ * **Division, not a shift.** A key is `face x 4^chunkLevel + path`, which at
+ * chunk level 14 runs past `2^31` -- and `>>` is a 32-bit signed operator, so
+ * it wraps the top faces to negative indices. A negative index into a
+ * `Float32Array` reads `undefined`, which the non-null assertion does not
+ * catch, and every comparison against it is false: the triangle is credited
+ * with no ground at all and culled. Depth 17 with 8-cell chunks is a world the
+ * panel accepts, and 12 of the 20 faces fold negative there.
+ *
+ * This is the same conversion `coarseChunkKey` makes, and it uses float
+ * arithmetic for the same reason.
+ */
+function fold(key: number, chunkLevel: number, level: number): number {
+	if (level >= chunkLevel) return key;
+	return Math.floor(key / 4 ** (chunkLevel - level));
 }
