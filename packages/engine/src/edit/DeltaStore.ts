@@ -4,6 +4,7 @@ import type { ChunkRow } from "./ChunkRows.js";
 import type { StoreHeader } from "./StoreHeader.js";
 import { ChunkDeltas } from "./ChunkDeltas.js";
 import { cellSlot } from "./cellSlot.js";
+import { chunkReaders } from "./chunkReaders.js";
 import { chunksReading } from "./chunksReading.js";
 import { slotCell } from "./slotCell.js";
 
@@ -177,38 +178,41 @@ export class DeltaStore {
 	 * moment its chunk dropped a level, which is a distance rather than an
 	 * event and reads as edits evaporating as you walk away.
 	 *
-	 * A coarse triangle contains exactly the fine ones whose path begins with
-	 * its own, so this is a filter over what the store holds rather than a walk
-	 * over the `4 ^ lod` fine chunks under it -- there may be a million of
-	 * those and there are only ever as many rows as chunks somebody has
-	 * touched.
-	 *
-	 * The reading map is filtered the same way, so a coarse chunk inherits
-	 * every row its fine chunks read past their own rims as well as the ones
-	 * they own.
+	 * **Reads are computed in the lattice this chunk is actually drawn at, not
+	 * the store's finest one.** A chunk built `lod` levels coarse generates at
+	 * a reduced subdivision depth, so its own outside ring is one *coarse*
+	 * cell -- roughly `4 ^ lod` fine cells -- not the one fine cell a chunk at
+	 * the store's own level reads. {@link chunkReaders} finds this chunk and
+	 * every same-level chunk bordering it, run at that reduced depth; every
+	 * fine row whose owner's ancestor at this level falls in that set is
+	 * handed over, whole, the same way the finest level hands over a whole
+	 * neighbouring row rather than filtering it to individual cells.
 	 */
 	rowsUnder(chunkKey: number, chunkLevel: number): ChunkRow[] {
 		const fine = this.header.chunkLevel;
 		if (chunkLevel >= fine) return this.rowsFor(chunkKey);
 
-		const span = 4 ** chunkLevel;
-		const face = Math.floor(chunkKey / span);
-		const path = chunkKey % span;
-		const fineSpan = 4 ** fine;
-		const inside = (key: number): boolean =>
-			Math.floor(key / fineSpan) === face &&
-			Math.floor((key % fineSpan) / 4 ** (fine - chunkLevel)) === path;
+		const lod = fine - chunkLevel;
+		const readable = new Set(
+			chunkReaders(
+				chunkKey,
+				this.header.subdivisionDepth - lod,
+				chunkLevel,
+			),
+		);
 
-		const wanted = new Set<number>();
-		for (const key of this.rows.keys()) if (inside(key)) wanted.add(key);
-		for (const [reader, owners] of this.alsoReads)
-			if (inside(reader)) for (const owner of owners) wanted.add(owner);
+		const fineSpan = 4 ** fine;
+		const drop = 4 ** lod;
+		const ancestorOf = (key: number): number => {
+			const face = Math.floor(key / fineSpan);
+			const path = Math.floor((key % fineSpan) / drop);
+			return face * 4 ** chunkLevel + path;
+		};
 
 		const out: ChunkRow[] = [];
-		for (const key of wanted) {
-			const row = this.rows.get(key);
-			if (row) out.push({ chunkKey: key, deltas: row });
-		}
+		for (const [key, row] of this.rows)
+			if (readable.has(ancestorOf(key)))
+				out.push({ chunkKey: key, deltas: row });
 		return out;
 	}
 

@@ -458,6 +458,24 @@ Violating any of these breaks the design. They are not tunable.
   keeps every chunk the same slot count while four become one; a test building
   one with the finest level and a reduced depth is modelling a chunk that does
   not exist, and that is what hid all three.
+- **A COARSE CHUNK'S OWN RING REACHES FURTHER THAN A FINE CHASE CAN FOLLOW**
+  (`chunkReaders`, `rowsUnder`, `plans/v0.4.1.md` I-13). Fixing the routing
+  (I-12) left the *reach* wrong: `rowsUnder` chased the store's fine-level "who
+  reads whom" relationships, which only ever span **one fine cell** across a
+  boundary -- the reach a chunk at the store's own finest level has. A chunk
+  drawn `lod` levels coarse generates at a **reduced subdivision depth**, so its
+  own outside ring is one **coarse** cell, roughly `4^lod` fine cells, not one.
+  An edit a few fine cells deep in the neighbour, past the shared fine
+  boundary, has no relationship recorded at any level and is invisible forever
+  at every coarse level -- not "not yet close enough", genuinely unreachable.
+  Measured (`tools/probe-coarse-reach.ts`): over every outside-ring cell of one
+  chunk at lod 1-3, a one-hop fine chase never reaches **47%** of them. The fix
+  computes the ring **in the lattice the chunk is actually drawn at**: walk the
+  chunk's own rim at its reduced depth, and whichever same-level chunk holds
+  each boundary point's six neighbours is a reader -- the same primitive
+  `chunksHolding` already verifies, just run over a whole rim instead of one
+  cell. Cross-checked at chunk level 0 against the icosahedron's own
+  face-adjacency table, a wholly independent definition.
 - **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
   THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
   the ring around them whether to draw a side face and its apron draws that ring
