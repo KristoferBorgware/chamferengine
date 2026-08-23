@@ -1,5 +1,13 @@
+import type { Box } from "../math/Box.js";
 import type { Geometry } from "./Geometry.js";
 import type { MeshSink } from "./MeshSink.js";
+
+/** The world axes, which is what a caller naming none gets. */
+const WORLD_AXES: Box["axes"] = [
+	[1, 0, 0],
+	[0, 1, 0],
+	[0, 0, 1],
+];
 
 /**
  * A sink that collects into growable typed arrays.
@@ -13,13 +21,25 @@ export class ArrayMeshSink implements MeshSink {
 	private vertexCount = 0;
 	private indexCount = 0;
 
-	/** The box every vertex written so far falls inside. */
+	/**
+	 * How far every vertex written so far reaches along each of the axes.
+	 *
+	 * **Along the axes given, not along the world's.** A chunk is a wedge into
+	 * the planet -- a small triangle extruded down through whatever has been
+	 * dug -- and a shape that is deep in one direction and narrow in the other
+	 * two is only cheap to bound if the box is allowed to point the same way.
+	 * Three dot products a vertex against three comparisons, and what it buys
+	 * on a chunk dug to the bottom of the crust is a volume some thousands of
+	 * times smaller.
+	 */
+	private readonly axes: Box["axes"];
 	private readonly low = [Infinity, Infinity, Infinity];
 	private readonly high = [-Infinity, -Infinity, -Infinity];
 
-	constructor(vertexCapacity = 4096) {
+	constructor(vertexCapacity = 4096, axes: Box["axes"] = WORLD_AXES) {
 		this.positions = new Float32Array(vertexCapacity * 6);
 		this.indices = new Uint32Array(vertexCapacity * 3);
+		this.axes = axes;
 	}
 
 	get vertices(): number {
@@ -40,12 +60,12 @@ export class ArrayMeshSink implements MeshSink {
 	): number {
 		if ((this.vertexCount + 1) * 6 > this.positions.length)
 			this.positions = grow(this.positions, Float32Array);
-		if (x < this.low[0]!) this.low[0] = x;
-		if (y < this.low[1]!) this.low[1] = y;
-		if (z < this.low[2]!) this.low[2] = z;
-		if (x > this.high[0]!) this.high[0] = x;
-		if (y > this.high[1]!) this.high[1] = y;
-		if (z > this.high[2]!) this.high[2] = z;
+		for (let n = 0; n < 3; n++) {
+			const axis = this.axes[n]!;
+			const along = x * axis[0] + y * axis[1] + z * axis[2];
+			if (along < this.low[n]!) this.low[n] = along;
+			if (along > this.high[n]!) this.high[n] = along;
+		}
 
 		const at = this.vertexCount * 6;
 		this.positions[at] = x;
@@ -67,25 +87,36 @@ export class ArrayMeshSink implements MeshSink {
 	}
 
 	/**
-	 * The middle of everything written and how far it reaches, in the same
-	 * frame the vertices are in.
+	 * The box everything written falls inside, in the same frame the vertices
+	 * are in and turned to the axes this sink was given.
 	 *
 	 * A renderer needs this to decide whether a chunk is in view at all, and
 	 * the mesher is the only thing that knows where the geometry actually
 	 * ended up: a chunk's triangle bounds its cells horizontally and says
-	 * nothing about how tall the ground under them is.
+	 * nothing about how tall the ground under them is, nor how deep.
+	 *
+	 * Empty comes back as a box with no width, which every test refuses the
+	 * same way a ball of no radius did.
 	 */
-	bounds(): { center: [number, number, number]; radius: number } {
-		if (this.vertexCount === 0) return { center: [0, 0, 0], radius: 0 };
-		const center: [number, number, number] = [
-			(this.low[0]! + this.high[0]!) / 2,
-			(this.low[1]! + this.high[1]!) / 2,
-			(this.low[2]! + this.high[2]!) / 2,
-		];
-		const dx = this.high[0]! - center[0];
-		const dy = this.high[1]! - center[1];
-		const dz = this.high[2]! - center[2];
-		return { center, radius: Math.sqrt(dx * dx + dy * dy + dz * dz) };
+	bounds(): Box {
+		if (this.vertexCount === 0)
+			return { center: [0, 0, 0], axes: this.axes, halves: [0, 0, 0] };
+		const middle = [0, 1, 2].map(
+			(n) => (this.low[n]! + this.high[n]!) / 2,
+		) as [number, number, number];
+		const halves = [0, 1, 2].map(
+			(n) => (this.high[n]! - this.low[n]!) / 2,
+		) as [number, number, number];
+		// The centre is named along the axes and wanted in the frame the
+		// vertices are in, so it is the three coordinates put back on them.
+		const center: [number, number, number] = [0, 0, 0];
+		for (let n = 0; n < 3; n++) {
+			const axis = this.axes[n]!;
+			center[0] += axis[0] * middle[n]!;
+			center[1] += axis[1] * middle[n]!;
+			center[2] += axis[2] * middle[n]!;
+		}
+		return { center, axes: this.axes, halves };
 	}
 
 	/** The finished geometry, trimmed to what was written. */

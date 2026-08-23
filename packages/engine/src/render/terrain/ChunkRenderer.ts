@@ -1,3 +1,4 @@
+import type { Box } from "../../math/Box.js";
 import type { ChunkMesh } from "../../mesh/ChunkMesh.js";
 import type { Frame } from "../Frame.js";
 import type { Geometry } from "../../mesh/Geometry.js";
@@ -25,8 +26,7 @@ interface Buffers {
 interface Resident {
 	readonly key: number;
 	readonly origin: readonly [number, number, number];
-	readonly center: readonly [number, number, number];
-	readonly radius: number;
+	readonly bound: Box;
 	readonly uniform: GPUBuffer;
 	readonly bindGroup: GPUBindGroup;
 	readonly opaque: Buffers | null;
@@ -121,16 +121,15 @@ export class ChunkRenderer implements ShadowCaster {
 	readonly clock: GpuClock;
 
 	/**
-	 * The ball each resident chunk is tested against before it is drawn.
+	 * The box each resident chunk is tested against before it is drawn.
 	 *
-	 * The ball the built geometry actually fits inside, which is a different
+	 * The box the built geometry actually fits inside, which is a different
 	 * question from the one the selection asked before the chunk was built.
 	 * Reported so both can be looked at.
 	 */
-	bounds(): { center: readonly [number, number, number]; radius: number }[] {
-		const out = [];
-		for (const chunk of this.resident.values())
-			out.push({ center: chunk.center, radius: chunk.radius });
+	bounds(): Box[] {
+		const out: Box[] = [];
+		for (const chunk of this.resident.values()) out.push(chunk.bound);
 		return out;
 	}
 
@@ -290,8 +289,7 @@ export class ChunkRenderer implements ShadowCaster {
 		this.resident.set(mesh.key, {
 			key: mesh.key,
 			origin: [mesh.origin.x, mesh.origin.y, mesh.origin.z],
-			center: mesh.center,
-			radius: mesh.radius,
+			bound: mesh.bound,
 			uniform,
 			bindGroup: device.createBindGroup({
 				layout: this.chunkLayout,
@@ -330,7 +328,7 @@ export class ChunkRenderer implements ShadowCaster {
 		const box = this.cascades.boxOf(cascade);
 		for (const chunk of this.resident.values()) {
 			if (!chunk.opaque) continue;
-			if (!box.holds(chunk.center, chunk.radius)) continue;
+			if (!box.holds(chunk.bound)) continue;
 			pass.setBindGroup(1, chunk.bindGroup);
 			pass.setVertexBuffer(0, chunk.opaque.vertices);
 			pass.setIndexBuffer(chunk.opaque.indices, "uint32");
@@ -408,15 +406,7 @@ export class ChunkRenderer implements ShadowCaster {
 		const view = new Frustum(frame.cullViewProj ?? frame.viewProj);
 		const visible: Resident[] = [];
 		for (const chunk of this.resident.values())
-			if (
-				view.holds(
-					chunk.center[0],
-					chunk.center[1],
-					chunk.center[2],
-					chunk.radius,
-				)
-			)
-				visible.push(chunk);
+			if (view.holdsBox(chunk.bound)) visible.push(chunk);
 		this.lastDrawn = visible.length;
 
 		pass.setPipeline(this.opaquePipeline);

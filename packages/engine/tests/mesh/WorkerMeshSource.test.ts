@@ -87,8 +87,15 @@ class FakeWorker implements MeshWorkerHandle {
 					chunkLevel: job.chunkLevel,
 					lod: job.lod,
 					origin: [0, 0, 1700],
-					center: [0, 0, 1700],
-					radius: 20,
+					bound: {
+						center: [0, 0, 1700],
+						axes: [
+							[0, 0, 1],
+							[1, 0, 0],
+							[0, 1, 0],
+						],
+						halves: [20, 20, 20],
+					},
 					opaque: geometry(),
 					translucent: geometry(),
 					tally: { cells: 0, faces: 0, merged: 0, apron: 0 },

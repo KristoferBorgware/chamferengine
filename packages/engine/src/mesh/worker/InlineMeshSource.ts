@@ -32,8 +32,7 @@ export class InlineMeshSource implements MeshSource {
 		return Promise.resolve({
 			key: selectionId(result.chunkLevel, result.key),
 			origin: new Vec3(...result.origin),
-			center: result.center,
-			radius: result.radius,
+			bound: result.bound,
 			opaque: result.opaque,
 			translucent: result.translucent,
 			tally: result.tally,

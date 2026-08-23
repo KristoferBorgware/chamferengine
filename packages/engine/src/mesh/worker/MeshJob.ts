@@ -1,4 +1,5 @@
 import type { CoarseMapSnapshot } from "../../generation/coarse/CoarseMapSnapshot.js";
+import type { Box } from "../../math/Box.js";
 import type { Geometry } from "../Geometry.js";
 import type { GridParts } from "../GridPaint.js";
 import type { MeshTally } from "../meshChunk.js";
@@ -97,9 +98,8 @@ export interface MeshResult {
 	readonly lod: number;
 	readonly origin: readonly [number, number, number];
 
-	/** The ball everything drawn falls inside, in world space. */
-	readonly center: readonly [number, number, number];
-	readonly radius: number;
+	/** The box everything drawn falls inside, in world space. */
+	readonly bound: Box;
 
 	readonly opaque: Geometry;
 	readonly translucent: Geometry;
