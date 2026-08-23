@@ -228,6 +228,16 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **What the world is doing, where the knobs that change it are.** It
+		// sat over the top-left corner of the view, which is a box of numbers
+		// standing on the ground it describes; in the panel it is one fold
+		// among the rest and the window is the world again. The page that owns
+		// the readout fills it in -- nothing here is a knob.
+		title: "Readout",
+		where: "world",
+		knobs: [],
+	},
+	{
 		// **The one picture the world cannot draw of itself.** Standing on the
 		// ground says nothing about where the land is; this is the whole planet
 		// as the map holds it, flat and on a ball, with the player marked on
