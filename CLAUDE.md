@@ -476,6 +476,83 @@ Violating any of these breaks the design. They are not tunable.
   `chunksHolding` already verifies, just run over a whole rim instead of one
   cell. Cross-checked at chunk level 0 against the icosahedron's own
   face-adjacency table, a wholly independent definition.
+- **THE STORE AND THE MESHER MUST AGREE ON HOW FAR A CHUNK READS, AND THE
+  MESHER IS THE AUTHORITY** (`MESHER_REACH`, `chunksReading`, `chunkReaders`).
+  A rim cell asks its own ring -- one step past the triangle -- and the apron
+  then draws that ring, and an **apron cell asks its own ring** for the band to
+  walk, the corner occlusion and the sky exposure. That is **two** steps.
+  Routing one reached the apron cells and not the cells they read: measured by
+  wrapping the real sampler (`tools/probe-mesher-reach.ts`), a chunk samples
+  **254** distinct columns and **16.3%** of them were cells no edit was ever
+  routed to. At two steps, **0%**. The number is written once and read by both
+  ends, because it is the one thing the two have to agree on.
+- **A CELL ON A FACE EDGE HAS SEVERAL NAMES, AND A KEY MUST PICK ONE**
+  (`cellSlot`, `STORE_VERSION` 2). Five faces meet at an icosahedron vertex and
+  two along every edge, and `positionToCell` produces both names -- splitting one
+  hexagon roughly in half, so ordinary aiming and ordinary standing name the same
+  cell differently. `cellSlot` keyed the row by whichever face the caller handed
+  in, giving one cell **two rows**: a break written under one name never reached
+  the block drawn from the other, so the ray read air through rock that was on
+  screen. Every sibling rule already reconciled the names -- `encodeCell` and
+  `owns` canonicalise, `chunksHolding` enumerates -- and this was the one that
+  did not. **Canonicalise before keying anything.**
+- **A JOB'S IDENTITY IS THE CHUNK AND THE STORE IT WAS POSTED WITH**
+  (`WorkerMeshSource.invalidate`). The rows are read as a job leaves, so a chunk
+  on a worker carries the store as it was then; `request` treated a repeat as
+  the same job and chained onto the promise without posting anything, and the
+  caller had already marked the chunk built, so nothing asked again. **The
+  commonest case is a world opening** -- the first jobs go out against an empty
+  store while the save is still loading, so a saved world's buildings are
+  missing from exactly the chunks nearest the player. A job whose world moved is
+  re-posted when its stale result arrives, rather than cancelled: the worker is
+  most of the way through.
+- **A PATCHED COLUMN IS NOT THE TERRAIN'S SURFACE ANY MORE** (`applyDeltas`,
+  `ChunkColumnSampler`). `chunk.surface` is where the generator put the ground
+  before it was rounded to a layer, and the mesher snaps the surface cap to it
+  so two levels of detail agree about one hillside. `applyDeltas` rewrote the
+  blocks and the band and left it, so a block placed on the ground had its cap
+  lifted to where the ground's surface was and **the ground's own wall was drawn
+  inside the block**. Clear both radii whenever the column's top moves -- in the
+  held column and in the generated one alike, or the two disagree.
+- **A LIVE REBUILD REPLACES THE WHOLE WORLD, AND EVERYTHING HOLDING A PIECE OF
+  IT MUST FOLLOW** (`flushTerrain`, `worldBlocks`, `Player.shape`). Moving a
+  terrain knob makes a new map, shape, generator and worker pool. The delta hook
+  was never re-attached, so **every chunk built after any terrain knob moved
+  carried no edit at all** until the page was reloaded; and `worldBlocks` and
+  `Player` held the shape and the generator by value, so the player collided
+  with the planet as it was before the knob -- `maxElevation` moves the crust
+  top, so every layer boundary moves with it. **Take a replaceable thing as a
+  function, never as a value.**
+- **A CHUNK KEY OUTGROWS A 32-BIT SHIFT** (`ChunkPeaks`). A key is
+  `face x 4^chunkLevel + path`, which passes `2^31` at chunk level 14 -- depth
+  17 with 8-cell chunks, a world the panel accepts. `>>` is signed, so **12 of
+  the 20 faces folded to a negative index**, which reads `undefined` straight
+  past the non-null assertion and compares false against everything: the
+  triangle is credited with no ground and culled. Convert a key between levels
+  by **division**, the way `coarseChunkKey` already did.
+- **HOLDING A CELL AND OWNING IT ARE DIFFERENT QUESTIONS**
+  (`ChunkColumnSampler`, `owns`, `plans/v0.4.1.md` I-14). A border cell sits in
+  two or three triangles; the border rule awards it to the lowest key and that
+  decides **only who draws it**. Every chunk containing the cell generates and
+  patches a slot for it, which is the whole reason a chunk can mesh its rim
+  without fetching a neighbour. `applyDeltas` writes by **containment**
+  (`offsetIn`); the sampler decided whether to read that slot back by
+  **ownership** (`splitPath`, the same descent `owns` uses) -- and the two
+  disagree on exactly the chunk's own border. Measured at depth 8 cut at chunk
+  level 4: a chunk holds **153** cells, the sampler served **120** from the
+  chunk's own array and regenerated **33** from the seed, and those 33 are
+  precisely the cells it holds but does not own. **The whole rim.** An edit was
+  written into the array and read back out of the generator three lines away.
+  Both symptoms follow: the neighbour's **apron** drew the seed's cap, so a
+  broken block kept a lid floating a centimetre over the hole; and a rim cell
+  asking its ring whether to draw a wall was told solid where the player had
+  dug, so the view ran through the planet -- worsening with depth, because the
+  stale column also gives a stale **band** and the layer walk stopped above the
+  bottom of the shaft. **The invariant that makes a stale cap impossible rather
+  than merely unobserved is that two chunks both holding a cell serve the
+  identical column for it after an edit.** `owns` is right and must stay: which
+  chunk *draws* a shared cell is still the border rule, or two would draw the
+  same cap.
 - **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
   THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
   the ring around them whether to draw a side face and its apron draws that ring

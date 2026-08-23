@@ -31,35 +31,41 @@ export interface WorldBlocks {
  * Collision, floating and whether the camera is under water are the same
  * question, so all three come through here.
  *
- * The store is taken as a function rather than a value because it is replaced
- * when a saved world finishes loading, and a probe holding the empty one would
- * answer from the seed forever.
+ * **Everything is taken as a function, because everything here is replaced.**
+ * The store is replaced when a saved world finishes loading; the generator and
+ * the shape are replaced whenever a terrain knob rebuilds the world. A probe
+ * holding any of them by value keeps answering for a world that no longer
+ * exists -- the empty store answers from the seed forever, and the old
+ * generator answers for the planet before the knob moved.
  */
 export function worldBlocks(
-	terrain: TerrainGenerator,
-	shape: WorldShape,
+	terrain: () => TerrainGenerator,
+	shape: () => WorldShape,
 	edits: () => DeltaStore,
 ): WorldBlocks {
 	const blockAt = (cell: CellRef): BlockType => {
-		if (cell.layer < 0 || cell.layer >= shape.crustDepth)
+		const world = shape();
+		if (cell.layer < 0 || cell.layer >= world.crustDepth)
 			return BlockType.AIR;
 		// The floor of the world, before anything a record could say about it.
-		if (cell.layer === shape.crustDepth - 1) return BlockType.BEDROCK;
+		if (cell.layer === world.crustDepth - 1) return BlockType.BEDROCK;
 		const changed = edits().read(cell);
 		if (changed !== undefined) return typeOf(changed) as BlockType;
-		const column = terrain.columnAt(cell.face, cell.i, cell.j);
-		return terrain.blockAt(column, cell.layer);
+		const ground = terrain();
+		const column = ground.columnAt(cell.face, cell.i, cell.j);
+		return ground.blockAt(column, cell.layer);
 	};
 
 	return {
 		blockAt,
 		probe: {
 			blockAtPosition(position): BlockType {
+				const world = shape();
 				const at = new Vec3(position.x, position.y, position.z);
-				const cell = positionToCell(at, shape.n);
+				const cell = positionToCell(at, world.n);
 				return blockAt({
 					...cell,
-					layer: shape.layerOfRadius(at.length()),
+					layer: world.layerOfRadius(at.length()),
 				});
 			},
 		},

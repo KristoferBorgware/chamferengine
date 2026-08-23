@@ -24,6 +24,8 @@ export { cellSlot } from "./cellSlot.js";
 export { slotCell } from "./slotCell.js";
 export type { HoldingChunk } from "./chunksHolding.js";
 export { chunksHolding } from "./chunksHolding.js";
+export { MESHER_REACH } from "./MESHER_REACH.js";
+export { ringAround } from "./ringAround.js";
 export { chunksReading } from "./chunksReading.js";
 export { chunkReaders } from "./chunkReaders.js";
 export { offsetIn } from "./offsetIn.js";

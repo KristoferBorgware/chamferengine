@@ -17,10 +17,11 @@ import {
 	chunksHolding,
 	cellSlot,
 	chunksReading,
+	offsetIn,
 	packBlockState,
 } from "chamfer/edit";
 import { buildChunkMesh } from "chamfer/mesh";
-import { joinPath, neighbour } from "chamfer/addressing";
+import { joinPath, neighbour, rank } from "chamfer/addressing";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 
 const DEPTH = 8;
@@ -246,6 +247,8 @@ describe("an edit at a chunk border", () => {
 			).toEqual([...held.blocks]);
 			expect(generated.first).toBe(held.first);
 			expect(generated.last).toBe(held.last);
+			expect(generated.groundRadius).toBe(held.groundRadius);
+			expect(generated.waterRadius).toBe(held.waterRadius);
 		}
 	});
 
@@ -278,7 +281,12 @@ describe("an edit seen from a distance", () => {
 		return {
 			at,
 			terrain,
-			chunk: generateChunk(terrain, at, level, LAYERS),
+			// **The coarse crust depth, not the finest.** Layers double in
+			// height with the cells, so `atLod` halves the count -- and
+			// `MeshWorkerCore` passes that. Handing the finest count models a
+			// chunk the worker never builds, and every layer-bounded branch on
+			// the coarse path then runs at a value production never sees.
+			chunk: generateChunk(terrain, at, level, shrunk.crustDepth),
 			level,
 		};
 	}
@@ -358,5 +366,220 @@ describe("an edit seen from a distance", () => {
 		expect(coarseChunkKey(address.key, CHUNK_LEVEL, CHUNK_LEVEL)).toBe(
 			address.key,
 		);
+	});
+});
+
+// **A chunk HOLDS every cell of its triangle and OWNS only some of them, and
+// the two are different questions.** The border rule awards a shared cell to
+// the lowest chunk key, and that decides only who draws it. A chunk generates
+// and patches a slot for every cell it holds -- that is the whole reason it can
+// mesh its rim without fetching a neighbour.
+//
+// Asking the ownership question when serving column data made a chunk
+// regenerate its own rim from the seed while holding a patched slot for it, so
+// an edit on a seam was written into the array and then read back from the
+// generator. The neighbour's apron went on drawing the broken block's cap, and
+// its rim cells were told there was rock where the tunnel was.
+describe("a chunk's own rim", () => {
+	const address = new ChunkAddress(3, [1, 2, 0, 3]);
+
+	/** Every cell of this chunk's triangle, with its slot. */
+	function heldCells() {
+		const out: { i: number; j: number; slot: number }[] = [];
+		for (let q = 0; q <= M; q++)
+			for (let r = 0; q + r <= M; r++) {
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				out.push({
+					i,
+					j,
+					slot: rank(q, r, M),
+				});
+			}
+		return out;
+	}
+
+	// The invariant the whole scheme rests on, stated over every cell rather
+	// than one: what the sampler serves for a cell this chunk holds IS this
+	// chunk's own column for it. Anything else means the mesher decides from
+	// data the chunk itself does not hold.
+	it("is served from the chunk's own array, not regenerated", () => {
+		const store = new DeltaStore(header());
+		const chunk = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+
+		// Dig three layers out of every cell of the triangle, rim included.
+		let dug = 0;
+		for (const cell of heldCells()) {
+			const ground = chunk.columnOf(cell.slot).first;
+			if (ground < 0 || ground >= LAYERS - 4) continue;
+			for (let down = 0; down < 3; down++)
+				store.write(
+					{ face: 3, i: cell.i, j: cell.j, layer: ground + down },
+					packBlockState(BlockType.AIR),
+				);
+			dug++;
+		}
+		expect(dug).toBeGreaterThan(100);
+
+		const patched = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+		const outside = applyDeltas(
+			patched,
+			store.rowsFor(address.key),
+			DEPTH,
+			0,
+		);
+		const sampler = new ChunkColumnSampler(patched, terrain, outside);
+
+		for (const cell of heldCells()) {
+			const held = patched.columnOf(cell.slot);
+			const served = sampler.columnAt(3, cell.i, cell.j);
+			expect(
+				[...served.blocks],
+				`cell ${cell.i}:${cell.j} (slot ${cell.slot})`,
+			).toEqual([...held.blocks]);
+			expect(served.first).toBe(held.first);
+			expect(served.last).toBe(held.last);
+			// The radii too: the mesher snaps the surface cap to them, so two
+			// chunks disagreeing about them draw one hillside at two heights.
+			expect(served.groundRadius).toBe(held.groundRadius);
+			expect(served.waterRadius).toBe(held.waterRadius);
+		}
+	});
+
+	// The symptom, directly: breaking a block this chunk holds but a
+	// neighbour owns has to change what this chunk draws, because its apron
+	// is what draws that cell's cap.
+	it("stops drawing the cap of a broken block it holds but does not own", () => {
+		const store = new DeltaStore(header());
+		const chunk = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+
+		// A rim cell: held by this chunk, owned by another.
+		const [i, j] = joinPath(address.path, 0, 3, DEPTH);
+		const owner = cellSlot(
+			{ face: 3, i, j, layer: 0 },
+			DEPTH,
+			CHUNK_LEVEL,
+		).chunkKey;
+		expect(owner).not.toBe(address.key);
+		expect(
+			chunksHolding({ face: 3, i, j, layer: 0 }, DEPTH, CHUNK_LEVEL).map(
+				(h) => h.chunkKey,
+			),
+		).toContain(address.key);
+
+		const ground = chunk.columnOf(rank(0, 3, M)).first;
+		expect(ground).toBeGreaterThan(0);
+		expect(ground).toBeLessThan(LAYERS - 2);
+
+		const before = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ apron: true },
+		);
+
+		store.write(
+			{ face: 3, i, j, layer: ground },
+			packBlockState(BlockType.AIR),
+		);
+		const dug = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+		const outside = applyDeltas(dug, store.rowsFor(address.key), DEPTH, 0);
+		const after = buildChunkMesh(
+			dug,
+			new ChunkColumnSampler(dug, terrain, outside),
+			shape,
+			map.seed,
+			{ apron: true },
+		);
+
+		expect([...after.opaque.vertices]).not.toEqual([
+			...before.opaque.vertices,
+		]);
+	});
+});
+
+// **THE SEAM INVARIANT.** Two chunks that both hold a cell each generate it
+// themselves rather than fetching it, which is only sound while the two agree.
+// Terrain is a pure function of the address so the seed halves always agree;
+// a player's changes are not, so the agreement has to survive them. Where it
+// does not, the two sides of a seam disagree about whether there is a block
+// there -- one draws a cap the other has removed, and one emits a wall the
+// other does not, which is a hole to see the sky through.
+describe("two chunks sharing a cell", () => {
+	const address = new ChunkAddress(3, [1, 2, 0, 3]);
+
+	it("serve the same column for it, before and after an edit", () => {
+		const store = new DeltaStore(header());
+		const mine = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+
+		// Every cell of this chunk's rim, and every other chunk holding it.
+		const shared: { i: number; j: number; others: number[] }[] = [];
+		for (let q = 0; q <= M; q++)
+			for (let r = 0; q + r <= M; r++) {
+				if (q > 0 && r > 0 && q + r < M) continue;
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				const others = chunksHolding(
+					{ face: 3, i, j, layer: 0 },
+					DEPTH,
+					CHUNK_LEVEL,
+				)
+					.map((h) => h.chunkKey)
+					.filter((key) => key !== address.key);
+				if (others.length > 0) shared.push({ i, j, others });
+			}
+		expect(shared.length).toBeGreaterThan(20);
+
+		// Dig every one of them out, three layers deep.
+		for (const cell of shared) {
+			const at = cellSlot(
+				{ face: 3, i: cell.i, j: cell.j, layer: 0 },
+				DEPTH,
+				CHUNK_LEVEL,
+			);
+			const ground = mine.columnOf(
+				rank(
+					offsetIn(address.path, cell.i, cell.j, DEPTH)!.q,
+					offsetIn(address.path, cell.i, cell.j, DEPTH)!.r,
+					M,
+				),
+			).first;
+			if (ground < 0 || ground >= LAYERS - 4) continue;
+			void at;
+			for (let down = 0; down < 3; down++)
+				store.write(
+					{ face: 3, i: cell.i, j: cell.j, layer: ground + down },
+					packBlockState(BlockType.AIR),
+				);
+		}
+
+		/** One chunk's sampler, built the way the worker builds it. */
+		const samplerFor = (key: number) => {
+			const at = ChunkAddress.fromKey(key, CHUNK_LEVEL);
+			const chunk = generateChunk(terrain, at, CHUNK_LEVEL, LAYERS);
+			const outside = applyDeltas(chunk, store.rowsFor(key), DEPTH, 0);
+			return new ChunkColumnSampler(chunk, terrain, outside);
+		};
+
+		const ours = samplerFor(address.key);
+		let compared = 0;
+		for (const cell of shared)
+			for (const other of cell.others) {
+				const theirs = samplerFor(other);
+				const a = ours.columnAt(3, cell.i, cell.j);
+				const b = theirs.columnAt(3, cell.i, cell.j);
+				expect(
+					[...b.blocks],
+					`chunk ${other} disagrees about ${cell.i}:${cell.j}`,
+				).toEqual([...a.blocks]);
+				expect(b.first).toBe(a.first);
+				expect(b.last).toBe(a.last);
+				expect(
+					b.groundRadius,
+					`chunk ${other} snaps ${cell.i}:${cell.j} elsewhere`,
+				).toBe(a.groundRadius);
+				expect(b.waterRadius).toBe(a.waterRadius);
+				compared++;
+			}
+		expect(compared).toBeGreaterThan(20);
 	});
 });
