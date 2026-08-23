@@ -10,6 +10,77 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-071 — A chunk meshes 54 cells it can never be told about, so an edit at a chunk border leaves a wall standing and a hole to see through
+
+**Kind:** bug
+**Milestone:** 0.1.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-23, from the owner digging into a mountain and getting
+triangle-shaped ridges along every chunk edge
+**Where:** `packages/engine/src/generation/chunk/ChunkColumnSampler.ts`,
+`packages/engine/src/edit/chunksHolding.ts`,
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** A chunk meshes more cells than it holds. Its rim cells ask the
+ring around them whether to draw a side face, and the apron draws that ring
+outright — and those cells sit one step past the rim, which puts them **strictly
+inside the neighbouring chunk's triangle**. `ChunkColumnSampler` generates them
+on demand from the terrain function, which is a pure function of the seed and
+knows nothing about any change a player made.
+
+`chunksHolding` hands a change to every chunk whose triangle **contains** the
+cell. That is the right set for the delta store and the wrong set for the
+mesher, which reads a ring wider than its own triangle.
+
+> **[measured]** `tools/probe-seam-edit.ts`, at depth 8 cut at chunk level 4.
+> A chunk holds **153** slots and reads **54** more from one step past its rim.
+> Of those 54, a change is handed to it for **0**. The first of them belongs to
+> chunks 878 and 879; the chunk reading it is 867.
+
+Two symptoms, one cause, and they are the two the owner saw.
+
+**A wall left standing.** Break a block just across a chunk boundary and the
+neighbour's apron still draws the seed's cap there, a centimetre low. Mine out a
+region spanning several chunks and what is left is a one-cell ridge along every
+chunk edge — a triangle outline of ground nobody removed.
+
+**A hole to see through.** A rim cell decides whether to emit a side face by
+asking the column across the boundary. If a player dug that column away the rim
+cell still reads solid ground and emits **no** face, so the wall of the tunnel
+is missing and the far side of the planet shows through it. The mirror case is
+the same bug: place a block across the boundary and the rim cell reads air and
+emits a face that should not be there.
+
+**Why it matters.** It is not a corner case. **17%** of a chunk's slots sit on a
+border (`rank.js`), and the ring past the rim is a third as many cells again as
+the chunk holds. Digging is the second thing a player does, and a tunnel that
+cannot be dug through a chunk edge without breaking the picture is the whole
+feature. It is also the one class of artefact that does not heal: the geometry
+is wrong on both sides and stays wrong until something else forces a rebuild.
+
+**What would fix it.** The records have to reach the chunk, and then the sampler
+has to apply them.
+
+1. **Widen who is told.** A second set beside `chunksHolding` — every chunk
+   whose *mesher reads* the cell, which is every chunk holding any neighbour of
+   it. The store already walks the ring to find the holders, so this is the
+   candidate list it currently throws away.
+2. **Patch the sampler, not the chunk.** `applyDeltas` writes into
+   `chunk.blocks`, which has no slot for a cell outside the triangle. The
+   generated-column path in `ChunkColumnSampler` is where the same records
+   belong: build the column from the terrain, then write the records naming it.
+
+The alternative — holding the neighbouring chunks resident before meshing — is
+the one `ChunkColumnSampler` exists to avoid, and it should stay avoided.
+
+**Not to be confused with the LOD seam**, F-025, the cave mouth crossing a
+level join. That is two levels
+disagreeing about generated ground. This is one level disagreeing about ground a
+player changed, and it happens with every chunk at the same level.
+
+---
+
 ### F-070 — The ground pyramid stops two levels above the map, so the smallest chunks are over-credited
 
 **Kind:** limitation
