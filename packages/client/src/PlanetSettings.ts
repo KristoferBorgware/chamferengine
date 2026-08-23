@@ -560,6 +560,17 @@ export interface PlanetKnobs {
 
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
+
+	/**
+	 * How far a player can reach to break or place a block, in blocks.
+	 *
+	 * **In blocks, not metres**, so it means the same thing on a world built
+	 * of 1 m blocks and one built of 4 m blocks: how many blocks along the
+	 * line of sight the arm gets to. It is what the aiming walk is given as
+	 * its length, so the outline, the crosshair and the click all take it
+	 * together and none of them can disagree about where the arm stops.
+	 */
+	reach: number;
 }
 
 export const PLANET_DEFAULTS: PlanetKnobs = {
@@ -671,6 +682,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	exposure: 1,
 	eyeAdapts: 0.6,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
+	reach: 6,
 };
 
 /**
@@ -941,6 +953,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
+	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };
 
 /**
