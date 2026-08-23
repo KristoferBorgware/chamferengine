@@ -783,6 +783,11 @@ const GROUPS: Group[] = [
 				label: "Walk speed",
 				digits: 1,
 			},
+			{
+				key: "reach",
+				label: "Reach",
+				digits: 0,
+			},
 		],
 	},
 ];

@@ -34,6 +34,7 @@ import {
 import type { RayWorld } from "chamfer/addressing";
 import { cellCorners, positionToCell, rayWalk } from "chamfer/addressing";
 import { Player } from "chamfer/player";
+import { worldBlocks } from "./worldBlocks.js";
 import {
 	geographicOf,
 	landmarks,
@@ -163,9 +164,6 @@ const WORKERS = Math.max(
 
 /** How many finished meshes are uploaded in one frame. */
 const UPLOAD_PER_FRAME = 2;
-
-/** How far a player can reach to break or place a block, in blocks. */
-const REACH = 6;
 
 /** How often the culling volumes are gathered again, in milliseconds. */
 const BOUNDS_INTERVAL = 250;
@@ -1164,16 +1162,10 @@ async function main(): Promise<void> {
 	});
 
 	/** What is at a cell: a change where somebody made one, the terrain otherwise. */
-	function blockAt(cell: CellRef): BlockType {
-		if (cell.layer < 0 || cell.layer >= shape.crustDepth)
-			return BlockType.AIR;
-		// The floor of the world, before anything a record could say about it.
-		if (cell.layer === shape.crustDepth - 1) return BlockType.BEDROCK;
-		const changed = edits.read(cell);
-		if (changed !== undefined) return typeOf(changed) as BlockType;
-		const column = terrain.columnAt(cell.face, cell.i, cell.j);
-		return terrain.blockAt(column, cell.layer);
-	}
+	// One answer to "what is here", for the aiming walk, the outline, a click
+	// and the player's own collision alike. The store is passed as a function
+	// because it is replaced when a saved world finishes loading.
+	const { blockAt, probe } = worldBlocks(terrain, shape, () => edits);
 
 	/**
 	 * What a ray walk asks the world about.
@@ -1210,7 +1202,14 @@ async function main(): Promise<void> {
 		// passes four metres over the player's head and needs twelve to come
 		// down to ground an arm reaches in six. The crosshair is moved to where
 		// this ray lands instead of being pinned to the middle of the screen.
-		const walked = rayWalk(from, look, rayWorld, REACH * shape.blockSize);
+		// Read from the live draft rather than the settings the page loaded
+		// with, so the row moves the arm as it is dragged.
+		const walked = rayWalk(
+			from,
+			look,
+			rayWorld,
+			current.knobs.reach * shape.blockSize,
+		);
 		if (!walked) return null;
 		const above = { ...walked.cell, layer: walked.cell.layer - 1 };
 		const free =
@@ -1640,9 +1639,10 @@ async function main(): Promise<void> {
 	 * Where each pointer went down and which button it was, so a press that
 	 * did not move can be told from a drag.
 	 *
-	 * Dragging looks around, so every press is a candidate for both. A press
-	 * that travels further than this many pixels was a look and never becomes
-	 * a click.
+	 * This is the **unlocked** path: with the pointer captured a click is
+	 * unambiguous, and here every press is a candidate for both a look and a
+	 * click. A press that travels further than this many pixels was a look and
+	 * never becomes a click.
 	 */
 	const CLICK_SLOP = 5;
 	const pressed = new Map<
@@ -1650,8 +1650,94 @@ async function main(): Promise<void> {
 		{ x: number; y: number; button: number; moved: number }
 	>();
 
+	/**
+	 * Whether the mouse is captured by the canvas.
+	 *
+	 * **Free look, rather than a button held down.** Looking around is what a
+	 * player does constantly and clicking is what they do occasionally, so the
+	 * one that costs nothing should be the constant one. Holding a button to
+	 * turn also makes every press ambiguous -- the same gesture starts a look
+	 * and breaks a block, and only how far it travelled tells them apart --
+	 * which is a rule the player has to know and a block broken by accident
+	 * whenever a small drag falls under the threshold.
+	 *
+	 * Captured, the two are different actions: the mouse turns the view and a
+	 * press is a press. It also takes the cursor off the canvas, which is the
+	 * other half of the same thing -- an arrow sitting over the world points at
+	 * a cell the crosshair is not aiming at.
+	 *
+	 * **Touch never captures**, so a finger keeps the drag path below, and so
+	 * does a browser that refuses. `Escape` gives the cursor back, which is how
+	 * the parameter panel is reached.
+	 */
+	const looking = (): boolean => document.pointerLockElement === canvas;
+
+	/**
+	 * When the last request was refused, and how long the drag stands in.
+	 *
+	 * Refusal is usually **temporary**: a browser will not re-capture within
+	 * about a second of letting go, so a player who presses `Escape` and clicks
+	 * straight back in is refused once. Latching that permanently would leave
+	 * them dragging for the rest of the session, so it lapses and the next
+	 * click tries again.
+	 */
+	const DENIED_FOR = 3000;
+	let deniedAt = -Infinity;
+
+	/**
+	 * Ask for the mouse, and note it if the answer is no.
+	 *
+	 * **Refusal arrives two ways and both have to be caught.** The older shape
+	 * fires `pointerlockerror` on the document; the newer one returns a promise
+	 * and rejects it, which is silent unless it is caught -- and left uncaught
+	 * it is an unhandled rejection in the console *and* a fallback that never
+	 * arms, so a browser that refuses gets a canvas where clicking does nothing
+	 * at all: no look, and no block broken either.
+	 */
+	const askForMouse = (): void => {
+		const asked = canvas.requestPointerLock() as unknown;
+		if (asked instanceof Promise)
+			asked.catch(() => {
+				deniedAt = performance.now();
+			});
+	};
+
+	document.addEventListener("pointerlockerror", () => {
+		deniedAt = performance.now();
+	});
+	document.addEventListener("pointerlockchange", () => {
+		if (looking()) {
+			deniedAt = -Infinity;
+			// Whatever was mid-gesture belongs to the unlocked path and would
+			// otherwise turn the view once more on the next move.
+			down.clear();
+			pressed.clear();
+		}
+		// Captured, the browser takes the cursor off the canvas itself. Let go
+		// and it comes back, which is what makes the parameter panel reachable
+		// and says which mode this is without a word of text.
+	});
+
 	canvas.addEventListener("pointerdown", (e) => {
 		if (e.pointerType === "touch") touch.reveal();
+		// The first click captures the mouse and does nothing else, which is
+		// what every game with free look does: a click that both grabs the
+		// pointer and breaks a block breaks one every time the player comes
+		// back from the panel.
+		if (
+			e.pointerType === "mouse" &&
+			!looking() &&
+			performance.now() - deniedAt > DENIED_FOR
+		) {
+			askForMouse();
+			return;
+		}
+		if (looking()) {
+			// No slop test: the pointer is captured, so a press is a press.
+			if (e.button === 0) pick();
+			else if (e.button === 2) place();
+			return;
+		}
 		canvas.setPointerCapture(e.pointerId);
 		down.set(e.pointerId, { x: e.clientX, y: e.clientY });
 		pressed.set(e.pointerId, {
@@ -1669,6 +1755,15 @@ async function main(): Promise<void> {
 	// The right button places, so the menu it would otherwise open never does.
 	canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	canvas.addEventListener("pointermove", (e) => {
+		if (looking()) {
+			// Captured, so the pointer has no position on the page and the
+			// movement is all there is. Same angle a pixel as the drag, so
+			// nothing about how far a turn feels changes with the mode.
+			const perPixel = Math.PI / (2 * viewHeight());
+			swing -= e.movementX * perPixel;
+			tilt -= e.movementY * perPixel;
+			return;
+		}
 		const press = pressed.get(e.pointerId);
 		if (press)
 			press.moved += Math.hypot(e.clientX - press.x, e.clientY - press.y);
@@ -1801,7 +1896,7 @@ async function main(): Promise<void> {
 				flying,
 			},
 			seconds,
-			terrain,
+			probe,
 		);
 		timer.leave("player", performance.now());
 		swing = 0;
@@ -1939,7 +2034,9 @@ async function main(): Promise<void> {
 		// it on the cell the click acts on, and leaves it in the middle in
 		// first person, where the camera is the eye.
 		{
-			const end = player.eye.add(look.scale(REACH * shape.blockSize));
+			const end = player.eye.add(
+				look.scale(current.knobs.reach * shape.blockSize),
+			);
 			const m = projection.multiply(view).elements;
 			let cx = 0;
 			let cy = 0;
@@ -2028,7 +2125,7 @@ async function main(): Promise<void> {
 		// Under the surface is a radius now, not a block: the sea holds none.
 		const submerged =
 			from.length() < shape.seaSurfaceRadius ||
-			terrain.blockAtPosition(from) === BlockType.WATER;
+			probe.blockAtPosition(from) === BlockType.WATER;
 		// Each half of the answer is switched on its own: the walk reaches the
 		// horizon and knows only generated ground, the maps reach a few
 		// hundred metres and hold anything that drew itself.
@@ -2167,7 +2264,7 @@ async function main(): Promise<void> {
 				`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
 				`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
 					(building.size > 0 ? ` · ${building.size} building` : ""),
-				`${clock(day)} · ${flying ? "flying" : player.swimming(terrain) ? "swimming" : "walking"}` +
+				`${clock(day)} · ${flying ? "flying" : player.swimming(probe) ? "swimming" : "walking"}` +
 					(submerged ? " · under water" : ""),
 				// What a click would do, and how much of this world is a
 				// player's rather than the seed's.
@@ -2187,7 +2284,9 @@ async function main(): Promise<void> {
 						]
 					: []),
 				budget(timer, renderer),
-				"WASD move · drag look · E eye level · F fly · T next pentagon · G go to",
+				looking()
+					? "WASD move · mouse look · click break · right click place · Esc cursor · E eye level · F fly · T next pentagon · G go to"
+					: "WASD move · click the world to look around · E eye level · F fly · T next pentagon · G go to",
 			]);
 		}
 		timer.end(performance.now());
