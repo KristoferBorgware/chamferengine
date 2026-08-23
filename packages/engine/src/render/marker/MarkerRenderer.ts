@@ -84,7 +84,7 @@ export class MarkerRenderer implements PassLayer {
 				targets: [{ format }],
 			},
 			depthStencil: {
-				format: "depth24plus" as const,
+				format: "depth32float" as const,
 				depthWriteEnabled: true,
 				depthCompare: "less" as const,
 			},

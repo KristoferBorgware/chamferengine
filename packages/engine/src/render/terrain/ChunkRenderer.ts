@@ -6,8 +6,10 @@ import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
 import { GpuClock } from "../gpu/GpuClock.js";
 import type { CloudCaster } from "../light/CloudShadow.js";
+import type { PlanetAtmosphere } from "../../sky/ATMOSPHERE.js";
 import type { ShadowCaster } from "../light/ShadowCaster.js";
 import { CascadeShadow } from "../light/CascadeShadow.js";
+import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
 import { SunShadow } from "../light/SunShadow.js";
@@ -109,6 +111,20 @@ export class ChunkRenderer implements ShadowCaster {
 	readonly sunViews: SunViews;
 
 	/**
+	 * The air, marched over the finished frame.
+	 *
+	 * It owns the image the world is drawn into and the image that comes out
+	 * of it, because it is the pass that stands between them. **The depth is
+	 * why it is a pass and not a layer**: a layer draws inside the frame's own
+	 * render pass, where the depth buffer is an attachment and cannot also be
+	 * read, and the air has to know how far away every pixel's surface is.
+	 */
+	readonly atmosphere: AtmospherePass;
+
+	/** The planet's own air, or null for a world drawn without any. */
+	air: PlanetAtmosphere | null = null;
+
+	/**
 	 * Where the frame is exposed and rolled off on its way to the canvas.
 	 *
 	 * Everything is drawn into a floating-point image first, so the sun, the
@@ -139,6 +155,7 @@ export class ChunkRenderer implements ShadowCaster {
 		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
 		this.shadow = new SunShadow(ctx);
+		this.atmosphere = new AtmospherePass(ctx);
 		this.tone = new TonePass(ctx);
 
 		const uniformEntry: GPUBindGroupLayoutEntry = {
@@ -198,7 +215,7 @@ export class ChunkRenderer implements ShadowCaster {
 				targets: [{ format }],
 			},
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				depthWriteEnabled: true,
 				depthCompare: "less",
 			},
@@ -230,7 +247,7 @@ export class ChunkRenderer implements ShadowCaster {
 			// Reads depth and does not write it, so a water surface behind
 			// another is not hidden by it.
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				depthWriteEnabled: false,
 				depthCompare: "less",
 			},
@@ -357,7 +374,10 @@ export class ChunkRenderer implements ShadowCaster {
 			...(timing ? { timestampWrites: timing } : {}),
 			colorAttachments: [
 				{
-					view: this.tone.target(canvas.width, canvas.height),
+					view: this.atmosphere.sceneTarget(
+						canvas.width,
+						canvas.height,
+					),
 					clearValue: {
 						r: this.sky[0],
 						g: this.sky[1],
@@ -428,10 +448,22 @@ export class ChunkRenderer implements ShadowCaster {
 
 		pass.end();
 		this.clock.resolve(encoder);
+		// The air stands between the world and the tone curve: it reads the
+		// depth the pass above just wrote, so every pixel knows how far away
+		// its surface is and how much air is in front of it.
+		this.atmosphere.resolve(
+			encoder,
+			depth.createView(),
+			frame.eye,
+			frame.sun,
+			frame.viewProj.inverse(),
+			this.air,
+		);
 		this.tone.resolve(
 			encoder,
 			context.getCurrentTexture().createView(),
 			frame.exposure,
+			this.atmosphere.view,
 		);
 		device.queue.submit([encoder.finish()]);
 		this.clock.read();
@@ -481,8 +513,13 @@ export class ChunkRenderer implements ShadowCaster {
 		this.depth?.destroy();
 		this.depth = device.createTexture({
 			size: { width: canvas.width, height: canvas.height },
-			format: "depth24plus",
-			usage: GPUTextureUsage.RENDER_ATTACHMENT,
+			format: "depth32float",
+			// Read as a texture as well as written as an attachment, because
+			// the air marched over the frame is bounded by how far away each
+			// pixel's surface turned out to be.
+			usage:
+				GPUTextureUsage.RENDER_ATTACHMENT |
+				GPUTextureUsage.TEXTURE_BINDING,
 		});
 		return this.depth;
 	}

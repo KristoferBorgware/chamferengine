@@ -26,8 +26,8 @@ const KNEE = 0.85;
  * something a screen can show: multiply by an exposure, bend what is over the
  * knee toward 1, and write it out.
  *
- * The scene image is the size of the canvas and read one texel per pixel, so
- * there is no sampler and nothing is filtered.
+ * The image is the size of the canvas and read one texel per pixel, so there
+ * is no sampler and nothing is filtered.
  */
 export class TonePass {
 	private readonly ctx: GpuContext;
@@ -36,9 +36,8 @@ export class TonePass {
 	private readonly uniform: GPUBuffer;
 	private readonly data = new Float32Array(TONE_BYTES / 4);
 
-	private scene: GPUTexture | null = null;
-	private view: GPUTextureView | null = null;
 	private bindGroup: GPUBindGroup | null = null;
+	private bound: GPUTextureView | null = null;
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
@@ -76,42 +75,26 @@ export class TonePass {
 		});
 	}
 
-	/** The image everything is drawn into, matched to the canvas. */
-	target(width: number, height: number): GPUTextureView {
-		if (
-			!this.scene ||
-			this.scene.width !== width ||
-			this.scene.height !== height
-		) {
-			this.scene?.destroy();
-			this.scene = this.ctx.device.createTexture({
-				size: { width, height },
-				// Half floats: a value over white has to survive being written
-				// down, and a byte per channel has nowhere to put one.
-				format: "rgba16float",
-				usage:
-					GPUTextureUsage.RENDER_ATTACHMENT |
-					GPUTextureUsage.TEXTURE_BINDING,
-			});
-			this.view = this.scene.createView();
-			this.bindGroup = this.ctx.device.createBindGroup({
-				layout: this.layout,
-				entries: [
-					{ binding: 0, resource: { buffer: this.uniform } },
-					{ binding: 1, resource: this.view },
-				],
-			});
-		}
-		return this.view!;
-	}
-
-	/** Draw the scene onto the canvas, exposed and rolled off. */
+	/** Draw an image onto the canvas, exposed and rolled off. */
 	resolve(
 		encoder: GPUCommandEncoder,
 		canvas: GPUTextureView,
 		exposure: number,
+		source: GPUTextureView,
 	): void {
-		if (!this.bindGroup) return;
+		// The image is handed in rather than owned, because what reaches the
+		// tone curve is the frame **after** the air in front of it, and the
+		// pass that marches the air is the one that owns both images.
+		if (this.bound !== source) {
+			this.bound = source;
+			this.bindGroup = this.ctx.device.createBindGroup({
+				layout: this.layout,
+				entries: [
+					{ binding: 0, resource: { buffer: this.uniform } },
+					{ binding: 1, resource: source },
+				],
+			});
+		}
 		this.data[0] = Math.max(0, exposure);
 		this.data[1] = KNEE;
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
@@ -133,7 +116,6 @@ export class TonePass {
 	}
 
 	destroy(): void {
-		this.scene?.destroy();
 		this.uniform.destroy();
 	}
 }

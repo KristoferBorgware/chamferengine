@@ -232,7 +232,7 @@ export class BillboardClouds implements PassLayer, CloudCaster {
 			},
 			primitive: { topology: "triangle-list", cullMode: "none" },
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				depthWriteEnabled: false,
 				depthCompare: "less",
 			},

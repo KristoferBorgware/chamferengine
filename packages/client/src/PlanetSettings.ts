@@ -252,6 +252,16 @@ export interface PlanetKnobs {
 	/** How thick the air reads straight up. */
 	zenithDepth: number;
 
+	/**
+	 * What the sunlight falling on the air is worth.
+	 *
+	 * The march gives how much of the light reaching each point is turned
+	 * toward the eye, which is a fraction rather than a brightness: nothing in
+	 * it knows how bright the sun is. This is that missing number, and it is
+	 * what decides whether the daytime sky reads as blue or as dusk.
+	 */
+	skyBrightness: number;
+
 	/** Whether the cloud decks are drawn at all. */
 	cloudsDrawn: boolean;
 
@@ -586,6 +596,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	crustMetres: 1232,
 	atmosphereTop: 2050,
 	zenithDepth: 0.272,
+	skyBrightness: 45,
 	cloudsDrawn: true,
 	lowDeck: 3000,
 	highDeck: 6000,
@@ -805,6 +816,13 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		low: 0.02,
 		high: 0.8,
 		step: 0.002,
+		rebuilds: false,
+		unit: "",
+	},
+	skyBrightness: {
+		low: 0,
+		high: 400,
+		step: 2,
 		rebuilds: false,
 		unit: "",
 	},

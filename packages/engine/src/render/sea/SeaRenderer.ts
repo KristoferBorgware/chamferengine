@@ -270,7 +270,7 @@ export class SeaRenderer implements PassLayer {
 			// Both sides: the surface is drawn from under it as well as over.
 			primitive: { topology: "triangle-list", cullMode: "none" },
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				// **The sea writes depth.** It is drawn before the clouds,
 				// and without this a cloud on the far side of the water --
 				// under the horizon, or behind the planet -- draws straight
@@ -289,7 +289,7 @@ export class SeaRenderer implements PassLayer {
 			},
 			primitive: { topology: "line-list" },
 			depthStencil: {
-				format: "depth24plus",
+				format: "depth32float",
 				depthWriteEnabled: false,
 				depthCompare: "less",
 			},

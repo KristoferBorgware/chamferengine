@@ -55,14 +55,10 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(
-			ctx,
-			{
-				direction: new Vec3(0, 1, 0),
-				angularRadius: 0.01,
-			},
-			AIR,
-		);
+		const sky = new SkyRenderer(ctx, {
+			direction: new Vec3(0, 1, 0),
+			angularRadius: 0.01,
+		});
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		renderer.layers = [sky];
 		renderer.upload(mesh(1));
@@ -80,14 +76,10 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(
-			ctx,
-			{
-				direction: new Vec3(0, 1, 0),
-				angularRadius: 0.01,
-			},
-			AIR,
-		);
+		const sky = new SkyRenderer(ctx, {
+			direction: new Vec3(0, 1, 0),
+			angularRadius: 0.01,
+		});
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		renderer.layers = [sky];
 		renderer.upload(mesh(1));
@@ -99,14 +91,16 @@ describe("what a frame encodes", () => {
 			.map((c) => c.what);
 		// The sky is the unindexed one: three vertices covering the screen,
 		// drawn before any of the indexed geometry that stands in front of it.
-		// The last is the tone pass, three vertices over the screen again,
-		// after everything the frame put in front of the sky.
+		// The last two are full-screen again and in this order -- the air
+		// marched over the finished frame, then the tone curve over that --
+		// because the air has to be in the picture before it is exposed.
 		expect(kinds[0]).toBe("draw");
+		expect(kinds[kinds.length - 2]).toBe("draw");
 		expect(kinds[kinds.length - 1]).toBe("draw");
-		expect(kinds.slice(1, -1).every((kind) => kind === "drawIndexed")).toBe(
+		expect(kinds.slice(1, -2).every((kind) => kind === "drawIndexed")).toBe(
 			true,
 		);
-		expect(kinds.length).toBeGreaterThan(2);
+		expect(kinds.length).toBeGreaterThan(3);
 	});
 
 	it("skips a chunk the camera is not looking at", () => {
@@ -125,8 +119,8 @@ describe("what a frame encodes", () => {
 		expect(renderer.count).toBe(2);
 		expect(renderer.drawn).toBe(1);
 		// One opaque and one water buffer, from the one chunk in view, and
-		// the tone pass over the screen after them.
-		expect(gpu.draws().length).toBe(3);
+		// the air and the tone curve over the screen after them.
+		expect(gpu.draws().length).toBe(4);
 	});
 
 	it("culls against a frozen matrix while drawing with the live one", () => {
@@ -160,22 +154,19 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(
-			ctx,
-			{
-				direction: new Vec3(0, 1, 0),
-				angularRadius: 0.01,
-			},
-			AIR,
-		);
+		const sky = new SkyRenderer(ctx, {
+			direction: new Vec3(0, 1, 0),
+			angularRadius: 0.01,
+		});
 		sky.inverseViewProj = VIEW_PROJ.inverse();
 		renderer.layers = [sky];
 
 		renderer.render(FRAME);
 
-		// The sky, and the tone pass that puts it on the canvas.
+		// The sky, the air marched over it, and the tone pass that puts the
+		// two on the canvas.
 		const draws = gpu.draws();
-		expect(draws.length).toBe(2);
+		expect(draws.length).toBe(3);
 		expect(draws[0]!.bound.has(0)).toBe(true);
 	});
 });

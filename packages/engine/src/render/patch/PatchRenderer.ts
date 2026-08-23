@@ -137,7 +137,7 @@ export class PatchRenderer {
 				// what the ground does.
 				primitive: { topology, cullMode: "none" },
 				depthStencil: {
-					format: "depth24plus",
+					format: "depth32float",
 					depthWriteEnabled: true,
 					depthCompare: "less",
 				},
@@ -199,7 +199,7 @@ export class PatchRenderer {
 			this.depth?.destroy();
 			this.depth = device.createTexture({
 				size: [canvas.width, canvas.height],
-				format: "depth24plus",
+				format: "depth32float",
 				usage: GPUTextureUsage.RENDER_ATTACHMENT,
 			});
 		}

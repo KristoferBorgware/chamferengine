@@ -306,31 +306,106 @@ bright at the horizon because the grazing sightline crosses **329 km** of air, f
 any case. There is no long sightline to accumulate color along, whatever the air
 is made of.
 
-### So the model runs on a planet that does not exist
+### So the air is built for the planet, rather than borrowed from Earth
 
-The recommendation is specific rather than a shrug. **Run whichever scattering
-model you like on a fictional Earth-sized atmosphere.** Preetham, Hosek–Wilkie and
-Bruneton are all parameterised by planet radius and scale height — feed them
-Earth's, not this planet's. **Only the sun direction comes from the real world**,
-and [doc 16](16-lighting.md) already has it as a world vector.
+There are two ways to answer this and only one of them survives contact with the
+rest of the world. The first is to **run the model on an Earth-sized atmosphere**
+and take only the sun direction from the real planet, which is what this page
+recommended for a long time. It gives an Earth sky, and it gives it at an
+Earth's radius, so the air stops relating to the ground under it: the shell has
+no edge you could ever reach, and from outside there is nothing wrapping the
+planet, because the planet is not the one the air belongs to.
 
-That composes with the skybox rather than fighting it. The gradient depends on the
-angle between the view direction and the sun, and **both of those are real** — so
-sunsets move when the player walks, on the same 2.12 h clock as everything else in
-this document, over an atmosphere that is entirely invented.
+The second is to keep the planet's own geometry and **build the air to a wanted
+zenith depth**, which is what `planetAtmosphere` does. The height the air reaches
+is a knob, the scale height is that height over Earth's own top-to-scale-height
+ratio of `7.5`, and every scattering coefficient is then multiplied by one common
+factor until the reading straight up is what was asked for. Earth's spectral
+shape survives that multiply untouched — blue still scatters `5.7×` more than red
+— so thinner air gives a **paler** sky rather than a differently coloured one.
 
-*(One thing that does survive: the sky is blue and the sunset red because of the
-`λ⁻⁴` law — zenith `τ` of `0.241` for blue against `0.041` for red. That ratio is a
-property of light and air, not of any planet, so it needs no fiction.)*
+That keeps the two things the fiction was needed for and gives up nothing else.
+**Air reaches** is metres above the surface and means what it says; **Depth
+overhead** is the reading straight up, and Earth's own is `0.241`.
+
+### The air is marched over the frame, not drawn behind it
+
+**A sky pass and an atmosphere are not the same object**, and the difference is
+which pixels each one is allowed to touch. A sky pass fills what nothing else
+covers. So air drawn in one exists only where the world does not: there is no
+haze over a distant mountain, because that mountain was drawn *over* the sky; and
+from outside there is no shell around the planet at all, because every pixel of
+the planet was drawn over the sky rather than through it.
+
+So the scattering runs **after the world is drawn**, over the finished frame,
+reading the depth that frame left behind. Every pixel then knows how far away its
+own surface is, and the march is bounded by the nearest of three things: where
+the ray leaves the air, where it meets the planet, and where the depth buffer
+says a surface already is. One model answers three questions that used to need
+three:
+
+- **Looking up from the ground** it is the sky, and the march is the air above
+  the camera.
+- **Looking at a mountain twenty kilometres off** it is the haze, because the
+  colour behind the air is multiplied by the same optical depth the march
+  accumulated and the scattered light is added on top of it.
+- **Looking at the planet from outside** it is the shell around it, because the
+  ray enters the air, crosses it, and stops on the ground the depth buffer found.
+
+**The depth is why this is a pass and not a layer.** A layer draws inside the frame's own render pass, where the depth
+buffer is an attachment and cannot also be read. The whole frame's depth is
+readable only once that pass has ended.
+
+### Single scattering, two species, and both legs of the path
+
+Rayleigh is the molecular term, three coefficients so blue scatters more than
+red, with the phase function `3/(16π)(1+cos²θ)`. Mie is the haze, one
+coefficient and a strong forward bias — Cornette–Shanks at `g = 0.76`, which is
+the glare around the sun. Each thins at its own rate, so a sunset reddens while
+the zenith stays blue.
+
+Both legs of the light path are paid for, and each buys something visible.
+
+The **sun leg** is marched from every sample toward the sun, and it is what
+reddens a low sun: at an 8° sun the light reaching a sample near the ground has
+crossed about seven scale heights of air, which leaves `0.72` of the red and
+`0.15` of the blue. It is also what draws the terminator, and by a ray test
+rather than a fade — a sample whose ray to the sun passes through the planet is
+not lit at all.
+
+The **view leg** is accumulated as the march runs and does two jobs: it dims the
+light scattered toward the eye from the far end of the ray, and it is the number
+the surface colour behind the air is multiplied by. The second of those is the
+haze, and it costs nothing beyond one exponential: the march had already
+added the depth up for its own use.
+
+**What is missing is worth naming.** There is no multiple scattering, so a deep
+twilight is darker than a real one; no ozone band, so there is no late purple;
+and the sun's own brightness is not modelled, which is why **Sunlight on the
+air** exists as a knob. The march gives the *fraction* of light turned toward the
+eye, and nothing in it knows how bright the source is.
+
+*(One thing that needs no fiction at any of this: the sky is blue and the sunset
+red because of the `λ⁻⁴` law — zenith `τ` of `0.241` for blue against `0.041` for
+red. That ratio is a property of light and air, not of any planet.)*
 
 ---
 
 ## Still open
 
-- **Sky color was filed under art direction** with no measurement constraining
-  it. Optical depth is *(a property of air)* × *(a path length)*, and only the
-  path shrinks, so correctly scaled air gives a zenith `τ` of `6.4e-5` against
-  Earth's `0.241` — **3,748× too thin**, and a black daytime sky.
+- **~~Sky color was filed under art direction~~** — closed. Optical depth is
+  *(a property of air)* × *(a path length)*, and only the path shrinks, so
+  correctly scaled air gives a zenith `τ` of `6.4e-5` against Earth's `0.241`
+  — **3,748× too thin**, and a black daytime sky. The air is built to a wanted
+  zenith depth on the planet's own geometry instead of being borrowed from
+  Earth's.
+
+- **The cloud decks stand outside the air.** The low one is `3,000 m` over a
+  crust top on a planet `6,801 m` in radius, which puts it at `1.6×` the
+  radius, and the air reaches `1.3×`. From the ground nothing shows it; from
+  outside the clouds are a second shell wider than the atmosphere, scattered
+  across black sky rather than lying on the planet. Either number can move and
+  the choice is not made here.
 
 - **A cloud was described as a cell at a bigger radius.** A cloud has no cell ID,
   no chunk and no layer — `layer` counts downward from the crust top, so there is

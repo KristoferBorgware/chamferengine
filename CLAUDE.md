@@ -1260,6 +1260,38 @@ Violating any of these breaks the design. They are not tunable.
   blob marked *not authoritative*; (3) **ship the rejection message in V1 unused**,
   because a client that assumes every edit succeeds has to be rewritten when V2
   starts refusing them.
+- **AN ATMOSPHERE IS MARCHED OVER THE FRAME; A SKY IS DRAWN BEHIND IT**
+  (`AtmospherePass`, `ATMOSPHERE_SHADER`, doc 32). A sky pass fills the pixels
+  nothing else covers, so air drawn in one exists **only where the world does
+  not**: no haze over a distant mountain, because the mountain was drawn over
+  the sky, and no shell around the planet from outside, because every pixel of
+  the planet was drawn over the sky rather than through it. The scattering runs
+  **after the world is drawn**, reads the depth that pass left, and is bounded
+  by the nearest of three things -- where the ray leaves the air, where it meets
+  the planet, and where the depth buffer says a surface already is. One model
+  then answers three questions: the sky overhead, the **haze** on far ground
+  (the colour behind the air multiplied by the optical depth the march already
+  accumulated, so it costs one exponential), and the shell seen from space.
+  **The depth is why it is a pass and not a layer** -- inside the frame's own
+  pass the depth buffer is an attachment and cannot also be read, so the frame
+  depth is `depth32float` with `TEXTURE_BINDING` and the pass sits between the
+  world and the tone curve, owning the image on each side of itself. Single
+  scattering, Rayleigh plus Cornette-Shanks Mie at `g = 0.76`, 16 view steps and
+  4 sun steps. **Both legs are paid for and each buys something**: the sun leg
+  reddens a low sun (at 8° the light has crossed ~7 scale heights, leaving 0.72
+  of the red against 0.15 of the blue) and draws the terminator as a **ray test
+  rather than a fade**; the view leg dims the far end of its own march and is
+  the haze. **Nothing in the march knows how bright the sun is** -- it gives a
+  fraction of light turned toward the eye -- so **Sunlight on the air** is a
+  knob, and at the shipped 45 the daytime sky reads `85, 188, 248` where 22 read
+  `24, 52, 110` and 200 washes to `212, 250, 253`. No multiple scattering, no
+  ozone band, no sun disc.
+- **THE STARS CANNOT BE HIDDEN BY THE AIR IN FRONT OF THEM** (`SKY_SHADER`).
+  The air dims them by its own optical depth, which overhead is about a tenth;
+  what hides a star by day is a sky ten thousand times brighter than it, and
+  that is a dynamic range this picture does not carry. The day takes them out,
+  and the air is left to take out the rest near the horizon where its depth is
+  enough to do it.
 - **The sky is not decoration on a planet this small** (`sky.js`, doc 32). Walking
   turns your own `up` by `s/R`: **3.37°** per 100 m and a full **360°** over the
   10,681 m circumference, in **2.12 h** — so **the skybox is fixed in WORLD space,

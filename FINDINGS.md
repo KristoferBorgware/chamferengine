@@ -10,6 +10,36 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-067 — The cloud decks stand outside the atmosphere
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-23, while building the atmosphere and looking at the planet
+from outside it
+**Where:** `packages/client/src/PlanetSettings.ts`
+
+**What happens.** The low cloud deck sits `3,000 m` over the crust top, which on
+a planet `6,801 m` in radius puts it at a radius of `10,901 m` — **1.6 times the
+planet's own**. The high deck is at `2.0` times. The air reaches `1.3` times. So
+both decks are outside the atmosphere entirely.
+
+**Why it matters.** Nothing shows it from the ground, and it is the whole
+picture from outside: the clouds are a second shell half again as wide as the
+planet, so they read as hexagons scattered across black space rather than as
+weather lying on a world. Lowering the decks to `900` and `1,700 m` puts the low
+one inside the air and the high one just past it, and the same view then shows
+cloud hugging the planet. It also decides something real about the world's
+scale — a cloud four kilometres up on a planet you can walk around in two hours
+is a cloud in orbit.
+
+**What would fix it.** Either number can move and neither choice is made here.
+Lowering the decks costs nothing but changes how big a cloud looks from the
+ground, since a nearer puff of the same size covers more sky; raising **Air
+reaches** past `7,100 m` would enclose both decks but makes the shell taller
+than the planet is wide.
+
 ### F-066 — A steep slope is a staircase with no antialiasing, and it crawls
 
 **Kind:** idea

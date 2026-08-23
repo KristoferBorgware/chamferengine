@@ -424,17 +424,19 @@ async function main(): Promise<void> {
 	// renderer is already given shows through as one flat sky.
 	const sky = PLAIN
 		? null
-		: new SkyRenderer(
-				ctx,
-				{
-					direction: new Vec3(0.2, 0.55, 0.81).normalize(),
-					angularRadius: MOON_ANGULAR_RADIUS,
-				},
-				planetAtmosphere(
-					RADIUS,
-					settings.knobs.atmosphereTop,
-					settings.knobs.zenithDepth,
-				),
+		: new SkyRenderer(ctx, {
+				direction: new Vec3(0.2, 0.55, 0.81).normalize(),
+				angularRadius: MOON_ANGULAR_RADIUS,
+			});
+	// The air is the renderer's, not the sky's: it is marched over the whole
+	// finished frame rather than drawn behind it, so it belongs to the pass
+	// that owns the frame.
+	renderer.air = PLAIN
+		? null
+		: planetAtmosphere(
+				RADIUS,
+				settings.knobs.atmosphereTop,
+				settings.knobs.zenithDepth,
 			);
 	// The frozen camera is drawn as an object, after the sky and the clouds so
 	// it is never behind either of them. It has nothing to draw until the view
@@ -1250,8 +1252,8 @@ async function main(): Promise<void> {
 					cloudLayers(live),
 				);
 		}
-		if (sky)
-			sky.atmosphere = planetAtmosphere(
+		if (!PLAIN)
+			renderer.air = planetAtmosphere(
 				RADIUS,
 				live.knobs.atmosphereTop,
 				live.knobs.zenithDepth,
@@ -1626,6 +1628,9 @@ async function main(): Promise<void> {
 		// generated ground and a cloud is neither ground nor generated into
 		// it. Its own darkness, because a cloud is translucent and a hill is
 		// not, so the two would not read the same at one setting.
+		renderer.atmosphere.brightness = PLAIN
+			? 0
+			: current.knobs.skyBrightness;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		renderer.cloudShadow.setLook(
 			PLAIN || !current.knobs.cloudShadows
