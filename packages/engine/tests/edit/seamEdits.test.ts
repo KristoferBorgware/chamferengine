@@ -7,6 +7,7 @@ import {
 	TerrainGenerator,
 	applyDeltas,
 	buildCoarseMap,
+	coarseChunkKey,
 	generateChunk,
 	seedFromString,
 } from "chamfer/generation";
@@ -256,5 +257,77 @@ describe("an edit at a chunk border", () => {
 		store.write({ face: address.face, i, j, layer }, packBlockState(0));
 		const outsideBlocks = applyDeltas(chunk, store.rowsFor(key), DEPTH, 0);
 		expect(outsideBlocks.size).toBe(0);
+	});
+});
+
+// **The path a real edit takes to a chunk drawn coarse**, which had no test at
+// all and did not work: the store is filed at the finest chunk level, the same
+// ground has a different key at every level, and a coarse chunk asking with its
+// own key got nothing back. So every change vanished the moment its chunk
+// dropped a level -- a distance rather than an event, which reads as edits
+// evaporating as you walk away.
+describe("an edit seen from a distance", () => {
+	const address = new ChunkAddress(3, [1, 2, 0, 3]);
+
+	/** A coarse chunk over the same ground, built the way the worker builds it. */
+	function coarse(lod: number) {
+		const shrunk = shape.atLod(lod);
+		const level = CHUNK_LEVEL - lod;
+		const at = new ChunkAddress(address.face, address.path.slice(0, level));
+		return {
+			at,
+			chunk: generateChunk(
+				new TerrainGenerator(map.seed, shrunk, map),
+				at,
+				level,
+				LAYERS,
+			),
+			level,
+		};
+	}
+
+	it("reaches a chunk drawn one, two and three levels coarser", () => {
+		const store = new DeltaStore(header());
+		const [i, j] = joinPath(address.path, 4, 4, DEPTH);
+		const cell = { face: address.face, i, j, layer: 0 };
+		const fine = generateChunk(terrain, address, CHUNK_LEVEL, LAYERS);
+		const ground = fine.columnOf(
+			cellSlot(cell, DEPTH, CHUNK_LEVEL).slot,
+		).first;
+		expect(ground).toBeGreaterThan(2);
+		store.write(
+			{ ...cell, layer: ground - 1 },
+			packBlockState(BlockType.SNOW),
+		);
+
+		for (const lod of [1, 2, 3]) {
+			const { at, chunk, level } = coarse(lod);
+			const rows = store.rowsUnder(at.key, level);
+			expect(rows.length, `no rows at lod ${lod}`).toBeGreaterThan(0);
+
+			const before = [...chunk.blocks];
+			applyDeltas(chunk, rows, DEPTH, lod);
+			const moved = [...chunk.blocks].filter(
+				(block, n) => block !== before[n],
+			).length;
+			expect(moved, `nothing landed at lod ${lod}`).toBeGreaterThan(0);
+			expect([...chunk.blocks]).toContain(BlockType.SNOW);
+		}
+	});
+
+	it("names the same triangle at every level", () => {
+		// The conversion the invalidation depends on: drop a change and the
+		// chunk actually showing that ground has to be dropped too, whatever
+		// level the selection picked for it.
+		for (const lod of [1, 2, 3]) {
+			const { at, level } = coarse(lod);
+			expect(coarseChunkKey(address.key, CHUNK_LEVEL, level)).toBe(
+				at.key,
+			);
+		}
+		// And asking for a level no coarser than its own is the key itself.
+		expect(coarseChunkKey(address.key, CHUNK_LEVEL, CHUNK_LEVEL)).toBe(
+			address.key,
+		);
 	});
 });

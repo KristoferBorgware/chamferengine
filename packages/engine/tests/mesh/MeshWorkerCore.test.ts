@@ -4,11 +4,20 @@ import {
 	ChunkAddress,
 	ChunkColumnSampler,
 	TerrainGenerator,
+	BlockType,
 	buildCoarseMap,
+	coarseChunkKey,
 	generateChunk,
 	seedFromString,
 	selectionId,
 } from "chamfer/generation";
+import {
+	DeltaStore,
+	STORE_VERSION,
+	cellSlot,
+	packBlockState,
+} from "chamfer/edit";
+import { joinPath } from "chamfer/addressing";
 import { InlineMeshSource, MeshWorkerCore, buildChunkMesh } from "chamfer/mesh";
 import { WorldShape } from "chamfer/world";
 
@@ -202,5 +211,77 @@ describe("InlineMeshSource", () => {
 		expect(mesh.key).toBe(selectionId(CHUNK_LEVEL, 300));
 		expect(mesh.opaque.triangleCount).toBeGreaterThan(0);
 		source.dispose();
+	});
+});
+
+// The last link of the path an edit takes, through the job the pool actually
+// posts. The store is filed at the finest chunk level and a coarse chunk has a
+// different key at its own, so the rows have to be asked for by key *and*
+// level, and the slots read back against the level they were filed at.
+describe("a change carried into a chunk drawn coarse", () => {
+	const FINEST = CHUNK_LEVEL;
+	const address = new ChunkAddress(3, [1, 2, 0, 3]);
+
+	function store() {
+		const at = new DeltaStore({
+			version: STORE_VERSION,
+			subdivisionDepth: DEPTH,
+			chunkLevel: FINEST,
+			registry: ["chamfer:air", "chamfer:stone"],
+		});
+		const terrain = new TerrainGenerator(SEED, shape, map);
+		const chunk = generateChunk(terrain, address, FINEST, LAYERS);
+
+		// **A patch of a different material, not a hole.** A coarse cell holds
+		// `4 ^ lod` fine cells and reads as air only when every change inside
+		// it was a break, so a hole small enough to close up at distance is
+		// the intended behaviour rather than a lost edit -- what has to
+		// survive to every level is a placed block. Replacing the surface
+		// rather than building on it, because this chunk's ground reaches the
+		// crust top and there is no sky over it to build in.
+		let found: { q: number; r: number; ground: number } | null = null;
+		for (let q = 1; q < chunk.m - 4 && !found; q++)
+			for (let r = 1; q + r < chunk.m - 4 && !found; r++) {
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				const ground = chunk.columnOf(
+					cellSlot({ face: 3, i, j, layer: 0 }, DEPTH, FINEST).slot,
+				).first;
+				if (ground >= 0 && ground < LAYERS - 4)
+					found = { q, r, ground };
+			}
+		expect(found, "no column with ground in it").not.toBeNull();
+
+		const { q, r, ground } = found!;
+		for (let along = 0; along < 4; along++)
+			for (let down = 0; down < 3; down++) {
+				const [x, y] = joinPath(address.path, q + along, r, DEPTH);
+				at.write(
+					{ face: 3, i: x, j: y, layer: ground + down },
+					packBlockState(BlockType.SNOW),
+				);
+			}
+		return at;
+	}
+
+	it("is drawn at every level a selection can pick for it", () => {
+		const edits = store();
+		const core = new MeshWorkerCore(setup());
+		for (const lod of [0, 1, 2, 3]) {
+			const chunkLevel = FINEST - lod;
+			const key = coarseChunkKey(address.key, FINEST, chunkLevel);
+			const rows = edits.rowsUnder(key, chunkLevel).map((row) => ({
+				chunkKey: row.chunkKey,
+				...row.deltas.pack(),
+			}));
+			expect(rows.length, `no rows at lod ${lod}`).toBeGreaterThan(0);
+
+			const job = { kind: "chunk", id: 1, key, chunkLevel, lod } as const;
+			const plain = core.run(job);
+			const changed = core.run({ ...job, id: 2, deltas: rows });
+			expect(
+				[...changed.opaque.vertices],
+				`the same geometry at lod ${lod}`,
+			).not.toEqual([...plain.opaque.vertices]);
+		}
 	});
 });

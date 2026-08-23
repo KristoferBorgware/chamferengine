@@ -12,6 +12,7 @@ import {
 	addressesOverlap,
 	buildCoarseMap,
 	chunkCenter,
+	coarseChunkKey,
 	flatCoarseMap,
 	horizonAngle,
 	isBreakable,
@@ -1253,9 +1254,19 @@ async function main(): Promise<void> {
 	function change(cell: CellRef, block: BlockType): void {
 		const owner = cellSlot(cell, DEPTH, CHUNK_LEVEL).chunkKey;
 		for (const key of edits.write(cell, packBlockState(block))) {
-			const id = selectionId(CHUNK_LEVEL, key);
-			drawn.delete(id);
-			building.delete(id);
+			// **At every level, not just the finest.** The chunk showing this
+			// ground is whichever level the selection picked for it, and its
+			// key is a different number at each -- so dropping the finest id
+			// alone leaves a coarse chunk drawing the ground as it was, which
+			// reads as the change appearing only once you walk close enough.
+			for (let level = CHUNK_LEVEL; level >= 0; level--) {
+				const id = selectionId(
+					level,
+					coarseChunkKey(key, CHUNK_LEVEL, level),
+				);
+				drawn.delete(id);
+				building.delete(id);
+			}
 			// Every chunk that reads the cell, not just the one that stores
 			// it: a chunk's apron draws the ring past its own rim, so a shaft
 			// dug just across the boundary is geometry this chunk puts on the
@@ -1307,10 +1318,14 @@ async function main(): Promise<void> {
 	}
 
 	// The pool asks for a chunk's changes as each job leaves, so a chunk asked
-	// for again after a click carries the click.
+	// for again after a click carries the click. **By key and level**: the same
+	// ground has a different key at every chunk level and the store is filed at
+	// the finest, so a coarse chunk asking with its own key alone gets nothing
+	// and the change disappears as soon as the player is far enough away for
+	// its chunk to drop a level.
 	const attachDeltas = (): void => {
-		source.deltas = (key) =>
-			edits.rowsFor(key).map((row) => ({
+		source.deltas = (key, chunkLevel) =>
+			edits.rowsUnder(key, chunkLevel).map((row) => ({
 				chunkKey: row.chunkKey,
 				...row.deltas.pack(),
 			}));

@@ -437,6 +437,27 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- **A CHUNK KEY MEANS A DIFFERENT TRIANGLE AT EVERY LEVEL** (`rowsUnder`,
+  `coarseChunkKey`, `plans/v0.4.1.md` I-12). A key is
+  `face x 4^chunkLevel + path`, and the delta store is filed at **one** level --
+  the finest -- so anything holding chunks at more than one level at once must
+  **convert rather than compare**. The mesh pool asked the store for a chunk's
+  records with that chunk's own key: right at full detail, and at every coarser
+  level a key naming some other triangle, which returned **0 rows at lod 1, 2
+  and 3**. So a change was drawn while its chunk was finest and vanished the
+  moment the selection dropped it a level -- a **distance**, not an event, which
+  reads as edits evaporating as you walk away. Two faults hid behind it: a slot
+  is a rank inside a triangle whose side the chunk level sets, so a coarse chunk
+  must decode against `chunk.chunkLevel + lod` (**the two always sum to the
+  finest**) and not its own; and an edit must drop `selectionId` at **every**
+  level, or the chunk actually on screen is never rebuilt. **A coarse triangle
+  contains exactly the fine ones whose path begins with its own**, so gathering
+  its rows is a filter over what the store holds -- there may be a million fine
+  chunks under it and only ever as many rows as chunks somebody touched.
+  **A coarse chunk drops its chunk level as well as its depth**, which is what
+  keeps every chunk the same slot count while four become one; a test building
+  one with the finest level and a reduced depth is modelling a chunk that does
+  not exist, and that is what hid all three.
 - **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
   THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
   the ring around them whether to draw a side face and its apron draws that ring

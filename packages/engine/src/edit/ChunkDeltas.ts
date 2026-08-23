@@ -23,6 +23,15 @@ import { LAYER_BITS } from "../addressing/index.js";
  */
 const LAYER_MASK = (1 << LAYER_BITS) - 1;
 
+/**
+ * The widest slot a record can name.
+ *
+ * A word holds the slot above the layer, so what is left of 32 bits is what a
+ * chunk may be: 2,097,151 slots is a triangle 2,047 cells a side, against the
+ * 64 the panel offers.
+ */
+const SLOT_MAX = (2 ** (32 - LAYER_BITS) - 1) >>> 0;
+
 export class ChunkDeltas {
 	/** `slot << 11 | layer`, one entry per record. */
 	private where: Uint32Array;
@@ -48,9 +57,24 @@ export class ChunkDeltas {
 		return this.used * 6;
 	}
 
-	/** Set what a cell holds now. */
+	/**
+	 * Set what a cell holds now.
+	 *
+	 * **Out of range is refused rather than packed.** A record is a slot and a
+	 * layer shifted into one word, so a negative layer or a slot past the
+	 * field's width does not overflow into an error -- it lands on some other
+	 * cell, and the record is indistinguishable from a real one from then on.
+	 * A layer of `-1` packs as every bit set and reads back as slot 2,097,151
+	 * of layer 2,047, which is a cell no chunk has: silently corrupt on disk,
+	 * and thrown far away from whatever wrote it. This is a caller's mistake,
+	 * so it says so where it is made.
+	 */
 	set(slot: number, layer: number, state: BlockState): void {
-		const where = (slot << LAYER_BITS) | layer;
+		if (!Number.isInteger(slot) || slot < 0 || slot > SLOT_MAX)
+			throw new RangeError(`slot ${slot} is not a slot`);
+		if (!Number.isInteger(layer) || layer < 0 || layer > LAYER_MASK)
+			throw new RangeError(`layer ${layer} is not a layer`);
+		const where = slot * (LAYER_MASK + 1) + layer;
 		const already = this.at.get(where);
 		if (already !== undefined) {
 			this.what[already] = state;
