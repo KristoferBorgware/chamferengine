@@ -295,8 +295,7 @@ export class WorkerMeshSource implements MeshSource {
 			waiting.resolve({
 				key: id,
 				origin: new Vec3(...result.origin),
-				center: result.center,
-				radius: result.radius,
+				bound: result.bound,
 				opaque: result.opaque,
 				translucent: result.translucent,
 				tally: result.tally,

@@ -4,7 +4,6 @@ import type { ChunkRow } from "./ChunkRows.js";
 import type { StoreHeader } from "./StoreHeader.js";
 import { ChunkDeltas } from "./ChunkDeltas.js";
 import { cellSlot } from "./cellSlot.js";
-import { typeOf } from "./typeOf.js";
 import { chunksHolding } from "./chunksHolding.js";
 import { slotCell } from "./slotCell.js";
 
@@ -120,11 +119,11 @@ export class DeltaStore {
 			}
 			also.add(owner);
 		}
-		if (typeOf(state) !== 0) this.stretch(owner, cell.layer);
+		this.stretch(owner, cell.layer);
 		return keys;
 	}
 
-	/** Widen a chunk's reach to hold a placed block's layer. */
+	/** Widen a chunk's reach to hold a changed block's layer. */
 	private stretch(chunkKey: number, layer: number): void {
 		const already = this.reach.get(chunkKey);
 		if (!already) {
@@ -136,13 +135,20 @@ export class DeltaStore {
 	}
 
 	/**
-	 * The shallowest and deepest layer a placed block reaches in a chunk.
+	 * The shallowest and deepest layer a change reaches in a chunk.
 	 *
 	 * The chunk selection decides what to draw from how high the ground stands
 	 * under each triangle, and it reads that from a picture of the generated
-	 * world, which holds no placed block. This is what a chunk has that the
-	 * picture does not. Broken blocks are left out: taking ground away never
-	 * puts geometry outside the volume the ground already had.
+	 * world, which holds no change anybody made. This is what a chunk has that
+	 * the picture does not.
+	 *
+	 * **Breaking counts, and it is the half that reaches furthest.** A tower
+	 * pokes out of the top of the volume built for its hillside; a shaft goes
+	 * out of the bottom of it, and a shaft can be the whole crust deep where a
+	 * tower is a few blocks tall. The walls of a hole are geometry standing
+	 * where the picture of the generated world says there is solid ground, so
+	 * a volume that stops at the surface culls a player standing at the bottom
+	 * of their own mine and leaves them in an empty room.
 	 */
 	reachOf(chunkKey: number): { top: number; bottom: number } | undefined {
 		return this.reach.get(chunkKey);

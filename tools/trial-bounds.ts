@@ -1,13 +1,13 @@
 /**
- * How big the ball a chunk is culled by is, against the chunk it stands for,
+ * How big the volume a chunk is culled by is, against the chunk it stands for,
  * and where the extra comes from.
  *
- * The selection tests a ball built from the triangle's own tallest and lowest
- * ground, widened by a margin that grows with distance. A ball much larger than
- * the ground inside it refuses almost nothing, and there are three places the
- * extra can come from: the span from the triangle's floor to its peak, the
- * margin, and the pyramid's own cap, below which a small triangle is credited
- * with a much larger one's figures.
+ * The selection tests a box built from the triangle's own tallest and lowest
+ * ground. A volume much larger than the ground inside it refuses almost
+ * nothing, and there are three places the extra can come from: the span from
+ * the triangle's floor to its peak, the pyramid's own cap -- below which a
+ * small triangle is credited with a much larger one's figures -- and the shape
+ * itself, which is why this reports the ball the box replaced beside it.
  *
  *   npx vite-node tools/trial-bounds.ts -- "<query string>"
  */
@@ -18,6 +18,7 @@ import {
 	ChunkPeaks,
 	buildCoarseMap,
 	chunkCenter,
+	chunkWedge,
 	flatCoarseMap,
 	seedFromString,
 	selectChunks,
@@ -112,12 +113,19 @@ console.log(
 		`${wanted.length - onScreen.length} more).`,
 );
 
-// ---- 1. the ball against the chunk it stands for ---------------------------
-console.log("\n1. how big the ball is, against the chunk inside it");
+// ---- 1. the box against the chunk it stands for ----------------------------
+console.log("\n1. how big the volume is, against the chunk inside it");
 {
 	const rows = new Map<
 		number,
-		{ n: number; ratio: number; width: number; radius: number }
+		{
+			n: number;
+			ratio: number;
+			ball: number;
+			width: number;
+			deep: number;
+			across: number;
+		}
 	>();
 	for (const selection of wanted) {
 		if (!selection.bound) continue;
@@ -133,33 +141,45 @@ console.log("\n1. how big the ball is, against the chunk inside it");
 		const row = rows.get(selection.lod) ?? {
 			n: 0,
 			ratio: 0,
+			ball: 0,
 			width: 0,
-			radius: 0,
+			deep: 0,
+			across: 0,
 		};
+		// The box's own volume against the ball that would have to hold it,
+		// which is the whole reason the shape changed.
+		const halves = selection.bound.halves;
+		const boxVolume = 8 * halves[0] * halves[1] * halves[2];
+		const ballRadius = Math.hypot(...halves);
 		row.n++;
-		row.ratio += selection.bound.radius / (width / 2);
+		row.ratio += boxVolume / (width / 2) ** 3;
+		row.ball += ((4 / 3) * Math.PI * ballRadius ** 3) / boxVolume;
 		row.width += width;
-		row.radius += selection.bound.radius;
+		row.deep += 2 * halves[0];
+		row.across += 2 * halves[1];
 		rows.set(selection.lod, row);
 	}
-	console.log("   lod   chunks   chunk across   ball radius   ball ÷ half the chunk");
+	console.log(
+		"   lod   chunks   chunk across   box across   box deep   a ball round the box",
+	);
 	for (const lod of [...rows.keys()].sort((a, b) => a - b)) {
 		const row = rows.get(lod)!;
 		console.log(
 			`   ${String(lod).padStart(3)}   ${String(row.n).padStart(6)}` +
 				`   ${(row.width / row.n).toFixed(1).padStart(12)} m` +
-				`   ${(row.radius / row.n).toFixed(1).padStart(11)} m` +
-				`   ${(row.ratio / row.n).toFixed(2).padStart(21)}x`,
+				`   ${(row.across / row.n).toFixed(1).padStart(10)} m` +
+				`   ${(row.deep / row.n).toFixed(1).padStart(8)} m` +
+				`   ${(row.ball / row.n).toFixed(1).padStart(19)}x the volume`,
 		);
 	}
 	console.log("");
-	console.log("   A ball that fits the ground would be about 1x. Higher is volume");
-	console.log("   the chunk does not occupy, and every metre of it is ground the");
-	console.log("   cull cannot refuse.");
+	console.log("   The last column is what the shape is worth: how much bigger the");
+	console.log("   ball this box replaced would have been. It is small while the");
+	console.log("   ground is a thin cap and grows with every metre anybody digs.");
 }
 
-// ---- 2. what the radius is made of, and what the margin keeps --------------
-console.log("\n2. what the radius is made of");
+// ---- 2. what the volume is made of, and what the margin keeps --------------
+console.log("\n2. what the volume is made of");
 {
 	let n = 0;
 	let fromSpan = 0;
@@ -180,7 +200,7 @@ console.log("\n2. what the radius is made of");
 	}
 	const total = fromSpan + fromWidth;
 	const share = (part: number) => `${((100 * part) / total).toFixed(1)}%`;
-	console.log(`   averaged over ${n} chunks, and the ball holds both at once:`);
+	console.log(`   averaged over ${n} chunks, and the box holds both at once:`);
 	console.log(
 		`   the triangle's own width ...... ${(fromWidth / n).toFixed(1).padStart(8)} m   ${share(fromWidth)}`,
 	);
@@ -190,8 +210,8 @@ console.log("\n2. what the radius is made of");
 	console.log(`   the widest floor-to-peak span found: ${worstSpan.toFixed(0)} m`);
 	console.log("");
 	console.log("   The margin is not in this list. It is an angle on the view, so it");
-	console.log("   widens the four side planes and leaves every ball the size of the");
-	console.log("   ground inside it.");
+	console.log("   widens the four side planes and leaves every volume the size of");
+	console.log("   the world inside it.");
 }
 
 // ---- 3. what the cap on the pyramid costs ----------------------------------
@@ -233,6 +253,48 @@ console.log("\n3. what the pyramid's cap costs a chunk below it");
 			`   and the pyramid credits it with ${(credited / n).toFixed(1)} m -- ${(credited / own).toFixed(2)}x.`,
 		);
 	}
+}
+
+// ---- 4. what a shaft costs each shape --------------------------------------
+console.log("\n4. what one chunk dug to the bottom of the crust costs");
+{
+	const crust = shape.crustDepth * settings.knobs.blockSize;
+	const finest = wanted.filter((selection) => selection.lod === 0);
+	const one = finest[0] ?? wanted[0]!;
+	const extent = chunkCenter(
+		ChunkAddress.fromKey(one.key, one.chunkLevel),
+		DEPTH,
+		one.chunkLevel,
+	);
+	const spread = Math.acos(Math.min(1, extent.cosRadius));
+	const width = 2 * spread * RADIUS;
+	const peak = Math.max(0, peaks.peakOf(one.key, one.chunkLevel));
+	const trough = Math.min(0, peaks.troughOf(one.key, one.chunkLevel));
+	for (const [what, deep] of [
+		["ground only", 0],
+		["dug a quarter of the crust", crust / 4],
+		["dug to the bottom", crust],
+	] as [string, number][]) {
+		const high = RADIUS + peak;
+		const low = RADIUS + trough - deep;
+		const box = chunkWedge(extent, low, high);
+		const ball = Math.hypot(...box.halves);
+		const boxVolume = 8 * box.halves[0] * box.halves[1] * box.halves[2];
+		const ballVolume = (4 / 3) * Math.PI * ball ** 3;
+		console.log(
+			`   ${what.padEnd(27)} box ${(2 * box.halves[0]).toFixed(0).padStart(5)} m deep` +
+				` x ${(2 * box.halves[1]).toFixed(0).padStart(4)} m across` +
+				`   ball radius ${ball.toFixed(0).padStart(5)} m` +
+				`   ${(ballVolume / boxVolume).toFixed(0).padStart(4)}x the volume`,
+		);
+	}
+	console.log("");
+	console.log(
+		`   The chunk itself is ${width.toFixed(0)} m across and the crust is ` +
+			`${crust.toFixed(0)} m deep.`,
+	);
+	console.log("   A ball cannot be grown downward alone, so digging one shaft makes");
+	console.log("   the whole neighbourhood vote to be drawn. The box grows down only.");
 }
 
 /** A chunk-local offset as lattice coordinates at full depth. */

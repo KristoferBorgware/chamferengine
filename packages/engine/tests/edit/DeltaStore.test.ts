@@ -173,17 +173,28 @@ describe("DeltaStore", () => {
 		expect(loaded.read(onBorder)).toBe(packBlockState(3));
 	});
 
-	it("reports how far a placed block reaches, and ignores a broken one", () => {
+	it("reports how far a change reaches, breaking as well as placing", () => {
 		const store = new DeltaStore(header(11, 5));
 		const cell = { face: 1, i: 300, j: 200, layer: 40 };
-		const key = store.write(cell, packBlockState(0))[0]!;
-		expect(store.reachOf(key), "air is not ground").toBeUndefined();
+		const key = store.write(cell, packBlockState(2))[0]!;
+		expect(store.reachOf(key)).toEqual({ top: 40, bottom: 40 });
 
 		store.write({ ...cell, layer: 30 }, packBlockState(2));
 		store.write({ ...cell, layer: 44 }, packBlockState(2));
 		const reach = store.reachOf(key)!;
 		expect(reach.top).toBe(30);
 		expect(reach.bottom).toBe(44);
+	});
+
+	// A shaft goes out of the bottom of the volume built for the hillside the
+	// same way a tower goes out of the top of it, and it can be the whole crust
+	// deep. Leaving it out culled a player standing at the bottom of their own
+	// mine and left them in an empty room.
+	it("counts a hole dug below the ground, not just a block put on it", () => {
+		const store = new DeltaStore(header(11, 5));
+		const cell = { face: 1, i: 300, j: 200, layer: 500 };
+		const key = store.write(cell, packBlockState(0))[0]!;
+		expect(store.reachOf(key)).toEqual({ top: 500, bottom: 500 });
 	});
 });
 

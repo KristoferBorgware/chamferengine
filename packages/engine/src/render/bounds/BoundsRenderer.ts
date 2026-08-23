@@ -1,4 +1,4 @@
-import type { BoundsBall } from "./BoundsBall.js";
+import type { BoundsBox } from "./BoundsBox.js";
 import type { Frame } from "../Frame.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
@@ -7,29 +7,29 @@ import { MARKER_STRIDE } from "../marker/markerGeometry.js";
 import { boundsGeometry } from "./boundsGeometry.js";
 
 /**
- * Draws the volumes a chunk is tested against, as wire rings over the world.
+ * Draws the volumes a chunk is tested against, as wire boxes over the world.
  *
- * Two different balls decide whether a chunk reaches the screen -- the one the
+ * Two different boxes decide whether a chunk reaches the screen -- the one the
  * selection tests before asking for a chunk, and the one the renderer tests
  * before drawing a resident one -- and neither is visible from the camera that
  * decides them. A selection refusing too much looks from there exactly like one
  * that does not.
  *
- * **Depth-tested and not depth-writing.** Tested, so a ball behind a hill reads
+ * **Depth-tested and not depth-writing.** Tested, so a box behind a hill reads
  * as behind it; not writing, so a one-pixel ring leaves the depth buffer as the
  * terrain left it.
  *
- * Set {@link BoundsRenderer.balls} to draw and an empty list to stop.
+ * Set {@link BoundsRenderer.boxes} to draw and an empty list to stop.
  */
 export class BoundsRenderer implements PassLayer {
 	private readonly ctx: GpuContext;
 	private readonly pipeline: GPURenderPipeline;
 	private buffer: GPUBuffer | null = null;
 	private count = 0;
-	private drawn: readonly BoundsBall[] | null = null;
+	private drawn: readonly BoundsBox[] | null = null;
 
-	/** The balls to draw. */
-	balls: readonly BoundsBall[] = [];
+	/** The boxes to draw. */
+	boxes: readonly BoundsBox[] = [];
 
 	constructor(ctx: GpuContext) {
 		this.ctx = ctx;
@@ -84,11 +84,11 @@ export class BoundsRenderer implements PassLayer {
 	}
 
 	after(pass: GPURenderPassEncoder, frame: Frame): void {
-		if (this.balls.length === 0) {
+		if (this.boxes.length === 0) {
 			this.drawn = null;
 			return;
 		}
-		if (this.balls !== this.drawn) this.upload(this.balls);
+		if (this.boxes !== this.drawn) this.upload(this.boxes);
 		if (!this.buffer || this.count === 0) return;
 		pass.setPipeline(this.pipeline);
 		pass.setVertexBuffer(0, this.buffer);
@@ -102,8 +102,8 @@ export class BoundsRenderer implements PassLayer {
 		this.drawn = null;
 	}
 
-	private upload(balls: readonly BoundsBall[]): void {
-		const data = boundsGeometry(balls);
+	private upload(boxes: readonly BoundsBox[]): void {
+		const data = boundsGeometry(boxes);
 		if (!this.buffer || this.buffer.size < data.byteLength) {
 			this.buffer?.destroy();
 			this.buffer = this.ctx.device.createBuffer({
@@ -113,6 +113,6 @@ export class BoundsRenderer implements PassLayer {
 		}
 		this.ctx.device.queue.writeBuffer(this.buffer, 0, data);
 		this.count = data.length / MARKER_STRIDE;
-		this.drawn = balls;
+		this.drawn = boxes;
 	}
 }

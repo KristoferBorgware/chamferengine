@@ -437,6 +437,29 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- **A CHUNK IS A WEDGE INTO THE PLANET, AND A BALL CANNOT HOLD ONE**
+  (`Box`, `chunkWedge`, `Frustum.holdsBox`, `plans/v0.4.1.md`). Every volume a
+  chunk was tested against was a ball -- the selection's, the renderer's and the
+  shadow cascade's -- and a ball fits the *ground*, which is a thin cap. It does
+  not fit the *world* a chunk holds: a small triangle extruded straight down
+  through as much crust as anybody has dug. **A ball cannot be grown downward
+  alone.** Measured on the shipped world (`tools/trial-bounds.ts`), a 76 m chunk
+  over a 1,232 m crust: holding the ground it needs a box 44 m deep and a ball
+  round that is **3x** the volume; dug a quarter of the way down, **13x**; dug
+  to the bottom the ball is **640 m** in radius against a 76 m chunk, **148x**
+  the volume, every cubic metre voting to be drawn. A `Box` is a centre, three
+  perpendicular unit axes and a half-width along each, and a plane test is the
+  sphere test with the box's reach along the normal -- the sum of each
+  half-width scaled by how much its axis points that way -- standing in for the
+  radius. The mesh sink measures itself along **axes it is handed** rather than
+  the world's, three dot products a vertex against three comparisons. The
+  cascade's cylinder takes the same box: a **cosine** per axis for how far it
+  reaches along the light and a **sine** for how far it stands off the axis, so
+  a shaft under a low sun barely widens the second. **And breaking counts as
+  much as placing**: `DeltaStore` left broken blocks out of a chunk's reach on
+  the reasoning that taking ground away adds no geometry, and the walls of a
+  hole are geometry standing where the map says solid ground is -- which culled
+  a player at the bottom of their own mine and left them in an empty room.
 - **THE MAP IS THE TERRAIN, and there is no detail term** (doc 08, doc 21,
   `plans/v0.3.0.md`). `columnAt` reads a height off the coarse map and adds
   **nothing** — no second noise field, no multiplier. The map is stored in

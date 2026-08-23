@@ -1,54 +1,59 @@
-import type { BoundsBall } from "./BoundsBall.js";
+import type { BoundsBox } from "./BoundsBox.js";
 import { MARKER_STRIDE } from "../marker/markerGeometry.js";
 
-/** How many segments each ring is drawn with. */
-const SEGMENTS = 16;
-
 /**
- * A list of balls as three rings each, one on each pair of world axes.
+ * A list of boxes as their twelve edges each.
  *
- * Rings rather than a shaded sphere: what is being read is where a boundary
- * sits and how big it is against the ground inside it, and a solid would hide
- * the ground it is drawn around. Three is what says "ball" rather than "circle
- * facing the camera" from any direction.
+ * Edges rather than shaded faces: what is being read is where a boundary sits
+ * and how big it is against the ground inside it, and a solid would hide the
+ * ground it is drawn around.
  *
  * Three positions and three color components a vertex, matching the marker's
  * layout so both draw through one shader.
  */
 export function boundsGeometry(
-	balls: readonly BoundsBall[],
+	boxes: readonly BoundsBox[],
 ): Float32Array<ArrayBuffer> {
-	const out = new Float32Array(
-		balls.length * 3 * SEGMENTS * 2 * MARKER_STRIDE,
-	);
+	const out = new Float32Array(boxes.length * 12 * 2 * MARKER_STRIDE);
 	let at = 0;
 
-	const put = (x: number, y: number, z: number, c: BoundsBall): void => {
-		out[at] = c.center[0] + x;
-		out[at + 1] = c.center[1] + y;
-		out[at + 2] = c.center[2] + z;
-		out[at + 3] = c.color[0];
-		out[at + 4] = c.color[1];
-		out[at + 5] = c.color[2];
-		at += MARKER_STRIDE;
-	};
-
-	for (const ball of balls) {
-		const r = ball.radius;
-		for (let s = 0; s < SEGMENTS; s++) {
-			const a = (s / SEGMENTS) * Math.PI * 2;
-			const b = ((s + 1) / SEGMENTS) * Math.PI * 2;
-			const ca = Math.cos(a) * r;
-			const sa = Math.sin(a) * r;
-			const cb = Math.cos(b) * r;
-			const sb = Math.sin(b) * r;
-			put(ca, sa, 0, ball);
-			put(cb, sb, 0, ball);
-			put(ca, 0, sa, ball);
-			put(cb, 0, sb, ball);
-			put(0, ca, sa, ball);
-			put(0, cb, sb, ball);
+	// The eight corners, indexed by which way each axis is taken. An edge joins
+	// two corners differing in exactly one axis, which is what the pairs below
+	// spell out: four along each axis in turn.
+	const EDGES: [number, number][] = [];
+	for (let corner = 0; corner < 8; corner++)
+		for (let axis = 0; axis < 3; axis++) {
+			const other = corner | (1 << axis);
+			if (other !== corner) EDGES.push([corner, other]);
 		}
+
+	for (const box of boxes) {
+		const corner = (which: number): [number, number, number] => {
+			const p: [number, number, number] = [
+				box.center[0],
+				box.center[1],
+				box.center[2],
+			];
+			for (let n = 0; n < 3; n++) {
+				const axis = box.axes[n]!;
+				const reach =
+					(which & (1 << n)) === 0 ? -box.halves[n]! : box.halves[n]!;
+				p[0] += axis[0] * reach;
+				p[1] += axis[1] * reach;
+				p[2] += axis[2] * reach;
+			}
+			return p;
+		};
+		for (const [a, b] of EDGES)
+			for (const p of [corner(a), corner(b)]) {
+				out[at] = p[0];
+				out[at + 1] = p[1];
+				out[at + 2] = p[2];
+				out[at + 3] = box.color[0];
+				out[at + 4] = box.color[1];
+				out[at + 5] = box.color[2];
+				at += MARKER_STRIDE;
+			}
 	}
 	return out;
 }

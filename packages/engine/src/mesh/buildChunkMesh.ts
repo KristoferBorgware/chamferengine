@@ -3,8 +3,10 @@ import type { ChunkMesh } from "./ChunkMesh.js";
 import type { ColumnSampler } from "../generation/chunk/ColumnSampler.js";
 import type { MeshOptions } from "./MeshOptions.js";
 import type { WorldShape } from "../world/WorldShape.js";
+import type { Box } from "../math/Box.js";
 import { ArrayMeshSink } from "./ArrayMeshSink.js";
 import { Vec3 } from "../math/Vec3.js";
+import { boxAxes } from "../math/boxAxes.js";
 import { joinPath } from "../addressing/lattice/joinPath.js";
 import { latticePosition } from "../addressing/lattice/latticePosition.js";
 import { meshChunk } from "./meshChunk.js";
@@ -31,8 +33,13 @@ export function buildChunkMesh(
 		j,
 	).scale(shape.seaLevelRadius);
 
-	const opaque = new ArrayMeshSink();
-	const translucent = new ArrayMeshSink(256);
+	// Both sinks measure themselves along the chunk's own direction rather than
+	// the world's axes, so a shaft dug straight down is one tall thin box
+	// instead of a cube the length of the shaft on every side.
+	const up = origin.normalize();
+	const axes = boxAxes(up.x, up.y, up.z);
+	const opaque = new ArrayMeshSink(4096, axes);
+	const translucent = new ArrayMeshSink(256, axes);
 	const tally = meshChunk(
 		chunk,
 		sampler,
@@ -43,47 +50,57 @@ export function buildChunkMesh(
 		translucent,
 		options,
 	);
-	// The ball everything drawn falls inside, over both buffers, moved back
+	// The box everything drawn falls inside, over both buffers, moved back
 	// into world space from the origin the vertices are written against.
-	const solid = opaque.bounds();
-	const wet = translucent.bounds();
-	const ball = merge(solid, wet);
+	const box = merge(opaque.bounds(), translucent.bounds());
 	return {
 		key: chunk.address.key,
 		origin: new Vec3(origin.x, origin.y, origin.z),
-		center: [
-			ball.center[0] + origin.x,
-			ball.center[1] + origin.y,
-			ball.center[2] + origin.z,
-		],
-		radius: ball.radius,
+		bound: {
+			center: [
+				box.center[0] + origin.x,
+				box.center[1] + origin.y,
+				box.center[2] + origin.z,
+			],
+			axes: box.axes,
+			halves: box.halves,
+		},
 		opaque: opaque.build(tally.cells),
 		translucent: translucent.build(tally.cells),
 		tally,
 	};
 }
 
-/** One ball around two, or around whichever of them holds anything. */
-function merge(
-	a: { center: [number, number, number]; radius: number },
-	b: { center: [number, number, number]; radius: number },
-): { center: [number, number, number]; radius: number } {
-	if (a.radius === 0) return b;
-	if (b.radius === 0) return a;
-	const dx = b.center[0] - a.center[0];
-	const dy = b.center[1] - a.center[1];
-	const dz = b.center[2] - a.center[2];
-	const apart = Math.sqrt(dx * dx + dy * dy + dz * dz);
-	if (apart + b.radius <= a.radius) return a;
-	if (apart + a.radius <= b.radius) return b;
-	const radius = (apart + a.radius + b.radius) / 2;
-	const along = apart > 0 ? (radius - a.radius) / apart : 0;
-	return {
-		center: [
-			a.center[0] + dx * along,
-			a.center[1] + dy * along,
-			a.center[2] + dz * along,
-		],
-		radius,
-	};
+/**
+ * One box around two, or around whichever of them holds anything.
+ *
+ * Both are measured along the same axes, so this is three pairs of intervals
+ * merged and nothing turns.
+ */
+function merge(a: Box, b: Box): Box {
+	const empty = (box: Box): boolean =>
+		box.halves[0] === 0 && box.halves[1] === 0 && box.halves[2] === 0;
+	if (empty(a)) return b;
+	if (empty(b)) return a;
+	const middle: [number, number, number] = [0, 0, 0];
+	const halves: [number, number, number] = [0, 0, 0];
+	const center: [number, number, number] = [0, 0, 0];
+	for (let n = 0; n < 3; n++) {
+		const axis = a.axes[n]!;
+		const at = (box: Box): number =>
+			box.center[0] * axis[0] +
+			box.center[1] * axis[1] +
+			box.center[2] * axis[2];
+		const low = Math.min(at(a) - a.halves[n]!, at(b) - b.halves[n]!);
+		const high = Math.max(at(a) + a.halves[n]!, at(b) + b.halves[n]!);
+		middle[n] = (low + high) / 2;
+		halves[n] = (high - low) / 2;
+	}
+	for (let n = 0; n < 3; n++) {
+		const axis = a.axes[n]!;
+		center[0] += axis[0] * middle[n]!;
+		center[1] += axis[1] * middle[n]!;
+		center[2] += axis[2] * middle[n]!;
+	}
+	return { center, axes: a.axes, halves };
 }

@@ -1,7 +1,7 @@
 import type { ChunkMesh } from "chamfer/mesh";
 import type { ChunkSelection, CoarseMap } from "chamfer/generation";
 import type { WorldShape } from "chamfer/world";
-import { Frustum, Mat4, Vec3 } from "chamfer/math";
+import { Frustum, Mat4, Vec3, type Box } from "chamfer/math";
 import {
 	BLOCK_NAMES,
 	BlockType,
@@ -20,7 +20,7 @@ import {
 	selectionOf,
 } from "chamfer/generation";
 import { WorkerMeshSource } from "chamfer/mesh";
-import type { BoundsBall } from "chamfer/render";
+import type { BoundsBox } from "chamfer/render";
 import type { CellRef } from "chamfer/edit";
 import {
 	DeltaStore,
@@ -729,11 +729,8 @@ async function main(): Promise<void> {
 		source.dispose();
 	});
 
-	/** The balls the last selection tested, for the diagnostic view to draw. */
-	let selectionBalls: {
-		readonly center: readonly [number, number, number];
-		readonly radius: number;
-	}[] = [];
+	/** The boxes the last selection tested, for the diagnostic view to draw. */
+	let selectionBoxes: Box[] = [];
 
 	/** What is drawn, what is asked for, and what has come back unuploaded. */
 	const drawn = new Set<number>();
@@ -1078,14 +1075,12 @@ async function main(): Promise<void> {
 						peaks.troughOf(selection.key, selection.chunkLevel) < 0,
 				),
 			);
-		// The balls the walk tested, kept so a frame can draw them. Held rather
+		// The boxes the walk tested, kept so a frame can draw them. Held rather
 		// than recomputed: the selection runs on movement and the frame runs
 		// always, and re-walking the hierarchy to draw a diagnostic would cost
 		// more than the diagnostic.
-		selectionBalls = wanted.flatMap((selection) =>
-			selection.bound && selection.bound.radius > 0
-				? [selection.bound]
-				: [],
+		selectionBoxes = wanted.flatMap((selection) =>
+			selection.bound ? [selection.bound] : [],
 		);
 
 		// Decoded once here rather than inside dropReplaced's own loop, which
@@ -1906,34 +1901,31 @@ async function main(): Promise<void> {
 		if (current.knobs.selectBounds || current.knobs.patchBounds) {
 			if (now - boundsAt >= BOUNDS_INTERVAL) {
 				boundsAt = now;
-				const near: { ball: BoundsBall; away: number }[] = [];
+				const near: { box: BoundsBox; away: number }[] = [];
 				const add = (
-					ball: {
-						center: readonly [number, number, number];
-						radius: number;
-					},
+					box: Box,
 					color: [number, number, number],
 				): void => {
-					const dx = ball.center[0] - from.x;
-					const dy = ball.center[1] - from.y;
-					const dz = ball.center[2] - from.z;
+					const dx = box.center[0] - from.x;
+					const dy = box.center[1] - from.y;
+					const dz = box.center[2] - from.z;
 					near.push({
-						ball: { ...ball, color },
+						box: { ...box, color },
 						away: dx * dx + dy * dy + dz * dz,
 					});
 				};
 				if (current.knobs.selectBounds)
-					for (const ball of selectionBalls)
-						add(ball, SELECT_BOUND_COLOR);
+					for (const box of selectionBoxes)
+						add(box, SELECT_BOUND_COLOR);
 				if (current.knobs.patchBounds)
-					for (const ball of renderer.bounds())
-						add(ball, PATCH_BOUND_COLOR);
+					for (const box of renderer.bounds())
+						add(box, PATCH_BOUND_COLOR);
 				boundsHeld = near.length;
 				near.sort((a, b) => a.away - b.away);
 				near.length = Math.min(near.length, BOUNDS_LIMIT);
-				bounds.balls = near.map((one) => one.ball);
+				bounds.boxes = near.map((one) => one.box);
 			}
-		} else if (bounds.balls.length > 0) bounds.balls = [];
+		} else if (bounds.boxes.length > 0) bounds.boxes = [];
 
 		// **The crosshair stands where the arm points, not in the middle of the
 		// screen.** With the camera pulled back the two are different lines,
@@ -2175,9 +2167,9 @@ async function main(): Promise<void> {
 				// What a click would do, and how much of this world is a
 				// player's rather than the seed's.
 				`${aimingSays(aimed)} · ${edits.count} changed`,
-				...(bounds.balls.length > 0
+				...(bounds.boxes.length > 0
 					? [
-							`${bounds.balls.length} of ${boundsHeld} bounds drawn, nearest first`,
+							`${bounds.boxes.length} of ${boundsHeld} bounds drawn, nearest first`,
 						]
 					: []),
 				// Where the decisions are being read from, and how far that is from
