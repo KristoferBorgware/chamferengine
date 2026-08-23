@@ -6,6 +6,7 @@ import { Chunk } from "../../generation/chunk/Chunk.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
+import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
@@ -28,6 +29,7 @@ export class MeshWorkerCore {
 	private readonly seed: number;
 	private readonly apron: boolean;
 	private readonly debugSeams: boolean;
+	private readonly speckle: number;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -54,6 +56,7 @@ export class MeshWorkerCore {
 		this.seed = setup.map.seed;
 		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
+		this.speckle = setup.speckle ?? SPECKLE;
 		this.options = setup.terrain;
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
@@ -98,6 +101,7 @@ export class MeshWorkerCore {
 				apron: this.apron,
 				surfaceGrid: this.shape.blockSize,
 				debugSeams: this.debugSeams,
+				speckle: this.speckle,
 				grid: this.grid
 					? {
 							...this.grid,

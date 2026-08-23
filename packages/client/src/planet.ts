@@ -5,6 +5,7 @@ import { Frustum, Mat4, Vec3 } from "chamfer/math";
 import {
 	BlockType,
 	ChunkAddress,
+	SPECKLE,
 	TerrainGenerator,
 	ChunkPeaks,
 	addressesOverlap,
@@ -629,6 +630,8 @@ async function main(): Promise<void> {
 			crustDepth: builtShape.crustDepth,
 			apron: APRON,
 			debugSeams: live.knobs.seamOverlay,
+			// Zero is off, and off is the flat colour the registry names.
+			speckle: live.knobs.speckle ? SPECKLE : 0,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode

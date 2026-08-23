@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { CoarseMap } from "chamfer/generation";
 import {
+	BLOCK_COLORS,
 	BlockType,
 	Chunk,
 	ChunkAddress,
@@ -10,6 +11,8 @@ import {
 	buildCoarseMap,
 	flatCoarseMap,
 	generateChunk,
+	blockColor,
+	SPECKLE,
 	seedFromString,
 	selectChunks,
 } from "chamfer/generation";
@@ -769,5 +772,99 @@ describe("ambient occlusion", () => {
 		for (let v = 3; v < built.opaque.vertices.length; v += 6)
 			shades.add(Math.round(built.opaque.vertices[v]! * 1000));
 		expect(shades.size).toBeGreaterThan(3);
+	});
+});
+
+describe("the speckle", () => {
+	/**
+	 * **Zero is the flat block colour and nothing else.** Not a hash multiplied
+	 * by nothing: a cell that took no speckle has to be the number in the
+	 * registry to the bit, because the state of the switch is what makes a
+	 * picture of the world comparable with a picture of the map.
+	 */
+	it("gives the registry's own colour when it is off", () => {
+		const out = new Float32Array(3);
+		for (const block of [
+			BlockType.GRASS,
+			BlockType.STONE,
+			BlockType.SNOW,
+		]) {
+			const want = BLOCK_COLORS[block]!;
+			for (const [face, i, j] of [
+				[0, 0, 0],
+				[7, 13, 5],
+				[19, 100, 3],
+			] as const) {
+				blockColor(block, face, i, j, 12345, out, 0, 0);
+				// Through `float32`, which is what a vertex buffer holds: the
+				// claim is that nothing multiplied it, not that a vertex can
+				// carry a `float64`.
+				expect([...out]).toEqual(want.map((v) => Math.fround(v)));
+			}
+		}
+	});
+
+	it("moves a cell either way, and never by more than it is asked for", () => {
+		const out = new Float32Array(3);
+		const base = BLOCK_COLORS[BlockType.GRASS]!;
+		let up = 0;
+		let down = 0;
+		let worst = 0;
+		for (let i = 0; i < 400; i++) {
+			blockColor(BlockType.GRASS, 3, i, 7, 99, out, 0);
+			const by = out[1]! / base[1]! - 1;
+			if (by > 0) up++;
+			if (by < 0) down++;
+			worst = Math.max(worst, Math.abs(by));
+		}
+		expect(up).toBeGreaterThan(100);
+		expect(down).toBeGreaterThan(100);
+		expect(worst).toBeLessThanOrEqual(SPECKLE);
+		expect(worst).toBeGreaterThan(SPECKLE * 0.9);
+	});
+
+	/**
+	 * The switch, end to end: the option a panel sets reaches the colours in a
+	 * vertex buffer. Off, a chunk of one block type holds a handful of colours
+	 * -- one per material, times the corner occlusion and the column's own sky
+	 * -- and on, it holds hundreds, because every cell took its own.
+	 */
+	it("reaches the vertex buffer a chunk hands over", () => {
+		const chunk = generateChunk(
+			terrain,
+			ChunkAddress.fromKey(700, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const greens = (speckle: number): number => {
+			const sink = new ArrayMeshSink();
+			meshChunk(
+				chunk,
+				new ChunkColumnSampler(chunk, terrain),
+				shape,
+				map.seed,
+				new Vec3(0, 0, 0),
+				sink,
+				new ArrayMeshSink(),
+				{ speckle },
+			);
+			const seen = new Set<number>();
+			const { vertices } = sink.build(0);
+			for (let v = 3; v < vertices.length; v += 6)
+				seen.add(Math.round(vertices[v + 1]! * 100000));
+			return seen.size;
+		};
+		const off = greens(0);
+		const on = greens(SPECKLE);
+		expect(off).toBeGreaterThan(0);
+		expect(on).toBeGreaterThan(off * 10);
+	});
+
+	it("is the same cell every time, on any machine", () => {
+		const one = new Float32Array(3);
+		const two = new Float32Array(3);
+		blockColor(BlockType.GRASS, 5, 31, 12, 7, one, 0);
+		blockColor(BlockType.GRASS, 5, 31, 12, 7, two, 0);
+		expect([...one]).toEqual([...two]);
 	});
 });
