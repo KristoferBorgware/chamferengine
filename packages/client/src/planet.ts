@@ -1256,10 +1256,12 @@ async function main(): Promise<void> {
 			const id = selectionId(CHUNK_LEVEL, key);
 			drawn.delete(id);
 			building.delete(id);
+			// Every chunk that reads the cell, not just the one that stores
+			// it: a chunk's apron draws the ring past its own rim, so a shaft
+			// dug just across the boundary is geometry this chunk puts on the
+			// screen and its cull volume has to hold.
+			liftPeaks(key);
 		}
-		// The ground the selection is credited with, so a build is not culled
-		// with the hillside it stands on.
-		liftPeaks(owner);
 		// One chunk written, because only one chunk's records changed.
 		void editDb.save(editWorld, edits, owner);
 		refresh();

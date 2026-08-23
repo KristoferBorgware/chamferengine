@@ -1,8 +1,11 @@
 import type { Chunk } from "./Chunk.js";
 import type { ChunkRow } from "../../edit/ChunkRows.js";
+import type { OutsideBlocks } from "./OutsideBlocks.js";
 import { BlockType } from "../terrain/BlockType.js";
+import { cellRepresentations } from "../../addressing/neighbours/cellRepresentations.js";
 import { coarseCell } from "../../edit/coarseCell.js";
 import { offsetIn } from "../../edit/offsetIn.js";
+import { outsideKey } from "./OutsideBlocks.js";
 import { rank } from "../../addressing/lattice/rank.js";
 import { slotCell } from "../../edit/slotCell.js";
 import { typeOf } from "../../edit/typeOf.js";
@@ -29,15 +32,29 @@ import { typeOf } from "../../edit/typeOf.js";
  * The band each column carries is recomputed for the columns that changed. It
  * is the first layer that is not air and the last that is not opaque, and the
  * mesher reads it to decide which layers to look at.
+ *
+ * **What lands outside the triangle is handed back rather than dropped.** A
+ * chunk meshes the ring one step past its own rim and has no slot for it, so
+ * those records come out as {@link OutsideBlocks} for the column sampler to
+ * write over the columns it generates. Dropping them is what left a ridge of
+ * untouched ground along every chunk edge and a tunnel with no wall.
+ *
+ * **A record names a cell under its owner's face, which is not always this
+ * one.** A cell on a face edge has a name under each face meeting there, so
+ * every record is matched through {@link cellRepresentations} rather than by
+ * feeding foreign coordinates to `offsetIn` and hoping they do not path-match
+ * this triangle by coincidence.
  */
 export function applyDeltas(
 	chunk: Chunk,
 	rows: readonly ChunkRow[],
 	fineDepth: number,
 	lod: number,
-): void {
+): OutsideBlocks {
+	const n = 1 << chunk.depth;
 	const touched = new Set<number>();
 	const placed = new Set<number>();
+	const outside: OutsideBlocks = new Map();
 	for (const row of rows)
 		for (const [slot, layer, state] of row.deltas.records()) {
 			const fine = slotCell(
@@ -49,13 +66,6 @@ export function applyDeltas(
 			);
 			const cell = lod === 0 ? fine : coarseCell(fine, fineDepth, lod);
 			if (cell.layer >= chunk.layerCount) continue;
-			const offset = offsetIn(
-				chunk.address.path,
-				cell.i,
-				cell.j,
-				chunk.depth,
-			);
-			if (!offset) continue;
 
 			// The deepest layer of the crust is the floor of the world and there is
 			// nothing under it. A record naming it is refused here as well as at
@@ -64,6 +74,41 @@ export function applyDeltas(
 			if (cell.layer === chunk.layerCount - 1) continue;
 
 			const block = typeOf(state);
+			const names = cellRepresentations(cell.face, n, cell.i, cell.j);
+			const mine = names.find(
+				(named) =>
+					named.face === chunk.address.face &&
+					offsetIn(chunk.address.path, named.i, named.j, chunk.depth),
+			);
+			if (!mine) {
+				// One step past the rim: no slot here, so it goes to the
+				// sampler instead -- under every name, because the mesher
+				// reaches it through whichever one its ring walk produced.
+				for (const named of names) {
+					const key = outsideKey(named.face, named.i, named.j);
+					let column = outside.get(key);
+					if (!column) {
+						column = new Map<number, number>();
+						outside.set(key, column);
+					}
+					const already = column.get(cell.layer);
+					if (
+						already !== undefined &&
+						already !== BlockType.AIR &&
+						block === BlockType.AIR
+					)
+						continue;
+					column.set(cell.layer, block);
+				}
+				continue;
+			}
+			const offset = offsetIn(
+				chunk.address.path,
+				mine.i,
+				mine.j,
+				chunk.depth,
+			)!;
+
 			const at =
 				rank(offset.q, offset.r, chunk.m) * chunk.layerCount +
 				cell.layer;
@@ -87,4 +132,5 @@ export function applyDeltas(
 		chunk.band[slot * 2] = first;
 		chunk.band[slot * 2 + 1] = last;
 	}
+	return outside;
 }

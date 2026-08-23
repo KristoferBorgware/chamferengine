@@ -4,7 +4,7 @@ import type { ChunkRow } from "./ChunkRows.js";
 import type { StoreHeader } from "./StoreHeader.js";
 import { ChunkDeltas } from "./ChunkDeltas.js";
 import { cellSlot } from "./cellSlot.js";
-import { chunksHolding } from "./chunksHolding.js";
+import { chunksReading } from "./chunksReading.js";
 import { slotCell } from "./slotCell.js";
 
 /**
@@ -46,7 +46,7 @@ export class DeltaStore {
 		for (const [key, row] of rows) this.rows.set(key, row);
 		// A loaded store carries records and nothing derived from them.
 		for (const [key, row] of this.rows)
-			for (const [slot, layer, state] of row.records())
+			for (const [slot, layer] of row.records())
 				this.note(
 					slotCell(
 						key,
@@ -55,7 +55,6 @@ export class DeltaStore {
 						header.subdivisionDepth,
 						header.chunkLevel,
 					),
-					state,
 					key,
 				);
 	}
@@ -95,22 +94,23 @@ export class DeltaStore {
 			this.rows.set(chunkKey, row);
 		}
 		row.set(slot, cell.layer, state);
-		return this.note(cell, state, chunkKey);
+		return this.note(cell, chunkKey);
 	}
 
 	/**
 	 * Record what a written cell means for the chunks around it, and return
 	 * every chunk that reads it.
 	 */
-	private note(cell: CellRef, state: BlockState, owner: number): number[] {
-		const holders = chunksHolding(
+	private note(cell: CellRef, owner: number): number[] {
+		// **Reading, not holding.** A chunk meshes the ring one step past its
+		// own rim, and those cells sit inside the neighbour's triangle -- so
+		// the set that has to be told is wider than the set that stores it.
+		const keys = chunksReading(
 			cell,
 			this.header.subdivisionDepth,
 			this.header.chunkLevel,
 		);
-		const keys: number[] = [];
-		for (const { chunkKey } of holders) {
-			keys.push(chunkKey);
+		for (const chunkKey of keys) {
 			if (chunkKey === owner) continue;
 			let also = this.alsoReads.get(chunkKey);
 			if (!also) {
@@ -119,7 +119,10 @@ export class DeltaStore {
 			}
 			also.add(owner);
 		}
-		this.stretch(owner, cell.layer);
+		// Every reader, not just the owner. A chunk's apron draws the ring
+		// past its rim, so a shaft dug just across the boundary is geometry
+		// this chunk puts on the screen and its cull volume has to hold.
+		for (const chunkKey of keys) this.stretch(chunkKey, cell.layer);
 		return keys;
 	}
 

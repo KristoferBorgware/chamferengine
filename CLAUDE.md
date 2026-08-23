@@ -437,6 +437,37 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- **A CHUNK MESHES MORE CELLS THAN IT HOLDS, AND AN EDIT HAS TO REACH ALL OF
+  THEM** (`chunksReading`, `ChunkColumnSampler`, F-071). A chunk's rim cells ask
+  the ring around them whether to draw a side face and its apron draws that ring
+  outright, and a cell one step past the rim sits **inside the neighbour's
+  triangle** -- so `chunksHolding`, which names every chunk whose triangle
+  *contains* a cell, is the right set for the store and the wrong one for the
+  mesher. Measured at depth 11 cut at chunk level 6 the ratio is the same shape
+  as at depth 8 / level 4, where a chunk holds **153** slots and reads **54**
+  more, and a change reached it for **0** of them
+  (`tools/probe-seam-edit.ts`). Two symptoms, one cause: break a block across a
+  boundary and the neighbour's apron went on drawing the seed's cap, so mining
+  across a chunk edge left a **one-cell ridge along it**; and a rim cell asking
+  about a column somebody had dug was told there was rock, emitted no wall, and
+  the far side of the planet showed through the tunnel. The fix is
+  `chunksReading` -- every chunk holding the cell **or any neighbour of it** --
+  plus `applyDeltas` handing back what fell outside the triangle for the sampler
+  to write over the columns it generates. **The invariant to test is that the
+  column a chunk GENERATES for a cell past its rim equals the column the chunk
+  that OWNS it holds**, blocks and band alike; generating rather than fetching
+  is only sound while that is true, and terrain is a pure function of the
+  address while a player's changes are not.
+- **A TRIANGLE'S OWN CORNER CAN BE INVISIBLE TO A RING WALK** (`chunksHolding`,
+  F-071). Finding the chunks containing a cell by asking the cell's ring which
+  chunks **own** those neighbours misses the triangle whose **corner** the cell
+  is: a corner's only neighbours inside its own triangle sit on that triangle's
+  two edges, so both are shared, and where the border rule awards both to
+  lower-keyed chunks that triangle never becomes a candidate. **155 of 39,168**
+  cell-and-chunk pairs went unreported over one face at depth 8 cut at chunk
+  level 4. **Descend the triangles instead**: they nest, so a chunk containing a
+  point has an ancestor containing it at every level above, and at most six
+  paths stay live however deep the cut -- **0 of 39,168**.
 - **A CHUNK IS A WEDGE INTO THE PLANET, AND A BALL CANNOT HOLD ONE**
   (`Box`, `chunkWedge`, `Frustum.holdsBox`, `plans/v0.4.1.md`). Every volume a
   chunk was tested against was a ball -- the selection's, the renderer's and the

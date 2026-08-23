@@ -81,6 +81,8 @@ export { GROUND_LINES } from "./terrain/GROUND_LINES.js";
 export { ChunkAddress } from "./chunk/ChunkAddress.js";
 export { Chunk } from "./chunk/Chunk.js";
 export { generateChunk } from "./chunk/generateChunk.js";
+export type { OutsideBlocks } from "./chunk/OutsideBlocks.js";
+export { outsideKey } from "./chunk/OutsideBlocks.js";
 export { applyDeltas } from "./chunk/applyDeltas.js";
 export type { ChunkExtent } from "./chunk/chunkCenter.js";
 export { chunkCenter } from "./chunk/chunkCenter.js";

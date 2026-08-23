@@ -1,8 +1,5 @@
 import type { CellRef } from "./CellRef.js";
 import { cellRepresentations } from "../addressing/neighbours/cellRepresentations.js";
-import { cellSlot } from "./cellSlot.js";
-import { neighbour } from "../addressing/neighbours/neighbour.js";
-import { offsetIn } from "./offsetIn.js";
 import { rank } from "../addressing/lattice/rank.js";
 
 /** A chunk key, and the cell's own offset under that chunk's face. */
@@ -21,11 +18,16 @@ export interface HoldingChunk {
  * written to the owner alone leaves the others deciding from ground that has
  * moved, which shows up as a face missing or drawn along a chunk edge.
  *
- * Found by asking the cell's own ring, under each of the faces the cell has a
- * name on. A chunk holding any neighbour of the cell is a candidate, and
- * `offsetIn` says exactly whether it holds the cell as well -- 17% of a chunk's
- * slots sit on its border, so this is not a rare case to leave to a rounding
- * rule.
+ * **Found by descending the triangles, not by asking the cell's ring.** The
+ * ring is the obvious candidate list and it is wrong at a corner: the only
+ * neighbours a corner has inside its own triangle sit on that triangle's two
+ * edges, so both are shared, and if the border rule awards both to lower-keyed
+ * chunks the triangle whose corner it is never appears at all. Descending
+ * cannot miss one -- triangles nest, so a chunk containing the point has an
+ * ancestor containing it at every level above.
+ *
+ * At most six triangles contain a lattice point, so the walk carries at most
+ * six live paths however deep the cut is.
  */
 export function chunksHolding(
 	cell: CellRef,
@@ -33,54 +35,38 @@ export function chunksHolding(
 	chunkLevel: number,
 ): HoldingChunk[] {
 	const n = 1 << subdivisionDepth;
-	const span = 4 ** chunkLevel;
 	const out: HoldingChunk[] = [];
 	const seen = new Set<number>();
 
 	// The cell under each face it has a name on, so a cell on a face edge
 	// reaches the chunks on both sides of it.
 	for (const named of cellRepresentations(cell.face, n, cell.i, cell.j)) {
-		const here = { ...cell, face: named.face, i: named.i, j: named.j };
-		const candidates = [here];
-		for (let k = 0; k < 6; k++) {
-			const ring = neighbour(named.face, n, named.i, named.j, k);
-			if (ring)
-				candidates.push({
-					...here,
-					face: ring.face,
-					i: ring.i,
-					j: ring.j,
-				});
-		}
-		for (const candidate of candidates) {
-			const key = cellSlot(
-				candidate,
-				subdivisionDepth,
-				chunkLevel,
-			).chunkKey;
-			// The face is checked before the key is marked seen. A ring
-			// neighbour across a face edge produces a key under its own face,
-			// which this cell is not in -- marking that key first would hide
-			// the chunk of the same number under the cell's own face.
-			if (Math.floor(key / span) !== named.face) continue;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			let value = key % span;
-			const path = new Array<number>(chunkLevel);
-			for (let level = chunkLevel - 1; level >= 0; level--) {
-				path[level] = value % 4;
-				value = Math.floor(value / 4);
+		let live = [{ path: 0, q: named.i, r: named.j, side: n }];
+		for (let level = 0; level < chunkLevel; level++) {
+			const next: typeof live = [];
+			for (const at of live) {
+				const side = at.side >> 1;
+				for (let digit = 0; digit < 4; digit++) {
+					let q = at.q;
+					let r = at.r;
+					if (digit === 1) q -= side;
+					else if (digit === 2) r -= side;
+					else if (digit === 3) {
+						q = side - q;
+						r = side - r;
+					}
+					if (q < 0 || r < 0 || q + r > side) continue;
+					next.push({ path: at.path * 4 + digit, q, r, side });
+				}
 			}
-			const offset = offsetIn(path, named.i, named.j, subdivisionDepth);
-			if (!offset) continue;
-			out.push({
-				chunkKey: key,
-				slot: rank(
-					offset.q,
-					offset.r,
-					1 << (subdivisionDepth - chunkLevel),
-				),
-			});
+			live = next;
+		}
+		const m = 1 << (subdivisionDepth - chunkLevel);
+		for (const at of live) {
+			const chunkKey = named.face * 4 ** chunkLevel + at.path;
+			if (seen.has(chunkKey)) continue;
+			seen.add(chunkKey);
+			out.push({ chunkKey, slot: rank(at.q, at.r, m) });
 		}
 	}
 	return out;
