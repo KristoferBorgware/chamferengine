@@ -30,8 +30,19 @@ export interface MeshOptions {
 	 * speckled through it as a dashed dark line along every chunk boundary.
 	 * Measured against the apron: over 3,899 rays outward and 1,446 grazing
 	 * rays into the terrain across a mixed-level scene, removing skirts opened
-	 * **no hole and no crack**, because the apron overlaps the join and the cap
-	 * steps wall every drop between neighbours.
+	 * **no hole**, because the apron overlaps the join and the neighbouring
+	 * chunk's own surface carries on underneath it.
+	 *
+	 * **No hole is not no crack.** The ring is a lid, and at its outer edge the
+	 * ground over there is the neighbour's, drawn at the neighbour's own level
+	 * -- so the two surfaces stand apart and the strip between them is open.
+	 * A ray from inside the crust still cannot get out, which is why the rays
+	 * above found nothing; what a viewer sees is the lid ending in mid-air with
+	 * ground several metres lower behind it. The apron closes that itself now,
+	 * with a curtain hung from its own edge down to what a coarser level puts
+	 * over there -- and it can hang one where a rim cell could not, because it
+	 * is already a centimetre low and so starts under the neighbour's cap
+	 * rather than in the plane of it.
 	 */
 	readonly apron?: boolean;
 

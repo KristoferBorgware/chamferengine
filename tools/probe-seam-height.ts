@@ -8,6 +8,9 @@
  * with many smaller ones, so this measures how far that single flat height can
  * stand from what the fine terrain actually does underneath it.
  *
+ * This is the size of the difference, not where it shows.
+ * `tools/probe-seam-crack.ts` finds the edges it actually opens a band at.
+ *
  *   npx vite-node tools/probe-seam-height.ts
  */
 import {

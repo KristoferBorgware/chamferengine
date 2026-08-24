@@ -29,10 +29,12 @@ import {
 	canonicalCell,
 	cellCorners,
 	joinPath,
+	latticePosition,
 	neighbour,
 	positionToCell,
 	splitPath,
 } from "chamfer/addressing";
+import { coarseCell } from "chamfer/edit";
 import type { Geometry } from "chamfer/mesh";
 
 const DEPTH = 8;
@@ -99,6 +101,31 @@ function* triangles(geometry: Geometry, origin: Vec3) {
 		};
 		yield [corner(0), corner(1), corner(2)] as const;
 	}
+}
+
+/** Whether a segment meets any triangle of a soup. Möller-Trumbore. */
+function meets(
+	from: Vec3,
+	direction: Vec3,
+	limit: number,
+	soup: readonly (readonly [Vec3, Vec3, Vec3])[],
+): boolean {
+	for (const [a, b, c] of soup) {
+		const e1 = b.sub(a);
+		const e2 = c.sub(a);
+		const p = direction.cross(e2);
+		const det = e1.dot(p);
+		if (Math.abs(det) < 1e-12) continue;
+		const t = from.sub(a);
+		const u = t.dot(p) / det;
+		if (u < 0 || u > 1) continue;
+		const q = t.cross(e1);
+		const v = direction.dot(q) / det;
+		if (v < 0 || u + v > 1) continue;
+		const hit = e2.dot(q) / det;
+		if (hit > 0 && hit < limit) return true;
+	}
+	return false;
 }
 
 describe("opacityOf", () => {
@@ -508,6 +535,167 @@ describe("merging at a level seam", () => {
 			);
 			expect(built.tally.apron).toBe(expected.size);
 		}
+	});
+
+	it("walls the band a coarser neighbour's ground leaves under the apron", () => {
+		// The apron is a lid: caps, and a wall wherever a cell in the ring
+		// stands over another cell the same chunk drew. At the ring's OUTER
+		// edge there is no such cell -- what is over there belongs to a
+		// neighbouring chunk, which may be drawing it a level coarser, and a
+		// level draws the ground at the points it kept rather than at the
+		// points between them. The two surfaces then stand apart with nothing
+		// between them, which reads as a bite out of the hillside with ground
+		// several metres lower showing through it.
+		//
+		// The wall is computable from one side because a point's height does
+		// not depend on who asks: the ground a coarser neighbour puts over a
+		// cell is this chunk's own reading of the coarse lattice point that
+		// cell falls into.
+		const rough = buildCoarseMap(seedFromString("seam-band"), {
+			level: 6,
+			cellMetres: 100,
+			relief: 200,
+		});
+		const steep = new WorldShape(1700, DEPTH, 260, maxCrustDepth(DEPTH));
+		const gen = new TerrainGenerator(rough.seed, steep, rough);
+		const n = 1 << DEPTH;
+		const m = 1 << (DEPTH - CHUNK_LEVEL);
+
+		/** Where a cell's ground cap is drawn, on the shared fine grid. */
+		const capOf = (cell: {
+			face: number;
+			i: number;
+			j: number;
+		}): number => {
+			const ground = gen.columnAt(cell.face, cell.i, cell.j).groundRadius;
+			return ground > 0
+				? steep.radiusOfLayer(steep.layerOfSurface(ground))
+				: 0;
+		};
+
+		let bands = 0;
+		let bare = 0;
+		for (const key of [5, 37, 96, 141, 202]) {
+			const address = ChunkAddress.fromKey(key, CHUNK_LEVEL);
+			const face = address.face;
+			const draws = (cell: {
+				face: number;
+				i: number;
+				j: number;
+			}): boolean => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (canon.face !== face) return false;
+				const split = splitPath(canon.i, canon.j, DEPTH, CHUNK_LEVEL);
+				for (let at = 0; at < split.path.length; at++)
+					if (split.path[at] !== address.path[at]) return false;
+				return true;
+			};
+
+			// The apron: the canonicalised outward neighbours of the cells the
+			// chunk draws, plus the three corners and their rings.
+			const apron = new Map<
+				number,
+				{ face: number; i: number; j: number }
+			>();
+			const put = (cell: { face: number; i: number; j: number }) => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (draws(canon)) return;
+				apron.set(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+					canon,
+				);
+			};
+			for (let q = 0; q <= m; q++)
+				for (let r = 0; q + r <= m; r++) {
+					const [i, j] = joinPath(address.path, q, r, DEPTH);
+					if (!draws({ face, i, j })) continue;
+					for (let k = 0; k < 6; k++) {
+						const nb = neighbour(face, n, i, j, k);
+						if (nb) put(nb);
+					}
+				}
+			for (const [cq, cr] of [
+				[0, 0],
+				[m, 0],
+				[0, m],
+			] as const) {
+				const [ci, cj] = joinPath(address.path, cq, cr, DEPTH);
+				const corner = canonicalCell(face, n, ci, cj);
+				put(corner);
+				for (
+					let k = 0;
+					k < cellCorners(corner.face, n, corner.i, corner.j).length;
+					k++
+				) {
+					const nb = neighbour(corner.face, n, corner.i, corner.j, k);
+					if (nb) put(nb);
+				}
+			}
+			const drawn = (cell: { face: number; i: number; j: number }) => {
+				if (draws(cell)) return true;
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				return apron.has(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+				);
+			};
+
+			const chunk = generateChunk(
+				gen,
+				address,
+				CHUNK_LEVEL,
+				steep.crustDepth,
+			);
+			const built = buildChunkMesh(
+				chunk,
+				new ChunkColumnSampler(chunk, gen),
+				steep,
+				rough.seed,
+				{ apron: true, surfaceGrid: steep.blockSize },
+			);
+			const soup = [...triangles(built.opaque, built.origin)];
+
+			for (const cell of apron.values()) {
+				const corners = cellCorners(cell.face, n, cell.i, cell.j);
+				const mine = capOf(cell);
+				if (mine <= 0) continue;
+				for (let k = 0; k < corners.length; k++) {
+					const nb = neighbour(cell.face, n, cell.i, cell.j, k);
+					if (!nb || drawn(nb)) continue;
+					const beyond = capOf(nb);
+					const floor = beyond > 0 ? Math.min(mine, beyond) : mine;
+					const coarse = coarseCell(
+						{ face: nb.face, i: nb.i, j: nb.j, layer: 0 },
+						DEPTH,
+						1,
+					);
+					const theirs = capOf({
+						face: coarse.face,
+						i: coarse.i << 1,
+						j: coarse.j << 1,
+					});
+					if (theirs <= 0 || floor - theirs <= 1e-6) continue;
+					bands++;
+
+					// A wall there stands on the edge shared with the cell
+					// beyond, which runs between corners `k - 1` and `k`. A
+					// short segment through the middle of the band, crossing
+					// that edge, meets it if it exists.
+					const left =
+						corners[(k + corners.length - 1) % corners.length]!;
+					const middle = left.add(corners[k]!).normalize();
+					const step = latticePosition(nb.face, n, nb.i, nb.j)
+						.sub(latticePosition(cell.face, n, cell.i, cell.j))
+						.normalize();
+					const from = middle
+						.scale((floor + theirs) / 2)
+						.sub(step.scale(steep.blockSize));
+					if (!meets(from, step, 2 * steep.blockSize, soup)) bare++;
+				}
+			}
+		}
+		// The test has to bite: a world with no relief leaves no band at all.
+		expect(bands).toBeGreaterThan(20);
+		expect(bare).toBe(0);
 	});
 
 	it("walls the step between neighbours level at the coarse grid", () => {
