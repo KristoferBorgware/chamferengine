@@ -95,6 +95,15 @@ const APRON_DROP = 0.01;
  * lands behind it; where the third cell is solid the extension is inside its
  * rock. It closes the corner slit between two chunks' copies of one wall for
  * the same reason.
+ *
+ * **A face widened past its corners must also run past its own ends.** The
+ * top and bottom of a wall used to share their vertices with the caps beside
+ * them to the bit, which is what kept those junctions watertight; moving the
+ * corners for the widening broke the sharing, and every cap grew a dotted rim
+ * where its edge and the wall's edge rasterize apart -- brinks seen from
+ * above, bottoms seen from below. So a face also runs this far past each end
+ * where no other face of the same wall continues there, and the cap junction
+ * is interior to the face instead of an edge meeting an edge.
  */
 const WALL_WELD = 0.004;
 
@@ -657,6 +666,8 @@ function meshCell(
 				ring,
 				groundCap,
 				groundCap,
+				true,
+				true,
 			);
 			tally.faces++;
 		}
@@ -684,6 +695,18 @@ function meshCell(
 			)
 				end++;
 
+			// Whether another run of this same wall continues past either
+			// end -- the one place the weld must not reach past, or two
+			// coplanar runs of different colors overlap and fight.
+			const aboveOpacity = opacityOf(at(own, layer - 1));
+			const belowOpacity = opacityOf(at(own, end + 1));
+			const wallAbove =
+				aboveOpacity > 0 &&
+				opacityOf(at(other, layer - 1)) < aboveOpacity;
+			const wallBelow =
+				belowOpacity > 0 &&
+				opacityOf(at(other, end + 1)) < belowOpacity;
+
 			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
@@ -698,6 +721,8 @@ function meshCell(
 				ring,
 				layer,
 				end,
+				!wallAbove,
+				!wallBelow,
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -839,6 +864,8 @@ function meshApronCell(
 				ring,
 				groundCap,
 				groundCap,
+				true,
+				true,
 			);
 			tally.faces++;
 		}
@@ -879,6 +906,19 @@ function meshApronCell(
 				opacityOf(at(other, end + 1)) < here
 			)
 				end++;
+
+			// Whether another run of this same wall continues past either
+			// end -- the one place the weld must not reach past, or two
+			// coplanar runs of different colors overlap and fight.
+			const aboveOpacity = opacityOf(at(own, layer - 1));
+			const belowOpacity = opacityOf(at(own, end + 1));
+			const wallAbove =
+				aboveOpacity > 0 &&
+				opacityOf(at(other, layer - 1)) < aboveOpacity;
+			const wallBelow =
+				belowOpacity > 0 &&
+				opacityOf(at(other, end + 1)) < belowOpacity;
+
 			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
@@ -893,6 +933,8 @@ function meshApronCell(
 				ring,
 				layer,
 				end,
+				!wallAbove,
+				!wallBelow,
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -957,6 +999,8 @@ function meshApronCell(
 				ring,
 				groundCap,
 				groundCap,
+				true,
+				true,
 			);
 			tally.faces++;
 		}
@@ -1017,9 +1061,20 @@ function emitSide(
 	ring: readonly (Column | null)[],
 	topLayer: number,
 	bottomLayer: number,
+	extendTop: boolean,
+	extendBottom: boolean,
 ): void {
 	const leftCorner = corners[(k + degree - 1) % degree]!;
 	const rightCorner = corners[k]!;
+
+	// The face runs past its own ends as well as past its corners, wherever no
+	// other face of the same wall continues there -- the junction with a cap is
+	// then interior to this face rather than two edges meeting on one line.
+	// Where another run does continue, the extension would lie in that run's
+	// own plane and the two would fight; those ends stay exact, and exact is
+	// enough there because two stacked runs share their corner directions.
+	if (extendTop) topRadius += WALL_WELD;
+	if (extendBottom) bottomRadius -= WALL_WELD;
 
 	// The widened corners: each pushed past its own end along the edge, so the
 	// face overlaps whatever meets it on the corner line. See {@link WALL_WELD}.

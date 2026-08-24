@@ -695,7 +695,14 @@ Violating any of these breaks the design. They are not tunable.
   The extension is never visible: where the corner's third cell is air the wall
   toward it exists — the cell this face stands on is solid there — and the
   extension lands behind it; where the third cell is solid it is inside rock.
-  Zero faces added.
+  **A face widened past its corners must also run past its own ends**: the
+  wall's end vertices used to be the cap's corner vertices to the bit, exact
+  sharing kept those junctions watertight, and moving the corners broke it —
+  every cap grew a dotted rim, brinks from above and block bottoms from below.
+  So a face also runs 4 mm past each end where no other face of the same wall
+  continues there; where one does, the extension would lie in that face's own
+  plane and fight it, and exact is enough there because stacked runs share
+  their corner directions. Zero faces added.
 - **A LOD seam is closed by the APRON, and a cave mouth by neither** (`seam.js`,
   doc 14). Each chunk draws the ring of cells one step past its own rim, at its
   own level, a centimetre low — both levels' surfaces then cover the strip and
