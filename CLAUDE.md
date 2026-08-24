@@ -663,9 +663,34 @@ Violating any of these breaks the design. They are not tunable.
   starts in the cap plane and speckles through a level neighbour's own cap,
   while an apron cell is already a centimetre low, so the curtain starts under
   that cap instead. Where it is not needed it hangs inside
-  the neighbouring column's rock, which nothing can see into. **254 of 254 open
-  bands had nothing across them before; 0 of 254 after**, for **0.9%** more
-  faces, and `MESHER_REACH` stays 2 (measured, not assumed).
+  the neighbouring column's rock, which nothing can see into. The curtain alone is
+  **not** the whole fix: it hangs from the lower of the two own-level caps, and
+  the step walls between fine cells across the boundary stand above it — its
+  own probe measured the band from that same lower cap, so it was green while
+  the slits were on screen. Measured over the whole frontier face, own cap down
+  to coarse ground at four heights: **554 of 1,267** outer edges stand open
+  (7.25 m mean, 40 m worst), the curtain alone leaves **324 of 554** holed, and
+  with the apron also drawing **the side runs a same-level neighbour would draw
+  there — reproduced exactly, same canonical cell, same ring, same colors, no
+  drop** — it is **0 of 554**. Two copies of one wall land on one another where
+  the neighbour really is at this level, and a depth fight between identical
+  colors paints one color. The whole seam closing costs **3.6%** more faces,
+  and `MESHER_REACH` stays 2 (measured, not assumed).
+- **A WALL RUNS PAST ITS OWN CORNERS, OR THE CORNER LINE LEAKS PINPRICKS OF
+  SKY** (`WALL_WELD` in `emitSide`, `plans/v0.4.1.md` I-18). The vertical line
+  where two side faces meet holds vertices from both, and the two sets rarely
+  agree: each wall is a run merged over its own neighbour's transitions, and
+  across a chunk boundary one corner is computed against two chunk origins, two
+  `float32` roundings of one line. A rasterizer given two edges on one line
+  with different vertices leaves pinprick holes along it, and behind a wall's
+  side edge is the undrawn inside of the planet — a dotted line of bright
+  pixels down the corner of every dark cliff, one per layer boundary one side
+  has and the other does not. Every side face runs **4 mm past each corner
+  along its own plane**, so what meets it there is overlapped, never abutted.
+  The extension is never visible: where the corner's third cell is air the wall
+  toward it exists — the cell this face stands on is solid there — and the
+  extension lands behind it; where the third cell is solid it is inside rock.
+  Zero faces added.
 - **A LOD seam is closed by the APRON, and a cave mouth by neither** (`seam.js`,
   doc 14). Each chunk draws the ring of cells one step past its own rim, at its
   own level, a centimetre low — both levels' surfaces then cover the strip and
