@@ -3,7 +3,7 @@ import type { Column } from "../generation/chunk/Column.js";
 import type { ColumnSampler } from "../generation/chunk/ColumnSampler.js";
 import type { MeshOptions } from "./MeshOptions.js";
 import type { MeshSink } from "./MeshSink.js";
-import type { Vec3 } from "../math/Vec3.js";
+import { Vec3 } from "../math/Vec3.js";
 import type { WorldShape } from "../world/WorldShape.js";
 import { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 import { MESH_DEFAULTS } from "./MeshOptions.js";
@@ -12,6 +12,7 @@ import { gridCellColor } from "./gridCellColor.js";
 import { skyExposure } from "../light/skyExposure.js";
 import { canonicalCell } from "../addressing/neighbours/canonicalCell.js";
 import { cellCorners } from "../addressing/lattice/cellCorners.js";
+import { coarseCell } from "../edit/coarseCell.js";
 import { joinPath } from "../addressing/lattice/joinPath.js";
 import { latticeWeights } from "../addressing/lattice/latticeWeights.js";
 import { neighbour } from "../addressing/neighbours/neighbour.js";
@@ -31,6 +32,24 @@ export interface MeshTally {
 
 	/** Cells drawn beyond the rim, closing the tiling gap at a level join. */
 	apron: number;
+}
+
+/** A lattice point, named by the face whose coordinates it is written in. */
+interface Cell {
+	readonly face: number;
+	readonly i: number;
+	readonly j: number;
+}
+
+/**
+ * One number for a cell, to key a map by.
+ *
+ * The lattice runs to `2^17` a side at the deepest world the address word
+ * allows, so two coordinates and a face fit inside an exact integer with room
+ * over.
+ */
+function nameOf(cell: Cell): number {
+	return (cell.face * 262144 + cell.i) * 262144 + cell.j;
 }
 
 /** Scratch color, refilled per face rather than allocated per vertex. */
@@ -57,6 +76,59 @@ const SKY_REACH = 6;
  * cell exists, and a centimetre down is invisible where one does not.
  */
 const APRON_DROP = 0.01;
+
+/**
+ * How far a side face reaches past each of its own two corners, in metres.
+ *
+ * The vertical line where two walls meet holds vertices from both, and the two
+ * sets rarely agree: each wall is a run merged over its own neighbour's
+ * transitions, and across a chunk boundary the same corner is computed against
+ * two different origins. A rasterizer given two edges on one line with
+ * different vertices leaves pinprick holes along it -- dots of sky down the
+ * corner of a cliff, bright wherever the unlit inside of the planet is behind
+ * them.
+ *
+ * Each side face therefore runs this far past its corners, along its own
+ * plane. The extension is never visible: where the corner's third cell is air
+ * the wall around the corner exists -- the cell this face stands on is solid
+ * there, so a face toward that third cell is emitted too -- and the extension
+ * lands behind it; where the third cell is solid the extension is inside its
+ * rock. It closes the corner slit between two chunks' copies of one wall for
+ * the same reason.
+ *
+ * **A face widened past its corners must also run past its own ends.** The
+ * top and bottom of a wall used to share their vertices with the caps beside
+ * them to the bit, which is what kept those junctions watertight; moving the
+ * corners for the widening broke the sharing, and every cap grew a dotted rim
+ * where its edge and the wall's edge rasterize apart -- brinks seen from
+ * above, bottoms seen from below. So a face also runs this far past each end
+ * where no other face of the same wall continues there, and the cap junction
+ * is interior to the face instead of an edge meeting an edge.
+ */
+const WALL_WELD = 0.004;
+
+/**
+ * How many levels coarser than itself a chunk assumes its neighbours may be.
+ *
+ * The selection splits a triangle when it is nearer than a multiple of its own
+ * width, and that test is on a distance which changes smoothly across the
+ * surface, so two triangles that end up side by side cannot be far apart in the
+ * walk. It is **one**, measured rather than argued: over every pair of adjacent
+ * cells in a real selection, at altitudes from 2 m to 1,500 m and with each
+ * triangle's own tallest ground deciding its reach, the worst gap between the
+ * levels of two neighbouring chunks is one, every time.
+ *
+ * That multiple is the `detail` knob, so the reading has to hold across its
+ * range and does: 1 to 8, where the selection goes from 169 chunks to 3,320,
+ * and the smallest reading is over 14,642 adjacent pairs and the largest over
+ * 216,000.
+ *
+ * At one, the coarse lattice point a rim cell falls into is still inside the
+ * two cells past the triangle that the mesher already reads, so the store's
+ * routing does not widen with it (`tools/probe-mesher-reach.ts`, 0% of a
+ * chunk's samples unrouted). Raising it would.
+ */
+const SEAM_JUMP = 1;
 
 /**
  * Where a chunk's surfaces sit once snapped to the shared fine grid.
@@ -163,7 +235,57 @@ export function meshChunk(
 				);
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
+	const ringCells: (Cell | null)[] = new Array<Cell | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
+
+	// Where a cell's ground cap lands once snapped to the shared fine grid,
+	// remembered by cell. The seam floor below asks for the same handful of
+	// coarse lattice points from every cell that falls into one of them.
+	const capAt = new Map<number, number>();
+	const snappedCapOf = (cell: Cell): number => {
+		const key = nameOf(cell);
+		const had = capAt.get(key);
+		if (had !== undefined) return had;
+		const ground = sampler.columnAt(cell.face, cell.i, cell.j).groundRadius;
+		const cap =
+			ground > 0 ? snappedSurface(shape.crustTopRadius, ground, grid) : 0;
+		capAt.set(key, cap);
+		return cap;
+	};
+
+	/**
+	 * The lowest ground any level of detail in play draws over a cell.
+	 *
+	 * A chunk one level coarser keeps every other lattice point and drops the
+	 * rest, and **a point's height does not depend on who asks** -- so the
+	 * ground a coarser neighbour puts over a cell is this chunk's own reading
+	 * of the coarse lattice point that cell falls into, at the same radius to
+	 * the last bit. That is what makes the join closable from one side: the
+	 * mesher never has to be told which level the chunk over there is drawn
+	 * at, because it can evaluate what every candidate level would draw.
+	 *
+	 * Which coarse point a cell falls into is `hexRound` on its weights, not a
+	 * shift -- a cell is the region around a lattice point rather than a square
+	 * of them, and a shift names the wrong one for 43.9% of cells one level
+	 * out.
+	 */
+	const seamFloor = (cell: Cell): number => {
+		let low = 0;
+		for (let step = 1; step <= SEAM_JUMP; step++) {
+			const coarse = coarseCell(
+				{ face: cell.face, i: cell.i, j: cell.j, layer: 0 },
+				depth,
+				step,
+			);
+			const cap = snappedCapOf({
+				face: coarse.face,
+				i: coarse.i << step,
+				j: coarse.j << step,
+			});
+			if (cap > 0 && (low === 0 || cap < low)) low = cap;
+		}
+		return low;
+	};
 
 	// The cells just outside the rim. Two chunks drawn at different levels
 	// tile the boundary with hexagons of two different sizes, and those do not
@@ -171,7 +293,19 @@ export function meshChunk(
 	// neither side's cells covering them. Each chunk closes its own side by
 	// also drawing the ring beyond its rim, dropped a centimetre so a real
 	// cell wins wherever one exists.
-	const apron = new Map<number, { face: number; i: number; j: number }>();
+	const apron = new Map<number, Cell>();
+
+	/**
+	 * Whether this chunk draws a cap for a cell at all.
+	 *
+	 * The cells it owns and the ring it draws beyond them, and nothing else --
+	 * which is what says where its own surface stops and another chunk's
+	 * begins.
+	 */
+	const drawnHere = (cell: Cell): boolean => {
+		if (owns(chunk, cell.face, n, cell.i, cell.j)) return true;
+		return apron.has(nameOf(canonicalCell(cell.face, n, cell.i, cell.j)));
+	};
 
 	for (let q = 0; q <= chunk.m; q++)
 		for (let r = 0; q + r <= chunk.m; r++) {
@@ -203,10 +337,7 @@ export function meshChunk(
 					);
 				if (outward[k] && nb && settings.apron) {
 					const canon = canonicalCell(nb.face, n, nb.i, nb.j);
-					apron.set(
-						(canon.face * 262144 + canon.i) * 262144 + canon.j,
-						canon,
-					);
+					apron.set(nameOf(canon), canon);
 				}
 			}
 
@@ -266,18 +397,12 @@ export function meshChunk(
 				corner.i,
 				corner.j,
 			).length;
-			apron.set(
-				(corner.face * 262144 + corner.i) * 262144 + corner.j,
-				corner,
-			);
+			apron.set(nameOf(corner), corner);
 			for (let k = 0; k < degree; k++) {
 				const nb = neighbour(corner.face, n, corner.i, corner.j, k);
 				if (!nb) continue;
 				const canon = canonicalCell(nb.face, n, nb.i, nb.j);
-				apron.set(
-					(canon.face * 262144 + canon.i) * 262144 + canon.j,
-					canon,
-				);
+				apron.set(nameOf(canon), canon);
 			}
 		}
 
@@ -312,6 +437,7 @@ export function meshChunk(
 			origin,
 			cell,
 			ring,
+			ringCells,
 			layers,
 			opaque,
 			translucent,
@@ -320,6 +446,8 @@ export function meshChunk(
 			apronTint,
 			mix,
 			drop,
+			drawnHere,
+			seamFloor,
 		);
 	}
 	return tally;
@@ -538,6 +666,8 @@ function meshCell(
 				ring,
 				groundCap,
 				groundCap,
+				true,
+				true,
 			);
 			tally.faces++;
 		}
@@ -565,6 +695,18 @@ function meshCell(
 			)
 				end++;
 
+			// Whether another run of this same wall continues past either
+			// end -- the one place the weld must not reach past, or two
+			// coplanar runs of different colors overlap and fight.
+			const aboveOpacity = opacityOf(at(own, layer - 1));
+			const belowOpacity = opacityOf(at(own, end + 1));
+			const wallAbove =
+				aboveOpacity > 0 &&
+				opacityOf(at(other, layer - 1)) < aboveOpacity;
+			const wallBelow =
+				belowOpacity > 0 &&
+				opacityOf(at(other, end + 1)) < belowOpacity;
+
 			paint(block, face, i, j);
 			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
@@ -579,6 +721,8 @@ function meshCell(
 				ring,
 				layer,
 				end,
+				!wallAbove,
+				!wallBelow,
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -596,7 +740,8 @@ function meshCell(
  * centimetre under it, invisible. Where the levels differ, the two tilings'
  * jagged edges leave strips neither side's own cells cover, and the apron is
  * what shows there instead of the sky through the planet. Only the surface is
- * drawn: the caps, and a skirt on the edges facing away from the chunk.
+ * drawn: the caps, the cap steps between them, and the curtain that closes the
+ * ring's outer edge.
  */
 function meshApronCell(
 	chunk: Chunk,
@@ -604,8 +749,9 @@ function meshApronCell(
 	shape: WorldShape,
 	paint: CellPaint,
 	origin: Vec3,
-	cell: { face: number; i: number; j: number },
+	cell: Cell,
 	ring: (Column | null)[],
+	ringCells: (Cell | null)[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
@@ -614,6 +760,8 @@ function meshApronCell(
 	tint: number,
 	mix: number,
 	drop: number,
+	drawnHere: (cell: Cell) => boolean,
+	seamFloor: (cell: Cell) => number,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -621,13 +769,13 @@ function meshApronCell(
 	const degree = corners.length;
 	const own = sampler.columnAt(face, i, j);
 
-	// The ring, for the band to walk, the corner occlusion and the sky
-	// exposure. There is no skirt: a curtain hanging from the cap plane is
-	// coplanar with the neighbour's own cap wherever the two agree, which drew
-	// a dashed outline along every chunk boundary, so the apron replaced it.
+	// The ring, for the band to walk, the corner occlusion, the sky exposure,
+	// and -- for the cells this chunk does not itself draw -- which edges its
+	// surface stops at.
 	for (let k = 0; k < 6; k++) {
 		const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 		ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+		ringCells[k] = nb;
 	}
 
 	let bandTop = own.first;
@@ -667,7 +815,7 @@ function meshApronCell(
 	}
 	const sky = skyExposure(own.first, around, SKY_REACH);
 
-	// Up-caps only: the apron exists to be looked down at.
+	// The caps, to be looked down at.
 	for (let layer = from; layer <= to; layer++) {
 		const block = at(own, layer);
 		const here = opacityOf(block);
@@ -716,10 +864,146 @@ function meshApronCell(
 				ring,
 				groundCap,
 				groundCap,
+				true,
+				true,
 			);
 			tally.faces++;
 		}
 	}
+
+	// The walls a neighbour at this chunk's own level would draw for this
+	// cell, reproduced exactly -- same canonical cell, same ring, same colors,
+	// same radii, no drop. Where the chunk over there IS at this level it
+	// draws these very quads, the two copies land on one another, and a depth
+	// fight between identical colors paints one color. Where it is a level
+	// coarser nobody else draws them: a level draws the ground at the points
+	// it kept, so every step at the boundary stood open -- a dashed line of
+	// holes climbing every slope a level join crosses, one slit per terrace.
+	//
+	// **Every edge, not only the ring's outer ones.** The ring itself is drawn
+	// at this chunk's own heights inside the coarser chunk's territory, so the
+	// steps between two ring cells -- and between a ring cell and the rim cell
+	// it stands over -- need these walls exactly as much as the outer edges
+	// do. Gating them to the outer edges left each of those steps as a slit
+	// with the sea showing through it. The run condition is the whole
+	// duplicate rule: a wall belongs to its more opaque side, so an owned
+	// cell's own runs and an apron cell's never both fire for one edge.
+	for (let k = 0; k < degree; k++) {
+		const other = ring[k];
+		if (!other) continue;
+		let layer = from;
+		while (layer <= to) {
+			const block = at(own, layer);
+			const here = opacityOf(block);
+			if (here === 0 || opacityOf(at(other, layer)) >= here) {
+				layer++;
+				continue;
+			}
+			let end = layer;
+			while (
+				end + 1 <= to &&
+				at(own, end + 1) === block &&
+				opacityOf(at(other, end + 1)) < here
+			)
+				end++;
+
+			// Whether another run of this same wall continues past either
+			// end -- the one place the weld must not reach past, or two
+			// coplanar runs of different colors overlap and fight.
+			const aboveOpacity = opacityOf(at(own, layer - 1));
+			const belowOpacity = opacityOf(at(own, end + 1));
+			const wallAbove =
+				aboveOpacity > 0 &&
+				opacityOf(at(other, layer - 1)) < aboveOpacity;
+			const wallBelow =
+				belowOpacity > 0 &&
+				opacityOf(at(other, end + 1)) < belowOpacity;
+
+			paint(block, face, i, j);
+			shade(COLOR, sky);
+			debugTint(COLOR, tint, mix);
+			emitSide(
+				here === 1 ? translucent : opaque,
+				corners,
+				degree,
+				k,
+				capRadius(layer),
+				shape.radiusOfLayer(end + 1),
+				origin,
+				ring,
+				layer,
+				end,
+				!wallAbove,
+				!wallBelow,
+			);
+			tally.faces++;
+			tally.merged += end - layer;
+			layer = end + 1;
+		}
+	}
+
+	// The ring's outer edge, where this chunk's surface stops and another
+	// chunk's begins. Everything above walls the drops this chunk can see, and
+	// this is the one it cannot: the cell over that edge belongs to a chunk
+	// which may be drawing it at a different level of detail, and a level draws
+	// the ground at the points it kept rather than at the points between them.
+	// The two surfaces then stand apart with nothing between them, and a look
+	// along the ground goes in at one seam and out of the planet -- measured
+	// before this wall existed, 20.8% of the outer edges at a level join stood
+	// over the neighbour's ground by 4.91 m on average and 20 m at worst, on a
+	// world whose block is 2 m.
+	//
+	// The curtain's top is the lowest this cell's own geometry already reaches
+	// at that edge, and its foot is the lowest ground any level in play puts
+	// over there. Where the chunk beyond is at this one's own level the two are
+	// the same reading of the same lattice, the curtain has no span, and none
+	// is drawn.
+	//
+	// **It hangs from the apron, which is why it can hang at all.** A wall from
+	// a real rim cell starts in the cap plane, so wherever the neighbouring
+	// chunk put its own cap on that layer the two are coplanar and speckle
+	// through each other -- a dashed dark outline along every chunk boundary,
+	// which is what retired the skirt. An apron cell is already a centimetre
+	// low, so this starts a centimetre under the neighbour's cap instead of in
+	// it. Where it is not needed it hangs inside the neighbouring column's own
+	// rock, and the terrain shell is closed, so nothing can see it.
+	if (groundCap >= 0 && groundTop > 0 && opacityOf(at(own, groundCap)) === 2)
+		for (let k = 0; k < degree; k++) {
+			const beyond = ringCells[k];
+			const other = ring[k];
+			if (!beyond || !other || drawnHere(beyond)) continue;
+			const otherTop =
+				other.groundRadius > 0
+					? snappedSurface(
+							shape.crustTopRadius,
+							other.groundRadius,
+							grid,
+						)
+					: 0;
+			const top =
+				otherTop > 0 ? Math.min(groundTop, otherTop) : groundTop;
+			const foot = seamFloor(beyond);
+			if (foot <= 0 || foot >= top - 1e-9) continue;
+			const block = at(own, groundCap);
+			paint(block, face, i, j);
+			shade(COLOR, sky);
+			debugTint(COLOR, tint, mix);
+			emitSide(
+				opaque,
+				corners,
+				degree,
+				k,
+				top - drop,
+				foot - drop,
+				origin,
+				ring,
+				groundCap,
+				groundCap,
+				true,
+				true,
+			);
+			tally.faces++;
+		}
 
 	tally.apron++;
 }
@@ -777,9 +1061,38 @@ function emitSide(
 	ring: readonly (Column | null)[],
 	topLayer: number,
 	bottomLayer: number,
+	extendTop: boolean,
+	extendBottom: boolean,
 ): void {
-	const left = corners[(k + degree - 1) % degree]!;
-	const right = corners[k]!;
+	const leftCorner = corners[(k + degree - 1) % degree]!;
+	const rightCorner = corners[k]!;
+
+	// The face runs past its own ends as well as past its corners, wherever no
+	// other face of the same wall continues there -- the junction with a cap is
+	// then interior to this face rather than two edges meeting on one line.
+	// Where another run does continue, the extension would lie in that run's
+	// own plane and the two would fight; those ends stay exact, and exact is
+	// enough there because two stacked runs share their corner directions.
+	if (extendTop) topRadius += WALL_WELD;
+	if (extendBottom) bottomRadius -= WALL_WELD;
+
+	// The widened corners: each pushed past its own end along the edge, so the
+	// face overlaps whatever meets it on the corner line. See {@link WALL_WELD}.
+	const ex = rightCorner.x - leftCorner.x;
+	const ey = rightCorner.y - leftCorner.y;
+	const ez = rightCorner.z - leftCorner.z;
+	const weld =
+		WALL_WELD / (Math.sqrt(ex * ex + ey * ey + ez * ez) * topRadius);
+	const left = new Vec3(
+		leftCorner.x - ex * weld,
+		leftCorner.y - ey * weld,
+		leftCorner.z - ez * weld,
+	);
+	const right = new Vec3(
+		rightCorner.x + ex * weld,
+		rightCorner.y + ey * weld,
+		rightCorner.z + ez * weld,
+	);
 
 	// Two occluders per vertex, as everywhere else: the cell beyond the wall at
 	// the layer above or below, and the cell round the corner at this layer.

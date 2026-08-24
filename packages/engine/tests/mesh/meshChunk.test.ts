@@ -29,10 +29,12 @@ import {
 	canonicalCell,
 	cellCorners,
 	joinPath,
+	latticePosition,
 	neighbour,
 	positionToCell,
 	splitPath,
 } from "chamfer/addressing";
+import { coarseCell } from "chamfer/edit";
 import type { Geometry } from "chamfer/mesh";
 
 const DEPTH = 8;
@@ -99,6 +101,31 @@ function* triangles(geometry: Geometry, origin: Vec3) {
 		};
 		yield [corner(0), corner(1), corner(2)] as const;
 	}
+}
+
+/** Whether a segment meets any triangle of a soup. Möller-Trumbore. */
+function meets(
+	from: Vec3,
+	direction: Vec3,
+	limit: number,
+	soup: readonly (readonly [Vec3, Vec3, Vec3])[],
+): boolean {
+	for (const [a, b, c] of soup) {
+		const e1 = b.sub(a);
+		const e2 = c.sub(a);
+		const p = direction.cross(e2);
+		const det = e1.dot(p);
+		if (Math.abs(det) < 1e-12) continue;
+		const t = from.sub(a);
+		const u = t.dot(p) / det;
+		if (u < 0 || u > 1) continue;
+		const q = t.cross(e1);
+		const v = direction.dot(q) / det;
+		if (v < 0 || u + v > 1) continue;
+		const hit = e2.dot(q) / det;
+		if (hit > 0 && hit < limit) return true;
+	}
+	return false;
 }
 
 describe("opacityOf", () => {
@@ -510,6 +537,211 @@ describe("merging at a level seam", () => {
 		}
 	});
 
+	it("walls the band a coarser neighbour's ground leaves under the apron", () => {
+		// The apron is a lid: caps, and a wall wherever a cell in the ring
+		// stands over another cell the same chunk drew. At the ring's OUTER
+		// edge there is no such cell -- what is over there belongs to a
+		// neighbouring chunk, which may be drawing it a level coarser, and a
+		// level draws the ground at the points it kept rather than at the
+		// points between them. The two surfaces then stand apart with nothing
+		// between them, which reads as a bite out of the hillside with ground
+		// several metres lower showing through it.
+		//
+		// The wall is computable from one side because a point's height does
+		// not depend on who asks: the ground a coarser neighbour puts over a
+		// cell is this chunk's own reading of the coarse lattice point that
+		// cell falls into.
+		const rough = buildCoarseMap(seedFromString("seam-band"), {
+			level: 6,
+			cellMetres: 100,
+			relief: 200,
+		});
+		const steep = new WorldShape(1700, DEPTH, 260, maxCrustDepth(DEPTH));
+		const gen = new TerrainGenerator(rough.seed, steep, rough);
+		const n = 1 << DEPTH;
+		const m = 1 << (DEPTH - CHUNK_LEVEL);
+
+		/** Where a cell's ground cap is drawn, on the shared fine grid. */
+		const capOf = (cell: {
+			face: number;
+			i: number;
+			j: number;
+		}): number => {
+			const ground = gen.columnAt(cell.face, cell.i, cell.j).groundRadius;
+			return ground > 0
+				? steep.radiusOfLayer(steep.layerOfSurface(ground))
+				: 0;
+		};
+
+		let bands = 0;
+		let bare = 0;
+		for (const key of [5, 37, 96, 141, 202]) {
+			const address = ChunkAddress.fromKey(key, CHUNK_LEVEL);
+			const face = address.face;
+			const draws = (cell: {
+				face: number;
+				i: number;
+				j: number;
+			}): boolean => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (canon.face !== face) return false;
+				const split = splitPath(canon.i, canon.j, DEPTH, CHUNK_LEVEL);
+				for (let at = 0; at < split.path.length; at++)
+					if (split.path[at] !== address.path[at]) return false;
+				return true;
+			};
+
+			// The apron: the canonicalised outward neighbours of the cells the
+			// chunk draws, plus the three corners and their rings.
+			const apron = new Map<
+				number,
+				{ face: number; i: number; j: number }
+			>();
+			const put = (cell: { face: number; i: number; j: number }) => {
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				if (draws(canon)) return;
+				apron.set(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+					canon,
+				);
+			};
+			for (let q = 0; q <= m; q++)
+				for (let r = 0; q + r <= m; r++) {
+					const [i, j] = joinPath(address.path, q, r, DEPTH);
+					if (!draws({ face, i, j })) continue;
+					for (let k = 0; k < 6; k++) {
+						const nb = neighbour(face, n, i, j, k);
+						if (nb) put(nb);
+					}
+				}
+			for (const [cq, cr] of [
+				[0, 0],
+				[m, 0],
+				[0, m],
+			] as const) {
+				const [ci, cj] = joinPath(address.path, cq, cr, DEPTH);
+				const corner = canonicalCell(face, n, ci, cj);
+				put(corner);
+				for (
+					let k = 0;
+					k < cellCorners(corner.face, n, corner.i, corner.j).length;
+					k++
+				) {
+					const nb = neighbour(corner.face, n, corner.i, corner.j, k);
+					if (nb) put(nb);
+				}
+			}
+			const drawn = (cell: { face: number; i: number; j: number }) => {
+				if (draws(cell)) return true;
+				const canon = canonicalCell(cell.face, n, cell.i, cell.j);
+				return apron.has(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+				);
+			};
+
+			const chunk = generateChunk(
+				gen,
+				address,
+				CHUNK_LEVEL,
+				steep.crustDepth,
+			);
+			const built = buildChunkMesh(
+				chunk,
+				new ChunkColumnSampler(chunk, gen),
+				steep,
+				rough.seed,
+				{ apron: true, surfaceGrid: steep.blockSize },
+			);
+			const soup = [...triangles(built.opaque, built.origin)];
+
+			for (const cell of apron.values()) {
+				const corners = cellCorners(cell.face, n, cell.i, cell.j);
+				const mine = capOf(cell);
+				if (mine <= 0) continue;
+				for (let k = 0; k < corners.length; k++) {
+					const nb = neighbour(cell.face, n, cell.i, cell.j, k);
+					if (!nb) continue;
+					if (drawn(nb)) {
+						// A step between two cells this chunk itself draws.
+						// The chunk over there draws coarse cells, never
+						// these, so the wall between the ring's own heights
+						// is this chunk's job as much as the outer edges
+						// are -- the slits between ring cells showed the sea
+						// through every step the gate left out.
+						const theirsFine = capOf(nb);
+						if (theirsFine <= 0) continue;
+						const high = Math.max(mine, theirsFine);
+						const low = Math.min(mine, theirsFine);
+						if (high - low <= 1e-6) continue;
+						bands++;
+						const left =
+							corners[(k + corners.length - 1) % corners.length]!;
+						const middle = left.add(corners[k]!).normalize();
+						const step = latticePosition(nb.face, n, nb.i, nb.j)
+							.sub(latticePosition(cell.face, n, cell.i, cell.j))
+							.normalize();
+						let holed = false;
+						for (const f of [0.15, 0.4, 0.65, 0.9]) {
+							const from = middle
+								.scale(low + (high - low) * f)
+								.sub(step.scale(steep.blockSize));
+							if (!meets(from, step, 2 * steep.blockSize, soup)) {
+								holed = true;
+								break;
+							}
+						}
+						if (holed) bare++;
+						continue;
+					}
+					const coarse = coarseCell(
+						{ face: nb.face, i: nb.i, j: nb.j, layer: 0 },
+						DEPTH,
+						1,
+					);
+					const theirs = capOf({
+						face: coarse.face,
+						i: coarse.i << 1,
+						j: coarse.j << 1,
+					});
+					// The whole frontier face: from this chunk's own cap down
+					// to the ground the coarser level draws. Measuring from
+					// the lower of the two own-level caps instead is how the
+					// step walls between two fine cells across the boundary
+					// went unmeasured -- and on a slope they are most of it.
+					if (theirs <= 0 || mine - theirs <= 1e-6) continue;
+					bands++;
+
+					// A wall there stands on the edge shared with the cell
+					// beyond, which runs between corners `k - 1` and `k`.
+					// Short segments crossing that edge at several heights
+					// meet it if it exists -- several, because different
+					// pieces close the band at different depths and one
+					// mid-height probe misses a hole above or below it.
+					const left =
+						corners[(k + corners.length - 1) % corners.length]!;
+					const middle = left.add(corners[k]!).normalize();
+					const step = latticePosition(nb.face, n, nb.i, nb.j)
+						.sub(latticePosition(cell.face, n, cell.i, cell.j))
+						.normalize();
+					let holed = false;
+					for (const f of [0.15, 0.4, 0.65, 0.9]) {
+						const from = middle
+							.scale(theirs + (mine - theirs) * f)
+							.sub(step.scale(steep.blockSize));
+						if (!meets(from, step, 2 * steep.blockSize, soup)) {
+							holed = true;
+							break;
+						}
+					}
+					if (holed) bare++;
+				}
+			}
+		}
+		// The test has to bite: a world with no relief leaves no band at all.
+		expect(bands).toBeGreaterThan(20);
+		expect(bare).toBe(0);
+	});
+
 	it("walls the step between neighbours level at the coarse grid", () => {
 		// Two neighbours in one coarse layer can stand several fine layers
 		// apart once their caps snap to the shared fine grid, and the side
@@ -702,6 +934,101 @@ describe("merging at a level seam", () => {
 		expect(bare).toBeGreaterThan(0);
 		// ...and the apron reaches all of it.
 		expect(uncovered).toBe(0);
+	});
+});
+
+describe("the wall weld", () => {
+	// The vertical line where two walls meet holds vertices from both sides,
+	// and the two sets rarely agree -- runs merge over different spans, and
+	// across a chunk boundary one corner is computed against two origins. The
+	// rasterizer then leaves pinprick holes along the line, bright wherever
+	// the unlit inside of the planet is behind them. Every side face runs a
+	// few millimetres past its own corners so whatever meets it on that line
+	// is overlapped, never abutted.
+	it("reaches past its corner, into the rock around it", () => {
+		// A flat world with one three-layer pit dug into it, so every height
+		// is exact by construction: the pit's neighbour A draws a wall toward
+		// the pit B, and the third cell C at their shared corner is solid at
+		// the wall's mid-height. The weld must reach past the corner into C's
+		// rock; before it, the probe segment there met nothing at all.
+		const flat = flatCoarseMap(map.seed, 2);
+		const flatShape = new WorldShape(1700, DEPTH, 1, maxCrustDepth(DEPTH));
+		const gen = new TerrainGenerator(map.seed, flatShape, flat);
+		const n = 1 << DEPTH;
+		const m = 1 << (DEPTH - CHUNK_LEVEL);
+		const address = ChunkAddress.fromKey(0, CHUNK_LEVEL);
+		const [bi, bj] = joinPath(address.path, m >> 1, m >> 2, DEPTH);
+
+		const chunk = generateChunk(
+			gen,
+			address,
+			CHUNK_LEVEL,
+			flatShape.crustDepth,
+		);
+		const real = new ChunkColumnSampler(chunk, gen);
+		const dug = 3;
+		const sampler = {
+			columnAt(f: number, i: number, j: number) {
+				const col = real.columnAt(f, i, j);
+				const c = canonicalCell(f, n, i, j);
+				if (c.face !== 0 || c.i !== bi || c.j !== bj) return col;
+				const blocks = col.blocks.slice();
+				for (let l = col.first; l < col.first + dug; l++)
+					blocks[l] = BlockType.AIR;
+				return {
+					...col,
+					blocks,
+					first: col.first + dug,
+					// The dug layers are the lowest air the column has now.
+					last: col.first + dug - 1,
+					groundRadius: col.groundRadius - dug * flatShape.blockSize,
+				};
+			},
+		};
+		const built = buildChunkMesh(chunk, sampler, flatShape, map.seed, {});
+		const soup = [...triangles(built.opaque, built.origin)];
+
+		// A is the pit's neighbour toward direction 3, seen from the pit; k
+		// is the direction that leads back from A to the pit.
+		const a = neighbour(0, n, bi, bj, 3)!;
+		const corners = cellCorners(a.face, n, a.i, a.j);
+		const degree = corners.length;
+		let k = -1;
+		for (let d = 0; d < degree; d++) {
+			const nb = neighbour(a.face, n, a.i, a.j, d)!;
+			if (nb.i === bi && nb.j === bj) k = d;
+		}
+		expect(k).toBeGreaterThanOrEqual(0);
+
+		const ground = real.columnAt(a.face, a.i, a.j).groundRadius;
+		const capA = flatShape.radiusOfLayer(flatShape.layerOfSurface(ground));
+		const rMid = capA - 1.5 * flatShape.blockSize;
+
+		// The wall runs between corners k - 1 and k; its plane's normal is
+		// across the edge. Probe through the wall proper, then through the
+		// zone past corner k, where only the weld can be.
+		const left = corners[(k + degree - 1) % degree]!;
+		const right = corners[k]!;
+		const edge = right.sub(left).normalize();
+		const normal = edge.cross(right).normalize();
+		const probe = (past: number, r: number): boolean => {
+			const at = right.scale(r).add(edge.scale(past));
+			return meets(at.sub(normal.scale(0.0015)), normal, 0.003, soup);
+		};
+		// 2 mm inside its own edge: the wall itself.
+		expect(probe(-0.002, rMid)).toBe(true);
+		// 3 mm past the corner: the weld, inside cell C's rock.
+		expect(probe(0.003, rMid)).toBe(true);
+
+		// The wall must also run past its own ends, or the junction with the
+		// caps is two edges meeting on one line and the rasterizer dots it.
+		// 2 mm above A's cap, and 2 mm below the pit's floor -- both inside
+		// the zone only the end weld can occupy.
+		const floorR = flatShape.radiusOfLayer(
+			flatShape.layerOfSurface(ground) + dug,
+		);
+		expect(probe(-0.002, capA + 0.002)).toBe(true);
+		expect(probe(-0.002, floorR - 0.002)).toBe(true);
 	});
 });
 
