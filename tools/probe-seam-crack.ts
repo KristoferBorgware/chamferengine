@@ -10,9 +10,10 @@
  * the far side of it.
  *
  * This measures that band, in metres, over the level joins a real selection
- * actually produces. It reads terrain and cell sets only: no mesh is built, so
- * what it reports is the geometry the mesher is being asked to close rather than
- * a picture of it.
+ * actually produces, and then builds the chunk and fires short segments across
+ * the band at several heights to ask whether the mesh actually closes it. The
+ * band runs from the chunk's own cap down to the coarse ground -- the whole
+ * frontier face, not just the part below the neighbouring cell's own cap.
  *
  *   npx vite-node tools/probe-seam-crack.ts
  */
@@ -293,11 +294,13 @@ for (const altitude of [2, 60, 600]) {
 				const theirs = capOf(theirLod, there);
 				if (theirs <= 0) continue;
 
-				// The lowest this chunk's own geometry reaches at that edge:
-				// its cap, or the cap step down to the cell beyond it.
-				const beyond = capOf(sel.lod, canon);
-				const floor = beyond > 0 ? Math.min(mine, beyond) : mine;
-				const band = floor - theirs;
+				// The band this chunk's own geometry must close at that
+				// edge: from its own cap all the way down to the ground the
+				// coarser level draws. Not from the LOWER of the two own-level
+				// caps -- measuring from there is how the step walls between
+				// two fine cells across the boundary went unmeasured, and
+				// they are most of what a hillside shows.
+				const band = mine - theirs;
 				edges++;
 				if (band <= 1e-6) continue;
 				open++;
@@ -305,11 +308,13 @@ for (const altitude of [2, 60, 600]) {
 				if (band > shape.blockSize) overBlock++;
 				if (band > worst) worst = band;
 
-				// Is anything actually drawn across it? A wall there would
-				// stand on the edge shared with the cell beyond, which runs
-				// between corners `k - 1` and `k`, so a short segment through
-				// the middle of the band crossing that edge meets it if it
-				// exists.
+				// Is anything actually drawn across it? A wall there stands
+				// on the edge shared with the cell beyond, which runs between
+				// corners `k - 1` and `k`, so short segments through the band
+				// crossing that edge meet it if it exists -- at several
+				// heights, because the band can be closed by different pieces
+				// at different depths and a single mid-height probe misses a
+				// hole above or below it.
 				const corners = cellCorners(cell.face, n, cell.i, cell.j);
 				const left = corners[(k + degree - 1) % degree]!;
 				const right = corners[k]!;
@@ -317,10 +322,17 @@ for (const altitude of [2, 60, 600]) {
 				const across = latticeAt(sel.lod, canon)
 					.sub(latticeAt(sel.lod, cell))
 					.normalize();
-				const mid = middle.scale((floor + theirs) / 2);
-				const from = mid.sub(across.scale(shape.blockSize));
 				const tris = trianglesOf(sel.key, sel.chunkLevel, sel.lod);
-				if (!crosses(from, across, tris, 2 * shape.blockSize)) bare++;
+				let holed = false;
+				for (const f of [0.15, 0.4, 0.65, 0.9]) {
+					const mid = middle.scale(theirs + band * f);
+					const from = mid.sub(across.scale(shape.blockSize));
+					if (!crosses(from, across, tris, 2 * shape.blockSize)) {
+						holed = true;
+						break;
+					}
+				}
+				if (holed) bare++;
 			}
 		}
 	}

@@ -3,7 +3,7 @@ import type { Column } from "../generation/chunk/Column.js";
 import type { ColumnSampler } from "../generation/chunk/ColumnSampler.js";
 import type { MeshOptions } from "./MeshOptions.js";
 import type { MeshSink } from "./MeshSink.js";
-import type { Vec3 } from "../math/Vec3.js";
+import { Vec3 } from "../math/Vec3.js";
 import type { WorldShape } from "../world/WorldShape.js";
 import { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 import { MESH_DEFAULTS } from "./MeshOptions.js";
@@ -76,6 +76,27 @@ const SKY_REACH = 6;
  * cell exists, and a centimetre down is invisible where one does not.
  */
 const APRON_DROP = 0.01;
+
+/**
+ * How far a side face reaches past each of its own two corners, in metres.
+ *
+ * The vertical line where two walls meet holds vertices from both, and the two
+ * sets rarely agree: each wall is a run merged over its own neighbour's
+ * transitions, and across a chunk boundary the same corner is computed against
+ * two different origins. A rasterizer given two edges on one line with
+ * different vertices leaves pinprick holes along it -- dots of sky down the
+ * corner of a cliff, bright wherever the unlit inside of the planet is behind
+ * them.
+ *
+ * Each side face therefore runs this far past its corners, along its own
+ * plane. The extension is never visible: where the corner's third cell is air
+ * the wall around the corner exists -- the cell this face stands on is solid
+ * there, so a face toward that third cell is emitted too -- and the extension
+ * lands behind it; where the third cell is solid the extension is inside its
+ * rock. It closes the corner slit between two chunks' copies of one wall for
+ * the same reason.
+ */
+const WALL_WELD = 0.004;
 
 /**
  * How many levels coarser than itself a chunk assumes its neighbours may be.
@@ -769,7 +790,7 @@ function meshApronCell(
 	}
 	const sky = skyExposure(own.first, around, SKY_REACH);
 
-	// Up-caps only: the apron exists to be looked down at.
+	// The caps, to be looked down at.
 	for (let layer = from; layer <= to; layer++) {
 		const block = at(own, layer);
 		const here = opacityOf(block);
@@ -820,6 +841,55 @@ function meshApronCell(
 				groundCap,
 			);
 			tally.faces++;
+		}
+	}
+
+	// The walls a neighbour at this chunk's own level would draw against the
+	// ring, reproduced exactly -- same canonical cell, same ring, same colors,
+	// same radii, no drop. Where the chunk over there IS at this level it
+	// draws these very quads, the two copies land on one another, and a depth
+	// fight between identical colors paints one color. Where it is a level
+	// coarser nobody else draws them: a level draws the ground at the points
+	// it kept, so every step between two fine cells across the boundary stood
+	// open -- a dashed line of holes climbing every slope a level join
+	// crosses, one slit per terrace the boundary cuts.
+	for (let k = 0; k < degree; k++) {
+		const other = ring[k];
+		const past = ringCells[k];
+		if (!other || !past || drawnHere(past)) continue;
+		let layer = from;
+		while (layer <= to) {
+			const block = at(own, layer);
+			const here = opacityOf(block);
+			if (here === 0 || opacityOf(at(other, layer)) >= here) {
+				layer++;
+				continue;
+			}
+			let end = layer;
+			while (
+				end + 1 <= to &&
+				at(own, end + 1) === block &&
+				opacityOf(at(other, end + 1)) < here
+			)
+				end++;
+			paint(block, face, i, j);
+			shade(COLOR, sky);
+			debugTint(COLOR, tint, mix);
+			emitSide(
+				here === 1 ? translucent : opaque,
+				corners,
+				degree,
+				k,
+				capRadius(layer),
+				shape.radiusOfLayer(end + 1),
+				origin,
+				ring,
+				layer,
+				end,
+			);
+			tally.faces++;
+			tally.merged += end - layer;
+			layer = end + 1;
 		}
 	}
 
@@ -941,8 +1011,26 @@ function emitSide(
 	topLayer: number,
 	bottomLayer: number,
 ): void {
-	const left = corners[(k + degree - 1) % degree]!;
-	const right = corners[k]!;
+	const leftCorner = corners[(k + degree - 1) % degree]!;
+	const rightCorner = corners[k]!;
+
+	// The widened corners: each pushed past its own end along the edge, so the
+	// face overlaps whatever meets it on the corner line. See {@link WALL_WELD}.
+	const ex = rightCorner.x - leftCorner.x;
+	const ey = rightCorner.y - leftCorner.y;
+	const ez = rightCorner.z - leftCorner.z;
+	const weld =
+		WALL_WELD / (Math.sqrt(ex * ex + ey * ey + ez * ez) * topRadius);
+	const left = new Vec3(
+		leftCorner.x - ex * weld,
+		leftCorner.y - ey * weld,
+		leftCorner.z - ez * weld,
+	);
+	const right = new Vec3(
+		rightCorner.x + ex * weld,
+		rightCorner.y + ey * weld,
+		rightCorner.z + ez * weld,
+	);
 
 	// Two occluders per vertex, as everywhere else: the cell beyond the wall at
 	// the layer above or below, and the cell round the corner at this layer.
