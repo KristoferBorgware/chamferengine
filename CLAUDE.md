@@ -122,7 +122,10 @@ and duplicates information found there.
 - `tools/make-reference.js` — runs every verification script and writes
   `docs/REFERENCE.md`. Also fails if a script does not run, is cited by no
   document, or is named somewhere but missing. Not part of the doc build: it
-  executes everything, so run it when the maths changes.
+  executes everything, so run it when the maths changes. **A script whose
+  question is closed goes in its `SETTLED` list**: kept, cited and readable,
+  run by hand instead of on every build. `language.js` is the one there — the
+  language is chosen, and it spawns six toolchains to re-derive that.
 - `tools/check-coverage.js` — reports facts (numbers, identifiers, links, bold
   terms) that an edit dropped from the corpus. Run it after rewriting prose.
 - `tools/take-frame.mjs` — launches headless Chromium on a software adapter,
@@ -185,7 +188,7 @@ them before touching either the lookup or the mesher.
 
 [`docs/REFERENCE.md`](docs/REFERENCE.md) is every script's actual output in one
 generated page — the fastest way to look a number up without reading the
-argument around it.
+argument around it. A settled script names its reason there in place of output.
 
 ## Hard invariants
 
