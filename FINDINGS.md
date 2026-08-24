@@ -10,51 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** high
-**Effort:** large
-**Found:** 2026-08-24, chasing screenshots of triangular notches along real
-chunk seams, always where a fine chunk meets a coarser one
-**Where:** `packages/engine/src/mesh/meshChunk.ts` (`meshApronCell`,
-`APRON_DROP`), `packages/engine/src/generation/chunk/selectChunks.ts`
-(`DETAIL`); measured with a new script, `tools/probe-seam-height.ts`
-
-**What happens.** A fine chunk and a coarse neighbour each sample the terrain
-function at their own spacing, so on sloped ground they land on different
-points and get different heights back — the apron was built to paper over a
-different problem, a tiling gap between two different-sized hexagon grids,
-by drawing one side's cap 1 cm lower so the other side wins the depth test.
-On flat ground the two heights agree and the trick works. On real relief
-they do not: `probe-seam-height.ts` walked 115 real fine/coarse chunk pairs
-across five faces and found mismatches up to 22 m on mountainous ground
-(face 7), with 15 to 35% of a boundary's cells more than a full block apart.
-A 1 cm drop cannot bridge a 22 m one, so the two sides' caps show through
-each other as a jagged edge — the notches in the screenshots. Separately,
-`selectChunks`'s recursion has no step that keeps two chunks that end up
-next to each other within one level of detail of each other, so the gap at
-any given seam is not even bounded to a single level's worth of difference.
-
-**Why it matters.** This is what the user is seeing today, on the shipped
-default world, with caves off and nothing unusual turned on — it needs
-sloped ground and a level join, and the reference planet has both
-everywhere. It is the surface form of F-025's cave-mouth gap: same missing
-piece, but visible on every hillside instead of behind a feature that ships
-off.
-
-**What would fix it.** F-025 already named the real fix and it applies here
-unchanged: the mesher does not know a neighbouring chunk's level, so it
-cannot ask what height the neighbour actually drew and bridge to it. Telling
-each chunk its neighbours' levels, and re-meshing a rim when a neighbour's
-level changes, lets the finer chunk emit a wall down to the coarse
-neighbour's real height instead of assuming the two already agree. That is a
-residency and worker-protocol change, not a tweak to `APRON_DROP` or the
-apron's reach.
-
----
-
 ### F-072 — `erodeFreeDroplets`'s slicing test fails under load and passes on its own
 
 **Kind:** risk
@@ -1577,6 +1532,69 @@ when the ground moves, so nothing else has to change.
 ---
 
 ## Closed
+
+### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** large
+**Found:** 2026-08-24, chasing screenshots of triangular notches along real
+chunk seams, always where a fine chunk meets a coarser one
+**Where:** `packages/engine/src/mesh/meshChunk.ts` (`meshApronCell`,
+`APRON_DROP`), `packages/engine/src/generation/chunk/selectChunks.ts`
+(`DETAIL`); measured with a new script, `tools/probe-seam-height.ts`
+
+**What happens.** A fine chunk and a coarse neighbour each sample the terrain
+function at their own spacing, so on sloped ground they land on different
+points and get different heights back — the apron was built to paper over a
+different problem, a tiling gap between two different-sized hexagon grids,
+by drawing one side's cap 1 cm lower so the other side wins the depth test.
+On flat ground the two heights agree and the trick works. On real relief
+they do not: `probe-seam-height.ts` walked 115 real fine/coarse chunk pairs
+across five faces and found mismatches up to 22 m on mountainous ground
+(face 7), with 15 to 35% of a boundary's cells more than a full block apart.
+A 1 cm drop cannot bridge a 22 m one, so the two sides' caps show through
+each other as a jagged edge — the notches in the screenshots. Separately,
+`selectChunks`'s recursion has no step that keeps two chunks that end up
+next to each other within one level of detail of each other, so the gap at
+any given seam is not even bounded to a single level's worth of difference.
+
+**Why it matters.** This is what the user is seeing today, on the shipped
+default world, with caves off and nothing unusual turned on — it needs
+sloped ground and a level join, and the reference planet has both
+everywhere. It is the surface form of F-025's cave-mouth gap: same missing
+piece, but visible on every hillside instead of behind a feature that ships
+off.
+
+**What would fix it.** F-025 already named the real fix and it applies here
+unchanged: the mesher does not know a neighbouring chunk's level, so it
+cannot ask what height the neighbour actually drew and bridge to it. Telling
+each chunk its neighbours' levels, and re-meshing a rim when a neighbour's
+level changes, lets the finer chunk emit a wall down to the coarse
+neighbour's real height instead of assuming the two already agree. That is a
+residency and worker-protocol change, not a tweak to `APRON_DROP` or the
+apron's reach.
+
+**Closed:** 2026-08-24, promoted to `plans/v0.4.1.md`, I-16, and built there.
+
+The diagnosis held and the remedy did not. The two levels really do stand at
+different heights and the apron's centimetre really cannot bridge it, but the
+apron's coverage was never the thing that failed: what failed is that the apron
+is a **lid**, with no wall at its outer edge. And the fix needs no protocol
+change at all, because **a point's height does not depend on who asks** — a
+coarser neighbour's ground is this chunk's own reading of the coarse lattice
+point a cell falls into, so each chunk can compute what every candidate level
+would draw and wall down to it from one side. `probe-seam-height.ts`'s 22 m is
+the size of the difference; `probe-seam-crack.ts` finds where it opens a band,
+and that number is 20.0% of the outer edges at a level join, 5.13 m on average.
+
+The worry about the gap being unbounded is also measured away: over every pair
+of adjacent cells in a real selection, at three altitudes and across the whole
+range of the `detail` knob, two neighbouring chunks are **never** more than one
+level apart.
+
+---
 
 ### F-071 — A chunk meshes 54 cells it can never be told about, so an edit at a chunk border leaves a wall standing and a hole to see through
 

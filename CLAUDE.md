@@ -632,6 +632,37 @@ Violating any of these breaks the design. They are not tunable.
   (`volume.js`). Raising `strength` without raising frequency buys a rougher
   surface and an 11x face bill and **zero caves**. Caves are what create
   multi-span columns (13-32% of them); rough surfaces do not.
+- **THE APRON IS A LID, AND A LID HAS AN OUTER EDGE** (`meshApronCell`,
+  `SEAM_JUMP`, `plans/v0.4.1.md` I-16). A chunk draws its own cells and one ring
+  past them, and that ring emits up-caps plus a wall wherever a ring cell stands
+  over another cell **the same chunk drew**. At the ring's outer edge there is
+  no such cell: what is over there belongs to a neighbouring chunk, which may be
+  drawing it a level coarser, and **a level draws the ground at the points it
+  kept rather than at the points between them**. Measured over the joins a real
+  selection makes, **254 of 1,267** outer edges — **20.0%** — stand over the
+  neighbour's ground with nothing between, by **5.13 m** on average and **20 m**
+  at worst on a 2 m block world, 230 of them taller than a whole block. The
+  apron's centimetre settles a tie between two copies of one cell; it cannot
+  bridge a step. **It is not a hole, and looking for one is what hid it** — the
+  neighbour's own surface carries on underneath, so grazing rays from inside the
+  crust escape at **0.07%** at a join against **0.00%** away from one and the
+  fix moves neither (`tools/probe-seam-leak.ts`). What a viewer sees is the lid
+  ending in mid-air with ground metres lower behind it. The fix is a **curtain
+  hung from the apron's own outer edge**, and it needs no protocol change
+  because **a point's height does not depend on who asks**: a coarse
+  generator's `columnAt(i, j)` and a fine one's `columnAt(i << lod, j << lod)`
+  agree to the bit, so a chunk can evaluate what **every** candidate level would
+  draw rather than being told which one is there. Which coarse point a cell
+  falls into is `hexRound` on its weights, never a shift. How many levels to
+  consider is measured: **one**, over every adjacent pair in a real selection at
+  three altitudes and across the whole range of the `detail` knob, 1 to 8. **It
+  hangs from the apron, which is why it can hang at all** — a wall from a real
+  rim cell starts in the cap plane and speckles through a level neighbour's own
+  cap, which is what retired the skirt, while an apron cell is already a
+  centimetre low and so starts under it. Where it is not needed it hangs inside
+  the neighbouring column's rock, which nothing can see into. **254 of 254 open
+  bands had nothing across them before; 0 of 254 after**, for **0.9%** more
+  faces, and `MESHER_REACH` stays 2 (measured, not assumed).
 - **A LOD seam is closed by the APRON, and a cave mouth by neither** (`seam.js`,
   doc 14). Each chunk draws the ring of cells one step past its own rim, at its
   own level, a centimetre low — both levels' surfaces then cover the strip and
