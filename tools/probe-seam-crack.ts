@@ -217,6 +217,8 @@ function latticeAt(lod: number, cell: Cell): Vec3 {
 let edges = 0;
 let open = 0;
 let bare = 0;
+let inner = 0;
+let innerBare = 0;
 let worst = 0;
 let overBlock = 0;
 let sum = 0;
@@ -264,9 +266,49 @@ for (const altitude of [2, 60, 600]) {
 				if (!nb) continue;
 				const canon = canonicalCell(nb.face, n, nb.i, nb.j);
 				const key = `${canon.face}:${canon.i}:${canon.j}`;
-				// An edge onto a cell this chunk also draws is walled by the
-				// ordinary cap step. Only the ring's outer edge is bare.
-				if (own.has(key) || apron.has(key)) continue;
+				// An edge onto a cell this chunk also draws: the step between
+				// the two caps needs a wall from THIS chunk wherever the ring
+				// sits in coarser territory, because the chunk over there
+				// draws coarse cells and never these. Believing the cap step
+				// covered it is how the slits between ring cells -- the sea
+				// showing through a missing step wall -- went unmeasured.
+				if (own.has(key) || apron.has(key)) {
+					const ringLod = lodOf({
+						face: cell.face,
+						i: cell.i << sel.lod,
+						j: cell.j << sel.lod,
+					});
+					if (ringLod === null || ringLod <= sel.lod) continue;
+					const theirsFine = capOf(sel.lod, canon);
+					if (theirsFine <= 0) continue;
+					const high = Math.max(mine, theirsFine);
+					const low = Math.min(mine, theirsFine);
+					if (high - low <= 1e-6) continue;
+					inner++;
+					const corners = cellCorners(cell.face, n, cell.i, cell.j);
+					const left = corners[(k + degree - 1) % degree]!;
+					const right = corners[k]!;
+					const middle = left.add(right).normalize();
+					const across = latticeAt(sel.lod, canon)
+						.sub(latticeAt(sel.lod, cell))
+						.normalize();
+					const tris = trianglesOf(
+						sel.key,
+						sel.chunkLevel,
+						sel.lod,
+					);
+					for (const f of [0.15, 0.4, 0.65, 0.9]) {
+						const mid = middle.scale(low + (high - low) * f);
+						const from = mid.sub(across.scale(shape.blockSize));
+						if (
+							!crosses(from, across, tris, 2 * shape.blockSize)
+						) {
+							innerBare++;
+							break;
+						}
+					}
+					continue;
+				}
 
 				// Whose ground is over there, and at which level it is drawn.
 				// At the finest lattice the neighbour's cell IS this one; a
@@ -348,6 +390,11 @@ console.log(
 console.log(
 	`${bare} of those ${open} have nothing drawn across the middle of the ` +
 		`band (${((100 * bare) / Math.max(1, open)).toFixed(1)}%).`,
+);
+console.log(
+	`${inner} steps between two drawn cells inside coarser territory, ` +
+		`${innerBare} of them with no wall across the step ` +
+		`(${((100 * innerBare) / Math.max(1, inner)).toFixed(1)}%).`,
 );
 console.log(
 	`open band: ${(sum / Math.max(1, open)).toFixed(2)} m mean, ` +
