@@ -656,10 +656,10 @@ Violating any of these breaks the design. They are not tunable.
   falls into is `hexRound` on its weights, never a shift. How many levels to
   consider is measured: **one**, over every adjacent pair in a real selection at
   three altitudes and across the whole range of the `detail` knob, 1 to 8. **It
-  hangs from the apron, which is why it can hang at all** — a wall from a real
-  rim cell starts in the cap plane and speckles through a level neighbour's own
-  cap, which is what retired the skirt, while an apron cell is already a
-  centimetre low and so starts under it. Where it is not needed it hangs inside
+  hangs from the apron and never from a rim cell** — a wall from a rim cell
+  starts in the cap plane and speckles through a level neighbour's own cap,
+  while an apron cell is already a centimetre low, so the curtain starts under
+  that cap instead. Where it is not needed it hangs inside
   the neighbouring column's rock, which nothing can see into. **254 of 254 open
   bands had nothing across them before; 0 of 254 after**, for **0.9%** more
   faces, and `MESHER_REACH` stays 2 (measured, not assumed).
