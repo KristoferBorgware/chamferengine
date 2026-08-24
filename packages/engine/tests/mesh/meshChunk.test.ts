@@ -1011,14 +1011,24 @@ describe("the wall weld", () => {
 		const right = corners[k]!;
 		const edge = right.sub(left).normalize();
 		const normal = edge.cross(right).normalize();
-		const probe = (past: number): boolean => {
-			const at = right.scale(rMid).add(edge.scale(past));
+		const probe = (past: number, r: number): boolean => {
+			const at = right.scale(r).add(edge.scale(past));
 			return meets(at.sub(normal.scale(0.0015)), normal, 0.003, soup);
 		};
 		// 2 mm inside its own edge: the wall itself.
-		expect(probe(-0.002)).toBe(true);
+		expect(probe(-0.002, rMid)).toBe(true);
 		// 3 mm past the corner: the weld, inside cell C's rock.
-		expect(probe(0.003)).toBe(true);
+		expect(probe(0.003, rMid)).toBe(true);
+
+		// The wall must also run past its own ends, or the junction with the
+		// caps is two edges meeting on one line and the rasterizer dots it.
+		// 2 mm above A's cap, and 2 mm below the pit's floor -- both inside
+		// the zone only the end weld can occupy.
+		const floorR = flatShape.radiusOfLayer(
+			flatShape.layerOfSurface(ground) + dug,
+		);
+		expect(probe(-0.002, capA + 0.002)).toBe(true);
+		expect(probe(-0.002, floorR - 0.002)).toBe(true);
 	});
 });
 
