@@ -1,5 +1,5 @@
 /**
- * Earth's own air, kept as the shape every planet's atmosphere is built from.
+ * Earth's own air, kept only as the proof of why it cannot be scaled down.
  *
  * Optical depth is a property of air times a path length through it, and
  * shrinking a planet shrinks only the path. Air literally scaled to a 1,700 m
@@ -8,12 +8,11 @@
  * that way needs air 3,748 times denser or an atmosphere five times the
  * planet's radius, and neither is a real atmosphere.
  *
- * So nothing here is drawn directly. {@link planetAtmosphere} takes a world's
- * own height and its own wanted zenith depth and builds an atmosphere to
- * match, keeping Earth's ratios -- how fast Rayleigh and Mie thin relative to
- * each other, how much bluer the sky is than the sunset -- at any size. Angles
- * scale and path lengths do not: the moon survives shrinking this way, and the
- * sky needs a planet-sized atmosphere rather than a lift onto Earth's.
+ * Nothing here is drawn directly. What ships, {@link planetAtmosphere} below,
+ * does not lift these numbers onto a smaller world at all -- it builds a
+ * planet-sized atmosphere from its own knobs instead. This constant and
+ * {@link zenithOpticalDepth} stay only because a page in `docs/` still argues
+ * the scaling claim from them.
  */
 export const ATMOSPHERE = {
 	/** Metres. Earth's, not the planet's. */
@@ -48,66 +47,66 @@ export function zenithOpticalDepth(
 	return coefficient * scaleHeight;
 }
 
-/** How many Rayleigh scale heights Earth's air keeps scattering over. */
-const EARTH_TOP_RATIO = ATMOSPHERE.thickness / ATMOSPHERE.rayleighScaleHeight;
-
-/** How much shorter Earth's haze thins over than its blue does. */
-const EARTH_MIE_SHARE =
-	ATMOSPHERE.mieScaleHeight / ATMOSPHERE.rayleighScaleHeight;
-
-/** Earth's own green-plus-haze zenith reading, the scale below is measured against. */
-const EARTH_ZENITH = zenithOpticalDepth(
-	ATMOSPHERE.rayleigh[1] + ATMOSPHERE.mie,
-	ATMOSPHERE.rayleighScaleHeight,
-);
-
-/** The seven numbers a shader needs to draw one planet's own air. */
+/**
+ * What one planet's own air is, in Sebastian Lague's atmosphere model.
+ *
+ * **Replaced, not tuned.** The zenith-depth model above was one answer to the
+ * scaling problem this file's own doc comment proves; this is a different one
+ * -- Rayleigh alone, one density curve, wavelengths a person can read. There
+ * is no Mie term and no separate haze: a single exponential-times-linear
+ * falloff stands in for both, and what colour it scatters comes from three
+ * wavelengths run through the same inverse-fourth-power law real air obeys.
+ */
 export interface PlanetAtmosphere {
 	readonly planetRadius: number;
 	readonly topRadius: number;
-	readonly rayleighScaleHeight: number;
-	readonly mieScaleHeight: number;
-	readonly rayleigh: readonly [number, number, number];
-	readonly mie: number;
-	readonly mieDirection: number;
+
+	/** How sharply the air thins with height, as one dimensionless number. */
+	readonly densityFalloff: number;
+
+	/** Scattering per metre at red, green and blue, already at its strength. */
+	readonly scattering: readonly [number, number, number];
+}
+
+/** The five knobs the panel exposes, before they become a shader's numbers. */
+export interface AtmosphereKnobs {
+	/** Nanometres, one per channel -- what the inverse-fourth-power law reads. */
+	readonly wavelengths: readonly [number, number, number];
+
+	/** Multiplies every wavelength's coefficient by the same amount. */
+	readonly scatteringStrength: number;
+
+	/** How sharply density falls from the surface to the top of the air. */
+	readonly densityFalloff: number;
+
+	/** Fraction of the planet's own radius the air reaches past it. */
+	readonly atmosphereScale: number;
 }
 
 /**
  * A planet's own atmosphere, in its own metres.
  *
- * B2 of I-1: no lift, no mapping onto Earth's radius. `top` is metres above
- * `radius` where the air is thin enough to stop, exactly the way the shipped
- * demo's candidate B built it — the scale height is `top` divided by Earth's
- * own top-to-scale-height ratio, so a taller atmosphere both reaches further
- * and thins more gradually, the two moving together the way a real one does.
- *
- * `zenithDepth` is the reading looking straight up, taken as the green
- * channel plus haze the way {@link EARTH_ZENITH} is. Every coefficient scales
- * by the same factor to reach it, which keeps Earth's spectral shape — blue
- * scatters more than red — at any strength, so a thinner air makes a paler
- * sky rather than a differently coloured one.
+ * `topRadius` is `radius * (1 + atmosphereScale)` -- a fraction of the body's
+ * own size, so the same **Atmosphere scale** means the same picture on a
+ * moon and on a planet twenty times its radius. **Rayleigh's own law**:
+ * scattering runs as the inverse fourth power of wavelength, so shorter
+ * (bluer) light scatters harder than longer (redder) light by construction --
+ * red at 700 nm scatters `(400/700)^4 ≈ 0.107` of what 400 nm would, blue at
+ * 460 nm scatters `0.573`. **Scattering strength** is the one knob that moves
+ * all three together, the way real air gets thicker or thinner without
+ * changing its colour.
  */
 export function planetAtmosphere(
 	radius: number,
-	top: number,
-	zenithDepth: number,
+	knobs: AtmosphereKnobs,
 ): PlanetAtmosphere {
-	const rayleighScaleHeight = top / EARTH_TOP_RATIO;
-	const mieScaleHeight = rayleighScaleHeight * EARTH_MIE_SHARE;
-	const scale =
-		(ATMOSPHERE.rayleighScaleHeight / rayleighScaleHeight) *
-		(zenithDepth / EARTH_ZENITH);
+	const scattering = knobs.wavelengths.map(
+		(nm) => (400 / nm) ** 4 * knobs.scatteringStrength,
+	) as [number, number, number];
 	return {
 		planetRadius: radius,
-		topRadius: radius + top,
-		rayleighScaleHeight,
-		mieScaleHeight,
-		rayleigh: ATMOSPHERE.rayleigh.map((b) => b * scale) as [
-			number,
-			number,
-			number,
-		],
-		mie: ATMOSPHERE.mie * scale,
-		mieDirection: ATMOSPHERE.mieDirection,
+		topRadius: radius * (1 + knobs.atmosphereScale),
+		densityFalloff: knobs.densityFalloff,
+		scattering,
 	};
 }

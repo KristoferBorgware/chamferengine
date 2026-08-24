@@ -346,68 +346,22 @@ Below about 6° of elevation a 10 m tower's shadow is **longer than the visible
 world**. So a shadow scheme never needs to reach further than the horizon —
 beyond that, curvature has already hidden both the shadow and whatever cast it.
 
-### The map is already the answer, so a shadow costs no second pass
+### A depth buffer from the sun, cut into cascades
 
 The usual way to shadow terrain is to render it again from the sun's point of
-view and compare depths. That is a second pass over every chunk in view, three
-or four times over for cascades, against a world made entirely of hard edges.
-
-There is a cheaper answer here, and it comes from something this design already
-has. **The coarse map is the terrain** ([doc 08](08-terrain-generation.md)):
-one height per coarse cell, and the generator reads a height off it and adds
-nothing. So the question a shadow asks — *is anything between this point and
-the sun* — is a question the map can answer directly. Walk from the point
-toward the sun, and at each step ask whether the ground stands above the walk.
-
-The map is small enough to hand to the GPU whole. One layer per icosahedron
-face, each holding that face's triangle of lattice points in the corner of a
-square: **2.6 MB** at the shipped map level, with just under half of each
-square wasted and no indirection to read it. A direction gives a face and two
-lattice coordinates, and those *are* the texture coordinates.
-
-Three things make the walk cheap:
-
-- **The steps grow.** Near ground has to be sampled finely enough to catch the
-  bank a few metres away; far ground has to be reached at all. Twenty-four
-  steps spread geometrically from 6 m to the reach cover both.
-- **The face rarely changes.** A face edge is 7,100 m long and a shadow ray is
-  a kilometre or two, so a ray almost never leaves the face it started in.
-  Checking the face it was last in is three dot products; finding a new one is
-  twenty.
-- **A near miss softens for nothing.** Divide how far the ray cleared the
-  ground by how far it had travelled and that is the angle it missed by. Take
-  the smallest such angle along the walk and a shadow has a soft edge with no
-  second sample. One over that number is the width of the penumbra: 60 puts it
-  at a degree either side, against the sun's own half-degree.
-
-The march starts on the **map's** own surface, not on the block the fragment
-belongs to. The two agree to within the block the height was rounded into, and
-a ray starting under the map is in shadow from its first step.
-
-What this cannot give is a block shadowing the block beside it: a map cell is
-32 m and a block is 1 m. It gives the shadows that carry the shape of a
-landscape and leaves the metre-scale ones to the corner darkening the mesher
-already bakes.
-
-**The ground and the sea run the same walk**, as one piece of shader source
-both include. It declares its own bind group and takes the sun as an argument,
-so it depends on nothing either shader has to hand it — and the sea needs it
-most, being at sea level and therefore in the shade of anything at all
-([doc 25](25-water.md)).
-
-### The map cannot see a thing that was not generated, so the sun looks too
-
-The walk over the coarse map has a hard limit, and it is not resolution. The
-map is one height per 32 m cell **of the generated world**. It does not hold a
-block anybody placed, it does not hold a mob, and it will never hold a player.
-Every shadow it can cast is a shadow of terrain that was there before anyone
-arrived.
-
-So the sun also takes its own picture: a depth buffer rendered from the sun's
-direction, holding how far the nearest surface is along the light. Anything
-that can draw itself can be in it. Reading it is one question — *is this point
-further along the light than whatever the sun saw here?* — and if it is,
-something is in the way.
+view and compare depths — one buffer holding how far the nearest surface is
+along the light, so reading it is one question: *is this point further along
+the light than whatever the sun saw here?* If it is, something is in the way.
+Anything that can draw itself can be in the buffer, which is what a walk over
+the coarse map ([doc 08](08-terrain-generation.md)) cannot offer: that map is
+one height per 32 m cell **of the generated world**, so a version of this
+shadow tried against the map first could shadow terrain but never a placed
+block, a mob, or anything moving, and cost a per-fragment march for it. The
+sun's own picture reaches all of those and costs three more passes over the
+world's geometry instead — a trade this project now takes. The map walk was
+built, measured and then removed: it cost more per fragment than the
+cascades below cost for the whole frame, and the cascades already cover
+everything that draws itself, which the walk could never do.
 
 One buffer covering everything in view spends its texels wrong. It holds a
 fixed number of them however far it is stretched, so the ground underfoot and
@@ -446,69 +400,32 @@ answers *nearer than this?* per texel and averages the answers, so the
 hardware's own filtering softens the edge. Averaging the depths instead would
 put a shadow halfway up a wall.
 
-### The two shadows are each other's blind spot
+**The ground and the sea run the same read**, as one piece of shader source
+both include. It declares its own bind group and takes the sun as an
+argument, so it depends on nothing either shader has to hand it — and the sea
+needs it most, being at sea level and therefore in the shade of anything at
+all ([doc 25](25-water.md)).
 
-Neither technique is a replacement for the other, and the combination is one
-`min`.
-
-|  | The walk over the map | The sun's own picture |
-|---|---|---|
-| Reaches | the horizon | 260 m |
-| Resolution | 32 m | 2 cm near, 23 cm far |
-| Costs | no extra pass | the world drawn three more times |
-| Sees | generated terrain | anything that draws itself |
-
-The walk carries the shadow of a range across a valley a kilometre away, which
-no cascade has the box for. The cascades carry the shadow of one block on the
-block beside it, and of anything placed, carried or moving, which the map
-cannot represent at all. A point is as lit as the darker of the two says.
-
-They hand over rather than meeting at a line: the furthest cascade fades out
-over the last 15% of its reach, and past that the walk is the only answer.
-
-**Each is switched on its own**, because they cost different things and fail
-differently. The walk is the expensive one per fragment and it is the one to
-turn off on a weak machine; the maps are three more passes over the world's
-geometry and they are the one to turn off when there is nothing dynamic in the
-scene to need them. How dark a shadow goes is one setting over both, so
-turning one off does not change the depth of the other.
-
-### A gentle world has almost nowhere for a shadow to fall
+### Ground shadows itself only where the terrain is steep enough
 
 Ground shadows itself only where its own slope is steeper than the sun is
-high. That makes the shipped world's shadows a dawn and dusk feature, and the
-measurement says so plainly.
+high. Since the shipped ground runs **11.1°** at the median and 38.1° at the
+99th percentile ([doc 08](08-terrain-generation.md)), by the time the sun is a
+third of the way up the sky there is almost nothing left standing steeply
+enough to shade anything, which makes the shipped world's shadows mostly a
+dawn and dusk feature.
 
-> **[measured]** `tools/trial-shadow.ts`, a 3,000 m patch of the shipped
-> world, 65,536 points, shadow reach 1,600 m.
->
-> | Sun above the horizon | Fully shadowed | Partly |
-> |---|---|---|
-> | 5° | **22.7%** | 13.9% |
-> | 10° | **15.2%** | 7.1% |
-> | 20° | 4.6% | 2.1% |
-> | 35° | 0.1% | 0.1% |
-> | 60° | 0.0% | 0.0% |
-
-That is the terrain's own gradient answering: the shipped ground runs
-**11.1°** at the median and 38.1° at the 99th percentile
-([doc 08](08-terrain-generation.md)), so by the time the sun is a third of the
-way up the sky there is almost nothing left standing steeply enough to shade
-anything.
-
-It also explains why a shadow is easy to under-sell. The direct term is
+That also explains why a shadow is easy to under-sell. The direct term is
 `sin(elevation)` of what the sun would give overhead, so at 8° a shadow can
 only take away 14% of the light that was there — and the light that was there
 is the smaller half of a lit surface's total. The shadow is doing its job; what
 makes it read is the exposure applied afterwards, not the shadow.
 
-### The clouds are the only moving thing, so they get a third shadow
+### The clouds are the only moving thing, so they get a second shadow
 
-Neither of the two shadows above can put a cloud on the ground. The coarse map
-is a picture of the **generated** ground, and a cloud is neither ground nor
-generated into it. The cascades are fitted to a sphere around what the camera
-sees and reach 260 m at the shipped settings, while the low deck stands
-**3,000 m** over a planet **6,801 m** in radius
+The cascades cannot put a cloud on the ground. They are fitted to a sphere
+around what the camera sees and reach 260 m at the shipped settings, while the
+low deck stands **3,000 m** over a planet **6,801 m** in radius
 ([doc 32](32-sky-clouds-and-moon.md)) — so no cascade box comes within a
 kilometre of a cloud, and stretching one up the sun until it did would spend
 every texel on empty air.
@@ -546,15 +463,13 @@ the same wind** as the one drawn into the picture, turned to face the sun
 instead of the eye and writing its opacity instead of its colour. A cloud
 floating off its own shade is then impossible rather than merely unlikely.
 
-**A cloud shadow multiplies, where the two ground shadows take the darker of
-themselves.** The hill is either in the way or it is not, so the darker of the
-walk and the cascades is the answer. A cloud is neither, so what it leaves is a
+**A cloud shadow multiplies, where the cascades are a yes or a no.** A hill is
+either in the way or it is not; a cloud is neither, so what it leaves is a
 *fraction of the light still there* — and a cloud shadow falling inside a
 hill's shadow takes its share of what the hill already left.
 
-It also has its own darkness rather than a share of **How dark**, because one
-number that read right on a mountain would black the ground out under a
-cumulus.
+It also has its own darkness knob, because one number that read right on a
+mountain would black the ground out under a cumulus.
 
 How much it darkens is set by how much cloud there is, and the shipped sky
 is thinner than it looks:
@@ -570,9 +485,9 @@ is thinner than it looks:
 
 That is the sky's property and not the shadow's: at a denser sky the same code
 draws far more. Measured at 5,000 clusters against the shipped 1,200, a 72° sun
-and the cascades and the walk both off, the fifth percentile of the on-against-
-off ratio is **0.915** — the most shadowed twentieth of the ground is 8.5%
-darker — over 916,000 pixels.
+and the cascades off, the fifth percentile of the on-against-off ratio is
+**0.915** — the most shadowed twentieth of the ground is 8.5% darker — over
+916,000 pixels.
 
 ### After dark the moon is the only thing with a direction
 
@@ -609,24 +524,18 @@ An eye does not work that way. It opens.
 So the frame is drawn into a floating-point image and exposed on the way to
 the screen. Two things happen there:
 
-- **An exposure**, from the light there actually is. Flat ground takes the
-  sky's share whenever the sun is up at all and the sun's share in proportion
-  to how high it stands, which runs from 1 at noon to the sky's share alone at
-  sunrise. One over that, raised to how far the eye is allowed to adapt, is
-  the multiplier. At full adaptation every hour comes out equally bright and
-  nothing reads as evening; at none, the picture stays as dark as the light
-  it was drawn in. There is a floor, or a night with no sun in it asks for all
-  the exposure there is.
+- **An exposure**, one plain multiplier a person sets and nothing else reads.
 - **A roll-off**, because a surface can now be brighter than white and a
-  screen has no such value. Everything under the knee passes through exactly
-  as it is — the great majority of any frame — and above it the curve bends
-  toward 1 and never reaches it. At a knee of 0.85 a surface at exactly white
-  comes out at 0.925 and one at three times white at 0.990, so a cloud stays a
-  cloud and sun on snow keeps its shape instead of clipping to a flat patch.
+  screen has no such value. The ACES filmic curve (the Narkowicz fit) is
+  identity near black and bends toward 1 as a value rises, never clipping —
+  a surface at exactly white comes out at **0.804**, one three times over at
+  **0.954**, and one six times over at **0.993**, so a cloud stays a cloud
+  and sun on snow keeps its shape instead of clipping to a flat patch.
 
-The roll-off is per channel rather than on the brightness, which is what makes
-a colour the exposure pushed past white lose its colour as it goes — the way a
-glint on water reads as white rather than as a saturated blue.
+The curve runs per channel rather than on the brightness, which is what makes
+a colour the exposure pushed past white lose its saturation as it goes — the
+way a glint on water reads as a white highlight rather than a clipped
+saturated blue.
 
 ---
 
@@ -699,17 +608,14 @@ glint on water reads as white rather than as a saturated blue.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
-- **A shadow needs no second pass.** The coarse map is the terrain, so a
-  fragment walks toward the sun and asks the map whether the ground ever stands
-  above the walk — 24 growing steps, one texture per face, **2.6 MB**. It
-  cannot shadow a block by its neighbour; it gives the shadows that carry the
-  shape of a landscape.
-- **And the sun takes its own picture as well**, in **three cascades** splitting
-  the near 260 m at 16, 65 and 260 m — **2 cm** a texel in the nearest and
-  **23 cm** in the furthest, **12.6 MB** in all. Fitted to a sphere and snapped
-  to whole texels so nothing crawls. The map can only ever shadow generated
-  terrain; a cascade holds anything that draws itself, which is the only way a
-  mob or a placed block will ever cast one.
+- **The sun takes its own picture**, in **three cascades** splitting the near
+  260 m at 16, 65 and 260 m — **2 cm** a texel in the nearest and **23 cm** in
+  the furthest, **12.6 MB** in all. Fitted to a sphere and snapped to whole
+  texels so nothing crawls. A cascade holds anything that draws itself, which
+  is the only way a mob or a placed block ever casts one. A walk over the
+  coarse map was tried first and removed: it cost more per fragment than the
+  cascades cost for the whole frame, for a shadow that could only ever be
+  generated terrain.
 - **Shadows here are a dawn and dusk feature.** Ground shades itself only where
   its slope beats the sun's height, and the shipped ground runs 11.1° at the
   median: **22.7%** of a patch is in full shadow at a 5° sun, **4.6%** at 20°
@@ -719,12 +625,12 @@ glint on water reads as white rather than as a saturated blue.
   sky term alone, or the moon has to beat it before it shows: measured, moonlit
   ground reads **20.2** against **12.6** without, and the faces turned toward
   it are more than twice as bright.
-- **The frame is exposed on its way to the screen**, from the light there
-  actually is — which is why a shadow at sunrise is visible at all, since the
-  shadow takes the same fraction either way and the fraction only reads once
-  the picture is exposed for the light that is there. Above a knee of **0.85**
-  a roll-off bends toward 1: white comes out at 0.925 and three times white at
-  0.990, so nothing clips to a flat patch.
+- **The frame is exposed on its way to the screen**, one plain multiplier
+  rather than a figure derived from the light there happened to be — which is
+  why a shadow at sunrise is visible at all, since the shadow takes the same
+  fraction either way and the fraction only reads once the picture is
+  exposed. The ACES filmic curve bends anything over white toward 1 rather
+  than clipping to a flat patch.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

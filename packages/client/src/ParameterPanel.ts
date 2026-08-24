@@ -469,22 +469,57 @@ const GROUPS: Group[] = [
 		folded: true,
 		knobs: [
 			{
-				key: "atmosphereTop",
-				label: "Air reaches",
-				digits: 0,
+				key: "atmosphereOn",
+				label: "Enabled",
 				enabledWhen: (k) => !k.plain,
 			},
 			{
-				key: "zenithDepth",
-				label: "Depth overhead",
+				key: "inScatteringPoints",
+				label: "In scattering points",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "opticalDepthPoints",
+				label: "Optical depth points",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "densityFalloff",
+				label: "Density falloff",
+				digits: 1,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "wavelengthRed",
+				label: "Wavelength red",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "wavelengthGreen",
+				label: "Wavelength green",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "wavelengthBlue",
+				label: "Wavelength blue",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "scatteringStrength",
+				label: "Scattering strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "atmosphereScale",
+				label: "Atmosphere scale",
 				digits: 3,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "skyBrightness",
-				label: "Sunlight on the air",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
 			},
 		],
 	},
@@ -515,30 +550,6 @@ const GROUPS: Group[] = [
 		title: "The light",
 		folded: true,
 		knobs: [
-			{
-				key: "sunShare",
-				label: "Sun against sky",
-				digits: 2,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "sunShadow",
-				label: "How dark",
-				digits: 2,
-				enabledWhen: (k) =>
-					!k.plain && (k.mapShadows || k.cascadeShadows),
-			},
-			{
-				key: "mapShadows",
-				label: "Marching shadows",
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "shadowReach",
-				label: "Marching reach",
-				digits: 0,
-				enabledWhen: (k) => !k.plain && k.mapShadows,
-			},
 			{
 				key: "cascadeShadows",
 				label: "Shadow maps",
@@ -583,11 +594,6 @@ const GROUPS: Group[] = [
 			{
 				key: "exposure",
 				label: "Exposure",
-				digits: 2,
-			},
-			{
-				key: "eyeAdapts",
-				label: "Eye adapts",
 				digits: 2,
 			},
 		],

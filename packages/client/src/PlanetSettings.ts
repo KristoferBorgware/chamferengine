@@ -31,7 +31,6 @@ import {
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
-import { SUN_SHARE } from "chamfer/light";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -266,21 +265,39 @@ export interface PlanetKnobs {
 	/** Metres from the top of the tallest ground to the floor of the world. */
 	crustMetres: number;
 
-	/** Metres to the top of the air. */
-	atmosphereTop: number;
+	/**
+	 * Whether the air is drawn at all.
+	 *
+	 * Off, the renderer marches nothing: no scattering, no haze, no sun disc
+	 * dimmed by the air in front of it -- the sun, the moon and the stars still
+	 * draw, exactly as bright as the frame gave them.
+	 */
+	atmosphereOn: boolean;
 
-	/** How thick the air reads straight up. */
-	zenithDepth: number;
+	/** Steps the view ray takes through the air, once for each screen pixel. */
+	inScatteringPoints: number;
+
+	/** Steps the sun ray takes at each of those, baked into a table once. */
+	opticalDepthPoints: number;
 
 	/**
-	 * What the sunlight falling on the air is worth.
+	 * How sharply the air thins with height, as one dimensionless number.
 	 *
-	 * The march gives how much of the light reaching each point is turned
-	 * toward the eye, which is a fraction rather than a brightness: nothing in
-	 * it knows how bright the sun is. This is that missing number, and it is
-	 * what decides whether the daytime sky reads as blue or as dusk.
+	 * Sebastian Lague's own knob, ported unchanged: an exponential-times-linear
+	 * falloff rather than Earth's separate Rayleigh and Mie scale heights.
 	 */
-	skyBrightness: number;
+	densityFalloff: number;
+
+	/** Nanometres. What the inverse-fourth-power scattering law reads. */
+	wavelengthRed: number;
+	wavelengthGreen: number;
+	wavelengthBlue: number;
+
+	/** Multiplies every wavelength's own scattering coefficient by the same amount. */
+	scatteringStrength: number;
+
+	/** Fraction of the planet's own radius the air reaches past it. */
+	atmosphereScale: number;
 
 	/** Whether the cloud decks are drawn at all. */
 	cloudsDrawn: boolean;
@@ -455,63 +472,20 @@ export interface PlanetKnobs {
 	timeOfDay: number;
 
 	/**
-	 * How much of the light on the ground comes from the sun rather than the
-	 * sky.
-	 *
-	 * The two sum to 1, so flat ground under a noon sun reads the same at any
-	 * setting. At `0` every face of a block takes the same light whichever way
-	 * it points; at `1` a face turned away from the sun keeps only what the
-	 * ground throws back at it.
-	 */
-	sunShare: number;
-
-	/**
-	 * How much of the direct sun a shadow takes away.
-	 *
-	 * `0` leaves a shadow doing nothing whichever way it was found. `1` leaves
-	 * a shadowed face lit by the sky alone, which is what a face turned away
-	 * from the sun already gets.
-	 */
-	sunShadow: number;
-
-	/**
-	 * Whether a fragment walks the coarse map toward the sun.
-	 *
-	 * The far half of the answer: it reaches the horizon at the map's own 32 m
-	 * resolution, and it can only ever see ground that was generated. Off, it
-	 * costs nothing at all -- the walk is the expensive one of the two.
-	 */
-	mapShadows: boolean;
-
-	/**
 	 * Whether the sun renders its own depth buffers of what stands near.
 	 *
-	 * The near half: sharp enough to shadow one block by the next, and the
-	 * only one of the two that can hold a thing nobody generated. Off, the
-	 * world is not drawn the three extra times.
+	 * Sharp enough to shadow one block by the next. Off, the world is not
+	 * drawn the three extra times the cascades cost.
 	 */
 	cascadeShadows: boolean;
 
 	/**
-	 * How many metres along the sun a shadow ray looks for something in the
-	 * way.
-	 *
-	 * What it has to reach is the shadow of the tallest thing that could stand
-	 * between: a peak of `h` metres at an elevation of `e` throws
-	 * `h / tan(e)`, so a 600 m range at 20 degrees reaches 1,650 m. Past the
-	 * horizon there is nothing to reach, because the curve of the planet has
-	 * already hidden whatever would cast it.
-	 */
-	shadowReach: number;
-
-	/**
 	 * How many texels a side each of the sun's three shadow maps holds.
 	 *
-	 * The maps are what shadow a block by its neighbour, and later anything
-	 * that moves; the walk over the coarse map is what shadows a valley by the
-	 * range beside it. More texels is a sharper edge and a larger picture to
-	 * draw the world into three times over. The sun's cloud cover takes the
-	 * same count, so one row says how finely the sun sees anything at all.
+	 * The maps are what shadow a block by its neighbour, or anything that
+	 * moves. More texels is a sharper edge and a larger picture to draw the
+	 * world into three times over. The sun's cloud cover takes the same
+	 * count, so one row says how finely the sun sees anything at all.
 	 */
 	shadowTexels: number;
 
@@ -519,9 +493,8 @@ export interface PlanetKnobs {
 	 * How far from the eye the sun's shadow maps carry, in metres.
 	 *
 	 * The three of them split that distance, each covering a quarter of the
-	 * one beyond it, so the nearest is the sharpest. Past it the walk over the
-	 * coarse map is the only answer, and the two fade into each other rather
-	 * than meeting at a line.
+	 * one beyond it, so the nearest is the sharpest. Past it, nothing casts a
+	 * shadow at all.
 	 */
 	cascadeReach: number;
 
@@ -566,19 +539,16 @@ export interface PlanetKnobs {
 	 */
 	moonLight: number;
 
-	/** What the whole picture is multiplied by on its way to the screen. */
-	exposure: number;
-
 	/**
-	 * How far the picture opens up as the light goes down.
+	 * What the whole picture is multiplied by on its way to the screen.
 	 *
-	 * The world is drawn in light rather than in color, so ground at dawn is
-	 * genuinely a fraction as bright as ground at noon. An eye does not read
-	 * it that way: it opens. At `0` the picture is exposed the same however
-	 * dark it is; at `1` every hour of the day comes out equally bright and
-	 * nothing reads as evening at all.
+	 * The world is drawn in light rather than in color, so a surface in full
+	 * sun and one at dawn differ by however much less light there is, and
+	 * everything past white is bent toward it by the ACES curve rather than
+	 * clipped. This is the one knob over that: a plain multiplier, with no
+	 * reading of the scene behind it deciding what "dark" ought to mean.
 	 */
-	eyeAdapts: number;
+	exposure: number;
 
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
@@ -643,9 +613,15 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchMap: "patch",
 	patchAlong: "x",
 	crustMetres: 1232,
-	atmosphereTop: 2050,
-	zenithDepth: 0.272,
-	skyBrightness: 45,
+	atmosphereOn: true,
+	inScatteringPoints: 10,
+	opticalDepthPoints: 10,
+	densityFalloff: 4.3,
+	wavelengthRed: 700,
+	wavelengthGreen: 530,
+	wavelengthBlue: 440,
+	scatteringStrength: 21.23,
+	atmosphereScale: 0.322,
 	cloudsDrawn: true,
 	lowDeck: 3000,
 	highDeck: 6000,
@@ -692,11 +668,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// does. A different seed spawns at a different longitude, where the same
 	// number is a different hour; the row above the slider is one drag.
 	timeOfDay: 0.75,
-	sunShare: SUN_SHARE,
-	sunShadow: 1,
-	mapShadows: true,
 	cascadeShadows: true,
-	shadowReach: 1600,
 	shadowTexels: 1024,
 	cascadeReach: 260,
 	cloudShadows: true,
@@ -704,7 +676,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadowReach: 4000,
 	moonLight: 0.16,
 	exposure: 1,
-	eyeAdapts: 0.6,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	reach: 6,
 };
@@ -893,24 +864,60 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	// held every world with a block over a metre to a fraction of the depth it
 	// could carry, because `rangeFor` only ever narrows.
 	crustMetres: { low: 32, high: 8192, step: 16, rebuilds: true, unit: "m" },
-	atmosphereTop: {
-		low: 50,
-		high: 4000,
-		step: 25,
-		rebuilds: false,
-		unit: "m",
-	},
-	zenithDepth: {
-		low: 0.02,
-		high: 0.8,
-		step: 0.002,
+	atmosphereOn: { ...TOGGLE, rebuilds: false },
+	inScatteringPoints: {
+		low: 1,
+		high: 30,
+		step: 1,
 		rebuilds: false,
 		unit: "",
 	},
-	skyBrightness: {
+	opticalDepthPoints: {
+		low: 1,
+		high: 30,
+		step: 1,
+		rebuilds: false,
+		unit: "",
+	},
+	densityFalloff: {
+		low: 0.1,
+		high: 12,
+		step: 0.1,
+		rebuilds: false,
+		unit: "",
+	},
+	wavelengthRed: {
+		low: 380,
+		high: 780,
+		step: 5,
+		rebuilds: false,
+		unit: "nm",
+	},
+	wavelengthGreen: {
+		low: 380,
+		high: 780,
+		step: 5,
+		rebuilds: false,
+		unit: "nm",
+	},
+	wavelengthBlue: {
+		low: 380,
+		high: 780,
+		step: 5,
+		rebuilds: false,
+		unit: "nm",
+	},
+	scatteringStrength: {
 		low: 0,
-		high: 400,
-		step: 2,
+		high: 60,
+		step: 0.5,
+		rebuilds: false,
+		unit: "",
+	},
+	atmosphereScale: {
+		low: 0.02,
+		high: 1,
+		step: 0.005,
 		rebuilds: false,
 		unit: "",
 	},
@@ -963,11 +970,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
-	sunShare: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
-	sunShadow: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
-	mapShadows: { ...TOGGLE, rebuilds: false },
 	cascadeShadows: { ...TOGGLE, rebuilds: false },
-	shadowReach: { low: 0, high: 4000, step: 50, rebuilds: false, unit: "m" },
 	shadowTexels: {
 		low: 256,
 		high: 4096,
@@ -986,8 +989,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m",
 	},
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
-	exposure: { low: 0.25, high: 3, step: 0.05, rebuilds: false, unit: "x" },
-	eyeAdapts: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };

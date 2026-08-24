@@ -1,20 +1,8 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import { TONE_SHADER } from "./TONE_SHADER.js";
 
-/** The exposure, the knee, and two spare. */
+/** The exposure, and three spare. */
 const TONE_BYTES = 16;
-
-/**
- * Where the roll-off toward white starts.
- *
- * Everything under it is left exactly as it is, so the great majority of a
- * frame passes through this pass unchanged and only what the exposure pushed
- * near white is bent. High, because the curve costs the whites something
- * wherever it starts: at 0.85 a surface at exactly white comes out at 0.925
- * and one at three times white at 0.990, so a cloud stays a cloud and the sun
- * on snow keeps its shape instead of clipping to a flat patch.
- */
-const KNEE = 0.85;
 
 /**
  * Where a value over white is decided, which is the whole of what one pixel
@@ -23,8 +11,9 @@ const KNEE = 0.85;
  * Everything is drawn into a floating-point image first, so the sun and the
  * sky and the moon can be added together without anything being lost to the
  * top of the range on the way. This pass is what turns that image into
- * something a screen can show: multiply by an exposure, bend what is over the
- * knee toward 1, and write it out.
+ * something a screen can show: multiply by an exposure and run the ACES
+ * filmic curve, which bends everything over white toward it rather than
+ * clipping to a flat patch.
  *
  * The image is the size of the canvas and read one texel per pixel, so there
  * is no sampler and nothing is filtered.
@@ -96,7 +85,6 @@ export class TonePass {
 			});
 		}
 		this.data[0] = Math.max(0, exposure);
-		this.data[1] = KNEE;
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		const pass = encoder.beginRenderPass({

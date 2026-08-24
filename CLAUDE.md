@@ -1663,6 +1663,61 @@ Violating any of these breaks the design. They are not tunable.
   path walk is integer arithmetic, so the float work is one barycentric blend and
   one normalise however deep the world goes. A deeper world is not a less accurate
   one.
+- **THE ATMOSPHERE IS ONE RAYLEIGH TERM AND A BAKED TABLE, REPLACED RATHER THAN
+  TUNED** (`ATMOSPHERE.ts`, `bakeOpticalDepth.ts`, `ATMOSPHERE_SHADER.ts`,
+  `AtmospherePass.ts`, doc 32). The earlier model here was Sean O'Neil's, with
+  separate Rayleigh and Mie terms and a phase function; this project now runs
+  Sebastian Lague's simpler one instead -- a single density-falloff curve, no
+  Mie term, wavelengths and a scattering strength a person can read straight off
+  a panel. The **optical-depth table** is baked on the CPU, not the GPU as
+  Lague's own project does it, and in the **planet's real metres** rather than a
+  unit sphere -- his own bake is at radius 1, so his table holds values on the
+  order of 1 and his `scatteringStrength` knob is calibrated against that.
+  Measured at the shipped knobs (radius 1,700 m, falloff 4.3, scale 0.322):
+  straight up from the ground this table holds **97.26**, and straight through
+  the planet from the same point **3,488.43** -- thousands of times bigger than
+  Lague's own table, because the table is honestly in metres. **The read site
+  has to undo that scale, not the bake.** Multiplying a metres-scale depth
+  straight against his order-1 `beta` sends the transmittance exponent to
+  thousands and every sample comes back extinguished to black -- measured: the
+  whole sky rendered as flat black, no stars, no sun disc, until
+  `opticalDepthBaked` divided its texture read by `air.shape.x` (the planet's
+  own radius) before returning it, which is exactly the conversion `scatter`'s
+  own final line already applied to the in-scattered sum for the same reason.
+  One line, caught only by actually rendering a frame -- nothing in the unit
+  tests exercises the WGSL math at all. **The stars, the
+  sun disc and the moon disc are drawn in the SAME pass** as the scattering,
+  reading the pass's own already-computed luminance to fade the stars, rather
+  than a second full-screen pass sampling the finished frame the way Lague's
+  does it -- one shader, one draw call, for the whole sky. **A per-pixel hash
+  stands in for Lague's blue-noise texture**, breaking the visible banding ten
+  integration steps leave across a smooth sky into noise too fine to read as a
+  band, with no binary asset to ship.
+- **TWO GROUND SHADOWS COVERED THE SAME GROUND, AND ONLY ONE OF THEM PAYS FOR
+  ITSELF** (F-073, doc 16). The coarse-map march this project shipped first
+  could only ever shadow *generated terrain* -- a map cell is 32 m, so a block
+  could never shadow its own neighbour -- which is exactly what the cascades
+  already draw, at centimetres rather than metres, out to the cascades' own
+  reach. The march ran every frame on every lit pixel regardless, the more
+  expensive of the two per pixel for the coarser of the two results. Removed:
+  `SunShadow.ts`, the map walk inside `SHADOW_WGSL.ts`, and the **Marching
+  shadows**, **Marching reach** and **How dark** knobs that shared one number
+  across both techniques. The cascades now take a fixed full-strength shadow
+  whenever **Shadow maps** is on.
+- **EXPOSURE READ THE SCENE IT WAS ABOUT TO EXPOSE, AND THE ROLL-OFF READ
+  NOTHING** (`TonePass.ts`, `TONE_SHADER.ts`, doc 16). The knee-rolloff curve
+  clipped nothing but had no headroom past its knee worth trusting, and the
+  exposure that fed it was derived from the sun's share of the light times how
+  high it stood, raised to a separate **Eye adapts** figure -- three knobs
+  whose combined effect none of them stated alone, and turning any one changed
+  what the other two did. Replaced with **one plain multiplier** and the
+  **ACES filmic curve** (the Narkowicz fit), which bends anything over white
+  toward it per channel rather than clipping -- a colour pushed past white
+  loses saturation as it goes, which is what keeps a sun-glint on water reading
+  as a white highlight rather than a clipped saturated blue. **Sun against
+  sky** is gone the same way: the ground shader now reads the fixed
+  `SUN_SHARE` constant `PATCH_SHADER.ts` already used for the map-editor bench
+  preview, rather than a knob that could disagree with it.
 
 ## Naming conventions
 

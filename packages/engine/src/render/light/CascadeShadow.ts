@@ -28,9 +28,8 @@ const LOOK_BYTES = CASCADES * 64 + 16 + 16;
  *
  * A box tight around what the camera sees holds no caster standing outside
  * it, so a wall just up-sun of the view would throw no shadow into it. This
- * is how far up-sun the box is stretched to catch one, and past it the walk
- * over the coarse map is what answers -- so it need only reach what a shadow
- * map can say and the map cannot, which is a thing standing near.
+ * is how far up-sun the box is stretched to catch one, past which nothing
+ * casts a shadow into the view at all.
  */
 const REACH_UP_SUN = 2.0;
 const REACH_LEAST = 120;
@@ -42,17 +41,9 @@ const SPLIT_GROWTH = 4;
 /**
  * Cascaded shadow maps: the sun's own view of what is near the camera.
  *
- * **This is the half of a shadow the coarse map cannot give.** The map holds
- * one height per 32 m cell, so it knows where a mountain is and nothing about
- * a block, a mob or a player -- and it is a picture of the *generated* world,
- * so nothing anybody builds or carries appears in it at all. A shadow map is
- * a picture of what is actually there, taken from the sun, and anything that
- * can draw itself can be in it.
- *
- * The two answer different distances and are combined by taking the darker.
- * Near the camera the cascades are sharp and hold everything; far away they
- * run out of texels and out of box, and the walk over the map carries on to
- * the horizon.
+ * A shadow map is a picture of what is actually there, taken from the sun,
+ * so anything that can draw itself can be in it -- a block, a mob, a placed
+ * or carried object, not only the generated ground.
  *
  * Each cascade is fitted to a **sphere** around its slice of the view rather
  * than to the slice itself: a sphere is the same size whichever way the camera

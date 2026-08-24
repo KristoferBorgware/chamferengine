@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ChunkRenderer, SkyRenderer } from "chamfer/render";
+import { ChunkRenderer } from "chamfer/render";
 import { Mat4, Vec3, type Box } from "chamfer/math";
 import type { ChunkMesh } from "chamfer/mesh";
 import type { Frame } from "chamfer/render";
-import { planetAtmosphere } from "chamfer/sky";
 import { RecordingGpu } from "./recordingGpu.js";
-
-const AIR = planetAtmosphere(1700, 400, 0.134);
 
 /** A camera standing sixty metres out, looking down at the surface. */
 const EYE: [number, number, number] = [0, 0, 1760];
@@ -21,7 +18,6 @@ const FRAME: Frame = {
 	fog: [0, 0, 0, 1e9],
 	daylight: 1,
 	nightLight: 0.09,
-	sunShare: 0.58,
 	moon: [0, -1, 0],
 	moonLight: 0.16,
 	exposure: 1,
@@ -67,12 +63,6 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
-		sky.inverseViewProj = VIEW_PROJ.inverse();
-		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
 		renderer.render(FRAME);
@@ -84,16 +74,10 @@ describe("what a frame encodes", () => {
 				expect(drawn.bound.has(group)).toBe(true);
 	});
 
-	it("draws the sky first, behind everything the ground puts over it", () => {
+	it("draws the ground first, then the air and the tone curve over it", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
-		sky.inverseViewProj = VIEW_PROJ.inverse();
-		renderer.layers = [sky];
 		renderer.upload(mesh(1));
 
 		renderer.render(FRAME);
@@ -101,18 +85,17 @@ describe("what a frame encodes", () => {
 		const kinds = gpu.commands
 			.filter((c) => c.what === "draw" || c.what === "drawIndexed")
 			.map((c) => c.what);
-		// The sky is the unindexed one: three vertices covering the screen,
-		// drawn before any of the indexed geometry that stands in front of it.
-		// The last two are full-screen again and in this order -- the air
+		// The two full-screen passes come last and in this order -- the air
 		// marched over the finished frame, then the tone curve over that --
-		// because the air has to be in the picture before it is exposed.
-		expect(kinds[0]).toBe("draw");
+		// because the air has to be in the picture before it is exposed. Every
+		// indexed draw before them is the ground's own geometry, opaque then
+		// water, with no separate sky layer standing behind it any more.
 		expect(kinds[kinds.length - 2]).toBe("draw");
 		expect(kinds[kinds.length - 1]).toBe("draw");
-		expect(kinds.slice(1, -2).every((kind) => kind === "drawIndexed")).toBe(
+		expect(kinds.slice(0, -2).every((kind) => kind === "drawIndexed")).toBe(
 			true,
 		);
-		expect(kinds.length).toBeGreaterThan(3);
+		expect(kinds.length).toBeGreaterThan(2);
 	});
 
 	it("skips a chunk the camera is not looking at", () => {
@@ -162,23 +145,17 @@ describe("what a frame encodes", () => {
 		expect(renderer.drawn).toBe(0);
 	});
 
-	it("draws nothing but the sky when no chunk is resident", () => {
+	it("draws nothing but the air and the tone pass when no chunk is resident", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
-		const sky = new SkyRenderer(ctx, {
-			direction: new Vec3(0, 1, 0),
-			angularRadius: 0.01,
-		});
-		sky.inverseViewProj = VIEW_PROJ.inverse();
-		renderer.layers = [sky];
 
 		renderer.render(FRAME);
 
-		// The sky, the air marched over it, and the tone pass that puts the
-		// two on the canvas.
+		// The air marched over the empty frame, and the tone pass that puts it
+		// on the canvas -- there is no separate sky layer to draw first.
 		const draws = gpu.draws();
-		expect(draws.length).toBe(3);
+		expect(draws.length).toBe(2);
 		expect(draws[0]!.bound.has(0)).toBe(true);
 	});
 });

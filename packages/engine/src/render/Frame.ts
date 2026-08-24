@@ -61,14 +61,4 @@ export interface Frame {
 	 */
 	readonly daylight: number;
 	readonly nightLight: number;
-
-	/**
-	 * How much of the light comes from the sun rather than from the sky.
-	 *
-	 * The two sum to 1, so flat ground under a noon sun reads the same at any
-	 * setting and only surfaces standing at an angle to the sun move. At `0`
-	 * every face of a block takes the same light whichever way it points; at
-	 * `1` a face turned away from the sun keeps nothing.
-	 */
-	readonly sunShare: number;
 }

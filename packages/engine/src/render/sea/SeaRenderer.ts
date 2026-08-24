@@ -6,7 +6,6 @@ import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { SEA_SHADER } from "./SEA_SHADER.js";
 import type { SunViews } from "../light/SunViews.js";
-import type { SunShadow } from "../light/SunShadow.js";
 import { SEA_STRIDE, seaPatch } from "./seaPatch.js";
 import { joinPath } from "../../addressing/lattice/joinPath.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
@@ -161,16 +160,6 @@ export class SeaRenderer implements PassLayer {
 	/** How many chunks of water the last frame drew. */
 	drawn = 0;
 
-	/**
-	 * The height map the water walks toward the sun, shared with the ground.
-	 *
-	 * The sea sits at sea level, which is the lowest thing on the planet, so
-	 * it is in the shade of anything at all -- and a headland's shadow that
-	 * stopped at the shoreline would stop exactly where a person standing on
-	 * a beach is looking.
-	 */
-	private readonly shadow: SunShadow;
-
 	/** The sun's own view of what stands near, shared with the ground. */
 	private readonly sunViews: SunViews;
 
@@ -179,14 +168,12 @@ export class SeaRenderer implements PassLayer {
 		radius: number,
 		depth: number,
 		look: SeaLook,
-		shadow: SunShadow,
 		sunViews: SunViews,
 	) {
 		this.ctx = ctx;
 		this.radius = radius;
 		this.depth = depth;
 		this.look = look;
-		this.shadow = shadow;
 		this.sunViews = sunViews;
 		const { device, sceneFormat: format } = ctx;
 
@@ -219,12 +206,7 @@ export class SeaRenderer implements PassLayer {
 
 		const module = device.createShaderModule({ code: SEA_SHADER });
 		const layout = device.createPipelineLayout({
-			bindGroupLayouts: [
-				frameLayout,
-				seaLayout,
-				shadow.layout,
-				sunViews.layout,
-			],
+			bindGroupLayouts: [frameLayout, seaLayout, sunViews.layout],
 		});
 		const vertex: GPUVertexState = {
 			module,
@@ -436,8 +418,7 @@ export class SeaRenderer implements PassLayer {
 		// Set here rather than relied on: whatever drew before this may have
 		// had a shorter pipeline layout, which drops every binding past its
 		// own end.
-		pass.setBindGroup(2, this.shadow.bindGroup);
-		pass.setBindGroup(3, this.sunViews.bindGroup);
+		pass.setBindGroup(2, this.sunViews.bindGroup);
 
 		/** Bind one group's mesh and its slice of the instance buffer. */
 		const bind = (group: (typeof this.groups)[number]): Patch => {

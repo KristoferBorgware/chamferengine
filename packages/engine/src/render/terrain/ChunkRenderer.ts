@@ -13,7 +13,6 @@ import { CascadeShadow } from "../light/CascadeShadow.js";
 import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
-import { SunShadow } from "../light/SunShadow.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
@@ -62,15 +61,6 @@ export class ChunkRenderer implements ShadowCaster {
 	private depth: GPUTexture | null = null;
 
 	/**
-	 * The coarse height map on the GPU, which is what casts the shadows.
-	 *
-	 * It exists from the start, holding one texel a face, because a binding
-	 * declared by a pipeline has to be filled whether or not a world has been
-	 * built yet. {@link setShadowMap} replaces it with the real thing.
-	 */
-	readonly shadow: SunShadow;
-
-	/**
 	 * The sun's own view of what stands near the camera.
 	 *
 	 * The chunks put themselves into it, and anything else that wants a shadow
@@ -83,9 +73,7 @@ export class ChunkRenderer implements ShadowCaster {
 	 *
 	 * The chunks are always the first of them. A mob, a player or anything
 	 * else with geometry joins the list and is drawn into each cascade with
-	 * its own pipeline -- which is the whole reason the maps exist beside the
-	 * walk over the coarse map, because the map is a picture of the generated
-	 * world and holds nothing anybody put there.
+	 * its own pipeline.
 	 */
 	readonly casters: ShadowCaster[] = [];
 
@@ -123,6 +111,15 @@ export class ChunkRenderer implements ShadowCaster {
 
 	/** The planet's own air, or null for a world drawn without any. */
 	air: PlanetAtmosphere | null = null;
+
+	/**
+	 * The radius the ground sits at, for anything that has to put a box on it.
+	 *
+	 * The cloud shadow box is centred on the ground under the camera rather
+	 * than on the camera itself, so it needs to know where that is without
+	 * asking the coarse map -- which no longer has a GPU copy here to ask.
+	 */
+	groundRadius = 0;
 
 	/**
 	 * Where the frame is exposed and rolled off on its way to the canvas.
@@ -167,7 +164,6 @@ export class ChunkRenderer implements ShadowCaster {
 		this.ctx = ctx;
 		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
-		this.shadow = new SunShadow(ctx);
 		this.atmosphere = new AtmospherePass(ctx);
 		this.tone = new TonePass(ctx);
 
@@ -192,7 +188,6 @@ export class ChunkRenderer implements ShadowCaster {
 				bindGroupLayouts: [
 					this.frameLayout,
 					this.chunkLayout,
-					this.shadow.layout,
 					this.sunViews.layout,
 				],
 			}),
@@ -363,7 +358,6 @@ export class ChunkRenderer implements ShadowCaster {
 		this.frameData.set(frame.fog, 24);
 		this.frameData[28] = frame.daylight;
 		this.frameData[29] = frame.nightLight;
-		this.frameData[30] = frame.sunShare;
 		// The sky is the color of every surface the sun does not reach, so the
 		// shader is given the same color the pass clears to.
 		this.frameData.set(this.sky, 32);
@@ -375,7 +369,7 @@ export class ChunkRenderer implements ShadowCaster {
 		// Centred on the ground under the camera rather than on the camera: a
 		// player a kilometre up would otherwise carry the box up with them and
 		// spend half of it on air.
-		this.cloudShadow.update(frame, this.shadow.seaRadius);
+		this.cloudShadow.update(frame, this.groundRadius);
 		const encoder = device.createCommandEncoder();
 		// The sun looks first. Its passes write what the frame then reads, so
 		// they go into the same encoder ahead of everything else.
@@ -390,12 +384,13 @@ export class ChunkRenderer implements ShadowCaster {
 						canvas.width,
 						canvas.height,
 					),
-					clearValue: {
-						r: this.sky[0],
-						g: this.sky[1],
-						b: this.sky[2],
-						a: 1,
-					},
+					// Black, not the sky's own color: the air pass now owns
+					// every pixel nothing here draws into, stars and all, so
+					// there is nothing left for a flat clear color to stand
+					// in for. `this.sky` still feeds the ground's own ambient
+					// tint below -- a different question from what an empty
+					// pixel shows.
+					clearValue: { r: 0, g: 0, b: 0, a: 1 },
 					loadOp: "clear",
 					storeOp: "store",
 				},
@@ -435,15 +430,13 @@ export class ChunkRenderer implements ShadowCaster {
 		// so a sky drawn with two groups leaves group 2 unset -- and the next
 		// terrain draw is refused, taking the whole command buffer with it.
 		// The water pass sets it again for the same reason.
-		pass.setBindGroup(2, this.shadow.bindGroup);
-		pass.setBindGroup(3, this.sunViews.bindGroup);
+		pass.setBindGroup(2, this.sunViews.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
-		pass.setBindGroup(2, this.shadow.bindGroup);
-		pass.setBindGroup(3, this.sunViews.bindGroup);
+		pass.setBindGroup(2, this.sunViews.bindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
@@ -460,6 +453,7 @@ export class ChunkRenderer implements ShadowCaster {
 			depth.createView(),
 			frame.eye,
 			frame.sun,
+			frame.moon,
 			frame.viewProj.inverse(),
 			this.air,
 		);

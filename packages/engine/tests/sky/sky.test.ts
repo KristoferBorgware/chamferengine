@@ -82,52 +82,50 @@ describe("the atmosphere does not survive scaling", () => {
 });
 
 describe("a planet's own atmosphere", () => {
-	const TOP = 400;
-	const ZENITH = 0.134;
+	const KNOBS = {
+		wavelengths: [700, 530, 460] as const,
+		scatteringStrength: 21.23,
+		densityFalloff: 4.3,
+		atmosphereScale: 0.322,
+	};
 
-	it("hits the wanted zenith depth at green plus haze", () => {
-		const air = planetAtmosphere(RADIUS, TOP, ZENITH);
-		const reading = zenithOpticalDepth(
-			air.rayleigh[1] + air.mie,
-			air.rayleighScaleHeight,
+	it("reaches a fraction of the planet's own radius past it, never a fixed metre count", () => {
+		const small = planetAtmosphere(RADIUS, KNOBS);
+		const big = planetAtmosphere(RADIUS * 4, KNOBS);
+		expect(small.topRadius).toBeCloseTo(RADIUS * 1.322, 9);
+		expect(big.topRadius / big.planetRadius).toBeCloseTo(
+			small.topRadius / small.planetRadius,
+			9,
 		);
-		expect(reading).toBeCloseTo(ZENITH, 9);
 	});
 
-	it("keeps Earth's spectral ratios at any strength", () => {
-		const air = planetAtmosphere(RADIUS, TOP, ZENITH);
-		expect(air.rayleigh[0] / air.rayleigh[1]).toBeCloseTo(
-			ATMOSPHERE.rayleigh[0] / ATMOSPHERE.rayleigh[1],
+	it("scatters blue harder than red, by the inverse fourth power of wavelength", () => {
+		const air = planetAtmosphere(RADIUS, KNOBS);
+		const [red, green, blue] = air.scattering;
+		expect(blue).toBeGreaterThan(green);
+		expect(green).toBeGreaterThan(red);
+		expect(red / blue).toBeCloseTo(
+			(KNOBS.wavelengths[2] / KNOBS.wavelengths[0]) ** 4,
 			9,
 		);
-		expect(air.rayleigh[2] / air.rayleigh[1]).toBeCloseTo(
-			ATMOSPHERE.rayleigh[2] / ATMOSPHERE.rayleigh[1],
-			9,
-		);
-		expect(air.mie / air.rayleigh[1]).toBeCloseTo(
-			ATMOSPHERE.mie / ATMOSPHERE.rayleigh[1],
-			9,
-		);
-		expect(air.mieDirection).toBe(ATMOSPHERE.mieDirection);
 	});
 
-	it("reaches exactly top metres above the planet's own radius", () => {
-		const air = planetAtmosphere(RADIUS, TOP, ZENITH);
-		expect(air.planetRadius).toBe(RADIUS);
-		expect(air.topRadius).toBe(RADIUS + TOP);
+	it("moves all three channels together as strength moves, keeping their ratios", () => {
+		const weak = planetAtmosphere(RADIUS, KNOBS);
+		const strong = planetAtmosphere(RADIUS, {
+			...KNOBS,
+			scatteringStrength: KNOBS.scatteringStrength * 3,
+		});
+		for (let c = 0; c < 3; c++)
+			expect(strong.scattering[c]).toBeCloseTo(
+				weak.scattering[c]! * 3,
+				9,
+			);
 	});
 
-	it("moves the scale heights together as the top does, at Earth's ratio", () => {
-		const short = planetAtmosphere(RADIUS, TOP, ZENITH);
-		const tall = planetAtmosphere(RADIUS, TOP * 2, ZENITH);
-		expect(tall.rayleighScaleHeight).toBeCloseTo(
-			short.rayleighScaleHeight * 2,
-			9,
-		);
-		expect(tall.mieScaleHeight / tall.rayleighScaleHeight).toBeCloseTo(
-			short.mieScaleHeight / short.rayleighScaleHeight,
-			9,
-		);
+	it("carries the falloff through unchanged, for the table it bakes into", () => {
+		const air = planetAtmosphere(RADIUS, KNOBS);
+		expect(air.densityFalloff).toBe(KNOBS.densityFalloff);
 	});
 });
 

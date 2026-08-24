@@ -7,9 +7,10 @@
  * is a few tens of metres across and the furthest is hundreds, so a thing too
  * small to leave a texel in the far one may skip it.
  *
- * **This is the whole reason a shadow map exists here alongside the walk over
- * the coarse map.** The map knows where the ground is and nothing else, so it
- * can never show a mob, a player or a placed block. A caster can.
+ * **This is what lets a shadow map hold more than the generated ground.** A
+ * coarse height map knows where a mountain is and nothing else; a caster
+ * draws whatever it actually is, so a mob, a player or a placed block can
+ * cast one too.
  */
 export interface ShadowCaster {
 	/**

@@ -1,4 +1,5 @@
 import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
+import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 
 /**
  * The terrain shader: a sun, a sky, and water fog.
@@ -16,14 +17,23 @@ import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
  * `fog.w` is the distance the view fades over. Above water it is set far past
  * the horizon, which leaves the same expression doing nothing.
  *
- * `night.x` is how far the sun is over this place's horizon, `night.y` is what
- * is left of the light when it is not, and `night.z` is how much of the light
- * comes from the sun rather than from the sky. `sky.rgb` is what the sky is
+ * `night.x` is how far the sun is over this place's horizon and `night.y` is
+ * what is left of the light when it is not. `sky.rgb` is what the sky is
  * doing, which is the color of everything the sun does not reach directly.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
 ${SHADOW_WGSL}
+
+/**
+ * How much of the light comes from the sun rather than from the sky.
+ *
+ * The world's own balance, fixed rather than a knob: no source this engine
+ * was built against exposes one either, and the two share nothing to tune it
+ * against beyond "does it look right," which a fixed number already does.
+ */
+const SUN_SHARE = ${SUN_SHARE};
+
 struct Frame {
 	viewProj : mat4x4f,
 	eye      : vec4f,
@@ -143,7 +153,7 @@ fn lightOn(
 	// Whether anything stands between here and the sun. Asked only where the
 	// sun would reach anyway, so a face already turned away costs nothing.
 	if (lambert > 0.0) {
-		lambert = lambert * sunLight(world, up, frame.sun.xyz, normal, away);
+		lambert = lambert * sunLight(world, normal, away);
 	}
 	// How much of the sky this face can see, from all of it to the fraction a
 	// downward face gets back off the ground.
@@ -184,7 +194,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// The two shares sum to 1, so flat ground under a noon sun reads the same
 	// whatever the balance is and only what stands at an angle to the sun
 	// moves.
-	let direct = frame.night.z;
+	let direct = SUN_SHARE;
 	let lit =
 		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
 
@@ -201,7 +211,7 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	let normal = faceNormal(in.local, frame.eye.xyz - world);
 	// Water takes less of its light from the sun than stone does: a look
 	// reaches through it to whatever is under, and that is lit from the sky.
-	let direct = frame.night.z * 0.78;
+	let direct = SUN_SHARE * 0.78;
 	let lit =
 		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);

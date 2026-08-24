@@ -1,5 +1,5 @@
 /**
- * The last thing a frame goes through: an exposure and a roll-off.
+ * The last thing a frame goes through: an exposure and a filmic roll-off.
  *
  * The scene is drawn into a floating-point image where a value over 1 is a
  * surface brighter than white, which is what the sun on snow is. The screen
@@ -7,7 +7,11 @@
  * is what happens without this pass, and clipping is why a bright hillside
  * comes out as one flat patch of white with the shape gone out of it.
  *
- * `tone.x` is the exposure, `tone.y` is where the roll-off starts.
+ * `tone.x` is the one exposure knob, a plain multiplier with no other reading
+ * of the scene behind it. The roll-off is the ACES filmic fit (Narkowicz):
+ * everything bends toward white rather than being clipped to it, and nothing
+ * else about the picture is guessed at -- there is no separate knee to place
+ * and no auto-exposure reading the frame to decide what "dark" means.
  */
 export const TONE_SHADER = /* wgsl */ `
 struct Tone {
@@ -37,18 +41,19 @@ fn vertexMain(@builtin(vertex_index) index : u32) -> ToneOut {
 }
 
 /**
- * Everything under the knee passes through untouched; above it the curve
- * bends toward 1 and never reaches it.
- *
- * Applied to each channel rather than to the brightness, so a color the
- * exposure pushed past white loses its color as it goes -- which is what
- * makes the sun on water read as a white glint rather than a saturated blue
- * one.
+ * The ACES filmic curve, fitted to a single rational function by Krzysztof
+ * Narkowicz. Applied per channel rather than to the brightness, so a color
+ * the exposure pushed past white loses its saturation as it goes -- which is
+ * what makes the sun on water read as a white glint rather than a clipped
+ * saturated blue one.
  */
-fn rolloff(x : vec3f, knee : f32) -> vec3f {
-	let over = max(x - vec3f(knee), vec3f(0.0));
-	let head = 1.0 - knee;
-	return min(x, vec3f(knee)) + head * over / (over + vec3f(head));
+fn aces(x : vec3f) -> vec3f {
+	let a = 2.51;
+	let b = 0.03;
+	let c = 2.43;
+	let d = 0.59;
+	let e = 0.14;
+	return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3f(0.0), vec3f(1.0));
 }
 
 @fragment
@@ -56,6 +61,6 @@ fn fragmentMain(in : ToneOut) -> @location(0) vec4f {
 	// One texel of the scene per pixel of the screen, so the read is by
 	// coordinate and there is no sampler and nothing to filter.
 	let raw = textureLoad(scene, vec2i(in.clip.xy), 0).rgb;
-	return vec4f(rolloff(raw * tone.tone.x, tone.tone.y), 1.0);
+	return vec4f(aces(raw * tone.tone.x), 1.0);
 }
 `;

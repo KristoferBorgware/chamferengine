@@ -56,12 +56,11 @@ import {
 	NoWebGPUError,
 	SEA_COLORS,
 	SeaRenderer,
-	SkyRenderer,
 	createGpuContext,
 	resizeToDisplay,
 } from "chamfer/render";
 import type { SeaLook } from "chamfer/render";
-import type { CloudPuffLayer } from "chamfer/sky";
+import type { CloudPuffLayer, PlanetAtmosphere } from "chamfer/sky";
 import {
 	WIND_AXIS,
 	WIND_RATE,
@@ -148,6 +147,20 @@ const NIGHT_LIGHT = 0.09;
  */
 const MOON_ANGULAR_RADIUS = (0.6 * Math.PI) / 180;
 const MOON_DISTANCE = 102_000;
+
+/** Half the angle the sun disc covers, in radians. */
+const SUN_ANGULAR_RADIUS = (0.9 * Math.PI) / 180;
+
+/** A planet's own air, from the knobs the panel exposes for it. */
+function airFor(live: PlanetSettings): PlanetAtmosphere {
+	const k = live.knobs;
+	return planetAtmosphere(RADIUS, {
+		wavelengths: [k.wavelengthRed, k.wavelengthGreen, k.wavelengthBlue],
+		scatteringStrength: k.scatteringStrength,
+		densityFalloff: k.densityFalloff,
+		atmosphereScale: k.atmosphereScale,
+	});
+}
 
 /** The sky, in daylight and at night. */
 const DAY_SKY: readonly [number, number, number] = [0.46, 0.62, 0.82];
@@ -376,10 +389,6 @@ async function main(): Promise<void> {
 	// margin is one block.
 	let peaks = new ChunkPeaks(map, settings.knobs.blockSize, CHUNK_LEVEL);
 
-	// The same map, on the GPU, where a fragment walks it toward the sun to
-	// find out whether anything stands in the way.
-	renderer.shadow.upload(map, shape.seaLevelRadius);
-
 	// Both decks are built on their own worker, off the thread that draws: a
 	// deck this size is unaffordable on the main thread, and the field is
 	// already a pure function of the seed and the wind angle, so it moves the
@@ -437,8 +446,8 @@ async function main(): Promise<void> {
 			);
 	if (billboardClouds) {
 		billboardClouds.visible = settings.knobs.cloudsDrawn;
-		// The clouds are the only moving thing on the planet, so they are the
-		// only thing with a shadow the coarse map could never hold.
+		// The clouds are the only moving thing on the planet, so they get a
+		// shadow of their own rather than sharing the cascades' depth buffers.
 		renderer.cloudCasters.push(billboardClouds);
 	}
 
@@ -473,7 +482,6 @@ async function main(): Promise<void> {
 				shape.seaSurfaceRadius,
 				DEPTH,
 				seaLook(settings),
-				renderer.shadow,
 				renderer.sunViews,
 			);
 	if (sea) {
@@ -482,27 +490,14 @@ async function main(): Promise<void> {
 		teardown.push(() => sea.destroy());
 	}
 
-	// The sky is a layer over the terrain pass, and the renderer already treats
-	// that layer as optional. Leaving it off is what pauses the atmosphere, the
-	// stars and the moon together, without the engine learning what a pause is:
-	// with no layer to fill every pixel at the far plane, the clear color the
-	// renderer is already given shows through as one flat sky.
-	const sky = PLAIN
-		? null
-		: new SkyRenderer(ctx, {
-				direction: new Vec3(0.2, 0.55, 0.81).normalize(),
-				angularRadius: MOON_ANGULAR_RADIUS,
-			});
-	// The air is the renderer's, not the sky's: it is marched over the whole
-	// finished frame rather than drawn behind it, so it belongs to the pass
-	// that owns the frame.
-	renderer.air = PLAIN
-		? null
-		: planetAtmosphere(
-				RADIUS,
-				settings.knobs.atmosphereTop,
-				settings.knobs.zenithDepth,
-			);
+	// The air, the stars, the sun disc and the moon disc are all one pass now
+	// -- the renderer's own atmosphere march, not a layer -- so pausing them
+	// under the plain planet is pausing what feeds it rather than a layer
+	// standing in front of the ground.
+	renderer.air =
+		PLAIN || !settings.knobs.atmosphereOn ? null : airFor(settings);
+	renderer.atmosphere.sunAngularRadius = SUN_ANGULAR_RADIUS;
+	renderer.atmosphere.moonAngularRadius = MOON_ANGULAR_RADIUS;
 	// The frozen camera is drawn as an object, after the sky and the clouds so
 	// it is never behind either of them. It has nothing to draw until the view
 	// is frozen.
@@ -514,7 +509,6 @@ async function main(): Promise<void> {
 	// The volumes the culling tests against, drawn only when asked for.
 	const bounds = new BoundsRenderer(ctx);
 	renderer.layers = [
-		...(sky ? [sky] : []),
 		// After the ground, so the water is drawn over the floor it covers,
 		// and before the clouds, which are further off than any of it.
 		...(sea ? [sea] : []),
@@ -1463,7 +1457,6 @@ async function main(): Promise<void> {
 			: flatCoarseMap(nextSeed, FLAT_COARSE_LEVEL);
 		shape = live.shapeFor(map);
 		peaks = new ChunkPeaks(map, live.knobs.blockSize, CHUNK_LEVEL);
-		renderer.shadow.upload(map, shape.seaLevelRadius);
 		byLod.length = 0;
 		for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 			byLod.push(
@@ -1640,11 +1633,7 @@ async function main(): Promise<void> {
 				);
 		}
 		if (!PLAIN)
-			renderer.air = planetAtmosphere(
-				RADIUS,
-				live.knobs.atmosphereTop,
-				live.knobs.zenithDepth,
-			);
+			renderer.air = live.knobs.atmosphereOn ? airFor(live) : null;
 
 		const now = performance.now();
 		if (live.knobs.timeOfDay !== lastTimeOfDay) {
@@ -2180,70 +2169,33 @@ async function main(): Promise<void> {
 		// rather than `dayStarted`.
 		if (billboardClouds) billboardClouds.time = (now - started) / 1000;
 
-		/**
-		 * What the picture is multiplied by, from the light there actually is.
-		 *
-		 * Flat ground takes the sky's share whenever the sun is up at all, and the
-		 * sun's share in proportion to how high it stands -- so the reading runs
-		 * from 1 at noon to the sky's share alone at sunrise. Dividing by it and
-		 * raising that to **Eye adapts** is an eye opening: at 1 every hour comes
-		 * out equally bright and nothing reads as evening, at 0 the picture is
-		 * exposed the same however dark it gets.
-		 *
-		 * The floor is what stops a night with no sun in it asking for all the
-		 * exposure there is. At 0.35 a night still comes out under a fifth as
-		 * bright as noon, which is dark and readable rather than black.
-		 */
-		const DARKEST = 0.35;
-
-		function exposureFor(day: number, sunUp: number): number {
-			const share = current.knobs.sunShare;
-			const lit = day * (1 - share + share * Math.max(0, sunUp));
-			return (
-				current.knobs.exposure *
-				Math.pow(1 / Math.max(DARKEST, lit), current.knobs.eyeAdapts)
-			);
-		}
-
 		// The moon stands off at a distance rather than being painted on, so
-		// walking round the planet shifts it against the stars. Worked out
-		// whether or not a sky is drawn, because the ground is lit by it.
+		// walking round the planet shifts it against the stars.
 		const moonPlace = windRotation(
 			new Vec3(0.2, 0.55, 0.81).normalize(),
 			NORTH,
 			(elapsed / (DAY_LENGTH * 1.35)) * 2 * Math.PI,
 		).scale(MOON_DISTANCE);
 		const moon = moonPlace.sub(from).normalize();
-		if (sky)
-			sky.moon = {
-				direction: moon,
-				angularRadius: MOON_ANGULAR_RADIUS,
-			};
 
 		// Under the surface is a radius now, not a block: the sea holds none.
 		const submerged =
 			from.length() < shape.seaSurfaceRadius ||
 			probe.blockAtPosition(from) === BlockType.WATER;
-		// Each half of the answer is switched on its own: the walk reaches the
-		// horizon and knows only generated ground, the maps reach a few
-		// hundred metres and hold anything that drew itself.
-		const dark = PLAIN ? 0 : current.knobs.sunShadow;
-		renderer.shadow.setLook(
-			current.knobs.mapShadows ? dark : 0,
-			current.knobs.shadowReach,
-		);
+		// The only shadow left is the sun's own depth buffers: sharp enough to
+		// shadow one block by the next, and the only one of the two the map
+		// walk used to share that can hold a thing nobody generated. A shadow
+		// takes away the direct sun entirely, which is what a face already
+		// turned away from it gets from the sky alone.
 		renderer.cascades.setSize(current.knobs.shadowTexels);
 		renderer.cascades.setLook(
-			current.knobs.cascadeShadows ? dark : 0,
+			PLAIN || !current.knobs.cascadeShadows ? 0 : 1,
 			current.knobs.cascadeReach,
 		);
-		// A cloud's shadow is the one the map can never hold: the map is the
-		// generated ground and a cloud is neither ground nor generated into
-		// it. Its own darkness, because a cloud is translucent and a hill is
-		// not, so the two would not read the same at one setting.
-		renderer.atmosphere.brightness = PLAIN
-			? 0
-			: current.knobs.skyBrightness;
+		renderer.atmosphere.inScatteringPoints =
+			current.knobs.inScatteringPoints;
+		renderer.atmosphere.opticalDepthPoints =
+			current.knobs.opticalDepthPoints;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		renderer.cloudShadow.setLook(
 			PLAIN || !current.knobs.cloudShadows
@@ -2327,7 +2279,6 @@ async function main(): Promise<void> {
 			refresh();
 		}
 		if (frozen) markMarker(frozen);
-		if (sky) sky.inverseViewProj = viewProj.inverse();
 		timer.enter("draw", performance.now());
 		renderer.render({
 			viewProj,
@@ -2343,8 +2294,7 @@ async function main(): Promise<void> {
 			nightLight: NIGHT_LIGHT,
 			moon: [moon.x, moon.y, moon.z],
 			moonLight: PLAIN ? 0 : current.knobs.moonLight,
-			exposure: exposureFor(day, up.dot(sun)),
-			sunShare: current.knobs.sunShare,
+			exposure: current.knobs.exposure,
 		});
 		timer.leave("draw", performance.now());
 

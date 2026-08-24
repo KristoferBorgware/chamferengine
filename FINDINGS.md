@@ -3099,3 +3099,49 @@ metres across one billboard rather than a request rounded to a lattice level,
 so it no longer has a level to be capped at. Every cloud knob is live and no
 cloud work happens on a worker at all.
 
+---
+
+### F-073 — Two ground shadows covered the same ground, and one of them cost a march per fragment
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-24, replacing the panel's sun, moon, sky and exposure
+knobs after doc 16's cascades shipped alongside the older coarse-map walk
+**Where:** `packages/engine/src/render/light/SHADOW_WGSL.ts`,
+`packages/engine/src/render/light/SunShadow.ts` (removed),
+`packages/client/src/PlanetSettings.ts`, `packages/client/src/planet.ts`
+
+**What happens.** Doc 16 shipped two independent ground shadows: a fragment
+march toward the sun over the 32 m coarse map (**Marching shadows**, up to 24
+steps a pixel, every frame), and three cascaded depth maps of anything that
+draws itself (**Shadow maps**). Both were on by default and both fed the same
+**How dark** knob, so a player who left both on paid for the march on every
+lit pixel and the three extra geometry passes at once, for one shadow that
+was never darker than either alone.
+
+**Why it matters.** The march could only ever shadow *generated terrain* — a
+map cell is 32 m, so it could never draw a block shadowing its neighbour, a
+placed block, or anything moving — which is exactly what the cascades already
+cover, at centimetres rather than 32 m, out to the cascades' own reach. Past
+that reach the map bought real range the cascades do not have, but the
+panel's own **How dark** knob made "how much of a shadow" and "which
+technique found it" the same number, so nobody comparing the two techniques
+could isolate what either one contributed. The march also ran unconditionally
+whenever `mapShadows` was on, at the fragment stage, on every visible pixel
+of ground and sea alike — the more expensive of the two per pixel, for the
+coarser of the two results.
+
+**What would fix it.** Remove the march and keep the cascades: they already
+draw everything the march could, at higher resolution, and reach anything
+that draws itself rather than only what the coarse map generated. The
+remaining gap — a shadow beyond the cascades' reach, cast by distant terrain
+the map still holds — is unclaimed; nothing in the shipped panel replaces it.
+
+**Closed:** 2026-08-24, removed. `SunShadow.ts`, the coarse-map march inside
+`SHADOW_WGSL.ts` and its `@group(2)` bindings, and the **Marching shadows**,
+**Marching reach** and **How dark** knobs are gone — `renderer.cascades` now
+takes a fixed full-strength shadow whenever **Shadow maps** is on, rather
+than a knob shared with a technique that no longer exists.
+

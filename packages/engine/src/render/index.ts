@@ -15,8 +15,6 @@ export { MARKER_SHADER } from "./marker/MARKER_SHADER.js";
 export { MarkerRenderer } from "./marker/MarkerRenderer.js";
 export type { MarkerGeometry } from "./marker/markerGeometry.js";
 export { markerGeometry } from "./marker/markerGeometry.js";
-export { SKY_SHADER } from "./sky/SKY_SHADER.js";
-export { SkyRenderer } from "./sky/SkyRenderer.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
 export { SEA_CLARITY, SEA_COLORS } from "./sea/SEA_COLORS.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";
