@@ -660,7 +660,39 @@ describe("merging at a level seam", () => {
 				if (mine <= 0) continue;
 				for (let k = 0; k < corners.length; k++) {
 					const nb = neighbour(cell.face, n, cell.i, cell.j, k);
-					if (!nb || drawn(nb)) continue;
+					if (!nb) continue;
+					if (drawn(nb)) {
+						// A step between two cells this chunk itself draws.
+						// The chunk over there draws coarse cells, never
+						// these, so the wall between the ring's own heights
+						// is this chunk's job as much as the outer edges
+						// are -- the slits between ring cells showed the sea
+						// through every step the gate left out.
+						const theirsFine = capOf(nb);
+						if (theirsFine <= 0) continue;
+						const high = Math.max(mine, theirsFine);
+						const low = Math.min(mine, theirsFine);
+						if (high - low <= 1e-6) continue;
+						bands++;
+						const left =
+							corners[(k + corners.length - 1) % corners.length]!;
+						const middle = left.add(corners[k]!).normalize();
+						const step = latticePosition(nb.face, n, nb.i, nb.j)
+							.sub(latticePosition(cell.face, n, cell.i, cell.j))
+							.normalize();
+						let holed = false;
+						for (const f of [0.15, 0.4, 0.65, 0.9]) {
+							const from = middle
+								.scale(low + (high - low) * f)
+								.sub(step.scale(steep.blockSize));
+							if (!meets(from, step, 2 * steep.blockSize, soup)) {
+								holed = true;
+								break;
+							}
+						}
+						if (holed) bare++;
+						continue;
+					}
 					const coarse = coarseCell(
 						{ face: nb.face, i: nb.i, j: nb.j, layer: 0 },
 						DEPTH,

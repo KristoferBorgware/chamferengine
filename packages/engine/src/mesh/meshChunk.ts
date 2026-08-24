@@ -844,19 +844,26 @@ function meshApronCell(
 		}
 	}
 
-	// The walls a neighbour at this chunk's own level would draw against the
-	// ring, reproduced exactly -- same canonical cell, same ring, same colors,
+	// The walls a neighbour at this chunk's own level would draw for this
+	// cell, reproduced exactly -- same canonical cell, same ring, same colors,
 	// same radii, no drop. Where the chunk over there IS at this level it
 	// draws these very quads, the two copies land on one another, and a depth
 	// fight between identical colors paints one color. Where it is a level
 	// coarser nobody else draws them: a level draws the ground at the points
-	// it kept, so every step between two fine cells across the boundary stood
-	// open -- a dashed line of holes climbing every slope a level join
-	// crosses, one slit per terrace the boundary cuts.
+	// it kept, so every step at the boundary stood open -- a dashed line of
+	// holes climbing every slope a level join crosses, one slit per terrace.
+	//
+	// **Every edge, not only the ring's outer ones.** The ring itself is drawn
+	// at this chunk's own heights inside the coarser chunk's territory, so the
+	// steps between two ring cells -- and between a ring cell and the rim cell
+	// it stands over -- need these walls exactly as much as the outer edges
+	// do. Gating them to the outer edges left each of those steps as a slit
+	// with the sea showing through it. The run condition is the whole
+	// duplicate rule: a wall belongs to its more opaque side, so an owned
+	// cell's own runs and an apron cell's never both fire for one edge.
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
-		const past = ringCells[k];
-		if (!other || !past || drawnHere(past)) continue;
+		if (!other) continue;
 		let layer = from;
 		while (layer <= to) {
 			const block = at(own, layer);

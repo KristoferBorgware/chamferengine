@@ -670,11 +670,16 @@ Violating any of these breaks the design. They are not tunable.
   the slits were on screen. Measured over the whole frontier face, own cap down
   to coarse ground at four heights: **554 of 1,267** outer edges stand open
   (7.25 m mean, 40 m worst), the curtain alone leaves **324 of 554** holed, and
-  with the apron also drawing **the side runs a same-level neighbour would draw
-  there — reproduced exactly, same canonical cell, same ring, same colors, no
-  drop** — it is **0 of 554**. Two copies of one wall land on one another where
+  with the apron drawing, **for every edge of every ring cell**, the side runs
+  a same-level neighbour would draw there — reproduced exactly, same canonical
+  cell, same ring, same colors, no drop — it is **0 of 554**, and **0 of
+  1,958** steps between two ring cells inside coarser territory (53.8% of
+  which stood open when the runs covered only the ring's outer edges: the ring
+  is drawn at this chunk's own heights inside the coarser chunk's territory,
+  so its internal steps are this chunk's job too, and the run condition — a
+  wall belongs to its more opaque side — is the whole duplicate rule). Two copies of one wall land on one another where
   the neighbour really is at this level, and a depth fight between identical
-  colors paints one color. The whole seam closing costs **3.6%** more faces,
+  colors paints one color. The whole seam closing costs **7.5%** more faces,
   and `MESHER_REACH` stays 2 (measured, not assumed).
 - **A WALL RUNS PAST ITS OWN CORNERS, OR THE CORNER LINE LEAKS PINPRICKS OF
   SKY** (`WALL_WELD` in `emitSide`, `plans/v0.4.1.md` I-18). The vertical line
