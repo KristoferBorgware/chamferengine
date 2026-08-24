@@ -21,6 +21,20 @@ const ROOT = path.resolve(__dirname, '..');
 const VDIR = path.join(ROOT, 'verification');
 const DDIR = path.join(ROOT, 'docs');
 
+// ---- decided, and so not re-run ---------------------------------------------
+// A script here is kept, cited and readable, but not executed on every build.
+// The question it answered is closed, so its cost buys nothing: it re-derives a
+// decision nobody is going to change. Run it by hand if one is reopened.
+//
+// This is not the same as deleting it. The documents argue their decisions from
+// measurements, and the measurement has to stay where a reader can run it.
+const SETTLED = {
+  'language.js':
+    'the language is decided -- TypeScript, doc 28. It spawns six toolchains to ' +
+    're-derive that, and on a machine with all of them installed it is the ' +
+    'slowest script here by a wide margin.',
+};
+
 const scripts = fs.readdirSync(VDIR).filter(f => f.endsWith('.js')).sort();
 const docs = fs.readdirSync(DDIR).filter(f => f.endsWith('.md') && f !== 'REFERENCE.md').sort();
 const docText = new Map(docs.map(f => [f, fs.readFileSync(path.join(DDIR, f), 'utf8')]));
@@ -59,6 +73,11 @@ function run(file){
 
 console.log(`running ${scripts.length} verification scripts...`);
 const results = scripts.map(f => {
+  if (SETTLED[f]) {
+    console.log(`  ${f.padEnd(12)} ${'settled'.padStart(8)}`);
+    return { file: f, purpose: purpose(f), cites: citedBy(f),
+             out: null, ms: 0, settled: SETTLED[f] };
+  }
   const r = run(f);
   console.log(`  ${f.padEnd(12)} ${r.out === null ? 'FAILED' : (r.ms + ' ms').padStart(8)}`);
   return { file: f, purpose: purpose(f), cites: citedBy(f), ...r };
@@ -67,7 +86,8 @@ const results = scripts.map(f => {
 // ---- consistency checks -----------------------------------------------------
 const problems = [];
 for (const r of results){
-  if (r.out === null) problems.push(`${r.file} does not run: ${r.err.split('\n')[0]}`);
+  if (r.out === null && !r.settled)
+    problems.push(`${r.file} does not run: ${r.err.split('\n')[0]}`);
   if (!r.cites.length) problems.push(`${r.file} is cited by no document`);
 }
 // a script named in a document must exist
@@ -89,7 +109,9 @@ lines.push('');
 lines.push('> **Generated file. Do not edit.** Rebuild with `node tools/make-reference.js`.');
 lines.push('>');
 lines.push('> Each section below is the actual output of a verification script, run');
-lines.push('> fresh. The prose documents explain *why* these numbers matter; this page');
+lines.push('> fresh -- except for the few marked settled, whose question is closed and');
+lines.push('> which are run by hand. The prose documents explain *why* these numbers');
+lines.push('> matter; this page');
 lines.push('> exists so an agent can look one up without reading the argument around it,');
 lines.push('> and so the numbers can never drift from the scripts that prove them.');
 lines.push('');
@@ -120,14 +142,23 @@ for (const r of results){
     ? `Cited by ${r.cites.map(d => `[doc ${d.slice(0,2)}](${d})`).join(', ')}.`
     : '_Not currently cited by any document._');
   lines.push('');
-  lines.push('```');
-  lines.push(r.out === null ? `SCRIPT FAILED\n${r.err}` : r.out);
-  lines.push('```');
-  lines.push('');
+  if (r.settled) {
+    lines.push(`**Settled, and so not run on this build:** ${r.settled}`);
+    lines.push('');
+    lines.push(`Run it with \`node verification/${r.file}\`.`);
+    lines.push('');
+  } else {
+    lines.push('```');
+    lines.push(r.out === null ? `SCRIPT FAILED\n${r.err}` : r.out);
+    lines.push('```');
+    lines.push('');
+  }
 }
 lines.push('---');
 lines.push('');
-lines.push(`_${results.length} scripts. Every number above is reproduced by running them._`);
+const ran = results.filter(r => !r.settled).length;
+lines.push(`_${results.length} scripts, ${ran} of them run here. Every number above is`
+  + ` reproduced by running them._`);
 lines.push('');
 
 fs.writeFileSync(path.join(DDIR, 'REFERENCE.md'), lines.join('\n'));
@@ -138,5 +169,5 @@ if (problems.length){
   for (const p of problems) console.error('  ' + p);
   process.exitCode = 1;
 } else {
-  console.log('every script runs, is cited, and every cited script exists.');
+  console.log(`every script runs or is settled, is cited, and every cited script exists.`);
 }

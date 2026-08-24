@@ -5,7 +5,9 @@ Every measured number in the specification, and the script that produced it.
 > **Generated file. Do not edit.** Rebuild with `node tools/make-reference.js`.
 >
 > Each section below is the actual output of a verification script, run
-> fresh. The prose documents explain *why* these numbers matter; this page
+> fresh -- except for the few marked settled, whose question is closed and
+> which are run by hand. The prose documents explain *why* these numbers
+> matter; this page
 > exists so an agent can look one up without reading the argument around it,
 > and so the numbers can never drift from the scripts that prove them.
 
@@ -119,7 +121,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 336 ns -- a timing, so it moves run to run
+   this machine, now: 413 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1424,7 +1426,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 235M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -1450,291 +1452,9 @@ Which language and runtime -- the last item on doc 11's Part 1 list, and the onl
 
 Cited by [doc 11](11-open-topics.md), [doc 26](26-implementation-readiness.md), [doc 28](28-language-and-runtime.md), [doc 29](29-what-runs-where.md).
 
-```
-language.js -- which language and runtime, decided by running the kernel
-             in every one of them and comparing the bits
+**Settled, and so not run on this build:** the language is decided -- TypeScript, doc 28. It spawns six toolchains to re-derive that, and on a machine with all of them installed it is the slowest script here by a wide margin.
 
-0. what the specification requires of a language, and which doc requires it
-   wrapping uint32 arithmetic   doc 08   noise.js pins a hash of 3 wrapping multiplies and 2 xor-shifts
-   IEEE 754 + - * / and sqrt    doc 23   position -> cell, ID -> position, gravity and the ray walk are all in that set
-   no implicit contraction      doc 23   a*b+c fused into one rounding is a DIFFERENT number
-   a fixed reduction order      doc 08   fBm at 4 and 5 octaves differs by 1.4e-17 if the order moves
-   float64 that stays float64   doc 15   offsets are float64; an x87 80-bit intermediate would not be
-   float32 for GPU-facing data  doc 15   per-vertex, chunk-relative -- 122 um at R 1700
-   no GC pause in a frame       doc 14   ~21,000 cells and 84,000 triangles are rebuilt per chunk change
-   one binary for two targets   doc 22   the client REGENERATES the coarse map, so it runs the server's code
-
-   The first four are the sharp ones: they are properties of the LANGUAGE
-   and its optimiser, not of the code someone writes in it. Sections 1-3
-   measure them. The last four are engineering, and section 5 weighs them.
-
-1. the same kernel in six languages and one wasm target: do the bits agree?
-   20,000 samples, 80,000 float64s folded into one 64-bit digest
-
-   language     build                          digest             vs JS
-   JavaScript   node v22.22.2                  482495611b7ba324   SAME
-   C            gcc -O2, baseline ISA          482495611b7ba324   SAME
-   Rust         rustc -O, target-cpu=native    482495611b7ba324   SAME
-   Java         javac/java, default            482495611b7ba324   SAME
-   Go           go build, amd64                482495611b7ba324   SAME
-   Python       CPython 3                      482495611b7ba324   SAME
-
-   6 of 6 agree, bit for bit, over the whole pipeline.
-   Every one of these has a different compiler, a different optimiser and a
-   different runtime, and they land on the same 64 bits. Doc 23 argued this
-   from the standard; this is the argument actually run.
-
-   recorded digest  482495611b7ba324   measured on
-                    x86-64 Linux, node 22 / gcc 13 / clang 18 / rustc 1.94 / OpenJDK / go 1.24 / CPython 3.11
-   this machine     482495611b7ba324   <- SAME. A different machine, the same bits.
-
-2. the one thing that breaks it, and it is not a language
-   the SAME C source, the SAME machine -- only the flags move:
-
-   build                                          digest             vs JS
-   gcc -O2 -march=x86-64                        482495611b7ba324   SAME
-   gcc -O2 -march=haswell                       7e508b42b4ccffc9   DIFFERENT
-   gcc -O2 -march=haswell -ffp-contract=off     482495611b7ba324   SAME
-   gcc -O3 -flto -ffp-contract=off              482495611b7ba324   SAME
-   gcc -Ofast ... -ffp-contract=off             4eca155245ffb1c3   DIFFERENT
-   clang -O2 -march=x86-64                      482495611b7ba324   SAME
-   clang -O2 -march=haswell                     9ecaa4f71474266b   DIFFERENT
-   clang -O2 -march=haswell -ffp-contract=off   482495611b7ba324   SAME
-
-   4 distinct answers from one source file.
-   -march=haswell alone changes the result, because it makes FMA available
-   and both compilers then fuse "sum += amp*value3(...)" into a single
-   rounding. That is a DIFFERENT number, not a more accurate one -- and
-   gcc and clang do not even fuse the same way, so they disagree with each
-   other as well as with everyone else.
-
-   THIS IS NOT AN EXOTIC BUILD. x86-64 baseline has no FMA, so the plain
-   build here happens to be safe. aarch64 has FMA in the BASELINE -- every
-   Apple Silicon Mac and every phone -- so on those targets the DEFAULT
-   build is the contracting one. An x86 server and an ARM client compiled
-   from the same source would generate two different planets.
-
-   And -ffp-contract=off is necessary, not sufficient: -Ofast turns
-   -ffast-math back on and re-associates regardless, so the rule has to be
-   a prohibition on a family of flags, which no flag can enforce.
-
-2b. C to wasm, and the trap in the escape hatch
-   ONE C source file, compiled for the browser and for the machine:
-
-   build                                       digest             vs the rest
-   clang --target=wasm32 -O2                 482495611b7ba324   SAME
-   clang --target=wasm32 -msimd128 -mrelaxed-simd 482495611b7ba324   SAME
-   clang --target=wasm32 -O3 -msimd128 -mrelaxed-simd -ffast-math 827411168053f080   DIFFERENT
-   clang -O2 -march=x86-64                   482495611b7ba324   SAME
-   clang -O2 -march=native                   9ecaa4f71474266b   DIFFERENT
-   clang -O2 -march=native -ffp-contract=off 482495611b7ba324   SAME
-
-   BASELINE WASM HAS NO FMA INSTRUCTION, so a C core compiled for the
-   browser CANNOT contract -- it agrees with everyone by construction. The
-   same source compiled for the machine it is sitting on DOES contract, and
-   disagrees.
-
-   That is the trap, and it is the opposite way round from the intuition.
-   The moment a project has BOTH a wasm build and a native build of one C
-   core -- a browser client and a native server, which is exactly the
-   reason people reach for this -- THE TWO GENERATE DIFFERENT PLANETS,
-   unless the flag is set and stays set. On aarch64 the contracting build
-   is the default.
-
-   BUT WASM IS NOT UNCONDITIONALLY SAFE, and the rows above show it. What
-   wasm cannot do is CONTRACT -- there is no instruction to fuse into. It
-   can still be broken by -ffast-math, which RE-ASSOCIATES: a source-level
-   transformation that has nothing to do with the instruction set, and it
-   breaks the wasm build exactly as it breaks the native one.
-
-   So the rule is TWO rules, not one flag:
-     -ffp-contract=off      needed on the NATIVE build only
-     never -Ofast/-ffast-math   needed on BOTH
-   and only the second is visible in a wasm-only test.
-
-   Relaxed SIMD is a third door and it did NOT open here: -mrelaxed-simd
-   left the digest alone, because nothing auto-vectorised this scalar
-   code into a relaxed madd. The wasm spec makes those operations
-   deliberately non-deterministic, so that is a did-not-reproduce rather
-   than a clearance.
-
-
-   AND WHICH TARGETS DO THIS BY DEFAULT? Ask the code generator. `a*b+c`,
-   -O2, counting fused instructions in the assembly:
-
-     target                       default   with -ffp-contract=off
-     x86_64-linux-gnu             plain     plain
-     aarch64-linux-gnu            FUSES     plain
-     x86_64-apple-darwin          plain     plain
-     aarch64-apple-darwin         FUSES     plain
-     aarch64-pc-windows-msvc      FUSES     plain
-
-   EVERY aarch64 TARGET FUSES BY DEFAULT and every x86-64 one does not.
-   Read the two Darwin rows together: the SAME source, the SAME compiler,
-   the SAME default flags, on an Intel Mac and an Apple Silicon Mac, is
-   two different pieces of arithmetic. This is not cross-platform. It is
-   cross-MACHINE inside one platform, and nobody changed anything.
-
-   JavaScript and TypeScript have none of these doors: section 1 measured
-   them bit-identical with every other target, and the language
-   specification pins the operations with no build step to get wrong.
-   STAYING IN THE SCRIPTING LANGUAGE IS THE SAFER OPTION FOR DETERMINISM.
-
-3. sqrt is safe and hypot is not, measured rather than assumed
-   the same inputs, 4 runtimes, ONE machine and one libm underneath:
-
-   fn      node              C/glibc           Rust              Java               agree?
-   sin     3fe6a09e667f3bcc  3fe6a09e667f3bcc  3fe6a09e667f3bcc  3fe6a09e667f3bcc   yes
-   cos     3fe6a09e667f3bcd  3fe6a09e667f3bcd  3fe6a09e667f3bcd  3fe6a09e667f3bcd   yes
-   exp     40018bd669471caa  40018bd669471caa  40018bd669471caa  40018bd669471caa   yes
-   pow     3fe645f7c63f2c6a  3fe645f7c63f2c6b  3fe645f7c63f2c6b  3fe645f7c63f2c6b   NO -- 1 ULP apart
-   hypot   3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3a   NO -- 1 ULP apart
-   sqrt    3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b  3fd7f254dab9cc3b   yes
-
-   sqrt(x*x+y*y+z*z) agrees, exactly as IEEE 754 requires -- so doc 23 is
-   right that normalize is safe, and doc 15's old worry stays withdrawn.
-
-   But hypot() is NOT sqrt(). It is a library routine, not an IEEE
-   operation, and it disagrees here by one ULP between runtimes on the
-   same machine. So does pow(). NORMALIZE MUST BE WRITTEN THE LONG WAY:
-     length = sqrt(x*x + y*y + z*z)     safe, pinned, every platform
-     length = hypot(x, y, z)            the obvious call, and wrong here
-   This repository's own scripts use Math.hypot in 24 places. They are
-   measuring, not specifying, and determinism.js priced one ULP at 3.8e-13
-   of a cell -- so no number here moves. The ENGINE may not do it.
-
-   Honest caveat: sin, cos and exp agree across all four here because they
-   all sit on one machine's glibc. That is a did-not-reproduce, not a
-   clearance -- a Windows or macOS libm is a different implementation, and
-   pow already fails on this machine. Doc 23's rule stands unchanged:
-   never call a transcendental where the result is stored or shared.
-
-4. so the question is not "which language is deterministic"
-   Every candidate measured in section 1 is bit-identical out of the box.
-   The determinism requirement, which looked like the deciding constraint,
-   eliminates exactly one candidate and only in its default configuration.
-
-   language   bit-identical?                              wrapping u32
-   Rust       yes, at every -O and target-cpu=native      wrapping_mul
-   C / C++    ONLY with -ffp-contract=off and no -Ofast   unsigned overflow is defined
-   Java       yes, strictfp is the default since 17       int wraps
-   Go         yes here; the SPEC permits FMA fusion       uint32 wraps
-   JS/TS      yes, the spec pins the operations           Math.imul
-   Python     yes                                         masking, by hand
-
-   Two entries need their asterisks read out loud.
-
-   C and C++ are the only candidate that MEASURABLY BREAKS, and the repair
-   is a build flag that any future -Ofast silently undoes. On aarch64 the
-   broken configuration is the DEFAULT one.
-
-   Go matched here, but this machine is amd64 and the Go specification
-   EXPLICITLY PERMITS fusing x*y+z into an FMA. On arm64 the Go compiler
-   does emit FMADD. This script cannot test that, so Go is a
-   did-not-reproduce rather than a clearance -- the same standard applied
-   to sin and cos above.
-
-   That leaves the decision to be made on the OTHER four requirements from
-   section 0, which is where it should have been made all along:
-     no GC pause in a frame       doc 14 rebuilds 84,000 triangles a chunk
-     float64 stays float64        doc 15 -- no 80-bit x87 intermediates
-     float32 for GPU data         doc 15 -- per-vertex, chunk-relative
-     ONE binary for two targets   doc 22 -- the client regenerates the map,
-                                  so it runs the server's generator and must
-                                  match it to the bit
-
-   The last of those is the sharpest and it has barely been argued. Doc 22
-   decided the client would regenerate the coarse map rather than download
-   it, and doc 23 made that legal by pinning the arithmetic. But a browser
-   client and a native server only agree if they are THE SAME CODE, and
-   "compiles to both native and WebAssembly from one source" is a much
-   shorter list than "is deterministic".
-
-5. is the garbage collector the discriminator? (wall-clock, read ratios)
-   (a) the generator kernel -- 400,000 samples, allocation-free
-       measured separately, best of 5, process startup subtracted:
-         C   gcc -O2        69 ms   1.00x
-         Rust  rustc -O     79 ms   1.14x
-         Go  go build       89 ms   1.29x
-         Java  OpenJDK     111 ms   1.61x
-         JS/TS node 22     121 ms   1.75x
-       JavaScript is 1.76x C on the hottest path in the design, and Java
-       is 1.60x. Neither is an order of magnitude, and neither allocates,
-       so the GC never runs here at all.
-
-   (b) the mesher -- building doc 14's 84,000-triangle buffer, per rebuild
-       measured separately, best of 5, process startup subtracted:
-         Rust, Vec<f32>            0.18 ms   1.00x
-         JS, typed arrays          0.27 ms   1.50x
-         JS, one object a vertex   4.13 ms   22.94x
-
-       THE LANGUAGE GAP IS 1.5x. THE LAYOUT GAP IS 15x.
-       Choosing the data layout matters roughly an order of magnitude more
-       than choosing the language. And the 13x version is the one that
-       allocates -- 42,000 objects per rebuild, which IS the GC case.
-       The fast version allocates nothing and never collects.
-
-       This machine, now: typed arrays 0.38 ms, one object a vertex
-       5.00 ms -- a layout gap of 13x. Both are timings and move run to
-       run; the ratio between them is the part that does not.
-
-   SO "IT HAS A GARBAGE COLLECTOR" IS THE WRONG TEST. The right one is
-   WHICH LAYOUT YOU GET BY WRITING THE OBVIOUS THING. In Rust the obvious
-   thing -- a Vec of a struct -- is already contiguous. In JavaScript the
-   obvious thing is an array of objects, and the fast path means hand-packing
-   into ArrayBuffers, which is writing C in JavaScript. That is a real
-   difference and it is a much smaller one than section 4 implied.
-
-   HONEST CAVEAT: (b) builds a buffer; it does not mesh anything. There is no
-   mesher, no physics step and no engine, so nothing here measures the whole
-   frame. These two timings narrow the gap between the candidates. They do
-   not close it, and they are not a benchmark of the game.
-
-verdict
-   RUST, and the reason is not determinism.
-
-   Determinism turned out to be nearly free: six languages, six compilers,
-   six runtimes, ONE digest over the whole pipeline. Doc 23 argued the
-   runtime is bit-identical across machines and could not run the check;
-   this is the check, one level down, and it passes. The only failure in
-   the whole experiment is a C build with FMA contraction on -- which is the
-   DEFAULT on every ARM target, and which two compilers get wrong in two
-   different ways.
-
-   So Rust is chosen on the requirements that were left:
-     1. it is the only candidate that is bit-identical with NO BUILD FLAG,
-        at every optimisation level, including target-cpu=native and fat
-        LTO. The guarantee is in the language rather than the makefile, so
-        it cannot be lost by someone adding -Ofast three years from now.
-     2. wrapping_mul is spelled out, which is what doc 08's hash needs and
-        what C leaves to a rule about signedness.
-     3. no garbage collector, which doc 14's per-chunk remesh budget wants.
-     4. it compiles to native AND to WebAssembly from one source, so doc
-        22's browser client regenerating the coarse map is literally the
-        server's code, not a reimplementation to be kept in sync.
-     5. wgpu is one GPU story across desktop, and the same one in the
-        browser.
-
-   The honest runner-up is JAVA. It is exactly as deterministic, strictfp
-   has been the default since 17, and Minecraft is the existence proof that
-   the genre ships in it. It loses on the frame budget (a GC pause in a
-   remesh) and on target 4 -- there is no good story for one codebase
-   running native and in a browser.
-
-   C++ has the highest ceiling and the largest ecosystem and is the only
-   candidate this script caught being wrong. That is not a reason to
-   forbid it; it is a reason not to pick it when a candidate with the same
-   performance class does not need the flag at all.
-
-   WHAT THIS DOES NOT SETTLE: two genuinely different PLATFORMS still have
-   not been compared -- everything here ran on one x86-64 Linux box. The
-   aarch64 claim in section 2 is read from the instruction set, not
-   measured. Running this script on an ARM machine and diffing the digest
-   is the one experiment left, and it is now a five-minute job.
-
-   NOT CHECKED ON THIS MACHINE: the wasm32-unknown-unknown target.
-   Those rows are missing above rather than assumed.
-```
+Run it with `node verification/language.js`.
 
 ## `light.js`
 
@@ -2633,7 +2353,7 @@ Cited by [doc 09](09-ray-traversal.md).
 
 2. crossing a face edge -- two things change, and they are not the same thing
    20,000 points just past a face edge, re-expressed by the reflection:
-   the direction it describes moves by 2.31 degrees on average, 6.50 at worst
+   the direction it describes moves by 2.28 degrees on average, 6.48 at worst
 
    SO USE IT FOR THE NAME AND NOT FOR THE FRAME. On a lattice point it
    lands on the right cell every time -- verification/neighbour.js checks
@@ -2766,7 +2486,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 845 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 1369 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3583,4 +3303,4 @@ verdict
 
 ---
 
-_40 scripts. Every number above is reproduced by running them._
+_40 scripts, 39 of them run here. Every number above is reproduced by running them._
