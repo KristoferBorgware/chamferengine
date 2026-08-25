@@ -451,9 +451,29 @@ parameter can, and the order they are read in is the whole construction:
   continent already set: below cuts a valley, above raises a peak.
 
 So high continentalness with low erosion and high peaks is a steep ridge, and
-the same continentalness and the same peaks under high erosion is a plain at the
-same height. The recipe under the pictures is the arithmetic, with the metres
-the knobs are set to.
+the same continentalness and the same peaks under high erosion is a plain. The
+recipe under the pictures is the arithmetic, with the metres the knobs are set
+to.
+
+**Erosion does two things: it flattens, and it lowers.** Flattening is `kept(E)`
+multiplying the relief. Lowering is that same `kept(E)` multiplying how high the
+land stands over the sea — water wears a range down as well as smoothing it, and
+in a nested spline, where the height is one function of all three fields,
+erosion changes the level by construction.
+
+**Wears the level down is how much of the lowering happens.** `worn(E)` is
+`kept(E)` pulled back toward `1` by it. Turned all the way up the two are the
+same number, so land the curve fully erodes is flattened and lowered together
+and ends at sea level; turned off, `worn(E)` is just `1`, the land keeps its
+height, and only the bumps go.
+
+Measured over the planet, the knob moves the top of the distribution and leaves
+the bottom exactly where it is. From `0` to `0.55` to `1`, the 95th percentile
+of height falls `552 m` → `403 m` → `337 m` and the snow band goes
+`13.8%` → `5.2%` → `2.7%` of the surface while grass grows `19.0%` → `30.3%`.
+The median stays at `-136 m` and the lowest point at `-417 m` on all three,
+because **below sea level nothing is worn** — the ocean floor is not what the
+rain is falling on, and wearing it would lift the sea bed toward the surface.
 
 **Each layer carries a whole stack, not a frequency** — its own feature size in
 metres, octave count, falloff, step between octaves and fold. A layer that

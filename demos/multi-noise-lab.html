@@ -1234,17 +1234,23 @@
 			 *   the level the continent set, below it cuts a valley and above it
 			 *   raises a peak.
 			 *
-			 * **Erosion also eats the level, and that is what `Wears down`
-			 * decides.** Water does not only take the peaks off a range, it
-			 * lowers the whole thing -- and in a nested spline, where the height
-			 * is one function of all three fields, erosion changes the level by
-			 * construction. Flattened into one line it has to be said out loud:
-			 * `worn(E)` is `1` where erosion keeps all the relief and falls to
-			 * `1 - bite` where it keeps none, so at a bite of `1` a fully eroded
-			 * continent is worn all the way to sea level and at `0` the level is
-			 * untouched and only the relief goes. **Below sea level nothing is
-			 * worn**: the ocean floor is not what the rain is falling on, and
-			 * wearing it would raise the sea bed toward the surface.
+			 * **Erosion does two things: it flattens, and it lowers.**
+			 * Flattening is `kept(E)` multiplying the relief, above. Lowering is
+			 * that same `kept(E)` multiplying how high the land stands over the
+			 * sea -- water wears a range down as well as smoothing it, and in a
+			 * nested spline, where the height is one function of all three
+			 * fields, erosion changes the level by construction.
+			 *
+			 * **`Wears the level down` is how much of the lowering happens.**
+			 * `worn(E)` is `kept(E)` pulled back toward `1` by it. Turned all the
+			 * way up the two are the same number, so land the curve fully erodes
+			 * is flattened and lowered together and ends at sea level; turned off
+			 * `worn(E)` is just `1`, the land keeps its height, and only the
+			 * bumps go.
+			 *
+			 * **Below sea level nothing is worn**: the ocean floor is not what
+			 * the rain is falling on, and wearing it would lift the sea bed
+			 * toward the surface.
 			 *
 			 * So high continentalness with low erosion and high peaks is a steep
 			 * ridge; the same continentalness and the same peaks under high
@@ -1266,8 +1272,14 @@
 				const kept = k.useEro ? splineAt(k.eroSpline, said[1]) : 1;
 				const swing = k.usePv ? splineAt(k.pvSpline, said[2]) * 2 - 1 : 0;
 				const over = base - k.seaLevel;
-				const worn = over > 0 ? over * (1 - k.erosionBite * (1 - kept)) : over;
-				return k.seaLevel + worn + kept * swing * k.peakRelief;
+				// `kept` pulled back toward 1 by the knob: equal to it turned all
+				// the way up, and simply 1 turned off.
+				const worn = 1 + k.erosionBite * (kept - 1);
+				return (
+					k.seaLevel +
+					(over > 0 ? over * worn : over) +
+					kept * swing * k.peakRelief
+				);
 			}
 
 			// ---------------------------------------------------------------
@@ -1578,11 +1590,12 @@
 							value: 0.55,
 							digits: 2,
 							note: () =>
-								field
-									? `fully eroded land is worn <b>${Math.round(
+								knobs.erosionBite === 0
+									? "off: erosion flattens the land and leaves its height alone"
+									: `land the curve fully erodes is dropped <b>${Math.round(
 											knobs.erosionBite * 100,
-										)}%</b> of the way to sea level; at 0 only the relief goes`
-									: "",
+										)}%</b> of the way to sea level — at 1 it is lowered by ` +
+										"the same amount it is flattened",
 						},
 					],
 				),
