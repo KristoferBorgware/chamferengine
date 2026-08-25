@@ -279,6 +279,31 @@ between two of them is two or three representable steps and the normal it gives
 is noise. Chunk-relative keeps the magnitude under a few hundred, where the
 step is 60 micrometres.
 
+### Damping the variation is not the same as sampling it, so there is a knob for both
+
+Turning the normal toward the column's up removes the *cause* of the moiré and
+leaves the sampling as coarse as it was. The other cure is to sample more
+densely, and it is the one that helps everything at once — a hard edge between
+two blocks, the rim of a cloud, the sun's own disc, the speckle a shadow map
+leaves. Nothing here sets `multisample`, and multisampling would only have
+helped the geometry edges anyway: most of what aliases on a voxel hillside is
+the *shading* across its steps, and multisampling shades once per pixel.
+
+So the world can be drawn into an image larger than the canvas and averaged
+back down by the pass that was already going to read every pixel of it once —
+the tone curve. **Supersample** is that scale. Measured over the distant band
+of one eye-level view, the mean jump from one pixel to the next along a row
+goes from **7.75 of 255 to 2.78** at a scale of 2 — 64% less high-frequency
+contrast — while the mean brightness of the frame stays at **127.2 against
+124.9**, which is what says it is the same picture more finely sampled rather
+than a different one.
+
+It costs the square of itself: a scale of 2 is four times the pixels through
+every pass inside the frame, which on this project's software adapter is most
+of the frame time. So it ships **off**, and off is exact — at a scale of 1 the
+resolve is a `textureLoad` of one texel with no filtering of any kind, so a
+world that never asks for this is drawn exactly as it was before it existed.
+
 ### Light comes from two places, and only one of them has a direction
 
 Once the sun is directional, a wall facing away from it gets nothing, and
@@ -308,6 +333,24 @@ air, and air scatters the blue out of it first. That height is measured against
 the place's own up, so the light turns orange as the day runs **and** as a
 player walks around the planet — which on a world you can walk around in 2.12
 hours is the same motion.
+
+### How hard the sun lands is the other half of a sky's brightness
+
+The air has its own brightness — how much light the atmosphere throws back at
+the eye — and turning it up brightens the sky and does nothing whatever to the
+ground, because the ground's sun term never reads it. That leaves half of a
+lighting balance with no control on it, and the half that decides whether a
+world reads as an overcast afternoon or as a hard noon.
+
+**Sunlight** is a plain multiplier on the direct term alone, on land and on the
+sea's two highlights alike. It cannot be the same number as the share between
+sun and sky: that share sums to 1 so that flat ground at noon does not move
+when it is turned, which is exactly the property that makes it useless as a
+brightness. Measured over one eye-level view with the air switched off, `2.5`
+against `0.2` moves the mean brightness from **56.7 to 106.7**, and the shape
+of the move is the whole point — the 95th percentile of the per-pixel ratio is
+**3.425** and the 5th is **0.947**. Faces the sun reaches gain nearly all of
+it; faces lit only by the sky do not move at all.
 
 ### Day length is a gameplay dial, and it has a natural anchor
 
@@ -665,6 +708,18 @@ happened to land in — which is exactly what a sun does as a camera turns.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
+- **How hard the sun lands is a knob of its own.** The share between sun and
+  sky sums to 1, which is exactly what stops it being a brightness, so the
+  direct term takes a plain multiplier beside it: `2.5` against `0.2` moves a
+  frame's mean from **56.7 to 106.7**, with the 95th percentile of the ratio at
+  **3.425** and the 5th at **0.947** — lit faces gain nearly all of it and
+  sky-lit ones do not move.
+- **Damping the moiré is not the same as sampling it**, so the world can be
+  drawn larger than the canvas and averaged back by the tone pass. At a scale
+  of 2 the mean jump from one pixel to the next across the distant band falls
+  from **7.75 of 255 to 2.78** while the frame's mean brightness holds at 127.2
+  against 124.9. It costs the square of itself, so it ships off — and off is a
+  `textureLoad` of one texel, filtered by nothing.
 - **The sun takes its own picture**, in **three cascades** splitting the near
   260 m at 16, 65 and 260 m — **2 cm** a texel in the nearest and **23 cm** in
   the furthest, **12.6 MB** in all. Fitted to a sphere and snapped to whole

@@ -2204,6 +2204,7 @@ async function main(): Promise<void> {
 		renderer.bloom.enabled = current.knobs.bloomOn;
 		renderer.bloom.threshold = current.knobs.bloomThreshold;
 		renderer.bloom.strength = current.knobs.bloomStrength;
+		renderer.superSample = current.knobs.superSample;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		renderer.cloudShadow.setLook(
 			PLAIN || !current.knobs.cloudShadows
@@ -2301,6 +2302,7 @@ async function main(): Promise<void> {
 			daylight: day,
 			nightLight: NIGHT_LIGHT,
 			moon: [moon.x, moon.y, moon.z],
+			sunLight: current.knobs.sunStrength,
 			moonLight: PLAIN ? 0 : current.knobs.moonLight,
 			exposure: current.knobs.exposure,
 		});

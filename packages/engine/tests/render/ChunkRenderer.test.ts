@@ -18,6 +18,7 @@ const FRAME: Frame = {
 	fog: [0, 0, 0, 1e9],
 	daylight: 1,
 	nightLight: 0.09,
+	sunLight: 1,
 	moon: [0, -1, 0],
 	moonLight: 0.16,
 	exposure: 1,

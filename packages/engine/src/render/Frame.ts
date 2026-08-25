@@ -61,4 +61,16 @@ export interface Frame {
 	 */
 	readonly daylight: number;
 	readonly nightLight: number;
+
+	/**
+	 * What the direct sun is worth on a surface, as a plain multiplier.
+	 *
+	 * The sky has its own brightness in the atmosphere's knobs, and this is
+	 * the other half: how hard the sun itself lands on the ground. `1` is the
+	 * balance against the sky that the ground shader's own `SUN_SHARE`
+	 * describes; under it the world reads as an overcast day, over it as a
+	 * harder light with deeper shadow between the lit faces and the turned
+	 * ones.
+	 */
+	readonly sunLight: number;
 }

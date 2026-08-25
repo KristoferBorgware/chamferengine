@@ -19,6 +19,7 @@ struct Tone {
 };
 @group(0) @binding(0) var<uniform> tone : Tone;
 @group(0) @binding(1) var scene : texture_2d<f32>;
+@group(0) @binding(2) var samp : sampler;
 
 struct ToneOut {
 	@builtin(position) clip : vec4f,
@@ -56,11 +57,40 @@ fn aces(x : vec3f) -> vec3f {
 	return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3f(0.0), vec3f(1.0));
 }
 
+/**
+ * The scene at one output pixel, averaged over whatever it covers.
+ *
+ * **Supersampling is the one antialiasing a voxel world of hard edges really
+ * answers to**, and it lands here because this is the pass that goes from the
+ * image the world was drawn into to the canvas. A pixel covers a
+ * \`scale x scale\` block of source texels; four linear taps, each at the
+ * centre of a quarter of that block, average it. At a scale of exactly 2 the
+ * taps land on texel centres and it is an exact four-texel box.
+ *
+ * At a scale of 1 the block is one texel and the read is a \`textureLoad\` --
+ * exact, unfiltered, and bit-for-bit what it was before any of this existed.
+ * Nothing is softened by a feature that is turned off.
+ */
+fn resolve(clip : vec2f) -> vec3f {
+	let scale = tone.tone.y;
+	if (scale <= 1.001) {
+		return textureLoad(scene, vec2i(clip), 0).rgb;
+	}
+	let size = vec2f(textureDimensions(scene));
+	let corner = floor(clip) * scale;
+	let quarter = scale * 0.5;
+	var sum = vec3f(0.0);
+	for (var y = 0; y < 2; y++) {
+		for (var x = 0; x < 2; x++) {
+			let at = corner + (vec2f(f32(x), f32(y)) + 0.5) * quarter;
+			sum += textureSampleLevel(scene, samp, at / size, 0.0).rgb;
+		}
+	}
+	return sum * 0.25;
+}
+
 @fragment
 fn fragmentMain(in : ToneOut) -> @location(0) vec4f {
-	// One texel of the scene per pixel of the screen, so the read is by
-	// coordinate and there is no sampler and nothing to filter.
-	let raw = textureLoad(scene, vec2i(in.clip.xy), 0).rgb;
-	return vec4f(aces(raw * tone.tone.x), 1.0);
+	return vec4f(aces(resolve(in.clip.xy) * tone.tone.x), 1.0);
 }
 `;

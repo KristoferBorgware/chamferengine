@@ -17,9 +17,10 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * `fog.w` is the distance the view fades over. Above water it is set far past
  * the horizon, which leaves the same expression doing nothing.
  *
- * `night.x` is how far the sun is over this place's horizon and `night.y` is
- * what is left of the light when it is not. `sky.rgb` is what the sky is
- * doing, which is the color of everything the sun does not reach directly.
+ * `night.x` is how far the sun is over this place's horizon, `night.y` is
+ * what is left of the light when it is not, and `night.z` is what the direct
+ * sun is worth against the sky. `sky.rgb` is what the sky is doing, which is
+ * the color of everything the sun does not reach directly.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
@@ -210,7 +211,7 @@ fn lightOn(
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
 	let fromSky = tint * (ambient * openness * day);
-	let fromSun = sunColor(up) * (direct * lambert * day);
+	let fromSun = sunColor(up) * (direct * lambert * day * frame.night.z);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a
 	// silhouette rather than a shape. It is measured against the place's own

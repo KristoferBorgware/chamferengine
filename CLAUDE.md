@@ -1904,6 +1904,33 @@ Violating any of these breaks the design. They are not tunable.
   from one that strobes. **Post-processing cannot fix this** -- bloom and the
   tone curve run after the image is sampled, and moire is information already
   gone by then.
+- **DAMPING THE VARIATION IS NOT SAMPLING IT, SO THERE IS A SUPERSAMPLE KNOB
+  AS WELL** (`ChunkRenderer.superSample`, `resolve` in `TONE_SHADER`, doc 16).
+  Turning the normal toward the column's up removes the *cause* of the moire
+  and leaves the sampling as coarse as it was; drawing the world into a larger
+  image and averaging it back helps that and every other hard edge in the
+  frame -- a block against the sky, a cloud's rim, the sun's own disc. **Nothing
+  here sets `multisample`, and it would not have helped**: most of what aliases
+  on a voxel hillside is the *shading* across its steps, and multisampling
+  shades once a pixel. The resolve lands in the tone pass because that is the
+  one pass already reading every pixel once. Measured over the distant band of
+  one eye-level view, the mean jump from one pixel to the next along a row goes
+  from **7.75 of 255 to 2.78** at a scale of 2 while the frame's mean
+  brightness holds at **127.2 against 124.9** -- the same picture, sampled more
+  finely. It costs the **square** of itself, so it ships **off**, and off is
+  exact: a `textureLoad` of one texel, filtered by nothing.
+- **HOW HARD THE SUN LANDS IS THE OTHER HALF OF A SKY'S BRIGHTNESS**
+  (`Frame.sunLight`, `frame.night.z`, doc 16). The air's own brightness knob
+  moves the sky and nothing on the ground, because the ground's sun term never
+  reads it -- so half of the balance had no control at all, and it is the half
+  deciding whether a world reads as an overcast afternoon or a hard noon.
+  **It cannot be the share between sun and sky**: that share sums to 1 so flat
+  ground at noon does not move when it is turned, which is exactly what makes
+  it useless as a brightness. **Sunlight** is a plain multiplier on the direct
+  term alone, on land and on the sea's two highlights alike. Measured with the
+  air off, `2.5` against `0.2` moves a frame's mean from **56.7 to 106.7**, and
+  the shape is the point: 95th percentile of the per-pixel ratio **3.425**, 5th
+  **0.947** -- lit faces gain nearly all of it and sky-lit ones do not move.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
   The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
   shipped planet -- and the world opens with the camera **`1,100 m` up**,

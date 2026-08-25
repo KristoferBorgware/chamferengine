@@ -1,7 +1,7 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import { TONE_SHADER } from "./TONE_SHADER.js";
 
-/** The exposure, and three spare. */
+/** The exposure, the supersample scale, and two spare. */
 const TONE_BYTES = 16;
 
 /**
@@ -15,14 +15,18 @@ const TONE_BYTES = 16;
  * filmic curve, which bends everything over white toward it rather than
  * clipping to a flat patch.
  *
- * The image is the size of the canvas and read one texel per pixel, so there
- * is no sampler and nothing is filtered.
+ * **This is also where supersampling lands.** The world can be drawn into an
+ * image larger than the canvas; this pass is the one that has to put it back,
+ * so it averages the block of source texels each output pixel covers. At a
+ * scale of 1 that block is one texel and the read is exact, with no filtering
+ * of any kind -- so nothing is softened by a feature nobody turned on.
  */
 export class TonePass {
 	private readonly ctx: GpuContext;
 	private readonly pipeline: GPURenderPipeline;
 	private readonly layout: GPUBindGroupLayout;
 	private readonly uniform: GPUBuffer;
+	private readonly sampler: GPUSampler;
 	private readonly data = new Float32Array(TONE_BYTES / 4);
 
 	private bindGroup: GPUBindGroup | null = null;
@@ -42,9 +46,22 @@ export class TonePass {
 				{
 					binding: 1,
 					visibility: GPUShaderStage.FRAGMENT,
-					texture: { sampleType: "unfilterable-float" },
+					texture: { sampleType: "float" },
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "filtering" },
 				},
 			],
+		});
+		// Only the downsample reads through this. At a scale of 1 the shader
+		// takes the `textureLoad` path and the sampler is never touched.
+		this.sampler = device.createSampler({
+			magFilter: "linear",
+			minFilter: "linear",
+			addressModeU: "clamp-to-edge",
+			addressModeV: "clamp-to-edge",
 		});
 		this.uniform = device.createBuffer({
 			size: TONE_BYTES,
@@ -70,6 +87,7 @@ export class TonePass {
 		canvas: GPUTextureView,
 		exposure: number,
 		source: GPUTextureView,
+		superSample = 1,
 	): void {
 		// The image is handed in rather than owned, because what reaches the
 		// tone curve is the frame **after** the air in front of it, and the
@@ -81,10 +99,12 @@ export class TonePass {
 				entries: [
 					{ binding: 0, resource: { buffer: this.uniform } },
 					{ binding: 1, resource: source },
+					{ binding: 2, resource: this.sampler },
 				],
 			});
 		}
 		this.data[0] = Math.max(0, exposure);
+		this.data[1] = Math.max(1, superSample);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		const pass = encoder.beginRenderPass({

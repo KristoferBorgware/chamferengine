@@ -518,7 +518,7 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	let raw = clamp(dot(normal, half), 0.0, 1.0);
 	let sheen = smoothstep(0.985, 0.996, raw);
 	let glint = smoothstep(0.9992, 0.9997, raw);
-	tint += (sheen * 0.22 + glint * 0.85) * sea.look.y * day * lit;
+	tint += (sheen * 0.22 + glint * 0.85) * sea.look.y * day * lit * frame.night.z;
 
 	// The same highlight for the moon, wider and far dimmer, so a night sea
 	// carries a path across it rather than being one flat sheet. Cut looser
@@ -544,7 +544,7 @@ fn fragmentMain(in : SeaOut) -> @location(0) vec4f {
 	// shadow takes the sun's share of it and leaves the sky's, the way it
 	// does on land.
 	let sunlit = clamp(dot(normal, frame.sun.xyz), 0.0, 1.0) * lit;
-	let shade = mix(frame.night.y, 0.55 + 0.45 * sunlit, day);
+	let shade = mix(frame.night.y, 0.55 + 0.45 * sunlit * frame.night.z, day);
 	let alpha = mix(sea.look.x, 1.0, through);
 	return vec4f(tint * shade, alpha);
 }

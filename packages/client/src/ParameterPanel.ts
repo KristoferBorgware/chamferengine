@@ -617,6 +617,12 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
+				key: "sunStrength",
+				label: "Sunlight",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,
@@ -642,6 +648,15 @@ const GROUPS: Group[] = [
 				label: "Bloom strength",
 				digits: 2,
 				enabledWhen: (k) => k.bloomOn,
+			},
+			{
+				key: "superSample",
+				label: "Supersample",
+				digits: 2,
+				given: (s) =>
+					s.knobs.superSample <= 1
+						? null
+						: `${(s.knobs.superSample ** 2).toFixed(1)}x the pixels`,
 			},
 		],
 	},

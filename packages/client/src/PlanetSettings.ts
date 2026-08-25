@@ -592,6 +592,16 @@ export interface PlanetKnobs {
 	cloudShadowReach: number;
 
 	/**
+	 * What the direct sun is worth on a surface.
+	 *
+	 * The sky has its own brightness under **The air**; this is the other
+	 * half. `1` is the balance against the sky the ground shader describes;
+	 * under it the world reads as an overcast day, over it as a harder light
+	 * with more between a lit face and a turned one.
+	 */
+	sunStrength: number;
+
+	/**
 	 * How much light the moon throws on the ground.
 	 *
 	 * It is the only thing with a direction after dark, so at `0` every face
@@ -625,6 +635,21 @@ export interface PlanetKnobs {
 
 	/** How much of the blurred glare is added back over the picture. */
 	bloomStrength: number;
+
+	/**
+	 * How many times the canvas the world is drawn at before it is put back.
+	 *
+	 * **The one antialiasing a world of hard edges answers to.** A voxel
+	 * hillside aliases in its *shading* as much as at its edges -- the flat
+	 * top of a step and the riser beside it take very different amounts of a
+	 * low sun -- and multisampling only ever helps an edge. Drawing the whole
+	 * picture larger and averaging it back helps both.
+	 *
+	 * It costs the square of itself: `2` is four times the pixels through
+	 * every pass inside the frame. `1` is off, and off is exact -- the tone
+	 * curve reads one texel per pixel with no filtering at all.
+	 */
+	superSample: number;
 
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
@@ -775,6 +800,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadows: true,
 	cloudShadow: 0.55,
 	cloudShadowReach: 4000,
+	sunStrength: 1,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -782,6 +808,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// spills -- lit ground sits near 1 and the sun sits at 120.
 	bloomThreshold: 1.1,
 	bloomStrength: 0.55,
+	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	reach: 6,
 };
@@ -1111,6 +1138,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "m",
 	},
+	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },
@@ -1122,6 +1150,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
+	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };

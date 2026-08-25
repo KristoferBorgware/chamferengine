@@ -114,6 +114,22 @@ export class ChunkRenderer implements ShadowCaster {
 	air: PlanetAtmosphere | null = null;
 
 	/**
+	 * How many times the canvas the world is drawn at before it is put back.
+	 *
+	 * **The one antialiasing a world of hard edges answers to.** Nothing here
+	 * sets `multisample`, and multisampling would only soften geometry edges
+	 * anyway -- most of what aliases on a voxel hillside is the *shading*
+	 * across its steps, which only more samples of the whole picture fix. At
+	 * `2` every pass inside the frame runs at four times the pixels and the
+	 * tone curve averages each block back down.
+	 *
+	 * `1` is off, and off is exact: the tone pass reads one texel per pixel
+	 * with no filtering, so a world that does not ask for this is drawn
+	 * exactly as it was before it existed.
+	 */
+	superSample = 1;
+
+	/**
 	 * The radius the ground sits at, for anything that has to put a box on it.
 	 *
 	 * The cloud shadow box is centred on the ground under the camera rather
@@ -362,7 +378,8 @@ export class ChunkRenderer implements ShadowCaster {
 
 	render(frame: Frame): void {
 		const { device, context, canvas } = this.ctx;
-		const depth = this.ensureDepth();
+		const [drawWidth, drawHeight] = this.drawSize();
+		const depth = this.ensureDepth(drawWidth, drawHeight);
 
 		this.frameData.set(frame.viewProj.elements, 0);
 		this.frameData.set(frame.eye, 16);
@@ -370,6 +387,9 @@ export class ChunkRenderer implements ShadowCaster {
 		this.frameData.set(frame.fog, 24);
 		this.frameData[28] = frame.daylight;
 		this.frameData[29] = frame.nightLight;
+		// `night.z`, which the sun-share knob used to hold. What the direct sun
+		// is worth on a surface, against the sky's own brightness knob.
+		this.frameData[30] = frame.sunLight;
 		// The sky is the color of every surface the sun does not reach, so the
 		// shader is given the same color the pass clears to.
 		this.frameData.set(this.sky, 32);
@@ -392,10 +412,7 @@ export class ChunkRenderer implements ShadowCaster {
 			...(timing ? { timestampWrites: timing } : {}),
 			colorAttachments: [
 				{
-					view: this.atmosphere.sceneTarget(
-						canvas.width,
-						canvas.height,
-					),
+					view: this.atmosphere.sceneTarget(drawWidth, drawHeight),
 					// Black, not the sky's own color: the air pass now owns
 					// every pixel nothing here draws into, stars and all, so
 					// there is nothing left for a flat clear color to stand
@@ -483,14 +500,15 @@ export class ChunkRenderer implements ShadowCaster {
 		this.bloom.resolve(
 			encoder,
 			this.atmosphere.view,
-			canvas.width,
-			canvas.height,
+			drawWidth,
+			drawHeight,
 		);
 		this.tone.resolve(
 			encoder,
 			context.getCurrentTexture().createView(),
 			frame.exposure,
 			this.atmosphere.view,
+			drawWidth / Math.max(1, canvas.width),
 		);
 		device.queue.submit([encoder.finish()]);
 		this.clock.read();
@@ -529,17 +547,41 @@ export class ChunkRenderer implements ShadowCaster {
 		return { vertices, indices, count: geometry.indices.length };
 	}
 
-	private ensureDepth(): GPUTexture {
-		const { device, canvas } = this.ctx;
+	/**
+	 * How many pixels the world is drawn into, before the tone curve puts it
+	 * back on the canvas.
+	 *
+	 * Held under the device's own texture limit rather than trusting the knob:
+	 * a large canvas at a scale of 2 can ask for more than the adapter will
+	 * make, and a refused texture is a black frame rather than a slow one.
+	 */
+	private drawSize(): [number, number] {
+		const { canvas, device } = this.ctx;
+		const most = device.limits?.maxTextureDimension2D ?? 8192;
+		const wanted = Math.max(1, Math.min(4, this.superSample));
+		const fits = Math.min(
+			wanted,
+			most / Math.max(1, canvas.width),
+			most / Math.max(1, canvas.height),
+		);
+		const scale = Math.max(1, fits);
+		return [
+			Math.max(1, Math.round(canvas.width * scale)),
+			Math.max(1, Math.round(canvas.height * scale)),
+		];
+	}
+
+	private ensureDepth(width: number, height: number): GPUTexture {
+		const { device } = this.ctx;
 		if (
 			this.depth &&
-			this.depth.width === canvas.width &&
-			this.depth.height === canvas.height
+			this.depth.width === width &&
+			this.depth.height === height
 		)
 			return this.depth;
 		this.depth?.destroy();
 		this.depth = device.createTexture({
-			size: { width: canvas.width, height: canvas.height },
+			size: { width, height },
 			format: "depth32float",
 			// Read as a texture as well as written as an attachment, because
 			// the air marched over the frame is bounded by how far away each
