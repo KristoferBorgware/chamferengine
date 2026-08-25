@@ -45,7 +45,12 @@ import {
 	shareCode,
 } from "chamfer/coordinates";
 import { NORTH } from "chamfer/addressing";
-import { daylight, sunDirection, terminatorSpeed } from "chamfer/light";
+import {
+	daylight,
+	solarNoonTime,
+	sunDirection,
+	terminatorSpeed,
+} from "chamfer/light";
 import {
 	AimRenderer,
 	BillboardClouds,
@@ -71,6 +76,7 @@ import { MapPreview } from "./MapPreview.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
+import type { PlanetKnobs } from "./PlanetSettings.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 
 const params = new URLSearchParams(location.search);
@@ -310,6 +316,17 @@ let onPlayerMoved: (up: { x: number; y: number; z: number }) => void = () => {};
 let onGoTo: (at: { x: number; y: number; z: number }) => void = () => {};
 
 /**
+ * Move some of the panel's own knobs, as if their rows had been dragged.
+ *
+ * The panel is built inside its own `if (params.get("panel") === "1")`
+ * block and is not in scope where a world is played in, so this is the one
+ * door back into it -- **Noon where you land** sets the clock through here
+ * the same way dragging **Time of day** would, rather than reaching past the
+ * panel to move `frozenAt` and `paused` on its behalf.
+ */
+let onPanelSet: (values: Partial<PlanetKnobs>) => void = () => {};
+
+/**
  * Everything holding a thread, to be given up when this page goes away.
  *
  * **A page leaving the screen is not a page whose workers have gone.** The
@@ -340,6 +357,7 @@ if (params.get("panel") === "1") {
 		(draft) => maps?.changed(draft),
 		(live) => onLiveRebuild(live),
 	);
+	onPanelSet = (values) => panel.set(values);
 	// **The picture of the planet lives in the panel, in a fold of its own.**
 	// It was a pane down the other side of the screen with its own copy of the
 	// terrain rows and its own button to commit them -- a second place to do
@@ -353,7 +371,7 @@ if (params.get("panel") === "1") {
 	panel.section("Readout")?.appendChild(status);
 	maps = new MapPreview(
 		settings,
-		panel.section("The map") ?? document.body,
+		panel.section("Map") ?? document.body,
 		(at) => onGoTo(at),
 	);
 	const preview = maps;
@@ -592,7 +610,10 @@ async function main(): Promise<void> {
 		shape,
 		ground.scale(RADIUS + shape.maxElevation),
 		ground.cross(new Vec3(0, 1, 0)).normalize(),
-		{ walkSpeed: settings.knobs.walkSpeed },
+		{
+			walkSpeed: settings.knobs.walkSpeed,
+			flySpeed: settings.knobs.flySpeed,
+		},
 	);
 	let flying = true;
 	let chase = 6;
@@ -643,7 +664,18 @@ async function main(): Promise<void> {
 	// Right-clicking the ball in the map pane stands the player there. The ball
 	// is the only place showing the whole planet at once, so it is the only
 	// place somewhere out of sight can be pointed at.
-	onGoTo = (at) => land(new Vec3(at.x, at.y, at.z));
+	onGoTo = (at) => {
+		const direction = new Vec3(at.x, at.y, at.z);
+		land(direction);
+		// **Noon where you land.** The clock is set the same way dragging
+		// Time of day would set it -- through the panel, which is what keeps
+		// the slider and the sky agreeing about what time it now is.
+		if (current.knobs.noonOnLand)
+			onPanelSet({
+				timeOfDay: solarNoonTime(direction.normalize(), NORTH),
+				paused: true,
+			});
+	};
 
 	/**
 	 * Put the player at a direction, as far over the surface as they are now.
@@ -666,6 +698,29 @@ async function main(): Promise<void> {
 			.normalize();
 		player.fall = 0;
 		refresh();
+	}
+
+	/**
+	 * Land wherever the crosshair is pointing, from anywhere in flight.
+	 *
+	 * **Not the arm's reach.** {@link PlanetKnobs.reach} bounds how far a
+	 * block can be broken or placed from; someone flying over a mountain and
+	 * aiming at its foot is routinely further from it than that. The walk
+	 * here is given as far as the ray could possibly meet the planet from
+	 * where the player's eye already is, so aiming past the horizon still
+	 * lands on the ground the crosshair is actually over.
+	 */
+	function landAtCursor(): void {
+		if (!aimedFrom || !aimedLook) return;
+		const walked = rayWalk(
+			aimedFrom,
+			aimedLook,
+			rayWorld,
+			player.eye.length() + shape.crustTopRadius,
+		);
+		if (!walked) return;
+		land(aimedFrom.add(aimedLook.scale(walked.distance)));
+		flying = false;
 	}
 
 	/**
@@ -1569,6 +1624,7 @@ async function main(): Promise<void> {
 		DETAIL = live.knobs.detail;
 		DAY_LENGTH = live.knobs.dayLength;
 		player.setWalkSpeed(live.knobs.walkSpeed);
+		player.setFlySpeed(live.knobs.flySpeed);
 		CULL_BUILD = live.knobs.buildCull;
 		if (sea) {
 			sea.visible = live.knobs.seaDrawn;
@@ -1663,7 +1719,10 @@ async function main(): Promise<void> {
 		const key = e.key.toLowerCase();
 		held.add(key);
 		if (key === "f") flying = !flying;
-		if (key === "e") standHere();
+		if (key === "e") {
+			if (flying) landAtCursor();
+			else standHere();
+		}
 		if (key === " ") e.preventDefault();
 		if (key === "t") {
 			// The twelve are 1,882 m apart on this planet, so each is a short
@@ -2353,8 +2412,8 @@ async function main(): Promise<void> {
 					: []),
 				budget(timer, renderer),
 				looking()
-					? "WASD move · mouse look · click break · right click place · Esc cursor · E eye level · F fly · T next pentagon · G go to"
-					: "WASD move · click the world to look around · E eye level · F fly · T next pentagon · G go to",
+					? `WASD move · mouse look · click break · right click place · Esc cursor · E ${flying ? "land here" : "eye level"} · F fly · T next pentagon · G go to`
+					: `WASD move · click the world to look around · E ${flying ? "land here" : "eye level"} · F fly · T next pentagon · G go to`,
 			]);
 		}
 		timer.end(performance.now());
