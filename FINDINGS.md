@@ -10,6 +10,48 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-078 — The cave function in the engine is not the cave function the corpus measured
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, reading the generator before discussing cave generation
+**Where:** `packages/engine/src/generation/terrain/caveDensity.ts`; the
+measurements are `verification/volume.js` section 3 and doc 14's cave table
+
+**What happens.** Two different carving rules share one name. Doc 08 and
+`verification/volume.js` argue a **signed density** — solid where
+`(surfaceRadius − r) + noise × strength > 0` — whose first term is a bias
+growing 1 per metre of depth, which is where the rule *an enclosed void needs
+the noise gradient, amplitude over feature size, to beat 1* comes from, and
+where doc 14's `11×` face bill and `13–32%` multi-span columns were measured.
+`caveDensity` does not do that. It is a **band around zero**: hollow where
+`|fbm| < caveThreshold`, three octaves at a `caveScale` of 24 m, with a hard
+refusal inside `caveCeiling`, 6 m, of the surface. There is no bias term, so
+there is no gradient to beat, and the doc comment on the function states the
+gradient rule anyway.
+
+**Why it matters.** Every number the project holds about caves describes the
+form that is not running. A band of fixed width carves **sheets of roughly one
+thickness everywhere**, and the two knobs a person would reach for move it in
+ways the corpus does not predict: raising `caveThreshold` widens every passage
+at once rather than opening more of them, and `caveScale` moves feature size
+with no coupled amplitude. So the first attempt to tune caves will be tuned
+against measurements taken of something else, and the face and column counts
+that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
+more than one span — are counts of the density field's caves, not of these.
+
+**What would fix it.** Decide which form ships, then make one of the two match
+the other. If the band stays, `volume.js` gains a section measuring it — face
+cost, multi-span share, mouth count — and the gradient sentence comes off
+`caveDensity`'s comment. If the density field is wanted instead, the band goes
+and the function becomes the expression doc 08 already draws. Either way it is
+one function and one verification section; what it must not stay is two forms
+under one name.
+
+---
+
 ### F-082 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
 
 **Kind:** bug
@@ -1726,96 +1768,6 @@ worn region sit lower as well as flatter.
 ---
 
 ## Closed
-
-### F-078 — The cave function in the engine is not the cave function the corpus measured
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-25, reading the generator before discussing cave generation
-**Where:** `packages/engine/src/generation/terrain/caveDensity.ts`; the
-measurements are `verification/volume.js` section 3 and doc 14's cave table
-
-**What happens.** Two different carving rules share one name. Doc 08 and
-`verification/volume.js` argue a **signed density** — solid where
-`(surfaceRadius − r) + noise × strength > 0` — whose first term is a bias
-growing 1 per metre of depth, which is where the rule *an enclosed void needs
-the noise gradient, amplitude over feature size, to beat 1* comes from, and
-where doc 14's `11×` face bill and `13–32%` multi-span columns were measured.
-`caveDensity` does not do that. It is a **band around zero**: hollow where
-`|fbm| < caveThreshold`, three octaves at a `caveScale` of 24 m, with a hard
-refusal inside `caveCeiling`, 6 m, of the surface. There is no bias term, so
-there is no gradient to beat, and the doc comment on the function states the
-gradient rule anyway.
-
-**Why it matters.** Every number the project holds about caves describes the
-form that is not running. A band of fixed width carves **sheets of roughly one
-thickness everywhere**, and the two knobs a person would reach for move it in
-ways the corpus does not predict: raising `caveThreshold` widens every passage
-at once rather than opening more of them, and `caveScale` moves feature size
-with no coupled amplitude. So the first attempt to tune caves will be tuned
-against measurements taken of something else, and the face and column counts
-that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
-more than one span — are counts of the density field's caves, not of these.
-
-**What would fix it.** Decide which form ships, then make one of the two match
-the other. If the band stays, `volume.js` gains a section measuring it — face
-cost, multi-span share, mouth count — and the gradient sentence comes off
-`caveDensity`'s comment. If the density field is wanted instead, the band goes
-and the function becomes the expression doc 08 already draws. Either way it is
-one function and one verification section; what it must not stay is two forms
-under one name.
-
-**Closed:** 2026-08-25, promoted to `plans/v0.5.0.md`, I-1. The band ships
-and the density field does not, so `verification/volume.js` gains a section
-measuring the band, and the gradient sentence comes off `caveDensity`'s
-comment because it describes the bias term the function does not have. Both
-are part of that item.
-### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** trivial
-**Found:** 2026-08-25, running `npm run format:check` before a push
-**Where:** `package.json`, the `prettier` devDependency
-
-**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
-and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
-Neither file has been edited since the merge that brought it in, and it was
-formatted when it was written. What changed is the formatter: the dependency
-is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
-lays a union type out differently -- a short union that 3.4 broke onto one
-line per member, 3.9 collapses onto a single line.
-
-**Why it matters.** Running `--write` here fixes the check on this machine
-and breaks it on any machine that resolved 3.4.x, so the two files would
-flip back and forth with every session and every diff would carry
-whitespace nobody chose. The formatter is a tool whose whole value is that
-everybody gets the same answer, and a caret range is the one thing that
-stops it giving one. It also means `format:check` is red for reasons
-unrelated to whatever a session is actually doing, which trains people to
-ignore it.
-
-**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
-caret -- and run `--write` once over the whole repo in the same commit, so
-the tree and the pin agree from that point on. A lockfile alone is not
-enough, because `npm install` in a fresh container with no lockfile entry
-for a transitively hoisted tool still picks the newest match. Nothing else
-in the toolchain has this shape: `typecheck`, `check-style.js` and
-`build-docs.js` all run code that lives in this repository.
-
-**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
-reformatted in the same commit. The flip-flop is not hypothetical: while this
-entry was being written another session pushed a commit reformatting
-`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
-Prettier wanted expanded -- which turned a file that passed here into a third
-failure the moment it was merged. `package-lock.json` already resolved
-`3.9.6`, so the tree and the lock now agree and the range can no longer drift
-under a fresh install.
-
----
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

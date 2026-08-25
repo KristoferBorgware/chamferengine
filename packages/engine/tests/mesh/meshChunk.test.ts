@@ -1327,7 +1327,8 @@ describe("sky exposure", () => {
 		});
 
 		const palette = Object.values(BLOCK_COLORS) as readonly (
-			readonly [number, number, number] | undefined
+			| readonly [number, number, number]
+			| undefined
 		)[];
 		const skyOf = (r: number, g: number, b: number): number | null => {
 			for (const c of palette) {
