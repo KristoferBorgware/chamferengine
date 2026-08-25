@@ -8,7 +8,19 @@
 	</head>
 	<body>
 		<canvas id="viewport"></canvas>
-		<div id="status" class="status"></div>
+		<div id="readout" class="readout">
+			<button
+				id="readout-open"
+				class="readout-open"
+				type="button"
+				aria-expanded="false"
+				aria-controls="status"
+				title="What the world is doing"
+			>
+				i
+			</button>
+			<div id="status" class="status"></div>
+		</div>
 		<div id="crosshair" class="crosshair" aria-hidden="true"></div>
 		<script type="module" src="./src/planet.ts"></script>
 	</body>

@@ -663,6 +663,23 @@ export interface PlanetKnobs {
 	skyStrength: number;
 
 	/**
+	 * Whether the sun reaches every face as though no block stood in the way.
+	 *
+	 * **A way to see underground until there is something to carry down
+	 * there.** It takes away the blocking and nothing else -- the shadow the
+	 * cascades would cast, and the sky exposure the mesher would bake. Every
+	 * other term still does its own work, so a face's angle to the sun decides
+	 * what it takes and a cave keeps its shape instead of going flat.
+	 *
+	 * The sky exposure has to stop being *baked*, because no light a shader
+	 * computes can undo a number already multiplied into the colour it was
+	 * handed -- without that a cave stays at the 12% a shut-in cell is baked
+	 * to, however far the sun is said to reach. That is why it needs a rebuild
+	 * rather than taking effect on the next frame.
+	 */
+	fullbright: boolean;
+
+	/**
 	 * How much light the moon throws on the ground.
 	 *
 	 * It is the only thing with a direction after dark, so at `0` every face
@@ -869,6 +886,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	sunStrength: 1,
 	skyShading: 1,
 	skyStrength: 1,
+	fullbright: false,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -967,6 +985,7 @@ export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
+	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -1236,6 +1255,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	skyShading: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	fullbright: { ...TOGGLE, rebuilds: true },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },

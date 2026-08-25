@@ -10,6 +10,38 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-079 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-25, while putting the readout behind a button in the corner
+**Where:** `packages/client/src/planet.css`, the palette at `:root`
+
+**What happens.** The palette reads `--bad: var(--bad);`. A custom property
+whose value names itself is invalid at computed-value time, so it resolves to
+nothing and every declaration reading it falls back. Measured in the browser
+against a `div` given both: `color: var(--bad)` computes to
+`rgb(232, 236, 242)`, which is the same as an element given no colour at all,
+and `border-left: 2px solid var(--bad)` computes to `none` at `0px`. The
+sibling `--warn` resolves to `rgb(255, 180, 84)` in the same page, so this is
+one entry and not the whole palette.
+
+**Why it matters.** The two readers are `.knobs-problems p` and
+`.knobs-problems.some`, which are how the parameter panel says a world cannot
+be built — a crust too shallow for its own sea, a map too coarse for its
+narrowest octave. Both are drawn as ordinary body text with no left bar, so a
+refusal looks like a sentence somebody added rather than a stop, and the
+`some` class marks nothing. Every other state in the panel has a colour that
+says what it is: amber for a knob pulled to a wall, green for a toggle that is
+on.
+
+**What would fix it.** One literal in the palette. The value is a decision
+rather than a lookup — the other four are hand-picked against this blue-grey
+— so it wants an eye on it beside `--warn`'s amber and `--good`'s green rather
+than a red taken from anywhere.
+
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 
 **Kind:** risk
@@ -1685,7 +1717,7 @@ crepuscular rays live: shafts through a gap in a ridge, seen from the side.
 Nothing cheap has been found for that, and the walk above is what expensive
 looks like.
 
-### F-080 — Three fields with three curves reach landforms the shipped two-layer merge cannot
+### F-081 — Three fields with three curves reach landforms the shipped two-layer merge cannot
 
 **Kind:** idea
 **Milestone:** unscheduled
@@ -1735,9 +1767,52 @@ worn region sit lower as well as flatter.
 
 ---
 
----
-
 ## Closed
+
+### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** trivial
+**Found:** 2026-08-25, running `npm run format:check` before a push
+**Where:** `package.json`, the `prettier` devDependency
+
+**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
+and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
+Neither file has been edited since the merge that brought it in, and it was
+formatted when it was written. What changed is the formatter: the dependency
+is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
+lays a union type out differently -- a short union that 3.4 broke onto one
+line per member, 3.9 collapses onto a single line.
+
+**Why it matters.** Running `--write` here fixes the check on this machine
+and breaks it on any machine that resolved 3.4.x, so the two files would
+flip back and forth with every session and every diff would carry
+whitespace nobody chose. The formatter is a tool whose whole value is that
+everybody gets the same answer, and a caret range is the one thing that
+stops it giving one. It also means `format:check` is red for reasons
+unrelated to whatever a session is actually doing, which trains people to
+ignore it.
+
+**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
+caret -- and run `--write` once over the whole repo in the same commit, so
+the tree and the pin agree from that point on. A lockfile alone is not
+enough, because `npm install` in a fresh container with no lockfile entry
+for a transitively hoisted tool still picks the newest match. Nothing else
+in the toolchain has this shape: `typecheck`, `check-style.js` and
+`build-docs.js` all run code that lives in this repository.
+
+**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
+reformatted in the same commit. The flip-flop is not hypothetical: while this
+entry was being written another session pushed a commit reformatting
+`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
+Prettier wanted expanded -- which turned a file that passed here into a third
+failure the moment it was merged. `package-lock.json` already resolved
+`3.9.6`, so the tree and the lock now agree and the range can no longer drift
+under a fresh install.
+
+---
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

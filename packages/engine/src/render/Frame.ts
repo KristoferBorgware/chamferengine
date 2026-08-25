@@ -99,4 +99,22 @@ export interface Frame {
 	 * keeps after dark is untouched -- this is the daylight sky alone.
 	 */
 	readonly skyLight: number;
+
+	/**
+	 * `1` when the sun is to reach every face as though no block stood in the
+	 * way, `0` otherwise.
+	 *
+	 * **A way to see underground until something can be carried down there.**
+	 * It takes away the blocking and nothing else: the shadow the cascades
+	 * would cast is not asked for, but a face's own angle to the sun still
+	 * decides how much of it that face takes, so a cave keeps its shape rather
+	 * than going flat.
+	 *
+	 * It cannot do the job alone. The mesher multiplies the sky exposure into
+	 * the vertex colours, and no light this shader computes can divide a
+	 * number back out of what it was handed -- so the client stops that being
+	 * baked whenever this is on, which is what makes a cave read as its own
+	 * rock rather than 12% of it.
+	 */
+	readonly fullbright: number;
 }

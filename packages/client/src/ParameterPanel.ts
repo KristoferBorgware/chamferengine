@@ -647,6 +647,18 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
+				// **The sun as though no block stood in its way**, so a cave
+				// can be looked into before there is anything to carry down
+				// it. Not a flat light: the face's own angle to the sun still
+				// decides what it takes, so the shape stays. It reaches the
+				// mesher too -- the sky exposure is baked, and no light
+				// computed afterwards can divide it back out -- which is why
+				// it wants a rebuild.
+				key: "fullbright",
+				label: "Full light",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "sunStrength",
 				label: "Sunlight",
 				digits: 2,

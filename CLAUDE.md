@@ -1950,6 +1950,29 @@ Violating any of these breaks the design. They are not tunable.
   Taking it out re-keys **every** world rather than only the ones with the
   switch turned, so the edits already on disk are orphaned once; nothing is
   deleted, they sit under the old name.
+- **FULL LIGHT TAKES AWAY THE BLOCKING, NOT THE LIGHTING**
+  (`frame.sun.w` in `TERRAIN_SHADER`, `fullbright`, doc 16). There is no torch,
+  so a hole gets the sky's 42% times a wall's own `openness` of 0.71 -- about
+  **0.30** of open ground, the sun's 58% having been refused by the shadow
+  maps -- and the 0.12 an enclosed cell is baked to takes that to **0.036**.
+  **Full light means the sun reaches every face as though no block stood in the
+  way**: the shadow lookup is simply not asked for, and every other term still
+  does its own work, so `dot(faceNormal, sun)` still says which way a face
+  points and the sky term still says how much sky is over it. A cave keeps its
+  shape. **Pinning every surface to 1 was tried and is the wrong shape** -- with
+  no term left that varies by face, a floor, a wall and a ceiling all come out
+  at exactly the block they are made of and the room reads as a flat sheet of
+  colour with edges; the brightness was never the problem, the blocking was.
+  **A shader flag alone still cannot do the whole of it**: the sky exposure is
+  multiplied into the vertex colours by the mesher and nothing computed
+  afterwards can divide a number back out, so full light stops that one being
+  baked and therefore wants a rebuild. **The corner shading stays baked and
+  stays on** -- it says how much sky a corner sees rather than whether the sun
+  arrives, it bottoms out at 0.55 rather than 0.12, and it is what keeps a
+  cave's edges legible. Measured on high-relief open ground with the air and
+  clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
+  **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
+  the point**: almost nothing up there was blocked.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

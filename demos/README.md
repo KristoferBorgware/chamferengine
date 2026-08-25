@@ -492,102 +492,55 @@ from the default.
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 
 ### [`cave-lab.html`](cave-lab.html)
-**Two ways to carve a cave, on one patch of hexagon columns.** The panel carries
-the plan as a picture and the volume as a block of ground you can turn, cut open
-and look into; **Draw · void** turns the world inside out and draws the caves
-themselves as the solid, which is the only view that shows a network from
-outside it. **Carve** switches between the two, and everything else — the seed,
-the ground, the block size, the measurements — is held still across the switch.
+**The engine's own cave carve, on a patch of hexagon columns.** The panel
+carries a plan of the caves as a picture and the volume as a block of ground you
+can turn, cut open and look into; **Draw · void** turns the world inside out and
+draws the caves themselves as the solid, which is the only view that shows a
+network from outside it.
 
-**Carve · plan** draws the cave system in 2D and extrudes it. A passage is a
-**band around zero** of a noise field over the ground, so the passages are that
-field's own contour lines and they wind, branch and join. **Passage families** is how
-many independent fields are laid over one another: one field's contours can
-never cross each other, and a second field's can cross the first's. **Octaves
-the band is too narrow to resolve speckle it**: an octave whose own wobble is
-wider than the band puts isolated one-cell specks along every passage, so the
-knob that reads as *more detail* is the one that breaks the network, and
-**Narrowest way through · N% of it one cell** is the same fact as a number. Then **one
-field gives both the shape on the ground and the shape across it** — how far
-inside the band a column sits says how tall the passage is there, so
-**Cross-section** shapes the roof from the same lookup that decided the plan.
-**Floor below the surface** and **Depth varies by** put it in the crust, and
-where the roof pushes through the ground a passage opens a mouth in a hillside.
-**Lowest passage kept** is a floor and not a taper: a roof lower than one block
-is no passage at all, so a passage edge is a step of at least a block rather
-than a wedge tapering to a thickness nothing can sample.
+`caveDensity` is a **band around zero** of a noise field, moved onto flat ground
+and otherwise untouched: three octaves at a **Feature size**, hollow inside a
+**Band width** either side of zero. **The zero set of a field in space is a set
+of surfaces, and the band round it is a slab** — so what this carves is not a
+network of corridors but one folded sheet running through the crust, and every
+number on the readout follows from that. The shipped settings put a passage
+under **69.8%** of columns and the narrowest way through one is **20 cells**:
+those are caverns, and squeezing them down to a 3-cell corridor shatters the
+sheet into **1,976** separate systems.
 
-**Carve · sheet** is `caveDensity`, the engine's own, moved onto flat ground and
-otherwise untouched: three octaves at a **Feature size**, hollow inside a band
-either side of zero, refused within **Rock kept over the roof** of the surface.
-It is the same band rule in three dimensions rather than two — and that one
-difference is the whole comparison. **The zero set of a field on a plane is a
-set of curves, and the band round it is a passage; the zero set of a field in
-space is a set of surfaces, and the band round it is a slab.** A sheet carve has
-no plan of its own, so the picture is one horizontal **slice** at a depth you
-name, and it is a different picture at every depth.
+A sheet carve has no plan of its own, so the picture is one horizontal **slice**
+at a depth you name, and it is a different picture at every depth.
 
-**A constant ceiling is why the engine's caves have no way in**, and **A way
-in** is two ways out of that. The gate is a yes or a no on one number, so at
-6 m nothing ever breaks the ground and at 0 m the sheet is near the surface
-everywhere and opens it everywhere: there is no setting between the two.
-**Taper** narrows the band toward the ground instead of stopping dead at it, so
-only the part of the sheet nearest its own middle is still wide enough to be a
-cave when it arrives — a mouth is where the **cave** is strongest, and it needs
-no second field. **Dipping** lets the ceiling itself wander over the ground and
-come down where a second field clears a rarity you set, so a mouth is where the
-**ground** allows one and the sheet happens to be there, which is two conditions
-rather than one.
+**A constant ceiling is why the engine's caves have no way in.** The gate is a
+yes or a no on one number, so at 6 m nothing ever breaks the ground and at 0 m
+the sheet is near the surface everywhere and opens it everywhere: there is no
+setting between the two. **Rock kept over the roof** is that constant, and the
+ceiling here **dips** below it where a second field clears a rarity you set, so
+a mouth opens where the ground allows one **and** the sheet happens to be there — two conditions rather than one, and
+the cave stays one system with holes in its roof rather than gaining
+disconnected pockets. Set **Ceiling dips by up to** to zero to get the constant
+back.
 
 **Where the rarity starts has to be set rather than assumed.** A borrowed figure
 does not work: the standard deviation of noise depends on how many octaves it
 has, and over a patch this size the field never sees its own full range — at a
 60 m feature over 95 m of ground the median reading is `0.461` and **46.5%** of
-it clears `0.5`, so a threshold picked from a two-standard-deviation argument
-opens half the map.
+it clears `0.5`.
 
 **The contour is drawn twice, and the two are worth comparing.** Blue is
-marching squares over a square raster — sixteen cases, two of them saddles the
-four corners cannot decide. Orange is the same contour taken on the **lattice
-the world is built on**: three adjacent cells are a triangle, so the cases are
-eight and **none of them is ambiguous**, because three points have no saddle.
+marching squares over a square raster — sixteen cases, two of them
+saddles the four corners cannot decide. Orange is the same contour taken on the
+**lattice the world is built on**: three adjacent cells are a triangle, so the
+cases are eight and **none of them is ambiguous**, because three points have no
+saddle.
 
-**Draw · smooth** is that argument one dimension up. Both carves decide a block
-with a comparison, and a comparison throws away how close the answer was; this
-gives the quantity back and draws the surface where the carve actually puts it
-rather than on the nearest block boundary. It is **marching tetrahedra**, not
-marching cubes, for the reason the contour is triangles and not squares: three
-columns and two layer boundaries make a **triangular prism**, a prism splits
-into three tetrahedra, and a tetrahedron cut by a surface has either one corner
-on its own side or two — one triangle or a quad, decided and never guessed,
-where marching cubes carries six faces whose four corners admit two different
-surfaces. The split is chosen by ordering the three columns, because two prisms
-sharing a quad face must cut it along the same diagonal or the surface tears.
-
-**It is a picture and not a world.** Nothing in it can be broken, stored or
-stood on, and the readout prices it against the blocks it is a picture of. What
-it is for is seeing what the block grid rounds off.
-
-**On the sheet carve it is the carve.** That carve *is* a signed field, so its
-isosurface is the surface the blocks are a sampling of, and it comes out smooth.
-
-**On the plan carve it is a construction, and its rim sawtooth is the
-construction.** That carve is not one field but three conditions met at once —
-inside the passage, under the roof, over the floor — and any single number whose
-zero set is their intersection has a crease wherever two of them meet. A crease
-sampled one point to a cell is a sawtooth, so the plan carve's surface shows a
-row of spikes along every passage edge that **the same world in Draw · void does
-not have**. Read the smooth view for the shape of the network and the void view
-for what is built.
-
-The readout is the point of the page, and it does not change when the carve
-does. **Narrowest way through** is how many cells wide a passage is where it
-pinches, which is what says whether it is a corridor or a cavern; **separate
-systems** and **half the void is in the biggest** say whether a plan that reads
-as a network on paper survives being drawn in hexagons; **faces per column**
-prices the caves against the same ground with none; and **noise lookups a
-column** is the generation bill, which is where a carve free to put a passage at
-any depth pays for that freedom.
+The readout is the point of the page. **Narrowest way through** is how many
+cells wide a passage is where it pinches, which is what says whether it is a
+corridor or a cavern; **separate systems** and **half the void is in the
+biggest** say whether what reads as a network survives being drawn in hexagons;
+**faces per column** prices the caves against the same ground with none; and
+**noise lookups a column** is the generation bill, which is where a carve free
+to put a passage at any depth pays for that freedom.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

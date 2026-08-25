@@ -27,7 +27,7 @@
 		"bench": "vite-node tools/bench.ts"
 	},
 	"devDependencies": {
-		"prettier": "^3.4.2",
+		"prettier": "3.9.6",
 		"typescript": "^5.7.2",
 		"vite": "^6.0.7",
 		"vitest": "^3.2.7"

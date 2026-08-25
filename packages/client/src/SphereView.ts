@@ -390,8 +390,8 @@ export class SphereView {
 
 	/** How a direction reached the screen the last time the ball was filled. */
 	private turned:
-		| ((x: number, y: number, z: number) => [number, number, number])
-		| null = null;
+		((x: number, y: number, z: number) => [number, number, number]) | null =
+		null;
 
 	/** The mark alone, over a ball that is already on the canvas. */
 	private drawMarker(): void {
