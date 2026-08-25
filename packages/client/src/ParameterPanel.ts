@@ -623,6 +623,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				// The one term that can still look directional with the sun
+				// off: a face's own angle to the sky, not to the sun. Zero
+				// gives every face the open-sky reading and stops it varying
+				// by shape at all.
+				key: "skyShading",
+				label: "Sky shading",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,

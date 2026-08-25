@@ -613,6 +613,20 @@ export interface PlanetKnobs {
 	sunStrength: number;
 
 	/**
+	 * How much a face's own angle to the sky changes its ambient light.
+	 *
+	 * A face looking straight up sees the whole sky and one looking sideways
+	 * sees half, and that alone is enough to shade one hexagon's faces
+	 * differently -- the one thing that can still look directional with
+	 * **Sunlight** at 0, because it reads a face's own normal rather than
+	 * the sun. `0` gives every face the open-sky reading regardless of which
+	 * way it points, which is flat rather than dim: the ambient term stops
+	 * depending on shape, and only **Exposure** and the block's own colour
+	 * are left.
+	 */
+	skyShading: number;
+
+	/**
 	 * How much light the moon throws on the ground.
 	 *
 	 * It is the only thing with a direction after dark, so at `0` every face
@@ -813,6 +827,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadow: 0.55,
 	cloudShadowReach: 4000,
 	sunStrength: 1,
+	skyShading: 1,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -1152,6 +1167,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m",
 	},
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	skyShading: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },
