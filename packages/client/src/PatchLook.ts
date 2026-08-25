@@ -7,7 +7,12 @@
 
 /** Which step of the build the preview stops at. */
 export type PatchPicture =
-	"ground" | "height" | "raw" | "terrain" | "mountain" | "erosion";
+	| "ground"
+	| "height"
+	| "raw"
+	| "terrain"
+	| "mountain"
+	| "erosion";
 
 export const PATCH_PICTURES: readonly PatchPicture[] = [
 	"ground",
