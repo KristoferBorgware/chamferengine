@@ -4,6 +4,7 @@ import {
 	pentagonDiscCells,
 	skyDiscCells,
 	skyExposure,
+	solarNoonTime,
 	sunDirection,
 	terminatorSpeed,
 } from "chamfer/light";
@@ -193,6 +194,37 @@ describe("sunDirection", () => {
 				NORTH.dot(sunDirection(t, NORTH, 0.41)),
 			);
 		expect(highest).toBeGreaterThan(0.35);
+	});
+});
+
+describe("solarNoonTime", () => {
+	it("names the time whose sun stands highest over the direction", () => {
+		const places = [
+			new Vec3(1, 0, 0),
+			new Vec3(0, 0, 1),
+			new Vec3(-1, 0, 0),
+			NORTH.cross(new Vec3(0, 0, 1)).normalize(),
+		];
+		for (const place of places) {
+			const noon = solarNoonTime(place, NORTH);
+			const atNoon = place.dot(sunDirection(noon, NORTH));
+			for (let t = 0; t < 1; t += 0.02)
+				expect(place.dot(sunDirection(t, NORTH))).toBeLessThanOrEqual(
+					atNoon + 1e-9,
+				);
+		}
+	});
+
+	it("round-trips through sunDirection", () => {
+		for (let t = 0; t < 1; t += 0.05) {
+			const sun = sunDirection(t, NORTH);
+			expect(solarNoonTime(sun, NORTH)).toBeCloseTo(t, 9);
+		}
+	});
+
+	it("has no preferred time on the axis itself", () => {
+		expect(solarNoonTime(NORTH, NORTH)).toBe(0);
+		expect(solarNoonTime(SOUTH, NORTH)).toBe(0);
 	});
 });
 
