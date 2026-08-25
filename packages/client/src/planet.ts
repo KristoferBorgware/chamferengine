@@ -1513,8 +1513,8 @@ async function main(): Promise<void> {
 	 * **Live rebuild reaches the terrain and nothing past it.** The device,
 	 * the renderer, the chunk address width, the crust top and the sea and
 	 * sky radii that follow from it all stay exactly as they were, because
-	 * {@link LIVE_TERRAIN_KNOBS} is the only set of knobs allowed to call
-	 * this at all. A Relief large enough to move the sea's own radius still
+	 * {@link REMESH_KNOBS} is the only set of knobs allowed to call this at
+	 * all. A Relief large enough to move the sea's own radius still
 	 * shows the new ground here and the old sea until the page is actually
 	 * rebuilt -- Apply is what makes the two agree again.
 	 *

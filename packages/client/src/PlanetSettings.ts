@@ -945,10 +945,6 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"erosionMaxCut",
 	"erosionCutShare",
 	"erosionInertia",
-	// Not a terrain knob at all: the ground is where it was and only its
-	// colour moved. It is here because what it takes to see the change is
-	// exactly what a terrain knob takes -- every chunk meshed again.
-	"speckle",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -957,16 +953,18 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
  *
  * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving. The rest here leave
  * every block exactly where it was and still need the same work, because what
- * they change is **baked into the mesh** rather than read by a shader -- so
- * nothing on screen moves until each chunk is built again.
+ * they change is **baked into the vertex colours** rather than read by a
+ * shader -- so nothing on screen moves until each chunk is built again.
  *
  * **They are deliberately not in `LIVE_TERRAIN_KNOBS` itself**, which
  * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
- * set, so a shading knob joining it would file a player's buildings under a
- * different world every time it was turned.
+ * set, so a knob joining it files a player's buildings under a different world
+ * every time it is turned. Needing the same work as a terrain knob is not the
+ * same thing as being one, and this is the set that says so.
  */
 export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	...LIVE_TERRAIN_KNOBS,
+	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
 ] satisfies (keyof PlanetKnobs)[]);
@@ -984,6 +982,12 @@ export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
  * the same world at sixty-four hold the same ground in the same places. So are
  * the knobs that decide only how the world is drawn -- the light, the sky, the
  * clouds, the sea's surface and every level-of-detail setting.
+ *
+ * **So are the three that are baked into the mesh** -- the speckle, the corner
+ * shading and the sky exposure. Each of them needs every chunk built again to
+ * be seen, which is what {@link REMESH_KNOBS} is for, and none of them moves a
+ * block: a cell's colour drifting 6% off its own block's is not a different
+ * world to put a player's buildings in.
  */
 export const WORLD_SHAPE_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	...LIVE_TERRAIN_KNOBS,

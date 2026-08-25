@@ -1940,8 +1940,16 @@ Violating any of these breaks the design. They are not tunable.
   out of it marks the world dirty and changes no frame until a full reload --
   which reads as a switch that is simply broken. It is a set of its own rather
   than `LIVE_TERRAIN_KNOBS`, because `WORLD_SHAPE_KNOBS` spreads that one and
-  a world's stored edits are named by it: a shading knob joining it would file
-  a player's buildings under a different world every time it was turned.
+  a world's stored edits are named by it: a knob joining it files a player's
+  buildings under a different world every time it is turned. **`speckle` was
+  in it and is not any more** (F-079) -- it had been put there with a comment
+  saying it was only for the rebuild, and it moves no block, so turning it
+  orphaned every block the player had placed. **Needing the same work as a
+  terrain knob is not the same thing as being one**, and the three baked
+  knobs -- speckle, corner shading, sky exposure -- are the set that says so.
+  Taking it out re-keys **every** world rather than only the ones with the
+  switch turned, so the edits already on disk are orphaned once; nothing is
+  deleted, they sit under the old name.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the
