@@ -1,12 +1,13 @@
 # Demos
 
-Thirty-three self-contained HTML files. No build step, no `npm install`, no
+Thirty-four self-contained HTML files. No build step, no `npm install`, no
 server required — open any of them directly in a browser. All are mobile-friendly
 and touch-enabled.
 
 Most of the 3D demos load Three.js r128 from a CDN and need an internet
 connection. The 2D ones are fully offline, and so is
-[`noise-lab.html`](noise-lab.html), which draws its own WebGL2.
+[`noise-lab.html`](noise-lab.html) and [`cave-lab.html`](cave-lab.html), which
+draw their own WebGL2.
 
 ---
 
@@ -420,6 +421,40 @@ restores the panel as well as the ground.
 
 The noise is a hand copy of the engine's, kept honest by a test that digests the
 two against each other.
+
+**Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+### [`cave-lab.html`](cave-lab.html)
+**A cave system drawn as a plan in 2D, then extruded into a volume of hexagon
+columns.** The panel carries the plan as a picture and the volume as a block of
+ground you can turn, cut open and look into; **Draw · void** turns the world
+inside out and draws the caves themselves as the solid, which is the only view
+that shows a network from outside it.
+
+The plan is a **band around zero** of a noise field over the ground: a passage
+is where the field sits near zero, so the passages are the field's own contour
+lines and they wind, branch and join. **Passage families** is how many
+independent fields are laid over one another — one field's contours can never
+cross each other, and a second field's can cross the first's.
+
+**One field gives both the shape on the ground and the shape across it.** How
+far inside the band a column sits says how tall the passage is there, so
+**Cross-section** shapes the roof from the same lookup that decided the plan:
+below 1 a domed tube, above it a pointed one. **Floor below the surface** and
+**Depth varies by** put the passage in the crust, and where the roof pushes
+through the ground a passage opens a mouth in a hillside.
+
+**The contour is drawn twice, and the two are worth comparing.** Blue is
+marching squares over a square raster — sixteen cases, two of them saddles the
+four corners cannot decide. Orange is the same contour taken on the **lattice
+the world is built on**: three adjacent cells are a triangle, so the cases are
+eight and **none of them is ambiguous**, because three points have no saddle.
+
+The readout is the point of the page. **Narrowest way through** is how many
+cells wide a passage is where it pinches, which is what says whether it can be
+walked; **separate systems** and **half the void is in the biggest** say whether
+a plan that reads as a network on paper survives being drawn in hexagons; and
+**faces per column** prices the caves against the same ground with none.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

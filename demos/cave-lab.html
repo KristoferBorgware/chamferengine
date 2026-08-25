@@ -1,0 +1,1851 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cave lab — a plan drawn in 2D, extruded into a volume of hexagons</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--ink: #e8ecf2;
+				--dim: #8b95a4;
+				--panel: #12161d;
+				--edge: #232b36;
+				--live: #6fd0ff;
+				--warm: #ffb56b;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				overflow: hidden;
+				background: #070a0e;
+				color: var(--ink);
+				font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+			}
+			#view {
+				position: fixed;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				display: block;
+				touch-action: none;
+				cursor: grab;
+			}
+			#view:active {
+				cursor: grabbing;
+			}
+			/* The plan and the readout are the reference and never scroll away;
+			   only the knobs move, so what is being judged stays on screen while
+			   it is being changed. */
+			#panel {
+				position: fixed;
+				top: 0;
+				right: 0;
+				bottom: 0;
+				width: 330px;
+				display: flex;
+				flex-direction: column;
+				background: rgba(18, 22, 29, 0.94);
+				border-left: 1px solid var(--edge);
+				backdrop-filter: blur(6px);
+			}
+			#fixed {
+				padding: 12px 14px 10px;
+				border-bottom: 1px solid var(--edge);
+			}
+			h1 {
+				font-size: 14px;
+				margin: 0 0 2px;
+				letter-spacing: 0.2px;
+			}
+			.sub {
+				color: var(--dim);
+				font-size: 11.5px;
+				margin: 0 0 10px;
+			}
+			#plan {
+				width: 100%;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				background: #05070a;
+				cursor: crosshair;
+			}
+			#planSays {
+				color: var(--dim);
+				font-size: 11px;
+				margin: 6px 0 0;
+			}
+			#facts {
+				font-size: 11.5px;
+				color: var(--dim);
+				margin: 8px 0 0;
+			}
+			#facts b {
+				color: var(--ink);
+				font-weight: 600;
+			}
+			#facts .warn {
+				color: var(--warm);
+			}
+			#facts div {
+				margin: 2px 0;
+			}
+			#knobs {
+				flex: 1;
+				overflow-y: auto;
+				padding: 6px 14px 24px;
+			}
+			.group {
+				border-top: 1px solid var(--edge);
+				padding: 6px 0 2px;
+			}
+			.group:first-child {
+				border-top: 0;
+			}
+			.group > summary {
+				cursor: pointer;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.9px;
+				color: var(--dim);
+				padding: 4px 0;
+				list-style: none;
+			}
+			.group > summary::-webkit-details-marker {
+				display: none;
+			}
+			.group > summary::before {
+				content: "▸ ";
+				color: #4c5768;
+			}
+			.group[open] > summary::before {
+				content: "▾ ";
+			}
+			.knob {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				align-items: center;
+				gap: 2px 8px;
+				margin: 7px 0;
+			}
+			.knob label {
+				font-size: 12px;
+			}
+			.knob output {
+				font-variant-numeric: tabular-nums;
+				font-size: 11.5px;
+				color: var(--live);
+			}
+			.knob input[type="range"],
+			.knob select {
+				grid-column: 1 / -1;
+				width: 100%;
+			}
+			.knob select,
+			.knob input[type="text"] {
+				background: #0c1015;
+				color: var(--ink);
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				padding: 3px 5px;
+				font: inherit;
+				font-size: 12px;
+			}
+			.knob.check {
+				grid-template-columns: auto 1fr;
+			}
+			.knob.check input {
+				grid-column: auto;
+				width: auto;
+				justify-self: start;
+			}
+			.knob.check label {
+				grid-column: auto;
+			}
+			.note {
+				color: var(--dim);
+				font-size: 11px;
+				margin: 4px 0 10px;
+			}
+			#hint {
+				position: fixed;
+				left: 14px;
+				bottom: 12px;
+				color: #6d768c;
+				font-size: 11.5px;
+				pointer-events: none;
+			}
+			@media (max-width: 760px) {
+				#panel {
+					width: 100%;
+					top: auto;
+					height: 62%;
+				}
+				#view {
+					bottom: 62%;
+				}
+				#hint {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="view"></canvas>
+		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
+		<div id="panel">
+			<div id="fixed">
+				<h1>Cave lab</h1>
+				<p class="sub">
+					A cave system drawn as a plan in 2D, then given a floor depth
+					and a height and extruded into a volume of hexagon columns.
+				</p>
+				<canvas id="plan" width="600" height="600"></canvas>
+				<p id="planSays">—</p>
+				<div id="facts">—</div>
+			</div>
+			<div id="knobs"></div>
+		</div>
+		<script>
+			// =============================================================
+			// The noise, copied from the engine so the picture is the world's.
+			// =============================================================
+
+			/** `2^32`, the divisor that turns a `uint32` into a fraction of one. */
+			const U32 = 4294967296;
+
+			/**
+			 * Three integer coordinates and a seed, mixed into a value in `[0, 1)`.
+			 *
+			 * Every step is `uint32`: a wrapping multiply, an xor, a logical shift.
+			 * No product runs past `2^53`, so there is nothing here for one language
+			 * to round differently from another.
+			 */
+			function hash3(x, y, z, seed) {
+				let h =
+					(Math.imul(x | 0, 374761393) +
+						Math.imul(y | 0, 668265263) +
+						Math.imul(z | 0, 1274126177) +
+						Math.imul(seed | 0, 1013904223)) >>>
+				0;
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				h = (h ^ (h >>> 16)) >>> 0;
+				return h / U32;
+			}
+
+			function seedFromString(text) {
+				let h = 2166136261 >>> 0;
+				for (let i = 0; i < text.length; i++) {
+					h = (h ^ text.charCodeAt(i)) >>> 0;
+					h = Math.imul(h, 16777619) >>> 0;
+				}
+				// The hash's own finaliser, or two seeds a character apart start on
+				// near-identical planets.
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				return (h ^ (h >>> 16)) >>> 0;
+			}
+
+			/** Quintic. Smoothstep jumps curvature by 12 at every lattice plane. */
+			function fade(t) {
+				return t * t * t * (t * (t * 6 - 15) + 10);
+			}
+
+			function valueNoise3(px, py, pz, seed) {
+				const x0 = Math.floor(px);
+				const y0 = Math.floor(py);
+				const z0 = Math.floor(pz);
+				const fx = fade(px - x0);
+				const fy = fade(py - y0);
+				const fz = fade(pz - z0);
+				const c000 = hash3(x0, y0, z0, seed);
+				const c100 = hash3(x0 + 1, y0, z0, seed);
+				const c010 = hash3(x0, y0 + 1, z0, seed);
+				const c110 = hash3(x0 + 1, y0 + 1, z0, seed);
+				const c001 = hash3(x0, y0, z0 + 1, seed);
+				const c101 = hash3(x0 + 1, y0, z0 + 1, seed);
+				const c011 = hash3(x0, y0 + 1, z0 + 1, seed);
+				const c111 = hash3(x0 + 1, y0 + 1, z0 + 1, seed);
+				const x00 = c000 + (c100 - c000) * fx;
+				const x10 = c010 + (c110 - c010) * fx;
+				const x01 = c001 + (c101 - c001) * fx;
+				const x11 = c011 + (c111 - c011) * fx;
+				const y0v = x00 + (x10 - x00) * fy;
+				const y1v = x01 + (x11 - x01) * fy;
+				return (y0v + (y1v - y0v) * fz) * 2 - 1;
+			}
+
+			/**
+			 * How far an octave's own offset may reach, in lattice units.
+			 */
+			const OCTAVE_SPREAD = 1000;
+
+			/**
+			 * Octaves at lacunarity 2 and gain 0.5, low octave first, divided by the
+			 * summed amplitude.
+			 *
+			 * **Every octave gets its own offset, hashed from the seed**, exactly as
+			 * the engine's `octaveNoise` does it. Without one, two octaves of the
+			 * same seeded lattice share their zero crossings wherever their
+			 * frequencies land near a whole multiple, and a field read for its zero
+			 * set -- which is the whole of this page -- grows straight passages on a
+			 * grain that has nothing to do with the ground.
+			 */
+			function fbm(x, y, z, octaves, seed) {
+				let sum = 0;
+				let amplitude = 1;
+				let total = 0;
+				let f = 1;
+				for (let o = 0; o < octaves; o++) {
+					const ox = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					const oy = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+					sum +=
+						amplitude *
+						valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+					total += amplitude;
+					amplitude *= 0.5;
+					f *= 2;
+				}
+				return sum / total;
+			}
+
+			// =============================================================
+			// The lattice.
+			//
+			// Cells are the vertices of a triangular lattice and each one owns
+			// the hexagon around it, which is what the engine's cells are --
+			// invariant 3, at a radius where nothing is curved. Axial `(i, j)`
+			// here is the engine's `(q, r)` inside a chunk, so moving this to
+			// the planet swaps `cellCenter` for `latticePosition` and changes
+			// nothing else about the carve.
+			// =============================================================
+
+			const ROOT3 = Math.sqrt(3);
+
+			/** The six neighbours, counter-clockwise from the `+i` step. */
+			const STEPS = [
+				[1, 0],
+				[0, 1],
+				[-1, 1],
+				[-1, 0],
+				[0, -1],
+				[1, -1],
+			];
+
+			/**
+			 * Where the cell in storage column `i` of row `j` stands, in metres.
+			 *
+			 * The lattice's own `(i, j)` walks a rhombus, and a rhombic patch leaves
+			 * half of any picture of it empty. Each row is shifted back half a row
+			 * on the way in, so the same lattice fills a **rectangle** of ground
+			 * instead: the axial coordinate is `i - (j >> 1)` and nothing else
+			 * changes -- the cells, their spacing and their six neighbours are the
+			 * lattice's, and only which of them the patch holds is different.
+			 */
+			function cellCenter(i, j, d) {
+				const axial = i - (j >> 1);
+				return [(axial + j * 0.5) * d, j * ROOT3 * 0.5 * d];
+			}
+
+			/**
+			 * The neighbour in direction `k`, in storage coordinates.
+			 *
+			 * A step is the lattice's own step; the row shift means the column moves
+			 * by a different amount on odd and even rows, which is the one price the
+			 * rectangle costs.
+			 */
+			function stepFrom(i, j, k) {
+				const [di, dj] = STEPS[k];
+				const shift = dj > 0 ? j & 1 : dj < 0 ? (j & 1) - 1 : 0;
+				return [i + di + shift, j + dj];
+			}
+
+			/**
+			 * The six corners of a cell's hexagon, as offsets from its centre.
+			 *
+			 * A lattice point's Voronoi region is the regular hexagon with
+			 * inradius `d / 2`, so its circumradius is `d / sqrt(3)` and its
+			 * corners sit at 30 degrees plus multiples of 60. Edge `k` spans
+			 * corners `k - 1` and `k`, which puts its outward normal on
+			 * neighbour `k` -- the same ring order `STEPS` lists.
+			 */
+			function hexCorners(d) {
+				const r = d / ROOT3;
+				const out = [];
+				for (let k = 0; k < 6; k++) {
+					const a = Math.PI / 6 + (k * Math.PI) / 3;
+					out.push([r * Math.cos(a), r * Math.sin(a)]);
+				}
+				return out;
+			}
+
+			// =============================================================
+			// The knobs.
+			// =============================================================
+
+			const knobs = {
+				seed: "cave",
+				cells: 96,
+				blockSize: 1,
+				layers: 28,
+
+				corridorScale: 20,
+				corridorOctaves: 3,
+				corridorWidth: 0.05,
+				families: 2,
+				branchWarp: 4,
+
+				floorDepth: 9,
+				depthVary: 12,
+				depthScale: 40,
+
+				roofHeight: 5,
+				roofShape: 0.5,
+				roofUnder: 1,
+
+				relief: 8,
+				reliefScale: 70,
+
+				show: "rock",
+				picture: "both",
+				lattice: true,
+				cutI: 0.62,
+				cutJ: 0.62,
+			};
+
+			const KNOBS = [
+				{
+					group: "The plan",
+					open: true,
+					rows: [
+						{ key: "seed", label: "Seed", type: "text" },
+						{
+							key: "corridorScale",
+							label: "Passage spacing",
+							low: 6,
+							high: 120,
+							step: 2,
+							unit: " m",
+						},
+						{
+							key: "corridorOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 6,
+							step: 1,
+						},
+						{
+							key: "corridorWidth",
+							label: "Passage width",
+							low: 0.005,
+							high: 0.25,
+							step: 0.005,
+							decimals: 3,
+						},
+						{
+							key: "families",
+							label: "Passage families",
+							low: 1,
+							high: 3,
+							step: 1,
+						},
+						{
+							key: "branchWarp",
+							label: "Wander",
+							low: 0,
+							high: 40,
+							step: 1,
+							unit: " m",
+						},
+					],
+				},
+				{
+					group: "How deep, and how high",
+					open: true,
+					rows: [
+						{
+							key: "floorDepth",
+							label: "Floor below the surface",
+							low: 2,
+							high: 60,
+							step: 1,
+							unit: " m",
+						},
+						{
+							key: "depthVary",
+							label: "Depth varies by",
+							low: 0,
+							high: 40,
+							step: 1,
+							unit: " m",
+						},
+						{
+							key: "depthScale",
+							label: "Depth changes over",
+							low: 15,
+							high: 400,
+							step: 10,
+							unit: " m",
+						},
+						{
+							key: "roofHeight",
+							label: "Height at the spine",
+							low: 1,
+							high: 24,
+							step: 0.5,
+							unit: " m",
+							decimals: 1,
+						},
+						{
+							key: "roofShape",
+							label: "Cross-section",
+							low: 0.25,
+							high: 3,
+							step: 0.05,
+							decimals: 2,
+						},
+						{
+							key: "roofUnder",
+							label: "Rock kept over the roof",
+							low: 0,
+							high: 12,
+							step: 0.5,
+							unit: " m",
+							decimals: 1,
+						},
+					],
+				},
+				{
+					group: "The ground over it",
+					open: false,
+					rows: [
+						{
+							key: "relief",
+							label: "Relief",
+							low: 0,
+							high: 60,
+							step: 1,
+							unit: " m",
+						},
+						{
+							key: "reliefScale",
+							label: "Relief over",
+							low: 30,
+							high: 400,
+							step: 10,
+							unit: " m",
+						},
+					],
+				},
+				{
+					group: "The volume",
+					open: false,
+					rows: [
+						{
+							key: "cells",
+							label: "Cells across",
+							low: 12,
+							high: 96,
+							step: 2,
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.5,
+							high: 4,
+							step: 0.5,
+							unit: " m",
+							decimals: 1,
+						},
+						{
+							key: "layers",
+							label: "Crust layers",
+							low: 12,
+							high: 80,
+							step: 2,
+						},
+					],
+				},
+				{
+					group: "Looking at it",
+					open: true,
+					rows: [
+						{
+							key: "show",
+							label: "Draw",
+							type: "select",
+							options: ["rock", "void"],
+						},
+						{
+							key: "picture",
+							label: "Plan shows",
+							type: "select",
+							options: ["field", "contour", "hexes", "both"],
+						},
+						{
+							key: "lattice",
+							label: "Contour the lattice as well",
+							type: "check",
+						},
+						{
+							key: "cutI",
+							label: "Cut across",
+							low: 0.2,
+							high: 1,
+							step: 0.02,
+							decimals: 2,
+						},
+						{
+							key: "cutJ",
+							label: "Cut along",
+							low: 0.2,
+							high: 1,
+							step: 0.02,
+							decimals: 2,
+						},
+					],
+				},
+			];
+
+			// =============================================================
+			// The plan, and the volume under it.
+			// =============================================================
+
+			/**
+			 * One family's plan field at a point on the ground.
+			 *
+			 * A passage is where this sits near zero. **The zero set of a smooth
+			 * field on a plane is a set of closed loops**, so one family on its
+			 * own carves rings -- passages that come back to where they started
+			 * and never reach the next ring, because two contours of one field
+			 * cannot cross. A second family, seeded independently, has loops that
+			 * cross the first family's, and the union of the two is a network.
+			 *
+			 * **Wander** bends the sample point before the lookup rather than
+			 * adding a term to the result, so it moves a passage sideways
+			 * without changing how wide it is.
+			 */
+			function planValue(x, z, k, seed, family) {
+				const own = (seed + Math.imul(family, 0x85ebca6b)) | 0;
+				let sx = x;
+				let sz = z;
+				if (k.branchWarp > 0) {
+					const s = k.corridorScale * 2;
+					sx += k.branchWarp * fbm(x / s, 3.1, z / s, 2, (own + 7) | 0);
+					sz += k.branchWarp * fbm(x / s, 8.7, z / s, 2, (own + 11) | 0);
+				}
+				const s = k.corridorScale;
+				return fbm(sx / s, 17.3, sz / s, k.corridorOctaves, own);
+			}
+
+			/**
+			 * How far inside a passage a point is: 1 at the spine, 0 at the rim
+			 * and outside. Several families take the largest, so where two cross
+			 * the passage is as tall as the taller of the two rather than the sum.
+			 */
+			function opennessOf(values, k) {
+				let best = 0;
+				for (const v of values) {
+					const o = (k.corridorWidth - Math.abs(v)) / k.corridorWidth;
+					if (o > best) best = o;
+				}
+				return best;
+			}
+
+			/** How far below the surface this column's cave floor sits, in metres. */
+			function floorAt(x, z, k, seed) {
+				if (k.depthVary === 0) return k.floorDepth;
+				const s = k.depthScale;
+				return (
+					k.floorDepth +
+					k.depthVary * fbm(x / s, 91.7, z / s, 2, (seed + 3) | 0)
+				);
+			}
+
+			/** The ground's own height above zero, in metres. */
+			function surfaceAt(x, z, k, seed) {
+				if (k.relief === 0) return 0;
+				const s = k.reliefScale;
+				return k.relief * fbm(x / s, 5.1, z / s, 4, (seed + 5) | 0);
+			}
+
+			const AIR = 0;
+			const ROCK = 1;
+			const VOID = 2;
+
+			/**
+			 * Build the whole patch: the plan, the surface over it, and the
+			 * blocks.
+			 *
+			 * `kind` is one byte a block -- open air above the ground, rock, or
+			 * a cave. Air and cave are both empty and are kept apart because the
+			 * two views draw opposite halves of the world, and because a cave
+			 * that has broken through to the sky is a mouth and worth counting.
+			 */
+			function build(k) {
+				const started = performance.now();
+				const seed = seedFromString(k.seed);
+				const n = k.cells;
+				const d = k.blockSize;
+				const layers = k.layers;
+				const columns = n * n;
+
+				const families = k.families;
+				const raw = new Float32Array(columns * families);
+				const openness = new Float32Array(columns);
+				const surface = new Float32Array(columns);
+				const floor = new Float32Array(columns);
+				const ground = new Int32Array(columns);
+				const kind = new Uint8Array(columns * layers);
+
+				let highest = -Infinity;
+				for (let j = 0; j < n; j++) {
+					for (let i = 0; i < n; i++) {
+						const c = j * n + i;
+						const [x, z] = cellCenter(i, j, d);
+						const values = [];
+						for (let f = 0; f < families; f++) {
+							const v = planValue(x, z, k, seed, f);
+							raw[c * families + f] = v;
+							values.push(v);
+						}
+						openness[c] = opennessOf(values, k);
+						surface[c] = surfaceAt(x, z, k, seed);
+						floor[c] = floorAt(x, z, k, seed);
+						if (surface[c] > highest) highest = surface[c];
+					}
+				}
+				// One block of empty sky over the tallest ground, so layer 0 is
+				// air everywhere and a mouth has somewhere to open into.
+				const top = Math.ceil(highest / d) * d + d;
+
+				for (let c = 0; c < columns; c++) {
+					const surfaceY = surface[c];
+					const first = Math.max(0, Math.ceil((top - surfaceY) / d));
+					ground[c] = first;
+
+					const open = openness[c];
+					// The cross-section falls out of the same field as the plan:
+					// how far inside the band a column is says how tall the
+					// passage is there, so one lookup gives both the shape on
+					// the ground and the shape across it.
+					const height =
+						open > 0 ? k.roofHeight * Math.pow(open, k.roofShape) : 0;
+					const floorDepth = floor[c];
+					const roofDepth = floorDepth - height;
+
+					const base = c * layers;
+					for (let L = first; L < layers; L++) {
+						const centre = top - (L + 0.5) * d;
+						const below = surfaceY - centre;
+						const hollow =
+							height > 0 &&
+							below > roofDepth &&
+							below <= floorDepth &&
+							below >= k.roofUnder;
+						kind[base + L] = hollow ? VOID : ROCK;
+					}
+				}
+
+				return {
+					n,
+					d,
+					layers,
+					top,
+					seed,
+					families,
+					raw,
+					openness,
+					surface,
+					floor,
+					ground,
+					kind,
+					millis: performance.now() - started,
+				};
+			}
+
+			// =============================================================
+			// What the volume is worth: the numbers that decide the concept.
+			// =============================================================
+
+			/**
+			 * A cave you cannot walk down is a texture, not a cave, so the
+			 * measurements are about **reach**: how much of the patch a passage
+			 * touches, how many separate systems it breaks into, and how many
+			 * cells wide the narrowest way through one is.
+			 *
+			 * The width is the number that carries to the planet. A cell is one
+			 * block, so a passage two cells wide at a 1 m block is a passage two
+			 * blocks wide however big the world is; the same plan at a 4 m block
+			 * is the same passage drawn with a quarter of the cells and may not
+			 * survive being drawn at all.
+			 */
+			function measure(world, k) {
+				const { n, layers, kind, ground } = world;
+				const columns = n * n;
+
+				let caveCells = 0;
+				let caveColumns = 0;
+				let mouths = 0;
+				let multiSpan = 0;
+				const hasCave = new Uint8Array(columns);
+
+				for (let c = 0; c < columns; c++) {
+					const base = c * layers;
+					let cave = 0;
+					let topCave = -1;
+					let spans = 0;
+					let wasRock = false;
+					for (let L = 0; L < layers; L++) {
+						const v = kind[base + L];
+						if (v === VOID) {
+							cave++;
+							if (topCave < 0) topCave = L;
+						}
+						const rock = v === ROCK;
+						if (rock && !wasRock) spans++;
+						wasRock = rock;
+					}
+					caveCells += cave;
+					if (cave > 0) {
+						caveColumns++;
+						hasCave[c] = 1;
+						if (topCave === ground[c]) mouths++;
+					}
+					if (spans > 1) multiSpan++;
+				}
+
+				// Connected systems, over the six lateral neighbours plus up and
+				// down. A plan that reads as one network on paper can still
+				// rasterise into a hundred disconnected pockets, and that is
+				// exactly the failure a picture hides and a count does not.
+				const seen = new Uint8Array(columns * layers);
+				const stack = new Int32Array(columns * layers);
+				const sizes = [];
+				for (let start = 0; start < columns * layers; start++) {
+					if (kind[start] !== VOID || seen[start]) continue;
+					let size = 0;
+					let head = 0;
+					stack[head++] = start;
+					seen[start] = 1;
+					while (head > 0) {
+						const at = stack[--head];
+						size++;
+						const L = at % layers;
+						const c = (at - L) / layers;
+						const i = c % n;
+						const j = (c - i) / n;
+						if (L > 0 && kind[at - 1] === VOID && !seen[at - 1]) {
+							seen[at - 1] = 1;
+							stack[head++] = at - 1;
+						}
+						if (
+							L < layers - 1 &&
+							kind[at + 1] === VOID &&
+							!seen[at + 1]
+						) {
+							seen[at + 1] = 1;
+							stack[head++] = at + 1;
+						}
+						for (let k = 0; k < 6; k++) {
+							const [ni, nj] = stepFrom(i, j, k);
+							if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+							const to = (nj * n + ni) * layers + L;
+							if (kind[to] === VOID && !seen[to]) {
+								seen[to] = 1;
+								stack[head++] = to;
+							}
+						}
+					}
+					sizes.push(size);
+				}
+
+				// The narrowest way through a passage, in cells. Three lattice
+				// axes, the run of cave columns through this one along each, and
+				// the smallest of the three -- so a column in a wide chamber
+				// reports the chamber and a column in a slot reports the slot.
+				const widths = [];
+				for (let j = 0; j < n; j++) {
+					for (let i = 0; i < n; i++) {
+						if (!hasCave[j * n + i]) continue;
+						let narrowest = Infinity;
+						// The three lattice axes, walked with the lattice's own step so
+						// the row shift cannot bend a straight line.
+						for (let axis = 0; axis < 3; axis++) {
+							let run = 1;
+							for (const k of [axis, axis + 3]) {
+								let a = i;
+								let b = j;
+								for (;;) {
+									[a, b] = stepFrom(a, b, k);
+									if (a < 0 || b < 0 || a >= n || b >= n) break;
+									if (!hasCave[b * n + a]) break;
+									run++;
+								}
+							}
+							if (run < narrowest) narrowest = run;
+						}
+						widths.push(narrowest);
+					}
+				}
+
+				// One count is not enough: a plan that reads as a network on paper
+				// can rasterise into a few real passages and a hundred specks, and a
+				// raw count says the same thing about both. How many of the biggest
+				// systems it takes to hold half the void separates them.
+				sizes.sort((a, b) => b - a);
+				let running = 0;
+				let half = 0;
+				while (half < sizes.length && running * 2 < caveCells) {
+					running += sizes[half];
+					half++;
+				}
+
+				widths.sort((a, b) => a - b);
+				const median = widths.length
+					? widths[widths.length >> 1]
+					: 0;
+				const thin = widths.filter((w) => w < 2).length;
+
+				// Faces, counted inside the patch only, so the rim the patch was
+				// cut at is not charged to the caves.
+				function faces(withCaves) {
+					let total = 0;
+					const solid = (c, L) => {
+						if (L < 0 || L >= layers) return true;
+						const v = kind[c * layers + L];
+						if (v === AIR) return false;
+						return withCaves ? v === ROCK : true;
+					};
+					for (let j = 0; j < n; j++) {
+						for (let i = 0; i < n; i++) {
+							const c = j * n + i;
+							for (let L = 0; L < layers; L++) {
+								if (!solid(c, L)) continue;
+								if (!solid(c, L - 1)) total++;
+								if (L < layers - 1 && !solid(c, L + 1)) total++;
+								for (let k = 0; k < 6; k++) {
+									const [a, b] = stepFrom(i, j, k);
+									if (a < 0 || b < 0 || a >= n || b >= n) continue;
+									if (!solid(b * n + a, L)) total++;
+								}
+							}
+						}
+					}
+					return total;
+				}
+
+				const withCaves = faces(true);
+				const without = faces(false);
+
+				return {
+					caveCells,
+					caveColumns,
+					columns,
+					mouths,
+					multiSpan,
+					systems: sizes.length,
+					largest: sizes[0] ?? 0,
+					half,
+					medianWidth: median,
+					thinShare: widths.length ? thin / widths.length : 0,
+					withCaves,
+					without,
+				};
+			}
+
+			// =============================================================
+			// Marching squares, and the lattice's own version of it.
+			// =============================================================
+
+			/**
+			 * Marching squares over a regular sample grid.
+			 *
+			 * Sixteen cases, of which two are saddles where the same four
+			 * corners admit two different curves. They are settled here by the
+			 * average of the four, which is the cheapest rule that at least
+			 * decides the two the same way.
+			 */
+			function marchingSquares(grid, w, h, level, emit) {
+				const point = (ax, ay, av, bx, by, bv) => {
+					const t = (level - av) / (bv - av || 1e-9);
+					return [ax + (bx - ax) * t, ay + (by - ay) * t];
+				};
+				for (let y = 0; y < h - 1; y++) {
+					for (let x = 0; x < w - 1; x++) {
+						const a = grid[y * w + x];
+						const b = grid[y * w + x + 1];
+						const c = grid[(y + 1) * w + x + 1];
+						const d = grid[(y + 1) * w + x];
+						let code = 0;
+						if (a > level) code |= 1;
+						if (b > level) code |= 2;
+						if (c > level) code |= 4;
+						if (d > level) code |= 8;
+						if (code === 0 || code === 15) continue;
+						const e0 = () => point(x, y, a, x + 1, y, b);
+						const e1 = () => point(x + 1, y, b, x + 1, y + 1, c);
+						const e2 = () => point(x + 1, y + 1, c, x, y + 1, d);
+						const e3 = () => point(x, y + 1, d, x, y, a);
+						const middle = (a + b + c + d) / 4 > level;
+						switch (code) {
+							case 1:
+							case 14:
+								emit(e3(), e0());
+								break;
+							case 2:
+							case 13:
+								emit(e0(), e1());
+								break;
+							case 3:
+							case 12:
+								emit(e3(), e1());
+								break;
+							case 4:
+							case 11:
+								emit(e1(), e2());
+								break;
+							case 6:
+							case 9:
+								emit(e0(), e2());
+								break;
+							case 7:
+							case 8:
+								emit(e2(), e3());
+								break;
+							case 5:
+								if (middle) {
+									emit(e3(), e0());
+									emit(e1(), e2());
+								} else {
+									emit(e0(), e1());
+									emit(e2(), e3());
+								}
+								break;
+							case 10:
+								if (middle) {
+									emit(e0(), e1());
+									emit(e2(), e3());
+								} else {
+									emit(e3(), e0());
+									emit(e1(), e2());
+								}
+								break;
+						}
+					}
+				}
+			}
+
+			/**
+			 * The same contour over the lattice the world is actually built on.
+			 *
+			 * Three adjacent cells make a triangle, so the cases are eight
+			 * rather than sixteen, and **none of them is ambiguous**: whenever a
+			 * triangle is cut at all, exactly one of its three corners is on its
+			 * own side and the segment joins the two edges that touch it. The
+			 * saddle marching squares has to guess at cannot arise on a
+			 * triangle, because three points have no saddle.
+			 */
+			function marchingTriangles(valueAt, n, level, emit) {
+				const cut = (p, q) => {
+					const t = (level - p[2]) / (q[2] - p[2] || 1e-9);
+					return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+				};
+				const one = (p, q, r) => {
+					const pi = p[2] > level;
+					const qi = q[2] > level;
+					const ri = r[2] > level;
+					if (pi === qi && qi === ri) return;
+					// Whichever corner disagrees with the other two is the one
+					// the segment cuts off.
+					const alone = pi === qi ? r : qi === ri ? p : q;
+					const rest = pi === qi ? [p, q] : qi === ri ? [q, r] : [p, r];
+					emit(cut(alone, rest[0]), cut(alone, rest[1]));
+				};
+				for (let j = 0; j < n - 1; j++) {
+					for (let i = 0; i < n - 1; i++) {
+						const a = valueAt(i, j);
+						const b = valueAt(i + 1, j);
+						const c = valueAt(i, j + 1);
+						const e = valueAt(i + 1, j + 1);
+						one(a, b, c);
+						one(b, c, e);
+					}
+				}
+			}
+
+			// =============================================================
+			// The plan picture.
+			// =============================================================
+
+			const plan = document.getElementById("plan");
+			const planSays = document.getElementById("planSays");
+			const planCtx = plan.getContext("2d");
+			const scratch = document.createElement("canvas");
+
+			/** How many field samples across the plan image is contoured on. */
+			const PLAN_GRID = 200;
+
+			function drawPlan(world, k) {
+				const n = world.n;
+				const d = world.d;
+				const span = (n - 1) * d;
+				// The row shift makes the patch a rectangle, give or take the half
+				// cell each odd row is offset by, so the extent is read off the cells
+				// rather than assumed from the corners.
+				const corners = hexCorners(d);
+				let minX = Infinity;
+				let maxX = -Infinity;
+				let minZ = Infinity;
+				let maxZ = -Infinity;
+				for (let j = 0; j < n; j++)
+					for (const i of [0, n - 1]) {
+						const [x, z] = cellCenter(i, j, d);
+						if (x < minX) minX = x;
+						if (x > maxX) maxX = x;
+						if (z < minZ) minZ = z;
+						if (z > maxZ) maxZ = z;
+					}
+				const inset = d / ROOT3;
+				minX -= inset;
+				maxX += inset;
+				minZ -= inset;
+				maxZ += inset;
+				const width = maxX - minX;
+				const height = maxZ - minZ;
+				// One scale for both axes, or the hexagons stop being hexagons; the
+				// canvas takes the patch's own shape rather than a square with the
+				// picture stranded across the middle of it.
+				const size = plan.width;
+				const scale = size / width;
+				plan.height = Math.round((size * height) / width);
+				const toPixel = (x, z) => [(x - minX) * scale, (z - minZ) * scale];
+
+				planCtx.setTransform(1, 0, 0, 1, 0, 0);
+				planCtx.fillStyle = "#05070a";
+				planCtx.fillRect(0, 0, plan.width, plan.height);
+
+				/** Whether a world point is a point the lattice actually covers. */
+				const onPatch = (x, z) => {
+					const j = z / (d * ROOT3 * 0.5);
+					const i = x / d - j / 2 + (j >> 1);
+					return i >= -0.5 && j >= -0.5 && i <= n - 0.5 && j <= n - 0.5;
+				};
+
+				// The field, on its own square grid. This is the raster marching
+				// squares is meant for, and it is a picture rather than a world:
+				// nothing here decides which block is which.
+				const grids = [];
+				for (let f = 0; f < world.families; f++)
+					grids.push(new Float32Array(PLAN_GRID * PLAN_GRID));
+				const openGrid = new Float32Array(PLAN_GRID * PLAN_GRID);
+				const sample = new Array(world.families);
+				for (let y = 0; y < PLAN_GRID; y++) {
+					for (let x = 0; x < PLAN_GRID; x++) {
+						const wx = minX + (x / (PLAN_GRID - 1)) * width;
+						const wz = minZ + (y / (PLAN_GRID - 1)) * height;
+						for (let f = 0; f < world.families; f++) {
+							const v = planValue(wx, wz, k, world.seed, f);
+							grids[f][y * PLAN_GRID + x] = v;
+							sample[f] = v;
+						}
+						openGrid[y * PLAN_GRID + x] = opennessOf(sample, k);
+					}
+				}
+
+				if (k.picture !== "hexes") {
+					scratch.width = PLAN_GRID;
+					scratch.height = PLAN_GRID;
+					const g = scratch.getContext("2d");
+					const image = g.createImageData(PLAN_GRID, PLAN_GRID);
+					for (let p = 0; p < openGrid.length; p++) {
+						const t = openGrid[p];
+						let r;
+						let gr;
+						let b;
+						if (t > 0) {
+							// Bright at the spine and falling off to the rim,
+							// which is the same quantity the roof height is taken
+							// from, so the picture reads as a passage with a shape
+							// rather than as a stencil.
+							r = 40 + 200 * t;
+							gr = 60 + 170 * t;
+							b = 80 + 90 * t;
+						} else {
+							const away = Math.min(1, Math.abs(grids[0][p]));
+							r = 10 + 14 * away;
+							gr = 14 + 18 * away;
+							b = 20 + 26 * away;
+						}
+						image.data[p * 4] = r;
+						image.data[p * 4 + 1] = gr;
+						image.data[p * 4 + 2] = b;
+						image.data[p * 4 + 3] = 255;
+					}
+					g.putImageData(image, 0, 0);
+					planCtx.imageSmoothingEnabled = true;
+					planCtx.drawImage(scratch, 0, 0, plan.width, plan.height);
+				}
+
+				// The hexagons, which is what the world is actually built out of.
+				if (k.picture === "hexes" || k.picture === "both") {
+					for (let j = 0; j < n; j++) {
+						for (let i = 0; i < n; i++) {
+							const c = j * n + i;
+							const open = world.openness[c];
+							if (open <= 0) continue;
+							const [cx, cz] = cellCenter(i, j, d);
+							planCtx.beginPath();
+							for (let e = 0; e < 6; e++) {
+								const [px, py] = toPixel(
+									cx + corners[e][0],
+									cz + corners[e][1],
+								);
+								if (e === 0) planCtx.moveTo(px, py);
+								else planCtx.lineTo(px, py);
+							}
+							planCtx.closePath();
+							const t = Math.min(1, open);
+							planCtx.fillStyle = `rgb(${Math.round(40 + 200 * t)},${Math.round(60 + 170 * t)},${Math.round(80 + 90 * t)})`;
+							planCtx.fill();
+						}
+					}
+				}
+
+				// The contour itself: the two edges of the band, at plus and
+				// minus the width.
+				let segments = 0;
+				if (k.picture !== "hexes") {
+					planCtx.strokeStyle = "#6fd0ff";
+					planCtx.lineWidth = 1.6;
+					planCtx.beginPath();
+					for (const grid of grids)
+						for (const level of [-k.corridorWidth, k.corridorWidth])
+							marchingSquares(grid, PLAN_GRID, PLAN_GRID, level, (a, b) => {
+							const mx =
+								minX + ((a[0] + b[0]) / 2 / (PLAN_GRID - 1)) * width;
+							const mz =
+								minZ + ((a[1] + b[1]) / 2 / (PLAN_GRID - 1)) * height;
+							if (!onPatch(mx, mz)) return;
+							segments++;
+							planCtx.moveTo(
+								(a[0] / (PLAN_GRID - 1)) * plan.width,
+								(a[1] / (PLAN_GRID - 1)) * plan.height,
+							);
+							planCtx.lineTo(
+								(b[0] / (PLAN_GRID - 1)) * plan.width,
+								(b[1] / (PLAN_GRID - 1)) * plan.height,
+							);
+							});
+					planCtx.stroke();
+				}
+
+				// And the same contour taken on the lattice, for comparison.
+				let latticeSegments = 0;
+				if (k.lattice) {
+					planCtx.strokeStyle = "#ffb56b";
+					planCtx.lineWidth = 1.2;
+					planCtx.beginPath();
+					for (let f = 0; f < world.families; f++) {
+						const valueAt = (i, j) => {
+							const [x, z] = cellCenter(i, j, d);
+							return [x, z, world.raw[(j * n + i) * world.families + f]];
+						};
+						for (const level of [-k.corridorWidth, k.corridorWidth])
+							marchingTriangles(valueAt, n, level, (a, b) => {
+							latticeSegments++;
+							const [ax, ay] = toPixel(a[0], a[1]);
+							const [bx, by] = toPixel(b[0], b[1]);
+							planCtx.moveTo(ax, ay);
+							planCtx.lineTo(bx, by);
+						});
+					}
+					planCtx.stroke();
+				}
+
+				planSays.textContent =
+					`${Math.round(span)} m across · ` +
+					`${segments} square segments` +
+					(k.lattice ? ` · ${latticeSegments} lattice segments` : "");
+			}
+
+			// =============================================================
+			// The volume, drawn.
+			// =============================================================
+
+			/** A Float32Array that grows, so the mesher does not size itself twice. */
+			function growable(initial) {
+				return {
+					data: new Float32Array(initial),
+					used: 0,
+					room(k) {
+						if (this.used + k <= this.data.length) return;
+						let size = this.data.length;
+						while (size < this.used + k) size *= 2;
+						const next = new Float32Array(size);
+						next.set(this.data.subarray(0, this.used));
+						this.data = next;
+					},
+					vertex(p, nrm, color) {
+						this.room(9);
+						const a = this.data;
+						let at = this.used;
+						a[at++] = p[0];
+						a[at++] = p[1];
+						a[at++] = p[2];
+						a[at++] = nrm[0];
+						a[at++] = nrm[1];
+						a[at++] = nrm[2];
+						a[at++] = color[0];
+						a[at++] = color[1];
+						a[at++] = color[2];
+						this.used = at;
+					},
+					quad(a, b, c, d, nrm, color) {
+						this.vertex(a, nrm, color);
+						this.vertex(b, nrm, color);
+						this.vertex(c, nrm, color);
+						this.vertex(a, nrm, color);
+						this.vertex(c, nrm, color);
+						this.vertex(d, nrm, color);
+					},
+				};
+			}
+
+			const SOIL = [0.30, 0.24, 0.16];
+			const GRASS = [0.26, 0.44, 0.19];
+			const STONE = [0.40, 0.40, 0.44];
+			const CUT = [0.62, 0.55, 0.40];
+
+			function mix(a, b, t) {
+				return [
+					a[0] + (b[0] - a[0]) * t,
+					a[1] + (b[1] - a[1]) * t,
+					a[2] + (b[2] - a[2]) * t,
+				];
+			}
+
+			/**
+			 * Every face where what is drawn meets what is not.
+			 *
+			 * The same mesher serves both views: **rock** draws the stone and
+			 * **void** draws the caves, and all that changes is which byte
+			 * counts as filled. Drawing the cave as a solid is the only way to
+			 * see the shape of a network from outside it, because the thing
+			 * being judged is a hole.
+			 *
+			 * A cell removed by the cut is removed from the world rather than
+			 * hidden, so faces are emitted against it and the cut reads as a
+			 * cross-section. Those faces are tinted, or a cut through solid rock
+			 * looks like a wall somebody built.
+			 */
+			function buildMesh(world, k) {
+				const { n, d, layers, top, kind, ground, surface } = world;
+				const corners = hexCorners(d);
+				const mesh = growable(1 << 16);
+				const filled = k.show === "void" ? VOID : ROCK;
+				const keepI = Math.round((n - 1) * k.cutI);
+				const keepJ = Math.round((n - 1) * k.cutJ);
+
+				const cut = (i, j) => i > keepI || j > keepJ;
+				const at = (i, j, L) => {
+					if (i < 0 || j < 0 || i >= n || j >= n) return -1;
+					if (cut(i, j)) return -1;
+					if (L < 0 || L >= layers) return -1;
+					return kind[(j * n + i) * layers + L];
+				};
+
+				for (let j = 0; j <= keepJ; j++) {
+					for (let i = 0; i <= keepI; i++) {
+						const c = j * n + i;
+						const [cx, cz] = cellCenter(i, j, d);
+						const base = c * layers;
+						for (let L = 0; L < layers; L++) {
+							if (kind[base + L] !== filled) continue;
+							const yTop = top - L * d;
+							const yBottom = yTop - d;
+							const centre = yTop - d * 0.5;
+							const below = surface[c] - centre;
+							// Deeper rock is darker, which is the only cue a
+							// picture with one light has for how far down a
+							// passage runs.
+							const deep = Math.min(1, Math.max(0, below / 40));
+							const soil =
+								filled === ROCK
+									? mix(SOIL, STONE, Math.min(1, below / (d * 4)))
+									: mix(
+											[0.85, 0.62, 0.36],
+											[0.32, 0.20, 0.26],
+											deep,
+										);
+							const body = mix(soil, [0.06, 0.06, 0.09], deep * 0.55);
+
+							// Up and down. A hexagon is a fan of four triangles from
+							// one corner, which is two of the mesher's quads and no
+							// centre vertex -- the same 2-verts-4-tris a cap costs in
+							// the engine.
+							const cap = (y, nrm, color) => {
+								const p = (e) => [cx + corners[e][0], y, cz + corners[e][1]];
+								mesh.quad(p(0), p(1), p(2), p(3), nrm, color);
+								mesh.quad(p(0), p(3), p(4), p(5), nrm, color);
+							};
+
+							const above = at(i, j, L - 1);
+							if (above !== filled) {
+								let color = body;
+								if (filled === ROCK && above === AIR)
+									color = L === ground[c] ? GRASS : mix(GRASS, SOIL, 0.5);
+								else if (filled === ROCK && above === VOID)
+									color = mix(STONE, [0.1, 0.1, 0.12], 0.35);
+								else if (above === -1 && L > 0) color = mix(CUT, body, 0.45);
+								cap(yTop, [0, 1, 0], color);
+							}
+
+							const under = at(i, j, L + 1);
+							if (under !== filled && L < layers - 1)
+								cap(yBottom, [0, -1, 0], mix(body, [0.04, 0.04, 0.06], 0.4));
+
+							// The six sides. Edge `k` spans corners `k - 1` and
+							// `k`, so its outward normal is neighbour `k`'s own
+							// direction.
+							for (let e = 0; e < 6; e++) {
+								const [ni, nj] = stepFrom(i, j, e);
+								const other = at(ni, nj, L);
+								if (other === filled) continue;
+								const outside =
+									ni < 0 || nj < 0 || ni >= n || nj >= n;
+								const removed = !outside && cut(ni, nj);
+								const a = corners[(e + 5) % 6];
+								const b = corners[e];
+								const nx = Math.cos((e * Math.PI) / 3);
+								const nz = Math.sin((e * Math.PI) / 3);
+								let color = body;
+								if (removed) color = mix(CUT, body, 0.45);
+								else if (filled === ROCK && other === VOID)
+									color = mix(STONE, [0.08, 0.07, 0.09], 0.45);
+								mesh.quad(
+									[cx + a[0], yTop, cz + a[1]],
+									[cx + b[0], yTop, cz + b[1]],
+									[cx + b[0], yBottom, cz + b[1]],
+									[cx + a[0], yBottom, cz + a[1]],
+									[nx, 0, nz],
+									color,
+								);
+							}
+						}
+					}
+				}
+				return mesh;
+			}
+
+			// =============================================================
+			// WebGL.
+			// =============================================================
+
+			const view = document.getElementById("view");
+			const gl = view.getContext("webgl2", { antialias: true });
+
+			const VERTEX_SOURCE = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec3 position;
+			layout(location = 1) in vec3 normal;
+			layout(location = 2) in vec3 tint;
+			uniform mat4 viewProj;
+			out vec3 vNormal;
+			out vec3 vTint;
+			void main() {
+				vNormal = normal;
+				vTint = tint;
+				gl_Position = viewProj * vec4(position, 1.0);
+			}`;
+
+			const FRAGMENT_SOURCE = `#version 300 es
+			precision highp float;
+			in vec3 vNormal;
+			in vec3 vTint;
+			uniform vec3 sun;
+			out vec4 color;
+			void main() {
+				vec3 n = normalize(vNormal);
+				// One sun and a sky that is brighter overhead than underfoot,
+				// which is doc 16's two terms with nothing else in them.
+				float direct = max(0.0, dot(n, normalize(sun)));
+				float sky = 0.5 + 0.5 * n.y;
+				vec3 lit = vTint * (0.30 * sky + 0.75 * direct) + vec3(0.02, 0.025, 0.04) * sky;
+				color = vec4(pow(max(lit, vec3(0.0)), vec3(1.0 / 2.2)), 1.0);
+			}`;
+
+			function compile(kind, source) {
+				const shader = gl.createShader(kind);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+					throw new Error(gl.getShaderInfoLog(shader));
+				return shader;
+			}
+
+			const program = gl.createProgram();
+			gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX_SOURCE));
+			gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT_SOURCE));
+			gl.linkProgram(program);
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+				throw new Error(gl.getProgramInfoLog(program));
+
+			const uViewProj = gl.getUniformLocation(program, "viewProj");
+			const uSun = gl.getUniformLocation(program, "sun");
+
+			const vao = gl.createVertexArray();
+			const buffer = gl.createBuffer();
+			gl.bindVertexArray(vao);
+			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+			const STRIDE = 9 * 4;
+			gl.enableVertexAttribArray(0);
+			gl.vertexAttribPointer(0, 3, gl.FLOAT, false, STRIDE, 0);
+			gl.enableVertexAttribArray(1);
+			gl.vertexAttribPointer(1, 3, gl.FLOAT, false, STRIDE, 12);
+			gl.enableVertexAttribArray(2);
+			gl.vertexAttribPointer(2, 3, gl.FLOAT, false, STRIDE, 24);
+			gl.bindVertexArray(null);
+
+			// The mesh carries correct outward normals on every face, so the
+			// lighting does not depend on winding and nothing is culled -- which
+			// also means the inside of a passage is lit rather than invisible.
+			gl.disable(gl.CULL_FACE);
+			gl.enable(gl.DEPTH_TEST);
+			gl.clearColor(0.027, 0.039, 0.055, 1);
+
+			let vertexCount = 0;
+			let span = 40;
+			const focus = [0, 0, 0];
+
+			function upload(world, k) {
+				const mesh = buildMesh(world, k);
+				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+				gl.bufferData(
+					gl.ARRAY_BUFFER,
+					mesh.data.subarray(0, mesh.used),
+					gl.DYNAMIC_DRAW,
+				);
+				vertexCount = mesh.used / 9;
+				// The eye is put on the caves rather than on the middle of the
+				// crust, which is mostly rock nobody is looking at.
+				const middle = cellCenter(world.n >> 1, world.n >> 1, world.d);
+				let sum = 0;
+				for (let c = 0; c < world.n * world.n; c++) sum += world.surface[c];
+				focus[0] = middle[0];
+				focus[1] = sum / (world.n * world.n) - k.floorDepth;
+				focus[2] = middle[1];
+				span = (world.n - 1) * world.d * 1.2;
+				return vertexCount;
+			}
+
+			// ---- the camera ----
+			const camera = { yaw: 0.9, pitch: 0.38, distance: 1.25, lift: 0 };
+
+			function multiply(a, b) {
+				const out = new Float32Array(16);
+				for (let c = 0; c < 4; c++)
+					for (let r = 0; r < 4; r++) {
+						let s = 0;
+						for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+						out[c * 4 + r] = s;
+					}
+				return out;
+			}
+			function perspective(fov, aspect, near, far) {
+				const f = 1 / Math.tan(fov / 2);
+				const out = new Float32Array(16);
+				out[0] = f / aspect;
+				out[5] = f;
+				out[10] = (far + near) / (near - far);
+				out[11] = -1;
+				out[14] = (2 * far * near) / (near - far);
+				return out;
+			}
+			function cross(a, b) {
+				return [
+					a[1] * b[2] - a[2] * b[1],
+					a[2] * b[0] - a[0] * b[2],
+					a[0] * b[1] - a[1] * b[0],
+				];
+			}
+			function norm(v) {
+				const l = Math.hypot(v[0], v[1], v[2]) || 1;
+				return [v[0] / l, v[1] / l, v[2] / l];
+			}
+			function lookAt(eye, at, upHint) {
+				const f = norm([at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]]);
+				const s = norm(cross(f, upHint));
+				const u = cross(s, f);
+				const out = new Float32Array(16);
+				out[0] = s[0]; out[4] = s[1]; out[8] = s[2];
+				out[1] = u[0]; out[5] = u[1]; out[9] = u[2];
+				out[2] = -f[0]; out[6] = -f[1]; out[10] = -f[2];
+				out[12] = -(s[0] * eye[0] + s[1] * eye[1] + s[2] * eye[2]);
+				out[13] = -(u[0] * eye[0] + u[1] * eye[1] + u[2] * eye[2]);
+				out[14] = f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2];
+				out[15] = 1;
+				return out;
+			}
+
+			function render() {
+				const dpr = Math.min(2, window.devicePixelRatio || 1);
+				const width = Math.max(1, Math.round(view.clientWidth * dpr));
+				const height = Math.max(1, Math.round(view.clientHeight * dpr));
+				if (view.width !== width || view.height !== height) {
+					view.width = width;
+					view.height = height;
+				}
+				gl.viewport(0, 0, width, height);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				if (!vertexCount) return;
+
+				const away = span * camera.distance;
+				const eye = [
+					focus[0] + Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
+					focus[1] +
+						Math.sin(camera.pitch) * away +
+						camera.lift * span,
+					focus[2] + Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
+				];
+				const proj = perspective(0.9, width / height, span * 0.004, span * 14);
+				gl.useProgram(program);
+				gl.uniformMatrix4fv(
+					uViewProj,
+					false,
+					multiply(proj, lookAt(eye, focus, [0, 1, 0])),
+				);
+				gl.uniform3f(uSun, 0.45, 0.74, 0.5);
+				gl.bindVertexArray(vao);
+				gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+			}
+
+			// ---- turning it ----
+			let dragging = null;
+			view.addEventListener("pointerdown", (event) => {
+				dragging = {
+					x: event.clientX,
+					y: event.clientY,
+					shift: event.shiftKey,
+				};
+				view.setPointerCapture(event.pointerId);
+			});
+			view.addEventListener("pointermove", (event) => {
+				if (!dragging) return;
+				const dx = event.clientX - dragging.x;
+				const dy = event.clientY - dragging.y;
+				dragging.x = event.clientX;
+				dragging.y = event.clientY;
+				if (dragging.shift) {
+					camera.lift = Math.max(-2, Math.min(2, camera.lift + dy * 0.004));
+				} else {
+					camera.yaw -= dx * 0.006;
+					camera.pitch = Math.max(
+						-1.4,
+						Math.min(1.4, camera.pitch + dy * 0.005),
+					);
+				}
+				render();
+			});
+			for (const done of ["pointerup", "pointercancel"])
+				view.addEventListener(done, () => {
+					dragging = null;
+				});
+			view.addEventListener(
+				"wheel",
+				(event) => {
+					event.preventDefault();
+					camera.distance = Math.max(
+						0.25,
+						Math.min(6, camera.distance * Math.exp(event.deltaY * 0.0012)),
+					);
+					render();
+				},
+				{ passive: false },
+			);
+			window.addEventListener("resize", () => render());
+
+			// =============================================================
+			// The panel, the readout, and the loop that keeps them live.
+			// =============================================================
+
+			const facts = document.getElementById("facts");
+			const rows = new Map();
+
+			function buildPanel() {
+				const host = document.getElementById("knobs");
+				for (const group of KNOBS) {
+					const set = document.createElement("details");
+					set.className = "group";
+					set.open = group.open !== false;
+					const legend = document.createElement("summary");
+					legend.textContent = group.group;
+					set.append(legend);
+					for (const row of group.rows) {
+						const wrap = document.createElement("div");
+						wrap.className =
+							"knob" + (row.type === "check" ? " check" : "");
+						const label = document.createElement("label");
+						label.textContent = row.label;
+						let input;
+						if (row.type === "select") {
+							input = document.createElement("select");
+							for (const option of row.options) {
+								const o = document.createElement("option");
+								o.value = option;
+								o.textContent = option;
+								input.append(o);
+							}
+							input.value = knobs[row.key];
+						} else if (row.type === "text") {
+							input = document.createElement("input");
+							input.type = "text";
+							input.value = knobs[row.key];
+						} else if (row.type === "check") {
+							input = document.createElement("input");
+							input.type = "checkbox";
+							input.checked = knobs[row.key];
+						} else {
+							input = document.createElement("input");
+							input.type = "range";
+							input.min = row.low;
+							input.max = row.high;
+							input.step = row.step;
+							input.value = knobs[row.key];
+						}
+
+						const readout = document.createElement("output");
+						if (row.type === "check") wrap.append(input, label);
+						else if (row.type === "select" || row.type === "text")
+							wrap.append(label, readout, input);
+						else wrap.append(label, readout, input);
+
+						const commit = () => {
+							if (row.type === "check") knobs[row.key] = input.checked;
+							else if (row.type === "select" || row.type === "text")
+								knobs[row.key] = input.value;
+							else knobs[row.key] = Number(input.value);
+							show();
+							askForRedraw();
+						};
+						const show = () => {
+							if (row.type === "check" || row.type === "text") {
+								readout.textContent = "";
+								return;
+							}
+							if (row.type === "select") {
+								readout.textContent = "";
+								return;
+							}
+							const v = knobs[row.key];
+							readout.textContent =
+								(row.decimals ? v.toFixed(row.decimals) : String(v)) +
+								(row.unit || "");
+						};
+						input.addEventListener("input", commit);
+						input.addEventListener("change", commit);
+						show();
+						set.append(wrap);
+						rows.set(row.key, { row, input, show });
+					}
+					host.append(set);
+				}
+
+				const note = document.createElement("p");
+				note.className = "note";
+				note.textContent =
+					"Cut across and Cut along take the far corner off the block " +
+					"so the passages can be looked into. Draw · void turns the " +
+					"world inside out and draws the caves as the solid, which is " +
+					"the only view that shows a network from outside it.";
+				host.append(note);
+			}
+
+			let pending = 0;
+			function askForRedraw() {
+				if (pending) return;
+				pending = requestAnimationFrame(() => {
+					pending = 0;
+					redraw();
+				});
+			}
+
+			function percent(part, whole) {
+				return whole ? ((100 * part) / whole).toFixed(1) + "%" : "0%";
+			}
+
+			function redraw() {
+				const k = knobs;
+				const world = build(k);
+				const m = measure(world, k);
+				const meshStarted = performance.now();
+				const verts = upload(world, k);
+				const meshMillis = performance.now() - meshStarted;
+
+				drawPlan(world, k);
+				render();
+				writeUrl();
+
+				const across = (world.n - 1) * world.d;
+				const deep = world.layers * world.d;
+				const perColumn = m.withCaves / m.columns;
+				const bare = m.without / m.columns;
+				const narrow = m.medianWidth < 2;
+				facts.innerHTML =
+					`<div><b>${Math.round(across)} × ${Math.round(across)} m</b> of ground, ` +
+					`<b>${Math.round(deep)} m</b> of crust, ${m.columns.toLocaleString()} columns</div>` +
+					`<div>passage in <b>${percent(m.caveColumns, m.columns)}</b> of columns · ` +
+					`${m.caveCells.toLocaleString()} cave blocks</div>` +
+					`<div class="${narrow ? "warn" : ""}">narrowest way through, median ` +
+					`<b>${m.medianWidth} cell${m.medianWidth === 1 ? "" : "s"}</b>` +
+					` · ${percent(Math.round(m.thinShare * m.caveColumns), m.caveColumns)} of it one cell</div>` +
+					`<div>separate systems <b>${m.systems.toLocaleString()}</b> · ` +
+					`largest holds <b>${percent(m.largest, m.caveCells)}</b> · ` +
+					`half the void is in the biggest <b>${m.half}</b></div>` +
+					`<div>mouths at the surface <b>${m.mouths}</b> · ` +
+					`columns with more than one span <b>${percent(m.multiSpan, m.columns)}</b></div>` +
+					`<div>faces per column <b>${perColumn.toFixed(1)}</b> against ` +
+					`<b>${bare.toFixed(1)}</b> with no caves — <b>×${(perColumn / (bare || 1)).toFixed(2)}</b></div>` +
+					`<div>${(verts / 3).toLocaleString()} triangles · generate ` +
+					`${world.millis.toFixed(0)} ms · mesh ${meshMillis.toFixed(0)} ms</div>`;
+			}
+
+			// ---- the link, so a world that looked right can be handed over ----
+			function writeUrl() {
+				const params = new URLSearchParams();
+				for (const group of KNOBS)
+					for (const row of group.rows) {
+						const v = knobs[row.key];
+						params.set(row.key, typeof v === "boolean" ? (v ? "1" : "0") : v);
+					}
+				history.replaceState(null, "", "?" + params.toString());
+			}
+
+			function fromUrl() {
+				const params = new URLSearchParams(location.search);
+				if (![...params.keys()].length) return;
+				for (const group of KNOBS)
+					for (const row of group.rows) {
+						if (!params.has(row.key)) continue;
+						const raw = params.get(row.key);
+						if (row.type === "check") knobs[row.key] = raw === "1";
+						else if (row.type === "select" || row.type === "text")
+							knobs[row.key] = raw;
+						else if (Number.isFinite(Number(raw)))
+							knobs[row.key] = Number(raw);
+					}
+			}
+
+			fromUrl();
+			buildPanel();
+			redraw();
+		</script>
+	</body>
+</html>
