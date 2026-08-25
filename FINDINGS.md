@@ -10,6 +10,38 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-079 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-25, while putting the readout behind a button in the corner
+**Where:** `packages/client/src/planet.css`, the palette at `:root`
+
+**What happens.** The palette reads `--bad: var(--bad);`. A custom property
+whose value names itself is invalid at computed-value time, so it resolves to
+nothing and every declaration reading it falls back. Measured in the browser
+against a `div` given both: `color: var(--bad)` computes to
+`rgb(232, 236, 242)`, which is the same as an element given no colour at all,
+and `border-left: 2px solid var(--bad)` computes to `none` at `0px`. The
+sibling `--warn` resolves to `rgb(255, 180, 84)` in the same page, so this is
+one entry and not the whole palette.
+
+**Why it matters.** The two readers are `.knobs-problems p` and
+`.knobs-problems.some`, which are how the parameter panel says a world cannot
+be built — a crust too shallow for its own sea, a map too coarse for its
+narrowest octave. Both are drawn as ordinary body text with no left bar, so a
+refusal looks like a sentence somebody added rather than a stop, and the
+`some` class marks nothing. Every other state in the panel has a colour that
+says what it is: amber for a knob pulled to a wall, green for a toggle that is
+on.
+
+**What would fix it.** One literal in the palette. The value is a decision
+rather than a lookup — the other four are hand-picked against this blue-grey
+— so it wants an eye on it beside `--warn`'s amber and `--good`'s green rather
+than a red taken from anywhere.
+
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 
 **Kind:** risk
