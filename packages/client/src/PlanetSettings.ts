@@ -636,6 +636,18 @@ export interface PlanetKnobs {
 	skyShading: number;
 
 	/**
+	 * What the sky's own ambient light is worth on a surface.
+	 *
+	 * A different knob from **Sky brightness** under **The air**, which is
+	 * how bright the marched atmosphere itself reads. This is the ground's
+	 * own ambient term -- what is left lighting the world once the sun goes
+	 * to `0` -- and nothing before it could turn that down at all. `1` is
+	 * the ambient share the ground shader's own `SUN_SHARE` describes; the
+	 * floor a face keeps after dark and the sea are both untouched by it.
+	 */
+	skyStrength: number;
+
+	/**
 	 * How much light the moon throws on the ground.
 	 *
 	 * It is the only thing with a direction after dark, so at `0` every face
@@ -841,6 +853,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadowReach: 4000,
 	sunStrength: 1,
 	skyShading: 1,
+	skyStrength: 1,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -1183,6 +1196,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	skyShading: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },

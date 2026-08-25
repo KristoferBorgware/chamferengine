@@ -20,6 +20,7 @@ const FRAME: Frame = {
 	nightLight: 0.09,
 	sunLight: 1,
 	skyShading: 1,
+	skyLight: 1,
 	moon: [0, -1, 0],
 	moonLight: 0.16,
 	exposure: 1,

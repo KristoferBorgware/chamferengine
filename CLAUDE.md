@@ -1971,6 +1971,17 @@ Violating any of these breaks the design. They are not tunable.
   with the sun, air, clouds and both ground shadows off: the terrain band's
   mean moves **38.3 to 40.1** turning it off, 95th percentile of the ratio
   **1.000**, 5th **0.727** -- it only ever brightens a face.
+- **THE AMBIENT TERM ITSELF HAD NO BRIGHTNESS KNOB, DISTINCT FROM SKY
+  SHADING** (`Frame.skyLight`, `frame.sky.w`, doc 16). Zeroing `sunLight` and
+  `skyShading` together still leaves a flat, uniform ambient light with
+  nothing to turn it down -- `ambient` in `fromSky` is a fixed share of
+  `SUN_SHARE`, never a knob. **Also distinct from the atmosphere's own Sky
+  brightness** (`skyIntensity`), which is how bright the marched sky dome
+  reads and which the ground's sun term never read either -- the same gap
+  Sunlight closed for the direct term, now closed for the ambient one.
+  **Ambient light** is a plain multiplier on `fromSky` alone, leaving the
+  after-dark floor and the sea untouched. Measured with the sun and air off:
+  `1` against `0.2` moves a terrain band's mean **113.6 to 87.8**.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
   The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
   shipped planet -- and the world opens with the camera **`1,100 m` up**,

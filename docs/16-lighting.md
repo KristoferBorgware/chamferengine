@@ -376,6 +376,27 @@ so what is left moving is `exposure` and each block's own colour.
 > at **1.000** and the 5th at **0.727** — it only ever brightens a face,
 > never darkens one, which is what removing a darkening term should do.
 
+### The ambient term itself had no brightness knob at all
+
+**Sunlight** at `0` and **Sky shading** at `0` together leave a flat,
+uniform ambient light and nothing to turn it down with — the ambient term's
+own brightness, `ambient` in `fromSky`, was a fixed share of the ground
+shader's `SUN_SHARE` constant, not a knob at any point in the chain. That is
+a different brightness from the atmosphere's own **Sky brightness** under
+**The air**: that knob is how bright the marched sky dome reads, and the
+ground's sun term never reads it either, which is the gap **Sunlight**
+closed for the direct term.
+
+**Ambient light** is the multiplier that was missing. `1` is the ambient
+share as `SUN_SHARE` describes it; it scales `fromSky` alone, leaving the
+floor a face keeps after dark and the sea untouched, so a world with the sun
+and the sky both turned down goes dark rather than flat-and-lit.
+
+> **[measured]** The same view as above, sun and air off. Over the terrain
+> band, excluding near-black pixels, the mean brightness moves **113.6 to
+> 87.8** taking **Ambient light** from `1` to `0.2` — a mean per-pixel move
+> of **35.6**.
+
 ### Day length is a gameplay dial, and it has a natural anchor
 
 The terminator sweeps at `circumference / dayLength`.
@@ -745,6 +766,11 @@ happened to land in — which is exactly what a sun does as a camera turns.
   turning it off moves a terrain band's mean **38.3 to 40.1** with the 95th
   percentile of the ratio at **1.000** and the 5th at **0.727** -- it only
   ever brightens a face.
+- **The ambient term itself had no brightness knob**, which is a different
+  gap from the one Sunlight closed. Ambient light is a plain multiplier on
+  `fromSky` alone; taking it from `1` to `0.2` with the sun off moves a
+  terrain band's mean **113.6 to 87.8**, and the floor a face keeps after
+  dark is untouched.
 - **Damping the moiré is not the same as sampling it**, so the world can be
   drawn larger than the canvas and averaged back by the tone pass. At a scale
   of 2 the mean jump from one pixel to the next across the distant band falls

@@ -649,6 +649,16 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				// The ground's own ambient term -- what is still lighting a
+				// face once the sun is at 0 -- and a different knob from
+				// **Sky brightness** under **The air**, which is the marched
+				// atmosphere's own brightness rather than this.
+				key: "skyStrength",
+				label: "Ambient light",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				// The one term that can still look directional with the sun
 				// off: a face's own angle to the sky, not to the sun. Zero
 				// gives every face the open-sky reading and stops it varying
