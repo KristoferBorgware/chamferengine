@@ -1934,7 +1934,14 @@ Violating any of these breaks the design. They are not tunable.
   0.35 it was, and that costs a surface frame's mean **136.0 against 136.1** of
   255, a mean per-pixel move of 3.08 -- the floor only reaches a cell shut in
   on every side. **Sky exposure** switches the term off entirely, which is the
-  only way to see what you dug.
+  only way to see what you dug. **A baked knob has to be in the panel's remesh
+  set or it does nothing at all** (`REMESH_KNOBS`): `touch` routes a
+  `rebuilds` knob to a live rebuild only for a key in that set, and a knob left
+  out of it marks the world dirty and changes no frame until a full reload --
+  which reads as a switch that is simply broken. It is a set of its own rather
+  than `LIVE_TERRAIN_KNOBS`, because `WORLD_SHAPE_KNOBS` spreads that one and
+  a world's stored edits are named by it: a shading knob joining it would file
+  a player's buildings under a different world every time it was turned.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

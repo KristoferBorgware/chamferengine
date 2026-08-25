@@ -952,6 +952,26 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
+ * The knobs a live rebuild can show, which is every one needing the chunks
+ * meshed again.
+ *
+ * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving. The rest here leave
+ * every block exactly where it was and still need the same work, because what
+ * they change is **baked into the mesh** rather than read by a shader -- so
+ * nothing on screen moves until each chunk is built again.
+ *
+ * **They are deliberately not in `LIVE_TERRAIN_KNOBS` itself**, which
+ * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
+ * set, so a shading knob joining it would file a player's buildings under a
+ * different world every time it was turned.
+ */
+export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	...LIVE_TERRAIN_KNOBS,
+	"ambientOcclusion",
+	"skyExposure",
+] satisfies (keyof PlanetKnobs)[]);
+
+/**
  * The knobs that decide where a cell is or what block sits there.
  *
  * A world's stored edits are named by these, so a change to any of them is a
