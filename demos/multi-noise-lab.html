@@ -72,15 +72,11 @@
 				margin: 0 0 6px;
 				letter-spacing: 0.01em;
 			}
-			/* **The three fields and what they make, all four at once.** The
-			   whole point of the construction is that one field cannot say what
-			   three can, and a picture selector shows one at a time -- which
-			   hides exactly the comparison the page is about. */
-			#pictures {
-				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 5px;
-			}
+			/* **A picture of a field sits where that field is tuned.** The
+			   ground they make together is the thing being judged, so it stays
+			   at the top where scrolling to reach a knob cannot carry it off;
+			   each layer's own field goes in that layer's section, directly
+			   above the curve it is read through. */
 			.shot {
 				position: relative;
 				line-height: 0;
@@ -115,6 +111,54 @@
 			}
 			.shot.out b {
 				background: var(--live);
+			}
+			.knob.pictured {
+				grid-template-columns: 1fr;
+				margin: 9px 0 4px;
+			}
+			/* The enlarged picture. A field at panel width shows where its
+			   features are; at this size it shows what they look like. */
+			#big {
+				position: fixed;
+				inset: 0;
+				z-index: 10;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(4, 6, 9, 0.88);
+				backdrop-filter: blur(3px);
+				cursor: zoom-out;
+			}
+			#big[hidden] {
+				display: none;
+			}
+			#big figure {
+				margin: 0;
+				max-width: 94vw;
+				max-height: 94vh;
+			}
+			#big canvas {
+				display: block;
+				max-width: 94vw;
+				max-height: 86vh;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+			}
+			#big figcaption {
+				display: flex;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 16px;
+				margin-top: 8px;
+				font-size: 12px;
+				color: var(--dim);
+			}
+			#big figcaption b {
+				color: var(--ink);
+				font-size: 13px;
+				letter-spacing: 0.02em;
 			}
 			#facts {
 				color: var(--dim);
@@ -248,6 +292,7 @@
 			.axis {
 				display: flex;
 				justify-content: space-between;
+				gap: 8px;
 				font-size: 9.5px;
 				color: var(--dim);
 				margin: 1px 0 0;
@@ -288,18 +333,20 @@
 		<div id="panel">
 			<div id="head">
 				<h1>Multi-noise lab</h1>
-				<div id="pictures">
-					<div class="shot cont"><canvas id="shotCont"></canvas><b>Continentalness</b></div>
-					<div class="shot ero"><canvas id="shotEro"></canvas><b>Erosion</b></div>
-					<div class="shot pv"><canvas id="shotPv"></canvas><b>Peaks &amp; valleys</b></div>
-					<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
-				</div>
+				<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
 				<div id="recipe"></div>
 				<div id="facts"></div>
 			</div>
 			<div id="scroller">
 				<div id="knobs"></div>
 			</div>
+		</div>
+
+		<div id="big" hidden>
+			<figure>
+				<canvas id="bigShot"></canvas>
+				<figcaption><b id="bigName"></b><span>click anywhere, or press Escape, to close</span></figcaption>
+			</figure>
 		</div>
 
 		<script>
@@ -1011,15 +1058,10 @@
 			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337 };
 
 			/**
-			 * `blockSize = K * radius / 2^depth`, so a depth and a radius fix the
-			 * spacing between two cells and there is nothing left to round.
+			 * `blockSize = K * radius / 2^depth`, which ties the three together
+			 * so any two fix the third.
 			 */
 			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
-
-			/** How wide one hexagon is, centre to centre, in metres. */
-			function cellMetres(k) {
-				return (CELL_CONSTANT * k.radius) / 2 ** k.subdivisionDepth;
-			}
 
 			/**
 			 * One layer's noise stack, read off that layer's own rows.
@@ -1038,7 +1080,14 @@
 			 */
 			function layerSettings(k, which) {
 				return {
-					frequency: k.radius / Math.max(1, k[which + "Feature"]),
+					// **A layer is set in metres and the noise takes a
+					// frequency.** The sample point is a unit direction, so a
+					// frequency counts how many times the widest octave repeats
+					// across the whole planet: the same number is hills on one
+					// world and continents on another. Metres divided by the
+					// radius reach the frequency, and the number a person sets
+					// then means the same thing whatever size the planet is.
+					frequency: k.radius / k[which + "Metres"],
 					octaves: k[which + "Octaves"],
 					persistence: k[which + "Persistence"],
 					lacunarity: k[which + "Lacunarity"],
@@ -1122,23 +1171,41 @@
 			 * what they *are*. A layer given a row its neighbours do not have
 			 * would be a fourth idea smuggled into a comparison of three.
 			 */
-			function layerRows(which, feature, low, high, octaves, fold) {
+			function layerRows(which, feature, scale, octaves, fold) {
 				return [
 					{
+						// **A size in metres, because a frequency is a number
+						// about a sphere and a landform is a thing on the
+						// ground.** The coarse slider carries the decade and the
+						// fine one picks the value inside it, since one slider
+						// cannot hold a hundred metres and a hundred kilometres
+						// at a resolution anybody can drag.
 						key: which + "Feature",
 						label: "Feature",
-						low,
-						high,
-						step: (high - low) / 100,
+						low: 100,
+						high: 1000,
+						step: 10,
 						value: feature,
 						digits: 0,
 						unit: "m",
+					},
+					{
+						key: which + "FeatureScale",
+						label: "Feature scale",
+						low: 1,
+						high: 100,
+						step: 1,
+						value: scale,
+						digits: 0,
+						unit: "x",
 						note: () =>
 							field
-								? `narrowest octave <b>${Math.round(
+								? `widest <b>${Math.round(
+										featureMetres(which),
+									).toLocaleString()} m</b>, narrowest <b>${Math.round(
 										narrowestOf(which),
-									).toLocaleString()} m</b>, ` +
-									`<b>${(narrowestOf(which) / field.cellMetres).toFixed(1)}</b> cells wide`
+									).toLocaleString()} m</b> = ` +
+									`<b>${(narrowestOf(which) / field.cellMetres).toFixed(1)}</b> map cells`
 								: "",
 					},
 					{
@@ -1181,6 +1248,10 @@
 							"0 is the plain sum, bit for bit; 1 creases every octave " +
 							"at its own zero crossing",
 					},
+					// The layer's own field, drawn where it is being tuned
+					// rather than at the top of the panel -- a picture of what a
+					// knob does belongs beside the knob. Click it for a large one.
+					{ key: which + "Picture", label: "", type: "picture", value: 0 },
 				];
 			}
 
@@ -1191,31 +1262,52 @@
 					rows: [
 						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
 						{
-							key: "radius",
-							label: "Radius",
-							low: 400,
-							high: 8000,
-							step: 100,
-							value: 1700,
-							digits: 0,
-							unit: "m",
-						},
-						{
-							// Depth and radius fix the spacing, so this row is
-							// how wide a hexagon is and the readout says so in
-							// metres. A cell size cannot be asked for directly:
-							// it is quantised to powers of two, and a slider for
-							// it would have positions that build the same world.
+							// **Depth and block size fix the radius**, so the
+							// radius is not a knob: it is quantised to powers of
+							// two, and a slider for it would have positions that
+							// build the same planet.
 							key: "subdivisionDepth",
 							label: "Subdivision depth",
-							low: 4,
-							high: 12,
+							low: 6,
+							high: 15,
 							step: 1,
-							value: 7,
+							value: 13,
 							digits: 0,
 							note: () =>
 								field
-									? `one hexagon is <b>${field.cellMetres.toFixed(1)} m</b> across`
+									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
+										`<b>${Math.round(2 * Math.PI * field.k.radius).toLocaleString()} m</b> around`
+									: "",
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.5,
+							high: 4,
+							step: 0.25,
+							value: 1,
+							digits: 2,
+							unit: "m",
+						},
+						{
+							// **The map is the terrain.** The engine reads a
+							// height off one cell of a coarse map and adds
+							// nothing, so this is the resolution the ground is
+							// actually built at, and the hexagons of the patch
+							// are those cells.
+							key: "coarseSpacing",
+							label: "Map cell",
+							low: 4,
+							high: 128,
+							step: 4,
+							value: 32,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `level <b>${field.k.level}</b>, which gives ` +
+										`<b>${field.cellMetres.toFixed(1)} m</b> and ` +
+										`<b>${(10 * 4 ** field.k.level + 2).toLocaleString()}</b> cells on the planet`
 									: "",
 						},
 						{
@@ -1226,7 +1318,7 @@
 							step: 8,
 							value: 64,
 							digits: 0,
-							unit: "cells across",
+							unit: "map cells across",
 							note: () =>
 								field
 									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
@@ -1239,7 +1331,7 @@
 							low: -85,
 							high: 85,
 							step: 1,
-							value: -14,
+							value: 3,
 							digits: 0,
 							unit: "°",
 						},
@@ -1249,7 +1341,7 @@
 							low: -180,
 							high: 180,
 							step: 1,
-							value: -124,
+							value: 126,
 							digits: 0,
 							unit: "°",
 						},
@@ -1260,7 +1352,7 @@
 					tint: "cont",
 					open: true,
 					rows: [
-						...layerRows("cont", 1400, 400, 8000, 3, 0),
+						...layerRows("cont", 600, 10, 3, 0),
 						{
 							key: "contSpline",
 							label: "Continentalness → the level here",
@@ -1270,12 +1362,13 @@
 							// the curve is one long fade and every shoreline on
 							// the planet is a beach a kilometre wide.
 							value: [
-								[-1, 0.02],
-								[-0.28, 0.1],
-								[0.02, 0.21],
-								[0.12, 0.3],
-								[0.28, 0.44],
-								[0.5, 0.72],
+								[-1, 0],
+								[-0.34, 0.06],
+								[-0.06, 0.18],
+								[0.06, 0.2],
+								[0.1, 0.36],
+								[0.26, 0.52],
+								[0.46, 0.78],
 								[1, 1],
 							],
 						},
@@ -1286,7 +1379,7 @@
 					tint: "ero",
 					open: true,
 					rows: [
-						...layerRows("ero", 1800, 400, 8000, 4, 0),
+						...layerRows("ero", 750, 10, 4, 0),
 						{
 							key: "eroSpline",
 							label: "Erosion → how much relief survives",
@@ -1315,7 +1408,7 @@
 						// is a crease and the only place a crease comes from is
 						// an absolute value. Folding either of the other two
 						// creases the coast of every continent instead.
-						...layerRows("pv", 400, 60, 3000, 4, 0.85),
+						...layerRows("pv", 600, 1, 4, 0.85),
 						{
 							key: "pvSpline",
 							label: "Peaks & valleys → the relief itself",
@@ -1341,9 +1434,9 @@
 							key: "relief",
 							label: "Relief",
 							low: 100,
-							high: 2000,
+							high: 3000,
 							step: 20,
-							value: 900,
+							value: 1400,
 							digits: 0,
 							unit: "m",
 							note: () =>
@@ -1354,9 +1447,9 @@
 							key: "seaDepth",
 							label: "Sea depth",
 							low: 0,
-							high: 1200,
+							high: 2000,
 							step: 20,
-							value: 340,
+							value: 600,
 							digits: 0,
 							unit: "m",
 							note: () => "the bottom of the same curve",
@@ -1367,7 +1460,7 @@
 							low: 0,
 							high: 1500,
 							step: 10,
-							value: 420,
+							value: 350,
 							digits: 0,
 							unit: "m",
 							note: () =>
@@ -1381,8 +1474,8 @@
 						{
 							key: "seaLevel",
 							label: "Sea level",
-							low: -400,
-							high: 400,
+							low: -800,
+							high: 800,
 							step: 5,
 							value: 0,
 							digits: 0,
@@ -1476,20 +1569,113 @@
 				return knobs[key];
 			}
 
-			/** Every knob in one object, which is what the field is generated from. */
+			/** Metres across a layer's widest octave, which is what its two rows set. */
+			function featureMetres(which) {
+				return Math.max(
+					1,
+					knobs[which + "Feature"] * knobs[which + "FeatureScale"],
+				);
+			}
+
+			/**
+			 * Metres across a layer's narrowest octave.
+			 *
+			 * Each octave is `Step between octaves` times narrower than the one
+			 * above it, so the last is the widest divided by that step to the
+			 * power of one less than the count. **This is the number the map has
+			 * to be fine enough to draw**: ground the map cannot carry is ground
+			 * the world does not have.
+			 */
+			function narrowestOf(which) {
+				return (
+					featureMetres(which) /
+					knobs[which + "Lacunarity"] ** (knobs[which + "Octaves"] - 1)
+				);
+			}
+
+			/**
+			 * What the knobs come to, in the units the engine states them in.
+			 *
+			 * **Depth and block size fix the radius**, and the map cell picks the
+			 * level nearest the spacing asked for -- then the cell is whatever
+			 * that level actually gives, because a level is a whole number and a
+			 * spacing is not.
+			 */
 			function derived() {
 				const k = {};
 				for (const key of ROWS.keys()) k[key] = knobs[key];
-				k.cellMetres = cellMetres(k);
+				k.radius =
+					(knobs.blockSize * 2 ** knobs.subdivisionDepth) / CELL_CONSTANT;
+				k.level = Math.max(
+					2,
+					Math.min(
+						knobs.subdivisionDepth,
+						9,
+						Math.max(
+							0,
+							Math.round(
+								Math.log2((CELL_CONSTANT * k.radius) / knobs.coarseSpacing),
+							),
+						),
+					),
+				);
+				k.cellMetres = (CELL_CONSTANT * k.radius) / 2 ** k.level;
+				for (const which of LAYERS) k[which + "Metres"] = featureMetres(which);
 				return k;
 			}
 
-			/** The narrowest octave a layer reaches, in metres. */
-			function narrowestOf(which) {
-				return (
-					knobs[which + "Feature"] /
-					knobs[which + "Lacunarity"] ** (knobs[which + "Octaves"] - 1)
-				);
+			/**
+			 * A knob's own ends, narrowed by the rest of the draft.
+			 *
+			 * **A slider that cannot be moved into a refusal beats a refusal that
+			 * explains itself.** The world is the map, so an octave narrower than
+			 * a map cell is ground the map cannot carry and the world would not
+			 * build. Rather than let a slider reach that and then complain, the
+			 * slider's own end moves. The narrowing only ever moves an end
+			 * inward.
+			 */
+			function liveRange(row) {
+				// The sea can be drained and no further: below the bottom of the
+				// continentalness curve there is no ocean left to take away.
+				if (row.key === "seaLevel")
+					return { ...row, low: Math.max(row.low, -knobs.seaDepth) };
+				const layer = LAYERS.find((l) => row.key.startsWith(l));
+				if (!layer) return row;
+				const what = row.key.slice(layer.length);
+				if (what !== "Octaves" && what !== "FeatureScale") return row;
+				const cell = derived().cellMetres;
+				if (what === "FeatureScale") {
+					// Even one octave has to be two map cells wide, and the fine
+					// slider reaches its own bottom, so the coarse one starts
+					// where their product does.
+					const least = (2 * cell) / knobs[layer + "Feature"];
+					return {
+						...row,
+						low: Math.min(row.high, Math.max(row.low, Math.ceil(least))),
+					};
+				}
+				// Each octave is narrower by the step, so the count stops where
+				// the narrowest one is still two map cells across.
+				const room =
+					1 +
+					Math.floor(
+						Math.log(featureMetres(layer) / (2 * cell)) /
+							Math.log(knobs[layer + "Lacunarity"]),
+					);
+				return { ...row, high: Math.max(row.low, Math.min(row.high, room)) };
+			}
+
+			/** Pull every knob inside its own narrowed ends, inward only. */
+			function settle() {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						if (r.digits === undefined || r.type) continue;
+						const live = liveRange(r);
+						knobs[r.key] = Math.min(
+							live.high,
+							Math.max(live.low, knobs[r.key]),
+						);
+					}
 			}
 
 			/** A latitude and a longitude, as a unit direction. */
@@ -1571,7 +1757,12 @@
 				// camera is standing over. `neighbour` is what walks, so a patch
 				// that reaches a face edge crosses it the way the engine does and
 				// a patch that reaches a pentagon gets a five-sided cell.
-				const n = 2 ** k.subdivisionDepth;
+				//
+				// **At the map's level, not the block's.** The map is the
+				// terrain -- the engine reads one height per map cell and adds
+				// nothing under it -- so a hexagon here is a map cell, which is
+				// what a map cell already is.
+				const n = 2 ** k.level;
 				const middle = directionOf(k.latitude, k.longitude);
 				// Canonicalised, because the walk keys every cell it reaches and
 				// a cell on a face edge has more than one name.
@@ -1698,16 +1889,23 @@
 				return { up, east, north: cross3(up, east) };
 			}
 
+			/**
+			 * The four pictures: one per field, and the ground they make.
+			 *
+			 * `layer` is which of the three readings a picture draws, or `-1` for
+			 * the ground. The three field pictures live in their own layer's
+			 * section of the panel and the ground stays in the head, so the thing
+			 * being judged never scrolls away from the knob being turned.
+			 */
 			const SHOTS = [
-				{ id: "shotCont", layer: 0 },
-				{ id: "shotEro", layer: 1 },
-				{ id: "shotPv", layer: 2 },
-				{ id: "shotOut", layer: -1 },
+				{ id: "shotOut", key: "out", layer: -1, name: "Terrain" },
+				{ id: "shotCont", key: "cont", layer: 0, name: "Continentalness" },
+				{ id: "shotEro", key: "ero", layer: 1, name: "Erosion" },
+				{ id: "shotPv", key: "pv", layer: 2, name: "Peaks & valleys" },
 			];
-			for (const shot of SHOTS) {
-				shot.canvas = document.getElementById(shot.id);
-				shot.ctx = shot.canvas.getContext("2d");
-			}
+			const SHOT_OF = new Map(SHOTS.map((shot) => [shot.key, shot]));
+			SHOTS[0].canvas = document.getElementById("shotOut");
+			SHOTS[0].ctx = SHOTS[0].canvas.getContext("2d");
 
 			/** How many grey steps a layer picture is cut into. */
 			const PICTURE_BANDS = 9;
@@ -1743,14 +1941,10 @@
 				const over = metres - k.seaLevel;
 				if (over <= 0) {
 					const deep = Math.min(1, -over / Math.max(1, k.seaDepth));
-					return [
-						0.10 - 0.07 * deep,
-						0.16 - 0.12 * deep,
-						0.42 - 0.30 * deep,
-					];
+					return [0.1 - 0.07 * deep, 0.16 - 0.12 * deep, 0.42 - 0.3 * deep];
 				}
 				const t = Math.min(1, over / Math.max(1, k.relief + k.peakRelief));
-				const g = 0.34 + t * 0.62;
+				const g = 0.32 + t * 0.64;
 				const into = ((over / 100) % 1) * 100;
 				const edge = into < 6 ? 0.74 : 1;
 				return [g * 0.92 * edge, g * edge, g * 0.86 * edge];
@@ -1785,87 +1979,153 @@
 				]);
 			}
 
-			function drawPictures() {
-				if (!field) return;
+			/**
+			 * Paint some or all of the pictures into their own canvases.
+			 *
+			 * **One sampling pass, however many are wanted.** The three fields
+			 * come out of one call at each point and the ground is made of the
+			 * same three, so drawing four pictures costs what drawing one costs
+			 * plus the writing. `only` narrows it to a single picture at a size
+			 * of its own, which is what the enlarged view asks for.
+			 */
+			function paintShots(shots, wide, tall, only = null) {
 				const planet = knobs.show === "planet";
-				// Half the samples while a knob is moving, for the same reason
-				// the plane draws fewer cells: a picture that arrives after the
-				// finger has stopped is not a picture of the knob.
-				const wide = field.draft ? 96 : 192;
-				const tall = planet ? wide / 2 : wide;
 				const frame = planet ? null : frameOf(field.centre);
 				const half = field.span / 2;
 				const k = field.k;
 				const said = [0, 0, 0];
-
-				const pixels = SHOTS.map((shot) => {
-					if (shot.canvas.width !== wide || shot.canvas.height !== tall) {
-						shot.canvas.width = wide;
-						shot.canvas.height = tall;
+				const images = shots.map((shot) => {
+					const target = only ?? shot.canvas;
+					if (target.width !== wide || target.height !== tall) {
+						target.width = wide;
+						target.height = tall;
 					}
-					return shot.ctx.createImageData(wide, tall);
+					return (only ? bigCtx : shot.ctx).createImageData(wide, tall);
 				});
-
+				const wantsAll = shots.some((shot) => shot.layer < 0);
 				for (let r = 0; r < tall; r++)
 					for (let q = 0; q < wide; q++) {
-						const p = pictureDirection(
-							q,
-							r,
-							wide,
-							tall,
-							frame,
-							half,
-							k.radius,
-						);
-						fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
+						// A single field picture reads one stack rather than
+						// three, which is three times less work for the
+						// enlarged view of a layer.
+						if (wantsAll || shots.length > 1)
+							fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						else
+							said[shots[0].layer] = octaveNoise(
+								p[0],
+								p[1],
+								p[2],
+								field.seed + SEED_OFFSET[shots[0].key],
+								field.s[shots[0].key],
+							);
 						const at = (r * wide + q) * 4;
-						for (let x = 0; x < 4; x++) {
+						for (let n = 0; n < shots.length; n++) {
+							const shot = shots[n];
 							const c =
-								x === 3
+								shot.layer < 0
 									? groundColor(heightFrom(said, k), k)
-									: bandGrey(said[x]);
-							const px = pixels[x].data;
+									: bandGrey(said[shot.layer]);
+							const px = images[n].data;
 							px[at] = c[0] * 255;
 							px[at + 1] = c[1] * 255;
 							px[at + 2] = c[2] * 255;
 							px[at + 3] = 255;
 						}
 					}
-
-				for (let x = 0; x < 4; x++) {
-					SHOTS[x].ctx.putImageData(pixels[x], 0, 0);
-					if (!planet) continue;
-					// Where the plane is standing, so the pictures and the ground
-					// are one place rather than five.
-					const lat = (knobs.latitude * Math.PI) / 180;
-					const across =
-						field.span / k.radius / Math.max(0.15, Math.cos(lat));
-					const box = {
-						x:
-							((knobs.longitude + 180) / 360) * wide -
-							(across / (4 * Math.PI)) * wide,
-						y:
-							(0.5 - knobs.latitude / 180) * tall -
-							(field.span / k.radius / (2 * Math.PI)) * tall,
-						w: Math.max(3, (across / (2 * Math.PI)) * wide),
-						h: Math.max(3, (field.span / k.radius / Math.PI) * tall),
-					};
-					const g = SHOTS[x].ctx;
-					g.strokeStyle = "rgba(255, 90, 90, 0.95)";
-					g.lineWidth = 1;
-					g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+				for (let n = 0; n < shots.length; n++) {
+					const g = only ? bigCtx : shots[n].ctx;
+					g.putImageData(images[n], 0, 0);
+					if (planet) outlinePatch(g, wide, tall);
 				}
 			}
 
+			/** Where the plane is standing, drawn on a picture of the planet. */
+			function outlinePatch(g, wide, tall) {
+				const k = field.k;
+				const lat = (knobs.latitude * Math.PI) / 180;
+				const across = field.span / k.radius / Math.max(0.15, Math.cos(lat));
+				const down = field.span / k.radius;
+				const box = {
+					x:
+						((knobs.longitude + 180) / 360) * wide -
+						(across / (4 * Math.PI)) * wide,
+					y: (0.5 - knobs.latitude / 180) * tall - (down / (2 * Math.PI)) * tall,
+					w: Math.max(3, (across / (2 * Math.PI)) * wide),
+					h: Math.max(3, (down / Math.PI) * tall),
+				};
+				g.strokeStyle = "rgba(255, 90, 90, 0.95)";
+				g.lineWidth = 1;
+				g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+			}
+
+			function drawPictures() {
+				if (!field) return;
+				const ready = SHOTS.filter((shot) => shot.ctx);
+				if (ready.length === 0) return;
+				// Half the samples while a knob is moving, for the same reason
+				// the plane draws fewer cells: a picture that arrives after the
+				// finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 156 : 312;
+				paintShots(ready, wide, knobs.show === "planet" ? wide / 2 : wide);
+				// The large one is a thousand pixels across and follows the
+				// knobs, but only once they have settled -- redrawing it every
+				// frame of a drag would cost more than everything else here put
+				// together.
+				if (!field.draft && !big.hidden && bigShown) drawBig(bigShown);
+			}
+
+			// ---------------------------------------------------------------
+			// The enlarged picture.
+			// ---------------------------------------------------------------
+
+			const big = document.getElementById("big");
+			const bigCanvas = document.getElementById("bigShot");
+			const bigCtx = bigCanvas.getContext("2d");
+			const bigName = document.getElementById("bigName");
+			let bigShown = null;
+
 			/**
-			 * **A latitude and a longitude are a place, and two sliders are not
-			 * a way to look for one.** Clicking a planet picture puts the patch
-			 * where the finger went: the projection is longitude across and
-			 * latitude down, so it inverts to two divisions.
+			 * One picture, large.
+			 *
+			 * **A field at panel width says where its features are; at this size
+			 * it says what they look like.** The narrow octaves of a folded field
+			 * are a grain at 312 pixels and ridges at 1,024, and which of those a
+			 * curve is being dragged against is the whole question.
 			 */
-			for (const shot of SHOTS)
+			function drawBig(shot) {
+				if (!field) return;
+				bigShown = shot;
+				const planet = knobs.show === "planet";
+				const wide = planet ? 1024 : 720;
+				bigName.textContent = `${shot.name} · ${
+					planet
+						? "the whole planet"
+						: `${Math.round(field.span).toLocaleString()} m of ground`
+				}`;
+				big.hidden = false;
+				paintShots([shot], wide, planet ? wide / 2 : wide, bigCanvas);
+			}
+
+			function closeBig() {
+				big.hidden = true;
+				bigShown = null;
+			}
+			big.addEventListener("click", closeBig);
+			window.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") closeBig();
+			});
+
+			/**
+			 * **A latitude and a longitude are a place, and two sliders are not a
+			 * way to look for one.** Clicking a picture of the planet puts the
+			 * patch where the finger went: the projection is longitude across and
+			 * latitude down, so it inverts to two divisions. Over the patch there
+			 * is nowhere to jump to, so a click enlarges instead.
+			 */
+			function watchShot(shot) {
 				shot.canvas.addEventListener("click", (e) => {
-					if (knobs.show !== "planet") return;
+					if (knobs.show !== "planet") return drawBig(shot);
 					const box = shot.canvas.getBoundingClientRect();
 					const across = (e.clientX - box.left) / box.width;
 					const down = (e.clientY - box.top) / box.height;
@@ -1877,6 +2137,17 @@
 					);
 					askForRedraw(false);
 				});
+				// Over the planet a click already means "go there", so the large
+				// view is on a second button rather than fighting it.
+				shot.canvas.addEventListener("contextmenu", (e) => {
+					e.preventDefault();
+					drawBig(shot);
+				});
+				shot.canvas.title =
+					"click to enlarge, or to move the patch when the pictures show the planet " +
+					"(right-click always enlarges)";
+			}
+			watchShot(SHOTS[0]);
 
 			// ---------------------------------------------------------------
 			// The plane: the patch as hexagon columns.
@@ -1929,8 +2200,8 @@
 				} else {
 					float t = clamp(over / max(1.0, reach), 0.0, 1.0);
 					tint = mix(vec3(0.24, 0.42, 0.19), vec3(0.46, 0.46, 0.48),
-						smoothstep(0.18, 0.45, t));
-					tint = mix(tint, vec3(0.94, 0.95, 0.98), smoothstep(0.58, 0.85, t));
+						smoothstep(0.28, 0.58, t));
+					tint = mix(tint, vec3(0.94, 0.95, 0.98), smoothstep(0.70, 0.94, t));
 				}
 				color = vec4(pow(tint * lit, vec3(1.0 / 2.2)), 1.0);
 			}`;
@@ -2111,7 +2382,13 @@
 					}
 				};
 
-				const floor = field.lowest - field.span * 0.05;
+				// **The rim is a lip, not a plinth.** Run it down to one floor
+				// under the lowest ground and a patch with a kilometre of relief
+				// becomes a slab whose cut face is taller than the terrain on
+				// top of it, which is what the eye then sees from any low angle.
+				// Hung a fixed depth under each rim cell instead, the block reads
+				// as ground with an edge.
+				const lip = field.span * 0.06;
 				for (let c = 0; c < count; c++) {
 					const deg = degree[c];
 					const h = height[c];
@@ -2127,7 +2404,7 @@
 						// underside of the far side of the patch. The rim runs
 						// down to a floor under the lowest ground instead.
 						const rim = found < 0;
-						const below = rim ? floor : height[found];
+						const below = rim ? h - lip : height[found];
 						if (below >= h && !(rim && h < k.seaLevel)) continue;
 						// **The cut face of the block runs up to the waterline.**
 						// The sea is translucent, so a curtain of it hung against
@@ -2221,7 +2498,7 @@
 				}
 			}
 
-			const camera = { yaw: -0.7, pitch: 0.36, distance: 2.5, lift: 0 };
+			const camera = { yaw: -0.7, pitch: 0.5, distance: 2.2, lift: 0 };
 
 			function multiply(a, b) {
 				const out = new Float32Array(16);
@@ -2494,18 +2771,23 @@
 				return at >= 0 && at <= 1 ? at : null;
 			}
 
-			/** What a curve's own two ends mean, written under it. */
+			/**
+			 * What a curve's axes mean, written under it.
+			 *
+			 * **Across and up are different questions and must not be labelled
+			 * as though they were one.** Across is always the layer's own noise,
+			 * `-1` to `+1`; up is what that layer controls, and only the middle
+			 * label says what it is worth.
+			 */
 			function axisOf(key) {
 				if (key === "contSpline")
-					return [
-						`${Math.round(-knobs.seaDepth).toLocaleString()} m`,
-						`${Math.round(knobs.relief).toLocaleString()} m`,
-					];
-				if (key === "eroSpline") return ["no relief kept", "all of it"];
-				return [
-					`-${Math.round(knobs.peakRelief).toLocaleString()} m`,
-					`+${Math.round(knobs.peakRelief).toLocaleString()} m`,
-				];
+					return `up ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
+						knobs.relief,
+					).toLocaleString()} m`;
+				if (key === "eroSpline") return "up none of the relief to all of it";
+				return `up -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
+					knobs.peakRelief,
+				).toLocaleString()} m`;
 			}
 
 			function buildPanel() {
@@ -2526,6 +2808,22 @@
 						const label = document.createElement("label");
 						label.textContent = row.label;
 						let input;
+						if (row.type === "picture") {
+							// The layer's own field, in the layer's own section.
+							const shot = SHOT_OF.get(row.key.replace("Picture", ""));
+							wrap.className = "knob pictured";
+							const holder = document.createElement("div");
+							holder.className = "shot " + shot.key;
+							shot.canvas = document.createElement("canvas");
+							shot.ctx = shot.canvas.getContext("2d");
+							const name = document.createElement("b");
+							name.textContent = shot.name;
+							holder.append(shot.canvas, name);
+							wrap.append(holder);
+							set.append(wrap);
+							watchShot(shot);
+							continue;
+						}
 						if (row.type === "spline") {
 							wrap.className = "knob curved";
 							input = document.createElement("canvas");
@@ -2594,21 +2892,26 @@
 
 			function refreshPanel() {
 				for (const { row, readout, input, note, redraw, axis } of rows.values()) {
+					if (row.type === "picture") continue;
 					if (redraw) {
 						redraw();
-						const [low, high] = axisOf(row.key);
 						axis.textContent = "";
-						const a = document.createElement("span");
-						const b = document.createElement("span");
-						a.textContent = low;
-						b.textContent = high;
-						axis.append(a, b);
+						for (const text of ["-1", axisOf(row.key), "+1"]) {
+							const span = document.createElement("span");
+							span.textContent = text;
+							axis.append(span);
+						}
 						continue;
 					}
 					if (row.type === "select" || row.type === "text") {
 						input.value = knobs[row.key];
 						readout.textContent = "";
 					} else {
+						// The ends move with the rest of the draft, so a slider
+						// cannot be dragged into a world the map could not carry.
+						const live = liveRange(row);
+						input.min = live.low;
+						input.max = live.high;
 						input.value = knobs[row.key];
 						readout.textContent =
 							Number(knobs[row.key]).toFixed(row.digits ?? 2) +
@@ -2626,7 +2929,7 @@
 					`${Math.round(field.k.peakRelief).toLocaleString()} m`;
 				facts.innerHTML =
 					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
-					`<b>${field.count.toLocaleString()}</b> hexagons of ` +
+					`<b>${field.count.toLocaleString()}</b> map cells of ` +
 					`<b>${field.cellMetres.toFixed(1)} m</b> · ` +
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
@@ -2645,6 +2948,7 @@
 				requestAnimationFrame(() => {
 					pending = false;
 					const started = performance.now();
+					settle();
 					// A draft covers the same ground with fewer cells, so the
 					// hexagons grow as the count falls and the patch keeps its
 					// width -- a picture that arrives after the finger has
@@ -2705,6 +3009,7 @@
 			// The first draw goes through the same timed path every later one
 			// does, so the cost on screen is a real number from the start.
 			const booted = performance.now();
+			settle();
 			generate();
 			buildMesh();
 			drawPictures();
