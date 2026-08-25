@@ -1737,12 +1737,12 @@ the relief survives at that place, and peaks and valleys is the relief. Erosion
 field says there.
 
 Measured over the planet's own cells at level 6 with the lab's shipped knobs,
-the fraction of relief kept on land runs `0.08` at the tenth percentile, `0.51`
+the fraction of relief kept on land runs `0.10` at the tenth percentile, `0.54`
 at the median and `0.95` at the ninetieth. Two frames of one place with the
 erosion curve pinned to each end: at `0.02` the patch is a smooth continental
-ramp with a clean shoreline and no ridge on it, ground `-145` to `752 m`; at
-`1.0` it is ridges everywhere, `-342` to `1,028 m`. The land share moves from
-`38.8%` to `38.5%` across that, because erosion moves relief and not level.
+ramp with a clean shoreline and no ridge on it, ground `-387` to `881 m`; at
+`1.0` it is ridges everywhere, `-461` to `1,133 m`. The land share moves from
+`38.5%` to `38.4%` across that, because erosion moves relief and not level.
 
 **Why it matters.** The gated merge answers *may this place be mountain* with a
 yes or a no read off the terrain layer's own height, so how rough a place is and
@@ -1756,6 +1756,17 @@ the engine runs today, plus a third curve on the panel and in every stored
 world's identity. `volume.js` prices the height term against the density term
 and not against itself, so what a third layer costs per chunk is not measured.
 
+**It also takes a metre budget the two-layer merge does not.** Peaks and
+valleys is applied about the level continentalness set, so wherever the
+continent curve is shallower in metres than the peak height, the third field
+decides land-or-sea rather than relief and the coastline speckles. Measured on
+the lab's own world: with the continent curve spanning `771 m` over the range
+continentalness actually reaches and a peak of `420 m`, peaks flipped **7.8%**
+of the planet from what the continent said and **89.9%** of it sat within one
+peak of sea level. Steepening the curve's coastal segment and widening its
+axis to `2,000 m` takes that to **0.9%** and **50.8%**. A shipped world would
+need the same care, and nothing in the engine currently states that budget.
+
 **What would fix it.** Nothing is broken, so this is a decision rather than a
 repair, and it belongs in a release worked through the three steps of
 [`HOW-TO-WRITE-PLANS.md`](HOW-TO-WRITE-PLANS.md): the lab is step 2 for one
@@ -1764,6 +1775,58 @@ is whether the erosion field replaces the gate or sits beside it, and whether a
 curve that multiplies is the right shape for it — the lab's erosion curve only
 ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
+
+
+---
+
+### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, raising the multi-noise lab's patch to half a million cells
+**Where:** `packages/engine/src/addressing/neighbours/canonicalCell.ts`,
+`packages/engine/src/addressing/neighbours/cellRepresentations.ts`
+
+**What happens.** `canonicalCell` asks `cellRepresentations` for every name a
+lattice point has and keeps the one on the lowest face. `cellRepresentations`
+builds a `Map` of the point's non-zero weights and then walks all twenty faces,
+testing each against that map with `includes` and building an array for the ones
+that match. It does this on every call.
+
+A point has more than one name only when it sits on a face edge or at an
+icosahedron vertex, and that is exactly when one of its three weights
+`(n - i - j, i, j)` is zero — three comparisons. Everywhere else the answer is
+the cell that was passed in.
+
+**Why it matters.** The share of points that need the search is small and gets
+smaller with depth. A face at subdivision `n` holds `(n+1)(n+2)/2` lattice
+points and `3n` of them sit on an edge, so at level 8 it is **768 of 33,153**,
+or `2.32%`; at level 11 it is `0.29%`. **Better than 97% of the calls walk
+twenty faces and allocate a map and an array to return their own argument.**
+
+Measured over one patch of 180,589 cells at level 8, taking the ring of all six
+neighbours of every cell — 1.08 million steps, which is what a mesher or a
+delta write does: **1,207 ms canonicalising every step against 70 ms
+canonicalising only where a weight is zero, and the same answer on all of
+them.** That is **17x**, and `neighbour` itself is 52 ms of the total, so the
+canonicalisation is not a cost beside the walk — it *is* the walk.
+
+It is on hot paths. `cellSlot` canonicalises before keying a row, `owns` and
+`chunksHolding` canonicalise while descending, and `DeltaStore.write` reaches
+`chunksReading`, which is the ring of every cell it touches.
+
+**What would fix it.** One guard at the top of `canonicalCell`: if no weight is
+zero, return `{ face, i, j }`. The search below it is then reached only by the
+points that have something to search for, and nothing else changes — the
+function's answer is identical, which is what makes this a cleanup rather than a
+decision. `cellRepresentations` keeps its full behaviour for the callers that
+want every name.
+
+`demos/multi-noise-lab.html` already guards at its own call sites rather than
+inside its port of the function, so the ported block still matches the engine
+line for line and the guard can be dropped there once the engine carries it.
 
 ---
 
@@ -1824,7 +1887,6 @@ shape*, is the same function seen from the other side: that entry is about
 what `flushTerrain` fails to update, this one about what it updates and did
 not need to.
 
-
 **Closed:** 2026-08-25, candidate A. `BAKED_KNOBS` is now a set of its own
 and takes its own path: `flushMeshes` retunes the worker pool in place and
 drops every chunk, where `flushTerrain` still rebuilds the map for a knob that
@@ -1850,7 +1912,9 @@ Candidate B -- carrying the sky exposure as its own vertex attribute, so no
 rebuild is needed at all -- is untouched and still costs 4 bytes a vertex. It
 is worth less now than it was: what it removes is a re-mesh rather than a
 re-mesh plus a map.
+
 ---
+
 ### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
 
 **Kind:** bug
@@ -1893,9 +1957,7 @@ Prettier wanted expanded -- which turned a file that passed here into a third
 failure the moment it was merged. `package-lock.json` already resolved
 `3.9.6`, so the tree and the lock now agree and the range can no longer drift
 under a fresh install.
-
 ---
-
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

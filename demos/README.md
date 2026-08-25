@@ -462,29 +462,74 @@ size. **The fold is what makes a ridge**: `1 - |n|` creases an octave at its own
 zero crossing, and it is turned up on peaks and valleys alone, since folding
 either of the others creases the coast of every continent at once.
 
+**A layer's section reads curve, picture, knobs**, in that order. The curve is
+what the layer is for — the stack's own rows only say how coarse or fine the
+reading is, so they are the setup and the curve is the decision — and the
+picture sits between them because it is what both are judged against.
+
+**Each layer has a switch on its section, and every off is an exact statement
+about what that layer contributes.** Erosion off keeps all of the relief, which
+is the multiply's own neutral; peaks off adds none, which is the sum's; and the
+recipe shows the term as the `1` or the `0` it became rather than removing it.
+Continentalness has no neutral, because something has to set the level — off
+reads its curve at the middle of the field, which is the one level a field with
+nothing to say would give. On the shipped world that turns the planet into an
+ocean with a scatter of ridge crests breaking the surface: **0.5% land** against
+38.3%, ground `-381` to `64 m`. It is the clearest statement of what the first
+layer is for, since without it nothing tells the mountains where they are. A
+layer that is off still draws its own picture and its own histogram, because
+what it would put back is the thing being decided.
+
 **Behind every curve is the histogram of where the world actually lands on it**,
 counted over the planet's own cells rather than over the patch — a curve governs
 the planet, and a patch is a place that can sit entirely on one side of it. Noise
 clusters around its own middle, so equal widths of a curve cover wildly unequal
 amounts of ground. Click a curve to add a point, shift-click one to remove it;
-only the two ends are pinned, in x alone.
+only the two ends are pinned, in x alone. Across is always that layer's noise
+from `-1` to `+1`, and the label under the middle says what up is worth.
 
-**The patch is the engine's own lattice**, not a hex grid that resembles one.
-Cells come from `directionToCell`, the ring from `neighbour` and the polygons
-from `cellCorners`, so a patch that reaches a face edge crosses it the way the
-engine does and a patch that reaches one of the twelve pentagons gets a
-five-sided cell. Each cell draws a cap at its own radius and a wall wherever it
-stands over a neighbour, and the sea is one translucent sheet at its own radius
-with no block under it. A test digests both ported blocks against the engine,
-cell for cell and corner for corner.
+**The world is set the way the engine states it.** Subdivision depth and block
+size fix the radius — `radius = blockSize × 2^depth / K` — so the radius is not
+a knob: it is quantised to powers of two, and a slider for it would have
+positions that build the same planet. **Map cell** picks the level nearest the
+spacing asked for, and the cell is then whatever that level gives, because a
+level is a whole number and a spacing is not. At the shipped settings that is
+depth 13 with 1 m blocks — the same depth, block and map cell the client opens
+with — giving a radius of 6,801 m, level 8, and a map cell of 32.0 m. Every slider's own ends move with the rest of the draft, so an octave
+narrower than two map cells cannot be reached — ground the map cannot carry is
+ground the world does not have.
 
-**The four pictures show the planet or the patch.** Over the planet they are
-longitude across and latitude down with the patch outlined in red, and clicking
-any of them moves the patch there. The three field pictures are cut into grey
-bands: a smooth wash shows a field's brightness and hides its shape, and the
-band edges are its contours. The three fields live at three sizes: the planet
-picture of peaks and valleys reads as grain, and the same field over the patch
-reads as ridges.
+**The patch runs from 16 map cells across to 512** — half a kilometre of ground
+to sixteen kilometres of it, 3,169 cells to 183,546. At the top of that range it
+is a whole landmass and its ocean, visibly curved, and it costs about two
+seconds to rebuild; the readout says how long every time.
+
+**The patch is the engine's own lattice at the map's own level**, not a hex grid
+that resembles one. The map is the terrain, so a hexagon here is a map cell,
+which is what a map cell already is. Cells come from `directionToCell`, the ring
+from `neighbour` and the polygons from `cellCorners`, so a patch that reaches a
+face edge crosses it the way the engine does and a patch that reaches one of the
+twelve pentagons gets a five-sided cell. Each cell draws a cap at its own radius
+and a wall wherever it stands over a neighbour, and the sea is one translucent
+sheet at its own radius with no block under it. **No normal is stored** — every
+face is flat, so the change of position across one pixel gives the plane's
+normal exactly, which is what the engine's own terrain shader does and what
+keeps the largest patch inside memory. A test digests both ported
+blocks against the engine, cell for cell and corner for corner.
+
+**A picture of a field sits where that field is tuned.** The ground the three
+make together stays in the head, where scrolling to reach a knob cannot carry it
+off; each layer's own field goes in that layer's section, under the curve it is
+read through. All four show the planet or the patch. Over the planet
+they are longitude across and latitude down with the patch outlined in red, and
+clicking one moves the patch there. **Click any of them for a large version** —
+right-click over the planet, where a plain click already means go there. A field
+at panel width says where its features are; at a thousand pixels it says what
+they look like, and which of those a curve is being dragged against is the whole
+question.
+
+The three field pictures are cut into grey bands: a smooth wash shows a field's
+brightness and hides its shape, and the band edges are its contours.
 
 **Every knob is in the address bar**, curves included, and only where it differs
 from the default.
