@@ -1778,7 +1778,7 @@ worn region sit lower as well as flatter.
 
 ---
 
-### F-082 — Switching Full light rebuilds the coarse map, which the switch cannot move
+### F-083 — Switching Full light rebuilds the coarse map, which the switch cannot move
 
 **Kind:** bug
 **Milestone:** 0.5.0
