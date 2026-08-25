@@ -98,6 +98,28 @@ fn extinction() -> vec3f { return air.beta.xyz + vec3f(mieStrength()); }
 /** Further than any ray goes, standing in for nothing in the way. */
 const FAR = 1.0e30;
 
+/**
+ * How near the sun a ray has to point before what it hits is taken to be
+ * standing between the air along it and the sun, as cosines of an angle.
+ *
+ * **A sun-leg query per sample collapses to one per pixel where it matters.**
+ * The expensive thing to ask is whether the sun reaches each in-scattering
+ * sample, and the answer needs a walk over the landscape for each one. But
+ * the term that needs the answer is the forward-thrown haze, and that term
+ * only exists near the sun: at \`g = 0.76\` the phase is 30x brighter straight
+ * at the sun, 3.2x at 30 degrees and 0.57x at 60. **Where a ray points at the
+ * sun, the sun leg from every sample on it runs along the ray itself** -- so
+ * whatever the ray hits is exactly what stands between those samples and the
+ * sun, and the depth buffer already holds it. That is the same buffer that
+ * hides the sun's own disc, which is why the two now go together instead of
+ * the disc going behind a mountain and its glow staying in front of one.
+ *
+ * The window runs from 45 degrees, where the excess is nearly spent, to 8,
+ * and the fade is what stops a silhouette gaining an edge of its own.
+ */
+const BEAM_WIDE = 0.707;
+const BEAM_NEAR = 0.990;
+
 struct AirOut {
 	@builtin(position) clip : vec4f,
 };
@@ -454,6 +476,20 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 	// it belongs to. Riding on \`cut\` gives a cloud beyond the air the sky's
 	// own full measure, gives ground underfoot all of the reduction, and
 	// leaves no step at a silhouette where a surface first appears.
+	// **Whatever a ray pointed at the sun hits is what shadows the air along
+	// it.** Without this the disc goes behind a mountain and the glow around
+	// it does not, leaving a soft patch that marks where the sun is through
+	// solid rock. It costs one \`smoothstep\` and reads nothing: the depth this
+	// pass has already sampled is the same depth that hides the disc.
+	//
+	// It is only right near the sun, and near the sun is the only place it is
+	// applied -- a ray pointing elsewhere says nothing about what stands
+	// between its own air and the sun, so nothing is taken away there.
+	var beam = 1.0;
+	if (!openSpace) {
+		beam = 1.0
+			- smoothstep(BEAM_WIDE, BEAM_NEAR, dot(dir, air.sun.xyz));
+	}
 	let haze = mix(1.0, aerialPerspective(), cut);
 	var background = worldColor;
 	if (openSpace) {
@@ -470,6 +506,6 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 	}
 
 	let dimmed = exp(-depth * extinction() * haze);
-	return vec4f(background * dimmed + scattered * haze, 1.0);
+	return vec4f(background * dimmed + scattered * haze * beam, 1.0);
 }
 `;

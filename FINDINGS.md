@@ -1546,7 +1546,7 @@ when the ground moves, so nothing else has to change.
 
 ---
 
-### F-076 — The in-scattered light is not blocked by terrain, so a low sun glows through a mountain
+### F-076 — The in-scattered light is not blocked by terrain, so there are no shafts of light through a gap in a ridge
 
 **Kind:** bug
 **Milestone:** 0.5.0
@@ -1619,15 +1619,29 @@ all of which the next attempt has to answer:
   case a person actually stands in -- at the base of a mountain, sun behind
   the summit -- was the one case the fade switched off.
 
-**And the artifact has a second half this entry never named.** With the sun
-behind a near mountain the disc and its bloom are correctly hidden, and a soft
-bright patch still marks where the sun is, so it can be tracked straight
-through the rock. That patch is the Mie term: at `g = 0.76` the phase is 30x
-brighter straight at the sun than even scattering, so airlight along a view ray
-pointed at a hidden sun is 30x what it is beside it. Shadowing the samples is
-one answer to it; a cheaper one may be to ask a single question per pixel --
-*is the sun itself behind something* -- rather than one per sample, since the
-depth buffer already knows and the disc is already being hidden by it.
+**And the artifact has a second half this entry never named**, which is now
+fixed. With the sun behind a near mountain the disc and its bloom are correctly
+hidden, and a soft bright patch still marked where the sun was, so it could be
+tracked straight through the rock. That patch is the Mie term: at `g = 0.76`
+the phase is 30x brighter straight at the sun than even scattering.
+
+**Fixed** 2026-08-25, by asking one question per pixel instead of one per
+sample. The forward spike only exists near the sun -- 30x straight at it, 3.2x
+at 30 degrees, 0.57x at 60 -- and where a ray points at the sun the sun leg
+from every sample along it runs along the ray itself, so whatever the ray hits
+is exactly what stands between those samples and the sun. The depth buffer
+already holds that and is the same buffer that hides the disc. The airlight now
+fades out where a ray within 45 degrees of the sun has something drawn in it:
+zero texture reads, one `smoothstep`. Over a sunrise ridge the face falls from
+**54.6 to 31.8** of 255, fifth percentile of the ratio **1.000**, against
+**31.1** for turning the haze off outright -- so it takes the spike and nothing
+else. Midday is unchanged at **123.1 against 123.6**.
+
+**What is still open is narrower than this entry started with.** Air shadowed
+by terrain a ray is *not* pointed at is untouched, which is exactly where
+crepuscular rays live: shafts through a gap in a ridge, seen from the side.
+Nothing cheap has been found for that, and the walk above is what expensive
+looks like.
 
 ---
 

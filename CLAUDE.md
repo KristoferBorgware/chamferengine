@@ -1838,6 +1838,33 @@ Violating any of these breaks the design. They are not tunable.
   queues against the queue and not the encoder, so steps sharing one buffer
   would all read whichever value was written last and the whole chain would
   blur at one level's texel size.
+- **A SUN-LEG QUERY PER SAMPLE COLLAPSES TO ONE PER PIXEL WHERE IT MATTERS**
+  (`BEAM_WIDE`/`BEAM_NEAR` in `ATMOSPHERE_SHADER`, doc 32, F-076). Nothing
+  shadows the air, so the column in front of a mountain is lit as though the
+  mountain were not there and a hidden sun leaves a soft patch marking where
+  it is -- the disc and its bloom go behind the rock and the glow does not.
+  **A walk over the coarse map from every sample was built and reverted**: the
+  bill is the **product** of two step counts, six readings toward the sun
+  times the march's own ten, and what a 32 m map cell draws in six steps is a
+  coarse copy of the ridge laid over the hillside rather than light. Its
+  elevation fade was wrong as well, and instructively: faded out above a 20-35
+  degree sun on the measurement that **ground** shades itself only where its
+  slope beats the sun, which says nothing about a 300 m mountain seen from its
+  foot that subtends a huge angle and blocks a high sun outright -- so the one
+  case a person stands in was the one case it switched off. **The term needing
+  the answer only exists near the sun**: the forward-thrown haze is 30x the
+  even value straight at it, 3.2x at 30 degrees and 0.57x at 60. **And where a
+  ray points at the sun, the sun leg from every sample on it runs along the
+  ray** -- so whatever the ray hits is exactly what stands between those
+  samples and the sun, which the depth buffer already holds and is the same
+  buffer that hides the disc. The airlight fades out where a ray within **45
+  degrees** of the sun has something drawn in it: **0** texture reads, one
+  `smoothstep`. Measured over a sunrise ridge the face falls **54.6 to 31.8**
+  of 255 with a fifth percentile of **1.000** -- it only ever takes light away
+  -- against **31.1** for turning the haze off outright, so it removes the
+  spike and nothing else; midday is unchanged at **123.1 against 123.6**. What
+  is left open is air shadowed by terrain a ray is **not** pointed at, which
+  is where crepuscular rays live.
 - **A CLAMPED STAR FADE HAS A SETTING AT WHICH IT SNAPS** (`celestialAt`, doc
   32). Stars faded by `clamp(luminance * 3, 0, 1)`, and every knob that moved
   the sky's brightness moved where that clamp landed, so retuning the air put

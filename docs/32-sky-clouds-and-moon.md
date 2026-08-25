@@ -448,12 +448,38 @@ two or three kilometres here crosses a large share of the whole atmosphere's
 optical depth, where the same distance on Earth crosses very little. At full
 strength a ridge two kilometres off is drawn nearly the colour of the sky.
 
-**Nothing shadows the air.** A sample asks whether the sun reaches it and only
-the planet's own sphere can answer no, so the column of air in front of a
-mountain is lit as though the mountain were not there — and with the haze
-thrown 30× forward, a low sun behind a ridge paints a warm glow across its
-face. The same gap is why there are no crepuscular rays: shafts of light
-through a gap in terrain *are* that shadowing. It is open, as F-076.
+**Nothing shadows the air, and asking every sample costs more than it buys.**
+A sample asks whether the sun reaches it and only the planet's own sphere can
+answer no, so the column of air in front of a mountain is lit as though the
+mountain were not there. A walk over the coarse map from every sample answers
+it correctly and was built and taken out again: the bill is the *product* of
+two step counts — six readings toward the sun times the march's own ten is
+sixty dependent texture reads a fragment — and what a 32 m map cell draws in
+six steps is a coarse copy of the ridge laid over the hillside rather than
+light.
+
+**But the term that needed the answer only exists near the sun, and there one
+question per pixel does the work of one per sample.** The forward-thrown haze
+is 30× the even value straight at the sun, 3.2× at 30° and 0.57× at 60°, so
+away from the sun there is no spike to shadow. And where a ray *does* point at
+the sun, the sun leg from every sample along it runs along the ray itself —
+which makes whatever the ray hits exactly what stands between those samples
+and the sun. The depth buffer already holds that, and it is the same buffer
+that hides the sun's own disc. So the airlight is faded out where a ray within
+45° of the sun has something drawn in it, reaching nothing at all beyond 45°
+and none of it costing a texture read.
+
+> **[measured]** Two frames of one sunrise, a near ridge with the sun behind
+> it. Over the ridge's own face the mean falls from **54.6 to 31.8** of 255,
+> and the fifth percentile of the per-pixel ratio is **1.000** — it only ever
+> takes light away. Turning the haze off outright reaches **31.1** on the same
+> box, so the gate removes essentially all of the spike and nothing else. At
+> midday the same view is unchanged: **123.1 against 123.6**, fifth percentile
+> 0.951 and ninety-fifth 1.084.
+
+What that leaves is the air shadowed by terrain a ray is *not* pointed at,
+which is where crepuscular rays live: shafts of light through a gap in a ridge,
+seen from the side. Those still do not exist. It is open, as F-076.
 
 **A march is dithered by where it starts, not by what it returns.** Every
 pixel marching from the same place samples the same heights, so wherever the
