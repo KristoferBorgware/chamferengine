@@ -442,11 +442,12 @@ parameter can, and the order they are read in is the whole construction:
   floor at one end, the top of a plateau at the other. Sea level is drawn across
   it as a dashed line, and where the curve crosses that line is where the coast
   is.
-- **Erosion** decides how much relief survives. Its curve answers a fraction
-  from all of it to none, and it **multiplies**, so a region the curve sends to
-  zero is flat whatever the third field is doing. Drag the whole curve to the
-  bottom and the patch is a smooth continental ramp with a clean shoreline and
-  no ridge anywhere on it.
+- **Erosion** decides how much of the relief is cut away. Its curve answers a
+  fraction from none of it to all of it — **up is more cut away**, because the
+  layer is called erosion and erosion is removal. What survives is `1 - cut(E)`
+  and it **multiplies**, so a region the curve sends to `1` is flat whatever the
+  third field is doing. Drag the whole curve to the top and the patch is a
+  smooth continental ramp with a clean shoreline and no ridge anywhere on it.
 - **Peaks & valleys** is the relief. Half way up its curve is the level the
   continent already set: below cuts a valley, above raises a peak.
 
@@ -455,17 +456,17 @@ the same continentalness and the same peaks under high erosion is a plain. The
 recipe under the pictures is the arithmetic, with the metres the knobs are set
 to.
 
-**Erosion does two things: it flattens, and it lowers.** Flattening is `kept(E)`
-multiplying the relief. Lowering is that same `kept(E)` multiplying how high the
-land stands over the sea — water wears a range down as well as smoothing it, and
-in a nested spline, where the height is one function of all three fields,
-erosion changes the level by construction.
+**Erosion does two things: it flattens, and it lowers.** It takes the relief
+outright, so what survives is `1 - cut(E)`; and it takes the level in proportion
+to **Wears the level down**, because water wears a range down as well as
+smoothing it, and in a nested spline — where the height is one function of all
+three fields — erosion changes the level by construction.
 
-**Wears the level down is how much of the lowering happens.** `worn(E)` is
-`kept(E)` pulled back toward `1` by it. Turned all the way up the two are the
-same number, so land the curve fully erodes is flattened and lowered together
-and ends at sea level; turned off, `worn(E)` is just `1`, the land keeps its
-height, and only the bumps go.
+Both are one minus a share of the same cut. The relief keeps `1 - cut(E)` and
+the level keeps `worn(E) = 1 - bite × cut(E)`, so at a bite of `1` the two are
+the same number and land the curve fully cuts is flattened and lowered together,
+ending at sea level; at `0` the level keeps all of its height and only the bumps
+go.
 
 Measured over the planet, the knob moves the top of the distribution and leaves
 the bottom exactly where it is. From `0` to `0.55` to `1`, the 95th percentile
@@ -488,8 +489,8 @@ reading is, so they are the setup and the curve is the decision — and the
 picture sits between them because it is what both are judged against.
 
 **Each layer has a switch on its section, and every off is an exact statement
-about what that layer contributes.** Erosion off keeps all of the relief, which
-is the multiply's own neutral; peaks off adds none, which is the sum's; and the
+about what that layer contributes.** Erosion off cuts nothing, so all of the
+relief survives — the multiply's own neutral; peaks off adds none, which is the sum's; and the
 recipe shows the term as the `1` or the `0` it became rather than removing it.
 Continentalness has no neutral, because something has to set the level — off
 reads its curve at the middle of the field, which is the one level a field with
@@ -506,7 +507,9 @@ the planet, and a patch is a place that can sit entirely on one side of it. Nois
 clusters around its own middle, so equal widths of a curve cover wildly unequal
 amounts of ground. Click a curve to add a point, shift-click one to remove it;
 only the two ends are pinned, in x alone. Across is always that layer's noise
-from `-1` to `+1`, and the label under the middle says what up is worth.
+from `-1` to `+1`, and the label under the middle says what up is worth. Up runs
+the way the layer's own word does: erosion is removal, so up is how much is cut
+away and a curve that rises to the right takes more.
 
 **The world is set the way the engine states it.** Subdivision depth and block
 size fix the radius — `radius = blockSize × 2^depth / K` — so the radius is not

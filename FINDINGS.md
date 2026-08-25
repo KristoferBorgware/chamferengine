@@ -1737,12 +1737,15 @@ the relief survives at that place, and peaks and valleys is the relief. Erosion
 field says there.
 
 Measured over the planet's own cells at level 6 with the lab's shipped knobs,
-the fraction of relief kept on land runs `0.10` at the tenth percentile, `0.54`
-at the median and `0.95` at the ninetieth. Two frames of one place with the
-erosion curve pinned to each end: at `0.02` the patch is a smooth continental
-ramp with a clean shoreline and no ridge on it, ground `-387` to `881 m`; at
-`1.0` it is ridges everywhere, `-461` to `1,133 m`. The land share moves from
-`38.5%` to `38.4%` across that, because erosion moves relief and not level.
+the fraction of the relief erosion cuts away on land runs `0.05` at the tenth
+percentile, `0.46` at the median and `0.90` at the ninetieth — the whole range,
+across one world. Two frames of one place with the erosion curve pinned to each
+end: cutting nothing, the patch is ridges everywhere, ground `-288` to `659 m`;
+cutting all of it, a smooth continental ramp with a clean shoreline and no ridge
+on it, `-236` to `230 m`. Over the planet that is a 95th percentile of height
+falling `537 m` to `256 m` while the land share moves `37.7%` to `38.2%`,
+because what erosion takes is relief and — in proportion to its own second
+term — level, never the coastline.
 
 **Why it matters.** The gated merge answers *may this place be mountain* with a
 yes or a no read off the terrain layer's own height, so how rough a place is and
