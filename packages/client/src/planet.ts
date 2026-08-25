@@ -2310,6 +2310,7 @@ async function main(): Promise<void> {
 			nightLight: NIGHT_LIGHT,
 			moon: [moon.x, moon.y, moon.z],
 			sunLight: current.knobs.sunStrength,
+			skyShading: current.knobs.skyShading,
 			moonLight: PLAIN ? 0 : current.knobs.moonLight,
 			exposure: current.knobs.exposure,
 		});
