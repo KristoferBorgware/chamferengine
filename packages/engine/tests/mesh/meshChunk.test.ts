@@ -23,6 +23,7 @@ import {
 	meshChunk,
 	opacityOf,
 } from "chamfer/mesh";
+import type { MeshOptions } from "chamfer/mesh";
 import { Vec3 } from "chamfer/math";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import {
@@ -1271,5 +1272,131 @@ describe("the speckle", () => {
 		blockColor(BlockType.GRASS, 5, 31, 12, 7, one, 0);
 		blockColor(BlockType.GRASS, 5, 31, 12, 7, two, 0);
 		expect([...one]).toEqual([...two]);
+	});
+});
+
+describe("sky exposure", () => {
+	/**
+	 * A flat world with one deep shaft dug into it, and what sky factor every
+	 * vertex came out with, gathered by how far below the surface it sits.
+	 *
+	 * With the speckle and the corner shading off, a vertex colour is exactly
+	 * the registry's colour for its block times the sky exposure -- so
+	 * dividing one out recovers the other, and nothing else is in the number.
+	 */
+	function shaftSky(
+		options: MeshOptions,
+	): { depth: number; lo: number; hi: number }[] {
+		const flat = flatCoarseMap(map.seed, 2);
+		const flatShape = new WorldShape(1700, DEPTH, 1, maxCrustDepth(DEPTH));
+		const gen = new TerrainGenerator(map.seed, flatShape, flat);
+		const n = 1 << DEPTH;
+		const m = 1 << (DEPTH - CHUNK_LEVEL);
+		const address = ChunkAddress.fromKey(0, CHUNK_LEVEL);
+		const [bi, bj] = joinPath(address.path, m >> 1, m >> 2, DEPTH);
+
+		const chunk = generateChunk(
+			gen,
+			address,
+			CHUNK_LEVEL,
+			flatShape.crustDepth,
+		);
+		const real = new ChunkColumnSampler(chunk, gen);
+		const dug = 12;
+		const sampler = {
+			columnAt(f: number, i: number, j: number) {
+				const col = real.columnAt(f, i, j);
+				const c = canonicalCell(f, n, i, j);
+				if (c.face !== 0 || c.i !== bi || c.j !== bj) return col;
+				const blocks = col.blocks.slice();
+				for (let l = col.first; l < col.first + dug; l++)
+					blocks[l] = BlockType.AIR;
+				return {
+					...col,
+					blocks,
+					first: col.first + dug,
+					last: col.first + dug - 1,
+					groundRadius: col.groundRadius - dug * flatShape.blockSize,
+				};
+			},
+		};
+		const built = buildChunkMesh(chunk, sampler, flatShape, map.seed, {
+			ambientOcclusion: false,
+			speckle: 0,
+			...options,
+		});
+
+		const palette = Object.values(BLOCK_COLORS) as readonly (
+			readonly [number, number, number] | undefined
+		)[];
+		const skyOf = (r: number, g: number, b: number): number | null => {
+			for (const c of palette) {
+				if (!c || !c[0]) continue;
+				const k = r / c[0];
+				if (
+					Math.abs(g - c[1] * k) < 1e-4 &&
+					Math.abs(b - c[2] * k) < 1e-4
+				)
+					return k;
+			}
+			return null;
+		};
+
+		const surface = real.columnAt(0, bi, bj).groundRadius;
+		const o = built.origin;
+		const v = built.opaque.vertices;
+		const found = new Map<number, { lo: number; hi: number }>();
+		for (let at = 0; at < v.length; at += 6) {
+			const radius = Math.hypot(
+				v[at]! + o.x,
+				v[at + 1]! + o.y,
+				v[at + 2]! + o.z,
+			);
+			const below = Math.round((surface - radius) / flatShape.blockSize);
+			if (below < 0 || below > dug + 1) continue;
+			const sky = skyOf(v[at + 3]!, v[at + 4]!, v[at + 5]!);
+			if (sky === null) continue;
+			const cell = found.get(below) ?? { lo: Infinity, hi: -Infinity };
+			cell.lo = Math.min(cell.lo, sky);
+			cell.hi = Math.max(cell.hi, sky);
+			found.set(below, cell);
+		}
+		return [...found.entries()]
+			.sort((a, b) => a[0] - b[0])
+			.map(([depth, c]) => ({ depth, ...c }));
+	}
+
+	it("darkens a wall the deeper down the shaft it runs", () => {
+		// **The bug this pins.** The exposure used to be read once per cell at
+		// its column's own top, and a wall belongs to the solid side -- so the
+		// whole wall of a shaft took the reading of the surface it was dug
+		// from. Measured before the fix: 1.000 at every depth, top to bottom,
+		// and only the floor cap at the bottom darkened at all.
+		const bands = shaftSky({});
+		expect(bands.length).toBeGreaterThan(2);
+
+		// Brightest first and dimmest last, with nothing rising on the way
+		// down: a wall's top vertex sits at the surface and its bottom one at
+		// the floor, so one run carries the whole gradient.
+		for (let b = 1; b < bands.length; b++)
+			expect(bands[b]!.hi).toBeLessThanOrEqual(bands[b - 1]!.hi + 1e-6);
+		expect(bands[bands.length - 1]!.hi).toBeLessThan(0.5);
+	});
+
+	it("leaves ground under the open sky at the full reading", () => {
+		// The fix must not move the surface: a cap sitting on its column's own
+		// top is read at that same layer, which is the number it always had.
+		const bands = shaftSky({});
+		expect(bands[0]!.lo).toBeCloseTo(1, 5);
+		expect(bands[0]!.hi).toBeCloseTo(1, 5);
+	});
+
+	it("gives every face the open sky when it is switched off", () => {
+		// There is no torch in this world, so off has to be a way to see what
+		// you dug -- every face at the open-sky reading, nothing darkened.
+		for (const band of shaftSky({ skyExposure: false })) {
+			expect(band.lo).toBeCloseTo(1, 5);
+			expect(band.hi).toBeCloseTo(1, 5);
+		}
 	});
 });
