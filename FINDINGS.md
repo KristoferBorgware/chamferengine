@@ -10,6 +10,48 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-078 — The cave function in the engine is not the cave function the corpus measured
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, reading the generator before discussing cave generation
+**Where:** `packages/engine/src/generation/terrain/caveDensity.ts`; the
+measurements are `verification/volume.js` section 3 and doc 14's cave table
+
+**What happens.** Two different carving rules share one name. Doc 08 and
+`verification/volume.js` argue a **signed density** — solid where
+`(surfaceRadius − r) + noise × strength > 0` — whose first term is a bias
+growing 1 per metre of depth, which is where the rule *an enclosed void needs
+the noise gradient, amplitude over feature size, to beat 1* comes from, and
+where doc 14's `11×` face bill and `13–32%` multi-span columns were measured.
+`caveDensity` does not do that. It is a **band around zero**: hollow where
+`|fbm| < caveThreshold`, three octaves at a `caveScale` of 24 m, with a hard
+refusal inside `caveCeiling`, 6 m, of the surface. There is no bias term, so
+there is no gradient to beat, and the doc comment on the function states the
+gradient rule anyway.
+
+**Why it matters.** Every number the project holds about caves describes the
+form that is not running. A band of fixed width carves **sheets of roughly one
+thickness everywhere**, and the two knobs a person would reach for move it in
+ways the corpus does not predict: raising `caveThreshold` widens every passage
+at once rather than opening more of them, and `caveScale` moves feature size
+with no coupled amplitude. So the first attempt to tune caves will be tuned
+against measurements taken of something else, and the face and column counts
+that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
+more than one span — are counts of the density field's caves, not of these.
+
+**What would fix it.** Decide which form ships, then make one of the two match
+the other. If the band stays, `volume.js` gains a section measuring it — face
+cost, multi-span share, mouth count — and the gradient sentence comes off
+`caveDensity`'s comment. If the density field is wanted instead, the band goes
+and the function becomes the expression doc 08 already draws. Either way it is
+one function and one verification section; what it must not stay is two forms
+under one name.
+
+---
+
 ### F-072 — `erodeFreeDroplets`'s slicing test fails under load and passes on its own
 
 **Kind:** risk
