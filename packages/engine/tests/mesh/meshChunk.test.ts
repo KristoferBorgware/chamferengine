@@ -1100,6 +1100,84 @@ describe("ambient occlusion", () => {
 			shades.add(Math.round(built.opaque.vertices[v]! * 1000));
 		expect(shades.size).toBeGreaterThan(3);
 	});
+
+	it("gives one triangle's three corners the same colour when it is off", () => {
+		// A single face is one call to `paint` and `shade`, so within one
+		// triangle the only thing that can move a vertex's colour is which of
+		// its own two neighbours are solid -- flip the switch and every corner
+		// of that face has to read as the one thing left to say about it: full
+		// light. Checking the whole buffer for "one shade" would also catch a
+		// sky-exposure or speckle difference between two different faces,
+		// which this switch does not touch and must not flatten.
+		const { chunk } = mesh(400);
+		const built = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ ambientOcclusion: false },
+		);
+		const { vertices, indices } = built.opaque;
+		let checked = 0;
+		for (let t = 0; t + 2 < indices.length; t += 3) {
+			const at = (corner: number) => indices[t + corner]! * 6;
+			const [a, b, c] = [0, 1, 2].map(at);
+			for (let ch = 3; ch < 6; ch++) {
+				expect(vertices[a! + ch]).toBe(vertices[b! + ch]);
+				expect(vertices[a! + ch]).toBe(vertices[c! + ch]);
+			}
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("lets a triangle's own corners differ when it is on", () => {
+		// The property the off case removes: a real chunk has at least one
+		// face where two corners see a different number of solid neighbours,
+		// so their colours are not the same triangle-by-triangle -- not just
+		// somewhere in the whole buffer, which a sky-exposure difference
+		// between unrelated faces could also produce.
+		const { built } = mesh(400);
+		const { vertices, indices } = built.opaque;
+		let differs = false;
+		for (let t = 0; t + 2 < indices.length && !differs; t += 3) {
+			const at = (corner: number) => indices[t + corner]! * 6;
+			const [a, b, c] = [0, 1, 2].map(at);
+			if (
+				vertices[a! + 3] !== vertices[b! + 3] ||
+				vertices[a! + 3] !== vertices[c! + 3]
+			)
+				differs = true;
+		}
+		expect(differs).toBe(true);
+	});
+
+	it("changes nothing about the geometry, only the vertex colour", () => {
+		// The same corner and the same triangles either way: turning this off
+		// is a lighting choice, not a different mesh.
+		const { chunk } = mesh(400);
+		const lit = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+		);
+		const flat = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			map.seed,
+			{ ambientOcclusion: false },
+		);
+		expect(flat.opaque.indices).toEqual(lit.opaque.indices);
+		expect(flat.opaque.vertices.length).toBe(lit.opaque.vertices.length);
+		for (let v = 0; v < lit.opaque.vertices.length; v += 6)
+			for (let c = 0; c < 3; c++)
+				expect(flat.opaque.vertices[v + c]).toBeCloseTo(
+					lit.opaque.vertices[v + c]!,
+					5,
+				);
+	});
 });
 
 describe("the speckle", () => {

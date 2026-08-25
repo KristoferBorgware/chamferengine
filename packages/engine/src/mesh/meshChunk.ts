@@ -6,6 +6,9 @@ import type { MeshSink } from "./MeshSink.js";
 import { Vec3 } from "../math/Vec3.js";
 import type { WorldShape } from "../world/WorldShape.js";
 import { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
+
+/** Every corner at full light -- the geometry {@link AMBIENT_OCCLUSION} shares. */
+const FLAT_LIGHT: readonly number[] = [1, 1, 1];
 import { MESH_DEFAULTS } from "./MeshOptions.js";
 import { blockColor } from "../generation/terrain/blockColor.js";
 import { gridCellColor } from "./gridCellColor.js";
@@ -211,6 +214,7 @@ export function meshChunk(
 	options: MeshOptions = {},
 ): MeshTally {
 	const settings = { ...MESH_DEFAULTS, ...options };
+	const light = settings.ambientOcclusion ? AMBIENT_OCCLUSION : FLAT_LIGHT;
 	const depth = chunk.depth;
 	const n = 1 << depth;
 	const face = chunk.address.face;
@@ -374,6 +378,7 @@ export function meshChunk(
 				grid,
 				tint,
 				mix,
+				light,
 			);
 		}
 
@@ -448,6 +453,7 @@ export function meshChunk(
 			drop,
 			drawnHere,
 			seamFloor,
+			light,
 		);
 	}
 	return tally;
@@ -520,6 +526,7 @@ function meshCell(
 	grid: number,
 	tint: number,
 	mix: number,
+	light: readonly number[],
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -593,6 +600,7 @@ function meshCell(
 				true,
 				(corner) =>
 					occlusion(ring, degree, corner, corner + 1, layer - 1),
+				light,
 			);
 			tally.faces++;
 		}
@@ -606,6 +614,7 @@ function meshCell(
 				origin,
 				false,
 				() => 0,
+				light,
 			);
 			tally.faces++;
 		}
@@ -628,6 +637,7 @@ function meshCell(
 				origin,
 				false,
 				() => 0,
+				light,
 			);
 			tally.faces++;
 		}
@@ -668,6 +678,7 @@ function meshCell(
 				groundCap,
 				true,
 				true,
+				light,
 			);
 			tally.faces++;
 		}
@@ -723,6 +734,7 @@ function meshCell(
 				end,
 				!wallAbove,
 				!wallBelow,
+				light,
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -762,6 +774,7 @@ function meshApronCell(
 	drop: number,
 	drawnHere: (cell: Cell) => boolean,
 	seamFloor: (cell: Cell) => number,
+	light: readonly number[],
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -832,6 +845,7 @@ function meshApronCell(
 			origin,
 			true,
 			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
+			light,
 		);
 		tally.faces++;
 	}
@@ -866,6 +880,7 @@ function meshApronCell(
 				groundCap,
 				true,
 				true,
+				light,
 			);
 			tally.faces++;
 		}
@@ -935,6 +950,7 @@ function meshApronCell(
 				end,
 				!wallAbove,
 				!wallBelow,
+				light,
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -1001,6 +1017,7 @@ function meshApronCell(
 				groundCap,
 				true,
 				true,
+				light,
 			);
 			tally.faces++;
 		}
@@ -1024,19 +1041,20 @@ function emitCap(
 	origin: Vec3,
 	upward: boolean,
 	occlude: (corner: number) => number,
+	light: readonly number[],
 ): void {
 	const first: number[] = new Array<number>(degree);
 	for (let c = 0; c < degree; c++) {
 		const at = upward ? c : degree - 1 - c;
 		const p = corners[at]!;
-		const light = AMBIENT_OCCLUSION[occlude(at)]!;
+		const lit = light[occlude(at)]!;
 		first[c] = sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
 			p.z * radius - origin.z,
-			COLOR[0]! * light,
-			COLOR[1]! * light,
-			COLOR[2]! * light,
+			COLOR[0]! * lit,
+			COLOR[1]! * lit,
+			COLOR[2]! * lit,
 		);
 	}
 	for (let c = 1; c + 1 < degree; c++)
@@ -1063,6 +1081,7 @@ function emitSide(
 	bottomLayer: number,
 	extendTop: boolean,
 	extendBottom: boolean,
+	light: readonly number[],
 ): void {
 	const leftCorner = corners[(k + degree - 1) % degree]!;
 	const rightCorner = corners[k]!;
@@ -1106,14 +1125,14 @@ function emitSide(
 		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
 	const put = (p: Vec3, radius: number, occ: number) => {
-		const light = AMBIENT_OCCLUSION[occ]!;
+		const lit = light[occ]!;
 		return sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
 			p.z * radius - origin.z,
-			COLOR[0]! * light,
-			COLOR[1]! * light,
-			COLOR[2]! * light,
+			COLOR[0]! * lit,
+			COLOR[1]! * lit,
+			COLOR[2]! * lit,
 		);
 	};
 

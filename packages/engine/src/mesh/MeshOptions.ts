@@ -91,6 +91,17 @@ export interface MeshOptions {
 	 * map in.
 	 */
 	readonly speckle?: number;
+
+	/**
+	 * Whether a corner darkens by how many of its neighbours are solid.
+	 *
+	 * Baked into the vertex color at mesh time -- the shader has no way to see
+	 * which cells stand around a corner, so this is the one shading term a
+	 * vertex has to carry rather than compute. Off gives every vertex full
+	 * light regardless of what is around it. The geometry is identical either
+	 * way; only the corner's own light multiplier changes.
+	 */
+	readonly ambientOcclusion?: boolean;
 }
 
 export const MESH_DEFAULTS = {
@@ -99,4 +110,5 @@ export const MESH_DEFAULTS = {
 	surfaceGrid: 0,
 	debugSeams: false,
 	speckle: SPECKLE,
+	ambientOcclusion: true,
 } as const satisfies MeshOptions;

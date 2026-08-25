@@ -492,6 +492,17 @@ export interface PlanetKnobs {
 	speckle: boolean;
 
 	/**
+	 * Whether a corner darkens by how many of the cells touching it are solid.
+	 *
+	 * Baked into the mesh, so it costs nothing to draw and needs a rebuild to
+	 * change. **On by default** -- it is what gives a hollow more shade than a
+	 * ridge and a crevice a bottom, which the light alone cannot: the shader
+	 * has no way to see what stands around a corner. Off gives every corner
+	 * the light its own face would give it anyway, flat.
+	 */
+	ambientOcclusion: boolean;
+
+	/**
 	 * Whether the world is drawn as its own grid.
 	 *
 	 * On, every chunk is selected and levelled exactly as the terrain would
@@ -776,6 +787,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	selectBounds: false,
 	patchBounds: false,
 	speckle: false,
+	ambientOcclusion: true,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -1111,6 +1123,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	selectBounds: { ...TOGGLE, rebuilds: false },
 	patchBounds: { ...TOGGLE, rebuilds: false },
 	speckle: { ...TOGGLE, rebuilds: true },
+	ambientOcclusion: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },

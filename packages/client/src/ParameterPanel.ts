@@ -851,6 +851,15 @@ const GROUPS: Group[] = [
 				label: "Speckle",
 			},
 			{
+				// **Baked into the mesh, not a shader term.** A vertex's own
+				// corner has no way to see which cells stand around it, so
+				// this is carried as a light multiplier at build time --
+				// which is why turning it off costs a rebuild rather than a
+				// frame.
+				key: "ambientOcclusion",
+				label: "Corner shading",
+			},
+			{
 				key: "seamOverlay",
 				label: "Seam overlay",
 			},

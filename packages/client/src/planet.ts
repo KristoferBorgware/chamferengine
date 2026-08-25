@@ -718,6 +718,7 @@ async function main(): Promise<void> {
 			debugSeams: live.knobs.seamOverlay,
 			// Zero is off, and off is the flat colour the registry names.
 			speckle: live.knobs.speckle ? SPECKLE : 0,
+			ambientOcclusion: live.knobs.ambientOcclusion,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode

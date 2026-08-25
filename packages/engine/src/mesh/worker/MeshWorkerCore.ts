@@ -32,6 +32,7 @@ export class MeshWorkerCore {
 	private readonly apron: boolean;
 	private readonly debugSeams: boolean;
 	private readonly speckle: number;
+	private readonly ambientOcclusion: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -59,6 +60,7 @@ export class MeshWorkerCore {
 		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
 		this.speckle = setup.speckle ?? SPECKLE;
+		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.options = setup.terrain;
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
@@ -123,6 +125,7 @@ export class MeshWorkerCore {
 				surfaceGrid: this.shape.blockSize,
 				debugSeams: this.debugSeams,
 				speckle: this.speckle,
+				ambientOcclusion: this.ambientOcclusion,
 				grid: this.grid
 					? {
 							...this.grid,
