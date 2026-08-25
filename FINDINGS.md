@@ -1777,6 +1777,53 @@ ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
 
 
+### F-085 — `tools/bench.ts` crashes before it measures anything, and its header reads knobs that no longer exist
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, trying to measure `canonicalCell`'s guard against a real frame
+**Where:** `tools/bench.ts`, `packages/engine/src/generation/chunk/ChunkPeaks.ts`
+`peakOf`
+
+**What happens.** `npx vite-node tools/bench.ts` builds the coarse map, prints
+its header, and then throws on the first scene:
+
+```
+TypeError: Cannot read properties of undefined (reading '0')
+    at ChunkPeaks.peakOf (ChunkPeaks.ts:144)
+    at walk (selectChunks.ts:113)
+    at selectChunks (selectChunks.ts:194)
+```
+
+`peakOf` reads `this.levels[deepest]`, and at the shipped settings — depth 13
+cut at chunk level 7 — `deepest` lands past the end of the pyramid, which is
+capped at level 6. Nothing is measured: the run dies before the first scene is
+timed.
+
+The header is stale in the same direction. It prints `height scale undefined`
+and `landforms undefined m down to 75 m in undefined octaves`, because it reads
+`heightScale` and the landform rows that went when the map became the terrain
+and the detail tier was removed.
+
+**Why it matters.** This is the only harness that measures what a frame costs
+on a CPU — selection, generation and meshing over the reference scenes — and
+the numbers 0.1.0 recorded were read off it. While it throws, there is no way
+to answer *is this change faster* about the thing that actually runs, and the
+temptation is to answer it from a micro-benchmark instead. That is exactly what
+happened here: F-084 was closed on a ratio that turned out not to reach a
+frame, and it took writing a second harness to find that out.
+
+**What would fix it.** Two repairs, neither large. Clamp `deepest` to the
+pyramid's own cap in `peakOf` — the cap is deliberate (F-023 built it that way,
+finer triangles read their ancestor) and the reader is what has not been told.
+Then take the dead knob names out of the header, or read them off
+`PlanetSettings` the way the world itself is read, so the header cannot drift
+from the world again.
+
+---
+
 ---
 
 
@@ -1836,20 +1883,39 @@ zero weight the point is strictly inside its own face, so `{ face, i, j }` is
 the answer and the search below is never reached. `cellRepresentations` keeps
 its full behaviour for the callers that want every name.
 
-Measured over the real engine by `tools/trial-canonical.ts`, which walks the
-ring of every cell of a 180,589-cell patch at level 8 — 1,083,531 steps, which
-is the shape of what a mesher and the delta store do: **1,789 ms searching
-every step against 207 ms guarded, 8.6x**, and the same answer on all
-1,083,531. `neighbour` itself is 142 ms of that, so the canonicalising alone
-went from `1,647 ms` to `65 ms`. Three runs gave 8.6x, 9.1x and 8.6x.
+**The entry above overstates what this is worth, and the measurement that
+closed it is what showed that.** The function itself is `9.4x` cheaper —
+1,083,531 calls go from `1,790 ms` to `191 ms`, same answer on every one — and
+**the engine does not get faster**, because nothing in it canonicalises in
+bulk without already guarding:
 
-`packages/engine/tests/addressing/neighbours/canonicalCell.test.ts` pins it
-against the search it replaces over every cell of the whole lattice at levels
-1, 2, 4 and 8 rather than over a sample, and checks the implication the guard
-rests on: a cell with a second name always has a zero weight.
+- `CoarseGrid` is the one path that walks the whole lattice, and it *already
+  carried the identical test at its call site* — `shared` is the same
+  zero-weight check. World creation does not move: **2,923 ms against
+  2,907 ms** for the coarse map at level 8.
+- A chunk build asks only **1,550** times, about **1.4%** of its own 175 ms,
+  so generating and meshing does not move either: **183 ms a chunk against
+  176 ms**, inside a run-to-run spread of 4,025–4,694 ms over the same 24
+  chunks.
 
-`demos/multi-noise-lab.html` carries the same guard in its port, so the block
-still matches the engine line for line.
+So the claim in the entry — that `encodeCell`, `cellSlot` and the mesher's
+rings would each get their share of `9x` — was reasoning from a micro-benchmark
+to a frame, and the frame says no. What the guard actually buys is that a
+caller no longer has to know any of this: bulk canonicalising was a footgun,
+and `CoarseGrid` is a call site that had to carry the test itself to avoid it.
+`demos/multi-noise-lab.html` is the caller that met the footgun, canonicalising
+every cell of a patch that can be the whole planet.
+
+Kept anyway on that ground, at no cost: it is three comparisons, the answer is
+identical, and `packages/engine/tests/addressing/neighbours/canonicalCell.test.ts`
+pins it against the search it replaces over **every** cell of the whole lattice
+at levels 1, 2, 4 and 8 rather than over a sample, and checks the implication it
+rests on — a cell with a second name always has a zero weight. The lab carries
+the same guard in its port, so that block still matches the engine line for
+line.
+
+`tools/trial-canonical.ts` runs all three measurements and is the thing to
+re-run before believing a ratio like this one again.
 
 ---
 

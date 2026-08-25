@@ -764,7 +764,10 @@
 			 * icosahedron vertex. With no zero the point is strictly inside its
 			 * own face, which names it and nothing else does -- and without the
 			 * guard, better than 97% of calls walk all twenty faces to hand back
-			 * the cell they were given.
+			 * the cell they were given. **This lab is the caller that made it
+			 * worth guarding**: it canonicalises every cell of a patch that can
+			 * be the whole planet, where the engine's own bulk caller already
+			 * carried the same test at its call site.
 			 */
 			function canonicalCell(face, n, i, j) {
 				if (i > 0 && j > 0 && i + j < n) return { face, i, j };
