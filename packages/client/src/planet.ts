@@ -249,7 +249,19 @@ const REPORT_INTERVAL = 100;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
+const readout = document.querySelector<HTMLDivElement>("#readout")!;
 const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
+
+// **Shut, and one mark wide.** The readout is six lines of numbers standing
+// over the view, and the world is what the window is for -- so it opens on a
+// click and starts closed. The button is outside the canvas, and the canvas is
+// the only thing that asks for the pointer, so this stays clickable in exactly
+// the states the parameter panel does.
+const readoutOpen = document.querySelector<HTMLButtonElement>("#readout-open")!;
+readoutOpen.onclick = () => {
+	const open = readout.classList.toggle("open");
+	readoutOpen.setAttribute("aria-expanded", String(open));
+};
 
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
@@ -367,9 +379,14 @@ if (params.get("panel") === "1") {
 	// **The readout goes into the panel with everything else.** A box of
 	// numbers over the top-left corner of the view stands on the ground it is
 	// describing; the panel is where what the world is doing belongs, beside
-	// the knobs that change it. Without the panel it stays where it was, which
-	// is the only place there is.
-	panel.section("Readout")?.appendChild(status);
+	// the knobs that change it. The corner button goes with it: a fold in the
+	// panel is the same question already answered, and two ways to open one
+	// readout is one too many. Without the panel the button is what opens it.
+	const readoutSection = panel.section("Readout");
+	if (readoutSection) {
+		readoutSection.appendChild(status);
+		readout.remove();
+	}
 	maps = new MapPreview(
 		settings,
 		panel.section("Map") ?? document.body,

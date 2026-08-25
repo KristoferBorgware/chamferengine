@@ -61,10 +61,56 @@ body {
 	touch-action: none;
 }
 
-.status {
+/*
+ * What the world is doing, behind a button in the corner.
+ *
+ * Six lines of numbers standing over the top-left of the view is a box of text
+ * on the ground it describes, and the world is what the window is for. Shut,
+ * this is one mark; open, it is the same readout it always was. Behind
+ * `?panel=1` it moves into the panel instead and this wrapper goes with its
+ * button, because a fold in the panel is already the same question answered.
+ */
+.readout {
 	position: fixed;
 	top: 1rem;
 	left: 1rem;
+	z-index: 15;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+}
+
+.readout-open {
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border-radius: 50%;
+	background: rgba(18, 22, 29, 0.85);
+	border: 1px solid var(--edge);
+	color: var(--dim);
+	/* A serif italic `i` is the info mark, and costs no glyph to ship. */
+	font:
+		italic 600 14px/1 Georgia,
+		"Times New Roman",
+		serif;
+	cursor: pointer;
+}
+
+.readout-open:hover {
+	color: var(--ink);
+	border-color: var(--edge-lit);
+}
+
+.readout .status {
+	display: none;
+}
+
+.readout.open .status {
+	display: block;
+}
+
+.status {
 	max-width: min(32rem, calc(100vw - 2rem));
 	white-space: pre-line;
 	padding: 0.5rem 0.75rem;
@@ -76,7 +122,6 @@ body {
 
 /* In the panel it is a fold like any other: no box, no corner of its own. */
 .knobs .status {
-	position: static;
 	max-width: none;
 	padding: 0;
 	background: none;
