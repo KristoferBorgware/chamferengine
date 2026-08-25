@@ -623,6 +623,16 @@ export interface PlanetKnobs {
 	 * way it points, which is flat rather than dim: the ambient term stops
 	 * depending on shape, and only **Exposure** and the block's own colour
 	 * are left.
+	 *
+	 * **At its natural strength this is subtle almost everywhere.** The term
+	 * bottoms out at 0.42 only for a face pointing straight down, and the
+	 * shipped ground runs 11.1° of slope at the median -- doc 08 -- where it
+	 * has barely moved off 1. A sheer vertical wall, the steepest a cell
+	 * ever stands, only reaches 0.71. So `1` reads as flat unless the view
+	 * is mostly cliff. Above `1` the term is pushed past that natural floor
+	 * for a stronger effect on steep ground; `2` reaches 0 on a sheer wall
+	 * rather than 0.71. Flat ground is untouched at any strength, because a
+	 * face looking straight up always reads 1 regardless.
 	 */
 	skyShading: number;
 
@@ -1184,7 +1194,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m",
 	},
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
-	skyShading: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	skyShading: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },

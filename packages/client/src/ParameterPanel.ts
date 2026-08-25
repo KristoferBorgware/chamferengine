@@ -655,10 +655,12 @@ const GROUPS: Group[] = [
 			{
 				// The ground's own ambient term -- what is still lighting a
 				// face once the sun is at 0 -- and a different knob from
+				// both **Exposure**, which scales the whole finished frame
+				// after this and the sun are already added together, and
 				// **Sky brightness** under **The air**, which is the marched
 				// atmosphere's own brightness rather than this.
 				key: "skyStrength",
-				label: "Ambient light",
+				label: "Ambient brightness",
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
