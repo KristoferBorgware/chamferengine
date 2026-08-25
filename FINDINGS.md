@@ -1685,6 +1685,58 @@ crepuscular rays live: shafts through a gap in a ridge, seen from the side.
 Nothing cheap has been found for that, and the walk above is what expensive
 looks like.
 
+### F-081 — Switching Full light rebuilds the coarse map, which the switch cannot move
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, asked what flipping the switch actually costs
+**Where:** `packages/client/src/planet.ts` (`flushTerrain`, `onLiveRebuild`),
+`packages/client/src/PlanetSettings.ts` (`REMESH_KNOBS`)
+
+**What happens.** **Full light**, **Sky exposure**, **Corner shading** and
+**Speckle** are in `REMESH_KNOBS` because the mesher bakes them into the
+vertex colours, so moving one has to build the meshes again. The panel routes
+every one of them to `onLiveRebuild`, which is `flushTerrain` -- and
+`flushTerrain` is the path a *terrain* knob takes. It regenerates the coarse
+map from the seed, rebuilds the shape, the peaks pyramid and all seven
+generators, and disposes and recreates the whole worker pool, before a single
+chunk is meshed. None of that is a function of the four knobs that took the
+path.
+
+> **[measured]** The shipped world, before any chunk is meshed: coarse map
+> **1,144 ms**, peaks pyramid **127 ms**, shape and the seven generators
+> **4 ms** together -- **1,276 ms** of work whose every input the four baked
+> knobs leave exactly as it was. The re-mesh that follows is the only part
+> the knob asked for.
+
+**Why it matters.** It reads as a switch that hangs the tab for over a second
+for no reason a player can see, and it is the same second whether the world
+is a shipped one or a plain one. It also makes the four baked knobs feel
+like world settings rather than view settings, which is the opposite of what
+they are: not one of them moves a block.
+
+**What would fix it.** Two candidates, and they are not the same size.
+
+**A: a re-mesh path that is not `flushTerrain`.** Keep the map, the shape,
+the peaks and the generators; hand the pool a new `meshSetup` and rebuild
+the meshes. The obstacle is that a worker's setup is fixed for its life, so
+either the pool is recreated (cheap next to the map) or the setup becomes a
+message the pool can take. Removes the 1,271 ms and leaves the re-mesh.
+
+**B: stop baking the sky exposure at all.** Carry it as its own vertex
+attribute rather than multiplied into the colour, and the shader can ignore
+it on a uniform -- which makes **Full light** and **Sky exposure** take
+effect on the next frame with no rebuild of any kind. It costs **4 bytes a
+vertex** on the current 24-byte stride, a sixth more vertex memory, and it
+does not help **Speckle** or **Corner shading**, which vary per vertex and
+so cannot be divided back out by a uniform. B is the better answer for the
+two knobs a player actually reaches for underground; A is the one that
+helps all four.
+
+---
+
 ## Closed
 
 ### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
