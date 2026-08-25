@@ -1222,10 +1222,16 @@
 			 *
 			 * **This is the whole model.**
 			 *
-			 * - The continentalness curve is read on an axis running from
-			 *   `-seaDepth` at the bottom to `relief` at the top, so its answer
-			 *   is already a height: the floor of the ocean at one end, the top
-			 *   of a plateau at the other.
+			 * - The continentalness curve **is a height, not a land-or-sea
+			 *   switch**. It is read on an axis running from `-seaDepth` at the
+			 *   bottom to `relief` at the top, so its answer is already in
+			 *   metres: an ocean floor at one end, the top of a plateau at the
+			 *   other. Which of those is coast falls out of it rather than being
+			 *   decided by it -- sea level is drawn across the curve, and where
+			 *   the curve crosses that line is the shore. It is the level the
+			 *   other two layers then work on, so it is where the ground would
+			 *   stand before erosion wears it and before peaks and valleys is
+			 *   added.
 			 * - The erosion curve answers **how much erosion takes away here**,
 			 *   from none of it to all of it -- up is more cut away, because the
 			 *   layer is called erosion and erosion is removal. What is left of
@@ -1244,11 +1250,11 @@
 			 * erosion changes the level by construction.
 			 *
 			 * So both are one minus a share of the same cut: the relief keeps
-			 * `1 - cut(E)` and the level keeps `worn(E) = 1 - bite * cut(E)`.
-			 * At a bite of `1` the two are the same number and land the curve
-			 * fully erodes is flattened and lowered together, ending at sea
-			 * level; at `0` the level keeps all of its height and only the bumps
-			 * go.
+			 * `1 - cut(E)`, and the level keeps that same cut scaled by whatever
+			 * `Wears the level down` is set to. Turn that knob all the way up and
+			 * the two are the same number, so land the curve fully cuts is
+			 * flattened and lowered together and ends at sea level; turn it off
+			 * and the level keeps all of its height while only the bumps go.
 			 *
 			 * **Below sea level nothing is worn**: the ocean floor is not what
 			 * the rain is falling on, and wearing it would lift the sea bed
@@ -1526,7 +1532,7 @@
 					"cont",
 					{
 						key: "contSpline",
-						label: "Continentalness → the level here",
+						label: "Continentalness → how high the land stands",
 						type: "spline",
 						// A shelf, a short steep rise, and land that keeps
 						// climbing. **The steep part is the coast**, and it has
@@ -1594,10 +1600,10 @@
 							note: () =>
 								knobs.erosionBite === 0
 									? "off: erosion takes the relief and leaves the level alone"
-									: `<b>worn(E) = 1 − ${knobs.erosionBite.toFixed(
+									: `the level keeps <b>1 − ${knobs.erosionBite.toFixed(
 											2,
-										)} × cut(E)</b>, so land the curve fully cuts is dropped ` +
-										`<b>${Math.round(
+										)} × cut(E)</b> of its height, so land the curve fully cuts ` +
+										`is dropped <b>${Math.round(
 											knobs.erosionBite * 100,
 										)}%</b> of the way to sea level`,
 						},
@@ -3129,20 +3135,27 @@
 					g.lineTo(toX(0), canvas.height - pad);
 					g.stroke();
 					// **The line every curve is read against, drawn on the curve
-					// itself.** On continentalness it is sea level, which is where
-					// the coast is; on peaks and valleys it is the level the
-					// continent already set, so above the line is a peak and below
-					// it a valley. Saying either as a number somewhere else would
-					// make the reader hold two pictures at once.
+					// itself and named there.** On continentalness it is sea
+					// level: the curve gives a height, and where it crosses this
+					// line is the coast. On peaks and valleys it is the level the
+					// continent already set, so above the line is a peak and
+					// below it a valley. Saying either as a number somewhere else
+					// would make the reader hold two pictures at once.
 					const mark = markOn(key);
-					if (mark !== null) {
+					if (mark) {
+						const y = toY(mark.at);
 						g.strokeStyle = "rgba(111, 208, 255, 0.5)";
 						g.setLineDash([3, 3]);
 						g.beginPath();
-						g.moveTo(pad, toY(mark));
-						g.lineTo(canvas.width - pad, toY(mark));
+						g.moveTo(pad, y);
+						g.lineTo(canvas.width - pad, y);
 						g.stroke();
 						g.setLineDash([]);
+						// **An unlabelled line is a line nobody can read.** The
+						// contour graph names its own; so does this one.
+						g.fillStyle = "rgba(111, 208, 255, 0.8)";
+						g.font = "9px system-ui, sans-serif";
+						g.fillText(mark.name, pad + 2, y - 3);
 					}
 					g.strokeStyle = CURVE_TINT[key] ?? "#6fd0ff";
 					g.lineWidth = 1.5;
@@ -3239,12 +3252,12 @@
 
 			/** Where the dashed line sits on a curve, in the curve's own units. */
 			function markOn(key) {
-				if (key === "pvSpline") return 0.5;
+				if (key === "pvSpline") return { at: 0.5, name: "level" };
 				if (key !== "contSpline") return null;
 				const span = knobs.relief + knobs.seaDepth;
 				if (span <= 0) return null;
 				const at = (knobs.seaLevel + knobs.seaDepth) / span;
-				return at >= 0 && at <= 1 ? at : null;
+				return at >= 0 && at <= 1 ? { at, name: "sea" } : null;
 			}
 
 			/**
@@ -3259,7 +3272,7 @@
 				if (key === "contSpline")
 					return [
 						"ocean",
-						`up: the level, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
+						`up: height, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
 							knobs.relief,
 						).toLocaleString()} m`,
 						"inland",

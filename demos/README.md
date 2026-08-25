@@ -437,11 +437,14 @@ octave applies everywhere at one amplitude, so one statistic describes the whole
 planet and nothing in it can say *be different here*. Three stacks sharing no
 parameter can, and the order they are read in is the whole construction:
 
-- **Continentalness** sets the level. Its curve runs from `-Sea depth` at the
-  bottom to `Relief` at the top, so its answer is already a height — an ocean
-  floor at one end, the top of a plateau at the other. Sea level is drawn across
-  it as a dashed line, and where the curve crosses that line is where the coast
-  is.
+- **Continentalness** sets the level, and its curve **is a height, not a
+  land-or-sea switch**. It runs from `-Sea depth` at the bottom to `Relief` at
+  the top, so its answer is already in metres — an ocean floor at one end, the
+  top of a plateau at the other. Which of those is coast falls out of it rather
+  than being decided by it: sea level is drawn across the curve and labelled
+  there, and where the curve crosses that line is the shore. It is the level the
+  other two layers then work on, so it is where the ground would stand before
+  erosion wears it and before peaks and valleys is added.
 - **Erosion** decides how much of the relief is cut away. Its curve answers a
   fraction from none of it to all of it — **up is more cut away**, because the
   layer is called erosion and erosion is removal. What survives is `1 - cut(E)`
@@ -462,11 +465,11 @@ to **Wears the level down**, because water wears a range down as well as
 smoothing it, and in a nested spline — where the height is one function of all
 three fields — erosion changes the level by construction.
 
-Both are one minus a share of the same cut. The relief keeps `1 - cut(E)` and
-the level keeps `worn(E) = 1 - bite × cut(E)`, so at a bite of `1` the two are
-the same number and land the curve fully cuts is flattened and lowered together,
-ending at sea level; at `0` the level keeps all of its height and only the bumps
-go.
+Both are one minus a share of the same cut. The relief keeps `1 - cut(E)`, and
+the level keeps that same cut scaled by whatever **Wears the level down** is set
+to. Turn that knob all the way up and the two are the same number, so land the
+curve fully cuts is flattened and lowered together and ends at sea level; turn
+it off and the level keeps all of its height while only the bumps go.
 
 Measured over the planet, the knob moves the top of the distribution and leaves
 the bottom exactly where it is. From `0` to `0.55` to `1`, the 95th percentile
