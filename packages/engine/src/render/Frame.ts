@@ -87,4 +87,16 @@ export interface Frame {
 	 * `exposure` and the block's own colour are left.
 	 */
 	readonly skyShading: number;
+
+	/**
+	 * What the sky's own ambient light is worth on a surface.
+	 *
+	 * This is the term `skyShading` reshapes but does not scale: with the sun
+	 * switched off, the sky is what is left lighting the world at all, and
+	 * nothing before this multiplier could turn it down. `1` is the ambient
+	 * term as the ground shader's own `SUN_SHARE` describes it; under it a
+	 * face reads darker at any angle, over it brighter, and the floor a face
+	 * keeps after dark is untouched -- this is the daylight sky alone.
+	 */
+	readonly skyLight: number;
 }

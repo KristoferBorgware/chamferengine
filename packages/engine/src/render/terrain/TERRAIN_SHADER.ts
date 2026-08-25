@@ -21,7 +21,8 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * what is left of the light when it is not, `night.z` is what the direct
  * sun is worth against the sky, and `night.w` is how much a face's own angle
  * to the sky still shades it once the sun is gone. `sky.rgb` is what the sky
- * is doing, which is the color of everything the sun does not reach directly.
+ * is doing, which is the color of everything the sun does not reach
+ * directly, and `sky.w` is what that ambient light is worth.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
@@ -218,7 +219,7 @@ fn lightOn(
 	// that tint is enough to read as sky without turning grey stone blue.
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
-	let fromSky = tint * (ambient * openness * day);
+	let fromSky = tint * (ambient * openness * day * frame.sky.w);
 	let fromSun = sunColor(up) * (direct * lambert * day * frame.night.z);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a

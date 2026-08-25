@@ -2311,6 +2311,7 @@ async function main(): Promise<void> {
 			moon: [moon.x, moon.y, moon.z],
 			sunLight: current.knobs.sunStrength,
 			skyShading: current.knobs.skyShading,
+			skyLight: current.knobs.skyStrength,
 			moonLight: PLAIN ? 0 : current.knobs.moonLight,
 			exposure: current.knobs.exposure,
 		});
