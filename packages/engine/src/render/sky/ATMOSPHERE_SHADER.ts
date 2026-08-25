@@ -386,7 +386,11 @@ fn ditherAt(p : vec2i) -> f32 {
 @fragment
 fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 	let at = vec2i(in.clip.xy);
-	let worldColor = textureLoad(scene, at, 0).rgb;
+	// Premultiplied, and its alpha is coverage: 0 where the world pass drew
+	// nothing at all, and a cloud's own opacity where one drew without
+	// writing depth.
+	let drawn = textureLoad(scene, at, 0);
+	let worldColor = drawn.rgb;
 
 	let size = vec2f(textureDimensions(scene));
 	let uv = in.clip.xy / size;
@@ -456,7 +460,13 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 		// The sky's own luminance at this very pixel, unclamped -- what the
 		// stars have to compete with, and what reddens the sun below.
 		let skyLum = max(0.0, dot(scattered, vec3f(0.2126, 0.7152, 0.0722)));
-		background = celestialAt(dir, skyLum);
+		// **Under what was drawn, not over it.** A cloud is translucent, so
+		// it must not write depth -- which leaves it looking to this pass
+		// exactly like empty space. Replacing the colour here cut every cloud
+		// off at the planet's limb, where the sky behind it is the only thing
+		// a depth test can find. What the world pass leaves is premultiplied,
+		// so the sky is the part of the pixel the world did not cover.
+		background = worldColor + celestialAt(dir, skyLum) * (1.0 - drawn.a);
 	}
 
 	let dimmed = exp(-depth * extinction() * haze);

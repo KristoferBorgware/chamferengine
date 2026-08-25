@@ -34,6 +34,22 @@ ${SHADOW_WGSL}
  */
 const SUN_SHARE = ${SUN_SHARE};
 
+/**
+ * Where a step stops being legible, in metres of world across one pixel.
+ *
+ * At the shipped 1 m block, \`0.35\` is about three pixels to a step -- still
+ * plainly a staircase, and left alone. \`2.5\` is two and a half steps inside
+ * one pixel, where nothing of the terracing survives sampling and all that is
+ * left is the interference between its spacing and the pixel grid.
+ *
+ * It never turns the whole way to the column's up: a hillside that reads as
+ * completely smooth is a different lie from a hillside that strobes, and the
+ * shape of the ground is still worth seeing at distance.
+ */
+const BLUR_FROM = 0.35;
+const BLUR_TO = 2.5;
+const BLUR_MOST = 0.85;
+
 struct Frame {
 	viewProj : mat4x4f,
 	eye      : vec4f,
@@ -97,6 +113,33 @@ fn vertexMain(
 fn faceNormal(local : vec3f, toEye : vec3f) -> vec3f {
 	let n = normalize(cross(dpdx(local), dpdy(local)));
 	return select(-n, n, dot(n, toEye) > 0.0);
+}
+
+/**
+ * How much of a step the eye can still tell apart, from one block to none.
+ *
+ * A voxel hillside is a staircase, and at a low sun the flat top of a step
+ * takes \`sin(elevation)\` of the direct light while the riser beside it takes
+ * \`cos(elevation)\` -- at an 8 degree sun that is a factor of **seven**
+ * between two surfaces a metre apart. Near the eye that reads as terracing,
+ * which is what the world is. Far off, where a whole step lands inside one
+ * pixel, it beats against the pixel grid and draws moire rings across a
+ * hillside instead.
+ *
+ * **The measure is metres of world per pixel, not distance.** A step is
+ * unresolvable when the pixel covering it is wider than the step is tall, and
+ * that depends on the resolution and the field of view as much as on how far
+ * away the ground is -- so it is read off the derivative rather than guessed
+ * from a range in metres. Taken on the **chunk-relative** position, because a
+ * world position here is a number near 6,800 where \`float32\` steps by about a
+ * millimetre and the change across one pixel is a few of those.
+ *
+ * What it returns is how far to turn the face's own normal toward the
+ * column's up: 0 while the steps are legible, rising as they stop being.
+ */
+fn stepBlur(local : vec3f) -> f32 {
+	let perPixel = length(fwidth(local));
+	return smoothstep(BLUR_FROM, BLUR_TO, perPixel) * BLUR_MOST;
 }
 
 /**
@@ -190,13 +233,18 @@ fn lightOn(
 @fragment
 fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	let world = in.local + chunk.origin.xyz;
-	let normal = faceNormal(in.local, frame.eye.xyz - world);
+	let up = normalize(in.up);
+	// Turned toward the column's own up as a step stops fitting inside a
+	// pixel, so distant ground shades as the hillside it is rather than
+	// strobing between the top of each step and its riser.
+	let normal = normalize(mix(
+		faceNormal(in.local, frame.eye.xyz - world), up, stepBlur(in.local)));
 	// The two shares sum to 1, so flat ground under a noon sun reads the same
 	// whatever the balance is and only what stands at an angle to the sun
 	// moves.
 	let direct = SUN_SHARE;
 	let lit =
-		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
+		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -208,12 +256,14 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 @fragment
 fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	let world = in.local + chunk.origin.xyz;
-	let normal = faceNormal(in.local, frame.eye.xyz - world);
+	let up = normalize(in.up);
+	let normal = normalize(mix(
+		faceNormal(in.local, frame.eye.xyz - world), up, stepBlur(in.local)));
 	// Water takes less of its light from the sun than stone does: a look
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
 	let lit =
-		in.color * lightOn(normal, normalize(in.up), world, in.depth, 1.0 - direct, direct);
+		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

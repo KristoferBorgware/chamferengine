@@ -1873,6 +1873,37 @@ Violating any of these breaks the design. They are not tunable.
   bound and would fix the near field for nearly nothing; the far field needs
   a coarse-map lookup on the sun leg, which is **one texture read per step**
   rather than the per-fragment march F-074 struck.
+- **NOT EVERYTHING IN THE WORLD PASS WRITES DEPTH, SO ALPHA HAS TO CARRY
+  COVERAGE** (`ChunkRenderer` clear, `fragmentMain` in `ATMOSPHERE_SHADER`).
+  A cloud is translucent and must not write depth, which leaves it looking to
+  the air pass **exactly like empty space** -- and that pass decided what a
+  pixel was by depth alone, then **replaced** the colour with the stars. So
+  every cloud with sky rather than ground behind it was erased: cut off at the
+  planet's limb seen from outside, and gone altogether from the sky overhead,
+  so a daytime sky held no clouds at all. The scene target
+  now clears to **alpha 0**, the cloud's existing `one / one-minus-src-alpha`
+  alpha blend accumulates coverage, and the air composites **under** what was
+  drawn: `worldColor + sky * (1 - alpha)`, premultiplied. Nothing else had to
+  change -- every opaque pipeline already writes alpha 1 and writes depth, so
+  its pixels never reach this path.
+- **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
+  `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
+  the flat top of a step takes `sin(elevation)` of the direct light while the
+  riser beside it takes `cos(elevation)` -- a factor of **seven** at an 8
+  degree sun, two surfaces a metre apart. Near the eye that is terracing,
+  which is what the world is. Far off, where a whole step lands inside one
+  pixel, it beats against the pixel grid and draws **moire rings** across a
+  hillside. The face normal is turned toward the column's own up as that
+  happens, which damps the alternation the rings are made of. **The measure is
+  metres of world per pixel, not distance** -- a step is unresolvable when the
+  pixel covering it is wider than the step is tall, and that depends on the
+  resolution and the field of view as much as on range, so it is read off
+  `fwidth` rather than guessed from metres. Taken on the **chunk-relative**
+  position, for the same `float32` reason the normal itself is. It never turns
+  the whole way: a hillside that reads as completely smooth is a different lie
+  from one that strobes. **Post-processing cannot fix this** -- bloom and the
+  tone curve run after the image is sampled, and moire is information already
+  gone by then.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
   The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
   shipped planet -- and the world opens with the camera **`1,100 m` up**,

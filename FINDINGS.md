@@ -244,6 +244,12 @@ has since removed the march and the depth knob with it, so the check today is
 **Shadow maps** off. The reading is unaffected — nothing here was ever a
 shadow.)*
 
+*(Partly addressed 2026-08-25. The **moiré** half — the interference rings a
+distant hillside draws once each step lands inside a pixel — is damped by
+turning the face normal toward the column's up as that happens, `stepBlur` in
+`TERRAIN_SHADER`. The stripes and the crawl below are untouched, and remain
+what this entry is about.)*
+
 **What would fix it.** Two separate things, and they are worth separating.
 The crawl is antialiasing: 4× MSAA on the scene target and a resolve in the
 tone pass, which every in-frame pipeline would have to declare. The stripes

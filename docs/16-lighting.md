@@ -246,6 +246,31 @@ those steps directly, as the change of any value across one pixel. So the
 mesher writes no normal, the vertex keeps its six floats, and nothing about the
 mesh format changes.
 
+### A step too small to see is a step that aliases
+
+The same face normal that makes a block read as a block makes a distant
+hillside strobe. A voxel slope is a staircase, and the flat top of each step
+and the riser beside it take very different amounts of a low sun — at 8° the
+one takes `sin(8°)` and the other `cos(8°)`, a factor of **seven** between two
+surfaces a metre apart. Near the eye that is terracing, which is what the
+world is made of. Far off, where a whole step lands inside one pixel, the
+regular spacing beats against the pixel grid and draws moiré rings across the
+hillside.
+
+So the normal is turned toward the column's own up as a step stops fitting in
+a pixel, which damps the alternation the rings are made of. **The measure is
+metres of world per pixel, not distance**: a step is unresolvable when the
+pixel covering it is wider than the step is tall, and that depends on the
+resolution and the field of view as much as on how far away the ground is. It
+is read off the derivative rather than guessed from a range in metres, and it
+never turns the whole way — a hillside that reads as perfectly smooth is a
+different lie from one that strobes.
+
+None of this is something a post-processing pass can do. Bloom and the tone
+curve run *after* the image is sampled, and moiré is information that is
+already gone by then; the only cures are to sample more densely before it is
+lost, or to damp the variation that is aliasing, which is this.
+
 One catch, and it is a precision one. The change across a pixel has to be taken
 on the **chunk-relative** position, never the world one. A world position here
 is a number near 6,800, where `float32` steps by about a millimetre; the change

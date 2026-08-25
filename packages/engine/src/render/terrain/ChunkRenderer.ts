@@ -402,7 +402,15 @@ export class ChunkRenderer implements ShadowCaster {
 					// in for. `this.sky` still feeds the ground's own ambient
 					// tint below -- a different question from what an empty
 					// pixel shows.
-					clearValue: { r: 0, g: 0, b: 0, a: 1 },
+					//
+					// **Alpha is coverage, and it clears to nothing.** Not
+					// everything in this pass writes depth -- a cloud is
+					// translucent and must not -- so the air pass cannot tell
+					// "a cloud is here" from "nothing is here" by depth
+					// alone, and it was replacing clouds beyond the planet's
+					// limb with the star field behind them. What comes out of
+					// here is premultiplied, so the sky composites under it.
+					clearValue: { r: 0, g: 0, b: 0, a: 0 },
 					loadOp: "clear",
 					storeOp: "store",
 				},
