@@ -85,7 +85,26 @@ export interface MeshJob {
 	readonly deltas?: readonly JobDeltas[];
 }
 
-export type MeshWorkerMessage = MeshWorkerSetup | MeshJob;
+/**
+ * The switches a worker bakes into a vertex colour, changed under a live pool.
+ *
+ * These move no block: the terrain is a function of a face and a lattice
+ * offset and never sees any of them. What they change is a number the mesher
+ * multiplies into a vertex colour, which no shader can divide back out -- so
+ * they need every chunk built again and need nothing else built at all.
+ *
+ * Sent rather than folded into a fresh {@link MeshWorkerSetup} because a setup
+ * carries the coarse map, five typed arrays that a structured clone copies
+ * once per worker. The map is exactly what these knobs leave alone.
+ */
+export interface MeshRetune {
+	readonly kind: "retune";
+	readonly speckle: number;
+	readonly ambientOcclusion: boolean;
+	readonly skyExposure: boolean;
+}
+
+export type MeshWorkerMessage = MeshWorkerSetup | MeshJob | MeshRetune;
 
 /**
  * One chunk meshed, as the buffers a renderer uploads and nothing else.

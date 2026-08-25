@@ -1,6 +1,11 @@
 import type { ChunkMesh } from "../ChunkMesh.js";
 import type { ChunkSelection } from "../../generation/chunk/selectChunks.js";
-import type { JobDeltas, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
+import type {
+	JobDeltas,
+	MeshResult,
+	MeshRetune,
+	MeshWorkerSetup,
+} from "./MeshJob.js";
 import type { MeshSource } from "./MeshSource.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { selectionId } from "../../generation/chunk/selectionId.js";
@@ -52,7 +57,16 @@ export class WorkerMeshSource implements MeshSource {
 	private readonly pending = new Map<number, Pending>();
 	private readonly cancelled = new Set<number>();
 	private readonly create: () => MeshWorkerHandle;
-	private readonly setup: MeshWorkerSetup;
+
+	/**
+	 * What every worker is told before its first chunk.
+	 *
+	 * Not readonly, because {@link retune} replaces the three switches inside
+	 * it as well as posting them. A worker that dies is respawned and told
+	 * this, and a replacement built from the setup the pool opened with would
+	 * quietly go back to the switches the player has since turned off.
+	 */
+	private setup: MeshWorkerSetup;
 
 	/**
 	 * What a player has changed that a chunk reads, asked for as each job is
@@ -125,6 +139,28 @@ export class WorkerMeshSource implements MeshSource {
 		this.create = create;
 		this.setup = setup;
 		for (let n = 0; n < count; n++) this.spawn();
+	}
+
+	/**
+	 * Change the switches the mesher bakes into a vertex colour.
+	 *
+	 * Every worker keeps its map, its shape and the generators it has built
+	 * so far -- none of which is a function of these three. The caller still
+	 * has to drop every chunk that is drawn, because the switch is already
+	 * multiplied into the colours those were built with.
+	 *
+	 * A job already in flight finishes under the old switches. That is worth
+	 * nothing to argue about: the caller is dropping every chunk anyway, so
+	 * the stale one is asked for again the moment it lands.
+	 */
+	retune(message: MeshRetune): void {
+		this.setup = {
+			...this.setup,
+			speckle: message.speckle,
+			ambientOcclusion: message.ambientOcclusion,
+			skyExposure: message.skyExposure,
+		};
+		for (const worker of this.workers) worker.postMessage(message);
 	}
 
 	/** Make one worker, wired so its death is a handled event. */

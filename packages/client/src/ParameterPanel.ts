@@ -1,6 +1,7 @@
 import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
 import {
 	KNOB_RANGES,
+	LIVE_TERRAIN_KNOBS,
 	REMESH_KNOBS,
 	PlanetSettings,
 	copyKnobs,
@@ -1007,8 +1008,17 @@ export class ParameterPanel {
 	 * rebuild** is on, instead of the knob only marking the Rebuild button
 	 * dirty. Never called for a knob outside that set: those still need the
 	 * device and the address width a full reload gives them.
+	 *
+	 * `terrain` says whether **this** key moves the ground. False means it is
+	 * one of {@link BAKED_KNOBS}, so the map, the shape, the peaks and the
+	 * generators all still describe this world and only the meshes are wrong.
+	 * A caller that debounces has to remember a true across the window: the
+	 * panel reports each key as it moves and never how the window ends.
 	 */
-	private readonly onLiveRebuild: (settings: PlanetSettings) => void;
+	private readonly onLiveRebuild: (
+		settings: PlanetSettings,
+		terrain: boolean,
+	) => void;
 	private readonly rows: Row[] = [];
 
 	/** Each named part's own element, so another pane can host one. */
@@ -1059,7 +1069,10 @@ export class ParameterPanel {
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
 		onDraft: (settings: PlanetSettings) => void = () => {},
-		onLiveRebuild: (settings: PlanetSettings) => void = () => {},
+		onLiveRebuild: (
+			settings: PlanetSettings,
+			terrain: boolean,
+		) => void = () => {},
 		options: { readonly bench?: boolean } = {},
 	) {
 		this.bench = options.bench ?? false;
@@ -1741,7 +1754,15 @@ export class ParameterPanel {
 			// new ground, not the new sea radius or the new sky, so Rebuild is
 			// still the way to see everything the knob changed.
 			if (this.liveRebuild && this.settings.problems().length === 0) {
-				if (REMESH_KNOBS.has(key)) this.onLiveRebuild(this.settings);
+				// The panel reports what this one key is. Whoever owns the
+				// settle timer owns remembering the strongest key inside the
+				// window, because it is the one that knows when the window
+				// closed.
+				if (REMESH_KNOBS.has(key))
+					this.onLiveRebuild(
+						this.settings,
+						LIVE_TERRAIN_KNOBS.has(key),
+					);
 			}
 		} else {
 			this.onLive(this.settings);

@@ -1776,6 +1776,81 @@ curve that multiplies is the right shape for it — the lab's erosion curve only
 ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
 
+
+---
+
+
+## Closed
+
+### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, raising the multi-noise lab's patch to half a million cells
+**Where:** `packages/engine/src/addressing/neighbours/canonicalCell.ts`,
+`packages/engine/src/addressing/neighbours/cellRepresentations.ts`
+
+**What happens.** `canonicalCell` asks `cellRepresentations` for every name a
+lattice point has and keeps the one on the lowest face. `cellRepresentations`
+builds a `Map` of the point's non-zero weights and then walks all twenty faces,
+testing each against that map with `includes` and building an array for the ones
+that match. It does this on every call.
+
+A point has more than one name only when it sits on a face edge or at an
+icosahedron vertex, and that is exactly when one of its three weights
+`(n - i - j, i, j)` is zero — three comparisons. Everywhere else the answer is
+the cell that was passed in.
+
+**Why it matters.** The share of points that need the search is small and gets
+smaller with depth. A face at subdivision `n` holds `(n+1)(n+2)/2` lattice
+points and `3n` of them sit on an edge, so at level 8 it is **768 of 33,153**,
+or `2.32%`; at level 11 it is `0.29%`. **Better than 97% of the calls walk
+twenty faces and allocate a map and an array to return their own argument.**
+
+Measured over one patch of 180,589 cells at level 8, taking the ring of all six
+neighbours of every cell — 1.08 million steps, which is what a mesher or a
+delta write does: **1,207 ms canonicalising every step against 70 ms
+canonicalising only where a weight is zero, and the same answer on all of
+them.** That is **17x**, and `neighbour` itself is 52 ms of the total, so the
+canonicalisation is not a cost beside the walk — it *is* the walk.
+
+It is on hot paths. `cellSlot` canonicalises before keying a row, `owns` and
+`chunksHolding` canonicalise while descending, and `DeltaStore.write` reaches
+`chunksReading`, which is the ring of every cell it touches.
+
+**What would fix it.** One guard at the top of `canonicalCell`: if no weight is
+zero, return `{ face, i, j }`. The search below it is then reached only by the
+points that have something to search for, and nothing else changes — the
+function's answer is identical, which is what makes this a cleanup rather than a
+decision. `cellRepresentations` keeps its full behaviour for the callers that
+want every name.
+
+`demos/multi-noise-lab.html` already guards at its own call sites rather than
+inside its port of the function, so the ported block still matches the engine
+line for line and the guard can be dropped there once the engine carries it.
+
+**Closed:** 2026-08-25, by one guard at the top of `canonicalCell`: with no
+zero weight the point is strictly inside its own face, so `{ face, i, j }` is
+the answer and the search below is never reached. `cellRepresentations` keeps
+its full behaviour for the callers that want every name.
+
+Measured over the real engine by `tools/trial-canonical.ts`, which walks the
+ring of every cell of a 180,589-cell patch at level 8 — 1,083,531 steps, which
+is the shape of what a mesher and the delta store do: **1,789 ms searching
+every step against 207 ms guarded, 8.6x**, and the same answer on all
+1,083,531. `neighbour` itself is 142 ms of that, so the canonicalising alone
+went from `1,647 ms` to `65 ms`. Three runs gave 8.6x, 9.1x and 8.6x.
+
+`packages/engine/tests/addressing/neighbours/canonicalCell.test.ts` pins it
+against the search it replaces over every cell of the whole lattice at levels
+1, 2, 4 and 8 rather than over a sample, and checks the implication the guard
+rests on: a cell with a second name always has a zero weight.
+
+`demos/multi-noise-lab.html` carries the same guard in its port, so the block
+still matches the engine line for line.
+
 ---
 
 ### F-083 — Switching Full light rebuilds the coarse map, which the switch cannot move
@@ -1833,83 +1908,77 @@ shape*, is the same function seen from the other side: that entry is about
 what `flushTerrain` fails to update, this one about what it updates and did
 not need to.
 
+**Closed:** 2026-08-25, candidate A. `BAKED_KNOBS` is now a set of its own
+and takes its own path: `flushMeshes` retunes the worker pool in place and
+drops every chunk, where `flushTerrain` still rebuilds the map for a knob that
+moves the ground. What the cheap path skips is **978 ms** on the shipped world
+at depth 13 -- 835 ms of coarse map, 139 ms of peak pyramid, 4 ms for the shape
+and the eight generators (`tools/trial-remesh.ts`) -- and not one input to any
+of them is a function of a baked knob.
+
+The pool is retuned rather than replaced, so the map's five typed arrays are
+not structured-cloned once per worker either. A `retune` message carries the
+three switches; `WorkerMeshSource` folds them into the setup it holds, so a
+worker spawned later to replace a dead one gets them too rather than quietly
+going back to what the player has just turned off.
+
+What is left is the re-mesh itself, which is the work the knob actually asked
+for. Confirmed in the real client (`tools/probe-remesh-path.mjs`): Full light
+and Corner shading take the mesh path, Relief takes the terrain path, and the
+readout now says which -- it claimed "rebuilding the terrain" for a knob that
+rebuilds no terrain, which is what made the two impossible to tell apart from
+outside.
+
+Candidate B -- carrying the sky exposure as its own vertex attribute, so no
+rebuild is needed at all -- is untouched and still costs 4 bytes a vertex. It
+is worth less now than it was: what it removes is a re-mesh rather than a
+re-mesh plus a map.
+
 ---
 
-## Closed
+### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
 
-### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
-
-**Kind:** cleanup
+**Kind:** bug
 **Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-25, raising the multi-noise lab's patch to half a million cells
-**Where:** `packages/engine/src/addressing/neighbours/canonicalCell.ts`,
-`packages/engine/src/addressing/neighbours/cellRepresentations.ts`
+**Priority:** low
+**Effort:** trivial
+**Found:** 2026-08-25, running `npm run format:check` before a push
+**Where:** `package.json`, the `prettier` devDependency
 
-**What happens.** `canonicalCell` asks `cellRepresentations` for every name a
-lattice point has and keeps the one on the lowest face. `cellRepresentations`
-builds a `Map` of the point's non-zero weights and then walks all twenty faces,
-testing each against that map with `includes` and building an array for the ones
-that match. It does this on every call.
+**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
+and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
+Neither file has been edited since the merge that brought it in, and it was
+formatted when it was written. What changed is the formatter: the dependency
+is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
+lays a union type out differently -- a short union that 3.4 broke onto one
+line per member, 3.9 collapses onto a single line.
 
-A point has more than one name only when it sits on a face edge or at an
-icosahedron vertex, and that is exactly when one of its three weights
-`(n - i - j, i, j)` is zero — three comparisons. Everywhere else the answer is
-the cell that was passed in.
+**Why it matters.** Running `--write` here fixes the check on this machine
+and breaks it on any machine that resolved 3.4.x, so the two files would
+flip back and forth with every session and every diff would carry
+whitespace nobody chose. The formatter is a tool whose whole value is that
+everybody gets the same answer, and a caret range is the one thing that
+stops it giving one. It also means `format:check` is red for reasons
+unrelated to whatever a session is actually doing, which trains people to
+ignore it.
 
-**Why it matters.** The share of points that need the search is small and gets
-smaller with depth. A face at subdivision `n` holds `(n+1)(n+2)/2` lattice
-points and `3n` of them sit on an edge, so at level 8 it is **768 of 33,153**,
-or `2.32%`; at level 11 it is `0.29%`. **Better than 97% of the calls walk
-twenty faces and allocate a map and an array to return their own argument.**
+**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
+caret -- and run `--write` once over the whole repo in the same commit, so
+the tree and the pin agree from that point on. A lockfile alone is not
+enough, because `npm install` in a fresh container with no lockfile entry
+for a transitively hoisted tool still picks the newest match. Nothing else
+in the toolchain has this shape: `typecheck`, `check-style.js` and
+`build-docs.js` all run code that lives in this repository.
 
-Measured over one patch of 180,589 cells at level 8, taking the ring of all six
-neighbours of every cell — 1.08 million steps, which is what a mesher or a
-delta write does: **1,207 ms canonicalising every step against 70 ms
-canonicalising only where a weight is zero, and the same answer on all of
-them.** That is **17x**, and `neighbour` itself is 52 ms of the total, so the
-canonicalisation is not a cost beside the walk — it *is* the walk.
-
-It is on hot paths. `cellSlot` canonicalises before keying a row, `owns` and
-`chunksHolding` canonicalise while descending, and `DeltaStore.write` reaches
-`chunksReading`, which is the ring of every cell it touches.
-
-**What would fix it.** One guard at the top of `canonicalCell`: if no weight is
-zero, return `{ face, i, j }`. The search below it is then reached only by the
-points that have something to search for, and nothing else changes — the
-function's answer is identical, which is what makes this a cleanup rather than a
-decision. `cellRepresentations` keeps its full behaviour for the callers that
-want every name.
-
-`demos/multi-noise-lab.html` already guards at its own call sites rather than
-inside its port of the function, so the ported block still matches the engine
-line for line and the guard can be dropped there once the engine carries it.
-
+**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
+reformatted in the same commit. The flip-flop is not hypothetical: while this
+entry was being written another session pushed a commit reformatting
+`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
+Prettier wanted expanded -- which turned a file that passed here into a third
+failure the moment it was merged. `package-lock.json` already resolved
+`3.9.6`, so the tree and the lock now agree and the range can no longer drift
+under a fresh install.
 ---
-
-**Closed:** 2026-08-25, by one guard at the top of `canonicalCell`: with no
-zero weight the point is strictly inside its own face, so `{ face, i, j }` is
-the answer and the search below is never reached. `cellRepresentations` keeps its
-full behaviour for the callers that want every name.
-
-Measured over the real engine by `tools/trial-canonical.ts`, which walks the
-ring of every cell of a 180,589-cell patch at level 8 — 1,083,531 steps, which
-is the shape of what a mesher and the delta store do: **1,789 ms searching
-every step against 207 ms guarded, 8.6x**, and the same answer on all
-1,083,531. `neighbour` itself is 142 ms of that, so the canonicalising alone
-went from `1,647 ms` to `65 ms`. Three runs gave 8.6x, 9.1x and 8.6x.
-
-`packages/engine/tests/addressing/neighbours/canonicalCell.test.ts` pins it
-against the search it replaces over every cell of the whole lattice at levels
-1, 2, 4 and 8 rather than over a sample, and checks the implication the guard
-rests on: a cell with a second name always has a zero weight.
-
-`demos/multi-noise-lab.html` carries the same guard in its port, so the block
-still matches the engine line for line.
-
----
-
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

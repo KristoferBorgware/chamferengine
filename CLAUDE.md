@@ -1101,6 +1101,29 @@ Violating any of these breaks the design. They are not tunable.
   proves the feature works and the checkbox proves nothing. Ten rows were dead
   this way, both shadow toggles among them. The frame reads `current`, which
   `onLiveKnob` reassigns; anything else that a frame reads goes there too.
+- **NEEDING THE MESHES AGAIN IS NOT NEEDING THE MAP AGAIN** (`BAKED_KNOBS`,
+  `flushMeshes`, `WorkerMeshSource.retune`, F-083). Four knobs -- speckle,
+  corner shading, sky exposure and full light -- change a number the mesher
+  multiplies into a vertex colour, which no shader can divide back out, so
+  every chunk has to be built again. They were routed down `flushTerrain`, the
+  path a **terrain** knob takes, which regenerates the coarse map from the
+  seed and rebuilds the shape, the peak pyramid, all the generators and the
+  whole worker pool first. **Not one input to any of that is a function of any
+  of the four**: the terrain reads a face and a lattice offset and has never
+  been told about one of them. Measured on the shipped world at depth 13
+  (`tools/trial-remesh.ts`), that is **978 ms** before a single chunk is
+  meshed -- **835 ms** of coarse map, **139 ms** of peak pyramid, 4 ms for the
+  shape and the eight generators. `flushMeshes` keeps all of it and **retunes
+  the pool in place**, which also stops the map's five typed arrays being
+  structured-cloned once per worker, and it is not `async`: there is no long
+  synchronous stretch to yield the thread before. **A retune folds into the
+  setup the pool holds**, or a worker spawned to replace a dead one quietly
+  goes back to the switches the player has just turned off. **And the readout
+  has to say which ran** -- it claimed "rebuilding the terrain" for a knob
+  that rebuilds no terrain, which is what made the two paths impossible to
+  tell apart from outside and is how `tools/probe-remesh-path.mjs` checks the
+  routing in the real client. What is left is the re-mesh, which is the work
+  the knob actually asked for.
 - **A row with no meaning comes off the panel, it is not greyed out**
   (`Knob.shownWhen`, `ParameterPanel`). **Mountain line** shows only under the
   gated merge, which is the only one with a gate. A disabled row is a question

@@ -21,6 +21,10 @@ self.onmessage = (event: MessageEvent<MeshWorkerMessage>) => {
 		return;
 	}
 	if (!core) throw new Error("chunk worker asked for a chunk before setup");
+	if (message.kind === "retune") {
+		core.retune(message);
+		return;
+	}
 
 	const result = core.run(message);
 	self.postMessage(result, { transfer: MeshWorkerCore.buffers(result) });

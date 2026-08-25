@@ -20,6 +20,7 @@ export { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 export type {
 	MeshJob,
 	MeshResult,
+	MeshRetune,
 	MeshWorkerMessage,
 	MeshWorkerSetup,
 	JobDeltas,

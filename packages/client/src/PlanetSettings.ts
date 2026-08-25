@@ -966,26 +966,46 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
- * The knobs a live rebuild can show, which is every one needing the chunks
- * meshed again.
+ * The knobs that need the chunks built again and move no block doing it.
  *
- * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving. The rest here leave
- * every block exactly where it was and still need the same work, because what
- * they change is **baked into the vertex colours** rather than read by a
- * shader -- so nothing on screen moves until each chunk is built again.
+ * What they change is **baked into the vertex colours** rather than read by a
+ * shader, so nothing on screen moves until each chunk is meshed again -- and
+ * the map, the shape, the peaks and the generators are all exactly what they
+ * were, because the terrain reads a face and a lattice offset and never sees
+ * one of these. That is what lets them take a cheaper path than a terrain
+ * knob: the pool is retuned in place rather than replaced, which skips the
+ * coarse map.
  *
- * **They are deliberately not in `LIVE_TERRAIN_KNOBS` itself**, which
+ * **They are deliberately not in {@link LIVE_TERRAIN_KNOBS}**, which
  * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
  * set, so a knob joining it files a player's buildings under a different world
  * every time it is turned. Needing the same work as a terrain knob is not the
  * same thing as being one, and this is the set that says so.
+ *
+ * **`fullbright` is here and reaches the mesher through `skyExposure`.** The
+ * sky term is a number multiplied into a vertex colour, and no shader can
+ * divide one back out of what it was handed, so full light has to stop it
+ * being baked rather than override it afterwards.
  */
-export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
-	...LIVE_TERRAIN_KNOBS,
+export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
 	"fullbright",
+] satisfies (keyof PlanetKnobs)[]);
+
+/**
+ * The knobs a live rebuild can show, which is every one needing the chunks
+ * meshed again.
+ *
+ * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving and needs the map
+ * built again with it; {@link BAKED_KNOBS} needs only the meshes. Which of the
+ * two a key falls in decides which path it takes, and this set is what says a
+ * key takes either.
+ */
+export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	...LIVE_TERRAIN_KNOBS,
+	...BAKED_KNOBS,
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
