@@ -1861,38 +1861,18 @@ Violating any of these breaks the design. They are not tunable.
   needed because the geometry is not Earth's -- a horizontal look of two or
   three kilometres here crosses a large share of the whole atmosphere's
   optical depth, where the same distance on Earth crosses very little.
-- **THE AIR IS SHADOWED BY A WALK OVER THE MAP, AND TWO BOUNDS ARE WHAT MAKE
-  IT AFFORDABLE** (`terrainReach` in `AIR_SHADOW_WGSL`, `GroundHeights`, doc
-  16, F-076 closed). An in-scattering sample asks whether the sun reaches it,
-  and the only thing that could answer no was the planet's own **sphere** --
-  terrain is invisible to a ball test, so the column of air in front of a
-  ridge was lit as though the ridge were not there and a low sun behind it
-  painted a warm disc across its face, the haze being thrown **30x** forward.
-  The coarse map answers the question directly: walk toward the sun and ask
-  whether the ground ever stands above the walk. **The cascades cannot do
-  this job** -- they carry 260 m and the ridge is kilometres off, and the box
-  that would cover the air a hazy ray crosses would spend every texel on
-  nothing. **A ceiling bounds every walk**: no ground stands above the tallest
-  reading on the map, so a sample above that radius cannot be shadowed at all
-  and a walk from below it stops there -- one ray-sphere solve, so a look at
-  the sky costs nothing and a look at the horizon walks a couple of kilometres
-  however low the sun is. **The sun's own height bounds the rest**: ground
-  shades itself only where its slope beats the sun, measured at 4.6% of a
-  patch at a 20 degree sun and 0.1% at 35, so the walk **fades out** between
-  those two angles -- a threshold would draw its own edge across the sky as
-  the sun climbed through it. Measured over two frames of one sunrise, the
-  ridge's own face falls from **86.0 to 63.1** of 255 while the zenith moves
-  **43.5 to 40.6** together at a 6.5% spread, and with the sun high the two
-  frames are one picture: **123.1 against 123.0**, a mean move of **0.73 of
-  255**. **The bill is the product of two step counts**: six readings times
-  the march's own ten is sixty dependent texture reads a fragment, and on this
-  project's software adapter ten-by-eight stops presenting altogether,
-  ten-by-seven draws at **915 ms** against the frame's own 140, and
-  five-by-eight at **302 ms**. F-076's own estimate of *one lookup per step*
-  was wrong -- one reading says how high the ground is under a point, and
-  whether a ridge stands in the way is a walk. **Shafts of light through a gap
-  in terrain now exist**, being the same shadowing seen from another angle;
-  what still does not shadow the air is anything a player **placed** (F-078).
+- **NOTHING SHADOWS THE AIR, SO A LOW SUN GLOWS THROUGH A MOUNTAIN** (F-076,
+  `inPlanetShadow`). An in-scattering sample asks whether the sun reaches it
+  and the only thing that can answer no is the planet's own **sphere** --
+  terrain is invisible to that test and to the sun-leg table read beside it.
+  So the column of air in front of a ridge is lit as though the ridge were
+  not there, and with the haze thrown **30x** forward a low sun behind it
+  paints a warm disc across its face. **The same gap is why there are no
+  crepuscular rays**: shafts through a gap in terrain *are* that shadowing,
+  so the feature and the artifact are one question. The cascades are already
+  bound and would fix the near field for nearly nothing; the far field needs
+  a coarse-map lookup on the sun leg, which is **one texture read per step**
+  rather than the per-fragment march F-074 struck.
 - **NOT EVERYTHING IN THE WORLD PASS WRITES DEPTH, SO ALPHA HAS TO CARRY
   COVERAGE** (`ChunkRenderer` clear, `fragmentMain` in `ATMOSPHERE_SHADER`).
   A cloud is translucent and must not write depth, which leaves it looking to

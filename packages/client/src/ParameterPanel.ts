@@ -623,11 +623,6 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
-				key: "airShadows",
-				label: "Shadows in the air",
-				enabledWhen: (k) => !k.plain && k.atmosphereOn,
-			},
-			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,

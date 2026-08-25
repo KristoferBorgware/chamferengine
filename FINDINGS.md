@@ -1544,39 +1544,7 @@ when the ground moves, so nothing else has to change.
 
 ---
 
-### F-078 — The air is shadowed by generated ground alone, so a placed block casts no beam
-
-**Kind:** gap
-**Milestone:** beyond 1.0.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-25, closing F-076
-**Where:** `packages/engine/src/render/light/AIR_SHADOW_WGSL.ts`
-(`terrainReach`), `packages/engine/src/render/light/CascadeShadow.ts`
-
-**What happens.** F-076 gave the air a shadow, and the thing casting it is the
-coarse map -- which is a picture of the **generated** world and holds no placed
-block, no mob and no player, ever. So a tower somebody builds shades the ground
-under it, through the cascades, and shades none of the air beside it. At a low
-sun that is the difference between a tower with a beam of dusty light past it
-and a tower with none.
-
-**Why it matters.** Not much yet. It is the same gap the cascades were built
-to close for surfaces: a map cell is 32 m and a block is 1 m, so this is not a
-resolution the map can ever reach, and the two shadows are each other's blind
-spot in the air exactly as they are on the ground.
-
-**What would fix it.** Sample the cascades in the atmosphere march as well,
-taking the darker of the two the way the surface read used to. The maps are
-already rendered and already hold anything that draws itself, so the cost is
-one comparison sample per in-scattering step -- a tenth of what the walk over
-the map costs. What it buys is bounded by the cascades' own reach, which is
-260 m at the shipped settings and 1,200 m at the most the panel allows, so it
-is the near field only. That is where a built thing stands.
-
 ---
-
-## Closed
 
 ### F-076 — The in-scattered light is not blocked by terrain, so a low sun glows through a mountain
 
@@ -1625,52 +1593,45 @@ shadowing. Three shapes, cheapest last:
 - Do neither, and hold **Haze** and **Haze forward** low enough that the
   spike never gets bright. That is what ships today.
 
-**Closed:** 2026-08-25, fixed. The second of the three shapes above, with two
-bounds neither of which is a tuning choice, and a measurement that says the
-first shape would not have been enough.
+**Tried, and reverted:** 2026-08-25, `ce77f5b`, reverted the same day. The
+second shape above, built and then taken out again. Three things it taught,
+all of which the next attempt has to answer:
 
-`GroundHeights` puts the coarse map back on the GPU -- one `r32float` layer per
-icosahedron face, 2.6 MB, the same upload `SunShadow` did before F-074 removed
-it -- and `AIR_SHADOW_WGSL`'s `terrainReach` walks it toward the sun from every
-in-scattering sample. **A ceiling is what makes it affordable**: no ground
-stands above the tallest reading on the map, so a sample above that radius
-cannot be shadowed at all and a walk from below it stops there, which is one
-ray-sphere solve and holds every walk on the planet to a couple of kilometres
-however low the sun is. **The sun's own height is the second bound**: the
-section this finding sat next to already measured 4.6% of a patch in shadow at
-a 20 degree sun and 0.1% at 35, so the walk fades out between those two angles
-and costs nothing for most of a day. It has to be a fade, or it draws its own
-edge across the sky as the sun climbs through it.
+- **The walk is far too expensive for what it draws.** The bill is the
+  **product** of two step counts -- six readings toward the sun per
+  in-scattering sample, times the march's own ten, is sixty dependent texture
+  reads a fragment. On this project's software adapter ten-by-eight stops
+  presenting altogether, ten-by-seven draws at **915 ms** of GPU against the
+  rest of the frame's 140, and five-by-eight at **302 ms**. The estimate in
+  this entry of *one lookup per in-scattering step* is wrong and is the reason
+  the shape looked affordable: one reading of the map says how high the ground
+  is under one point, and whether a ridge stands between a point and the sun
+  is a walk, not a reading.
+- **A map cell is 32 m and the walk had six steps, so the shadow it drew was a
+  coarse copy of the ridge** rather than light. It reads as a dark shape laid
+  over the hillside, with the map's own cell size and the walk's own step
+  spacing both visible in its edge.
+- **The elevation fade was wrong, and the wrongness is instructive.** The walk
+  was faded out above a 20 to 35 degree sun on the measurement that ground
+  shades *itself* only where its own slope beats the sun -- which is a fact
+  about **ground**, and says nothing about a 300 m mountain seen from its
+  foot, which subtends a huge angle and blocks a high sun outright. So the
+  case a person actually stands in -- at the base of a mountain, sun behind
+  the summit -- was the one case the fade switched off.
 
-The cascades were not used, and the reason is the reach the finding already
-named: they carry 260 m and the ridge is kilometres off. What the walk cannot
-do is shadow the air behind a **placed** block, which is what a cascade could
-have done -- filed as its own question rather than folded in here.
-
-Measured over two frames of one sunrise, one URL parameter apart: over the near
-ridge's own face the mean falls from **86.0 to 63.1** of 255, a mean per-pixel
-move of **50.5**; at the zenith in the same frames **43.5 to 40.6**, moving
-together with a 6.5% spread, so the sky keeps its colour. With the sun high the
-two frames are the same picture -- **123.1 against 123.0**, a mean move of
-**0.73 of 255**, fifth percentile of the ratio 0.996 and ninety-fifth 1.006 --
-which is the elevation fade doing what it was measured for.
-
-**The finding's cost estimate was wrong and is worth correcting.** "One lookup
-per in-scattering step" does not answer the question: a single reading of the
-map says how high the ground is under one point, and whether a ridge stands
-between a point and the sun is a walk. The bill is the **product** of the two
-step counts, six times the march's own ten, which is sixty dependent texture
-reads a fragment. On the software adapter this project takes its frames on
-that is where it stops being free: ten samples and eight walk steps stops
-presenting altogether, ten and seven draws at **915 ms** of GPU against the
-rest of the frame's 140 ms, and five and eight draws at **302 ms**. Halving
-either number halves the cost, which is what says the reads are the whole of
-it.
-
-**Shafts of light through a gap in terrain now exist**, since they are the same
-shadowing seen from a different angle.
+**And the artifact has a second half this entry never named.** With the sun
+behind a near mountain the disc and its bloom are correctly hidden, and a soft
+bright patch still marks where the sun is, so it can be tracked straight
+through the rock. That patch is the Mie term: at `g = 0.76` the phase is 30x
+brighter straight at the sun than even scattering, so airlight along a view ray
+pointed at a hidden sun is 30x what it is beside it. Shadowing the samples is
+one answer to it; a cheaper one may be to ask a single question per pixel --
+*is the sun itself behind something* -- rather than one per sample, since the
+depth buffer already knows and the disc is already being hidden by it.
 
 ---
+
+## Closed
 
 ### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
 
