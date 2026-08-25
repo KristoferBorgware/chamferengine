@@ -3128,7 +3128,7 @@
 			/**
 			 * One editable curve, over the histogram of what the world lands on.
 			 *
-			 * Across is that layer's own noise value, up is what it controls. The
+			 * X is that layer's own noise value, y is what it controls. The
 			 * four points it opens with are a starting shape and not the shape:
 			 * click the empty curve to add a point, shift-click one to take it
 			 * away, and only the two ends are pinned, in x alone, so the curve
@@ -3302,32 +3302,32 @@
 			/**
 			 * What a curve's two axes are, written under it as two statements.
 			 *
-			 * **Across is the field and up is the consequence, and only up may
-			 * claim one.** Naming the ends of across "untouched" and "most
-			 * eroded" reads as a fact about the ground, and it is not: the field
-			 * is a raw reading and the curve is the only thing that says what a
-			 * reading costs. Drag the curve flat and nothing is eroded anywhere,
-			 * while an end labelled that way still says otherwise. So across
-			 * names the field and its range, and nothing else.
+			 * **X is the field and y is the consequence, and only y may claim
+			 * one.** Naming the ends of x "untouched" and "most eroded" reads
+			 * as a fact about the ground, and it is not: the field is a raw
+			 * reading and the curve is the only thing that says what a reading
+			 * costs. Drag the curve flat and nothing is eroded anywhere, while
+			 * an end labelled that way still says otherwise. So x names the
+			 * field and its range, and nothing else.
 			 */
 			function axisOf(key) {
 				const layer = key.slice(0, -6);
 				const field = { cont: "continentalness", ero: "erosion", pv: "peaks & valleys" }[layer];
 				if (key === "contSpline")
 					return {
-						across: `across · the ${field} field, -1 to +1`,
-						up: `up · the height, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
+						x: `x · the ${field} field, -1 to +1`,
+						y: `y · the height, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
 							knobs.relief,
 						).toLocaleString()} m, with sea level in the middle`,
 					};
 				if (key === "eroSpline")
 					return {
-						across: `across · the ${field} field, -1 to +1`,
-						up: "up · how much of the relief it cuts away, none to all of it",
+						x: `x · the ${field} field, -1 to +1`,
+						y: "y · how much of the relief it cuts away, none to all of it",
 					};
 				return {
-					across: `across · the ${field} field, -1 to +1`,
-					up: `up · the relief, -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
+					x: `x · the ${field} field, -1 to +1`,
+					y: `y · the relief, -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
 						knobs.peakRelief,
 					).toLocaleString()} m, with the continent's own level in the middle`,
 				};
@@ -3395,7 +3395,7 @@
 							axis.className = "axis";
 							const help = document.createElement("p");
 							help.className = "curve-help";
-							// **The bars are what makes across mean anything.** A
+							// **The bars are what makes x mean anything.** A
 							// field's range is -1 to +1 and it reaches nowhere near
 							// either end, so where the bars pile up is the part of
 							// the curve that governs most of the planet -- and a
@@ -3474,7 +3474,7 @@
 						redraw();
 						axis.textContent = "";
 						const said = axisOf(row.key);
-						for (const text of [said.across, said.up]) {
+						for (const text of [said.x, said.y]) {
 							const line = document.createElement("div");
 							line.textContent = text;
 							axis.append(line);

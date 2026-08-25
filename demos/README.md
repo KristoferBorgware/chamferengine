@@ -448,7 +448,7 @@ parameter can, and the order they are read in is the whole construction:
   ground would stand before erosion wears it and before peaks and valleys is
   added.
 - **Erosion** decides how much of the relief is cut away. Its curve answers a
-  fraction from none of it to all of it — **up is more cut away**, because the
+  fraction from none of it to all of it — **higher `y` is more cut away**, because the
   layer is called erosion and erosion is removal. What survives is `1 - cut(E)`
   and it **multiplies**, so a region the curve sends to `1` is flat whatever the
   third field is doing. Drag the whole curve to the top and the patch is a
@@ -516,15 +516,15 @@ planet, and a stretch with no bars under it is a shape nobody will ever stand
 on. Click a curve to add a point, shift-click one to remove it;
 only the two ends are pinned, in x alone.
 
-**Each curve names its two axes as two statements, and only up may claim a
-consequence.** Across is that layer's field and its range, `-1` to `+1`, and
+**Each curve names its two axes as two statements, and only `y` may claim a
+consequence.** `x` is that layer's field and its range, `-1` to `+1`, and
 nothing else: the field is a raw reading, and the curve is the only thing that
-says what a reading costs. Naming the ends of across *untouched* and *most
-eroded* reads as a fact about the ground and is not one — drag the curve flat
-and nothing is eroded anywhere while the label still says otherwise. Up is where
+says what a reading costs. Naming the ends of `x` *untouched* and *most eroded*
+reads as a fact about the ground and is not one — drag the curve flat and
+nothing is eroded anywhere while the label still says otherwise. `y` is where
 the consequence goes, and it runs the way the layer's own word does: erosion is
-removal, so up is how much is cut away and a curve that rises to the right takes
-more.
+removal, so `y` is how much is cut away and a curve that rises to the right
+takes more.
 
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so
