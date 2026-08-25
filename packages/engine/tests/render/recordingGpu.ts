@@ -117,7 +117,7 @@ export class RecordingGpu {
 			// No timestamp query: this device reports nothing about the GPU,
 			// which is the case a renderer has to draw the same frame under.
 			features: new Set<string>(),
-			queue: { writeBuffer() {}, submit() {} },
+			queue: { writeBuffer() {}, writeTexture() {}, submit() {} },
 			createShaderModule: () => ({}),
 			createBindGroupLayout: () => ({}),
 			createPipelineLayout: (descriptor: {

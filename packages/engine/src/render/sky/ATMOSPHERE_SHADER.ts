@@ -1,3 +1,5 @@
+import { AIR_SHADOW_WGSL } from "../light/AIR_SHADOW_WGSL.js";
+
 /**
  * The air, marched over the finished frame -- Sebastian Lague's model, ported.
  *
@@ -36,17 +38,22 @@
  * is exactly the trick \`opticalDepthOver\` below carries over unchanged.
  *
  * **What is not carried over.** The planet's own shadow inside its own air is
- * an explicit ray test here (\`inPlanetShadow\`) -- the source this was ported
+ * an explicit ray test here (\`sunReach\`) -- the source this was ported
  * from has no such test, and a sun-leg sample past the terminator just keeps
  * integrating a longer and longer path with nothing that zeroes it outright,
  * which never quite goes as dark as a real planet's night side does from
- * space. And the baked table is built in the **planet's own metres**, not a
+ * space. Neither does that source have the **landscape's** own shadow on the
+ * air (\`terrainReach\`, in {@link AIR_SHADOW_WGSL}), because a planet seen
+ * from orbit has no ridge in front of the camera: a ball is the only occluder
+ * that matters out there and the only one this model was written for. And the baked table is built in the **planet's own metres**, not a
  * unit sphere the way the source bakes it -- baking against a unit sphere and
  * reading the result back with real-world heights is short by a factor of the
  * planet's own radius, silently, with nothing to catch it but tuning the
  * strength knob until it happens to look right again.
  */
 export const ATMOSPHERE_SHADER = /* wgsl */ `
+${AIR_SHADOW_WGSL}
+
 /**
  * What one planet's air is, and where the eye and the two lights are.
  *
@@ -276,6 +283,10 @@ fn scatter(
 	let aimed = air.beta.xyz * phaseRayleigh(cosTheta)
 		+ vec3f(mieStrength() * phaseMie(cosTheta, mieDirection()));
 	let outward = extinction();
+	// The twenty-way face search, run once for the whole ray rather than once
+	// a sample: a ray a kilometre or two long almost never leaves the face it
+	// started in, and every walk below reaches for its own face from here.
+	let hint = faceOf(origin);
 	var inScattered = vec3f(0.0);
 	// **The offset is what turns banding into noise.** Every pixel marching
 	// from the same place samples the same heights, so wherever the sum
@@ -286,7 +297,13 @@ fn scatter(
 	// does -- cannot do this: by then the band is already in the number.
 	var point = origin + dir * (step * jitter);
 	for (var s = 0; s < steps; s++) {
-		let lit = sunReach(point, sun);
+		// **The planet's own night, and the shadow the landscape casts in
+		// it.** The first is a ball test and reaches round the whole world;
+		// the second is a walk over the coarse map and reaches the horizon.
+		// Without the second the air in front of a ridge is lit as though the
+		// ridge were not there, which at a low sun paints a warm disc across
+		// its face.
+		let lit = sunReach(point, sun) * terrainReach(point, sun, hint);
 		if (lit > 0.0) {
 			let sunDepth = opticalDepthBaked(point, sun);
 			let viewDepth = opticalDepthOver(origin, dir, step * (f32(s) + jitter));

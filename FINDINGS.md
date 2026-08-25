@@ -176,7 +176,7 @@ to carry the chunk it was written under.
 
 ---
 
-### F-072 — The cloud decks stand outside the atmosphere
+### F-077 — The cloud decks stand outside the atmosphere
 
 **Kind:** question
 **Milestone:** 0.5.0
@@ -186,8 +186,9 @@ to carry the chunk it was written under.
 from outside it
 **Where:** `packages/client/src/PlanetSettings.ts`
 
-*(Written down as F-067 in the commit that found it, before master turned out
-to be spending that number on something else.)*
+*(Written down as F-067 in the commit that found it, then F-072, both of which
+turned out to be spent already -- the first by master, the second by the
+erosion entry at the top of this list.)*
 
 **What happens.** The low cloud deck sits `3,000 m` over the crust top, which on
 a planet `6,801 m` in radius puts it at a radius of `10,901 m` — **1.6 times the
@@ -1543,7 +1544,39 @@ when the ground moves, so nothing else has to change.
 
 ---
 
+### F-078 — The air is shadowed by generated ground alone, so a placed block casts no beam
+
+**Kind:** gap
+**Milestone:** beyond 1.0.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-25, closing F-076
+**Where:** `packages/engine/src/render/light/AIR_SHADOW_WGSL.ts`
+(`terrainReach`), `packages/engine/src/render/light/CascadeShadow.ts`
+
+**What happens.** F-076 gave the air a shadow, and the thing casting it is the
+coarse map -- which is a picture of the **generated** world and holds no placed
+block, no mob and no player, ever. So a tower somebody builds shades the ground
+under it, through the cascades, and shades none of the air beside it. At a low
+sun that is the difference between a tower with a beam of dusty light past it
+and a tower with none.
+
+**Why it matters.** Not much yet. It is the same gap the cascades were built
+to close for surfaces: a map cell is 32 m and a block is 1 m, so this is not a
+resolution the map can ever reach, and the two shadows are each other's blind
+spot in the air exactly as they are on the ground.
+
+**What would fix it.** Sample the cascades in the atmosphere march as well,
+taking the darker of the two the way the surface read used to. The maps are
+already rendered and already hold anything that draws itself, so the cost is
+one comparison sample per in-scattering step -- a tenth of what the walk over
+the map costs. What it buys is bounded by the cascades' own reach, which is
+260 m at the shipped settings and 1,200 m at the most the panel allows, so it
+is the near field only. That is where a built thing stands.
+
 ---
+
+## Closed
 
 ### F-076 — The in-scattered light is not blocked by terrain, so a low sun glows through a mountain
 
@@ -1592,9 +1625,52 @@ shadowing. Three shapes, cheapest last:
 - Do neither, and hold **Haze** and **Haze forward** low enough that the
   spike never gets bright. That is what ships today.
 
----
+**Closed:** 2026-08-25, fixed. The second of the three shapes above, with two
+bounds neither of which is a tuning choice, and a measurement that says the
+first shape would not have been enough.
 
-## Closed
+`GroundHeights` puts the coarse map back on the GPU -- one `r32float` layer per
+icosahedron face, 2.6 MB, the same upload `SunShadow` did before F-074 removed
+it -- and `AIR_SHADOW_WGSL`'s `terrainReach` walks it toward the sun from every
+in-scattering sample. **A ceiling is what makes it affordable**: no ground
+stands above the tallest reading on the map, so a sample above that radius
+cannot be shadowed at all and a walk from below it stops there, which is one
+ray-sphere solve and holds every walk on the planet to a couple of kilometres
+however low the sun is. **The sun's own height is the second bound**: the
+section this finding sat next to already measured 4.6% of a patch in shadow at
+a 20 degree sun and 0.1% at 35, so the walk fades out between those two angles
+and costs nothing for most of a day. It has to be a fade, or it draws its own
+edge across the sky as the sun climbs through it.
+
+The cascades were not used, and the reason is the reach the finding already
+named: they carry 260 m and the ridge is kilometres off. What the walk cannot
+do is shadow the air behind a **placed** block, which is what a cascade could
+have done -- filed as its own question rather than folded in here.
+
+Measured over two frames of one sunrise, one URL parameter apart: over the near
+ridge's own face the mean falls from **86.0 to 63.1** of 255, a mean per-pixel
+move of **50.5**; at the zenith in the same frames **43.5 to 40.6**, moving
+together with a 6.5% spread, so the sky keeps its colour. With the sun high the
+two frames are the same picture -- **123.1 against 123.0**, a mean move of
+**0.73 of 255**, fifth percentile of the ratio 0.996 and ninety-fifth 1.006 --
+which is the elevation fade doing what it was measured for.
+
+**The finding's cost estimate was wrong and is worth correcting.** "One lookup
+per in-scattering step" does not answer the question: a single reading of the
+map says how high the ground is under one point, and whether a ridge stands
+between a point and the sun is a walk. The bill is the **product** of the two
+step counts, six times the march's own ten, which is sixty dependent texture
+reads a fragment. On the software adapter this project takes its frames on
+that is where it stops being free: ten samples and eight walk steps stops
+presenting altogether, ten and seven draws at **915 ms** of GPU against the
+rest of the frame's 140 ms, and five and eight draws at **302 ms**. Halving
+either number halves the cost, which is what says the reads are the whole of
+it.
+
+**Shafts of light through a gap in terrain now exist**, since they are the same
+shadowing seen from a different angle.
+
+---
 
 ### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
 

@@ -386,6 +386,9 @@ async function main(): Promise<void> {
 	// guess: a Land setting far from the default shifts sea level a long way,
 	// and a guessed crust top too low shears the mountains flat.
 	let shape = settings.shapeFor(map);
+	// The air's own march reads this to find whether a ridge stands between a
+	// sample and the sun, and the cloud shadow box is centred on it.
+	renderer.ground.upload(map, shape.seaLevelRadius);
 
 	// How high the ground reaches under each triangle, so the selection reaches
 	// for the ground a chunk actually has rather than for the planet's tallest.
@@ -1460,6 +1463,7 @@ async function main(): Promise<void> {
 			? buildCoarseMap(nextSeed, live.coarseOptions())
 			: flatCoarseMap(nextSeed, FLAT_COARSE_LEVEL);
 		shape = live.shapeFor(map);
+		renderer.ground.upload(map, shape.seaLevelRadius);
 		peaks = new ChunkPeaks(map, live.knobs.blockSize, CHUNK_LEVEL);
 		byLod.length = 0;
 		for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
@@ -2196,6 +2200,11 @@ async function main(): Promise<void> {
 			PLAIN || !current.knobs.cascadeShadows ? 0 : 1,
 			current.knobs.cascadeReach,
 		);
+		// The other half of the same question, asked of the air instead of a
+		// surface. The cascades reach a few hundred metres and shade what is
+		// drawn; this reaches the horizon and shades what light is scattered
+		// in, which is the one a cascade box could never cover.
+		renderer.ground.setStrength(PLAIN || !current.knobs.airShadows ? 0 : 1);
 		renderer.atmosphere.inScatteringPoints =
 			current.knobs.inScatteringPoints;
 		renderer.atmosphere.opticalDepthPoints =

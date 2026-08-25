@@ -13,6 +13,7 @@ import { CascadeShadow } from "../light/CascadeShadow.js";
 import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
+import { GroundHeights } from "../light/GroundHeights.js";
 import { SunViews } from "../light/SunViews.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
@@ -130,13 +131,21 @@ export class ChunkRenderer implements ShadowCaster {
 	superSample = 1;
 
 	/**
-	 * The radius the ground sits at, for anything that has to put a box on it.
+	 * The coarse height map on the GPU, which is what shadows the air.
 	 *
-	 * The cloud shadow box is centred on the ground under the camera rather
-	 * than on the camera itself, so it needs to know where that is without
-	 * asking the coarse map -- which no longer has a GPU copy here to ask.
+	 * It exists from the start, holding one texel a face, because a binding a
+	 * pipeline declares has to be filled whether or not a world has been built
+	 * yet. `upload` replaces it with the real thing, and `setStrength(0)`
+	 * turns the walk off on its first line.
+	 *
+	 * **The two shadows in this renderer answer different questions.** The
+	 * cascades hold anything that draws itself, at centimetres, out to a few
+	 * hundred metres, and they shade **surfaces**. This holds generated ground
+	 * alone, at 32 m to a cell, all the way to the horizon, and it shades the
+	 * **air** -- which is the one a cascade box could never cover, because the
+	 * air a hazy ray crosses is kilometres of it.
 	 */
-	groundRadius = 0;
+	readonly ground: GroundHeights;
 
 	/**
 	 * The glare around anything brighter than a screen can show.
@@ -191,7 +200,8 @@ export class ChunkRenderer implements ShadowCaster {
 		this.ctx = ctx;
 		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
-		this.atmosphere = new AtmospherePass(ctx);
+		this.ground = new GroundHeights(ctx);
+		this.atmosphere = new AtmospherePass(ctx, this.ground.layout);
 		this.bloom = new BloomPass(ctx);
 		this.tone = new TonePass(ctx);
 
@@ -401,7 +411,10 @@ export class ChunkRenderer implements ShadowCaster {
 		// Centred on the ground under the camera rather than on the camera: a
 		// player a kilometre up would otherwise carry the box up with them and
 		// spend half of it on air.
-		this.cloudShadow.update(frame, this.groundRadius);
+		// Centred on the ground under the camera rather than on the camera: a
+		// player a kilometre up would otherwise carry the box up with them and
+		// spend half of it on air. The height map knows where the ground is.
+		this.cloudShadow.update(frame, this.ground.seaRadius);
 		const encoder = device.createCommandEncoder();
 		// The sun looks first. Its passes write what the frame then reads, so
 		// they go into the same encoder ahead of everything else.
@@ -493,6 +506,7 @@ export class ChunkRenderer implements ShadowCaster {
 			frame.moon,
 			frame.viewProj.inverse(),
 			this.air,
+			this.ground.bindGroup,
 		);
 		// The glare goes on before the curve, because what spills is the part
 		// of the picture the curve is about to fold away: after it, the sun

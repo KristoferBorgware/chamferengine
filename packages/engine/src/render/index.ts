@@ -24,6 +24,8 @@ export { wireIndices } from "./sea/wireIndices.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
 export { BloomPass } from "./bloom/BloomPass.js";
 export { BLOOM_SHADER } from "./bloom/BLOOM_SHADER.js";
+export { GroundHeights } from "./light/GroundHeights.js";
+export { AIR_SHADOW_WGSL } from "./light/AIR_SHADOW_WGSL.js";
 
 export type { AimTarget } from "./aim/AimTarget.js";
 export { aimGeometry } from "./aim/aimGeometry.js";

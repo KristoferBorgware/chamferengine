@@ -489,6 +489,62 @@ only take away 14% of the light that was there — and the light that was there
 is the smaller half of a lit surface's total. The shadow is doing its job; what
 makes it read is the exposure applied afterwards, not the shadow.
 
+### Nothing shadowed the air, so a low sun glowed through a mountain
+
+The two shadows above shade **surfaces**. The sky is a march through air, and
+every sample along it asks the same question — *does the sun reach here* — with
+one difference: the only thing that could answer no was the planet's own
+sphere. Terrain is invisible to a ball test, so the column of air standing in
+front of a ridge was lit as though the ridge were not there. With the haze
+thrown 30× forward ([doc 32](32-sky-clouds-and-moon.md)) a low sun behind a
+ridge then painted a warm disc across its face, which reads as sunlight through
+solid rock. The same gap is why there were no shafts of light through a gap in
+terrain: those *are* this shadowing.
+
+Neither surface shadow can be borrowed for it. A cascade is a box fitted to
+what the camera sees and reaches 260 m; the air a hazy ray crosses on the way
+to a ridge is kilometres of it, and a box that wide spends every texel on
+nothing.
+
+**The coarse map answers it directly.** Walk from the sample toward the sun and
+ask whether the ground ever stands above the walk — the same walk that shaded
+surfaces before the cascades replaced it, doing the job the cascades cannot
+reach. What makes it affordable is that both ends are bounded, and neither
+bound is a tuning choice:
+
+- **A ceiling.** No ground stands above the tallest point of the map, so a
+  sample already above that radius cannot be shadowed at all, and a walk from
+  below it need only run until it clears that radius. Where the walk stops is
+  one ray–sphere solve against that ceiling. A look at the sky costs nothing;
+  a look at the horizon walks a couple of kilometres however low the sun is.
+- **The sun's own height.** Ground shades itself only where its slope beats the
+  sun, and the section above measures that at 4.6% of a patch at a 20° sun and
+  0.1% at 35°. So the walk fades out between those two angles, which keeps the
+  whole expense on the hour of the day that has the artifact. It has to be a
+  fade rather than a threshold, or it draws its own edge across the sky as the
+  sun climbs through it.
+
+Six readings per in-scattering sample, spaced geometrically: a ridge a few
+hundred metres off is what paints the glow, and a sample high in the air needs
+the far end of the walk instead, so the same six have to serve both.
+
+> **[measured]** Two frames of one sunrise, one URL parameter apart. Over the
+> near ridge's own face the mean falls from **86.0 to 63.1** of 255, a mean
+> per-pixel move of **50.5**. At the zenith in the same frames it is **43.5 to
+> 40.6**, moving together with a 6.5% spread — the sky keeps its colour. With
+> the sun high the two frames are the same picture: **123.1 against 123.0**,
+> a mean move of **0.73 of 255**, fifth percentile of the ratio 0.996 and
+> ninety-fifth 1.006.
+
+**The bill is the product of two step counts, and nothing else.** Six readings
+times the march's own ten samples is sixty dependent texture reads a fragment,
+and on the software adapter this project takes its frames on that is where it
+stops being free: at ten samples and **eight** walk steps the frame stops
+presenting altogether, at ten and seven it draws at **915 ms** of GPU against
+the rest of the frame's 140 ms, and at five and eight it draws at **302 ms**.
+Halving either number halves the cost, which is what says the reads are the
+whole of it.
+
 ### The clouds are the only moving thing, so they get a second shadow
 
 The cascades cannot put a cloud on the ground. They are fitted to a sphere
@@ -732,6 +788,12 @@ happened to land in — which is exactly what a sun does as a camera turns.
   its slope beats the sun's height, and the shipped ground runs 11.1° at the
   median: **22.7%** of a patch is in full shadow at a 5° sun, **4.6%** at 20°
   and **0.0%** at 60°.
+- **The air is shadowed too, or a low sun glows through a mountain.** A ball
+  test cannot see terrain, so the column of air in front of a ridge was lit as
+  though the ridge were not there. A walk over the coarse map answers it,
+  bounded by the tallest ground the map holds and faded out as the sun climbs
+  past 20°: over the ridge's face the mean falls **86.0 to 63.1** of 255, while
+  a high sun leaves the frame unchanged at **123.1 against 123.0**.
 - **After dark the moon is the only thing with a direction.** Without it every
   face reads the same all night. The floor under the light has to sit under the
   sky term alone, or the moon has to beat it before it shows: measured, moonlit

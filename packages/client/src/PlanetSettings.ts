@@ -592,6 +592,22 @@ export interface PlanetKnobs {
 	cloudShadowReach: number;
 
 	/**
+	 * Whether the landscape shadows the air the light is scattered in.
+	 *
+	 * The sky's own march asks every sample whether the sun reaches it, and
+	 * without this the only thing that can answer no is the planet's own
+	 * sphere -- so the column of air in front of a ridge is lit as though the
+	 * ridge were not there, and a low sun behind one paints a warm disc across
+	 * its face. It is also what draws shafts of light through a gap in
+	 * terrain, since those *are* this shadowing.
+	 *
+	 * It costs a short walk over the coarse map per in-scattering sample, and
+	 * only for samples standing lower than the tallest ground the world has:
+	 * looking up, nothing walks at all.
+	 */
+	airShadows: boolean;
+
+	/**
 	 * What the direct sun is worth on a surface.
 	 *
 	 * The sky has its own brightness under **The air**; this is the other
@@ -800,6 +816,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadows: true,
 	cloudShadow: 0.55,
 	cloudShadowReach: 4000,
+	airShadows: true,
 	sunStrength: 1,
 	moonLight: 0.16,
 	exposure: 1,
@@ -1138,6 +1155,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "m",
 	},
+	airShadows: { ...TOGGLE, rebuilds: false },
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },

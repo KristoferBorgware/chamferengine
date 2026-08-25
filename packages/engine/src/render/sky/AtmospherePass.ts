@@ -78,7 +78,7 @@ export class AtmospherePass {
 	/** Half the angle the moon disc covers, in radians. */
 	moonAngularRadius = (0.6 * Math.PI) / 180;
 
-	constructor(ctx: GpuContext) {
+	constructor(ctx: GpuContext, groundLayout: GPUBindGroupLayout) {
 		this.ctx = ctx;
 		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: ATMOSPHERE_SHADER });
@@ -117,7 +117,9 @@ export class AtmospherePass {
 		});
 		this.pipeline = device.createRenderPipeline({
 			layout: device.createPipelineLayout({
-				bindGroupLayouts: [this.layout],
+				// Group 1 is the coarse height map, which the march reads to
+				// find whether a ridge stands between a sample and the sun.
+				bindGroupLayouts: [this.layout, groundLayout],
 			}),
 			vertex: { module, entryPoint: "vertexMain" },
 			fragment: {
@@ -171,6 +173,7 @@ export class AtmospherePass {
 		moonDirection: readonly [number, number, number],
 		inverseViewProj: Mat4,
 		air: PlanetAtmosphere | null,
+		ground: GPUBindGroup,
 	): void {
 		if (!this.sceneView || !this.litView) return;
 		if (air) this.ensureBaked(air);
@@ -235,6 +238,7 @@ export class AtmospherePass {
 		});
 		pass.setPipeline(this.pipeline);
 		pass.setBindGroup(0, this.bindGroup!);
+		pass.setBindGroup(1, ground);
 		pass.draw(3);
 		pass.end();
 	}
