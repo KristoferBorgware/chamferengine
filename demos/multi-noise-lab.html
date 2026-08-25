@@ -1667,11 +1667,11 @@
 							digits: 0,
 							unit: "m",
 							note: () =>
-								"the top half of the continentalness curve, so the highest " +
-								"a continent can stand before peaks are added — and what " +
-								"carries ground past the rock line at 300 m and the snow " +
-								"line at 400 m. It scales the land and leaves the sea floor " +
-								"where it is",
+								"the top half of the continentalness curve, measured from " +
+								"its middle, so the highest a continent can stand before " +
+								"peaks are added — and what carries ground past the rock " +
+								"line at 300 m and the snow line at 400 m. It scales the " +
+								"land and leaves the sea floor where it is",
 						},
 						{
 							key: "seaDepth",
@@ -1683,9 +1683,11 @@
 							digits: 0,
 							unit: "m",
 							note: () =>
-								"the bottom half of the same curve. It deepens the ocean " +
-								"and leaves the land where it is — the coast is where the " +
-								"curve crosses the middle, and no metre knob moves it",
+								"the bottom half of the same curve, measured from its " +
+								"middle — which is where the water sits until Sea level " +
+								"drains it. It deepens the ocean and leaves the land where " +
+								"it is; the coast is where the curve crosses the middle, " +
+								"and no metre knob moves it",
 						},
 						{
 							key: "peakRelief",
@@ -1717,11 +1719,21 @@
 							value: 0,
 							digits: 0,
 							unit: "m",
+							// **Draining moves no ground, so what changes is how much
+							// of it is wet.** Sea depth and Relief are measured
+							// from the curve's middle and stay exactly what they
+							// say; the two numbers that follow the water are the
+							// ones a reader is actually asking about, so they are
+							// spelled out rather than left to be worked out.
 							note: () =>
 								field
 									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land` +
 										(knobs.seaLevel < 0
-											? " — draining uncovers the shallow floor and moves no ground"
+											? ` — the ground has not moved, so the water reaches <b>${Math.round(
+													knobs.seaDepth + knobs.seaLevel,
+												).toLocaleString()} m</b> deep and land stands <b>${Math.round(
+													knobs.relief - knobs.seaLevel,
+												).toLocaleString()} m</b> over it`
 											: "")
 									: "",
 						},
