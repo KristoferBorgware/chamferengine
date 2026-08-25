@@ -1,0 +1,2716 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Multi-noise lab — three fields, three curves, one landscape</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--ink: #e8ecf2;
+				--dim: #8b95a4;
+				--panel: #12161d;
+				--edge: #232b36;
+				--live: #6fd0ff;
+				--cont: #ffd166;
+				--ero: #8ce99a;
+				--pv: #ff9db1;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				overflow: hidden;
+				background: #070a0e;
+				color: var(--ink);
+				font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+			}
+			#view {
+				position: fixed;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				display: block;
+				touch-action: none;
+				cursor: grab;
+			}
+			#view:active {
+				cursor: grabbing;
+			}
+			/* **The four pictures are the reference; the knobs are the work.**
+			   Scrolling to reach a knob must not carry the thing being judged
+			   off the top of the panel, so there are two sections and only the
+			   lower one moves. */
+			#panel {
+				position: fixed;
+				top: 0;
+				right: 0;
+				bottom: 0;
+				width: 340px;
+				display: flex;
+				flex-direction: column;
+				background: rgba(18, 22, 29, 0.94);
+				border-left: 1px solid var(--edge);
+				backdrop-filter: blur(6px);
+			}
+			#head {
+				flex: 0 0 auto;
+				padding: 10px 14px 8px;
+				border-bottom: 1px solid var(--edge);
+			}
+			#scroller {
+				flex: 1 1 auto;
+				overflow-y: auto;
+				overscroll-behavior: contain;
+				padding: 0 14px 24px;
+			}
+			#panel h1 {
+				font-size: 14px;
+				margin: 0 0 6px;
+				letter-spacing: 0.01em;
+			}
+			/* **The three fields and what they make, all four at once.** The
+			   whole point of the construction is that one field cannot say what
+			   three can, and a picture selector shows one at a time -- which
+			   hides exactly the comparison the page is about. */
+			#pictures {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 5px;
+			}
+			.shot {
+				position: relative;
+				line-height: 0;
+			}
+			.shot canvas {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+				cursor: crosshair;
+			}
+			.shot b {
+				position: absolute;
+				left: 4px;
+				top: 4px;
+				font: 600 9.5px/1.4 system-ui, sans-serif;
+				letter-spacing: 0.02em;
+				padding: 1px 4px;
+				border-radius: 2px;
+				color: #12161d;
+				background: var(--cont);
+				pointer-events: none;
+			}
+			.shot.ero b {
+				background: var(--ero);
+			}
+			.shot.pv b {
+				background: var(--pv);
+			}
+			.shot.out b {
+				background: var(--live);
+			}
+			#facts {
+				color: var(--dim);
+				font-size: 11px;
+				margin: 7px 0 0;
+			}
+			#facts b {
+				color: var(--ink);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			#recipe {
+				margin: 6px 0 0;
+				padding: 5px 6px;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				background: #0b0e13;
+				color: var(--dim);
+				font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			#recipe i {
+				font-style: normal;
+				font-weight: 600;
+			}
+			#recipe .c {
+				color: var(--cont);
+			}
+			#recipe .e {
+				color: var(--ero);
+			}
+			#recipe .p {
+				color: var(--pv);
+			}
+			.group {
+				border-top: 1px solid var(--edge);
+				margin: 10px 0 0;
+				padding: 0 0 6px;
+			}
+			.group > summary {
+				padding: 8px 0 4px;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				cursor: pointer;
+				list-style: none;
+				user-select: none;
+			}
+			.group > summary::-webkit-details-marker {
+				display: none;
+			}
+			.group > summary::before {
+				content: "▸ ";
+				color: var(--edge);
+			}
+			.group[open] > summary::before {
+				content: "▾ ";
+			}
+			.group > summary:hover {
+				color: var(--live);
+			}
+			.group.cont > summary {
+				color: var(--cont);
+			}
+			.group.ero > summary {
+				color: var(--ero);
+			}
+			.group.pv > summary {
+				color: var(--pv);
+			}
+			.knob {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				align-items: center;
+				gap: 2px 8px;
+				margin: 7px 0;
+			}
+			.knob label {
+				font-size: 12px;
+			}
+			.knob output {
+				font-variant-numeric: tabular-nums;
+				color: var(--live);
+				font-size: 11.5px;
+			}
+			.knob-note {
+				grid-column: 1 / -1;
+				font-size: 10.5px;
+				color: var(--dim);
+				margin: 1px 0 0;
+			}
+			.knob-note b {
+				color: var(--live);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			.knob input[type="range"],
+			.knob select,
+			.knob input[type="text"] {
+				grid-column: 1 / -1;
+				width: 100%;
+				accent-color: var(--live);
+			}
+			.knob select,
+			.knob input[type="text"] {
+				background: #0b0e13;
+				color: var(--ink);
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				padding: 3px 5px;
+				font: inherit;
+			}
+			.knob.curved {
+				grid-template-columns: 1fr;
+			}
+			.curve {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				touch-action: none;
+				cursor: crosshair;
+			}
+			.curve-help {
+				font-size: 10px;
+				color: var(--dim);
+				margin: 2px 0 0;
+				line-height: 1.35;
+			}
+			.axis {
+				display: flex;
+				justify-content: space-between;
+				font-size: 9.5px;
+				color: var(--dim);
+				margin: 1px 0 0;
+				font-variant-numeric: tabular-nums;
+			}
+			.knob.check {
+				grid-template-columns: auto 1fr;
+			}
+			.knob.check input {
+				grid-column: auto;
+				width: auto;
+			}
+			#hint {
+				position: fixed;
+				left: 12px;
+				bottom: 10px;
+				color: var(--dim);
+				font-size: 11.5px;
+				pointer-events: none;
+			}
+			@media (max-width: 760px) {
+				#panel {
+					width: 100%;
+					top: auto;
+					height: 56%;
+					border-left: 0;
+					border-top: 1px solid var(--edge);
+				}
+				#hint {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="view"></canvas>
+		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
+		<div id="panel">
+			<div id="head">
+				<h1>Multi-noise lab</h1>
+				<div id="pictures">
+					<div class="shot cont"><canvas id="shotCont"></canvas><b>Continentalness</b></div>
+					<div class="shot ero"><canvas id="shotEro"></canvas><b>Erosion</b></div>
+					<div class="shot pv"><canvas id="shotPv"></canvas><b>Peaks &amp; valleys</b></div>
+					<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
+				</div>
+				<div id="recipe"></div>
+				<div id="facts"></div>
+			</div>
+			<div id="scroller">
+				<div id="knobs"></div>
+			</div>
+		</div>
+
+		<script>
+			"use strict";
+
+			// ===== BEGIN engine noise kernel =====
+			// A hand port of packages/engine/src/generation/noise. A demo here
+			// carries no imports and no build step, so this is a copy -- and a
+			// copy that has drifted from the engine is a lab that teaches the
+			// wrong lesson, which is why
+			// packages/engine/tests/demos/multiNoiseLab.test.ts digests this
+			// block against the real functions.
+			/** `2^32`, the divisor that turns a `uint32` into a fraction of one. */
+			const U32 = 4294967296;
+
+			/** Three integer coordinates and a seed, mixed into `[0, 1)`. */
+			function hash3(x, y, z, seed) {
+				let h =
+					(Math.imul(x | 0, 374761393) +
+						Math.imul(y | 0, 668265263) +
+						Math.imul(z | 0, 1274126177) +
+						Math.imul(seed | 0, 1013904223)) >>>
+					0;
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				h = (h ^ (h >>> 16)) >>> 0;
+				return h / U32;
+			}
+
+			/** A seed someone typed, reduced to the `uint32` the hash takes. */
+			function seedFromString(text) {
+				let h = 2166136261 >>> 0;
+				for (let i = 0; i < text.length; i++) {
+					h = (h ^ text.charCodeAt(i)) >>> 0;
+					h = Math.imul(h, 16777619) >>> 0;
+				}
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				return (h ^ (h >>> 16)) >>> 0;
+			}
+
+			/**
+			 * The quintic curve, `6t^5 - 15t^4 + 10t^3`.
+			 *
+			 * Zero in the first and second derivative at both ends, so a normal
+			 * has no crease where one lattice cell meets the next. Smoothstep is
+			 * flat in the first derivative only and leaves a curvature jump at
+			 * every lattice plane, which shading draws as a grid.
+			 */
+			function fade(t) {
+				return t * t * t * (t * (t * 6 - 15) + 10);
+			}
+
+			/** Trilinear value noise, in `[-1, 1]`. */
+			function valueNoise3(px, py, pz, seed) {
+				const xi = Math.floor(px);
+				const yi = Math.floor(py);
+				const zi = Math.floor(pz);
+				const u = fade(px - xi);
+				const v = fade(py - yi);
+				const w = fade(pz - zi);
+				let s = 0;
+				for (let c = 0; c < 8; c++) {
+					const dx = c & 1;
+					const dy = (c >> 1) & 1;
+					const dz = (c >> 2) & 1;
+					const wx = dx ? u : 1 - u;
+					const wy = dy ? v : 1 - v;
+					const wz = dz ? w : 1 - w;
+					s += wx * wy * wz * hash3(xi + dx, yi + dy, zi + dz, seed);
+				}
+				return s * 2 - 1;
+			}
+
+			const OCTAVE_SPREAD = 1000;
+			const RIDGE_GAIN = 2.2;
+
+			/**
+			 * Octaves of value noise with the panel's own parameters, in
+			 * `[-1, 1]`.
+			 *
+			 * Every octave gets its own hashed offset, or two octaves of one
+			 * seeded lattice share zero crossings wherever their frequencies land
+			 * near a whole multiple and the ground grows a repeating grain.
+			 * Octaves accumulate low frequency first, because floating-point
+			 * addition is not associative -- the other order moves the result by
+			 * `1.4e-17` at four and five octaves and by nothing at six and
+			 * eight, which is the kind of error testing never finds. And the sum
+			 * is divided by the total amplitude, so adding an octave adds detail
+			 * without making the world taller.
+			 *
+			 * **`ridge` is in the engine and is not on this panel.** It folds
+			 * each octave at its own zero crossing, which creases a whole world
+			 * at once -- it moves the character of every place together, and
+			 * what a second layer exists for is to make places differ. Both
+			 * layers pass zero. The parameter stays because this block is the
+			 * engine's function and a copy that has dropped an argument is a
+			 * copy that has drifted.
+			 */
+			function octaveNoise(x, y, z, seed, s) {
+				let sum = 0;
+				let amplitude = 1;
+				let total = 0;
+				let f = s.frequency;
+				let weight = 1;
+				const ridge = s.ridge;
+				for (let o = 0; o < s.octaves; o++) {
+					const ox =
+						(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetX;
+					const oy =
+						(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetY;
+					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+					let signal = n;
+					if (ridge > 0) {
+						const fold = 1 - Math.abs(n);
+						const crease = fold * fold;
+						signal = n * (1 - ridge) + (crease * 2 - 1) * ridge;
+						signal *= weight;
+						weight = Math.min(
+							1,
+							Math.max(0, 1 - ridge + ridge * crease * RIDGE_GAIN),
+						);
+					}
+					sum += amplitude * signal;
+					total += amplitude;
+					amplitude *= s.persistence;
+					f *= s.lacunarity;
+				}
+				if (s.normalise === false) return sum;
+				return total > 0 ? sum / total : 0;
+			}
+			// ===== END engine noise kernel =====
+
+			// ===== BEGIN engine coarse grid =====
+			// A hand port of packages/engine/src/addressing. Same reason the
+			// noise above is a copy: a demo here carries no imports and no build
+			// step, and packages/engine/tests/demos/multiNoiseLab.test.ts runs
+			// this block against the real functions, so a copy that has drifted
+			// fails a test rather than drawing a world the engine does not build.
+			//
+			// **The patch is the engine's own lattice**, not a hex grid that
+			// looks like one: the cells come from `positionToCell`, the ring
+			// from `neighbour`, and the hexagons from `cellCorners`. Porting the
+			// lab into the engine is deleting this block and importing the six
+			// names it defines.
+
+			/** The golden ratio, which is what puts the twelve vertices where they are. */
+			const PHI = (1 + Math.sqrt(5)) / 2;
+
+			/** Three components divided by their own length. */
+			function normalize3(v) {
+				const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+				return [v[0] / l, v[1] / l, v[2] / l];
+			}
+
+			/**
+			 * The twelve icosahedron vertices, as unit directions.
+			 *
+			 * A cell sits on a vertex of the subdivided icosahedron, so these
+			 * twelve are the twelve pentagons at every depth and in every world.
+			 * The order is fixed: vertices 0 and 3 carry the coordinate poles and
+			 * vertex 11 carries the prime meridian.
+			 */
+			const VERTICES = [
+				[-1, PHI, 0],
+				[1, PHI, 0],
+				[-1, -PHI, 0],
+				[1, -PHI, 0],
+				[0, -1, PHI],
+				[0, 1, PHI],
+				[0, -1, -PHI],
+				[0, 1, -PHI],
+				[PHI, 0, -1],
+				[PHI, 0, 1],
+				[-PHI, 0, -1],
+				[-PHI, 0, 1],
+			].map(normalize3);
+
+			/**
+			 * The twenty faces, each three indices into the vertex table.
+			 *
+			 * Every triple runs counter-clockwise seen from outside the sphere,
+			 * so a direction table written in one face's frame means the same
+			 * turn on all twenty.
+			 */
+			const FACES = [
+				[0, 11, 5],
+				[0, 5, 1],
+				[0, 1, 7],
+				[0, 7, 10],
+				[0, 10, 11],
+				[1, 5, 9],
+				[5, 11, 4],
+				[11, 10, 2],
+				[10, 7, 6],
+				[7, 1, 8],
+				[3, 9, 4],
+				[3, 4, 2],
+				[3, 2, 6],
+				[3, 6, 8],
+				[3, 8, 9],
+				[4, 9, 5],
+				[2, 4, 11],
+				[6, 2, 10],
+				[8, 6, 7],
+				[9, 8, 1],
+			];
+
+			/**
+			 * The direction of each face's centroid.
+			 *
+			 * The perpendicular bisector between two adjacent centroids contains
+			 * the edge those faces share, so the nearest centroid to a direction
+			 * names the face that direction falls in, exactly.
+			 */
+			const FACE_CENTROIDS = FACES.map(([a, b, c]) =>
+				normalize3([
+					VERTICES[a][0] + VERTICES[b][0] + VERTICES[c][0],
+					VERTICES[a][1] + VERTICES[b][1] + VERTICES[c][1],
+					VERTICES[a][2] + VERTICES[b][2] + VERTICES[c][2],
+				]),
+			);
+
+			/**
+			 * The six lattice steps, counter-clockwise seen from outside.
+			 *
+			 * Index 0 is the step from the face's vertex `A` toward `B`, the
+			 * offset `(+1, 0)`. That anchor is a property of the cell's own face,
+			 * so it never depends on how the cell was reached.
+			 */
+			const DIRECTIONS = [
+				[1, 0],
+				[0, 1],
+				[-1, 1],
+				[-1, 0],
+				[0, -1],
+				[1, -1],
+			];
+
+			/**
+			 * For each face, where each of its three edges leads.
+			 *
+			 * Twenty faces times three edges is sixty entries, each a face number
+			 * and an edge number: 180 bytes for every seam on the planet. Edge
+			 * `e` runs from vertex `e` to vertex `(e + 1) % 3`. Every matched
+			 * pair is traversed in opposite directions by its two faces, which is
+			 * the signature of consistent outward winding, so no orientation flag
+			 * is stored.
+			 */
+			const FACE_ADJACENCY = FACES.map((f, at) =>
+				[0, 1, 2].map((e) => {
+					const a = f[e];
+					const b = f[(e + 1) % 3];
+					for (let g = 0; g < 20; g++) {
+						if (g === at) continue;
+						for (let other = 0; other < 3; other++) {
+							const c = FACES[g][other];
+							const d = FACES[g][(other + 1) % 3];
+							if ((a === c && b === d) || (a === d && b === c))
+								return { face: g, edge: other };
+						}
+					}
+					throw new Error(`face ${at} edge ${e} has no neighbour`);
+				}),
+			);
+
+			/**
+			 * Turn a set of weights on global vertex numbers into an offset on
+			 * `face`.
+			 *
+			 * The weights need not be whole. A lattice point carries integers and
+			 * a droplet standing between cells carries the fractions between
+			 * them, and both are the same three numbers attached to the same
+			 * three vertices.
+			 */
+			function offsetOn(face, weights) {
+				const ids = FACES[face];
+				let total = 0;
+				const w = ids.map((v) => {
+					const x = weights.get(v) ?? 0;
+					total += x;
+					return x;
+				});
+				if (total === 0) return null;
+				for (const v of weights.keys()) if (!ids.includes(v)) return null;
+				return { face, i: w[1], j: w[2] };
+			}
+
+			/**
+			 * The barycentric weights of a lattice point on its face's vertices.
+			 *
+			 * Written this way a lattice point is a set of integer weights
+			 * attached to global vertex numbers, and that description never
+			 * mentions a face.
+			 */
+			function latticeWeights(n, i, j) {
+				return [n - i - j, i, j];
+			}
+
+			/**
+			 * The direction of lattice point `(i, j)` on `face`, at `n = 2^level`.
+			 *
+			 * One barycentric blend evaluated once at full depth, then one
+			 * normalize. Building the same point by repeated arc-midpoint
+			 * subdivision lands on a different sphere, 38.97 m out on a 1,700 m
+			 * planet, and the error is fixed in metres rather than shrinking with
+			 * depth.
+			 */
+			function latticePosition(face, n, i, j) {
+				const [ia, ib, ic] = FACES[face];
+				const [wa, wb, wc] = latticeWeights(n, i, j);
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				return normalize3([
+					a[0] * wa + b[0] * wb + c[0] * wc,
+					a[1] * wa + b[1] * wb + c[1] * wc,
+					a[2] * wa + b[2] * wb + c[2] * wc,
+				]);
+			}
+
+			/**
+			 * Every face-and-offset pair that names the same lattice point.
+			 *
+			 * A point strictly inside a face has one. A point on a face edge has
+			 * two, and a point at an icosahedron vertex has five, since five
+			 * faces meet there. The point is found by matching weights against
+			 * global vertex numbers, so no geometry is involved.
+			 */
+			function cellRepresentations(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				const ids = FACES[face];
+				const carried = new Map();
+				for (let x = 0; x < 3; x++) if (w[x] > 0) carried.set(ids[x], w[x]);
+				const out = [];
+				for (let g = 0; g < 20; g++) {
+					const gv = FACES[g];
+					let ok = true;
+					for (const v of carried.keys()) if (!gv.includes(v)) ok = false;
+					if (!ok) continue;
+					out.push({
+						face: g,
+						i: carried.get(gv[1]) ?? 0,
+						j: carried.get(gv[2]) ?? 0,
+					});
+				}
+				return out;
+			}
+
+			/**
+			 * The one representation a cell is numbered from: the lowest face.
+			 *
+			 * The same rule that awards a border cell to the lowest chunk
+			 * containing it, applied one level up.
+			 */
+			function canonicalCell(face, n, i, j) {
+				const all = cellRepresentations(face, n, i, j);
+				let best = all[0];
+				for (const c of all) if (c.face < best.face) best = c;
+				return best;
+			}
+
+			/**
+			 * Move a set of weights across the edge opposite vertex `leaving`.
+			 *
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
+			}
+
+
+			/**
+			 * Which of the twenty faces a direction falls in.
+			 *
+			 * Twenty dot products, take the largest. Exact rather than an
+			 * approximation: the perpendicular bisector plane between two
+			 * adjacent face centroids contains the two vertices of the edge they
+			 * share, so the face boundaries are the Voronoi boundaries of the
+			 * centroids.
+			 */
+			function faceOf(x, y, z) {
+				let best = 0;
+				let bestDot = -Infinity;
+				for (let f = 0; f < 20; f++) {
+					const c = FACE_CENTROIDS[f];
+					const d = x * c[0] + y * c[1] + z * c[2];
+					if (d > bestDot) {
+						bestDot = d;
+						best = f;
+					}
+				}
+				return best;
+			}
+
+			/**
+			 * Where a direction sits inside a face, as three weights summing to 1.
+			 *
+			 * Cramer's rule on `[A B C] w = dir`, rescaled, which is the same
+			 * blend `latticePosition` runs forwards. A negative weight means the
+			 * direction is outside this face.
+			 */
+			function barycentricOf(face, x, y, z) {
+				const [ia, ib, ic] = FACES[face];
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				const bc = [
+					b[1] * c[2] - b[2] * c[1],
+					b[2] * c[0] - b[0] * c[2],
+					b[0] * c[1] - b[1] * c[0],
+				];
+				const dc = [
+					y * c[2] - z * c[1],
+					z * c[0] - x * c[2],
+					x * c[1] - y * c[0],
+				];
+				const bd = [
+					b[1] * z - b[2] * y,
+					b[2] * x - b[0] * z,
+					b[0] * y - b[1] * x,
+				];
+				const det = a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2];
+				const wa = (x * bc[0] + y * bc[1] + z * bc[2]) / det;
+				const wb = (a[0] * dc[0] + a[1] * dc[1] + a[2] * dc[2]) / det;
+				const wc = (a[0] * bd[0] + a[1] * bd[1] + a[2] * bd[2]) / det;
+				const s = wa + wb + wc;
+				return [wa / s, wb / s, wc / s];
+			}
+
+			/**
+			 * The icosahedron vertex a cell sits on, or `-1` when it sits on none.
+			 *
+			 * A cell is a vertex when two of its three weights are zero, which
+			 * puts all of its weight on one corner. Those twelve cells are the
+			 * pentagons.
+			 */
+			function pentagonVertex(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				let full = -1;
+				let zeros = 0;
+				for (let x = 0; x < 3; x++) {
+					if (w[x] === 0) zeros++;
+					else full = x;
+				}
+				return zeros === 2 ? FACES[face][full] : -1;
+			}
+
+			/**
+			 * The five neighbours of the pentagon on icosahedron vertex `p`, in
+			 * order around it, starting from the step `startFace` takes toward
+			 * its own next vertex.
+			 *
+			 * The ring is built by rotating face to face around the vertex rather
+			 * than by reflecting across one edge. Two of the five faces meeting
+			 * at a vertex touch the starting face only at that vertex, so a
+			 * single reflection cannot reach them.
+			 */
+			function pentagonRing(p, n, startFace) {
+				let g = startFace;
+				const ring = [];
+				for (let s = 0; s < 5; s++) {
+					const e = FACES[g].indexOf(p);
+					// Faces wind A -> B -> C counter-clockwise from outside, so
+					// at vertex p the next cell round is the one toward the
+					// following vertex, and the next face round is the one across
+					// the edge that arrives back at p.
+					const x = FACES[g][(e + 1) % 3];
+					const cell = offsetOn(
+						g,
+						new Map([
+							[p, n - 1],
+							[x, 1],
+						]),
+					);
+					if (cell) ring.push(cell);
+					g = FACE_ADJACENCY[g][(e + 2) % 3].face;
+				}
+				return ring;
+			}
+
+			/**
+			 * The neighbour of `(face, i, j)` in direction `k`, at subdivision `n`.
+			 *
+			 * Returns `null` only for `k = 5` on one of the twelve pentagons,
+			 * whose ring is five long. That is a direction which does not exist
+			 * rather than a gap: the ring is short, never holed and never
+			 * doubled.
+			 *
+			 * Away from those twelve, stepping off the face is a reflection and
+			 * the whole of it is three additions. A lattice point is integer
+			 * weights on global vertex numbers; step outside and exactly one
+			 * weight goes negative. Reflecting across the shared edge sends
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)`,
+			 * where `gamma` is the negative one. The point itself does not move
+			 * -- only the name it is written under.
+			 */
+			function neighbour(face, n, i, j, k) {
+				const p = pentagonVertex(face, n, i, j);
+				if (p >= 0) return pentagonRing(p, n, face)[k] ?? null;
+
+				const [di, dj] = DIRECTIONS[k];
+				const ni = i + di;
+				const nj = j + dj;
+				const w = latticeWeights(n, ni, nj);
+
+				let negative = -1;
+				for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+				if (negative < 0) return { face, i: ni, j: nj };
+
+				// The edge opposite the vertex whose weight went negative is the
+				// one crossed, and the reflection over it is the whole of the step.
+				return acrossEdge(face, w, negative);
+			}
+
+			/**
+			 * The corners of a cell's polygon, counter-clockwise seen from
+			 * outside.
+			 *
+			 * A corner sits at the centroid of one of the triangles meeting at
+			 * the cell, so corner `k` comes from the cell together with its
+			 * neighbours in directions `k` and `k + 1`. Six of them on a hexagon,
+			 * five on a pentagon.
+			 *
+			 * The three lattice points are averaged as **integer weights on
+			 * global vertex numbers**, and only then blended and projected.
+			 * Averaging first and projecting second is what keeps the 30 face
+			 * edges seamless: the sum never mentions a face, so two faces sharing
+			 * a corner compute the same number rather than two numbers that
+			 * nearly agree. Projecting each point and then averaging the results
+			 * gives a different curve.
+			 */
+			function cellCorners(face, n, i, j) {
+				const ring = [];
+				for (let k = 0; k < 6; k++) {
+					const nb = neighbour(face, n, i, j, k);
+					if (nb) ring.push(nb);
+				}
+				const degree = ring.length;
+				const total = new Float64Array(12);
+				const out = [];
+				for (let k = 0; k < degree; k++) {
+					const b = (k + 1) % degree;
+					total.fill(0);
+					addWeights(total, face, n, i, j);
+					addWeights(total, ring[k].face, n, ring[k].i, ring[k].j);
+					addWeights(total, ring[b].face, n, ring[b].i, ring[b].j);
+					let x = 0;
+					let y = 0;
+					let z = 0;
+					for (let v = 0; v < 12; v++) {
+						const w = total[v];
+						if (w === 0) continue;
+						const p = VERTICES[v];
+						x += p[0] * w;
+						y += p[1] * w;
+						z += p[2] * w;
+					}
+					const length = Math.sqrt(x * x + y * y + z * z);
+					out.push([x / length, y / length, z / length]);
+				}
+				return out;
+			}
+
+			/** Add one lattice point's weights into the running total over the twelve vertices. */
+			function addWeights(total, face, n, i, j) {
+				const ids = FACES[face];
+				total[ids[0]] += n - i - j;
+				total[ids[1]] += i;
+				total[ids[2]] += j;
+			}
+
+			/**
+			 * Round three continuous barycentric coordinates to a lattice point.
+			 *
+			 * Rounding each one on its own breaks the sum: `(4.7, 8.6, 2.7)` sums
+			 * to 16 and rounds to `(5, 9, 3)`, which sums to 17 and names no
+			 * lattice point at all. The repair recomputes whichever coordinate
+			 * moved furthest from the other two, because that is the one the
+			 * measurement knows least about.
+			 *
+			 * The third coordinate exists for this. Two cannot detect the error.
+			 */
+			function hexRound(ka, kb, kc, n) {
+				let ra = Math.round(ka);
+				let rb = Math.round(kb);
+				let rc = Math.round(kc);
+				const da = Math.abs(ra - ka);
+				const db = Math.abs(rb - kb);
+				const dc = Math.abs(rc - kc);
+				if (da > db && da > dc) ra = n - rb - rc;
+				else if (db > dc) rb = n - ra - rc;
+				else rc = n - ra - rb;
+				return [ra, rb, rc];
+			}
+
+			/**
+			 * Which lattice point a direction belongs to, at subdivision `n`.
+			 *
+			 * Three steps, all arithmetic: nearest face centroid, then where
+			 * inside that face, then round to a lattice point. A cell is by
+			 * definition the set of directions this maps to it -- never a
+			 * nearest-centre search, which disagrees with the rounding on about
+			 * 1% of the sphere.
+			 *
+			 * **It does not canonicalise, and that is deliberate.** A cell on a
+			 * face edge has two names and a cell on an icosahedron vertex has
+			 * five, and which one comes back here is whichever face the direction
+			 * fell in. Picking one of them is the caller's job, at the moment it
+			 * uses the cell as a key -- which is what `generate` does.
+			 */
+			function directionToCell(x, y, z, n) {
+				const face = faceOf(x, y, z);
+				const [a, b, c] = barycentricOf(face, x, y, z);
+				const [, i, j] = hexRound(a * n, b * n, c * n, n);
+				return { face, i, j };
+			}
+			// ===== END engine coarse grid =====
+			// ---------------------------------------------------------------
+			// The curves.
+			// ---------------------------------------------------------------
+
+			/**
+			 * A curve read at `at`, straight-line between the points it holds.
+			 *
+			 * `at` is a noise value in `[-1, 1]` and the answer is in `[0, 1]`.
+			 * Outside the outermost points the curve holds its end value, so a
+			 * field that reaches further than the curve was drawn for still has
+			 * an answer and the answer is the one the edge of the curve gave.
+			 */
+			function splineAt(points, at) {
+				if (points.length === 0) return 0;
+				if (at <= points[0][0]) return points[0][1];
+				const last = points[points.length - 1];
+				if (at >= last[0]) return last[1];
+				for (let n = 1; n < points.length; n++) {
+					const [x1, y1] = points[n];
+					if (at > x1) continue;
+					const [x0, y0] = points[n - 1];
+					const span = x1 - x0;
+					if (span <= 1e-9) return y1;
+					return y0 + ((y1 - y0) * (at - x0)) / span;
+				}
+				return last[1];
+			}
+
+			/** A curve as a query-string value, and back. */
+			function splineToText(points) {
+				return points
+					.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`)
+					.join(",");
+			}
+			function splineFromText(text) {
+				const out = [];
+				for (const pair of text.split(",")) {
+					const [x, y] = pair.split(":").map(Number);
+					if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+					out.push([
+						Math.max(-1, Math.min(1, x)),
+						Math.max(0, Math.min(1, y)),
+					]);
+				}
+				out.sort((a, b) => a[0] - b[0]);
+				return out.length >= 2 ? out : null;
+			}
+
+			// ---------------------------------------------------------------
+			// The three fields, and the one line that combines them.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The three layers, in the order they are read.
+			 *
+			 * The order is the whole construction. **Continentalness sets the
+			 * level, erosion decides how much relief survives there, and peaks
+			 * and valleys is the relief itself.** Reading them the other way --
+			 * relief first, then a continent under it -- gives a mountain range
+			 * that starts in the sea, because nothing in the range's own field
+			 * knows where it is.
+			 */
+			const LAYERS = ["cont", "ero", "pv"];
+
+			/** Offsets from the world seed, so the three layers are three fields. */
+			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337 };
+
+			/**
+			 * `blockSize = K * radius / 2^depth`, so a depth and a radius fix the
+			 * spacing between two cells and there is nothing left to round.
+			 */
+			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
+
+			/** How wide one hexagon is, centre to centre, in metres. */
+			function cellMetres(k) {
+				return (CELL_CONSTANT * k.radius) / 2 ** k.subdivisionDepth;
+			}
+
+			/**
+			 * One layer's noise stack, read off that layer's own rows.
+			 *
+			 * **A layer is a whole stack, not a frequency.** A layer that
+			 * borrowed its neighbour's octave count and falloff could only say
+			 * the same thing at a different size, and the reason there are three
+			 * is to say three different things: where the land is, how worn it
+			 * is, and what stands on it.
+			 *
+			 * **The size is in metres and the frequency is derived.** A
+			 * frequency counts features from pole to pole, so one setting draws
+			 * hills on a small planet and continents on a large one; metres mean
+			 * the same on every world, and moving the radius then moves the
+			 * horizon and leaves the landforms where they were.
+			 */
+			function layerSettings(k, which) {
+				return {
+					frequency: k.radius / Math.max(1, k[which + "Feature"]),
+					octaves: k[which + "Octaves"],
+					persistence: k[which + "Persistence"],
+					lacunarity: k[which + "Lacunarity"],
+					offsetX: 0,
+					offsetY: 0,
+					// **The fold is what makes a ridge.** Every octave of a plain
+					// sum is smooth in its first and second derivative, so every
+					// summit it can build is a dome; `1 - |n|` creases an octave
+					// at its own zero crossing and the crease is the ridge line.
+					// It belongs on peaks and valleys and nowhere else -- folding
+					// continentalness creases the coast of every continent at
+					// once.
+					ridge: k[which + "Fold"],
+					normalise: true,
+				};
+			}
+
+			/** The three stacks, built once and read everywhere. */
+			function settingsFor(k) {
+				const out = {};
+				for (const which of LAYERS) out[which] = layerSettings(k, which);
+				return out;
+			}
+
+			/**
+			 * What the three fields say at one direction, each in `[-1, 1]`.
+			 *
+			 * **Sampled from the direction vector, in 3D world space** -- never
+			 * from a face's own `(i, j)`. Face coordinates are discontinuous at
+			 * all thirty face edges and the discontinuity is visible as a seam in
+			 * the ground.
+			 */
+			function fieldsAt(x, y, z, seed, s, out) {
+				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.cont, s.cont);
+				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.ero, s.ero);
+				out[2] = octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.pv);
+				return out;
+			}
+
+			/**
+			 * The three readings turned into one height, in metres above sea
+			 * level.
+			 *
+			 * **This is the whole model, and it is three curve reads and one
+			 * multiply.**
+			 *
+			 * - The continentalness curve is read on an axis running from
+			 *   `-seaDepth` at the bottom to `relief` at the top, so its answer
+			 *   is already a height: the floor of the ocean at one end, the top
+			 *   of a plateau at the other.
+			 * - The erosion curve answers **how much of the relief survives
+			 *   here**, from all of it to none. It multiplies, so a region the
+			 *   curve sends to zero is flat whatever the third field is doing --
+			 *   which is the one thing a single stack of octaves can never say.
+			 * - The peaks-and-valleys curve is the relief, signed: its `0.5` is
+			 *   the level the continent set, below it cuts a valley and above it
+			 *   raises a peak.
+			 *
+			 * So high continentalness with low erosion and high peaks is a steep
+			 * ridge, and the same continentalness and the same peaks under high
+			 * erosion is a plain at the same height.
+			 */
+			function heightFrom(said, k) {
+				const base =
+					-k.seaDepth +
+					splineAt(k.contSpline, said[0]) * (k.relief + k.seaDepth);
+				const kept = splineAt(k.eroSpline, said[1]);
+				const swing = splineAt(k.pvSpline, said[2]) * 2 - 1;
+				return base + kept * swing * k.peakRelief;
+			}
+
+			// ---------------------------------------------------------------
+			// The knobs.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The four rows every noise layer carries, plus the fold.
+			 *
+			 * Written once and stamped out three times, because the whole claim
+			 * is that the three layers differ in what they *say* rather than in
+			 * what they *are*. A layer given a row its neighbours do not have
+			 * would be a fourth idea smuggled into a comparison of three.
+			 */
+			function layerRows(which, feature, low, high, octaves, fold) {
+				return [
+					{
+						key: which + "Feature",
+						label: "Feature",
+						low,
+						high,
+						step: (high - low) / 100,
+						value: feature,
+						digits: 0,
+						unit: "m",
+						note: () =>
+							field
+								? `narrowest octave <b>${Math.round(
+										narrowestOf(which),
+									).toLocaleString()} m</b>, ` +
+									`<b>${(narrowestOf(which) / field.cellMetres).toFixed(1)}</b> cells wide`
+								: "",
+					},
+					{
+						key: which + "Octaves",
+						label: "Octaves",
+						low: 1,
+						high: 8,
+						step: 1,
+						value: octaves,
+						digits: 0,
+					},
+					{
+						key: which + "Persistence",
+						label: "Falloff",
+						low: 0.1,
+						high: 0.9,
+						step: 0.05,
+						value: 0.5,
+						digits: 2,
+					},
+					{
+						key: which + "Lacunarity",
+						label: "Step between octaves",
+						low: 1.5,
+						high: 3,
+						step: 0.1,
+						value: 2,
+						digits: 1,
+						unit: "x",
+					},
+					{
+						key: which + "Fold",
+						label: "Fold",
+						low: 0,
+						high: 1,
+						step: 0.05,
+						value: fold,
+						digits: 2,
+						note: () =>
+							"0 is the plain sum, bit for bit; 1 creases every octave " +
+							"at its own zero crossing",
+					},
+				];
+			}
+
+			const KNOBS = [
+				{
+					group: "The world",
+					open: false,
+					rows: [
+						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
+						{
+							key: "radius",
+							label: "Radius",
+							low: 400,
+							high: 8000,
+							step: 100,
+							value: 1700,
+							digits: 0,
+							unit: "m",
+						},
+						{
+							// Depth and radius fix the spacing, so this row is
+							// how wide a hexagon is and the readout says so in
+							// metres. A cell size cannot be asked for directly:
+							// it is quantised to powers of two, and a slider for
+							// it would have positions that build the same world.
+							key: "subdivisionDepth",
+							label: "Subdivision depth",
+							low: 4,
+							high: 12,
+							step: 1,
+							value: 7,
+							digits: 0,
+							note: () =>
+								field
+									? `one hexagon is <b>${field.cellMetres.toFixed(1)} m</b> across`
+									: "",
+						},
+						{
+							key: "cells",
+							label: "Patch",
+							low: 16,
+							high: 96,
+							step: 8,
+							value: 64,
+							digits: 0,
+							unit: "cells across",
+							note: () =>
+								field
+									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons`
+									: "",
+						},
+						{
+							key: "latitude",
+							label: "Latitude",
+							low: -85,
+							high: 85,
+							step: 1,
+							value: -14,
+							digits: 0,
+							unit: "°",
+						},
+						{
+							key: "longitude",
+							label: "Longitude",
+							low: -180,
+							high: 180,
+							step: 1,
+							value: -124,
+							digits: 0,
+							unit: "°",
+						},
+					],
+				},
+				{
+					group: "Continentalness",
+					tint: "cont",
+					open: true,
+					rows: [
+						...layerRows("cont", 1400, 400, 8000, 3, 0),
+						{
+							key: "contSpline",
+							label: "Continentalness → the level here",
+							type: "spline",
+							// A shelf, a short steep rise, and land that keeps
+							// climbing. The steep part is the coast: without it
+							// the curve is one long fade and every shoreline on
+							// the planet is a beach a kilometre wide.
+							value: [
+								[-1, 0.02],
+								[-0.28, 0.1],
+								[0.02, 0.21],
+								[0.12, 0.3],
+								[0.28, 0.44],
+								[0.5, 0.72],
+								[1, 1],
+							],
+						},
+					],
+				},
+				{
+					group: "Erosion",
+					tint: "ero",
+					open: true,
+					rows: [
+						...layerRows("ero", 1800, 400, 8000, 4, 0),
+						{
+							key: "eroSpline",
+							label: "Erosion → how much relief survives",
+							type: "spline",
+							// Falling, and in steps rather than as a ramp. A step
+							// is what puts an edge between a range and the plain
+							// beside it; a ramp gives every place a little of
+							// both and the planet one texture.
+							value: [
+								[-1, 1],
+								[-0.3, 0.95],
+								[-0.1, 0.55],
+								[0.05, 0.18],
+								[0.3, 0.06],
+								[1, 0.02],
+							],
+						},
+					],
+				},
+				{
+					group: "Peaks & valleys",
+					tint: "pv",
+					open: true,
+					rows: [
+						// **Folded, and it is the only layer that is.** A ridge
+						// is a crease and the only place a crease comes from is
+						// an absolute value. Folding either of the other two
+						// creases the coast of every continent instead.
+						...layerRows("pv", 400, 60, 3000, 4, 0.85),
+						{
+							key: "pvSpline",
+							label: "Peaks & valleys → the relief itself",
+							type: "spline",
+							// Half way up is the level the continent set: below
+							// cuts a valley, above raises a peak.
+							value: [
+								[-1, 0.06],
+								[-0.45, 0.24],
+								[-0.05, 0.42],
+								[0.25, 0.58],
+								[0.55, 0.84],
+								[1, 1],
+							],
+						},
+					],
+				},
+				{
+					group: "The ground",
+					open: true,
+					rows: [
+						{
+							key: "relief",
+							label: "Relief",
+							low: 100,
+							high: 2000,
+							step: 20,
+							value: 900,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								"the top of the continentalness curve, so the " +
+								"highest a continent can stand before peaks are added",
+						},
+						{
+							key: "seaDepth",
+							label: "Sea depth",
+							low: 0,
+							high: 1200,
+							step: 20,
+							value: 340,
+							digits: 0,
+							unit: "m",
+							note: () => "the bottom of the same curve",
+						},
+						{
+							key: "peakRelief",
+							label: "Peak relief",
+							low: 0,
+							high: 1500,
+							step: 10,
+							value: 420,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `a full peak over a full valley is <b>${(
+											2 * value("peakRelief")
+										).toLocaleString()} m</b> in ` +
+										`<b>${Math.round(value("pvFeature") / 2).toLocaleString()} m</b>`
+									: "",
+						},
+						{
+							key: "seaLevel",
+							label: "Sea level",
+							low: -400,
+							high: 400,
+							step: 5,
+							value: 0,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land`
+									: "",
+						},
+					],
+				},
+				{
+					group: "The pictures",
+					open: false,
+					rows: [
+						{
+							key: "show",
+							label: "The four pictures show",
+							type: "select",
+							options: ["planet", "patch"],
+							value: "planet",
+							note: () =>
+								knobs.show === "planet"
+									? "click any of them to move the patch there"
+									: "the ground the plane is drawing, from above",
+						},
+					],
+				},
+			];
+
+			const knobs = {};
+			for (const g of KNOBS)
+				for (const r of g.rows)
+					knobs[r.key] =
+						r.type === "spline" ? r.value.map((p) => [...p]) : r.value;
+
+			/**
+			 * The whole draft, as a query string, and back again.
+			 *
+			 * **A link is how a setting travels.** Every knob is a parameter, so
+			 * a world found by dragging can be handed to somebody else rather
+			 * than described. The address bar is rewritten as the knobs move.
+			 */
+			function toParams() {
+				const out = new URLSearchParams();
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						const v = knobs[r.key];
+						if (r.type === "spline") {
+							const now = splineToText(v);
+							if (now !== splineToText(r.value)) out.set(r.key, now);
+							continue;
+						}
+						if (v === r.value) continue;
+						out.set(r.key, String(v));
+					}
+				return out;
+			}
+
+			function fromParams(params) {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						const raw = params.get(r.key);
+						if (raw === null) continue;
+						if (r.type === "spline") {
+							const points = splineFromText(raw);
+							if (points) knobs[r.key] = points;
+						} else if (r.type === "select")
+							knobs[r.key] = r.options.includes(raw) ? raw : r.value;
+						else if (r.type === "text") knobs[r.key] = raw;
+						else {
+							const v = Number(raw);
+							// A hand-edited link can name anything, so a slider's
+							// own ends are what the value is held inside.
+							knobs[r.key] = Number.isFinite(v)
+								? Math.min(r.high, Math.max(r.low, v))
+								: r.value;
+						}
+					}
+			}
+
+			function writeUrl() {
+				const query = toParams().toString();
+				history.replaceState(null, "", query ? `?${query}` : location.pathname);
+			}
+
+			const ROWS = new Map();
+			for (const g of KNOBS) for (const r of g.rows) ROWS.set(r.key, r);
+
+			function value(key) {
+				return knobs[key];
+			}
+
+			/** Every knob in one object, which is what the field is generated from. */
+			function derived() {
+				const k = {};
+				for (const key of ROWS.keys()) k[key] = knobs[key];
+				k.cellMetres = cellMetres(k);
+				return k;
+			}
+
+			/** The narrowest octave a layer reaches, in metres. */
+			function narrowestOf(which) {
+				return (
+					knobs[which + "Feature"] /
+					knobs[which + "Lacunarity"] ** (knobs[which + "Octaves"] - 1)
+				);
+			}
+
+			/** A latitude and a longitude, as a unit direction. */
+			function directionOf(latitude, longitude) {
+				const lat = (latitude * Math.PI) / 180;
+				const lon = (longitude * Math.PI) / 180;
+				const ring = Math.cos(lat);
+				return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+			}
+
+			// ---------------------------------------------------------------
+			// The world, and the patch cut out of it.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The level the three histograms are counted over.
+			 *
+			 * **A curve governs the planet, so what sits under it has to be
+			 * counted over the planet** -- a patch is a place, and a place can be
+			 * entirely on one side of a curve while the world is spread across
+			 * all of it. Level 5 is 10,242 cells, which is the engine's own grid
+			 * at a level coarse enough to run on every knob move.
+			 */
+			const TALLY_LEVEL = 5;
+			const TALLY_BINS = 48;
+
+			/** Every cell of the planet at one level, as directions, built once. */
+			const WORLD = (() => {
+				const n = 1 << TALLY_LEVEL;
+				const out = [];
+				for (let face = 0; face < 20; face++)
+					for (let i = 0; i <= n; i++)
+						for (let j = 0; i + j <= n; j++) {
+							// A cell on a face edge or an icosahedron vertex has
+							// several names and must be counted once, so it is
+							// taken only by the face that owns it.
+							if (canonicalCell(face, n, i, j).face !== face) continue;
+							out.push(latticePosition(face, n, i, j));
+						}
+				return out;
+			})();
+
+			let field = null;
+
+			/** Generate the patch, the world tally, and the numbers on the panel. */
+			function generate(cells = knobs.cells) {
+				const k = derived();
+				const seed = seedFromString(knobs.seed);
+				const s = settingsFor(k);
+				const said = [0, 0, 0];
+
+				// **What the world lands on, under each curve.** Noise clusters
+				// around its own middle, so equal widths of a curve cover wildly
+				// unequal amounts of planet: a drag near the middle repaints a
+				// fifth of the world and the same drag out at the end reaches a
+				// couple of percent of it.
+				const tally = {
+					contSpline: new Float32Array(TALLY_BINS),
+					eroSpline: new Float32Array(TALLY_BINS),
+					pvSpline: new Float32Array(TALLY_BINS),
+				};
+				const keys = ["contSpline", "eroSpline", "pvSpline"];
+				const bin = (v) =>
+					Math.max(
+						0,
+						Math.min(TALLY_BINS - 1, Math.floor(((v + 1) / 2) * TALLY_BINS)),
+					);
+				let land = 0;
+				for (const p of WORLD) {
+					fieldsAt(p[0], p[1], p[2], seed, s, said);
+					for (let x = 0; x < 3; x++) tally[keys[x]][bin(said[x])]++;
+					if (heightFrom(said, k) > k.seaLevel) land++;
+				}
+				let tallest = 0;
+				for (const counts of Object.values(tally))
+					for (const v of counts) if (v > tallest) tallest = v;
+
+				// The patch: the engine's own cells, walked out from the one the
+				// camera is standing over. `neighbour` is what walks, so a patch
+				// that reaches a face edge crosses it the way the engine does and
+				// a patch that reaches a pentagon gets a five-sided cell.
+				const n = 2 ** k.subdivisionDepth;
+				const middle = directionOf(k.latitude, k.longitude);
+				// Canonicalised, because the walk keys every cell it reaches and
+				// a cell on a face edge has more than one name.
+				const found = directionToCell(middle[0], middle[1], middle[2], n);
+				const start = canonicalCell(found.face, n, found.i, found.j);
+				const radius = Math.max(1, cells >> 1);
+				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
+				const at = new Map();
+				const list = [];
+				const add = (c) => {
+					const key = keyOf(c);
+					if (at.has(key)) return false;
+					at.set(key, list.length);
+					list.push(c);
+					return true;
+				};
+				add(start);
+				let frontier = [start];
+				for (let ring = 0; ring < radius; ring++) {
+					const next = [];
+					for (const c of frontier)
+						for (let d = 0; d < 6; d++) {
+							const nb = neighbour(c.face, n, c.i, c.j, d);
+							if (!nb) continue;
+							const cell = canonicalCell(nb.face, n, nb.i, nb.j);
+							if (add(cell)) next.push(cell);
+						}
+					frontier = next;
+				}
+
+				const count = list.length;
+				const height = new Float64Array(count);
+				const layer = new Float32Array(count * 3);
+				// **The polygon and the ring are asked for once, here, and read
+				// from typed arrays afterwards.** Both are pure functions of the
+				// address, so a mesh that recomputed them would be doing the same
+				// arithmetic a second time to get the same answer -- and it is
+				// the mesh that runs while a slider is moving.
+				const degree = new Uint8Array(count);
+				const corner = new Float64Array(count * 18);
+				const ring = new Int32Array(count * 6).fill(-1);
+				const centre = latticePosition(start.face, n, start.i, start.j);
+				let lowest = Infinity;
+				let highest = -Infinity;
+				for (let c = 0; c < count; c++) {
+					const cell = list[c];
+					const p = latticePosition(cell.face, n, cell.i, cell.j);
+					fieldsAt(p[0], p[1], p[2], seed, s, said);
+					for (let x = 0; x < 3; x++) layer[c * 3 + x] = said[x];
+					const m = heightFrom(said, k);
+					height[c] = m;
+					if (m < lowest) lowest = m;
+					if (m > highest) highest = m;
+
+					const corners = cellCorners(cell.face, n, cell.i, cell.j);
+					degree[c] = corners.length;
+					for (let m2 = 0; m2 < corners.length; m2++) {
+						corner[c * 18 + m2 * 3] = corners[m2][0];
+						corner[c * 18 + m2 * 3 + 1] = corners[m2][1];
+						corner[c * 18 + m2 * 3 + 2] = corners[m2][2];
+					}
+					for (let d = 0; d < 6; d++) {
+						const nb = neighbour(cell.face, n, cell.i, cell.j, d);
+						if (!nb) continue;
+						const found = at.get(
+							keyOf(canonicalCell(nb.face, n, nb.i, nb.j)),
+						);
+						// A cell on the rim of the patch has neighbours nobody
+						// generated. `-1` says so, and the mesh draws no wall
+						// there rather than a cliff the world does not have.
+						if (found !== undefined) ring[c * 6 + d] = found;
+					}
+				}
+
+				field = {
+					k,
+					s,
+					seed,
+					n,
+					list,
+					at,
+					keyOf,
+					count,
+					height,
+					layer,
+					degree,
+					corner,
+					ring,
+					centre,
+					cellMetres: k.cellMetres,
+					span: cells * k.cellMetres,
+					tally,
+					tallest,
+					landShare: land / WORLD.length,
+					lowest,
+					highest,
+					draft: cells !== knobs.cells,
+				};
+			}
+
+			// ---------------------------------------------------------------
+			// The four pictures.
+			// ---------------------------------------------------------------
+
+			function cross3(a, b) {
+				return [
+					a[1] * b[2] - a[2] * b[1],
+					a[2] * b[0] - a[0] * b[2],
+					a[0] * b[1] - a[1] * b[0],
+				];
+			}
+
+			/**
+			 * An east-and-north frame around a direction.
+			 *
+			 * Up is `normalize(position)` and there is no global north -- the
+			 * hairy ball theorem forbids one -- so the sideways axes are picked
+			 * against the coordinate pole and swapped for another when the
+			 * direction is the pole itself.
+			 */
+			function frameOf(up) {
+				const pole = Math.abs(up[1]) > 0.98 ? [1, 0, 0] : [0, 1, 0];
+				const east = normalize3(cross3(pole, up));
+				return { up, east, north: cross3(up, east) };
+			}
+
+			const SHOTS = [
+				{ id: "shotCont", layer: 0 },
+				{ id: "shotEro", layer: 1 },
+				{ id: "shotPv", layer: 2 },
+				{ id: "shotOut", layer: -1 },
+			];
+			for (const shot of SHOTS) {
+				shot.canvas = document.getElementById(shot.id);
+				shot.ctx = shot.canvas.getContext("2d");
+			}
+
+			/** How many grey steps a layer picture is cut into. */
+			const PICTURE_BANDS = 9;
+
+			/**
+			 * One reading of a layer, as a banded grey.
+			 *
+			 * **Bands, not a gradient.** A smooth grey wash of a noise field
+			 * shows its brightness and hides its shape; cutting it into steps
+			 * draws the contour lines, and the contours are what say whether a
+			 * field is broad and rolling or narrow and folded. It is a picture of
+			 * a field, so the bands mean nothing on the ground -- only the fourth
+			 * picture does.
+			 */
+			function bandGrey(v) {
+				const t = Math.max(0, Math.min(0.9999, (v + 1) / 2));
+				const step = Math.floor(t * PICTURE_BANDS);
+				const g = 0.06 + (step / (PICTURE_BANDS - 1)) * 0.92;
+				// A dark line at the edge of each band, which is the contour.
+				const into = t * PICTURE_BANDS - step;
+				const edge = into < 0.06 ? 0.45 : 1;
+				return [g * edge, g * edge, g * edge];
+			}
+
+			/**
+			 * One height, as the colour the ground would be.
+			 *
+			 * Sea is one colour deepening with how much water a look passes
+			 * through, because the ocean is a surface and holds no blocks; land
+			 * is banded every hundred metres so a slope reads as a slope.
+			 */
+			function groundColor(metres, k) {
+				const over = metres - k.seaLevel;
+				if (over <= 0) {
+					const deep = Math.min(1, -over / Math.max(1, k.seaDepth));
+					return [
+						0.10 - 0.07 * deep,
+						0.16 - 0.12 * deep,
+						0.42 - 0.30 * deep,
+					];
+				}
+				const t = Math.min(1, over / Math.max(1, k.relief + k.peakRelief));
+				const g = 0.34 + t * 0.62;
+				const into = ((over / 100) % 1) * 100;
+				const edge = into < 6 ? 0.74 : 1;
+				return [g * 0.92 * edge, g * edge, g * 0.86 * edge];
+			}
+
+			/**
+			 * The direction a pixel of a picture is looking at.
+			 *
+			 * Over the planet it is longitude across and latitude down, the one
+			 * projection where a direction is two cosines and no case analysis.
+			 * Over the patch it is the exponential map out of the patch's own
+			 * frame, so metres out from the middle become radians of arc and the
+			 * picture keeps its scale to the corners.
+			 */
+			function pictureDirection(q, r, wide, tall, frame, half, radius) {
+				if (!frame) {
+					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
+					const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
+					const ring = Math.cos(lat);
+					return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+				}
+				const u = (((q + 0.5) / wide) * 2 - 1) * (half / radius);
+				const v = (1 - ((r + 0.5) / tall) * 2) * (half / radius);
+				const a = Math.hypot(u, v);
+				if (a < 1e-12) return frame.up;
+				const c = Math.cos(a);
+				const sn = Math.sin(a) / a;
+				return normalize3([
+					frame.up[0] * c + (frame.east[0] * u + frame.north[0] * v) * sn,
+					frame.up[1] * c + (frame.east[1] * u + frame.north[1] * v) * sn,
+					frame.up[2] * c + (frame.east[2] * u + frame.north[2] * v) * sn,
+				]);
+			}
+
+			function drawPictures() {
+				if (!field) return;
+				const planet = knobs.show === "planet";
+				// Half the samples while a knob is moving, for the same reason
+				// the plane draws fewer cells: a picture that arrives after the
+				// finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 96 : 192;
+				const tall = planet ? wide / 2 : wide;
+				const frame = planet ? null : frameOf(field.centre);
+				const half = field.span / 2;
+				const k = field.k;
+				const said = [0, 0, 0];
+
+				const pixels = SHOTS.map((shot) => {
+					if (shot.canvas.width !== wide || shot.canvas.height !== tall) {
+						shot.canvas.width = wide;
+						shot.canvas.height = tall;
+					}
+					return shot.ctx.createImageData(wide, tall);
+				});
+
+				for (let r = 0; r < tall; r++)
+					for (let q = 0; q < wide; q++) {
+						const p = pictureDirection(
+							q,
+							r,
+							wide,
+							tall,
+							frame,
+							half,
+							k.radius,
+						);
+						fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						const at = (r * wide + q) * 4;
+						for (let x = 0; x < 4; x++) {
+							const c =
+								x === 3
+									? groundColor(heightFrom(said, k), k)
+									: bandGrey(said[x]);
+							const px = pixels[x].data;
+							px[at] = c[0] * 255;
+							px[at + 1] = c[1] * 255;
+							px[at + 2] = c[2] * 255;
+							px[at + 3] = 255;
+						}
+					}
+
+				for (let x = 0; x < 4; x++) {
+					SHOTS[x].ctx.putImageData(pixels[x], 0, 0);
+					if (!planet) continue;
+					// Where the plane is standing, so the pictures and the ground
+					// are one place rather than five.
+					const lat = (knobs.latitude * Math.PI) / 180;
+					const across =
+						field.span / k.radius / Math.max(0.15, Math.cos(lat));
+					const box = {
+						x:
+							((knobs.longitude + 180) / 360) * wide -
+							(across / (4 * Math.PI)) * wide,
+						y:
+							(0.5 - knobs.latitude / 180) * tall -
+							(field.span / k.radius / (2 * Math.PI)) * tall,
+						w: Math.max(3, (across / (2 * Math.PI)) * wide),
+						h: Math.max(3, (field.span / k.radius / Math.PI) * tall),
+					};
+					const g = SHOTS[x].ctx;
+					g.strokeStyle = "rgba(255, 90, 90, 0.95)";
+					g.lineWidth = 1;
+					g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+				}
+			}
+
+			/**
+			 * **A latitude and a longitude are a place, and two sliders are not
+			 * a way to look for one.** Clicking a planet picture puts the patch
+			 * where the finger went: the projection is longitude across and
+			 * latitude down, so it inverts to two divisions.
+			 */
+			for (const shot of SHOTS)
+				shot.canvas.addEventListener("click", (e) => {
+					if (knobs.show !== "planet") return;
+					const box = shot.canvas.getBoundingClientRect();
+					const across = (e.clientX - box.left) / box.width;
+					const down = (e.clientY - box.top) / box.height;
+					const row = ROWS.get("latitude");
+					knobs.longitude = Math.round(across * 360 - 180);
+					knobs.latitude = Math.max(
+						row.low,
+						Math.min(row.high, Math.round((0.5 - down) * 180)),
+					);
+					askForRedraw(false);
+				});
+
+			// ---------------------------------------------------------------
+			// The plane: the patch as hexagon columns.
+			// ---------------------------------------------------------------
+
+			const view = document.getElementById("view");
+			const gl = view.getContext("webgl2", { antialias: true });
+
+			const VERTEX_SOURCE = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec3 position;
+			layout(location = 1) in vec3 normal;
+			layout(location = 2) in float metres;
+			uniform mat4 viewProj;
+			out vec3 vNormal;
+			out float vMetres;
+			void main() {
+				vNormal = normal;
+				vMetres = metres;
+				gl_Position = viewProj * vec4(position, 1.0);
+			}`;
+
+			const FRAGMENT_SOURCE = `#version 300 es
+			precision highp float;
+			in vec3 vNormal;
+			in float vMetres;
+			uniform vec3 sun;
+			uniform float seaLevel;
+			uniform float reach;
+			uniform int water;
+			out vec4 color;
+			void main() {
+				// Nothing here is culled, because a hexagon column's walls are
+				// emitted without a winding rule and a wall seen from inside a
+				// valley is a wall seen from its back.
+				vec3 n = normalize(vNormal);
+				if (!gl_FrontFacing) n = -n;
+				float lit = 0.30 + 0.70 * max(0.0, dot(n, normalize(sun)));
+				if (water == 1) {
+					// The ocean is a surface and holds no blocks, so it is one
+					// translucent sheet at its own radius rather than a column of
+					// water cells.
+					color = vec4(pow(vec3(0.10, 0.26, 0.46) * lit, vec3(1.0 / 2.2)), 0.72);
+					return;
+				}
+				float over = vMetres - seaLevel;
+				vec3 tint;
+				if (over <= 0.0) {
+					tint = vec3(0.62, 0.56, 0.40);
+				} else {
+					float t = clamp(over / max(1.0, reach), 0.0, 1.0);
+					tint = mix(vec3(0.24, 0.42, 0.19), vec3(0.46, 0.46, 0.48),
+						smoothstep(0.18, 0.45, t));
+					tint = mix(tint, vec3(0.94, 0.95, 0.98), smoothstep(0.58, 0.85, t));
+				}
+				color = vec4(pow(tint * lit, vec3(1.0 / 2.2)), 1.0);
+			}`;
+
+			function compile(kind, source) {
+				const shader = gl.createShader(kind);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+					throw new Error(gl.getShaderInfoLog(shader) ?? "shader");
+				return shader;
+			}
+			const program = gl.createProgram();
+			gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX_SOURCE));
+			gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT_SOURCE));
+			gl.linkProgram(program);
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+				throw new Error(gl.getProgramInfoLog(program) ?? "link");
+			gl.useProgram(program);
+			const uViewProj = gl.getUniformLocation(program, "viewProj");
+			const uSun = gl.getUniformLocation(program, "sun");
+			const uSeaLevel = gl.getUniformLocation(program, "seaLevel");
+			const uReach = gl.getUniformLocation(program, "reach");
+			const uWater = gl.getUniformLocation(program, "water");
+
+			const vao = gl.createVertexArray();
+			gl.bindVertexArray(vao);
+			const positionBuffer = gl.createBuffer();
+			const normalBuffer = gl.createBuffer();
+			const metreBuffer = gl.createBuffer();
+			for (const [at, buffer, size] of [
+				[0, positionBuffer, 3],
+				[1, normalBuffer, 3],
+				[2, metreBuffer, 1],
+			]) {
+				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+				gl.enableVertexAttribArray(at);
+				gl.vertexAttribPointer(at, size, gl.FLOAT, false, 0, 0);
+			}
+			gl.enable(gl.DEPTH_TEST);
+			gl.disable(gl.CULL_FACE);
+			gl.enable(gl.BLEND);
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			gl.clearColor(0.027, 0.039, 0.055, 1);
+
+			let groundCount = 0;
+			let waterFrom = 0;
+			let waterCount = 0;
+
+			/**
+			 * The patch as triangles: a cap on every cell, a wall wherever it
+			 * stands over its neighbour, and the sea over whatever is under it.
+			 *
+			 * **The cap is drawn at the cell's own radius**, so it is the slice
+			 * of sphere the cell covers rather than a flat lid -- which is what
+			 * makes two neighbouring caps meet along their shared edge with
+			 * nothing between them. The wall spans the two corners that edge
+			 * holds, which `cellCorners` numbers so that the edge toward
+			 * neighbour `k` runs from corner `k - 1` to corner `k`.
+			 */
+			function buildMesh() {
+				if (!field) return;
+				const { k, count, height, degree, corner, ring, centre } = field;
+				const radius = k.radius;
+				const frame = frameOf(centre);
+
+				// **The buffers are sized before anything is written into
+				// them.** A cell emits two caps and, per edge, at most one wall
+				// and at most one curtain of water -- so 36 triangles is the
+				// ceiling, and growing a plain array to reach it costs more than
+				// the arithmetic that fills it.
+				const room = count * 36 * 3;
+				const position = new Float32Array(room * 3);
+				const normal = new Float32Array(room * 3);
+				const metre = new Float32Array(room);
+				let vertices = 0;
+
+				// One cell's corners, in the patch's own frame, refilled per
+				// cell rather than allocated.
+				const ringX = new Float64Array(6);
+				const ringY = new Float64Array(6);
+				const ringZ = new Float64Array(6);
+
+				/** A direction and a height, in the frame the patch is drawn in. */
+				const localX = new Float64Array(3);
+				const local = (dx, dy, dz, metres) => {
+					const s2 = radius + metres;
+					const rx = dx * s2 - centre[0] * radius;
+					const ry = dy * s2 - centre[1] * radius;
+					const rz = dz * s2 - centre[2] * radius;
+					localX[0] =
+						rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
+					localX[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
+					localX[2] =
+						rx * frame.north[0] + ry * frame.north[1] + rz * frame.north[2];
+					return localX;
+				};
+
+				/**
+				 * One triangle, with the plane's own normal and a height per
+				 * corner.
+				 *
+				 * Every face here is flat, so the cross product of two of its
+				 * edges is the normal exactly and no normal has to be stored per
+				 * cell or averaged between cells. **The height is per corner
+				 * because a wall has two ends**: given the height of the cell it
+				 * stands on, the cut face of a snow-capped mountain is snow all
+				 * the way down to the sea floor. Its top corners take the top and
+				 * its bottom corners take the bottom, so one wall carries the
+				 * gradient the ground beside it has.
+				 */
+				const triangle = (
+					ax, ay, az, bx, by, bz, cx, cy, cz, ma, mb, mc,
+				) => {
+					const ux = bx - ax;
+					const uy = by - ay;
+					const uz = bz - az;
+					const vx = cx - ax;
+					const vy = cy - ay;
+					const vz = cz - az;
+					let nx = uy * vz - uz * vy;
+					let ny = uz * vx - ux * vz;
+					let nz = ux * vy - uy * vx;
+					const len = Math.hypot(nx, ny, nz) || 1;
+					nx /= len;
+					ny /= len;
+					nz /= len;
+					const at3 = vertices * 3;
+					position[at3] = ax; position[at3 + 1] = ay; position[at3 + 2] = az;
+					position[at3 + 3] = bx; position[at3 + 4] = by; position[at3 + 5] = bz;
+					position[at3 + 6] = cx; position[at3 + 7] = cy; position[at3 + 8] = cz;
+					for (let v = 0; v < 3; v++) {
+						normal[at3 + v * 3] = nx;
+						normal[at3 + v * 3 + 1] = ny;
+						normal[at3 + v * 3 + 2] = nz;
+					}
+					metre[vertices] = ma;
+					metre[vertices + 1] = mb;
+					metre[vertices + 2] = mc;
+					vertices += 3;
+				};
+
+				/**
+				 * A cell's polygon, drawn at one height.
+				 *
+				 * **Drawn at the cell's own radius**, so it is the slice of
+				 * sphere the cell covers rather than a flat lid -- which is what
+				 * makes two neighbouring caps meet along their shared edge with
+				 * nothing between them.
+				 */
+				const cap = (c, metres) => {
+					const deg = degree[c];
+					let mx = 0;
+					let my = 0;
+					let mz = 0;
+					for (let m = 0; m < deg; m++) {
+						const p = local(
+							corner[c * 18 + m * 3],
+							corner[c * 18 + m * 3 + 1],
+							corner[c * 18 + m * 3 + 2],
+							metres,
+						);
+						ringX[m] = p[0];
+						ringY[m] = p[1];
+						ringZ[m] = p[2];
+						mx += p[0] / deg;
+						my += p[1] / deg;
+						mz += p[2] / deg;
+					}
+					for (let m = 0; m < deg; m++) {
+						const b = (m + 1) % deg;
+						triangle(
+							mx, my, mz,
+							ringX[m], ringY[m], ringZ[m],
+							ringX[b], ringY[b], ringZ[b],
+							metres, metres, metres,
+						);
+					}
+				};
+
+				const floor = field.lowest - field.span * 0.05;
+				for (let c = 0; c < count; c++) {
+					const deg = degree[c];
+					const h = height[c];
+					cap(c, h);
+					// A wall wherever the cell stands over its neighbour. The
+					// edge toward neighbour `m` runs from corner `m - 1` to
+					// corner `m`, which is how `cellCorners` numbers them.
+					for (let m = 0; m < deg; m++) {
+						const found = ring[c * 6 + m];
+						// **A patch is a block of ground, not a shell.** Off the
+						// rim there is no neighbour to stand over, and with
+						// nothing drawn there the eye looks straight in at the
+						// underside of the far side of the patch. The rim runs
+						// down to a floor under the lowest ground instead.
+						const rim = found < 0;
+						const below = rim ? floor : height[found];
+						if (below >= h && !(rim && h < k.seaLevel)) continue;
+						// **The cut face of the block runs up to the waterline.**
+						// The sea is translucent, so a curtain of it hung against
+						// the background blends over nothing and reads as a dark
+						// wedge past the coast. Standing the rock up behind it
+						// gives it a sea floor to be shallow over.
+						const top = rim && h < k.seaLevel ? k.seaLevel : h;
+						const a = ((m - 1 + deg) % deg) * 3 + c * 18;
+						const b = m * 3 + c * 18;
+						const t1 = local(corner[a], corner[a + 1], corner[a + 2], top);
+						const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
+						const t2 = local(corner[b], corner[b + 1], corner[b + 2], top);
+						const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
+						const t3 = local(corner[b], corner[b + 1], corner[b + 2], below);
+						const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
+						const t4 = local(corner[a], corner[a + 1], corner[a + 2], below);
+						const aLowX = t4[0]; const aLowY = t4[1]; const aLowZ = t4[2];
+						triangle(
+							aTopX, aTopY, aTopZ,
+							bTopX, bTopY, bTopZ,
+							bLowX, bLowY, bLowZ,
+							top, top, below,
+						);
+						triangle(
+							aTopX, aTopY, aTopZ,
+							bLowX, bLowY, bLowZ,
+							aLowX, aLowY, aLowZ,
+							top, below, below,
+						);
+					}
+				}
+				groundCount = vertices;
+
+				// The sea, last, so it is one run of triangles the renderer can
+				// blend after every opaque one has been drawn.
+				for (let c = 0; c < count; c++) {
+					const h = height[c];
+					if (h >= k.seaLevel) continue;
+					cap(c, k.seaLevel);
+					// **A sheet of water has an edge, and off the rim of the
+					// patch there is nothing standing in front of it.** Left
+					// open, the water is seen from underneath wherever the
+					// planet's own curve carries its far side up into view --
+					// one flat wedge, lit from the wrong side, hanging past the
+					// coast. A curtain from the water's edge down to the ground
+					// under it closes that, and it is the same curtain the
+					// engine hangs from a sea patch's rim.
+					const deg = degree[c];
+					for (let m = 0; m < deg; m++) {
+						if (ring[c * 6 + m] >= 0) continue;
+						const a = ((m - 1 + deg) % deg) * 3 + c * 18;
+						const b = m * 3 + c * 18;
+						const t1 = local(corner[a], corner[a + 1], corner[a + 2], k.seaLevel);
+						const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
+						const t2 = local(corner[b], corner[b + 1], corner[b + 2], k.seaLevel);
+						const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
+						const t3 = local(corner[b], corner[b + 1], corner[b + 2], h);
+						const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
+						const t4 = local(corner[a], corner[a + 1], corner[a + 2], h);
+						triangle(
+							aTopX, aTopY, aTopZ,
+							bTopX, bTopY, bTopZ,
+							bLowX, bLowY, bLowZ,
+							k.seaLevel, k.seaLevel, k.seaLevel,
+						);
+						triangle(
+							aTopX, aTopY, aTopZ,
+							bLowX, bLowY, bLowZ,
+							t4[0], t4[1], t4[2],
+							k.seaLevel, k.seaLevel, k.seaLevel,
+						);
+					}
+				}
+				waterFrom = groundCount;
+				waterCount = vertices - groundCount;
+
+				gl.bindVertexArray(vao);
+				for (const [buffer, data, wide] of [
+					[positionBuffer, position, 3],
+					[normalBuffer, normal, 3],
+					[metreBuffer, metre, 1],
+				]) {
+					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+					// Only the part that was written. The rest of the buffer is
+					// the headroom the ceiling left and holds no triangle.
+					gl.bufferData(
+						gl.ARRAY_BUFFER,
+						data.subarray(0, vertices * wide),
+						gl.DYNAMIC_DRAW,
+					);
+				}
+			}
+
+			const camera = { yaw: -0.7, pitch: 0.36, distance: 2.5, lift: 0 };
+
+			function multiply(a, b) {
+				const out = new Float32Array(16);
+				for (let c = 0; c < 4; c++)
+					for (let r = 0; r < 4; r++) {
+						let s = 0;
+						for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+						out[c * 4 + r] = s;
+					}
+				return out;
+			}
+			function perspective(fov, aspect, near, far) {
+				const f = 1 / Math.tan(fov / 2);
+				const out = new Float32Array(16);
+				out[0] = f / aspect;
+				out[5] = f;
+				out[10] = (far + near) / (near - far);
+				out[11] = -1;
+				out[14] = (2 * far * near) / (near - far);
+				return out;
+			}
+			function lookAt(eye, to, upHint) {
+				const f = normalize3([to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]]);
+				const s = normalize3(cross3(f, upHint));
+				const u = cross3(s, f);
+				const out = new Float32Array(16);
+				out[0] = s[0]; out[4] = s[1]; out[8] = s[2];
+				out[1] = u[0]; out[5] = u[1]; out[9] = u[2];
+				out[2] = -f[0]; out[6] = -f[1]; out[10] = -f[2];
+				out[12] = -(s[0] * eye[0] + s[1] * eye[1] + s[2] * eye[2]);
+				out[13] = -(u[0] * eye[0] + u[1] * eye[1] + u[2] * eye[2]);
+				out[14] = f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2];
+				out[15] = 1;
+				return out;
+			}
+
+			function render() {
+				const dpr = Math.min(2, window.devicePixelRatio || 1);
+				const width = Math.max(1, Math.round(view.clientWidth * dpr));
+				const height = Math.max(1, Math.round(view.clientHeight * dpr));
+				if (view.width !== width || view.height !== height) {
+					view.width = width;
+					view.height = height;
+				}
+				gl.viewport(0, 0, width, height);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				if (!field || groundCount === 0) return;
+
+				const span = field.span;
+				// **A patch as tall as it is wide is framed by neither on its
+				// own.** The ground here runs from a sea floor to a summit, and
+				// a camera placed off the width alone looks at the middle of the
+				// map with the mountains out of frame above it.
+				const tall = field.highest - field.lowest;
+				const reach = Math.hypot(span, tall) / 2;
+				const away = reach * camera.distance;
+				const middle = (field.highest + field.lowest) / 2;
+				const eye = [
+					Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
+					Math.sin(camera.pitch) * away + middle + camera.lift * span,
+					Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
+				];
+				const proj = perspective(
+					0.9,
+					width / height,
+					reach * 0.004,
+					reach * 14,
+				);
+				gl.useProgram(program);
+				gl.uniformMatrix4fv(
+					uViewProj,
+					false,
+					multiply(proj, lookAt(eye, [0, middle, 0], [0, 1, 0])),
+				);
+				gl.uniform3f(uSun, 0.42, 0.72, 0.55);
+				gl.uniform1f(uSeaLevel, field.k.seaLevel);
+				gl.uniform1f(uReach, field.k.relief + field.k.peakRelief);
+				gl.bindVertexArray(vao);
+				gl.uniform1i(uWater, 0);
+				gl.depthMask(true);
+				gl.drawArrays(gl.TRIANGLES, 0, groundCount);
+				if (waterCount === 0) return;
+				// **The sea writes depth.** It is one surface at one radius, so
+				// on a sphere the near water stands in front of the far water
+				// and the far water has to be thrown away rather than blended
+				// through -- two blends of a translucent sheet on one pixel is a
+				// dark band along the horizon, which is where a shoreline is
+				// most looked at.
+				gl.uniform1i(uWater, 1);
+				gl.drawArrays(gl.TRIANGLES, waterFrom, waterCount);
+			}
+
+			// ---------------------------------------------------------------
+			// The panel, and the loop that keeps it live.
+			// ---------------------------------------------------------------
+
+			const facts = document.getElementById("facts");
+			const recipe = document.getElementById("recipe");
+			const rows = new Map();
+
+			/** The tint each curve is drawn in, so a curve and its group match. */
+			const CURVE_TINT = {
+				contSpline: "#ffd166",
+				eroSpline: "#8ce99a",
+				pvSpline: "#ff9db1",
+			};
+
+			/**
+			 * One editable curve, over the histogram of what the world lands on.
+			 *
+			 * Across is that layer's own noise value, up is what it controls. The
+			 * four points it opens with are a starting shape and not the shape:
+			 * click the empty curve to add a point, shift-click one to take it
+			 * away, and only the two ends are pinned, in x alone, so the curve
+			 * always covers the whole range.
+			 */
+			function makeCurve(canvas, key, onChange) {
+				const g = canvas.getContext("2d");
+				const pad = 6;
+				const toX = (v) => pad + ((v + 1) / 2) * (canvas.width - pad * 2);
+				const toY = (v) => canvas.height - pad - v * (canvas.height - pad * 2);
+				const fromX = (px) => ((px - pad) / (canvas.width - pad * 2)) * 2 - 1;
+				const fromY = (py) =>
+					(canvas.height - pad - py) / (canvas.height - pad * 2);
+
+				function draw() {
+					const points = knobs[key];
+					g.fillStyle = "#0b0e13";
+					g.fillRect(0, 0, canvas.width, canvas.height);
+					// The world's own distribution, behind everything: how much
+					// planet sits under each slice of this curve. Dim, because it
+					// is context for the curve rather than the thing being edited.
+					const counts = field && field.tally ? field.tally[key] : null;
+					if (counts && field.tallest > 0) {
+						g.fillStyle = "rgba(255, 255, 255, 0.13)";
+						const wide = (canvas.width - pad * 2) / TALLY_BINS;
+						for (let n = 0; n < TALLY_BINS; n++) {
+							const tall =
+								(counts[n] / field.tallest) * (canvas.height - pad * 2);
+							if (tall <= 0) continue;
+							g.fillRect(
+								pad + n * wide,
+								canvas.height - pad - tall,
+								Math.max(1, wide - 0.5),
+								tall,
+							);
+						}
+					}
+					g.strokeStyle = "#232b36";
+					g.beginPath();
+					g.moveTo(toX(0), pad);
+					g.lineTo(toX(0), canvas.height - pad);
+					g.stroke();
+					// **The line every curve is read against, drawn on the curve
+					// itself.** On continentalness it is sea level, which is where
+					// the coast is; on peaks and valleys it is the level the
+					// continent already set, so above the line is a peak and below
+					// it a valley. Saying either as a number somewhere else would
+					// make the reader hold two pictures at once.
+					const mark = markOn(key);
+					if (mark !== null) {
+						g.strokeStyle = "rgba(111, 208, 255, 0.5)";
+						g.setLineDash([3, 3]);
+						g.beginPath();
+						g.moveTo(pad, toY(mark));
+						g.lineTo(canvas.width - pad, toY(mark));
+						g.stroke();
+						g.setLineDash([]);
+					}
+					g.strokeStyle = CURVE_TINT[key] ?? "#6fd0ff";
+					g.lineWidth = 1.5;
+					g.beginPath();
+					for (let px = pad; px <= canvas.width - pad; px++) {
+						const y = toY(splineAt(points, fromX(px)));
+						if (px === pad) g.moveTo(px, y);
+						else g.lineTo(px, y);
+					}
+					g.stroke();
+					g.fillStyle = "#e8ecf2";
+					for (const [x, y] of points) {
+						g.beginPath();
+						g.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+						g.fill();
+					}
+				}
+
+				let dragging = -1;
+				const spot = (e) => {
+					const box = canvas.getBoundingClientRect();
+					return [
+						((e.clientX - box.left) / box.width) * canvas.width,
+						((e.clientY - box.top) / box.height) * canvas.height,
+					];
+				};
+				const nearest = (px, py) => {
+					const points = knobs[key];
+					let best = -1;
+					let far = 12;
+					for (let n = 0; n < points.length; n++) {
+						const d = Math.hypot(
+							toX(points[n][0]) - px,
+							toY(points[n][1]) - py,
+						);
+						if (d < far) {
+							far = d;
+							best = n;
+						}
+					}
+					return best;
+				};
+				canvas.addEventListener("pointerdown", (e) => {
+					e.preventDefault();
+					const [px, py] = spot(e);
+					const at = nearest(px, py);
+					const points = knobs[key];
+					if (at >= 0 && e.shiftKey) {
+						// Never below two, or the curve stops being a curve.
+						if (points.length > 2 && at > 0 && at < points.length - 1) {
+							points.splice(at, 1);
+							draw();
+							onChange();
+						}
+						return;
+					}
+					if (at >= 0) {
+						dragging = at;
+					} else {
+						const x = Math.max(-1, Math.min(1, fromX(px)));
+						const y = Math.max(0, Math.min(1, fromY(py)));
+						points.push([x, y]);
+						points.sort((a, b) => a[0] - b[0]);
+						dragging = points.findIndex((p) => p[0] === x && p[1] === y);
+						draw();
+						onChange();
+					}
+					canvas.setPointerCapture(e.pointerId);
+				});
+				canvas.addEventListener("pointermove", (e) => {
+					if (dragging < 0) return;
+					const points = knobs[key];
+					const [px, py] = spot(e);
+					const first = dragging === 0;
+					const last = dragging === points.length - 1;
+					// The ends hold their x, so the curve always covers the whole
+					// range and nothing has to guess what happens past it.
+					if (!first && !last)
+						points[dragging][0] = Math.max(
+							points[dragging - 1][0] + 0.01,
+							Math.min(points[dragging + 1][0] - 0.01, fromX(px)),
+						);
+					points[dragging][1] = Math.max(0, Math.min(1, fromY(py)));
+					draw();
+					onChange();
+				});
+				const drop = () => {
+					dragging = -1;
+				};
+				canvas.addEventListener("pointerup", drop);
+				canvas.addEventListener("pointercancel", drop);
+				return draw;
+			}
+
+			/** Where the dashed line sits on a curve, in the curve's own units. */
+			function markOn(key) {
+				if (key === "pvSpline") return 0.5;
+				if (key !== "contSpline") return null;
+				const span = knobs.relief + knobs.seaDepth;
+				if (span <= 0) return null;
+				const at = (knobs.seaLevel + knobs.seaDepth) / span;
+				return at >= 0 && at <= 1 ? at : null;
+			}
+
+			/** What a curve's own two ends mean, written under it. */
+			function axisOf(key) {
+				if (key === "contSpline")
+					return [
+						`${Math.round(-knobs.seaDepth).toLocaleString()} m`,
+						`${Math.round(knobs.relief).toLocaleString()} m`,
+					];
+				if (key === "eroSpline") return ["no relief kept", "all of it"];
+				return [
+					`-${Math.round(knobs.peakRelief).toLocaleString()} m`,
+					`+${Math.round(knobs.peakRelief).toLocaleString()} m`,
+				];
+			}
+
+			function buildPanel() {
+				const host = document.getElementById("knobs");
+				for (const group of KNOBS) {
+					// **A section folds, because three whole noise layers do not
+					// fit on one screen.** Each carries its own frequency, octave
+					// count, falloff, step and fold, so the panel is long by
+					// construction rather than by neglect.
+					const set = document.createElement("details");
+					set.className = "group" + (group.tint ? " " + group.tint : "");
+					set.open = group.open !== false;
+					const legend = document.createElement("summary");
+					legend.textContent = group.group;
+					set.append(legend);
+					for (const row of group.rows) {
+						const wrap = document.createElement("div");
+						const label = document.createElement("label");
+						label.textContent = row.label;
+						let input;
+						if (row.type === "spline") {
+							wrap.className = "knob curved";
+							input = document.createElement("canvas");
+							input.width = 300;
+							input.height = 96;
+							input.className = "curve";
+							const axis = document.createElement("div");
+							axis.className = "axis";
+							const help = document.createElement("p");
+							help.className = "curve-help";
+							help.textContent =
+								"drag a point · click the curve to add one · " +
+								"shift-click a point to remove it";
+							wrap.append(label, input, axis, help);
+							set.append(wrap);
+							const redraw = makeCurve(input, row.key, () => askForRedraw());
+							rows.set(row.key, { row, wrap, redraw, axis });
+							continue;
+						}
+						wrap.className = "knob";
+						if (row.type === "select") {
+							input = document.createElement("select");
+							for (const option of row.options) {
+								const o = document.createElement("option");
+								o.value = option;
+								o.textContent = option;
+								input.append(o);
+							}
+							input.value = knobs[row.key];
+						} else if (row.type === "text") {
+							input = document.createElement("input");
+							input.type = "text";
+							input.value = knobs[row.key];
+						} else {
+							input = document.createElement("input");
+							input.type = "range";
+							input.min = row.low;
+							input.max = row.high;
+							input.step = row.step;
+							input.value = knobs[row.key];
+						}
+						const readout = document.createElement("output");
+						wrap.append(label, readout, input);
+						let note = null;
+						if (row.note) {
+							note = document.createElement("p");
+							note.className = "knob-note";
+							wrap.append(note);
+						}
+						set.append(wrap);
+						rows.set(row.key, { row, wrap, input, readout, note });
+						// **Every move redraws.** `input` rather than `change`, so
+						// the ground answers while the slider is still moving --
+						// which is the only way to feel what a knob does.
+						input.addEventListener("input", () => {
+							knobs[row.key] =
+								row.type === "select" || row.type === "text"
+									? input.value
+									: Number(input.value);
+							askForRedraw();
+						});
+					}
+					host.append(set);
+				}
+			}
+
+			function refreshPanel() {
+				for (const { row, readout, input, note, redraw, axis } of rows.values()) {
+					if (redraw) {
+						redraw();
+						const [low, high] = axisOf(row.key);
+						axis.textContent = "";
+						const a = document.createElement("span");
+						const b = document.createElement("span");
+						a.textContent = low;
+						b.textContent = high;
+						axis.append(a, b);
+						continue;
+					}
+					if (row.type === "select" || row.type === "text") {
+						input.value = knobs[row.key];
+						readout.textContent = "";
+					} else {
+						input.value = knobs[row.key];
+						readout.textContent =
+							Number(knobs[row.key]).toFixed(row.digits ?? 2) +
+							(row.unit ? " " + row.unit : "");
+					}
+					if (note) note.innerHTML = row.note();
+				}
+				if (!field) return;
+				// **The one line the whole page is about**, written out with the
+				// numbers the knobs are currently set to.
+				recipe.innerHTML =
+					'height = <i class="c">level(C)</i><br />' +
+					'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <i class="e">kept(E)</i> × ' +
+					'<i class="p">relief(P)</i> × ' +
+					`${Math.round(field.k.peakRelief).toLocaleString()} m`;
+				facts.innerHTML =
+					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
+					`<b>${field.count.toLocaleString()}</b> hexagons of ` +
+					`<b>${field.cellMetres.toFixed(1)} m</b> · ` +
+					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
+					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
+					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
+					`<b>${cost.toFixed(0)} ms</b>`;
+			}
+
+			let pending = false;
+			let settleTimer = 0;
+			let cost = 0;
+			function askForRedraw(draft = true) {
+				clearTimeout(settleTimer);
+				if (draft) settleTimer = setTimeout(() => askForRedraw(false), 200);
+				if (pending) return;
+				pending = true;
+				requestAnimationFrame(() => {
+					pending = false;
+					const started = performance.now();
+					// A draft covers the same ground with fewer cells, so the
+					// hexagons grow as the count falls and the patch keeps its
+					// width -- a picture that arrives after the finger has
+					// stopped is not a picture of the knob.
+					generate(draft ? Math.max(16, knobs.cells >> 1) : knobs.cells);
+					buildMesh();
+					drawPictures();
+					cost = performance.now() - started;
+					refreshPanel();
+					if (!draft) writeUrl();
+					render();
+				});
+			}
+
+			// ---- turning and zooming ----
+			let dragging = null;
+			view.addEventListener("pointerdown", (e) => {
+				dragging = { x: e.clientX, y: e.clientY, shift: e.shiftKey };
+				view.setPointerCapture(e.pointerId);
+			});
+			view.addEventListener("pointermove", (e) => {
+				if (!dragging) return;
+				const dx = e.clientX - dragging.x;
+				const dy = e.clientY - dragging.y;
+				dragging.x = e.clientX;
+				dragging.y = e.clientY;
+				if (dragging.shift) camera.lift += dy * 0.002;
+				else {
+					camera.yaw -= dx * 0.006;
+					camera.pitch = Math.max(
+						0.03,
+						Math.min(1.5, camera.pitch + dy * 0.005),
+					);
+				}
+				render();
+			});
+			const stop = () => {
+				dragging = null;
+			};
+			view.addEventListener("pointerup", stop);
+			view.addEventListener("pointercancel", stop);
+			view.addEventListener(
+				"wheel",
+				(e) => {
+					e.preventDefault();
+					camera.distance = Math.max(
+						0.15,
+						Math.min(6, camera.distance * Math.exp(e.deltaY * 0.001)),
+					);
+					render();
+				},
+				{ passive: false },
+			);
+			window.addEventListener("resize", render);
+
+			fromParams(new URLSearchParams(location.search));
+			buildPanel();
+			// The first draw goes through the same timed path every later one
+			// does, so the cost on screen is a real number from the start.
+			const booted = performance.now();
+			generate();
+			buildMesh();
+			drawPictures();
+			cost = performance.now() - booted;
+			refreshPanel();
+			render();
+		</script>
+	</body>
+</html>
