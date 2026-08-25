@@ -528,6 +528,9 @@ takes more. **It points at the dashed line rather than saying where the line
 sits**: sea level is halfway up the continentalness axis only while the sea is
 undrained, and Sea level and Sea depth both move it, so a label reading *sea
 level in the middle* is true at the shipped knobs and wrong one drag later.
+**And it never reprints a knob** — Relief, Sea depth and Peaks say what the ends
+of an axis are worth in metres, and putting them under the curve as well is the
+same three numbers on screen twice.
 
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so

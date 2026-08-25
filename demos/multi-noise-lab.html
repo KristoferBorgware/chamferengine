@@ -3302,7 +3302,13 @@
 			/**
 			 * What a curve's two axes are, written under it as two statements.
 			 *
-			 * **A label points at the line rather than naming where it sits.**
+			 * **A label says what an axis is, and never what a knob already
+			 * says.** Reprinting Relief, Sea depth and Peaks as the ends of
+			 * the axis puts the same three numbers on screen twice, a few
+			 * centimetres apart, and they are the numbers a reader came from
+			 * rather than the ones they came for.
+			 *
+			 * **And it points at the line rather than naming where it sits.**
 			 * Sea level is the middle of the continentalness axis only while
 			 * the sea is undrained -- move Sea level or Sea depth and the
 			 * dashed line moves down the sea half, so a label saying "in the
@@ -3324,9 +3330,7 @@
 				if (key === "contSpline")
 					return {
 						x: `x · the ${field} field, -1 to +1`,
-						y: `y · the height, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
-							knobs.relief,
-						).toLocaleString()} m · the blue line is sea level`,
+						y: "y · the height · the blue line is sea level",
 					};
 				if (key === "eroSpline")
 					return {
@@ -3335,9 +3339,7 @@
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
-					y: `y · the relief, -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
-						knobs.peakRelief,
-					).toLocaleString()} m · the blue line is the continent's own level`,
+					y: "y · the relief · the blue line is the continent's own level",
 				};
 			}
 
