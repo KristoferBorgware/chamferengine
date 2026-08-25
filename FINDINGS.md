@@ -1737,12 +1737,12 @@ the relief survives at that place, and peaks and valleys is the relief. Erosion
 field says there.
 
 Measured over the planet's own cells at level 6 with the lab's shipped knobs,
-the fraction of relief kept on land runs `0.08` at the tenth percentile, `0.51`
+the fraction of relief kept on land runs `0.10` at the tenth percentile, `0.54`
 at the median and `0.95` at the ninetieth. Two frames of one place with the
 erosion curve pinned to each end: at `0.02` the patch is a smooth continental
-ramp with a clean shoreline and no ridge on it, ground `-145` to `752 m`; at
-`1.0` it is ridges everywhere, `-342` to `1,028 m`. The land share moves from
-`38.8%` to `38.5%` across that, because erosion moves relief and not level.
+ramp with a clean shoreline and no ridge on it, ground `-387` to `881 m`; at
+`1.0` it is ridges everywhere, `-461` to `1,133 m`. The land share moves from
+`38.5%` to `38.4%` across that, because erosion moves relief and not level.
 
 **Why it matters.** The gated merge answers *may this place be mountain* with a
 yes or a no read off the terrain layer's own height, so how rough a place is and
@@ -1755,6 +1755,17 @@ octaves evaluated at every point the height field is asked for, against the two
 the engine runs today, plus a third curve on the panel and in every stored
 world's identity. `volume.js` prices the height term against the density term
 and not against itself, so what a third layer costs per chunk is not measured.
+
+**It also takes a metre budget the two-layer merge does not.** Peaks and
+valleys is applied about the level continentalness set, so wherever the
+continent curve is shallower in metres than the peak height, the third field
+decides land-or-sea rather than relief and the coastline speckles. Measured on
+the lab's own world: with the continent curve spanning `771 m` over the range
+continentalness actually reaches and a peak of `420 m`, peaks flipped **7.8%**
+of the planet from what the continent said and **89.9%** of it sat within one
+peak of sea level. Steepening the curve's coastal segment and widening its
+axis to `2,000 m` takes that to **0.9%** and **50.8%**. A shipped world would
+need the same care, and nothing in the engine currently states that budget.
 
 **What would fix it.** Nothing is broken, so this is a decision rather than a
 repair, and it belongs in a release worked through the three steps of
