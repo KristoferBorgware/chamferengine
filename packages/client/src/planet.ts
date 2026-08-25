@@ -249,7 +249,19 @@ const REPORT_INTERVAL = 100;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
+const readout = document.querySelector<HTMLDivElement>("#readout")!;
 const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
+
+// **Shut, and one mark wide.** The readout is six lines of numbers standing
+// over the view, and the world is what the window is for -- so it opens on a
+// click and starts closed. The button is outside the canvas, and the canvas is
+// the only thing that asks for the pointer, so this stays clickable in exactly
+// the states the parameter panel does.
+const readoutOpen = document.querySelector<HTMLButtonElement>("#readout-open")!;
+readoutOpen.onclick = () => {
+	const open = readout.classList.toggle("open");
+	readoutOpen.setAttribute("aria-expanded", String(open));
+};
 
 function report(lines: string[]): void {
 	status.textContent = lines.join("\n");
@@ -367,9 +379,14 @@ if (params.get("panel") === "1") {
 	// **The readout goes into the panel with everything else.** A box of
 	// numbers over the top-left corner of the view stands on the ground it is
 	// describing; the panel is where what the world is doing belongs, beside
-	// the knobs that change it. Without the panel it stays where it was, which
-	// is the only place there is.
-	panel.section("Readout")?.appendChild(status);
+	// the knobs that change it. The corner button goes with it: a fold in the
+	// panel is the same question already answered, and two ways to open one
+	// readout is one too many. Without the panel the button is what opens it.
+	const readoutSection = panel.section("Readout");
+	if (readoutSection) {
+		readoutSection.appendChild(status);
+		readout.remove();
+	}
 	maps = new MapPreview(
 		settings,
 		panel.section("Map") ?? document.body,
@@ -791,14 +808,16 @@ async function main(): Promise<void> {
 			debugSeams: live.knobs.seamOverlay,
 			// Zero is off, and off is the flat colour the registry names.
 			speckle: live.knobs.speckle ? SPECKLE : 0,
+			ambientOcclusion: live.knobs.ambientOcclusion,
 			// **Full light has to reach the bake as well as the shader.** The
-			// sky exposure and the corner shading are multiplied into the
-			// vertex colours here, and nothing the shader computes afterwards
-			// can divide a number back out of what it was handed -- so a cave
-			// would stay at the 12% a shut-in cell is baked to however bright
-			// the light was said to be.
-			ambientOcclusion:
-				live.knobs.ambientOcclusion && !live.knobs.fullbright,
+			// sky exposure is multiplied into the vertex colours here, and
+			// nothing the shader computes afterwards can divide a number back
+			// out of what it was handed -- so a cave would stay at the 12% a
+			// shut-in cell is baked to however far the sun was said to reach.
+			// The corner shading stays: it is how much of the sky a corner
+			// sees rather than whether the sun arrives, it bottoms out at
+			// 0.55 rather than 0.12, and it is what keeps a cave's edges
+			// readable. It has a switch of its own for anyone who disagrees.
 			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.

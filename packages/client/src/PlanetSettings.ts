@@ -663,18 +663,19 @@ export interface PlanetKnobs {
 	skyStrength: number;
 
 	/**
-	 * Whether every surface is pinned to full light.
+	 * Whether the sun reaches every face as though no block stood in the way.
 	 *
 	 * **A way to see underground until there is something to carry down
-	 * there.** It takes the whole lighting model out at once rather than
-	 * turning its terms down one at a time: the sun, the shadow that stops the
-	 * sun reaching a hole, the sky's share, the moon and the night floor.
+	 * there.** It takes away the blocking and nothing else -- the shadow the
+	 * cascades would cast, and the sky exposure the mesher would bake. Every
+	 * other term still does its own work, so a face's angle to the sun decides
+	 * what it takes and a cave keeps its shape instead of going flat.
 	 *
-	 * It also stops the mesher baking the sky exposure and the corner shading,
-	 * because no light a shader computes can undo a number already multiplied
-	 * into the colour it was handed -- without that a cave stays at the 12% a
-	 * shut-in cell is baked to, however bright the light is said to be. That
-	 * is why it needs a rebuild rather than taking effect on the next frame.
+	 * The sky exposure has to stop being *baked*, because no light a shader
+	 * computes can undo a number already multiplied into the colour it was
+	 * handed -- without that a cave stays at the 12% a shut-in cell is baked
+	 * to, however far the sun is said to reach. That is why it needs a rebuild
+	 * rather than taking effect on the next frame.
 	 */
 	fullbright: boolean;
 

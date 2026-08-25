@@ -1,13 +1,13 @@
 # Demos
 
-Thirty-four self-contained HTML files. No build step, no `npm install`, no
+Thirty-five self-contained HTML files. No build step, no `npm install`, no
 server required — open any of them directly in a browser. All are mobile-friendly
 and touch-enabled.
 
 Most of the 3D demos load Three.js r128 from a CDN and need an internet
-connection. The 2D ones are fully offline, and so is
-[`noise-lab.html`](noise-lab.html) and [`cave-lab.html`](cave-lab.html), which
-draw their own WebGL2.
+connection. The 2D ones are fully offline, and so are
+[`noise-lab.html`](noise-lab.html), [`multi-noise-lab.html`](multi-noise-lab.html)
+and [`cave-lab.html`](cave-lab.html), which draw their own WebGL2.
 
 ---
 
@@ -421,6 +421,73 @@ restores the panel as well as the ground.
 
 The noise is a hand copy of the engine's, kept honest by a test that digests the
 two against each other.
+
+**Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+### [`multi-noise-lab.html`](multi-noise-lab.html)
+**Three noise fields, three curves, and one line of arithmetic between them.**
+The construction is Henrik Kniberg's, from his talk on reinventing a voxel
+game's world generation ([video](https://www.youtube.com/watch?v=ob3VwY4JyzE)).
+Four pictures sit above the knobs — one per field and one of the ground they
+make together — and a patch of the planet stands in the middle as hexagon
+columns you can turn and zoom.
+
+**One stack of octaves makes one kind of landscape.** fBm is homogeneous: every
+octave applies everywhere at one amplitude, so one statistic describes the whole
+planet and nothing in it can say *be different here*. Three stacks sharing no
+parameter can, and the order they are read in is the whole construction:
+
+- **Continentalness** sets the level. Its curve runs from `-Sea depth` at the
+  bottom to `Relief` at the top, so its answer is already a height — an ocean
+  floor at one end, the top of a plateau at the other. Sea level is drawn across
+  it as a dashed line, and where the curve crosses that line is where the coast
+  is.
+- **Erosion** decides how much relief survives. Its curve answers a fraction
+  from all of it to none, and it **multiplies**, so a region the curve sends to
+  zero is flat whatever the third field is doing. Drag the whole curve to the
+  bottom and the patch is a smooth continental ramp with a clean shoreline and
+  no ridge anywhere on it.
+- **Peaks & valleys** is the relief. Half way up its curve is the level the
+  continent already set: below cuts a valley, above raises a peak.
+
+So high continentalness with low erosion and high peaks is a steep ridge, and
+the same continentalness and the same peaks under high erosion is a plain at the
+same height. The recipe under the pictures is the arithmetic, with the metres
+the knobs are set to.
+
+**Each layer carries a whole stack, not a frequency** — its own feature size in
+metres, octave count, falloff, step between octaves and fold. A layer that
+borrowed its neighbour's falloff could only say the same thing at a different
+size. **The fold is what makes a ridge**: `1 - |n|` creases an octave at its own
+zero crossing, and it is turned up on peaks and valleys alone, since folding
+either of the others creases the coast of every continent at once.
+
+**Behind every curve is the histogram of where the world actually lands on it**,
+counted over the planet's own cells rather than over the patch — a curve governs
+the planet, and a patch is a place that can sit entirely on one side of it. Noise
+clusters around its own middle, so equal widths of a curve cover wildly unequal
+amounts of ground. Click a curve to add a point, shift-click one to remove it;
+only the two ends are pinned, in x alone.
+
+**The patch is the engine's own lattice**, not a hex grid that resembles one.
+Cells come from `directionToCell`, the ring from `neighbour` and the polygons
+from `cellCorners`, so a patch that reaches a face edge crosses it the way the
+engine does and a patch that reaches one of the twelve pentagons gets a
+five-sided cell. Each cell draws a cap at its own radius and a wall wherever it
+stands over a neighbour, and the sea is one translucent sheet at its own radius
+with no block under it. A test digests both ported blocks against the engine,
+cell for cell and corner for corner.
+
+**The four pictures show the planet or the patch.** Over the planet they are
+longitude across and latitude down with the patch outlined in red, and clicking
+any of them moves the patch there. The three field pictures are cut into grey
+bands: a smooth wash shows a field's brightness and hides its shape, and the
+band edges are its contours. The three fields live at three sizes: the planet
+picture of peaks and valleys reads as grain, and the same field over the patch
+reads as ridges.
+
+**Every knob is in the address bar**, curves included, and only where it differs
+from the default.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

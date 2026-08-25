@@ -17,8 +17,10 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * `fog.w` is the distance the view fades over. Above water it is set far past
  * the horizon, which leaves the same expression doing nothing.
  *
- * `sun.xyz` points at the sun and `sun.w` pins every surface to full light,
- * which is how a hole is looked into before anything can be carried down it.
+ * `sun.xyz` points at the sun and `sun.w` is 1 when the sun is to reach every
+ * face as though no block stood in its way, which is how a cave is looked into
+ * before anything can be carried down there. It takes away only the blocking:
+ * a face's own angle to the sun still decides how much of it that face gets.
  *
  * `night.x` is how far the sun is over this place's horizon, `night.y` is
  * what is left of the light when it is not, `night.z` is what the direct
@@ -200,8 +202,12 @@ fn lightOn(
 	let day = frame.night.x;
 	var lambert = max(dot(normal, frame.sun.xyz), 0.0);
 	// Whether anything stands between here and the sun. Asked only where the
-	// sun would reach anyway, so a face already turned away costs nothing.
-	if (lambert > 0.0) {
+	// sun would reach anyway, so a face already turned away costs nothing --
+	// and **not asked at all under full light**, which is the whole of what
+	// that switch means: the sun reaches every face as though no block stood
+	// in its way. The face's own angle to the sun still decides how much it
+	// takes, so a cave keeps its shape instead of going flat.
+	if (lambert > 0.0 && frame.sun.w < 0.5) {
 		lambert = lambert * sunLight(world, normal, away);
 	}
 	// How much of the sky this face can see, from all of it to the fraction a
@@ -245,14 +251,7 @@ fn lightOn(
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
 	let night = vec3f(frame.night.y * openness);
-	let lit = max(night, fromSky) + fromSun + fromMoon;
-	// **Full light, for seeing underground while nothing can be carried
-	// there.** It takes the whole model out at once rather than turning its
-	// terms down one at a time -- the sun, the shadow that stops it reaching a
-	// hole, the sky's share, the moon and the night floor. What it cannot
-	// reach is what the mesher already multiplied into \`in.color\`, so the
-	// client stops that being baked at all whenever this is on.
-	return mix(lit, vec3f(1.0), frame.sun.w);
+	return max(night, fromSky) + fromSun + fromMoon;
 }
 
 @fragment
