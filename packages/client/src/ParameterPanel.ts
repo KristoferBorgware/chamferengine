@@ -912,6 +912,13 @@ const GROUPS: Group[] = [
 				label: "Corner shading",
 			},
 			{
+				// **The only light this world has.** Read per layer, so a
+				// hole goes dark as it deepens -- and with no torch to carry
+				// down there, off is the only way to see what you dug.
+				key: "skyExposure",
+				label: "Sky exposure",
+			},
+			{
 				key: "seamOverlay",
 				label: "Seam overlay",
 			},

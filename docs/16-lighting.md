@@ -246,6 +246,57 @@ those steps directly, as the change of any value across one pixel. So the
 mesher writes no normal, the vertex keeps its six floats, and nothing about the
 mesh format changes.
 
+### Sky exposure is a fact about a layer, not about a column
+
+A cell at the bottom of a hollow has taller ground on several sides and takes
+less of the sky than one on a ridge. That is a different scale from the
+occlusion at a face's corners, which only ever sees the two cells touching that
+corner, and it is what separates a hillside from a hollow. It is baked into the
+vertex colour by the mesher, because the shader cannot see what stands around a
+cell.
+
+**It was read once per cell, at that cell's column's own top, and painted over
+every face the column produced.** That is right for the cap sitting on the top
+and wrong for everything under it — and a wall belongs to the *solid* side, so
+the wall of a shaft took the exposure of the surface the shaft was dug from,
+all the way down. A cave inside a hill took it too, because the column's top is
+still the hillside standing over the cave.
+
+> **[measured]** A flat world with one shaft dug twelve blocks into it, sky
+> factor recovered per vertex by dividing the block's own registry colour out.
+>
+> | Blocks below the surface | Before | After |
+> |---|---|---|
+> | 1 — open ground | 1.000 | 1.000 |
+> | 2 — the wall's top | **1.000** | 0.878 – 1.000 |
+> | 5 — the wall's middle | **1.000** | 0.511 – 0.633 |
+> | 13 — the floor | 0.350 – **1.000** | 0.120 – 0.267 |
+>
+> Before, only the floor cap darkened at all and every wall was at full
+> daylight top to bottom.
+
+Reading it at each face's **own layer** is the whole fix, and it costs a call
+per face rather than one per cell. A wall takes its two ends — the top vertices
+at the run's first layer, the bottom ones at its last — so one merged run
+carries the gradient down itself for nothing. Ground under the open sky does not
+move: a cap sitting on its column's top is read at that same layer, which is the
+number it always had.
+
+**What an enclosed cell keeps is a decision, not a measurement.** There is no
+torch in this world yet, so the floor of the curve is the whole of what a cave
+gets, and `0` would be pitch black. It is `0.12`, and a floor that low costs
+almost nothing above ground:
+
+> **[measured]** One eye-level view of open terrain, `0.35` against `0.12`:
+> mean brightness **136.0 to 136.1** of 255, a mean per-pixel move of **3.08**,
+> fifth percentile of the ratio 0.949 and ninety-fifth 1.051. The floor only
+> reaches a cell that is shut in on every side, which is what a cave is and
+> what open ground never is.
+
+**Sky exposure** switches the whole term off, and every face then takes the
+open-sky reading. With nothing to carry underground that is the only way to see
+what you dug.
+
 ### A step too small to see is a step that aliases
 
 The same face normal that makes a block read as a block makes a distant
@@ -772,6 +823,12 @@ happened to land in — which is exactly what a sun does as a camera turns.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
+- **Sky exposure is a fact about a layer, not a column.** Read once at a
+  column's top it painted the surface's own daylight over every face below it,
+  so a twelve-block shaft's wall sat at **1.000** from top to bottom and only
+  its floor cap darkened. Read at each face's own layer it runs 1.000 at the
+  surface to **0.120–0.267** at the floor, and a merged wall carries the
+  gradient down its own two ends for nothing.
 - **How hard the sun lands is a knob of its own.** The share between sun and
   sky sums to 1, which is exactly what stops it being a brightness, so the
   direct term takes a plain multiplier beside it: `2.5` against `0.2` moves a

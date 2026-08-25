@@ -1913,6 +1913,28 @@ Violating any of these breaks the design. They are not tunable.
   drawn: `worldColor + sky * (1 - alpha)`, premultiplied. Nothing else had to
   change -- every opaque pipeline already writes alpha 1 and writes depth, so
   its pixels never reach this path.
+- **SKY EXPOSURE IS A FACT ABOUT A LAYER, NOT ABOUT A COLUMN** (`skyAt` in
+  `meshChunk`, `SKY_FLOOR`, doc 16). The mesher bakes how much sky a cell takes
+  from the ground around it, and it read that **once per cell at the column's
+  own top** and painted it over every face the column produced. Right for the
+  cap sitting on that top, wrong for everything under it -- and **a wall
+  belongs to the solid side**, so the wall of a dug shaft took the exposure of
+  the surface it was dug from, at full daylight, however deep it ran. A cave
+  inside a hill took it too, because the column's top is still the hillside
+  over the cave. Measured on a flat world with a twelve-block shaft, sky factor
+  recovered per vertex by dividing the block's own registry colour out: **1.000
+  at every depth** top to bottom, and only the floor cap darkened, to 0.350.
+  Read at each face's **own layer** it runs 1.000 at the surface, 0.511-0.633
+  halfway down and **0.120-0.267** at the floor. A wall takes its **two ends**
+  -- top vertices at the run's first layer, bottom at its last -- so one merged
+  run carries the gradient for nothing, and ground under the open sky does not
+  move because a cap on its column's top is read at that same layer. **What an
+  enclosed cell keeps is a decision**: there is no torch in this world, so the
+  curve's floor is the whole of what a cave gets. It is **0.12** against the
+  0.35 it was, and that costs a surface frame's mean **136.0 against 136.1** of
+  255, a mean per-pixel move of 3.08 -- the floor only reaches a cell shut in
+  on every side. **Sky exposure** switches the term off entirely, which is the
+  only way to see what you dug.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

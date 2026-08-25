@@ -70,6 +70,33 @@ type CellPaint = (block: number, face: number, i: number, j: number) => void;
 const SKY_REACH = 6;
 
 /**
+ * What a cell shut in on every side still takes, as a fraction.
+ *
+ * There is no other light in this world yet -- no torch, no lamp -- so this
+ * is the whole of what an enclosed place gets, and 0 would be pitch black.
+ */
+const SKY_FLOOR = 0.12;
+
+/**
+ * How much sky a face at one layer sees, from the ground around its cell.
+ *
+ * **A layer, not a column.** The exposure used to be read once per cell at
+ * the column's own top and painted over every face the column produced --
+ * which is right for the cap sitting on that top and wrong for everything
+ * below it. A wall belongs to the solid side, so a shaft's wall took the
+ * exposure of the surface the shaft was dug from, at full daylight, however
+ * deep it ran; a cave inside a hill took it too, because the column's top is
+ * still the hillside standing over the cave.
+ *
+ * \`around\` is the ring's own tops, which is what says whether this face is
+ * under the ground beside it or standing clear of it -- so a cliff face stays
+ * bright as it should while a cave a metre away goes dark.
+ */
+function skyAt(on: boolean, layer: number, around: readonly number[]): number {
+	return on ? skyExposure(layer, around, SKY_REACH, SKY_FLOOR) : 1;
+}
+
+/**
  * How far below its true radius an apron cell is drawn, in metres.
  *
  * An apron duplicates a cell its neighbour may be drawing as its own, and two
@@ -179,13 +206,6 @@ function debugTint(color: Float32Array, tint: number, mix: number): void {
 	color[2] = color[2]! * (1 - mix) + mark[2] * mix;
 }
 
-/** Multiply a color in place. */
-function shade(color: Float32Array, by: number): void {
-	color[0] = color[0]! * by;
-	color[1] = color[1]! * by;
-	color[2] = color[2]! * by;
-}
-
 /** A column's block at a layer, air outside the crust. */
 function at(column: Column, layer: number): number {
 	const blocks = column.blocks;
@@ -215,6 +235,7 @@ export function meshChunk(
 ): MeshTally {
 	const settings = { ...MESH_DEFAULTS, ...options };
 	const light = settings.ambientOcclusion ? AMBIENT_OCCLUSION : FLAT_LIGHT;
+	const exposed = settings.skyExposure;
 	const depth = chunk.depth;
 	const n = 1 << depth;
 	const face = chunk.address.face;
@@ -379,6 +400,7 @@ export function meshChunk(
 				tint,
 				mix,
 				light,
+				exposed,
 			);
 		}
 
@@ -454,6 +476,7 @@ export function meshChunk(
 			drawnHere,
 			seamFloor,
 			light,
+			exposed,
 		);
 	}
 	return tally;
@@ -527,6 +550,7 @@ function meshCell(
 	tint: number,
 	mix: number,
 	light: readonly number[],
+	exposed: boolean,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -577,7 +601,6 @@ function meshCell(
 		const other = ring[k];
 		if (other) around.push(other.first);
 	}
-	const sky = skyExposure(own.first, around, SKY_REACH);
 
 	// Caps first: a top or a bottom face covers one layer and never merges with
 	// the layer under it, because there is a different block there.
@@ -587,7 +610,6 @@ function meshCell(
 		if (here === 0) continue;
 		const sink = here === 1 ? translucent : opaque;
 		paint(block, face, i, j);
-		shade(COLOR, sky);
 		debugTint(COLOR, tint, mix);
 
 		if (opacityOf(at(own, layer - 1)) < here) {
@@ -601,6 +623,7 @@ function meshCell(
 				(corner) =>
 					occlusion(ring, degree, corner, corner + 1, layer - 1),
 				light,
+				skyAt(exposed, layer, around),
 			);
 			tally.faces++;
 		}
@@ -615,6 +638,7 @@ function meshCell(
 				false,
 				() => 0,
 				light,
+				skyAt(exposed, layer, around),
 			);
 			tally.faces++;
 		}
@@ -627,7 +651,6 @@ function meshCell(
 		const block = at(own, floor);
 		if (opacityOf(block) > 0) {
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitCap(
 				opacityOf(block) === 1 ? translucent : opaque,
@@ -638,6 +661,7 @@ function meshCell(
 				false,
 				() => 0,
 				light,
+				skyAt(exposed, floor, around),
 			);
 			tally.faces++;
 		}
@@ -663,7 +687,6 @@ function meshCell(
 			if (otherTop >= groundTop - 1e-9) continue;
 			const block = at(own, groundCap);
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitSide(
 				opaque,
@@ -679,6 +702,8 @@ function meshCell(
 				true,
 				true,
 				light,
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
@@ -719,7 +744,6 @@ function meshCell(
 				opacityOf(at(other, end + 1)) < belowOpacity;
 
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitSide(
 				here === 1 ? translucent : opaque,
@@ -735,6 +759,8 @@ function meshCell(
 				!wallAbove,
 				!wallBelow,
 				light,
+				skyAt(exposed, layer, around),
+				skyAt(exposed, end, around),
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -775,6 +801,7 @@ function meshApronCell(
 	drawnHere: (cell: Cell) => boolean,
 	seamFloor: (cell: Cell) => number,
 	light: readonly number[],
+	exposed: boolean,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -826,7 +853,6 @@ function meshApronCell(
 		const other = ring[k];
 		if (other) around.push(other.first);
 	}
-	const sky = skyExposure(own.first, around, SKY_REACH);
 
 	// The caps, to be looked down at.
 	for (let layer = from; layer <= to; layer++) {
@@ -835,7 +861,6 @@ function meshApronCell(
 		if (here === 0) continue;
 		if (opacityOf(at(own, layer - 1)) >= here) continue;
 		paint(block, face, i, j);
-		shade(COLOR, sky);
 		debugTint(COLOR, tint, mix);
 		emitCap(
 			here === 1 ? translucent : opaque,
@@ -846,6 +871,7 @@ function meshApronCell(
 			true,
 			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
 			light,
+			skyAt(exposed, layer, around),
 		);
 		tally.faces++;
 	}
@@ -865,7 +891,6 @@ function meshApronCell(
 			if (otherTop >= groundTop - 1e-9) continue;
 			const block = at(own, groundCap);
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitSide(
 				opaque,
@@ -881,6 +906,8 @@ function meshApronCell(
 				true,
 				true,
 				light,
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
@@ -935,7 +962,6 @@ function meshApronCell(
 				opacityOf(at(other, end + 1)) < belowOpacity;
 
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitSide(
 				here === 1 ? translucent : opaque,
@@ -951,6 +977,8 @@ function meshApronCell(
 				!wallAbove,
 				!wallBelow,
 				light,
+				skyAt(exposed, layer, around),
+				skyAt(exposed, end, around),
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -1002,7 +1030,6 @@ function meshApronCell(
 			if (foot <= 0 || foot >= top - 1e-9) continue;
 			const block = at(own, groundCap);
 			paint(block, face, i, j);
-			shade(COLOR, sky);
 			debugTint(COLOR, tint, mix);
 			emitSide(
 				opaque,
@@ -1018,6 +1045,8 @@ function meshApronCell(
 				true,
 				true,
 				light,
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
@@ -1042,12 +1071,13 @@ function emitCap(
 	upward: boolean,
 	occlude: (corner: number) => number,
 	light: readonly number[],
+	sky: number,
 ): void {
 	const first: number[] = new Array<number>(degree);
 	for (let c = 0; c < degree; c++) {
 		const at = upward ? c : degree - 1 - c;
 		const p = corners[at]!;
-		const lit = light[occlude(at)]!;
+		const lit = light[occlude(at)]! * sky;
 		first[c] = sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
@@ -1082,6 +1112,8 @@ function emitSide(
 	extendTop: boolean,
 	extendBottom: boolean,
 	light: readonly number[],
+	topSky: number,
+	bottomSky: number,
 ): void {
 	const leftCorner = corners[(k + degree - 1) % degree]!;
 	const rightCorner = corners[k]!;
@@ -1124,8 +1156,8 @@ function emitSide(
 	const byRight =
 		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
-	const put = (p: Vec3, radius: number, occ: number) => {
-		const lit = light[occ]!;
+	const put = (p: Vec3, radius: number, occ: number, sky: number) => {
+		const lit = light[occ]! * sky;
 		return sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
@@ -1136,10 +1168,10 @@ function emitSide(
 		);
 	};
 
-	const topLeft = put(left, topRadius, above + byLeft);
-	const topRight = put(right, topRadius, above + byRight);
-	const bottomRight = put(right, bottomRadius, under + byRight);
-	const bottomLeft = put(left, bottomRadius, under + byLeft);
+	const topLeft = put(left, topRadius, above + byLeft, topSky);
+	const topRight = put(right, topRadius, above + byRight, topSky);
+	const bottomRight = put(right, bottomRadius, under + byRight, bottomSky);
+	const bottomLeft = put(left, bottomRadius, under + byLeft, bottomSky);
 
 	sink.triangle(topLeft, bottomLeft, bottomRight);
 	sink.triangle(topLeft, bottomRight, topRight);

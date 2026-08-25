@@ -102,6 +102,19 @@ export interface MeshOptions {
 	 * way; only the corner's own light multiplier changes.
 	 */
 	readonly ambientOcclusion?: boolean;
+
+	/**
+	 * Whether a face darkens by how much sky the ground around it leaves it.
+	 *
+	 * Baked into the vertex colour at mesh time, like the corner shading, and
+	 * read at each face's own layer rather than once at its column's top --
+	 * which is what makes a shaft's wall, a cave's ceiling and a tunnel go
+	 * dark rather than carrying the daylight of the surface above them.
+	 *
+	 * Off gives every face the open-sky reading. There is no torch in this
+	 * world yet, so that is the only way to see underground.
+	 */
+	readonly skyExposure?: boolean;
 }
 
 export const MESH_DEFAULTS = {
@@ -111,4 +124,5 @@ export const MESH_DEFAULTS = {
 	debugSeams: false,
 	speckle: SPECKLE,
 	ambientOcclusion: true,
+	skyExposure: true,
 } as const satisfies MeshOptions;
