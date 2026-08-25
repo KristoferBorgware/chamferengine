@@ -106,6 +106,16 @@ export class Player {
 		this.settings = { ...this.settings, walkSpeed };
 	}
 
+	/** How fast the player flies, in metres a second, before {@link altitudeScale}. */
+	get flySpeed(): number {
+		return this.settings.flySpeed;
+	}
+
+	/** Change how fast the player flies, without touching anything else about them. */
+	setFlySpeed(flySpeed: number): void {
+		this.settings = { ...this.settings, flySpeed };
+	}
+
 	/** Where the eyes are. */
 	get eye(): Vec3 {
 		return this.position.add(this.up.scale(this.settings.eyeHeight));

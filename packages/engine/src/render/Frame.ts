@@ -73,4 +73,30 @@ export interface Frame {
 	 * ones.
 	 */
 	readonly sunLight: number;
+
+	/**
+	 * How much a face's own angle to the sky changes its ambient light.
+	 *
+	 * The ambient term is not one flat number: a face looking straight up
+	 * sees the whole sky and one looking sideways sees half, so two faces of
+	 * one hexagon read as different shades even with the sun switched off --
+	 * which is the one thing that can still look directional once `sunLight`
+	 * is `0`, because it is not the sun at all. `1` is that full variation;
+	 * `0` gives every face the open-sky reading regardless of which way it
+	 * points, so the ambient term stops depending on shape and only
+	 * `exposure` and the block's own colour are left.
+	 */
+	readonly skyShading: number;
+
+	/**
+	 * What the sky's own ambient light is worth on a surface.
+	 *
+	 * This is the term `skyShading` reshapes but does not scale: with the sun
+	 * switched off, the sky is what is left lighting the world at all, and
+	 * nothing before this multiplier could turn it down. `1` is the ambient
+	 * term as the ground shader's own `SUN_SHARE` describes it; under it a
+	 * face reads darker at any angle, over it brighter, and the floor a face
+	 * keeps after dark is untouched -- this is the daylight sky alone.
+	 */
+	readonly skyLight: number;
 }

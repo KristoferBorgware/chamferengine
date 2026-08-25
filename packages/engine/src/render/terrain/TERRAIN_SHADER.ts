@@ -18,9 +18,11 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * the horizon, which leaves the same expression doing nothing.
  *
  * `night.x` is how far the sun is over this place's horizon, `night.y` is
- * what is left of the light when it is not, and `night.z` is what the direct
- * sun is worth against the sky. `sky.rgb` is what the sky is doing, which is
- * the color of everything the sun does not reach directly.
+ * what is left of the light when it is not, `night.z` is what the direct
+ * sun is worth against the sky, and `night.w` is how much a face's own angle
+ * to the sky still shades it once the sun is gone. `sky.rgb` is what the sky
+ * is doing, which is the color of everything the sun does not reach
+ * directly, and `sky.w` is what that ambient light is worth.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
@@ -200,8 +202,15 @@ fn lightOn(
 		lambert = lambert * sunLight(world, normal, away);
 	}
 	// How much of the sky this face can see, from all of it to the fraction a
-	// downward face gets back off the ground.
-	let openness = mix(0.42, 1.0, 0.5 + 0.5 * dot(normal, up));
+	// downward face gets back off the ground. **This is the one thing that
+	// can still read as directional with the sun switched off** -- it is a
+	// dot product against \`up\`, not against the sun, but two faces of one
+	// hexagon differ under it all the same. \`night.w\` blends it toward the
+	// open-sky reading for every face alike, which is flat rather than dim:
+	// turning this down does not darken the world, it makes every face agree
+	// about how much sky is over it.
+	let byAngle = mix(0.42, 1.0, 0.5 + 0.5 * dot(normal, up));
+	let openness = mix(1.0, byAngle, frame.night.w);
 	// **The sky's hue, not its brightness.** The color the pass clears to
 	// already fades from day to night, so taking it whole would dim the
 	// ambient twice over -- once by that fade and once by \`day\` below --
@@ -210,7 +219,7 @@ fn lightOn(
 	// that tint is enough to read as sky without turning grey stone blue.
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
-	let fromSky = tint * (ambient * openness * day);
+	let fromSky = tint * (ambient * openness * day * frame.sky.w);
 	let fromSun = sunColor(up) * (direct * lambert * day * frame.night.z);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a

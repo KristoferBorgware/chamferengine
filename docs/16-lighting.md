@@ -352,6 +352,51 @@ of the move is the whole point — the 95th percentile of the per-pixel ratio is
 **3.425** and the 5th is **0.947**. Faces the sun reaches gain nearly all of
 it; faces lit only by the sky do not move at all.
 
+### The sky term reads a face's own angle, and that alone looks directional
+
+Turning **Sunlight** to `0` removes the sun term outright, and a face
+still comes out shaded differently from its neighbour — which reads as a
+missed switch, because it looks exactly like what a sun does: one side of a
+ridge darker than the other. It is not the sun. `openness`, the fraction of
+the sky a face can see, is `dot(faceNormal, up)` — a face looking sideways
+sees half the sky a face looking straight up does, and that is enough on its
+own to shade two faces of one hexagon apart with no light in the scene at
+all pointing anywhere in particular.
+
+**Sky shading** blends that term toward the open-sky reading for every face
+alike. At `1` it is the `dot(faceNormal, up)` above; at `0` every face reads
+as though it saw the whole sky, whatever way it points, and the ambient term
+stops depending on shape. It is not a brightness knob — turning it down does
+not dim the world, it makes every face agree about how much sky is over it,
+so what is left moving is `exposure` and each block's own colour.
+
+> **[measured]** One eye-level view, sun off, air off, clouds and both ground
+> shadows off. Over the terrain band the mean brightness moves **38.3 to
+> 40.1** turning shading off, with the 95th percentile of the per-pixel ratio
+> at **1.000** and the 5th at **0.727** — it only ever brightens a face,
+> never darkens one, which is what removing a darkening term should do.
+
+### The ambient term itself had no brightness knob at all
+
+**Sunlight** at `0` and **Sky shading** at `0` together leave a flat,
+uniform ambient light and nothing to turn it down with — the ambient term's
+own brightness, `ambient` in `fromSky`, was a fixed share of the ground
+shader's `SUN_SHARE` constant, not a knob at any point in the chain. That is
+a different brightness from the atmosphere's own **Sky brightness** under
+**The air**: that knob is how bright the marched sky dome reads, and the
+ground's sun term never reads it either, which is the gap **Sunlight**
+closed for the direct term.
+
+**Ambient light** is the multiplier that was missing. `1` is the ambient
+share as `SUN_SHARE` describes it; it scales `fromSky` alone, leaving the
+floor a face keeps after dark and the sea untouched, so a world with the sun
+and the sky both turned down goes dark rather than flat-and-lit.
+
+> **[measured]** The same view as above, sun and air off. Over the terrain
+> band, excluding near-black pixels, the mean brightness moves **113.6 to
+> 87.8** taking **Ambient light** from `1` to `0.2` — a mean per-pixel move
+> of **35.6**.
+
 ### Day length is a gameplay dial, and it has a natural anchor
 
 The terminator sweeps at `circumference / dayLength`.
@@ -714,6 +759,18 @@ happened to land in — which is exactly what a sun does as a camera turns.
   frame's mean from **56.7 to 106.7**, with the 95th percentile of the ratio at
   **3.425** and the 5th at **0.947** — lit faces gain nearly all of it and
   sky-lit ones do not move.
+- **The sky term alone still reads as directional**, because `openness` is
+  `dot(faceNormal, up)` rather than a flat number -- a face looking sideways
+  sees half the sky a face looking straight up does, with no sun involved.
+  Sky shading blends it toward the open-sky reading for every face alike;
+  turning it off moves a terrain band's mean **38.3 to 40.1** with the 95th
+  percentile of the ratio at **1.000** and the 5th at **0.727** -- it only
+  ever brightens a face.
+- **The ambient term itself had no brightness knob**, which is a different
+  gap from the one Sunlight closed. Ambient light is a plain multiplier on
+  `fromSky` alone; taking it from `1` to `0.2` with the sun off moves a
+  terrain band's mean **113.6 to 87.8**, and the floor a face keeps after
+  dark is untouched.
 - **Damping the moiré is not the same as sampling it**, so the world can be
   drawn larger than the canvas and averaged back by the tone pass. At a scale
   of 2 the mean jump from one pixel to the next across the distant band falls

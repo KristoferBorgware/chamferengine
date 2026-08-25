@@ -96,6 +96,14 @@ interface Group {
 	 */
 	readonly side?: "left" | "right";
 
+	/**
+	 * Which of the right pane's two tabs the group stands under.
+	 *
+	 * Ignored on the bench, which has no tabs. `"settings"` unless stated,
+	 * because that is what most of the panel is.
+	 */
+	readonly tab?: "terrain" | "settings";
+
 	readonly knobs: Knob[];
 }
 
@@ -235,6 +243,8 @@ const GROUPS: Group[] = [
 		// the readout fills it in -- nothing here is a knob.
 		title: "Readout",
 		where: "world",
+		folded: true,
+		tab: "settings",
 		knobs: [],
 	},
 	{
@@ -243,13 +253,17 @@ const GROUPS: Group[] = [
 		// as the map holds it, flat and on a ball, with the player marked on
 		// both. Nothing in it is a knob -- the page that owns the map fills it
 		// in.
-		title: "The map",
+		title: "Map",
 		where: "world",
+		folded: true,
+		tab: "settings",
 		knobs: [],
 	},
 	{
 		title: "Terrain",
 		where: "both",
+		folded: true,
+		tab: "terrain",
 		knobs: [
 			{
 				key: "terrainCurve",
@@ -284,6 +298,8 @@ const GROUPS: Group[] = [
 	{
 		title: "Mountains",
 		where: "both",
+		folded: true,
+		tab: "terrain",
 		knobs: [
 			{
 				key: "mountainLayer",
@@ -353,6 +369,8 @@ const GROUPS: Group[] = [
 		// moves the other.
 		title: "Land",
 		where: "both",
+		folded: true,
+		tab: "terrain",
 		knobs: [
 			{
 				key: "landFraction",
@@ -376,6 +394,8 @@ const GROUPS: Group[] = [
 		// taking that much ocean away.
 		title: "Sea",
 		where: "both",
+		folded: true,
+		tab: "terrain",
 		knobs: [
 			{
 				key: "seaLevel",
@@ -405,6 +425,7 @@ const GROUPS: Group[] = [
 		title: "Erosion",
 		where: "both",
 		folded: true,
+		tab: "terrain",
 		knobs: [
 			{
 				key: "erosionOn",
@@ -465,7 +486,7 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The air",
+		title: "Air",
 		folded: true,
 		knobs: [
 			{
@@ -575,10 +596,15 @@ const GROUPS: Group[] = [
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
+			{
+				key: "noonOnLand",
+				label: "Noon where you land",
+				enabledWhen: (k) => !k.plain,
+			},
 		],
 	},
 	{
-		title: "The light",
+		title: "Light",
 		folded: true,
 		knobs: [
 			{
@@ -623,6 +649,26 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				// The ground's own ambient term -- what is still lighting a
+				// face once the sun is at 0 -- and a different knob from
+				// **Sky brightness** under **The air**, which is the marched
+				// atmosphere's own brightness rather than this.
+				key: "skyStrength",
+				label: "Ambient light",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				// The one term that can still look directional with the sun
+				// off: a face's own angle to the sky, not to the sun. Zero
+				// gives every face the open-sky reading and stops it varying
+				// by shape at all.
+				key: "skyShading",
+				label: "Sky shading",
+				digits: 2,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,
@@ -661,7 +707,7 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The sea",
+		title: "Waves",
 		folded: true,
 		knobs: [
 			{
@@ -737,7 +783,7 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The clouds",
+		title: "Clouds",
 		folded: true,
 		knobs: [
 			{
@@ -784,7 +830,7 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The grid",
+		title: "Grid",
 		folded: true,
 		knobs: [
 			{
@@ -878,13 +924,18 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The player",
+		title: "Player",
 		folded: true,
 		knobs: [
 			{
 				key: "walkSpeed",
 				label: "Walk speed",
 				digits: 1,
+			},
+			{
+				key: "flySpeed",
+				label: "Fly speed",
+				digits: 0,
 			},
 			{
 				key: "reach",
@@ -1089,6 +1140,39 @@ export class ParameterPanel {
 		this.sections.set("Seed", seed);
 		body.appendChild(seed);
 
+		// **Two tabs on the right pane, nowhere else.** The bench already has
+		// two panels for two different questions (what the world came out as,
+		// and the knobs that decide the ground) and has no use for a third
+		// split. Here there is one panel and twenty-some groups in it, and
+		// the split that matters is the same one the bench's two panels
+		// draw: the ground itself against everything about how it is shown.
+		let terrainTab: HTMLElement | null = null;
+		let settingsTab: HTMLElement | null = null;
+		if (!this.bench) {
+			const tabs = document.createElement("div");
+			tabs.className = "knobs-tabs";
+			const terrainButton = document.createElement("button");
+			terrainButton.textContent = "Terrain";
+			const settingsButton = document.createElement("button");
+			settingsButton.textContent = "Settings";
+			tabs.append(terrainButton, settingsButton);
+			body.appendChild(tabs);
+
+			terrainTab = document.createElement("div");
+			settingsTab = document.createElement("div");
+			body.append(terrainTab, settingsTab);
+
+			const select = (tab: "terrain" | "settings"): void => {
+				terrainButton.classList.toggle("active", tab === "terrain");
+				settingsButton.classList.toggle("active", tab === "settings");
+				terrainTab!.hidden = tab !== "terrain";
+				settingsTab!.hidden = tab !== "settings";
+			};
+			terrainButton.onclick = () => select("terrain");
+			settingsButton.onclick = () => select("settings");
+			select("terrain");
+		}
+
 		// A group is a fold, and only the first is open. Twenty-six rows at one
 		// prominence is the thing this release set out to fix, and the order
 		// they are in is what each one decides rather than which subsystem
@@ -1098,7 +1182,11 @@ export class ParameterPanel {
 			if (where !== "both" && (where === "bench") !== this.bench)
 				continue;
 			const into =
-				group.side === "left" && this.leftBody ? this.leftBody : body;
+				group.side === "left" && this.leftBody
+					? this.leftBody
+					: (((group.tab ?? "settings") === "terrain"
+							? terrainTab
+							: settingsTab) ?? body);
 			const section = document.createElement("section");
 			if (group.folded) section.classList.add("shut");
 

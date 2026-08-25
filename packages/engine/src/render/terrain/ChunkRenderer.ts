@@ -390,9 +390,17 @@ export class ChunkRenderer implements ShadowCaster {
 		// `night.z`, which the sun-share knob used to hold. What the direct sun
 		// is worth on a surface, against the sky's own brightness knob.
 		this.frameData[30] = frame.sunLight;
+		// `night.w`. How much a face's own angle to the sky still shades it --
+		// the one term that can look directional with `sunLight` at 0, because
+		// it reads a face's normal rather than the sun.
+		this.frameData[31] = frame.skyShading;
 		// The sky is the color of every surface the sun does not reach, so the
 		// shader is given the same color the pass clears to.
 		this.frameData.set(this.sky, 32);
+		// `sky.w`. What the sky's own ambient light is worth on a surface --
+		// the one multiplier `skyShading` does not touch, because that term
+		// reshapes the ambient by a face's angle rather than scaling it.
+		this.frameData[35] = frame.skyLight;
 		this.frameData.set(frame.moon, 36);
 		this.frameData[39] = frame.moonLight;
 		device.queue.writeBuffer(this.frameUniform, 0, this.frameData);

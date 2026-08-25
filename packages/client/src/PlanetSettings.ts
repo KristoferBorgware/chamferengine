@@ -544,6 +544,15 @@ export interface PlanetKnobs {
 	timeOfDay: number;
 
 	/**
+	 * Whether landing on the globe sets the clock to noon at the place landed.
+	 *
+	 * On, the sun is put directly over wherever the globe was clicked, pausing
+	 * the clock there the way dragging **Time of day** already does. Off, a
+	 * teleport leaves the clock exactly where it was.
+	 */
+	noonOnLand: boolean;
+
+	/**
 	 * Whether the sun renders its own depth buffers of what stands near.
 	 *
 	 * Sharp enough to shadow one block by the next. Off, the world is not
@@ -613,6 +622,32 @@ export interface PlanetKnobs {
 	sunStrength: number;
 
 	/**
+	 * How much a face's own angle to the sky changes its ambient light.
+	 *
+	 * A face looking straight up sees the whole sky and one looking sideways
+	 * sees half, and that alone is enough to shade one hexagon's faces
+	 * differently -- the one thing that can still look directional with
+	 * **Sunlight** at 0, because it reads a face's own normal rather than
+	 * the sun. `0` gives every face the open-sky reading regardless of which
+	 * way it points, which is flat rather than dim: the ambient term stops
+	 * depending on shape, and only **Exposure** and the block's own colour
+	 * are left.
+	 */
+	skyShading: number;
+
+	/**
+	 * What the sky's own ambient light is worth on a surface.
+	 *
+	 * A different knob from **Sky brightness** under **The air**, which is
+	 * how bright the marched atmosphere itself reads. This is the ground's
+	 * own ambient term -- what is left lighting the world once the sun goes
+	 * to `0` -- and nothing before it could turn that down at all. `1` is
+	 * the ambient share the ground shader's own `SUN_SHARE` describes; the
+	 * floor a face keeps after dark and the sea are both untouched by it.
+	 */
+	skyStrength: number;
+
+	/**
 	 * How much light the moon throws on the ground.
 	 *
 	 * It is the only thing with a direction after dark, so at `0` every face
@@ -664,6 +699,9 @@ export interface PlanetKnobs {
 
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
+
+	/** How fast the player flies, in metres a second, before altitude speeds it up further. */
+	flySpeed: number;
 
 	/**
 	 * How far a player can reach to break or place a block, in blocks.
@@ -760,9 +798,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// blue-over-red at the zenith against that thinner best.
 	atmosphereScale: 0.25,
 	cloudsDrawn: true,
-	lowDeck: 3000,
-	highDeck: 6000,
-	cloudPuff: 64,
+	lowDeck: 6100,
+	highDeck: 22600,
+	cloudPuff: 248,
 	seaDrawn: true,
 	seaWireframe: false,
 	waveHeight: 4,
@@ -775,10 +813,10 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seaGlint: 0.8,
 	seaRipple: 0.7,
 	seaGrouping: 0.5,
-	cloudClusters: 1200,
-	cloudDensity: 100,
-	cloudSpread: 180,
-	detail: 5,
+	cloudClusters: 2300,
+	cloudDensity: 78,
+	cloudSpread: 1600,
+	detail: 1.5,
 	buildCull: true,
 	cullMargin: 25,
 	nearestFirst: true,
@@ -806,6 +844,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// does. A different seed spawns at a different longitude, where the same
 	// number is a different hour; the row above the slider is one drag.
 	timeOfDay: 0.75,
+	noonOnLand: false,
 	cascadeShadows: true,
 	shadowTexels: 1024,
 	cascadeReach: 260,
@@ -813,6 +852,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadow: 0.55,
 	cloudShadowReach: 4000,
 	sunStrength: 1,
+	skyShading: 1,
+	skyStrength: 1,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -822,7 +863,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	bloomStrength: 0.55,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
-	reach: 6,
+	flySpeed: PLAYER_DEFAULTS.flySpeed,
+	reach: 64,
 };
 
 /**
@@ -1133,6 +1175,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
+	noonOnLand: { ...TOGGLE, rebuilds: false },
 	cascadeShadows: { ...TOGGLE, rebuilds: false },
 	shadowTexels: {
 		low: 256,
@@ -1152,6 +1195,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m",
 	},
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	skyShading: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },
@@ -1165,6 +1210,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
+	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },
 	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };
 

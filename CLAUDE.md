@@ -1958,6 +1958,30 @@ Violating any of these breaks the design. They are not tunable.
   air off, `2.5` against `0.2` moves a frame's mean from **56.7 to 106.7**, and
   the shape is the point: 95th percentile of the per-pixel ratio **3.425**, 5th
   **0.947** -- lit faces gain nearly all of it and sky-lit ones do not move.
+- **THE SKY TERM READS A FACE'S OWN ANGLE, AND THAT ALONE LOOKS DIRECTIONAL**
+  (`Frame.skyShading`, `frame.night.w`, doc 16). Zeroing `sunLight` removes the
+  sun term outright and a ridge still shades one side darker than the other --
+  which reads as the sun still being on, because it looks exactly like what a
+  directional light does. It is not: `openness`, the sky term's own fraction,
+  is `dot(faceNormal, up)`, a face looking sideways seeing half the sky a face
+  looking straight up does, with nothing in the scene pointing anywhere in
+  particular. **Sky shading** blends `openness` toward the open-sky reading for
+  every face alike -- not a brightness knob, since turning it down does not dim
+  the world, it makes every face agree about how much sky is over it. Measured
+  with the sun, air, clouds and both ground shadows off: the terrain band's
+  mean moves **38.3 to 40.1** turning it off, 95th percentile of the ratio
+  **1.000**, 5th **0.727** -- it only ever brightens a face.
+- **THE AMBIENT TERM ITSELF HAD NO BRIGHTNESS KNOB, DISTINCT FROM SKY
+  SHADING** (`Frame.skyLight`, `frame.sky.w`, doc 16). Zeroing `sunLight` and
+  `skyShading` together still leaves a flat, uniform ambient light with
+  nothing to turn it down -- `ambient` in `fromSky` is a fixed share of
+  `SUN_SHARE`, never a knob. **Also distinct from the atmosphere's own Sky
+  brightness** (`skyIntensity`), which is how bright the marched sky dome
+  reads and which the ground's sun term never read either -- the same gap
+  Sunlight closed for the direct term, now closed for the ambient one.
+  **Ambient light** is a plain multiplier on `fromSky` alone, leaving the
+  after-dark floor and the sea untouched. Measured with the sun and air off:
+  `1` against `0.2` moves a terrain band's mean **113.6 to 87.8**.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
   The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
   shipped planet -- and the world opens with the camera **`1,100 m` up**,
