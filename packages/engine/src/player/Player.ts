@@ -4,8 +4,28 @@ import type { WorldShape } from "../world/WorldShape.js";
 import { BlockType, isSolid } from "../generation/terrain/BlockType.js";
 import { PLAYER_DEFAULTS } from "./PlayerOptions.js";
 import { Vec3 } from "../math/Vec3.js";
+import { slidePastWalls } from "./slidePastWalls.js";
 import { transport } from "./transport.js";
 import { turn } from "./turn.js";
+
+/**
+ * The widest a player may be, as a share of a block.
+ *
+ * A cell's centre-to-edge distance is half its spacing, and the narrowest cell
+ * on any planet here is `0.744` of the nominal spacing -- so `0.372` of a
+ * block is the most that fits at a pentagon, and this leaves a margin under
+ * it. Two facing walls asking for a place narrower than the player is have no
+ * answer.
+ */
+const FITS_CELL = 0.3;
+
+/**
+ * The furthest one piece of a step may carry, as a share of a block.
+ *
+ * Under the `0.372` a cell's own half-width comes to, so a piece can never
+ * carry a player clean across the cell whose walls it was measured against.
+ */
+const WALL_STRIDE = 0.35;
 
 /** What a player is being asked to do this tick. */
 export interface PlayerInput {
@@ -192,20 +212,63 @@ export class Player {
 		}
 
 		const before = this.position;
-		let moved = before.add(across.scale(seconds));
-		if (this.flying || swimming)
-			moved = moved.add(up.scale(input.lift * speed * seconds));
+
+		// Flight passes through everything. Nothing is tested, because the one
+		// thing flying is for is getting to somewhere the ground is in the way
+		// of.
+		if (this.flying) {
+			const moved = before
+				.add(across.scale(seconds))
+				.add(up.scale(input.lift * speed * seconds));
+			this.heading = transport(this.heading, before, moved);
+			this.onGround = false;
+			this.position = moved;
+			return;
+		}
+
+		// **Cut into pieces no wider than a cell.** The walls a step is tested
+		// against are the ones around where it started, so a step long enough
+		// to clear a whole cell would be measured against a place it is no
+		// longer anywhere near -- and at the 20 m/s the speed knob reaches,
+		// one frame at 30 Hz covers two thirds of a metre. Ordinary walking is
+		// one piece: 4.5 m/s at 60 Hz is 0.075 m against the 0.35 m allowed.
+		const stride = across.scale(seconds);
+		const pieces = Math.max(
+			1,
+			Math.ceil(stride.length() / (WALL_STRIDE * this.shape.blockSize)),
+		);
+		const piece = stride.scale(1 / pieces);
+		let moved = before;
+		for (let step = 0; step < pieces; step++)
+			moved = slidePastWalls(
+				moved,
+				moved.add(piece),
+				this.shape,
+				probe,
+				this.radius,
+				this.settings.height,
+			);
+
+		if (swimming) moved = moved.add(up.scale(input.lift * speed * seconds));
 
 		// A heading only means anything against the ground under it, so it
 		// travels with the player rather than being kept as a world vector.
 		this.heading = transport(this.heading, before, moved);
 
-		if (this.flying) {
-			this.onGround = false;
-			this.position = moved;
-			return;
-		}
 		this.position = this.settle(moved, swimming, seconds, probe);
+	}
+
+	/**
+	 * How wide the player is, in metres, held to what this world's cells fit.
+	 *
+	 * The narrowest cell anywhere runs `0.744` of the nominal spacing and its
+	 * centre-to-edge distance is half that, so `0.372` of a block is all that
+	 * fits at a pentagon. A world of half-metre blocks would trap a `0.3 m`
+	 * player outright, so the metres asked for are a ceiling rather than the
+	 * answer.
+	 */
+	get radius(): number {
+		return Math.min(this.settings.radius, FITS_CELL * this.shape.blockSize);
 	}
 
 	/**
@@ -215,7 +278,10 @@ export class Player {
 	 * tested against **every layer it passes** rather than against where it
 	 * ended up. A column is straight, so that is a walk down one of them.
 	 *
-	 * Ground a step high is walked up rather than into.
+	 * This is the radial half of moving. Walking into a wall is settled before
+	 * anything here runs, by {@link slidePastWalls}, so a rise arrives under
+	 * the feet only by being built or eroded there -- never by being walked
+	 * at.
 	 */
 	private settle(
 		moved: Vec3,
@@ -242,7 +308,12 @@ export class Player {
 		const startRadius = moved.length();
 		const wanted = startRadius - this.fall * seconds;
 
-		// Upward first: ground that rose under the player is stepped onto.
+		// Upward first: ground that arrived under the player is stood on
+		// rather than stood in. At the shipped `stepHeight` of zero this
+		// reaches one layer, which is the one holding the feet -- so it holds
+		// a standing player where they are, and lifts one out of a block
+		// somebody built on them. Raising it walks up that many blocks
+		// unaided, which is the auto-climb this world does without.
 		const feetLayer = shape.layerOfRadius(startRadius);
 		let standing = -1;
 		for (
@@ -266,6 +337,26 @@ export class Player {
 			this.fall = 0;
 			this.onGround = true;
 			return up.scale(shape.radiusOfLayer(standing));
+		}
+
+		// Rising into a ceiling. `fall` is positive downward, so a jump makes
+		// it negative and carries `wanted` above where the step started; the
+		// head stops that the way the ground stops a fall.
+		if (wanted > startRadius) {
+			const head = this.settings.height;
+			const inNow = shape.layerOfRadius(startRadius + head - 0.001);
+			const reaches = shape.layerOfRadius(wanted + head);
+			// From the first layer the head is entering rather than the one it
+			// is already in, which a standing player is not held out of.
+			for (let layer = inNow - 1; layer >= reaches; layer--) {
+				if (layer < 0) break;
+				const middle =
+					shape.radiusOfLayer(layer) - shape.blockSize * 0.5;
+				if (!solidAt(probe, up, middle)) continue;
+				this.fall = 0;
+				// The head sits just under the bottom of what it hit.
+				return up.scale(shape.radiusOfLayer(layer + 1) - head);
+			}
 		}
 
 		// Downward: every layer the fall crosses, top to bottom.
