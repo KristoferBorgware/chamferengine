@@ -112,6 +112,20 @@
 			.shot.out b {
 				background: var(--live);
 			}
+			.group > summary > .switch {
+				accent-color: var(--live);
+				margin: 0 6px 0 0;
+				vertical-align: -1px;
+			}
+			.group.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			.group.off > summary {
+				color: var(--dim);
+			}
+			#recipe .gone {
+				color: #5a6470;
+			}
 			.knob.pictured {
 				grid-template-columns: 1fr;
 				margin: 9px 0 4px;
@@ -1151,11 +1165,20 @@
 			 * erosion is a plain at the same height.
 			 */
 			function heightFrom(said, k) {
-				const base =
-					-k.seaDepth +
-					splineAt(k.contSpline, said[0]) * (k.relief + k.seaDepth);
-				const kept = splineAt(k.eroSpline, said[1]);
-				const swing = splineAt(k.pvSpline, said[2]) * 2 - 1;
+				// **Each layer's off is an exact statement about what it
+				// contributes, not a hidden default.** Erosion off keeps all of
+				// the relief, which is the multiply's own neutral; peaks off adds
+				// none, which is the sum's. Continentalness has no neutral --
+				// something has to set the level -- so off reads its curve at the
+				// middle of the field, which is the one level a field with
+				// nothing to say would give: a flat plain, and whatever the other
+				// two do on top of it.
+				const level = k.useCont
+					? splineAt(k.contSpline, said[0])
+					: splineAt(k.contSpline, 0);
+				const base = -k.seaDepth + level * (k.relief + k.seaDepth);
+				const kept = k.useEro ? splineAt(k.eroSpline, said[1]) : 1;
+				const swing = k.usePv ? splineAt(k.pvSpline, said[2]) * 2 - 1 : 0;
 				return base + kept * swing * k.peakRelief;
 			}
 
@@ -1248,11 +1271,43 @@
 							"0 is the plain sum, bit for bit; 1 creases every octave " +
 							"at its own zero crossing",
 					},
-					// The layer's own field, drawn where it is being tuned
-					// rather than at the top of the panel -- a picture of what a
-					// knob does belongs beside the knob. Click it for a large one.
-					{ key: which + "Picture", label: "", type: "picture", value: 0 },
 				];
+			}
+
+			/**
+			 * A layer's section: the switch, then the graph, then the picture,
+			 * then the knobs.
+			 *
+			 * **The curve is what the layer is for, so it goes first.** A layer
+			 * is a stack of octaves read through a curve, and the stack's own
+			 * rows only say how coarse or fine the reading is -- they are the
+			 * setup, and the curve is the decision. The picture sits between
+			 * them because it is what both are being judged against.
+			 */
+			function layerGroup(group, which, tint, spline, feature, scale, octaves, fold) {
+				return {
+					group,
+					tint,
+					open: true,
+					rows: [
+						// **A switch on the section, not a row inside it.** It
+						// governs every row below it, so a reader meets it before
+						// the thing it governs rather than among them.
+						{
+							key: "use" + which[0].toUpperCase() + which.slice(1),
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+						},
+						spline,
+						// The layer's own field, drawn where it is being tuned
+						// rather than at the top of the panel. Click it for a
+						// large one.
+						{ key: which + "Picture", label: "", type: "picture", value: 0 },
+						...layerRows(which, feature, scale, octaves, fold),
+					],
+				};
 			}
 
 			const KNOBS = [
@@ -1268,8 +1323,8 @@
 							// build the same planet.
 							key: "subdivisionDepth",
 							label: "Subdivision depth",
-							low: 6,
-							high: 15,
+							low: 4,
+							high: 17,
 							step: 1,
 							value: 13,
 							digits: 0,
@@ -1314,7 +1369,7 @@
 							key: "cells",
 							label: "Patch",
 							low: 16,
-							high: 96,
+							high: 512,
 							step: 8,
 							value: 64,
 							digits: 0,
@@ -1347,85 +1402,91 @@
 						},
 					],
 				},
-				{
-					group: "Continentalness",
-					tint: "cont",
-					open: true,
-					rows: [
-						...layerRows("cont", 600, 10, 3, 0),
-						{
-							key: "contSpline",
-							label: "Continentalness → the level here",
-							type: "spline",
-							// A shelf, a short steep rise, and land that keeps
-							// climbing. The steep part is the coast: without it
-							// the curve is one long fade and every shoreline on
-							// the planet is a beach a kilometre wide.
-							value: [
-								[-1, 0],
-								[-0.34, 0.06],
-								[-0.06, 0.18],
-								[0.06, 0.2],
-								[0.1, 0.36],
-								[0.26, 0.52],
-								[0.46, 0.78],
-								[1, 1],
-							],
-						},
-					],
-				},
-				{
-					group: "Erosion",
-					tint: "ero",
-					open: true,
-					rows: [
-						...layerRows("ero", 750, 10, 4, 0),
-						{
-							key: "eroSpline",
-							label: "Erosion → how much relief survives",
-							type: "spline",
-							// Falling, and in steps rather than as a ramp. A step
-							// is what puts an edge between a range and the plain
-							// beside it; a ramp gives every place a little of
-							// both and the planet one texture.
-							value: [
-								[-1, 1],
-								[-0.3, 0.95],
-								[-0.1, 0.55],
-								[0.05, 0.18],
-								[0.3, 0.06],
-								[1, 0.02],
-							],
-						},
-					],
-				},
-				{
-					group: "Peaks & valleys",
-					tint: "pv",
-					open: true,
-					rows: [
-						// **Folded, and it is the only layer that is.** A ridge
-						// is a crease and the only place a crease comes from is
-						// an absolute value. Folding either of the other two
-						// creases the coast of every continent instead.
-						...layerRows("pv", 600, 1, 4, 0.85),
-						{
-							key: "pvSpline",
-							label: "Peaks & valleys → the relief itself",
-							type: "spline",
-							// Half way up is the level the continent set: below
-							// cuts a valley, above raises a peak.
-							value: [
-								[-1, 0.06],
-								[-0.45, 0.24],
-								[-0.05, 0.42],
-								[0.25, 0.58],
-								[0.55, 0.84],
-								[1, 1],
-							],
-						},
-					],
-				},
+				layerGroup(
+					"Continentalness",
+					"cont",
+					"cont",
+					{
+						key: "contSpline",
+						label: "Continentalness → the level here",
+						type: "spline",
+						// A shelf, a short steep rise, and land that keeps
+						// climbing. **The steep part is the coast**, and it has
+						// to be steep in metres: peaks and valleys is applied
+						// about whatever level this curve sets, so wherever the
+						// curve is shallower than a peak is tall, the third
+						// field decides land-or-sea rather than relief and the
+						// coastline speckles.
+						value: [
+							[-1, 0],
+							[-0.34, 0.06],
+							[-0.06, 0.18],
+							[0.06, 0.2],
+							[0.1, 0.36],
+							[0.26, 0.52],
+							[0.46, 0.78],
+							[1, 1],
+						],
+					},
+					600,
+					10,
+					3,
+					0,
+				),
+				layerGroup(
+					"Erosion",
+					"ero",
+					"ero",
+					{
+						key: "eroSpline",
+						label: "Erosion → how much relief survives",
+						type: "spline",
+						// Falling, and in steps rather than as a ramp. A step is
+						// what puts an edge between a range and the plain beside
+						// it; a ramp gives every place a little of both and the
+						// planet one texture.
+						value: [
+							[-1, 1],
+							[-0.3, 0.95],
+							[-0.1, 0.55],
+							[0.05, 0.18],
+							[0.3, 0.06],
+							[1, 0.02],
+						],
+					},
+					750,
+					10,
+					4,
+					0,
+				),
+				// **Folded, and it is the only layer that is.** A ridge is a
+				// crease and the only place a crease comes from is an absolute
+				// value. Folding either of the other two creases the coast of
+				// every continent instead.
+				layerGroup(
+					"Peaks & valleys",
+					"pv",
+					"pv",
+					{
+						key: "pvSpline",
+						label: "Peaks & valleys → the relief itself",
+						type: "spline",
+						// Half way up is the level the continent set: below cuts
+						// a valley, above raises a peak.
+						value: [
+							[-1, 0.06],
+							[-0.45, 0.24],
+							[-0.05, 0.42],
+							[0.25, 0.58],
+							[0.55, 0.84],
+							[1, 1],
+						],
+					},
+					600,
+					1,
+					4,
+					0.85,
+				),
 				{
 					group: "The ground",
 					open: true,
@@ -1530,7 +1591,7 @@
 							continue;
 						}
 						if (v === r.value) continue;
-						out.set(r.key, String(v));
+						out.set(r.key, r.type === "check" ? (v ? "1" : "0") : String(v));
 					}
 				return out;
 			}
@@ -1543,7 +1604,8 @@
 						if (r.type === "spline") {
 							const points = splineFromText(raw);
 							if (points) knobs[r.key] = points;
-						} else if (r.type === "select")
+						} else if (r.type === "check") knobs[r.key] = raw !== "0";
+						else if (r.type === "select")
 							knobs[r.key] = r.options.includes(raw) ? raw : r.value;
 						else if (r.type === "text") knobs[r.key] = raw;
 						else {
@@ -1678,6 +1740,29 @@
 					}
 			}
 
+			/**
+			 * The name a cell is filed under, canonicalised only where that can
+			 * change the answer.
+			 *
+			 * **A cell has more than one name only on a face edge or at an
+			 * icosahedron vertex**, which is exactly where one of its three
+			 * weights `(n - i - j, i, j)` is zero. Everywhere else it is already
+			 * the only name it has -- and `canonicalCell` cannot know that
+			 * without being asked, so it scans all twenty faces building a map
+			 * per call to hand back the cell it was given. At level 8 a face
+			 * holds 33,153 lattice points of which 768 sit on an edge, so
+			 * **97.7%** of the calls are that scan for nothing; over the largest
+			 * patch here it is **98.87%**. Three comparisons first, and the
+			 * answer is identical either way -- measured over that patch's
+			 * 1.08 million ring steps, **1,207 ms against 70 ms**, same answer
+			 * on every one. F-084 has it as an engine finding.
+			 */
+			function nameOf(cell, n) {
+				return cell.i === 0 || cell.j === 0 || cell.i + cell.j === n
+					? canonicalCell(cell.face, n, cell.i, cell.j)
+					: cell;
+			}
+
 			/** A latitude and a longitude, as a unit direction. */
 			function directionOf(latitude, longitude) {
 				const lat = (latitude * Math.PI) / 180;
@@ -1766,8 +1851,7 @@
 				const middle = directionOf(k.latitude, k.longitude);
 				// Canonicalised, because the walk keys every cell it reaches and
 				// a cell on a face edge has more than one name.
-				const found = directionToCell(middle[0], middle[1], middle[2], n);
-				const start = canonicalCell(found.face, n, found.i, found.j);
+				const start = nameOf(directionToCell(middle[0], middle[1], middle[2], n), n);
 				const radius = Math.max(1, cells >> 1);
 				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
 				const at = new Map();
@@ -1787,7 +1871,7 @@
 						for (let d = 0; d < 6; d++) {
 							const nb = neighbour(c.face, n, c.i, c.j, d);
 							if (!nb) continue;
-							const cell = canonicalCell(nb.face, n, nb.i, nb.j);
+							const cell = nameOf(nb, n);
 							if (add(cell)) next.push(cell);
 						}
 					frontier = next;
@@ -1827,9 +1911,7 @@
 					for (let d = 0; d < 6; d++) {
 						const nb = neighbour(cell.face, n, cell.i, cell.j, d);
 						if (!nb) continue;
-						const found = at.get(
-							keyOf(canonicalCell(nb.face, n, nb.i, nb.j)),
-						);
+						const found = at.get(keyOf(nameOf(nb, n)));
 						// A cell on the rim of the patch has neighbours nobody
 						// generated. `-1` says so, and the mesh draws no wall
 						// there rather than a cliff the world does not have.
@@ -2159,20 +2241,19 @@
 			const VERTEX_SOURCE = `#version 300 es
 			precision highp float;
 			layout(location = 0) in vec3 position;
-			layout(location = 1) in vec3 normal;
-			layout(location = 2) in float metres;
+			layout(location = 1) in float metres;
 			uniform mat4 viewProj;
-			out vec3 vNormal;
+			out vec3 vPosition;
 			out float vMetres;
 			void main() {
-				vNormal = normal;
+				vPosition = position;
 				vMetres = metres;
 				gl_Position = viewProj * vec4(position, 1.0);
 			}`;
 
 			const FRAGMENT_SOURCE = `#version 300 es
 			precision highp float;
-			in vec3 vNormal;
+			in vec3 vPosition;
 			in float vMetres;
 			uniform vec3 sun;
 			uniform float seaLevel;
@@ -2180,10 +2261,18 @@
 			uniform int water;
 			out vec4 color;
 			void main() {
+				// **No normal is stored.** Every face here is flat, so the
+				// change of position across one pixel gives the plane's normal
+				// exactly -- which is what the engine's own terrain shader does,
+				// and it takes a third of the mesh out of memory and every cross
+				// product out of the build. It is taken on the patch-relative
+				// position, which is already small enough for float32 to
+				// difference without the answer turning into noise.
+				//
 				// Nothing here is culled, because a hexagon column's walls are
 				// emitted without a winding rule and a wall seen from inside a
 				// valley is a wall seen from its back.
-				vec3 n = normalize(vNormal);
+				vec3 n = normalize(cross(dFdx(vPosition), dFdy(vPosition)));
 				if (!gl_FrontFacing) n = -n;
 				float lit = 0.30 + 0.70 * max(0.0, dot(n, normalize(sun)));
 				if (water == 1) {
@@ -2230,12 +2319,10 @@
 			const vao = gl.createVertexArray();
 			gl.bindVertexArray(vao);
 			const positionBuffer = gl.createBuffer();
-			const normalBuffer = gl.createBuffer();
 			const metreBuffer = gl.createBuffer();
 			for (const [at, buffer, size] of [
 				[0, positionBuffer, 3],
-				[1, normalBuffer, 3],
-				[2, metreBuffer, 1],
+				[1, metreBuffer, 1],
 			]) {
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				gl.enableVertexAttribArray(at);
@@ -2268,16 +2355,29 @@
 				const radius = k.radius;
 				const frame = frameOf(centre);
 
-				// **The buffers are sized before anything is written into
-				// them.** A cell emits two caps and, per edge, at most one wall
-				// and at most one curtain of water -- so 36 triangles is the
-				// ceiling, and growing a plain array to reach it costs more than
-				// the arithmetic that fills it.
-				const room = count * 36 * 3;
-				const position = new Float32Array(room * 3);
-				const normal = new Float32Array(room * 3);
-				const metre = new Float32Array(room);
+				// **The buffers start at what a patch actually uses and grow if
+				// it needs more.** A cell's ceiling is two caps plus, per edge, a
+				// wall and a curtain of water -- 36 triangles -- and real terrain
+				// runs nearer twelve, so at the largest patch the ceiling would
+				// ask for a quarter of a gigabyte to hold a tenth of that.
+				// Growing costs one copy at each doubling and the estimate is
+				// right for almost every patch, so almost every rebuild does
+				// none.
+				let room = count * 10 * 3;
+				let position = new Float32Array(room * 3);
+				let metre = new Float32Array(room);
 				let vertices = 0;
+				/** Make sure three more vertices fit, whatever it takes. */
+				const roomFor = () => {
+					if (vertices + 3 <= room) return;
+					room = Math.max(room * 2, vertices + 3);
+					const wider = new Float32Array(room * 3);
+					wider.set(position);
+					position = wider;
+					const wider2 = new Float32Array(room);
+					wider2.set(metre);
+					metre = wider2;
+				};
 
 				// One cell's corners, in the patch's own frame, refilled per
 				// cell rather than allocated.
@@ -2301,13 +2401,10 @@
 				};
 
 				/**
-				 * One triangle, with the plane's own normal and a height per
-				 * corner.
+				 * One triangle, and a height per corner.
 				 *
-				 * Every face here is flat, so the cross product of two of its
-				 * edges is the normal exactly and no normal has to be stored per
-				 * cell or averaged between cells. **The height is per corner
-				 * because a wall has two ends**: given the height of the cell it
+				 * **The height is per corner because a wall has two ends**:
+				 * given the height of the cell it
 				 * stands on, the cut face of a snow-capped mountain is snow all
 				 * the way down to the sea floor. Its top corners take the top and
 				 * its bottom corners take the bottom, so one wall carries the
@@ -2316,28 +2413,11 @@
 				const triangle = (
 					ax, ay, az, bx, by, bz, cx, cy, cz, ma, mb, mc,
 				) => {
-					const ux = bx - ax;
-					const uy = by - ay;
-					const uz = bz - az;
-					const vx = cx - ax;
-					const vy = cy - ay;
-					const vz = cz - az;
-					let nx = uy * vz - uz * vy;
-					let ny = uz * vx - ux * vz;
-					let nz = ux * vy - uy * vx;
-					const len = Math.hypot(nx, ny, nz) || 1;
-					nx /= len;
-					ny /= len;
-					nz /= len;
+					roomFor();
 					const at3 = vertices * 3;
 					position[at3] = ax; position[at3 + 1] = ay; position[at3 + 2] = az;
 					position[at3 + 3] = bx; position[at3 + 4] = by; position[at3 + 5] = bz;
 					position[at3 + 6] = cx; position[at3 + 7] = cy; position[at3 + 8] = cz;
-					for (let v = 0; v < 3; v++) {
-						normal[at3 + v * 3] = nx;
-						normal[at3 + v * 3 + 1] = ny;
-						normal[at3 + v * 3 + 2] = nz;
-					}
 					metre[vertices] = ma;
 					metre[vertices + 1] = mb;
 					metre[vertices + 2] = mc;
@@ -2484,7 +2564,6 @@
 				gl.bindVertexArray(vao);
 				for (const [buffer, data, wide] of [
 					[positionBuffer, position, 3],
-					[normalBuffer, normal, 3],
 					[metreBuffer, metre, 1],
 				]) {
 					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -2804,6 +2883,24 @@
 					legend.textContent = group.group;
 					set.append(legend);
 					for (const row of group.rows) {
+						if (row.summary) {
+							// A checkbox inside a summary would open and shut the
+							// section as well as answer its own question, so the
+							// click is stopped before it reaches the details.
+							const box = document.createElement("input");
+							box.type = "checkbox";
+							box.className = "switch";
+							box.checked = knobs[row.key];
+							box.title = `turn this layer off`;
+							box.addEventListener("click", (e) => e.stopPropagation());
+							box.addEventListener("input", () => {
+								knobs[row.key] = box.checked;
+								askForRedraw(false);
+							});
+							legend.prepend(box);
+							rows.set(row.key, { row, wrap: set, input: box });
+							continue;
+						}
 						const wrap = document.createElement("div");
 						const label = document.createElement("label");
 						label.textContent = row.label;
@@ -2891,7 +2988,16 @@
 			}
 
 			function refreshPanel() {
-				for (const { row, readout, input, note, redraw, axis } of rows.values()) {
+				for (const { row, wrap, readout, input, note, redraw, axis } of rows.values()) {
+					if (row.summary) {
+						input.checked = knobs[row.key];
+						// **A layer that is off still draws its own picture and
+						// its own histogram**, because what it would put back is
+						// the thing being decided. The section dims to say the
+						// world is not reading it.
+						wrap.classList.toggle("off", !knobs[row.key]);
+						continue;
+					}
 					if (row.type === "picture") continue;
 					if (redraw) {
 						redraw();
@@ -2922,11 +3028,21 @@
 				if (!field) return;
 				// **The one line the whole page is about**, written out with the
 				// numbers the knobs are currently set to.
+				// **The one line the whole page is about**, with the terms a
+				// switch has taken out shown as what they became rather than
+				// removed -- a reader has to see that erosion off is a 1 and
+				// peaks off is a 0, or "off" is just a gap.
+				const k = field.k;
+				const term = (on, live, dead, tint) =>
+					on
+						? `<i class="${tint}">${live}</i>`
+						: `<i class="gone">${dead}</i>`;
 				recipe.innerHTML =
-					'height = <i class="c">level(C)</i><br />' +
-					'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <i class="e">kept(E)</i> × ' +
-					'<i class="p">relief(P)</i> × ' +
-					`${Math.round(field.k.peakRelief).toLocaleString()} m`;
+					`height = ${term(k.useCont, "level(C)", "level(0)", "c")}<br />` +
+					"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ " +
+					`${term(k.useEro, "kept(E)", "1", "e")} × ` +
+					`${term(k.usePv, "relief(P)", "0", "p")} × ` +
+					`${Math.round(k.peakRelief).toLocaleString()} m`;
 				facts.innerHTML =
 					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
 					`<b>${field.count.toLocaleString()}</b> map cells of ` +

@@ -1833,6 +1833,57 @@ shape*, is the same function seen from the other side: that entry is about
 what `flushTerrain` fails to update, this one about what it updates and did
 not need to.
 
+### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, raising the multi-noise lab's patch to half a million cells
+**Where:** `packages/engine/src/addressing/neighbours/canonicalCell.ts`,
+`packages/engine/src/addressing/neighbours/cellRepresentations.ts`
+
+**What happens.** `canonicalCell` asks `cellRepresentations` for every name a
+lattice point has and keeps the one on the lowest face. `cellRepresentations`
+builds a `Map` of the point's non-zero weights and then walks all twenty faces,
+testing each against that map with `includes` and building an array for the ones
+that match. It does this on every call.
+
+A point has more than one name only when it sits on a face edge or at an
+icosahedron vertex, and that is exactly when one of its three weights
+`(n - i - j, i, j)` is zero — three comparisons. Everywhere else the answer is
+the cell that was passed in.
+
+**Why it matters.** The share of points that need the search is small and gets
+smaller with depth. A face at subdivision `n` holds `(n+1)(n+2)/2` lattice
+points and `3n` of them sit on an edge, so at level 8 it is **768 of 33,153**,
+or `2.32%`; at level 11 it is `0.29%`. **Better than 97% of the calls walk
+twenty faces and allocate a map and an array to return their own argument.**
+
+Measured over one patch of 180,589 cells at level 8, taking the ring of all six
+neighbours of every cell — 1.08 million steps, which is what a mesher or a
+delta write does: **1,207 ms canonicalising every step against 70 ms
+canonicalising only where a weight is zero, and the same answer on all of
+them.** That is **17x**, and `neighbour` itself is 52 ms of the total, so the
+canonicalisation is not a cost beside the walk — it *is* the walk.
+
+It is on hot paths. `cellSlot` canonicalises before keying a row, `owns` and
+`chunksHolding` canonicalise while descending, and `DeltaStore.write` reaches
+`chunksReading`, which is the ring of every cell it touches.
+
+**What would fix it.** One guard at the top of `canonicalCell`: if no weight is
+zero, return `{ face, i, j }`. The search below it is then reached only by the
+points that have something to search for, and nothing else changes — the
+function's answer is identical, which is what makes this a cleanup rather than a
+decision. `cellRepresentations` keeps its full behaviour for the callers that
+want every name.
+
+`demos/multi-noise-lab.html` already guards at its own call sites rather than
+inside its port of the function, so the ported block still matches the engine
+line for line and the guard can be dropped there once the engine carries it.
+
+---
+
 ---
 
 ## Closed
