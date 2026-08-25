@@ -511,10 +511,13 @@ from `neighbour` and the polygons from `cellCorners`, so a patch that reaches a
 face edge crosses it the way the engine does and a patch that reaches one of the
 twelve pentagons gets a five-sided cell. Each cell draws a cap at its own radius
 and a wall wherever it stands over a neighbour, and the sea is one translucent
-sheet at its own radius with no block under it. **No normal is stored** — every
-face is flat, so the change of position across one pixel gives the plane's
-normal exactly, which is what the engine's own terrain shader does and what
-keeps the largest patch inside memory. A test digests both ported
+sheet at its own radius with no block under it. **The normal is stored, and it
+is stored as three bytes** — taking it from the change of position across a
+pixel is what the engine's terrain shader does and it is wrong at this scale,
+because a derivative is a difference over a two-by-two block of pixels and a map
+cell is a few pixels across, so most pixels straddle the line where a cap meets
+a wall and average the two into a normal belonging to neither. A face normal
+quantised to one part in 127 is far finer than any shading can show. A test digests both ported
 blocks against the engine, cell for cell and corner for corner.
 
 **A picture of a field sits where that field is tuned.** The ground the three

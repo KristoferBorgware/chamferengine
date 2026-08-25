@@ -206,6 +206,42 @@
 			#recipe .p {
 				color: var(--pv);
 			}
+			#profile {
+				margin-top: 12px;
+				border-top: 1px solid var(--edge);
+				padding-top: 8px;
+			}
+			#profile > summary {
+				cursor: pointer;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				list-style: none;
+			}
+			#profile > summary::-webkit-details-marker {
+				display: none;
+			}
+			#profile > summary::before {
+				content: "▾ ";
+			}
+			#profile:not([open]) > summary::before {
+				content: "▸ ";
+			}
+			#graph {
+				width: 100%;
+				height: auto;
+				display: block;
+				margin-top: 8px;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				background: #0b0e13;
+			}
+			#graphsays {
+				color: var(--dim);
+				font-size: 10.5px;
+				margin: 3px 0 0;
+			}
 			.group {
 				border-top: 1px solid var(--edge);
 				margin: 10px 0 0;
@@ -353,6 +389,11 @@
 			</div>
 			<div id="scroller">
 				<div id="knobs"></div>
+				<details id="profile" open>
+					<summary>Contour</summary>
+					<canvas id="graph" width="640" height="300"></canvas>
+					<div id="graphsays"></div>
+				</details>
 			</div>
 		</div>
 
@@ -716,8 +757,20 @@
 			 *
 			 * The same rule that awards a border cell to the lowest chunk
 			 * containing it, applied one level up.
+			 *
+			 * **A cell has a second name only on a face edge, and that is three
+			 * comparisons rather than a search.** A weight of zero is what puts
+			 * the point on the edge opposite that vertex; two zeros put it on an
+			 * icosahedron vertex. With no zero the point is strictly inside its
+			 * own face, which names it and nothing else does -- and without the
+			 * guard, better than 97% of calls walk all twenty faces to hand back
+			 * the cell they were given. **This lab is the caller that made it
+			 * worth guarding**: it canonicalises every cell of a patch that can
+			 * be the whole planet, where the engine's own bulk caller already
+			 * carried the same test at its call site.
 			 */
 			function canonicalCell(face, n, i, j) {
+				if (i > 0 && j > 0 && i + j < n) return { face, i, j };
 				const all = cellRepresentations(face, n, i, j);
 				let best = all[0];
 				for (const c of all) if (c.face < best.face) best = c;
@@ -1068,6 +1121,28 @@
 			 */
 			const LAYERS = ["cont", "ero", "pv"];
 
+			/**
+			 * The two elevations that cut the land into three bands, and the
+			 * colour of each.
+			 *
+			 * **Absolute metres, because the map is.** A fraction of relief
+			 * agrees at one relief and drifts at every other, so the engine
+			 * bands on fixed heights: water under sea level, grass to 300 m,
+			 * bare stone to 400 m, snow over it. These are the engine's own
+			 * numbers and the engine's own colours, so a colour here names the
+			 * block the world would build there.
+			 */
+			const GROUND_LINES = { rock: 300, snow: 400 };
+			const BAND_COLORS = [
+				[0.76, 0.7, 0.5],
+				[0.26, 0.44, 0.19],
+				[0.42, 0.42, 0.45],
+				[0.92, 0.94, 0.97],
+			];
+			/** What the sea is, and how far a look reaches into it. */
+			const SEA_COLOR = [0.12, 0.32, 0.55];
+			const SEA_CLARITY = 45;
+
 			/** Offsets from the world seed, so the three layers are three fields. */
 			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337 };
 
@@ -1145,8 +1220,7 @@
 			 * The three readings turned into one height, in metres above sea
 			 * level.
 			 *
-			 * **This is the whole model, and it is three curve reads and one
-			 * multiply.**
+			 * **This is the whole model.**
 			 *
 			 * - The continentalness curve is read on an axis running from
 			 *   `-seaDepth` at the bottom to `relief` at the top, so its answer
@@ -1160,9 +1234,21 @@
 			 *   the level the continent set, below it cuts a valley and above it
 			 *   raises a peak.
 			 *
+			 * **Erosion also eats the level, and that is what `Wears down`
+			 * decides.** Water does not only take the peaks off a range, it
+			 * lowers the whole thing -- and in a nested spline, where the height
+			 * is one function of all three fields, erosion changes the level by
+			 * construction. Flattened into one line it has to be said out loud:
+			 * `worn(E)` is `1` where erosion keeps all the relief and falls to
+			 * `1 - bite` where it keeps none, so at a bite of `1` a fully eroded
+			 * continent is worn all the way to sea level and at `0` the level is
+			 * untouched and only the relief goes. **Below sea level nothing is
+			 * worn**: the ocean floor is not what the rain is falling on, and
+			 * wearing it would raise the sea bed toward the surface.
+			 *
 			 * So high continentalness with low erosion and high peaks is a steep
-			 * ridge, and the same continentalness and the same peaks under high
-			 * erosion is a plain at the same height.
+			 * ridge; the same continentalness and the same peaks under high
+			 * erosion is a plain, and a lower one than the continent asked for.
 			 */
 			function heightFrom(said, k) {
 				// **Each layer's off is an exact statement about what it
@@ -1179,7 +1265,9 @@
 				const base = -k.seaDepth + level * (k.relief + k.seaDepth);
 				const kept = k.useEro ? splineAt(k.eroSpline, said[1]) : 1;
 				const swing = k.usePv ? splineAt(k.pvSpline, said[2]) * 2 - 1 : 0;
-				return base + kept * swing * k.peakRelief;
+				const over = base - k.seaLevel;
+				const worn = over > 0 ? over * (1 - k.erosionBite * (1 - kept)) : over;
+				return k.seaLevel + worn + kept * swing * k.peakRelief;
 			}
 
 			// ---------------------------------------------------------------
@@ -1194,7 +1282,7 @@
 			 * what they *are*. A layer given a row its neighbours do not have
 			 * would be a fourth idea smuggled into a comparison of three.
 			 */
-			function layerRows(which, feature, scale, octaves, fold) {
+			function layerRows(which, feature, scale, octaves, fold, extra = []) {
 				return [
 					{
 						// **A size in metres, because a frequency is a number
@@ -1271,6 +1359,7 @@
 							"0 is the plain sum, bit for bit; 1 creases every octave " +
 							"at its own zero crossing",
 					},
+					...extra,
 				];
 			}
 
@@ -1284,7 +1373,17 @@
 			 * setup, and the curve is the decision. The picture sits between
 			 * them because it is what both are being judged against.
 			 */
-			function layerGroup(group, which, tint, spline, feature, scale, octaves, fold) {
+			function layerGroup(
+				group,
+				which,
+				tint,
+				spline,
+				feature,
+				scale,
+				octaves,
+				fold,
+				extra = [],
+			) {
 				return {
 					group,
 					tint,
@@ -1305,7 +1404,7 @@
 						// rather than at the top of the panel. Click it for a
 						// large one.
 						{ key: which + "Picture", label: "", type: "picture", value: 0 },
-						...layerRows(which, feature, scale, octaves, fold),
+						...layerRows(which, feature, scale, octaves, fold, extra),
 					],
 				};
 			}
@@ -1376,8 +1475,13 @@
 							unit: "map cells across",
 							note: () =>
 								field
-									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
-										`<b>${field.count.toLocaleString()}</b> hexagons`
+									? field.whole
+										? "the walk has reached every cell on the planet"
+										: `<b>${Math.round(field.arc).toLocaleString()} m</b> of ground, ` +
+											`<b>${field.count.toLocaleString()}</b> hexagons — the planet ` +
+											`wraps at <b>${Math.ceil(
+												(Math.PI * field.k.radius) / field.cellMetres,
+											).toLocaleString()}</b>, so coarsen Map cell to see all of it`
 									: "",
 						},
 						{
@@ -1458,6 +1562,29 @@
 					10,
 					4,
 					0,
+					[
+						{
+							// **The half of erosion that is not about relief.**
+							// Water lowers a range as well as smoothing it, and
+							// in a nested spline -- where the height is one
+							// function of all three fields -- erosion changes the
+							// level by construction. Flattened into one line it
+							// has to be a term of its own.
+							key: "erosionBite",
+							label: "Wears the level down",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.55,
+							digits: 2,
+							note: () =>
+								field
+									? `fully eroded land is worn <b>${Math.round(
+											knobs.erosionBite * 100,
+										)}%</b> of the way to sea level; at 0 only the relief goes`
+									: "",
+						},
+					],
 				),
 				// **Folded, and it is the only layer that is.** A ridge is a
 				// crease and the only place a crease comes from is an absolute
@@ -1497,12 +1624,14 @@
 							low: 100,
 							high: 3000,
 							step: 20,
-							value: 1400,
+							value: 800,
 							digits: 0,
 							unit: "m",
 							note: () =>
-								"the top of the continentalness curve, so the " +
-								"highest a continent can stand before peaks are added",
+								"the top of the continentalness curve, so the highest a " +
+								"continent can stand before peaks are added — and what " +
+								"carries ground past the rock line at 300 m and the snow " +
+								"line at 400 m",
 						},
 						{
 							key: "seaDepth",
@@ -1510,7 +1639,7 @@
 							low: 0,
 							high: 2000,
 							step: 20,
-							value: 600,
+							value: 360,
 							digits: 0,
 							unit: "m",
 							note: () => "the bottom of the same curve",
@@ -1521,7 +1650,7 @@
 							low: 0,
 							high: 1500,
 							step: 10,
-							value: 350,
+							value: 220,
 							digits: 0,
 							unit: "m",
 							note: () =>
@@ -1740,29 +1869,6 @@
 					}
 			}
 
-			/**
-			 * The name a cell is filed under, canonicalised only where that can
-			 * change the answer.
-			 *
-			 * **A cell has more than one name only on a face edge or at an
-			 * icosahedron vertex**, which is exactly where one of its three
-			 * weights `(n - i - j, i, j)` is zero. Everywhere else it is already
-			 * the only name it has -- and `canonicalCell` cannot know that
-			 * without being asked, so it scans all twenty faces building a map
-			 * per call to hand back the cell it was given. At level 8 a face
-			 * holds 33,153 lattice points of which 768 sit on an edge, so
-			 * **97.7%** of the calls are that scan for nothing; over the largest
-			 * patch here it is **98.87%**. Three comparisons first, and the
-			 * answer is identical either way -- measured over that patch's
-			 * 1.08 million ring steps, **1,207 ms against 70 ms**, same answer
-			 * on every one. F-084 has it as an engine finding.
-			 */
-			function nameOf(cell, n) {
-				return cell.i === 0 || cell.j === 0 || cell.i + cell.j === n
-					? canonicalCell(cell.face, n, cell.i, cell.j)
-					: cell;
-			}
-
 			/** A latitude and a longitude, as a unit direction. */
 			function directionOf(latitude, longitude) {
 				const lat = (latitude * Math.PI) / 180;
@@ -1851,7 +1957,8 @@
 				const middle = directionOf(k.latitude, k.longitude);
 				// Canonicalised, because the walk keys every cell it reaches and
 				// a cell on a face edge has more than one name.
-				const start = nameOf(directionToCell(middle[0], middle[1], middle[2], n), n);
+				const found = directionToCell(middle[0], middle[1], middle[2], n);
+				const start = canonicalCell(found.face, n, found.i, found.j);
 				const radius = Math.max(1, cells >> 1);
 				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
 				const at = new Map();
@@ -1871,13 +1978,14 @@
 						for (let d = 0; d < 6; d++) {
 							const nb = neighbour(c.face, n, c.i, c.j, d);
 							if (!nb) continue;
-							const cell = nameOf(nb, n);
+							const cell = canonicalCell(nb.face, n, nb.i, nb.j);
 							if (add(cell)) next.push(cell);
 						}
 					frontier = next;
 				}
 
 				const count = list.length;
+				const arc = Math.min(cells * k.cellMetres, Math.PI * k.radius);
 				const height = new Float64Array(count);
 				const layer = new Float32Array(count * 3);
 				// **The polygon and the ring are asked for once, here, and read
@@ -1911,7 +2019,9 @@
 					for (let d = 0; d < 6; d++) {
 						const nb = neighbour(cell.face, n, cell.i, cell.j, d);
 						if (!nb) continue;
-						const found = at.get(keyOf(nameOf(nb, n)));
+						const found = at.get(
+							keyOf(canonicalCell(nb.face, n, nb.i, nb.j)),
+						);
 						// A cell on the rim of the patch has neighbours nobody
 						// generated. `-1` says so, and the mesh draws no wall
 						// there rather than a cliff the world does not have.
@@ -1935,7 +2045,18 @@
 					ring,
 					centre,
 					cellMetres: k.cellMetres,
+					// **What was asked for, what is covered, and how wide that
+					// is in a straight line -- three different numbers once the
+					// patch is a fair share of the planet.** A patch is an arc,
+					// so it stops growing at the antipode however many cells are
+					// asked for, and what a camera has to frame is the chord
+					// under that arc rather than the arc itself. At the antipode
+					// the chord is the planet's diameter and the walk has
+					// enumerated every cell there is.
 					span: cells * k.cellMetres,
+					arc,
+					across: 2 * k.radius * Math.sin(arc / (2 * k.radius)),
+					whole: count === 10 * 4 ** k.level + 2,
 					tally,
 					tallest,
 					landShare: land / WORLD.length,
@@ -2021,15 +2142,22 @@
 			 */
 			function groundColor(metres, k) {
 				const over = metres - k.seaLevel;
+				// Bare sand seen through water, because the ocean is a surface
+				// and holds no blocks: what makes a deep blue is how much water
+				// a look passes through to reach the floor.
 				if (over <= 0) {
-					const deep = Math.min(1, -over / Math.max(1, k.seaDepth));
-					return [0.1 - 0.07 * deep, 0.16 - 0.12 * deep, 0.42 - 0.3 * deep];
+					const through = 1 - Math.exp(over / SEA_CLARITY);
+					return BAND_COLORS[0].map(
+						(c, n) => c + (SEA_COLOR[n] - c) * through,
+					);
 				}
-				const t = Math.min(1, over / Math.max(1, k.relief + k.peakRelief));
-				const g = 0.32 + t * 0.64;
+				const band =
+					over < GROUND_LINES.rock ? 1 : over < GROUND_LINES.snow ? 2 : 3;
+				// A contour every hundred metres, so a slope reads as a slope
+				// rather than as one flat sheet of the block that stands on it.
 				const into = ((over / 100) % 1) * 100;
-				const edge = into < 6 ? 0.74 : 1;
-				return [g * 0.92 * edge, g * edge, g * 0.86 * edge];
+				const edge = into < 6 ? 0.78 : 1;
+				return BAND_COLORS[band].map((c) => c * edge);
 			}
 
 			/**
@@ -2073,7 +2201,7 @@
 			function paintShots(shots, wide, tall, only = null) {
 				const planet = knobs.show === "planet";
 				const frame = planet ? null : frameOf(field.centre);
-				const half = field.span / 2;
+				const half = field.arc / 2;
 				const k = field.k;
 				const said = [0, 0, 0];
 				const images = shots.map((shot) => {
@@ -2126,8 +2254,8 @@
 			function outlinePatch(g, wide, tall) {
 				const k = field.k;
 				const lat = (knobs.latitude * Math.PI) / 180;
-				const across = field.span / k.radius / Math.max(0.15, Math.cos(lat));
-				const down = field.span / k.radius;
+				const across = field.arc / k.radius / Math.max(0.15, Math.cos(lat));
+				const down = field.arc / k.radius;
 				const box = {
 					x:
 						((knobs.longitude + 180) / 360) * wide -
@@ -2232,6 +2360,167 @@
 			watchShot(SHOTS[0]);
 
 			// ---------------------------------------------------------------
+			// The contour: every line of the patch, over one another.
+			// ---------------------------------------------------------------
+
+			const graphCanvas = document.getElementById("graph");
+			const graphCtx = graphCanvas.getContext("2d");
+			const graphSays = document.getElementById("graphsays");
+
+			/** How many sections are drawn, and how many points each carries. */
+			const GRAPH_LINES = 80;
+			const GRAPH_ALONG = 120;
+
+			/**
+			 * The patch in section, every line of it at once.
+			 *
+			 * **One section says what one line of ground does; all of them
+			 * together draw the silhouette** -- how high the patch stands, where
+			 * its ridges are, and how much of it sits at any height, because
+			 * where the lines bunch is where most of the ground is. Read against
+			 * the two elevations that decide what the ground is made of, it is
+			 * the one picture that says whether a world reaches the snow line at
+			 * all.
+			 *
+			 * **The lines are the height function, not the mesh.** A patch here
+			 * is a disc of hexagons rather than a grid, and there is no row to
+			 * walk; sampled through the patch's own frame instead, these are
+			 * parallel cuts across exactly the ground the plane is drawing.
+			 */
+			function drawGraph() {
+				if (!field) return;
+				// Drawn in a fixed logical box and scaled up to whatever the
+				// canvas is, so the text keeps its size on screen rather than
+				// shrinking with the panel.
+				const scale = graphCanvas.width / 320;
+				const width = 320;
+				const height = graphCanvas.height / scale;
+				const g = graphCtx;
+				g.setTransform(1, 0, 0, 1, 0, 0);
+				g.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+				g.setTransform(scale, 0, 0, scale, 0, 0);
+				const pad = { left: 40, right: 8, top: 10, bottom: 24 };
+				const plotW = width - pad.left - pad.right;
+				const plotH = height - pad.top - pad.bottom;
+				g.fillStyle = "#0b0e13";
+				g.fillRect(0, 0, width, height);
+
+				const k = field.k;
+				const frame = frameOf(field.centre);
+				const half = field.arc / 2;
+				const said = [0, 0, 0];
+				const lines = [];
+				let lowest = Infinity;
+				let highest = -Infinity;
+				for (let r = 0; r < GRAPH_LINES; r++) {
+					const line = new Float64Array(GRAPH_ALONG);
+					for (let q = 0; q < GRAPH_ALONG; q++) {
+						const p = pictureDirection(
+							q,
+							r,
+							GRAPH_ALONG,
+							GRAPH_LINES,
+							frame,
+							half,
+							k.radius,
+						);
+						fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						const h = heightFrom(said, k);
+						line[q] = h;
+						if (h < lowest) lowest = h;
+						if (h > highest) highest = h;
+					}
+					lines.push(line);
+				}
+
+				let yLow = Math.min(lowest, k.seaLevel);
+				let yHigh = Math.max(highest, k.seaLevel + 1);
+				const room = (yHigh - yLow) * 0.06 || 1;
+				yLow -= room;
+				yHigh += room;
+				const toX = (at) => pad.left + (at / (GRAPH_ALONG - 1)) * plotW;
+				const toY = (v) =>
+					pad.top + plotH - ((v - yLow) / (yHigh - yLow)) * plotH;
+
+				// Sea level and the two material lines, so a section can be read
+				// against the elevations that decide what the ground is made of.
+				const marks = [
+					[k.seaLevel, "#3b6ea8", "sea"],
+					[k.seaLevel + GROUND_LINES.rock, "#5a5a62", "rock"],
+					[k.seaLevel + GROUND_LINES.snow, "#8a8f98", "snow"],
+				];
+				g.font = "9.5px system-ui, sans-serif";
+				for (const [metres, color, name] of marks) {
+					if (metres < yLow || metres > yHigh) continue;
+					const y = toY(metres);
+					g.strokeStyle = color;
+					g.setLineDash(metres === k.seaLevel ? [] : [3, 3]);
+					g.beginPath();
+					g.moveTo(pad.left, y);
+					g.lineTo(width - pad.right, y);
+					g.stroke();
+					g.setLineDash([]);
+					g.fillStyle = color;
+					g.fillText(name, 4, y + 3);
+				}
+
+				g.strokeStyle = "#2b3542";
+				g.beginPath();
+				g.moveTo(pad.left, pad.top);
+				g.lineTo(pad.left, pad.top + plotH);
+				g.lineTo(width - pad.right, pad.top + plotH);
+				g.stroke();
+				g.fillStyle = "#8b95a4";
+				g.fillText(`${Math.round(yHigh)} m`, 4, pad.top + 8);
+				g.fillText(`${Math.round(yLow)} m`, 4, pad.top + plotH - 1);
+				g.textAlign = "center";
+				g.fillText(
+					`${Math.round(field.arc).toLocaleString()} m across the patch, every line of it`,
+					pad.left + plotW / 2,
+					height - 6,
+				);
+				g.textAlign = "left";
+
+				// Faint, and many: where the lines bunch is where most of the
+				// ground stands, so the silhouette carries the distribution as
+				// well as the shape.
+				g.lineWidth = 0.4;
+				g.strokeStyle = "rgba(111, 208, 255, 0.15)";
+				for (const line of lines) {
+					g.beginPath();
+					for (let at = 0; at < GRAPH_ALONG; at++) {
+						const x = toX(at);
+						const y = toY(line[at]);
+						if (at === 0) g.moveTo(x, y);
+						else g.lineTo(x, y);
+					}
+					g.stroke();
+				}
+				// The middle line solid, so there is one section to read against
+				// the elevations rather than only a mass.
+				g.lineWidth = 1.1;
+				g.strokeStyle = "#6fd0ff";
+				g.beginPath();
+				const mid = lines[GRAPH_LINES >> 1];
+				for (let at = 0; at < GRAPH_ALONG; at++) {
+					const x = toX(at);
+					const y = toY(mid[at]);
+					if (at === 0) g.moveTo(x, y);
+					else g.lineTo(x, y);
+				}
+				g.stroke();
+				g.lineWidth = 1;
+
+				const off = LAYERS.filter(
+					(l) => !knobs["use" + l[0].toUpperCase() + l.slice(1)],
+				);
+				graphSays.textContent =
+					`${GRAPH_LINES} lines · ground ${Math.round(lowest)} to ` +
+					`${Math.round(highest)} m` +
+					(off.length ? ` · ${off.length} layer off` : "");
+			}
+
+			// ---------------------------------------------------------------
 			// The plane: the patch as hexagon columns.
 			// ---------------------------------------------------------------
 
@@ -2242,55 +2531,65 @@
 			precision highp float;
 			layout(location = 0) in vec3 position;
 			layout(location = 1) in float metres;
+			layout(location = 2) in vec3 normal;
 			uniform mat4 viewProj;
-			out vec3 vPosition;
+			out vec3 vNormal;
 			out float vMetres;
 			void main() {
-				vPosition = position;
+				vNormal = normal;
 				vMetres = metres;
 				gl_Position = viewProj * vec4(position, 1.0);
 			}`;
 
 			const FRAGMENT_SOURCE = `#version 300 es
 			precision highp float;
-			in vec3 vPosition;
+			in vec3 vNormal;
 			in float vMetres;
 			uniform vec3 sun;
 			uniform float seaLevel;
-			uniform float reach;
+			uniform float rockLine;
+			uniform float snowLine;
 			uniform int water;
 			out vec4 color;
 			void main() {
-				// **No normal is stored.** Every face here is flat, so the
-				// change of position across one pixel gives the plane's normal
-				// exactly -- which is what the engine's own terrain shader does,
-				// and it takes a third of the mesh out of memory and every cross
-				// product out of the build. It is taken on the patch-relative
-				// position, which is already small enough for float32 to
-				// difference without the answer turning into noise.
+				// **The normal is stored, and it is stored as three bytes.**
+				// Taking it from the change of position across a pixel is what
+				// the engine's terrain shader does and it is wrong here: a
+				// derivative is a difference over a two-by-two block of pixels,
+				// and a map cell at this scale is a few pixels across, so most
+				// pixels straddle the line where a cap meets a wall and average
+				// the two into a normal belonging to neither. The whole patch
+				// then shades as one tone. A face normal quantised to one part in
+				// 127 is
+				// far finer than any shading can show, so the attribute costs a
+				// quarter of what a float one would.
 				//
 				// Nothing here is culled, because a hexagon column's walls are
 				// emitted without a winding rule and a wall seen from inside a
 				// valley is a wall seen from its back.
-				vec3 n = normalize(cross(dFdx(vPosition), dFdy(vPosition)));
+				vec3 n = normalize(vNormal);
 				if (!gl_FrontFacing) n = -n;
 				float lit = 0.30 + 0.70 * max(0.0, dot(n, normalize(sun)));
 				if (water == 1) {
 					// The ocean is a surface and holds no blocks, so it is one
 					// translucent sheet at its own radius rather than a column of
 					// water cells.
-					color = vec4(pow(vec3(0.10, 0.26, 0.46) * lit, vec3(1.0 / 2.2)), 0.72);
+					color = vec4(pow(vec3(0.12, 0.32, 0.55) * lit, vec3(1.0 / 2.2)), 0.72);
 					return;
 				}
+				// **Three bands on two absolute elevations**, the engine's own,
+				// so a colour on the plane names the block the world would build
+				// there and agrees with the colour on the map above it.
 				float over = vMetres - seaLevel;
 				vec3 tint;
 				if (over <= 0.0) {
-					tint = vec3(0.62, 0.56, 0.40);
+					tint = vec3(0.76, 0.70, 0.50);
+				} else if (over < rockLine) {
+					tint = vec3(0.26, 0.44, 0.19);
+				} else if (over < snowLine) {
+					tint = vec3(0.42, 0.42, 0.45);
 				} else {
-					float t = clamp(over / max(1.0, reach), 0.0, 1.0);
-					tint = mix(vec3(0.24, 0.42, 0.19), vec3(0.46, 0.46, 0.48),
-						smoothstep(0.28, 0.58, t));
-					tint = mix(tint, vec3(0.94, 0.95, 0.98), smoothstep(0.70, 0.94, t));
+					tint = vec3(0.92, 0.94, 0.97);
 				}
 				color = vec4(pow(tint * lit, vec3(1.0 / 2.2)), 1.0);
 			}`;
@@ -2313,13 +2612,15 @@
 			const uViewProj = gl.getUniformLocation(program, "viewProj");
 			const uSun = gl.getUniformLocation(program, "sun");
 			const uSeaLevel = gl.getUniformLocation(program, "seaLevel");
-			const uReach = gl.getUniformLocation(program, "reach");
+			const uRock = gl.getUniformLocation(program, "rockLine");
+			const uSnow = gl.getUniformLocation(program, "snowLine");
 			const uWater = gl.getUniformLocation(program, "water");
 
 			const vao = gl.createVertexArray();
 			gl.bindVertexArray(vao);
 			const positionBuffer = gl.createBuffer();
 			const metreBuffer = gl.createBuffer();
+			const normalBuffer = gl.createBuffer();
 			for (const [at, buffer, size] of [
 				[0, positionBuffer, 3],
 				[1, metreBuffer, 1],
@@ -2328,6 +2629,10 @@
 				gl.enableVertexAttribArray(at);
 				gl.vertexAttribPointer(at, size, gl.FLOAT, false, 0, 0);
 			}
+			gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+			gl.enableVertexAttribArray(2);
+			// Signed bytes read back as `-1 .. 1`, which is all a unit normal is.
+			gl.vertexAttribPointer(2, 3, gl.BYTE, true, 0, 0);
 			gl.enable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			gl.enable(gl.BLEND);
@@ -2337,6 +2642,8 @@
 			let groundCount = 0;
 			let waterFrom = 0;
 			let waterCount = 0;
+			/** The box the patch actually occupies, which is what the eye frames. */
+			let bounds = null;
 
 			/**
 			 * The patch as triangles: a cap on every cell, a wall wherever it
@@ -2366,7 +2673,14 @@
 				let room = count * 10 * 3;
 				let position = new Float32Array(room * 3);
 				let metre = new Float32Array(room);
+				let normal = new Int8Array(room * 3);
 				let vertices = 0;
+				let loX = Infinity;
+				let hiX = -Infinity;
+				let loY = Infinity;
+				let hiY = -Infinity;
+				let loZ = Infinity;
+				let hiZ = -Infinity;
 				/** Make sure three more vertices fit, whatever it takes. */
 				const roomFor = () => {
 					if (vertices + 3 <= room) return;
@@ -2377,6 +2691,9 @@
 					const wider2 = new Float32Array(room);
 					wider2.set(metre);
 					metre = wider2;
+					const wider3 = new Int8Array(room * 3);
+					wider3.set(normal);
+					normal = wider3;
 				};
 
 				// One cell's corners, in the patch's own frame, refilled per
@@ -2401,7 +2718,12 @@
 				};
 
 				/**
-				 * One triangle, and a height per corner.
+				 * One triangle, with the plane's own normal and a height per
+				 * corner.
+				 *
+				 * Every face here is flat, so the cross product of two of its
+				 * edges is the normal exactly -- nothing has to be averaged
+				 * between cells, and the three components go in as bytes.
 				 *
 				 * **The height is per corner because a wall has two ends**:
 				 * given the height of the cell it
@@ -2413,8 +2735,30 @@
 				const triangle = (
 					ax, ay, az, bx, by, bz, cx, cy, cz, ma, mb, mc,
 				) => {
+					const ux = bx - ax;
+					const uy = by - ay;
+					const uz = bz - az;
+					const vx = cx - ax;
+					const vy = cy - ay;
+					const vz = cz - az;
+					const nx = uy * vz - uz * vy;
+					const ny = uz * vx - ux * vz;
+					const nz = ux * vy - uy * vx;
+					// **`sqrt(x*x + y*y + z*z)`, never `Math.hypot`.** `hypot` is a
+					// library routine rather than an IEEE operation and differs by
+					// a unit in the last place between runtimes; this is the one
+					// place here that normalises, and it runs once per triangle.
+					const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+					const bx8 = Math.round((nx / len) * 127);
+					const by8 = Math.round((ny / len) * 127);
+					const bz8 = Math.round((nz / len) * 127);
 					roomFor();
 					const at3 = vertices * 3;
+					for (let v = 0; v < 3; v++) {
+						normal[at3 + v * 3] = bx8;
+						normal[at3 + v * 3 + 1] = by8;
+						normal[at3 + v * 3 + 2] = bz8;
+					}
 					position[at3] = ax; position[at3 + 1] = ay; position[at3 + 2] = az;
 					position[at3 + 3] = bx; position[at3 + 4] = by; position[at3 + 5] = bz;
 					position[at3 + 6] = cx; position[at3 + 7] = cy; position[at3 + 8] = cz;
@@ -2422,6 +2766,30 @@
 					metre[vertices + 1] = mb;
 					metre[vertices + 2] = mc;
 					vertices += 3;
+					// **What the camera has to frame is the shape, and only the
+					// shape knows what that is.** A patch's width says nothing
+					// once it is a fair share of the planet: the ground curves
+					// away, and past the antipode it comes back. The box around
+					// what was actually written covers a flat patch, a curved
+					// cap and a whole globe with no case of its own.
+					if (ax < loX) loX = ax;
+					if (ax > hiX) hiX = ax;
+					if (bx < loX) loX = bx;
+					if (bx > hiX) hiX = bx;
+					if (cx < loX) loX = cx;
+					if (cx > hiX) hiX = cx;
+					if (ay < loY) loY = ay;
+					if (ay > hiY) hiY = ay;
+					if (by < loY) loY = by;
+					if (by > hiY) hiY = by;
+					if (cy < loY) loY = cy;
+					if (cy > hiY) hiY = cy;
+					if (az < loZ) loZ = az;
+					if (az > hiZ) hiZ = az;
+					if (bz < loZ) loZ = bz;
+					if (bz > hiZ) hiZ = bz;
+					if (cz < loZ) loZ = cz;
+					if (cz > hiZ) hiZ = cz;
 				};
 
 				/**
@@ -2468,7 +2836,7 @@
 				// top of it, which is what the eye then sees from any low angle.
 				// Hung a fixed depth under each rim cell instead, the block reads
 				// as ground with an edge.
-				const lip = field.span * 0.06;
+				const lip = field.across * 0.06;
 				for (let c = 0; c < count; c++) {
 					const deg = degree[c];
 					const h = height[c];
@@ -2560,11 +2928,19 @@
 				}
 				waterFrom = groundCount;
 				waterCount = vertices - groundCount;
+				bounds = {
+					x: (loX + hiX) / 2,
+					y: (loY + hiY) / 2,
+					z: (loZ + hiZ) / 2,
+					reach:
+						Math.hypot(hiX - loX, hiY - loY, hiZ - loZ) / 2 || field.across,
+				};
 
 				gl.bindVertexArray(vao);
 				for (const [buffer, data, wide] of [
 					[positionBuffer, position, 3],
 					[metreBuffer, metre, 1],
+					[normalBuffer, normal, 3],
 				]) {
 					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 					// Only the part that was written. The rest of the buffer is
@@ -2577,7 +2953,7 @@
 				}
 			}
 
-			const camera = { yaw: -0.7, pitch: 0.5, distance: 2.2, lift: 0 };
+			const camera = { yaw: -0.7, pitch: 0.5, distance: 1.75, lift: 0 };
 
 			function multiply(a, b) {
 				const out = new Float32Array(16);
@@ -2624,21 +3000,21 @@
 				}
 				gl.viewport(0, 0, width, height);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-				if (!field || groundCount === 0) return;
+				if (!field || groundCount === 0 || !bounds) return;
 
-				const span = field.span;
 				// **A patch as tall as it is wide is framed by neither on its
-				// own.** The ground here runs from a sea floor to a summit, and
-				// a camera placed off the width alone looks at the middle of the
-				// map with the mountains out of frame above it.
-				const tall = field.highest - field.lowest;
-				const reach = Math.hypot(span, tall) / 2;
+				// own**, and one that has curved round the planet is framed by
+				// neither at all. The box the mesh actually filled says where to
+				// stand and how far back, whether that is a flat field, a
+				// hillside, or a globe.
+				const reach = bounds.reach;
 				const away = reach * camera.distance;
-				const middle = (field.highest + field.lowest) / 2;
 				const eye = [
-					Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
-					Math.sin(camera.pitch) * away + middle + camera.lift * span,
-					Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
+					bounds.x + Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
+					bounds.y +
+						Math.sin(camera.pitch) * away +
+						camera.lift * reach,
+					bounds.z + Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
 				];
 				const proj = perspective(
 					0.9,
@@ -2650,11 +3026,15 @@
 				gl.uniformMatrix4fv(
 					uViewProj,
 					false,
-					multiply(proj, lookAt(eye, [0, middle, 0], [0, 1, 0])),
+					multiply(
+						proj,
+						lookAt(eye, [bounds.x, bounds.y, bounds.z], [0, 1, 0]),
+					),
 				);
 				gl.uniform3f(uSun, 0.42, 0.72, 0.55);
 				gl.uniform1f(uSeaLevel, field.k.seaLevel);
-				gl.uniform1f(uReach, field.k.relief + field.k.peakRelief);
+				gl.uniform1f(uRock, GROUND_LINES.rock);
+				gl.uniform1f(uSnow, GROUND_LINES.snow);
 				gl.bindVertexArray(vao);
 				gl.uniform1i(uWater, 0);
 				gl.depthMask(true);
@@ -2860,13 +3240,31 @@
 			 */
 			function axisOf(key) {
 				if (key === "contSpline")
-					return `up ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
-						knobs.relief,
-					).toLocaleString()} m`;
-				if (key === "eroSpline") return "up none of the relief to all of it";
-				return `up -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
-					knobs.peakRelief,
-				).toLocaleString()} m`;
+					return [
+						"ocean",
+						`up: the level, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
+							knobs.relief,
+						).toLocaleString()} m`,
+						"inland",
+					];
+				// **Naming both ends of across is what makes this curve
+				// readable.** Up is how much relief survives, so a curve that
+				// falls to the right is more erosion leaving less -- and a
+				// reader cannot tell which way "more erosion" runs unless the
+				// axis says.
+				if (key === "eroSpline")
+					return [
+						"untouched",
+						"up: relief kept, none to all of it",
+						"most eroded",
+					];
+				return [
+					"valley",
+					`up: the relief, -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
+						knobs.peakRelief,
+					).toLocaleString()} m`,
+					"peak",
+				];
 			}
 
 			function buildPanel() {
@@ -3002,7 +3400,7 @@
 					if (redraw) {
 						redraw();
 						axis.textContent = "";
-						for (const text of ["-1", axisOf(row.key), "+1"]) {
+						for (const text of axisOf(row.key)) {
 							const span = document.createElement("span");
 							span.textContent = text;
 							axis.append(span);
@@ -3037,14 +3435,18 @@
 					on
 						? `<i class="${tint}">${live}</i>`
 						: `<i class="gone">${dead}</i>`;
+				const worn = k.useEro && k.erosionBite > 0 ? "worn(E)" : "1";
 				recipe.innerHTML =
-					`height = ${term(k.useCont, "level(C)", "level(0)", "c")}<br />` +
-					"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ " +
+					`height = sea + (${term(k.useCont, "level(C)", "level(0)", "c")} − sea) × ` +
+					`${term(k.useEro && k.erosionBite > 0, worn, "1", "e")}<br />` +
+					"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ " +
 					`${term(k.useEro, "kept(E)", "1", "e")} × ` +
 					`${term(k.usePv, "relief(P)", "0", "p")} × ` +
 					`${Math.round(k.peakRelief).toLocaleString()} m`;
 				facts.innerHTML =
-					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
+					(field.whole
+						? "patch is <b>the whole planet</b>, "
+						: `patch <b>${Math.round(field.arc).toLocaleString()} m</b> across, `) +
 					`<b>${field.count.toLocaleString()}</b> map cells of ` +
 					`<b>${field.cellMetres.toFixed(1)} m</b> · ` +
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
@@ -3072,6 +3474,7 @@
 					generate(draft ? Math.max(16, knobs.cells >> 1) : knobs.cells);
 					buildMesh();
 					drawPictures();
+					drawGraph();
 					cost = performance.now() - started;
 					refreshPanel();
 					if (!draft) writeUrl();
@@ -3129,6 +3532,7 @@
 			generate();
 			buildMesh();
 			drawPictures();
+			drawGraph();
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();
