@@ -1821,6 +1821,31 @@ Violating any of these breaks the design. They are not tunable.
   stars in a midday sky. It is `1 / (1 + luminance * k)` now: no edge, and
   right at both ends -- a world given almost no atmosphere **shows** its stars
   in daylight, the way an airless one does.
+- **HAZE OVER GROUND IS TWO TERMS, AND A THICKNESS KNOB MUST MOVE BOTH**
+  (`aerialPerspective`, **Haze on distance**, F-075). Air dims what is behind
+  it **and** adds the light it scatters in front of it. Scaling only the
+  extinction was tried and is worse than nothing -- the ground clears and the
+  glow stays sitting on top of it, which reads as fog no knob controls. One
+  factor over both is what makes it a thickness rather than a contrast
+  slider. **The sky itself is never scaled**: a pixel with nothing behind it
+  *is* the atmosphere rather than something seen through it, which also keeps
+  the stars, the moon and the sun disc dimmed by the air they are really seen
+  through, and leaves no step at the planet's limb from outside. The scale is
+  needed because the geometry is not Earth's -- a horizontal look of two or
+  three kilometres here crosses a large share of the whole atmosphere's
+  optical depth, where the same distance on Earth crosses very little.
+- **NOTHING SHADOWS THE AIR, SO A LOW SUN GLOWS THROUGH A MOUNTAIN** (F-076,
+  `inPlanetShadow`). An in-scattering sample asks whether the sun reaches it
+  and the only thing that can answer no is the planet's own **sphere** --
+  terrain is invisible to that test and to the sun-leg table read beside it.
+  So the column of air in front of a ridge is lit as though the ridge were
+  not there, and with the haze thrown **30x** forward a low sun behind it
+  paints a warm disc across its face. **The same gap is why there are no
+  crepuscular rays**: shafts through a gap in terrain *are* that shadowing,
+  so the feature and the artifact are one question. The cascades are already
+  bound and would fix the near field for nearly nothing; the far field needs
+  a coarse-map lookup on the sun leg, which is **one texture read per step**
+  rather than the per-fragment march F-074 struck.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
   The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
   shipped planet -- and the world opens with the camera **`1,100 m` up**,

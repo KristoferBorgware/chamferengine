@@ -94,6 +94,24 @@ export interface PlanetAtmosphere {
 
 	/** How far forward the haze throws light, `0` even to `~0.9` a tight halo. */
 	readonly mieDirection: number;
+
+	/**
+	 * How much of the air a **surface** is seen through, against how much the
+	 * sky is made of.
+	 *
+	 * The colour behind the air is multiplied by `exp(-viewDepth * extinction)`
+	 * and that is correct single scattering -- but on a planet this size a
+	 * horizontal look of two or three kilometres crosses a large fraction of
+	 * the whole atmosphere's optical depth, where the same distance on Earth
+	 * crosses a small one. So distant ground goes the colour of the sky at a
+	 * range where an eye expects it to still be ground.
+	 *
+	 * Every knob that would weaken that also weakens the sky, because the haze
+	 * and the sky's own colour are the same coefficients. This scales the
+	 * surface term alone: `1` is the honest single-scattering answer, and
+	 * under it distance clears without the zenith going pale.
+	 */
+	readonly aerialPerspective: number;
 }
 
 /** The knobs the panel exposes, before they become a shader's numbers. */
@@ -118,6 +136,9 @@ export interface AtmosphereKnobs {
 
 	/** How tightly that haze throws light forward. */
 	readonly mieDirection: number;
+
+	/** How much air a surface is seen through. `1` is the honest answer. */
+	readonly aerialPerspective: number;
 }
 
 /**
@@ -150,5 +171,6 @@ export function planetAtmosphere(
 		// A Henyey-Greenstein phase divides by `(1 + g^2 - 2g cos)^1.5`, which
 		// is zero at `g = 1` looking straight at the sun. Held just under it.
 		mieDirection: Math.min(0.95, Math.max(-0.95, knobs.mieDirection)),
+		aerialPerspective: Math.max(0, knobs.aerialPerspective),
 	};
 }

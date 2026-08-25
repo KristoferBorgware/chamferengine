@@ -90,6 +90,7 @@ describe("a planet's own atmosphere", () => {
 		intensity: 2.3,
 		mieStrength: 0.4,
 		mieDirection: 0.76,
+		aerialPerspective: 1,
 	};
 
 	it("reaches a fraction of the planet's own radius past it, never a fixed metre count", () => {
@@ -124,6 +125,26 @@ describe("a planet's own atmosphere", () => {
 				weak.scattering[c]! * 3,
 				9,
 			);
+	});
+
+	it("scales the haze on a surface without touching what the sky is worth", () => {
+		// The two are the same coefficients, so nothing that thins the haze
+		// over distant ground leaves the sky's own colour alone -- unless it
+		// is applied to the surface term by itself, which is what this is.
+		const honest = planetAtmosphere(RADIUS, KNOBS);
+		const cleared = planetAtmosphere(RADIUS, {
+			...KNOBS,
+			aerialPerspective: 0.45,
+		});
+		expect(honest.aerialPerspective).toBe(1);
+		expect(cleared.aerialPerspective).toBeCloseTo(0.45, 9);
+		for (let c = 0; c < 3; c++)
+			expect(cleared.scattering[c]).toBeCloseTo(
+				honest.scattering[c]!,
+				12,
+			);
+		expect(cleared.intensity).toBe(honest.intensity);
+		expect(cleared.mieStrength).toBe(honest.mieStrength);
 	});
 
 	it("carries the falloff through unchanged, for the table it bakes into", () => {

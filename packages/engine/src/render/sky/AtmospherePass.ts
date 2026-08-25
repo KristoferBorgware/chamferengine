@@ -4,8 +4,11 @@ import type { PlanetAtmosphere } from "../../sky/ATMOSPHERE.js";
 import { ATMOSPHERE_SHADER } from "./ATMOSPHERE_SHADER.js";
 import { bakeOpticalDepth } from "../../sky/bakeOpticalDepth.js";
 
-/** The matrix, the eye, the sun, the moon, the shape, the coefficients, the march. */
-const AIR_BYTES = 64 + 16 * 6;
+/**
+ * The matrix, the eye, the sun, the moon, the shape, the coefficients, the
+ * march, and how much of the air a surface behind it is seen through.
+ */
+const AIR_BYTES = 64 + 16 * 7;
 
 /** Texels a side the baked optical-depth table holds. */
 const LUT_SIZE = 256;
@@ -211,8 +214,10 @@ export class AtmospherePass {
 				],
 				36,
 			);
+			this.data.set([air.aerialPerspective, 0, 0, 0], 40);
 		} else {
 			this.data.set([0, 0, 0, this.sunAngularRadius], 28);
+			this.data.set([1, 0, 0, 0], 40);
 		}
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 

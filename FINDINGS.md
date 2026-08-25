@@ -1531,45 +1531,54 @@ when the ground moves, so nothing else has to change.
 
 ---
 
-### F-075 — Haze over a few kilometres washes the terrain out, and it cannot be turned down without dimming the sky
+---
 
-**Kind:** question
+### F-076 — The in-scattered light is not blocked by terrain, so a low sun glows through a mountain
+
+**Kind:** bug
 **Milestone:** 0.5.0
 **Priority:** medium
-**Effort:** small
-**Found:** 2026-08-25, taking eye-level frames to judge the retuned atmosphere
-**Where:** `packages/engine/src/render/sky/ATMOSPHERE_SHADER.ts`,
-`fragmentMain`'s `dimmed` term
+**Effort:** large
+**Found:** 2026-08-25, looking at a low sun standing behind a ridge
+**Where:** `packages/engine/src/render/sky/ATMOSPHERE_SHADER.ts`, `scatter()`
+and `inPlanetShadow()`
 
-**What happens.** The colour behind the air is multiplied by
-`exp(-viewDepth * extinction)`, which is the aerial perspective and is correct
-single scattering. On this planet it is very strong: at eye level a ridge two
-or three kilometres off is drawn nearly the colour of the sky, with its own
-material colour almost gone. A frame at 196 m over the shipped seed shows the
-far mountains as pale blue silhouettes rather than as ground.
+**What happens.** Every in-scattering sample asks whether the sun reaches it,
+and the only thing that can answer no is the planet's own sphere.
+`inPlanetShadow` is a ray test against a ball of radius `planetRadius`;
+terrain is invisible to it, and so is the sun-leg optical depth the same
+sample reads out of the baked table. So the column of air between the camera
+and a mountain is lit as though the mountain were not there. With the haze
+thrown **30x** forward at `g = 0.76`, that paints a warm disc of glow across
+the mountain's face at exactly the place the sun stands behind it.
 
-**Why it matters.** The strength follows from the geometry rather than from a
-setting anybody chose. The air is `1,700 m` deep on a planet `6,801 m` in
-radius, so a horizontal look of a few kilometres crosses a large fraction of
-the whole atmosphere's optical depth -- where the same distance on Earth
-crosses a small one. Every knob that would weaken it is a knob that also
-weakens the sky, because the sky's colour and the haze are the same
-coefficients: turning the extinction down to clear the distance turns the
-zenith pale at the same time. So there is currently no setting that gives a
-blue sky and readable distant ground together.
+**Why it matters.** It reads as the sun shining through solid rock, and it is
+the one place an otherwise convincing sky breaks. It is worst at a low sun
+against a near ridge, which is when somebody is most likely to be looking at
+the sky at all. The same gap is why there are no crepuscular rays: shafts of
+light through a gap in terrain **are** this shadowing, so the feature and the
+artifact are one question.
 
-Nobody is blocked. It reads as a deliberate hazy look and several people
-would prefer it. It is written down because it is the one part of the
-atmosphere that cannot be tuned from the panel, and because the fix is small
-if it is ever wanted.
+**Haze on distance** dims it, because the airlight is scaled by it -- but
+that is a mitigation over the whole picture rather than a fix here.
 
-**What would fix it.** Give the surface term its own multiplier on the view
-depth -- `exp(-viewDepth * extinction * aerialPerspective)` -- so the distance
-haze can be dialled back without touching what the sky is worth. One uniform,
-one knob, no change to the march. The alternative is to give the haze its own
-lower scale height the way real air does, which would concentrate it near the
-ground and is more faithful, but needs a second baked table and so is a
-larger change than the picture is likely to justify.
+**What would fix it.** An occlusion test per march step, which is volumetric
+shadowing. Three shapes, cheapest last:
+
+- Sample the **cascade shadow maps** where the step falls inside one. Correct
+  and nearly free, since the maps are already bound for the ground -- but
+  they reach `260 m` by default and the ridge in question is kilometres off,
+  so it fixes the near field only.
+- Bring back a **coarse-map lookup on the sun leg**, which is the walk F-074
+  removed. The map answers *is ground above this point* in one texture read
+  rather than a march, so the cost is one lookup per in-scattering step --
+  ten a pixel at the shipped count, against the twenty-four a pixel the old
+  per-fragment walk cost. It reaches the horizon, which is the range this
+  needs, and it does not bring back what F-074 struck: that entry removed the
+  march because it duplicated the cascades for **surface** shading, and this
+  is the volumetric job the cascades cannot reach.
+- Do neither, and hold **Haze** and **Haze forward** low enough that the
+  spike never gets bright. That is what ships today.
 
 ---
 
@@ -3249,4 +3258,55 @@ the map still holds — is unclaimed; nothing in the shipped panel replaces it.
 **Marching reach** and **How dark** knobs are gone — `renderer.cascades` now
 takes a fixed full-strength shadow whenever **Shadow maps** is on, rather
 than a knob shared with a technique that no longer exists.
+
+---
+
+### F-075 — Haze over a few kilometres washes the terrain out, and it cannot be turned down without dimming the sky
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, taking eye-level frames to judge the retuned atmosphere
+**Where:** `packages/engine/src/render/sky/ATMOSPHERE_SHADER.ts`,
+`fragmentMain`'s `dimmed` term
+
+**What happens.** The colour behind the air is multiplied by
+`exp(-viewDepth * extinction)`, which is the aerial perspective and is correct
+single scattering. On this planet it is very strong: at eye level a ridge two
+or three kilometres off is drawn nearly the colour of the sky, with its own
+material colour almost gone. A frame at 196 m over the shipped seed shows the
+far mountains as pale blue silhouettes rather than as ground.
+
+**Why it matters.** The strength follows from the geometry rather than from a
+setting anybody chose. The air is `1,700 m` deep on a planet `6,801 m` in
+radius, so a horizontal look of a few kilometres crosses a large fraction of
+the whole atmosphere's optical depth -- where the same distance on Earth
+crosses a small one. Every knob that would weaken it is a knob that also
+weakens the sky, because the sky's colour and the haze are the same
+coefficients: turning the extinction down to clear the distance turns the
+zenith pale at the same time. So there is currently no setting that gives a
+blue sky and readable distant ground together.
+
+Nobody is blocked. It reads as a deliberate hazy look and several people
+would prefer it. It is written down because it is the one part of the
+atmosphere that cannot be tuned from the panel, and because the fix is small
+if it is ever wanted.
+
+**What would fix it.** Give the surface term its own multiplier on the view
+depth -- `exp(-viewDepth * extinction * aerialPerspective)` -- so the distance
+haze can be dialled back without touching what the sky is worth. One uniform,
+one knob, no change to the march. The alternative is to give the haze its own
+lower scale height the way real air does, which would concentrate it near the
+ground and is more faithful, but needs a second baked table and so is a
+larger change than the picture is likely to justify.
+
+**Closed:** 2026-08-25, fixed by giving the surface term its own scale. **Haze
+on distance** multiplies both halves of what air does to a surface -- the
+extinction that dims it and the airlight added in front of it. Scaling only
+the first was tried and is worse than nothing: the ground clears and the glow
+stays sitting on top of it, which reads as fog no knob controls. The sky
+itself is never scaled, so the stars, the moon and the sun disc stay dimmed
+by the air they are really seen through, and the planet's limb from outside
+shows no step where the two meet.
 

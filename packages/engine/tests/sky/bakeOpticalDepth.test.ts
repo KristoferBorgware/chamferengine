@@ -10,6 +10,7 @@ const AIR = planetAtmosphere(RADIUS, {
 	intensity: 1,
 	mieStrength: 0,
 	mieDirection: 0.76,
+	aerialPerspective: 1,
 });
 
 const SIZE = 64;

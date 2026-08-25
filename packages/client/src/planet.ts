@@ -162,6 +162,7 @@ function airFor(live: PlanetSettings): PlanetAtmosphere {
 		intensity: k.skyIntensity,
 		mieStrength: k.mieStrength,
 		mieDirection: k.mieDirection,
+		aerialPerspective: k.aerialPerspective,
 	});
 }
 

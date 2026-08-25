@@ -430,6 +430,27 @@ and the sun's own brightness is not modelled, which is why the light on the air
 is a knob at all. The march gives the *fraction* of light turned toward the
 eye, and nothing in it knows how bright the source is.
 
+**Haze over ground is two terms, and a thickness control has to move both.**
+Air dims what is behind it and adds the light it scatters in front of it.
+Scaling only the first clears the ground and leaves the glow sitting on top,
+which reads as fog nothing controls; one factor over both is what makes the
+control a thickness rather than a contrast slider. The sky itself is never
+scaled — a pixel with nothing behind it *is* the atmosphere rather than
+something seen through it, which is also what keeps the stars, the moon and
+the sun disc dimmed by the air they are really seen through.
+
+The scale is needed because the geometry is not Earth's: a horizontal look of
+two or three kilometres here crosses a large share of the whole atmosphere's
+optical depth, where the same distance on Earth crosses very little. At full
+strength a ridge two kilometres off is drawn nearly the colour of the sky.
+
+**Nothing shadows the air.** A sample asks whether the sun reaches it and only
+the planet's own sphere can answer no, so the column of air in front of a
+mountain is lit as though the mountain were not there — and with the haze
+thrown 30× forward, a low sun behind a ridge paints a warm glow across its
+face. The same gap is why there are no crepuscular rays: shafts of light
+through a gap in terrain *are* that shadowing. It is open, as F-076.
+
 **The stars are not hidden by a threshold.** A clamped fade has a setting at
 which it snaps, and every knob that moves the sky's brightness moves where
 that is — which is how stars end up in a midday sky the moment the air is

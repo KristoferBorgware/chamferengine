@@ -331,6 +331,19 @@ export interface PlanetKnobs {
 	/** How tightly the haze throws light forward. `0` even, `0.9` a tight halo. */
 	mieDirection: number;
 
+	/**
+	 * How much of the air distant **ground** is seen through.
+	 *
+	 * The sky and the haze over a far hillside are the same coefficients, so
+	 * every knob that clears the distance also drains the sky. This one scales
+	 * the surface term alone. `1` is honest single scattering, which on a
+	 * planet this size draws a ridge two kilometres off nearly the colour of
+	 * the sky -- a horizontal look here crosses a large share of the whole
+	 * atmosphere's depth, where the same distance on Earth crosses very
+	 * little. Under `1` the distance clears and the zenith keeps its blue.
+	 */
+	aerialPerspective: number;
+
 	/** Fraction of the planet's own radius the air reaches past it. */
 	atmosphereScale: number;
 
@@ -685,6 +698,10 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	skyIntensity: 2,
 	mieStrength: 0.4,
 	mieDirection: 0.76,
+	// Under the honest 1: a full-strength haze reads as fog on this planet,
+	// because a horizontal look crosses a large share of the air's whole
+	// depth at a distance where an eye still expects to see ground.
+	aerialPerspective: 0.45,
 	// **The air has to contain the altitudes people are actually at.** The
 	// sweep's best colour came at `0.15`, which is `1,020 m` of air on this
 	// planet -- and the world opens with the camera `1,100 m` up, looking at
@@ -997,6 +1014,13 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		step: 0.01,
 		rebuilds: false,
 		unit: "",
+	},
+	aerialPerspective: {
+		low: 0,
+		high: 1.5,
+		step: 0.05,
+		rebuilds: false,
+		unit: "x",
 	},
 	atmosphereScale: {
 		low: 0.02,

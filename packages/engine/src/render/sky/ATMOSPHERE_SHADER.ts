@@ -65,7 +65,18 @@ struct Air {
 	shape           : vec4f,
 	beta            : vec4f,
 	look            : vec4f,
+	surface         : vec4f,
 };
+
+/**
+ * How much air a **surface** is seen through, against how much the sky is.
+ *
+ * The sky and the haze on distant ground are the same coefficients, so
+ * nothing that thins one leaves the other alone. This scales the surface term
+ * by itself: \`1\` is honest single scattering, and under it the distance
+ * clears while the zenith keeps its colour.
+ */
+fn aerialPerspective() -> f32 { return air.surface.x; }
 
 /** Grey haze: one coefficient, sharing the air's own density curve. */
 fn mieStrength() -> f32 { return air.beta.w; }
@@ -356,7 +367,7 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 	let openSpace = toSurface >= FAR;
 
 	var scattered = vec3f(0.0);
-	var dimmed = vec3f(1.0);
+	var depth = 0.0;
 	if (air.eye.w > 0.0) {
 		let shell = raySphere(air.shape.y, origin, dir);
 		let through = min(shell.y, toSurface - shell.x);
@@ -365,19 +376,33 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 			scattered = scatter(start, dir, through, air.sun.xyz);
 			let dither = (hash2(at) - 0.5) * air.look.y * 0.01;
 			scattered += vec3f(dither);
-			let totalDepth = opticalDepthOver(start, dir, through);
-			dimmed = exp(-totalDepth * extinction());
+			depth = opticalDepthOver(start, dir, through);
 		}
 	}
 
+	// **Haze over ground is two terms, and a thickness knob must move both.**
+	// What a look through air does is dim what is behind it *and* add the
+	// light the air itself scatters in front of it. Scaling only the first
+	// clears the ground and leaves the glow sitting on top of it, which reads
+	// as fog that nothing controls. One factor over both is what makes this a
+	// thickness rather than a contrast slider.
+	//
+	// **The sky itself is never scaled.** A pixel with nothing behind it is
+	// the atmosphere rather than something seen through it, so it keeps the
+	// honest depth -- which is also what keeps the stars, the moon and the
+	// sun disc dimmed by the air they are actually seen through.
+	var haze = 1.0;
 	var background = worldColor;
 	if (openSpace) {
 		// The sky's own luminance at this very pixel, unclamped -- what the
 		// stars have to compete with, and what reddens the sun below.
 		let skyLum = max(0.0, dot(scattered, vec3f(0.2126, 0.7152, 0.0722)));
 		background = celestialAt(dir, skyLum);
+	} else {
+		haze = aerialPerspective();
 	}
 
-	return vec4f(background * dimmed + scattered, 1.0);
+	let dimmed = exp(-depth * extinction() * haze);
+	return vec4f(background * dimmed + scattered * haze, 1.0);
 }
 `;

@@ -535,6 +535,12 @@ const GROUPS: Group[] = [
 					!k.plain && k.atmosphereOn && k.mieStrength > 0,
 			},
 			{
+				key: "aerialPerspective",
+				label: "Haze on distance",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
 				key: "atmosphereScale",
 				label: "Atmosphere scale",
 				digits: 3,
