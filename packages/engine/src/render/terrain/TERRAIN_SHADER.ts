@@ -208,9 +208,14 @@ fn lightOn(
 	// hexagon differ under it all the same. \`night.w\` blends it toward the
 	// open-sky reading for every face alike, which is flat rather than dim:
 	// turning this down does not darken the world, it makes every face agree
-	// about how much sky is over it.
+	// about how much sky is over it. **Past 1 it overshoots the other way**:
+	// \`mix\` extrapolates past \`byAngle\` rather than stopping there, so a
+	// value above 1 pushes a steep face darker than its own natural floor --
+	// which matters, because that floor is 0.71 for a sheer wall and the
+	// shipped ground runs 11 degrees of slope at the median, so the natural
+	// range barely moves off 1 anywhere but a cliff.
 	let byAngle = mix(0.42, 1.0, 0.5 + 0.5 * dot(normal, up));
-	let openness = mix(1.0, byAngle, frame.night.w);
+	let openness = clamp(mix(1.0, byAngle, frame.night.w), 0.0, 1.0);
 	// **The sky's hue, not its brightness.** The color the pass clears to
 	// already fades from day to night, so taking it whole would dim the
 	// ambient twice over -- once by that fade and once by \`day\` below --

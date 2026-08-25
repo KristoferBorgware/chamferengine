@@ -1970,7 +1970,16 @@ Violating any of these breaks the design. They are not tunable.
   the world, it makes every face agree about how much sky is over it. Measured
   with the sun, air, clouds and both ground shadows off: the terrain band's
   mean moves **38.3 to 40.1** turning it off, 95th percentile of the ratio
-  **1.000**, 5th **0.727** -- it only ever brightens a face.
+  **1.000**, 5th **0.727** -- it only ever brightens a face. **At its natural
+  strength this is subtle almost everywhere**: `byAngle` bottoms out at
+  `0.42` only for a face pointing straight down, a sheer vertical wall only
+  reaches `0.71`, and the shipped ground runs `11.1°` of slope at the
+  median -- so ordinary terrain has barely left `1` regardless of the knob.
+  `mix` does not clamp to its own ends, so a value **past 1** extrapolates
+  past `byAngle` for a stronger effect than the physical derivation gives --
+  `2` reaches `0` on a sheer wall rather than `0.71` -- and the final
+  `clamp(..., 0.0, 1.0)` is what keeps that inside range. Flat ground never
+  moves at any strength: `byAngle` is `1` there regardless.
 - **THE AMBIENT TERM ITSELF HAD NO BRIGHTNESS KNOB, DISTINCT FROM SKY
   SHADING** (`Frame.skyLight`, `frame.sky.w`, doc 16). Zeroing `sunLight` and
   `skyShading` together still leaves a flat, uniform ambient light with
@@ -1979,7 +1988,7 @@ Violating any of these breaks the design. They are not tunable.
   brightness** (`skyIntensity`), which is how bright the marched sky dome
   reads and which the ground's sun term never read either -- the same gap
   Sunlight closed for the direct term, now closed for the ambient one.
-  **Ambient light** is a plain multiplier on `fromSky` alone, leaving the
+  **Ambient brightness** is a plain multiplier on `fromSky` alone, leaving the
   after-dark floor and the sea untouched. Measured with the sun and air off:
   `1` against `0.2` moves a terrain band's mean **113.6 to 87.8**.
 - **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).

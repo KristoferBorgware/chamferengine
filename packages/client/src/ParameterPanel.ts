@@ -99,10 +99,20 @@ interface Group {
 	/**
 	 * Which of the right pane's two tabs the group stands under.
 	 *
-	 * Ignored on the bench, which has no tabs. `"settings"` unless stated,
-	 * because that is what most of the panel is.
+	 * Ignored on the bench, which has no tabs, and ignored on a group marked
+	 * {@link Group.aboveTabs}. `"settings"` unless stated, because that is
+	 * what most of the panel is.
 	 */
 	readonly tab?: "terrain" | "settings";
+
+	/**
+	 * Whether the group sits above both tabs, in neither of them.
+	 *
+	 * For the one section that is not really a setting: the map is where a
+	 * click stands the player somewhere, which is a thing to reach whichever
+	 * tab is open, not a knob filed under one of two questions.
+	 */
+	readonly aboveTabs?: boolean;
 
 	readonly knobs: Knob[];
 }
@@ -255,8 +265,7 @@ const GROUPS: Group[] = [
 		// in.
 		title: "Map",
 		where: "world",
-		folded: true,
-		tab: "settings",
+		aboveTabs: true,
 		knobs: [],
 	},
 	{
@@ -596,11 +605,6 @@ const GROUPS: Group[] = [
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
-			{
-				key: "noonOnLand",
-				label: "Noon where you land",
-				enabledWhen: (k) => !k.plain,
-			},
 		],
 	},
 	{
@@ -651,10 +655,12 @@ const GROUPS: Group[] = [
 			{
 				// The ground's own ambient term -- what is still lighting a
 				// face once the sun is at 0 -- and a different knob from
+				// both **Exposure**, which scales the whole finished frame
+				// after this and the sun are already added together, and
 				// **Sky brightness** under **The air**, which is the marched
 				// atmosphere's own brightness rather than this.
 				key: "skyStrength",
-				label: "Ambient light",
+				label: "Ambient brightness",
 				digits: 2,
 				enabledWhen: (k) => !k.plain,
 			},
@@ -1140,6 +1146,43 @@ export class ParameterPanel {
 		this.sections.set("Seed", seed);
 		body.appendChild(seed);
 
+		/** One group, built as a folding section with every one of its rows. */
+		const buildSection = (group: Group): HTMLElement => {
+			const section = document.createElement("section");
+			if (group.folded) section.classList.add("shut");
+
+			const head = document.createElement("h2");
+			const toggle = document.createElement("button");
+			toggle.className = "knobs-fold";
+			toggle.textContent = group.title;
+			toggle.onclick = () => section.classList.toggle("shut");
+			head.appendChild(toggle);
+			section.appendChild(head);
+
+			for (const knob of group.knobs) {
+				const row = this.row(knob);
+				this.rows.push(row);
+				section.appendChild(row.wrap);
+			}
+			this.sections.set(group.title, section);
+			return section;
+		};
+
+		const handled = new Set<Group>();
+
+		// **The map stands above both tabs.** It is where a click stands the
+		// player somewhere, which wants to be reachable whichever tab is
+		// open, not filed under one of two questions the way a knob is.
+		if (!this.bench)
+			for (const group of GROUPS) {
+				const where = group.where ?? "world";
+				if (where !== "both" && (where === "bench") !== this.bench)
+					continue;
+				if (!group.aboveTabs) continue;
+				body.appendChild(buildSection(group));
+				handled.add(group);
+			}
+
 		// **Two tabs on the right pane, nowhere else.** The bench already has
 		// two panels for two different questions (what the world came out as,
 		// and the knobs that decide the ground) and has no use for a third
@@ -1170,7 +1213,11 @@ export class ParameterPanel {
 			};
 			terrainButton.onclick = () => select("terrain");
 			settingsButton.onclick = () => select("settings");
-			select("terrain");
+			// **Settings, not Terrain.** Most of what a returning visitor
+			// reaches for -- the light, the player, the sea -- lives there,
+			// and Terrain is one click away when it is the ground being
+			// tuned.
+			select("settings");
 		}
 
 		// A group is a fold, and only the first is open. Twenty-six rows at one
@@ -1178,6 +1225,7 @@ export class ParameterPanel {
 		// they are in is what each one decides rather than which subsystem
 		// happens to read it.
 		for (const group of GROUPS) {
+			if (handled.has(group)) continue;
 			const where = group.where ?? "world";
 			if (where !== "both" && (where === "bench") !== this.bench)
 				continue;
@@ -1187,24 +1235,7 @@ export class ParameterPanel {
 					: (((group.tab ?? "settings") === "terrain"
 							? terrainTab
 							: settingsTab) ?? body);
-			const section = document.createElement("section");
-			if (group.folded) section.classList.add("shut");
-
-			const head = document.createElement("h2");
-			const toggle = document.createElement("button");
-			toggle.className = "knobs-fold";
-			toggle.textContent = group.title;
-			toggle.onclick = () => section.classList.toggle("shut");
-			head.appendChild(toggle);
-			section.appendChild(head);
-
-			for (const knob of group.knobs) {
-				const row = this.row(knob);
-				this.rows.push(row);
-				section.appendChild(row.wrap);
-			}
-			this.sections.set(group.title, section);
-			into.appendChild(section);
+			into.appendChild(buildSection(group));
 		}
 
 		this.problems = document.createElement("div");

@@ -376,6 +376,25 @@ so what is left moving is `exposure` and each block's own colour.
 > at **1.000** and the 5th at **0.727** — it only ever brightens a face,
 > never darkens one, which is what removing a darkening term should do.
 
+**At its natural strength, `1`, this reads as subtle almost everywhere** —
+which is not a bug in the knob, it is a fact about the ground. `byAngle`
+bottoms out at `0.42` only for a face pointing straight down; the steepest a
+face on this terrain ever stands, a sheer vertical wall, only pushes it to
+`0.71`, and the shipped ground runs **11.1°** of slope at the median
+([doc 08](08-terrain-generation.md)) — close enough to flat that `byAngle`
+has barely left `1` at all. So a view of ordinary ground moves little, and a
+view of mostly cliff moves much more, which is exactly the asymmetry the
+measurement above is taken over.
+
+`mix` does not clamp to its own endpoints, so pushing the knob **past `1`**
+extrapolates past `byAngle` in the same direction rather than stopping at
+it — the final `clamp(..., 0.0, 1.0)` is what keeps the result inside `[0,
+1]`. At `2` a sheer wall reaches `0` rather than `0.71`, a stronger effect
+than the term's own physical derivation gives, for a view where the natural
+range reads as too little of a change to be worth having. Flat ground is
+untouched at any strength: a face looking straight up reads `1` in `byAngle`
+regardless, and `mix(1.0, 1.0, t) = 1.0` for every `t`.
+
 ### The ambient term itself had no brightness knob at all
 
 **Sunlight** at `0` and **Sky shading** at `0` together leave a flat,
@@ -387,14 +406,14 @@ a different brightness from the atmosphere's own **Sky brightness** under
 ground's sun term never reads it either, which is the gap **Sunlight**
 closed for the direct term.
 
-**Ambient light** is the multiplier that was missing. `1` is the ambient
+**Ambient brightness** is the multiplier that was missing. `1` is the ambient
 share as `SUN_SHARE` describes it; it scales `fromSky` alone, leaving the
 floor a face keeps after dark and the sea untouched, so a world with the sun
 and the sky both turned down goes dark rather than flat-and-lit.
 
 > **[measured]** The same view as above, sun and air off. Over the terrain
 > band, excluding near-black pixels, the mean brightness moves **113.6 to
-> 87.8** taking **Ambient light** from `1` to `0.2` — a mean per-pixel move
+> 87.8** taking **Ambient brightness** from `1` to `0.2` — a mean per-pixel move
 > of **35.6**.
 
 ### Day length is a gameplay dial, and it has a natural anchor
@@ -767,7 +786,7 @@ happened to land in — which is exactly what a sun does as a camera turns.
   percentile of the ratio at **1.000** and the 5th at **0.727** -- it only
   ever brightens a face.
 - **The ambient term itself had no brightness knob**, which is a different
-  gap from the one Sunlight closed. Ambient light is a plain multiplier on
+  gap from the one Sunlight closed. Ambient brightness is a plain multiplier on
   `fromSky` alone; taking it from `1` to `0.2` with the sun off moves a
   terrain band's mean **113.6 to 87.8**, and the floor a face keeps after
   dark is untouched.
