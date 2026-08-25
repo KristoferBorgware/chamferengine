@@ -127,7 +127,7 @@ export class MapPreview {
 		globeButton.onclick = () => {
 			this.globeShown = !this.globeShown;
 			globeButton.classList.toggle("on", this.globeShown);
-			ball.hidden = !this.globeShown;
+			ball.classList.toggle("shown", this.globeShown);
 			this.sphere.setVisible(this.globeShown);
 		};
 		buttons.appendChild(globeButton);
@@ -159,7 +159,7 @@ export class MapPreview {
 		ball.width = 260;
 		ball.height = 260;
 		ball.className = "map-ball";
-		ball.hidden = !this.globeShown;
+		ball.classList.toggle("shown", this.globeShown);
 		preview.appendChild(ball);
 		this.sphere = new SphereView(ball);
 		this.sphere.setVisible(this.globeShown);

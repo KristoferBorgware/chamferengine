@@ -452,8 +452,14 @@ body {
 	cursor: crosshair;
 }
 
+/* Off by default, and off means gone -- no box in the layout and nothing
+   under a pointer, not merely undrawn. `hidden` alone does not reach that:
+   the browser's own `[hidden] { display: none }` rule loses to this file's
+   own `display: block` at equal specificity, whichever is written last wins,
+   and this file is the one loaded second. A class the toggle button owns
+   settles it either way. */
 .map-ball {
-	display: block;
+	display: none;
 	width: 100%;
 	max-width: 260px;
 	height: auto;
@@ -462,6 +468,10 @@ body {
 	background: var(--panel);
 	cursor: grab;
 	touch-action: none;
+}
+
+.map-ball.shown {
+	display: block;
 }
 
 .map-ball:active {

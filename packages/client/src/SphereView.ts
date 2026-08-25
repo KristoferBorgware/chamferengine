@@ -184,9 +184,14 @@ export class SphereView {
 			// Always swallowed, so a long press on a touch screen does not
 			// raise the browser's own menu over the ball.
 			e.preventDefault();
-			if (mouse) pick(e.offsetX, e.offsetY);
+			if (mouse && this.visible) pick(e.offsetX, e.offsetY);
 		};
 		canvas.onpointerdown = (e) => {
+			// The canvas keeps its pointer handlers whether or not it is on
+			// screen, since a caller hides it with a CSS class rather than by
+			// tearing this down. Nothing here should fire against a canvas
+			// nobody can see.
+			if (!this.visible) return;
 			canvas.setPointerCapture(e.pointerId);
 			mouse = e.pointerType === "mouse";
 			down(e.clientX, e.clientY);
