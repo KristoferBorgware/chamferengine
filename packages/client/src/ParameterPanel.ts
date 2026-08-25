@@ -623,17 +623,17 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "bloomOn",
-				label: "Glare",
+				label: "Bloom",
 			},
 			{
 				key: "bloomThreshold",
-				label: "Glare above",
+				label: "Bloom above",
 				digits: 2,
 				enabledWhen: (k) => k.bloomOn,
 			},
 			{
 				key: "bloomStrength",
-				label: "Glare strength",
+				label: "Bloom strength",
 				digits: 2,
 				enabledWhen: (k) => k.bloomOn,
 			},

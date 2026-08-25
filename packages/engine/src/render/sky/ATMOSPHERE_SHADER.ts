@@ -193,10 +193,28 @@ fn opticalDepthOver(rayOrigin : vec3f, dir : vec3f, rayLength : f32) -> f32 {
 	return mix(backward, forward, w);
 }
 
-/** Whether the planet stands between a point and the sun. */
-fn inPlanetShadow(point : vec3f, sun : vec3f) -> bool {
-	let hit = raySphere(air.shape.x, point, sun);
-	return hit.x < FAR;
+/**
+ * How much of the sun reaches a point, with the planet in the way or not.
+ *
+ * **A yes-or-no answer here draws the planet's own shadow as a staircase.**
+ * The terminator inside the atmosphere is a real feature -- it is the edge of
+ * the night the world casts on its own air -- but a march of ten samples
+ * crossing a hard boundary gains or loses a whole sample's worth of light at
+ * once, and that steps across the sky as one clean arc. Softening the edge
+ * costs nothing and is better physics besides: the sun has an angular size,
+ * so its shadow has a penumbra rather than an edge.
+ *
+ * The test itself is the closest approach of the ray to the planet's centre.
+ * With the sun ahead of the point there is nothing to pass through; behind
+ * it, the ray grazes at \`sqrt(|p|^2 - b^2)\` and anything under the radius is
+ * blocked.
+ */
+fn sunReach(point : vec3f, sun : vec3f) -> f32 {
+	let b = dot(point, sun);
+	if (b > 0.0) { return 1.0; }
+	let perpendicular = sqrt(max(0.0, dot(point, point) - b * b));
+	let soft = air.shape.x * 0.02;
+	return smoothstep(air.shape.x - soft, air.shape.x + soft, perpendicular);
 }
 
 /**
@@ -243,7 +261,13 @@ fn phaseMie(cosTheta : f32, g : f32) -> f32 {
  * the two is the coefficient it is multiplied by and the phase function that
  * aims it. So the haze costs two multiplies a step and no second table.
  */
-fn scatter(origin : vec3f, dir : vec3f, through : f32, sun : vec3f) -> vec3f {
+fn scatter(
+	origin : vec3f,
+	dir : vec3f,
+	through : f32,
+	sun : vec3f,
+	jitter : f32,
+) -> vec3f {
 	let steps = i32(air.look.x);
 	let step = through / f32(steps);
 	let cosTheta = dot(dir, sun);
@@ -253,13 +277,21 @@ fn scatter(origin : vec3f, dir : vec3f, through : f32, sun : vec3f) -> vec3f {
 		+ vec3f(mieStrength() * phaseMie(cosTheta, mieDirection()));
 	let outward = extinction();
 	var inScattered = vec3f(0.0);
-	var point = origin;
+	// **The offset is what turns banding into noise.** Every pixel marching
+	// from the same place samples the same heights, so wherever the sum
+	// changes by one sample's worth the whole screen changes there at once,
+	// and that is a band. Starting each pixel a different fraction of a step
+	// along scatters the transition over neighbouring pixels instead. Noise
+	// added to the *result* -- which is what the source this was ported from
+	// does -- cannot do this: by then the band is already in the number.
+	var point = origin + dir * (step * jitter);
 	for (var s = 0; s < steps; s++) {
-		if (!inPlanetShadow(point, sun)) {
+		let lit = sunReach(point, sun);
+		if (lit > 0.0) {
 			let sunDepth = opticalDepthBaked(point, sun);
-			let viewDepth = opticalDepthOver(origin, dir, step * f32(s));
+			let viewDepth = opticalDepthOver(origin, dir, step * (f32(s) + jitter));
 			let transmittance = exp(-(sunDepth + viewDepth) * outward);
-			inScattered += densityAt(point) * transmittance;
+			inScattered += densityAt(point) * transmittance * lit;
 		}
 		point += dir * step;
 	}
@@ -373,9 +405,13 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 		let through = min(shell.y, toSurface - shell.x);
 		if (through > 0.0) {
 			let start = origin + dir * shell.x;
-			scattered = scatter(start, dir, through, air.sun.xyz);
-			let dither = (hash2(at) - 0.5) * air.look.y * 0.01;
-			scattered += vec3f(dither);
+			// The same hash does both jobs: it offsets where this pixel's
+			// march begins, which is what breaks a band into noise, and a
+			// little of it is added to the result for the fine grain a
+			// ten-step integral still leaves behind.
+			let noise = hash2(at);
+			scattered = scatter(start, dir, through, air.sun.xyz, noise);
+			scattered += vec3f((noise - 0.5) * air.look.y * 0.01);
 			depth = opticalDepthOver(start, dir, through);
 		}
 	}

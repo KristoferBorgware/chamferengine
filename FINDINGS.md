@@ -233,10 +233,16 @@ into two or three pixels and there is no antialiasing anywhere in the renderer
 
 **Why it matters.** It reads as a rendering fault, and the first guess is
 always shadow acne or depth fighting. It is neither: taking the same view with
-the coarse-map walk off, the cascades off, and `sunShadow` at 0 leaves the
-stripes untouched, and rendering it at 2× and box-filtering back down leaves
-them untouched as well, so the pattern is real geometry rather than pixel
-aliasing. What the camera adds is only the crawl.
+every shadow turned off leaves the stripes untouched, and rendering it at 2×
+and box-filtering back down leaves them untouched as well, so the pattern is
+real geometry rather than pixel aliasing. What the camera adds is only the
+crawl.
+
+*(Written when the shadows were a coarse-map march plus the cascades, turned
+off by `mapShadows`, `cascadeShadows` and a shared `sunShadow` depth. F-074
+has since removed the march and the depth knob with it, so the check today is
+**Shadow maps** off. The reading is unaffected — nothing here was ever a
+shadow.)*
 
 **What would fix it.** Two separate things, and they are worth separating.
 The crawl is antialiasing: 4× MSAA on the scene target and a resolve in the

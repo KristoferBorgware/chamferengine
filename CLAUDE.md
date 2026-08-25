@@ -1764,6 +1764,21 @@ Violating any of these breaks the design. They are not tunable.
   stands in for Lague's blue-noise texture**, breaking the visible banding ten
   integration steps leave across a smooth sky into noise too fine to read as a
   band, with no binary asset to ship.
+- **A MARCH IS DITHERED BY WHERE IT STARTS, NOT BY WHAT IT RETURNS**
+  (`scatter`, `sunReach`, doc 32). Noise added to the in-scattered sum -- which
+  is what Lague's shader does and what was ported -- masks fine grain and
+  cannot touch a band, because by then the band is already in the number.
+  Every pixel marching from the same place samples the same heights, so
+  wherever the sum gains a sample's worth of light the whole screen gains it
+  along one line. **Offset each pixel's first sample by a fraction of a step**
+  and that transition is scattered over neighbouring pixels instead. The hash
+  now does both jobs. What made it visible was the planet's own shadow: a
+  **yes-or-no** `inPlanetShadow` crossing a hard boundary at ten samples drew
+  the terminator inside the atmosphere as one clean arc across a twilight sky
+  -- confirmed by frames, since the arc vanished at 40 steps and was there at
+  `aerialPerspective` 1 and 0.45 alike. `sunReach` softens that edge over
+  **2%** of the planet's radius, which is better physics as well: the sun has
+  an angular size, so its shadow has a penumbra rather than an edge.
 - **BRIGHTNESS AND COLOUR NEED SEPARATE KNOBS, AND ONE OF THEM WAS NEVER
   PORTED** (`intensity` in `ATMOSPHERE.ts`, `skyIntensity` on the panel,
   `tools/trial-sky.ts`, doc 32). Lague's shader ends

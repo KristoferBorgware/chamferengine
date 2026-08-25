@@ -451,6 +451,19 @@ thrown 30× forward, a low sun behind a ridge paints a warm glow across its
 face. The same gap is why there are no crepuscular rays: shafts of light
 through a gap in terrain *are* that shadowing. It is open, as F-076.
 
+**A march is dithered by where it starts, not by what it returns.** Every
+pixel marching from the same place samples the same heights, so wherever the
+sum gains one sample's worth of light the whole screen gains it along one
+line — and that is a band. Noise added to the result cannot touch it, because
+by then the band is in the number; offsetting each pixel's first sample by a
+fraction of a step scatters the transition across neighbouring pixels
+instead. The planet's own shadow is what makes this visible: a yes-or-no
+occlusion test crossing a hard boundary at ten samples draws the terminator
+inside the atmosphere as one clean arc across a twilight sky. Softening that
+edge over a couple of per cent of the planet's radius removes it, and is
+better physics besides — the sun has an angular size, so its shadow has a
+penumbra rather than an edge.
+
 **The stars are not hidden by a threshold.** A clamped fade has a setting at
 which it snaps, and every knob that moves the sky's brightness moves where
 that is — which is how stars end up in a midday sky the moment the air is
