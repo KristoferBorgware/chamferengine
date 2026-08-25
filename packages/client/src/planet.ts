@@ -58,6 +58,7 @@ import {
 	ChunkRenderer,
 	FrameTimer,
 	MarkerRenderer,
+	PlayerRenderer,
 	NoWebGPUError,
 	SEA_COLORS,
 	SeaRenderer,
@@ -77,6 +78,7 @@ import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
+import type { PlayerBody } from "chamfer/render";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 import { behindPlayer } from "./behindPlayer.js";
 
@@ -546,9 +548,18 @@ async function main(): Promise<void> {
 	// the water as well as the ground: it says where a click goes rather than
 	// being a thing that lives in the world.
 	const aim = new AimRenderer(ctx);
+	// The player themselves, once the camera trails far enough back to see
+	// one. Nothing to draw in first person, which is where a world opens.
+	const playerBody = new PlayerRenderer(ctx);
 	// The volumes the culling tests against, drawn only when asked for.
 	const bounds = new BoundsRenderer(ctx);
 	renderer.layers = [
+		// **A player is a thing in the world, so it goes in with the world.**
+		// Before the sea, which is translucent and writes depth: drawn after
+		// it, a player standing in the shallows would be cut off at the
+		// waterline rather than seen through it, the way the sea floor under
+		// them already is.
+		playerBody,
 		// After the ground, so the water is drawn over the floor it covers,
 		// and before the clouds, which are further off than any of it.
 		...(sea ? [sea] : []),
@@ -634,7 +645,11 @@ async function main(): Promise<void> {
 		},
 	);
 	let flying = true;
-	let chase = 6;
+	// **A world opens at the eye.** Third person is a thing to ask for with
+	// the wheel, not the view somebody is given: the camera behind the
+	// shoulder is for looking at the player, and there is nothing to look at
+	// until someone goes and finds it.
+	let chase = 0;
 
 	// The twelve pentagons and the two poles, which are two of the twelve.
 	const places = landmarks();
@@ -1096,6 +1111,41 @@ async function main(): Promise<void> {
 				? shape.crustTopRadius
 				: RADIUS,
 		};
+	}
+
+	/** The body last handed over, so a player standing still is not rebuilt. */
+	let bodyAt: PlayerBody | null = null;
+
+	/**
+	 * Draw the player, once the camera is far enough back to see one.
+	 *
+	 * **The test is where the camera ended up, not how far back it was
+	 * asked to go.** `behindPlayer` gives the offset up whenever the ground is
+	 * in the way, so a player backed into a corner has the camera at their own
+	 * eye however far the wheel was turned -- and a capsule drawn there is the
+	 * inside of its own head filling the screen.
+	 */
+	function markPlayer(from: Vec3): void {
+		if (from.sub(player.eye).length() <= player.radius) {
+			playerBody.body = null;
+			bodyAt = null;
+			return;
+		}
+		// A step too small to move a pixel of it is not worth rebuilding a
+		// thousand vertices for, and this runs once a frame.
+		if (
+			bodyAt &&
+			bodyAt.position.sub(player.position).length() < 1e-3 &&
+			bodyAt.heading.dot(player.heading) > 1 - 1e-9
+		)
+			return;
+		bodyAt = {
+			position: player.position,
+			heading: player.heading,
+			height: player.height,
+			radius: player.radius,
+		};
+		playerBody.body = bodyAt;
 	}
 
 	/**
@@ -2125,6 +2175,7 @@ async function main(): Promise<void> {
 			.add(up.scale(Math.sin(player.pitch)))
 			.normalize();
 		const from = behindPlayer(player.eye, look, up, chase, rayWorld);
+		markPlayer(from);
 		const target = player.eye.add(look.scale(50));
 
 		// The ray a click acts along is the player's own. Where it lands on
