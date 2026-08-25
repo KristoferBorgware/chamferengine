@@ -1685,7 +1685,7 @@ crepuscular rays live: shafts through a gap in a ridge, seen from the side.
 Nothing cheap has been found for that, and the walk above is what expensive
 looks like.
 
----
+## Closed
 
 ### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
 
@@ -1721,7 +1721,16 @@ for a transitively hoisted tool still picks the newest match. Nothing else
 in the toolchain has this shape: `typecheck`, `check-style.js` and
 `build-docs.js` all run code that lives in this repository.
 
-## Closed
+**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
+reformatted in the same commit. The flip-flop is not hypothetical: while this
+entry was being written another session pushed a commit reformatting
+`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
+Prettier wanted expanded -- which turned a file that passed here into a third
+failure the moment it was merged. `package-lock.json` already resolved
+`3.9.6`, so the tree and the lock now agree and the range can no longer drift
+under a fresh install.
+
+---
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 
