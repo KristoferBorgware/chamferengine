@@ -453,6 +453,25 @@ space is a set of surfaces, and the band round it is a slab.** A sheet carve has
 no plan of its own, so the picture is one horizontal **slice** at a depth you
 name, and it is a different picture at every depth.
 
+**A constant ceiling is why the engine's caves have no way in**, and **A way
+in** is two ways out of that. The gate is a yes or a no on one number, so at
+6 m nothing ever breaks the ground and at 0 m the sheet is near the surface
+everywhere and opens it everywhere: there is no setting between the two.
+**Taper** narrows the band toward the ground instead of stopping dead at it, so
+only the part of the sheet nearest its own middle is still wide enough to be a
+cave when it arrives — a mouth is where the **cave** is strongest, and it needs
+no second field. **Dipping** lets the ceiling itself wander over the ground and
+come down where a second field clears a rarity you set, so a mouth is where the
+**ground** allows one and the sheet happens to be there, which is two conditions
+rather than one.
+
+**Where the rarity starts has to be set rather than assumed.** A borrowed figure
+does not work: the standard deviation of noise depends on how many octaves it
+has, and over a patch this size the field never sees its own full range — at a
+60 m feature over 95 m of ground the median reading is `0.461` and **46.5%** of
+it clears `0.5`, so a threshold picked from a two-standard-deviation argument
+opens half the map.
+
 **The contour is drawn twice, and the two are worth comparing.** Blue is
 marching squares over a square raster — sixteen cases, two of them saddles the
 four corners cannot decide. Orange is the same contour taken on the **lattice

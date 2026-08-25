@@ -452,6 +452,11 @@
 				sheetScale: 24,
 				sheetThreshold: 0.12,
 				sheetCeiling: 6,
+				mouths: "dipping",
+				mouthWidth: 0.25,
+				mouthVary: 10,
+				mouthRare: 0.7,
+				mouthScale: 60,
 				sliceDepth: 12,
 
 				relief: 8,
@@ -546,6 +551,49 @@
 							step: 0.5,
 							unit: " m",
 							decimals: 1,
+						},
+						{
+							key: "mouths",
+							shownWhen: (k) => k.method === "sheet",
+							label: "A way in",
+							type: "select",
+							options: ["none", "taper", "dipping"],
+						},
+						{
+							key: "mouthWidth",
+							shownWhen: (k) => k.method === "sheet" && k.mouths === "taper",
+							label: "Band left at the surface",
+							low: 0,
+							high: 0.25,
+							step: 0.005,
+							decimals: 3,
+						},
+						{
+							key: "mouthVary",
+							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
+							label: "Ceiling dips by up to",
+							low: 0,
+							high: 120,
+							step: 5,
+							unit: " m",
+						},
+						{
+							key: "mouthRare",
+							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
+							label: "Only where the field clears",
+							low: 0,
+							high: 0.95,
+							step: 0.01,
+							decimals: 2,
+						},
+						{
+							key: "mouthScale",
+							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
+							label: "Ceiling changes over",
+							low: 15,
+							high: 200,
+							step: 5,
+							unit: " m",
 						},
 						{
 							key: "sliceDepth",
@@ -786,6 +834,63 @@
 				return fbmPlain(x * f, y * f, z * f, 3, (seed + CAVE_SEED_OFFSET) | 0);
 			}
 
+			/**
+			 * How far below the surface this column's sheet is forbidden to reach.
+			 *
+			 * **A constant here is why the engine's caves have no way in.** The gate
+			 * is a yes or a no on one number, so at 6 m nothing ever breaks the
+			 * ground and at 0 m the sheet is near the surface everywhere and opens it
+			 * everywhere: there is no setting between the two. Letting the depth
+			 * itself wander over the ground puts the decision somewhere -- a mouth
+			 * opens where the ground says it may **and** the sheet happens to be
+			 * there, which is two conditions rather than one.
+			 */
+			function sheetCeilingAt(x, z, k, seed) {
+				if (k.mouths !== "dipping") return k.sheetCeiling;
+				const s = k.mouthScale;
+				// **One-sided and squared**, so the ceiling only ever comes down and
+				// almost never by much. A field that moves it both ways pushes the
+				// caves deeper over half the map and takes a third of the void away
+				// to buy a handful of mouths, which is paying for the wrong thing.
+				// **Only the top of the field does anything, and where its top starts
+				// has to be set rather than assumed.** Anything reading the whole range
+				// dips the ceiling over half the ground and opens it everywhere again,
+				// which is the failure the constant ceiling already had. A borrowed
+				// figure does not work either: the standard deviation of noise depends
+				// on how many octaves it has, and over a patch this size the field never
+				// sees its own full range -- at a 60 m feature over 95 m of ground the
+				// median reading is `0.461` and **46.5%** of it clears `0.5`.
+				const n = fbm(x / s, 41.3, z / s, 2, (seed + 13) | 0);
+				const dip = Math.max(0, (n - k.mouthRare) / (1 - k.mouthRare));
+				return k.sheetCeiling - k.mouthVary * dip;
+			}
+
+			/**
+			 * The band's half-width at one depth: the whole gate, in one number.
+			 *
+			 * **Taper** is the other way out of the same problem, and it needs no
+			 * second field: the band narrows toward the ground instead of stopping
+			 * dead at it, so only the part of the sheet nearest its own middle is
+			 * still wide enough to be a cave when it gets there. A mouth is then
+			 * where the **cave** is strongest rather than where the ground allows it,
+			 * and `mouthWidth` is how much of the band survives the trip: at 0 the
+			 * band closes at the surface and nothing breaks through, at 1 there is no
+			 * gate at all.
+			 */
+			function sheetBandAt(below, ceiling, k) {
+				if (k.mouths === "taper") {
+					// Squared for the same reason the dip is: a straight ramp is already
+					// a fifth of the way open one block under the ground, and a sheet
+					// that wide meets the surface everywhere.
+					const reached = Math.min(1, Math.max(0, below / k.sheetCeiling));
+					return (
+						k.sheetThreshold *
+						(k.mouthWidth + (1 - k.mouthWidth) * reached * reached)
+					);
+				}
+				return below >= ceiling ? k.sheetThreshold : 0;
+			}
+
 			/** How far inside the sheet's band a point is: 1 in the middle, 0 outside. */
 			function sheetOpenness(v, k) {
 				return Math.max(0, (k.sheetThreshold - Math.abs(v)) / k.sheetThreshold);
@@ -861,8 +966,12 @@
 							// what it carves 20 m down, and that is the whole difference.
 							const v = sheetValue(x, surface[c] - k.sliceDepth, z, k, seed);
 							raw[c] = v;
-							openness[c] =
-								k.sliceDepth < k.sheetCeiling ? 0 : sheetOpenness(v, k);
+							const band = sheetBandAt(
+								k.sliceDepth,
+								sheetCeilingAt(x, z, k, seed),
+								k,
+							);
+							openness[c] = band > 0 ? Math.max(0, (band - Math.abs(v)) / band) : 0;
 						}
 						if (surface[c] > highest) highest = surface[c];
 					}
@@ -904,13 +1013,13 @@
 						// once a column and fills the slab it decided; this one cannot,
 						// which is what a passage free to be at any depth costs.
 						const [cx, cz] = cellCenter(i, j, d);
+						const ceiling = sheetCeilingAt(cx, cz, k, seed);
 						for (let L = first; L < layers; L++) {
 							const centre = top - (L + 0.5) * d;
 							const below = surfaceY - centre;
 							const hollow =
-								below >= k.sheetCeiling &&
 								Math.abs(sheetValue(cx, centre, cz, k, seed)) <
-									k.sheetThreshold;
+								sheetBandAt(below, ceiling, k);
 							kind[base + L] = hollow ? VOID : ROCK;
 						}
 					}
@@ -1483,12 +1592,22 @@
 			 * without moving the surface.
 			 */
 			function caveFieldAt(x, z, surfaceY, k, seed) {
-				if (k.method === "sheet")
-					return (y) =>
-						Math.min(
-							k.sheetThreshold - Math.abs(sheetValue(x, y, z, k, seed)),
-							(surfaceY - y - k.sheetCeiling) * 0.02,
-						);
+				if (k.method === "sheet") {
+					const ceiling = sheetCeilingAt(x, z, k, seed);
+					return (y) => {
+						const below = surfaceY - y;
+						const reach = k.sheetThreshold - Math.abs(sheetValue(x, y, z, k, seed));
+						// The taper is the gate, so there is no second term to take the
+						// smaller of; the other two keep a hard floor under the ground.
+						if (k.mouths === "taper")
+							return Math.min(
+								sheetBandAt(below, ceiling, k) -
+									Math.abs(sheetValue(x, y, z, k, seed)),
+								below * 0.02,
+							);
+						return Math.min(reach, (below - ceiling) * 0.02);
+					};
+				}
 				// Everything the plan carve decides from the ground is decided once
 				// for the column, which is why this surface is nearly free there and
 				// costs a lookup a level for the sheet.
