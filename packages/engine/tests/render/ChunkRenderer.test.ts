@@ -21,6 +21,7 @@ const FRAME: Frame = {
 	sunLight: 1,
 	skyShading: 1,
 	skyLight: 1,
+	fullbright: 0,
 	moon: [0, -1, 0],
 	moonLight: 0.16,
 	exposure: 1,

@@ -99,4 +99,20 @@ export interface Frame {
 	 * keeps after dark is untouched -- this is the daylight sky alone.
 	 */
 	readonly skyLight: number;
+
+	/**
+	 * How far to pin every surface to full light, from 0 to 1.
+	 *
+	 * **A way to see underground until something can be carried down there.**
+	 * At `1` the ground shader stops asking about the sun, the sky, the moon,
+	 * the shadows and the night floor alike, and every face reads as the block
+	 * it is made of.
+	 *
+	 * It cannot do the job alone: the mesher bakes the sky exposure and the
+	 * corner shading into the vertex colours, and no light this shader
+	 * computes can undo a number already multiplied into what it is given. The
+	 * client turns those two off at mesh time whenever this is on, which is
+	 * what makes a cave read as its own rock rather than 12% of it.
+	 */
+	readonly fullbright: number;
 }

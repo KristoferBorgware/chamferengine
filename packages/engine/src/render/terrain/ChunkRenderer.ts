@@ -384,6 +384,9 @@ export class ChunkRenderer implements ShadowCaster {
 		this.frameData.set(frame.viewProj.elements, 0);
 		this.frameData.set(frame.eye, 16);
 		this.frameData.set(frame.sun, 20);
+		// `sun.w`. Full light, taking the whole lighting model out at once so
+		// a dug hole can be looked into.
+		this.frameData[23] = frame.fullbright;
 		this.frameData.set(frame.fog, 24);
 		this.frameData[28] = frame.daylight;
 		this.frameData[29] = frame.nightLight;

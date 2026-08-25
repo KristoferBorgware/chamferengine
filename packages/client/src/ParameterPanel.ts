@@ -647,10 +647,20 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
+				// **The whole lighting model out at once**, so a hole can be
+				// looked into before there is anything to carry down it. It
+				// reaches the mesher too -- the sky exposure and the corner
+				// shading are baked, and no light computed afterwards can
+				// divide them back out -- which is why it wants a rebuild.
+				key: "fullbright",
+				label: "Full light",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "sunStrength",
 				label: "Sunlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				// The ground's own ambient term -- what is still lighting a
@@ -662,7 +672,7 @@ const GROUPS: Group[] = [
 				key: "skyStrength",
 				label: "Ambient brightness",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				// The one term that can still look directional with the sun
@@ -672,13 +682,13 @@ const GROUPS: Group[] = [
 				key: "skyShading",
 				label: "Sky shading",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				key: "exposure",

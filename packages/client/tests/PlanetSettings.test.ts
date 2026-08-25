@@ -582,7 +582,12 @@ describe("what a live rebuild can show", () => {
 	 * nothing on screen moves until every chunk is meshed again -- and none of
 	 * which moves a block.
 	 */
-	const BAKED = ["speckle", "ambientOcclusion", "skyExposure"] as const;
+	const BAKED = [
+		"speckle",
+		"ambientOcclusion",
+		"skyExposure",
+		"fullbright",
+	] as const;
 
 	it("rebuilds for a knob that is baked into the mesh", () => {
 		// The panel only calls `onLiveRebuild` for a key in this set. Left out
@@ -604,6 +609,16 @@ describe("what a live rebuild can show", () => {
 		// a baked knob marked live would take the `onLive` path and never
 		// reach a rebuild at all.
 		for (const key of BAKED) expect(KNOB_RANGES[key]!.rebuilds).toBe(true);
+	});
+
+	it("puts full light through a rebuild, and keeps it out of the world", () => {
+		// It is half a shader flag and half a mesher one: the sky exposure and
+		// the corner shading are multiplied into the vertex colours, and no
+		// light computed afterwards can divide them back out. So it needs the
+		// chunks built again -- and it still moves no block.
+		expect(REMESH_KNOBS.has("fullbright")).toBe(true);
+		expect(WORLD_SHAPE_KNOBS.has("fullbright")).toBe(false);
+		expect(KNOB_RANGES["fullbright"]!.rebuilds).toBe(true);
 	});
 
 	it("gives one world one name however they are turned", () => {
