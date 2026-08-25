@@ -78,6 +78,7 @@ import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
+import { behindPlayer } from "./behindPlayer.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -2106,10 +2107,7 @@ async function main(): Promise<void> {
 			.scale(Math.cos(player.pitch))
 			.add(up.scale(Math.sin(player.pitch)))
 			.normalize();
-		const from =
-			chase < 0.5
-				? player.eye
-				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
+		const from = behindPlayer(player.eye, look, up, chase, rayWorld);
 		const target = player.eye.add(look.scale(50));
 
 		// The ray a click acts along is the player's own. Where it lands on
