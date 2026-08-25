@@ -1767,7 +1767,9 @@ worn region sit lower as well as flatter.
 
 ---
 
-### F-082 — Switching Full light rebuilds the coarse map, which the switch cannot move
+## Closed
+
+### F-083 — Switching Full light rebuilds the coarse map, which the switch cannot move
 
 **Kind:** bug
 **Milestone:** 0.5.0
@@ -1822,9 +1824,78 @@ shape*, is the same function seen from the other side: that entry is about
 what `flushTerrain` fails to update, this one about what it updates and did
 not need to.
 
+
+**Closed:** 2026-08-25, candidate A. `BAKED_KNOBS` is now a set of its own
+and takes its own path: `flushMeshes` retunes the worker pool in place and
+drops every chunk, where `flushTerrain` still rebuilds the map for a knob that
+moves the ground. What the cheap path skips is **978 ms** on the shipped world
+at depth 13 -- 835 ms of coarse map, 139 ms of peak pyramid, 4 ms for the shape
+and the eight generators (`tools/trial-remesh.ts`) -- and not one input to any
+of them is a function of a baked knob.
+
+The pool is retuned rather than replaced, so the map's five typed arrays are
+not structured-cloned once per worker either. A `retune` message carries the
+three switches; `WorkerMeshSource` folds them into the setup it holds, so a
+worker spawned later to replace a dead one gets them too rather than quietly
+going back to what the player has just turned off.
+
+What is left is the re-mesh itself, which is the work the knob actually asked
+for. Confirmed in the real client (`tools/probe-remesh-path.mjs`): Full light
+and Corner shading take the mesh path, Relief takes the terrain path, and the
+readout now says which -- it claimed "rebuilding the terrain" for a knob that
+rebuilds no terrain, which is what made the two impossible to tell apart from
+outside.
+
+Candidate B -- carrying the sky exposure as its own vertex attribute, so no
+rebuild is needed at all -- is untouched and still costs 4 bytes a vertex. It
+is worth less now than it was: what it removes is a re-mesh rather than a
+re-mesh plus a map.
+---
+### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** trivial
+**Found:** 2026-08-25, running `npm run format:check` before a push
+**Where:** `package.json`, the `prettier` devDependency
+
+**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
+and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
+Neither file has been edited since the merge that brought it in, and it was
+formatted when it was written. What changed is the formatter: the dependency
+is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
+lays a union type out differently -- a short union that 3.4 broke onto one
+line per member, 3.9 collapses onto a single line.
+
+**Why it matters.** Running `--write` here fixes the check on this machine
+and breaks it on any machine that resolved 3.4.x, so the two files would
+flip back and forth with every session and every diff would carry
+whitespace nobody chose. The formatter is a tool whose whole value is that
+everybody gets the same answer, and a caret range is the one thing that
+stops it giving one. It also means `format:check` is red for reasons
+unrelated to whatever a session is actually doing, which trains people to
+ignore it.
+
+**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
+caret -- and run `--write` once over the whole repo in the same commit, so
+the tree and the pin agree from that point on. A lockfile alone is not
+enough, because `npm install` in a fresh container with no lockfile entry
+for a transitively hoisted tool still picks the newest match. Nothing else
+in the toolchain has this shape: `typecheck`, `check-style.js` and
+`build-docs.js` all run code that lives in this repository.
+
+**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
+reformatted in the same commit. The flip-flop is not hypothetical: while this
+entry was being written another session pushed a commit reformatting
+`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
+Prettier wanted expanded -- which turned a file that passed here into a third
+failure the moment it was merged. `package-lock.json` already resolved
+`3.9.6`, so the tree and the lock now agree and the range can no longer drift
+under a fresh install.
+
 ---
 
-## Closed
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

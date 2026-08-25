@@ -8,8 +8,10 @@ import {
 } from "chamfer/generation";
 import type { PlanetKnobs } from "../src/PlanetSettings.js";
 import {
+	BAKED_KNOBS,
 	FLAT_COARSE_LEVEL,
 	KNOB_RANGES,
+	LIVE_TERRAIN_KNOBS,
 	PLANET_DEFAULTS,
 	PlanetSettings,
 	REMESH_KNOBS,
@@ -588,6 +590,27 @@ describe("what a live rebuild can show", () => {
 		"skyExposure",
 		"fullbright",
 	] as const;
+
+	it("names the same four the client routes on", () => {
+		// `BAKED_KNOBS` is what decides a knob takes the cheap path -- the
+		// meshes again and not the map. A key listed here and missing there
+		// would quietly go on rebuilding the coarse map it cannot move.
+		expect([...BAKED_KNOBS].sort()).toEqual([...BAKED].sort());
+	});
+
+	it("splits the remesh set cleanly in two", () => {
+		// Every key that needs a rebuild is in exactly one of the two, so the
+		// panel's question -- does this key move the ground -- always has an
+		// answer, and nothing needing the map ever takes the path that keeps
+		// it.
+		for (const key of REMESH_KNOBS)
+			expect(LIVE_TERRAIN_KNOBS.has(key) !== BAKED_KNOBS.has(key)).toBe(
+				true,
+			);
+		for (const key of BAKED_KNOBS) expect(REMESH_KNOBS.has(key)).toBe(true);
+		for (const key of LIVE_TERRAIN_KNOBS)
+			expect(REMESH_KNOBS.has(key)).toBe(true);
+	});
 
 	it("rebuilds for a knob that is baked into the mesh", () => {
 		// The panel only calls `onLiveRebuild` for a key in this set. Left out
