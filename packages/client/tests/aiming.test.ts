@@ -3,6 +3,7 @@ import type { RayWorld } from "chamfer/addressing";
 import type { CellRef } from "chamfer/edit";
 import { Mat4, Vec3 } from "chamfer/math";
 import { latticePosition, rayWalk } from "chamfer/addressing";
+import { behindPlayer } from "../src/behindPlayer.js";
 import { WorldShape } from "chamfer/world";
 
 /**
@@ -14,8 +15,8 @@ import { WorldShape } from "chamfer/world";
  * the *eye* rather than ahead of itself, so the line through screen centre is
  * neither the player's heading nor a line through the player's eye.
  *
- * The arithmetic here is the client's own, written out so a change to either
- * side shows up as a disagreement rather than as an outline in the wrong place.
+ * The camera itself comes from the client's own `behindPlayer`, so there is one
+ * definition of where it stands rather than two that can drift apart.
  */
 const FIELD_OF_VIEW = (65 * Math.PI) / 180;
 const RADIUS = 1700;
@@ -78,10 +79,7 @@ describe("what the crosshair points at", () => {
 			.scale(Math.cos(pitch))
 			.add(up.scale(Math.sin(pitch)))
 			.normalize();
-		const from =
-			chase < 0.5
-				? eye
-				: eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
+		const from = behindPlayer(eye, look, up, chase, world);
 		const target = eye.add(look.scale(50));
 		return { up, eye, look, from, target };
 	}
@@ -128,4 +126,68 @@ describe("what the crosshair points at", () => {
 			expect(Math.abs(cell.y - mark.y)).toBeLessThan(slack);
 		});
 	}
+});
+
+describe("where a trailing camera stands", () => {
+	const shape = new WorldShape(RADIUS, DEPTH, 150, CRUST);
+	const ground = shape.radiusOfLayer(20);
+	const open = ballWorld(shape, ground);
+
+	const up = new Vec3(0.31, 0.58, 0.75).normalize();
+	const eye = up.scale(ground + 1.7);
+	const east = new Vec3(0, 1, 0).cross(up).normalize();
+	const heading = up.cross(east).normalize();
+	const looking = (pitch: number) =>
+		heading
+			.scale(Math.cos(pitch))
+			.add(up.scale(Math.sin(pitch)))
+			.normalize();
+
+	/** A world with nothing solid at all, so the camera is never pulled in. */
+	const empty: RayWorld = { ...open, solidAt: () => false };
+
+	/** A world that is solid everywhere, so the first step back is a wall. */
+	const filled: RayWorld = { ...open, solidAt: () => true };
+
+	it("sits at the eye when it is not trailing", () => {
+		expect(
+			behindPlayer(eye, looking(0), up, 0, open).sub(eye).length(),
+		).toBe(0);
+	});
+
+	it("takes the whole offset when nothing is behind", () => {
+		for (const chase of [6, 20, 60]) {
+			const look = looking(-0.45);
+			const wanted = eye
+				.add(up.scale(chase * 0.35))
+				.sub(look.scale(chase));
+			const from = behindPlayer(eye, look, up, chase, empty);
+			expect(from.sub(wanted).length()).toBeCloseTo(0, 9);
+		}
+	});
+
+	it("comes back to the eye when the ground is against it", () => {
+		// Nowhere to stand behind the player at all, so the camera gives up
+		// the offset rather than taking a place inside rock.
+		for (const chase of [6, 20, 60]) {
+			const from = behindPlayer(eye, looking(-0.45), up, chase, filled);
+			expect(from.sub(eye).length()).toBeLessThan(0.001);
+		}
+	});
+
+	it("stops short of what it hit, and never past it", () => {
+		// Level, so the offset runs backward into the hillside behind rather
+		// than up over it: the ball's own surface is what it meets.
+		const look = looking(0.9);
+		for (const chase of [6, 20, 60]) {
+			const from = behindPlayer(eye, look, up, chase, open);
+			const offset = up.scale(chase * 0.35).sub(look.scale(chase));
+			const took = from.sub(eye).length();
+
+			// Never further than asked for, and never below the ground it
+			// stopped against.
+			expect(took).toBeLessThanOrEqual(offset.length() + 1e-9);
+			expect(from.length()).toBeGreaterThan(ground);
+		}
+	});
 });

@@ -78,6 +78,7 @@ import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
+import { behindPlayer } from "./behindPlayer.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -790,8 +791,15 @@ async function main(): Promise<void> {
 			debugSeams: live.knobs.seamOverlay,
 			// Zero is off, and off is the flat colour the registry names.
 			speckle: live.knobs.speckle ? SPECKLE : 0,
-			ambientOcclusion: live.knobs.ambientOcclusion,
-			skyExposure: live.knobs.skyExposure,
+			// **Full light has to reach the bake as well as the shader.** The
+			// sky exposure and the corner shading are multiplied into the
+			// vertex colours here, and nothing the shader computes afterwards
+			// can divide a number back out of what it was handed -- so a cave
+			// would stay at the 12% a shut-in cell is baked to however bright
+			// the light was said to be.
+			ambientOcclusion:
+				live.knobs.ambientOcclusion && !live.knobs.fullbright,
+			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode
@@ -1512,8 +1520,8 @@ async function main(): Promise<void> {
 	 * **Live rebuild reaches the terrain and nothing past it.** The device,
 	 * the renderer, the chunk address width, the crust top and the sea and
 	 * sky radii that follow from it all stay exactly as they were, because
-	 * {@link LIVE_TERRAIN_KNOBS} is the only set of knobs allowed to call
-	 * this at all. A Relief large enough to move the sea's own radius still
+	 * {@link REMESH_KNOBS} is the only set of knobs allowed to call this at
+	 * all. A Relief large enough to move the sea's own radius still
 	 * shows the new ground here and the old sea until the page is actually
 	 * rebuilt -- Apply is what makes the two agree again.
 	 *
@@ -2107,10 +2115,7 @@ async function main(): Promise<void> {
 			.scale(Math.cos(player.pitch))
 			.add(up.scale(Math.sin(player.pitch)))
 			.normalize();
-		const from =
-			chase < 0.5
-				? player.eye
-				: player.eye.sub(look.scale(chase)).add(up.scale(chase * 0.35));
+		const from = behindPlayer(player.eye, look, up, chase, rayWorld);
 		const target = player.eye.add(look.scale(50));
 
 		// The ray a click acts along is the player's own. Where it lands on
@@ -2392,6 +2397,7 @@ async function main(): Promise<void> {
 			sunLight: current.knobs.sunStrength,
 			skyShading: current.knobs.skyShading,
 			skyLight: current.knobs.skyStrength,
+			fullbright: current.knobs.fullbright ? 1 : 0,
 			moonLight: PLAIN ? 0 : current.knobs.moonLight,
 			exposure: current.knobs.exposure,
 		});

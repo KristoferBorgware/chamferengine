@@ -11,22 +11,40 @@ import {
 	PLAYER_DEFAULTS,
 	Player,
 	holonomy,
+	slidePastWalls,
 	transport,
 	turn,
 } from "chamfer/player";
 import { Vec3 } from "chamfer/math";
-import { positionToCell } from "chamfer/addressing";
+import {
+	canonicalCell,
+	cellCorners,
+	latticePosition,
+	neighbour,
+	positionToCell,
+} from "chamfer/addressing";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 
 const RADIUS = 1700;
 const DEPTH = 9;
 
 let shape: WorldShape;
+
+/**
+ * A world of 1 m blocks, which is the size this planet ships at.
+ *
+ * `shape` above is depth 9, where a block is **4 m** -- so the whole 1.8 m
+ * player fits inside one layer and a 2.15 m jump does not clear one block.
+ * Neither is true of the shipped world, and both would make a wall or a
+ * ceiling meaningless to test against.
+ */
+let fine: WorldShape;
 let map: CoarseMap;
 let terrain: TerrainGenerator;
 
 beforeAll(() => {
 	shape = new WorldShape(RADIUS, DEPTH, 150, maxCrustDepth(DEPTH));
+	fine = new WorldShape(RADIUS, 11, 150, maxCrustDepth(11));
 	map = buildCoarseMap(seedFromString("chamfer"), {
 		level: 6,
 		cellMetres: 100,
@@ -56,6 +74,11 @@ function withWater(ground: number, water: number) {
 		},
 	};
 }
+
+/** How high a jump reaches: `jumpSpeed^2 / (2 * gravity)`, 2.15 m. */
+const JUMP_REACH =
+	(PLAYER_DEFAULTS.jumpSpeed * PLAYER_DEFAULTS.jumpSpeed) /
+	(2 * PLAYER_DEFAULTS.gravity);
 
 const STILL = {
 	ahead: 0,
@@ -292,8 +315,9 @@ describe("walking", () => {
 			player.step(STILL, 1 / 30, probe);
 			peak = Math.max(peak, player.position.length());
 		}
-		// Higher than a step, so it clears what walking cannot.
-		expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+		// Clear of the ground by its own reach, which is the whole point of
+		// it: nothing is walked up, so a jump is the only way onto anything.
+		expect(peak - ground).toBeGreaterThan(JUMP_REACH * 0.9);
 		// And back down, standing again.
 		expect(player.position.length()).toBeCloseTo(ground, 6);
 		expect(player.standing).toBe(true);
@@ -351,7 +375,7 @@ describe("walking", () => {
 			player.step(STILL, 1 / 30, plain);
 			peak = Math.max(peak, player.position.length());
 		}
-		expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+		expect(peak - ground).toBeGreaterThan(JUMP_REACH * 0.9);
 		expect(player.position.length()).toBeCloseTo(ground, 6);
 	});
 
@@ -384,7 +408,7 @@ describe("walking", () => {
 
 		for (const rest of rests) expect(rest).toBeCloseTo(ground, 6);
 		for (const height of peaks)
-			expect(height).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+			expect(height).toBeGreaterThan(JUMP_REACH * 0.9);
 		// Every jump the same jump, rather than drifting up or dying out.
 		expect(peaks[1]).toBeCloseTo(peaks[0]!, 6);
 		expect(peaks[2]).toBeCloseTo(peaks[0]!, 6);
@@ -557,6 +581,289 @@ describe("flying", () => {
 	});
 });
 
+/** Flat ground, with the whole column of each named cell built up into a wall. */
+function wallOfCells(world: WorldShape, surface: number, walls: Set<string>) {
+	return {
+		blockAtPosition(p: { x: number; y: number; z: number }): number {
+			const at = new Vec3(p.x, p.y, p.z);
+			if (at.length() < surface) return BlockType.STONE;
+			return walls.has(keyOf(world, positionToCell(at, world.n)))
+				? BlockType.STONE
+				: BlockType.AIR;
+		},
+	};
+}
+
+/**
+ * The one name a cell is known by.
+ *
+ * A cell on a face edge has two or three, and `positionToCell` hands back
+ * whichever face the direction landed on -- so a probe keying its walls by the
+ * raw name has a block that exists from one side of the hexagon and not the
+ * other.
+ */
+function keyOf(
+	world: WorldShape,
+	cell: { face: number; i: number; j: number },
+): string {
+	const one = canonicalCell(cell.face, world.n, cell.i, cell.j);
+	return `${one.face}:${one.i}:${one.j}`;
+}
+
+/** Every cell touching one, by name. */
+function ringAround(
+	world: WorldShape,
+	cell: { face: number; i: number; j: number },
+): Set<string> {
+	const out = new Set<string>();
+	for (let k = 0; k < 6; k++) {
+		const nb = neighbour(cell.face, world.n, cell.i, cell.j, k);
+		if (nb) out.add(keyOf(world, nb));
+	}
+	return out;
+}
+
+/**
+ * The plane between a cell and its neighbour `k`, as a normal pointing out.
+ *
+ * The wall runs between corners `k - 1` and `k`, and a corner is the centroid
+ * of the triangle its cell shares with two neighbours -- so those two corners
+ * are the ones both built from neighbour `k`.
+ */
+function wallNormal(
+	world: WorldShape,
+	cell: { face: number; i: number; j: number },
+	k: number,
+): Vec3 {
+	const corners = cellCorners(cell.face, world.n, cell.i, cell.j);
+	const degree = corners.length;
+	const centre = latticePosition(cell.face, world.n, cell.i, cell.j);
+	const normal = corners[(k + degree - 1) % degree]!.cross(
+		corners[k]!,
+	).normalize();
+	return centre.dot(normal) > 0 ? normal.scale(-1) : normal;
+}
+
+/** A player settled onto flat ground, and left standing on it. */
+function standing(
+	world: WorldShape,
+	probe: { blockAtPosition(p: Vec3): number },
+	options = {},
+) {
+	const player = new Player(
+		world,
+		new Vec3(0, 0, 1).scale(RADIUS + 4),
+		new Vec3(1, 0, 0),
+		options,
+	);
+	for (let n = 0; n < 90; n++) player.step(STILL, 1 / 30, probe);
+	return player;
+}
+
+/** One tick of walking at a place on the ground, whichever way it lies. */
+function walkToward(
+	player: Player,
+	target: Vec3,
+	probe: { blockAtPosition(p: Vec3): number },
+	seconds: number,
+): void {
+	const up = player.up;
+	const to = target.sub(player.position);
+	const flat = to.sub(up.scale(to.dot(up)));
+	const along = flat.length() > 1e-9 ? flat.normalize() : player.heading;
+	player.step(
+		{
+			...STILL,
+			ahead: along.dot(player.heading),
+			aside: along.dot(player.right),
+		},
+		seconds,
+		probe,
+	);
+}
+
+describe("walls", () => {
+	it("is held to a width the narrowest cell fits", () => {
+		// A cell's centre-to-edge distance is half its spacing and the
+		// narrowest cell anywhere runs 0.744 of the nominal, so 0.372 of a
+		// block is all that fits at a pentagon. The metres asked for are a
+		// ceiling: on a world of half-metre blocks the 0.3 m player would not
+		// fit in a cell at all, and comes out narrower instead.
+		const wide = new Player(
+			fine,
+			new Vec3(0, 0, RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		expect(fine.blockSize).toBeCloseTo(1, 2);
+		expect(wide.radius).toBeLessThan(0.372 * fine.blockSize);
+		expect(wide.radius).toBeCloseTo(PLAYER_DEFAULTS.radius, 3);
+
+		const small = new WorldShape(RADIUS, 12, 150, maxCrustDepth(12));
+		const narrow = new Player(
+			small,
+			new Vec3(0, 0, RADIUS),
+			new Vec3(1, 0, 0),
+		);
+		expect(small.blockSize).toBeCloseTo(0.5, 2);
+		expect(narrow.radius).toBeLessThan(0.372 * small.blockSize);
+		expect(narrow.radius).toBeLessThan(PLAYER_DEFAULTS.radius);
+	});
+
+	it("stops a walk into one instead of climbing it", () => {
+		const here = positionToCell(
+			standing(fine, flatGround(RADIUS)).position,
+			fine.n,
+		);
+		// The whole ring is wall, so every direction they could walk is one
+		// they must not leave in.
+		const probe = wallOfCells(fine, RADIUS, ringAround(fine, here));
+		const player = standing(fine, probe);
+		const ground = player.position.length();
+
+		for (let k = 0; k < 6; k++) {
+			const nb = neighbour(here.face, fine.n, here.i, here.j, k)!;
+			const at = latticePosition(nb.face, fine.n, nb.i, nb.j).scale(
+				RADIUS,
+			);
+			for (let n = 0; n < 60; n++) walkToward(player, at, probe, 1 / 30);
+
+			// Never lifted: a wall is walked into, never up.
+			expect(player.position.length()).toBeCloseTo(ground, 6);
+			// Never inside one, at the feet or at the eye.
+			expect(probe.blockAtPosition(player.eye)).toBe(BlockType.AIR);
+			expect(keyOf(fine, positionToCell(player.position, fine.n))).toBe(
+				keyOf(fine, here),
+			);
+		}
+	});
+
+	it("holds the eye its own width off the wall, not up against it", () => {
+		const here = positionToCell(
+			standing(fine, flatGround(RADIUS)).position,
+			fine.n,
+		);
+		const probe = wallOfCells(fine, RADIUS, ringAround(fine, here));
+		const player = standing(fine, probe);
+
+		for (let k = 0; k < 6; k++) {
+			const nb = neighbour(here.face, fine.n, here.i, here.j, k)!;
+			const at = latticePosition(nb.face, fine.n, nb.i, nb.j).scale(
+				RADIUS,
+			);
+			for (let n = 0; n < 60; n++) walkToward(player, at, probe, 1 / 30);
+
+			// Pressed against that wall, and stopped its own width short of
+			// it. A player with no width reads zero here, which is an eye
+			// sitting on the face of the block in front of it.
+			//
+			// The micrometre is the renormalise that holds the altitude: a
+			// push runs along a plane through the planet's centre, so putting
+			// the player back at the radius they were handed moves them along
+			// the wall by a few nanometres. Measured at 3.7e-9 m.
+			const past = player.position.dot(wallNormal(fine, here, k));
+			expect(past).toBeLessThanOrEqual(-player.radius + 1e-6);
+			expect(past).toBeGreaterThan(-player.radius - 0.05);
+
+			// And clear of every other wall by at least as much, so no corner
+			// leaks while one wall is being leaned on.
+			for (let other = 0; other < 6; other++)
+				expect(
+					player.position.dot(wallNormal(fine, here, other)),
+				).toBeLessThanOrEqual(-player.radius + 1e-6);
+		}
+	});
+
+	it("holds at any speed the panel allows, over a coarse tick", () => {
+		// 20 m/s is the top of the Walk speed slider and 10 Hz is a far worse
+		// frame than anything real, so one step covers 2 m -- two cells,
+		// where a single test against where the step began would miss the
+		// wall entirely.
+		const here = positionToCell(
+			standing(fine, flatGround(RADIUS)).position,
+			fine.n,
+		);
+		const probe = wallOfCells(fine, RADIUS, ringAround(fine, here));
+		const player = standing(fine, probe, { walkSpeed: 20 });
+
+		for (let k = 0; k < 12; k++) {
+			const around = (k * Math.PI) / 6;
+			for (let n = 0; n < 20; n++)
+				player.step(
+					{
+						...STILL,
+						ahead: Math.cos(around),
+						aside: Math.sin(around),
+					},
+					1 / 10,
+					probe,
+				);
+			expect(probe.blockAtPosition(player.eye)).toBe(BlockType.AIR);
+			expect(keyOf(fine, positionToCell(player.position, fine.n))).toBe(
+				keyOf(fine, here),
+			);
+		}
+	});
+
+	it("stops a jump at a ceiling instead of passing through it", () => {
+		const player = standing(fine, flatGround(RADIUS));
+		const ground = player.position.length();
+		const roof = fine.layerOfRadius(ground + 3.5);
+		const under = fine.radiusOfLayer(roof + 1);
+		const probe = {
+			blockAtPosition(p: { x: number; y: number; z: number }): number {
+				const r = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+				if (r < RADIUS) return BlockType.STONE;
+				return fine.layerOfRadius(r) === roof
+					? BlockType.STONE
+					: BlockType.AIR;
+			},
+		};
+		// The roof is genuinely in the way, or this proves nothing.
+		expect(under).toBeLessThan(
+			ground + JUMP_REACH + PLAYER_DEFAULTS.height,
+		);
+
+		player.step({ ...STILL, jump: true }, 1 / 60, probe);
+		let highest = 0;
+		for (let n = 0; n < 180; n++) {
+			player.step(STILL, 1 / 60, probe);
+			highest = Math.max(
+				highest,
+				player.position.length() + PLAYER_DEFAULTS.height,
+			);
+		}
+		// The head stopped under it, the jump still left the ground, and the
+		// player came back down to stand where they started.
+		expect(highest).toBeLessThanOrEqual(under + 1e-6);
+		expect(highest).toBeGreaterThan(ground + PLAYER_DEFAULTS.height);
+		expect(player.position.length()).toBeCloseTo(ground, 6);
+	});
+
+	it("never changes the altitude it was handed", () => {
+		// The push runs along a plane through the planet's centre, which is
+		// only nearly tangent here -- a wall that moved a player radially
+		// would be a wall they could climb or sink through.
+		const player = standing(fine, flatGround(RADIUS));
+		const here = positionToCell(player.position, fine.n);
+		const boxed = wallOfCells(fine, RADIUS, ringAround(fine, here));
+		for (let k = 0; k < 6; k++) {
+			const around = (k * Math.PI) / 3;
+			const to = player.position.add(
+				new Vec3(Math.cos(around), Math.sin(around), 0).scale(2),
+			);
+			const out = slidePastWalls(
+				player.position,
+				to,
+				fine,
+				boxed,
+				player.radius,
+				PLAYER_DEFAULTS.height,
+			);
+			expect(out.length()).toBeCloseTo(to.length(), 9);
+		}
+	});
+});
+
 describe("on real terrain", () => {
 	it("lands on the ground the generator made and stays on it", () => {
 		const place = new Vec3(0.3, 0.7, 0.5).normalize();
@@ -602,7 +909,7 @@ describe("on real terrain", () => {
 				player.step(STILL, 1 / 30, terrain);
 				peak = Math.max(peak, player.position.length());
 			}
-			expect(peak - ground).toBeGreaterThan(PLAYER_DEFAULTS.stepHeight);
+			expect(peak - ground).toBeGreaterThan(JUMP_REACH * 0.9);
 			expect(player.position.length()).toBeCloseTo(ground, 6);
 			expect(player.standing).toBe(true);
 		}

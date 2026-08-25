@@ -17,6 +17,9 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * `fog.w` is the distance the view fades over. Above water it is set far past
  * the horizon, which leaves the same expression doing nothing.
  *
+ * `sun.xyz` points at the sun and `sun.w` pins every surface to full light,
+ * which is how a hole is looked into before anything can be carried down it.
+ *
  * `night.x` is how far the sun is over this place's horizon, `night.y` is
  * what is left of the light when it is not, `night.z` is what the direct
  * sun is worth against the sky, and `night.w` is how much a face's own angle
@@ -242,7 +245,14 @@ fn lightOn(
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
 	let night = vec3f(frame.night.y * openness);
-	return max(night, fromSky) + fromSun + fromMoon;
+	let lit = max(night, fromSky) + fromSun + fromMoon;
+	// **Full light, for seeing underground while nothing can be carried
+	// there.** It takes the whole model out at once rather than turning its
+	// terms down one at a time -- the sun, the shadow that stops it reaching a
+	// hole, the sky's share, the moon and the night floor. What it cannot
+	// reach is what the mesher already multiplied into \`in.color\`, so the
+	// client stops that being baked at all whenever this is on.
+	return mix(lit, vec3f(1.0), frame.sun.w);
 }
 
 @fragment

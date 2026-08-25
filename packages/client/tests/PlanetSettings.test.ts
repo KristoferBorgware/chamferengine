@@ -12,6 +12,8 @@ import {
 	KNOB_RANGES,
 	PLANET_DEFAULTS,
 	PlanetSettings,
+	REMESH_KNOBS,
+	WORLD_SHAPE_KNOBS,
 	curveToText,
 } from "../src/PlanetSettings.js";
 
@@ -571,5 +573,76 @@ describe("how deep the crust may be asked to run", () => {
 					`${blockSize} m block at depth ${subdivisionDepth}`,
 				).toEqual([]);
 			}
+	});
+});
+
+describe("what a live rebuild can show", () => {
+	/**
+	 * The knobs whose whole effect is baked into the vertex colours, so
+	 * nothing on screen moves until every chunk is meshed again -- and none of
+	 * which moves a block.
+	 */
+	const BAKED = [
+		"speckle",
+		"ambientOcclusion",
+		"skyExposure",
+		"fullbright",
+	] as const;
+
+	it("rebuilds for a knob that is baked into the mesh", () => {
+		// The panel only calls `onLiveRebuild` for a key in this set. Left out
+		// of it, a baked knob marks the world dirty and changes nothing at
+		// all until a full reload -- which reads as a switch that does not
+		// work, because every frame after it looks the same.
+		for (const key of BAKED) expect(REMESH_KNOBS.has(key)).toBe(true);
+	});
+
+	it("keeps them out of what names a world", () => {
+		// The set a world's stored edits are filed under. A knob that moves no
+		// block must stay out of it, or turning it files every later edit
+		// under a different world and leaves the player's own behind.
+		for (const key of BAKED) expect(WORLD_SHAPE_KNOBS.has(key)).toBe(false);
+	});
+
+	it("needs a rebuild for every one of them", () => {
+		// The panel routes on `rebuilds` first and only then asks the set, so
+		// a baked knob marked live would take the `onLive` path and never
+		// reach a rebuild at all.
+		for (const key of BAKED) expect(KNOB_RANGES[key]!.rebuilds).toBe(true);
+	});
+
+	it("puts full light through a rebuild, and keeps it out of the world", () => {
+		// It is half a shader flag and half a mesher one: the sky exposure and
+		// the corner shading are multiplied into the vertex colours, and no
+		// light computed afterwards can divide them back out. So it needs the
+		// chunks built again -- and it still moves no block.
+		expect(REMESH_KNOBS.has("fullbright")).toBe(true);
+		expect(WORLD_SHAPE_KNOBS.has("fullbright")).toBe(false);
+		expect(KNOB_RANGES["fullbright"]!.rebuilds).toBe(true);
+	});
+
+	it("gives one world one name however they are turned", () => {
+		// The record `worldKey` hashes into the key a player's edits are
+		// filed under. Turning a knob that moves no block has to leave that
+		// record alone, or the buildings are still on disk under a name
+		// nothing asks for again.
+		const base = new PlanetSettings();
+		const named = JSON.stringify(base.worldShape());
+		for (const key of BAKED) {
+			const flipped = new PlanetSettings({
+				...base.knobs,
+				[key]: !base.knobs[key],
+			});
+			expect(JSON.stringify(flipped.worldShape())).toBe(named);
+		}
+
+		// And the record is not simply empty: a knob that really does move the
+		// ground still names a different world, which is the whole point of
+		// keeping the two sets apart.
+		const moved = new PlanetSettings({
+			...base.knobs,
+			relief: base.knobs.relief + 1,
+		});
+		expect(JSON.stringify(moved.worldShape())).not.toBe(named);
 	});
 });

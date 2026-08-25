@@ -1,7 +1,7 @@
 import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
 import {
 	KNOB_RANGES,
-	LIVE_TERRAIN_KNOBS,
+	REMESH_KNOBS,
 	PlanetSettings,
 	copyKnobs,
 } from "./PlanetSettings.js";
@@ -647,10 +647,20 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
+				// **The whole lighting model out at once**, so a hole can be
+				// looked into before there is anything to carry down it. It
+				// reaches the mesher too -- the sky exposure and the corner
+				// shading are baked, and no light computed afterwards can
+				// divide them back out -- which is why it wants a rebuild.
+				key: "fullbright",
+				label: "Full light",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				key: "sunStrength",
 				label: "Sunlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				// The ground's own ambient term -- what is still lighting a
@@ -662,7 +672,7 @@ const GROUPS: Group[] = [
 				key: "skyStrength",
 				label: "Ambient brightness",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				// The one term that can still look directional with the sun
@@ -672,13 +682,13 @@ const GROUPS: Group[] = [
 				key: "skyShading",
 				label: "Sky shading",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain,
+				enabledWhen: (k) => !k.plain && !k.fullbright,
 			},
 			{
 				key: "exposure",
@@ -991,7 +1001,7 @@ export class ParameterPanel {
 	private readonly onDraft: (settings: PlanetSettings) => void;
 
 	/**
-	 * Told when a knob in {@link LIVE_TERRAIN_KNOBS} moves and **Live
+	 * Told when a knob in {@link REMESH_KNOBS} moves and **Live
 	 * rebuild** is on, instead of the knob only marking the Rebuild button
 	 * dirty. Never called for a knob outside that set: those still need the
 	 * device and the address width a full reload gives them.
@@ -1019,7 +1029,7 @@ export class ParameterPanel {
 	private dirty = false;
 
 	/**
-	 * Whether a knob in {@link LIVE_TERRAIN_KNOBS} rebuilds the terrain on the
+	 * Whether a knob in {@link REMESH_KNOBS} rebuilds the terrain on the
 	 * spot rather than waiting for **Rebuild**.
 	 *
 	 * Off by default. A live rebuild runs on the thread that draws -- there is
@@ -1721,16 +1731,15 @@ export class ParameterPanel {
 		if (rebuilds) {
 			this.dirty = true;
 			this.applyButton.classList.add("wants");
-			// **Live rebuild only ever reaches the terrain.** The device, the
+			// **Live rebuild only ever reaches the mesh.** The device, the
 			// chunk address width and the crust are still a real reload's job
 			// -- this panel has no way to know a knob outside
-			// `LIVE_TERRAIN_KNOBS` is safe to swap under a running world, so it
-			// does not try. `dirty` stays set either way: a live rebuild shows
-			// the new ground, not the new sea radius or the new sky, so
-			// Rebuild is still the way to see everything the knob changed.
+			// `REMESH_KNOBS` is safe to swap under a running world, so it does
+			// not try. `dirty` stays set either way: a live rebuild shows the
+			// new ground, not the new sea radius or the new sky, so Rebuild is
+			// still the way to see everything the knob changed.
 			if (this.liveRebuild && this.settings.problems().length === 0) {
-				if (LIVE_TERRAIN_KNOBS.has(key))
-					this.onLiveRebuild(this.settings);
+				if (REMESH_KNOBS.has(key)) this.onLiveRebuild(this.settings);
 			}
 		} else {
 			this.onLive(this.settings);

@@ -131,6 +131,36 @@ pool. Forty-five seconds is enough for a standing view at the shipped settings;
 a frame taken earlier is a frame of a half-built world, and its horizon is the
 edge of what arrived rather than the edge of what the selection asked for.
 
+## The world itself runs in slow motion, so poll the state and never sleep
+
+The frame loop advances the world by `min(0.1, dt)` seconds of world time, and
+the software rasterizer delivers frames slowly enough that the clamp binds.
+Measured on a depth-11 planet at 800 by 600: the page advanced **0.1 s of world
+time per 1.5 s of wall clock**, a fifteenth of real time.
+
+Everything the player does inherits that. A world opens with the camera over
+the ground and the fall to the surface is a couple of hundred metres — six
+seconds of world time, and **a minute and a half** here. A jump is 1.3 s of
+world time and twenty seconds of waiting.
+
+So a sleep long enough to look right is a sleep that lands mid-fall, and the
+readout will not tell you: its last line says `walking` for a player who is
+still falling, because that word only means *not flying and not swimming*. Poll
+something that actually settles — the altitude on line two, held still across
+several reads — or hang a hook on `window` for the run and read the player back
+by value:
+
+```js
+// In the draw loop, for the length of one investigation.
+(window as unknown as Record<string, unknown>).__dbg = {
+	r: player.position.length(),
+	standing: player.standing,
+};
+```
+
+Then wait on `standing`, not on a clock. Take the hook out again before
+committing: it is a probe, not a feature.
+
 ## Read the pixels, not the picture
 
 Looking at a frame says something is wrong. Reading it says what.

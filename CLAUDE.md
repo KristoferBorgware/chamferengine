@@ -1934,7 +1934,36 @@ Violating any of these breaks the design. They are not tunable.
   0.35 it was, and that costs a surface frame's mean **136.0 against 136.1** of
   255, a mean per-pixel move of 3.08 -- the floor only reaches a cell shut in
   on every side. **Sky exposure** switches the term off entirely, which is the
-  only way to see what you dug.
+  only way to see what you dug. **A baked knob has to be in the panel's remesh
+  set or it does nothing at all** (`REMESH_KNOBS`): `touch` routes a
+  `rebuilds` knob to a live rebuild only for a key in that set, and a knob left
+  out of it marks the world dirty and changes no frame until a full reload --
+  which reads as a switch that is simply broken. It is a set of its own rather
+  than `LIVE_TERRAIN_KNOBS`, because `WORLD_SHAPE_KNOBS` spreads that one and
+  a world's stored edits are named by it: a knob joining it files a player's
+  buildings under a different world every time it is turned. **`speckle` was
+  in it and is not any more** (F-079) -- it had been put there with a comment
+  saying it was only for the rebuild, and it moves no block, so turning it
+  orphaned every block the player had placed. **Needing the same work as a
+  terrain knob is not the same thing as being one**, and the three baked
+  knobs -- speckle, corner shading, sky exposure -- are the set that says so.
+  Taking it out re-keys **every** world rather than only the ones with the
+  switch turned, so the edits already on disk are orphaned once; nothing is
+  deleted, they sit under the old name.
+- **FULL LIGHT IS TWO SWITCHES, BECAUSE HALF THE LIGHT IS ALREADY IN THE MESH**
+  (`frame.sun.w` in `TERRAIN_SHADER`, `fullbright`, doc 16). There is no torch,
+  so a hole gets the sky's 42% times a wall's own `openness` of 0.71 -- about
+  **0.30** of open ground, the sun's 58% having been refused by the shadow
+  maps -- and the 0.12 an enclosed cell is baked to takes that to **0.036**.
+  **Full light** pins every surface to 1, taking the sun, the shadow, the sky,
+  the moon and the night floor out at once. **A shader flag alone cannot do
+  it**: the sky exposure and the corner shading are multiplied into the vertex
+  colours by the mesher, and nothing computed afterwards can divide a number
+  back out of what it was handed, so a cave would stay at 12% however bright
+  the light was said to be. Turning it on stops those two being baked as well,
+  and so it wants a rebuild. Measured on high-relief ground with the air off: mean **74.9 to 99.2** of 255, fifth percentile of the ratio **1.000**
+  and ninety-fifth **2.006** -- sunlit ground does not move and shaded faces
+  double, which is what pinning a light to its own maximum should do.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

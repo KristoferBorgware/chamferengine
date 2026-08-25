@@ -1689,6 +1689,62 @@ looks like.
 
 ## Closed
 
+### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, wiring a live rebuild for the two shading knobs
+**Where:** `packages/client/src/PlanetSettings.ts` (`LIVE_TERRAIN_KNOBS`,
+`WORLD_SHAPE_KNOBS`, `worldShape`), `packages/client/src/planet.ts`
+(`editWorld`)
+
+**What happens.** `WORLD_SHAPE_KNOBS` spreads `LIVE_TERRAIN_KNOBS`, and
+`worldShape()` turns that set into the record `worldKey` hashes into
+`editWorld` -- the key a player's stored edits are filed under. `speckle` sits
+in `LIVE_TERRAIN_KNOBS`, with a comment saying it is there only because seeing
+it change takes the same work a terrain knob takes. So it is in the world's
+identity as well, and turning it on or off files every future edit under a
+different world and leaves the existing ones behind.
+
+**Why it matters.** Speckle moves no block. It drifts a cell's colour off its
+block's own by up to 6%, and `WORLD_SHAPE_KNOBS`'s own doc says the knobs that
+decide only how the world is drawn are deliberately absent for exactly this
+reason -- `chunkCells` is named there as the case that was got right. A player
+who builds something, toggles Speckle to compare the ground against the map
+picture, and toggles it back does get their world returned; a player who
+leaves it toggled has silently started a second one.
+
+**What would fix it.** The reason `speckle` was put in `LIVE_TERRAIN_KNOBS` is
+gone: `REMESH_KNOBS` now exists for knobs that need every chunk meshed again
+and move no block, which is what the two shading knobs use. Moving `speckle`
+out of `LIVE_TERRAIN_KNOBS` and into `REMESH_KNOBS`'s own list keeps its live
+rebuild and takes it out of the world's identity, and is two lines.
+
+**It is not free, which is why it is filed rather than done.** Dropping a
+field changes the key for *every* existing world, not only the ones with the
+switch turned, so the edits already on disk are orphaned once on the way past.
+That is a save-compatibility call rather than a code one.
+
+**Closed:** 2026-08-25, fixed. `speckle` moves out of `LIVE_TERRAIN_KNOBS` and
+into `REMESH_KNOBS`'s own list, beside the corner shading and the sky
+exposure. It keeps its live rebuild and leaves the world's identity, and
+`WORLD_SHAPE_KNOBS` now names the ground alone.
+
+**The save cost was real and was paid.** Dropping a field changes the record
+`worldKey` hashes, so the key moves for **every** world rather than only the
+ones with the switch turned, and the edits already on disk are orphaned once
+on the way past. Nothing is deleted -- the old rows keep sitting under the old
+name -- so what it costs is one world's buildings, once, per world already
+saved.
+
+Pinned by a test that flips each of the three baked knobs and asserts the
+record does not move, with a terrain knob flipped alongside to prove the
+record is not simply empty.
+
+---
+
 ### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
 
 **Kind:** bug
