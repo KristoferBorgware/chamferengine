@@ -524,7 +524,10 @@ reads as a fact about the ground and is not one — drag the curve flat and
 nothing is eroded anywhere while the label still says otherwise. `y` is where
 the consequence goes, and it runs the way the layer's own word does: erosion is
 removal, so `y` is how much is cut away and a curve that rises to the right
-takes more.
+takes more. **It points at the dashed line rather than saying where the line
+sits**: sea level is halfway up the continentalness axis only while the sea is
+undrained, and Sea level and Sea depth both move it, so a label reading *sea
+level in the middle* is true at the shipped knobs and wrong one drag later.
 
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so

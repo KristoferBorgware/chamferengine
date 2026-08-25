@@ -3302,6 +3302,14 @@
 			/**
 			 * What a curve's two axes are, written under it as two statements.
 			 *
+			 * **A label points at the line rather than naming where it sits.**
+			 * Sea level is the middle of the continentalness axis only while
+			 * the sea is undrained -- move Sea level or Sea depth and the
+			 * dashed line moves down the sea half, so a label saying "in the
+			 * middle" is true at the shipped knobs and a lie one drag later.
+			 * The graph already draws the line and names it; the axis says
+			 * which line to look at and lets it stand where it stands.
+			 *
 			 * **X is the field and y is the consequence, and only y may claim
 			 * one.** Naming the ends of x "untouched" and "most eroded" reads
 			 * as a fact about the ground, and it is not: the field is a raw
@@ -3318,7 +3326,7 @@
 						x: `x · the ${field} field, -1 to +1`,
 						y: `y · the height, ${Math.round(-knobs.seaDepth).toLocaleString()} m to ${Math.round(
 							knobs.relief,
-						).toLocaleString()} m, with sea level in the middle`,
+						).toLocaleString()} m · the blue line is sea level`,
 					};
 				if (key === "eroSpline")
 					return {
@@ -3329,7 +3337,7 @@
 					x: `x · the ${field} field, -1 to +1`,
 					y: `y · the relief, -${Math.round(knobs.peakRelief).toLocaleString()} m to +${Math.round(
 						knobs.peakRelief,
-					).toLocaleString()} m, with the continent's own level in the middle`,
+					).toLocaleString()} m · the blue line is the continent's own level`,
 				};
 			}
 
