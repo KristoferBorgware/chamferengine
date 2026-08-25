@@ -12,6 +12,8 @@ import {
 	KNOB_RANGES,
 	PLANET_DEFAULTS,
 	PlanetSettings,
+	REMESH_KNOBS,
+	WORLD_SHAPE_KNOBS,
 	curveToText,
 } from "../src/PlanetSettings.js";
 
@@ -571,5 +573,35 @@ describe("how deep the crust may be asked to run", () => {
 					`${blockSize} m block at depth ${subdivisionDepth}`,
 				).toEqual([]);
 			}
+	});
+});
+
+describe("what a live rebuild can show", () => {
+	/**
+	 * The two knobs whose whole effect is baked into the vertex colours, so
+	 * nothing on screen moves until every chunk is meshed again.
+	 */
+	const BAKED = ["ambientOcclusion", "skyExposure"] as const;
+
+	it("rebuilds for a knob that is baked into the mesh", () => {
+		// The panel only calls `onLiveRebuild` for a key in this set. Left out
+		// of it, a baked knob marks the world dirty and changes nothing at
+		// all until a full reload -- which reads as a switch that does not
+		// work, because every frame after it looks the same.
+		for (const key of BAKED) expect(REMESH_KNOBS.has(key)).toBe(true);
+	});
+
+	it("keeps them out of what names a world", () => {
+		// The set a world's stored edits are filed under. A knob that moves no
+		// block must stay out of it, or turning it files every later edit
+		// under a different world and leaves the player's own behind.
+		for (const key of BAKED) expect(WORLD_SHAPE_KNOBS.has(key)).toBe(false);
+	});
+
+	it("needs a rebuild for every one of them", () => {
+		// The panel routes on `rebuilds` first and only then asks the set, so
+		// a baked knob marked live would take the `onLive` path and never
+		// reach a rebuild at all.
+		for (const key of BAKED) expect(KNOB_RANGES[key]!.rebuilds).toBe(true);
 	});
 });

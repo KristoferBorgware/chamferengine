@@ -295,7 +295,9 @@ almost nothing above ground:
 
 **Sky exposure** switches the whole term off, and every face then takes the
 open-sky reading. With nothing to carry underground that is the only way to see
-what you dug.
+what you dug. It is baked, so it needs every chunk meshed again — which is what
+puts it in the panel's remesh set beside the terrain knobs, and deliberately
+*not* in the set a world's stored edits are named by, since it moves no block.
 
 ### A step too small to see is a step that aliases
 
