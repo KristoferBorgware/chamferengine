@@ -10,38 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-079 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-25, while putting the readout behind a button in the corner
-**Where:** `packages/client/src/planet.css`, the palette at `:root`
-
-**What happens.** The palette reads `--bad: var(--bad);`. A custom property
-whose value names itself is invalid at computed-value time, so it resolves to
-nothing and every declaration reading it falls back. Measured in the browser
-against a `div` given both: `color: var(--bad)` computes to
-`rgb(232, 236, 242)`, which is the same as an element given no colour at all,
-and `border-left: 2px solid var(--bad)` computes to `none` at `0px`. The
-sibling `--warn` resolves to `rgb(255, 180, 84)` in the same page, so this is
-one entry and not the whole palette.
-
-**Why it matters.** The two readers are `.knobs-problems p` and
-`.knobs-problems.some`, which are how the parameter panel says a world cannot
-be built — a crust too shallow for its own sea, a map too coarse for its
-narrowest octave. Both are drawn as ordinary body text with no left bar, so a
-refusal looks like a sentence somebody added rather than a stop, and the
-`some` class marks nothing. Every other state in the panel has a colour that
-says what it is: amber for a knob pulled to a wall, green for a toggle that is
-on.
-
-**What would fix it.** One literal in the palette. The value is a decision
-rather than a lookup — the other four are hand-picked against this blue-grey
-— so it wants an eye on it beside `--warn`'s amber and `--good`'s green rather
-than a red taken from anywhere.
-
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 
 **Kind:** risk
@@ -83,6 +51,38 @@ one function and one verification section; what it must not stay is two forms
 under one name.
 
 ---
+
+### F-082 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-25, while putting the readout behind a button in the corner
+**Where:** `packages/client/src/planet.css`, the palette at `:root`
+
+**What happens.** The palette reads `--bad: var(--bad);`. A custom property
+whose value names itself is invalid at computed-value time, so it resolves to
+nothing and every declaration reading it falls back. Measured in the browser
+against a `div` given both: `color: var(--bad)` computes to
+`rgb(232, 236, 242)`, which is the same as an element given no colour at all,
+and `border-left: 2px solid var(--bad)` computes to `none` at `0px`. The
+sibling `--warn` resolves to `rgb(255, 180, 84)` in the same page, so this is
+one entry and not the whole palette.
+
+**Why it matters.** The two readers are `.knobs-problems p` and
+`.knobs-problems.some`, which are how the parameter panel says a world cannot
+be built — a crust too shallow for its own sea, a map too coarse for its
+narrowest octave. Both are drawn as ordinary body text with no left bar, so a
+refusal looks like a sentence somebody added rather than a stop, and the
+`some` class marks nothing. Every other state in the panel has a colour that
+says what it is: amber for a knob pulled to a wall, green for a toggle that is
+on.
+
+**What would fix it.** One literal in the palette. The value is a decision
+rather than a lookup — the other four are hand-picked against this blue-grey
+— so it wants an eye on it beside `--warn`'s amber and `--good`'s green rather
+than a red taken from anywhere.
 
 ### F-072 — `erodeFreeDroplets`'s slicing test fails under load and passes on its own
 
@@ -1778,52 +1778,64 @@ worn region sit lower as well as flatter.
 
 ---
 
-## Closed
-
-### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
+### F-082 — Switching Full light rebuilds the coarse map, which the switch cannot move
 
 **Kind:** bug
 **Milestone:** 0.5.0
-**Priority:** low
-**Effort:** trivial
-**Found:** 2026-08-25, running `npm run format:check` before a push
-**Where:** `package.json`, the `prettier` devDependency
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, asked what flipping the switch actually costs
+**Where:** `packages/client/src/planet.ts` (`flushTerrain`, `onLiveRebuild`),
+`packages/client/src/PlanetSettings.ts` (`REMESH_KNOBS`)
 
-**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
-and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
-Neither file has been edited since the merge that brought it in, and it was
-formatted when it was written. What changed is the formatter: the dependency
-is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
-lays a union type out differently -- a short union that 3.4 broke onto one
-line per member, 3.9 collapses onto a single line.
+**What happens.** **Full light**, **Sky exposure**, **Corner shading** and
+**Speckle** are in `REMESH_KNOBS` because the mesher bakes them into the
+vertex colours, so moving one has to build the meshes again. The panel routes
+every one of them to `onLiveRebuild`, which is `flushTerrain` -- and
+`flushTerrain` is the path a *terrain* knob takes. It regenerates the coarse
+map from the seed, rebuilds the shape, the peaks pyramid and all seven
+generators, and disposes and recreates the whole worker pool, before a single
+chunk is meshed. None of that is a function of the four knobs that took the
+path.
 
-**Why it matters.** Running `--write` here fixes the check on this machine
-and breaks it on any machine that resolved 3.4.x, so the two files would
-flip back and forth with every session and every diff would carry
-whitespace nobody chose. The formatter is a tool whose whole value is that
-everybody gets the same answer, and a caret range is the one thing that
-stops it giving one. It also means `format:check` is red for reasons
-unrelated to whatever a session is actually doing, which trains people to
-ignore it.
+> **[measured]** The shipped world, before any chunk is meshed: coarse map
+> **1,144 ms**, peaks pyramid **127 ms**, shape and the seven generators
+> **4 ms** together -- **1,276 ms** of work whose every input the four baked
+> knobs leave exactly as it was. The re-mesh that follows is the only part
+> the knob asked for.
 
-**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
-caret -- and run `--write` once over the whole repo in the same commit, so
-the tree and the pin agree from that point on. A lockfile alone is not
-enough, because `npm install` in a fresh container with no lockfile entry
-for a transitively hoisted tool still picks the newest match. Nothing else
-in the toolchain has this shape: `typecheck`, `check-style.js` and
-`build-docs.js` all run code that lives in this repository.
+**Why it matters.** It reads as a switch that hangs the tab for over a second
+for no reason a player can see, and it is the same second whether the world
+is a shipped one or a plain one. It also makes the four baked knobs feel
+like world settings rather than view settings, which is the opposite of what
+they are: not one of them moves a block.
 
-**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
-reformatted in the same commit. The flip-flop is not hypothetical: while this
-entry was being written another session pushed a commit reformatting
-`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
-Prettier wanted expanded -- which turned a file that passed here into a third
-failure the moment it was merged. `package-lock.json` already resolved
-`3.9.6`, so the tree and the lock now agree and the range can no longer drift
-under a fresh install.
+**What would fix it.** Two candidates, and they are not the same size.
+
+**A: a re-mesh path that is not `flushTerrain`.** Keep the map, the shape,
+the peaks and the generators; hand the pool a new `meshSetup` and rebuild
+the meshes. The obstacle is that a worker's setup is fixed for its life, so
+either the pool is recreated (cheap next to the map) or the setup becomes a
+message the pool can take. Removes the 1,271 ms and leaves the re-mesh.
+
+**B: stop baking the sky exposure at all.** Carry it as its own vertex
+attribute rather than multiplied into the colour, and the shader can ignore
+it on a uniform -- which makes **Full light** and **Sky exposure** take
+effect on the next frame with no rebuild of any kind. It costs **4 bytes a
+vertex** on the current 24-byte stride, a sixth more vertex memory, and it
+does not help **Speckle** or **Corner shading**, which vary per vertex and
+so cannot be divided back out by a uniform. B is the better answer for the
+two knobs a player actually reaches for underground; A is the one that
+helps all four.
+
+F-056, *Live rebuild flushes the terrain and nothing that follows from its
+shape*, is the same function seen from the other side: that entry is about
+what `flushTerrain` fails to update, this one about what it updates and did
+not need to.
 
 ---
+
+## Closed
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 
