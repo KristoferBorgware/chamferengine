@@ -1687,6 +1687,40 @@ looks like.
 
 ---
 
+### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** trivial
+**Found:** 2026-08-25, running `npm run format:check` before a push
+**Where:** `package.json`, the `prettier` devDependency
+
+**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
+and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
+Neither file has been edited since the merge that brought it in, and it was
+formatted when it was written. What changed is the formatter: the dependency
+is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
+lays a union type out differently -- a short union that 3.4 broke onto one
+line per member, 3.9 collapses onto a single line.
+
+**Why it matters.** Running `--write` here fixes the check on this machine
+and breaks it on any machine that resolved 3.4.x, so the two files would
+flip back and forth with every session and every diff would carry
+whitespace nobody chose. The formatter is a tool whose whole value is that
+everybody gets the same answer, and a caret range is the one thing that
+stops it giving one. It also means `format:check` is red for reasons
+unrelated to whatever a session is actually doing, which trains people to
+ignore it.
+
+**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
+caret -- and run `--write` once over the whole repo in the same commit, so
+the tree and the pin agree from that point on. A lockfile alone is not
+enough, because `npm install` in a fresh container with no lockfile entry
+for a transitively hoisted tool still picks the newest match. Nothing else
+in the toolchain has this shape: `typecheck`, `check-style.js` and
+`build-docs.js` all run code that lives in this repository.
+
 ## Closed
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
