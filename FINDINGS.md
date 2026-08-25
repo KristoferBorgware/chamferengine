@@ -1901,6 +1901,15 @@ three switches; `WorkerMeshSource` folds them into the setup it holds, so a
 worker spawned later to replace a dead one gets them too rather than quietly
 going back to what the player has just turned off.
 
+**Keeping the pool is what made a job in flight a problem.** Replacing it
+rejected everything a worker was holding; keeping it means those jobs finish
+under the switches they were posted with, and `request` chains onto a job in
+flight rather than posting a second one -- so the caller asking again is
+handed exactly that stale mesh and nothing asks a third time. Up to one chunk
+per worker would have kept the old lighting until something else rebuilt it,
+scattered wherever the pool happened to be busy. `retune` marks every running
+job stale, which `finish` already knows how to re-post.
+
 What is left is the re-mesh itself, which is the work the knob actually asked
 for. Confirmed in the real client (`tools/probe-remesh-path.mjs`): Full light
 and Corner shading take the mesh path, Relief takes the terrain path, and the

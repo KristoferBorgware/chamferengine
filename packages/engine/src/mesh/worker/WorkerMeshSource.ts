@@ -149,9 +149,20 @@ export class WorkerMeshSource implements MeshSource {
 	 * has to drop every chunk that is drawn, because the switch is already
 	 * multiplied into the colours those were built with.
 	 *
-	 * A job already in flight finishes under the old switches. That is worth
-	 * nothing to argue about: the caller is dropping every chunk anyway, so
-	 * the stale one is asked for again the moment it lands.
+	 * **A job already on a worker was posted under the old switches**, and
+	 * its colours are the ones the player has just turned off. It cannot
+	 * simply be handed over and asked for again, because {@link request}
+	 * chains onto a job in flight rather than posting a second one -- so the
+	 * caller asking again would be given exactly that stale mesh, nothing
+	 * would ask a third time, and those chunks would keep the old lighting
+	 * until something else happened to rebuild them. Up to one chunk per
+	 * worker, scattered wherever the pool was busy, which is the shape of
+	 * lighting that looks wrong and cannot be pointed at.
+	 *
+	 * So every running job is marked stale and re-posted when it lands, the
+	 * same way {@link invalidate} handles a job whose store moved. A job
+	 * still in the **queue** needs nothing: it is posted after this, to a
+	 * worker that now has the new switches.
 	 */
 	retune(message: MeshRetune): void {
 		this.setup = {
@@ -161,6 +172,8 @@ export class WorkerMeshSource implements MeshSource {
 			skyExposure: message.skyExposure,
 		};
 		for (const worker of this.workers) worker.postMessage(message);
+		for (const selection of this.working.values())
+			this.stale.add(selectionId(selection.chunkLevel, selection.key));
 	}
 
 	/** Make one worker, wired so its death is a handled event. */

@@ -355,6 +355,35 @@ describe("WorkerMeshSource", () => {
 			source.dispose();
 		});
 
+		it("throws away what was already on a worker and asks again", async () => {
+			// A job on a worker was posted under the old switches, so its
+			// colours are the ones the player has just turned off. And
+			// `request` chains onto a job already in flight rather than
+			// posting a second one -- so the caller asking again after the
+			// retune gets handed exactly that stale mesh, and nothing ever
+			// asks a third time. It is drawn with the old lighting for good.
+			const { source, workers } = pool(1);
+			const waiting = source.request(pick(7));
+			expect(workers[0]!.jobs.length).toBe(1);
+
+			source.retune(SWITCHES);
+			// The worker answers the job it was already holding.
+			workers[0]!.answer();
+			await Promise.resolve();
+
+			// Put back on the queue rather than handed over: the same chunk
+			// is posted a second time, now that the worker has the switches.
+			expect(workers[0]!.jobs.length).toBe(1);
+			let settled = false;
+			void waiting.then(() => (settled = true));
+			await Promise.resolve();
+			expect(settled).toBe(false);
+
+			workers[0]!.answer();
+			await waiting;
+			source.dispose();
+		});
+
 		it("carries into a worker spawned to replace a dead one", async () => {
 			const { source, workers } = pool(1);
 			source.retune(SWITCHES);

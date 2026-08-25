@@ -1118,7 +1118,17 @@ Violating any of these breaks the design. They are not tunable.
   structured-cloned once per worker, and it is not `async`: there is no long
   synchronous stretch to yield the thread before. **A retune folds into the
   setup the pool holds**, or a worker spawned to replace a dead one quietly
-  goes back to the switches the player has just turned off. **And the readout
+  goes back to the switches the player has just turned off. **And a job
+  already ON a worker was posted under the old switches** -- `request` chains
+  onto a job in flight rather than posting a second one, so the caller asking
+  again is handed exactly that stale mesh and nothing ever asks a third time.
+  Up to one chunk per worker keeps the old lighting for good, scattered
+  wherever the pool was busy, which is the shape of lighting that looks wrong
+  and cannot be pointed at. `retune` marks every running job **stale**, the
+  same way `invalidate` handles a job whose store moved; a job still in the
+  **queue** needs nothing, because it is posted after the retune. Replacing
+  the pool never needed this -- `dispose` rejects everything in flight -- so
+  keeping it is what created the case. **And the readout
   has to say which ran** -- it claimed "rebuilding the terrain" for a knob
   that rebuilds no terrain, which is what made the two paths impossible to
   tell apart from outside and is how `tools/probe-remesh-path.mjs` checks the
