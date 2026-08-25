@@ -438,13 +438,15 @@ planet and nothing in it can say *be different here*. Three stacks sharing no
 parameter can, and the order they are read in is the whole construction:
 
 - **Continentalness** sets the level, and its curve **is a height, not a
-  land-or-sea switch**. It runs from `-Sea depth` at the bottom to `Relief` at
-  the top, so its answer is already in metres — an ocean floor at one end, the
-  top of a plateau at the other. Which of those is coast falls out of it rather
-  than being decided by it: sea level is drawn across the curve and labelled
-  there, and where the curve crosses that line is the shore. It is the level the
-  other two layers then work on, so it is where the ground would stand before
-  erosion wears it and before peaks and valleys is added.
+  land-or-sea switch**. Its **middle is the waterline**, and the two halves
+  scale apart — up to `Relief` above it, down to `Sea depth` below — so its
+  answer is already in metres: an ocean floor at one end, the top of a plateau
+  at the other. Which of those is coast falls out of it rather than being
+  decided by it, and **only the curve decides it**: sea level is drawn across
+  the curve and labelled there, and where the curve crosses that line is the
+  shore. It is the level the other two layers then work on, so it is where the
+  ground would stand before erosion wears it and before peaks and valleys is
+  added.
 - **Erosion** decides how much of the relief is cut away. Its curve answers a
   fraction from none of it to all of it — **up is more cut away**, because the
   layer is called erosion and erosion is removal. What survives is `1 - cut(E)`
@@ -513,6 +515,19 @@ only the two ends are pinned, in x alone. Across is always that layer's noise
 from `-1` to `+1`, and the label under the middle says what up is worth. Up runs
 the way the layer's own word does: erosion is removal, so up is how much is cut
 away and a curve that rises to the right takes more.
+
+**Three knobs are metres and each moves one thing.** **Relief** scales the land
+half of the curve and **Sea depth** the sea half, each to its own knob, so
+neither moves the coast — measured, Relief from `400 m` to `1,600 m` leaves the
+sea side at `-417` / `-315` / `-136 m` untouched while the land goes `196 m` to
+`824 m` at the 95th percentile, and Sea depth from `200 m` to `1,200 m` leaves
+the land side at `403` / `615 m` while the floor drops `-283 m` to `-1,141 m`.
+One scale for the whole axis looks obvious and is what makes Sea depth flood the
+world: it rescales what a curve point is worth, dragging sea level across the
+curve. **Sea level only drains**, because heights are metres above sea level and
+so sea level is zero by construction — dropping it uncovers the shallow floor
+that was already there and moves no ground at all, `-100 m` taking the planet
+from `37.9%` land to `44.0%` with every height identical.
 
 **The world is set the way the engine states it.** Subdivision depth and block
 size fix the radius — `radius = blockSize × 2^depth / K` — so the radius is not

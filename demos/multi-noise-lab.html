@@ -1223,15 +1223,15 @@
 			 * **This is the whole model.**
 			 *
 			 * - The continentalness curve **is a height, not a land-or-sea
-			 *   switch**. It is read on an axis running from `-seaDepth` at the
-			 *   bottom to `relief` at the top, so its answer is already in
-			 *   metres: an ocean floor at one end, the top of a plateau at the
-			 *   other. Which of those is coast falls out of it rather than being
-			 *   decided by it -- sea level is drawn across the curve, and where
-			 *   the curve crosses that line is the shore. It is the level the
-			 *   other two layers then work on, so it is where the ground would
-			 *   stand before erosion wears it and before peaks and valleys is
-			 *   added.
+			 *   switch**. Its **middle is the waterline**, and the two halves
+			 *   scale apart: up to `relief` above it, down to `seaDepth` below,
+			 *   so its answer is already in metres -- an ocean floor at one end,
+			 *   the top of a plateau at the other. Which of those is coast falls
+			 *   out of it rather than being decided by it, and **only the curve
+			 *   decides it**: sea level is drawn across the curve, and where the
+			 *   curve crosses that line is the shore. It is the level the other
+			 *   two layers then work on, so it is where the ground would stand
+			 *   before erosion wears it and before peaks and valleys is added.
 			 * - The erosion curve answers **how much erosion takes away here**,
 			 *   from none of it to all of it -- up is more cut away, because the
 			 *   layer is called erosion and erosion is removal. What is left of
@@ -1276,7 +1276,19 @@
 				const level = k.useCont
 					? splineAt(k.contSpline, said[0])
 					: splineAt(k.contSpline, 0);
-				const base = -k.seaDepth + level * (k.relief + k.seaDepth);
+				// **Land and the sea floor scale apart, each to its own knob.**
+				// The curve's middle is the waterline, so above it `Relief` alone
+				// says how tall land gets and below it `Sea depth` alone says how
+				// deep the floor goes. One scale for the whole axis looks obvious
+				// and is what makes `Sea depth` flood the world: it rescales the
+				// metres a curve point is worth, which drags sea level across the
+				// curve and moves the coast. Split, neither knob moves the coast
+				// -- the coast is where the curve crosses the middle, and only
+				// the curve puts it there.
+				const base =
+					level >= 0.5
+						? ((level - 0.5) / 0.5) * k.relief
+						: -((0.5 - level) / 0.5) * k.seaDepth;
 				// How much erosion takes away here: `0` leaves the ground alone,
 				// `1` takes all of the relief.
 				const cut = k.useEro ? splineAt(k.eroSpline, said[1]) : 0;
@@ -1543,12 +1555,16 @@
 						// coastline speckles.
 						value: [
 							[-1, 0],
-							[-0.34, 0.06],
-							[-0.06, 0.18],
-							[0.06, 0.2],
-							[0.1, 0.36],
-							[0.26, 0.52],
-							[0.46, 0.78],
+							[-0.34, 0.0967],
+							[-0.06, 0.29],
+							[0.06, 0.3222],
+							// The shore, pinned on the waterline. Everything left
+							// of it is under water and everything right of it is
+							// land, which is the one thing this curve decides.
+							[0.0876, 0.5],
+							[0.1, 0.536],
+							[0.26, 0.652],
+							[0.46, 0.8405],
 							[1, 1],
 						],
 					},
@@ -1651,10 +1667,11 @@
 							digits: 0,
 							unit: "m",
 							note: () =>
-								"the top of the continentalness curve, so the highest a " +
-								"continent can stand before peaks are added — and what " +
+								"the top half of the continentalness curve, so the highest " +
+								"a continent can stand before peaks are added — and what " +
 								"carries ground past the rock line at 300 m and the snow " +
-								"line at 400 m",
+								"line at 400 m. It scales the land and leaves the sea floor " +
+								"where it is",
 						},
 						{
 							key: "seaDepth",
@@ -1665,7 +1682,10 @@
 							value: 360,
 							digits: 0,
 							unit: "m",
-							note: () => "the bottom of the same curve",
+							note: () =>
+								"the bottom half of the same curve. It deepens the ocean " +
+								"and leaves the land where it is — the coast is where the " +
+								"curve crosses the middle, and no metre knob moves it",
 						},
 						{
 							key: "peakRelief",
@@ -1685,17 +1705,24 @@
 									: "",
 						},
 						{
+							// **Heights are metres above sea level, so sea level is
+							// zero by construction and the knob only drains.**
+							// Dropping it uncovers the shallow floor that was
+							// already there and moves no ground at all.
 							key: "seaLevel",
 							label: "Sea level",
-							low: -800,
-							high: 800,
+							low: -1200,
+							high: 0,
 							step: 5,
 							value: 0,
 							digits: 0,
 							unit: "m",
 							note: () =>
 								field
-									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land`
+									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land` +
+										(knobs.seaLevel < 0
+											? " — draining uncovers the shallow floor and moves no ground"
+											: "")
 									: "",
 						},
 					],
@@ -3254,10 +3281,12 @@
 			function markOn(key) {
 				if (key === "pvSpline") return { at: 0.5, name: "level" };
 				if (key !== "contSpline") return null;
-				const span = knobs.relief + knobs.seaDepth;
-				if (span <= 0) return null;
-				const at = (knobs.seaLevel + knobs.seaDepth) / span;
-				return at >= 0 && at <= 1 ? { at, name: "sea" } : null;
+				// The middle of the curve is the waterline, and draining moves
+				// the water down the sea half -- so the line stays what the curve
+				// is read against: cross it and you are on land.
+				if (knobs.seaDepth <= 0) return { at: 0.5, name: "sea" };
+				const at = 0.5 * (1 + knobs.seaLevel / knobs.seaDepth);
+				return { at: Math.max(0, Math.min(0.5, at)), name: "sea" };
 			}
 
 			/**
