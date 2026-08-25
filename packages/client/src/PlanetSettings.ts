@@ -503,6 +503,20 @@ export interface PlanetKnobs {
 	ambientOcclusion: boolean;
 
 	/**
+	 * Whether a face darkens by how much sky the ground around it leaves it.
+	 *
+	 * Read at each face's own layer, so a shaft's wall, a cave's ceiling and
+	 * a tunnel all go dark rather than carrying the daylight of the surface
+	 * standing over them. Baked into the mesh, so it costs nothing to draw
+	 * and needs a rebuild to change.
+	 *
+	 * **There is no torch in this world yet**, so off is the only way to see
+	 * underground: every face then takes the open-sky reading, which is what
+	 * the whole world looked like before this was read per layer.
+	 */
+	skyExposure: boolean;
+
+	/**
 	 * Whether the world is drawn as its own grid.
 	 *
 	 * On, every chunk is selected and levelled exactly as the terrain would
@@ -827,6 +841,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchBounds: false,
 	speckle: false,
 	ambientOcclusion: true,
+	skyExposure: true,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -1166,6 +1181,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	patchBounds: { ...TOGGLE, rebuilds: false },
 	speckle: { ...TOGGLE, rebuilds: true },
 	ambientOcclusion: { ...TOGGLE, rebuilds: true },
+	skyExposure: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },

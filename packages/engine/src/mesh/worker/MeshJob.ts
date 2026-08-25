@@ -31,6 +31,9 @@ export interface MeshWorkerSetup {
 	/** Whether a corner darkens by how many of its neighbours are solid. */
 	readonly ambientOcclusion?: boolean;
 
+	/** Whether a face darkens by how much sky the ground around it leaves it. */
+	readonly skyExposure?: boolean;
+
 	/**
 	 * Draw the world as its own grid: a flat shell of hexagons at the crust
 	 * top, painted by these switches, in place of the terrain. The selection
