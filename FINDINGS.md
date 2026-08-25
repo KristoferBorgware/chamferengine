@@ -1833,6 +1833,10 @@ shape*, is the same function seen from the other side: that entry is about
 what `flushTerrain` fails to update, this one about what it updates and did
 not need to.
 
+---
+
+## Closed
+
 ### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
 
 **Kind:** cleanup
@@ -1884,9 +1888,28 @@ line for line and the guard can be dropped there once the engine carries it.
 
 ---
 
+**Closed:** 2026-08-25, by one guard at the top of `canonicalCell`: with no
+zero weight the point is strictly inside its own face, so `{ face, i, j }` is
+the answer and the search below is never reached. `cellRepresentations` keeps its
+full behaviour for the callers that want every name.
+
+Measured over the real engine by `tools/trial-canonical.ts`, which walks the
+ring of every cell of a 180,589-cell patch at level 8 — 1,083,531 steps, which
+is the shape of what a mesher and the delta store do: **1,789 ms searching
+every step against 207 ms guarded, 8.6x**, and the same answer on all
+1,083,531. `neighbour` itself is 142 ms of that, so the canonicalising alone
+went from `1,647 ms` to `65 ms`. Three runs gave 8.6x, 9.1x and 8.6x.
+
+`packages/engine/tests/addressing/neighbours/canonicalCell.test.ts` pins it
+against the search it replaces over every cell of the whole lattice at levels
+1, 2, 4 and 8 rather than over a sample, and checks the implication the guard
+rests on: a cell with a second name always has a zero weight.
+
+`demos/multi-noise-lab.html` carries the same guard in its port, so the block
+still matches the engine line for line.
+
 ---
 
-## Closed
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 
