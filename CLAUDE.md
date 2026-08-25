@@ -1771,8 +1771,16 @@ Violating any of these breaks the design. They are not tunable.
   Every pixel marching from the same place samples the same heights, so
   wherever the sum gains a sample's worth of light the whole screen gains it
   along one line. **Offset each pixel's first sample by a fraction of a step**
-  and that transition is scattered over neighbouring pixels instead. The hash
-  now does both jobs. What made it visible was the planet's own shadow: a
+  and that transition is scattered over neighbouring pixels instead --
+  **banding and grain are one quantity spent either way**, and **Sky dither**
+  is which. Nothing is added to the result on top of that; grain there buys
+  nothing the offset has not. **The pattern decides how much of the noise can
+  be seen**: a hash is white noise and clumps by definition, so a tenth of the
+  signal's worth of jitter reads as coarse grain over the whole sky.
+  `ditherAt` is Jimenez's **interleaved gradient noise** -- three constants and
+  two `fract`s, nearly as well distributed as the blue-noise texture Lague
+  ships as a binary, with no file to carry. What made the banding visible in
+  the first place was the planet's own shadow: a
   **yes-or-no** `inPlanetShadow` crossing a hard boundary at ten samples drew
   the terminator inside the atmosphere as one clean arc across a twilight sky
   -- confirmed by frames, since the arc vanished at 40 steps and was there at
@@ -1842,10 +1850,14 @@ Violating any of these breaks the design. They are not tunable.
   extinction was tried and is worse than nothing -- the ground clears and the
   glow stays sitting on top of it, which reads as fog no knob controls. One
   factor over both is what makes it a thickness rather than a contrast
-  slider. **The sky itself is never scaled**: a pixel with nothing behind it
-  *is* the atmosphere rather than something seen through it, which also keeps
-  the stars, the moon and the sun disc dimmed by the air they are really seen
-  through, and leaves no step at the planet's limb from outside. The scale is
+  slider. **It rides on how much air a surface cut short, not on whether one
+  is there at all**: a yes-or-no test says the same thing about a mountain two
+  kilometres off and a cloud deck standing above the whole atmosphere, and a
+  cloud is not seen *through* the air -- the air is under it, so thinning its
+  haze cuts it out of the sky it belongs to. `1 - through / shellLength` gives
+  a cloud beyond the air the sky's own full measure, gives ground underfoot
+  all of the reduction, and leaves no step at a silhouette where a surface
+  first appears -- including the planet's own limb from outside. The scale is
   needed because the geometry is not Earth's -- a horizontal look of two or
   three kilometres here crosses a large share of the whole atmosphere's
   optical depth, where the same distance on Earth crosses very little.

@@ -60,15 +60,17 @@ export class AtmospherePass {
 	opticalDepthPoints = 10;
 
 	/**
-	 * How much per-pixel noise is mixed into the scattered light.
+	 * How far each pixel's march is offset from its neighbours', as a
+	 * fraction of one step.
 	 *
-	 * Ten or so integration steps leave visible bands across a smooth sky;
-	 * this breaks them into noise too fine to read as a band, standing in for
-	 * the blue-noise texture the technique this was ported from ships as a
-	 * binary asset -- a hashed screen coordinate does the same job for one
-	 * frame with no file to carry.
+	 * **Banding and grain are the same quantity, spent one way or the other.**
+	 * Ten integration steps cannot draw a smooth sky, and the error has to
+	 * land somewhere: at `0` every pixel samples the same heights and it
+	 * lands as bands, at `1` a whole step's worth is spread over neighbouring
+	 * pixels as noise. The pattern is what decides how much of that noise can
+	 * be seen -- see `ditherAt` in {@link ATMOSPHERE_SHADER}.
 	 */
-	ditherStrength = 1.2;
+	ditherStrength = 0.55;
 
 	/** Half the angle the sun disc covers, in radians. */
 	sunAngularRadius = (0.9 * Math.PI) / 180;
@@ -208,7 +210,7 @@ export class AtmospherePass {
 			this.data.set(
 				[
 					Math.max(2, Math.round(this.inScatteringPoints)),
-					Math.max(0, this.ditherStrength),
+					Math.min(1, Math.max(0, this.ditherStrength)),
 					air.mieDirection,
 					Math.max(0, air.intensity),
 				],

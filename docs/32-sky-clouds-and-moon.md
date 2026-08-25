@@ -434,10 +434,14 @@ eye, and nothing in it knows how bright the source is.
 Air dims what is behind it and adds the light it scatters in front of it.
 Scaling only the first clears the ground and leaves the glow sitting on top,
 which reads as fog nothing controls; one factor over both is what makes the
-control a thickness rather than a contrast slider. The sky itself is never
-scaled — a pixel with nothing behind it *is* the atmosphere rather than
-something seen through it, which is also what keeps the stars, the moon and
-the sun disc dimmed by the air they are really seen through.
+control a thickness rather than a contrast slider. It rides on how much air a
+surface cut short rather than on whether one is there at all: a yes-or-no
+test says the same thing about a mountain two kilometres off and a cloud deck
+standing above the whole atmosphere, and a cloud is not seen *through* the air
+— the air is under it, so thinning its haze cuts it out of the sky it belongs
+to. Riding on the fraction of the path that was cut gives a cloud beyond the
+air the sky's own full measure, gives ground underfoot all of the reduction,
+and leaves no step at a silhouette where a surface first appears.
 
 The scale is needed because the geometry is not Earth's: a horizontal look of
 two or three kilometres here crosses a large share of the whole atmosphere's
@@ -457,7 +461,12 @@ sum gains one sample's worth of light the whole screen gains it along one
 line — and that is a band. Noise added to the result cannot touch it, because
 by then the band is in the number; offsetting each pixel's first sample by a
 fraction of a step scatters the transition across neighbouring pixels
-instead. The planet's own shadow is what makes this visible: a yes-or-no
+instead. Banding and grain are one quantity spent either way, and how much of
+the grain can be seen is the *pattern*: a hash is white noise and clumps by
+definition, so a tenth of the signal's worth of jitter reads as coarse grain
+over the whole sky. Interleaved gradient noise — three constants and two
+fractional parts — is nearly as evenly spread as a blue-noise texture and
+needs no texture. The planet's own shadow is what makes this visible: a yes-or-no
 occlusion test crossing a hard boundary at ten samples draws the terminator
 inside the atmosphere as one clean arc across a twilight sky. Softening that
 edge over a couple of per cent of the planet's radius removes it, and is

@@ -365,11 +365,22 @@ fn celestialAt(dir : vec3f, skyLum : f32) -> vec3f {
 	return color;
 }
 
-/** A per-pixel hash, standing in for the blue-noise texture this was ported from. */
-fn hash2(p : vec2i) -> f32 {
-	var h = u32(p.x * 374761393 + p.y * 668265263);
-	h = (h ^ (h >> 13u)) * 1274126177u;
-	return f32((h ^ (h >> 16u)) & 0xffffffu) / 16777216.0;
+/**
+ * Interleaved gradient noise, standing in for the blue-noise texture this was
+ * ported from.
+ *
+ * **A hash is the wrong pattern for this job.** What the march wants is a
+ * value that differs from its neighbours as evenly as possible, so ten
+ * samples' worth of error is spread across the screen rather than clumped --
+ * and a hash is white noise, which clumps by definition: neighbouring pixels
+ * land anywhere, so a tenth of the signal's worth of jitter reads as coarse
+ * grain over the whole sky. This is Jorge Jimenez's formula, three constants
+ * and two \`fract\`s, and it is nearly as well distributed as a blue-noise
+ * texture with no texture to ship.
+ */
+fn ditherAt(p : vec2i) -> f32 {
+	let uv = vec2f(f32(p.x), f32(p.y));
+	return fract(52.9829189 * fract(dot(uv, vec2f(0.06711056, 0.00583715))));
 }
 
 @fragment
@@ -400,18 +411,26 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 
 	var scattered = vec3f(0.0);
 	var depth = 0.0;
+	// How much of the air this ray *could* have crossed was cut short by
+	// something standing in it: 0 when nothing is in the way or what is in the
+	// way stands beyond the air, 1 when it is right at the eye.
+	var cut = 0.0;
 	if (air.eye.w > 0.0) {
 		let shell = raySphere(air.shape.y, origin, dir);
 		let through = min(shell.y, toSurface - shell.x);
+		cut = clamp(1.0 - through / max(1e-6, shell.y), 0.0, 1.0);
 		if (through > 0.0) {
 			let start = origin + dir * shell.x;
-			// The same hash does both jobs: it offsets where this pixel's
-			// march begins, which is what breaks a band into noise, and a
-			// little of it is added to the result for the fine grain a
-			// ten-step integral still leaves behind.
-			let noise = hash2(at);
-			scattered = scatter(start, dir, through, air.sun.xyz, noise);
-			scattered += vec3f((noise - 0.5) * air.look.y * 0.01);
+			// **Banding and grain are the same knob, turned opposite ways.**
+			// Ten samples cannot draw a smooth sky: the error has to go
+			// somewhere, and offsetting where each pixel starts moves it out
+			// of a band and into noise. At 0 every pixel samples the same
+			// heights and the bands come back; at 1 a whole step's worth of
+			// error is spread across neighbouring pixels. Nothing is added to
+			// the result on top -- grain there would buy nothing a start
+			// offset has not already bought.
+			let jitter = ditherAt(at) * air.look.y;
+			scattered = scatter(start, dir, through, air.sun.xyz, jitter);
 			depth = opticalDepthOver(start, dir, through);
 		}
 	}
@@ -423,19 +442,21 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 	// as fog that nothing controls. One factor over both is what makes this a
 	// thickness rather than a contrast slider.
 	//
-	// **The sky itself is never scaled.** A pixel with nothing behind it is
-	// the atmosphere rather than something seen through it, so it keeps the
-	// honest depth -- which is also what keeps the stars, the moon and the
-	// sun disc dimmed by the air they are actually seen through.
-	var haze = 1.0;
+	// **It rides on how much air was cut short, not on whether anything is
+	// there at all.** A yes-or-no test says the same thing about a mountain
+	// two kilometres off and a cloud deck standing above the whole
+	// atmosphere -- and the cloud is not something seen *through* the air, it
+	// is something the air is under. Thinning its haze cuts it out of the sky
+	// it belongs to. Riding on \`cut\` gives a cloud beyond the air the sky's
+	// own full measure, gives ground underfoot all of the reduction, and
+	// leaves no step at a silhouette where a surface first appears.
+	let haze = mix(1.0, aerialPerspective(), cut);
 	var background = worldColor;
 	if (openSpace) {
 		// The sky's own luminance at this very pixel, unclamped -- what the
 		// stars have to compete with, and what reddens the sun below.
 		let skyLum = max(0.0, dot(scattered, vec3f(0.2126, 0.7152, 0.0722)));
 		background = celestialAt(dir, skyLum);
-	} else {
-		haze = aerialPerspective();
 	}
 
 	let dimmed = exp(-depth * extinction() * haze);

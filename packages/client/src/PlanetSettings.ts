@@ -281,6 +281,19 @@ export interface PlanetKnobs {
 	opticalDepthPoints: number;
 
 	/**
+	 * How far each pixel's march is offset from its neighbours', as a
+	 * fraction of one step.
+	 *
+	 * **Banding and grain are the same quantity, spent one way or the other.**
+	 * A ten-step integral cannot draw a smooth sky and the error has to land
+	 * somewhere: at `0` every pixel samples the same heights and it lands as
+	 * bands, and the higher this goes the more of it is spread over
+	 * neighbouring pixels as noise instead. More **In scattering points** is
+	 * what buys a smooth sky without either.
+	 */
+	skyDither: number;
+
+	/**
 	 * How sharply the air thins with height, as one dimensionless number.
 	 *
 	 * Sebastian Lague's own knob, ported unchanged: an exponential-times-linear
@@ -679,6 +692,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	atmosphereOn: true,
 	inScatteringPoints: 10,
 	opticalDepthPoints: 10,
+	skyDither: 0.55,
 	// Steeper than the 4.3 a screenshot of one of Lague's own planets showed:
 	// it packs the air nearer the ground, which lengthens a horizontal path
 	// against a vertical one and is what a small planet is short of.
@@ -971,6 +985,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "",
 	},
+	skyDither: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	densityFalloff: {
 		low: 0.1,
 		high: 12,

@@ -2200,6 +2200,7 @@ async function main(): Promise<void> {
 			current.knobs.inScatteringPoints;
 		renderer.atmosphere.opticalDepthPoints =
 			current.knobs.opticalDepthPoints;
+		renderer.atmosphere.ditherStrength = current.knobs.skyDither;
 		renderer.bloom.enabled = current.knobs.bloomOn;
 		renderer.bloom.threshold = current.knobs.bloomThreshold;
 		renderer.bloom.strength = current.knobs.bloomStrength;

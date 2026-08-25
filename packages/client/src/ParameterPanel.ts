@@ -486,6 +486,12 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain && k.atmosphereOn,
 			},
 			{
+				key: "skyDither",
+				label: "Sky dither",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
 				key: "densityFalloff",
 				label: "Density falloff",
 				digits: 1,
