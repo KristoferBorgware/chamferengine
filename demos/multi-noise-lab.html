@@ -2741,7 +2741,11 @@
 					const nx = uy * vz - uz * vy;
 					const ny = uz * vx - ux * vz;
 					const nz = ux * vy - uy * vx;
-					const len = Math.hypot(nx, ny, nz) || 1;
+					// **`sqrt(x*x + y*y + z*z)`, never `Math.hypot`.** `hypot` is a
+					// library routine rather than an IEEE operation and differs by
+					// a unit in the last place between runtimes; this is the one
+					// place here that normalises, and it runs once per triangle.
+					const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
 					const bx8 = Math.round((nx / len) * 127);
 					const by8 = Math.round((ny / len) * 127);
 					const bz8 = Math.round((nz / len) * 127);
