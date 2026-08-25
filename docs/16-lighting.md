@@ -299,33 +299,45 @@ what you dug. It is baked, so it needs every chunk meshed again — which is wha
 puts it in the panel's remesh set beside the terrain knobs, and deliberately
 *not* in the set a world's stored edits are named by, since it moves no block.
 
-### Full light is two switches, because half the light is already in the mesh
+### Full light takes away the blocking, and nothing else
 
 There is no torch, so a hole is lit by whatever reaches it and nothing else —
 and what reaches it is very little. The sun is 58% of the budget and the shadow
 maps correctly refuse to let it down a shaft; what is left is the sky's 42%
 times a wall's own `openness` of about 0.71, so a hole sits near **0.30** of
-open ground before the sky exposure above has said anything. Multiply the
-0.12 an enclosed cell is baked to and it is **0.036** — black, and rightly so.
+open ground before the sky exposure above has said anything. Multiply the 0.12
+an enclosed cell is baked to and it is **0.036** — black, and rightly so.
 
-**Full light** is the way to look into one anyway. It pins every surface to 1,
-which takes the whole model out at once rather than turning its terms down one
-at a time: the sun, the shadow, the sky's share, the moon and the night floor.
+**Full light** is the way to look into one anyway, and what it does is narrow:
+**the sun reaches every face as though no block stood in its way.** The shadow
+the cascades would cast is not asked for and the sky exposure is not baked.
+Nothing else changes. A face's own angle to the sun still decides how much of
+it that face takes, the sky's share is still `dot(faceNormal, up)`, the moon
+and the night floor are untouched — so a cave keeps its shape rather than going
+flat, and the same view at noon and at dusk is still two different pictures.
 
-It cannot be a shader flag alone, and what stops it is the same thing twice
-over in this document. **The sky exposure and the corner shading are multiplied
-into the vertex colours by the mesher, and no light a shader computes
-afterwards can divide a number back out of what it was handed.**
-A shader-only switch would leave a cave at the 12% it was baked to however
-bright the light was said to be. So turning it on also stops those two being
-baked, which is what makes it need a rebuild rather than taking effect on the
-next frame.
+**Pinning every surface to 1 instead was tried and is the wrong shape.** It
+removes the very thing that makes a cave readable: with no term left that
+varies by face, a floor, a wall and a ceiling all come out at exactly the block
+they are made of, and the room reads as a flat sheet of colour with edges. The
+brightness was never the problem — the blocking was.
 
-> **[measured]** One view of high-relief ground, air and clouds off. Full light
-> moves the mean from **74.9 to 99.2** of 255, with the fifth percentile of the
-> per-pixel ratio at exactly **1.000** and the ninety-fifth at **2.006** —
-> ground already in full sun does not move at all and shaded faces double,
-> which is what pinning a light to its own maximum should do.
+The sky exposure has to stop being **baked**, not merely overridden: it is
+multiplied into the vertex colours by the mesher, and no light a shader
+computes afterwards can divide a number back out of what it was handed. A shader-only switch would leave a cave at the 12% it
+was baked to however far the sun was said to reach. That is what makes this
+need a rebuild rather than taking effect on the next frame. The corner shading
+stays baked and stays on: it says how much sky a corner sees rather than
+whether the sun arrives, it bottoms out at 0.55 rather than 0.12, and it is
+what keeps a cave's edges legible.
+
+> **[measured]** One view of high-relief open ground, air and clouds off. Full
+> light moves the mean from **74.9 to 76.7** of 255, with the fifth percentile
+> of the per-pixel ratio at exactly **1.000** — it only ever gives light back,
+> never takes it. **Nearly a no-op above ground is the point**: almost nothing
+> up there was blocked, so there is almost nothing to give back. Underground
+> the same switch takes a wall from `0.036` of open ground to about `0.30`,
+> and a floor under a high sun to `0.88`.
 
 ### A step too small to see is a step that aliases
 
@@ -853,11 +865,12 @@ happened to land in — which is exactly what a sun does as a camera turns.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
-- **Full light is two switches**, because the sky exposure and the corner
-  shading are baked into the vertex colours and no shader can divide them back
-  out. It pins every surface to 1 and stops those two being baked: mean
-  **74.9 to 99.2** of 255, fifth percentile of the ratio 1.000 and
-  ninety-fifth 2.006 — sunlit ground unmoved, shaded faces doubled.
+- **Full light takes away the blocking and nothing else**: the sun reaches
+  every face as though no block stood in its way, while the face's own angle
+  to it still decides what it takes, so a cave keeps its shape. Above ground
+  it is nearly a no-op — mean **74.9 to 76.7** of 255, fifth percentile of the
+  ratio 1.000 — because almost nothing up there was blocked. Underground it
+  takes a wall from `0.036` of open ground to about `0.30`.
 - **Sky exposure is a fact about a layer, not a column.** Read once at a
   column's top it painted the surface's own daylight over every face below it,
   so a twelve-block shaft's wall sat at **1.000** from top to bottom and only

@@ -791,14 +791,16 @@ async function main(): Promise<void> {
 			debugSeams: live.knobs.seamOverlay,
 			// Zero is off, and off is the flat colour the registry names.
 			speckle: live.knobs.speckle ? SPECKLE : 0,
+			ambientOcclusion: live.knobs.ambientOcclusion,
 			// **Full light has to reach the bake as well as the shader.** The
-			// sky exposure and the corner shading are multiplied into the
-			// vertex colours here, and nothing the shader computes afterwards
-			// can divide a number back out of what it was handed -- so a cave
-			// would stay at the 12% a shut-in cell is baked to however bright
-			// the light was said to be.
-			ambientOcclusion:
-				live.knobs.ambientOcclusion && !live.knobs.fullbright,
+			// sky exposure is multiplied into the vertex colours here, and
+			// nothing the shader computes afterwards can divide a number back
+			// out of what it was handed -- so a cave would stay at the 12% a
+			// shut-in cell is baked to however far the sun was said to reach.
+			// The corner shading stays: it is how much of the sky a corner
+			// sees rather than whether the sun arrives, it bottoms out at
+			// 0.55 rather than 0.12, and it is what keeps a cave's edges
+			// readable. It has a switch of its own for anyone who disagrees.
 			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.

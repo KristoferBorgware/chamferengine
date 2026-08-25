@@ -101,18 +101,20 @@ export interface Frame {
 	readonly skyLight: number;
 
 	/**
-	 * How far to pin every surface to full light, from 0 to 1.
+	 * `1` when the sun is to reach every face as though no block stood in the
+	 * way, `0` otherwise.
 	 *
 	 * **A way to see underground until something can be carried down there.**
-	 * At `1` the ground shader stops asking about the sun, the sky, the moon,
-	 * the shadows and the night floor alike, and every face reads as the block
-	 * it is made of.
+	 * It takes away the blocking and nothing else: the shadow the cascades
+	 * would cast is not asked for, but a face's own angle to the sun still
+	 * decides how much of it that face takes, so a cave keeps its shape rather
+	 * than going flat.
 	 *
-	 * It cannot do the job alone: the mesher bakes the sky exposure and the
-	 * corner shading into the vertex colours, and no light this shader
-	 * computes can undo a number already multiplied into what it is given. The
-	 * client turns those two off at mesh time whenever this is on, which is
-	 * what makes a cave read as its own rock rather than 12% of it.
+	 * It cannot do the job alone. The mesher multiplies the sky exposure into
+	 * the vertex colours, and no light this shader computes can divide a
+	 * number back out of what it was handed -- so the client stops that being
+	 * baked whenever this is on, which is what makes a cave read as its own
+	 * rock rather than 12% of it.
 	 */
 	readonly fullbright: number;
 }

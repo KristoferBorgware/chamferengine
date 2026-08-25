@@ -647,11 +647,13 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
-				// **The whole lighting model out at once**, so a hole can be
-				// looked into before there is anything to carry down it. It
-				// reaches the mesher too -- the sky exposure and the corner
-				// shading are baked, and no light computed afterwards can
-				// divide them back out -- which is why it wants a rebuild.
+				// **The sun as though no block stood in its way**, so a cave
+				// can be looked into before there is anything to carry down
+				// it. Not a flat light: the face's own angle to the sun still
+				// decides what it takes, so the shape stays. It reaches the
+				// mesher too -- the sky exposure is baked, and no light
+				// computed afterwards can divide it back out -- which is why
+				// it wants a rebuild.
 				key: "fullbright",
 				label: "Full light",
 				enabledWhen: (k) => !k.plain,
@@ -660,7 +662,7 @@ const GROUPS: Group[] = [
 				key: "sunStrength",
 				label: "Sunlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain && !k.fullbright,
+				enabledWhen: (k) => !k.plain,
 			},
 			{
 				// The ground's own ambient term -- what is still lighting a
@@ -672,7 +674,7 @@ const GROUPS: Group[] = [
 				key: "skyStrength",
 				label: "Ambient brightness",
 				digits: 2,
-				enabledWhen: (k) => !k.plain && !k.fullbright,
+				enabledWhen: (k) => !k.plain,
 			},
 			{
 				// The one term that can still look directional with the sun
@@ -682,13 +684,13 @@ const GROUPS: Group[] = [
 				key: "skyShading",
 				label: "Sky shading",
 				digits: 2,
-				enabledWhen: (k) => !k.plain && !k.fullbright,
+				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "moonLight",
 				label: "Moonlight",
 				digits: 2,
-				enabledWhen: (k) => !k.plain && !k.fullbright,
+				enabledWhen: (k) => !k.plain,
 			},
 			{
 				key: "exposure",
