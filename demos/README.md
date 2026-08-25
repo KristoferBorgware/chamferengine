@@ -510,11 +510,21 @@ what it would put back is the thing being decided.
 counted over the planet's own cells rather than over the patch — a curve governs
 the planet, and a patch is a place that can sit entirely on one side of it. Noise
 clusters around its own middle, so equal widths of a curve cover wildly unequal
-amounts of ground. Click a curve to add a point, shift-click one to remove it;
-only the two ends are pinned, in x alone. Across is always that layer's noise
-from `-1` to `+1`, and the label under the middle says what up is worth. Up runs
-the way the layer's own word does: erosion is removal, so up is how much is cut
-away and a curve that rises to the right takes more.
+amounts of ground — and a field reaches nowhere near either end of its own
+range, so where the bars pile up is the part of the curve governing most of the
+planet, and a stretch with no bars under it is a shape nobody will ever stand
+on. Click a curve to add a point, shift-click one to remove it;
+only the two ends are pinned, in x alone.
+
+**Each curve names its two axes as two statements, and only up may claim a
+consequence.** Across is that layer's field and its range, `-1` to `+1`, and
+nothing else: the field is a raw reading, and the curve is the only thing that
+says what a reading costs. Naming the ends of across *untouched* and *most
+eroded* reads as a fact about the ground and is not one — drag the curve flat
+and nothing is eroded anywhere while the label still says otherwise. Up is where
+the consequence goes, and it runs the way the layer's own word does: erosion is
+removal, so up is how much is cut away and a curve that rises to the right takes
+more.
 
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so
