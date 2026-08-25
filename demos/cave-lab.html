@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Cave lab — two ways to carve a cave, on one volume of hexagons</title>
+		<title>Cave lab — the engine's cave carve, on a volume of hexagons</title>
 		<style>
 			:root {
 				color-scheme: dark;
@@ -202,10 +202,10 @@
 			<div id="fixed">
 				<h1>Cave lab</h1>
 				<p class="sub">
-					Two ways to carve a cave, on one patch of hexagon columns: a
-					<b>plan</b> drawn in 2D and extruded, or the <b>sheet</b> the
-					engine carves today. The same seed, the same ground, the same
-					measurements.
+					The engine's own cave carve on a patch of hexagon columns: a
+					band around zero of a field in space, which is a
+					<b>sheet</b>, with a ceiling that dips so it has a way to
+					the surface.
 				</p>
 				<canvas id="plan" width="600" height="600"></canvas>
 				<p id="planSays">—</p>
@@ -429,32 +429,14 @@
 			// =============================================================
 
 			const knobs = {
-				method: "plan",
 				seed: "cave",
 				cells: 96,
 				blockSize: 1,
 				layers: 28,
 
-				corridorScale: 20,
-				corridorOctaves: 1,
-				corridorWidth: 0.055,
-				families: 2,
-				branchWarp: 4,
-
-				floorDepth: 9,
-				depthVary: 12,
-				depthScale: 40,
-
-				roofHeight: 5,
-				roofShape: 0.5,
-				minHeight: 1,
-				roofUnder: 1,
-
 				sheetScale: 24,
 				sheetThreshold: 0.12,
 				sheetCeiling: 6,
-				mouths: "dipping",
-				mouthWidth: 0.25,
 				mouthVary: 10,
 				mouthRare: 0.7,
 				mouthScale: 60,
@@ -475,59 +457,9 @@
 					group: "The carve",
 					open: true,
 					rows: [
-						{
-							key: "method",
-							label: "Carve",
-							type: "select",
-							options: ["plan", "sheet"],
-						},
 						{ key: "seed", label: "Seed", type: "text" },
 						{
-							key: "corridorScale",
-							shownWhen: (k) => k.method === "plan",
-							label: "Passage spacing",
-							low: 6,
-							high: 120,
-							step: 2,
-							unit: " m",
-						},
-						{
-							key: "corridorOctaves",
-							shownWhen: (k) => k.method === "plan",
-							label: "Octaves",
-							low: 1,
-							high: 6,
-							step: 1,
-						},
-						{
-							key: "corridorWidth",
-							shownWhen: (k) => k.method === "plan",
-							label: "Passage width",
-							low: 0.005,
-							high: 0.25,
-							step: 0.005,
-							decimals: 3,
-						},
-						{
-							key: "families",
-							shownWhen: (k) => k.method === "plan",
-							label: "Passage families",
-							low: 1,
-							high: 3,
-							step: 1,
-						},
-						{
-							key: "branchWarp",
-							shownWhen: (k) => k.method === "plan",
-							label: "Wander",
-							low: 0,
-							high: 40,
-							step: 1,
-							unit: " m",
-						},
-						{
 							key: "sheetScale",
-							shownWhen: (k) => k.method === "sheet",
 							label: "Feature size",
 							low: 4,
 							high: 120,
@@ -536,16 +468,20 @@
 						},
 						{
 							key: "sheetThreshold",
-							shownWhen: (k) => k.method === "sheet",
 							label: "Band width",
 							low: 0.005,
 							high: 0.4,
 							step: 0.005,
 							decimals: 3,
 						},
+					],
+				},
+				{
+					group: "A way in",
+					open: true,
+					rows: [
 						{
 							key: "sheetCeiling",
-							shownWhen: (k) => k.method === "sheet",
 							label: "Rock kept over the roof",
 							low: 0,
 							high: 24,
@@ -554,24 +490,7 @@
 							decimals: 1,
 						},
 						{
-							key: "mouths",
-							shownWhen: (k) => k.method === "sheet",
-							label: "A way in",
-							type: "select",
-							options: ["none", "taper", "dipping"],
-						},
-						{
-							key: "mouthWidth",
-							shownWhen: (k) => k.method === "sheet" && k.mouths === "taper",
-							label: "Band left at the surface",
-							low: 0,
-							high: 0.25,
-							step: 0.005,
-							decimals: 3,
-						},
-						{
 							key: "mouthVary",
-							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
 							label: "Ceiling dips by up to",
 							low: 0,
 							high: 120,
@@ -580,7 +499,6 @@
 						},
 						{
 							key: "mouthRare",
-							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
 							label: "Only where the field clears",
 							low: 0,
 							high: 0.95,
@@ -589,88 +507,11 @@
 						},
 						{
 							key: "mouthScale",
-							shownWhen: (k) => k.method === "sheet" && k.mouths === "dipping",
 							label: "Ceiling changes over",
 							low: 15,
 							high: 200,
 							step: 5,
 							unit: " m",
-						},
-						{
-							key: "sliceDepth",
-							shownWhen: (k) => k.method === "sheet",
-							label: "Plan drawn at a depth of",
-							low: 1,
-							high: 60,
-							step: 1,
-							unit: " m",
-						},
-					],
-				},
-				{
-					group: "How deep, and how high",
-					open: true,
-					shownWhen: (k) => k.method === "plan",
-					rows: [
-						{
-							key: "floorDepth",
-							label: "Floor below the surface",
-							low: 2,
-							high: 60,
-							step: 1,
-							unit: " m",
-						},
-						{
-							key: "depthVary",
-							label: "Depth varies by",
-							low: 0,
-							high: 40,
-							step: 1,
-							unit: " m",
-						},
-						{
-							key: "depthScale",
-							label: "Depth changes over",
-							low: 15,
-							high: 400,
-							step: 10,
-							unit: " m",
-						},
-						{
-							key: "roofHeight",
-							label: "Height at the spine",
-							low: 1,
-							high: 24,
-							step: 0.5,
-							unit: " m",
-							decimals: 1,
-						},
-						{
-							key: "roofShape",
-							label: "Cross-section",
-							low: 0.25,
-							high: 3,
-							step: 0.05,
-							decimals: 2,
-						},
-						{
-							key: "minHeight",
-							shownWhen: (k) => k.method === "plan",
-							label: "Lowest passage kept",
-							low: 0,
-							high: 6,
-							step: 0.25,
-							decimals: 2,
-							unit: " m",
-						},
-						{
-							key: "roofUnder",
-							label: "Rock kept over the roof",
-							low: 0,
-							high: 12,
-							step: 0.5,
-							unit: " m",
-							decimals: 1,
 						},
 					],
 				},
@@ -700,13 +541,7 @@
 					group: "The volume",
 					open: false,
 					rows: [
-						{
-							key: "cells",
-							label: "Cells across",
-							low: 12,
-							high: 96,
-							step: 2,
-						},
+						{ key: "cells", label: "Cells across", low: 12, high: 96, step: 2 },
 						{
 							key: "blockSize",
 							label: "Block size",
@@ -716,30 +551,27 @@
 							unit: " m",
 							decimals: 1,
 						},
-						{
-							key: "layers",
-							label: "Crust layers",
-							low: 12,
-							high: 80,
-							step: 2,
-						},
+						{ key: "layers", label: "Crust layers", low: 12, high: 80, step: 2 },
 					],
 				},
 				{
 					group: "Looking at it",
 					open: true,
 					rows: [
-						{
-							key: "show",
-							label: "Draw",
-							type: "select",
-							options: ["rock", "void", "smooth"],
-						},
+						{ key: "show", label: "Draw", type: "select", options: ["rock", "void"] },
 						{
 							key: "picture",
 							label: "Plan shows",
 							type: "select",
 							options: ["field", "contour", "hexes", "both"],
+						},
+						{
+							key: "sliceDepth",
+							label: "Plan drawn at a depth of",
+							low: 1,
+							high: 60,
+							step: 1,
+							unit: " m",
 						},
 						{
 							key: "lattice",
@@ -767,68 +599,8 @@
 			];
 
 			// =============================================================
-			// The plan, and the volume under it.
+			// The carve.
 			// =============================================================
-
-			/**
-			 * One family's plan field at a point on the ground.
-			 *
-			 * A passage is where this sits near zero. **The zero set of a smooth
-			 * field on a plane is a set of closed loops**, so one family on its
-			 * own carves rings -- passages that come back to where they started
-			 * and never reach the next ring, because two contours of one field
-			 * cannot cross. A second family, seeded independently, has loops that
-			 * cross the first family's, and the union of the two is a network.
-			 *
-			 * **Wander** bends the sample point before the lookup rather than
-			 * adding a term to the result, so it moves a passage sideways
-			 * without changing how wide it is.
-			 */
-			function planValue(x, z, k, seed, family) {
-				const own = (seed + Math.imul(family, 0x85ebca6b)) | 0;
-				let sx = x;
-				let sz = z;
-				if (k.branchWarp > 0) {
-					const s = k.corridorScale * 2;
-					sx += k.branchWarp * fbm(x / s, 3.1, z / s, 2, (own + 7) | 0);
-					sz += k.branchWarp * fbm(x / s, 8.7, z / s, 2, (own + 11) | 0);
-				}
-				const s = k.corridorScale;
-				return fbm(sx / s, 17.3, sz / s, k.corridorOctaves, own);
-			}
-
-			/**
-			 * How far inside a passage a point is: 1 at the spine, 0 at the rim
-			 * and outside. Several families take the largest, so where two cross
-			 * the passage is as tall as the taller of the two rather than the sum.
-			 */
-			/**
-			 * The same quantity unclamped, so it is negative outside a passage.
-			 *
-			 * The blocks only ever ask whether this is positive; a surface needs to
-			 * know how far past zero it is, on both sides.
-			 *
-			 * **It is `1 - (v/width)^2` and not `(width - |v|)/width`, because an
-			 * absolute value has a corner and the roof is read off this.** The two
-			 * agree at the spine and at the rim and differ in between; the fold makes
-			 * a crease along the middle of every passage, and sampled one point to a
-			 * cell that crease is a row of spikes down the roof -- the same fold
-			 * `ridge` uses on purpose to put an edge on a mountain, arriving here
-			 * where nobody wanted one. The square is flat at its own top.
-			 */
-			function opennessRaw(values, k) {
-				let best = -Infinity;
-				for (const v of values) {
-					const at = v / k.corridorWidth;
-					const o = 1 - at * at;
-					if (o > best) best = o;
-				}
-				return best;
-			}
-
-			function opennessOf(values, k) {
-				return Math.max(0, opennessRaw(values, k));
-			}
 
 			/** The engine's own offset from the world seed, so caves differ from ground. */
 			const CAVE_SEED_OFFSET = 2;
@@ -843,11 +615,10 @@
 			 * of `sheetThreshold` either side of zero, refused inside `sheetCeiling`
 			 * metres of the surface.
 			 *
-			 * **It is the plan carve's band rule taken in three dimensions rather
-			 * than two.** The zero set of a field on a plane is a set of curves and
-			 * the band round it is a passage; the zero set of a field in space is a
-			 * set of **surfaces**, and the band round it is a slab. That one
-			 * difference is what the two halves of this page are for.
+			 * **The zero set of a field in space is a set of surfaces, and the band
+			 * round it is a slab.** That is what this carves: not a network of
+			 * corridors but one folded sheet running through the crust, and it is
+			 * what the shape of everything on this page follows from.
 			 */
 			function sheetValue(x, y, z, k, seed) {
 				const f = 1 / k.sheetScale;
@@ -858,22 +629,22 @@
 			 * How far below the surface this column's sheet is forbidden to reach.
 			 *
 			 * **A constant here is why the engine's caves have no way in.** The gate
-			 * is a yes or a no on one number, so at 6 m nothing ever breaks the
+			 * would be a yes or a no on one number, so at 6 m nothing ever breaks the
 			 * ground and at 0 m the sheet is near the surface everywhere and opens it
 			 * everywhere: there is no setting between the two. Letting the depth
 			 * itself wander over the ground puts the decision somewhere -- a mouth
 			 * opens where the ground says it may **and** the sheet happens to be
-			 * there, which is two conditions rather than one.
+			 * there, which is two conditions rather than one. Set **Ceiling dips by
+			 * up to** to zero to get the constant back.
 			 */
 			function sheetCeilingAt(x, z, k, seed) {
-				if (k.mouths !== "dipping") return k.sheetCeiling;
 				const s = k.mouthScale;
-				// **One-sided and squared**, so the ceiling only ever comes down and
-				// almost never by much. A field that moves it both ways pushes the
-				// caves deeper over half the map and takes a third of the void away
-				// to buy a handful of mouths, which is paying for the wrong thing.
-				// **Only the top of the field does anything, and where its top starts
-				// has to be set rather than assumed.** Anything reading the whole range
+				// **One-sided**, so the ceiling only ever comes down: a field that moves
+				// it both ways pushes the caves deeper over half the map and takes a
+				// third of the void away to buy a handful of mouths.
+				//
+				// **And only the top of the field does anything, with where its top
+				// starts set rather than assumed.** Anything reading the whole range
 				// dips the ceiling over half the ground and opens it everywhere again,
 				// which is the failure the constant ceiling already had. A borrowed
 				// figure does not work either: the standard deviation of noise depends
@@ -885,74 +656,14 @@
 				return k.sheetCeiling - k.mouthVary * dip;
 			}
 
-			/**
-			 * The band's half-width at one depth: the whole gate, in one number.
-			 *
-			 * **Taper** is the other way out of the same problem, and it needs no
-			 * second field: the band narrows toward the ground instead of stopping
-			 * dead at it, so only the part of the sheet nearest its own middle is
-			 * still wide enough to be a cave when it gets there. A mouth is then
-			 * where the **cave** is strongest rather than where the ground allows it,
-			 * and `mouthWidth` is how much of the band survives the trip: at 0 the
-			 * band closes at the surface and nothing breaks through, at 1 there is no
-			 * gate at all.
-			 */
+			/** The band's half-width at one depth: the whole gate, in one number. */
 			function sheetBandAt(below, ceiling, k) {
-				if (k.mouths === "taper") {
-					// Squared for the same reason the dip is: a straight ramp is already
-					// a fifth of the way open one block under the ground, and a sheet
-					// that wide meets the surface everywhere.
-					const reached = Math.min(1, Math.max(0, below / k.sheetCeiling));
-					return (
-						k.sheetThreshold *
-						(k.mouthWidth + (1 - k.mouthWidth) * reached * reached)
-					);
-				}
 				return below >= ceiling ? k.sheetThreshold : 0;
 			}
 
 			/** How far inside the sheet's band a point is: 1 in the middle, 0 outside. */
 			function sheetOpenness(v, k) {
 				return Math.max(0, (k.sheetThreshold - Math.abs(v)) / k.sheetThreshold);
-			}
-
-			/**
-			 * How tall the passage is where a column sits this far inside the band.
-			 *
-			 * **The roof is read off the same field that decided the passage, and a
-			 * marginal reading must not buy a full one.** At `roofShape` 0.5 a column
-			 * only 68% of the way in still takes 82% of the height, so a cell that
-			 * barely clears the band -- with both its neighbours well outside it --
-			 * becomes a one-cell chimney several metres tall. In blocks that is a
-			 * thin pillar among thousands; the isosurface draws it as a spike, which
-			 * is what made it visible.
-			 *
-			 * **A passage that tapers to nothing at its rim has no width where it
-			 * matters, and nothing can sample a zero thickness.** The blocks hide
-			 * that -- a wedge under half a block rounds to no block, so the block
-			 * counts barely move -- and the isosurface draws it as the sawtooth it
-			 * is. `minHeight` is a floor rather than a taper: a roof lower than one
-			 * block is no passage at all, and every passage edge is then a step of
-			 * at least a block, which a lattice can carry exactly.
-			 *
-			 * **It moves the roof and never the plan** -- which columns are passage
-			 * is still `open > 0` -- so the network the contour draws is the network
-			 * the blocks build, and only what was too low to stand up in drops out.
-			 */
-			function roofHeightAt(open, k) {
-				if (open <= 0) return 0;
-				const height = k.roofHeight * Math.pow(open, k.roofShape);
-				return height < k.minHeight ? 0 : height;
-			}
-
-			/** How far below the surface this column's cave floor sits, in metres. */
-			function floorAt(x, z, k, seed) {
-				if (k.depthVary === 0) return k.floorDepth;
-				const s = k.depthScale;
-				return (
-					k.floorDepth +
-					k.depthVary * fbm(x / s, 91.7, z / s, 2, (seed + 3) | 0)
-				);
 			}
 
 			/** The ground's own height above zero, in metres. */
@@ -967,30 +678,25 @@
 			const VOID = 2;
 
 			/**
-			 * Build the whole patch: the plan, the surface over it, and the
-			 * blocks.
+			 * Build the whole patch: the ground, and the blocks under it.
 			 *
-			 * `kind` is one byte a block -- open air above the ground, rock, or
-			 * a cave. Air and cave are both empty and are kept apart because the
-			 * two views draw opposite halves of the world, and because a cave
-			 * that has broken through to the sky is a mouth and worth counting.
+			 * `kind` is one byte a block -- open air above the ground, rock, or a
+			 * cave. Air and cave are both empty and are kept apart because the two
+			 * views draw opposite halves of the world, and because a cave that has
+			 * broken through to the sky is a mouth and worth counting.
 			 */
 			function build(k) {
 				const started = performance.now();
+				noiseLookups = 0;
 				const seed = seedFromString(k.seed);
 				const n = k.cells;
 				const d = k.blockSize;
 				const layers = k.layers;
 				const columns = n * n;
 
-				const plan = k.method === "plan";
-				// The picture contours one scalar field per family for the plan carve,
-				// and one horizontal slice of the sheet's field for the other.
-				const fields = plan ? k.families : 1;
-				const raw = new Float32Array(columns * fields);
+				const raw = new Float32Array(columns);
 				const openness = new Float32Array(columns);
 				const surface = new Float32Array(columns);
-				const floor = new Float32Array(columns);
 				const ground = new Int32Array(columns);
 				const kind = new Uint8Array(columns * layers);
 
@@ -1000,33 +706,23 @@
 						const c = j * n + i;
 						const [x, z] = cellCenter(i, j, d);
 						surface[c] = surfaceAt(x, z, k, seed);
-						if (plan) {
-							const values = [];
-							for (let f = 0; f < fields; f++) {
-								const v = planValue(x, z, k, seed, f);
-								raw[c * fields + f] = v;
-								values.push(v);
-							}
-							openness[c] = opennessOf(values, k);
-							floor[c] = floorAt(x, z, k, seed);
-						} else {
-							// One depth, named on the panel, because a sheet has no plan of
-							// its own: what it carves 6 m down is a different picture from
-							// what it carves 20 m down, and that is the whole difference.
-							const v = sheetValue(x, surface[c] - k.sliceDepth, z, k, seed);
-							raw[c] = v;
-							const band = sheetBandAt(
-								k.sliceDepth,
-								sheetCeilingAt(x, z, k, seed),
-								k,
-							);
-							openness[c] = band > 0 ? Math.max(0, (band - Math.abs(v)) / band) : 0;
-						}
 						if (surface[c] > highest) highest = surface[c];
+						// The picture is **one depth**, named on the panel, because a sheet
+						// has no plan of its own: what it carves 6 m down is a different
+						// picture from what it carves 20 m down.
+						const v = sheetValue(x, surface[c] - k.sliceDepth, z, k, seed);
+						raw[c] = v;
+						const band = sheetBandAt(
+							k.sliceDepth,
+							sheetCeilingAt(x, z, k, seed),
+							k,
+						);
+						openness[c] =
+							band > 0 ? Math.max(0, (band - Math.abs(v)) / band) : 0;
 					}
 				}
-				// One block of empty sky over the tallest ground, so layer 0 is
-				// air everywhere and a mouth has somewhere to open into.
+				// One block of empty sky over the tallest ground, so layer 0 is air
+				// everywhere and a mouth has somewhere to open into.
 				const top = Math.ceil(highest / d) * d + d;
 
 				for (let c = 0; c < columns; c++) {
@@ -1036,40 +732,20 @@
 					const first = Math.max(0, Math.ceil((top - surfaceY) / d));
 					ground[c] = first;
 
+					// **Every layer is a fresh lookup.** A carve that decided its cave
+					// from the ground alone could read once a column and fill the slab;
+					// this one cannot, which is what a passage free to be at any depth
+					// costs and is the largest number on the readout.
 					const base = c * layers;
-					if (plan) {
-						const open = openness[c];
-						// The cross-section falls out of the same field as the plan:
-						// how far inside the band a column is says how tall the
-						// passage is there, so one lookup gives both the shape on
-						// the ground and the shape across it.
-						const height = roofHeightAt(open, k);
-						const floorDepth = floor[c];
-						const roofDepth = floorDepth - height;
-						for (let L = first; L < layers; L++) {
-							const centre = top - (L + 0.5) * d;
-							const below = surfaceY - centre;
-							const hollow =
-								height > 0 &&
-								below > roofDepth &&
-								below <= floorDepth &&
-								below >= k.roofUnder;
-							kind[base + L] = hollow ? VOID : ROCK;
-						}
-					} else {
-						// Every layer is a fresh lookup. The plan carve reads its field
-						// once a column and fills the slab it decided; this one cannot,
-						// which is what a passage free to be at any depth costs.
-						const [cx, cz] = cellCenter(i, j, d);
-						const ceiling = sheetCeilingAt(cx, cz, k, seed);
-						for (let L = first; L < layers; L++) {
-							const centre = top - (L + 0.5) * d;
-							const below = surfaceY - centre;
-							const hollow =
-								Math.abs(sheetValue(cx, centre, cz, k, seed)) <
-								sheetBandAt(below, ceiling, k);
-							kind[base + L] = hollow ? VOID : ROCK;
-						}
+					const [cx, cz] = cellCenter(i, j, d);
+					const ceiling = sheetCeilingAt(cx, cz, k, seed);
+					for (let L = first; L < layers; L++) {
+						const centre = top - (L + 0.5) * d;
+						const below = surfaceY - centre;
+						const hollow =
+							Math.abs(sheetValue(cx, centre, cz, k, seed)) <
+							sheetBandAt(below, ceiling, k);
+						kind[base + L] = hollow ? VOID : ROCK;
 					}
 				}
 
@@ -1079,11 +755,9 @@
 					layers,
 					top,
 					seed,
-					fields,
 					raw,
 					openness,
 					surface,
-					floor,
 					ground,
 					kind,
 					lookups: noiseLookups,
@@ -1239,12 +913,10 @@
 				function faces(wanted) {
 					let total = 0;
 					const solid = (c, L) => {
-						// Outside the crust counts as filled for the rock, so the patch's
-						// own rim is not charged to the caves, and as empty for the void,
-						// because a passage cut off by the patch really does end there.
-						if (L < 0 || L >= layers) return wanted !== "void";
+						// Outside the crust counts as filled, so the patch's own rim is
+						// not charged to the caves.
+						if (L < 0 || L >= layers) return true;
 						const v = kind[c * layers + L];
-						if (wanted === "void") return v === VOID;
 						if (v === AIR) return false;
 						return wanted === "rock" ? v === ROCK : true;
 					};
@@ -1268,7 +940,6 @@
 
 				const withCaves = faces("rock");
 				const without = faces("bare");
-				const voidFaces = faces("void");
 
 				return {
 					caveCells,
@@ -1282,7 +953,6 @@
 					medianWidth: median,
 					thinShare: widths.length ? thin / widths.length : 0,
 					withCaves,
-					voidFaces,
 					without,
 				};
 			}
@@ -1468,36 +1138,29 @@
 				// The field, on its own square grid. This is the raster marching
 				// squares is meant for, and it is a picture rather than a world:
 				// nothing here decides which block is which.
-				// The picture samples whichever field the carve contours: a plan
-				// family, or the sheet's field at the depth the panel names.
-				const fieldAt = (x, z, f) =>
-					k.method === "plan"
-						? planValue(x, z, k, world.seed, f)
-						: sheetValue(x, surfaceAt(x, z, k, world.seed) - k.sliceDepth, z, k, world.seed);
-				const openOf = (values) =>
-					k.method === "plan"
-						? opennessOf(values, k)
-						: k.sliceDepth < k.sheetCeiling
-							? 0
-							: sheetOpenness(values[0], k);
-				const band =
-					k.method === "plan" ? k.corridorWidth : k.sheetThreshold;
-				const bandEdges = [-band, band];
-				const grids = [];
-				for (let f = 0; f < world.fields; f++)
-					grids.push(new Float32Array(PLAN_GRID * PLAN_GRID));
+				const bandEdges = [-k.sheetThreshold, k.sheetThreshold];
+				const grid = new Float32Array(PLAN_GRID * PLAN_GRID);
 				const openGrid = new Float32Array(PLAN_GRID * PLAN_GRID);
-				const sample = new Array(world.fields);
 				for (let y = 0; y < PLAN_GRID; y++) {
 					for (let x = 0; x < PLAN_GRID; x++) {
 						const wx = minX + (x / (PLAN_GRID - 1)) * width;
 						const wz = minZ + (y / (PLAN_GRID - 1)) * height;
-						for (let f = 0; f < world.fields; f++) {
-							const v = fieldAt(wx, wz, f);
-							grids[f][y * PLAN_GRID + x] = v;
-							sample[f] = v;
-						}
-						openGrid[y * PLAN_GRID + x] = openOf(sample);
+						const surfaceY = surfaceAt(wx, wz, k, world.seed);
+						const v = sheetValue(
+							wx,
+							surfaceY - k.sliceDepth,
+							wz,
+							k,
+							world.seed,
+						);
+						grid[y * PLAN_GRID + x] = v;
+						const at = sheetBandAt(
+							k.sliceDepth,
+							sheetCeilingAt(wx, wz, k, world.seed),
+							k,
+						);
+						openGrid[y * PLAN_GRID + x] =
+							at > 0 ? Math.max(0, (at - Math.abs(v)) / at) : 0;
 					}
 				}
 
@@ -1520,7 +1183,7 @@
 							gr = 60 + 170 * t;
 							b = 80 + 90 * t;
 						} else {
-							const away = Math.min(1, Math.abs(grids[0][p]));
+							const away = Math.min(1, Math.abs(grid[p]));
 							r = 10 + 14 * away;
 							gr = 14 + 18 * away;
 							b = 20 + 26 * away;
@@ -1567,9 +1230,8 @@
 					planCtx.strokeStyle = "#6fd0ff";
 					planCtx.lineWidth = 1.6;
 					planCtx.beginPath();
-					for (const grid of grids)
-						for (const level of bandEdges)
-							marchingSquares(grid, PLAN_GRID, PLAN_GRID, level, (a, b) => {
+					for (const level of bandEdges)
+						marchingSquares(grid, PLAN_GRID, PLAN_GRID, level, (a, b) => {
 							const mx =
 								minX + ((a[0] + b[0]) / 2 / (PLAN_GRID - 1)) * width;
 							const mz =
@@ -1594,146 +1256,26 @@
 					planCtx.strokeStyle = "#ffb56b";
 					planCtx.lineWidth = 1.2;
 					planCtx.beginPath();
-					for (let f = 0; f < world.fields; f++) {
-						const valueAt = (i, j) => {
-							const [x, z] = cellCenter(i, j, d);
-							return [x, z, world.raw[(j * n + i) * world.fields + f]];
-						};
-						for (const level of bandEdges)
-							marchingTriangles(valueAt, n, level, (a, b) => {
+					const valueAt = (i, j) => {
+						const [x, z] = cellCenter(i, j, d);
+						return [x, z, world.raw[j * n + i]];
+					};
+					for (const level of bandEdges)
+						marchingTriangles(valueAt, n, level, (a, b) => {
 							latticeSegments++;
 							const [ax, ay] = toPixel(a[0], a[1]);
 							const [bx, by] = toPixel(b[0], b[1]);
 							planCtx.moveTo(ax, ay);
 							planCtx.lineTo(bx, by);
 						});
-					}
 					planCtx.stroke();
 				}
 
 				planSays.textContent =
 					`${Math.round(span)} m across · ` +
-					(k.method === "plan"
-						? "the whole plan"
-						: `one slice, ${k.sliceDepth} m down`) +
+					`one slice, ${k.sliceDepth} m down` +
 					` · ${segments} square segments` +
 					(k.lattice ? ` · ${latticeSegments} lattice segments` : "");
-			}
-
-			// =============================================================
-			// The isosurface, and why it is tetrahedra rather than cubes.
-			// =============================================================
-
-			/**
-			 * The carve's own field as one signed number: positive inside a cave.
-			 *
-			 * Both carves already answer *is this block hollow* with a comparison,
-			 * and a comparison throws away how close the answer was. This gives back
-			 * the quantity the comparison was made on, so a surface can be put where
-			 * it actually falls rather than on the nearest block boundary. The zero
-			 * set is exactly the cave the blocks are a sampling of.
-			 *
-			 * The plan carve's cave is an **intersection** -- inside the passage,
-			 * under the roof, over the floor, under the ground -- so its field is the
-			 * smallest of those four. A `min` of positive multiples leaves the zero
-			 * set where it was, so the terms may be scaled into the same units
-			 * without moving the surface.
-			 */
-			function caveFieldAt(x, z, surfaceY, k, seed) {
-				if (k.method === "sheet") {
-					const ceiling = sheetCeilingAt(x, z, k, seed);
-					return (y) => {
-						const below = surfaceY - y;
-						const reach = k.sheetThreshold - Math.abs(sheetValue(x, y, z, k, seed));
-						// The taper is the gate, so there is no second term to take the
-						// smaller of; the other two keep a hard floor under the ground.
-						if (k.mouths === "taper")
-							return Math.min(
-								sheetBandAt(below, ceiling, k) -
-									Math.abs(sheetValue(x, y, z, k, seed)),
-								below * 0.02,
-							);
-						return Math.min(reach, (below - ceiling) * 0.02);
-					};
-				}
-				// Everything the plan carve decides from the ground is decided once
-				// for the column, which is why this surface is nearly free there and
-				// costs a lookup a level for the sheet.
-				const values = [];
-				for (let f = 0; f < k.families; f++)
-					values.push(planValue(x, z, k, seed, f));
-				const open = opennessRaw(values, k);
-				const height = roofHeightAt(open, k);
-				const floorDepth = floorAt(x, z, k, seed);
-				const roofDepth = floorDepth - height;
-				return (y) => {
-					const below = surfaceY - y;
-					// **Three terms and not four.** An openness term looks needed and is
-						// not: where a column is outside the band its roof height is zero, so
-						// its roof and its floor are the same depth and the two depth terms
-						// cannot both be positive. Adding it puts a crease along the top edge
-						// of every passage where an openness in band units crosses a depth in
-						// metres -- two quantities with no common scale, so where they cross
-						// is arbitrary, and the surface picks a different one from tetrahedron
-						// to tetrahedron.
-					return Math.min(
-						below - roofDepth,
-						floorDepth - below,
-						below - k.roofUnder,
-					);
-				};
-			}
-
-			/**
-			 * Marching tetrahedra: sixteen cases, and **not one of them ambiguous**.
-			 *
-			 * Marching cubes is the square grid's tool, and this lattice is not one.
-			 * Three adjacent columns and two adjacent layers make a **triangular
-			 * prism**, a prism splits into three tetrahedra, and a tetrahedron cut by
-			 * a surface always has either one corner on its own side or two -- one
-			 * triangle or a quad, decided and never guessed. Marching cubes' 256
-			 * cases carry six faces where the four corners admit two different
-			 * surfaces, and picking wrong holes the mesh. The same argument as
-			 * marching squares against marching triangles, one dimension up.
-			 */
-			function marchTetrahedron(p, v, emit) {
-				const inside = [];
-				const outside = [];
-				for (let i = 0; i < 4; i++) (v[i] > 0 ? inside : outside).push(i);
-				if (!inside.length || !outside.length) return;
-				const cut = (a, b) => {
-					const t = v[a] / (v[a] - v[b] || 1e-9);
-					return [
-						p[a][0] + (p[b][0] - p[a][0]) * t,
-						p[a][1] + (p[b][1] - p[a][1]) * t,
-						p[a][2] + (p[b][2] - p[a][2]) * t,
-					];
-				};
-				// The surface is oriented outward by the corners it cut off, which is
-				// the one thing the case tables cannot supply and the winding must not
-				// be trusted for.
-				const middle = [0, 0, 0];
-				for (const i of inside)
-					for (let a = 0; a < 3; a++) middle[a] += p[i][a] / inside.length;
-				if (inside.length === 1 || outside.length === 1) {
-					const lone = inside.length === 1 ? inside[0] : outside[0];
-					const rest = inside.length === 1 ? outside : inside;
-					emit(
-						cut(lone, rest[0]),
-						cut(lone, rest[1]),
-						cut(lone, rest[2]),
-						middle,
-					);
-					return;
-				}
-				const [a, b] = inside;
-				const [c, e] = outside;
-				const q0 = cut(a, c);
-				const q1 = cut(a, e);
-				const q2 = cut(b, e);
-				const q3 = cut(b, c);
-				emit(q0, q1, q2, middle);
-				emit(q0, q2, q3, middle);
 			}
 
 			// =============================================================
@@ -1905,125 +1447,6 @@
 				return mesh;
 			}
 
-			/**
-			 * The isosurface of the carve's own field, over the lattice's own prisms.
-			 *
-			 * Three adjacent columns and two adjacent layer boundaries make a
-			 * triangular prism, which splits into three tetrahedra. **The split has
-			 * to be the same on both sides of every quad face** or the two sides cut
-			 * it along different diagonals and the surface tears; ordering the three
-			 * columns by their storage key before splitting is what guarantees it,
-			 * because two prisms sharing a face share those two columns and order
-			 * them the same way.
-			 *
-			 * This draws no blocks and is not a world: nothing here can be broken,
-			 * stored or stood on. It is what the carve says before the block grid
-			 * rounds it off.
-			 */
-			function buildSmooth(world, k) {
-				const { n, d, layers, top, surface, seed } = world;
-				const mesh = growable(1 << 16);
-				const keepI = Math.round((n - 1) * k.cutI);
-				const keepJ = Math.round((n - 1) * k.cutJ);
-				const levels = layers + 1;
-				const value = new Float32Array(n * n * levels);
-				const atX = new Float32Array(n * n);
-				const atZ = new Float32Array(n * n);
-
-				for (let j = 0; j <= keepJ; j++)
-					for (let i = 0; i <= keepI; i++) {
-						const c = j * n + i;
-						const [x, z] = cellCenter(i, j, d);
-						atX[c] = x;
-						atZ[c] = z;
-						const field = caveFieldAt(x, z, surface[c], k, seed);
-						for (let L = 0; L < levels; L++)
-							value[c * levels + L] = field(top - L * d);
-					}
-
-				const inPatch = ([i, j]) => i >= 0 && j >= 0 && i <= keepI && j <= keepJ;
-				const key = ([i, j]) => j * n + i;
-
-				const emit = (p0, p1, p2, middle) => {
-					const ux = p1[0] - p0[0];
-					const uy = p1[1] - p0[1];
-					const uz = p1[2] - p0[2];
-					const vx = p2[0] - p0[0];
-					const vy = p2[1] - p0[1];
-					const vz = p2[2] - p0[2];
-					let nx = uy * vz - uz * vy;
-					let ny = uz * vx - ux * vz;
-					let nz = ux * vy - uy * vx;
-					const length = Math.hypot(nx, ny, nz);
-					if (!length) return;
-					nx /= length;
-					ny /= length;
-					nz /= length;
-					// Away from the corners the surface cut off, which is the one thing
-					// the case tables cannot supply.
-					const ax = (p0[0] + p1[0] + p2[0]) / 3 - middle[0];
-					const ay = (p0[1] + p1[1] + p2[1]) / 3 - middle[1];
-					const az = (p0[2] + p1[2] + p2[2]) / 3 - middle[2];
-					if (nx * ax + ny * ay + nz * az < 0) {
-						nx = -nx;
-						ny = -ny;
-						nz = -nz;
-					}
-					const deep = Math.min(1, Math.max(0, (top - p0[1]) / (layers * d)));
-					const color = mix([0.85, 0.62, 0.36], [0.32, 0.2, 0.26], deep);
-					const nrm = [nx, ny, nz];
-					mesh.vertex(p0, nrm, color);
-					mesh.vertex(p1, nrm, color);
-					mesh.vertex(p2, nrm, color);
-				};
-
-				const prism = (cells) => {
-					if (!cells.every(inPatch)) return;
-					const [A, B, C] = [...cells].sort((u, w) => key(u) - key(w));
-					const ca = key(A);
-					const cb = key(B);
-					const cc = key(C);
-					for (let L = 0; L < levels - 1; L++) {
-						const yUpper = top - L * d;
-						const yLower = top - (L + 1) * d;
-						const a0 = [atX[ca], yUpper, atZ[ca]];
-						const a1 = [atX[ca], yLower, atZ[ca]];
-						const b0 = [atX[cb], yUpper, atZ[cb]];
-						const b1 = [atX[cb], yLower, atZ[cb]];
-						const c0 = [atX[cc], yUpper, atZ[cc]];
-						const c1 = [atX[cc], yLower, atZ[cc]];
-						const va0 = value[ca * levels + L];
-						const va1 = value[ca * levels + L + 1];
-						const vb0 = value[cb * levels + L];
-						const vb1 = value[cb * levels + L + 1];
-						const vc0 = value[cc * levels + L];
-						const vc1 = value[cc * levels + L + 1];
-						// Every layer of every prism, and nothing in it is drawn unless the
-						// field changes sign inside it.
-						if (
-							(va0 > 0) === (va1 > 0) &&
-							(va0 > 0) === (vb0 > 0) &&
-							(va0 > 0) === (vb1 > 0) &&
-							(va0 > 0) === (vc0 > 0) &&
-							(va0 > 0) === (vc1 > 0)
-						)
-							continue;
-						marchTetrahedron([a0, b0, c0, c1], [va0, vb0, vc0, vc1], emit);
-						marchTetrahedron([a0, b0, c1, b1], [va0, vb0, vc1, vb1], emit);
-						marchTetrahedron([a0, b1, c1, a1], [va0, vb1, vc1, va1], emit);
-					}
-				};
-
-				for (let j = 0; j <= keepJ; j++)
-					for (let i = 0; i <= keepI; i++) {
-						const b = stepFrom(i, j, 0);
-						const c = stepFrom(i, j, 1);
-						prism([[i, j], b, c]);
-						prism([b, c, stepFrom(c[0], c[1], 0)]);
-					}
-				return mesh;
-			}
-
 			// =============================================================
 			// WebGL.
 			// =============================================================
@@ -2105,8 +1528,7 @@
 			const focus = [0, 0, 0];
 
 			function upload(world, k) {
-				const mesh =
-					k.show === "smooth" ? buildSmooth(world, k) : buildMesh(world, k);
+				const mesh = buildMesh(world, k);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				gl.bufferData(
 					gl.ARRAY_BUFFER,
@@ -2114,13 +1536,15 @@
 					gl.DYNAMIC_DRAW,
 				);
 				vertexCount = mesh.used / 9;
-				// The eye is put on the caves rather than on the middle of the
-				// crust, which is mostly rock nobody is looking at.
+				// The eye is put a third of the way into the crust rather than on
+				// its middle, because the caves are nearer the top and the bottom
+				// is rock nobody is looking at.
 				const middle = cellCenter(world.n >> 1, world.n >> 1, world.d);
 				let sum = 0;
 				for (let c = 0; c < world.n * world.n; c++) sum += world.surface[c];
 				focus[0] = middle[0];
-				focus[1] = sum / (world.n * world.n) - k.floorDepth;
+				focus[1] =
+					sum / (world.n * world.n) - (world.layers * world.d) / 3;
 				focus[2] = middle[1];
 				span = (world.n - 1) * world.d * 1.2;
 				return vertexCount;
@@ -2258,11 +1682,9 @@
 
 			const facts = document.getElementById("facts");
 			const rows = new Map();
-			let showRows = () => {};
 
 			function buildPanel() {
 				const host = document.getElementById("knobs");
-				const groups = [];
 				for (const group of KNOBS) {
 					const set = document.createElement("details");
 					set.className = "group";
@@ -2315,7 +1737,6 @@
 								knobs[row.key] = input.value;
 							else knobs[row.key] = Number(input.value);
 							show();
-							showRows();
 							askForRedraw();
 						};
 						const show = () => {
@@ -2336,31 +1757,10 @@
 						input.addEventListener("change", commit);
 						show();
 						set.append(wrap);
-						rows.set(row.key, { row, input, show, wrap });
+						rows.set(row.key, { row, input, show });
 					}
-					groups.push({ group, set });
 					host.append(set);
 				}
-
-				/**
-				 * A row with no meaning comes off the panel; it is not greyed out.
-				 *
-				 * The two carves share the seed, the ground and the volume and share
-				 * nothing else, so half of this panel means nothing at any moment. A
-				 * disabled row is a question the reader has to answer before
-				 * dismissing it.
-				 */
-				showRows = () => {
-					for (const entry of groups)
-						entry.set.style.display =
-							entry.group.shownWhen && !entry.group.shownWhen(knobs)
-								? "none"
-								: "";
-					for (const entry of rows.values())
-						entry.wrap.style.display =
-							entry.row.shownWhen && !entry.row.shownWhen(knobs) ? "none" : "";
-				};
-				showRows();
 
 				const note = document.createElement("p");
 				note.className = "note";
@@ -2368,11 +1768,7 @@
 					"Cut across and Cut along take the far corner off the block " +
 					"so the passages can be looked into. Draw · void turns the " +
 					"world inside out and draws the caves as the solid, which is " +
-					"the only view that shows a network from outside it. Draw · " +
-					"smooth is the same cave as an isosurface, drawn where the " +
-					"carve actually puts it rather than on the nearest block " +
-					"boundary — a picture of what the block grid rounds off, and " +
-					"not a world: nothing in it can be broken or stood on.";
+					"the only view that shows a network from outside it.";
 				host.append(note);
 			}
 
@@ -2421,11 +1817,7 @@
 					`columns with more than one span <b>${percent(m.multiSpan, m.columns)}</b></div>` +
 					`<div>faces per column <b>${perColumn.toFixed(1)}</b> against ` +
 					`<b>${bare.toFixed(1)}</b> with no caves — <b>×${(perColumn / (bare || 1)).toFixed(2)}</b></div>` +
-					`<div>${(verts / 3).toLocaleString()} triangles` +
-					(k.show === "smooth"
-						? ` against <b>${(2 * m.voidFaces).toLocaleString()}</b> for the same cave in blocks`
-						: "") +
-					" · " +
+					`<div>${(verts / 3).toLocaleString()} triangles · ` +
 					`<b>${(world.lookups / m.columns).toFixed(1)}</b> noise lookups a column · ` +
 					`generate ${world.millis.toFixed(0)} ms · mesh ${meshMillis.toFixed(0)} ms</div>`;
 			}
