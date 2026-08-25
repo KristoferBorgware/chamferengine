@@ -537,6 +537,38 @@ a colour the exposure pushed past white lose its saturation as it goes — the
 way a glint on water reads as a white highlight rather than a clipped
 saturated blue.
 
+### A screen has one white, so brightness has to be spent on glare
+
+The roll-off above is also the limit of what a curve can do. A sun drawn at
+six times white and a cloud drawn at one both arrive at the screen inside a
+tenth of each other, and both arrive flat. **Nothing a tone curve does can
+make a small bright disc read as a sun**, because the thing that says "sun"
+to an eye is not the disc's own value — which the screen cannot show — but
+what that value does to everything near it.
+
+So the part of the frame over a threshold is blurred very wide and added
+back, before the curve rather than after it: after the curve there is nothing
+left to tell a sun from a cloud. The blur is taken at falling resolutions
+rather than with a wide kernel — six halvings from a half-size base, each a
+quarter the cost of the last — which reaches a radius no single pass would
+pay for.
+
+> **[measured]** `tools/frame-diff.mjs`, one view of a low sun over the limb,
+> 303,414 pixels, glare on against off. Mean brightness **101.5** against
+> **94.3**, and the ratio is **1.080 with a 50.7% spread** — the fifth
+> percentile is **1.000** and the ninety-fifth **1.147**.
+>
+> That shape is the point: most of the frame is untouched, and what moves
+> moves a long way. A glare that lifted every pixel would be a brightness
+> knob wearing a costume.
+
+Two details keep it from flickering. The threshold has a **soft knee**, so a
+pixel wandering either side of it fades rather than popping the whole blur on
+and off. And the first halving averages its thirteen taps in **four
+overlapping groups** rather than one, so a single very bright pixel spreads
+across four of them and what it contributes stops depending on which texel it
+happened to land in — which is exactly what a sun does as a camera turns.
+
 ---
 
 ## What this forces elsewhere
@@ -631,6 +663,11 @@ saturated blue.
   fraction either way and the fraction only reads once the picture is
   exposed. The ACES filmic curve bends anything over white toward 1 rather
   than clipping to a flat patch.
+- **A screen has one white, so the sun is drawn as glare rather than as a
+  disc.** What is over a threshold is blurred across six halvings and added
+  back before the curve; measured on a low sun, that moves the frame's mean
+  from 94.3 to **101.5** at a **50.7%** spread, with the fifth percentile at
+  1.000 — most of the picture untouched, and what moves moving a long way.
 - Set the day length in units of **how long it takes to walk around** — equal
   means the sun moves at exactly walking pace.
 - **Twilight lasts a fixed fraction of the day** whatever the planet's size.

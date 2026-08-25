@@ -359,10 +359,55 @@ readable only once that pass has ended.
 ### Single scattering, two species, and both legs of the path
 
 Rayleigh is the molecular term, three coefficients so blue scatters more than
-red, with the phase function `3/(16π)(1+cos²θ)`. Mie is the haze, one
-coefficient and a strong forward bias — Cornette–Shanks at `g = 0.76`, which is
-the glare around the sun. Each thins at its own rate, so a sunset reddens while
-the zenith stays blue.
+red, with the phase function `3/(16π)(1+cos²θ)`. Mie is the haze, one grey
+coefficient and a strong forward bias — Henyey–Greenstein at `g = 0.76`, which
+is the glare around the sun.
+
+**The two share one density curve and one baked table.** A baked optical depth
+is a path length and carries no colour, so what separates the species is the
+coefficient it is multiplied by and the phase function that aims it — the haze
+costs two multiplies a step and no second table. Sharing the curve gives up
+one thing worth naming: real Mie hugs the ground, thinning about seven times
+faster than Rayleigh does, so a real horizon carries more haze relative to its
+zenith than this one can.
+
+Both phase functions are **normalised so their average over the sphere is 1**
+rather than the `1/4π` the textbook forms integrate to. That keeps them a
+redistribution of light rather than a dimming of it, so turning them on does
+not cost a factor of `4π` that some other knob then has to win back.
+
+**Brightness and colour need separate knobs, and this is measurable rather
+than a matter of taste.** Every knob that decides how much air a ray crosses —
+the scattering strength, the density falloff, how far the air reaches — decides
+the colour too, because blue scatters `6.4×` harder than red and so is
+extinguished `6.4×` faster. Turn any of them up for a brighter sky and the blue
+saturates and dies first.
+
+> **[measured]** `tools/trial-sky.ts`, the zenith under a 60° sun, blue over
+> red.
+>
+> | Scattering strength | Zenith colour | Blue ÷ red |
+> |---|---|---|
+> | 5 | `0.050 0.143 0.265` | **5.26** |
+> | 20 | `0.181 0.409 0.527` | 2.91 |
+> | 40 | `0.313 0.525 0.416` | 1.33 |
+> | 80 | `0.467 0.434 0.131` | **0.28** |
+>
+> Brightness climbs the whole way and the sky goes blue, then cyan, then
+> green, then orange. **There is no setting of it that is bright and blue at
+> once.**
+
+So the light falling on the air is its own knob, multiplying what is scattered
+toward the eye without touching what is taken out along the way. Thickness is
+then chosen for the colour and that one for how bright it is.
+
+A small planet also bounds how dramatic a sunset can be. What reddens a sun is
+the ratio between a horizontal path through the air and a vertical one, and
+that ratio is set by how wide the planet is against how deep its air is —
+Earth reaches about `38`, and this world cannot. Swept over strength, falloff
+and reach, the best corner holds a zenith at **3.3** blue-over-red under a high
+sun while a 2° sun reads **2.9** red-over-blue and its own disc is reddened
+**5.4** to one by the air it is seen through.
 
 Both legs of the light path are paid for, and each buys something visible.
 
@@ -381,9 +426,16 @@ added the depth up for its own use.
 
 **What is missing is worth naming.** There is no multiple scattering, so a deep
 twilight is darker than a real one; no ozone band, so there is no late purple;
-and the sun's own brightness is not modelled, which is why **Sunlight on the
-air** exists as a knob. The march gives the *fraction* of light turned toward the
+and the sun's own brightness is not modelled, which is why the light on the air
+is a knob at all. The march gives the *fraction* of light turned toward the
 eye, and nothing in it knows how bright the source is.
+
+**The stars are not hidden by a threshold.** A clamped fade has a setting at
+which it snaps, and every knob that moves the sky's brightness moves where
+that is — which is how stars end up in a midday sky the moment the air is
+retuned. What ships is `1 / (1 + skyLuminance × k)`, which has no such edge
+and says the physically right thing at both ends: a world given almost no
+atmosphere shows its stars in daylight, the way an airless one does.
 
 *(One thing that needs no fiction at any of this: the sky is blue and the sunset
 red because of the `λ⁻⁴` law — zenith `τ` of `0.241` for blue against `0.041` for

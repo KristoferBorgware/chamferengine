@@ -1531,6 +1531,48 @@ when the ground moves, so nothing else has to change.
 
 ---
 
+### F-075 — Haze over a few kilometres washes the terrain out, and it cannot be turned down without dimming the sky
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, taking eye-level frames to judge the retuned atmosphere
+**Where:** `packages/engine/src/render/sky/ATMOSPHERE_SHADER.ts`,
+`fragmentMain`'s `dimmed` term
+
+**What happens.** The colour behind the air is multiplied by
+`exp(-viewDepth * extinction)`, which is the aerial perspective and is correct
+single scattering. On this planet it is very strong: at eye level a ridge two
+or three kilometres off is drawn nearly the colour of the sky, with its own
+material colour almost gone. A frame at 196 m over the shipped seed shows the
+far mountains as pale blue silhouettes rather than as ground.
+
+**Why it matters.** The strength follows from the geometry rather than from a
+setting anybody chose. The air is `1,700 m` deep on a planet `6,801 m` in
+radius, so a horizontal look of a few kilometres crosses a large fraction of
+the whole atmosphere's optical depth -- where the same distance on Earth
+crosses a small one. Every knob that would weaken it is a knob that also
+weakens the sky, because the sky's colour and the haze are the same
+coefficients: turning the extinction down to clear the distance turns the
+zenith pale at the same time. So there is currently no setting that gives a
+blue sky and readable distant ground together.
+
+Nobody is blocked. It reads as a deliberate hazy look and several people
+would prefer it. It is written down because it is the one part of the
+atmosphere that cannot be tuned from the panel, and because the fix is small
+if it is ever wanted.
+
+**What would fix it.** Give the surface term its own multiplier on the view
+depth -- `exp(-viewDepth * extinction * aerialPerspective)` -- so the distance
+haze can be dialled back without touching what the sky is worth. One uniform,
+one knob, no change to the march. The alternative is to give the haze its own
+lower scale height the way real air does, which would concentrate it near the
+ground and is more faithful, but needs a second baked table and so is a
+larger change than the picture is likely to justify.
+
+---
+
 ## Closed
 
 ### F-073 — Two chunks at different levels of detail sample the ground at different heights, and the apron only ever covered the gap between their tilings
@@ -3164,7 +3206,7 @@ cloud work happens on a worker at all.
 
 ---
 
-### F-073 — Two ground shadows covered the same ground, and one of them cost a march per fragment
+### F-074 — Two ground shadows covered the same ground, and one of them cost a march per fragment
 
 **Kind:** cleanup
 **Milestone:** 0.5.0

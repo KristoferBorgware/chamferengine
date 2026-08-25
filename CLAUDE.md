@@ -1764,8 +1764,73 @@ Violating any of these breaks the design. They are not tunable.
   stands in for Lague's blue-noise texture**, breaking the visible banding ten
   integration steps leave across a smooth sky into noise too fine to read as a
   band, with no binary asset to ship.
+- **BRIGHTNESS AND COLOUR NEED SEPARATE KNOBS, AND ONE OF THEM WAS NEVER
+  PORTED** (`intensity` in `ATMOSPHERE.ts`, `skyIntensity` on the panel,
+  `tools/trial-sky.ts`, doc 32). Lague's shader ends
+  `inScatteredLight *= scatteringCoefficients * intensity * stepSize /
+  planetRadius`, and `intensity` was dropped in the port -- leaving
+  **Scattering strength** doing two jobs at once, because it scales both the
+  light scattered toward the eye **and** the exponent that takes light out
+  along the way. Blue scatters `6.4x` harder than red and so extinguishes
+  `6.4x` faster, so turning it up for a brighter sky kills the blue first:
+  measured at the zenith under a 60-degree sun, strength 5 gives `5.26`
+  blue-over-red, 20 gives `2.91`, 40 gives `1.33` and 80 gives `0.28` -- blue,
+  cyan, green, orange, brightening the whole way. **There is no setting of it
+  that is bright and blue at once**, which is exactly why the sky could not be
+  tuned and why raising it to brighten the day brought the stars out. Every
+  other thickness knob (**Density falloff**, **Atmosphere scale**) has the same
+  coupling. Thickness now picks the colour and `intensity` picks the
+  brightness.
+- **THE HAZE IS WHAT MAKES A SUNSET WARM, AND IT NEEDS NO SECOND TABLE**
+  (`phaseMie`, `phaseRayleigh` in `ATMOSPHERE_SHADER.ts`, doc 32). A
+  Rayleigh-only sky is blue in **every** direction, so looking at a low sun
+  reads blue too -- measured, `(0.62, 1.44, 1.92)` toward a 2-degree sun. Grey
+  forward-thrown haze is what turns that warm: at `g = 0.76` the
+  Henyey-Greenstein phase is **30x** brighter straight at the sun than even
+  scattering and a fifth of it across the sky. **Both species share one
+  density curve and one baked table**, because a baked optical depth is a path
+  length and carries no colour -- what separates them is the coefficient it is
+  multiplied by and the phase that aims it, so the haze costs two multiplies a
+  step. The Rayleigh phase `3/(16pi)(1+cos^2)` was **missing entirely**, which
+  is why the sky was one flat sheet: measured, toward and away from the sun
+  differed by `0.5%` without it. **Both phases are normalised to average 1
+  over the sphere**, not `1/4pi`, so switching them on redistributes light
+  rather than dimming it by `4pi`.
+- **A SCREEN HAS ONE WHITE, SO A SUN MUST BE DRAWN AS GLARE** (`BloomPass`,
+  `BLOOM_SHADER`, doc 16). A disc drawn near white is a sticker and no tone
+  curve rescues it: ACES maps 6 to `0.95` and 1 to `0.80`, so a sun and a
+  cloud arrive a tenth apart and both flat. The sun disc is now **120** and
+  the part of the frame over a threshold is blurred very wide and added back
+  **before** the curve -- after it there is nothing left to tell the two
+  apart. Six halvings from a half-size base, each a quarter the cost of the
+  last, reaching a radius no single pass would pay for. Measured over 303,414
+  pixels on a low sun (`tools/frame-diff.mjs`), glare on against off moves the
+  mean from **94.3 to 101.5** at a **50.7%** spread, fifth percentile
+  **1.000** and ninety-fifth **1.147** -- most of the frame untouched and what
+  moves moving a long way, which is the shape that says it is a glare and not
+  a brightness knob. Two details stop it flickering: a **soft knee** at the
+  threshold, and a first halving that averages its thirteen taps in **four
+  overlapping groups** so one very bright pixel stops depending on which texel
+  it landed in. **Every step owns its own uniform buffer** -- `writeBuffer`
+  queues against the queue and not the encoder, so steps sharing one buffer
+  would all read whichever value was written last and the whole chain would
+  blur at one level's texel size.
+- **A CLAMPED STAR FADE HAS A SETTING AT WHICH IT SNAPS** (`celestialAt`, doc
+  32). Stars faded by `clamp(luminance * 3, 0, 1)`, and every knob that moved
+  the sky's brightness moved where that clamp landed, so retuning the air put
+  stars in a midday sky. It is `1 / (1 + luminance * k)` now: no edge, and
+  right at both ends -- a world given almost no atmosphere **shows** its stars
+  in daylight, the way an airless one does.
+- **THE AIR HAS TO CONTAIN THE ALTITUDES PEOPLE ARE AT** (`atmosphereScale`).
+  The colour sweep's best corner was `0.15`, which is `1,020 m` of air on the
+  shipped planet -- and the world opens with the camera **`1,100 m` up**,
+  looking at the sky from outside it, which draws as black space with a blue
+  rim. Shipped at `0.25`, `1,700 m`, which holds the opening view and costs
+  `0.35` of blue-over-red at the zenith. Doc 32's own F-072 is the same
+  measurement from the other side: the cloud decks at `3,000 m` and `6,000 m`
+  stand outside the air at any scale that keeps the sky blue.
 - **TWO GROUND SHADOWS COVERED THE SAME GROUND, AND ONLY ONE OF THEM PAYS FOR
-  ITSELF** (F-073, doc 16). The coarse-map march this project shipped first
+  ITSELF** (F-074, doc 16). The coarse-map march this project shipped first
   could only ever shadow *generated terrain* -- a map cell is 32 m, so a block
   could never shadow its own neighbour -- which is exactly what the cascades
   already draw, at centimetres rather than metres, out to the cascades' own

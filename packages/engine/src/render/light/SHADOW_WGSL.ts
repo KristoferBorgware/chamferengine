@@ -10,7 +10,7 @@
  * the sun over the 32 m height map and cost more than it gave once the
  * cascades existed to do the same job at the scale that is actually visible
  * -- a block shadowing its neighbour, which the coarse map was never fine
- * enough to draw in the first place. See F-073.
+ * enough to draw in the first place. See F-074.
  */
 export const SHADOW_WGSL = /* wgsl */ `
 /**

@@ -78,6 +78,9 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
+		// The glare is its own chain of full-screen draws between the two, and
+		// this is about where the world's own geometry falls against them.
+		renderer.bloom.enabled = false;
 		renderer.upload(mesh(1));
 
 		renderer.render(FRAME);
@@ -98,6 +101,31 @@ describe("what a frame encodes", () => {
 		expect(kinds.length).toBeGreaterThan(2);
 	});
 
+	it("blurs the glare down a chain and back up again, once bloom is on", () => {
+		// Every level halves, so the chain is a fixed shape rather than a
+		// number worth pinning: down to the smallest level and back up, plus
+		// the one that lays the result over the picture it came from.
+		const gpu = new RecordingGpu();
+		const ctx = gpu.context;
+		const renderer = new ChunkRenderer(ctx);
+		renderer.upload(mesh(1));
+
+		renderer.render(FRAME);
+		const withGlare = gpu.draws().length;
+
+		const bare = new RecordingGpu();
+		const plain = new ChunkRenderer(bare.context);
+		plain.bloom.enabled = false;
+		plain.upload(mesh(1));
+		plain.render(FRAME);
+
+		// A chain that goes down and back up is an even number of steps, and
+		// it is the only thing between the two runs.
+		const added = withGlare - bare.draws().length;
+		expect(added).toBeGreaterThan(2);
+		expect(added % 2).toBe(0);
+	});
+
 	it("skips a chunk the camera is not looking at", () => {
 		// A chunk out of view stays resident and goes undrawn. Dropping it
 		// instead would put a hole in the world every time someone turned:
@@ -105,6 +133,7 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
+		renderer.bloom.enabled = false;
 		renderer.upload(mesh(1));
 		// Behind the camera: it looks inward from 1760 toward the surface.
 		renderer.upload({ ...mesh(2), bound: ball([0, 0, 2400], 20) });
@@ -149,6 +178,7 @@ describe("what a frame encodes", () => {
 		const gpu = new RecordingGpu();
 		const ctx = gpu.context;
 		const renderer = new ChunkRenderer(ctx);
+		renderer.bloom.enabled = false;
 
 		renderer.render(FRAME);
 

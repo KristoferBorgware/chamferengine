@@ -11,6 +11,7 @@ import type { PlanetAtmosphere } from "../../sky/ATMOSPHERE.js";
 import type { ShadowCaster } from "../light/ShadowCaster.js";
 import { CascadeShadow } from "../light/CascadeShadow.js";
 import { AtmospherePass } from "../sky/AtmospherePass.js";
+import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
 import { TonePass } from "../tone/TonePass.js";
@@ -122,6 +123,16 @@ export class ChunkRenderer implements ShadowCaster {
 	groundRadius = 0;
 
 	/**
+	 * The glare around anything brighter than a screen can show.
+	 *
+	 * It runs between the air and the tone curve and adds into the air's own
+	 * image in place, because what makes a sun read as a sun is not how bright
+	 * its disc is -- a screen has one white -- but what that brightness does to
+	 * the sky around it.
+	 */
+	readonly bloom: BloomPass;
+
+	/**
 	 * Where the frame is exposed and rolled off on its way to the canvas.
 	 *
 	 * Everything is drawn into a floating-point image first, so the sun, the
@@ -165,6 +176,7 @@ export class ChunkRenderer implements ShadowCaster {
 		const { device, sceneFormat: format } = ctx;
 		const module = device.createShaderModule({ code: TERRAIN_SHADER });
 		this.atmosphere = new AtmospherePass(ctx);
+		this.bloom = new BloomPass(ctx);
 		this.tone = new TonePass(ctx);
 
 		const uniformEntry: GPUBindGroupLayoutEntry = {
@@ -456,6 +468,15 @@ export class ChunkRenderer implements ShadowCaster {
 			frame.moon,
 			frame.viewProj.inverse(),
 			this.air,
+		);
+		// The glare goes on before the curve, because what spills is the part
+		// of the picture the curve is about to fold away: after it, the sun
+		// and a cloud are both white and there is nothing left to tell apart.
+		this.bloom.resolve(
+			encoder,
+			this.atmosphere.view,
+			canvas.width,
+			canvas.height,
 		);
 		this.tone.resolve(
 			encoder,

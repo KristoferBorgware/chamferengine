@@ -22,6 +22,8 @@ export { SeaRenderer } from "./sea/SeaRenderer.js";
 export { SEA_STRIDE, seaPatch } from "./sea/seaPatch.js";
 export { wireIndices } from "./sea/wireIndices.js";
 export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
+export { BloomPass } from "./bloom/BloomPass.js";
+export { BLOOM_SHADER } from "./bloom/BLOOM_SHADER.js";
 
 export type { AimTarget } from "./aim/AimTarget.js";
 export { aimGeometry } from "./aim/aimGeometry.js";

@@ -293,8 +293,43 @@ export interface PlanetKnobs {
 	wavelengthGreen: number;
 	wavelengthBlue: number;
 
-	/** Multiplies every wavelength's own scattering coefficient by the same amount. */
+	/**
+	 * Multiplies every wavelength's own scattering coefficient by the same
+	 * amount, which decides the sky's **colour** rather than its brightness.
+	 *
+	 * Blue scatters `6.4x` harder than red and so is extinguished `6.4x`
+	 * faster, so this is really "how much air a ray crosses" and a thicker
+	 * sky is a less blue one. Measured over its whole range
+	 * (`tools/trial-sky.ts`), the zenith runs from blue at `5.3` blue-over-red
+	 * at strength 5, through cyan, to orange at `0.3` at strength 80 --
+	 * brightness climbs the whole way. Set this for the colour and set
+	 * {@link PlanetKnobs.skyIntensity} for how bright it is.
+	 */
 	scatteringStrength: number;
+
+	/**
+	 * What the light falling on the air is worth. Brightness, and nothing else.
+	 *
+	 * The one knob here that does not change the sky's colour: it scales the
+	 * light scattered toward the eye without touching how much is taken out
+	 * along the way. Without it there is no setting that is bright and blue at
+	 * once, and turning up the only other brightness control washes the sky to
+	 * cyan and then to orange.
+	 */
+	skyIntensity: number;
+
+	/**
+	 * Grey haze: scattering off drops and dust rather than off air.
+	 *
+	 * Thrown forward rather than evenly, so it is what draws the halo around
+	 * a low sun and the pale band along the horizon -- and what makes a sunset
+	 * read warm, since it carries no colour of its own where Rayleigh
+	 * scattering is always bluest.
+	 */
+	mieStrength: number;
+
+	/** How tightly the haze throws light forward. `0` even, `0.9` a tight halo. */
+	mieDirection: number;
 
 	/** Fraction of the planet's own radius the air reaches past it. */
 	atmosphereScale: number;
@@ -550,6 +585,21 @@ export interface PlanetKnobs {
 	 */
 	exposure: number;
 
+	/**
+	 * Whether anything brighter than the screen spills into what is beside it.
+	 *
+	 * A screen has one white, so a sun and a cloud reach it as the same pixel
+	 * and the sun reads as a flat coin. What separates them is the glare, and
+	 * this is what draws it. Off, the sun is a disc again.
+	 */
+	bloomOn: boolean;
+
+	/** How bright a thing has to be before it spills. */
+	bloomThreshold: number;
+
+	/** How much of the blurred glare is added back over the picture. */
+	bloomStrength: number;
+
 	/** How fast the player walks, in metres a second. */
 	walkSpeed: number;
 
@@ -616,12 +666,32 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	atmosphereOn: true,
 	inScatteringPoints: 10,
 	opticalDepthPoints: 10,
-	densityFalloff: 4.3,
+	// Steeper than the 4.3 a screenshot of one of Lague's own planets showed:
+	// it packs the air nearer the ground, which lengthens a horizontal path
+	// against a vertical one and is what a small planet is short of.
+	densityFalloff: 8,
 	wavelengthRed: 700,
 	wavelengthGreen: 530,
 	wavelengthBlue: 440,
-	scatteringStrength: 21.23,
-	atmosphereScale: 0.322,
+	// **Chosen by measurement, not by eye** (`tools/trial-sky.ts`). Swept over
+	// strength, falloff and scale, this is the corner that holds a blue zenith
+	// and a red sunset at once: blue-over-red `3.3` at the zenith under a
+	// 60-degree sun, red-over-blue `2.9` looking at a 2-degree one, and a sun
+	// disc reddened `5.4` to one by the air it is seen through. A small planet
+	// cannot reach Earth's numbers here -- the ratio between a vertical path
+	// and a horizontal one is what makes a sunset, and that ratio is set by
+	// how large the planet is against how deep its air is.
+	scatteringStrength: 16,
+	skyIntensity: 2,
+	mieStrength: 0.4,
+	mieDirection: 0.76,
+	// **The air has to contain the altitudes people are actually at.** The
+	// sweep's best colour came at `0.15`, which is `1,020 m` of air on this
+	// planet -- and the world opens with the camera `1,100 m` up, looking at
+	// the sky from outside it. This is `1,700 m`, which holds the opening
+	// view and every altitude a player flies to, and costs `0.35` of
+	// blue-over-red at the zenith against that thinner best.
+	atmosphereScale: 0.25,
 	cloudsDrawn: true,
 	lowDeck: 3000,
 	highDeck: 6000,
@@ -676,6 +746,11 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	cloudShadowReach: 4000,
 	moonLight: 0.16,
 	exposure: 1,
+	bloomOn: true,
+	// Just over white, so only what the tone curve was about to fold away
+	// spills -- lit ground sits near 1 and the sun sits at 120.
+	bloomThreshold: 1.1,
+	bloomStrength: 0.55,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	reach: 6,
 };
@@ -914,6 +989,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "",
 	},
+	skyIntensity: { low: 0, high: 12, step: 0.05, rebuilds: false, unit: "x" },
+	mieStrength: { low: 0, high: 4, step: 0.02, rebuilds: false, unit: "" },
+	mieDirection: {
+		low: 0,
+		high: 0.95,
+		step: 0.01,
+		rebuilds: false,
+		unit: "",
+	},
 	atmosphereScale: {
 		low: 0.02,
 		high: 1,
@@ -990,6 +1074,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
+	bloomOn: { ...TOGGLE, rebuilds: false },
+	bloomThreshold: {
+		low: 0,
+		high: 6,
+		step: 0.05,
+		rebuilds: false,
+		unit: "",
+	},
+	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	reach: { low: 2, high: 64, step: 1, rebuilds: false, unit: "blocks" },
 };

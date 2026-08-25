@@ -516,6 +516,25 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain && k.atmosphereOn,
 			},
 			{
+				key: "skyIntensity",
+				label: "Sky brightness",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "mieStrength",
+				label: "Haze",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.atmosphereOn,
+			},
+			{
+				key: "mieDirection",
+				label: "Haze forward",
+				digits: 2,
+				enabledWhen: (k) =>
+					!k.plain && k.atmosphereOn && k.mieStrength > 0,
+			},
+			{
 				key: "atmosphereScale",
 				label: "Atmosphere scale",
 				digits: 3,
@@ -595,6 +614,22 @@ const GROUPS: Group[] = [
 				key: "exposure",
 				label: "Exposure",
 				digits: 2,
+			},
+			{
+				key: "bloomOn",
+				label: "Glare",
+			},
+			{
+				key: "bloomThreshold",
+				label: "Glare above",
+				digits: 2,
+				enabledWhen: (k) => k.bloomOn,
+			},
+			{
+				key: "bloomStrength",
+				label: "Glare strength",
+				digits: 2,
+				enabledWhen: (k) => k.bloomOn,
 			},
 		],
 	},

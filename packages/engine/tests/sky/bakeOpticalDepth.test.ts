@@ -7,6 +7,9 @@ const AIR = planetAtmosphere(RADIUS, {
 	scatteringStrength: 21.23,
 	densityFalloff: 4.3,
 	atmosphereScale: 0.322,
+	intensity: 1,
+	mieStrength: 0,
+	mieDirection: 0.76,
 });
 
 const SIZE = 64;

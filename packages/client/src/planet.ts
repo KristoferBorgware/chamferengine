@@ -159,6 +159,9 @@ function airFor(live: PlanetSettings): PlanetAtmosphere {
 		scatteringStrength: k.scatteringStrength,
 		densityFalloff: k.densityFalloff,
 		atmosphereScale: k.atmosphereScale,
+		intensity: k.skyIntensity,
+		mieStrength: k.mieStrength,
+		mieDirection: k.mieDirection,
 	});
 }
 
@@ -2196,6 +2199,9 @@ async function main(): Promise<void> {
 			current.knobs.inScatteringPoints;
 		renderer.atmosphere.opticalDepthPoints =
 			current.knobs.opticalDepthPoints;
+		renderer.bloom.enabled = current.knobs.bloomOn;
+		renderer.bloom.threshold = current.knobs.bloomThreshold;
+		renderer.bloom.strength = current.knobs.bloomStrength;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		renderer.cloudShadow.setLook(
 			PLAIN || !current.knobs.cloudShadows

@@ -66,6 +66,18 @@ struct Air {
 	beta            : vec4f,
 	look            : vec4f,
 };
+
+/** Grey haze: one coefficient, sharing the air's own density curve. */
+fn mieStrength() -> f32 { return air.beta.w; }
+
+/** How far forward that haze throws light. */
+fn mieDirection() -> f32 { return air.look.z; }
+
+/** What the light on the air is worth, with no say in its colour. */
+fn skyIntensity() -> f32 { return air.look.w; }
+
+/** Everything that takes light out of a ray: Rayleigh's three, plus grey haze. */
+fn extinction() -> vec3f { return air.beta.xyz + vec3f(mieStrength()); }
 @group(0) @binding(0) var<uniform> air : Air;
 @group(0) @binding(1) var scene : texture_2d<f32>;
 @group(0) @binding(2) var sceneDepth : texture_depth_2d;
@@ -177,6 +189,36 @@ fn inPlanetShadow(point : vec3f, sun : vec3f) -> bool {
 }
 
 /**
+ * How much light a molecule throws toward the eye, by the angle it turns it.
+ *
+ * **Normalised so its average over the whole sphere is 1**, not the \`1/4pi\`
+ * the textbook form integrates to. That keeps the phase functions a
+ * redistribution of light rather than a dimming of it, so switching them on
+ * does not cost a factor of \`4pi\` that some other knob then has to win back.
+ *
+ * Rayleigh's own: brightest straight toward the sun and straight away from
+ * it, dimmest across. Without it the sky is one flat sheet of colour, which
+ * is what the model this was ported from draws.
+ */
+fn phaseRayleigh(cosTheta : f32) -> f32 {
+	return 0.75 * (1.0 + cosTheta * cosTheta);
+}
+
+/**
+ * Henyey-Greenstein, on the same average-of-1 convention.
+ *
+ * At \`g = 0.76\` this is **30x** brighter straight at the sun than the even
+ * scattering it replaces, and a fifth of it across the sky -- which is the
+ * halo round a low sun and the pale band along the horizon, and the whole
+ * reason a sunset reads warm rather than blue.
+ */
+fn phaseMie(cosTheta : f32, g : f32) -> f32 {
+	let gg = g * g;
+	let denom = max(1e-4, 1.0 + gg - 2.0 * g * cosTheta);
+	return (1.0 - gg) / (denom * sqrt(denom));
+}
+
+/**
  * Single in-scattering along the view ray, from \`origin\` to \`through\` metres
  * further along \`dir\`.
  *
@@ -184,22 +226,33 @@ fn inPlanetShadow(point : vec3f, sun : vec3f) -> bool {
  * what the source this was ported from does -- the first sample sits exactly
  * on the edge of the atmosphere, where the sun-facing side of a planet seen
  * from outside gets its brightest rim.
+ *
+ * **Rayleigh and haze share one density curve and one table**, because a
+ * baked optical depth is a path length and carries no colour: what separates
+ * the two is the coefficient it is multiplied by and the phase function that
+ * aims it. So the haze costs two multiplies a step and no second table.
  */
 fn scatter(origin : vec3f, dir : vec3f, through : f32, sun : vec3f) -> vec3f {
 	let steps = i32(air.look.x);
 	let step = through / f32(steps);
+	let cosTheta = dot(dir, sun);
+	// Aimed once for the whole ray: the angle between the view and the sun
+	// does not change along a straight line.
+	let aimed = air.beta.xyz * phaseRayleigh(cosTheta)
+		+ vec3f(mieStrength() * phaseMie(cosTheta, mieDirection()));
+	let outward = extinction();
 	var inScattered = vec3f(0.0);
 	var point = origin;
 	for (var s = 0; s < steps; s++) {
 		if (!inPlanetShadow(point, sun)) {
 			let sunDepth = opticalDepthBaked(point, sun);
 			let viewDepth = opticalDepthOver(origin, dir, step * f32(s));
-			let transmittance = exp(-(sunDepth + viewDepth) * air.beta.xyz);
+			let transmittance = exp(-(sunDepth + viewDepth) * outward);
 			inScattered += densityAt(point) * transmittance;
 		}
 		point += dir * step;
 	}
-	return inScattered * air.beta.xyz * step / air.shape.x;
+	return inScattered * aimed * skyIntensity() * step / air.shape.x;
 }
 
 /** A field of stars, fixed in world directions. */
@@ -215,20 +268,36 @@ fn starsAt(direction : vec3f) -> f32 {
 /** What moonlight is: sunlight seen twice and cold. */
 const MOON_COLOR = vec3f(0.62, 0.72, 1.0);
 
-/** The sun disc's own colour, bright enough to still be the sun after the tone curve. */
-const SUN_DISC_COLOR = vec3f(6.2, 5.7, 4.9);
+/**
+ * The sun's own surface, far brighter than white on purpose.
+ *
+ * **A disc drawn near white is a sticker, and no curve can rescue it.** The
+ * tone curve maps everything over white toward 1, so a sun at 6 and a cloud
+ * at 1 come out at 0.95 and 0.80 -- barely apart, and both flat. At 120 it
+ * clips to white with a great deal left over, and that leftover is what the
+ * bloom pass spreads into the sky around it. The glare is what reads as a
+ * sun; the disc is only where it starts.
+ */
+const SUN_DISC_COLOR = vec3f(120.0, 111.0, 96.0);
+
+/** How quickly a star is lost in a sky brighter than it. */
+const STAR_FADE = 400.0;
 
 /**
  * Everything past the air: the stars, the moon, and the sun disc.
  *
- * \`skyGlow\` is the scattered light already computed for this same pixel,
- * standing in for how bright the sky already is here -- a star behind a
- * bright noon sky fades out, the same star at the edge of the atmosphere or
- * in open space does not, and nothing here needed a separate day-or-night
- * number to know which.
+ * \`skyLum\` is the scattered light already computed for this same pixel, so a
+ * star behind a bright noon sky fades and the same star at the edge of the
+ * atmosphere does not, with no separate day-or-night number to keep in step.
+ * **The fade is a reciprocal and not a clamp**: a clamped subtraction has a
+ * setting at which it snaps, and every knob that moves the sky's brightness
+ * moved where that was -- which is why stars used to appear at midday the
+ * moment the air was retuned. \`1 / (1 + lum * k)\` has no such edge, and it
+ * says the physically right thing at both ends: a world given almost no
+ * atmosphere shows its stars in daylight, the way an airless one does.
  */
-fn celestialAt(dir : vec3f, skyGlow : f32) -> vec3f {
-	var color = vec3f(starsAt(dir)) * 0.9 * (1.0 - skyGlow);
+fn celestialAt(dir : vec3f, skyLum : f32) -> vec3f {
+	var color = vec3f(starsAt(dir)) * 0.55 / (1.0 + skyLum * STAR_FADE);
 
 	let toMoon = dot(dir, air.moon.xyz);
 	let moonEdge = cos(air.moon.w);
@@ -242,7 +311,12 @@ fn celestialAt(dir : vec3f, skyGlow : f32) -> vec3f {
 	let sunEdge = cos(air.shape.w);
 	if (toSun > sunEdge) {
 		let rim = clamp((toSun - sunEdge) / (1.0 - sunEdge), 0.0, 1.0);
-		color = mix(color, SUN_DISC_COLOR, smoothstep(0.0, 0.5, rim));
+		// **Limb darkening**: a real sun is dimmer at its edge than at its
+		// middle, because a look at the rim passes further through its own
+		// cooler outer gas. Without it the disc is a flat coin, and the eye
+		// reads a flat coin as a sticker however bright it is.
+		let limb = 0.45 + 0.55 * sqrt(rim);
+		color = SUN_DISC_COLOR * limb;
 	}
 
 	return color;
@@ -292,14 +366,16 @@ fn fragmentMain(in : AirOut) -> @location(0) vec4f {
 			let dither = (hash2(at) - 0.5) * air.look.y * 0.01;
 			scattered += vec3f(dither);
 			let totalDepth = opticalDepthOver(start, dir, through);
-			dimmed = exp(-totalDepth * air.beta.xyz);
+			dimmed = exp(-totalDepth * extinction());
 		}
 	}
 
 	var background = worldColor;
 	if (openSpace) {
-		let skyGlow = clamp(dot(scattered, vec3f(0.2126, 0.7152, 0.0722)) * 3.0, 0.0, 1.0);
-		background = celestialAt(dir, skyGlow);
+		// The sky's own luminance at this very pixel, unclamped -- what the
+		// stars have to compete with, and what reddens the sun below.
+		let skyLum = max(0.0, dot(scattered, vec3f(0.2126, 0.7152, 0.0722)));
+		background = celestialAt(dir, skyLum);
 	}
 
 	return vec4f(background * dimmed + scattered, 1.0);

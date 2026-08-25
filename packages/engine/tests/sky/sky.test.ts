@@ -87,6 +87,9 @@ describe("a planet's own atmosphere", () => {
 		scatteringStrength: 21.23,
 		densityFalloff: 4.3,
 		atmosphereScale: 0.322,
+		intensity: 2.3,
+		mieStrength: 0.4,
+		mieDirection: 0.76,
 	};
 
 	it("reaches a fraction of the planet's own radius past it, never a fixed metre count", () => {
@@ -126,6 +129,35 @@ describe("a planet's own atmosphere", () => {
 	it("carries the falloff through unchanged, for the table it bakes into", () => {
 		const air = planetAtmosphere(RADIUS, KNOBS);
 		expect(air.densityFalloff).toBe(KNOBS.densityFalloff);
+	});
+
+	it("leaves the scattering colour alone when only the brightness moves", () => {
+		// The whole reason this knob exists: every other one that brightens
+		// the sky also changes how much blue survives the trip, so there is no
+		// setting of them that is bright and blue at once.
+		const dim = planetAtmosphere(RADIUS, KNOBS);
+		const bright = planetAtmosphere(RADIUS, { ...KNOBS, intensity: 9 });
+		expect(bright.intensity / dim.intensity).toBeCloseTo(9 / 2.3, 9);
+		for (let c = 0; c < 3; c++)
+			expect(bright.scattering[c]).toBeCloseTo(dim.scattering[c]!, 12);
+	});
+
+	it("holds the haze back from the value its phase function divides by zero at", () => {
+		// Henyey-Greenstein divides by (1 + g^2 - 2g cos), which is zero at
+		// g = 1 looking straight at the sun -- a single infinite pixel where
+		// the sun is, which no tone curve recovers from.
+		expect(
+			planetAtmosphere(RADIUS, { ...KNOBS, mieDirection: 1 })
+				.mieDirection,
+		).toBeLessThan(1);
+		expect(
+			planetAtmosphere(RADIUS, { ...KNOBS, mieDirection: -4 })
+				.mieDirection,
+		).toBeGreaterThan(-1);
+		expect(planetAtmosphere(RADIUS, KNOBS).mieDirection).toBeCloseTo(
+			0.76,
+			9,
+		);
 	});
 });
 

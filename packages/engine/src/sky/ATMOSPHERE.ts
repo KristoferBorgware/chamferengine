@@ -66,9 +66,37 @@ export interface PlanetAtmosphere {
 
 	/** Scattering per metre at red, green and blue, already at its strength. */
 	readonly scattering: readonly [number, number, number];
+
+	/**
+	 * What the light falling on the air is worth, with no say in its colour.
+	 *
+	 * **The one knob that moves brightness alone.** Every other knob here
+	 * moves how much air a ray crosses, and that decides the colour as well:
+	 * blue scatters `6.4x` harder than red and so extinguishes `6.4x` faster,
+	 * so a thicker atmosphere is both brighter and less blue. Measured over
+	 * the whole range (`tools/trial-sky.ts`), raising **Scattering strength**
+	 * from 5 to 80 takes the zenith from blue at `5.3` blue-over-red, through
+	 * cyan, to orange at `0.3` -- there is no setting of it that is bright and
+	 * blue at once. This is what makes one possible.
+	 */
+	readonly intensity: number;
+
+	/**
+	 * Haze: scattering off things far bigger than a wavelength.
+	 *
+	 * Grey rather than coloured, and thrown forward rather than evenly, so it
+	 * is what draws the halo around a low sun and the pale band along the
+	 * horizon. It shares the air's own density curve, so it needs no second
+	 * table -- the table is a path length, and this is one more coefficient
+	 * multiplied against it.
+	 */
+	readonly mieStrength: number;
+
+	/** How far forward the haze throws light, `0` even to `~0.9` a tight halo. */
+	readonly mieDirection: number;
 }
 
-/** The five knobs the panel exposes, before they become a shader's numbers. */
+/** The knobs the panel exposes, before they become a shader's numbers. */
 export interface AtmosphereKnobs {
 	/** Nanometres, one per channel -- what the inverse-fourth-power law reads. */
 	readonly wavelengths: readonly [number, number, number];
@@ -81,6 +109,15 @@ export interface AtmosphereKnobs {
 
 	/** Fraction of the planet's own radius the air reaches past it. */
 	readonly atmosphereScale: number;
+
+	/** What the light on the air is worth. Brightness, and nothing else. */
+	readonly intensity: number;
+
+	/** How much grey, forward-thrown haze there is. */
+	readonly mieStrength: number;
+
+	/** How tightly that haze throws light forward. */
+	readonly mieDirection: number;
 }
 
 /**
@@ -108,5 +145,10 @@ export function planetAtmosphere(
 		topRadius: radius * (1 + knobs.atmosphereScale),
 		densityFalloff: knobs.densityFalloff,
 		scattering,
+		intensity: knobs.intensity,
+		mieStrength: knobs.mieStrength,
+		// A Henyey-Greenstein phase divides by `(1 + g^2 - 2g cos)^1.5`, which
+		// is zero at `g = 1` looking straight at the sun. Held just under it.
+		mieDirection: Math.min(0.95, Math.max(-0.95, knobs.mieDirection)),
 	};
 }

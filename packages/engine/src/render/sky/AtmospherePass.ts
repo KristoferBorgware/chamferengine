@@ -194,15 +194,20 @@ export class AtmospherePass {
 				28,
 			);
 			this.data.set(
-				[air.scattering[0], air.scattering[1], air.scattering[2], 0],
+				[
+					air.scattering[0],
+					air.scattering[1],
+					air.scattering[2],
+					Math.max(0, air.mieStrength),
+				],
 				32,
 			);
 			this.data.set(
 				[
 					Math.max(2, Math.round(this.inScatteringPoints)),
 					Math.max(0, this.ditherStrength),
-					0,
-					0,
+					air.mieDirection,
+					Math.max(0, air.intensity),
 				],
 				36,
 			);
