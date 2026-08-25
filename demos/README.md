@@ -459,6 +459,27 @@ four corners cannot decide. Orange is the same contour taken on the **lattice
 the world is built on**: three adjacent cells are a triangle, so the cases are
 eight and **none of them is ambiguous**, because three points have no saddle.
 
+**Draw · smooth** is that argument one dimension up. Both carves decide a block
+with a comparison, and a comparison throws away how close the answer was; this
+gives the quantity back and draws the surface where the carve actually puts it
+rather than on the nearest block boundary. It is **marching tetrahedra**, not
+marching cubes, for the reason the contour is triangles and not squares: three
+columns and two layer boundaries make a **triangular prism**, a prism splits
+into three tetrahedra, and a tetrahedron cut by a surface has either one corner
+on its own side or two — one triangle or a quad, decided and never guessed,
+where marching cubes carries six faces whose four corners admit two different
+surfaces. The split is chosen by ordering the three columns, because two prisms
+sharing a quad face must cut it along the same diagonal or the surface tears.
+
+**It is a picture and not a world.** Nothing in it can be broken, stored or
+stood on, and the readout prices it against the blocks it is a picture of. What
+it is for is seeing what the block grid rounds off — and the first thing it
+shows is that a column whose plan value only just clears the band still gets
+almost the full roof, so a marginal cell becomes a **one-cell chimney several
+metres tall**. In the blocks that is a thin pillar among many; as a surface it
+is a spike, and **Narrowest way through · N% of it one cell** is the same fact
+as a number.
+
 The readout is the point of the page, and it does not change when the carve
 does. **Narrowest way through** is how many cells wide a passage is where it
 pinches, which is what says whether it is a corridor or a cavern; **separate
