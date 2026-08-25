@@ -271,6 +271,11 @@ export class Player {
 		return Math.min(this.settings.radius, FITS_CELL * this.shape.blockSize);
 	}
 
+	/** Metres from the feet to the top of the head. */
+	get height(): number {
+		return this.settings.height;
+	}
+
 	/**
 	 * Bring the player back to the ground, and stop them at what they hit.
 	 *
