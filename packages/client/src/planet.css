@@ -436,6 +436,11 @@ body {
 	padding-bottom: 4px;
 }
 
+.map-buttons {
+	display: flex;
+	gap: 6px;
+}
+
 .map-flat {
 	display: block;
 	width: 100%;
@@ -444,6 +449,7 @@ body {
 	border-radius: 3px;
 	image-rendering: pixelated;
 	background: var(--panel);
+	cursor: crosshair;
 }
 
 .map-ball {
