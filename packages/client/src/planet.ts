@@ -661,20 +661,20 @@ async function main(): Promise<void> {
 		refresh();
 	}
 
-	// Right-clicking the ball in the map pane stands the player there. The ball
-	// is the only place showing the whole planet at once, so it is the only
-	// place somewhere out of sight can be pointed at.
+	// Clicking the flat map or the ball in the map pane stands the player
+	// there -- the flat picture shows the whole planet at once and the ball
+	// shows its shape, so between them nowhere is out of reach.
 	onGoTo = (at) => {
 		const direction = new Vec3(at.x, at.y, at.z);
 		land(direction);
-		// **Noon where you land.** The clock is set the same way dragging
-		// Time of day would set it -- through the panel, which is what keeps
-		// the slider and the sky agreeing about what time it now is.
-		if (current.knobs.noonOnLand)
-			onPanelSet({
-				timeOfDay: solarNoonTime(direction.normalize(), NORTH),
-				paused: true,
-			});
+		// **Always noon where you land.** The clock is set the same way
+		// dragging Time of day would set it -- through the panel, which is
+		// what keeps the slider and the sky agreeing about what time it now
+		// is -- so a teleport always arrives somewhere lit.
+		onPanelSet({
+			timeOfDay: solarNoonTime(direction.normalize(), NORTH),
+			paused: true,
+		});
 	};
 
 	/**
@@ -721,6 +721,23 @@ async function main(): Promise<void> {
 		if (!walked) return;
 		land(aimedFrom.add(aimedLook.scale(walked.distance)));
 		flying = false;
+	}
+
+	/**
+	 * Put the player on the ground directly under their own feet.
+	 *
+	 * **Precisely, not the 1.2 m clearance {@link land} leaves.** That
+	 * clearance is for a teleport that cannot be sure how close the target
+	 * already is -- across the map, over a mountain -- and expects gravity or
+	 * a further step to close the gap. Straight down is not that: the column
+	 * is already known, so the feet go exactly onto {@link standingRadius}
+	 * and nothing about how the player is standing changes.
+	 */
+	function dropToGround(): void {
+		const direction = player.position.normalize();
+		player.position = direction.scale(standingRadius(direction));
+		player.fall = 0;
+		refresh();
 	}
 
 	/**
@@ -1719,10 +1736,13 @@ async function main(): Promise<void> {
 		const key = e.key.toLowerCase();
 		held.add(key);
 		if (key === "f") flying = !flying;
-		if (key === "e") {
-			if (flying) landAtCursor();
-			else standHere();
-		}
+		// **E means two different things, and neither changes what E already
+		// means.** Flying, there is no ground under the feet worth dropping
+		// to, so it lands wherever the crosshair is pointing and switches to
+		// walking. Walking, there is nowhere else to send the player, so it
+		// drops them straight onto the ground already under their feet and
+		// leaves them walking.
+		if (key === "e") (flying ? landAtCursor : dropToGround)();
 		if (key === " ") e.preventDefault();
 		if (key === "t") {
 			// The twelve are 1,882 m apart on this planet, so each is a short
@@ -2413,9 +2433,11 @@ async function main(): Promise<void> {
 						]
 					: []),
 				budget(timer, renderer),
-				looking()
-					? `WASD move · mouse look · click break · right click place · Esc cursor · E ${flying ? "land here" : "eye level"} · F fly · T next pentagon · G go to`
-					: `WASD move · click the world to look around · E ${flying ? "land here" : "eye level"} · F fly · T next pentagon · G go to`,
+				(looking()
+					? "WASD move · mouse look · click break · right click place · Esc cursor"
+					: "WASD move · click the world to look around") +
+					` · E ${flying ? "land here" : "drop to ground"}` +
+					" · F fly · T next pentagon · G go to",
 			]);
 		}
 		timer.end(performance.now());

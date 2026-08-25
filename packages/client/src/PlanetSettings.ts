@@ -544,15 +544,6 @@ export interface PlanetKnobs {
 	timeOfDay: number;
 
 	/**
-	 * Whether landing on the globe sets the clock to noon at the place landed.
-	 *
-	 * On, the sun is put directly over wherever the globe was clicked, pausing
-	 * the clock there the way dragging **Time of day** already does. Off, a
-	 * teleport leaves the clock exactly where it was.
-	 */
-	noonOnLand: boolean;
-
-	/**
 	 * Whether the sun renders its own depth buffers of what stands near.
 	 *
 	 * Sharp enough to shadow one block by the next. Off, the world is not
@@ -844,7 +835,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// does. A different seed spawns at a different longitude, where the same
 	// number is a different hour; the row above the slider is one drag.
 	timeOfDay: 0.75,
-	noonOnLand: false,
 	cascadeShadows: true,
 	shadowTexels: 1024,
 	cascadeReach: 260,
@@ -1175,7 +1165,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	dayLength: { low: 30, high: 3600, step: 10, rebuilds: false, unit: "s" },
 	paused: { ...TOGGLE, rebuilds: false },
 	timeOfDay: { low: 0, high: 1, step: 0.01, rebuilds: false, unit: "" },
-	noonOnLand: { ...TOGGLE, rebuilds: false },
 	cascadeShadows: { ...TOGGLE, rebuilds: false },
 	shadowTexels: {
 		low: 256,

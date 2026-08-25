@@ -90,6 +90,17 @@ export class SphereView {
 	/** The ball as last filled, so moving the mark does not fill it again. */
 	private filled: ImageData | null = null;
 
+	/**
+	 * Whether the canvas is on screen.
+	 *
+	 * A caller that keeps the ball hidden still calls {@link show} on every
+	 * map rebuild step and {@link setMarker} on every player move, so both
+	 * take the new state without drawing it -- 20,480 triangles is not worth
+	 * paying for a canvas nobody can see. Turning this on catches up in one
+	 * draw from whatever was last handed over.
+	 */
+	private visible = true;
+
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
 		this.context = canvas.getContext("2d")!;
@@ -276,7 +287,13 @@ export class SphereView {
 	show(map: CoarseMap, field: CoarseField): void {
 		this.map = map;
 		this.field = field;
-		this.draw();
+		if (this.visible) this.draw();
+	}
+
+	/** Whether the canvas is on screen, so drawing can stop while it is not. */
+	setVisible(visible: boolean): void {
+		this.visible = visible;
+		if (visible) this.draw();
 	}
 
 	/** Put the filled ball back and draw the mark on it. */
@@ -292,6 +309,7 @@ export class SphereView {
 	/** Where the player stands, as a direction, or nothing to drop the mark. */
 	setMarker(at: { x: number; y: number; z: number } | null): void {
 		this.marker = at;
+		if (!this.visible) return;
 		// The ball is 20,480 triangles and the mark is one ring. Putting the
 		// filled ball back and drawing the ring on it costs neither the
 		// triangles nor a sample of the map per triangle.

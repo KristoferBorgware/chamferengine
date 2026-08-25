@@ -11,7 +11,7 @@ import {
 	coarseStageOf,
 } from "chamfer/generation";
 import type { PlanetSettings } from "./PlanetSettings.js";
-import { geographicOf } from "chamfer/coordinates";
+import { geographicOf, positionOf } from "chamfer/coordinates";
 import { Vec3 } from "chamfer/math";
 import { paintCoarseField } from "./paintCoarseField.js";
 import { SphereView } from "./SphereView.js";
@@ -81,6 +81,16 @@ export class MapPreview {
 	/** Whether the player's own place is marked. On, because it usually is. */
 	private pinned = true;
 
+	/**
+	 * Whether the ball is drawn at all.
+	 *
+	 * Off by default. The flat picture already says where the land is and
+	 * already takes a click to stand on; the ball is the one that costs a
+	 * drag to turn and 20,480 triangles to redraw, for the same answer shown
+	 * a second way.
+	 */
+	private globeShown = false;
+
 	constructor(
 		settings: PlanetSettings,
 		into: HTMLElement,
@@ -94,6 +104,10 @@ export class MapPreview {
 
 		const preview = this.root;
 
+		const buttons = document.createElement("div");
+		buttons.className = "map-buttons";
+		preview.appendChild(buttons);
+
 		const pin = document.createElement("button");
 		pin.className = "map-pin";
 		pin.textContent = "Pin the player";
@@ -104,12 +118,36 @@ export class MapPreview {
 			this.drawOverlay();
 			this.sphere.setMarker(this.pinned ? this.player : null);
 		};
-		preview.appendChild(pin);
+		buttons.appendChild(pin);
+
+		const globeButton = document.createElement("button");
+		globeButton.className = "map-pin";
+		globeButton.textContent = "Show globe";
+		globeButton.classList.toggle("on", this.globeShown);
+		globeButton.onclick = () => {
+			this.globeShown = !this.globeShown;
+			globeButton.classList.toggle("on", this.globeShown);
+			ball.hidden = !this.globeShown;
+			this.sphere.setVisible(this.globeShown);
+		};
+		buttons.appendChild(globeButton);
 
 		this.canvas = document.createElement("canvas");
 		this.canvas.width = WIDTH;
 		this.canvas.height = HEIGHT;
 		this.canvas.className = "map-flat";
+		// **The flat picture stands the player wherever it is clicked, the
+		// same as the ball.** It is the one on screen by default, so it is
+		// the one that has to carry the gesture, not just the picture.
+		this.canvas.onclick = (e) => {
+			const rect = this.canvas.getBoundingClientRect();
+			const x = ((e.clientX - rect.left) / rect.width) * WIDTH;
+			const y = ((e.clientY - rect.top) / rect.height) * HEIGHT;
+			const longitude = (x / WIDTH) * 360 - 180;
+			const latitude = 90 - (y / HEIGHT) * 180;
+			const at = positionOf({ latitude, longitude, altitude: 0 }, 1);
+			onGoTo({ x: at.x, y: at.y, z: at.z });
+		};
 		preview.appendChild(this.canvas);
 		this.context = this.canvas.getContext("2d")!;
 		this.image = this.context.createImageData(WIDTH, HEIGHT);
@@ -121,8 +159,10 @@ export class MapPreview {
 		ball.width = 260;
 		ball.height = 260;
 		ball.className = "map-ball";
+		ball.hidden = !this.globeShown;
 		preview.appendChild(ball);
 		this.sphere = new SphereView(ball);
+		this.sphere.setVisible(this.globeShown);
 		this.sphere.picked(([x, y, z]) => onGoTo({ x, y, z }));
 
 		this.status = document.createElement("div");
