@@ -436,8 +436,8 @@
 				layers: 28,
 
 				corridorScale: 20,
-				corridorOctaves: 3,
-				corridorWidth: 0.05,
+				corridorOctaves: 1,
+				corridorWidth: 0.055,
 				families: 2,
 				branchWarp: 4,
 
@@ -447,6 +447,7 @@
 
 				roofHeight: 5,
 				roofShape: 0.5,
+				minHeight: 1,
 				roofUnder: 1,
 
 				sheetScale: 24,
@@ -653,6 +654,16 @@
 							decimals: 2,
 						},
 						{
+							key: "minHeight",
+							shownWhen: (k) => k.method === "plan",
+							label: "Lowest passage kept",
+							low: 0,
+							high: 6,
+							step: 0.25,
+							decimals: 2,
+							unit: " m",
+						},
+						{
 							key: "roofUnder",
 							label: "Rock kept over the roof",
 							low: 0,
@@ -796,11 +807,20 @@
 			 *
 			 * The blocks only ever ask whether this is positive; a surface needs to
 			 * know how far past zero it is, on both sides.
+			 *
+			 * **It is `1 - (v/width)^2` and not `(width - |v|)/width`, because an
+			 * absolute value has a corner and the roof is read off this.** The two
+			 * agree at the spine and at the rim and differ in between; the fold makes
+			 * a crease along the middle of every passage, and sampled one point to a
+			 * cell that crease is a row of spikes down the roof -- the same fold
+			 * `ridge` uses on purpose to put an edge on a mountain, arriving here
+			 * where nobody wanted one. The square is flat at its own top.
 			 */
 			function opennessRaw(values, k) {
 				let best = -Infinity;
 				for (const v of values) {
-					const o = (k.corridorWidth - Math.abs(v)) / k.corridorWidth;
+					const at = v / k.corridorWidth;
+					const o = 1 - at * at;
 					if (o > best) best = o;
 				}
 				return best;
@@ -894,6 +914,35 @@
 			/** How far inside the sheet's band a point is: 1 in the middle, 0 outside. */
 			function sheetOpenness(v, k) {
 				return Math.max(0, (k.sheetThreshold - Math.abs(v)) / k.sheetThreshold);
+			}
+
+			/**
+			 * How tall the passage is where a column sits this far inside the band.
+			 *
+			 * **The roof is read off the same field that decided the passage, and a
+			 * marginal reading must not buy a full one.** At `roofShape` 0.5 a column
+			 * only 68% of the way in still takes 82% of the height, so a cell that
+			 * barely clears the band -- with both its neighbours well outside it --
+			 * becomes a one-cell chimney several metres tall. In blocks that is a
+			 * thin pillar among thousands; the isosurface draws it as a spike, which
+			 * is what made it visible.
+			 *
+			 * **A passage that tapers to nothing at its rim has no width where it
+			 * matters, and nothing can sample a zero thickness.** The blocks hide
+			 * that -- a wedge under half a block rounds to no block, so the block
+			 * counts barely move -- and the isosurface draws it as the sawtooth it
+			 * is. `minHeight` is a floor rather than a taper: a roof lower than one
+			 * block is no passage at all, and every passage edge is then a step of
+			 * at least a block, which a lattice can carry exactly.
+			 *
+			 * **It moves the roof and never the plan** -- which columns are passage
+			 * is still `open > 0` -- so the network the contour draws is the network
+			 * the blocks build, and only what was too low to stand up in drops out.
+			 */
+			function roofHeightAt(open, k) {
+				if (open <= 0) return 0;
+				const height = k.roofHeight * Math.pow(open, k.roofShape);
+				return height < k.minHeight ? 0 : height;
 			}
 
 			/** How far below the surface this column's cave floor sits, in metres. */
@@ -994,8 +1043,7 @@
 						// how far inside the band a column is says how tall the
 						// passage is there, so one lookup gives both the shape on
 						// the ground and the shape across it.
-						const height =
-							open > 0 ? k.roofHeight * Math.pow(open, k.roofShape) : 0;
+						const height = roofHeightAt(open, k);
 						const floorDepth = floor[c];
 						const roofDepth = floorDepth - height;
 						for (let L = first; L < layers; L++) {
@@ -1615,13 +1663,20 @@
 				for (let f = 0; f < k.families; f++)
 					values.push(planValue(x, z, k, seed, f));
 				const open = opennessRaw(values, k);
-				const height = k.roofHeight * Math.pow(Math.max(0, open), k.roofShape);
+				const height = roofHeightAt(open, k);
 				const floorDepth = floorAt(x, z, k, seed);
 				const roofDepth = floorDepth - height;
 				return (y) => {
 					const below = surfaceY - y;
+					// **Three terms and not four.** An openness term looks needed and is
+						// not: where a column is outside the band its roof height is zero, so
+						// its roof and its floor are the same depth and the two depth terms
+						// cannot both be positive. Adding it puts a crease along the top edge
+						// of every passage where an openness in band units crosses a depth in
+						// metres -- two quantities with no common scale, so where they cross
+						// is arbitrary, and the surface picks a different one from tetrahedron
+						// to tetrahedron.
 					return Math.min(
-						open * k.roofHeight,
 						below - roofDepth,
 						floorDepth - below,
 						below - k.roofUnder,

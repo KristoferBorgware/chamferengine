@@ -436,12 +436,19 @@ the ground, the block size, the measurements — is held still across the switch
 **band around zero** of a noise field over the ground, so the passages are that
 field's own contour lines and they wind, branch and join. **Passage families** is how
 many independent fields are laid over one another: one field's contours can
-never cross each other, and a second field's can cross the first's. Then **one
+never cross each other, and a second field's can cross the first's. **Octaves
+the band is too narrow to resolve speckle it**: an octave whose own wobble is
+wider than the band puts isolated one-cell specks along every passage, so the
+knob that reads as *more detail* is the one that breaks the network, and
+**Narrowest way through · N% of it one cell** is the same fact as a number. Then **one
 field gives both the shape on the ground and the shape across it** — how far
 inside the band a column sits says how tall the passage is there, so
 **Cross-section** shapes the roof from the same lookup that decided the plan.
 **Floor below the surface** and **Depth varies by** put it in the crust, and
 where the roof pushes through the ground a passage opens a mouth in a hillside.
+**Lowest passage kept** is a floor and not a taper: a roof lower than one block
+is no passage at all, so a passage edge is a step of at least a block rather
+than a wedge tapering to a thickness nothing can sample.
 
 **Carve · sheet** is `caveDensity`, the engine's own, moved onto flat ground and
 otherwise untouched: three octaves at a **Feature size**, hollow inside a band
@@ -492,12 +499,19 @@ sharing a quad face must cut it along the same diagonal or the surface tears.
 
 **It is a picture and not a world.** Nothing in it can be broken, stored or
 stood on, and the readout prices it against the blocks it is a picture of. What
-it is for is seeing what the block grid rounds off — and the first thing it
-shows is that a column whose plan value only just clears the band still gets
-almost the full roof, so a marginal cell becomes a **one-cell chimney several
-metres tall**. In the blocks that is a thin pillar among many; as a surface it
-is a spike, and **Narrowest way through · N% of it one cell** is the same fact
-as a number.
+it is for is seeing what the block grid rounds off.
+
+**On the sheet carve it is the carve.** That carve *is* a signed field, so its
+isosurface is the surface the blocks are a sampling of, and it comes out smooth.
+
+**On the plan carve it is a construction, and its rim sawtooth is the
+construction.** That carve is not one field but three conditions met at once —
+inside the passage, under the roof, over the floor — and any single number whose
+zero set is their intersection has a crease wherever two of them meet. A crease
+sampled one point to a cell is a sawtooth, so the plan carve's surface shows a
+row of spikes along every passage edge that **the same world in Draw · void does
+not have**. Read the smooth view for the shape of the network and the void view
+for what is built.
 
 The readout is the point of the page, and it does not change when the carve
 does. **Narrowest way through** is how many cells wide a passage is where it
