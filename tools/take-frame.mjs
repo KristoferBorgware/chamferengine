@@ -2,6 +2,8 @@
 // Take a frame of the client, from this container, on a software adapter.
 //
 //   node tools/take-frame.mjs <url> <out.png> [--wait ms] [--read selector]
+//                                             [--size WxH] [--mobile]
+//                                             [--click selector]
 //
 // Chromium is launched with the four flags that make it present, driven over
 // the DevTools protocol, and asked for a screenshot once the world has stopped
@@ -21,6 +23,16 @@ const flag = (name, fallback) => {
 };
 const settleMs = Number(flag("--wait", "45000"));
 const read = flag("--read", "#status");
+// **A layout that changes with the window has to be photographed at that
+// window.** The default is the desktop size every frame here has been taken
+// at; `--size 390x844` is a phone, and `--mobile` also tells the page it is
+// one, which is what a hover rule and a touch rule read.
+const [wide, tall] = flag("--size", "1280x800").split("x").map(Number);
+const mobile = args.includes("--mobile");
+// **A control that opens something has two frames, and only one of them is
+// the page as it loads.** One click, after the world has settled, is enough to
+// photograph the other.
+const click = flag("--click", "");
 const port = Number(flag("--port", "9222"));
 
 const chrome =
@@ -87,7 +99,7 @@ const send = (method, params = {}) =>
 await send("Page.enable");
 await send("Runtime.enable");
 await send("Emulation.setDeviceMetricsOverride", {
-	width: 1280, height: 800, deviceScaleFactor: 1, mobile: false,
+	width: wide, height: tall, deviceScaleFactor: 1, mobile,
 });
 await send("Page.navigate", { url });
 
@@ -105,6 +117,14 @@ while (Date.now() < until) {
 	await sleep(1500);
 	last = await text(read);
 	if (last && !/building/.test(last) && Date.now() > until - settleMs + 8000) break;
+}
+
+if (click) {
+	await send("Runtime.evaluate", {
+		expression: `document.querySelector(${JSON.stringify(click)})?.click()`,
+	});
+	// Long enough for a CSS transition to finish; nothing here times anything.
+	await sleep(600);
 }
 
 const shot = await send("Page.captureScreenshot", { format: "png" });

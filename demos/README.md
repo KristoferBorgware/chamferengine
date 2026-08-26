@@ -732,6 +732,13 @@ every leaf cell it holds is drawn on several sides — at the shipped stand the
 leaf faces outnumber the wood faces several times over, and that, not the
 skeleton, is what decides whether a forest is affordable.
 
+**On a phone the panel is shut and a button opens it.** It is 340 px of knobs
+against a 390 px screen, so left open it is the page and the plants are a strip
+above it; shut, they have the whole screen and one tap brings the knobs back.
+The button moves above the panel when it opens, so the way out is never under
+the thing it opened. On a desktop the button is not on the page at all — there
+the panel sits beside the view and never covers it.
+
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 
 ### [`planet-slice-noise.html`](planet-slice-noise.html)

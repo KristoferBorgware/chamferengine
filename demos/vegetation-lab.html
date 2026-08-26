@@ -360,13 +360,48 @@
 				font-size: 11.5px;
 				pointer-events: none;
 			}
+			/* **On a phone the panel is shut and there is a button to open
+			   it.** The panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open it is the page and the thing being judged is a strip
+			   above it. Shut, the plants have the whole screen and one tap
+			   brings the knobs back. It is off the desktop layout entirely --
+			   there the panel sits beside the view and never covers it. */
+			#toggle {
+				display: none;
+			}
 			@media (max-width: 760px) {
 				#panel {
 					width: 100%;
 					top: auto;
-					height: 56%;
+					height: 68%;
 					border-left: 0;
 					border-top: 1px solid var(--edge);
+					transform: translateY(100%);
+					transition: transform 0.22s ease;
+				}
+				body.knobs #panel {
+					transform: none;
+				}
+				#toggle {
+					display: block;
+					position: fixed;
+					right: 12px;
+					bottom: 12px;
+					z-index: 12;
+					padding: 9px 15px;
+					border: 1px solid var(--edge);
+					border-radius: 999px;
+					background: rgba(18, 22, 29, 0.94);
+					backdrop-filter: blur(6px);
+					color: var(--live);
+					font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+					letter-spacing: 0.02em;
+					transition: bottom 0.22s ease;
+				}
+				/* Above the panel when it is open, so the way out is never
+				   under the thing it opened. */
+				body.knobs #toggle {
+					bottom: calc(68% + 12px);
 				}
 				#hint {
 					display: none;
@@ -377,6 +412,9 @@
 	<body>
 		<canvas id="view"></canvas>
 		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
+		<button id="toggle" type="button" aria-controls="panel" aria-expanded="false">
+			Knobs
+		</button>
 		<div id="panel">
 			<div id="head">
 				<h1>Vegetation lab</h1>
@@ -3099,6 +3137,15 @@
 					render();
 				});
 			}
+
+			// The knobs open and shut on a phone; on a desktop the button is not
+			// on the page at all and this never runs.
+			const toggle = document.getElementById("toggle");
+			toggle.addEventListener("click", () => {
+				const open = document.body.classList.toggle("knobs");
+				toggle.setAttribute("aria-expanded", String(open));
+				toggle.textContent = open ? "Close" : "Knobs";
+			});
 
 			let dragging = null;
 			view.addEventListener("pointerdown", (e) => {

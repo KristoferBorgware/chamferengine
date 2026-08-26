@@ -54,6 +54,30 @@ touching the source: `&apron=false` draws the same world with the apron off,
 noise, its water and its sky. Two frames from two URLs attribute an artifact to
 the thing that causes it.
 
+## A window is part of what is drawn, and a shut panel is a second frame
+
+`tools/take-frame.mjs` photographs at **1280 x 800** with the page told it is a
+desktop, which is the size every frame quoted anywhere in this repository was
+taken at. A layout that changes with the window has to be photographed at that
+window instead:
+
+```
+node tools/take-frame.mjs <url> <out.png> --size 390x844 --mobile
+```
+
+`--size` sets the viewport and `--mobile` also tells the page it *is* a phone,
+which is what a hover rule and a touch rule read — the two are separate because
+a narrow desktop window is a real case and is not a phone.
+
+**A control that opens something has two frames, and only one of them is the
+page as it loads.** `--click <selector>` presses one thing after the world has
+settled and waits for a CSS transition before the shutter, which is how the
+demos' mobile panel is photographed open as well as shut:
+
+```
+node tools/take-frame.mjs <url> <out.png> --size 390x844 --mobile --click "#toggle"
+```
+
 ## Drive it over the DevTools protocol
 
 Node 22 has a global `WebSocket`, so the whole harness is one file with no
