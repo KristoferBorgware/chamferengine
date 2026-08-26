@@ -1199,7 +1199,9 @@
 			 *
 			 * The one number it cannot do without is how big the shapes are.
 			 * `60 m` is the shipped block times about eight, which is the size a
-			 * grid can draw and a person can walk through.
+			 * grid can draw and a person can walk through. **It is also what the
+			 * squash is measured in**: the lift is `squash` per `60 m` of depth,
+			 * so the two are one scale rather than two.
 			 */
 			const VOID_METRES = 60;
 			function voidSettings(k) {
@@ -1576,10 +1578,14 @@
 					// carve and nothing to keep.
 					let solid = y < surface;
 					// **The void first, because it is the whole rule.** One
-					// reading at this block, air where it is not positive, and
-					// nothing added to it.
+					// reading at this block, air where it is not positive --
+					// plus the one thing added to it, which is a lift that grows
+					// with how far under the ground the block is.
 					if (solid && k.useVoid)
-						solid = voidAt(dx, dy, dz, y, k, seed, v) > 0;
+						solid =
+							voidAt(dx, dy, dz, y, k, seed, v) +
+								(k.voidSquash * (surface - y)) / VOID_METRES >
+							0;
 					if (solid && cliffOn) {
 						const read = densityAt(dx, dy, dz, y, k, seed, s);
 						// The curve is a transform of the reading, and its middle
@@ -2235,9 +2241,30 @@
 							note: () =>
 								field
 									? `one reading per hexagon at <b>${VOID_METRES} m</b> ` +
-										`shapes, air where it is not positive — no curve, no ` +
-										`bias, no depth term, nothing else`
+										`shapes, air where it is not positive`
 									: "",
+						},
+						{
+							// **The squashing factor: more density the deeper a
+							// block is.** Air is where the reading is not
+							// positive, so lifting the reading as the column goes
+							// down is what keeps the deep rock solid and pushes
+							// the spaces toward the surface. At `0` there is no
+							// lift and the field owns the whole crust, which is
+							// the plain rule and the wildest it gets.
+							key: "voidSquash",
+							label: "Squash",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.2,
+							digits: 2,
+							note: () =>
+								knobs.voidSquash === 0
+									? "off: no lift at all, and the field owns the whole crust"
+									: `the density gains a full <b>1</b> every ` +
+										`<b>${Math.round(VOID_METRES / knobs.voidSquash)} m</b> ` +
+										`of depth, so nothing under that is ever air`,
 						},
 					],
 				},
@@ -4428,7 +4455,11 @@
 					// density then asks, at every point of the column that height
 					// placed, whether to take that point away.
 					(k.useVoid
-						? '<br />air under height where <i class="f">void(V)</i> ≤ 0'
+						? '<br />air under height where <i class="f">void(V)</i>' +
+							(k.voidSquash > 0
+								? ` + ${k.voidSquash.toFixed(2)} × (height − y) ÷ ${VOID_METRES} m`
+								: "") +
+							" ≤ 0"
 						: "") +
 					(k.useCliff && carveLift(0, k) < 1
 						? "<br />air under height where <i class=\"f\">density(D)</i> + " +

@@ -552,17 +552,32 @@ the carve is further down, and it is not a cost question.
 
 **`Void` is the whole idea with nothing else attached, and it ships on.** Once
 the three fields have placed a column, every hexagon in it gets one reading from
-a 3D noise field and is air where that reading is not positive. No curve to
-remap it, no bias for how far under the ground it is, no share of the crust, no
-strength, no knobs at all — the value at that block decides that block. The one
-number it cannot do without is how big the shapes are, and that is fixed at
-`60 m`, about eight of the shipped block.
+a 3D noise field and is air where that reading is not positive. No curve to remap
+it, no share of the crust, no strength — the value at that block decides that
+block. The one number it cannot do without is how big the shapes are, and that is
+fixed at `60 m`, about eight of the shipped block.
 
 What comes out is caverns, arches and tunnels through the crust rather than a
-surface that has moved: three quarters of columns hold rock over air over rock,
-and about three fifths of what goes is taken out from under rock rather than off
-the top. **Roughly half of it is under the sea**, which is the ocean covering
-what was opened rather than the layer having skipped the low ground.
+surface that has moved. **Roughly half of what goes is under the sea**, which is
+the ocean covering what was opened rather than the layer having skipped the low
+ground.
+
+**One thing is added to the reading, and it is the squashing factor.** The
+density gains `Squash` for every `60 m` of depth — the same `60 m` the shapes
+are, so the two are one scale rather than two. Air is where the reading is not
+positive, so lifting it as the column goes down keeps the deep rock solid and
+pushes the spaces toward the surface, which is *do not cut below the crust*
+written as a number instead of a rule. At `0` there is no lift at all and the
+field owns the whole crust:
+
+| Squash | nothing under | out from under rock | columns that overhang | floating masses |
+|---|---|---|---|---|
+| 0 | — | 61.5% | 76.9% | 13 |
+| 0.10 | 600 m | 57.9% | 65.5% | 10 |
+| **0.20 (shipped)** | **300 m** | **51.9%** | **48.4%** | **6** |
+| 0.30 | 200 m | 38.4% | 27.7% | 7 |
+| 0.50 | 120 m | 20.5% | 11.0% | 2 |
+| 1.00 | 60 m | 3.7% | 1.5% | 1 |
 
 **The density layer below now ships off**, because two carves at once say nothing
 about either. Everything it does is being re-asked from the plain rule.
