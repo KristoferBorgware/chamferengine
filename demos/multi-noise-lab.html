@@ -1144,7 +1144,7 @@
 			 * that starts in the sea, because nothing in the range's own field
 			 * knows where it is.
 			 */
-			const LAYERS = ["cont", "ero", "pv", "cliff"];
+			const LAYERS = ["cont", "ero", "pv", "cliff", "void"];
 
 			/**
 			 * The two elevations that cut the land into three bands, and the
@@ -1235,27 +1235,9 @@
 			 * system rather than a dimple.
 			 */
 			const VOID_REACH = 4;
-			const VOID_LACUNARITY = 2;
-			const VOID_PERSISTENCE = 0.5;
 			/** How wide the widest shapes are, which is what the position is divided by. */
 			function voidMetres(k) {
-				return Math.max(1, k.voidFeature * k.voidFeatureScale);
-			}
-			/** The narrowest octave, which is what the block grid has to be able to draw. */
-			function voidNarrowest(k) {
-				return voidMetres(k) / VOID_LACUNARITY ** (k.voidOctaves - 1);
-			}
-			function voidSettings(k) {
-				return {
-					frequency: k.radius / voidMetres(k),
-					octaves: k.voidOctaves,
-					persistence: VOID_PERSISTENCE,
-					lacunarity: VOID_LACUNARITY,
-					offsetX: 0,
-					offsetY: 0,
-					ridge: 0,
-					normalise: true,
-				};
+				return k.voidMetres;
 			}
 
 			/**
@@ -1320,7 +1302,10 @@
 					// It belongs on peaks and valleys and nowhere else -- folding
 					// continentalness creases the coast of every continent at
 					// once.
-					ridge: k[which + "Fold"],
+					// **The void has no fold row and the fold is what a fold is
+					// for**: a crease belongs on peaks and valleys, and a crease
+					// in a cave field is a crease nobody can see from inside it.
+					ridge: k[which + "Fold"] ?? 0,
 					normalise: true,
 				};
 			}
@@ -1351,6 +1336,9 @@
 				// ground happens to pass through. The terrain reads it again at
 				// every block of `carveColumn`.
 				out[3] = octaveNoise(x, y, z, seed + SEED_OFFSET.cliff, s.cliff);
+				// The fifth is the same: a field over points, shown at the one
+				// slice of it a picture can hold, which is the ground.
+				out[4] = octaveNoise(x, y, z, seed + SEED_OFFSET.void, s.void);
 				return out;
 			}
 
@@ -1599,7 +1587,7 @@
 			 */
 			const carved = { under: 0, above: 0, drowned: 0 };
 
-			function carveColumn(dx, dy, dz, surface, lift, cliffOn, k, seed, s, v, out) {
+			function carveColumn(dx, dy, dz, surface, lift, cliffOn, k, seed, s, out) {
 				out.length = 0;
 				carved.under = 0;
 				carved.above = 0;
@@ -1622,11 +1610,16 @@
 					// reading at this block, air where it is not positive --
 					// plus the one thing added to it, which is a lift that grows
 					// with how far under the ground the block is.
-					if (solid && k.useVoid)
+					if (solid && k.useVoid) {
+						// **The curve is a transform of the reading, and its
+						// middle is the line between air and rock.** A straight
+						// line hands the field through unchanged; anything else
+						// moves which readings are which.
+						const read = voidAt(dx, dy, dz, y, k, seed, s.void);
+						const density = splineAt(k.voidSpline, read) * 2 - 1;
 						solid =
-							voidAt(dx, dy, dz, y, k, seed, v) +
-								(surface - y) / (VOID_REACH * voidMetres(k)) >
-							0;
+							density + (surface - y) / (VOID_REACH * voidMetres(k)) > 0;
+					}
 					if (solid && cliffOn) {
 						const read = densityAt(dx, dy, dz, y, k, seed, s);
 						// The curve is a transform of the reading, and its middle
@@ -1675,14 +1668,14 @@
 			 * picture beside it shows the hillside the spire was cut out of.
 			 * Under an overhang the two are not even close.
 			 */
-			function surfaceAt(dx, dy, dz, said, k, seed, s, v, out) {
+			function surfaceAt(dx, dy, dz, said, k, seed, s, out) {
 				const base = heightFrom(said, k);
 				const lift = carveLift(erosionCut(said, k), k);
 				// Lifted clear of the line, nothing the density says reaches air
 				// and the walk would only confirm the height field.
 				const cliffOn = k.useCliff && lift < 1;
 				if (!cliffOn && !k.useVoid) return base;
-				carveColumn(dx, dy, dz, base, lift, cliffOn, k, seed, s, v, out);
+				carveColumn(dx, dy, dz, base, lift, cliffOn, k, seed, s, out);
 				return out.length > 0 ? out[out.length - 1] : base - carveCrust(k);
 			}
 
@@ -1711,7 +1704,7 @@
 						// smallest thing worth calling one; this one has to
 						// swing several times inside a crust a couple of hundred
 						// metres deep or what comes out is a lowered surface.
-						low: which === "cliff" ? 10 : 100,
+						low: which === "cliff" || which === "void" ? 10 : 100,
 						high: 1000,
 						step: 10,
 						value: feature,
@@ -1736,8 +1729,12 @@
 									).toLocaleString()} m</b> = ` +
 									`<b>${(
 										narrowestOf(which) /
-										(which === "cliff" ? field.blockMetres : field.cellMetres)
-									).toFixed(1)}</b> ${which === "cliff" ? "blocks" : "map cells"}`
+										(which === "cliff" || which === "void"
+											? field.blockMetres
+											: field.cellMetres)
+									).toFixed(1)}</b> ${
+										which === "cliff" || which === "void" ? "blocks" : "map cells"
+									}`
 								: "",
 					},
 					{
@@ -1837,7 +1834,13 @@
 						// rather than at the top of the panel. Click it for a
 						// large one.
 						{ key: which + "Picture", label: "", type: "picture", value: 0 },
-						...layerRows(which, feature, scale, octaves, fold, extra),
+						// **The void has no fold.** A fold creases a whole world
+						// at once, which is what makes it a landform knob; a
+						// crease in a cave field is one nobody can see from
+						// inside the cave.
+						...layerRows(which, feature, scale, octaves, fold, extra).filter(
+							(row) => which !== "void" || row.key !== "voidFold",
+						),
 					],
 				};
 			}
@@ -2090,93 +2093,34 @@
 				// The three fields answer *how high*; this one answers *is this
 				// point rock*, and it is read down the column the first three
 				// already placed.
-				{
-					group: "Void",
-					tint: "cliff",
-					open: true,
-					rows: [
-						{
-							key: "useVoid",
-							label: "on",
-							type: "check",
-							summary: true,
-							value: true,
-							note: () =>
-								field
-									? `one reading per hexagon, air where it is not positive · ` +
-										`the density gains a full <b>1</b> over ` +
-										`<b>${Math.round(
-											VOID_REACH * voidMetres(field.k),
-										).toLocaleString()} m</b> of depth — four shape widths — ` +
-										`so nothing under that is ever air`
-									: "",
-						},
-						{
-							// **The scale, which is the one thing the noise
-							// function cannot supply.** It is smooth per unit of
-							// its own input and has no idea what a metre is; this
-							// is the only conversion there is, and it decides
-							// whether the sign of the field changes every block
-							// -- speckle -- or every few tens of metres, which is
-							// a cavern.
-							key: "voidFeature",
-							label: "Feature",
-							low: 10,
-							high: 1000,
-							step: 10,
-							value: 120,
-							digits: 0,
-							unit: "m",
-						},
-						{
-							// The coarse slider carries the decade and the fine
-							// one picks the value inside it, the same pair the
-							// other three layers use.
-							key: "voidFeatureScale",
-							label: "Feature scale",
-							low: 1,
-							high: 100,
-							step: 1,
-							value: 1,
-							digits: 0,
-							unit: "x",
-							note: () => {
-								if (!field) return "";
-								const k = field.k;
-								const narrow = voidNarrowest(k);
-								return (
-									`widest <b>${Math.round(
-										voidMetres(k),
-									).toLocaleString()} m</b>, narrowest <b>${Math.round(
-										narrow,
-									).toLocaleString()} m</b> = <b>${(
-										narrow / k.blockMetres
-									).toFixed(1)}</b> blocks`
-								);
-							},
-						},
-						{
-							// **Octaves are what stop a cavern being an egg.**
-							// One octave of value noise is a lattice of smooth
-							// blobs and the sign of it is a set of rounded
-							// pockets; narrower octaves ragged-edge them into
-							// passages and side chambers without moving the
-							// widest shape.
-							key: "voidOctaves",
-							label: "Octaves",
-							low: 1,
-							high: 8,
-							step: 1,
-							value: 3,
-							digits: 0,
-							note: () =>
-								field
-									? `each one <b>${VOID_LACUNARITY}x</b> narrower and ` +
-										`<b>${VOID_PERSISTENCE}x</b> quieter than the one above`
-									: "",
-						},
-					],
-				},
+				// **The void is a layer like the other three, so it is built by
+				// the same function.** It has a field, a curve on that field, a
+				// picture of it and the same four noise rows; what it does not
+				// have is a fold, which creases a whole world at once and is
+				// invisible from inside a cave.
+				layerGroup(
+					"Void",
+					"void",
+					"void",
+					{
+						key: "voidSpline",
+						label: "Noise → density",
+						type: "spline",
+						// **A straight line is the field itself**, which is where
+						// a reader should start: the shipped world is the plain
+						// rule and every shape in it comes from the noise rather
+						// than from anything done to it afterwards.
+						value: [
+							[-1, 0],
+							[1, 1],
+						],
+					},
+					120,
+					1,
+					3,
+					0,
+					[],
+				),
 				layerGroup(
 					"Cliffs & overhangs",
 					"cliff",
@@ -2636,19 +2580,6 @@
 				// them.** The patch is set in map cells, so the two knobs
 				// multiply, and this end moves rather than letting the pair of
 				// them ask for a patch nothing can build.
-				// The narrowest octave has to be something the block grid can
-				// draw: under two blocks it is noise per block rather than a
-				// shape, which reads as speckle and not as a cave.
-				if (row.key === "voidOctaves") {
-					const k = derived();
-					const room =
-						1 +
-						Math.floor(
-							Math.log(voidMetres(k) / (2 * k.blockMetres)) /
-								Math.log(VOID_LACUNARITY),
-						);
-					return { ...row, high: Math.max(row.low, Math.min(row.high, room)) };
-				}
 				if (row.key === "blockDetail")
 					return {
 						...row,
@@ -2669,13 +2600,15 @@
 				if (!layer) return row;
 				const what = row.key.slice(layer.length);
 				if (what !== "Octaves" && what !== "FeatureScale") return row;
-				// **The cliff layer is read at every block and the other three
-				// once a map cell**, so what it must not be finer than is the
-				// block. Held to the map cell it could not carry an overhang the
-				// grid has room to draw.
+				// **The two point layers are read at every block and the other
+				// three once a map cell**, so what they must not be finer than is
+				// the block. Held to the map cell they could not carry a space
+				// the grid has room to draw.
 				const derivedK = derived();
 				const cell =
-					layer === "cliff" ? derivedK.blockMetres : derivedK.cellMetres;
+					layer === "cliff" || layer === "void"
+						? derivedK.blockMetres
+						: derivedK.cellMetres;
 				if (what === "FeatureScale") {
 					// Even one octave has to be two map cells wide, and the fine
 					// slider reaches its own bottom, so the coarse one starts
@@ -2757,8 +2690,7 @@
 				const k = derived();
 				const seed = seedFromString(knobs.seed);
 				const s = settingsFor(k);
-				const v = voidSettings(k);
-				const said = [0, 0, 0, 0];
+				const said = [0, 0, 0, 0, 0];
 
 				// **What the world lands on, under each curve.** Noise clusters
 				// around its own middle, so equal widths of a curve cover wildly
@@ -2770,8 +2702,15 @@
 					eroSpline: new Float32Array(TALLY_BINS),
 					pvSpline: new Float32Array(TALLY_BINS),
 					cliffSpline: new Float32Array(TALLY_BINS),
+					voidSpline: new Float32Array(TALLY_BINS),
 				};
-				const keys = ["contSpline", "eroSpline", "pvSpline", "cliffSpline"];
+				const keys = [
+					"contSpline",
+					"eroSpline",
+					"pvSpline",
+					"cliffSpline",
+					"voidSpline",
+				];
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -2780,7 +2719,7 @@
 				let land = 0;
 				for (const p of WORLD) {
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
-					for (let x = 0; x < 4; x++) tally[keys[x]][bin(said[x])]++;
+					for (let x = 0; x < 5; x++) tally[keys[x]][bin(said[x])]++;
 					if (heightFrom(said, k) > k.seaLevel) land++;
 				}
 				let tallest = 0;
@@ -2871,7 +2810,7 @@
 					const cliffOn = k.useCliff && lift < 1;
 					if (cliffOn || k.useVoid) {
 						carveColumn(
-							p[0], p[1], p[2], base, lift, cliffOn, k, seed, s, v, runs,
+							p[0], p[1], p[2], base, lift, cliffOn, k, seed, s, runs,
 						);
 						for (const y of runs) runs2.push(y);
 						// **The height a colour and a coastline read is the top
@@ -2978,7 +2917,6 @@
 				field = {
 					k,
 					s,
-					v,
 					seed,
 					n,
 					list,
@@ -3076,6 +3014,7 @@
 				{ id: "shotEro", key: "ero", layer: 1, name: "Erosion" },
 				{ id: "shotPv", key: "pv", layer: 2, name: "Peaks & valleys" },
 				{ id: "shotCliff", key: "cliff", layer: 3, name: "Density at the surface" },
+				{ id: "shotVoid", key: "void", layer: 4, name: "Void at the surface" },
 			];
 			const SHOT_OF = new Map(SHOTS.map((shot) => [shot.key, shot]));
 			SHOTS[0].canvas = document.getElementById("shotOut");
@@ -3174,9 +3113,8 @@
 				const frame = planet ? null : frameOf(field.centre);
 				const half = field.arc / 2;
 				const k = field.k;
-				const said = [0, 0, 0, 0];
+				const said = [0, 0, 0, 0, 0];
 				const runs = [];
-				const v = field.v;
 				const images = shots.map((shot) => {
 					const target = only ?? shot.canvas;
 					if (target.width !== wide || target.height !== tall) {
@@ -3209,7 +3147,7 @@
 								shot.layer < 0
 									? groundColor(
 											surfaceAt(
-												p[0], p[1], p[2], said, k, field.seed, field.s, v, runs,
+												p[0], p[1], p[2], said, k, field.seed, field.s, runs,
 											),
 											k,
 										)
@@ -3386,7 +3324,7 @@
 				const k = field.k;
 				const frame = frameOf(field.centre);
 				const half = field.arc / 2;
-				const said = [0, 0, 0, 0];
+				const said = [0, 0, 0, 0, 0];
 				const lines = [];
 				let lowest = Infinity;
 				let highest = -Infinity;
@@ -4129,6 +4067,7 @@
 				eroSpline: "#8ce99a",
 				pvSpline: "#ff9db1",
 				cliffSpline: "#c9a7ff",
+				voidSpline: "#7ee0c0",
 			};
 
 			/**
@@ -4305,6 +4244,9 @@
 				// puts above the line is stone and everything under it is air,
 				// before the depth term and `Squash` push a reading back over.
 				if (key === "cliffSpline") return { at: 0.5, name: "rock" };
+				// Over the line is rock and under it is air, which is the whole
+				// of what the void does with a reading.
+				if (key === "voidSpline") return { at: 0.5, name: "rock" };
 				if (key !== "contSpline") return null;
 				// The middle of the curve is the waterline, and draining moves
 				// the water down the sea half -- so the line stays what the curve
@@ -4346,6 +4288,7 @@
 					ero: "erosion",
 					pv: "peaks & valleys",
 					cliff: "density",
+					void: "void",
 				}[layer];
 				if (key === "contSpline")
 					return {
@@ -4356,6 +4299,11 @@
 					return {
 						x: `x · the ${field} field, -1 to +1`,
 						y: "y · how much of the relief it cuts away, none to all of it",
+					};
+				if (key === "voidSpline")
+					return {
+						x: "x · the void field read at this point, -1 to +1",
+						y: "y · the density it becomes, -1 to +1 · over the blue line the block is rock and under it is air · a straight line hands the field through untouched",
 					};
 				if (key === "cliffSpline")
 					return {

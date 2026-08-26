@@ -574,13 +574,45 @@ deepest readings at three, which is a cave system rather than a dimple.
 reach deeper by the same factor and there is no second slider that has to be kept
 in agreement with the first.
 
+**It is a layer like the other three and is built by the same function**, so it
+has a field, a curve on that field, a picture of it, and the same four noise
+rows. **What it has not got is a fold**: a fold creases a whole world at once, which is
+what makes it a landform knob, and a crease in a cave field is one nobody can see
+from inside the cave.
+
 **Feature is the one number the noise function cannot supply.** It is smooth per
 unit of *its own input* and has no idea what a metre is; dividing the world
 position by Feature before the lookup is the only conversion there is, and it
 decides whether the sign of the field changes every block — speckle — or every
 few tens of metres, which is a cavern. **Octaves** then ragged-edge those shapes
-into passages and side chambers without moving the widest one, and the row's top
-end moves so the narrowest octave stays something the block grid can draw.
+into passages and side chambers without moving the widest one, **Falloff** says
+how loud each narrower octave is against the one above and **Step between
+octaves** how much narrower. Both rows' ends move so the narrowest octave stays
+something the block grid can draw — **the void's are measured against the block
+and the first three layers' against the map cell**, because this field is read at
+every block and theirs are read once a place.
+
+| | out from under rock | columns that overhang | floating masses |
+|---|---|---|---|
+| Falloff 0.20 | 41.5% | 28.3% | 0 |
+| **0.50 (shipped)** | **43.9%** | **33.6%** | **9** |
+| Falloff 0.80 | 50.1% | 45.2% | 24 |
+| Step 1.5× | 36.0% | 21.1% | 3 |
+| Step 3.0× | 45.2% | 34.6% | 9 |
+
+**The curve is on the field and its middle line is where air becomes rock.** `x`
+is the reading at that point and `y` is the density it becomes, over the line
+rock and under it air. **It ships as a straight line**, which is the field itself
+handed through untouched — the right place for a reader to start, because then
+every shape in the world came from the noise rather than from something done to
+it afterwards. Standing the middle up sends ordinary readings to both ends and
+opens the world out:
+
+| Curve | out from under rock | columns that overhang | floating masses |
+|---|---|---|---|
+| straight (shipped) | 43.9% | 33.6% | 9 |
+| middle at ×1.75 | 49.4% | 42.1% | 19 |
+| middle at ×5 | 57.4% | 62.6% | 15 |
 
 | Feature | octaves | out from under rock | columns that overhang | floating masses |
 |---|---|---|---|---|
