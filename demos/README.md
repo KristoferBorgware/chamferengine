@@ -570,58 +570,71 @@ above, everything air; and in between the noise decides. That is what keeps the
 2D layers' answer — a coastline, a continent, a mountain range are all still
 theirs — while letting the 3D field carve into it.
 
-**Squash is that bias's slope, and it is the whole of how dramatic the result
-gets.** It is Kniberg's squash factor: how much the bias moves over one **Carve
-depth**, against a noise that reaches **Carve strength**. Turn it up and the bias
-beats the noise a block either side of the surface, so the column snaps back to
-the height field and the layer does nothing; turn it down and the bias barely
-changes over a hundred metres, so the noise owns that hundred metres:
+**Carve reach is the bias, written as the distance it is a slope over.** It is
+Kniberg's squash factor, and metres is the only unit it means anything in: the
+rule is `density > (y − height) ÷ reach`, so one reach **above** the surface the
+bias is `+1` and no reading can keep a block, and one reach **below** it is `−1`
+and no reading can take one away. As a slope every useful value was crammed under
+1 and the top of the slider did nothing; as metres the number on it answers *how
+far from the ground can this reach*:
 
-| Squash | band | columns that overhang | deepest column | tallest ground |
+| Carve reach | columns that overhang | deepest column | tallest ground | rebuild |
 |---|---|---|---|---|
-| 3.00 | 20 m | **0.1%** | 2 spans | 384 m |
-| 1.50 | 40 m | 1.6% | 3 spans | 400 m |
-| 0.80 | 75 m | 9.9% | 3 spans | 432 m |
-| 0.40 | 150 m | 32.2% | 4 spans | 504 m |
-| 0.20 (shipped) | 300 m | 70.8% | 6 spans | 544 m |
-| 0.10 | 600 m | 96.2% | 10 spans | 896 m |
-| 0.05 | 1,200 m | 100.0% | 13 spans | 1,376 m |
-| 0.02 | 3,000 m | 100.0% | 23 spans | 3,136 m |
+| 80 m | 6.3% | 3 spans | 432 m | 452 ms |
+| 150 m (shipped) | 21.5% | 4 spans | 496 m | 578 ms |
+| 300 m | 56.0% | 6 spans | 544 m | 949 ms |
+| 600 m | 96.2% | 10 spans | 896 m | 796 ms |
+| 1,200 m | 100.0% | 13 spans | 1,376 m | 1,388 ms |
+| 3,000 m | 100.0% | 23 spans | 3,136 m | 214 ms at a 32 m block |
 
-Under about 0.2 it stops being cliffs and becomes floating slabs — the failure
-the talk names, where the 3D noise is visible as itself. The readout says the
-share every rebuild, so the line between the two is a number rather than a
-judgement.
+**There is no separate strength knob, because there cannot be one.** Multiplying
+the density and the bias by the same number leaves every comparison exactly as it
+was — what a strength would have done, the reach and the curve already do, and a
+third knob that only moves when the other two are held still is a knob nobody can
+tune. The walk is exactly the reach, so this slider's top end moves with the
+block size: 512 blocks a column is the cap, which is 2,048 m at an 8 m block.
 
-**And under about 0.1 it stops being terrain at all, which the last column is
-what says so.** The ground in this patch runs about **850 m** top to bottom, so
-once the band is wider than that no column's surface is far enough from any
+**Past about 600 m it stops being terrain at all, and the tallest-ground column
+is what says so.** The ground in this patch runs about **850 m** top to bottom,
+so once the reach is further than that no column's surface is far enough from any
 other's for the bias to tell them apart: every column is solid over most of the
-band, the three 2D fields stop reaching the picture, and what is left is a block
-of noise with the patch's own footprint. The tallest ground then tracks the band
-and not the world — 896 m, 1,376 m, 3,136 m against a band of 600 m, 1,200 m,
-3,000 m — and at Squash `0.01` the whole patch lifts off, ground running **2,688
-m to 5,960 m** on a planet 6,801 m in radius. **Making the density's own features
-smaller does not rescue it**: at a 100 m feature instead of 150 m, Squash `0.05`
-is the same slab, 18 spans deep. The band is measured against the *terrain's*
-relief, never against the noise's feature size. The Squash note says so live,
-because the number it has to be compared with moves with every other knob.
+reach, the three 2D fields stop reaching the picture, and what is left is a block
+of noise with the patch's own footprint. The tallest ground then tracks the reach
+and not the world — 896 m, 1,376 m, 3,136 m against reaches of 600 m, 1,200 m,
+3,000 m — and at 6,000 m the whole patch lifts off, ground running **2,688 m to
+5,960 m** on a planet 6,801 m in radius. **Making the density's own features
+smaller does not rescue it**: at a 100 m feature instead of 150 m the same reach
+is the same slab, 18 spans deep. The reach is measured against the *terrain's*
+relief, never against the noise's feature size, and the note under the slider
+says so live because the number it has to be compared with moves with every other
+knob.
 
-**So the walk's cap is a speed limit and not the wall.** It is 512 blocks a
-column, which at the shipped 8 m block puts Squash's bottom at 0.05 — a 1,388 ms
-rebuild, and already well past the point where the picture stops being a
-landscape. The slider goes to 0.02, and reaching it means coarsening **Block
-detail**: a 3 km slab does not need 8 m blocks to look at, and at 32 m blocks it
-draws in 214 ms.
+**Erosion carries into the carve, which is the one place two layers meet.**
+Erosion already flattens the peaks and drags the level toward the sea; a cliff
+standing in the middle of that is the same contradiction a mountain there would
+be. So the reach at a place is `reach × (1 − Erosion smooths it × cut(E))` — the
+same `cut` the height reads, one field with one meaning and two readers. Flatten
+the erosion curve to a constant and the coupling is exactly what it claims to be:
 
-**The band is not a knob, it is two knobs divided.** The noise reaches Carve
-strength at most and the bias grows one Squash per Carve depth, so past
-`depth × strength ÷ squash` the bias cannot be beaten and the answer is settled
-without a reading — rock below, air above. A column is therefore walked over
-tens of blocks rather than over the whole crust, and it closes itself at both
-ends. **Squash also has a bottom that moves**: the walk is capped
-at 160 blocks a column, so the two knobs above it decide how far down this
-slider goes rather than the reader finding out by hitting a refusal.
+| Erosion curve, flat at | columns that overhang | deepest column | tallest ground |
+|---|---|---|---|
+| 0 — nothing worn | 31.6% | 4 spans | 520 m |
+| 0.5 — half worn | 9.1% | 3 spans | 328 m |
+| 1 — worn everywhere | **0.0%** | 1 span | 176 m |
+
+At the shipped curve, turning the knob from `0` to `1` takes the patch from 32.2%
+of columns overhanging to 16.7% — and the point is *which* columns lose them.
+
+**The Terrain picture runs the carve too.** It used to draw the height field, so
+the plane showed a spire and the map beside it showed the hillside the spire was
+cut out of, which under an overhang are not even close. It now takes the top of
+the topmost rock at every pixel. That roughly doubles what a picture costs and it
+changes what the map is for: on the **patch** setting a pixel is a few metres and
+the map matches the plane cell for cell, while on the **planet** setting a pixel
+is 137 m of ground against a 150 m density feature, so a wild reach reads as
+speckle. That speckle is the world, not the drawing — but it is also why the
+shipped reach came down from 300 m to 150 m, because at 300 m the continents
+stop being legible from orbit and nothing had been showing that.
 
 **The curve is on the density, and its blue line is where the density is zero.**
 `x` is the reading at that point and `y` is the density it becomes; above the

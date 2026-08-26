@@ -1341,6 +1341,19 @@
 			 * ridge; the same continentalness and the same peaks under high
 			 * erosion is a plain, and a lower one than the continent asked for.
 			 */
+			/**
+			 * How much erosion takes away here: `0` leaves the ground alone, `1`
+			 * takes all of the relief.
+			 *
+			 * **Pulled out because two things read it.** The height uses it to
+			 * flatten the relief and lower the level; the carve uses it to
+			 * shorten its own reach, so a worn place gets no cliffs for the same
+			 * reason it gets no peaks -- one field, one meaning, two readers.
+			 */
+			function erosionCut(said, k) {
+				return k.useEro ? splineAt(k.eroSpline, said[1]) : 0;
+			}
+
 			function heightFrom(said, k) {
 				// **Each layer's off is an exact statement about what it
 				// contributes, not a hidden default.** Erosion off keeps all of
@@ -1366,9 +1379,7 @@
 					level >= 0.5
 						? ((level - 0.5) / 0.5) * k.relief
 						: -((0.5 - level) / 0.5) * k.seaDepth;
-				// How much erosion takes away here: `0` leaves the ground alone,
-				// `1` takes all of the relief.
-				const cut = k.useEro ? splineAt(k.eroSpline, said[1]) : 0;
+				const cut = erosionCut(said, k);
 				const swing = k.usePv ? splineAt(k.pvSpline, said[2]) * 2 - 1 : 0;
 				const over = base - k.seaLevel;
 				const worn = 1 - k.erosionBite * cut;
@@ -1384,6 +1395,21 @@
 			// ---------------------------------------------------------------
 
 			/**
+			 * How far the density may decide at one place, in metres.
+			 *
+			 * **Erosion shortens it.** A worn place has had its peaks flattened
+			 * and its level dragged toward the sea, and a cliff standing in the
+			 * middle of that is the same contradiction a mountain there would be
+			 * -- so the same `cut` that takes the relief away takes the carve's
+			 * reach with it, in proportion to `Erosion smooths it`. At `0` the
+			 * carve ignores erosion and cuts a plain as hard as a range; at `1`
+			 * a fully worn place gets no carve at all.
+			 */
+			function carveReach(cut, k) {
+				return k.cliffReach * (1 - k.cliffWear * cut);
+			}
+
+			/**
 			 * One column of ground, as the heights where rock starts and stops.
 			 *
 			 * **It is a carve, on the block grid, and everything else in the lab
@@ -1391,39 +1417,39 @@
 			 * height per place, which is what makes a coastline, a continent and
 			 * a mountain range tractable and what no density field can be asked
 			 * for. That height then becomes a **bias** on a 3D density field, and
-			 * what is rock is `density > 0` -- so far below the surface the bias
-			 * is large and positive and every block is rock whatever the noise
-			 * says, far above it is large and negative and every block is air,
-			 * and in between the noise decides. **Without the bias the same field
-			 * is a cave system**, because nothing tells it where the ground was.
+			 * a block is rock where the density beats the bias -- so far below
+			 * the surface the bias is large and every block is rock whatever the
+			 * noise says, far above it is large the other way and every block is
+			 * air, and in between the noise decides. **Without the bias the same
+			 * field is a cave system**, because nothing tells it where the ground
+			 * was. Nothing here is a displacement: every block is kept or
+			 * removed.
 			 *
-			 * **`Squash` is how steep that bias is**, which is the whole of how
-			 * dramatic the result gets. It is Kniberg's squash factor: turn it up
-			 * and the bias beats the noise a block either side of the surface, so
-			 * the column snaps back to the height field and the layer does
-			 * nothing; turn it down and the bias barely changes over a hundred
-			 * metres, so the noise owns that hundred metres -- rock left standing
-			 * in the air is a spire, air left under rock is an overhang, and rock
-			 * whose whole column below it was carved away is a floating island.
-			 * Nothing here is a displacement: every block is kept or removed.
+			 * **`Carve reach` is the bias written as a distance, which is the
+			 * only unit it means anything in.** The rule is
+			 * `density > (y - surface) / reach`, so at exactly one reach above
+			 * the surface the bias is `+1` and no reading can keep a block, and
+			 * one reach below it is `-1` and no reading can take one away. The
+			 * walk therefore covers the reach and nothing else, and the column
+			 * closes itself at both ends.
 			 *
-			 * **The band is not a knob, it is the two knobs divided.** The noise
-			 * reaches `Carve strength` at most and the bias grows `Squash` per
-			 * `Carve depth`, so past `depth x strength / squash` the bias cannot
-			 * be beaten and the answer is settled without a reading. That is why
-			 * the walk is short and why the column closes itself at both ends.
+			 * **There is no separate strength knob, because there cannot be
+			 * one.** Multiplying the density and the bias by the same number
+			 * leaves every comparison exactly as it was -- what a strength would
+			 * have done, the reach and the curve already do, and a third knob
+			 * that only moves when the other two are held still is a knob that
+			 * cannot be tuned.
 			 *
 			 * Returns pairs of heights, low to high, snapped to the block grid.
 			 */
-			function carveColumn(dx, dy, dz, surface, k, seed, s, out) {
+			function carveColumn(dx, dy, dz, surface, reach, k, seed, s, out) {
 				out.length = 0;
 				const block = k.blockMetres;
-				const band = (k.cliffDepth * k.cliffStrength) / k.cliffSquash;
 				// Layer indices, so two neighbouring columns cut their blocks on
 				// the same planes -- a grid one column rounded for itself would
 				// draw a step between every pair of columns and nowhere else.
-				const first = Math.floor((surface - band) / block);
-				const last = Math.ceil((surface + band) / block);
+				const first = Math.floor((surface - reach) / block);
+				const last = Math.ceil((surface + reach) / block);
 				let from = first * block;
 				let rock = true;
 				for (let L = first; L <= last; L++) {
@@ -1434,10 +1460,7 @@
 					// through the middle it leaves ordinary ground alone and
 					// cuts only where the field runs to one of its tails.
 					const push = splineAt(k.cliffSpline, read) * 2 - 1;
-					const density =
-						k.cliffStrength * push -
-						(k.cliffSquash * (y - surface)) / k.cliffDepth;
-					const solid = density > 0;
+					const solid = push > (y - surface) / reach;
 					if (solid === rock) continue;
 					// A block is rock or air whole, so the face is the plane
 					// between two layers rather than the point the density
@@ -1448,6 +1471,24 @@
 				}
 				if (rock) out.push(from, (last + 1) * block);
 				return out;
+			}
+
+			/**
+			 * The top of the topmost rock at one place, which is what a picture
+			 * of the ground has to draw.
+			 *
+			 * **A carve moves the surface, so a map that skips it is a map of a
+			 * world nobody is standing on** -- the plane shows a spire and the
+			 * picture beside it shows the hillside the spire was cut out of.
+			 * Under an overhang the two are not even close.
+			 */
+			function surfaceAt(dx, dy, dz, said, k, seed, s, out) {
+				const base = heightFrom(said, k);
+				if (!k.useCliff) return base;
+				const reach = carveReach(erosionCut(said, k), k);
+				if (reach < k.blockMetres) return base;
+				carveColumn(dx, dy, dz, base, reach, k, seed, s, out);
+				return out.length > 0 ? out[out.length - 1] : base;
 			}
 
 			/**
@@ -1883,42 +1924,41 @@
 					0,
 					[
 						{
-							// **This is the squash factor**, and it is the one
-							// knob that decides whether the layer is a texture or
-							// a landscape. It is how much the bias moves over one
-							// `Carve depth`, against a noise that reaches `Carve
-							// strength` -- so at 1.0 with strength 1.0 the noise
-							// is beaten one depth out and the ground is the
-							// height field with a rough edge, and at 0.2 the
-							// noise owns five depths of altitude and leaves
-							// spires and floating islands in it.
-							key: "cliffSquash",
-							label: "Squash",
-							low: 0.02,
-							high: 3,
-							step: 0.01,
-							value: 0.2,
-							digits: 2,
+							// **This is Kniberg's squash factor, written as the
+							// distance it is a slope over**, which is the only
+							// unit it means anything in. As a slope every useful
+							// value was crammed under 1 and the top of the slider
+							// did nothing; as metres the number on it is the
+							// answer to "how far from the ground can this reach",
+							// which is a question a reader has.
+							key: "cliffReach",
+							label: "Carve reach",
+							low: 8,
+							high: 2000,
+							step: 4,
+							value: 150,
+							digits: 0,
+							unit: "m",
 							note: () => {
 								if (!field) return "";
-								const band =
-									(field.k.cliffDepth * field.k.cliffStrength) /
-									field.k.cliffSquash;
 								const relief = field.highest - field.lowest;
 								return (
-									`the noise decides <b>${Math.round(band).toLocaleString()} m</b> ` +
-									`either side of the surface — below that everything is rock ` +
-									`and above it everything is air, whatever the noise says` +
-									// **The band against the ground's own range is what
-									// says whether this is still a carve.** Once it is
-									// wider than the relief in the patch, no column's
-									// surface is far enough from any other's for the bias
-									// to tell them apart: every column is solid over most
-									// of the band, the three fields stop reaching the
-									// picture, and the tallest ground becomes a function
-									// of this slider rather than of the world.
-									(band > relief
-										? ` · <b>wider than the ground's own ${Math.round(
+									`one reach above the surface no reading can keep a block ` +
+									`and one below it none can take one away, so the walk is ` +
+									`<b>${Math.round(
+										(2 * field.k.cliffReach) / field.k.blockMetres,
+									).toLocaleString()}</b> blocks` +
+									// **The reach against the ground's own range is
+									// what says whether this is still a carve.** Once
+									// it is wider than the relief in the patch, no
+									// column's surface is far enough from any other's
+									// for the bias to tell them apart: every column is
+									// solid over most of the reach, the three fields
+									// stop reaching the picture, and the tallest ground
+									// becomes a function of this slider rather than of
+									// the world.
+									(field.k.cliffReach > relief
+										? ` · <b>further than the ground's own ${Math.round(
 												relief,
 											).toLocaleString()} m</b>, so the density is setting the ` +
 											`terrain rather than carving it`
@@ -1927,49 +1967,28 @@
 							},
 						},
 						{
-							// The distance the bias is measured in. It sets the
-							// scale of the band together with the two above it,
-							// and on its own it is what one unit of squash is
-							// worth.
-							key: "cliffDepth",
-							label: "Carve depth",
-							low: 10,
-							high: 300,
-							step: 5,
-							value: 60,
-							digits: 0,
-							unit: "m",
-							note: () =>
-								field
-									? `one Squash of bias per <b>${field.k.cliffDepth} m</b>, ` +
-										`walked <b>${field.k.blockMetres.toFixed(1)} m</b> at a ` +
-										`time — <b>${Math.round(
-											(2 * field.k.cliffDepth * field.k.cliffStrength) /
-												(field.k.cliffSquash * field.k.blockMetres),
-										).toLocaleString()}</b> blocks a column`
-									: "",
-						},
-						{
-							// How loud the density is against the bias. Raising
-							// it widens the band and deepens the cut inside it,
-							// which is why it is not the same knob as the squash.
-							key: "cliffStrength",
-							label: "Carve strength",
+							// The one place two layers meet. Erosion already
+							// flattens the peaks and drags the level down; this
+							// is it taking the cliffs as well, which is what
+							// stops a worn plain being cut into spires.
+							key: "cliffWear",
+							label: "Erosion smooths it",
 							low: 0,
-							high: 2,
+							high: 1,
 							step: 0.05,
-							value: 1,
+							value: 0.7,
 							digits: 2,
-							unit: "x",
 							note: () =>
-								field
-									? field.k.cliffStrength === 0
-										? "off: the density says nothing and the column is the height field"
-										: `<b>${(field.stacked / Math.max(1, field.count) * 100).toFixed(
-												1,
-											)}%</b> of columns have rock over air over rock, and the ` +
-											`deepest holds <b>${field.deepest}</b> of them`
-									: "",
+								knobs.cliffWear === 0
+									? "off: a worn plain is carved as hard as a mountain range"
+									: `a fully worn place keeps <b>${Math.round(
+											(1 - knobs.cliffWear) * 100,
+										)}%</b> of the reach — <b>${Math.round(
+											(1 - knobs.cliffWear) * knobs.cliffReach,
+										)} m</b> against ${Math.round(knobs.cliffReach)} m` +
+										(knobs.useEro
+											? ""
+											: " · nothing is worn while Erosion is switched off"),
 						},
 					],
 				),
@@ -2260,20 +2279,16 @@
 							),
 						),
 					};
-				// **The carve is walked block by block, and how far it has to be
-				// walked is a knob divided by a knob.** Everything further from
-				// the surface than `Carve depth x Carve strength / Squash` is
-				// settled without a reading -- rock below, air above -- so a
-				// squash near nothing is a column walked for kilometres. This
-				// end moves instead.
-				if (row.key === "cliffSquash") {
-					const k = derived();
-					const least =
-						(2 * k.cliffDepth * knobs.cliffStrength) /
-						(k.blockMetres * MAX_CARVE_LAYERS);
+				// **The carve is walked block by block, and the reach is how
+				// many.** Everything further from the surface than the reach is
+				// settled without a reading -- rock below, air above -- so this
+				// end moves with the block size rather than letting a reach of
+				// kilometres be asked for at a four-metre block.
+				if (row.key === "cliffReach") {
+					const most = (derived().blockMetres * MAX_CARVE_LAYERS) / 2;
 					return {
 						...row,
-						low: Math.min(row.high, Math.max(row.low, Math.ceil(least / row.step) * row.step)),
+						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
 					};
 				}
 				const layer = LAYERS.find((l) => row.key.startsWith(l));
@@ -2474,8 +2489,9 @@
 					const base = heightFrom(said, k);
 					spanAt[c] = runs2.length;
 					let m = base;
-					if (k.useCliff && k.cliffStrength > 0) {
-						carveColumn(p[0], p[1], p[2], base, k, seed, s, runs);
+					const reach = carveReach(erosionCut(said, k), k);
+					if (k.useCliff && reach >= k.blockMetres) {
+						carveColumn(p[0], p[1], p[2], base, reach, k, seed, s, runs);
 						for (const y of runs) runs2.push(y);
 						// **The height a colour and a coastline read is the top
 						// of the topmost rock**, which under an overhang is not
@@ -2707,6 +2723,7 @@
 				const half = field.arc / 2;
 				const k = field.k;
 				const said = [0, 0, 0, 0];
+				const runs = [];
 				const images = shots.map((shot) => {
 					const target = only ?? shot.canvas;
 					if (target.width !== wide || target.height !== tall) {
@@ -2737,7 +2754,10 @@
 							const shot = shots[n];
 							const c =
 								shot.layer < 0
-									? groundColor(heightFrom(said, k), k)
+									? groundColor(
+											surfaceAt(p[0], p[1], p[2], said, k, field.seed, field.s, runs),
+											k,
+										)
 									: bandGrey(said[shot.layer]);
 							const px = images[n].data;
 							px[at] = c[0] * 255;
@@ -3880,7 +3900,7 @@
 				if (key === "cliffSpline")
 					return {
 						x: "x · the density read at this point, -1 to +1",
-						y: "y · the density this reading becomes, -1 to +1 · above the blue line it keeps a block the height would not have, below it takes one away",
+						y: "y · the density, -1 to +1 · at the blue line the ground stays exactly where the other three layers put it · at the top it keeps rock one whole Carve reach higher than that, at the bottom it digs one whole Carve reach lower",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -4080,11 +4100,12 @@
 					// density asks a different question at every point of the
 					// column that height placed, and rock is where its answer
 					// beats the bias.
-					(k.useCliff && k.cliffStrength > 0
-						? `<br />rock where ${k.cliffStrength.toFixed(2)} × ` +
-							"<i class=\"f\">density(D)</i> &gt; " +
-							`${k.cliffSquash.toFixed(2)} × (y − height) ÷ ` +
-							`${Math.round(k.cliffDepth).toLocaleString()} m`
+					(k.useCliff && k.cliffReach >= k.blockMetres
+						? "<br />rock where <i class=\"f\">density(D)</i> &gt; " +
+							`(y − height) ÷ ${Math.round(k.cliffReach).toLocaleString()} m` +
+							(k.cliffWear > 0 && k.useEro
+								? ` × ${term(true, "(1 − " + k.cliffWear.toFixed(2) + " × cut(E))", "1", "e")}`
+								: "")
 						: "<br /><i class=\"gone\">rock below height, air above</i>");
 				facts.innerHTML =
 					(field.whole
@@ -4095,7 +4116,7 @@
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
 					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
-					(knobs.useCliff && knobs.cliffStrength > 0
+					(knobs.useCliff && knobs.cliffReach >= field.k.blockMetres
 						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
 								1,
 							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
