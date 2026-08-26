@@ -1,13 +1,14 @@
 # Demos
 
-Thirty-five self-contained HTML files. No build step, no `npm install`, no
+Thirty-six self-contained HTML files. No build step, no `npm install`, no
 server required — open any of them directly in a browser. All are mobile-friendly
 and touch-enabled.
 
 Most of the 3D demos load Three.js r128 from a CDN and need an internet
 connection. The 2D ones are fully offline, and so are
-[`noise-lab.html`](noise-lab.html), [`multi-noise-lab.html`](multi-noise-lab.html)
-and [`cave-lab.html`](cave-lab.html), which draw their own WebGL2.
+[`noise-lab.html`](noise-lab.html), [`multi-noise-lab.html`](multi-noise-lab.html),
+[`vegetation-lab.html`](vegetation-lab.html) and
+[`cave-lab.html`](cave-lab.html), which draw their own WebGL2.
 
 ---
 
@@ -646,6 +647,90 @@ biggest** say whether what reads as a network survives being drawn in hexagons;
 **faces per column** prices the caves against the same ground with none; and
 **noise lookups a column** is the generation bill, which is where a carve free
 to put a passage at any depth pays for that freedom.
+
+**Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+### [`vegetation-lab.html`](vegetation-lab.html)
+**Trees grown from the planet seed, as blocks, with nothing authored and
+nothing placed.** Twelve species from pine to heather, a stand of them on a
+hillside of hexagon columns, and every number that decides a shape on the
+panel beside it.
+
+**A tree is a skeleton, not a threshold, and that was measured rather than
+argued.** Growing wood wherever a noise field crosses a threshold is the
+obvious idea. Over a 64 m box at 4% fill it gives **172 separate pieces with
+1.7% of the wood touching the ground** — a cloud of floating fragments, which
+is debris rather than a tree. Two fields intersected reach **10.0%**, because
+the crossing of two level sets really is a curve in three dimensions and noise
+really does hold long filaments; they are still rooted nowhere. And gating the
+field by height, which is the natural way to say *no branches near the ground*,
+takes it to **0.0% both times** — the gate's job is to delete wood near the
+ground, and the trunk is the wood near the ground. The same measurement over a
+hashed skeleton is **one piece, 100% of it standing on the ground**.
+
+**That matters beyond looks.** The repair for a disconnected field is a flood
+fill from the trunk, and a flood fill is a global query: whether a cell survives
+depends on a chain of cells that may run three chunks away. Terrain here is a
+pure function of the address — a chunk generates its own rim rather than asking
+the chunk next door, which is what the mesher, the apron and every level of
+detail rest on. **Nothing that needs a flood fill can be terrain.**
+
+**Grown from** switches between the two on the same grid, and the readout says
+**how many separate pieces** the wood is in and **how much of it is standing on
+the ground**. At the shipped thickness the field mode reads **429 pieces, 2.7%
+rooted** against the skeleton's **100%**, and the picture is the finding: brown
+fragments hanging in the air over a bare hillside.
+
+**So noise does the other job, which is the one it is good at.** It bends the
+branches — each step of a limb leans by a lookup at its own position, so no two
+branches repeat and a whole stand leans together, off the same field the ground
+was read from. It
+cuts the leaf clusters, which is what makes a canopy rather than a ball. And
+the height gate survives, pointed at how much splitting is allowed rather than
+at what is wood: **First branch** is bare trunk under a fraction of the height.
+
+**A branch is a direction in three dimensions, never a walk along the neighbour
+ring.** A heading carried along a path here does not close — a loop round an odd
+number of pentagons comes back rotated one index at any radius — and 46% of
+chunks are turned half a turn, so a branch stepping by direction index would
+grow one shape in one chunk and its mirror in the next. Cells come from
+`directionToCell` on the branch's own position, which also means the twelve
+pentagons never need a case: nothing asks for neighbour `k = 5`, and nothing is
+planted on a five in the first place.
+
+**A rod thinner than a cell rasterises to a dotted line, and a dotted branch is
+not connected to anything.** Measured on one tree: at a radius of 0.45 of a cell
+it comes out as **66 pieces with 74.7% rooted**, and at 0.87 it is **one piece
+and 100%**. The rod's centreline is written whatever the radius, and where a
+step moves sideways and upward at once the corner between the two is written as
+well — the ring is six neighbours and the column is two, a diagonal is neither,
+and one missed corner is a branch in two pieces.
+
+**The hexagons are blocks here, not map cells.** The other labs draw the coarse
+map, because the map is the terrain and a landscape is what they are about. A
+plant is metres tall and blocks wide, so this patch is the block grid at the
+full subdivision depth with the map read underneath it through `hexRound` on
+scaled barycentric weights — and **a map cell is a straight ramp, not a
+plateau**: one height per map cell handed to every block under it builds a
+staircase of 16 m treads with a cliff at every edge.
+
+**A species is a bundle of numbers, never a model.** Picking one writes its
+numbers into the rows below and they stay editable, so the list is a set of
+starting points. **Mixed stand** hashes a species per plant out of the twelve,
+and the one named in **Species** is the one the panel is editing. **Size
+spread** scales each plant off its own hash, so a stand has saplings in it.
+
+**Collision is not a second system.** A plant is blocks, so what a player walks
+into is the block test the world already runs, and whether a leaf stops them is
+a property of the block type the way water's is. **Leaves are solid** turns that
+over and the readout says what it costs: how much of the ground you could still
+step onto.
+
+**The cost section is bars, because leaves are the expense and a number in a
+sentence hides that.** A canopy is a shell of one-block-thick surface, so almost
+every leaf cell it holds is drawn on several sides — at the shipped stand the
+leaf faces outnumber the wood faces several times over, and that, not the
+skeleton, is what decides whether a forest is affordable.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

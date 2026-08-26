@@ -1780,6 +1780,51 @@ ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
 
 
+### F-086 — A tree is wider than the reach an edit is routed over, and nothing generates a structure across a chunk rim
+
+**Kind:** gap
+**Milestone:** beyond 1.0.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-26, building `demos/vegetation-lab.html`
+**Where:** `packages/engine/src/generation/chunk/chunksReading.ts`,
+`MESHER_REACH`, `packages/engine/src/generation/ChunkColumnSampler.ts`
+
+**What is missing.** The vegetation lab grows plants from a hash of the cell
+they stand on and rasterises them into the block grid, and it does that over a
+whole patch at once, which a lab may do and a chunk may not. In the engine a
+chunk generates its own contents alone -- `columnAt(face, i, j)` takes an
+address and no neighbour -- and a plant does not fit inside one column. A
+canopy measured in the lab reaches **3 to 4 m** on the shipped 1 m block, and a
+redwood's reaches **6 m**; a chunk at depth 13 cut at chunk level 6 is 64 cells
+a side. So every chunk holds parts of plants rooted in the chunks around it,
+out to the widest canopy the species table allows.
+
+**Why it is not the reach that already exists.** `MESHER_REACH` is **2** -- a
+rim cell asks its own ring and an apron cell asks its own ring, which is the
+furthest a *face* decision reaches. A plant is not a face decision: it is
+content, generated from an address that may be six cells outside the triangle.
+The two numbers are unrelated and the plant one is set by the species table
+rather than by the mesher, so it moves whenever somebody adds a bigger tree.
+
+**What it costs to close.** A root is a hash test on a cell, so a chunk can
+enumerate candidate roots over its own triangle grown by the widest canopy and
+grow the ones that hit. It stays a pure function of the address -- no flood
+fill, no fetch -- and the bill is the rim: at 64 cells a side, growing the
+triangle by 6 cells is about **1.4x** the cells to test for a root, and only
+the ones that hit cost anything after that. What has to be written down
+somewhere both ends read is the widest canopy, the way `MESHER_REACH` is
+written down once, or a chunk and its neighbour disagree about whether a tree
+exists.
+
+**Two things that fall out of it.** A plant rooted outside the chunk must be
+grown identically by both chunks, which means the grower may read nothing but
+the root's address and the seed -- no patch-local frame, which is what the lab
+uses. And a chunk drawn at a coarse level re-generates: a 1 m branch is gone by
+level 3 the way a 3 m cave is gone by level 10, so plants either stop being
+generated past some level or are generated as a coarse blob, and either way
+they appear as the player walks in. Neither is decided.
+
 ### F-085 — `tools/bench.ts` crashes before it measures anything, and its header reads knobs that no longer exist
 
 **Kind:** bug
