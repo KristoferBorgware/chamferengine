@@ -772,6 +772,61 @@ wanders about a radian, which draws as a redwood sprawling **40.8 m** sideways
 from a crown twenty across. Read as a displacement it is bounded by the knob,
 and a stand still leans together because the field is the same.
 
+**Level of detail is a subdivision depth, and vegetation follows it because
+vegetation is terrain.** A plant is blocks, so it is drawn by the chunk's own
+mesher at the chunk's own level — there is nothing to bake and nothing separate
+to fade. **Level of detail** draws the same ground at a shallower depth, and the
+skeleton, which is in world metres and knows nothing about resolution, is
+rasterised into whatever lattice is there. Over the shipped stand, with the
+chunk audit still reading zero at every level:
+
+| level | blocks | hexagons | plants | wood cells | leaf cells | rebuild |
+|---|---|---|---|---|---|---|
+| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 4,990 ms |
+| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 1,669 ms |
+| 2 | 4 m | 469 | 185 | 658 | 1,266 | 1,006 ms |
+| 3 | 8 m | 127 | 186 | 77 | 429 | 917 ms |
+| 4 | 16 m | 37 | 182 | 11 | 106 | 580 ms |
+
+**The plant count barely moves, and that is the point.** A root is a cell, and a
+coarse chunk's cells are not a fine chunk's cells — hashing its own would choose
+a different forest at every level and a tree would come and go as the player
+walked. So **the planting lattice is the finest one at every level**, which
+makes the same ground hold the same trees however coarsely it is drawn. It also
+means the root walk is the same size at every level: **the one part of a chunk
+whose cost does not fall with distance**. The hexagons drop fourfold a level and
+the roots do not.
+
+**Anything a planting test reads from the drawn level makes the forest depend on
+it.** Two did. The slope limit divided by the drawn cell rather than the finest,
+which made the same hillside four times steeper a level out and refused **6,544
+of 7,045** roots at level 2 against none at level 0. And the waterline was read
+off the drawn cell, which resamples the surface, so plants at the shore came and
+went with the level. Both read the world instead now — how steep the ground is
+and how high it stands do not depend on who is asking.
+
+**Past a certain cell size the canopy wins.** A twig is centimetres thick and a
+cluster is metres across, so wood beating leaf is right at the block scale and
+wrong once a block is wider than a trunk: with wood always winning, level 3 drew
+**2,938 wood cells against 62 leaf** — bare brown poles at exactly the distance
+a forest should read as green. **The rule is a rank and not a permission**, and
+that distinction is the whole of it: letting a leaf overwrite wood where it
+happens to arrive second makes the answer depend on the order plants are grown
+in, and a chunk grows them in a different order from its neighbour. Measured,
+that alone took the audit from **0 cells differing to 10**. A rank fixed before
+any plant is grown gives the same cell whatever order it is written in.
+
+**A plant shorter than one block is not grown at all.** Left in, its rod's own
+minimum radius draws it as a whole block — a 0.9 m heather bigger at level 3
+than it is at level 0, standing where nothing should be. Skipping it takes its
+skeleton off the bill as well, which is the only part of the plant cost that
+falls with distance.
+
+**On hills it holds.** Over a hillside with 36 m of relief across the patch and
+198 plants standing on it, the chunk audit reads **0 cells differ**. Steeper
+than that and the slope limit refuses everything — at 134 m of relief across
+96 m, **no plant stands at all**, which is the rule working rather than failing.
+
 **On a phone the panel is shut and a button opens it.** It is 340 px of knobs
 against a 390 px screen, so left open it is the page and the plants are a strip
 above it; shut, they have the whole screen and one tap brings the knobs back.

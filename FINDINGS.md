@@ -1844,13 +1844,45 @@ wanders about a radian, measuring **40.8 m** of sideways reach on a crown twenty
 across. A displacement from the heading a limb set out on is bounded by the knob
 and leans a stand together just the same.
 
+**Level of detail is the same mechanism and it holds too.** A plant is blocks,
+so it is drawn by the chunk's own mesher at the chunk's own level -- there is
+nothing to bake and nothing separate to fade. The lab draws the same ground at a
+shallower depth and rasterises the same skeleton, which is in world metres and
+knows nothing about resolution, into whatever lattice is there. Over five
+levels the hexagons drop fourfold a level, the rebuild falls from **4,990 ms to
+580 ms**, and the chunk audit reads **0 cells differ at every one**.
+
+**But the roots do not get cheaper, and that is structural.** A root is a cell,
+and a coarse chunk's cells are not a fine chunk's cells -- hashing its own would
+choose a different forest at every level and a tree would come and go as a
+player walked. So the planting lattice is the **finest** one whatever is being
+drawn, and the root walk is the same size at every level: **the one part of a
+chunk whose cost does not fall with distance**. Plant counts across levels 0 to
+4 are 186, 185, 185, 186, 182 -- the drift is only plants shorter than one
+block, which are not grown because a rod's own minimum radius would draw a 0.9 m
+heather as a whole 8 m block.
+
+**Three rules came out of it, and all three are things a chunk must not read.**
+A planting test that reads the drawn level makes the forest depend on it: the
+slope limit divided by the drawn cell rather than the finest, which refused
+**6,544 of 7,045** roots at level 2 against none at level 0, and the waterline
+was read off the drawn cell, which resamples the surface. And **material
+precedence must be a rank fixed before any plant is grown, never a permission**
+-- past a cell wider than a trunk the canopy has to win or a forest draws as
+bare poles (**2,938 wood cells against 62 leaf** at level 3), but letting a leaf
+overwrite wood where it happens to arrive second makes the answer depend on the
+order plants are grown in, and a chunk grows them in a different order from its
+neighbour. Measured, that alone took the audit from **0 cells differing to 10**.
+
 **What is left for the engine.** The reach has to be written down once where
 both the store and the mesher read it, the way `MESHER_REACH` is, or a chunk and
-its neighbour disagree about whether a tree exists. And a chunk drawn at a
-coarse level re-generates: a 1 m branch is gone by level 3 the way a 3 m cave is
-gone by level 10, so plants either stop being generated past some level or are
-generated as a coarse blob, and either way they appear as the player walks in.
-Neither is decided.
+its neighbour disagree about whether a tree exists. And the root walk not
+falling with distance is a real bill nobody has priced against a real frame: a
+coarse chunk covers four times the ground of the one a level finer, so it grows
+four times as many plants while its terrain costs the same. Whether that wants a
+coarser planting lattice -- one tree possible per four or eight cells rather
+than per cell, which would make the walk fall with the level and cost the
+density of small plants -- is undecided.
 
 ### F-085 — `tools/bench.ts` crashes before it measures anything, and its header reads knobs that no longer exist
 

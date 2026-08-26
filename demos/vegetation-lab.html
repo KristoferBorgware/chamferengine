@@ -1298,6 +1298,27 @@
 									: "",
 						},
 						{
+							// **Level of detail is a subdivision depth.** The
+							// same ground drawn at a shallower one, which is the
+							// engine's rule -- levels do not nest, so a coarse
+							// mesh re-evaluates the terrain rather than dropping
+							// cells out of a fine one.
+							key: "lod",
+							label: "Level of detail",
+							low: 0,
+							high: 5,
+							step: 1,
+							value: 0,
+							digits: 0,
+							note: () =>
+								field
+									? `blocks <b>${field.block.toFixed(1)} m</b> · ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons drawn over ` +
+										`<b>${field.roots.toLocaleString()}</b> planting cells — the ` +
+										`ground gets cheaper with the level and the roots do not`
+									: "",
+						},
+						{
 							key: "cells",
 							label: "Patch",
 							low: 24, high: 256, step: 8, value: 96, digits: 0,
@@ -1995,12 +2016,30 @@
 					ridge: 0,
 				};
 
-				const n = 2 ** knobs.subdivisionDepth;
+				// **A level of detail is a subdivision depth, and nothing else.**
+				// A coarse chunk here is drawn at a shallower depth over the same
+				// ground, which is the engine's own rule: levels do not nest, so
+				// a coarse mesh re-evaluates the terrain rather than dropping
+				// cells from a fine one. Blocks are wider and taller by the same
+				// factor, and a plant is rasterised into whatever lattice the
+				// chunk is drawn at.
+				const lod = Math.round(knobs.lod);
+				const grain = 2 ** lod;
+				const n = 2 ** Math.max(2, knobs.subdivisionDepth - lod);
+				// **The planting lattice is the finest one, at every level.** A
+				// root is a cell, and a coarse chunk's cells are not the fine
+				// chunk's cells -- hashing its own would choose a different
+				// forest for every level and a tree would come and go as the
+				// player walked. So the roots are enumerated at full depth
+				// whatever is being drawn, which is the one part of this that
+				// does NOT get cheaper with distance.
+				const rootN = 2 ** knobs.subdivisionDepth;
 				const m = 2 ** k.level;
 				const middle = directionOf(knobs.latitude, knobs.longitude);
+				const drawn = Math.max(4, cells >> lod);
 				const found = directionToCell(middle[0], middle[1], middle[2], n);
 				const start = canonicalCell(found.face, n, found.i, found.j);
-				const reach = Math.max(1, cells >> 1);
+				const reach = Math.max(1, drawn >> 1);
 				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
 				const at = new Map();
 				const list = [];
@@ -2029,7 +2068,10 @@
 				const centre = latticePosition(start.face, n, start.i, start.j);
 				const frame = frameOf(centre);
 				const radius = k.radius;
-				const block = k.blockSize;
+				// A layer is as thick as a cell is wide, and both grow with the
+				// level -- the engine shifts the layer index by the level for
+				// exactly this reason.
+				const block = k.blockSize * grain;
 				const height = new Float64Array(count);
 				const localX = new Float64Array(count);
 				const localZ = new Float64Array(count);
@@ -2115,6 +2157,72 @@
 					top[c] = datum + (groundLayer[c] + 1) * block;
 				}
 
+				// **The roots, at the finest lattice, whatever is being drawn.**
+				// A coarse chunk covers four times the ground of the one a level
+				// finer and holds the same number of cells, so its terrain costs
+				// the same at every level -- that is what makes distance cheap.
+				// The plants do not follow: they are chosen per fine cell, and
+				// the same ground holds the same trees however coarsely it is
+				// drawn, so this walk is the same size at every level. **It is
+				// the one part of a chunk whose cost does not fall with
+				// distance**, and the readout says so.
+				const roots = [];
+				{
+					const fine = directionToCell(middle[0], middle[1], middle[2], rootN);
+					const seedCell = canonicalCell(fine.face, rootN, fine.i, fine.j);
+					const keyFine = (c) => (c.face * (rootN + 1) + c.i) * (rootN + 1) + c.j;
+					const seen = new Set([keyFine(seedCell)]);
+					roots.push(seedCell);
+					let edge = [seedCell];
+					const want = Math.max(1, cells >> 1);
+					for (let r = 0; r < want; r++) {
+						const next = [];
+						for (const c of edge)
+							for (let d = 0; d < 6; d++) {
+								const nb = neighbour(c.face, rootN, c.i, c.j, d);
+								if (!nb) continue;
+								const cell = canonicalCell(nb.face, rootN, nb.i, nb.j);
+								const key = keyFine(cell);
+								if (seen.has(key)) continue;
+								seen.add(key);
+								roots.push(cell);
+								next.push(cell);
+							}
+						edge = next;
+					}
+				}
+				// Which drawn cell each root stands on, and where it stands.
+				const rootSeat = new Int32Array(roots.length).fill(-1);
+				const rootDir = new Float64Array(roots.length * 3);
+				// **The ground at the root's own point, not at the cell it is
+				// drawn on.** A coarse level resamples the surface, so a shore
+				// read off the drawn cell moves a metre or two every level and a few
+				// plants at the waterline come and go with the level. The map is
+				// the terrain and a point's height on it does not depend on who
+				// asks.
+				const rootHeight = new Float64Array(roots.length);
+				for (let r = 0; r < roots.length; r++) {
+					const cell = roots[r];
+					const p = latticePosition(cell.face, rootN, cell.i, cell.j);
+					let h = 0;
+					for (const [ci, cj, weight] of coarseCorners(
+						cell.face, rootN, cell.i, cell.j, m,
+					)) {
+						if (weight === 0) continue;
+						h += weight * mapAt(cell.face, ci, cj);
+					}
+					rootHeight[r] = h;
+					rootDir[r * 3] = p[0];
+					rootDir[r * 3 + 1] = p[1];
+					rootDir[r * 3 + 2] = p[2];
+					const coarse =
+						rootN === n
+							? cell
+							: coarseOf(cell.face, rootN, cell.i, cell.j, n);
+					const seat = at.get(keyOf(canonicalCell(coarse.face, n, coarse.i, coarse.j)));
+					if (seat !== undefined) rootSeat[r] = seat;
+				}
+
 				// How tall the tallest thing that could stand here is, which is
 				// what the voxel field has to have room for.
 				let reachUp = 0;
@@ -2136,11 +2244,19 @@
 					320,
 					SUNK + Math.ceil(reachUp / block) + 3,
 				);
+				// The widest trunk any species on the panel can grow, which is
+				// where a cell stops being narrower than the wood in it.
+				let widestTrunk = 0;
+				for (const name of SPECIES_NAMES)
+					widestTrunk = Math.max(
+						widestTrunk,
+						shapeOf(name).trunk * (1 + knobs.sizeSpread),
+					);
 				const veg = new Uint8Array(count * LAYERS);
 				// **Which species put a cell there**, so a mixed stand is not
 				// one colour. Nought means the field mode, which has no species.
 				const owner = new Uint8Array(count * LAYERS);
-				const cellMetres = k.blockMetres;
+				const cellMetres = k.blockMetres * grain;
 
 				// **A plant is grown in world coordinates, and that is what lets
 				// a chunk grow it alone.** Every earlier version worked in the
@@ -2205,12 +2321,32 @@
 				let holds = null;
 				let holder = 0;
 				let painting = 0;
+				// **A cell takes what most fills it, and past a certain cell
+				// size that is the canopy.** A twig is centimetres thick and a
+				// cluster is metres across, so wood beating leaf is right at the
+				// block scale and exactly wrong once a block is wider than a
+				// trunk: at level 3, an 8 m block, a forest drew 2,938 wood
+				// cells against **62** leaf, because every cluster lands on the
+				// same cell as the twig it hangs from and was refused there --
+				// bare brown poles at exactly the distance a forest should read
+				// as green.
+				//
+				// **The rule is a rank and not a permission**, and that
+				// distinction is the whole of it. Letting a leaf overwrite wood
+				// where it happens to arrive second makes the answer depend on
+				// the order plants are grown in, and a chunk grows them in a
+				// different order from its neighbour -- measured, that alone
+				// took the chunk audit from 0 cells differing to 10. A rank
+				// fixed before any plant is grown gives the same cell whatever
+				// order it is written in.
+				const canopyWins = cellMetres > widestTrunk;
+				const rankOf = (what) =>
+					what === EMPTY ? 0 : (what === LEAF) === canopyWins ? 2 : 1;
 				const write = (c, slot, what) => {
 					if (slot < 0 || slot >= LAYERS) return;
 					if (holds !== null && holds[c] !== holder) return;
 					const i = c * LAYERS + slot;
-					if (target[i] === WOOD) return;
-					if (what === LEAF && target[i] !== EMPTY) return;
+					if (rankOf(what) <= rankOf(target[i])) return;
 					target[i] = what;
 					if (tint !== null) tint[i] = painting;
 				};
@@ -2322,6 +2458,19 @@
 					const seat = cellOf(x, y, z);
 					if (seat < 0) return;
 					const stands = metresOf(x, y, z);
+					// **A cluster narrower than a cell still has to land
+					// somewhere.** A rod already has a floor on its radius, so
+					// at a coarse level every twig is drawn as a whole block
+					// while a canopy smaller than one cell passes no distance
+					// test at all and disappears. Measured at level 3, an 8 m
+					// block: 2,941 wood cells against **62** leaf, which is a
+					// forest that reads as bare brown poles from exactly the
+					// distance a forest should read as green. The floor is the
+					// same one, for the same reason.
+					if (r < cellMetres * 0.6) {
+						write(seat, layerAt(seat, stands), LEAF);
+						return;
+					}
 					const used = gather(seat, Math.min(12, Math.ceil(r / cellMetres) + 1));
 					for (let q = 0; q < used; q++) {
 						const c = bag[q];
@@ -2355,7 +2504,14 @@
 				// where it reads the whole step. The ground's real steepness is
 				// a property of the map.
 				const slopeAt = new Map();
-				const perBlock = Math.max(1, k.mapMetres / cellMetres);
+				// **Per finest block, never per drawn block.** How steep the
+				// ground is, is a property of the world; dividing by the cell
+				// size of whatever level happens to be drawn makes the same
+				// hillside four times steeper a level out, and measured that
+				// refused **6,544 of 7,045** roots at level 2 against none at
+				// level 0. Which plants exist has to be the same answer at every
+				// level or a forest appears and disappears as a player walks.
+				const perBlock = Math.max(1, k.mapMetres / k.blockMetres);
 				const slopeOf = (coarse) => {
 					const key = (coarse.face * (m + 1) + coarse.i) * (m + 1) + coarse.j;
 					let s = slopeAt.get(key);
@@ -2400,24 +2556,45 @@
 				 * both consider this root get the same plant, because neither
 				 * of them is consulted.
 				 */
-				const plantAt = (c) => {
-					const cell = list[c];
-					if (knobs.plant === "one plant") return c === 0 ? cell : null;
-					if (height[c] <= knobs.seaLevel) return null;
+				const plantAt = (r) => {
+					const seat = rootSeat[r];
+					if (seat < 0) return null;
+					const cell = roots[r];
+					if (knobs.plant === "one plant") return r === 0 ? cell : null;
+					if (rootHeight[r] <= knobs.seaLevel) return null;
 					// **The twelve pentagons are protected columns**, so nothing
 					// is planted on one and no branch has to ask for a fifth
-					// direction.
-					if (degree[c] !== 6) return "no";
-					if (slopeOf(coarseOf(cell.face, n, cell.i, cell.j, m)) > knobs.slopeLimit)
+					// direction. A lattice point is one of the twelve exactly
+					// when it is a corner of its own face triangle, which is
+					// three integer comparisons rather than a polygon.
+					if (
+						(cell.i === 0 && cell.j === 0) ||
+						(cell.i === rootN && cell.j === 0) ||
+						(cell.i === 0 && cell.j === rootN)
+					)
+						return "no";
+					if (
+						slopeOf(coarseOf(cell.face, rootN, cell.i, cell.j, m)) >
+						knobs.slopeLimit
+					)
 						return "no";
 					if (hash3(cell.i, cell.j, cell.face, seed + 909) >= knobs.density / 100)
 						return null;
 					return cell;
 				};
 
+				// **A plant shorter than one block cannot be drawn, so it is not
+				// grown.** Left in, a 0.9 m heather becomes a whole 8 m block of
+				// wood at level 3 -- bigger than it is at level 0 and standing
+				// where nothing should be. Skipping it also takes its whole
+				// skeleton off the bill, which is the only part of the plant
+				// cost that falls with distance.
+				const tooSmall = (spec, scale) => spec.height * scale < block;
+
 				/** Grow whatever stands on one cell, into whatever sink is set. */
-				const raise = (c) => {
-					const cell = list[c];
+				const raise = (r) => {
+					const seat = rootSeat[r];
+					const cell = roots[r];
 					const roll = hash3(cell.j, cell.face, cell.i, seed + 55);
 					const name =
 						knobs.plant !== "one plant" && knobs.mixed
@@ -2434,14 +2611,20 @@
 						1 +
 						knobs.sizeSpread *
 							(2 * hash3(cell.face, cell.i, cell.j, seed + 77) - 1);
+					if (tooSmall(spec, scale)) return 0;
 					// **The plant's own frame, taken at its own root.** Up is
 					// `normalize(position)` and there is no global north, so
 					// every plant stands in a frame of its own -- which is the
 					// second half of what makes it a pure function of its
 					// address.
-					const foot = radius + top[c];
-					const base = [dirX[c] * foot, dirY[c] * foot, dirZ[c] * foot];
-					const stance = frameOf([dirX[c], dirY[c], dirZ[c]]);
+					// **The plant stands on the ground as it is DRAWN**, so its
+					// foot moves to the layer the coarse chunk put the surface
+					// on. Its direction is its own fine lattice point, which
+					// never moves.
+					const ux = rootDir[r * 3], uy = rootDir[r * 3 + 1], uz = rootDir[r * 3 + 2];
+					const foot = radius + top[seat];
+					const base = [ux * foot, uy * foot, uz * foot];
+					const stance = frameOf([ux, uy, uz]);
 					const out = { rods: [], clusters: [] };
 					growPlant(base, stance, spec, scale, seed + Math.floor(roll * 100000), out);
 					// **Sideways, not away.** Which chunks a plant reaches into
@@ -2510,23 +2693,33 @@
 						}
 					}
 				} else {
+					// Which roots stand on each drawn cell. At the finest level
+					// that is one apiece; four levels out it is 256, and the
+					// list is the same length either way.
+					const under = new Array(count);
+					for (let r = 0; r < roots.length; r++) {
+						const seat = rootSeat[r];
+						if (seat < 0) continue;
+						(under[seat] ??= []).push(r);
+					}
+
 					/** Every root in the patch, into whatever is the target. */
 					const whole = () => {
-						for (let c = 0; c < count && trees < 4000; c++) {
-							const answer = plantAt(c);
+						for (let r = 0; r < roots.length && trees < 4000; r++) {
+							const answer = plantAt(r);
 							if (answer === null) continue;
 							if (answer === "no") {
 								rejected++;
 								continue;
 							}
-							raise(c);
+							raise(r);
 							trees++;
 						}
 					};
 					if (!knobs.chunked) {
 						whole();
-						rootsTested = count;
-						rootsOwned = count;
+						rootsTested = roots.length;
+						rootsOwned = roots.length;
 					} else {
 					// **Cut into chunks, and every chunk generates alone.**
 					// A chunk is the triangle a cell's scaled barycentric
@@ -2594,18 +2787,23 @@
 						}
 						holds = mine;
 						holder = round;
-						rootsOwned += own.length;
-						rootsTested += used;
 						for (let q = 0; q < used; q++) {
 							const c = queue[q];
-							const answer = plantAt(c);
-							if (answer === null) continue;
-							if (answer === "no") {
-								if (mine[c] === round) rejected++;
-								continue;
+							const here = under[c];
+							if (here === undefined) continue;
+							const owned = mine[c] === round;
+							if (owned) rootsOwned += here.length;
+							rootsTested += here.length;
+							for (const r of here) {
+								const answer = plantAt(r);
+								if (answer === null) continue;
+								if (answer === "no") {
+									if (owned) rejected++;
+									continue;
+								}
+								raise(r);
+								if (owned) trees++;
 							}
-							raise(c);
-							if (mine[c] === round) trees++;
 						}
 					}
 					holds = null;
@@ -2717,9 +2915,9 @@
 					k, seed, n, m, list, at, keyOf, count, height, degree, corner,
 					ring, centre, frame, localX, localZ, groundLayer, top, veg, owner,
 					dirX, dirY, dirZ, chunkCount, rootsTested,
-					rootsOwned, widest, differ,
+					rootsOwned, widest, differ, lod, block, roots: roots.length,
 					LAYERS, datum, lowest, highest, cellMetres,
-					span: cells * cellMetres,
+					span: drawn * cellMetres,
 					trees, rejected, tallest, shortest, woodCells, leafCells,
 					pieces, rooted,
 					walkable: landCells ? 1 - blocked / landCells : 1,
@@ -2830,7 +3028,7 @@
 					LAYERS, height, groundLayer,
 				} = field;
 				const radius = k.radius;
-				const block = k.blockSize;
+				const block = field.block;
 
 				let room = count * 24 * 3;
 				let position = new Float32Array(room * 3);
