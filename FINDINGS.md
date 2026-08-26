@@ -10,6 +10,35 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-088 — The multi-noise lab evaluates terrain noise at every block; the engine reads a coarse map and ramps between readings
+
+**Kind:** unverified claim
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-26, moving `demos/multi-noise-lab.html` onto the block grid
+**Where:** `demos/multi-noise-lab.html`, `packages/engine/src/generation/coarse/`
+
+**What happens.** The lab's patch is now cut at the block level rather than the
+map's, and every column reads the three noise stacks **at its own direction**.
+The engine does not: `columnAt` reads a height off the coarse map, which holds
+one value per map cell, and the ground between two readings is a straight ramp.
+So at **Block detail 2** the lab draws four blocks across a map cell, each with
+its own noise reading, where the engine would draw four blocks on one ramp.
+
+**Why it may not matter.** The narrowest octave any layer is allowed is two map
+cells, so the field is smooth at the scale the ramp spans and the two ought to
+be within a fraction of a block of each other almost everywhere. Nothing has
+measured that. What it would take is one probe reading a layer both ways over a
+patch and reporting the distribution of the difference in blocks -- and a
+straight answer would either close this or say what **Block detail** costs in
+honesty above the level the map is at.
+
+**What it is not.** It is not the reason the carve reads the same at every block
+detail (70.8% of columns overhang at detail 2 against 71.4% at detail 3): the
+density layer is 3D and is read per point at every setting, so it never goes
+through the map at all.
+
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 
 **Kind:** risk

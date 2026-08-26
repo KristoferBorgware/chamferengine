@@ -533,54 +533,101 @@ level in the middle* is true at the shipped knobs and wrong one drag later.
 of an axis are worth in metres, and putting them under the curve as well is the
 same three numbers on screen twice.
 
-**A fourth layer is applied to the result of the other three, and it is not a
-height.** The construction is the same talk's: a **density** read at every
-point of the column rather than one value per place, rock where it is positive
-and air where it is not. A height field cannot hold rock over air over rock — an
-overhang is not a value it has — so this one is three inputs and one output,
-and the ground is wherever its answer changes, which can happen more than once
-going up.
+**The patch is drawn on the block grid, not on the map's.** A map cell is a
+reading and a block is a hexagon one layer tall; between two readings the engine
+lays blocks up a ramp, and a cliff, an overhang and a floating island are all
+shapes in that grid. Drawn a hexagon per map reading there is nowhere for any of
+them to stand. **Block detail** is how many levels finer than the map that is —
+at 0 it is the map's own level again, and each step is four times the columns:
+
+| Block detail | block | columns in the patch | columns that overhang | rebuild |
+|---|---|---|---|---|
+| 0 | 32 m | 817 | 63.4% | 148 ms |
+| 1 | 16 m | 3,169 | 69.5% | 248 ms |
+| 2 (shipped) | 8 m | 12,481 | 70.8% | 553 ms |
+| 3 | 4 m | 49,537 | 71.4% | 3,306 ms |
+
+**The shape barely moves and only the drawing gets finer**, which is the answer
+to whether the grid is inventing the effect: 70.8% against 71.4% over a
+quarter of the block size. Those are software-adapter timings — read the ratio.
+
+**A fourth layer carves the result of the other three, and it removes blocks
+rather than moving them.** The construction is the same talk's: a **density**
+read at every point of the column rather than one value per place, rock where it
+is positive and air where it is not. A height field cannot hold rock over air
+over rock — an overhang is not a value it has — so this one is three inputs and
+one output, and the ground is wherever its answer changes, which can happen more
+than once going up. **It is 3D noise, and on a sphere that costs nothing extra**:
+the other three layers sample a unit direction, and the point `metres` above the
+surface is the same direction scaled by `1 + metres / radius`, so one call reads
+one field at any altitude — and that scaling is exactly isotropic, so a feature
+set to 150 m is 150 m tall as well as wide.
 
 **On its own it is a cave system, and the squash is what makes it a cliff.** The
 density is biased by how far the point stands above the height the three fields
 drew: far below, the bias makes everything rock whatever the noise says; far
-above, everything air; and only inside a band of **Cliff reach** either side can
-the noise decide. That is what keeps the 2D layers' answer — a coastline, a
-continent, a mountain range are all still theirs — while letting the 3D field
-cut a cliff into it.
+above, everything air; and in between the noise decides. That is what keeps the
+2D layers' answer — a coastline, a continent, a mountain range are all still
+theirs — while letting the 3D field carve into it.
 
-**The vertical scale is what makes an overhang possible at all.** For a column
-to hold two spans the density has to cross the bias twice, and the bias sweeps
-the whole of `−1` to `+1` across the band. Read at the same scale in every
-direction it never does: a 150 m feature changes by about `1/150` a metre where
-the bias changes by `1/reach`, so at any reach under 150 m the bias wins
-everywhere. Measured at the shipped feature size, **3,169 columns and not one
-second span**. **Vertical scale** stretches the sample point so the field
-changes that many times faster going up than sideways — wide landforms, short
-overhangs — and it is the dial the whole effect hangs off:
+**Squash is that bias's slope, and it is the whole of how dramatic the result
+gets.** It is Kniberg's squash factor: how much the bias moves over one **Carve
+depth**, against a noise that reaches **Carve strength**. Turn it up and the bias
+beats the noise a block either side of the surface, so the column snaps back to
+the height field and the layer does nothing; turn it down and the bias barely
+changes over a hundred metres, so the noise owns that hundred metres:
 
-| Vertical scale | columns that overhang | deepest column |
-|---|---|---|
-| 1× | **0.0%** | 1 span |
-| 5× (shipped) | 18.3% | 3 spans |
-| 10× | 53.9% | 5 spans |
-| 16× | **75.5%** | 6 spans |
+| Squash | columns that overhang | deepest column | tallest ground |
+|---|---|---|---|
+| 3.00 | **0.1%** | 2 spans | 384 m |
+| 1.50 | 1.6% | 3 spans | 400 m |
+| 0.80 | 9.9% | 3 spans | 432 m |
+| 0.40 | 32.2% | 4 spans | 504 m |
+| 0.20 (shipped) | 70.8% | 6 spans | 544 m |
+| 0.10 | **96.2%** | 10 spans | 896 m |
 
-Past about 10× it stops being cliffs and becomes mesas and floating slabs —
-the failure the talk names, where the 3D noise is visible as itself. The
-readout says the share every rebuild, so the line between the two is a number
-rather than a judgement.
+Under about 0.2 it stops being cliffs and becomes floating slabs — the failure
+the talk names, where the 3D noise is visible as itself. The readout says the
+share every rebuild, so the line between the two is a number rather than a
+judgement.
 
-**The curve is on the density, and its blue line leaves the ground alone.** `x`
-is the density read at that point and `y` is how far it moves the surface, one
-Cliff reach down to one up; half way is where it neither carves in nor builds
-out. The shipped curve is **flat through the middle** so ordinary ground is the
-surface the three fields drew and only the tails cut a cliff — a straight line
-there spends the whole band everywhere and the patch comes out as stacks.
+**The band is not a knob, it is two knobs divided.** The noise reaches Carve
+strength at most and the bias grows one Squash per Carve depth, so past
+`depth × strength ÷ squash` the bias cannot be beaten and the answer is settled
+without a reading — rock below, air above. A column is therefore walked over
+tens of blocks rather than over the whole crust, and it closes itself at both
+ends. **Squash also has a bottom that moves**: the walk is capped
+at 160 blocks a column, so the two knobs above it decide how far down this
+slider goes rather than the reader finding out by hitting a refusal.
 
-**With the layer switched off the world is the one it always was** — pixel for
-pixel, 0.00 of 255 across a whole frame, because a column then holds the single
-span a height field is.
+**The curve is on the density, and its blue line is where the density is zero.**
+`x` is the reading at that point and `y` is the density it becomes; above the
+line it keeps a block the height field would not have, below it takes one away.
+The shipped curve is **steep through the middle, because that is where the
+readings are** — an octave stack is normalised to its own peak and then clusters,
+so a straight line spends nearly all of its range on readings almost nothing
+lands on and hands ordinary ground a density of about a quarter. Standing the
+middle up takes the same readings to both ends: **29.4% of columns overhang
+against 62.3%**, and the tallest ground goes from 348 m to 472 m. Flattening the
+middle is the tame setting, and worth reaching by dragging rather than by
+shipping.
+
+**Turning the layer off leaves the block grid, because the grid is the world's
+and not the layer's.** The ground is then the height field rounded to the nearest
+layer boundary — the terracing the engine builds, and the shape a carve is cut
+out of.
+
+**And it turned up a hole the height field had had all along.** Each column is
+drawn down to a lip under its own ground rather than down to one floor under the
+patch, because a floor makes the block a plinth taller than the terrain on it;
+but the wall between two columns was drawn to *this* column's lip, so a neighbour
+more than a lip lower left a gap between the bottom of one and the top of the
+other, with the inside of the planet behind it. The lip is 6% of the patch, so it
+opens as soon as the patch is small enough to look at closely: at **Patch 16**,
+512 m across ground running −136 m to 234 m, **6.23% of the drawn ground was
+showing through**. The fix is one term — a wall reaches whichever of the two
+lips is lower. It has nothing to do with the density layer, and turning that
+layer off does not close it.
 
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so
