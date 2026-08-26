@@ -521,13 +521,16 @@
 			 * is divided by the total amplitude, so adding an octave adds detail
 			 * without making the world taller.
 			 *
-			 * **`ridge` is in the engine and is not on this panel.** It folds
-			 * each octave at its own zero crossing, which creases a whole world
-			 * at once -- it moves the character of every place together, and
-			 * what a second layer exists for is to make places differ. Both
-			 * layers pass zero. The parameter stays because this block is the
-			 * engine's function and a copy that has dropped an argument is a
-			 * copy that has drifted.
+			 * **`ridge` folds each octave at its own zero crossing**, and that
+			 * fold is the only place a crease can come from: every octave of a
+			 * plain sum is smooth in its first and second derivative, so every
+			 * summit a plain sum builds is a dome. At `0` the sum is returned
+			 * bit for bit.
+			 *
+			 * **It creases a whole layer at once**, moving the character of
+			 * every place in that layer together, so it belongs to a layer that
+			 * already says *where* -- fold the layer that decides a coastline
+			 * and every coastline on the planet is creased.
 			 */
 			function octaveNoise(x, y, z, seed, s) {
 				let sum = 0;
