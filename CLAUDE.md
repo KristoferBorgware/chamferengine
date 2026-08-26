@@ -966,8 +966,9 @@ Violating any of these breaks the design. They are not tunable.
   of it has an edge. **The only place a crease comes from is an absolute
   value**: `1 - |n|` folds an octave at its own zero crossing, squaring sharpens
   the fold, and weighting each ridged octave by the one above it keeps the flats
-  flat. At `ridge` 0.6 the median goes to **24.3°** and the 99th to **63.7°**.
-  **At 0 it is bit-for-bit the plain sum.**
+  flat. Over a 3,400 m patch sampled every 13.3 m at 300 m of relief, a fold of
+  0.6 takes the median from `13.8°` to **21.2°** and the 99th from `47.9°` to
+  **60.9°**. **At 0 it is bit-for-bit the plain sum.**
 - **THE SEA FLOOR WAS SPENDING THE MOUNTAINS' BUDGET** (`metreHeight`, doc 08).
   One scale for the whole field looks obvious and caps the peaks: noise is
   symmetric about its own middle and sea level is a percentile **above** it, so
@@ -1012,12 +1013,31 @@ Violating any of these breaks the design. They are not tunable.
   the layers decide where land is, so it was a second answer to a question that
   now has one.
 - **RIDGE IS IN THE ENGINE AND NOTHING SETS IT** (`octaveNoise`, doc 08). The
-  fold is real and measured — `1 - |n|` at 0.6 takes the median land gradient
-  from `11.0°` to `24.3°` and the 99th from `37.5°` to `63.7°` — and it creases
-  the **whole world at once**, moving the character of every place together,
-  which is the one thing a landscape must not do. The mountain layer replaced
-  it because a layer says *where*. The parameter stays because doc 08 argues it
-  from that measurement and this is the function the measurement is of.
+  fold is real and measured — over a 3,400 m patch sampled every 13.3 m at
+  300 m of relief, 0.6 takes the median land gradient from `13.8°` to `21.2°`
+  and the 99th from `47.9°` to `60.9°` — and it creases the **whole world at
+  once**, moving the character of every place together, which is the one thing
+  a landscape must not do. The mountain layer replaced it because a layer says
+  *where*. The parameter stays because doc 08 argues it from that measurement
+  and this is the function the measurement is of.
+- **A FOLD MOVES ITS CREST; IT IS NEVER MIXED WITH THE SHAPE IT REPLACES**
+  (`octaveNoise`, doc 08, `tools/trial-fold.ts`, F-087 closed). A plain octave
+  peaks where it reads `+1` and a fold peaks where it reads `0`, so the two
+  **disagree about which end is high**: adding them in proportion subtracts on
+  the positive half and adds on the negative one. Measured over the planet,
+  that cost the positive half its range across the middle of the dial — the
+  spread of the top tenth against the bottom tenth ran **bottom ×2.47 at a fold
+  of 0.35**, the field's maximum fell to `0.337` against the plain sum's
+  `0.735`, and **which end of the field carried its range reversed near 0.72**
+  with nothing saying so. A little fold also made the ground *flatter* than
+  none: `10.9°` at the median against `13.8°` at zero. `octaveNoise` moves the
+  crest instead — `pivot` is where `+1` sits, at `n = 1` unfolded and `n = 0`
+  fully folded, and the crease is measured from there, so the field reaches
+  `+1` at the crest and `-1` at the far end **at every setting**. The top leads
+  at every setting (×1.08 to ×2.20) and the gradient rises monotonically.
+  **Both ends are unchanged to the bit** — 200,000 of 200,000 samples identical
+  at 0 and at 1, largest gap zero — so no shipped world moves: `layeredHeight`
+  passes `ridge: 0`, and nothing else in the engine sets it.
 - **THE ONE SCALE THE FIT CANNOT DIVIDE OUT IS PEAK SCALE** (`metreHeight`,
   doc 08). The metre step divides by the field's own peak, so the tallest point
   is Relief whatever the shape knobs say — which is what makes Relief

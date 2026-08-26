@@ -518,9 +518,23 @@
 					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 					let signal = n;
 					if (ridge > 0) {
-						const fold = 1 - Math.abs(n);
-						const crease = fold * fold;
-						signal = n * (1 - ridge) + (crease * 2 - 1) * ridge;
+						// **The fold's crest moves; the two shapes are never
+						// mixed.** Folding at the zero crossing and blending
+						// that against the plain octave adds an even function to
+						// an odd one, and the two disagree about which end is
+						// high -- plain noise peaks at `n = 1` and a fold peaks
+						// at `n = 0` -- so on the positive side they cancel.
+						// Measured over the planet, the spread of the top tenth
+						// against the bottom tenth ran `1 : 3.34` at a fold of
+						// 0.35 and the maximum fell to 0.338 against the plain
+						// sum's 0.807. One shape whose crest slides instead: the
+						// field reaches +1 at the crest and -1 at the far end at
+						// every setting, and both ends are the arithmetic they
+						// always were.
+						const pivot = 1 - ridge;
+						const away = Math.abs(n - pivot) / (1 + pivot);
+						const crease = (1 - away) * (1 - ridge * away);
+						signal = crease * 2 - 1;
 						signal *= weight;
 						weight = Math.min(
 							1,
@@ -1388,33 +1402,13 @@
 						step: 0.05,
 						value: fold,
 						digits: 2,
-						// **Which end of the field carries the range is not the
-						// end the name promises, under about 0.72.** The blend
-						// is an odd term in the raw noise plus an even one in
-						// the crease, so on the positive side the two partly
-						// cancel and on the negative side they add. Measured
-						// over the whole planet, the spread of the top tenth
-						// against the spread of the bottom tenth: even at 0,
-						// **bottom x3.34 at 0.35**, bottom x1.72 at 0.50, and
-						// the crossover near **0.72** -- above it, top x1.48 at
-						// 0.85 and x2.10 at 1. The *shape* is right at any
-						// setting, and only the room is not: the high values are
-						// the thin ridge network either way, with a top-tenth
-						// neighbour agreement of 71.9% against the bottom's
-						// 87.5%. Below the crossover the ridges are simply piled
-						// against a ceiling with nothing above them.
 						note: () =>
 							knobs[which + "Fold"] === 0
 								? "the plain sum, bit for bit"
-								: knobs[which + "Fold"] < 0.72
-									? "creases every octave at its own zero crossing — but " +
-										"under <b>0.72</b> the crease has no headroom and the " +
-										"range sits in the field's <b>negative</b> half, " +
-										"<b>3.3x</b> the positive one at 0.35, so a curve here " +
-										"wants to rise to the left"
-									: "creases every octave at its own zero crossing, with " +
-										"the range in the field's positive half — <b>1.5x</b> " +
-										"the negative one at 0.85",
+								: "creases every octave at its own zero crossing · the " +
+									"crest slides from the field's high end to its middle, so " +
+									"the range stays in the positive half at every setting — " +
+									"<b>1.1x</b> the negative one just off zero, <b>2.2x</b> at 1",
 					},
 					...extra,
 				];
