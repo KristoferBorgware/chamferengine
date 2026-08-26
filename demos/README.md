@@ -542,14 +542,14 @@ at 0 it is the map's own level again, and each step is four times the columns:
 
 | Block detail | block | columns in the patch | columns that overhang | rebuild |
 |---|---|---|---|---|
-| 0 | 32 m | 817 | 21.5% | 180 ms |
-| 1 | 16 m | 3,169 | 24.6% | 292 ms |
-| 2 (shipped) | 8 m | 12,481 | 29.1% | 547 ms |
-| 3 | 4 m | 49,537 | 29.8% | 1,696 ms |
+| 0 | 32 m | 817 | 13.7% | 178 ms |
+| 1 | 16 m | 3,169 | 18.3% | 265 ms |
+| 2 (shipped) | 8 m | 12,481 | 22.5% | 507 ms |
+| 3 | 4 m | 49,537 | 22.9% | 1,298 ms |
 
 **The shape settles and only the drawing gets finer**, which is the answer to
-whether the grid is inventing the effect: 29.1% against 29.8% over half the block
-size, against 21.5% at a 32 m block where a whole overhang can fall between two
+whether the grid is inventing the effect: 22.5% against 22.9% over half the block
+size, against 13.7% at a 32 m block where a whole overhang can fall between two
 layers. Those are software-adapter timings — read the ratio.
 
 **A fourth layer carves the result of the other three, and it only ever takes
@@ -567,52 +567,65 @@ isotropic, so a feature set to 100 m is 100 m tall as well as wide.
 above that surface is ever kept, so **the ground can only end up lower than the
 three fields drew it** — a mountain here is something the carve left standing,
 never something it built. That is the one property the whole layer has to have,
-and it is measurable: as Carve reach rises the tallest ground in the patch falls
-and never rises.
+and it is measurable: the tallest ground in the patch falls as Squash rises and
+never climbs.
 
-| Carve reach | tallest ground | lowest ground | columns that overhang | deepest | floating masses |
+| Squash | tallest ground | lowest ground | columns that overhang | deepest | floating masses |
 |---|---|---|---|---|---|
-| off | 368 m | −152 m | — | 1 span | — |
-| 100 m | 352 m | −208 m | 4.2% | 3 spans | 3 |
-| **250 m (shipped)** | **344 m** | **−264 m** | **29.1%** | **4 spans** | **25** |
-| 600 m | 320 m | −528 m | 76.1% | 8 spans | 41 |
-| 1,200 m | 304 m | −752 m | 97.0% | 9 spans | 86 |
+| 0 | 368 m | −152 m | — | 1 span | — |
+| 0.25 | 360 m | −184 m | 0.3% | 2 spans | 0 |
+| 0.50 | 352 m | −208 m | 4.2% | 3 spans | 3 |
+| 0.75 | 352 m | −224 m | 12.2% | 3 spans | 4 |
+| **1.00 (shipped)** | **344 m** | **−248 m** | **22.5%** | **4 spans** | **8** |
 
-**A floating mass is a question no column can answer**, so the lab walks the whole
-patch for it: how many spans a column holds says there is air under some rock,
-and whether that rock is attached to anything is a fact about the neighbours.
-Every column's lowest span reaches the bedrock under the carve — below one reach
-nothing is ever dug — so those are the ground, and any run of rock that never
-joins one is hanging in the air. **Carving alone produces them**, with nothing
-built above the surface: a spire whose neighbours are all dug out below its cap
-is left holding a roof over nothing.
+**Squash at 0 is the layer switched off, to the metre** — the same −152 m to
+368 m the checkbox gives — because a carve that may dig nothing digs nothing.
 
-**Carve reach is the reading turned into a distance, which is the only unit it
-means anything in.** It is Kniberg's squash factor: a reading at the top of the
-curve digs nothing and one at the bottom digs a whole reach, so a block at depth
-`d` is removed when the reading **at that block** is willing to dig past it. The
-same field read at two heights in one column can dig at one and not the other,
-which is what leaves rock over air over rock. As a slope every useful value was
-crammed under 1 and the top of the slider did nothing.
+**How deep it may dig is not a knob, and that is the point.** A depth slider is a
+digging slider: turn it up and the layer stops carving a crust and starts sinking
+shafts, which is a cave system's job and not this one's. It is a fixed share of
+**Relief** instead — a quarter of how tall the tallest mountain in the world is —
+so the carve is the same slice off the top of a gentle world and a savage one.
+Move Relief and the crust it works in moves with it, in proportion:
+
+| Relief | carve depth | tallest ground, carved | uncarved | columns that overhang |
+|---|---|---|---|---|
+| 400 m | 100 m | 248 m | 256 m | 4.2% |
+| 800 m | 200 m | 344 m | 368 m | 22.5% |
+| 1,600 m | 400 m | 656 m | 704 m | 47.9% |
+
+**Tying the depth to the density's own feature size was tried and drowns the
+world.** It reads well — the carve is the size of the shapes in the field it is
+cutting — and it is the digging slider again wearing a different label: widening
+Feature from 100 m to 800 m took the lowest ground from −248 m to **−1,280 m**
+and the highest from 344 m to **−200 m**, every column dug under the sea. Against
+Relief the floor does not move at all:
+
+| Density feature | lowest ground | columns that overhang | deepest | floating masses |
+|---|---|---|---|---|
+| 100 m (shipped) | −248 m | 22.5% | 4 spans | 8 |
+| 200 m | −248 m | 4.2% | 3 spans | 0 |
+| 400 m | −256 m | 1.3% | 2 spans | 0 |
+| 800 m | −264 m | **0.0%** | 1 span | 0 |
+
+**So the feature size decides whether anything overhangs, and nothing else
+does.** A block is kept while one below it is dug only if the field swings
+between the two, which it cannot do over a distance shorter than its own
+features — so a Feature wider than the crust gives a lowered surface and no
+overhang at all. The Squash row says so live when that is what has happened.
 
 **There is no separate strength knob, because there cannot be one.** How much is
-dug is the curve's shape and how far is the reach; a third knob multiplying both
-would move nothing those two are holding still. The walk is exactly the reach, so
-this slider's top end moves with the block size — 512 blocks a column is the cap,
-which is 4,096 m at an 8 m block.
+dug is the curve's shape and how far is the crust; a third knob multiplying both
+would move nothing those two are holding still.
 
-**What decides whether it reads as a cliff is the reach against the density's own
-feature size, not the reach alone.** An overhang needs a block to be kept while
-one below it is dug, which needs the field to swing between the two — and a
-feature much wider than the reach cannot swing over that distance. Measured at a
-200 m reach:
-
-| Density feature | columns that overhang | deepest | floating masses |
-|---|---|---|---|
-| 600 m | 0.1% | 2 spans | 0 |
-| 300 m | 1.5% | 2 spans | 0 |
-| 150 m | 8.2% | 3 spans | 1 |
-| 100 m (shipped) | 22.5% | 4 spans | 8 |
+**A floating mass is a question no column can answer**, so the lab walks the
+whole patch for it: how many spans a column holds says there is air under some
+rock, and whether that rock is attached to anything is a fact about the
+neighbours. Every column's lowest span reaches the bedrock under the carve — below
+the crust nothing is ever dug — so those are the ground, and any run of rock that
+never joins one is hanging in the air. **Carving alone produces them**, with
+nothing built above the surface: a spire whose neighbours are all dug out below
+its cap is left holding a roof over nothing.
 
 **Erosion carries into the carve, which is the one place two layers meet.**
 Erosion already flattens the peaks and drags the level toward the sea; a cliff
@@ -623,22 +636,26 @@ the erosion curve to a constant and the coupling is exactly what it claims:
 
 | Erosion curve, flat at | columns that overhang | deepest | floating masses |
 |---|---|---|---|
-| 0 — nothing worn | 37.2% | 6 spans | 13 |
-| 0.5 — half worn | 16.8% | 3 spans | 7 |
+| 0 — nothing worn | 27.1% | 4 spans | 13 |
+| 0.5 — half worn | 10.3% | 3 spans | 4 |
 | 1 — worn everywhere | **0.0%** | **1 span** | **0** |
 
 At the shipped erosion curve, turning the knob from `0` to `1` takes the patch
-from 38.2% of columns overhanging to 23.6% — and the point is *which* columns
+from 29.8% of columns overhanging to 16.0% — and the point is *which* columns
 lose them.
 
 **The curve is a digging depth, so the whole of its axis does work.** `x` is the
 reading at that point and `y` is how deep it digs: the top digs nothing and
-leaves the ground exactly as the other three drew it, the bottom digs a whole
-Carve reach out from under it. There is no reference line on this one, because
-the reference is the top of its own axis. The shipped curve is **high across most
-of the axis and dives in one tail** — a curve sitting in the middle digs
-*everywhere*, and a field thresholded at its own median is swiss cheese rather
-than a cliff.
+leaves the ground exactly as the other three drew it, the bottom digs the whole
+crust out from under it. There is no reference line on this one, because the
+reference is the top of its own axis — the other three curves are read against
+something the world sets, and this one is read against *no carve at all*. The
+shipped curve is **steep through the middle, because that is where the readings
+are**: an octave stack is normalised to its own peak and then clusters, so a
+straight line spends nearly all of its range on readings almost nothing lands on
+and hands ordinary ground a shallow scrape. Standing the middle up sends the same
+readings to both ends — about a third of the world digs the full crust and about
+a third digs nothing — which is what makes a wall rather than a slope.
 
 **The Terrain picture runs the carve too.** It used to draw the height field, so
 the plane showed a spire and the map beside it showed the hillside the spire was
@@ -646,7 +663,7 @@ cut out of, which under an overhang are not even close. It now takes the top of
 the topmost rock at every pixel. That roughly doubles what a picture costs, and
 on the **patch** setting a pixel is a few metres so the map matches the plane cell
 for cell. On the **planet** setting a pixel is 137 m of ground against a 100 m
-density feature, so what a wild reach does to a coastline arrives as speckle —
+density feature, so what a full squash does to a coastline arrives as speckle —
 which is the world and not the drawing, and is the only place the whole planet's
 worth of it can be seen at once.
 

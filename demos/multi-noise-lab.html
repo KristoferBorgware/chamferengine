@@ -1181,6 +1181,15 @@
 			 * band and `Squash` is the end that moves to keep it.
 			 */
 			const MAX_CARVE_LAYERS = 512;
+			/**
+			 * How much of `Relief` the carve may dig through at a full squash.
+			 *
+			 * **The crust is a share of the world's own height, not a distance.**
+			 * A quarter of the tallest mountain is the same slice off the top of
+			 * a gentle world and a savage one, so the layer keeps its character
+			 * when Relief moves rather than needing to be re-tuned after it.
+			 */
+			const CARVE_SHARE = 0.25;
 
 			/** Offsets from the world seed, so the three layers are three fields. */
 			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613 };
@@ -1395,18 +1404,48 @@
 			// ---------------------------------------------------------------
 
 			/**
-			 * How far the density may decide at one place, in metres.
+			 * How far under the ground the density may decide, in metres.
+			 *
+			 * **It is not a knob, and that is the point.** A depth slider is a
+			 * digging slider: turn it up and the layer stops carving a crust and
+			 * starts sinking shafts, which is a cave system's job and not this
+			 * one's. It is a fixed share of **`Relief`** instead -- a quarter of
+			 * how tall the tallest mountain in the world is -- so the carve is
+			 * always the same slice off the top of the world however that world
+			 * is set. Make the mountains taller and the crust it works in gets
+			 * taller with them; nothing else moves it.
+			 *
+			 * **Not the density's own feature size, which was tried.** Tying the
+			 * depth to the shapes being cut reads well and drowns the world: at
+			 * the shipped knobs, widening `Feature` from 100 m to 800 m took the
+			 * lowest ground from `-248 m` to `-1,280 m` and the highest from
+			 * `344 m` to `-200 m` -- every column dug under the sea. That is the
+			 * same digging slider wearing a different label.
+			 *
+			 * **What the feature size decides instead is whether anything
+			 * overhangs.** A block is kept while one below it is dug only if the
+			 * field swings between the two, so the depth has to be worth more
+			 * than one feature: at a 200 m depth, a 100 m feature gives 22.5% of
+			 * columns overhanging and a 400 m feature gives a lowered surface
+			 * and almost nothing else.
 			 *
 			 * **Erosion shortens it.** A worn place has had its peaks flattened
 			 * and its level dragged toward the sea, and a cliff standing in the
 			 * middle of that is the same contradiction a mountain there would be
-			 * -- so the same `cut` that takes the relief away takes the carve's
-			 * reach with it, in proportion to `Erosion smooths it`. At `0` the
+			 * -- so the same `cut` that takes the relief away takes the carve
+			 * with it, in proportion to `Erosion smooths it`. At `0` the
 			 * carve ignores erosion and cuts a plain as hard as a range; at `1`
 			 * a fully worn place gets no carve at all.
 			 */
 			function carveReach(cut, k) {
-				return k.cliffReach * (1 - k.cliffWear * cut);
+				return Math.min(
+					CARVE_SHARE * k.relief * k.cliffSquash * (1 - k.cliffWear * cut),
+					// The walk is one block a step, so this is what stops a
+					// kilometre-wide density feature asking for a column walked
+					// for kilometres. It binds only at the widest settings, and
+					// the row says so when it does.
+					k.blockMetres * MAX_CARVE_LAYERS,
+				);
 			}
 
 			/**
@@ -1422,8 +1461,8 @@
 			 * it**, and a mountain is something the carve left standing rather
 			 * than something it built.
 			 *
-			 * **The curve says how deep, and `Carve reach` says what its bottom
-			 * is worth.** A reading is turned into a distance -- the top of the
+			 * **The curve says how deep, and the reach says what its bottom is
+			 * worth.** A reading is turned into a distance -- the top of the
 			 * curve digs nothing, the bottom digs a whole reach -- and a block at
 			 * depth `d` under the surface is removed when the reading at *that
 			 * block* is willing to dig past it. So the same field read at two
@@ -1886,26 +1925,19 @@
 						key: "cliffSpline",
 						label: "Density → how deep it digs",
 						type: "spline",
-						// Half way up is where the density is zero: it neither
-						// keeps a block the bias would have taken nor takes one
-						// the bias would have kept.
-						// **Straight by default, because the point of the layer
-						// is what the density does.** Flattening the middle
-						// leaves ordinary ground exactly as the three fields
-						// drew it and spends the carve only where the field runs
-						// to one of its tails -- which is the tame setting, and
-						// worth reaching by dragging rather than by shipping.
 						// **Steep through the middle, because that is where the
 						// readings are.** An octave stack is normalised to its
-						// own peak and then clusters: most of the planet reads
-						// inside a third of the axis either side of zero, so a
+						// own peak and then clusters, so most of the planet reads
+						// inside a third of the axis either side of zero: a
 						// straight line spends nearly all of its range on
-						// readings almost nothing lands on and hands the ground
-						// a density of about a quarter. Standing the middle up
-						// takes the same readings to both ends of the density,
-						// which is what turns a rough edge into a cliff --
-						// measured, 29.4% of columns overhang against 62.3%, and
-						// the tallest ground goes from 348 m to 472 m.
+						// readings almost nothing lands on, and hands ordinary
+						// ground a shallow scrape. Standing the middle up sends
+						// the same readings to both ends -- about a third of the
+						// world digs the full depth and about a third digs
+						// nothing -- which is what makes a wall rather than a
+						// slope. Flattening it toward the top is the tame
+						// setting, and worth reaching by dragging rather than by
+						// shipping.
 						value: [
 							[-1, 0],
 							[-0.35, 0.06],
@@ -1921,44 +1953,42 @@
 					0,
 					[
 						{
-							// **This is Kniberg's squash factor, written as the
-							// distance it is a slope over**, which is the only
-							// unit it means anything in. As a slope every useful
-							// value was crammed under 1 and the top of the slider
-							// did nothing; as metres the number on it is the
-							// answer to "how far from the ground can this reach",
-							// which is a question a reader has.
-							key: "cliffReach",
-							label: "Carve reach",
-							low: 8,
-							high: 2000,
-							step: 4,
-							value: 250,
-							digits: 0,
-							unit: "m",
+							// **Kniberg's squash factor, and a fraction rather
+							// than a distance.** As metres it was a digging
+							// slider: turn it up and the layer stopped carving a
+							// crust and started sinking shafts, which is what a
+							// cave system is for. The depth is the density's own
+							// feature size now, and this is how much of it to
+							// take -- so the top of the slider is a full carve
+							// and there is nothing past it to reach for.
+							key: "cliffSquash",
+							label: "Squash",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 1,
+							digits: 2,
 							note: () => {
 								if (!field) return "";
-								const relief = field.highest - field.lowest;
+								if (field.k.cliffSquash === 0)
+									return "off: nothing is carved and the ground is the height field";
+								const full =
+									CARVE_SHARE * field.k.relief * field.k.cliffSquash;
+								const capped = field.k.blockMetres * MAX_CARVE_LAYERS;
 								return (
-									`the deepest a reading can dig, so the walk is ` +
-									`<b>${Math.round(
-										field.k.cliffReach / field.k.blockMetres,
-									).toLocaleString()}</b> blocks and nothing under it is ` +
-									`ever touched` +
-									// **The reach against the ground's own range is
-									// what says whether this is still a carve.** Once
-									// it is wider than the relief in the patch, no
-									// column's surface is far enough from any other's
-									// for the bias to tell them apart: every column is
-									// solid over most of the reach, the three fields
-									// stop reaching the picture, and the tallest ground
-									// becomes a function of this slider rather than of
-									// the world.
-									(field.k.cliffReach > relief
-										? ` · <b>further than the ground's own ${Math.round(
-												relief,
-											).toLocaleString()} m</b>, so the density is setting the ` +
-											`terrain rather than carving it`
+									`the carve reaches <b>${Math.round(
+										Math.min(full, capped),
+									).toLocaleString()} m</b> under the ground — a quarter of ` +
+									`Relief at a full squash — and nothing below that is ever ` +
+									`touched` +
+									(field.k.cliffMetres > Math.min(full, capped)
+										? ` · <b>Feature is wider than that</b>, so the field ` +
+											`cannot swing inside the crust and what comes out is a ` +
+											`lowered surface rather than an overhang`
+										: "") +
+									(full > capped
+										? ` · <b>held at ${MAX_CARVE_LAYERS} blocks a column</b>, ` +
+											`so widen the block or narrow the Feature for the rest`
 										: "")
 								);
 							},
@@ -1980,9 +2010,7 @@
 									? "off: a worn plain is carved as hard as a mountain range"
 									: `a fully worn place keeps <b>${Math.round(
 											(1 - knobs.cliffWear) * 100,
-										)}%</b> of the reach — <b>${Math.round(
-											(1 - knobs.cliffWear) * knobs.cliffReach,
-										)} m</b> against ${Math.round(knobs.cliffReach)} m` +
+										)}%</b> of the carve` +
 										(knobs.useEro
 											? ""
 											: " · nothing is worn while Erosion is switched off"),
@@ -2281,13 +2309,6 @@
 				// settled without a reading -- rock below, air above -- so this
 				// end moves with the block size rather than letting a reach of
 				// kilometres be asked for at a four-metre block.
-				if (row.key === "cliffReach") {
-					const most = derived().blockMetres * MAX_CARVE_LAYERS;
-					return {
-						...row,
-						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
-					};
-				}
 				const layer = LAYERS.find((l) => row.key.startsWith(l));
 				if (!layer) return row;
 				const what = row.key.slice(layer.length);
@@ -3963,7 +3984,7 @@
 				if (key === "cliffSpline")
 					return {
 						x: "x · the density read at this point, -1 to +1",
-						y: "y · how deep this reading digs · at the top it digs nothing and the ground is exactly what the other three drew, at the bottom it digs a whole Carve reach out from under it",
+						y: "y · how deep this reading digs · at the top it digs nothing and the ground is exactly what the other three drew, at the bottom it digs the whole depth Squash allows out from under it",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -4162,10 +4183,10 @@
 					// the first.** The three fields sum to one height; the
 					// density then asks, at every point of the column that height
 					// placed, whether to take that point away.
-					(k.useCliff && k.cliffReach >= k.blockMetres
+					(k.useCliff && carveReach(0, k) >= k.blockMetres
 						? "<br />rock under height, except where " +
 							"<i class=\"f\">dig(D)</i> &gt; height − y · dig up to " +
-							`${Math.round(k.cliffReach).toLocaleString()} m` +
+							`${Math.round(CARVE_SHARE * k.relief * k.cliffSquash).toLocaleString()} m` +
 							(k.cliffWear > 0 && k.useEro
 								? ` × ${term(true, "(1 − " + k.cliffWear.toFixed(2) + " × cut(E))", "1", "e")}`
 								: "")
@@ -4179,7 +4200,7 @@
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
 					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
-					(knobs.useCliff && knobs.cliffReach >= field.k.blockMetres
+					(knobs.useCliff && carveReach(0, field.k) >= field.k.blockMetres
 						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
 								1,
 							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
