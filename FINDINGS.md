@@ -1780,6 +1780,65 @@ ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
 
 
+### F-087 — Under a fold of 0.72 the range is in the field's negative half, so a ridged layer's peaks are its low values
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-26, tuning peaks and valleys in `demos/multi-noise-lab.html`
+**Where:** `packages/engine/src/generation/noise/octaveNoise.ts`,
+`demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+
+**What happens.** The fold blends two functions of the raw octave:
+
+```
+signal = n * (1 - ridge) + (crease * 2 - 1) * ridge
+```
+
+`n` is **odd** and `crease * 2 - 1` is **even**, so on the positive side the
+two partly cancel and on the negative side they add. The field stays correctly
+shaped -- the high values really are the thin ridge network, measured over the
+whole planet as a top-tenth neighbour agreement of **71.9%** against the bottom
+tenth's **87.5%**, where a plain sum gives 87.1% and 87.6% -- but the positive
+half is left with **no room above the ridges**. They pile against a ceiling.
+
+Measured, the spread of the top tenth against the spread of the bottom tenth
+over 20 faces at level 7:
+
+| fold | max | top tail | bottom tail | |
+|---|---|---|---|---|
+| 0.00 | 0.807 | 0.486 | 0.496 | even |
+| 0.20 | 0.429 | 0.198 | 0.467 | bottom **x2.35** |
+| 0.35 | 0.338 | 0.129 | 0.431 | bottom **x3.34** |
+| 0.50 | 0.474 | 0.227 | 0.391 | bottom x1.72 |
+| 0.65 | 0.613 | 0.311 | 0.346 | bottom x1.11 |
+| 0.80 | 0.755 | 0.390 | 0.297 | top x1.31 |
+| 0.85 | 0.802 | 0.415 | 0.280 | top x1.48 |
+| 1.00 | 0.944 | 0.490 | 0.234 | top **x2.10** |
+
+**The crossover is near 0.72**, and the worst setting is around **0.35**, where
+the maximum falls to `0.338` -- lower than the plain sum's `0.807` -- and the
+top tenth is squeezed into `0.129` of range.
+
+**What it costs.** A curve read against that field has to rise to the **left**
+to get a spread of peak heights, which is the opposite of what a layer called
+peaks and valleys leads a reader to expect, and the opposite of what the same
+knob asks for above 0.72. Turning one knob past `0.72` reverses which end of
+another control means *high ground*. Nothing warns of it.
+
+**What is not wrong.** The picture is not inverted -- `bandGrey` is monotone in
+the value, so `+1` is white. And the shipped world is above the crossover: peaks
+and valleys ships at **0.85**, where the top has x1.48 the range. This bites
+only a reader who turns the fold down.
+
+**The options.** The panel now says which half holds the range, which is the
+cheap half of a fix and is in place. The other half is a decision nobody has
+taken: whether the blend should be made symmetric -- lerping toward a crease
+with its own mean removed, so the two terms cannot cancel -- which would change
+the arithmetic of every world built with a fold between 0 and 1, or whether the
+fold should simply be a switch rather than a dial.
+
 ### F-086 — A tree is wider than the reach an edit is routed over, and nothing generates a structure across a chunk rim
 
 **Kind:** gap
