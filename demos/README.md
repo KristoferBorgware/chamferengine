@@ -557,10 +557,28 @@ with — giving a radius of 6,801 m, level 8, and a map cell of 32.0 m. Every sl
 narrower than two map cells cannot be reached — ground the map cannot carry is
 ground the world does not have.
 
-**The patch runs from 16 map cells across to 512** — half a kilometre of ground
-to sixteen kilometres of it, 3,169 cells to 183,546. At the top of that range it
-is a whole landmass and its ocean, visibly curved, and it costs about two
-seconds to rebuild; the readout says how long every time.
+**The patch runs from 16 map cells across to 1,024**, and past a point it stops
+being a patch: the walk keeps going until it has enumerated every cell there is,
+and the readout says **the whole planet**. Which pair of knobs gets you there is
+the whole trick, because the two ends trade against each other — the patch is a
+count of map cells, so coarsening the map buys reach and spends detail:
+
+| Map cell | Patch | hexagons | |
+|---|---|---|---|
+| 128 m | 512 | 40,962 | the whole planet, 1.9 s |
+| 64 m | 1,024 | 163,842 | the whole planet at four times the detail, 2.6 s |
+| 32 m | 512 | 183,546 | a landmass and its ocean, visibly curved, 9.9 s |
+| 32 m | 1,024 | 540,806 | still not all of it, 20.6 s |
+| 16 m | 1,024 | 732,700 | the most it will build, 32.1 s |
+
+Read the ratios; those are software-adapter timings, and the readout says how
+long every time. **The note under the slider counts what the walk reached
+against what the planet holds**, and names no threshold. A threshold here is two
+different measurements: the knob is a count *across* and the walk's own limit is
+a *radius*, so a wrap figure taken from the half-circumference says half of what
+it means — at a 128 m map cell it names 167 where the planet needs 334, and
+following it hands you **20,057 of 40,962** hexagons. A hemisphere, drawn as
+confidently as a planet. A count cannot be out by a factor.
 
 **The patch is the engine's own lattice at the map's own level**, not a hex grid
 that resembles one. The map is the terrain, so a hexagon here is a map cell,

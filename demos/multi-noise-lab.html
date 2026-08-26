@@ -1498,20 +1498,29 @@
 							key: "cells",
 							label: "Patch",
 							low: 16,
-							high: 512,
+							high: 1024,
 							step: 8,
 							value: 64,
 							digits: 0,
 							unit: "map cells across",
+							// **What is reached against what there is, because a
+							// threshold here is two different measurements.**
+							// This knob is map cells *across* and the walk's
+							// own limit is a *radius*, so a wrap figure worked
+							// out from the half-circumference reads half of what
+							// it has to say -- at a 128 m map cell it names 167
+							// where the planet needs 334, and a reader who does
+							// what it says gets 20,057 of 40,962 hexagons.
+							// Counting what the walk actually reached needs no
+							// threshold and cannot be out by a factor.
 							note: () =>
 								field
 									? field.whole
 										? "the walk has reached every cell on the planet"
 										: `<b>${Math.round(field.arc).toLocaleString()} m</b> of ground, ` +
-											`<b>${field.count.toLocaleString()}</b> hexagons — the planet ` +
-											`wraps at <b>${Math.ceil(
-												(Math.PI * field.k.radius) / field.cellMetres,
-											).toLocaleString()}</b>, so coarsen Map cell to see all of it`
+											`<b>${field.count.toLocaleString()}</b> of the planet's ` +
+											`<b>${(10 * 4 ** field.k.level + 2).toLocaleString()}</b> ` +
+											`hexagons — raise this or coarsen Map cell for the rest`
 									: "",
 						},
 						{
