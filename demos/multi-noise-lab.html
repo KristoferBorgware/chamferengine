@@ -1812,7 +1812,12 @@
 				return {
 					group,
 					tint,
-					open: true,
+					// **The density layer arrives closed.** It is switched off
+					// and everything it does is being re-asked from `Void`, so
+					// open it is a section of dead knobs standing between the
+					// reader and the live one -- which is exactly how its
+					// `Squash` gets mistaken for the void's.
+					open: which !== "cliff",
 					rows: [
 						// **A switch on the section, not a row inside it.** It
 						// governs every row below it, so a reader meets it before
@@ -2085,6 +2090,93 @@
 				// The three fields answer *how high*; this one answers *is this
 				// point rock*, and it is read down the column the first three
 				// already placed.
+				{
+					group: "Void",
+					tint: "cliff",
+					open: true,
+					rows: [
+						{
+							key: "useVoid",
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+							note: () =>
+								field
+									? `one reading per hexagon, air where it is not positive · ` +
+										`the density gains a full <b>1</b> over ` +
+										`<b>${Math.round(
+											VOID_REACH * voidMetres(field.k),
+										).toLocaleString()} m</b> of depth — four shape widths — ` +
+										`so nothing under that is ever air`
+									: "",
+						},
+						{
+							// **The scale, which is the one thing the noise
+							// function cannot supply.** It is smooth per unit of
+							// its own input and has no idea what a metre is; this
+							// is the only conversion there is, and it decides
+							// whether the sign of the field changes every block
+							// -- speckle -- or every few tens of metres, which is
+							// a cavern.
+							key: "voidFeature",
+							label: "Feature",
+							low: 10,
+							high: 1000,
+							step: 10,
+							value: 120,
+							digits: 0,
+							unit: "m",
+						},
+						{
+							// The coarse slider carries the decade and the fine
+							// one picks the value inside it, the same pair the
+							// other three layers use.
+							key: "voidFeatureScale",
+							label: "Feature scale",
+							low: 1,
+							high: 100,
+							step: 1,
+							value: 1,
+							digits: 0,
+							unit: "x",
+							note: () => {
+								if (!field) return "";
+								const k = field.k;
+								const narrow = voidNarrowest(k);
+								return (
+									`widest <b>${Math.round(
+										voidMetres(k),
+									).toLocaleString()} m</b>, narrowest <b>${Math.round(
+										narrow,
+									).toLocaleString()} m</b> = <b>${(
+										narrow / k.blockMetres
+									).toFixed(1)}</b> blocks`
+								);
+							},
+						},
+						{
+							// **Octaves are what stop a cavern being an egg.**
+							// One octave of value noise is a lattice of smooth
+							// blobs and the sign of it is a set of rounded
+							// pockets; narrower octaves ragged-edge them into
+							// passages and side chambers without moving the
+							// widest shape.
+							key: "voidOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 8,
+							step: 1,
+							value: 3,
+							digits: 0,
+							note: () =>
+								field
+									? `each one <b>${VOID_LACUNARITY}x</b> narrower and ` +
+										`<b>${VOID_PERSISTENCE}x</b> quieter than the one above`
+									: "",
+						},
+					],
+				},
 				layerGroup(
 					"Cliffs & overhangs",
 					"cliff",
@@ -2268,93 +2360,6 @@
 						},
 					],
 				),
-				{
-					group: "Void",
-					tint: "cliff",
-					open: true,
-					rows: [
-						{
-							key: "useVoid",
-							label: "on",
-							type: "check",
-							summary: true,
-							value: true,
-							note: () =>
-								field
-									? `one reading per hexagon, air where it is not positive · ` +
-										`the density gains a full <b>1</b> over ` +
-										`<b>${Math.round(
-											VOID_REACH * voidMetres(field.k),
-										).toLocaleString()} m</b> of depth — four shape widths — ` +
-										`so nothing under that is ever air`
-									: "",
-						},
-						{
-							// **The scale, which is the one thing the noise
-							// function cannot supply.** It is smooth per unit of
-							// its own input and has no idea what a metre is; this
-							// is the only conversion there is, and it decides
-							// whether the sign of the field changes every block
-							// -- speckle -- or every few tens of metres, which is
-							// a cavern.
-							key: "voidFeature",
-							label: "Feature",
-							low: 10,
-							high: 1000,
-							step: 10,
-							value: 120,
-							digits: 0,
-							unit: "m",
-						},
-						{
-							// The coarse slider carries the decade and the fine
-							// one picks the value inside it, the same pair the
-							// other three layers use.
-							key: "voidFeatureScale",
-							label: "Feature scale",
-							low: 1,
-							high: 100,
-							step: 1,
-							value: 1,
-							digits: 0,
-							unit: "x",
-							note: () => {
-								if (!field) return "";
-								const k = field.k;
-								const narrow = voidNarrowest(k);
-								return (
-									`widest <b>${Math.round(
-										voidMetres(k),
-									).toLocaleString()} m</b>, narrowest <b>${Math.round(
-										narrow,
-									).toLocaleString()} m</b> = <b>${(
-										narrow / k.blockMetres
-									).toFixed(1)}</b> blocks`
-								);
-							},
-						},
-						{
-							// **Octaves are what stop a cavern being an egg.**
-							// One octave of value noise is a lattice of smooth
-							// blobs and the sign of it is a set of rounded
-							// pockets; narrower octaves ragged-edge them into
-							// passages and side chambers without moving the
-							// widest shape.
-							key: "voidOctaves",
-							label: "Octaves",
-							low: 1,
-							high: 8,
-							step: 1,
-							value: 3,
-							digits: 0,
-							note: () =>
-								field
-									? `each one <b>${VOID_LACUNARITY}x</b> narrower and ` +
-										`<b>${VOID_PERSISTENCE}x</b> quieter than the one above`
-									: "",
-						},
-					],
-				},
 				{
 					group: "The ground",
 					open: true,
