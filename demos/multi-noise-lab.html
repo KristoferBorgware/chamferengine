@@ -1197,11 +1197,20 @@
 			 * exists to answer, so anything that could be tuned to flatter it is
 			 * left out.
 			 *
-			 * The one number it cannot do without is how big the shapes are.
+			 * The one number it cannot do without is how big the shapes are, and
+			 * **that number is not applied to the reading -- it is applied to the
+			 * position handed in.** The noise is defined on a grid of whole
+			 * numbers, a random value at each and a smooth blend between, so one
+			 * unit of input is one blob whatever else happens. What decides how
+			 * big a blob is *in metres* is the only conversion there is: the
+			 * world position divided by this before the lookup. Two blocks `60 m`
+			 * apart land a whole unit apart and agree about nothing; two blocks
+			 * `6 m` apart land a tenth of a unit apart and read almost the same.
+			 *
 			 * `60 m` is the shipped block times about eight, which is the size a
 			 * grid can draw and a person can walk through. **It is also what the
 			 * squash is measured in**: the lift is `squash` per `60 m` of depth,
-			 * so the two are one scale rather than two.
+			 * so the layer has one length rather than two.
 			 */
 			const VOID_METRES = 60;
 			function voidSettings(k) {
@@ -2240,8 +2249,10 @@
 							value: true,
 							note: () =>
 								field
-									? `one reading per hexagon at <b>${VOID_METRES} m</b> ` +
-										`shapes, air where it is not positive`
+									? `one reading per hexagon, air where it is not positive · ` +
+										`the world position is divided by <b>${VOID_METRES} m</b> ` +
+										`before the lookup, which is how far apart two blocks stop ` +
+										`agreeing`
 									: "",
 						},
 						{
