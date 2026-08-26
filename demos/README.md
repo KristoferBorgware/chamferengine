@@ -550,6 +550,23 @@ at 0 it is the map's own level again, and each step is four times the columns:
 Those are software-adapter timings — read the ratio. What the block size does to
 the carve is further down, and it is not a cost question.
 
+**`Void` is the whole idea with nothing else attached, and it ships on.** Once
+the three fields have placed a column, every hexagon in it gets one reading from
+a 3D noise field and is air where that reading is not positive. No curve to
+remap it, no bias for how far under the ground it is, no share of the crust, no
+strength, no knobs at all — the value at that block decides that block. The one
+number it cannot do without is how big the shapes are, and that is fixed at
+`60 m`, about eight of the shipped block.
+
+What comes out is caverns, arches and tunnels through the crust rather than a
+surface that has moved: three quarters of columns hold rock over air over rock,
+and about three fifths of what goes is taken out from under rock rather than off
+the top. **Roughly half of it is under the sea**, which is the ocean covering
+what was opened rather than the layer having skipped the low ground.
+
+**The density layer below now ships off**, because two carves at once say nothing
+about either. Everything it does is being re-asked from the plain rule.
+
 **A fourth layer carves the result of the other three, and it only ever takes
 rock away.** The construction is the same talk's. A 3D noise field gives **one
 number per point** rather than one per place — that is what a height field cannot

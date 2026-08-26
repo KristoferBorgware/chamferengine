@@ -1184,7 +1184,55 @@
 
 
 			/** Offsets from the world seed, so the three layers are three fields. */
-			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613 };
+			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613, void: 977 };
+
+			/**
+			 * The void: one noise value per hexagon, and air where it is not
+			 * positive.
+			 *
+			 * **Nothing else.** No curve to remap the reading, no bias for how
+			 * far under the ground it is, no share of the crust, no strength --
+			 * the value the field gives at that block decides that block and
+			 * that is the whole rule. What it looks like is the question this
+			 * exists to answer, so anything that could be tuned to flatter it is
+			 * left out.
+			 *
+			 * The one number it cannot do without is how big the shapes are.
+			 * `60 m` is the shipped block times about eight, which is the size a
+			 * grid can draw and a person can walk through.
+			 */
+			const VOID_METRES = 60;
+			function voidSettings(k) {
+				return {
+					frequency: k.radius / VOID_METRES,
+					octaves: 1,
+					persistence: 0.5,
+					lacunarity: 2,
+					offsetX: 0,
+					offsetY: 0,
+					ridge: 0,
+					normalise: true,
+				};
+			}
+
+			/**
+			 * The field at one point of the column, read the same size in every
+			 * direction.
+			 *
+			 * The sample point is the direction scaled by `1 + metres / radius`,
+			 * which is the world point that block stands at -- so a metre up
+			 * moves it exactly as far as a metre sideways.
+			 */
+			function voidAt(dx, dy, dz, metres, k, seed, v) {
+				const out = 1 + metres / k.radius;
+				return octaveNoise(
+					dx * out,
+					dy * out,
+					dz * out,
+					seed + SEED_OFFSET.void,
+					v,
+				);
+			}
 
 			/**
 			 * `blockSize = K * radius / 2^depth`, which ties the three together
@@ -1508,7 +1556,7 @@
 			 */
 			const carved = { under: 0, above: 0, drowned: 0 };
 
-			function carveColumn(dx, dy, dz, surface, lift, k, seed, s, out) {
+			function carveColumn(dx, dy, dz, surface, lift, cliffOn, k, seed, s, v, out) {
 				out.length = 0;
 				carved.under = 0;
 				carved.above = 0;
@@ -1527,7 +1575,12 @@
 					// Above the ground the three fields drew there is nothing to
 					// carve and nothing to keep.
 					let solid = y < surface;
-					if (solid) {
+					// **The void first, because it is the whole rule.** One
+					// reading at this block, air where it is not positive, and
+					// nothing added to it.
+					if (solid && k.useVoid)
+						solid = voidAt(dx, dy, dz, y, k, seed, v) > 0;
+					if (solid && cliffOn) {
 						const read = densityAt(dx, dy, dz, y, k, seed, s);
 						// The curve is a transform of the reading, and its middle
 						// is the line between air and rock: a point dragged from
@@ -1575,14 +1628,14 @@
 			 * picture beside it shows the hillside the spire was cut out of.
 			 * Under an overhang the two are not even close.
 			 */
-			function surfaceAt(dx, dy, dz, said, k, seed, s, out) {
+			function surfaceAt(dx, dy, dz, said, k, seed, s, v, out) {
 				const base = heightFrom(said, k);
-				if (!k.useCliff) return base;
 				const lift = carveLift(erosionCut(said, k), k);
-				// Lifted clear of the line, nothing the noise says reaches air
+				// Lifted clear of the line, nothing the density says reaches air
 				// and the walk would only confirm the height field.
-				if (lift >= 1) return base;
-				carveColumn(dx, dy, dz, base, lift, k, seed, s, out);
+				const cliffOn = k.useCliff && lift < 1;
+				if (!cliffOn && !k.useVoid) return base;
+				carveColumn(dx, dy, dz, base, lift, cliffOn, k, seed, s, v, out);
 				return out.length > 0 ? out[out.length - 1] : base - carveCrust(k);
 			}
 
@@ -1722,7 +1775,10 @@
 							label: "on",
 							type: "check",
 							summary: true,
-							value: true,
+							// **The density layer ships off.** Everything it does
+							// is being re-asked from the plain rule in `Void`,
+							// and two carves at once say nothing about either.
+							value: which !== "cliff",
 						},
 						spline,
 						// The layer's own field, drawn where it is being tuned
@@ -2166,6 +2222,26 @@
 					],
 				),
 				{
+					group: "Void",
+					tint: "cliff",
+					open: true,
+					rows: [
+						{
+							key: "useVoid",
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+							note: () =>
+								field
+									? `one reading per hexagon at <b>${VOID_METRES} m</b> ` +
+										`shapes, air where it is not positive — no curve, no ` +
+										`bias, no depth term, nothing else`
+									: "",
+						},
+					],
+				},
+				{
 					group: "The ground",
 					open: true,
 					rows: [
@@ -2549,6 +2625,7 @@
 				const k = derived();
 				const seed = seedFromString(knobs.seed);
 				const s = settingsFor(k);
+				const v = voidSettings(k);
 				const said = [0, 0, 0, 0];
 
 				// **What the world lands on, under each curve.** Noise clusters
@@ -2659,8 +2736,11 @@
 					spanAt[c] = runs2.length;
 					let m = base;
 					const lift = carveLift(erosionCut(said, k), k);
-					if (k.useCliff && lift < 1) {
-						carveColumn(p[0], p[1], p[2], base, lift, k, seed, s, runs);
+					const cliffOn = k.useCliff && lift < 1;
+					if (cliffOn || k.useVoid) {
+						carveColumn(
+							p[0], p[1], p[2], base, lift, cliffOn, k, seed, s, v, runs,
+						);
 						for (const y of runs) runs2.push(y);
 						// **The height a colour and a coastline read is the top
 						// of the topmost rock**, which under an overhang is not
@@ -2766,6 +2846,7 @@
 				field = {
 					k,
 					s,
+					v,
 					seed,
 					n,
 					list,
@@ -2963,6 +3044,7 @@
 				const k = field.k;
 				const said = [0, 0, 0, 0];
 				const runs = [];
+				const v = field.v;
 				const images = shots.map((shot) => {
 					const target = only ?? shot.canvas;
 					if (target.width !== wide || target.height !== tall) {
@@ -2994,7 +3076,9 @@
 							const c =
 								shot.layer < 0
 									? groundColor(
-											surfaceAt(p[0], p[1], p[2], said, k, field.seed, field.s, runs),
+											surfaceAt(
+												p[0], p[1], p[2], said, k, field.seed, field.s, v, runs,
+											),
 											k,
 										)
 									: bandGrey(said[shot.layer]);
@@ -4343,6 +4427,9 @@
 					// the first.** The three fields sum to one height; the
 					// density then asks, at every point of the column that height
 					// placed, whether to take that point away.
+					(k.useVoid
+						? '<br />air under height where <i class="f">void(V)</i> ≤ 0'
+						: "") +
 					(k.useCliff && carveLift(0, k) < 1
 						? "<br />air under height where <i class=\"f\">density(D)</i> + " +
 							`(height − y) ÷ ${Math.round(carveCrust(k)).toLocaleString()} m + ` +
@@ -4351,6 +4438,9 @@
 								? ` + ${term(true, k.cliffWear.toFixed(2) + " × cut(E)", "0", "e")}`
 								: "") +
 							" ≤ 0"
+						: "") +
+					(k.useVoid || (k.useCliff && carveLift(0, k) < 1)
+						? ""
 						: "<br /><i class=\"gone\">rock below height, air above</i>");
 				facts.innerHTML =
 					(field.whole
@@ -4361,7 +4451,7 @@
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
 					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
-					(knobs.useCliff && carveLift(0, field.k) < 1
+					((knobs.useCliff && carveLift(0, field.k) < 1) || knobs.useVoid
 						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
 								1,
 							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
