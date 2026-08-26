@@ -550,16 +550,16 @@ at 0 it is the map's own level again, and each step is four times the columns:
 Those are software-adapter timings — read the ratio. What the block size does to
 the carve is further down, and it is not a cost question.
 
-**`Void` is the whole idea with nothing else attached, and it ships on.** Once
-the three fields have placed a column, every hexagon in it gets one reading from
-a 3D noise field and is air where that reading is not positive. No curve to remap
-it, no share of the crust, no strength. **One thing is added to the reading and it
-is not a knob**: the density gains a full `1` over four shape widths of depth, so
-nothing deeper than that is ever air — *do not cut below the crust* written as
-arithmetic rather than as a rule.
+**A fourth layer carves the terrain the other three placed, and it only ever
+takes rock away.** Once the three fields have placed a column, every hexagon in
+it gets one reading from a 3D noise field and is air where that reading is not
+positive. **One thing is added to the reading and it is not a knob**: the density
+gains a full `1` over four shape widths of depth, so nothing deeper than that is
+ever air — *do not cut below the crust* written as arithmetic rather than as a
+rule, and the depth the whole layer works in rather than a slider of its own.
 
 ```
-air under height where  void(V) + (height − y) ÷ 480 m  ≤  0
+air under height where  density(D) + (height − y) ÷ 480 m  ≤  0
 ```
 
 **Four widths, because a reading is not `−1`.** An octave stack is normalised to
@@ -588,7 +588,7 @@ few tens of metres, which is a cavern. **Octaves** then ragged-edge those shapes
 into passages and side chambers without moving the widest one, **Falloff** says
 how loud each narrower octave is against the one above and **Step between
 octaves** how much narrower. Both rows' ends move so the narrowest octave stays
-something the block grid can draw — **the void's are measured against the block
+something the block grid can draw — **the carve's are measured against the block
 and the first three layers' against the map cell**, because this field is read at
 every block and theirs are read once a place.
 
@@ -623,215 +623,6 @@ opens the world out:
 
 **Roughly a third of what goes is under the sea**, which is the ocean covering
 what was opened rather than the layer having skipped the low ground.
-
-**The density layer below now ships off**, because two carves at once say nothing
-about either. Everything it does is being re-asked from the plain rule.
-
-**A fourth layer carves the result of the other three, and it only ever takes
-rock away.** The construction is the same talk's. A 3D noise field gives **one
-number per point** rather than one per place — that is what a height field cannot
-do, because an overhang is not a value it has — and a block is rock where that
-number is over the line and air where it is under it. **It is 3D noise, and on a
-sphere that costs nothing extra**: the other three layers sample a unit
-direction, and the point `metres` above the surface is the same direction scaled
-by `1 + metres / radius`, so one call reads one field at any altitude, isotropic
-in all three axes.
-
-**Everything else in this section is about where that rule is allowed to apply.**
-The walk goes down a column from the surface toward the bottom of the crust, and
-two terms are added to the density on the way, both pushing toward rock:
-
-```
-air  where  density(D) + (height − y) ÷ crust + Squash + wear ≤ 0
-```
-
-- **Depth.** The density gains a full `1` over the crust, so at the bottom of the
-  crust nothing the noise can say reaches air. That is the *do not cut below the
-  crust* rule, enforced by the number rather than by a clamp — caves are a
-  different layer's job, and this one has to stop.
-- **Squash.** A flat lift on the whole field.
-
-**Squash goes the way the talk's squashing factor goes: `0` is the wildest and
-`1` is off.** The density runs `−1` to `+1`, so a lift of `1` puts every reading
-over the line and nothing can be air. Two earlier tries had it as a depth in
-metres, and a depth in metres is a digging slider whatever it is called.
-
-**The readout that decides whether any of this works is what was taken out from
-under rock.** A block taken off the *top* of a column lowers the ground, and
-enough of those in a row is a displaced height field wearing a 3D field's
-clothes — it cannot make an arch, an overhang or a floating island however deep
-it goes. A block taken out from *under* rock is a space, and a space is the only
-thing a height field could never have drawn:
-
-| Squash | out from under rock | columns that overhang | deepest | floating masses |
-|---|---|---|---|---|
-| 0 | **68.6%** | 79.7% | 5 spans | 50 |
-| **0.15 (shipped)** | **64.4%** | **67.8%** | **5 spans** | **37** |
-| 0.35 | 55.8% | 43.5% | 4 spans | 27 |
-| 0.60 | 40.1% | 11.9% | 3 spans | 12 |
-| 1.00 | — | — | 1 span | — |
-
-**At `1` it is the layer switched off, to the metre** — the same −152 m to 368 m
-the checkbox gives. **And the tallest ground never rises**, at any setting: the
-carve takes rock away and never puts any back.
-
-**A shape has to turn over inside the crust, or the layer can only stencil.** For
-a block to be kept while the one under it goes, the field has to say rock at one
-and air at the other — and it cannot change its mind over a distance shorter than
-its own shapes. A shape taller than the crust gives every column one answer for
-its whole depth: the ground drops by the crust, or it does not move. That is a
-stencil, and it is what a carve that reads as a scaled height field actually is.
-
-**The trouble is that a crust is thin and a landform is not.** Read the same size
-in every direction, a field whose shapes are as wide as a hillside is also as
-tall as one, so making it turn over inside a 200 m crust means shapes small
-enough to be rubble sideways as well. **Flattens** breaks that tie: it multiplies
-the altitude before the lookup, so the field changes that many times faster going
-up than sideways. Wide shapes, short shapes — which is what a ledge is.
-
-| Flattens | out from under rock | columns that overhang | deepest | floating masses |
-|---|---|---|---|---|
-| 1× (isotropic) | 26.6% | 17.4% | 4 spans | 10 |
-| 2× | 51.7% | 38.6% | 5 spans | 14 |
-| 4× | 72.1% | 64.4% | 7 spans | 27 |
-| **6× (shipped)** | **74.1%** | **76.6%** | **6 spans** | **39** |
-| 10× | 80.2% | 87.2% | 7 spans | 29 |
-| 16× | 81.7% | 88.9% | 7 spans | 30 |
-
-**It has a floor and the floor is the block.** At the shipped 100 m feature and
-6×, the shapes are about 17 m tall against an 8 m block — two blocks, which is
-the least a grid can draw. Past that the field alternates faster than the blocks
-can represent and what comes out is noise per block rather than shapes, so the
-row says which of the two limits has been hit: shapes that do not cross the crust
-twice, or shapes shorter than two blocks.
-
-**Making the shapes small instead of flat works and costs the horizontal
-picture.** A 25 m feature read isotropically reaches 64.4% out from under rock
-with Flattens at 1×, and 25 m sideways is rubble where 100 m is a landform. **This is also why the Feature slider starts at
-10 m on this layer and 100 m on the other three**: the other three draw
-continents and mountain ranges, where a hundred metres is the smallest thing
-worth calling one.
-
-**Crust is how fast the density recovers going down, and it is the thing Squash
-cannot say.** The density gains a full `1` over it, so a shallow crust means it
-recovers fast and the carve is pinned to the top few blocks, and a deep one means
-a space can run a long way down. Squash lifts the whole field and decides *how
-much* is carved; Crust decides *how far down* the carving reaches. Neither can be
-got out of the other, and the shipped `0.25` is the setting that makes them look
-like the same knob.
-
-| Crust | out from under rock | columns that overhang | deepest | tallest ground |
-|---|---|---|---|---|
-| 0.10 × Relief | 34.6% | 26.4% | 3 spans | 360 m |
-| **0.25 (shipped)** | **64.4%** | **67.8%** | **5 spans** | **360 m** |
-| 0.50 | 80.6% | 92.1% | 7 spans | 360 m |
-| 1.00 | **90.0%** | 99.4% | 12 spans | 360 m |
-
-**It is safe where a distance in metres was not, and the last column is what says
-so.** The bias at the surface is Squash whatever Crust is set to, so raising it
-opens deeper spaces and leaves the top of the ground exactly where it was — 360 m
-at every setting, while what is taken out from under rock climbs from a third to
-nine tenths. An earlier `Carve reach` set the depth **and** the amount from one
-slider, which is a digging slider whatever it is called.
-
-**It is a share of Relief rather than a distance**, so it means the same thing on
-a gentle world and a savage one and does not need re-tuning after Relief moves.
-**Tying it to the density's own feature size was tried and drowns the world**:
-widening Feature from 100 m to 800 m took the lowest ground from −248 m to
-**−1,280 m** and the highest from 344 m to **−200 m**, every column dug under the
-sea.
-
-**Two ways to have no room, and they read the same from outside.** A crust too
-few blocks deep cannot hold a space at all, and a density whose features are
-wider than the crust has nothing to swing over inside it. Both come out as a
-carve that only lowers the top, and the Crust row says which one has happened.
-Worked from a real case — a 540 m Relief at a 32 m block with 450 m density
-features, which is a crust **four blocks deep** crossed **1.2 times**:
-
-| | out from under rock | columns that overhang | floating masses |
-|---|---|---|---|
-| as found | **1.4%** | 0.2% | 0 |
-| Crust 1.00 × Relief | 35.8% | 6.6% | 0 |
-| and Feature 90 m | **79.3%** | 46.8% | 3 |
-
-**And the patch is drawn down to the bottom of the crust, so a column is a
-column.** Hung a lip under the rock instead, the patch is a shell: from
-underneath there is nothing but the back of the ground, and a carve whose whole
-point is that it takes blocks out from under other blocks has nowhere to show
-that it did. Drawn to the crust it is the cave lab's picture — a solid slab of
-ground with the spaces cut into it — and it costs nothing, because everything
-below the crust is rock in every column and no wall is ever drawn down there.
-
-**The finer the block, the more of the carve survives being drawn**, which is a
-sampling limit rather than a property of the field: a space one block tall in a
-32 m grid is a space that does not exist.
-
-| Block detail | block | out from under rock | columns that overhang | floating masses | rebuild |
-|---|---|---|---|---|---|
-| 0 | 32 m | 23.9% | 19.2% | 7 | 206 ms |
-| 1 | 16 m | 42.9% | 35.4% | 5 | 260 ms |
-| 2 (shipped) | 8 m | 64.4% | 67.8% | 37 | 485 ms |
-| 3 | 4 m | 70.2% | 72.0% | 126 | 2,040 ms |
-
-**Most of a carve on low ground ends up under the sea, which reads as nothing
-having happened.** The ocean is a surface at a fixed radius, so anything opened
-below it is filled and drawn as flat water — and low ground is near that radius
-to begin with, so almost anything taken out of it drowns. A world can be shredded
-end to end and look untouched below the shoreline; drain the sea and the same
-world is ragged everywhere. The readout says what share of the carve went under
-water, because a flat blue sheet is exactly what a carve that did nothing also
-looks like.
-
-**A floating mass is a question no column can answer**, so the lab walks the
-whole patch for it: how many spans a column holds says there is air under some
-rock, and whether that rock is attached to anything is a fact about the
-neighbours. Every column's lowest span reaches the bedrock under the carve —
-below the crust nothing is ever dug — so those are the ground, and any run of
-rock that never joins one is hanging in the air. **Carving alone produces them**,
-with nothing built above the surface: a spire whose neighbours are all dug out
-below its cap is left holding a roof over nothing.
-
-**Erosion adds to the same lift, which is the one place two layers meet.**
-Erosion already flattens the peaks and drags the level toward the sea, and a
-cliff standing in the middle of that is the same contradiction a mountain there
-would be. So `cut(E)` lifts the density here, in proportion to **Erosion smooths
-it**. Flatten the erosion curve to a constant and the coupling is exactly what it
-claims:
-
-| Erosion curve, flat at | columns that overhang | deepest | floating masses |
-|---|---|---|---|
-| 0 — nothing worn | 30.6% | 5 spans | 23 |
-| 0.5 — half worn | 10.4% | 3 spans | 5 |
-| 1 — worn everywhere | **0.0%** | 2 spans | **0** |
-
-**The curve transforms the reading, and its middle line is where air becomes
-rock.** `x` is what the noise said at that point and `y` is the density it
-becomes. **Every block comes out air or solid and never in between**, so the
-axis is really two values with a line across the middle: under the line the
-reading votes air, over it votes solid, and dragging a point across declares that
-reading stone rather than air. What the height in between is for is **how far
-down the vote holds** — the depth term and Squash are added to it, so a vote
-close to the line only holds near the surface and one at the very top or bottom
-of the axis holds through the whole crust. Drawn as square pulses it is a
-band-pass: those readings and no others.
-
-The shipped curve is **steep through the middle, because that is where the
-readings are**: an octave stack is normalised to its own peak and then clusters,
-so a straight line spends nearly all of its range on readings almost nothing
-lands on and leaves ordinary ground sitting a hair either side of the line.
-Standing the middle up sends the same readings to both ends, which is what makes
-a wall rather than a speckle.
-
-**The Terrain picture runs the carve too.** It used to draw the height field, so
-the plane showed a spire and the map beside it showed the hillside the spire was
-cut out of, which under an overhang are not even close. It now takes the top of
-the topmost rock at every pixel. That roughly doubles what a picture costs, and
-on the **patch** setting a pixel is a few metres so the map matches the plane cell
-for cell. On the **planet** setting a pixel is 137 m of ground against a 100 m
-density feature, so what a squash near zero does to a coastline arrives as
-speckle —
-which is the world and not the drawing, and is the only place the whole planet's
-worth of it can be seen at once.
 
 **Turning the layer off leaves the block grid, because the grid is the world's
 and not the layer's.** The ground is then the height field rounded to the nearest
