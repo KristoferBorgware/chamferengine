@@ -598,26 +598,42 @@ thing a height field could never have drawn:
 the checkbox gives. **And the tallest ground never rises**, at any setting: the
 carve takes rock away and never puts any back.
 
-**The density's feature size is what decides whether it carves or displaces, and
-it has to be small against the crust.** The field can only take a block out from
-under another if it swings between the two, and it cannot swing over a distance
-shorter than its own features — so a feature near the crust's own depth gives a
-lowered surface and calls it a carve. That is the whole of the difference:
+**A shape has to turn over inside the crust, or the layer can only stencil.** For
+a block to be kept while the one under it goes, the field has to say rock at one
+and air at the other — and it cannot change its mind over a distance shorter than
+its own shapes. A shape taller than the crust gives every column one answer for
+its whole depth: the ground drops by the crust, or it does not move. That is a
+stencil, and it is what a carve that reads as a scaled height field actually is.
 
-| Density feature | out from under rock | columns that overhang | floating masses |
-|---|---|---|---|
-| 400 m | **1.5%** | 0.9% | 0 |
-| 100 m | 26.6% | 17.4% | 10 |
-| 40 m | 51.7% | 44.9% | 20 |
-| **25 m (shipped)** | **64.4%** | **67.8%** | **37** |
-| 15 m | 61.9% | 60.0% | 28 |
+**The trouble is that a crust is thin and a landform is not.** Read the same size
+in every direction, a field whose shapes are as wide as a hillside is also as
+tall as one, so making it turn over inside a 200 m crust means shapes small
+enough to be rubble sideways as well. **Flattens** breaks that tie: it multiplies
+the altitude before the lookup, so the field changes that many times faster going
+up than sideways. Wide shapes, short shapes — which is what a ledge is.
 
-The crust is 200 m at the shipped Relief, so the shipped feature is **an eighth
-of it** — the field swings eight times on the way down. At 400 m it does not
-swing at all inside the crust and 98.5% of what goes is taken off the top. **This
-is also why the Feature slider starts at 10 m on this layer and 100 m on the
-other three**: the other three draw continents and mountain ranges, where a
-hundred metres is the smallest thing worth calling one.
+| Flattens | out from under rock | columns that overhang | deepest | floating masses |
+|---|---|---|---|---|
+| 1× (isotropic) | 26.6% | 17.4% | 4 spans | 10 |
+| 2× | 51.7% | 38.6% | 5 spans | 14 |
+| 4× | 72.1% | 64.4% | 7 spans | 27 |
+| **6× (shipped)** | **74.1%** | **76.6%** | **6 spans** | **39** |
+| 10× | 80.2% | 87.2% | 7 spans | 29 |
+| 16× | 81.7% | 88.9% | 7 spans | 30 |
+
+**It has a floor and the floor is the block.** At the shipped 100 m feature and
+6×, the shapes are about 17 m tall against an 8 m block — two blocks, which is
+the least a grid can draw. Past that the field alternates faster than the blocks
+can represent and what comes out is noise per block rather than shapes, so the
+row says which of the two limits has been hit: shapes that do not cross the crust
+twice, or shapes shorter than two blocks.
+
+**Making the shapes small instead of flat works and costs the horizontal
+picture.** A 25 m feature read isotropically reaches 64.4% out from under rock
+with Flattens at 1×, and 25 m sideways is rubble where 100 m is a landform. **This is also why the Feature slider starts at
+10 m on this layer and 100 m on the other three**: the other three draw
+continents and mountain ranges, where a hundred metres is the smallest thing
+worth calling one.
 
 **Crust is how fast the density recovers going down, and it is the thing Squash
 cannot say.** The density gains a full `1` over it, so a shallow crust means it
