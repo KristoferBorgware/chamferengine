@@ -1490,8 +1490,23 @@
 			 *
 			 * Returns pairs of heights, low to high, snapped to the block grid.
 			 */
+			/**
+			 * What the last `carveColumn` removed, split into the two kinds.
+			 *
+			 * **The whole question about this layer is which of these two
+			 * numbers is bigger.** A block taken off the top of a column lowers
+			 * the ground, and enough of those in a row is a displaced height
+			 * field wearing a 3D field's clothes -- it cannot make an arch, an
+			 * overhang or a floating island however deep it goes. A block taken
+			 * out from *under* rock is a space, and a space is the only thing a
+			 * height field could never have drawn.
+			 */
+			const carved = { under: 0, above: 0 };
+
 			function carveColumn(dx, dy, dz, surface, lift, k, seed, s, out) {
 				out.length = 0;
+				carved.under = 0;
+				carved.above = 0;
 				const block = k.blockMetres;
 				const crust = carveCrust(k);
 				// Layer indices, so two neighbouring columns cut their blocks on
@@ -1515,6 +1530,7 @@
 						const density = splineAt(k.cliffSpline, read) * 2 - 1;
 						solid = density + (surface - y) / crust + lift > 0;
 					}
+					if (!solid && y < surface) carved.above++;
 					if (solid === rock) continue;
 					// A block is rock or air whole, so the face is the plane
 					// between two layers rather than the point the density
@@ -1524,6 +1540,15 @@
 					rock = solid;
 				}
 				if (rock) out.push(from, (last + 1) * block);
+				// Everything dug under the highest rock left standing is a hole;
+				// the rest is the top of the column having moved down.
+				if (out.length > 0) {
+					const top = out[out.length - 1];
+					let above = 0;
+					for (let y = top + block / 2; y < surface; y += block) above++;
+					carved.under = carved.above - above;
+					carved.above = above;
+				}
 				return out;
 			}
 
@@ -1566,7 +1591,13 @@
 						// at a resolution anybody can drag.
 						key: which + "Feature",
 						label: "Feature",
-						low: 100,
+						// **The density layer is measured against the crust, not
+						// against a landform.** The other three draw continents
+						// and mountain ranges, and a hundred metres is the
+						// smallest thing worth calling one; this one has to
+						// swing several times inside a crust a couple of hundred
+						// metres deep or what comes out is a lowered surface.
+						low: which === "cliff" ? 10 : 100,
 						high: 1000,
 						step: 10,
 						value: feature,
@@ -1970,7 +2001,7 @@
 							[1, 1],
 						],
 					},
-					100,
+					25,
 					1,
 					3,
 					0,
@@ -2520,6 +2551,8 @@
 				let highest = -Infinity;
 				let stacked = 0;
 				let deepest = 1;
+				let dugUnder = 0;
+				let dugAbove = 0;
 				for (let c = 0; c < count; c++) {
 					const cell = list[c];
 					const p = latticePosition(cell.face, n, cell.i, cell.j);
@@ -2537,6 +2570,8 @@
 						// the surface the three fields drew, and under a column
 						// carved away entirely is nothing at all.
 						m = runs.length > 0 ? runs[runs.length - 1] : base;
+						dugUnder += carved.under;
+						dugAbove += carved.above;
 						if (runs.length > 2) stacked++;
 						if (runs.length / 2 > deepest) deepest = runs.length / 2;
 					} else {
@@ -2546,7 +2581,7 @@
 						// which is the terracing the engine builds and the shape
 						// a carve is cut out of.
 						m = Math.round(base / k.blockMetres) * k.blockMetres;
-						runs2.push(m - k.blockMetres, m);
+						runs2.push(m - carveCrust(k), m);
 					}
 					height[c] = m;
 					if (m < lowest) lowest = m;
@@ -2652,6 +2687,11 @@
 					// and how many column-spans they are made of.
 					floating,
 					floatingSpans,
+					// Blocks removed with rock still over them, against blocks
+					// removed off the top of a column. The first is the only kind
+					// a height field could not have drawn.
+					dugUnder,
+					dugAbove,
 					// How much of the patch the density actually lifted off the
 					// height field: a column with one pair is a surface, and a
 					// column with two or more is an overhang.
@@ -3492,26 +3532,26 @@
 				/**
 				 * Where a column stops being drawn.
 				 *
-				 * **The rim is a lip, not a plinth**, so this is hung under each
-				 * column rather than under the patch -- but a wall between two
-				 * columns has to reach whichever of the two floors is lower, or
-				 * a neighbour more than a lip below leaves a gap between the
-				 * bottom of this column's rock and the top of that one's. That
-				 * is a hole with the inside of the planet behind it, and it
-				 * opens on any drop over `lip` whether or not anything has been
-				 * carved.
+				 * **Down to the bottom of the crust, so a column is a column.**
+				 * Hung a lip under the rock instead, the patch is a shell: from
+				 * underneath there is nothing but the back of the ground, and a
+				 * carve whose whole point is that it takes blocks out from under
+				 * other blocks has nowhere to show that it did. The crust is a
+				 * quarter of Relief and the carve cannot reach past it, so
+				 * drawing to it is drawing exactly the volume the layer works
+				 * in.
+				 *
+				 * **The bottom of the lowest span is that plane already**: the
+				 * walk starts at the crust bottom and everything under it is
+				 * rock, so no wall is ever drawn between two columns down there
+				 * and the cost is the rim alone.
+				 *
+				 * A wall between two columns still reaches whichever of the two
+				 * floors is lower, or a neighbour further down leaves a gap
+				 * between the bottom of one and the top of the other, with the
+				 * inside of the planet behind it.
 				 */
-				// **And it is measured off the bottom span's top, not off the
-				// ground and not off the bottom span's bottom.** With a carve on
-				// those are three different heights: `height` is the top of the
-				// *topmost* rock, which a lip under it leaves hanging in the air
-				// over a column carved out beneath; and the bottom span's own
-				// bottom is where the walk stopped reading, a whole band down,
-				// which draws every column as a plinth taller than the terrain
-				// standing on it. The top of the lowest span is the last height
-				// anything can be seen at, because everything under it is rock
-				// in this column and in every neighbour's.
-				const floorOf = (c) => spans[spanAt[c] + 1] - lip;
+				const floorOf = (c) => spans[spanAt[c]] - lip;
 
 				/** One side of a cell, between two heights. */
 				const wall = (c, m, deg, top, below) => {
@@ -4005,7 +4045,7 @@
 				if (key === "cliffSpline")
 					return {
 						x: "x · the density read at this point, -1 to +1",
-						y: "y · the density this reading becomes · over the blue line is rock and under it is air · how far from the line is how strongly, which is what the depth under the surface and Squash have to overcome",
+						y: "y · air at the bottom, solid at the top, and the blue line is the border · the height between them is not a distance, it is how sure the reading is — which is what the depth under the surface and Squash have to overturn",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -4226,7 +4266,11 @@
 						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
 								1,
 							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
-							`layers of rock, <b>${field.floating.toLocaleString()}</b> ` +
+							`layers of rock · <b>${(
+								(100 * field.dugUnder) /
+								Math.max(1, field.dugUnder + field.dugAbove)
+							).toFixed(1)}%</b> of what went was taken out from under rock ` +
+							`rather than off the top, <b>${field.floating.toLocaleString()}</b> ` +
 							`floating masses · `
 						: "") +
 					`<b>${cost.toFixed(0)} ms</b>`;
