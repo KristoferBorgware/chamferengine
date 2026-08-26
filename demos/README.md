@@ -732,6 +732,46 @@ every leaf cell it holds is drawn on several sides — at the shipped stand the
 leaf faces outnumber the wood faces several times over, and that, not the
 skeleton, is what decides whether a forest is affordable.
 
+**The patch is cut into chunks and every chunk generates alone.** This is the
+property the engine needs and the one a lab is most likely to fake: a chunk
+there gets an address and the seed and nothing else, so a plant whose canopy
+crosses a boundary has to be grown twice, identically, by two chunks that never
+speak. Three things had to change for that to hold. A plant is grown in **world
+coordinates**, not in the patch's own east/up/north frame, because that frame is
+one no chunk has — two chunks would each grow the tree about their own middle.
+Layers count from a **world datum**, not from the lowest ground in view, which
+is the one thing a chunk generating alone cannot know. And the bend and the leaf
+cut are read at the cell's own place in the world, so two chunks agree about the
+air inside one canopy.
+
+**The check is the patch against itself.** Asking whether two chunks agree about
+a cell neither owns is the wrong question — a chunk answers for its own
+territory and what a plant spills past that is the neighbour's business. So the
+same ground is generated a second time in one piece and the two are compared
+cell for cell. At the shipped reach it reads **0 cells differ**, and the ladder
+down is what says the reach is load-bearing rather than decoration:
+
+| reach past the rim | cells that differ |
+|---|---|
+| 0 m | **10,702** |
+| 8 m | 704 |
+| 16 m | **0** |
+| 24 m (shipped) | **0** |
+
+**What it costs is the rim.** A chunk tests every root within reach of its own
+cells, which at 48 blocks a side and 24 m of reach is **27,360 roots against
+7,057 owned — 3.88x**. Bigger chunks amortise it; the whole point of the number
+being on the panel is that it moves when you drag either slider.
+
+**The reach has to cover the widest canopy, and the lab measures that too.** The
+shipped stand's widest plant reaches **19.8 m** sideways from its own trunk, and
+that number is why **the bend is a displacement from the heading a limb set out
+on and never a nudge added to each step**. Accumulated it is a random walk in
+direction: an 86 m trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
+wanders about a radian, which draws as a redwood sprawling **40.8 m** sideways
+from a crown twenty across. Read as a displacement it is bounded by the knob,
+and a stand still leans together because the field is the same.
+
 **On a phone the panel is shut and a button opens it.** It is 340 px of knobs
 against a 390 px screen, so left open it is the page and the plants are a strip
 above it; shut, they have the whole screen and one tap brings the knobs back.

@@ -1817,13 +1817,40 @@ somewhere both ends read is the widest canopy, the way `MESHER_REACH` is
 written down once, or a chunk and its neighbour disagree about whether a tree
 exists.
 
-**Two things that fall out of it.** A plant rooted outside the chunk must be
-grown identically by both chunks, which means the grower may read nothing but
-the root's address and the seed -- no patch-local frame, which is what the lab
-uses. And a chunk drawn at a coarse level re-generates: a 1 m branch is gone by
-level 3 the way a 3 m cave is gone by level 10, so plants either stop being
-generated past some level or are generated as a coarse blob, and either way
-they appear as the player walks in. Neither is decided.
+**The lab now does it, and it holds.** `demos/vegetation-lab.html` cuts its
+patch into the same triangles -- a cell's scaled barycentric weights floored,
+one level of the hierarchy `coarseCorners` already descends -- and generates
+each one alone, writing only the cells it owns. The check is the patch against
+itself: the same ground generated a second time in one piece, compared cell for
+cell. At 48 blocks a chunk and 24 m of reach it reads **0 cells differ**, and
+the reach is load-bearing rather than decorative -- **10,702** cells differ at
+no reach at all, **704** at 8 m, **0** from 16 m up. The cost is the rim:
+**27,360** roots tested against **7,057** owned, **3.88x**.
+
+**Three things had to change for that to hold**, and all three are the same
+mistake in different places: reading something the patch knows and a chunk does
+not. A plant is grown in **world coordinates** rather than the patch's own
+east/up/north frame, because two chunks would each grow one tree about their own
+middle. Layers count from a **world datum** rather than the lowest ground in
+view. And the bend and the leaf cut are read at the cell's own place in the
+world. **Any of the three left in place makes a tree change shape at a chunk
+boundary**, which is the failure this finding is about.
+
+**It also priced the reach, which turned up a defect.** The widest plant in the
+shipped stand reaches **19.8 m** sideways from its trunk -- but only after
+fixing the bend, which was a nudge added to each step and so a random walk in
+direction: an 86 m trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
+wanders about a radian, measuring **40.8 m** of sideways reach on a crown twenty
+across. A displacement from the heading a limb set out on is bounded by the knob
+and leans a stand together just the same.
+
+**What is left for the engine.** The reach has to be written down once where
+both the store and the mesher read it, the way `MESHER_REACH` is, or a chunk and
+its neighbour disagree about whether a tree exists. And a chunk drawn at a
+coarse level re-generates: a 1 m branch is gone by level 3 the way a 3 m cave is
+gone by level 10, so plants either stop being generated past some level or are
+generated as a coarse blob, and either way they appear as the player walks in.
+Neither is decided.
 
 ### F-085 — `tools/bench.ts` crashes before it measures anything, and its header reads knobs that no longer exist
 

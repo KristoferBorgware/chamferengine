@@ -1429,6 +1429,71 @@
 					],
 				},
 				{
+					group: "Chunks",
+					tint: "plan",
+					rows: [
+						{
+							key: "chunked",
+							label: "Generate per chunk",
+							type: "check",
+							value: true,
+							note: () =>
+								field
+									? `<b>${field.chunkCount.toLocaleString()}</b> chunks, each ` +
+										`generating alone from addresses and the seed`
+									: "",
+						},
+						{
+							key: "chunkCells",
+							label: "Chunk",
+							low: 8,
+							high: 96,
+							step: 8,
+							value: 48,
+							digits: 0,
+							unit: "blocks a side",
+							shownWhen: () => knobs.chunked,
+							note: () =>
+								field && field.rootsOwned
+									? `<b>${field.rootsTested.toLocaleString()}</b> roots tested ` +
+										`against <b>${field.rootsOwned.toLocaleString()}</b> owned — ` +
+										`<b>${(field.rootsTested / field.rootsOwned).toFixed(2)}x</b>, ` +
+										`which is what looking past the rim costs`
+									: "",
+						},
+						{
+							key: "audit",
+							label: "Check it against the whole patch",
+							type: "check",
+							value: true,
+							shownWhen: () => knobs.chunked,
+							note: () =>
+								field
+									? `<b>${field.differ.toLocaleString()}</b> cells differ from ` +
+										`generating the same ground in one piece · it costs a ` +
+										`second pass, which is why it is a switch`
+									: "",
+						},
+						{
+							key: "chunkReach",
+							label: "Reach past the rim",
+							low: 0,
+							high: 48,
+							step: 1,
+							value: 24,
+							digits: 0,
+							unit: "m",
+							shownWhen: () => knobs.chunked,
+							note: () =>
+								field
+									? `the widest plant here reaches <b>${field.widest.toFixed(1)} m</b> ` +
+										`sideways from its own trunk, so anything under that ` +
+										`leaves a neighbour writing nothing where a canopy falls`
+									: "",
+						},
+					],
+				},
+				{
 					group: "The trunk",
 					tint: "wood",
 					rows: [
@@ -1713,14 +1778,41 @@
 			 * also never asks for neighbour `k = 5`, which is what keeps the
 			 * twelve pentagons from needing a case.
 			 */
-			function growPlant(x0, y0, z0, spec, scale, seed, out) {
+			function growPlant(base, stance, spec, scale, seed, out) {
 				const noise = bendSettings(spec);
+				// **The walk is in the plant's own frame and everything it
+				// records is in the world's.** Working in a frame is what makes
+				// a branch angle mean anything -- up is up and a spread is a
+				// spread; recording in the world is what lets two chunks that
+				// both hold this plant put its cells in the same places. The
+				// bend is read in world coordinates for the same reason: read in
+				// the plant's frame it would be a different field for every
+				// plant, and a stand would not lean together.
+				const world = [0, 0, 0];
+				const out3 = (x, y, z) => {
+					world[0] =
+						base[0] + stance.east[0] * x + stance.up[0] * y + stance.north[0] * z;
+					world[1] =
+						base[1] + stance.east[1] * x + stance.up[1] * y + stance.north[1] * z;
+					world[2] =
+						base[2] + stance.east[2] * x + stance.up[2] * y + stance.north[2] * z;
+					return world;
+				};
 				const step = Math.max(0.35, knobs.blockSize * 0.6);
 				const grow = (
 					px, py, pz, dx, dy, dz, len, rad, level, trunk, tag,
 				) => {
 					const steps = Math.max(2, Math.round(len / step));
 					const run = len / steps;
+					// **The bend is a displacement from the heading this limb
+					// set out on, never a nudge added to the last step.**
+					// Accumulated, it is a random walk in direction: an 86 m
+					// trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
+					// each time wanders about a radian, which measured as a
+					// canopy reaching 40.8 m sideways from a tree 20 m wide.
+					// Read as a displacement it is bounded by the knob, and a
+					// stand still leans together because the field is the same.
+					const sx = dx, sy = dy, sz = dz;
 					// Where children leave this limb: spread along the bare
 					// fraction of a trunk, gathered at the tip of anything else.
 					const from = trunk ? spec.first : 0.82;
@@ -1745,24 +1837,34 @@
 					for (let s = 0; s < steps; s++) {
 						const ax = px, ay = py, az = pz;
 						const at = (s + 1) / steps;
+						dx = sx;
+						dy = sy;
+						dz = sz;
 						if (spec.bend > 0) {
-							const push = spec.bend * 0.5;
-							dx += push * octaveNoise(px, py, pz, seed + 11, noise);
-							dy +=
-								push * 0.4 * octaveNoise(px, py, pz, seed + 23, noise) +
-								spec.up * 0.12 -
-								spec.droop * 0.14 * (1 - level / Math.max(1, spec.levels));
-							dz += push * octaveNoise(px, py, pz, seed + 37, noise);
-						} else {
-							dy += spec.up * 0.06 - spec.droop * 0.1;
+							const push = spec.bend * 0.8;
+							const w = out3(px, py, pz);
+							const wx = w[0], wy = w[1], wz = w[2];
+							dx += push * octaveNoise(wx, wy, wz, seed + 11, noise);
+							dy += push * 0.4 * octaveNoise(wx, wy, wz, seed + 23, noise);
+							dz += push * octaveNoise(wx, wy, wz, seed + 37, noise);
 						}
+						// **The lean is a share of the way along, not a
+						// per-step addition**, for the same reason: a limb
+						// rises or droops by a fixed amount over its own
+						// length whatever that length is. A trunk does
+						// neither -- it is what up and droop are measured
+						// against.
+						if (!trunk) dy += spec.up * at * 0.9 - spec.droop * at * 1.2;
 						const m = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
 						dx /= m; dy /= m; dz /= m;
 						px += dx * run; py += dy * run; pz += dz * run;
 						const r0 = rad * (1 - (1 - spec.taper) * (s / steps));
 						const r1 = rad * (1 - (1 - spec.taper) * at);
-						out.rods.push([ax, ay, az, px, py, pz, r0, r1]);
-						if (s === steps >> 1) middle = [px, py, pz];
+						const a3 = out3(ax, ay, az);
+						const aw = [a3[0], a3[1], a3[2]];
+						const b3 = out3(px, py, pz);
+						out.rods.push([aw[0], aw[1], aw[2], b3[0], b3[1], b3[2], r0, r1]);
+						if (s === steps >> 1) middle = [b3[0], b3[1], b3[2]];
 						// **A trunk carries whorls and a limb forks.** Spreading
 						// the children of every limb along its own length reads
 						// as one child each, because a 1.6 m twig at a 0.6 m
@@ -1819,8 +1921,10 @@
 								tag * 7 + c + j * 13 + 1,
 							);
 						}
-					else if (spec.leaves && knobs.useLeaves)
-						out.clusters.push([px, py, pz, spec.leafRadius * scale]);
+					else if (spec.leaves && knobs.useLeaves) {
+						const w = out3(px, py, pz);
+						out.clusters.push([w[0], w[1], w[2], spec.leafRadius * scale]);
+					}
 					// Leaves along the limb as well as at its end, in the share
 					// **Only at the tips** leaves to the limb.
 					if (
@@ -1836,7 +1940,7 @@
 						]);
 				};
 				grow(
-					x0, y0, z0,
+					0, 0, 0,
 					0, 1, 0,
 					spec.height * scale,
 					Math.max(knobs.blockSize * 0.45, spec.trunk * scale),
@@ -1930,6 +2034,12 @@
 				const localX = new Float64Array(count);
 				const localZ = new Float64Array(count);
 				const degree = new Uint8Array(count);
+				// **The cell's own direction, kept.** Everything a plant does is
+				// in world coordinates now, so this is read once per stamped
+				// cell rather than recomputed from the lattice.
+				const dirX = new Float64Array(count);
+				const dirY = new Float64Array(count);
+				const dirZ = new Float64Array(count);
 				const corner = new Float64Array(count * 18);
 				const ring = new Int32Array(count * 6).fill(-1);
 				// **One height per map cell, and every block cell under it reads
@@ -1952,6 +2062,9 @@
 				for (let c = 0; c < count; c++) {
 					const cell = list[c];
 					const p = latticePosition(cell.face, n, cell.i, cell.j);
+					dirX[c] = p[0];
+					dirY[c] = p[1];
+					dirZ[c] = p[2];
 					localX[c] =
 						(p[0] - centre[0]) * radius * frame.east[0] +
 						(p[1] - centre[1]) * radius * frame.east[1] +
@@ -1989,7 +2102,12 @@
 				// rounding puts it.** Two columns a metre apart in height stand
 				// on the same layer boundary or on two, never half way between,
 				// which is what a wall between them is drawn from.
-				const datum = lowest - block;
+				// **The datum is the world's, never the patch's.** Counting
+				// layers from the lowest ground in view makes a column's height
+				// depend on what else was drawn, which is the one thing a chunk
+				// generating alone cannot know. Sea level is zero by
+				// construction, so zero is the datum.
+				const datum = 0;
 				const groundLayer = new Int32Array(count);
 				const top = new Float64Array(count);
 				for (let c = 0; c < count; c++) {
@@ -2022,25 +2140,36 @@
 				// **Which species put a cell there**, so a mixed stand is not
 				// one colour. Nought means the field mode, which has no species.
 				const owner = new Uint8Array(count * LAYERS);
-				let painting = 0;
 				const cellMetres = k.blockMetres;
 
-				/** The patch cell a local east/north offset falls in, or -1. */
-				const cellAtLocal = (x, z) => {
-					const dx = centre[0] * radius + frame.east[0] * x + frame.north[0] * z;
-					const dy = centre[1] * radius + frame.east[1] * x + frame.north[1] * z;
-					const dz = centre[2] * radius + frame.east[2] * x + frame.north[2] * z;
-					const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-					const c = directionToCell(dx / len, dy / len, dz / len, n);
+				// **A plant is grown in world coordinates, and that is what lets
+				// a chunk grow it alone.** Every earlier version worked in the
+				// patch's own east/up/north frame with the origin at the patch
+				// centre, which is a frame no chunk has: two chunks holding one
+				// tree would each grow it about their own middle and disagree
+				// about every cell of it. Nothing below mentions the patch. A
+				// point is three numbers in the planet's own space, the cell it
+				// falls in comes from `directionToCell` on that point, and how
+				// high it stands is its distance from the centre less the
+				// radius -- all three of which any chunk can work out from an
+				// address and the seed.
+				const cellOf = (px, py, pz) => {
+					const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
+					const c = directionToCell(px / len, py / len, pz / len, n);
 					const hit = at.get(keyOf(canonicalCell(c.face, n, c.i, c.j)));
 					return hit === undefined ? -1 : hit;
 				};
+				const metresOf = (px, py, pz) =>
+					Math.sqrt(px * px + py * py + pz * pz) - radius;
+				/** Which layer of a column a height in metres lands in. */
+				const layerAt = (c, metres) =>
+					SUNK + Math.floor((metres - top[c]) / block);
 
 				// A ring walk out from one cell, reused for every stamp. It
 				// gathers cells and carries no heading, so the half turn and the
 				// pentagons cost nothing.
 				const mark = new Int32Array(count).fill(-1);
-				const bag = new Int32Array(512);
+				const bag = new Int32Array(4096);
 				let era = 0;
 				const gather = (from, rings) => {
 					era++;
@@ -2065,17 +2194,28 @@
 					return used;
 				};
 
-				/** Write one cell, where wood always beats leaf. */
-				const put = (c, y, what) => {
-					const at2 = c * LAYERS + SUNK + Math.floor((y - top[c]) / block);
-					if (at2 < c * LAYERS || at2 >= (c + 1) * LAYERS) return;
-					if (veg[at2] === WOOD) return;
-					if (what === LEAF && veg[at2] !== EMPTY) return;
-					veg[at2] = what;
-					owner[at2] = painting;
+				// **Where a write goes, and which writes a chunk is allowed to
+				// make.** A chunk may only write the cells it owns. It grows
+				// plants rooted outside itself all the same -- that is the whole
+				// point -- but what those plants put down beyond its own
+				// territory is the neighbour's business, and dropping it on the
+				// floor here is what proves the neighbour got it too.
+				let target = veg;
+				let tint = owner;
+				let holds = null;
+				let holder = 0;
+				let painting = 0;
+				const write = (c, slot, what) => {
+					if (slot < 0 || slot >= LAYERS) return;
+					if (holds !== null && holds[c] !== holder) return;
+					const i = c * LAYERS + slot;
+					if (target[i] === WOOD) return;
+					if (what === LEAF && target[i] !== EMPTY) return;
+					target[i] = what;
+					if (tint !== null) tint[i] = painting;
 				};
 
-				/** One tapered rod of wood. */
+				/** One tapered rod of wood, between two points in world space. */
 				const rod = (ax, ay, az, bx, by, bz, ra, rb) => {
 					// **A rod thinner than a cell rasterises to a dotted line,
 					// and a dotted branch is not connected to anything.**
@@ -2097,8 +2237,9 @@
 					for (let s = 0; s <= steps; s++) {
 						const t = s / steps;
 						const px = ax + ux * t, py = ay + uy * t, pz = az + uz * t;
-						const seat = cellAtLocal(px, pz);
+						const seat = cellOf(px, py, pz);
 						if (seat < 0) continue;
+						const stands = metresOf(px, py, pz);
 						// **The axis cell is always written, whatever the
 						// radius**, so the rod is a walk rather than a string of
 						// discs -- and where a step moves sideways and up at
@@ -2106,21 +2247,17 @@
 						// ring is six neighbours and the column is two; a
 						// diagonal is neither, and one missed corner is a branch
 						// in two pieces.
-						const here = SUNK + Math.floor((py - top[seat]) / block);
+						const here = layerAt(seat, stands);
 						if (here >= 0 && here < LAYERS) {
-							veg[seat * LAYERS + here] = WOOD;
-							owner[seat * LAYERS + here] = painting;
+							write(seat, here, WOOD);
 							if (wasCell >= 0 && wasCell !== seat) {
 								// A layer index is counted from the column's own
 								// ground, so carrying one across to another
 								// column means converting it rather than reusing
 								// the number.
-								const step =
+								const bridge =
 									wasLayer + groundLayer[wasCell] - groundLayer[seat];
-								if (step !== here && step >= 0 && step < LAYERS) {
-									veg[seat * LAYERS + step] = WOOD;
-									owner[seat * LAYERS + step] = painting;
-								}
+								if (bridge !== here) write(seat, bridge, WOOD);
 							}
 							wasCell = seat;
 							wasLayer = here;
@@ -2128,19 +2265,21 @@
 						const used = gather(seat, rings);
 						for (let q = 0; q < used; q++) {
 							const c = bag[q];
-							const cx = localX[c], cz = localZ[c];
+							const lo = Math.max(0, layerAt(c, stands - wide - block));
+							const hi = Math.min(
+								LAYERS - 1,
+								layerAt(c, stands + wide + block),
+							);
 							// The true distance from the block's own centre to
 							// the rod's axis, so a rod is a rod and not a
 							// staircase of discs.
-							for (
-								let y = py - wide - block;
-								y <= py + wide + block;
-								y += block
-							) {
-								const at3 = SUNK + Math.floor((y - top[c]) / block);
-								if (at3 < 0 || at3 >= LAYERS) continue;
-								const my = top[c] + (at3 - SUNK + 0.5) * block;
-								const dx = cx - ax, dy = my - ay, dz = cz - az;
+							for (let slot = lo; slot <= hi; slot++) {
+								const my = top[c] + (slot - SUNK + 0.5) * block;
+								const reach2 = radius + my;
+								const cx = dirX[c] * reach2;
+								const cy = dirY[c] * reach2;
+								const cz = dirZ[c] * reach2;
+								const dx = cx - ax, dy = cy - ay, dz = cz - az;
 								let along =
 									run > 0 ? (dx * ux + dy * uy + dz * uz) / (run * run) : 0;
 								along = Math.max(0, Math.min(1, along));
@@ -2148,10 +2287,8 @@
 								const ey = dy - uy * along;
 								const ez = dz - uz * along;
 								const r = ra + (rb - ra) * along;
-								if (ex * ex + ey * ey + ez * ez <= r * r) {
-									veg[c * LAYERS + at3] = WOOD;
-									owner[c * LAYERS + at3] = painting;
-								}
+								if (ex * ex + ey * ey + ez * ez <= r * r)
+									write(c, slot, WOOD);
 							}
 						}
 					}
@@ -2161,14 +2298,16 @@
 				 * One cluster of leaves: a ball, cut by noise.
 				 *
 				 * **A ball is a ball and a canopy is not.** The cut is what
-				 * makes a rim ragged and lets light through, and it is read off
-				 * the same lattice the world is, so two clusters that overlap
-				 * agree about the air between them.
+				 * makes a rim ragged and lets light through, and it is read at
+				 * the cell's own place in the world -- so two clusters that
+				 * overlap agree about the air between them, and so do two
+				 * chunks that both draw one cluster.
+				 *
+				 * **One octave, because this is a cut and not a landscape.** A
+				 * second costs eight more hashed lattice corners for every
+				 * candidate cell of every cluster, and a canopy has hundreds of
+				 * clusters -- it is the largest single bill on the page.
 				 */
-				// **One octave, because this is a cut and not a landscape.** A
-				// second one costs eight more hashed lattice corners for every
-				// candidate cell of every cluster, and a canopy has hundreds of
-				// clusters -- it is the largest single bill on the page.
 				const leafNoise = (spec) => ({
 					frequency: 1 / Math.max(0.4, spec.leafRadius * 0.55),
 					octaves: 1,
@@ -2180,17 +2319,21 @@
 				});
 				const cluster = (x, y, z, r, spec, noise) => {
 					if (r <= 0) return;
-					const seat = cellAtLocal(x, z);
+					const seat = cellOf(x, y, z);
 					if (seat < 0) return;
+					const stands = metresOf(x, y, z);
 					const used = gather(seat, Math.min(12, Math.ceil(r / cellMetres) + 1));
 					for (let q = 0; q < used; q++) {
 						const c = bag[q];
-						const cx = localX[c], cz = localZ[c];
-						for (let sy = y - r; sy <= y + r; sy += block) {
-							const at3 = SUNK + Math.floor((sy - top[c]) / block);
-							if (at3 < 0 || at3 >= LAYERS) continue;
-							const my = top[c] + (at3 - SUNK + 0.5) * block;
-							const dx = cx - x, dy = my - y, dz = cz - z;
+						const lo = Math.max(0, layerAt(c, stands - r));
+						const hi = Math.min(LAYERS - 1, layerAt(c, stands + r));
+						for (let slot = lo; slot <= hi; slot++) {
+							const my = top[c] + (slot - SUNK + 0.5) * block;
+							const reach2 = radius + my;
+							const cx = dirX[c] * reach2;
+							const cy = dirY[c] * reach2;
+							const cz = dirZ[c] * reach2;
+							const dx = cx - x, dy = cy - y, dz = cz - z;
 							const away = Math.sqrt(dx * dx + dy * dy + dz * dz) / r;
 							if (away > 1) continue;
 							const cut =
@@ -2199,9 +2342,9 @@
 								(spec.leafRough > 0
 									? spec.leafRough *
 										0.6 *
-										octaveNoise(cx, my, cz, seed + 71, noise)
+										octaveNoise(cx, cy, cz, seed + 71, noise)
 									: 0);
-							if (cut > 1 - spec.leafFill) put(c, my, LEAF);
+							if (cut > 1 - spec.leafFill) write(c, slot, LEAF);
 						}
 					}
 				};
@@ -2238,6 +2381,100 @@
 				let rejected = 0;
 				let tallest = 0;
 				let shortest = Infinity;
+				let differ = 0;
+				let rootsTested = 0;
+				let rootsOwned = 0;
+				let chunkCount = 1;
+				// **How far the widest plant actually reached**, measured rather
+				// than assumed. It is what the reach past a chunk's rim has to
+				// cover: anything wider and a neighbour never sees the root, so
+				// it writes nothing where the canopy falls and the tree comes
+				// apart at the boundary.
+				let widest = 0;
+
+				/**
+				 * Does one cell hold a plant, and if so which one and how big?
+				 *
+				 * **Every answer here is a hash of the cell's own address and
+				 * the seed.** That is the whole requirement: two chunks that
+				 * both consider this root get the same plant, because neither
+				 * of them is consulted.
+				 */
+				const plantAt = (c) => {
+					const cell = list[c];
+					if (knobs.plant === "one plant") return c === 0 ? cell : null;
+					if (height[c] <= knobs.seaLevel) return null;
+					// **The twelve pentagons are protected columns**, so nothing
+					// is planted on one and no branch has to ask for a fifth
+					// direction.
+					if (degree[c] !== 6) return "no";
+					if (slopeOf(coarseOf(cell.face, n, cell.i, cell.j, m)) > knobs.slopeLimit)
+						return "no";
+					if (hash3(cell.i, cell.j, cell.face, seed + 909) >= knobs.density / 100)
+						return null;
+					return cell;
+				};
+
+				/** Grow whatever stands on one cell, into whatever sink is set. */
+				const raise = (c) => {
+					const cell = list[c];
+					const roll = hash3(cell.j, cell.face, cell.i, seed + 55);
+					const name =
+						knobs.plant !== "one plant" && knobs.mixed
+							? SPECIES_NAMES[
+									Math.min(
+										SPECIES_NAMES.length - 1,
+										Math.floor(roll * SPECIES_NAMES.length),
+									)
+								]
+							: knobs.species;
+					const spec = shapeOf(name);
+					painting = SPECIES_NAMES.indexOf(name) + 1;
+					const scale =
+						1 +
+						knobs.sizeSpread *
+							(2 * hash3(cell.face, cell.i, cell.j, seed + 77) - 1);
+					// **The plant's own frame, taken at its own root.** Up is
+					// `normalize(position)` and there is no global north, so
+					// every plant stands in a frame of its own -- which is the
+					// second half of what makes it a pure function of its
+					// address.
+					const foot = radius + top[c];
+					const base = [dirX[c] * foot, dirY[c] * foot, dirZ[c] * foot];
+					const stance = frameOf([dirX[c], dirY[c], dirZ[c]]);
+					const out = { rods: [], clusters: [] };
+					growPlant(base, stance, spec, scale, seed + Math.floor(roll * 100000), out);
+					// **Sideways, not away.** Which chunks a plant reaches into
+					// is a question about the ground it stands over, and a
+					// straight distance from the foot is mostly the trunk's own
+					// height -- a 85 m redwood reads 81 m by that measure and
+					// covers twenty. The radial part comes out along the root's
+					// own up.
+					const far = (x, y, z, pad) => {
+						const dx = x - base[0], dy = y - base[1], dz = z - base[2];
+						const along =
+							dx * stance.up[0] + dy * stance.up[1] + dz * stance.up[2];
+						const ex = dx - stance.up[0] * along;
+						const ey = dy - stance.up[1] * along;
+						const ez = dz - stance.up[2] * along;
+						const away = Math.sqrt(ex * ex + ey * ey + ez * ez) + pad;
+						if (away > widest) widest = away;
+					};
+					for (const r of out.rods) {
+						rod(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
+						far(r[3], r[4], r[5], Math.max(r[6], r[7]));
+					}
+					const noise = leafNoise(spec);
+					for (const b of out.clusters) {
+						cluster(b[0], b[1], b[2], b[3], spec, noise);
+						far(b[0], b[1], b[2], b[3]);
+					}
+					const tall = spec.height * scale;
+					if (tall > tallest) tallest = tall;
+					if (tall < shortest) shortest = tall;
+					return tall;
+				};
+
 				if (knobs.growth === NOISE_GROWTH) {
 					// **The comparison, run on the same grid.** Two fields
 					// crossed give a curve in three dimensions rather than the
@@ -2263,78 +2500,141 @@
 								1 -
 								knobs.fieldGate *
 									(1 - Math.min(1, Math.max(0, (up - 0.02) / 0.3)));
-							const y = top[c] + (L + 0.5) * block;
-							const f = octaveNoise(localX[c], y, localZ[c], seed + 5, air);
-							const g = octaveNoise(localX[c], y, localZ[c], seed + 6, air);
+							const my = top[c] + (L + 0.5) * block;
+							const s2 = radius + my;
+							const px = dirX[c] * s2, py = dirY[c] * s2, pz = dirZ[c] * s2;
+							const f = octaveNoise(px, py, pz, seed + 5, air);
+							const g = octaveNoise(px, py, pz, seed + 6, air);
 							if (Math.sqrt(f * f + g * g) < knobs.fieldThickness * gate)
 								veg[c * LAYERS + SUNK + L] = WOOD;
 						}
 					}
 				} else {
-					const only = knobs.plant === "one plant";
-					const share = knobs.density / 100;
-					for (let c = 0; c < count && trees < 4000; c++) {
-						if (only && c !== 0) continue;
-						const cell = list[c];
-						if (!only) {
-							if (height[c] <= knobs.seaLevel) continue;
-							// **The twelve pentagons are protected columns**, so
-							// nothing is planted on one and no branch has to ask
-							// for a fifth direction.
-							if (degree[c] !== 6) {
+					/** Every root in the patch, into whatever is the target. */
+					const whole = () => {
+						for (let c = 0; c < count && trees < 4000; c++) {
+							const answer = plantAt(c);
+							if (answer === null) continue;
+							if (answer === "no") {
 								rejected++;
 								continue;
 							}
-							if (
-								slopeOf(coarseOf(cell.face, n, cell.i, cell.j, m)) >
-								knobs.slopeLimit
-							) {
-								rejected++;
-								continue;
-							}
-							if (
-								hash3(cell.i, cell.j, cell.face, seed + 909) >= share
-							)
-								continue;
+							raise(c);
+							trees++;
 						}
-						// **Every plant is a hash of its own cell.** Nothing is
-						// stored, nothing is placed, and the whole stand comes
-						// back from the seed alone.
-						const roll = hash3(cell.j, cell.face, cell.i, seed + 55);
-						const name =
-							!only && knobs.mixed
-								? SPECIES_NAMES[
-										Math.min(
-											SPECIES_NAMES.length - 1,
-											Math.floor(roll * SPECIES_NAMES.length),
-										)
-									]
-								: knobs.species;
-						const spec = shapeOf(name);
-						painting = SPECIES_NAMES.indexOf(name) + 1;
-						const scale =
-							1 +
-							knobs.sizeSpread *
-								(2 * hash3(cell.face, cell.i, cell.j, seed + 77) - 1);
-						const out = { rods: [], clusters: [] };
-						growPlant(
-							localX[c],
-							top[c],
-							localZ[c],
-							spec,
-							scale,
-							seed + Math.floor(roll * 100000),
-							out,
-						);
-						for (const r of out.rods)
-							rod(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
-						const noise = leafNoise(spec);
-						for (const c2 of out.clusters)
-							cluster(c2[0], c2[1], c2[2], c2[3], spec, noise);
-						trees++;
-						const tall = spec.height * scale;
-						if (tall > tallest) tallest = tall;
-						if (tall < shortest) shortest = tall;
+					};
+					if (!knobs.chunked) {
+						whole();
+						rootsTested = count;
+						rootsOwned = count;
+					} else {
+					// **Cut into chunks, and every chunk generates alone.**
+					// A chunk is the triangle a cell's scaled barycentric
+					// weights floor into -- the same descent `coarseCorners`
+					// makes, one level of the same hierarchy -- so this is the
+					// engine's own cut and not a grid laid over it.
+					const side = Math.max(1, knobs.chunkCells);
+					const cn = 2 ** Math.max(0, Math.round(Math.log2(n / side)));
+					const scale = n / cn;
+					const chunkOf = (c) => {
+						const cell = list[c];
+						const u = (n - cell.i - cell.j) / scale;
+						const v = cell.i / scale;
+						const w = cell.j / scale;
+						const fu = Math.floor(u), fv = Math.floor(v), fw = Math.floor(w);
+						const over = cn - (fu + fv + fw);
+						return ((cell.face * (cn + 1) + fv) * (cn + 1) + fw) * 2 + (over >= 2 ? 1 : 0);
+					};
+					const held = new Map();
+					const keyAt = new Float64Array(count);
+					for (let c = 0; c < count; c++) {
+						const key = chunkOf(c);
+						keyAt[c] = key;
+						let own = held.get(key);
+						if (own === undefined) {
+							own = [];
+							held.set(key, own);
+						}
+						own.push(c);
+					}
+					chunkCount = held.size;
+
+					// **How far past its own rim a chunk has to look**, in
+					// hops, which is the number F-086 is about. Too small and
+					// the audit below stops reading zero: a tree rooted just
+					// outside is grown by its owner and not by the neighbour
+					// whose cells its canopy reaches.
+					const hops = Math.max(0, Math.ceil(knobs.chunkReach / cellMetres));
+					const mine = new Int32Array(count).fill(-1);
+					const near = new Int32Array(count).fill(-1);
+					const queue = new Int32Array(count);
+					let round = 0;
+					for (const [key, own] of held) {
+						round++;
+						// Its own cells, then everything within reach of them.
+						let used = 0;
+						for (const c of own) {
+							mine[c] = round;
+							near[c] = round;
+							queue[used++] = c;
+						}
+						let read = 0;
+						for (let h = 0; h < hops; h++) {
+							const stop = used;
+							for (let q = read; q < stop; q++) {
+								const c = queue[q];
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || near[nb] === round) continue;
+									near[nb] = round;
+									queue[used++] = nb;
+								}
+							}
+							read = stop;
+						}
+						holds = mine;
+						holder = round;
+						rootsOwned += own.length;
+						rootsTested += used;
+						for (let q = 0; q < used; q++) {
+							const c = queue[q];
+							const answer = plantAt(c);
+							if (answer === null) continue;
+							if (answer === "no") {
+								if (mine[c] === round) rejected++;
+								continue;
+							}
+							raise(c);
+							if (mine[c] === round) trees++;
+						}
+					}
+					holds = null;
+
+					// **The audit is the whole patch against itself.** Asking
+					// whether two chunks agree about a cell neither of them owns
+					// is the wrong question -- a chunk is only answerable for
+					// its own territory, and what a plant spills past that is
+					// the neighbour's business. The question that matters is
+					// whether cutting the patch up changed anything, so the
+					// same ground is generated a second time in one piece and
+					// the two are compared cell for cell. Zero is the only
+					// passing answer, and turning the reach down is what makes
+					// it climb.
+					// Not while a slider is moving: a draft covers the same
+					// ground with fewer cells to answer inside a frame, and a
+					// second full pass is the opposite of that.
+					if (knobs.audit && cells === knobs.cells) {
+						const check = new Uint8Array(count * LAYERS);
+						target = check;
+						tint = null;
+						trees = 0;
+						rejected = 0;
+						whole();
+						for (let i = 0; i < check.length; i++)
+							if (check[i] !== veg[i]) differ++;
+						target = veg;
+						tint = owner;
+					}
 					}
 				}
 				if (shortest === Infinity) shortest = 0;
@@ -2416,6 +2716,8 @@
 				field = {
 					k, seed, n, m, list, at, keyOf, count, height, degree, corner,
 					ring, centre, frame, localX, localZ, groundLayer, top, veg, owner,
+					dirX, dirY, dirZ, chunkCount, rootsTested,
+					rootsOwned, widest, differ,
 					LAYERS, datum, lowest, highest, cellMetres,
 					span: cells * cellMetres,
 					trees, rejected, tallest, shortest, woodCells, leafCells,

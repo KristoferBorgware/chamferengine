@@ -55,10 +55,21 @@ describe("the vegetation lab's copy of the engine", () => {
 		expect(vegetation).toContain("hash3(c, level * 31 + j, tag, seed)");
 	});
 
+	it("grows a plant in world coordinates rather than in the patch's frame", () => {
+		// **This is what lets a chunk grow a plant alone.** A frame anchored at
+		// the patch centre is a frame no chunk has, so two chunks holding one
+		// tree would each grow it about their own middle. Every point a plant
+		// records is in the planet's own space, and the layer it lands in is
+		// counted from the column's own ground.
+		expect(vegetation).toContain("function growPlant(base, stance, spec,");
+		expect(vegetation).toContain("const metresOf = (px, py, pz) =>");
+		expect(vegetation).toContain("const datum = 0;");
+	});
+
 	it("finds the cell a branch reaches through the engine's own lookup", () => {
 		// **Never a nearest-centre search and never a walk along the neighbour
 		// ring.** A cell is what `hexRound` says it is, and a heading carried
 		// along a path here does not close.
-		expect(vegetation).toContain("directionToCell(dx / len, dy / len, dz / len, n)");
+		expect(vegetation).toContain("directionToCell(px / len, py / len, pz / len, n)");
 	});
 });
