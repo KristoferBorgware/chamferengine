@@ -553,31 +553,44 @@ the carve is further down, and it is not a cost question.
 **`Void` is the whole idea with nothing else attached, and it ships on.** Once
 the three fields have placed a column, every hexagon in it gets one reading from
 a 3D noise field and is air where that reading is not positive. No curve to remap
-it, no share of the crust, no strength — the value at that block decides that
-block. The one number it cannot do without is how big the shapes are, and that is
-fixed at `60 m`, about eight of the shipped block.
+it, no share of the crust, no strength. **One thing is added to the reading and it
+is not a knob**: the density gains a full `1` over four shape widths of depth, so
+nothing deeper than that is ever air — *do not cut below the crust* written as
+arithmetic rather than as a rule.
 
-What comes out is caverns, arches and tunnels through the crust rather than a
-surface that has moved. **Roughly half of what goes is under the sea**, which is
-the ocean covering what was opened rather than the layer having skipped the low
-ground.
+```
+air under height where  void(V) + (height − y) ÷ 480 m  ≤  0
+```
 
-**One thing is added to the reading, and it is the squashing factor.** The
-density gains `Squash` for every `60 m` of depth — the same `60 m` the shapes
-are, so the two are one scale rather than two. Air is where the reading is not
-positive, so lifting it as the column goes down keeps the deep rock solid and
-pushes the spaces toward the surface, which is *do not cut below the crust*
-written as a number instead of a rule. At `0` there is no lift at all and the
-field owns the whole crust:
+**Four widths, because a reading is not `−1`.** An octave stack is normalised to
+its own peak and its standard deviation is about a quarter of that, so an
+ordinary negative reading sits near `−0.25` and is cancelled after a *quarter* of
+whatever span it is given. At one shape width the layer all but disappears —
+**0.7%** of columns holding rock over air over rock, against **34%** at a quarter
+of that rate. Four puts a typical reading's reach at about one width and the
+deepest readings at three, which is a cave system rather than a dimple.
 
-| Squash | nothing under | out from under rock | columns that overhang | floating masses |
+**It is measured in the layer's own scale**, so widening the shapes lets them
+reach deeper by the same factor and there is no second slider that has to be kept
+in agreement with the first.
+
+**Feature is the one number the noise function cannot supply.** It is smooth per
+unit of *its own input* and has no idea what a metre is; dividing the world
+position by Feature before the lookup is the only conversion there is, and it
+decides whether the sign of the field changes every block — speckle — or every
+few tens of metres, which is a cavern. **Octaves** then ragged-edge those shapes
+into passages and side chambers without moving the widest one, and the row's top
+end moves so the narrowest octave stays something the block grid can draw.
+
+| Feature | octaves | out from under rock | columns that overhang | floating masses |
 |---|---|---|---|---|
-| 0 | — | 61.5% | 76.9% | 13 |
-| 0.10 | 600 m | 57.9% | 65.5% | 10 |
-| **0.20 (shipped)** | **300 m** | **51.9%** | **48.4%** | **6** |
-| 0.30 | 200 m | 38.4% | 27.7% | 7 |
-| 0.50 | 120 m | 20.5% | 11.0% | 2 |
-| 1.00 | 60 m | 3.7% | 1.5% | 1 |
+| 60 m | 2 | 38.8% | 30.9% | 7 |
+| **120 m (shipped)** | **3** | **43.9%** | **33.6%** | **9** |
+| 200 m | 3 | 24.3% | 25.8% | 4 |
+| 300 m | 4 | 15.2% | 10.8% | 2 |
+
+**Roughly a third of what goes is under the sea**, which is the ocean covering
+what was opened rather than the layer having skipped the low ground.
 
 **The density layer below now ships off**, because two carves at once say nothing
 about either. Everything it does is being re-asked from the plain rule.

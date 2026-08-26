@@ -1190,10 +1190,18 @@
 			 * The void: one noise value per hexagon, and air where it is not
 			 * positive.
 			 *
-			 * **Nothing else.** No curve to remap the reading, no bias for how
-			 * far under the ground it is, no share of the crust, no strength --
-			 * the value the field gives at that block decides that block and
-			 * that is the whole rule. What it looks like is the question this
+			 * **One thing is added and it is not a knob.** The density gains a
+			 * full `1` over four shape widths of depth, so nothing deeper than
+			 * that is ever air -- which is *do not cut below the crust* written
+			 * as arithmetic rather than as a rule. It is measured in the layer's
+			 * own scale because that is the only length the layer has, so
+			 * widening `Feature` widens the shapes and lets them reach deeper by
+			 * the same factor rather than needing a second slider to agree with
+			 * the first.
+			 *
+			 * **Nothing else.** No curve to remap the reading, no share of the
+			 * crust, no strength -- the value the field gives at that block plus
+			 * how deep the block is, and that is the whole rule. What it looks like is the question this
 			 * exists to answer, so anything that could be tuned to flatter it is
 			 * left out.
 			 *
@@ -1212,13 +1220,37 @@
 			 * squash is measured in**: the lift is `squash` per `60 m` of depth,
 			 * so the layer has one length rather than two.
 			 */
-			const VOID_METRES = 60;
+			/**
+			 * How many shape widths of depth the density takes to gain a full
+			 * `1`, past which nothing is ever air.
+			 *
+			 * **Four, because a reading is not `-1`.** An octave stack is
+			 * normalised to its own peak and its standard deviation is about a
+			 * quarter of that, so an ordinary negative reading is near `-0.25`
+			 * and would be cancelled after a *quarter* of the span. Set at one
+			 * shape width the layer all but disappears -- measured, 0.7% of
+			 * columns holding rock over air over rock against 40% at a quarter
+			 * of that rate. Four widths puts a typical reading's reach at about
+			 * one width and the deepest readings at three, which is a cave
+			 * system rather than a dimple.
+			 */
+			const VOID_REACH = 4;
+			const VOID_LACUNARITY = 2;
+			const VOID_PERSISTENCE = 0.5;
+			/** How wide the widest shapes are, which is what the position is divided by. */
+			function voidMetres(k) {
+				return Math.max(1, k.voidFeature * k.voidFeatureScale);
+			}
+			/** The narrowest octave, which is what the block grid has to be able to draw. */
+			function voidNarrowest(k) {
+				return voidMetres(k) / VOID_LACUNARITY ** (k.voidOctaves - 1);
+			}
 			function voidSettings(k) {
 				return {
-					frequency: k.radius / VOID_METRES,
-					octaves: 1,
-					persistence: 0.5,
-					lacunarity: 2,
+					frequency: k.radius / voidMetres(k),
+					octaves: k.voidOctaves,
+					persistence: VOID_PERSISTENCE,
+					lacunarity: VOID_LACUNARITY,
 					offsetX: 0,
 					offsetY: 0,
 					ridge: 0,
@@ -1593,7 +1625,7 @@
 					if (solid && k.useVoid)
 						solid =
 							voidAt(dx, dy, dz, y, k, seed, v) +
-								(k.voidSquash * (surface - y)) / VOID_METRES >
+								(surface - y) / (VOID_REACH * voidMetres(k)) >
 							0;
 					if (solid && cliffOn) {
 						const read = densityAt(dx, dy, dz, y, k, seed, s);
@@ -2250,32 +2282,76 @@
 							note: () =>
 								field
 									? `one reading per hexagon, air where it is not positive · ` +
-										`the world position is divided by <b>${VOID_METRES} m</b> ` +
-										`before the lookup, which is how far apart two blocks stop ` +
-										`agreeing`
+										`the density gains a full <b>1</b> over ` +
+										`<b>${Math.round(
+											VOID_REACH * voidMetres(field.k),
+										).toLocaleString()} m</b> of depth — four shape widths — ` +
+										`so nothing under that is ever air`
 									: "",
 						},
 						{
-							// **The squashing factor: more density the deeper a
-							// block is.** Air is where the reading is not
-							// positive, so lifting the reading as the column goes
-							// down is what keeps the deep rock solid and pushes
-							// the spaces toward the surface. At `0` there is no
-							// lift and the field owns the whole crust, which is
-							// the plain rule and the wildest it gets.
-							key: "voidSquash",
-							label: "Squash",
-							low: 0,
-							high: 1,
-							step: 0.05,
-							value: 0.2,
-							digits: 2,
+							// **The scale, which is the one thing the noise
+							// function cannot supply.** It is smooth per unit of
+							// its own input and has no idea what a metre is; this
+							// is the only conversion there is, and it decides
+							// whether the sign of the field changes every block
+							// -- speckle -- or every few tens of metres, which is
+							// a cavern.
+							key: "voidFeature",
+							label: "Feature",
+							low: 10,
+							high: 1000,
+							step: 10,
+							value: 120,
+							digits: 0,
+							unit: "m",
+						},
+						{
+							// The coarse slider carries the decade and the fine
+							// one picks the value inside it, the same pair the
+							// other three layers use.
+							key: "voidFeatureScale",
+							label: "Feature scale",
+							low: 1,
+							high: 100,
+							step: 1,
+							value: 1,
+							digits: 0,
+							unit: "x",
+							note: () => {
+								if (!field) return "";
+								const k = field.k;
+								const narrow = voidNarrowest(k);
+								return (
+									`widest <b>${Math.round(
+										voidMetres(k),
+									).toLocaleString()} m</b>, narrowest <b>${Math.round(
+										narrow,
+									).toLocaleString()} m</b> = <b>${(
+										narrow / k.blockMetres
+									).toFixed(1)}</b> blocks`
+								);
+							},
+						},
+						{
+							// **Octaves are what stop a cavern being an egg.**
+							// One octave of value noise is a lattice of smooth
+							// blobs and the sign of it is a set of rounded
+							// pockets; narrower octaves ragged-edge them into
+							// passages and side chambers without moving the
+							// widest shape.
+							key: "voidOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 8,
+							step: 1,
+							value: 3,
+							digits: 0,
 							note: () =>
-								knobs.voidSquash === 0
-									? "off: no lift at all, and the field owns the whole crust"
-									: `the density gains a full <b>1</b> every ` +
-										`<b>${Math.round(VOID_METRES / knobs.voidSquash)} m</b> ` +
-										`of depth, so nothing under that is ever air`,
+								field
+									? `each one <b>${VOID_LACUNARITY}x</b> narrower and ` +
+										`<b>${VOID_PERSISTENCE}x</b> quieter than the one above`
+									: "",
 						},
 					],
 				},
@@ -2555,6 +2631,19 @@
 				// them.** The patch is set in map cells, so the two knobs
 				// multiply, and this end moves rather than letting the pair of
 				// them ask for a patch nothing can build.
+				// The narrowest octave has to be something the block grid can
+				// draw: under two blocks it is noise per block rather than a
+				// shape, which reads as speckle and not as a cave.
+				if (row.key === "voidOctaves") {
+					const k = derived();
+					const room =
+						1 +
+						Math.floor(
+							Math.log(voidMetres(k) / (2 * k.blockMetres)) /
+								Math.log(VOID_LACUNARITY),
+						);
+					return { ...row, high: Math.max(row.low, Math.min(row.high, room)) };
+				}
 				if (row.key === "blockDetail")
 					return {
 						...row,
@@ -4467,9 +4556,9 @@
 					// placed, whether to take that point away.
 					(k.useVoid
 						? '<br />air under height where <i class="f">void(V)</i>' +
-							(k.voidSquash > 0
-								? ` + ${k.voidSquash.toFixed(2)} × (height − y) ÷ ${VOID_METRES} m`
-								: "") +
+							` + (height − y) ÷ ${Math.round(
+								VOID_REACH * voidMetres(k),
+							).toLocaleString()} m` +
 							" ≤ 0"
 						: "") +
 					(k.useCliff && carveLift(0, k) < 1
