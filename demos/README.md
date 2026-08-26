@@ -680,6 +680,15 @@ sampling limit rather than a property of the field: a space one block tall in a
 | 2 (shipped) | 8 m | 64.4% | 67.8% | 37 | 485 ms |
 | 3 | 4 m | 70.2% | 72.0% | 126 | 2,040 ms |
 
+**Most of a carve on low ground ends up under the sea, which reads as nothing
+having happened.** The ocean is a surface at a fixed radius, so anything opened
+below it is filled and drawn as flat water — and low ground is near that radius
+to begin with, so almost anything taken out of it drowns. A world can be shredded
+end to end and look untouched below the shoreline; drain the sea and the same
+world is ragged everywhere. The readout says what share of the carve went under
+water, because a flat blue sheet is exactly what a carve that did nothing also
+looks like.
+
 **A floating mass is a question no column can answer**, so the lab walks the
 whole patch for it: how many spans a column holds says there is air under some
 rock, and whether that rock is attached to anything is a fact about the
@@ -704,13 +713,14 @@ claims:
 
 **The curve transforms the reading, and its middle line is where air becomes
 rock.** `x` is what the noise said at that point and `y` is the density it
-becomes: **air at the bottom, solid at the top**, and the blue line is the
-border. So dragging a point from below the line to above it declares that reading
-stone rather than air — which is the whole of what the graph is for. The height
-between the two is not a distance and not a depth; it is **how sure the reading
-is**, and it matters because the depth term and Squash are added to it. A reading
-a hair under the line is air only at the very surface; one at the bottom of the
-axis is air all the way down to the bottom of the crust.
+becomes. **Every block comes out air or solid and never in between**, so the
+axis is really two values with a line across the middle: under the line the
+reading votes air, over it votes solid, and dragging a point across declares that
+reading stone rather than air. What the height in between is for is **how far
+down the vote holds** — the depth term and Squash are added to it, so a vote
+close to the line only holds near the surface and one at the very top or bottom
+of the axis holds through the whole crust. Drawn as square pulses it is a
+band-pass: those readings and no others.
 
 The shipped curve is **steep through the middle, because that is where the
 readings are**: an octave stack is normalised to its own peak and then clusters,

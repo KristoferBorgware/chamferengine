@@ -1498,12 +1498,13 @@
 			 * out from *under* rock is a space, and a space is the only thing a
 			 * height field could never have drawn.
 			 */
-			const carved = { under: 0, above: 0 };
+			const carved = { under: 0, above: 0, drowned: 0 };
 
 			function carveColumn(dx, dy, dz, surface, lift, k, seed, s, out) {
 				out.length = 0;
 				carved.under = 0;
 				carved.above = 0;
+				carved.drowned = 0;
 				const block = k.blockMetres;
 				const crust = carveCrust(k);
 				// Layer indices, so two neighbouring columns cut their blocks on
@@ -1527,7 +1528,15 @@
 						const density = splineAt(k.cliffSpline, read) * 2 - 1;
 						solid = density + (surface - y) / crust + lift > 0;
 					}
-					if (!solid && y < surface) carved.above++;
+					if (!solid && y < surface) {
+						carved.above++;
+						// **The sea is a surface at a fixed radius, so anything
+						// opened under it is filled and seen as water.** On low
+						// ground that is most of the carve, and a reader looking
+						// at a flat blue sheet has no way to tell that the layer
+						// did anything there at all.
+						if (y < k.seaLevel) carved.drowned++;
+					}
 					if (solid === rock) continue;
 					// A block is rock or air whole, so the face is the plane
 					// between two layers rather than the point the density
@@ -2593,6 +2602,7 @@
 				let deepest = 1;
 				let dugUnder = 0;
 				let dugAbove = 0;
+				let dugDrowned = 0;
 				for (let c = 0; c < count; c++) {
 					const cell = list[c];
 					const p = latticePosition(cell.face, n, cell.i, cell.j);
@@ -2612,6 +2622,7 @@
 						m = runs.length > 0 ? runs[runs.length - 1] : base;
 						dugUnder += carved.under;
 						dugAbove += carved.above;
+						dugDrowned += carved.drowned;
 						if (runs.length > 2) stacked++;
 						if (runs.length / 2 > deepest) deepest = runs.length / 2;
 					} else {
@@ -2732,6 +2743,7 @@
 					// a height field could not have drawn.
 					dugUnder,
 					dugAbove,
+					dugDrowned,
 					// How much of the patch the density actually lifted off the
 					// height field: a column with one pair is a surface, and a
 					// column with two or more is an overhang.
@@ -4085,7 +4097,7 @@
 				if (key === "cliffSpline")
 					return {
 						x: "x · the density read at this point, -1 to +1",
-						y: "y · air at the bottom, solid at the top, and the blue line is the border · the height between them is not a distance, it is how sure the reading is — which is what the depth under the surface and Squash have to overturn",
+						y: "y · every block comes out air or solid, never in between · under the blue line this reading votes air and over it votes solid · a vote close to the line only holds near the surface, one at the top or the bottom of the axis holds all the way down",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -4310,8 +4322,11 @@
 								(100 * field.dugUnder) /
 								Math.max(1, field.dugUnder + field.dugAbove)
 							).toFixed(1)}%</b> of what went was taken out from under rock ` +
-							`rather than off the top, <b>${field.floating.toLocaleString()}</b> ` +
-							`floating masses · `
+							`rather than off the top, <b>${(
+								(100 * field.dugDrowned) /
+								Math.max(1, field.dugUnder + field.dugAbove)
+							).toFixed(0)}%</b> of it under the sea, ` +
+							`<b>${field.floating.toLocaleString()}</b> floating masses · `
 						: "") +
 					`<b>${cost.toFixed(0)} ms</b>`;
 			}
