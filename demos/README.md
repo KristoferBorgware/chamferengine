@@ -533,6 +533,55 @@ level in the middle* is true at the shipped knobs and wrong one drag later.
 of an axis are worth in metres, and putting them under the curve as well is the
 same three numbers on screen twice.
 
+**A fourth layer is applied to the result of the other three, and it is not a
+height.** The construction is the same talk's: a **density** read at every
+point of the column rather than one value per place, rock where it is positive
+and air where it is not. A height field cannot hold rock over air over rock — an
+overhang is not a value it has — so this one is three inputs and one output,
+and the ground is wherever its answer changes, which can happen more than once
+going up.
+
+**On its own it is a cave system, and the squash is what makes it a cliff.** The
+density is biased by how far the point stands above the height the three fields
+drew: far below, the bias makes everything rock whatever the noise says; far
+above, everything air; and only inside a band of **Cliff reach** either side can
+the noise decide. That is what keeps the 2D layers' answer — a coastline, a
+continent, a mountain range are all still theirs — while letting the 3D field
+cut a cliff into it.
+
+**The vertical scale is what makes an overhang possible at all.** For a column
+to hold two spans the density has to cross the bias twice, and the bias sweeps
+the whole of `−1` to `+1` across the band. Read at the same scale in every
+direction it never does: a 150 m feature changes by about `1/150` a metre where
+the bias changes by `1/reach`, so at any reach under 150 m the bias wins
+everywhere. Measured at the shipped feature size, **3,169 columns and not one
+second span**. **Vertical scale** stretches the sample point so the field
+changes that many times faster going up than sideways — wide landforms, short
+overhangs — and it is the dial the whole effect hangs off:
+
+| Vertical scale | columns that overhang | deepest column |
+|---|---|---|
+| 1× | **0.0%** | 1 span |
+| 5× (shipped) | 18.3% | 3 spans |
+| 10× | 53.9% | 5 spans |
+| 16× | **75.5%** | 6 spans |
+
+Past about 10× it stops being cliffs and becomes mesas and floating slabs —
+the failure the talk names, where the 3D noise is visible as itself. The
+readout says the share every rebuild, so the line between the two is a number
+rather than a judgement.
+
+**The curve is on the density, and its blue line leaves the ground alone.** `x`
+is the density read at that point and `y` is how far it moves the surface, one
+Cliff reach down to one up; half way is where it neither carves in nor builds
+out. The shipped curve is **flat through the middle** so ordinary ground is the
+surface the three fields drew and only the tails cut a cliff — a straight line
+there spends the whole band everywhere and the patch comes out as stacks.
+
+**With the layer switched off the world is the one it always was** — pixel for
+pixel, 0.00 of 255 across a whole frame, because a column then holds the single
+span a height field is.
+
 **Three knobs are metres and each moves one thing.** **Relief** scales the land
 half of the curve and **Sea depth** the sea half, each to its own knob, so
 neither moves the coast — measured, Relief from `400 m` to `1,600 m` leaves the

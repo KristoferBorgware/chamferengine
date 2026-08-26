@@ -15,6 +15,7 @@
 				--cont: #ffd166;
 				--ero: #8ce99a;
 				--pv: #ff9db1;
+				--cliff: #c9a7ff;
 			}
 			* {
 				box-sizing: border-box;
@@ -108,6 +109,9 @@
 			}
 			.shot.pv b {
 				background: var(--pv);
+			}
+			.shot.cliff b {
+				background: var(--cliff);
 			}
 			.shot.out b {
 				background: var(--live);
@@ -206,6 +210,9 @@
 			#recipe .p {
 				color: var(--pv);
 			}
+			#recipe .f {
+				color: var(--cliff);
+			}
 			#profile {
 				margin-top: 12px;
 				border-top: 1px solid var(--edge);
@@ -278,6 +285,9 @@
 			}
 			.group.pv > summary {
 				color: var(--pv);
+			}
+			.group.cliff > summary {
+				color: var(--cliff);
 			}
 			.knob {
 				display: grid;
@@ -1134,7 +1144,7 @@
 			 * that starts in the sea, because nothing in the range's own field
 			 * knows where it is.
 			 */
-			const LAYERS = ["cont", "ero", "pv"];
+			const LAYERS = ["cont", "ero", "pv", "cliff"];
 
 			/**
 			 * The two elevations that cut the land into three bands, and the
@@ -1159,7 +1169,7 @@
 			const SEA_CLARITY = 45;
 
 			/** Offsets from the world seed, so the three layers are three fields. */
-			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337 };
+			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613 };
 
 			/**
 			 * `blockSize = K * radius / 2^depth`, which ties the three together
@@ -1228,7 +1238,54 @@
 				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.cont, s.cont);
 				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.ero, s.ero);
 				out[2] = octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.pv);
+				// **The fourth is read at the surface here and everywhere else
+				// in the column.** The other three are fields over a sphere and
+				// have one value per place; this one has a value per *point*, so
+				// what a picture and a histogram can show is the slice of it the
+				// ground happens to pass through. The terrain reads it again at
+				// every step of `cliffColumn`.
+				out[3] = octaveNoise(x, y, z, seed + SEED_OFFSET.cliff, s.cliff);
 				return out;
+			}
+
+			/**
+			 * The density at one point of the column, rather than at the surface.
+			 *
+			 * **Three inputs and one output, which is what a cliff needs.** A
+			 * height field answers one height per place, so no place can have
+			 * ground over air over ground -- an overhang is not a value it can
+			 * hold. A density field answers *is this point rock*, and the ground
+			 * is wherever the answer changes, which can happen more than once
+			 * down a column.
+			 *
+			 * **The 3D-ness is free on a sphere.** The other three layers sample
+			 * a unit direction, which the settings scale by `radius / metres`; a
+			 * point `metres` above the surface is the same direction scaled by
+			 * `1 + metres / radius`, so the same call reads the same field at a
+			 * different altitude.
+			 */
+			function densityAt(dx, dy, dz, metres, radius, vertical, seed, s) {
+				// **The vertical scale is what makes an overhang possible at
+				// all.** For a column to hold rock over air over rock the
+				// density has to cross the height bias more than once, and the
+				// bias sweeps the whole of `-1` to `+1` across the band. Read at
+				// the same scale in every direction it cannot: a 150 m feature
+				// changes by about `1/150` a metre where the bias changes by
+				// `1/reach`, so with any reach under 150 m the bias wins
+				// everywhere and every column comes back with exactly one
+				// surface. Measured at the shipped feature size, that is what
+				// happened -- 3,169 columns, not one of them with a second span.
+				// Stretching the sample point vertically makes the field change
+				// that many times faster going up than going sideways, which is
+				// the whole trick: wide landforms, short overhangs.
+				const out = 1 + (metres * vertical) / radius;
+				return octaveNoise(
+					dx * out,
+					dy * out,
+					dz * out,
+					seed + SEED_OFFSET.cliff,
+					s.cliff,
+				);
 			}
 
 			/**
@@ -1320,6 +1377,52 @@
 			// ---------------------------------------------------------------
 			// The knobs.
 			// ---------------------------------------------------------------
+
+			/**
+			 * One column of ground, as the heights where rock starts and stops.
+			 *
+			 * **The 2D layers keep their answer and the 3D one is only allowed
+			 * near it.** The three fields give one height per place, which is
+			 * what makes a coastline, a continent and a mountain range
+			 * tractable; a density field gives one answer per *point*, which is
+			 * the only way to hold rock over air over rock. Squashing is what
+			 * lets both be true at once: the density is biased by how far the
+			 * point stands above that height, so far below the surface the bias
+			 * makes everything rock whatever the noise says, far above it makes
+			 * everything air, and only inside a band of `Cliff reach` either
+			 * side can the noise decide. **Without the squash the same field is
+			 * a cave system**, because nothing tells it where the ground was.
+			 *
+			 * The walk therefore has to cover only that band. At the bottom of
+			 * it the bias is `-1` and the density cannot be lower, so the bottom
+			 * is always rock; at the top the bias is `+1` and the density cannot
+			 * be higher, so the top is always air. The column closes itself.
+			 *
+			 * Returns pairs of heights, low to high, and the first pair's floor
+			 * is where the drawing stops rather than where the rock does.
+			 */
+			function cliffColumn(dx, dy, dz, base, k, seed, s, out) {
+				out.length = 0;
+				const reach = k.cliffReach;
+				const lowest = base - reach;
+				const steps = Math.max(2, Math.ceil((2 * reach) / k.cliffStep));
+				let from = lowest;
+				let rock = true;
+				for (let i = 0; i <= steps; i++) {
+					const y = lowest + ((i * 2) * reach) / steps;
+					const read = densityAt(
+						dx, dy, dz, y, k.radius, k.cliffVertical, seed, s,
+					);
+					const push = splineAt(k.cliffSpline, read) * 2 - 1;
+					const solid = push > (y - base) / reach;
+					if (solid === rock) continue;
+					if (rock) out.push(from, y);
+					else from = y;
+					rock = solid;
+				}
+				if (rock) out.push(from, base + reach);
+				return out;
+			}
 
 			/**
 			 * The four rows every noise layer carries, plus the fold.
@@ -1681,6 +1784,99 @@
 					4,
 					0.85,
 				),
+				// **Applied to the result of the other three, not beside them.**
+				// The three fields answer *how high*; this one answers *is this
+				// point rock*, and it is read down the column the first three
+				// already placed.
+				layerGroup(
+					"Cliffs & overhangs",
+					"cliff",
+					"cliff",
+					{
+						key: "cliffSpline",
+						label: "Density → how far it moves the surface",
+						type: "spline",
+						// Half way up is the surface the other three set: below
+						// it the density carves in, above it the density builds
+						// out over the air.
+						// **Flat through the middle, so most ground is the
+						// surface the three fields drew.** A straight line here
+						// spends the whole band everywhere and the patch comes
+						// out as mesas and stacks -- the failure the talk names,
+						// where the 3D noise is visible as itself. Held near the
+						// middle for the common readings and swinging only in
+						// the tails, the density leaves ordinary ground alone
+						// and cuts a cliff where it runs out.
+						value: [
+							[-1, 0],
+							[-0.55, 0.08],
+							[-0.22, 0.44],
+							[0.22, 0.56],
+							[0.55, 0.92],
+							[1, 1],
+						],
+					},
+					150,
+					1,
+					3,
+					0,
+					[
+						{
+							key: "cliffReach",
+							label: "Cliff reach",
+							low: 0,
+							high: 200,
+							step: 5,
+							value: 45,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								"**the squash**: how far above and below the surface " +
+								"the density is allowed to decide · below the band " +
+								"everything is rock and above it everything is air, " +
+								"whatever the noise says",
+						},
+						{
+							key: "cliffVertical",
+							label: "Vertical scale",
+							low: 1,
+							high: 16,
+							step: 0.5,
+							value: 5,
+							digits: 1,
+							unit: "x",
+							note: () =>
+								field
+									? `the density changes <b>${knobs.cliffVertical.toFixed(
+											1,
+										)}x</b> as fast going up as sideways, so its ` +
+										`<b>${Math.round(field.k.cliffMetres).toLocaleString()} m</b> ` +
+										`features are <b>${Math.round(
+											field.k.cliffMetres / knobs.cliffVertical,
+										).toLocaleString()} m</b> tall — under Cliff reach is what ` +
+										`buys an overhang`
+									: "",
+						},
+						{
+							key: "cliffStep",
+							label: "Cliff step",
+							low: 1,
+							high: 32,
+							step: 1,
+							value: 4,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `<b>${Math.max(
+											2,
+											Math.ceil((2 * knobs.cliffReach) / knobs.cliffStep),
+										)}</b> readings a column, and the shortest overhang ` +
+										`the walk can find is <b>${knobs.cliffStep}</b> m`
+									: "",
+						},
+					],
+				),
 				{
 					group: "The ground",
 					open: true,
@@ -2006,7 +2202,7 @@
 				const k = derived();
 				const seed = seedFromString(knobs.seed);
 				const s = settingsFor(k);
-				const said = [0, 0, 0];
+				const said = [0, 0, 0, 0];
 
 				// **What the world lands on, under each curve.** Noise clusters
 				// around its own middle, so equal widths of a curve cover wildly
@@ -2017,8 +2213,9 @@
 					contSpline: new Float32Array(TALLY_BINS),
 					eroSpline: new Float32Array(TALLY_BINS),
 					pvSpline: new Float32Array(TALLY_BINS),
+					cliffSpline: new Float32Array(TALLY_BINS),
 				};
-				const keys = ["contSpline", "eroSpline", "pvSpline"];
+				const keys = ["contSpline", "eroSpline", "pvSpline", "cliffSpline"];
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -2027,7 +2224,7 @@
 				let land = 0;
 				for (const p of WORLD) {
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
-					for (let x = 0; x < 3; x++) tally[keys[x]][bin(said[x])]++;
+					for (let x = 0; x < 4; x++) tally[keys[x]][bin(said[x])]++;
 					if (heightFrom(said, k) > k.seaLevel) land++;
 				}
 				let tallest = 0;
@@ -2077,7 +2274,16 @@
 				const count = list.length;
 				const arc = Math.min(cells * k.cellMetres, Math.PI * k.radius);
 				const height = new Float64Array(count);
-				const layer = new Float32Array(count * 3);
+				const layer = new Float32Array(count * 4);
+				// **A column is a list of heights where rock starts and stops,
+				// not one height.** With the cliff layer off every column holds
+				// exactly one pair and the mesh is the height field it always
+				// was; with it on a column can hold three or five, and rock over
+				// air over rock is a shape the old array could not hold at all.
+				// Kept flat: `spanAt[c]` to `spanAt[c + 1]` indexes `span`.
+				const spanAt = new Int32Array(count + 1);
+				const runs2 = [];
+				const runs = [];
 				// **The polygon and the ring are asked for once, here, and read
 				// from typed arrays afterwards.** Both are pure functions of the
 				// address, so a mesh that recomputed them would be doing the same
@@ -2089,12 +2295,28 @@
 				const centre = latticePosition(start.face, n, start.i, start.j);
 				let lowest = Infinity;
 				let highest = -Infinity;
+				let stacked = 0;
+				let deepest = 1;
 				for (let c = 0; c < count; c++) {
 					const cell = list[c];
 					const p = latticePosition(cell.face, n, cell.i, cell.j);
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
-					for (let x = 0; x < 3; x++) layer[c * 3 + x] = said[x];
-					const m = heightFrom(said, k);
+					for (let x = 0; x < 4; x++) layer[c * 4 + x] = said[x];
+					const base = heightFrom(said, k);
+					spanAt[c] = runs2.length;
+					let m = base;
+					if (k.useCliff && k.cliffReach > 0) {
+						cliffColumn(p[0], p[1], p[2], base, k, seed, s, runs);
+						for (const y of runs) runs2.push(y);
+						// **The height a colour and a coastline read is the top
+						// of the topmost rock**, which under an overhang is not
+						// the surface the three fields drew.
+						m = runs.length > 0 ? runs[runs.length - 1] : base - k.cliffReach;
+						if (runs.length > 2) stacked++;
+						if (runs.length / 2 > deepest) deepest = runs.length / 2;
+					} else {
+						runs2.push(base - 1, base);
+					}
 					height[c] = m;
 					if (m < lowest) lowest = m;
 					if (m > highest) highest = m;
@@ -2118,6 +2340,7 @@
 						if (found !== undefined) ring[c * 6 + d] = found;
 					}
 				}
+				spanAt[count] = runs2.length;
 
 				field = {
 					k,
@@ -2130,6 +2353,18 @@
 					count,
 					height,
 					layer,
+					// **Not `span`.** That name is already the patch's own width
+					// in metres, a few lines down, and a duplicate key in an
+					// object literal is not an error -- the later one simply
+					// wins. The column heights became a number, every `top` came
+					// back `undefined`, and the ground drew as garbage.
+					spanAt,
+					spans: Float64Array.from(runs2),
+					// How much of the patch the density actually lifted off the
+					// height field: a column with one pair is a surface, and a
+					// column with two or more is an overhang.
+					stacked,
+					deepest,
 					degree,
 					corner,
 					ring,
@@ -2195,6 +2430,7 @@
 				{ id: "shotCont", key: "cont", layer: 0, name: "Continentalness" },
 				{ id: "shotEro", key: "ero", layer: 1, name: "Erosion" },
 				{ id: "shotPv", key: "pv", layer: 2, name: "Peaks & valleys" },
+				{ id: "shotCliff", key: "cliff", layer: 3, name: "Density at the surface" },
 			];
 			const SHOT_OF = new Map(SHOTS.map((shot) => [shot.key, shot]));
 			SHOTS[0].canvas = document.getElementById("shotOut");
@@ -2293,7 +2529,7 @@
 				const frame = planet ? null : frameOf(field.centre);
 				const half = field.arc / 2;
 				const k = field.k;
-				const said = [0, 0, 0];
+				const said = [0, 0, 0, 0];
 				const images = shots.map((shot) => {
 					const target = only ?? shot.canvas;
 					if (target.width !== wide || target.height !== tall) {
@@ -2498,7 +2734,7 @@
 				const k = field.k;
 				const frame = frameOf(field.centre);
 				const half = field.arc / 2;
-				const said = [0, 0, 0];
+				const said = [0, 0, 0, 0];
 				const lines = [];
 				let lowest = Infinity;
 				let highest = -Infinity;
@@ -2954,51 +3190,85 @@
 				// Hung a fixed depth under each rim cell instead, the block reads
 				// as ground with an edge.
 				const lip = field.across * 0.06;
+				const { spanAt, spans } = field;
+
+				/** One side of a cell, between two heights. */
+				const wall = (c, m, deg, top, below) => {
+					if (below >= top) return;
+					const a = ((m - 1 + deg) % deg) * 3 + c * 18;
+					const b = m * 3 + c * 18;
+					const t1 = local(corner[a], corner[a + 1], corner[a + 2], top);
+					const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
+					const t2 = local(corner[b], corner[b + 1], corner[b + 2], top);
+					const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
+					const t3 = local(corner[b], corner[b + 1], corner[b + 2], below);
+					const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
+					const t4 = local(corner[a], corner[a + 1], corner[a + 2], below);
+					triangle(
+						aTopX, aTopY, aTopZ,
+						bTopX, bTopY, bTopZ,
+						bLowX, bLowY, bLowZ,
+						top, top, below,
+					);
+					triangle(
+						aTopX, aTopY, aTopZ,
+						bLowX, bLowY, bLowZ,
+						t4[0], t4[1], t4[2],
+						top, below, below,
+					);
+				};
+
 				for (let c = 0; c < count; c++) {
 					const deg = degree[c];
-					const h = height[c];
-					cap(c, h);
-					// A wall wherever the cell stands over its neighbour. The
-					// edge toward neighbour `m` runs from corner `m - 1` to
-					// corner `m`, which is how `cellCorners` numbers them.
-					for (let m = 0; m < deg; m++) {
-						const found = ring[c * 6 + m];
-						// **A patch is a block of ground, not a shell.** Off the
-						// rim there is no neighbour to stand over, and with
-						// nothing drawn there the eye looks straight in at the
-						// underside of the far side of the patch. The rim runs
-						// down to a floor under the lowest ground instead.
-						const rim = found < 0;
-						const below = rim ? h - lip : height[found];
-						if (below >= h && !(rim && h < k.seaLevel)) continue;
-						// **The cut face of the block runs up to the waterline.**
-						// The sea is translucent, so a curtain of it hung against
-						// the background blends over nothing and reads as a dark
-						// wedge past the coast. Standing the rock up behind it
-						// gives it a sea floor to be shallow over.
-						const top = rim && h < k.seaLevel ? k.seaLevel : h;
-						const a = ((m - 1 + deg) % deg) * 3 + c * 18;
-						const b = m * 3 + c * 18;
-						const t1 = local(corner[a], corner[a + 1], corner[a + 2], top);
-						const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
-						const t2 = local(corner[b], corner[b + 1], corner[b + 2], top);
-						const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
-						const t3 = local(corner[b], corner[b + 1], corner[b + 2], below);
-						const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
-						const t4 = local(corner[a], corner[a + 1], corner[a + 2], below);
-						const aLowX = t4[0]; const aLowY = t4[1]; const aLowZ = t4[2];
-						triangle(
-							aTopX, aTopY, aTopZ,
-							bTopX, bTopY, bTopZ,
-							bLowX, bLowY, bLowZ,
-							top, top, below,
-						);
-						triangle(
-							aTopX, aTopY, aTopZ,
-							bLowX, bLowY, bLowZ,
-							aLowX, aLowY, aLowZ,
-							top, below, below,
-						);
+					const from = spanAt[c];
+					const to = spanAt[c + 1];
+					// **A column is drawn span by span, and the bottom one runs
+					// off the picture.** Everything under the band is rock, so
+					// the lowest pair's floor is where the drawing stops rather
+					// than where the rock does -- the same lip the height field
+					// always hung off its rim, now hung off the whole patch.
+					const floor = height[c] - lip - (to - from > 2 ? lip : 0);
+					for (let pair = from; pair < to; pair += 2) {
+						const bottom = pair === from ? floor : spans[pair];
+						const top = spans[pair + 1];
+						cap(c, top);
+						// **The underside of an overhang is a face too.** A
+						// height field never had one; a column with air beneath
+						// it does, and leaving it out is a hole you can see the
+						// inside of the planet through.
+						if (pair > from) cap(c, spans[pair]);
+						for (let m = 0; m < deg; m++) {
+							const found = ring[c * 6 + m];
+							if (found < 0) {
+								// Off the rim there is no neighbour to stand
+								// over. The cut face of the block runs up to the
+								// waterline, because the sea is translucent and a
+								// curtain of it against the background reads as a
+								// dark wedge past the coast.
+								const lift =
+									pair + 2 >= to && top < k.seaLevel ? k.seaLevel : top;
+								wall(c, m, deg, lift, bottom);
+								continue;
+							}
+							// **What is exposed is this span less the
+							// neighbour's spans.** A height field only ever had
+							// to compare two numbers; with overhangs on both
+							// sides the answer is an interval difference, and
+							// the parts left over are the cliff faces.
+							let open = bottom;
+							const nFrom = spanAt[found];
+							const nTo = spanAt[found + 1];
+							for (let q = nFrom; q < nTo; q += 2) {
+								const lo = q === nFrom ? -Infinity : spans[q];
+								const hi = spans[q + 1];
+								if (hi <= open) continue;
+								if (lo >= top) break;
+								wall(c, m, deg, Math.min(top, lo), open);
+								open = Math.max(open, hi);
+								if (open >= top) break;
+							}
+							wall(c, m, deg, top, open);
+						}
 					}
 				}
 				groundCount = vertices;
@@ -3180,6 +3450,7 @@
 				contSpline: "#ffd166",
 				eroSpline: "#8ce99a",
 				pvSpline: "#ff9db1",
+				cliffSpline: "#c9a7ff",
 			};
 
 			/**
@@ -3347,6 +3618,10 @@
 			/** Where the dashed line sits on a curve, in the curve's own units. */
 			function markOn(key) {
 				if (key === "pvSpline") return { at: 0.5, name: "level" };
+				// Half way up leaves the column where the three fields put it:
+				// the density is zero there, so it neither carves in nor builds
+				// out.
+				if (key === "cliffSpline") return { at: 0.5, name: "surface" };
 				if (key !== "contSpline") return null;
 				// The middle of the curve is the waterline, and draining moves
 				// the water down the sea half -- so the line stays what the curve
@@ -3383,7 +3658,12 @@
 			 */
 			function axisOf(key) {
 				const layer = key.slice(0, -6);
-				const field = { cont: "continentalness", ero: "erosion", pv: "peaks & valleys" }[layer];
+				const field = {
+					cont: "continentalness",
+					ero: "erosion",
+					pv: "peaks & valleys",
+					cliff: "density",
+				}[layer];
 				if (key === "contSpline")
 					return {
 						x: `x · the ${field} field, -1 to +1`,
@@ -3393,6 +3673,11 @@
 					return {
 						x: `x · the ${field} field, -1 to +1`,
 						y: "y · how much of the relief it cuts away, none to all of it",
+					};
+				if (key === "cliffSpline")
+					return {
+						x: "x · the density read at this point, -1 to +1",
+						y: "y · how far it moves the surface, one Cliff reach down to one up · the blue line leaves it alone",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -3586,7 +3871,17 @@
 					"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ " +
 					`${term(k.useEro, "(1 − cut(E))", "1", "e")} × ` +
 					`${term(k.usePv, "relief(P)", "0", "p")} × ` +
-					`${Math.round(k.peakRelief).toLocaleString()} m`;
+					`${Math.round(k.peakRelief).toLocaleString()} m` +
+					// **A second line, because the fourth layer is not a term in
+					// the first.** The three fields sum to one height; the
+					// density asks a different question at every point of the
+					// column that height placed, and rock is where its answer
+					// beats the bias.
+					(k.useCliff && k.cliffReach > 0
+						? "<br />rock where <i class=\"f\">density(D)</i> &gt; " +
+							"(y − height) ÷ " +
+							`${Math.round(k.cliffReach).toLocaleString()} m`
+						: "<br /><i class=\"gone\">rock below height, air above</i>");
 				facts.innerHTML =
 					(field.whole
 						? "patch is <b>the whole planet</b>, "
@@ -3596,6 +3891,12 @@
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
 					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
+					(knobs.useCliff && knobs.cliffReach > 0
+						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
+								1,
+							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
+							`layers of rock · `
+						: "") +
 					`<b>${cost.toFixed(0)} ms</b>`;
 			}
 
