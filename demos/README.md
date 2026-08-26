@@ -577,19 +577,42 @@ beats the noise a block either side of the surface, so the column snaps back to
 the height field and the layer does nothing; turn it down and the bias barely
 changes over a hundred metres, so the noise owns that hundred metres:
 
-| Squash | columns that overhang | deepest column | tallest ground |
-|---|---|---|---|
-| 3.00 | **0.1%** | 2 spans | 384 m |
-| 1.50 | 1.6% | 3 spans | 400 m |
-| 0.80 | 9.9% | 3 spans | 432 m |
-| 0.40 | 32.2% | 4 spans | 504 m |
-| 0.20 (shipped) | 70.8% | 6 spans | 544 m |
-| 0.10 | **96.2%** | 10 spans | 896 m |
+| Squash | band | columns that overhang | deepest column | tallest ground |
+|---|---|---|---|---|
+| 3.00 | 20 m | **0.1%** | 2 spans | 384 m |
+| 1.50 | 40 m | 1.6% | 3 spans | 400 m |
+| 0.80 | 75 m | 9.9% | 3 spans | 432 m |
+| 0.40 | 150 m | 32.2% | 4 spans | 504 m |
+| 0.20 (shipped) | 300 m | 70.8% | 6 spans | 544 m |
+| 0.10 | 600 m | 96.2% | 10 spans | 896 m |
+| 0.05 | 1,200 m | 100.0% | 13 spans | 1,376 m |
+| 0.02 | 3,000 m | 100.0% | 23 spans | 3,136 m |
 
 Under about 0.2 it stops being cliffs and becomes floating slabs — the failure
 the talk names, where the 3D noise is visible as itself. The readout says the
 share every rebuild, so the line between the two is a number rather than a
 judgement.
+
+**And under about 0.1 it stops being terrain at all, which the last column is
+what says so.** The ground in this patch runs about **850 m** top to bottom, so
+once the band is wider than that no column's surface is far enough from any
+other's for the bias to tell them apart: every column is solid over most of the
+band, the three 2D fields stop reaching the picture, and what is left is a block
+of noise with the patch's own footprint. The tallest ground then tracks the band
+and not the world — 896 m, 1,376 m, 3,136 m against a band of 600 m, 1,200 m,
+3,000 m — and at Squash `0.01` the whole patch lifts off, ground running **2,688
+m to 5,960 m** on a planet 6,801 m in radius. **Making the density's own features
+smaller does not rescue it**: at a 100 m feature instead of 150 m, Squash `0.05`
+is the same slab, 18 spans deep. The band is measured against the *terrain's*
+relief, never against the noise's feature size. The Squash note says so live,
+because the number it has to be compared with moves with every other knob.
+
+**So the walk's cap is a speed limit and not the wall.** It is 512 blocks a
+column, which at the shipped 8 m block puts Squash's bottom at 0.05 — a 1,388 ms
+rebuild, and already well past the point where the picture stops being a
+landscape. The slider goes to 0.02, and reaching it means coarsening **Block
+detail**: a 3 km slab does not need 8 m blocks to look at, and at 32 m blocks it
+draws in 214 ms.
 
 **The band is not a knob, it is two knobs divided.** The noise reaches Carve
 strength at most and the bias grows one Squash per Carve depth, so past

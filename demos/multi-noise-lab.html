@@ -1180,7 +1180,7 @@
 			 * outside the band is settled without a reading, so this bounds the
 			 * band and `Squash` is the end that moves to keep it.
 			 */
-			const MAX_CARVE_LAYERS = 160;
+			const MAX_CARVE_LAYERS = 512;
 
 			/** Offsets from the world seed, so the three layers are three fields. */
 			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613 };
@@ -1894,20 +1894,37 @@
 							// spires and floating islands in it.
 							key: "cliffSquash",
 							label: "Squash",
-							low: 0.05,
+							low: 0.02,
 							high: 3,
-							step: 0.05,
+							step: 0.01,
 							value: 0.2,
 							digits: 2,
-							note: () =>
-								field
-									? `the noise decides <b>${Math.round(
-											(field.k.cliffDepth * field.k.cliffStrength) /
-												field.k.cliffSquash,
-										).toLocaleString()} m</b> either side of the surface — ` +
-										`below that everything is rock and above it everything ` +
-										`is air, whatever the noise says`
-									: "",
+							note: () => {
+								if (!field) return "";
+								const band =
+									(field.k.cliffDepth * field.k.cliffStrength) /
+									field.k.cliffSquash;
+								const relief = field.highest - field.lowest;
+								return (
+									`the noise decides <b>${Math.round(band).toLocaleString()} m</b> ` +
+									`either side of the surface — below that everything is rock ` +
+									`and above it everything is air, whatever the noise says` +
+									// **The band against the ground's own range is what
+									// says whether this is still a carve.** Once it is
+									// wider than the relief in the patch, no column's
+									// surface is far enough from any other's for the bias
+									// to tell them apart: every column is solid over most
+									// of the band, the three fields stop reaching the
+									// picture, and the tallest ground becomes a function
+									// of this slider rather than of the world.
+									(band > relief
+										? ` · <b>wider than the ground's own ${Math.round(
+												relief,
+											).toLocaleString()} m</b>, so the density is setting the ` +
+											`terrain rather than carving it`
+										: "")
+								);
+							},
 						},
 						{
 							// The distance the bias is measured in. It sets the
