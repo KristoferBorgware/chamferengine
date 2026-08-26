@@ -619,13 +619,47 @@ is also why the Feature slider starts at 10 m on this layer and 100 m on the
 other three**: the other three draw continents and mountain ranges, where a
 hundred metres is the smallest thing worth calling one.
 
-**How deep the crust is is not a knob, and that is the point.** It is a fixed
-share of **Relief** — a quarter of how tall the tallest mountain in the world is
-— so the carve is the same slice off the top of a gentle world and a savage one,
-and moving Relief moves the crust with it in proportion. **Tying it to the
-density's own feature size was tried and drowns the world**: widening Feature
-from 100 m to 800 m took the lowest ground from −248 m to **−1,280 m** and the
-highest from 344 m to **−200 m**, every column dug under the sea.
+**Crust is how fast the density recovers going down, and it is the thing Squash
+cannot say.** The density gains a full `1` over it, so a shallow crust means it
+recovers fast and the carve is pinned to the top few blocks, and a deep one means
+a space can run a long way down. Squash lifts the whole field and decides *how
+much* is carved; Crust decides *how far down* the carving reaches. Neither can be
+got out of the other, and the shipped `0.25` is the setting that makes them look
+like the same knob.
+
+| Crust | out from under rock | columns that overhang | deepest | tallest ground |
+|---|---|---|---|---|
+| 0.10 × Relief | 34.6% | 26.4% | 3 spans | 360 m |
+| **0.25 (shipped)** | **64.4%** | **67.8%** | **5 spans** | **360 m** |
+| 0.50 | 80.6% | 92.1% | 7 spans | 360 m |
+| 1.00 | **90.0%** | 99.4% | 12 spans | 360 m |
+
+**It is safe where a distance in metres was not, and the last column is what says
+so.** The bias at the surface is Squash whatever Crust is set to, so raising it
+opens deeper spaces and leaves the top of the ground exactly where it was — 360 m
+at every setting, while what is taken out from under rock climbs from a third to
+nine tenths. An earlier `Carve reach` set the depth **and** the amount from one
+slider, which is a digging slider whatever it is called.
+
+**It is a share of Relief rather than a distance**, so it means the same thing on
+a gentle world and a savage one and does not need re-tuning after Relief moves.
+**Tying it to the density's own feature size was tried and drowns the world**:
+widening Feature from 100 m to 800 m took the lowest ground from −248 m to
+**−1,280 m** and the highest from 344 m to **−200 m**, every column dug under the
+sea.
+
+**Two ways to have no room, and they read the same from outside.** A crust too
+few blocks deep cannot hold a space at all, and a density whose features are
+wider than the crust has nothing to swing over inside it. Both come out as a
+carve that only lowers the top, and the Crust row says which one has happened.
+Worked from a real case — a 540 m Relief at a 32 m block with 450 m density
+features, which is a crust **four blocks deep** crossed **1.2 times**:
+
+| | out from under rock | columns that overhang | floating masses |
+|---|---|---|---|
+| as found | **1.4%** | 0.2% | 0 |
+| Crust 1.00 × Relief | 35.8% | 6.6% | 0 |
+| and Feature 90 m | **79.3%** | 46.8% | 3 |
 
 **And the patch is drawn down to the bottom of the crust, so a column is a
 column.** Hung a lip under the rock instead, the patch is a shell: from

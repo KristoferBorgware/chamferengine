@@ -1181,15 +1181,7 @@
 			 * band and `Squash` is the end that moves to keep it.
 			 */
 			const MAX_CARVE_LAYERS = 512;
-			/**
-			 * How much of `Relief` the carve may dig through at a full squash.
-			 *
-			 * **The crust is a share of the world's own height, not a distance.**
-			 * A quarter of the tallest mountain is the same slice off the top of
-			 * a gentle world and a savage one, so the layer keeps its character
-			 * when Relief moves rather than needing to be re-tuned after it.
-			 */
-			const CARVE_SHARE = 0.25;
+
 
 			/** Offsets from the world seed, so the three layers are three fields. */
 			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 613 };
@@ -1406,32 +1398,37 @@
 			/**
 			 * How far under the ground the density is allowed to decide.
 			 *
-			 * **It is not a knob, and that is the point.** A depth slider is a
-			 * digging slider: turn it up and the layer stops carving a crust and
-			 * starts sinking shafts, which is a cave system's job and not this
-			 * one's. It is a fixed share of **`Relief`** instead -- a quarter of
-			 * how tall the tallest mountain in the world is -- so the carve is
-			 * always the same slice off the top of the world however that world
-			 * is set. Make the mountains taller and the crust it works in gets
-			 * taller with them; nothing else moves it.
+			 * **It is a share of `Relief`, not a distance.** A quarter of how
+			 * tall the tallest mountain in the world is, at the shipped setting
+			 * -- so the carve is the same slice off the top of a gentle world
+			 * and a savage one, and moving Relief moves the crust with it rather
+			 * than needing the layer re-tuned after it.
+			 *
+			 * **It is the rate the density recovers at, which is the thing
+			 * `Squash` cannot say.** The density gains a full `1` over this
+			 * distance, so a shallow crust means it recovers fast and the carve
+			 * is pinned to the top few blocks, and a deep crust means it recovers
+			 * slowly and a space can run a long way down. `Squash` lifts the
+			 * whole field and decides *how much* is carved; this decides *how far
+			 * down* the carving can reach. Neither can be got out of the other.
+			 *
+			 * **It is safe where a distance in metres was not, because the
+			 * surface does not move with it.** The bias at the surface is
+			 * `Squash` whatever this is set to, so raising it opens deeper
+			 * spaces and leaves the top of the ground where it was -- measured,
+			 * the tallest ground holds while what is taken out from under rock
+			 * climbs. An earlier `Carve reach` set the depth in metres *and* the
+			 * amount, which is a digging slider whatever it is called.
 			 *
 			 * **Not the density's own feature size, which was tried.** Tying the
 			 * depth to the shapes being cut reads well and drowns the world: at
 			 * the shipped knobs, widening `Feature` from 100 m to 800 m took the
 			 * lowest ground from `-248 m` to `-1,280 m` and the highest from
-			 * `344 m` to `-200 m` -- every column dug under the sea. That is a
-			 * digging slider wearing a different label.
-			 *
-			 * **What the feature size decides instead is whether anything
-			 * overhangs.** A block is kept while one below it is dug only if the
-			 * field swings between the two, so the crust has to be worth more
-			 * than one feature: at a 200 m crust, a 100 m feature gives an
-			 * overhang on a fifth of the columns and a 400 m feature gives a
-			 * lowered surface and almost nothing else.
+			 * `344 m` to `-200 m` -- every column dug under the sea.
 			 */
 			function carveCrust(k) {
 				return Math.min(
-					CARVE_SHARE * k.relief,
+					k.cliffCrust * k.relief,
 					// The walk is one block a step, so this is what stops a
 					// world with kilometres of relief asking for a column walked
 					// for kilometres.
@@ -2007,6 +2004,54 @@
 					0,
 					[
 						{
+							// **How fast the density recovers going down, which
+							// is what decides whether a space can run deep.**
+							// `Squash` lifts the whole field and says how much is
+							// carved; this says how far down the carving reaches.
+							// A share of Relief rather than a distance, so it
+							// means the same thing on a gentle world and a savage
+							// one.
+							key: "cliffCrust",
+							label: "Crust",
+							low: 0.05,
+							high: 1,
+							step: 0.05,
+							value: 0.25,
+							digits: 2,
+							unit: "x Relief",
+							note: () => {
+								if (!field) return "";
+								const k = field.k;
+								const crust = carveCrust(k);
+								const blocks = Math.round(crust / k.blockMetres);
+								const swings = crust / k.cliffMetres;
+								return (
+									`the density gains a full <b>1</b> over ` +
+									`<b>${Math.round(crust).toLocaleString()} m</b>, which is ` +
+									`<b>${blocks.toLocaleString()}</b> blocks, and nothing under ` +
+									`that is ever carved` +
+									// **Two ways to have no room, and they read the
+									// same from outside.** Too few blocks and a space
+									// cannot be drawn; too few swings of the field and
+									// there is nothing to cut a space out of. Both come
+									// out as a carve that only lowers the top, which is
+									// the complaint this row exists to answer.
+									(blocks < 8
+										? ` · <b>too few blocks to hold a space</b> — deepen this ` +
+											`or raise Block detail`
+										: "") +
+									(swings < 2
+										? ` · <b>the density's ${Math.round(
+												k.cliffMetres,
+											).toLocaleString()} m features only cross it ${swings.toFixed(
+												1,
+											)} times</b>, so the field cannot swing inside the crust ` +
+											`and the carve can only lower the top — narrow Feature`
+										: "")
+								);
+							},
+						},
+						{
 							// **The squashing factor, and it goes the way the
 							// talk's does: 0 is the wildest and 1 is off.** It is
 							// a flat lift on the whole density field, and the
@@ -2036,12 +2081,7 @@
 										k.cliffSquash + 1
 									).toFixed(2)}</b> at the bottom of the ` +
 									`<b>${Math.round(crust).toLocaleString()} m</b> crust — ` +
-									`which nothing reads, so the carve stops there` +
-									(k.cliffMetres > crust
-										? ` · <b>Feature is wider than the crust</b>, so the field ` +
-											`cannot swing inside it and what comes out is a lowered ` +
-											`surface rather than an overhang`
-										: "")
+									`which nothing reads, so the carve stops there`
 								);
 							},
 						},
