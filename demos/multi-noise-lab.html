@@ -1412,33 +1412,29 @@
 			/**
 			 * One column of ground, as the heights where rock starts and stops.
 			 *
-			 * **It is a carve, on the block grid, and everything else in the lab
-			 * is what decides where to carve.** The three 2D layers give one
-			 * height per place, which is what makes a coastline, a continent and
-			 * a mountain range tractable and what no density field can be asked
-			 * for. That height then becomes a **bias** on a 3D density field, and
-			 * a block is rock where the density beats the bias -- so far below
-			 * the surface the bias is large and every block is rock whatever the
-			 * noise says, far above it is large the other way and every block is
-			 * air, and in between the noise decides. **Without the bias the same
-			 * field is a cave system**, because nothing tells it where the ground
-			 * was. Nothing here is a displacement: every block is kept or
-			 * removed.
+			 * **It takes rock away and never puts any back.** The three 2D layers
+			 * give one height per place, which is what makes a coastline, a
+			 * continent and a mountain range tractable and what no density field
+			 * can be asked for. This layer starts from the solid column that
+			 * height describes and **digs**: a block is rock unless the density
+			 * says to remove it. Nothing above the surface is ever kept, so
+			 * **the ground can only ever end up lower than the three fields drew
+			 * it**, and a mountain is something the carve left standing rather
+			 * than something it built.
 			 *
-			 * **`Carve reach` is the bias written as a distance, which is the
-			 * only unit it means anything in.** The rule is
-			 * `density > (y - surface) / reach`, so at exactly one reach above
-			 * the surface the bias is `+1` and no reading can keep a block, and
-			 * one reach below it is `-1` and no reading can take one away. The
-			 * walk therefore covers the reach and nothing else, and the column
-			 * closes itself at both ends.
+			 * **The curve says how deep, and `Carve reach` says what its bottom
+			 * is worth.** A reading is turned into a distance -- the top of the
+			 * curve digs nothing, the bottom digs a whole reach -- and a block at
+			 * depth `d` under the surface is removed when the reading at *that
+			 * block* is willing to dig past it. So the same field read at two
+			 * heights in one column can dig at one and not at the other, which is
+			 * what leaves rock over air over rock. Below one reach nothing is
+			 * ever touched, and the walk covers exactly that.
 			 *
 			 * **There is no separate strength knob, because there cannot be
-			 * one.** Multiplying the density and the bias by the same number
-			 * leaves every comparison exactly as it was -- what a strength would
-			 * have done, the reach and the curve already do, and a third knob
-			 * that only moves when the other two are held still is a knob that
-			 * cannot be tuned.
+			 * one.** How much is dug is the curve's shape and how far is the
+			 * reach; a third knob multiplying both would move nothing the two of
+			 * them are holding still.
 			 *
 			 * Returns pairs of heights, low to high, snapped to the block grid.
 			 */
@@ -1449,22 +1445,23 @@
 				// the same planes -- a grid one column rounded for itself would
 				// draw a step between every pair of columns and nowhere else.
 				const first = Math.floor((surface - reach) / block);
-				const last = Math.ceil((surface + reach) / block);
+				const last = Math.floor(surface / block);
 				let from = first * block;
 				let rock = true;
 				for (let L = first; L <= last; L++) {
 					const y = (L + 0.5) * block;
-					const read = densityAt(dx, dy, dz, y, k.radius, seed, s);
-					// The curve remaps the field before the bias sees it, which
-					// is how a reader decides what a density *means*: held flat
-					// through the middle it leaves ordinary ground alone and
-					// cuts only where the field runs to one of its tails.
-					const push = splineAt(k.cliffSpline, read) * 2 - 1;
-					const solid = push > (y - surface) / reach;
+					// Above the ground the three fields drew, there is nothing to
+					// carve and nothing to keep.
+					let solid = y < surface;
+					if (solid) {
+						const read = densityAt(dx, dy, dz, y, k.radius, seed, s);
+						const dig = (1 - splineAt(k.cliffSpline, read)) * reach;
+						solid = surface - y >= dig;
+					}
 					if (solid === rock) continue;
 					// A block is rock or air whole, so the face is the plane
 					// between two layers rather than the point the density
-					// crossed zero.
+					// crossed its own threshold.
 					if (rock) out.push(from, L * block);
 					else from = L * block;
 					rock = solid;
@@ -1488,7 +1485,7 @@
 				const reach = carveReach(erosionCut(said, k), k);
 				if (reach < k.blockMetres) return base;
 				carveColumn(dx, dy, dz, base, reach, k, seed, s, out);
-				return out.length > 0 ? out[out.length - 1] : base;
+				return out.length > 0 ? out[out.length - 1] : base - reach;
 			}
 
 			/**
@@ -1887,7 +1884,7 @@
 					"cliff",
 					{
 						key: "cliffSpline",
-						label: "Density → rock or air",
+						label: "Density → how deep it digs",
 						type: "spline",
 						// Half way up is where the density is zero: it neither
 						// keeps a block the bias would have taken nor takes one
@@ -1918,7 +1915,7 @@
 							[1, 1],
 						],
 					},
-					150,
+					100,
 					1,
 					3,
 					0,
@@ -1936,18 +1933,18 @@
 							low: 8,
 							high: 2000,
 							step: 4,
-							value: 150,
+							value: 250,
 							digits: 0,
 							unit: "m",
 							note: () => {
 								if (!field) return "";
 								const relief = field.highest - field.lowest;
 								return (
-									`one reach above the surface no reading can keep a block ` +
-									`and one below it none can take one away, so the walk is ` +
+									`the deepest a reading can dig, so the walk is ` +
 									`<b>${Math.round(
-										(2 * field.k.cliffReach) / field.k.blockMetres,
-									).toLocaleString()}</b> blocks` +
+										field.k.cliffReach / field.k.blockMetres,
+									).toLocaleString()}</b> blocks and nothing under it is ` +
+									`ever touched` +
 									// **The reach against the ground's own range is
 									// what says whether this is still a carve.** Once
 									// it is wider than the relief in the patch, no
@@ -2285,7 +2282,7 @@
 				// end moves with the block size rather than letting a reach of
 				// kilometres be asked for at a four-metre block.
 				if (row.key === "cliffReach") {
-					const most = (derived().blockMetres * MAX_CARVE_LAYERS) / 2;
+					const most = derived().blockMetres * MAX_CARVE_LAYERS;
 					return {
 						...row,
 						high: Math.max(row.low, Math.min(row.high, Math.floor(most))),
@@ -2534,6 +2531,63 @@
 				}
 				spanAt[count] = runs2.length;
 
+				// **A floating island is a question a column cannot answer.**
+				// How many spans a column holds says there is air under some
+				// rock; whether that rock is *attached to anything* is a fact
+				// about the patch, so it takes a walk over the whole of it.
+				// Every column's lowest span reaches the bedrock under the
+				// carve -- below one reach nothing is ever dug -- so those are
+				// the ground, and any run of rock that never joins one is
+				// hanging in the air.
+				const spans = Float64Array.from(runs2);
+				const pieces = spans.length / 2;
+				const owner = new Int32Array(pieces);
+				for (let i = 0; i < pieces; i++) owner[i] = i;
+				const rootOf = (i) => {
+					let r = i;
+					while (owner[r] !== r) r = owner[r];
+					// Flatten on the way back, or a patch this size walks the
+					// same chain thousands of times.
+					while (owner[i] !== r) {
+						const up = owner[i];
+						owner[i] = r;
+						i = up;
+					}
+					return r;
+				};
+				const join = (a, b) => {
+					const ra = rootOf(a);
+					const rb = rootOf(b);
+					if (ra !== rb) owner[ra < rb ? rb : ra] = ra < rb ? ra : rb;
+				};
+				// Two spans in neighbouring columns are one piece of rock when
+				// they share a block layer. Half a block of overlap is the test,
+				// because the spans are already on the grid and a touch of
+				// exactly zero is two floors meeting rather than rock joining.
+				const touch = k.blockMetres * 0.5;
+				for (let c = 0; c < count; c++)
+					for (let d = 0; d < 6; d++) {
+						const found = ring[c * 6 + d];
+						if (found <= c) continue;
+						for (let a = spanAt[c]; a < spanAt[c + 1]; a += 2)
+							for (let b = spanAt[found]; b < spanAt[found + 1]; b += 2)
+								if (
+									Math.min(spans[a + 1], spans[b + 1]) -
+										Math.max(spans[a], spans[b]) >
+									touch
+								)
+									join(a / 2, b / 2);
+					}
+				const grounded = new Uint8Array(pieces);
+				for (let c = 0; c < count; c++) grounded[rootOf(spanAt[c] / 2)] = 1;
+				let floating = 0;
+				let floatingSpans = 0;
+				for (let i = 0; i < pieces; i++) {
+					if (grounded[rootOf(i)]) continue;
+					floatingSpans++;
+					if (rootOf(i) === i) floating++;
+				}
+
 				field = {
 					k,
 					s,
@@ -2551,7 +2605,11 @@
 					// wins. The column heights became a number, every `top` came
 					// back `undefined`, and the ground drew as garbage.
 					spanAt,
-					spans: Float64Array.from(runs2),
+					spans,
+					// Masses of rock touching nothing that reaches the bedrock,
+					// and how many column-spans they are made of.
+					floating,
+					floatingSpans,
 					// How much of the patch the density actually lifted off the
 					// height field: a column with one pair is a surface, and a
 					// column with two or more is an overhang.
@@ -3844,7 +3902,12 @@
 				// Half way up leaves the column where the three fields put it:
 				// the density is zero there, so it neither carves in nor builds
 				// out.
-				if (key === "cliffSpline") return { at: 0.5, name: "no push" };
+				// **No line on the density curve.** The other three curves are
+				// read against something -- sea level, the continent's own level
+				// -- and this one is a depth measured from the top of its own
+				// axis, so a line across it would have to be drawn at the top
+				// edge and would say only what the axis label already does.
+				if (key === "cliffSpline") return null;
 				if (key !== "contSpline") return null;
 				// The middle of the curve is the waterline, and draining moves
 				// the water down the sea half -- so the line stays what the curve
@@ -3900,7 +3963,7 @@
 				if (key === "cliffSpline")
 					return {
 						x: "x · the density read at this point, -1 to +1",
-						y: "y · the density, -1 to +1 · at the blue line the ground stays exactly where the other three layers put it · at the top it keeps rock one whole Carve reach higher than that, at the bottom it digs one whole Carve reach lower",
+						y: "y · how deep this reading digs · at the top it digs nothing and the ground is exactly what the other three drew, at the bottom it digs a whole Carve reach out from under it",
 					};
 				return {
 					x: `x · the ${field} field, -1 to +1`,
@@ -4097,12 +4160,12 @@
 					`${Math.round(k.peakRelief).toLocaleString()} m` +
 					// **A second line, because the fourth layer is not a term in
 					// the first.** The three fields sum to one height; the
-					// density asks a different question at every point of the
-					// column that height placed, and rock is where its answer
-					// beats the bias.
+					// density then asks, at every point of the column that height
+					// placed, whether to take that point away.
 					(k.useCliff && k.cliffReach >= k.blockMetres
-						? "<br />rock where <i class=\"f\">density(D)</i> &gt; " +
-							`(y − height) ÷ ${Math.round(k.cliffReach).toLocaleString()} m` +
+						? "<br />rock under height, except where " +
+							"<i class=\"f\">dig(D)</i> &gt; height − y · dig up to " +
+							`${Math.round(k.cliffReach).toLocaleString()} m` +
 							(k.cliffWear > 0 && k.useEro
 								? ` × ${term(true, "(1 − " + k.cliffWear.toFixed(2) + " × cut(E))", "1", "e")}`
 								: "")
@@ -4120,7 +4183,8 @@
 						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
 								1,
 							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
-							`layers of rock · `
+							`layers of rock, <b>${field.floating.toLocaleString()}</b> ` +
+							`floating masses · `
 						: "") +
 					`<b>${cost.toFixed(0)} ms</b>`;
 			}

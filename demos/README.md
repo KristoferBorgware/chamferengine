@@ -542,111 +542,113 @@ at 0 it is the map's own level again, and each step is four times the columns:
 
 | Block detail | block | columns in the patch | columns that overhang | rebuild |
 |---|---|---|---|---|
-| 0 | 32 m | 817 | 63.4% | 148 ms |
-| 1 | 16 m | 3,169 | 69.5% | 248 ms |
-| 2 (shipped) | 8 m | 12,481 | 70.8% | 553 ms |
-| 3 | 4 m | 49,537 | 71.4% | 3,306 ms |
+| 0 | 32 m | 817 | 21.5% | 180 ms |
+| 1 | 16 m | 3,169 | 24.6% | 292 ms |
+| 2 (shipped) | 8 m | 12,481 | 29.1% | 547 ms |
+| 3 | 4 m | 49,537 | 29.8% | 1,696 ms |
 
-**The shape barely moves and only the drawing gets finer**, which is the answer
-to whether the grid is inventing the effect: 70.8% against 71.4% over a
-quarter of the block size. Those are software-adapter timings — read the ratio.
+**The shape settles and only the drawing gets finer**, which is the answer to
+whether the grid is inventing the effect: 29.1% against 29.8% over half the block
+size, against 21.5% at a 32 m block where a whole overhang can fall between two
+layers. Those are software-adapter timings — read the ratio.
 
-**A fourth layer carves the result of the other three, and it removes blocks
-rather than moving them.** The construction is the same talk's: a **density**
-read at every point of the column rather than one value per place, rock where it
-is positive and air where it is not. A height field cannot hold rock over air
-over rock — an overhang is not a value it has — so this one is three inputs and
-one output, and the ground is wherever its answer changes, which can happen more
-than once going up. **It is 3D noise, and on a sphere that costs nothing extra**:
-the other three layers sample a unit direction, and the point `metres` above the
-surface is the same direction scaled by `1 + metres / radius`, so one call reads
-one field at any altitude — and that scaling is exactly isotropic, so a feature
-set to 150 m is 150 m tall as well as wide.
+**A fourth layer carves the result of the other three, and it only ever takes
+rock away.** The construction is the same talk's: a **density** read at every
+point of the column rather than one value per place. A height field cannot hold
+rock over air over rock — an overhang is not a value it has — so this one is
+three inputs and one output, and the ground is wherever its answer changes, which
+can happen more than once going up. **It is 3D noise, and on a sphere that costs
+nothing extra**: the other three layers sample a unit direction, and the point
+`metres` above the surface is the same direction scaled by `1 + metres / radius`,
+so one call reads one field at any altitude — and that scaling is exactly
+isotropic, so a feature set to 100 m is 100 m tall as well as wide.
 
-**On its own it is a cave system, and the squash is what makes it a cliff.** The
-density is biased by how far the point stands above the height the three fields
-drew: far below, the bias makes everything rock whatever the noise says; far
-above, everything air; and in between the noise decides. That is what keeps the
-2D layers' answer — a coastline, a continent, a mountain range are all still
-theirs — while letting the 3D field carve into it.
+**It starts from the solid column the three fields describe and digs.** Nothing
+above that surface is ever kept, so **the ground can only end up lower than the
+three fields drew it** — a mountain here is something the carve left standing,
+never something it built. That is the one property the whole layer has to have,
+and it is measurable: as Carve reach rises the tallest ground in the patch falls
+and never rises.
 
-**Carve reach is the bias, written as the distance it is a slope over.** It is
-Kniberg's squash factor, and metres is the only unit it means anything in: the
-rule is `density > (y − height) ÷ reach`, so one reach **above** the surface the
-bias is `+1` and no reading can keep a block, and one reach **below** it is `−1`
-and no reading can take one away. As a slope every useful value was crammed under
-1 and the top of the slider did nothing; as metres the number on it answers *how
-far from the ground can this reach*:
+| Carve reach | tallest ground | lowest ground | columns that overhang | deepest | floating masses |
+|---|---|---|---|---|---|
+| off | 368 m | −152 m | — | 1 span | — |
+| 100 m | 352 m | −208 m | 4.2% | 3 spans | 3 |
+| **250 m (shipped)** | **344 m** | **−264 m** | **29.1%** | **4 spans** | **25** |
+| 600 m | 320 m | −528 m | 76.1% | 8 spans | 41 |
+| 1,200 m | 304 m | −752 m | 97.0% | 9 spans | 86 |
 
-| Carve reach | columns that overhang | deepest column | tallest ground | rebuild |
-|---|---|---|---|---|
-| 80 m | 6.3% | 3 spans | 432 m | 452 ms |
-| 150 m (shipped) | 21.5% | 4 spans | 496 m | 578 ms |
-| 300 m | 56.0% | 6 spans | 544 m | 949 ms |
-| 600 m | 96.2% | 10 spans | 896 m | 796 ms |
-| 1,200 m | 100.0% | 13 spans | 1,376 m | 1,388 ms |
-| 3,000 m | 100.0% | 23 spans | 3,136 m | 214 ms at a 32 m block |
+**A floating mass is a question no column can answer**, so the lab walks the whole
+patch for it: how many spans a column holds says there is air under some rock,
+and whether that rock is attached to anything is a fact about the neighbours.
+Every column's lowest span reaches the bedrock under the carve — below one reach
+nothing is ever dug — so those are the ground, and any run of rock that never
+joins one is hanging in the air. **Carving alone produces them**, with nothing
+built above the surface: a spire whose neighbours are all dug out below its cap
+is left holding a roof over nothing.
 
-**There is no separate strength knob, because there cannot be one.** Multiplying
-the density and the bias by the same number leaves every comparison exactly as it
-was — what a strength would have done, the reach and the curve already do, and a
-third knob that only moves when the other two are held still is a knob nobody can
-tune. The walk is exactly the reach, so this slider's top end moves with the
-block size: 512 blocks a column is the cap, which is 2,048 m at an 8 m block.
+**Carve reach is the reading turned into a distance, which is the only unit it
+means anything in.** It is Kniberg's squash factor: a reading at the top of the
+curve digs nothing and one at the bottom digs a whole reach, so a block at depth
+`d` is removed when the reading **at that block** is willing to dig past it. The
+same field read at two heights in one column can dig at one and not the other,
+which is what leaves rock over air over rock. As a slope every useful value was
+crammed under 1 and the top of the slider did nothing.
 
-**Past about 600 m it stops being terrain at all, and the tallest-ground column
-is what says so.** The ground in this patch runs about **850 m** top to bottom,
-so once the reach is further than that no column's surface is far enough from any
-other's for the bias to tell them apart: every column is solid over most of the
-reach, the three 2D fields stop reaching the picture, and what is left is a block
-of noise with the patch's own footprint. The tallest ground then tracks the reach
-and not the world — 896 m, 1,376 m, 3,136 m against reaches of 600 m, 1,200 m,
-3,000 m — and at 6,000 m the whole patch lifts off, ground running **2,688 m to
-5,960 m** on a planet 6,801 m in radius. **Making the density's own features
-smaller does not rescue it**: at a 100 m feature instead of 150 m the same reach
-is the same slab, 18 spans deep. The reach is measured against the *terrain's*
-relief, never against the noise's feature size, and the note under the slider
-says so live because the number it has to be compared with moves with every other
-knob.
+**There is no separate strength knob, because there cannot be one.** How much is
+dug is the curve's shape and how far is the reach; a third knob multiplying both
+would move nothing those two are holding still. The walk is exactly the reach, so
+this slider's top end moves with the block size — 512 blocks a column is the cap,
+which is 4,096 m at an 8 m block.
+
+**What decides whether it reads as a cliff is the reach against the density's own
+feature size, not the reach alone.** An overhang needs a block to be kept while
+one below it is dug, which needs the field to swing between the two — and a
+feature much wider than the reach cannot swing over that distance. Measured at a
+200 m reach:
+
+| Density feature | columns that overhang | deepest | floating masses |
+|---|---|---|---|
+| 600 m | 0.1% | 2 spans | 0 |
+| 300 m | 1.5% | 2 spans | 0 |
+| 150 m | 8.2% | 3 spans | 1 |
+| 100 m (shipped) | 22.5% | 4 spans | 8 |
 
 **Erosion carries into the carve, which is the one place two layers meet.**
 Erosion already flattens the peaks and drags the level toward the sea; a cliff
 standing in the middle of that is the same contradiction a mountain there would
 be. So the reach at a place is `reach × (1 − Erosion smooths it × cut(E))` — the
 same `cut` the height reads, one field with one meaning and two readers. Flatten
-the erosion curve to a constant and the coupling is exactly what it claims to be:
+the erosion curve to a constant and the coupling is exactly what it claims:
 
-| Erosion curve, flat at | columns that overhang | deepest column | tallest ground |
+| Erosion curve, flat at | columns that overhang | deepest | floating masses |
 |---|---|---|---|
-| 0 — nothing worn | 31.6% | 4 spans | 520 m |
-| 0.5 — half worn | 9.1% | 3 spans | 328 m |
-| 1 — worn everywhere | **0.0%** | 1 span | 176 m |
+| 0 — nothing worn | 37.2% | 6 spans | 13 |
+| 0.5 — half worn | 16.8% | 3 spans | 7 |
+| 1 — worn everywhere | **0.0%** | **1 span** | **0** |
 
-At the shipped curve, turning the knob from `0` to `1` takes the patch from 32.2%
-of columns overhanging to 16.7% — and the point is *which* columns lose them.
+At the shipped erosion curve, turning the knob from `0` to `1` takes the patch
+from 38.2% of columns overhanging to 23.6% — and the point is *which* columns
+lose them.
+
+**The curve is a digging depth, so the whole of its axis does work.** `x` is the
+reading at that point and `y` is how deep it digs: the top digs nothing and
+leaves the ground exactly as the other three drew it, the bottom digs a whole
+Carve reach out from under it. There is no reference line on this one, because
+the reference is the top of its own axis. The shipped curve is **high across most
+of the axis and dives in one tail** — a curve sitting in the middle digs
+*everywhere*, and a field thresholded at its own median is swiss cheese rather
+than a cliff.
 
 **The Terrain picture runs the carve too.** It used to draw the height field, so
 the plane showed a spire and the map beside it showed the hillside the spire was
 cut out of, which under an overhang are not even close. It now takes the top of
-the topmost rock at every pixel. That roughly doubles what a picture costs and it
-changes what the map is for: on the **patch** setting a pixel is a few metres and
-the map matches the plane cell for cell, while on the **planet** setting a pixel
-is 137 m of ground against a 150 m density feature, so a wild reach reads as
-speckle. That speckle is the world, not the drawing — but it is also why the
-shipped reach came down from 300 m to 150 m, because at 300 m the continents
-stop being legible from orbit and nothing had been showing that.
-
-**The curve is on the density, and its blue line is where the density is zero.**
-`x` is the reading at that point and `y` is the density it becomes; above the
-line it keeps a block the height field would not have, below it takes one away.
-The shipped curve is **steep through the middle, because that is where the
-readings are** — an octave stack is normalised to its own peak and then clusters,
-so a straight line spends nearly all of its range on readings almost nothing
-lands on and hands ordinary ground a density of about a quarter. Standing the
-middle up takes the same readings to both ends: **29.4% of columns overhang
-against 62.3%**, and the tallest ground goes from 348 m to 472 m. Flattening the
-middle is the tame setting, and worth reaching by dragging rather than by
-shipping.
+the topmost rock at every pixel. That roughly doubles what a picture costs, and
+on the **patch** setting a pixel is a few metres so the map matches the plane cell
+for cell. On the **planet** setting a pixel is 137 m of ground against a 100 m
+density feature, so what a wild reach does to a coastline arrives as speckle —
+which is the world and not the drawing, and is the only place the whole planet's
+worth of it can be seen at once.
 
 **Turning the layer off leaves the block grid, because the grid is the world's
 and not the layer's.** The ground is then the height field rounded to the nearest
