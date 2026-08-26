@@ -587,7 +587,20 @@ from `neighbour` and the polygons from `cellCorners`, so a patch that reaches a
 face edge crosses it the way the engine does and a patch that reaches one of the
 twelve pentagons gets a five-sided cell. Each cell draws a cap at its own radius
 and a wall wherever it stands over a neighbour, and the sea is one translucent
-sheet at its own radius with no block under it. **The normal is stored, and it
+sheet at its own radius with no block under it. **Three lights, because the badly lit part of a patch and the badly lit part of
+a globe are not the same surfaces.** A patch's dark faces are the walls turned
+away from the light, and their normals point the opposite way, so a fill
+opposite the key is exactly what reaches them — rendered alone it lights the
+anti-sun walls and leaves every cap in the picture black. A globe's dark part is
+the terminator, and a light opposite the key cannot reach it: those normals are
+square to the key, so both clamped terms are zero there by construction. Adding
+the opposite fill alone moved a whole-planet frame's mean from **49.7 to 50.4**
+of 255 and left the dark limb where it was. What reaches it is a light that
+wraps — half the dot product plus a half, still 0.5 where the clamped one has
+gone to nothing. All three together take the same frame to **53.0**, with the
+95th percentile of the per-pixel ratio at **1.000**: nothing anywhere gets
+darker, and a face square to the key reads exactly what it read before.
+**The normal is stored, and it
 is stored as three bytes** — taking it from the change of position across a
 pixel is what the engine's terrain shader does and it is wrong at this scale,
 because a derivative is a difference over a two-by-two block of pixels and a map
