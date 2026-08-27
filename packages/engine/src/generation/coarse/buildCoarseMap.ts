@@ -2,18 +2,14 @@ import type { CoarseMapOptions } from "./CoarseMapOptions.js";
 import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
-import { erodeDroplets } from "./erodeDroplets.js";
-import { erodeFreeDroplets } from "./erodeFreeDroplets.js";
 import { layeredHeight } from "./layeredHeight.js";
-import { metreHeight } from "./metreHeight.js";
 
 /**
  * Compute a planet's coarse map from its seed.
  *
- * Three steps, and the order is fixed by what each needs from the one before
- * it. Two noise layers and their curves decide the shape, sea level and the
- * metre scale turn that shape into ground a person can measure, and water cuts
- * into the ground.
+ * Three noise layers and their curves, and that is the whole of it. The ground
+ * comes out in metres rather than being fitted to a percentile afterwards,
+ * because the continentalness curve's middle is the waterline.
  *
  * Seconds of work, once, at world creation. Nothing here runs per frame, and
  * nothing runs afterwards either: what this returns **is** the terrain.
@@ -24,16 +20,9 @@ export function buildCoarseMap(
 ): CoarseMap {
 	const settings = { ...COARSE_MAP_DEFAULTS, ...options };
 	const grid = new CoarseGrid(settings.level);
-	const height = metreHeight(
-		layeredHeight(grid, seed, settings).raw,
-		settings,
+	return new CoarseMap(
+		seed,
+		grid,
+		Float32Array.from(layeredHeight(grid, seed, settings).raw),
 	);
-	const cut =
-		settings.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
-	cut(grid, height, seed, settings.erosion, settings.cellMetres, {
-		maxCut: settings.erosionMaxCut,
-		cutShare: settings.erosionCutShare,
-		inertia: settings.erosionInertia,
-	});
-	return new CoarseMap(seed, grid, Float32Array.from(height));
 }

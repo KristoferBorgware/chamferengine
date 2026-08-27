@@ -20,10 +20,10 @@ function sheet(): BenchSheet {
 		height: H,
 		metres: of((at) => (at % 40) * 30 - 300),
 		raw: of((at) => Math.sin(at) * 0.8),
-		terrain: of((at) => (at % 11) / 10),
-		mountain: of((at) => ((at * 7) % 13) / 12),
-		cut: of((at) => Math.cos(at) * 4),
-		cutScale: 4,
+		continent: of((at) => (at % 11) / 10),
+		erosion: of((at) => ((at * 3) % 17) / 16),
+		peaks: of((at) => ((at * 7) % 13) / 12),
+		carve: of((at) => ((at * 5) % 19) / 18),
 		rawLow: -1,
 		rawHigh: 1,
 		low: -300,
@@ -50,7 +50,7 @@ describe("paintSheet", () => {
 	 * The whole point of sending samples rather than pixels: six pictures of
 	 * one sheet, each one a different reading of it.
 	 */
-	it("draws six different pictures of the same samples", () => {
+	it("draws a different picture for every name", () => {
 		const seen = new Set<string>();
 		for (const picture of PATCH_PICTURES)
 			seen.add(paint(picture).join(","));
@@ -58,9 +58,7 @@ describe("paintSheet", () => {
 	});
 
 	it("reads the mountain layer for the mountain picture and the terrain layer for the terrain one", () => {
-		expect(paint("terrain").join(",")).not.toBe(
-			paint("mountain").join(","),
-		);
+		expect(paint("continent").join(",")).not.toBe(paint("peaks").join(","));
 	});
 });
 
@@ -85,8 +83,6 @@ describe("the bench's colours", () => {
 			metres: -400,
 			raw: 0,
 			layer: 0,
-			cut: 0,
-			cutScale: 1,
 			rawLow: -1,
 			rawHigh: 1,
 			low: -400,

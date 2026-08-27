@@ -38,7 +38,7 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 	{
 		id: "ground",
 		key: "height",
-		stage: "erosion",
+		stage: "metres",
 		label: "Ground",
 		scale: "linear",
 		// **Bands, not a blend, and every band is one of the world's blocks.**

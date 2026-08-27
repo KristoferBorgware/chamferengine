@@ -12,7 +12,7 @@ export interface PatchLook {
 	readonly surface: "solid" | "wire" | "both";
 
 	/** Which control layer a picture of one layer draws. */
-	readonly layer: "terrain" | "mountain";
+	readonly layer: "continent" | "erosion" | "peaks" | "carve";
 
 	/** The two elevations that cut land into three materials, in metres. */
 	readonly rockLine: number;
@@ -49,6 +49,20 @@ export interface PatchUpload {
 	readonly indices: Uint32Array<ArrayBuffer> | null;
 	readonly lines: Uint32Array<ArrayBuffer> | null;
 	readonly triangleCount: number;
+
+	/**
+	 * How many vertices the ground drew, on a mesh that is not indexed.
+	 *
+	 * **A column mesh shares no vertex, so there is nothing for an index to
+	 * name.** Every face of it is flat and carries its own plane as its normal,
+	 * where a surface patch shares one vertex round a cell -- so the two are
+	 * drawn the same way and buffered differently. When this is set the draw is
+	 * a plain `draw`, and the sea's own run follows the ground's.
+	 */
+	readonly groundVertices?: number;
+
+	/** How many the sea drew, blended after every opaque one. */
+	readonly waterVertices?: number;
 }
 
 /** A matrix, the light, the mode, and the four numbers the pictures read. */
@@ -65,6 +79,7 @@ export class PatchRenderer {
 	private readonly ctx: GpuContext;
 	private readonly solidPipeline: GPURenderPipeline;
 	private readonly linePipeline: GPURenderPipeline;
+	private readonly seaPipeline: GPURenderPipeline;
 	/**
 	 * Two of everything the shader reads, because the rims are drawn in the
 	 * same pass as the surface and differ by one number.
@@ -76,8 +91,10 @@ export class PatchRenderer {
 	 */
 	private readonly uniform: GPUBuffer;
 	private readonly rimUniform: GPUBuffer;
+	private readonly seaUniform: GPUBuffer;
 	private readonly bindGroup: GPUBindGroup;
 	private readonly rimBindGroup: GPUBindGroup;
+	private readonly seaBindGroup: GPUBindGroup;
 	private readonly data = new Float32Array(VIEW_BYTES / 4);
 
 	private vertices: GPUBuffer | null = null;
@@ -85,6 +102,8 @@ export class PatchRenderer {
 	private lines: GPUBuffer | null = null;
 	private triangleCount = 0;
 	private lineCount = 0;
+	private groundVertices = 0;
+	private waterVertices = 0;
 	private depth: GPUTexture | null = null;
 
 	/** What the frame clears to where no ground covers it. */
@@ -119,6 +138,14 @@ export class PatchRenderer {
 			layout,
 			entries: [{ binding: 0, resource: { buffer: this.rimUniform } }],
 		});
+		this.seaUniform = device.createBuffer({
+			size: VIEW_BYTES,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+		this.seaBindGroup = device.createBindGroup({
+			layout,
+			entries: [{ binding: 0, resource: { buffer: this.seaUniform } }],
+		});
 
 		const buffers: GPUVertexBufferLayout[] = [
 			{
@@ -130,20 +157,41 @@ export class PatchRenderer {
 					{ shaderLocation: 3, offset: 28, format: "float32" },
 					{ shaderLocation: 4, offset: 32, format: "float32" },
 					{ shaderLocation: 5, offset: 36, format: "float32" },
+					{ shaderLocation: 6, offset: 40, format: "float32" },
+					{ shaderLocation: 7, offset: 44, format: "float32" },
 				],
 			},
 		];
 		const pipelineLayout = device.createPipelineLayout({
 			bindGroupLayouts: [layout],
 		});
-		const make = (topology: GPUPrimitiveTopology): GPURenderPipeline =>
+		const make = (
+			topology: GPUPrimitiveTopology,
+			sea = false,
+		): GPURenderPipeline =>
 			device.createRenderPipeline({
 				layout: pipelineLayout,
 				vertex: { module, entryPoint: "vertexMain", buffers },
 				fragment: {
 					module,
 					entryPoint: "fragmentMain",
-					targets: [{ format }],
+					targets: [
+						sea
+							? {
+									format,
+									blend: {
+										color: {
+											srcFactor: "src-alpha",
+											dstFactor: "one-minus-src-alpha",
+										},
+										alpha: {
+											srcFactor: "one",
+											dstFactor: "one-minus-src-alpha",
+										},
+									},
+								}
+							: { format },
+					],
 				},
 				// **No culling.** A preview is turned over and looked at from
 				// under, and a patch seen from below is a legitimate way to read
@@ -151,12 +199,17 @@ export class PatchRenderer {
 				primitive: { topology, cullMode: "none" },
 				depthStencil: {
 					format: "depth32float",
-					depthWriteEnabled: true,
+					// **The sea tests depth and does not write it.** Two water
+					// faces on one pixel -- a sheet and the curtain hung off the
+					// rim under it -- would otherwise blend one over the other
+					// and draw a dark band round every coast.
+					depthWriteEnabled: !sea,
 					depthCompare: "less",
 				},
 			});
 		this.solidPipeline = make("triangle-list");
 		this.linePipeline = make("line-list");
+		this.seaPipeline = make("triangle-list", true);
 	}
 
 	/** Put a freshly built patch on the GPU, dropping whatever was there. */
@@ -165,6 +218,8 @@ export class PatchRenderer {
 		this.vertices?.destroy();
 		this.vertices = null;
 		this.triangleCount = patch.triangleCount;
+		this.groundVertices = patch.groundVertices ?? 0;
+		this.waterVertices = patch.waterVertices ?? 0;
 		// **Indices only when the patch moved.** A patch whose ground changed
 		// draws the same triangles between the same vertices -- the shape of a
 		// patch is where it stands, not what stands on it -- so the index
@@ -227,7 +282,18 @@ export class PatchRenderer {
 		// map, with the light over the reader's shoulder.
 		this.data.set([-0.82, 0.57, 0.08, 0], 16);
 		this.data.set(
-			[look.picture, 0, look.layer === "mountain" ? 1 : 0, 0],
+			[
+				look.picture,
+				0,
+				look.layer === "carve"
+					? 3
+					: look.layer === "peaks"
+						? 2
+						: look.layer === "erosion"
+							? 1
+							: 0,
+				0,
+			],
 			20,
 		);
 		this.data.set([look.low, look.high, 0, 0], 28);
@@ -239,6 +305,9 @@ export class PatchRenderer {
 		this.data[21] = 1;
 		device.queue.writeBuffer(this.rimUniform, 0, this.data);
 		this.data[21] = 0;
+		this.data[23] = 1;
+		device.queue.writeBuffer(this.seaUniform, 0, this.data);
+		this.data[23] = 0;
 
 		const encoder = device.createCommandEncoder();
 		const pass = encoder.beginRenderPass({
@@ -262,27 +331,39 @@ export class PatchRenderer {
 				depthStoreOp: "store",
 			},
 		});
-		if (this.vertices && this.indices) {
+		if (this.vertices && (this.indices || this.groundVertices > 0)) {
 			pass.setBindGroup(0, this.bindGroup);
 			pass.setVertexBuffer(0, this.vertices);
 			if (look.surface !== "wire") {
 				pass.setPipeline(this.solidPipeline);
-				pass.setIndexBuffer(this.indices, "uint32");
-				pass.drawIndexed(this.triangleCount * 3);
+				if (this.groundVertices > 0) {
+					pass.draw(this.groundVertices);
+				} else if (this.indices) {
+					pass.setIndexBuffer(this.indices, "uint32");
+					pass.drawIndexed(this.triangleCount * 3);
+				}
 			}
 			if (look.surface !== "solid" && this.lines) {
-				// The rims are drawn with the mode bit set, which is the one
-				// thing the shader reads from a second uniform write.
-				this.data[21] = 1;
-				device.queue.writeBuffer(
-					this.uniform,
-					80,
-					this.data.subarray(20, 24),
-				);
+				// **The rims are drawn through their own buffer, not through a
+				// second write to this one.** A queued write lands before the
+				// whole submission runs, so writing the mode bit here would
+				// reach the surface draw above as well and paint the whole patch
+				// flat blue. That is what `rimUniform` is for, and binding it is
+				// the half that was missing.
+				pass.setBindGroup(0, this.rimBindGroup);
 				pass.setPipeline(this.linePipeline);
 				pass.setIndexBuffer(this.lines, "uint32");
 				pass.drawIndexed(this.lineCount);
-				this.data[21] = 0;
+			}
+			// **The water last, and through its own uniform.** It is blended,
+			// so every opaque triangle has to be behind it in the depth buffer
+			// before it is drawn; and a uniform cannot be rewritten between two
+			// draws of one pass, because a queued write lands before the whole
+			// submission runs.
+			if (look.surface !== "wire" && this.waterVertices > 0) {
+				pass.setBindGroup(0, this.seaBindGroup);
+				pass.setPipeline(this.seaPipeline);
+				pass.draw(this.waterVertices, 1, this.groundVertices);
 			}
 		}
 		pass.end();
@@ -296,5 +377,6 @@ export class PatchRenderer {
 		this.depth?.destroy();
 		this.uniform.destroy();
 		this.rimUniform.destroy();
+		this.seaUniform.destroy();
 	}
 }

@@ -646,6 +646,25 @@ body.bench .knobs {
 	padding-top: 12px;
 }
 
+/* **A layer's heading is its curve's colour**, and the same four the bench's
+   pictures are named by: four curves with one colour between them are four
+   curves a reader has to keep track of by position. */
+.knobs h2.tint-cont .knobs-fold {
+	color: #ffd166;
+}
+
+.knobs h2.tint-ero .knobs-fold {
+	color: #8ce99a;
+}
+
+.knobs h2.tint-pv .knobs-fold {
+	color: #ff9db1;
+}
+
+.knobs h2.tint-cliff .knobs-fold {
+	color: #c9a7ff;
+}
+
 /* No fold on the bench: the panel is half of what the page is for. */
 body.bench .knobs-head {
 	display: none;
@@ -826,4 +845,22 @@ body.bench .knobs-head {
 		transparent 6px 12px,
 		rgba(255, 255, 255, 0.9) 12px 18px
 	);
+}
+
+/**
+ * A layer's own field, under the curve that shapes it.
+ *
+ * Square, because the patch it is a picture of is; and drawn with no smoothing,
+ * because a map cell is a reading and a picture that blends two of them shows a
+ * value the field never had.
+ */
+.knobs .bench-layer-shot {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	margin: 0.5rem 0 0.25rem;
+	border-radius: 4px;
+	background: #0b1017;
+	image-rendering: pixelated;
+	cursor: pointer;
 }

@@ -10,6 +10,120 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-094 — Doc 08 describes a terrain model the engine stopped running
+
+**Kind:** doc
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-27, building the landscape bench against the shipped engine
+**Where:** [`docs/08-terrain-generation.md`](docs/08-terrain-generation.md);
+`packages/engine/src/generation/coarse/shapeLayers.ts`,
+`packages/engine/src/generation/terrain/carveDensity.ts`
+
+**What happens.** Doc 08 argues a surface built from **two** noise stacks -- a
+terrain layer and a mountain layer gated on it -- scaled into metres by a fit
+that puts sea level at a **percentile** of the finished field. The engine now
+builds it from **three**, and the metres come out of the continentalness
+curve rather than from a fit: the curve's own middle is the waterline, so the
+coast is where a reader drew it and no percentile is computed anywhere. There
+is a **fourth** layer as well, the carve, which the document does not mention
+at all -- a 3D density field read per block that cuts cliffs, overhangs and
+arches into the finished ground, held off at the waterline.
+
+The document is still right about everything under those two headings: the
+noise basis, the fold and its measured pivot, why one scale for land and sea
+spent the mountains' budget, the three absolute material lines and the
+measurement that put Relief at 600 m. What has moved is the layer count, the
+name of each layer, and how a reading becomes a metre.
+
+**What it costs to leave.** Doc 08 is the page anyone reading the generator is
+sent to, and the two disagree about the shape of the thing rather than about a
+number: a reader looking for `landFraction` finds an argument for a knob the
+engine does not have, and a reader looking for the carve finds nothing. The
+knock-on is that **doc 11's still-open list and doc 26's triage both count
+against the old model**, so neither can be trusted about what is left.
+
+**Why it is not fixed in the same turn.** `docs/` argues each decision from a
+measurement, and three of the four layers here were chosen in the lab against
+measurements that are in the lab's own comments rather than in
+`verification/`. Rewriting the page properly means deciding which of those get
+a script and re-running them at the engine's own numbers, which is its own
+piece of work.
+
+### F-093 — A planet smaller than its own layer widths comes out all sea or all land, and nothing says so
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/TerrainLayer.ts`,
+`packages/client/src/PlanetSettings.ts`
+
+**What happens.** The coast is where the continentalness curve crosses its own
+middle, so how much land a world has is decided by how far that layer's field
+swings. The layer is stated in metres and the noise takes `radius / metres` as
+its frequency -- so on a planet **smaller than the layer's widest octave** the
+frequency drops below one, the field barely varies over the whole sphere, and it
+can sit entirely on one side of the curve's middle.
+
+Measured on one seed at four sizes, with the shipped 6,000 m continentalness
+layer:
+
+| radius | ground | land |
+|---|---|---|
+| 1,700 m | −425 to −15 m | **0.0%** |
+| 3,400 m | −372 to 366 m | 24.2% |
+| 5,313 m | −429 to 670 m | 21.8% |
+| 10,626 m | −450 to 736 m | 24.3% |
+
+A 1,700 m planet is not an odd request -- it is the radius a level-6 map at 32 m
+cells gives, and it is the worked planet several verification scripts use. The
+world it builds is entirely ocean, drawn in one flat colour, with no refusal and
+nothing on the panel to point at.
+
+**Why it is not simply a smaller default.** The defaults are the lab's, and the
+lab's planet is 6,801 m. Shrinking them to suit a small world would make the
+shipped one's continents into hills. What the panel is missing is the other
+guard it already has in the other direction: it refuses a map too coarse to draw
+a layer's narrowest octave, and has nothing to say about a planet too small to
+hold its widest.
+
+**What it would take.** One line in `problems()` per map layer: if the widest
+octave is over about half the planet's circumference, say so and name the scale
+row that fixes it. The number wants measuring rather than guessing -- what
+matters is the frequency at which the field stops crossing the curve's middle,
+which is a property of the octave count and the falloff as well as the width.
+
+### F-092 — The droplet walk has no caller inside the engine any more
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts`,
+`erodeFreeDroplets.ts`, `DROPLET.ts`, `ErosionOptions.ts`, `ErosionWalk.ts`
+
+**What happens.** Erosion in the new model is a **field**: a noise stack read
+through a curve that says, per place, how much of the relief survives there and
+how far the level is worn down with it. It is one lookup per map cell and it is
+on by default. The droplet walk is a different thing that happened to share the
+name -- a pass that moves material downhill over the finished map -- and it is
+off the map build entirely: no option, no stage, no call.
+
+**Why it is not deleted in the same turn.** `demos/noise-lab.html` ports both
+walks and `packages/engine/tests/demos/noiseLab.test.ts` digests the port
+against the engine's own, so the functions are still exercised and still
+documented. Deleting them means deciding what happens to that lab, which is a
+separate question from the terrain model.
+
+**What it costs to leave.** Five files and their tests, reachable from
+`chamfer/generation` and callable by anyone reading the barrel -- which is the
+part that matters, because the name `erosion` now means the field and a caller
+finding `erodeDroplets` beside it will reasonably think the two are related.
+
 ### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 
 **Kind:** risk

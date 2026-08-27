@@ -7,7 +7,7 @@
  * side of everything without changing what an open field comes to.
  *
  * Here rather than beside either renderer, because two of them light ground
- * with it -- the world and the terrain bench's patch -- and a preview lit by a
+ * with it -- the world and the landscape bench's patch -- and a preview lit by a
  * different balance from the world is a preview of a different world.
  */
 export const SUN_SHARE = 0.58;

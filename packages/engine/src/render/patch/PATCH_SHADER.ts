@@ -51,7 +51,10 @@ const SUN_SHARE = ${SUN_SHARE};
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
-	/** x: which picture. y: lines rather than surface. z: which control layer. */
+	/**
+	 * x: which picture. y: lines rather than surface. z: which control layer.
+	 * w: the sea rather than the ground.
+	 */
 	mode     : vec4f,
 	/** The two material lines in metres, and the field's own range here. */
 	lines    : vec4f,
@@ -85,8 +88,10 @@ fn vertexMain(
 	@location(1) normal   : vec3f,
 	@location(2) metres   : f32,
 	@location(3) raw      : f32,
-	@location(4) terrain  : f32,
-	@location(5) mountain : f32,
+	@location(4) continent : f32,
+	@location(5) erosion   : f32,
+	@location(6) peaks     : f32,
+	@location(7) carve     : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
@@ -94,9 +99,19 @@ fn vertexMain(
 	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
-	// Both layers are on the vertex and the uniform picks one, so choosing a
-	// picture of one of them costs a frame rather than a rebuilt mesh.
-	out.layer = select(terrain, mountain, view.mode.z > 0.5);
+	// **Every layer is on the vertex and the uniform picks one**, so choosing a
+	// picture of one of them costs a frame rather than a rebuilt mesh. Three
+	// now, because the surface is three layers and a layer with no channel is
+	// a layer whose curve cannot be looked at.
+	out.layer = select(
+		select(
+			select(continent, erosion, view.mode.z > 0.5),
+			peaks,
+			view.mode.z > 1.5,
+		),
+		carve,
+		view.mode.z > 2.5,
+	);
 	return out;
 }
 
@@ -165,6 +180,22 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	}
 	let picture = i32(view.mode.x);
 
+	// **The sea is a sheet over the ground and carries the ground's own
+	// height**, so how much water a look passes through is on the vertex: it
+	// decides which of the two colours the water is, and how much of the floor
+	// gets back out through it. In a picture of a number the water is left out
+	// entirely -- the question there is what the field says, and a blue sheet
+	// over the answer hides it.
+	if (view.mode.w > 0.5) {
+		if (picture != 0) {
+			discard;
+		}
+		let through = 1.0 - exp(in.metres / SEA_CLARITY);
+		let water = mix(SEA_SHALLOW, SEA_DEEP, through);
+		let lit = pow(water * lightOn(in.normal, SUN_SHARE), vec3f(1.0 / 2.2));
+		return vec4f(lit, mix(0.42, 0.94, through));
+	}
+
 	// The grey pictures answer a different question from the bands: they read
 	// elevation everywhere rather than saying which of the four blocks stands
 	// there, and Raw stops before sea level has been taken off the field.
@@ -201,13 +232,11 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 
 	var tint : vec3f;
 	if (in.metres <= 0.0) {
-		// **Bare sand seen through the sea's own two colours.** The ocean is a
-		// surface at one radius and holds no blocks, so the floor is bare; how
-		// much water a look passes through decides both how far that floor
-		// shows and which of the two colours it is seen against. A shore is
-		// sand under a tint and open water never gets back out.
-		let through = 1.0 - exp(in.metres / SEA_CLARITY);
-		tint = mix(SAND, mix(SEA_SHALLOW, SEA_DEEP, through), through);
+		// **Bare sand under the water, and the water itself is geometry.** The
+		// ocean is a surface at one radius and holds no blocks, so the floor is
+		// bare; the sheet drawn over it is what tints it, and tinting the floor
+		// here as well would put two depths of water on one pixel.
+		tint = SAND;
 	} else if (in.metres < view.lines.x) {
 		tint = GRASS;
 	} else if (in.metres < view.lines.y) {

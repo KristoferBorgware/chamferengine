@@ -4,10 +4,9 @@ import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import { COARSE_STAGES } from "./CoarseStage.js";
 import { CoarseGrid } from "./CoarseGrid.js";
 import { CoarseMap } from "./CoarseMap.js";
-import { erodeDroplets } from "./erodeDroplets.js";
-import { erodeFreeDroplets } from "./erodeFreeDroplets.js";
-import { layeredHeight } from "./layeredHeight.js";
-import { metreHeight } from "./metreHeight.js";
+import type { LayerNoise } from "./layerNoise.js";
+import { layerNoise } from "./layerNoise.js";
+import { shapeLayers } from "./shapeLayers.js";
 
 /** One step finished, and the map as it stands after it. */
 export interface CoarseMapStep {
@@ -41,10 +40,17 @@ export interface CoarseMapStep {
 export class CoarseMapBuilder {
 	readonly grid: CoarseGrid;
 
-	/** The surface with no unit, held so a later step can start again. */
-	private raw?: Float64Array;
+	/**
+	 * The three octave stacks, held so a later step can start again.
+	 *
+	 * **This is the expensive half and the half nothing but the seed and the
+	 * layer widths move.** Every curve, every switch and every metre knob is
+	 * read off it by `shapeLayers`, so dragging one of those re-runs the cheap
+	 * pass over fields already in memory.
+	 */
+	private noise?: LayerNoise;
 
-	/** The surface in metres before erosion, held for the same reason. */
+	/** The surface in metres, held so a repeat run has something to hand back. */
 	private metres?: Float64Array;
 
 	private height?: Float64Array;
@@ -73,41 +79,25 @@ export class CoarseMapBuilder {
 		// start from. A first run holds nothing, so it begins at the top whatever
 		// it was asked for.
 		const asked = COARSE_STAGES.indexOf(from);
-		const at = this.raw === undefined ? 0 : asked;
+		const at = this.noise === undefined ? 0 : asked;
 		// A caller wanting a picture of the ground before the water does not
 		// wait for the water. The steps below the last one it asked for are not
 		// run, and the map it gets back holds what has been computed so far.
 		const last = COARSE_STAGES.indexOf(until);
 
 		if (at <= 0) {
-			this.raw = layeredHeight(grid, seed, settings).raw;
-			// Nothing downstream has run, so the ground is the noise itself with
-			// no sea in it. Drawing this shows what the octave knobs are turned
-			// against.
-			this.height = Float64Array.from(this.raw);
+			this.noise = layerNoise(grid, seed, settings);
+			// Nothing downstream has run, so what is on screen is the
+			// continentalness stack alone -- which is what the octave knobs are
+			// turned against, before any curve touches it.
+			this.height = Float64Array.from(this.noise.continent);
 			yield this.step("height", last <= 0);
 		}
 		if (last <= 0) return;
 
-		if (at <= 1 || this.metres === undefined)
-			this.metres = metreHeight(this.raw!, settings);
-		if (at <= 1) {
-			this.height = Float64Array.from(this.metres!);
-			yield this.step("metres", last <= 1);
-		}
-		if (last <= 1) return;
-
-		// Erosion writes in place, so it starts from a copy of ground nothing
-		// has cut. That copy is why the metric field is held separately.
-		this.height = Float64Array.from(this.metres!);
-		const cut =
-			settings.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
-		cut(grid, this.height, seed, settings.erosion, settings.cellMetres, {
-			maxCut: settings.erosionMaxCut,
-			cutShare: settings.erosionCutShare,
-			inertia: settings.erosionInertia,
-		});
-		yield this.step("erosion", true);
+		this.metres = shapeLayers(this.noise!, settings).raw;
+		this.height = Float64Array.from(this.metres);
+		yield this.step("metres", true);
 	}
 
 	/** The map as it stands, with anything not yet computed holding zero. */

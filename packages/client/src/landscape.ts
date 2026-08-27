@@ -5,16 +5,17 @@ import type {
 	BenchSheet,
 } from "./BenchMessage.js";
 import type { PatchLook } from "chamfer/render";
-import type { PlanetKnobs } from "./PlanetSettings.js";
+import type { LayerName, PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { BAND_COLORS } from "./paintPatch.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { SEA_COLORS } from "chamfer/render";
 import { Mat4, Vec3 } from "chamfer/math";
-import { PlanetSettings } from "./PlanetSettings.js";
+import { LAYER_NAMES, LAYER_TITLES, PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
+import { LAYER_PICTURES } from "./PatchLook.js";
 import { paintSheet } from "./paintSheet.js";
 import {
 	PatchRenderer,
@@ -23,7 +24,7 @@ import {
 } from "chamfer/render";
 
 /**
- * The terrain bench: one patch of a planet, and the knobs that shape it.
+ * The landscape bench: one patch of a planet, and the four layers that shape it.
  *
  * **Its own page, not a pane over the world.** Choosing terrain numbers is
  * looking at ground, and a world drawn behind the thing being judged is a
@@ -83,9 +84,10 @@ const PICTURE_INDEX: Record<string, number> = {
 	ground: 0,
 	height: 1,
 	raw: 2,
-	terrain: 3,
-	mountain: 3,
-	erosion: 0,
+	continent: 3,
+	erosion: 3,
+	peaks: 3,
+	carve: 3,
 };
 
 // ---------------------------------------------------------------------------
@@ -159,6 +161,54 @@ profile.appendChild(graphSays);
 panel.footer(profile);
 
 const graph = new BenchGraph(graphCanvas, graphSays);
+
+/**
+ * A picture of one layer's own field, in the section where that layer is tuned.
+ *
+ * **A curve is judged against what it did, and the two have to be in one
+ * place.** The bench's own picture select shows one layer at a time over the
+ * whole patch, which means dragging a curve, looking away to switch pictures,
+ * and looking back; a thumbnail under the curve is the same field, always the
+ * one this section decides, and it costs a pass over a rectangle already here.
+ */
+const layerShots = new Map<LayerName, HTMLCanvasElement>();
+for (const layer of LAYER_NAMES) {
+	const section = panel.section(LAYER_TITLES[layer]);
+	if (!section) continue;
+	const shot = document.createElement("canvas");
+	shot.className = "bench-layer-shot";
+	// Clicking it puts the big picture on the same layer, which is the one
+	// thing a thumbnail cannot show: the field on the ground it shapes.
+	shot.title = "show this layer on the patch";
+	shot.onclick = () => panel.set({ patchPicture: LAYER_PICTURES[layer] });
+	// **Straight under the curve it belongs to.** The curve is the whole of
+	// what a layer decides and this is what it decided; a picture at the foot
+	// of the section is a picture the reader has to scroll away from the curve
+	// to see.
+	const row = section.querySelector(":scope > .knob.curved");
+	if (row) row.after(shot);
+	else section.appendChild(shot);
+	layerShots.set(layer, shot);
+}
+
+/** Repaint every layer thumbnail from the sheet the last build handed over. */
+function paintLayers(): void {
+	if (!patchSheet) return;
+	for (const [layer, shot] of layerShots) {
+		if (
+			shot.width !== patchSheet.width ||
+			shot.height !== patchSheet.height
+		) {
+			shot.width = patchSheet.width;
+			shot.height = patchSheet.height;
+		}
+		const ctx = shot.getContext("2d");
+		if (!ctx) continue;
+		const image = ctx.createImageData(patchSheet.width, patchSheet.height);
+		paintSheet(patchSheet, LAYER_PICTURES[layer], image.data);
+		ctx.putImageData(image, 0, 0);
+	}
+}
 
 /**
  * Click the planet to stand somewhere on it.
@@ -319,6 +369,8 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 			indices: reply.geometry.indices,
 			lines: reply.geometry.lines,
 			triangleCount: reply.geometry.triangleCount,
+			groundVertices: reply.geometry.groundVertices,
+			waterVertices: reply.geometry.waterVertices,
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
@@ -327,13 +379,20 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 	}
 	says = "";
 	busy = false;
-	// **The share the gate is open over is a count, not a number the row
-	// holds.** Mountain line is a fraction of the terrain curve's own reach, so
-	// the same 0.5 opens the gate over a third of one planet and a fiftieth of
-	// another; only a finished map says which.
+	// **The land share is a measurement, not a knob.** The coast is where the
+	// continentalness curve crosses its own middle, so how much land there is
+	// falls out of that curve -- only a finished map says how much.
 	panel.note(
-		"mountainLine",
-		`${(reply.facts.overLine * 100).toFixed(1)}% of the planet is above it`,
+		"seaLevel",
+		`${(reply.facts.land * 100).toFixed(1)}% of the planet is land`,
+	);
+	// **The patch is drawn on the block grid, not the map's.** What that costs
+	// is columns, and the count is the only honest way to say it: one more
+	// level is four times as many of them.
+	panel.note(
+		"patchDetail",
+		`a column is ${reply.facts.columnMetres.toFixed(1)} m — ` +
+			`${reply.facts.cellsDrawn.toLocaleString("en-US")} in the patch`,
 	);
 	show();
 	if (pending) ask();
@@ -348,6 +407,7 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
  */
 function show(): void {
 	paint();
+	paintLayers();
 	if (sections) graph.draw(sections, settings.knobs.patchAlong);
 	say();
 	render();
@@ -378,7 +438,6 @@ function paint(): void {
 function say(): void {
 	const k = settings.knobs;
 	const f = facts0;
-	const report = f?.report ?? null;
 	const metres = (v: number): string =>
 		`${Math.round(v).toLocaleString("en-US")} m`;
 	const line = (text: string): string => `<p>${text}</p>`;
@@ -437,28 +496,31 @@ function say(): void {
 		(f
 			? line(
 					`patch <b>${metres(f.span)}</b> across · ` +
-						`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> cells`,
+						`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> columns ` +
+						`of <b>${f.columnMetres.toFixed(1)} m</b>` +
+						(f.whole ? " — the whole planet" : ""),
 				) +
 				line(
 					`ground <b>${metres(f.lowest)}</b> to <b>${metres(f.highest)}</b> · ` +
 						`land <b>${Math.round(f.landShare * 100)}%</b>`,
-				)
-			: "") +
-		(report
-			? line(
-					`erosion moved <b>${report.moved.toFixed(2)} m</b> a cell, ` +
-						`deepest cut <b>${metres(report.deepest)}</b>`,
 				) +
-				line(
-					`slope median <b>${report.before.median.toFixed(3)}</b> → ` +
-						`<b>${report.after.median.toFixed(3)}</b> ` +
-						`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)}) · ` +
-						`99th <b>${report.before.ninetyNine.toFixed(3)}</b> → ` +
-						`<b>${report.after.ninetyNine.toFixed(3)}</b>`,
-				) +
-				(k.patchPicture === "erosion"
+				// **Which of the first two is bigger is the whole question about
+				// the carve.** Blocks off the top of a column only lower the
+				// ground, however many of them there are; a block taken out from
+				// under rock is a space, and a space is the only thing a height
+				// field could never have drawn.
+				(f.dugUnder + f.dugAbove > 0
 					? line(
-							`the cut picture saturates at <b>${report.scale.toFixed(1)} m</b>`,
+							`carved <b>${f.dugUnder.toLocaleString("en-US")}</b> under rock, ` +
+								`<b>${f.dugAbove.toLocaleString("en-US")}</b> off the top` +
+								(f.dugDrowned > 0
+									? ` · <b>${f.dugDrowned.toLocaleString("en-US")}</b> under the sea`
+									: ""),
+						) +
+						line(
+							`<b>${f.stacked.toLocaleString("en-US")}</b> columns hold rock over air, ` +
+								`deepest <b>${f.deepest}</b> spans · ` +
+								`<b>${f.floating.toLocaleString("en-US")}</b> floating`,
 						)
 					: "")
 			: "");
@@ -475,7 +537,14 @@ function render(): void {
 	const k = settings.knobs;
 	look.picture = PICTURE_INDEX[k.patchPicture] ?? 0;
 	look.surface = k.patchSurface;
-	look.layer = k.patchPicture === "mountain" ? "mountain" : "terrain";
+	look.layer =
+		k.patchPicture === "peaks"
+			? "peaks"
+			: k.patchPicture === "erosion"
+				? "erosion"
+				: k.patchPicture === "carve"
+					? "carve"
+					: "continent";
 
 	const reach = span * camera.distance;
 	const eye = new Vec3(

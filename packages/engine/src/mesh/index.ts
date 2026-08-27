@@ -32,3 +32,21 @@ export type { MeshSource } from "./worker/MeshSource.js";
 export { InlineMeshSource } from "./worker/InlineMeshSource.js";
 export type { MeshWorkerHandle } from "./worker/WorkerMeshSource.js";
 export { WorkerMeshSource } from "./worker/WorkerMeshSource.js";
+
+export type { ColumnPatch, ColumnPlace } from "./column/ColumnPatch.js";
+export { columnPatchLayout } from "./column/columnPatchLayout.js";
+export type { Carved } from "./column/columnSpans.js";
+export {
+	MAX_CARVE_LAYERS,
+	columnDepth,
+	columnSpans,
+	plainSpan,
+} from "./column/columnSpans.js";
+export type {
+	ColumnGround,
+	ColumnLook,
+	ColumnMesh,
+} from "./column/columnPatchMesh.js";
+export { columnPatchMesh } from "./column/columnPatchMesh.js";
+export type { FloatingRock } from "./column/floatingRock.js";
+export { floatingRock } from "./column/floatingRock.js";

@@ -1,18 +1,9 @@
-import type { ErosionWalk } from "./ErosionWalk.js";
 import type { TerrainLayer } from "./TerrainLayer.js";
-import { DROPLET } from "./DROPLET.js";
 import {
-	MOUNTAIN_LAYER_DEFAULT,
-	TERRAIN_LAYER_DEFAULT,
+	CONTINENT_LAYER_DEFAULT,
+	EROSION_LAYER_DEFAULT,
+	PEAKS_LAYER_DEFAULT,
 } from "./TerrainLayer.js";
-
-/** How the mountain layer reaches the ground. */
-export type MountainMerge = "gated" | "roughen";
-
-export const MOUNTAIN_MERGES: readonly MountainMerge[] = [
-	"gated",
-	"roughen",
-] as const;
 
 /**
  * The knobs on a coarse map, all of them defaulted.
@@ -29,97 +20,71 @@ export interface CoarseMapOptions {
 	/** Metres across one cell of the map, which is what makes its heights metric. */
 	readonly cellMetres?: number;
 
-	/** The layer that draws the land: continents at its widest, ground at its narrowest. */
-	readonly terrain?: TerrainLayer;
-
-	/** The layer that draws the ranges. */
-	readonly mountain?: TerrainLayer;
-
-	/** Whether the mountain layer runs at all. */
-	readonly mountainLayer?: boolean;
-
-	/** How the mountain layer reaches the ground. */
-	readonly merge?: MountainMerge;
+	/** The layer that sets the level: where the land is and where the sea is. */
+	readonly continent?: TerrainLayer;
 
 	/**
-	 * Where the gate opens, as a fraction of the terrain curve's own reach.
+	 * The layer that says how much of the relief survives in each place.
 	 *
-	 * `gated` only. Nothing at or below it, all of the mountain layer at the
-	 * top of that curve, smoothed between.
+	 * **Not the droplets.** This is a field over the planet read through a
+	 * curve: it decides, per place, how much of the relief peaks and valleys is
+	 * allowed to put there and how far the level is worn down with it, and it
+	 * costs one noise stack. `droplets` below is a wholly separate thing -- a
+	 * walk that moves material downhill over the finished map, off by default,
+	 * and the slowest step of a build by a wide margin. They shared a name once
+	 * and that is the only relation between them.
 	 */
-	readonly mountainLine?: number;
+	readonly erosion?: TerrainLayer;
+
+	/** The layer that is the relief itself, signed about the level. */
+	readonly peaks?: TerrainLayer;
+
+	/** Whether each layer reaches the height at all. */
+	readonly continentLayer?: boolean;
+	readonly erosionLayer?: boolean;
+	readonly peaksLayer?: boolean;
 
 	/**
-	 * The balance between the two layers.
+	 * How much of the level erosion takes with the relief, `0` to `1`.
 	 *
-	 * A ratio rather than a number of metres, which is F-052 and is open: what
-	 * it buys in metres moves with the terrain curve, because the metre step
-	 * divides by the field's own peak.
+	 * Water wears a range down as well as smoothing it, and in a model where
+	 * the height is one function of all three fields, erosion changes the level
+	 * by construction. Flattened into one line it has to be a term of its own.
 	 */
-	readonly detail?: number;
+	readonly erosionBite?: number;
 
-	/** Metres from sea level to the tallest ground, before the peak scale. */
+	/** Metres from the continentalness curve's middle to the tallest ground. */
 	readonly relief?: number;
 
-	/** Metres from sea level down to the deepest sea floor. */
+	/** Metres from that middle down to the deepest sea floor. */
 	readonly seaDepth?: number;
 
-	/** Fraction of the surface left above sea level. Earth is near 0.3. */
-	readonly landFraction?: number;
+	/** Metres a full peak stands over the level the continent set. */
+	readonly peakRelief?: number;
 
 	/**
-	 * Metres the water is dropped below the level `landFraction` chose. Never
-	 * above zero.
+	 * Metres the water is moved from the curve's own middle. Below zero drains.
 	 *
-	 * **Land and this are different questions.** `landFraction` is the
-	 * percentile every height is measured from, so moving it moves the ground.
-	 * This moves only the water, leaving every height exactly where it was --
-	 * the same picture as draining that much ocean -- and what comes out from
-	 * under it is the shallow floor that was already there.
+	 * **The coast is where the continentalness curve crosses its middle**, and
+	 * this is the one thing that moves the water off it -- lifting the whole
+	 * field rather than moving any of it, which is the same picture as draining
+	 * that much ocean.
 	 */
 	readonly seaLevel?: number;
-
-	/**
-	 * How hard the water cuts. Zero leaves the noise exactly as it fell.
-	 *
-	 * **Zero by default, and that is a decision rather than a placeholder.**
-	 * Neither walk passes the test a carving pass has to pass -- the median
-	 * hillslope has to hold while the tail grows, and at full strength `cell`
-	 * takes the median up `1.40x` and `free` up `1.11x`. A world is better
-	 * without that until one of them sits at one. The pass returns on its first
-	 * line when this is zero.
-	 */
-	readonly erosion?: number;
-
-	/** How a droplet moves over the map. */
-	readonly erosionWalk?: ErosionWalk;
-
-	/** The most of one step's fall a single droplet may cut, as a fraction. */
-	readonly erosionMaxCut?: number;
-
-	/** What a cell keeps of the material cut from it. `cell` walk only. */
-	readonly erosionCutShare?: number;
-
-	/** How much of the previous direction a droplet keeps. `free` walk only. */
-	readonly erosionInertia?: number;
 }
 
 export const COARSE_MAP_DEFAULTS = {
 	level: 8,
 	cellMetres: 32,
-	terrain: TERRAIN_LAYER_DEFAULT,
-	mountain: MOUNTAIN_LAYER_DEFAULT,
-	mountainLayer: true,
-	merge: "gated",
-	mountainLine: 0.5,
-	detail: 7,
-	relief: 1100,
-	seaDepth: 130,
-	landFraction: 0.65,
+	continent: CONTINENT_LAYER_DEFAULT,
+	erosion: EROSION_LAYER_DEFAULT,
+	peaks: PEAKS_LAYER_DEFAULT,
+	continentLayer: true,
+	erosionLayer: true,
+	peaksLayer: true,
+	erosionBite: 0.55,
+	relief: 800,
+	seaDepth: 360,
+	peakRelief: 220,
 	seaLevel: 0,
-	erosion: 0,
-	erosionWalk: "cell",
-	erosionMaxCut: DROPLET.maxCut,
-	erosionCutShare: DROPLET.cutShare,
-	erosionInertia: DROPLET.inertia,
 } as const satisfies Required<CoarseMapOptions>;

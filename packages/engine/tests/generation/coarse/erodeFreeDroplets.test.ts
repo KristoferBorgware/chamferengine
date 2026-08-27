@@ -4,7 +4,6 @@ import {
 	erodeDroplets,
 	erodeFreeDroplets,
 	layeredHeight,
-	metreHeight,
 	seedFromString,
 } from "chamfer/generation";
 
@@ -27,16 +26,7 @@ const grid = new CoarseGrid(LEVEL);
 
 /** The shipped ground in metres, which is what the pass is written for. */
 function ground(): Float64Array {
-	const field = layeredHeight(grid, SEED, {
-		level: LEVEL,
-		cellMetres: CELL,
-	});
-	return metreHeight(field.raw, {
-		landFraction: 0.65,
-		relief: 1100,
-		seaDepth: 130,
-		seaLevel: 0,
-	});
+	return layeredHeight(grid, SEED, { level: LEVEL, cellMetres: CELL }).raw;
 }
 
 /**
