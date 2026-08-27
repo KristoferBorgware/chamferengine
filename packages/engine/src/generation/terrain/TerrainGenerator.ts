@@ -144,6 +144,7 @@ export class TerrainGenerator {
 				this.carveSeed,
 				this.settings.carve,
 				this.carveNoise,
+				this.settings.carveHold,
 			)
 		)
 			return BlockType.AIR;

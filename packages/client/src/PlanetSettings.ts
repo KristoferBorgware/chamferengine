@@ -257,6 +257,16 @@ export interface PlanetKnobs {
 	peaksCurve: Curve;
 
 	carveLayer: boolean;
+
+	/**
+	 * How far above sea level the carve stays held off, in metres.
+	 *
+	 * At and below the waterline nothing is carved, because what the layer
+	 * opens down there fills. This is how far up that reaches: a shoreline rule
+	 * at a few metres, and turned up it keeps the layer off the low ground
+	 * entirely so cliffs and arches appear only well above the sea.
+	 */
+	carveHold: number;
 	carveFeature: number;
 	carveFeatureScale: number;
 	carveOctaves: number;
@@ -318,6 +328,30 @@ export interface PlanetKnobs {
 	 * how far under the map that is. At `0` it is the map's own level again.
 	 */
 	patchDetail: number;
+
+	/**
+	 * Whether to draw a ball where each of the bench's lights shines from.
+	 *
+	 * **They are directions, not places**, so the balls stand on a dome around
+	 * the patch: what they say is which way each light comes from and how much
+	 * of the total it carries, which is its size. Nothing about the picture
+	 * changes when they are on -- they are drawn over it and take no light
+	 * themselves, because a lamp lit by the rig it is a picture of would be a
+	 * picture of something else.
+	 */
+	showLights: boolean;
+
+	/**
+	 * How bright the bench's preview is, as one multiplier before the curve.
+	 *
+	 * **A preview cannot be brighter than what it is made of.** Grass is `0.44`
+	 * of green, so a cap of it lit perfectly still comes out at `176` of 255 --
+	 * no arrangement of lights makes this picture bright, because the lights are
+	 * already giving it everything they have. This is the one thing that does,
+	 * and it is a knob because how bright is right is a matter of the screen it
+	 * is read on.
+	 */
+	patchLight: number;
 
 	/** Which step of the build the preview stops at. */
 	patchPicture: PatchPicture;
@@ -868,6 +902,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// couple of hundred metres deep or what comes out is a lowered surface
 	// rather than an overhang.
 	carveLayer: true,
+	carveHold: 30,
 	carveFeature: 120,
 	carveFeatureScale: 1,
 	carveOctaves: 3,
@@ -888,6 +923,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLongitude: -20,
 	patchCells: 32,
 	patchDetail: 2,
+	showLights: false,
+	patchLight: 1.5,
 	patchPicture: "ground",
 	patchSurface: "solid",
 	patchMap: "patch",
@@ -1073,6 +1110,7 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"carvePersistence",
 	"carveLacunarity",
 	"carveCurve",
+	"carveHold",
 	"erosionBite",
 	"seaLevel",
 	"relief",
@@ -1254,6 +1292,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	peaksFold: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	peaksCurve: { ...TOGGLE, rebuilds: true },
 	carveLayer: { ...TOGGLE, rebuilds: true },
+	carveHold: { low: 0, high: 600, step: 5, rebuilds: true, unit: "m" },
 	carveFeature: {
 		low: 10,
 		high: 1000,
@@ -1307,6 +1346,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "\u00b0",
 	},
 	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	showLights: { ...TOGGLE, rebuilds: false },
+	patchLight: { low: 0.4, high: 3, step: 0.1, rebuilds: false, unit: "x" },
 	patchDetail: {
 		low: 0,
 		high: 3,
@@ -1879,6 +1920,7 @@ export class PlanetSettings {
 			snowLine: GROUND_LINES.snow,
 			carveLayer: this.coarseMapRuns && this.knobs.carveLayer,
 			carve: this.layerFor("carve"),
+			carveHold: this.knobs.carveHold,
 		};
 	}
 

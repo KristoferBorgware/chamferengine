@@ -68,9 +68,10 @@ export function carveDepth(layer: TerrainLayer): number {
  * - **Depth.** The density gains a full `1` over {@link carveDepth}, so at the
  *   bottom of that nothing the noise can say reaches air. That is *do not cut
  *   below the crust* enforced by the number rather than by a clamp.
- * - **The waterline.** `1` at and below sea level, fading back over
- *   {@link WATERLINE_REACH} shape widths above it, so a cliff cut into a
- *   headland stops at the water instead of running on down and filling.
+ * - **The waterline.** `1` at and below sea level, fading back over `hold`
+ *   metres above it, so a cliff cut into a headland stops at the water instead
+ *   of running on down and filling. Raise it and the layer keeps off the low
+ *   ground and works only on what stands well above the sea.
  *
  * **The curve is a transform of the reading and its middle is the line between
  * air and rock.** A straight line hands the field through unchanged; anything
@@ -93,6 +94,7 @@ export function carveIsRock(
 	seed: number,
 	layer: TerrainLayer,
 	settings: NoiseSettings,
+	hold: number = WATERLINE_REACH * Math.max(1, layer.metres),
 ): boolean {
 	const deep = carveDepth(layer);
 	if (depthBelow >= deep) return true;
@@ -102,11 +104,8 @@ export function carveIsRock(
 	const out = 1 + up / radius;
 	const read = octaveNoise(x * out, y * out, z * out, seed, settings);
 	const said = splineAt(layer.curve, read) * 2 - 1;
-	const hold = Math.max(
-		0,
-		Math.min(1, 1 - up / (WATERLINE_REACH * Math.max(1, layer.metres))),
-	);
-	const density = said + (1 - said) * hold;
+	const held = Math.max(0, Math.min(1, 1 - up / Math.max(1e-6, hold)));
+	const density = said + (1 - said) * held;
 	return density + depthBelow / deep > 0;
 }
 

@@ -15,6 +15,7 @@ import { LAYER_NAMES, LAYER_TITLES, PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
+import type { PatchPicture } from "./PatchLook.js";
 import { LAYER_PICTURES } from "./PatchLook.js";
 import { paintSheet } from "./paintSheet.js";
 import {
@@ -219,7 +220,7 @@ function enlarge(layer: LayerName): void {
 	big.hidden = false;
 	bigName.textContent =
 		`${LAYER_TITLES[layer]} — the field, ` +
-		(settings.knobs.patchMap === "planet"
+		(sheetFor(LAYER_PICTURES[layer]) === planetSheet
 			? "the whole planet"
 			: `${Math.round(facts0?.span ?? 0).toLocaleString("en-US")} m of ground`) +
 		" · click to close";
@@ -228,7 +229,7 @@ function enlarge(layer: LayerName): void {
 
 /** Redraw the enlarged picture, if one is up. */
 function paintBig(): void {
-	const sheet = shown();
+	const sheet = sheetFor(LAYER_PICTURES[bigShown ?? "continent"]);
 	if (!bigShown || !sheet || big.hidden) return;
 	if (bigCanvas.width !== sheet.width || bigCanvas.height !== sheet.height) {
 		bigCanvas.width = sheet.width;
@@ -243,10 +244,10 @@ function paintBig(): void {
 
 /** Repaint every layer thumbnail from the sheet the last build handed over. */
 function paintLayers(): void {
-	const sheet = shown();
-	if (!sheet) return;
 	paintBig();
 	for (const [layer, shot] of layerShots) {
+		const sheet = sheetFor(LAYER_PICTURES[layer]);
+		if (!sheet) continue;
 		if (shot.width !== sheet.width || shot.height !== sheet.height) {
 			shot.width = sheet.width;
 			shot.height = sheet.height;
@@ -334,6 +335,9 @@ const look = {
 	low: 0,
 	high: 1,
 	eye: [0, 1, 1] as [number, number, number],
+	showLights: false,
+	span: 1,
+	light: 1,
 };
 
 /**
@@ -476,11 +480,25 @@ function shown(): BenchSheet | null {
 	return settings.knobs.patchMap === "planet" ? planetSheet : patchSheet;
 }
 
+/**
+ * The sheet one picture is drawn from.
+ *
+ * **The carve is always the patch, whatever the map is showing.** Its shapes
+ * are 120 m and the planet picture is 512 points around a 42,730 m
+ * circumference -- one point every 83 m, so a shape is not two points across
+ * and neighbouring points are unrelated. What that draws is television static:
+ * an honest sampling of the field and a picture of nothing. Over the patch the
+ * same shape is forty points across.
+ */
+function sheetFor(picture: PatchPicture): BenchSheet | null {
+	return picture === "carve" ? patchSheet : shown();
+}
+
 /** The small picture: whichever sheet is asked for, in whichever picture. */
 function paint(): void {
-	const planet = settings.knobs.patchMap === "planet";
-	const sheet = shown();
+	const sheet = sheetFor(settings.knobs.patchPicture);
 	if (!sheet) return;
+	const planet = sheet === planetSheet;
 	if (mapCanvas.width !== sheet.width || mapCanvas.height !== sheet.height) {
 		mapCanvas.width = sheet.width;
 		mapCanvas.height = sheet.height;
@@ -618,6 +636,9 @@ function render(): void {
 	// One of the lights stands here, so where the camera is has to reach the
 	// shader as well as the matrix.
 	look.eye = [eye.x, eye.y, eye.z];
+	look.showLights = k.showLights;
+	look.light = k.patchLight;
+	look.span = span;
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(
 		0.9,

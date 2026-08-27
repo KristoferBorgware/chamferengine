@@ -1,4 +1,5 @@
 import type { TerrainLayer } from "../coarse/TerrainLayer.js";
+import { WATERLINE_REACH } from "./carveDensity.js";
 import { CARVE_LAYER_DEFAULT } from "../coarse/TerrainLayer.js";
 import { GROUND_LINES } from "./GROUND_LINES.js";
 
@@ -46,6 +47,18 @@ export interface TerrainOptions {
 	/** The carve's own noise stack and the curve its reading is read through. */
 	readonly carve?: TerrainLayer;
 
+	/**
+	 * How far above sea level the carve takes to come back, in metres.
+	 *
+	 * **At and below the waterline the density is `1` and nothing is carved**,
+	 * because what the layer opens down there fills, and a slot of water
+	 * dropping through the crust reads as a fault rather than a cave. This is
+	 * how far up that hold reaches: at a few metres it is a shoreline rule, and
+	 * turned up it keeps the layer off the low ground entirely so cliffs and
+	 * arches appear only on what stands well above the sea.
+	 */
+	readonly carveHold?: number;
+
 	/** Whether the density term runs. Caves cost 51x the height field. */
 	readonly caves?: boolean;
 
@@ -62,6 +75,7 @@ export interface TerrainOptions {
 export const TERRAIN_DEFAULTS = {
 	carveLayer: false,
 	carve: CARVE_LAYER_DEFAULT,
+	carveHold: WATERLINE_REACH * CARVE_LAYER_DEFAULT.metres,
 	soilDepth: 4,
 	rockLine: GROUND_LINES.rock,
 	snowLine: GROUND_LINES.snow,

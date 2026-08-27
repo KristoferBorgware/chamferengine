@@ -11,6 +11,19 @@ export interface PatchLook {
 	/** Whether the surface, the cell rims, or both are drawn. */
 	readonly surface: "solid" | "wire" | "both";
 
+	/**
+	 * Whether to draw a ball where each light shines from.
+	 *
+	 * **They are directions, not places**, so a ball is drawn on a dome around
+	 * the patch: what it says is which way the light comes from and how strong
+	 * it is, and moving the camera never moves it nearer or further. Its size
+	 * is its share of the light.
+	 */
+	readonly showLights: boolean;
+
+	/** Metres across the patch, which is what the light dome is sized from. */
+	readonly span: number;
+
 	/** Which control layer a picture of one layer draws. */
 	readonly layer: "continent" | "erosion" | "peaks" | "carve";
 
@@ -34,6 +47,16 @@ export interface PatchLook {
 	 */
 	readonly low: number;
 	readonly high: number;
+
+	/**
+	 * How bright the picture is, as one multiplier before the curve.
+	 *
+	 * **A preview cannot be brighter than what it is made of.** Grass is 0.44
+	 * of green, so a cap of it lit perfectly still comes out at 176 of 255 and
+	 * no arrangement of lights makes this picture bright. This is the one thing
+	 * that does.
+	 */
+	readonly light: number;
 
 	/**
 	 * Which way the camera looks from, in the patch's own frame.
@@ -111,14 +134,19 @@ export class PatchRenderer {
 	private readonly uniform: GPUBuffer;
 	private readonly rimUniform: GPUBuffer;
 	private readonly seaUniform: GPUBuffer;
+	private readonly lampUniform: GPUBuffer;
 	private readonly bindGroup: GPUBindGroup;
 	private readonly rimBindGroup: GPUBindGroup;
 	private readonly seaBindGroup: GPUBindGroup;
+	private readonly lampBindGroup: GPUBindGroup;
 	private readonly data = new Float32Array(VIEW_BYTES / 4);
 
 	private vertices: GPUBuffer | null = null;
 	private indices: GPUBuffer | null = null;
 	private lines: GPUBuffer | null = null;
+	private lamps: GPUBuffer | null = null;
+	private lampVertices = 0;
+	private lampSpanKey = "";
 	private triangleCount = 0;
 	private lineCount = 0;
 	private groundVertices = 0;
@@ -164,6 +192,14 @@ export class PatchRenderer {
 		this.seaBindGroup = device.createBindGroup({
 			layout,
 			entries: [{ binding: 0, resource: { buffer: this.seaUniform } }],
+		});
+		this.lampUniform = device.createBuffer({
+			size: VIEW_BYTES,
+			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+		});
+		this.lampBindGroup = device.createBindGroup({
+			layout,
+			entries: [{ binding: 0, resource: { buffer: this.lampUniform } }],
 		});
 
 		const buffers: GPUVertexBufferLayout[] = [
@@ -276,6 +312,104 @@ export class PatchRenderer {
 		device.queue.writeBuffer(this.vertices, 0, patch.vertices);
 	}
 
+	/**
+	 * The lights, as balls on a dome around the patch.
+	 *
+	 * Rebuilt only when the patch changes size or the camera light turns, which
+	 * is what `span` and the head direction between them say. Every ball is a
+	 * subdivided octahedron -- eight triangles refined twice, which is 128
+	 * faces and round enough at this size -- written straight out with the
+	 * marker's colour on the channels the fragment reads for it.
+	 */
+	private buildLamps(span: number, head: readonly number[]): void {
+		const { device } = this.ctx;
+		const key = [-0.62, 1.0, 0.16];
+		// Direction, colour and share, in the order the shader weighs them.
+		const lamps: [number[], number[], number][] = [
+			[key, [1, 0.86, 0.55], 1],
+			[[0.62, 0.55, -0.16], [0.4, 0.55, 0.85], 0.15],
+			[[0, 1, 0], [1, 1, 0.95], 1.35],
+			[[head[0]!, head[1]!, head[2]!], [0.55, 0.95, 0.7], 0.18],
+		];
+		const out: number[] = [];
+		// One octant of an octahedron, refined; the eight sign flips give the
+		// ball, and a flip that reverses handedness swaps two corners back.
+		const facet = (
+			a: number[],
+			b: number[],
+			c: number[],
+			depth: number,
+			at: number[],
+			size: number,
+			tint: number[],
+		): void => {
+			if (depth > 0) {
+				const mid = (p: number[], q: number[]): number[] => {
+					const m = [p[0]! + q[0]!, p[1]! + q[1]!, p[2]! + q[2]!];
+					const l = Math.hypot(m[0]!, m[1]!, m[2]!) || 1;
+					return [m[0]! / l, m[1]! / l, m[2]! / l];
+				};
+				const ab = mid(a, b);
+				const bc = mid(b, c);
+				const ca = mid(c, a);
+				facet(a, ab, ca, depth - 1, at, size, tint);
+				facet(ab, b, bc, depth - 1, at, size, tint);
+				facet(ca, bc, c, depth - 1, at, size, tint);
+				facet(ab, bc, ca, depth - 1, at, size, tint);
+				return;
+			}
+			for (const p of [a, b, c]) {
+				out.push(
+					at[0]! + p[0]! * size,
+					at[1]! + p[1]! * size,
+					at[2]! + p[2]! * size,
+					p[0]!,
+					p[1]!,
+					p[2]!,
+					// The marker's blue rides on metres, red on raw and green on
+					// the layer -- three channels the fragment already has.
+					tint[2]!,
+					tint[0]!,
+					tint[1]!,
+					0,
+					0,
+					0,
+					1,
+				);
+			}
+		};
+		for (const [dir, tint, share] of lamps) {
+			const len = Math.hypot(dir[0]!, dir[1]!, dir[2]!) || 1;
+			const reach = span * 0.62;
+			const at = [
+				(dir[0]! / len) * reach,
+				(dir[1]! / len) * reach,
+				(dir[2]! / len) * reach,
+			];
+			// **The size is the share of the light**, so the picture says which
+			// one is doing the work as well as where it stands.
+			const size = span * 0.012 * (0.55 + share);
+			for (const sx of [1, -1])
+				for (const sy of [1, -1])
+					for (const sz of [1, -1]) {
+						const a = [sx, 0, 0];
+						const b = [0, sy, 0];
+						const c = [0, 0, sz];
+						// An odd number of flips turns the winding over.
+						const flip = sx * sy * sz < 0;
+						facet(a, flip ? c : b, flip ? b : c, 2, at, size, tint);
+					}
+		}
+		this.lamps?.destroy();
+		this.lampVertices = out.length / PATCH_STRIDE;
+		const data = Float32Array.from(out);
+		this.lamps = device.createBuffer({
+			size: data.byteLength,
+			usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+		});
+		device.queue.writeBuffer(this.lamps, 0, data);
+	}
+
 	/** Draw the patch through one view matrix. */
 	draw(viewProj: Float32Array, look: PatchLook): void {
 		const { device, context, canvas } = this.ctx;
@@ -323,7 +457,7 @@ export class PatchRenderer {
 			],
 			20,
 		);
-		this.data.set([look.low, look.high, 0, 0], 28);
+		this.data.set([look.low, look.high, look.light, 0], 28);
 		// Lifted well above the eye, then normalised, so it is the same light at
 		// every zoom and on a patch of any width.
 		const lift = 1.2;
@@ -345,6 +479,21 @@ export class PatchRenderer {
 		this.data[23] = 1;
 		device.queue.writeBuffer(this.seaUniform, 0, this.data);
 		this.data[23] = 0;
+		if (look.showLights) {
+			const head = this.data.subarray(32, 35);
+			const turned = `${look.span}/${head[0]}/${head[1]}/${head[2]}`;
+			if (turned !== this.lampSpanKey) {
+				this.lampSpanKey = turned;
+				this.buildLamps(Math.max(1, look.span), [
+					head[0]!,
+					head[1]!,
+					head[2]!,
+				]);
+			}
+			this.data[21] = 2;
+			device.queue.writeBuffer(this.lampUniform, 0, this.data);
+			this.data[21] = 0;
+		}
 
 		const encoder = device.createCommandEncoder();
 		const pass = encoder.beginRenderPass({
@@ -403,6 +552,12 @@ export class PatchRenderer {
 				pass.draw(this.waterVertices, 1, this.groundVertices);
 			}
 		}
+		if (look.showLights && this.lamps && this.lampVertices > 0) {
+			pass.setBindGroup(0, this.lampBindGroup);
+			pass.setPipeline(this.solidPipeline);
+			pass.setVertexBuffer(0, this.lamps);
+			pass.draw(this.lampVertices);
+		}
 		pass.end();
 		device.queue.submit([encoder.finish()]);
 	}
@@ -415,5 +570,7 @@ export class PatchRenderer {
 		this.uniform.destroy();
 		this.rimUniform.destroy();
 		this.seaUniform.destroy();
+		this.lampUniform.destroy();
+		this.lamps?.destroy();
 	}
 }

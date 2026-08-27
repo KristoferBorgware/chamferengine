@@ -387,6 +387,19 @@ const GROUPS: Group[] = [
 				label: "Speckle",
 			},
 			{
+				key: "patchLight",
+				label: "Brightness",
+				digits: 1,
+			},
+			{
+				// **A light with no direction you can see is a light you tune
+				// by guessing.** These are directions rather than places, so
+				// each one is drawn on a dome around the patch, sized by how
+				// much of the light it carries.
+				key: "showLights",
+				label: "Show the lights",
+			},
+			{
 				key: "patchSurface",
 				label: "Surface",
 				choices: [
@@ -475,7 +488,23 @@ const GROUPS: Group[] = [
 		folded: true,
 		tab: "terrain",
 		tint: "cliff",
-		knobs: layerKnobs("carve", "Noise → density"),
+		knobs: [
+			...layerKnobs("carve", "Noise → density"),
+			{
+				// **The layer opens nothing at the waterline, and this is how
+				// far up that reaches.** What it opens below the sea fills, and
+				// a slot of water dropping through the crust reads as a fault
+				// rather than a cave -- so at a few metres this is a shoreline
+				// rule. Turned up it keeps the layer off the low ground
+				// altogether, and cliffs and arches appear only on what stands
+				// well above the sea.
+				key: "carveHold",
+				map: true,
+				label: "Held off above the water",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.carveLayer,
+			},
+		],
 	},
 	{
 		title: "Ground",

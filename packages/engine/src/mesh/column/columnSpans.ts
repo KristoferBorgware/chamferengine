@@ -65,6 +65,7 @@ export function columnSpans(
 	out: number[],
 	carved: Carved,
 	seaLevel = 0,
+	hold?: number,
 ): void {
 	out.length = 0;
 	carved.under = 0;
@@ -92,6 +93,7 @@ export function columnSpans(
 				seed,
 				layer,
 				settings,
+				hold,
 			);
 		if (!solid && up < surface) {
 			opened++;

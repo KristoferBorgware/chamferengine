@@ -857,7 +857,10 @@ body.bench .knobs-head {
 .knobs .bench-layer-shot {
 	display: block;
 	width: 100%;
-	aspect-ratio: 1;
+	/* **The canvas's own shape, not a square.** The patch is square and the
+	   planet is twice as wide as it is tall, so a fixed ratio squashes one of
+	   them -- and the picture stops being a picture of the field. */
+	height: auto;
 	margin: 0.5rem 0 0.25rem;
 	border-radius: 4px;
 	background: #0b1017;
@@ -900,8 +903,11 @@ body.bench .knobs-head {
 /* Square, and no smoothing: a sample is a reading, and a blend of two of them
    shows a value the field never had. */
 .bench-big canvas {
-	max-width: min(90vw, 90vh);
-	max-height: min(90vw, 90vh);
+	/* Bounded on each side separately, so the canvas keeps its own shape: a
+	   square patch and a planet twice as wide as it is tall both fit, and
+	   neither is stretched to the other's. */
+	max-width: 92vw;
+	max-height: 82vh;
 	width: auto;
 	height: auto;
 	border-radius: 6px;

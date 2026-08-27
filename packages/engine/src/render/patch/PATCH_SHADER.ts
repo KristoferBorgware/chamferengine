@@ -103,7 +103,15 @@ struct View {
 	mode     : vec4f,
 	/** The two material lines in metres, and the field's own range here. */
 	lines    : vec4f,
-	/** The ground's own range in metres here, which Height is drawn against. */
+	/**
+	 * The ground's own range in metres here, and how bright the picture is.
+	 *
+	 * z is the exposure. **A preview cannot be brighter than what it is made
+	 * of**: grass is 0.44 of green and a cap of it lit perfectly still comes
+	 * out at 176 of 255, so no arrangement of lights makes this picture
+	 * bright. One multiplier before the curve does, and it is a knob because
+	 * how bright is right is a matter of the screen it is read on.
+	 */
 	ground   : vec4f,
 	/** The direction of the light that follows the camera. */
 	head     : vec4f,
@@ -247,11 +255,24 @@ fn lightOn(normal : vec3f, direct : f32) -> f32 {
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
 fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
-	return vec4f(pow(tint * lightOn(normal, direct), vec3f(1.0 / 2.2)), 1.0);
+	let lit = min(tint * lightOn(normal, direct) * view.ground.z, vec3f(1.0));
+	return vec4f(pow(lit, vec3f(1.0 / 2.2)), 1.0);
 }
 
 @fragment
 fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
+	// **The lights themselves, drawn where they shine from.** Each marker
+	// carries its own colour on the layer channel and takes no light at all --
+	// a lamp lit by the rig it is a picture of would be a picture of something
+	// else. A little shading across it so it reads as a ball rather than a
+	// disc, and that is the whole of it.
+	if (view.mode.y > 1.5) {
+		let round = 0.55 + 0.45 * clamp(normalize(in.normal).y, -1.0, 1.0);
+		return vec4f(
+			pow(vec3f(in.raw, in.layer, in.metres) * round, vec3f(1.0 / 2.2)),
+			1.0,
+		);
+	}
 	if (view.mode.y > 0.5) {
 		return vec4f(0.42, 0.82, 1.0, 1.0);
 	}
@@ -270,7 +291,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let through = 1.0 - exp(in.metres / SEA_CLARITY);
 		let water = mix(SEA_SHALLOW, SEA_DEEP, through);
 		let lit = pow(
-			water * lightOn(in.normal, SUN_SHARE),
+			min(water * lightOn(in.normal, SUN_SHARE) * view.ground.z, vec3f(1.0)),
 			vec3f(1.0 / 2.2),
 		);
 		return vec4f(lit, mix(0.42, 0.94, through));

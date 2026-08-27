@@ -375,6 +375,8 @@ export class BenchWorkerCore {
 					carveNoise,
 					runs,
 					carved,
+					0,
+					terrain.carveHold,
 				);
 				for (const y of runs) all.push(y);
 				// **The height a colour and a coastline read is the top of the
@@ -494,6 +496,13 @@ export class BenchWorkerCore {
 	private planet(): BenchSheet {
 		const grid = this.world.cells!;
 		const layers = this.world.stacks!;
+		// **No carve here, and it is not an omission.** Its shapes are 120 m and
+		// this picture is 512 points around a 42,730 m circumference -- one
+		// point every 83 m, so a shape is not two points across and
+		// neighbouring points are unrelated. What that draws is television
+		// static: an honest sampling of the field and a picture of nothing. The
+		// carve's picture is always the patch, where the same shape is forty
+		// points across.
 		const wide = PLANET_WIDE;
 		const tall = wide / 2;
 		const sheet = this.sheet(wide, tall);
@@ -517,9 +526,6 @@ export class BenchWorkerCore {
 				sheet.continent[at] = readBlend(layers.continent, blend);
 				sheet.erosion[at] = readBlend(layers.erosion, blend);
 				sheet.peaks[at] = readBlend(layers.peaks, blend);
-				// **No carve on the planet picture.** It is one pixel a place
-				// over the whole world, where the layer's shapes are 120 m
-				// across -- a picture of it at that scale is noise.
 			}
 		}
 		return {
