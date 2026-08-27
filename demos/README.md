@@ -562,6 +562,32 @@ rule, and the depth the whole layer works in rather than a slider of its own.
 air under height where  density(D) + (height − y) ÷ 480 m  ≤  0
 ```
 
+**And a second thing, which is the waterline.** The layer draws cliffs and
+overhangs, which are things on a hillside; run it down through the waterline and
+what it opens fills, which draws as a slot of water dropping through the crust
+and reads as a fault rather than a cave. **At and below sea level the density is
+`1` outright** and nothing is carved, and it fades back in over a quarter of a
+shape width above. Measured against the same world with the hold off, it
+puts **43%** of everything it takes under the sea; with the hold on, **0%**, and
+the patch's lowest ground is `−152 m` against `−328 m` because the sea floor is
+not cut into.
+
+**A floor and not a band.** Suppressing a slice either side of the waterline and
+letting the layer back in underneath moves the slots down rather than removing
+them.
+
+**The fade is what stops the waterline being a shelf.** With no fade the density
+jumps from the reading to `1` across one plane and every carve that would have
+gone below stops on it: **42.8%** of every hole in the patch had its floor on
+that one layer. What a fade costs is the layer's own work, steadily — 2,743 holes
+at no fade, 2,173 at a quarter, 1,666 at a half, 820 at a whole one — so a
+quarter is the shortest fade that is not a step, keeping **79%** of the holes.
+**How piled-up the floors are does not choose between short fades, and it looks
+as though it does**: at the shipped 8 m block the busiest layer holds 48.7% at
+`0.15`, 32.8% at `0.25` and 39.0% at `0.35`, which reads as a minimum, and at a
+16 m block the order reverses. It is where the crossing lands against a block
+boundary, so it is a property of the block size rather than of the fade.
+
 **Four widths, because a reading is not `−1`.** An octave stack is normalised to
 its own peak and its standard deviation is about a quarter of that, so an
 ordinary negative reading sits near `−0.25` and is cancelled after a *quarter* of
@@ -594,11 +620,11 @@ every block and theirs are read once a place.
 
 | | out from under rock | columns that overhang | floating masses |
 |---|---|---|---|
-| Falloff 0.20 | 41.5% | 28.3% | 0 |
-| **0.50 (shipped)** | **43.9%** | **33.6%** | **9** |
-| Falloff 0.80 | 50.1% | 45.2% | 24 |
-| Step 1.5× | 36.0% | 21.1% | 3 |
-| Step 3.0× | 45.2% | 34.6% | 9 |
+| Falloff 0.20 | 38.8% | 15.4% | 0 |
+| **0.50 (shipped)** | **40.1%** | **16.6%** | **6** |
+| Falloff 0.80 | 46.5% | 22.2% | 10 |
+| Step 1.5× | 31.2% | 11.1% | 0 |
+| Step 3.0× | 43.6% | 20.1% | 5 |
 
 **The curve is on the field and its middle line is where air becomes rock.** `x`
 is the reading at that point and `y` is the density it becomes, over the line
@@ -610,19 +636,19 @@ opens the world out:
 
 | Curve | out from under rock | columns that overhang | floating masses |
 |---|---|---|---|
-| straight (shipped) | 43.9% | 33.6% | 9 |
-| middle at ×1.75 | 49.4% | 42.1% | 19 |
-| middle at ×5 | 57.4% | 62.6% | 15 |
+| straight (shipped), `-1:0,1:1` | 40.1% | 16.6% | 6 |
+| middle at ×1.75, `-1:0,-0.571:0,0.571:1,1:1` | 47.4% | 22.7% | 13 |
+| middle at ×5, `-1:0,-0.2:0,0.2:1,1:1` | 53.2% | 29.3% | 8 |
 
 | Feature | octaves | out from under rock | columns that overhang | floating masses |
 |---|---|---|---|---|
-| 60 m | 2 | 38.8% | 30.9% | 7 |
-| **120 m (shipped)** | **3** | **43.9%** | **33.6%** | **9** |
-| 200 m | 3 | 24.3% | 25.8% | 4 |
-| 300 m | 4 | 15.2% | 10.8% | 2 |
+| 60 m | 2 | 33.6% | 17.5% | 4 |
+| **120 m (shipped)** | **3** | **40.1%** | **16.6%** | **6** |
+| 200 m | 3 | 16.0% | 6.9% | 2 |
+| 300 m | 4 | 10.0% | 6.0% | 1 |
 
-**Roughly a third of what goes is under the sea**, which is the ocean covering
-what was opened rather than the layer having skipped the low ground.
+**Nothing the layer takes is under the sea**, and the readout counts it so the
+waterline hold can be watched holding.
 
 **Turning the layer off leaves the block grid, because the grid is the world's
 and not the layer's.** The ground is then the height field rounded to the nearest

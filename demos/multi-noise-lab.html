@@ -1351,6 +1351,51 @@
 			 * system rather than a dimple.
 			 */
 			const CARVE_REACH = 4;
+			/**
+			 * How far above sea level the layer takes to come back, in shape
+			 * widths.
+			 *
+			 * **At the waterline the density is `1` and nothing is carved.** The
+			 * layer draws cliffs and overhangs, which are things on a hillside;
+			 * run it down through the waterline and what it opens fills, which
+			 * draws as a slot of water dropping through the crust and reads as a
+			 * fault rather than a cave. Caves are a different layer's job and
+			 * this one has to stop. Against the same world with the hold
+			 * off, the layer puts **43%** of everything it takes under the sea;
+			 * at any setting of this it is **0%**, and the patch's lowest ground
+			 * is `-152 m` against `-328 m` because the sea floor is not cut
+			 * into.
+			 *
+			 * **It is a floor and not a band.** Suppressing a slice either side
+			 * of the waterline and letting the layer back in underneath moves
+			 * the slots down rather than removing them; at and below sea level
+			 * the density is `1` outright, and it fades back in over this many
+			 * shape widths above it. Measured in the layer's own scale for the
+			 * same reason the depth term is: it is the only length the layer
+			 * has, so widening `Feature` widens the shapes and lifts the fade
+			 * with them rather than needing a second slider to agree with the
+			 * first.
+			 *
+			 * **The fade is what stops the waterline being a shelf.** With no
+			 * fade at all the density jumps from the reading to `1` across one
+			 * plane, and every carve that would have gone below stops on it:
+			 * **42.8%** of every hole in the patch had its floor on that one
+			 * layer. What a fade costs is the layer's own work, and it costs it
+			 * steadily -- 2,743 holes at no fade, 2,173 at a quarter, 1,666 at a
+			 * half and 820 at a whole one. So this is the shortest fade that is
+			 * not a step: a quarter of a shape width keeps **79%** of the holes
+			 * and spreads the crossing over about four blocks at the shipped
+			 * block size.
+			 *
+			 * **How piled-up the floors are does not choose between short
+			 * fades**, and it looks as though it does. At the shipped 8 m block
+			 * the busiest layer holds 48.7% at `0.15`, 32.8% at `0.25` and 39.0%
+			 * at `0.35`, which reads as a minimum; at a 16 m block the order
+			 * reverses. It is where the crossing happens to land against a block
+			 * boundary, so it is a property of the block size and not of the
+			 * fade.
+			 */
+			const WATERLINE_REACH = 0.25;
 			/** How wide the widest shapes are, which is what the position is divided by. */
 			function cliffMetres(k) {
 				return k.cliffMetres;
@@ -1647,7 +1692,20 @@
 						// line hands the field through unchanged; anything else
 						// moves which readings are which.
 						const read = densityAt(dx, dy, dz, y, k, seed, s.cliff);
-						const density = splineAt(k.cliffSpline, read) * 2 - 1;
+						const said = splineAt(k.cliffSpline, read) * 2 - 1;
+						// **The waterline holds the layer off.** `hold` is 1 at
+						// and below sea level and nought a shape width or so
+						// above it, and the reading is blended toward solid by
+						// it -- so a cliff carved into a headland stops at the
+						// water rather than running on down and filling.
+						const hold = Math.max(
+							0,
+							Math.min(
+								1,
+								1 - (y - k.seaLevel) / (WATERLINE_REACH * cliffMetres(k)),
+							),
+						);
+						const density = said + (1 - said) * hold;
 						solid = density + (surface - y) / crust > 0;
 					}
 					if (!solid && y < surface) {
