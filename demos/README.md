@@ -971,12 +971,13 @@ than that and the slope limit refuses everything — at 134 m of relief across
 96 m, **no plant stands at all**, which is the rule working rather than failing.
 
 **Two panels, one on each side, because a plant and the ground it stands on
-are different questions.** The left panel is the plant alone — trunk, branches,
-leaves, and the readout that says what grew — and nothing there depends on
-which world it is planted in. The right panel is everything about that world:
-planting rules, the terrain knobs, how the patch is cut into chunks. Moving a
-slider in one never has to be cross-referenced against a heading in the other,
-because the heading already says which question it answers.
+are different questions.** The right panel is the plant alone — planting rules,
+trunk, branches, leaves. The left panel is everything about the world it is
+planted in: the terrain knobs, how the patch is cut into chunks, and the
+readout that says what grew — a fact read back off the ground after the fact,
+so it sits with the world rather than with the knobs that shaped one plant.
+Moving a slider in one never has to be cross-referenced against a heading in
+the other, because the heading already says which question it answers.
 
 **On a phone each panel is its own shut drawer, with its own button.** 340 px of
 knobs against a 390 px screen means only one drawer can usefully be open at a

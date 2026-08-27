@@ -44,13 +44,14 @@
 			   to reach a knob must not carry the thing being judged off the top
 			   of the panel, so there are two sections and only the lower one
 			   moves. */
-			/* **Two panels, one on each side of the view.** The right one is
+			/* **Two panels, one on each side of the view.** The left one is
 			   the world a plant stands on -- terrain, planting rules, how the
-			   patch is cut into chunks; the left is the plant itself -- trunk,
-			   branches, leaves -- and carries the readout, because the readout
-			   is a fact about the plants. */
-			#panel,
-			#panelLeft {
+			   patch is cut into chunks -- and carries the readout, a fact about
+			   the plants read back after the fact rather than a knob; the right
+			   is the plant itself -- planting rules for it, trunk, branches,
+			   leaves. */
+			#panelWorld,
+			#panelPlants {
 				position: fixed;
 				top: 0;
 				bottom: 0;
@@ -60,13 +61,13 @@
 				background: rgba(18, 22, 29, 0.94);
 				backdrop-filter: blur(6px);
 			}
-			#panel {
-				right: 0;
-				border-left: 1px solid var(--edge);
-			}
-			#panelLeft {
+			#panelWorld {
 				left: 0;
 				border-right: 1px solid var(--edge);
+			}
+			#panelPlants {
+				right: 0;
+				border-left: 1px solid var(--edge);
 			}
 			.head {
 				flex: 0 0 auto;
@@ -336,19 +337,19 @@
 				font-size: 11.5px;
 				pointer-events: none;
 			}
-			/* **On a phone the panel is shut and there is a button to open
-			   it.** The panel is 340 px of knobs and a phone is 390 px wide, so
-			   left open it is the page and the thing being judged is a strip
-			   above it. Shut, the plants have the whole screen and one tap
-			   brings the knobs back. It is off the desktop layout entirely --
-			   there the panel sits beside the view and never covers it. */
-			#toggle,
-			#toggleLeft {
+			/* **On a phone each panel is shut and there is a button to open
+			   it.** Each panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open one is the page and the view is a strip above it. Shut,
+			   the view has the whole screen and one tap brings a drawer back.
+			   It is off the desktop layout entirely -- there the panels sit
+			   beside the view and never cover it. */
+			#toggleWorld,
+			#togglePlants {
 				display: none;
 			}
 			@media (max-width: 760px) {
-				#panel,
-				#panelLeft {
+				#panelWorld,
+				#panelPlants {
 					width: 100%;
 					top: auto;
 					height: 68%;
@@ -358,12 +359,12 @@
 					transform: translateY(100%);
 					transition: transform 0.22s ease;
 				}
-				body.knobs #panel,
-				body.plants #panelLeft {
+				body.knobs #panelWorld,
+				body.plants #panelPlants {
 					transform: none;
 				}
-				#toggle,
-				#toggleLeft {
+				#toggleWorld,
+				#togglePlants {
 					display: block;
 					position: fixed;
 					bottom: 12px;
@@ -378,19 +379,19 @@
 					letter-spacing: 0.02em;
 					transition: bottom 0.22s ease;
 				}
-				#toggle {
-					right: 12px;
-				}
-				#toggleLeft {
+				#toggleWorld {
 					left: 12px;
+				}
+				#togglePlants {
+					right: 12px;
 				}
 				/* Above its own panel when that one is open, so the way out is
 				   never under the thing it opened. Each button only answers
 				   for its own drawer -- opening one does not move the other. */
-				body.knobs #toggle {
+				body.knobs #toggleWorld {
 					bottom: calc(68% + 12px);
 				}
-				body.plants #toggleLeft {
+				body.plants #togglePlants {
 					bottom: calc(68% + 12px);
 				}
 				#hint {
@@ -402,28 +403,43 @@
 	<body>
 		<canvas id="view"></canvas>
 		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
-		<button id="toggleLeft" type="button" aria-controls="panelLeft" aria-expanded="false">
-			Plants
-		</button>
-		<button id="toggle" type="button" aria-controls="panel" aria-expanded="false">
+		<button
+			id="toggleWorld"
+			type="button"
+			aria-controls="panelWorld"
+			aria-expanded="false"
+		>
 			World
 		</button>
-		<div id="panelLeft">
+		<button
+			id="togglePlants"
+			type="button"
+			aria-controls="panelPlants"
+			aria-expanded="false"
+		>
+			Plants
+		</button>
+		<!-- **Left is the world a plant stands on; right is the plant.** The
+		     readout is a fact about the plants, and it sits with the world
+		     panel anyway -- it is what that ground grew, read back after the
+		     fact, the same way a photograph of a garden belongs beside the
+		     garden and not folded into the seed packet. -->
+		<div id="panelWorld">
 			<div class="head">
 				<h1>Vegetation lab</h1>
 				<div id="recipe"></div>
 				<div id="facts"></div>
 			</div>
 			<div class="scroller">
-				<div id="knobsLeft"></div>
+				<div id="knobsWorld"></div>
 			</div>
 		</div>
-		<div id="panel">
+		<div id="panelPlants">
 			<div class="head">
-				<h1>World</h1>
+				<h1>Plants</h1>
 			</div>
 			<div class="scroller">
-				<div id="knobs"></div>
+				<div id="knobsPlants"></div>
 			</div>
 		</div>
 
@@ -1276,6 +1292,7 @@
 				{
 					group: "Planting",
 					tint: "plan",
+					panel: "plants",
 					rows: [
 						{
 							key: "plant",
@@ -1530,7 +1547,7 @@
 				{
 					group: "Trunk",
 					tint: "wood",
-					panel: "left",
+					panel: "plants",
 					rows: [
 						{ key: "height", label: "Height", low: 0.5, high: 90, step: 0.5, value: 22, digits: 1, unit: "m" },
 						{ key: "trunk", label: "Base radius", low: 0.1, high: 4, step: 0.05, value: 0.55, digits: 2, unit: "m" },
@@ -1554,7 +1571,7 @@
 				{
 					group: "Branches",
 					tint: "wood",
-					panel: "left",
+					panel: "plants",
 					rows: [
 						{ key: "useBranches", summary: true, value: true, title: "grow branches" },
 						{ key: "levels", label: "Splits", low: 0, high: 6, step: 1, value: 3, digits: 0 },
@@ -1569,7 +1586,7 @@
 				{
 					group: "Leaves",
 					tint: "leaf",
-					panel: "left",
+					panel: "plants",
 					rows: [
 						{
 							key: "useLeaves",
@@ -3463,8 +3480,8 @@
 			}
 
 			function buildPanel() {
-				const hostRight = document.getElementById("knobs");
-				const hostLeft = document.getElementById("knobsLeft");
+				const hostWorld = document.getElementById("knobsWorld");
+				const hostPlants = document.getElementById("knobsPlants");
 				for (const group of KNOBS) {
 					const set = document.createElement("details");
 					set.className = "group" + (group.tint ? " " + group.tint : "");
@@ -3542,7 +3559,7 @@
 							askForRedraw();
 						});
 					}
-					(group.panel === "left" ? hostLeft : hostRight).append(set);
+					(group.panel === "plants" ? hostPlants : hostWorld).append(set);
 				}
 			}
 
@@ -3634,8 +3651,8 @@
 					button.textContent = open ? "Close" : label;
 				});
 			};
-			drawer("toggle", "knobs", "World");
-			drawer("toggleLeft", "plants", "Plants");
+			drawer("toggleWorld", "knobs", "World");
+			drawer("togglePlants", "plants", "Plants");
 
 			let dragging = null;
 			view.addEventListener("pointerdown", (e) => {
