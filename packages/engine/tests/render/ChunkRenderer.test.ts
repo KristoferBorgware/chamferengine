@@ -105,6 +105,79 @@ describe("what a frame encodes", () => {
 		expect(kinds.length).toBeGreaterThan(2);
 	});
 
+	describe("the two screen-space terms", () => {
+		/** One frame's draws, split into geometry and full-screen passes. */
+		function count(tune: (renderer: ChunkRenderer) => void) {
+			const gpu = new RecordingGpu();
+			const renderer = new ChunkRenderer(gpu.context);
+			renderer.bloom.enabled = false;
+			tune(renderer);
+			renderer.upload(mesh(1));
+			renderer.render(FRAME);
+			const kinds = gpu.commands
+				.filter((c) => c.what === "draw" || c.what === "drawIndexed")
+				.map((c) => c.what);
+			return {
+				geometry: kinds.filter((k) => k === "drawIndexed").length,
+				screen: kinds.filter((k) => k === "draw").length,
+				draws: gpu.draws(),
+			};
+		}
+
+		it("costs nothing at all while both are off", () => {
+			// They ship off, and off has to mean the frame this renderer drew
+			// before either existed -- not a pass that runs and returns 1.
+			const off = count(() => {});
+			const bare = count((r) => {
+				r.ambientOn = false;
+				r.bounceOn = false;
+			});
+			expect(off.geometry).toBe(bare.geometry);
+			expect(off.screen).toBe(bare.screen);
+		});
+
+		it("draws the geometry a second time for the occlusion", () => {
+			// **This is what the occlusion costs**, and the reason it is a
+			// switch rather than always on: the sky's share is decided while
+			// the world is being drawn, so where the geometry is has to be
+			// known before that pass, which means finding out twice.
+			const off = count(() => {});
+			const on = count((r) => {
+				r.ambientOn = true;
+			});
+			expect(on.geometry).toBe(off.geometry + 1);
+			// Occlusion, then the blur that makes it usable.
+			expect(on.screen).toBe(off.screen + 2);
+		});
+
+		it("adds the bounce without drawing the geometry again", () => {
+			// The bounce gathers from the lit colour the world pass already
+			// wrote, so it needs no second look at the geometry -- which is
+			// the whole difference between the two in what they cost.
+			const off = count(() => {});
+			const on = count((r) => {
+				r.bounceOn = true;
+			});
+			expect(on.geometry).toBe(off.geometry);
+			// Gather, blur, and add it back over the frame.
+			expect(on.screen).toBe(off.screen + 3);
+		});
+
+		it("still binds every group a draw declares, with both on", () => {
+			// The occlusion joins the group the shadows already share, so
+			// switching it on changes what every terrain pipeline reads. One
+			// unbound group refuses the whole command buffer.
+			const { draws } = count((r) => {
+				r.ambientOn = true;
+				r.bounceOn = true;
+			});
+			expect(draws.length).toBeGreaterThan(0);
+			for (const drawn of draws)
+				for (let group = 0; group < drawn.groups; group++)
+					expect(drawn.bound.has(group)).toBe(true);
+		});
+	});
+
 	it("blurs the glare down a chain and back up again, once bloom is on", () => {
 		// Every level halves, so the chain is a fixed shape rather than a
 		// number worth pinning: down to the smallest level and back up, plus
