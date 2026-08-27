@@ -10,6 +10,47 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-094 — Doc 08 describes a terrain model the engine stopped running
+
+**Kind:** doc
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-27, building the landscape bench against the shipped engine
+**Where:** [`docs/08-terrain-generation.md`](docs/08-terrain-generation.md);
+`packages/engine/src/generation/coarse/shapeLayers.ts`,
+`packages/engine/src/generation/terrain/carveDensity.ts`
+
+**What happens.** Doc 08 argues a surface built from **two** noise stacks -- a
+terrain layer and a mountain layer gated on it -- scaled into metres by a fit
+that puts sea level at a **percentile** of the finished field. The engine now
+builds it from **three**, and the metres come out of the continentalness
+curve rather than from a fit: the curve's own middle is the waterline, so the
+coast is where a reader drew it and no percentile is computed anywhere. There
+is a **fourth** layer as well, the carve, which the document does not mention
+at all -- a 3D density field read per block that cuts cliffs, overhangs and
+arches into the finished ground, held off at the waterline.
+
+The document is still right about everything under those two headings: the
+noise basis, the fold and its measured pivot, why one scale for land and sea
+spent the mountains' budget, the three absolute material lines and the
+measurement that put Relief at 600 m. What has moved is the layer count, the
+name of each layer, and how a reading becomes a metre.
+
+**What it costs to leave.** Doc 08 is the page anyone reading the generator is
+sent to, and the two disagree about the shape of the thing rather than about a
+number: a reader looking for `landFraction` finds an argument for a knob the
+engine does not have, and a reader looking for the carve finds nothing. The
+knock-on is that **doc 11's still-open list and doc 26's triage both count
+against the old model**, so neither can be trusted about what is left.
+
+**Why it is not fixed in the same turn.** `docs/` argues each decision from a
+measurement, and three of the four layers here were chosen in the lab against
+measurements that are in the lab's own comments rather than in
+`verification/`. Rewriting the page properly means deciding which of those get
+a script and re-running them at the engine's own numbers, which is its own
+piece of work.
+
 ### F-093 — A planet smaller than its own layer widths comes out all sea or all land, and nothing says so
 
 **Kind:** risk
