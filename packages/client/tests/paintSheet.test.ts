@@ -20,8 +20,9 @@ function sheet(): BenchSheet {
 		height: H,
 		metres: of((at) => (at % 40) * 30 - 300),
 		raw: of((at) => Math.sin(at) * 0.8),
-		terrain: of((at) => (at % 11) / 10),
-		mountain: of((at) => ((at * 7) % 13) / 12),
+		continent: of((at) => (at % 11) / 10),
+		erosion: of((at) => ((at * 3) % 17) / 16),
+		peaks: of((at) => ((at * 7) % 13) / 12),
 		cut: of((at) => Math.cos(at) * 4),
 		cutScale: 4,
 		rawLow: -1,
@@ -58,9 +59,7 @@ describe("paintSheet", () => {
 	});
 
 	it("reads the mountain layer for the mountain picture and the terrain layer for the terrain one", () => {
-		expect(paint("terrain").join(",")).not.toBe(
-			paint("mountain").join(","),
-		);
+		expect(paint("continent").join(",")).not.toBe(paint("peaks").join(","));
 	});
 });
 

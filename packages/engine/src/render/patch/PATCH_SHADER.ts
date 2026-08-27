@@ -85,8 +85,9 @@ fn vertexMain(
 	@location(1) normal   : vec3f,
 	@location(2) metres   : f32,
 	@location(3) raw      : f32,
-	@location(4) terrain  : f32,
-	@location(5) mountain : f32,
+	@location(4) continent : f32,
+	@location(5) erosion   : f32,
+	@location(6) peaks     : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
@@ -94,9 +95,15 @@ fn vertexMain(
 	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
-	// Both layers are on the vertex and the uniform picks one, so choosing a
-	// picture of one of them costs a frame rather than a rebuilt mesh.
-	out.layer = select(terrain, mountain, view.mode.z > 0.5);
+	// **Every layer is on the vertex and the uniform picks one**, so choosing a
+	// picture of one of them costs a frame rather than a rebuilt mesh. Three
+	// now, because the surface is three layers and a layer with no channel is
+	// a layer whose curve cannot be looked at.
+	out.layer = select(
+		select(continent, erosion, view.mode.z > 0.5),
+		peaks,
+		view.mode.z > 1.5,
+	);
 	return out;
 }
 

@@ -4,9 +4,13 @@ import { paintCoarseField } from "../src/paintCoarseField.js";
 
 const W = 96;
 const H = 48;
-// Level 6 with the erosion that ships, so the slope field has something in
-// it: a barely-eroded level-5 map is nearly flat everywhere.
-const map = buildCoarseMap(77, { level: 6 });
+// **A planet big enough for the layers that ship.** The continentalness layer
+// is 6,000 m across at its widest and a level-6 map at 32 m cells is a planet
+// 1,700 m in radius, so the widest octave is three times the world: the field
+// never crosses the curve's middle and the map comes out entirely ocean, which
+// draws in one colour. At 100 m cells the planet is 5,313 m and 22% of it is
+// land (F-093).
+const map = buildCoarseMap(77, { level: 6, cellMetres: 100 });
 const field = COARSE_FIELDS[0]!;
 
 function paint(which = field): Uint8ClampedArray {

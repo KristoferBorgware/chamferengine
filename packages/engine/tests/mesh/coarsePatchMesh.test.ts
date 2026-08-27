@@ -33,8 +33,9 @@ function ground(
 ): {
 	height: Float32Array;
 	raw: Float32Array;
-	terrain: Float32Array;
-	mountain: Float32Array;
+	continent: Float32Array;
+	erosion: Float32Array;
+	peaks: Float32Array;
 } {
 	// **No erosion bite, so draining is a drain.** Erosion wears land toward
 	// the waterline, so moving the waterline with the bite on moves how far
@@ -44,8 +45,9 @@ function ground(
 	return {
 		height: Float32Array.from(field.raw),
 		raw: Float32Array.from(field.raw),
-		terrain: field.continent,
-		mountain: field.peaks,
+		continent: field.continent,
+		erosion: field.erosion,
+		peaks: field.peaks,
 	};
 }
 

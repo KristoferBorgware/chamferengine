@@ -36,10 +36,24 @@ const header = () => ({
 	registry: ["chamfer:air", "chamfer:stone"],
 });
 
-/** A direction with ground under it, and the layer its surface sits on. */
+/**
+ * A direction with ground under it, and the layer its surface sits on.
+ *
+ * **Spread over the whole sphere rather than jittered around one point.** The
+ * coast is where the continentalness curve crosses its own middle, so a little
+ * over a third of any world is land -- five directions a few degrees apart can
+ * all be ocean, and were.
+ */
 function somewhereOnLand(): { at: Vec3; layer: number; face: number } {
-	for (const seed of [0.31, 0.58, 0.12, 0.77, 0.44]) {
-		const at = new Vec3(seed, 0.58, 0.75).normalize();
+	const golden = Math.PI * (3 - Math.sqrt(5));
+	for (let n = 0; n < 200; n++) {
+		const y = 1 - (2 * n + 1) / 200;
+		const ring = Math.sqrt(Math.max(0, 1 - y * y));
+		const at = new Vec3(
+			Math.cos(n * golden) * ring,
+			y,
+			Math.sin(n * golden) * ring,
+		).normalize();
 		const cell = positionToCell(at, shape.n);
 		const column = terrain.columnAt(cell.face, cell.i, cell.j);
 		if (column.groundRadius > RADIUS)

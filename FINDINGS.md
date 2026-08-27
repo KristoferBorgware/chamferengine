@@ -10,6 +10,51 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-093 — A planet smaller than its own layer widths comes out all sea or all land, and nothing says so
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/TerrainLayer.ts`,
+`packages/client/src/PlanetSettings.ts`
+
+**What happens.** The coast is where the continentalness curve crosses its own
+middle, so how much land a world has is decided by how far that layer's field
+swings. The layer is stated in metres and the noise takes `radius / metres` as
+its frequency -- so on a planet **smaller than the layer's widest octave** the
+frequency drops below one, the field barely varies over the whole sphere, and it
+can sit entirely on one side of the curve's middle.
+
+Measured on one seed at four sizes, with the shipped 6,000 m continentalness
+layer:
+
+| radius | ground | land |
+|---|---|---|
+| 1,700 m | −425 to −15 m | **0.0%** |
+| 3,400 m | −372 to 366 m | 24.2% |
+| 5,313 m | −429 to 670 m | 21.8% |
+| 10,626 m | −450 to 736 m | 24.3% |
+
+A 1,700 m planet is not an odd request -- it is the radius a level-6 map at 32 m
+cells gives, and it is the worked planet several verification scripts use. The
+world it builds is entirely ocean, drawn in one flat colour, with no refusal and
+nothing on the panel to point at.
+
+**Why it is not simply a smaller default.** The defaults are the lab's, and the
+lab's planet is 6,801 m. Shrinking them to suit a small world would make the
+shipped one's continents into hills. What the panel is missing is the other
+guard it already has in the other direction: it refuses a map too coarse to draw
+a layer's narrowest octave, and has nothing to say about a planet too small to
+hold its widest.
+
+**What it would take.** One line in `problems()` per map layer: if the widest
+octave is over about half the planet's circumference, say so and name the scale
+row that fixes it. The number wants measuring rather than guessing -- what
+matters is the frequency at which the field stops crossing the curve's middle,
+which is a property of the octave count and the falloff as well as the width.
+
 ### F-092 — The droplet walk has no caller inside the engine any more
 
 **Kind:** cleanup

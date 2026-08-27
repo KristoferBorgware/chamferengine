@@ -83,9 +83,9 @@ const PICTURE_INDEX: Record<string, number> = {
 	ground: 0,
 	height: 1,
 	raw: 2,
-	terrain: 3,
-	mountain: 3,
-	erosion: 0,
+	continent: 3,
+	erosion: 3,
+	peaks: 3,
 };
 
 // ---------------------------------------------------------------------------
@@ -327,13 +327,12 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 	}
 	says = "";
 	busy = false;
-	// **The share the gate is open over is a count, not a number the row
-	// holds.** Mountain line is a fraction of the terrain curve's own reach, so
-	// the same 0.5 opens the gate over a third of one planet and a fiftieth of
-	// another; only a finished map says which.
+	// **The land share is a measurement, not a knob.** The coast is where the
+	// continentalness curve crosses its own middle, so how much land there is
+	// falls out of that curve -- only a finished map says how much.
 	panel.note(
-		"mountainLine",
-		`${(reply.facts.land * 100).toFixed(1)}% of the planet is above it`,
+		"seaLevel",
+		`${(reply.facts.land * 100).toFixed(1)}% of the planet is land`,
 	);
 	show();
 	if (pending) ask();
@@ -475,7 +474,12 @@ function render(): void {
 	const k = settings.knobs;
 	look.picture = PICTURE_INDEX[k.patchPicture] ?? 0;
 	look.surface = k.patchSurface;
-	look.layer = k.patchPicture === "mountain" ? "mountain" : "terrain";
+	look.layer =
+		k.patchPicture === "peaks"
+			? "peaks"
+			: k.patchPicture === "erosion"
+				? "erosion"
+				: "continent";
 
 	const reach = span * camera.distance;
 	const eye = new Vec3(
