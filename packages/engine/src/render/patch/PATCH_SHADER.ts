@@ -110,6 +110,16 @@ struct VertexOut {
 
 	/** Where this fragment is, so a light standing at the camera has a direction. */
 	@location(5)       world  : vec3f,
+
+	/**
+	 * The cell's own speckle.
+	 *
+	 * **The one thing that says where one hexagon ends.** A slope of one
+	 * material at one height is a single sheet of colour however it is lit, and
+	 * the lattice the world is built on is invisible in it -- which is the
+	 * hardest thing to read on a preview whose whole subject is that lattice.
+	 */
+	@location(6)       shade  : f32,
 };
 
 @vertex
@@ -122,11 +132,13 @@ fn vertexMain(
 	@location(5) erosion   : f32,
 	@location(6) peaks     : f32,
 	@location(7) carve     : f32,
+	@location(8) shade     : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
 	out.world = position;
+	out.shade = shade;
 	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
@@ -301,6 +313,13 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	} else {
 		tint = SNOW;
 	}
-	return shade(contoured(tint, in.height), in.normal, in.world, SUN_SHARE);
+	// **Only the picture of the ground takes it.** The rest are pictures of a
+	// number, and a speckle there is noise drawn over the answer.
+	return shade(
+		contoured(tint * in.shade, in.height),
+		in.normal,
+		in.world,
+		SUN_SHARE,
+	);
 }
 `;

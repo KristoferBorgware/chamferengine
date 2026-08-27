@@ -217,47 +217,44 @@ let bigShown: LayerName | null = null;
 function enlarge(layer: LayerName): void {
 	bigShown = layer;
 	big.hidden = false;
-	bigName.textContent = `${LAYER_TITLES[layer]} — the field, ${
-		patchSheet
-			? `${Math.round(facts0?.span ?? 0).toLocaleString("en-US")} m of ground`
-			: ""
-	} · click to close`;
+	bigName.textContent =
+		`${LAYER_TITLES[layer]} — the field, ` +
+		(settings.knobs.patchMap === "planet"
+			? "the whole planet"
+			: `${Math.round(facts0?.span ?? 0).toLocaleString("en-US")} m of ground`) +
+		" · click to close";
 	paintBig();
 }
 
 /** Redraw the enlarged picture, if one is up. */
 function paintBig(): void {
-	if (!bigShown || !patchSheet || big.hidden) return;
-	if (
-		bigCanvas.width !== patchSheet.width ||
-		bigCanvas.height !== patchSheet.height
-	) {
-		bigCanvas.width = patchSheet.width;
-		bigCanvas.height = patchSheet.height;
+	const sheet = shown();
+	if (!bigShown || !sheet || big.hidden) return;
+	if (bigCanvas.width !== sheet.width || bigCanvas.height !== sheet.height) {
+		bigCanvas.width = sheet.width;
+		bigCanvas.height = sheet.height;
 	}
 	const ctx = bigCanvas.getContext("2d");
 	if (!ctx) return;
-	const image = ctx.createImageData(patchSheet.width, patchSheet.height);
-	paintSheet(patchSheet, LAYER_PICTURES[bigShown], image.data);
+	const image = ctx.createImageData(sheet.width, sheet.height);
+	paintSheet(sheet, LAYER_PICTURES[bigShown], image.data);
 	ctx.putImageData(image, 0, 0);
 }
 
 /** Repaint every layer thumbnail from the sheet the last build handed over. */
 function paintLayers(): void {
-	if (!patchSheet) return;
+	const sheet = shown();
+	if (!sheet) return;
 	paintBig();
 	for (const [layer, shot] of layerShots) {
-		if (
-			shot.width !== patchSheet.width ||
-			shot.height !== patchSheet.height
-		) {
-			shot.width = patchSheet.width;
-			shot.height = patchSheet.height;
+		if (shot.width !== sheet.width || shot.height !== sheet.height) {
+			shot.width = sheet.width;
+			shot.height = sheet.height;
 		}
 		const ctx = shot.getContext("2d");
 		if (!ctx) continue;
-		const image = ctx.createImageData(patchSheet.width, patchSheet.height);
-		paintSheet(patchSheet, LAYER_PICTURES[layer], image.data);
+		const image = ctx.createImageData(sheet.width, sheet.height);
+		paintSheet(sheet, LAYER_PICTURES[layer], image.data);
 		ctx.putImageData(image, 0, 0);
 	}
 }
@@ -466,10 +463,23 @@ function show(): void {
 	render();
 }
 
+/**
+ * The sheet every picture on this page is drawn from.
+ *
+ * **One choice for all of them.** `Map shows` is a question about what is being
+ * looked at rather than about the small map alone -- and a layer whose shapes
+ * are kilometres wide says nothing over a patch a kilometre across, so a
+ * thumbnail of it stuck on the patch is a picture that barely moves whatever
+ * the knobs do.
+ */
+function shown(): BenchSheet | null {
+	return settings.knobs.patchMap === "planet" ? planetSheet : patchSheet;
+}
+
 /** The small picture: whichever sheet is asked for, in whichever picture. */
 function paint(): void {
 	const planet = settings.knobs.patchMap === "planet";
-	const sheet = planet ? planetSheet : patchSheet;
+	const sheet = shown();
 	if (!sheet) return;
 	if (mapCanvas.width !== sheet.width || mapCanvas.height !== sheet.height) {
 		mapCanvas.width = sheet.width;

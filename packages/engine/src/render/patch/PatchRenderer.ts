@@ -173,6 +173,7 @@ export class PatchRenderer {
 					{ shaderLocation: 5, offset: 36, format: "float32" },
 					{ shaderLocation: 6, offset: 40, format: "float32" },
 					{ shaderLocation: 7, offset: 44, format: "float32" },
+					{ shaderLocation: 8, offset: 48, format: "float32" },
 				],
 			},
 		];

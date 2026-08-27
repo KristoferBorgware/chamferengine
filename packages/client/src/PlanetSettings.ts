@@ -552,11 +552,17 @@ export interface PlanetKnobs {
 	 * Whether a cell's colour drifts a little from its block's own.
 	 *
 	 * On, every cell is moved up to 6% either way by a hash of its own address.
-	 * **Off by default**, so a cell is exactly the colour the block registry
-	 * names: the ground reads as the material it is made of, and a picture of
-	 * the world can be held against a picture of the map. What the drift buys
-	 * is that a hillside of one block type is not one flat sheet, and the light
-	 * and the block terraces already say most of that.
+	 * **On by default**, because a hillside of one material at one height is a
+	 * single sheet of colour however it is lit, and the drift is the only thing
+	 * in the picture that says where one hexagon ends and the next begins. That
+	 * is what the landscape bench is for looking at, and it is what the ground
+	 * underfoot is made of.
+	 *
+	 * What it costs is that a cell is no longer exactly the colour the block
+	 * registry names, so a frame of the world cannot be held against a frame of
+	 * the map colour for colour. Turn it off for that -- the row is on the
+	 * bench's viewport and in the world's drawing settings, and it is the same
+	 * knob in both.
 	 */
 	speckle: boolean;
 
@@ -989,7 +995,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seamOverlay: false,
 	selectBounds: false,
 	patchBounds: false,
-	speckle: false,
+	speckle: true,
 	ambientOcclusion: true,
 	skyExposure: true,
 	gridMode: false,

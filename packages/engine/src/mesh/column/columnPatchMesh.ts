@@ -1,6 +1,7 @@
 import type { ColumnPatch } from "./ColumnPatch.js";
 import { PATCH_STRIDE } from "../PatchGeometry.js";
 import { Vec3 } from "../../math/Vec3.js";
+import { speckleShade } from "../../generation/terrain/blockColor.js";
 
 /** The ground a patch stands on, one entry per column. */
 export interface ColumnGround {
@@ -36,6 +37,12 @@ export interface ColumnGround {
 
 /** What the mesh is drawn against, beyond the ground itself. */
 export interface ColumnLook {
+	/** The world's seed, which is what the speckle is hashed from. */
+	readonly seed: number;
+
+	/** How far a cell's colour may drift from its material's, `0` for none. */
+	readonly speckle: number;
+
 	/** The planet's radius in metres, which turns a direction into a place. */
 	readonly radius: number;
 
@@ -124,9 +131,19 @@ export function columnPatchMesh(
 	ground: ColumnGround,
 	look: ColumnLook,
 ): ColumnMesh {
-	const { count, degree, corner, ring, centre, directions } = patch;
+	const {
+		count,
+		degree,
+		corner,
+		ring,
+		centre,
+		directions,
+		face,
+		i: iOf,
+		j: jOf,
+	} = patch;
 	const { at, spans, height, raw, continent, erosion, peaks, carve } = ground;
-	const { radius, seaLevel } = look;
+	const { radius, seaLevel, seed, speckle } = look;
 	const frame = frameAt(centre);
 
 	// **The buffer starts at what a patch actually uses and grows if it needs
@@ -160,6 +177,7 @@ export function columnPatchMesh(
 	let cEro = 0;
 	let cPeaks = 0;
 	let cCarve = 0;
+	let cShade = 1;
 
 	/** A direction and a height, in the frame the patch is drawn in. */
 	const local = (
@@ -233,6 +251,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
+		vertices[to + 12] = cShade;
 		to += PATCH_STRIDE;
 		vertices[to] = bx;
 		vertices[to + 1] = by;
@@ -246,6 +265,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
+		vertices[to + 12] = cShade;
 		to += PATCH_STRIDE;
 		vertices[to] = cx;
 		vertices[to + 1] = cy;
@@ -259,6 +279,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
+		vertices[to + 12] = cShade;
 		written += 3;
 		// **What the camera has to frame is the shape, and only the shape knows
 		// what that is.** A patch's width says nothing once it is a fair share
@@ -436,6 +457,11 @@ export function columnPatchMesh(
 		cEro = erosion[c]!;
 		cPeaks = peaks[c]!;
 		cCarve = carve[c]!;
+		// **A fact about the cell, not about the ground under it**, so it is
+		// read from the address the same way the world's own mesher reads it --
+		// which is what makes a preview of a hillside the hillside the world
+		// builds rather than a near miss of it.
+		cShade = speckleShade(face[c]!, iOf[c]!, jOf[c]!, seed, speckle);
 		const deg = degree[c]!;
 		const from = at[c]!;
 		const to = at[c + 1]!;
@@ -489,6 +515,9 @@ export function columnPatchMesh(
 		cEro = erosion[c]!;
 		cPeaks = peaks[c]!;
 		cCarve = carve[c]!;
+		// The sea is one surface at one radius rather than a cell of anything,
+		// so nothing about it is per hexagon.
+		cShade = 1;
 		// **The water carries the ground under it, not the surface it is
 		// drawn at.** How much water a look passes through is what decides the
 		// colour and how much of it can be seen through, and the sheet itself
