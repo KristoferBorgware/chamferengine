@@ -170,6 +170,7 @@ export class WorkerMeshSource implements MeshSource {
 			speckle: message.speckle,
 			ambientOcclusion: message.ambientOcclusion,
 			skyExposure: message.skyExposure,
+			skyBounce: message.skyBounce,
 		};
 		for (const worker of this.workers) worker.postMessage(message);
 		for (const selection of this.working.values())

@@ -865,6 +865,21 @@ export interface PlanetKnobs {
 	ssgiStrength: number;
 
 	/**
+	 * How much of the light a blocked direction intercepts comes back.
+	 *
+	 * A direction blocked by rock points at a lit surface, and some of what
+	 * lands there returns. Baked into the mesh by the same walk that decides
+	 * how much sky a face sees, so it costs no pass of its own and needs the
+	 * chunks built again to move.
+	 *
+	 * **It is the sky's bounce, never the sun's.** A baked term cannot follow
+	 * a sun that moves, so a sunlit rim throws no warm patch on the wall
+	 * opposite -- what it does is stop everything enclosed sharing one flat
+	 * floor. Zero is that floor, and is what this was before.
+	 */
+	skyBounce: number;
+
+	/**
 	 * How many times the canvas the world is drawn at before it is put back.
 	 *
 	 * **The one antialiasing a world of hard edges answers to.** A voxel
@@ -1076,6 +1091,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	ssgi: false,
 	ssgiReach: 48,
 	ssgiStrength: 1.5,
+	skyBounce: 0.35,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1191,6 +1207,7 @@ export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
+	"skyBounce",
 	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
@@ -1583,6 +1600,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	ssgi: { ...TOGGLE, rebuilds: false },
 	ssgiReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
 	ssgiStrength: { low: 0, high: 6, step: 0.05, rebuilds: false, unit: "" },
+	skyBounce: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },

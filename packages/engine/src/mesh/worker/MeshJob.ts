@@ -34,6 +34,9 @@ export interface MeshWorkerSetup {
 	/** Whether a face darkens by how much sky the ground around it leaves it. */
 	readonly skyExposure?: boolean;
 
+	/** How much of the light a blocked direction intercepts comes back. */
+	readonly skyBounce?: number;
+
 	/**
 	 * Draw the world as its own grid: a flat shell of hexagons at the crust
 	 * top, painted by these switches, in place of the terrain. The selection
@@ -102,6 +105,7 @@ export interface MeshRetune {
 	readonly speckle: number;
 	readonly ambientOcclusion: boolean;
 	readonly skyExposure: boolean;
+	readonly skyBounce: number;
 }
 
 export type MeshWorkerMessage = MeshWorkerSetup | MeshJob | MeshRetune;
