@@ -796,6 +796,94 @@ happened to land in — which is exactly what a sun does as a camera turns.
 
 ---
 
+## Two terms the block grid cannot see
+
+Everything above is decided before there is a view. The mesher bakes how much
+sky a column stands under and how boxed in a corner is; the cascades ask
+whether the sun reaches a face. All three are facts about the world, and all
+three are settled without knowing where anybody is standing.
+
+Two things about light are **not** facts about the world alone, and both of
+them are cheap to read off the picture once it exists.
+
+### Ambient occlusion sees what the block grid was never told
+
+The baked terms know a column and they know a corner. Neither knows that one
+hill stands in front of another, or that a wall built this morning now shades
+the ground a metre from it: at the moment they are computed there is no view,
+and a corner's four neighbours are the whole of what it can ask about.
+
+**Screen-space ambient occlusion** asks a different question, of the picture
+rather than of the grid: for the surface at this pixel, how much of the
+hemisphere over it is filled by other surfaces the camera can also see. A
+handful of directions are tried per pixel, each turned a different way so the
+pattern never repeats, and each is projected back onto the screen and compared
+against the depth already there.
+
+**It scales the ambient and never the direct sun.** A lit wall is lit whatever
+stands beside it -- the sun either reaches it or it does not, and the cascades
+answer that. Multiplying a whole pixel by an occlusion factor is the common
+mistake and it draws dirt across ground in full sunlight.
+
+That placement is the whole of why it costs what it does. The sky's share is
+decided inside the terrain shader, while the world is being drawn -- so a pass
+reading the depth *that* pass wrote would be a frame too late to change it. The
+occlusion has to exist first, which means finding out where the geometry is
+twice: a depth-only pass with no fragment stage, then the occlusion, then the
+world. **That second pass over the geometry is what the switch is for.**
+
+Two details are not optional. **The normal is reconstructed rather than
+stored** -- there is no G-buffer here, and the terrain shader derives its own
+normal the same way, from how the world position changes across a pixel, so
+the two agree by construction. But a plain derivative straddles a silhouette
+and averages two surfaces metres apart, which tilts the normal at every edge in
+the picture; each axis takes whichever of its two neighbours is closer in
+depth instead. And **an occluder far in front occludes nothing**: it is a
+different part of the world that happens to line up, and without that test
+every silhouette casts a dark halo onto the ground behind it.
+
+### A bounce is the one indirect term that can run after the world
+
+Every light in this world arrives straight from its source. A sunlit cliff
+throws nothing onto the shaded ground beside it, and an overhang is the same
+darkness whatever it stands over -- snow or bare stone.
+
+**Screen-space global illumination** is one bounce, and it is nearly free to
+know about, because the frame has already been drawn: what every visible
+surface emits is sitting in the colour buffer. For each pixel, look around it,
+and where a neighbouring surface faces this one, add a share of its colour.
+Both surfaces have to face each other -- this one turned toward the other for
+the light to land, the other turned back for it to have left -- or the back of
+every wall lights the ground behind it.
+
+**Indirect light adds, so this needs nothing separated out.** Occlusion has to
+find the ambient term because it scales it; a bounce is new light arriving, so
+it goes on top of a finished pixel. That is what lets it run after the world
+pass, where the occlusion could not, and it is also why it can read the lit
+colour at all: it is downstream of the shading it gathers from. It costs no
+second look at the geometry, which is the whole difference between the two in
+what they are worth turning on.
+
+A surface gives back a fraction of what it takes, never all of it. Grass and
+stone return about a third; anything near 1 makes the frame feed itself and the
+picture climbs.
+
+The standing limit of the technique is worth being plain about: **it only knows
+what is on screen.** A wall out of frame bounces nothing, so turning the camera
+changes the light. The alternative is a world-space structure nothing here has,
+and the artifact is a gradual one -- what leaves the frame was at the edge of
+it, contributing least.
+
+### Both ship off
+
+Neither is the world being drawn wrongly without it, and both cost real time
+per frame: the occlusion a whole extra pass over the geometry, the bounce three
+full-screen passes and a gather. They are separate rows because they cost
+different things, the same way **Marching shadows** and **Shadow maps** were
+separate rows for the same reason.
+
+---
+
 ## What this forces elsewhere
 
 - **`neighbour(id, k)` gains two radial cases**, up and down, which are `layer ±
@@ -823,7 +911,14 @@ happened to land in — which is exactly what a sun does as a camera turns.
   *inward* from the boundary rather than just being drawn at it.
 - **Ambient occlusion with 8 neighbours**, carried over from
   [doc 14](14-meshing-and-lod.md), including what a corner means where three
-  hexagons meet rather than four squares.
+  hexagons meet rather than four squares. The screen-space term above does not
+  close this: it answers a question about the *picture* and this one is about
+  the grid, so a cell's own corner still has no answer when nobody is looking
+  at it.
+- **What the two screen-space terms are worth, in numbers.** Both are built
+  and both ship off, and the case for turning either on is a measurement
+  nobody has taken on real hardware -- the software adapter here settles what
+  is drawn and never what it costs.
 - **Whether sky light should know the sun's angle.** The usual voxel approach
   makes sky light directionless and then modulates it globally by time of day. Here the modulation
   is per-cell and gives the terminator — but a cell in a deep valley still gets

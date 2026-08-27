@@ -14,6 +14,9 @@ import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
+import { ScreenAmbient } from "../light/ScreenAmbient.js";
+import { ScreenBounce } from "../light/ScreenBounce.js";
+import { ScreenDepth } from "../light/ScreenDepth.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
@@ -98,6 +101,31 @@ export class ChunkRenderer implements ShadowCaster {
 	 * things the sun looks at share the last one.
 	 */
 	readonly sunViews: SunViews;
+
+	/**
+	 * Where the geometry is, before the world is shaded.
+	 *
+	 * Only drawn when something needs it. See {@link ScreenDepth}.
+	 */
+	readonly screenDepth: ScreenDepth;
+
+	/**
+	 * How much sky each pixel can see, scaling the ambient term alone.
+	 *
+	 * Off by default: it costs a whole extra geometry pass to find out where
+	 * the geometry is, and this world already bakes two occlusion terms the
+	 * mesher can compute for nothing.
+	 */
+	readonly screenAmbient: ScreenAmbient;
+
+	/** One bounce of light between surfaces, gathered off the frame. */
+	readonly screenBounce: ScreenBounce;
+
+	/** Whether {@link screenAmbient} runs at all. */
+	ambientOn = false;
+
+	/** Whether {@link screenBounce} runs at all. */
+	bounceOn = false;
 
 	/**
 	 * The air, marched over the finished frame.
@@ -208,7 +236,15 @@ export class ChunkRenderer implements ShadowCaster {
 		});
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
 		this.cloudShadow = new CloudShadow(ctx, 1024);
-		this.sunViews = new SunViews(ctx, this.cascades, this.cloudShadow);
+		this.screenDepth = new ScreenDepth(ctx, this.chunkLayout);
+		this.screenAmbient = new ScreenAmbient(ctx);
+		this.screenBounce = new ScreenBounce(ctx);
+		this.sunViews = new SunViews(
+			ctx,
+			this.cascades,
+			this.cloudShadow,
+			this.screenAmbient.openView,
+		);
 		this.casters.push(this);
 
 		const common = {
@@ -418,6 +454,59 @@ export class ChunkRenderer implements ShadowCaster {
 		// they go into the same encoder ahead of everything else.
 		this.cascades.render(encoder, this.casters);
 		this.cloudShadow.render(encoder, this.cloudCasters);
+
+		// Turning is instant and building a chunk is not, so what is held is a
+		// disc around the player and what is drawn is the part of it being
+		// looked at. Dropping the rest instead would put a hole in the world
+		// every time someone spun round.
+		//
+		// `cullViewProj` is the frame's own matrix unless a caller froze one,
+		// and then the sort below still runs against the live eye: which water
+		// surface is in front of which is a fact about the picture being
+		// taken, not about the camera that chose the chunks.
+		//
+		// **Worked out before the passes rather than inside the world pass**,
+		// because the depth prepass has to draw the same list: a second
+		// opinion about what is visible is a second chance to disagree, and
+		// occlusion computed from geometry the world pass does not draw would
+		// shade the pixels around a chunk that is not there.
+		const view = new Frustum(frame.cullViewProj ?? frame.viewProj);
+		const visible: Resident[] = [];
+		for (const chunk of this.resident.values())
+			if (view.holdsBox(chunk.bound)) visible.push(chunk);
+		this.lastDrawn = visible.length;
+
+		// **Ambient occlusion runs before the light it changes.** The sky's
+		// share of a surface is decided inside the terrain shader while the
+		// world is being drawn, so a pass reading the depth that pass wrote
+		// would be a frame too late to touch it. What this costs is finding
+		// out where the geometry is twice, which is why it only happens when
+		// the effect is on.
+		this.sunViews.openSky = this.screenAmbient.openView;
+		if (this.ambientOn) {
+			const inverse = frame.viewProj.inverse();
+			this.screenDepth.render(
+				encoder,
+				frame.viewProj,
+				drawWidth,
+				drawHeight,
+				(pass) => {
+					for (const chunk of visible)
+						draw(pass, chunk, chunk.opaque);
+				},
+			);
+			this.screenAmbient.resolve(
+				encoder,
+				this.screenDepth.view!,
+				drawWidth,
+				drawHeight,
+				frame.eye,
+				frame.viewProj,
+				inverse,
+			);
+			this.sunViews.openSky = this.screenAmbient.view;
+		}
+
 		const timing = this.clock.writes();
 		const pass = encoder.beginRenderPass({
 			...(timing ? { timestampWrites: timing } : {}),
@@ -457,21 +546,6 @@ export class ChunkRenderer implements ShadowCaster {
 		pass.setBindGroup(0, this.frameBindGroup);
 		for (const layer of this.layers) layer.before?.(pass, frame);
 
-		// Turning is instant and building a chunk is not, so what is held is a
-		// disc around the player and what is drawn is the part of it being
-		// looked at. Dropping the rest instead would put a hole in the world
-		// every time someone spun round.
-		//
-		// `cullViewProj` is the frame's own matrix unless a caller froze one,
-		// and then the sort below still runs against the live eye: which water
-		// surface is in front of which is a fact about the picture being
-		// taken, not about the camera that chose the chunks.
-		const view = new Frustum(frame.cullViewProj ?? frame.viewProj);
-		const visible: Resident[] = [];
-		for (const chunk of this.resident.values())
-			if (view.holdsBox(chunk.bound)) visible.push(chunk);
-		this.lastDrawn = visible.length;
-
 		pass.setPipeline(this.opaquePipeline);
 		// **After the layers, not before them.** A pipeline whose layout is
 		// shorter than this one's drops every binding past the end of its own,
@@ -493,6 +567,23 @@ export class ChunkRenderer implements ShadowCaster {
 
 		pass.end();
 		this.clock.resolve(encoder);
+		// **The bounce goes before the air and after the world**, because what
+		// it gathers is the lit colour the pass above just wrote. Indirect
+		// light adds rather than scaling anything, so it needs nothing
+		// separated out of that colour -- which is what lets it run here at
+		// all, where ambient occlusion could not.
+		if (this.bounceOn) {
+			this.screenBounce.resolve(
+				encoder,
+				depth.createView(),
+				this.atmosphere.sceneTarget(drawWidth, drawHeight),
+				drawWidth,
+				drawHeight,
+				frame.eye,
+				frame.viewProj,
+				frame.viewProj.inverse(),
+			);
+		}
 		// The air stands between the world and the tone curve: it reads the
 		// depth the pass above just wrote, so every pixel knows how far away
 		// its surface is and how much air is in front of it.

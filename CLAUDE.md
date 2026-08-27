@@ -2026,6 +2026,37 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **AMBIENT OCCLUSION MUST RUN BEFORE THE LIGHT IT CHANGES, AND A BOUNCE IS
+  THE ONE INDIRECT TERM THAT CAN RUN AFTER** (`ScreenAmbient`, `ScreenBounce`,
+  `ScreenDepth`, doc 16). Two screen-space terms, and the difference between
+  them decides everything about what each one costs. **Occlusion scales the
+  sky's share of a surface**, and that share is decided inside
+  `TERRAIN_SHADER` while the world is being drawn -- so a pass reading the
+  depth **that** pass wrote is a frame too late to touch it. The occlusion has
+  to exist first, which means finding out where the geometry is **twice**: a
+  depth-only pass with no fragment stage (`ScreenDepth`, the cascades' own
+  shader with the view matrix in place of the light's), then the occlusion,
+  then the world. That second geometry pass is the whole of what the switch is
+  for. **A bounce adds rather than scaling**, so it needs nothing separated
+  out of a finished pixel and runs after the world pass -- which is also what
+  lets it read the lit colour at all, since it is downstream of the shading it
+  gathers from. It costs no second look at the geometry. **Never multiply a
+  whole pixel by an occlusion factor**: the sun either reaches a face or does
+  not and the cascades already answer that, so scaling everything draws dirt
+  across ground in full sunlight. **The normal is reconstructed, never
+  stored** -- the terrain shader derives its own the same way, so the two
+  agree by construction -- but **a plain derivative straddles a silhouette**
+  and averages two surfaces metres apart, so each axis takes whichever
+  neighbour is closer in depth. **An occluder far in front occludes nothing**,
+  or every silhouette casts a dark halo on the ground behind it. Both are
+  blurred before anything reads them, and **neither blur may cross a depth
+  step**. The occlusion joins **group 2**, which `SunViews` owns and both the
+  terrain and the sea declare -- there is no fourth bind group left -- and it
+  is read through a **clamped** `textureLoad`, because the off case is one
+  texel wide and a load outside a texture returns **zero**, which here means
+  fully shut in and would black the world out rather than leave it alone. Both
+  ship **off**; the case for either is a measurement on real hardware that
+  nobody has taken.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

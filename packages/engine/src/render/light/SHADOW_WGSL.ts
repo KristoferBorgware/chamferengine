@@ -47,6 +47,35 @@ struct CloudCover {
 @group(2) @binding(5) var cloudSample : sampler;
 
 /**
+ * How much of the sky each pixel can see, from {@link ScreenAmbient}.
+ *
+ * One texel of pure openness when the effect is off, so this is read the same
+ * way either way and no shader has a branch for a feature nobody turned on.
+ * Read with \`textureLoad\` at the fragment's own pixel: it is drawn at exactly
+ * the size the world is, so there is nothing to filter and nothing to round.
+ */
+@group(2) @binding(6) var openSky : texture_2d<f32>;
+
+/**
+ * What the ambient at this pixel is worth after what stands around it.
+ *
+ * **Only ever multiplied into the sky's share.** The sun either reaches a
+ * face or does not, and the cascades already answer that; scaling the whole
+ * pixel by an occlusion factor is the common mistake, and it draws dirt
+ * across ground in full sunlight.
+ */
+fn skyOpenAt(pixel : vec2f) -> f32 {
+	// **Clamped, because the off case is one texel wide.** A \`textureLoad\`
+	// outside a texture returns zero, and zero here means fully shut in -- so
+	// reading a 1280-wide screen position out of a 1x1 image would black the
+	// world out rather than leave it alone. Clamping costs one instruction
+	// and makes the two cases the same lookup, with no branch for a feature
+	// nobody turned on.
+	let last = vec2i(textureDimensions(openSky)) - vec2i(1);
+	return textureLoad(openSky, min(vec2i(pixel), last), 0).r;
+}
+
+/**
  * How far a sample is pushed off the surface before the shadow map is read.
  *
  * A surface drawn into the shadow map records its own depth, so reading that

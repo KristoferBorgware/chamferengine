@@ -742,6 +742,41 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.bloomOn,
 			},
 			{
+				key: "contactShadows",
+				label: "Contact shadows",
+				enabledWhen: (k) => !k.plain,
+				given: () => "a second pass over the geometry",
+			},
+			{
+				key: "contactReach",
+				label: "Contact reach",
+				digits: 1,
+				enabledWhen: (k) => !k.plain && k.contactShadows,
+			},
+			{
+				key: "contactStrength",
+				label: "Contact strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.contactShadows,
+			},
+			{
+				key: "bouncedLight",
+				label: "Bounced light",
+				enabledWhen: (k) => !k.plain,
+				given: () => "only from what is on screen",
+			},
+			{
+				key: "bounceReach",
+				label: "Bounce reach",
+				enabledWhen: (k) => !k.plain && k.bouncedLight,
+			},
+			{
+				key: "bounceStrength",
+				label: "Bounce strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.bouncedLight,
+			},
+			{
 				key: "superSample",
 				label: "Supersample",
 				digits: 2,
