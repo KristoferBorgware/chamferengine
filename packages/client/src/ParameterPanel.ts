@@ -793,6 +793,13 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.bloomOn,
 			},
 			{
+				key: "skyBounce",
+				label: "Sky bounce",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.skyExposure && !k.fullbright,
+				given: () => "the sky's bounce, not the sun's",
+			},
+			{
 				key: "ssao",
 				label: "SSAO",
 				enabledWhen: (k) => !k.plain,

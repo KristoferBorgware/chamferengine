@@ -831,6 +831,10 @@ async function main(): Promise<void> {
 			speckle: live.knobs.speckle ? SPECKLE : 0,
 			ambientOcclusion: live.knobs.ambientOcclusion,
 			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
+			// A blocked direction points at a lit surface, and some of what
+			// lands there comes back. Zero is the flat floor every enclosed
+			// face used to share.
+			skyBounce: live.knobs.skyBounce,
 		};
 	}
 

@@ -2034,6 +2034,28 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A BLOCKED DIRECTION POINTS AT A LIT SURFACE** (`skyExposure`, **Sky
+  bounce**, `tools/trial-skybounce.ts`, doc 16). The sky walk counts how much
+  taller each of a face's six neighbours is and clamps to a floor, and a
+  blocked direction was worth **nothing** -- so once every direction is
+  blocked there is nothing left to vary and **a shaft reads the same number at
+  its mouth and forty layers down**. Measured at reach 6, floor 0.12: every
+  depth from **6 layers and below shared one number, 0.120**. A blocked
+  direction now returns a share of what it intercepted, faded by how far the
+  blocker rises -- the part of a wall a cell sees from ten layers down is
+  itself ten layers into shadow. At **0.35** that is `0.295` at six layers
+  (**2.46x**), `0.237` at twelve, `0.166` at forty and `0.144` at eighty: a
+  gradient where there was a constant. **At zero it is the old reading to the
+  bit**, and an open face never moves at any setting, because it blocks
+  nothing so nothing is intercepted. **It costs nothing** -- the walk already
+  ran over data already in hand. Two things it does not do, both by
+  construction: it **carries no colour**, so a red wall does not tint the floor
+  beside it, and it is **the sky's bounce and never the sun's** -- it is baked
+  into the mesh and the sun moves, so a sunlit rim throws no warm patch on the
+  wall opposite. Both need light computed while the world is looked at rather
+  than while it is built, which is a light field and a milestone rather than a
+  term in a function. It joins `BAKED_KNOBS`, so it takes the re-mesh path and
+  stays out of a world's identity.
 - **SSAO MUST RUN BEFORE THE LIGHT IT CHANGES, AND SSGI IS THE ONE INDIRECT
   TERM THAT CAN RUN AFTER** (`Ssao`, `Ssgi`, `ScreenDepth`, doc 16). Two screen-space terms, and the difference between
   them decides everything about what each one costs. **Occlusion scales the

@@ -12,6 +12,7 @@ import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
+import { MESH_DEFAULTS } from "../MeshOptions.js";
 import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
@@ -43,6 +44,7 @@ export class MeshWorkerCore {
 	private speckle: number;
 	private ambientOcclusion: boolean;
 	private skyExposure: boolean;
+	private skyBounce: number;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -72,6 +74,7 @@ export class MeshWorkerCore {
 		this.speckle = setup.speckle ?? SPECKLE;
 		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.skyExposure = setup.skyExposure ?? true;
+		this.skyBounce = setup.skyBounce ?? MESH_DEFAULTS.skyBounce;
 		this.options = setup.terrain;
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
@@ -102,6 +105,7 @@ export class MeshWorkerCore {
 		this.speckle = message.speckle;
 		this.ambientOcclusion = message.ambientOcclusion;
 		this.skyExposure = message.skyExposure;
+		this.skyBounce = message.skyBounce;
 	}
 
 	run(job: MeshJob): MeshResult {
@@ -152,6 +156,7 @@ export class MeshWorkerCore {
 				speckle: this.speckle,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
+				skyBounce: this.skyBounce,
 				grid: this.grid
 					? {
 							...this.grid,
