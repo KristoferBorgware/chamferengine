@@ -10,6 +10,34 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-092 — The droplet walk has no caller inside the engine any more
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts`,
+`erodeFreeDroplets.ts`, `DROPLET.ts`, `ErosionOptions.ts`, `ErosionWalk.ts`
+
+**What happens.** Erosion in the new model is a **field**: a noise stack read
+through a curve that says, per place, how much of the relief survives there and
+how far the level is worn down with it. It is one lookup per map cell and it is
+on by default. The droplet walk is a different thing that happened to share the
+name -- a pass that moves material downhill over the finished map -- and it is
+off the map build entirely: no option, no stage, no call.
+
+**Why it is not deleted in the same turn.** `demos/noise-lab.html` ports both
+walks and `packages/engine/tests/demos/noiseLab.test.ts` digests the port
+against the engine's own, so the functions are still exercised and still
+documented. Deleting them means deciding what happens to that lab, which is a
+separate question from the terrain model.
+
+**What it costs to leave.** Five files and their tests, reachable from
+`chamfer/generation` and callable by anyone reading the barrel -- which is the
+part that matters, because the name `erosion` now means the field and a caller
+finding `erodeDroplets` beside it will reasonably think the two are related.
+
 ### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 
 **Kind:** risk

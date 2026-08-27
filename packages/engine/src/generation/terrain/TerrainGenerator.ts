@@ -2,11 +2,14 @@ import type { CoarseMap } from "../coarse/CoarseMap.js";
 import type { ColumnBand } from "./ColumnBand.js";
 import type { TerrainColumn } from "./TerrainColumn.js";
 import type { TerrainOptions } from "./TerrainOptions.js";
+import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import type { Vec3 } from "../../math/Vec3.js";
 import type { WorldShape } from "../../world/WorldShape.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
+import { carveIsRock, carveSeed } from "./carveDensity.js";
 import { caveDensity } from "./caveDensity.js";
+import { layerNoiseSettings } from "../coarse/layeredHeight.js";
 import { fbm } from "../noise/fbm.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
 import { positionToCell } from "../../addressing/lookup/positionToCell.js";
@@ -34,6 +37,17 @@ export class TerrainGenerator {
 
 	private readonly settings: Required<TerrainOptions>;
 
+	/**
+	 * The carve's octave stack, built once for the generator's whole life.
+	 *
+	 * It is a function of the layer's rows and the planet's radius, neither of
+	 * which moves while a generator exists, and it is read at every block of
+	 * every column -- rebuilding it per block was the whole of the layer's cost
+	 * before it was hoisted.
+	 */
+	private readonly carveNoise: NoiseSettings;
+	private readonly carveSeed: number;
+
 	constructor(
 		seed: number,
 		shape: WorldShape,
@@ -44,6 +58,13 @@ export class TerrainGenerator {
 		this.shape = shape;
 		this.map = map;
 		this.settings = { ...TERRAIN_DEFAULTS, ...options };
+		// The planet's own radius, which is what makes the layer's width a
+		// number in metres rather than a count of features round a sphere.
+		this.carveNoise = layerNoiseSettings(
+			this.settings.carve,
+			shape.seaLevelRadius,
+		);
+		this.carveSeed = carveSeed(seed);
 	}
 
 	/**
@@ -107,6 +128,25 @@ export class TerrainGenerator {
 
 		const depthBelow =
 			(layer - column.groundLayer + 1) * this.shape.blockSize;
+
+		// **The carve runs first, because it decides whether there is a block
+		// here at all** -- caves then hollow what it left, and the material
+		// rule paints what survives both.
+		if (
+			this.settings.carveLayer &&
+			!carveIsRock(
+				column.x,
+				column.y,
+				column.z,
+				this.shape.seaLevelRadius,
+				column.elevation,
+				depthBelow,
+				this.carveSeed,
+				this.settings.carve,
+				this.carveNoise,
+			)
+		)
+			return BlockType.AIR;
 
 		if (this.settings.caves) {
 			const radius = this.shape.radiusOfLayer(layer);

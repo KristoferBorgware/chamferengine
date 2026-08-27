@@ -6,6 +6,7 @@ import {
 	TerrainGenerator,
 	BlockType,
 	buildCoarseMap,
+	maxElevationFor,
 	coarseChunkKey,
 	generateChunk,
 	seedFromString,
@@ -29,9 +30,20 @@ const SEED = seedFromString("worker");
 let map: CoarseMap;
 let shape: WorldShape;
 
+/**
+ * A world whose ground fits the crust the shape below has.
+ *
+ * The height is no longer fitted to its own peak, so the ground spans
+ * `-(seaDepth + peakRelief)` to `relief + peakRelief` and a fixture has to say
+ * both halves. At this depth a block is about 4 m and the crust is 40 of them,
+ * so there are 160 m of it: `120` above the waterline and `40` below.
+ */
+const MAP = { level: 5, relief: 100, peakRelief: 20, seaDepth: 20 } as const;
+const MAX_ELEVATION = maxElevationFor(MAP);
+
 beforeAll(() => {
-	shape = new WorldShape(1700, DEPTH, 150, LAYERS);
-	map = buildCoarseMap(SEED, { level: 5 });
+	shape = new WorldShape(1700, DEPTH, MAX_ELEVATION, LAYERS);
+	map = buildCoarseMap(SEED, MAP);
 });
 
 function setup() {
@@ -40,7 +52,7 @@ function setup() {
 		map: map.toSnapshot(),
 		seaLevelRadius: 1700,
 		subdivisionDepth: DEPTH,
-		maxElevation: 150,
+		maxElevation: MAX_ELEVATION,
 		crustDepth: LAYERS,
 		apron: true,
 		terrain: {},
