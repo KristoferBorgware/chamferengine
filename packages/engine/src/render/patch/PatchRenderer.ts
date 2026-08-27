@@ -2,6 +2,8 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PatchGeometry } from "../../mesh/PatchGeometry.js";
 import { PATCH_SHADER } from "./PATCH_SHADER.js";
 import { PATCH_STRIDE } from "../../mesh/PatchGeometry.js";
+import type { ShadowBox } from "./PatchShadow.js";
+import { PatchShadow } from "./PatchShadow.js";
 import {
 	PATCH_FILL_SHARE,
 	PATCH_HEAD_LIFT,
@@ -31,6 +33,16 @@ export interface PatchLook {
 
 	/** Metres across the patch, which is what the light dome is sized from. */
 	readonly span: number;
+
+	/**
+	 * Whether the key and the fill cast a shadow.
+	 *
+	 * Only those two: the one overhead and the one at the camera have none,
+	 * because between them they are what keeps every face readable, and a face
+	 * they could not reach is a face nothing says anything about.
+	 */
+	readonly keyShadow: boolean;
+	readonly fillShadow: boolean;
 
 	/** Which control layer a picture of one layer draws. */
 	readonly layer: "continent" | "erosion" | "peaks" | "carve";
@@ -108,15 +120,26 @@ export interface PatchUpload {
 	 */
 	readonly groundVertices?: number;
 
+	/**
+	 * The box the mesh fills, which is what a shadow map is fitted to.
+	 *
+	 * A patch's width says nothing about how far its crust runs down, and the
+	 * lip hanging off the rim is geometry that casts.
+	 */
+	readonly bounds?: {
+		readonly low: readonly [number, number, number];
+		readonly high: readonly [number, number, number];
+	};
+
 	/** How many the sea drew, blended after every opaque one. */
 	readonly waterVertices?: number;
 }
 
 /**
- * A matrix, the light, the mode, the numbers the pictures read, and the light
- * that follows the camera.
+ * A matrix, the light, the mode, the numbers the pictures read, the light that
+ * follows the camera, and the two the shadows are read from.
  */
-const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 16;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 16 + 64 + 64 + 16;
 
 /**
  * Draws one patch of the surface, cell by cell.
@@ -130,6 +153,8 @@ export class PatchRenderer {
 	private readonly solidPipeline: GPURenderPipeline;
 	private readonly linePipeline: GPURenderPipeline;
 	private readonly seaPipeline: GPURenderPipeline;
+	private readonly shadow: PatchShadow;
+	private readonly shadowGroup: GPUBindGroup;
 	/**
 	 * Two of everything the shader reads, because the rims are drawn in the
 	 * same pass as the surface and differ by one number.
@@ -158,6 +183,7 @@ export class PatchRenderer {
 	private triangleCount = 0;
 	private lineCount = 0;
 	private groundVertices = 0;
+	private bounds: ShadowBox = { low: [-1, -1, -1], high: [1, 1, 1] };
 	private waterVertices = 0;
 	private depth: GPUTexture | null = null;
 
@@ -226,8 +252,43 @@ export class PatchRenderer {
 				],
 			},
 		];
+		// **The shadows live in their own group**, because a texture and a
+		// sampler cannot go in a uniform buffer and every pipeline here shares
+		// one layout -- so the maps are bound once and read by whichever draw
+		// asks for them.
+		this.shadow = new PatchShadow(ctx, 2);
+		const shadowLayout = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: { sampleType: "depth" },
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: { sampleType: "depth" },
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "comparison" },
+				},
+			],
+		});
+		this.shadowGroup = device.createBindGroup({
+			layout: shadowLayout,
+			entries: [
+				{ binding: 0, resource: this.shadow.view(0) },
+				{ binding: 1, resource: this.shadow.view(1) },
+				{
+					binding: 2,
+					resource: device.createSampler({ compare: "less" }),
+				},
+			],
+		});
 		const pipelineLayout = device.createPipelineLayout({
-			bindGroupLayouts: [layout],
+			bindGroupLayouts: [layout, shadowLayout],
 		});
 		const make = (
 			topology: GPUPrimitiveTopology,
@@ -283,6 +344,7 @@ export class PatchRenderer {
 		this.vertices = null;
 		this.triangleCount = patch.triangleCount;
 		this.groundVertices = patch.groundVertices ?? 0;
+		if (patch.bounds) this.bounds = patch.bounds;
 		this.waterVertices = patch.waterVertices ?? 0;
 		// **Indices only when the patch moved.** A patch whose ground changed
 		// draws the same triangles between the same vertices -- the shape of a
@@ -473,6 +535,43 @@ export class PatchRenderer {
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,
 		);
+		// **The depth passes come first, in the same command buffer.** What they
+		// record is what the world pass then reads, so a frame that drew the
+		// world first would shade it against the shadow of the frame before --
+		// which on a turning camera is a shadow that lags one frame behind
+		// everything casting it.
+		const encoder = device.createCommandEncoder();
+		const casting: [number, readonly number[], boolean][] = [
+			[0, PATCH_KEY, look.keyShadow],
+			[1, patchFill(), look.fillShadow],
+		];
+		for (const [light, direction, on] of casting) {
+			// **A map nobody recorded is cleared to the far plane**, which
+			// every comparison passes -- so a switch that is off reads as no
+			// shadow rather than as everything in shadow, and the fragment's
+			// own toggle need not agree with this loop to be safe.
+			if (!on || !this.vertices || this.groundVertices === 0) continue;
+			this.shadow.record(
+				encoder,
+				light,
+				[direction[0]!, direction[1]!, direction[2]!],
+				this.bounds,
+				this.vertices,
+				this.groundVertices,
+			);
+		}
+		this.data.set(this.shadow.matrices[0]!, 36);
+		this.data.set(this.shadow.matrices[1]!, 52);
+		this.data.set(
+			[
+				look.keyShadow ? 1 : 0,
+				look.fillShadow ? 1 : 0,
+				this.shadow.texel,
+				this.shadow.bias,
+			],
+			68,
+		);
+
 		device.queue.writeBuffer(this.uniform, 0, this.data);
 		this.data[21] = 1;
 		device.queue.writeBuffer(this.rimUniform, 0, this.data);
@@ -496,7 +595,6 @@ export class PatchRenderer {
 			this.data[21] = 0;
 		}
 
-		const encoder = device.createCommandEncoder();
 		const pass = encoder.beginRenderPass({
 			colorAttachments: [
 				{
@@ -520,6 +618,7 @@ export class PatchRenderer {
 		});
 		if (this.vertices && (this.indices || this.groundVertices > 0)) {
 			pass.setBindGroup(0, this.bindGroup);
+			pass.setBindGroup(1, this.shadowGroup);
 			pass.setVertexBuffer(0, this.vertices);
 			if (look.surface !== "wire") {
 				pass.setPipeline(this.solidPipeline);
@@ -555,6 +654,7 @@ export class PatchRenderer {
 		}
 		if (look.showLights && this.lamps && this.lampVertices > 0) {
 			pass.setBindGroup(0, this.lampBindGroup);
+			pass.setBindGroup(1, this.shadowGroup);
 			pass.setPipeline(this.solidPipeline);
 			pass.setVertexBuffer(0, this.lamps);
 			pass.draw(this.lampVertices);
@@ -572,6 +672,7 @@ export class PatchRenderer {
 		this.rimUniform.destroy();
 		this.seaUniform.destroy();
 		this.lampUniform.destroy();
+		this.shadow.dispose();
 		this.lamps?.destroy();
 	}
 }

@@ -239,6 +239,7 @@ export class BenchWorkerCore {
 				triangleCount: mesh.groundVertices / 3,
 				groundVertices: mesh.groundVertices,
 				waterVertices: mesh.waterVertices,
+				bounds: mesh.bounds,
 				rawLow: mesh.rawLow,
 				rawHigh: mesh.rawHigh,
 			};

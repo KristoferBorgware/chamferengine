@@ -92,8 +92,74 @@ struct View {
 	ground   : vec4f,
 	/** The direction of the light that follows the camera. */
 	head     : vec4f,
+	/** Where the key and the fill each recorded the patch from. */
+	keyLight : mat4x4f,
+	fillLight: mat4x4f,
+	/**
+	 * x: the key's shadow is on. y: the fill's is on. z: one texel of the map.
+	 * w: how far a sample is pushed toward the light before it is compared.
+	 */
+	shadow   : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
+
+/**
+ * What each light recorded, and the sampler that compares against it.
+ *
+ * **Nine comparisons, not nine depths.** A comparison sampler filters the
+ * answers -- is this point behind the surface the light saw -- and filtering
+ * the depths instead averages two surfaces and puts a shadow halfway up a wall.
+ */
+@group(1) @binding(0) var keyDepth  : texture_depth_2d;
+@group(1) @binding(1) var fillDepth : texture_depth_2d;
+@group(1) @binding(2) var depthCompare : sampler_comparison;
+
+/**
+ * How much of one light reaches a point.
+ *
+ * The map is recorded along the light, so a point behind the nearest surface it
+ * saw is in shadow. Nine taps a texel apart soften the edge, which is what
+ * keeps a 2,048-texel map from drawing a staircase along every shadow it casts.
+ *
+ * **Outside the map is lit, not shadowed.** The box is fitted to the mesh, so
+ * anything outside it is something the light never had a chance to record --
+ * and a clamped read at the rim would smear the edge column across everything
+ * beyond it.
+ */
+fn reaches(
+	depth : texture_depth_2d,
+	lightViewProj : mat4x4f,
+	world : vec3f,
+	facing : f32,
+) -> f32 {
+	let clip = lightViewProj * vec4f(world, 1.0);
+	let ndc = clip.xyz / clip.w;
+	if (ndc.z < 0.0 || ndc.z > 1.0) {
+		return 1.0;
+	}
+	let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+		return 1.0;
+	}
+	// **A face turned away from the light needs no map to be dark**, and
+	// asking anyway is what makes the far side of every column stripe: it is
+	// exactly the surface that recorded the depth it is being compared with.
+	if (facing <= 0.0) {
+		return 1.0;
+	}
+	// The bias eases off as a face turns edge-on to the light, where one texel
+	// of the map covers the most depth.
+	let slope = view.shadow.w * (1.0 + 2.0 * (1.0 - facing));
+	let at = ndc.z - slope;
+	var sum = 0.0;
+	for (var y = -1; y <= 1; y++) {
+		for (var x = -1; x <= 1; x++) {
+			let tap = uv + vec2f(f32(x), f32(y)) * view.shadow.z;
+			sum = sum + textureSampleCompareLevel(depth, depthCompare, tap, at);
+		}
+	}
+	return sum / 9.0;
+}
 
 struct VertexOut {
 	@builtin(position) clip   : vec4f,
@@ -123,6 +189,9 @@ struct VertexOut {
 	 * hardest thing to read on a preview whose whole subject is that lattice.
 	 */
 	@location(5)       shade  : f32,
+
+	/** Where this fragment is, which is what a shadow map is read at. */
+	@location(6)       world  : vec3f,
 };
 
 @vertex
@@ -141,6 +210,7 @@ fn vertexMain(
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
 	out.shade = shade;
+	out.world = position;
 	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
@@ -206,7 +276,7 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
  * stands at an angle moves. A picture of a number rather than of a place takes
  * less of it: the light is there to show the shape, not to be read off.
  */
-fn lightOn(normal : vec3f, direct : f32) -> f32 {
+fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 	let n = normalize(normal);
 	let key = normalize(view.sun.xyz);
 	// **A key light alone leaves half the shape unreadable.** Every face turned
@@ -218,9 +288,25 @@ fn lightOn(normal : vec3f, direct : f32) -> f32 {
 	// PATCH_LIGHTS.ts for why it stays above the horizon.
 	let fill = normalize(vec3f(${patchFill().join(", ")}));
 	let top = vec3f(0.0, 1.0, 0.0);
+	// **Each light is shadowed by its own map and by nothing else.** The one
+	// overhead and the one at the camera have none, and that is deliberate:
+	// between them they are what keeps every face readable, and a face they
+	// could not reach is a face nothing says anything about.
+	let toKey = max(0.0, dot(n, key));
+	let toFill = max(0.0, dot(n, fill));
+	let keyOpen = select(
+		1.0,
+		reaches(keyDepth, view.keyLight, world, toKey),
+		view.shadow.x > 0.5,
+	);
+	let fillOpen = select(
+		1.0,
+		reaches(fillDepth, view.fillLight, world, toFill),
+		view.shadow.y > 0.5,
+	);
 	let lit =
-		max(0.0, dot(n, key)) +
-		KEY_FILL * max(0.0, dot(n, fill)) +
+		toKey * keyOpen +
+		KEY_FILL * toFill * fillOpen +
 		KEY_TOP * max(0.0, dot(n, top)) +
 		KEY_HEAD * max(0.0, dot(n, view.head.xyz));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
@@ -229,8 +315,8 @@ fn lightOn(normal : vec3f, direct : f32) -> f32 {
 }
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
-fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
-	let lit = min(tint * lightOn(normal, direct) * view.ground.z, vec3f(1.0));
+fn shade(tint : vec3f, normal : vec3f, world : vec3f, direct : f32) -> vec4f {
+	let lit = min(tint * lightOn(normal, world, direct) * view.ground.z, vec3f(1.0));
 	return vec4f(pow(lit, vec3f(1.0 / 2.2)), 1.0);
 }
 
@@ -266,7 +352,10 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let through = 1.0 - exp(in.metres / SEA_CLARITY);
 		let water = mix(SEA_SHALLOW, SEA_DEEP, through);
 		let lit = pow(
-			min(water * lightOn(in.normal, SUN_SHARE) * view.ground.z, vec3f(1.0)),
+			min(
+				water * lightOn(in.normal, in.world, SUN_SHARE) * view.ground.z,
+				vec3f(1.0),
+			),
 			vec3f(1.0 / 2.2),
 		);
 		return vec4f(lit, mix(0.42, 0.94, through));
@@ -282,7 +371,12 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			0.0,
 			1.0,
 		);
-		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.4);
+		return shade(
+			mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t),
+			in.normal,
+			in.world,
+			0.4,
+		);
 	}
 	if (picture == 2) {
 		let t = clamp(
@@ -293,6 +387,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return shade(
 			mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
 			in.normal,
+			in.world,
 			0.35,
 		);
 	}
@@ -306,7 +401,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
 		let into = t * PICTURE_BANDS - step;
 		let edge = select(1.0, 0.45, into < 0.06);
-		return shade(vec3f(grey * edge), in.normal, 0.3);
+		return shade(vec3f(grey * edge), in.normal, in.world, 0.3);
 	}
 
 	var tint : vec3f;
@@ -328,6 +423,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	return shade(
 		contoured(tint * in.shade, in.height),
 		in.normal,
+		in.world,
 		SUN_SHARE,
 	);
 }

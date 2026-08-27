@@ -339,6 +339,21 @@ export interface PlanetKnobs {
 	 * themselves, because a lamp lit by the rig it is a picture of would be a
 	 * picture of something else.
 	 */
+	/**
+	 * Whether the key and the fill cast a shadow on the bench.
+	 *
+	 * **Only those two, and not cascades.** Cascades exist because a view of a
+	 * world is unbounded -- the near ground wants centimetres a texel and the
+	 * far ground cannot have them -- and a bench patch is a box whose corners
+	 * are all known before anything is drawn, so one map fitted to that box
+	 * beats any number of pieces over it. The light overhead and the one at the
+	 * camera cast nothing: between them they are what keeps every face
+	 * readable, and a face they could not reach is a face nothing says anything
+	 * about.
+	 */
+	keyShadow: boolean;
+	fillShadow: boolean;
+
 	showLights: boolean;
 
 	/**
@@ -964,6 +979,8 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLongitude: -20,
 	patchCells: 32,
 	patchDetail: 2,
+	keyShadow: false,
+	fillShadow: false,
 	showLights: false,
 	patchLight: 1.5,
 	patchPicture: "ground",
@@ -1393,6 +1410,8 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "\u00b0",
 	},
 	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	keyShadow: { ...TOGGLE, rebuilds: false },
+	fillShadow: { ...TOGGLE, rebuilds: false },
 	showLights: { ...TOGGLE, rebuilds: false },
 	patchLight: { low: 0.4, high: 3, step: 0.1, rebuilds: false, unit: "x" },
 	patchDetail: {

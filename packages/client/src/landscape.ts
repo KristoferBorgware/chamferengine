@@ -338,6 +338,8 @@ const look = {
 	showLights: false,
 	span: 1,
 	light: 1,
+	keyShadow: false,
+	fillShadow: false,
 };
 
 /**
@@ -425,6 +427,7 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 			triangleCount: reply.geometry.triangleCount,
 			groundVertices: reply.geometry.groundVertices,
 			waterVertices: reply.geometry.waterVertices,
+			bounds: reply.geometry.bounds,
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
@@ -638,6 +641,8 @@ function render(): void {
 	look.eye = [eye.x, eye.y, eye.z];
 	look.showLights = k.showLights;
 	look.light = k.patchLight;
+	look.keyShadow = k.keyShadow;
+	look.fillShadow = k.fillShadow;
 	look.span = span;
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(

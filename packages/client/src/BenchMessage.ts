@@ -142,6 +142,17 @@ export interface BenchGeometry {
 	readonly groundVertices: number;
 	readonly waterVertices: number;
 
+	/**
+	 * The box the mesh fills, which a shadow map is fitted to.
+	 *
+	 * A patch's width says nothing about how far its crust runs down, and the
+	 * lip hanging off the rim is geometry that casts.
+	 */
+	readonly bounds: {
+		readonly low: readonly [number, number, number];
+		readonly high: readonly [number, number, number];
+	};
+
 	/** What the field reached in this patch, which the Raw picture is drawn against. */
 	readonly rawLow: number;
 	readonly rawHigh: number;

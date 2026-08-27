@@ -84,6 +84,19 @@ export interface ColumnMesh {
 
 	/** Metres from one side of the drawn shape to the other. */
 	readonly span: number;
+
+	/**
+	 * The box the mesh actually fills, in the patch's own frame.
+	 *
+	 * **What a shadow map has to cover is the shape, and only the shape knows
+	 * what that is.** A patch's width says nothing about how far its crust runs
+	 * down, and a box guessed from the ground's own range misses the lip and
+	 * every wall hanging off the rim -- which is geometry that casts.
+	 */
+	readonly bounds: {
+		readonly low: readonly [number, number, number];
+		readonly high: readonly [number, number, number];
+	};
 }
 
 /**
@@ -573,6 +586,7 @@ export function columnPatchMesh(
 		rawLow: count ? rawLow : 0,
 		rawHigh: count ? rawHigh : 0,
 		lines: Uint32Array.from(rims),
+		bounds: { low: [loX, loY, loZ], high: [hiX, hiY, hiZ] },
 		landShare: count ? land / count : 0,
 		span: Math.max(hiX - loX, hiZ - loZ, 1),
 	};

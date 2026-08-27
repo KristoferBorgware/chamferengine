@@ -392,6 +392,18 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **One map fitted to the patch, not cascades.** Cascades exist
+				// because a view of a world is unbounded; this patch is a box
+				// whose corners are known before anything is drawn, so one map
+				// over it is finer than any number of pieces would be.
+				key: "keyShadow",
+				label: "Shadow from the key",
+			},
+			{
+				key: "fillShadow",
+				label: "Shadow from the fill",
+			},
+			{
 				// **A light with no direction you can see is a light you tune
 				// by guessing.** These are directions rather than places, so
 				// each one is drawn on a dome around the patch, sized by how
