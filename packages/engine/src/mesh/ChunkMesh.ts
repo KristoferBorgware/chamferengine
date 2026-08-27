@@ -1,4 +1,5 @@
 import type { Box } from "../math/Box.js";
+import type { ProbeVolume } from "../light/probeVolume.js";
 import type { Geometry } from "./Geometry.js";
 import type { MeshTally } from "./meshChunk.js";
 import type { Vec3 } from "../math/Vec3.js";
@@ -33,4 +34,10 @@ export interface ChunkMesh {
 	readonly opaque: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
+
+	/**
+	 * How much light reaches each point of a sparse grid inside this chunk,
+	 * and which way it comes from. Absent when probes are switched off.
+	 */
+	readonly probes?: ProbeVolume;
 }

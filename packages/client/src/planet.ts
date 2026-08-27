@@ -835,6 +835,8 @@ async function main(): Promise<void> {
 			// lands there comes back. Zero is the flat floor every enclosed
 			// face used to share.
 			skyBounce: live.knobs.skyBounce,
+			// Zero is off, and off means no volume is built and none travels.
+			probeSpacing: live.knobs.lightProbes ? live.knobs.probeSpacing : 0,
 		};
 	}
 
@@ -2433,6 +2435,17 @@ async function main(): Promise<void> {
 		renderer.superSample = current.knobs.superSample;
 		// Both screen-space terms, each on its own switch. SSAO costs a second
 		// pass over the geometry and SSGI does not, so they are never one row.
+		// The probes are built per chunk and read per fragment, so the switch
+		// is really two: whether a volume exists at all, which needs the
+		// chunks again, and what it is worth, which does not.
+		renderer.probeStrength =
+			!PLAIN && current.knobs.lightProbes
+				? current.knobs.probeStrength
+				: 0;
+		renderer.showProbes =
+			!PLAIN && current.knobs.lightProbes && current.knobs.showProbes;
+		renderer.crustTopRadius = shape.crustTopRadius;
+		renderer.layerHeight = shape.blockSize;
 		renderer.ssaoOn = !PLAIN && current.knobs.ssao;
 		renderer.ssao.reach = current.knobs.ssaoReach;
 		renderer.ssao.strength = current.knobs.ssaoStrength;
