@@ -10,7 +10,7 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-090 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
+### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 
 **Kind:** risk
 **Milestone:** 0.5.0
@@ -45,6 +45,40 @@ and longitude written in a link mean a different place than they did, across
 every lab at once — which is an argument for doing all three in one change
 rather than for leaving it.
 
+### F-090 — Nothing in the vegetation lab checks any more that a chunk generates the same stand alone
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, rebuilding `demos/vegetation-lab.html` around vegetation
+layers
+**Where:** `demos/vegetation-lab.html`
+
+**What happens.** The lab still cuts the patch into chunks and still grows every
+plant within reach of a chunk's rim from the address and the seed alone -- that
+part is unchanged and is not a switch any more, because the other way is not on
+offer. What is gone is the **audit**: the second pass that generated the same
+ground in one piece and compared it cell for cell, which read **0 cells differ**
+and climbed to **704** at an 8 m reach and **10,702** at none. It was a
+checkbox in the `Chunks` section, and that section came off the panel with the
+`Ground` one when the layers arrived.
+
+**Why it matters more now than it did.** Every rule the audit was watching is
+now **per layer**: a layer's hash salt, its own noise stack, its own curve, the
+order the layers are offered a cell in. Any of those read from something a
+chunk cannot know -- a list position, a neighbour's answer, the patch's own
+frame -- and two chunks would disagree about a tree on their boundary. The rank
+rule alone once took the audit from 0 to 10 differing cells, and it was one line.
+
+**What it would take.** The pass itself is thirty lines and it still exists in
+git; what it needs is somewhere to live now that its section is gone. The
+honest place is the readout in the left panel, as a fact rather than a knob --
+it belongs with the other things read back off the ground after the fact. The
+cost is what took it off in the first place: a second full generation, which
+roughly doubles a rebuild. So it wants to run on a settled draft only, the way
+it used to, or behind a key nobody presses by accident.
+
 ### F-089 — Growing a stand of plants is one synchronous stretch, and it is already cut into the pieces a worker pool wants
 
 **Kind:** gap
@@ -56,12 +90,11 @@ into the engine
 **Where:** `demos/vegetation-lab.html`, `packages/engine/src/mesh/worker/`
 
 **What happens.** The lab rebuilds the whole stand inside one animation-frame
-callback. At level 0 that is **2,367 ms** of unbroken JavaScript on the
-thread that draws, so nothing on the page answers for the whole of it -- a
-slider dragged across its range queues one of these per settle and the panel
-locks up. Five algorithmic fixes took it from **4,990 ms**, and the shape did
-not change: it is still one task, and the next factor of two would not change it
-either.
+callback. At level 0 that is **1,595 ms** of unbroken JavaScript on the thread
+that draws, so nothing on the page answers for the whole of it -- a slider
+dragged across its range queues one of these per settle and the panel locks up.
+Nine algorithmic fixes took it from **4,990 ms**, and the shape did not change:
+it is still one task, and the next factor of two would not change it either.
 
 **Why the shape is the answer rather than the constant.** Vegetation here is
 terrain -- a plant is blocks, drawn by the chunk's own mesher at the chunk's own
@@ -84,11 +117,14 @@ clock by very nearly `n`, and the freeze goes away outright at `n = 1`.
 
 **What this is not.** It is not a reason to stop optimising: a worker pool moves
 the work off the drawing thread and does not make it smaller, and the engine
-runs a chunk mesher on those same cores already. The two remaining terms are
-`gather`, which walks a hexagon disc around every cell a rod's axis passes
-through and is the largest single term left in the profile after the two stamps
-themselves, and the leaf cut's noise, which is still read once per candidate
-cell of every cluster inside the shell where the answer is undecided.
+runs a chunk mesher on those same cores already. What is left in the profile is
+flat -- the leaf stamp is still the largest single term at about a quarter of
+the rebuild, and after it come terrain noise, the position-to-cell pipeline the
+rod walk runs at every step, and the mesher, none of them far apart. The one
+named lead is that pipeline: `faceOf` searches all twenty face centroids at
+every step of every rod, where the shadow march already **rechecks the face it
+was last in** rather than searching, which is three dot products against
+twenty.
 
 ### F-088 — The multi-noise lab evaluates terrain noise at every block; the engine reads a coarse map and ramps between readings
 

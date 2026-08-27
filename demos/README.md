@@ -732,6 +732,24 @@ question.
 The three field pictures are cut into grey bands: a smooth wash shows a field's
 brightness and hides its shape, and the band edges are its contours.
 
+**Two panels, one on each side, because a layer and the world it draws on are
+different questions.** The right panel is the four layers and nothing else —
+each with its switch, its curve, its picture and its five noise rows. The left
+panel is everything that is not one of the four: **World**, the size and place
+of the planet and the patch on it; **Preview**, what the pictures show;
+**Ground**, the metres the curves are scaled into; **Contour**; and the ground
+picture and the readout, which are what the four layers made rather than one of
+the four. Moving a slider in one never has to be cross-referenced against a
+heading in the other.
+
+**On a phone each panel is its own shut drawer, with its own button.** 340 px of
+knobs against a 390 px screen means only one drawer can usefully be open at a
+time, so **Terrain** and **World** sit at opposite corners and answer for their
+own panel alone — opening one never closes the other. Each button moves above
+its own drawer when open, so the way out is never under the thing it opened. On
+a desktop neither button is on the page — the panels sit either side of the view
+and never cover it.
+
 **Every knob is in the address bar**, curves included, and only where it differs
 from the default.
 
@@ -792,21 +810,97 @@ to put a passage at any depth pays for that freedom.
 
 ### [`vegetation-lab.html`](vegetation-lab.html)
 **Trees grown from the planet seed, as blocks, with nothing authored and
-nothing placed.** Twelve species from pine to heather, a stand of them on a
-hillside of hexagon columns, and every number that decides a shape on the
-panel beside it.
+nothing placed.** A stand on a hillside of hexagon columns, and every number
+that decides a shape on the panel beside it.
+
+**A kind of plant is a layer, and a layer is a whole noise field.** **+
+Vegetation** adds one; it carries a species, a density, its own stack of
+octaves, its own curve on that field, its own picture of where it grows, and
+its own trunk, branches and leaves. Nothing is shared between two layers but
+the world they stand on. That is the difference between this and a species
+dropdown with a mixing switch, and it is the whole point: a stand of pine along
+one coast and oak inland is a statement about **places**, and a density is a
+statement about a planet. There is no number a single species list could carry
+that says *here and not there*.
+
+**The curve is what makes a field a place.** Its x axis is the layer's own
+noise, `-1` to `+1`; its y axis is how much of **Density** that reading takes.
+Flat at the top is a layer that grows everywhere it is allowed; a step is a
+tree line; a hump is a belt. **Density and the curve answer different
+questions** — the curve says *where* and the slider says *how many* — so
+re-drawing one never undoes the other.
+
+**The bars behind a curve are what makes its x axis mean anything.** A field's
+range is `-1` to `+1` and it reaches nowhere near either end, so equal widths of
+a curve cover wildly unequal amounts of ground: a drag near the middle moves a
+fifth of the land and the same drag out at the end reaches a couple of percent
+of it. They are counted over the planet at level 5 — a patch is a place, and a
+place can sit entirely on one side of a curve while the world is spread across
+all of it — and **over the land alone**, because a vegetation curve is read on
+land and nowhere else and the sea is most of a planet with continents on it.
+Drawn behind the curve rather than under it, so the two share an x axis exactly
+and nothing has to be lined up by eye.
+
+**A layer's picture answers two questions and only one of them at a time.**
+**Layers show** switches every layer's picture together: `noise` is the reading
+itself, black at `-1` and white at `+1`, over the whole field with the sea
+included, because a field has a value everywhere and the ground picture above it
+already says where the land is; `density` is that reading through the curve, in
+the layer's own green, with the sea left black because nothing grows in it.
+**Noise is the default**, because a reader arriving at a layer is about to draw
+a curve, and a curve cannot be drawn against a picture the curve has already
+been applied to — past the ends of a curve every value is one colour, which is
+exactly where you need to see whether there is anything out there.
+
+**A cell holds one plant, so the order of the cards is the tie-break.** Each
+layer rolls its own hash against its own density at every root and the first
+that wants the cell takes it, which makes a layer's density its share of what
+is **left** rather than of the ground. Any other rule needs the layers to know
+about each other, and a layer that reads its neighbour is not a layer. **A
+layer's hash salt is its id, never its position in the list**, so deleting the
+first of three does not re-sow the other two.
+
+**Species is a template, not an identity.** Picking one writes its numbers into
+the rows below and they stay editable, so two layers both named `Oak` that have
+been dragged apart are two different trees. **Custom** is a species like the
+rest — spelled out rather than left as a gap, so a layer built from it opens
+with numbers a reader can see and drag.
+
+**The terrain is the multi-noise lab's, frozen, and a seed is the whole of the
+input.** This lab is about what grows on a hillside and not about the hillside,
+and the two want opposite things from a panel: a landscape lab earns its length
+by putting every term of the model on screen, and here each of those rows is a
+row between a reader and the plants. So the three fields, the three curves and
+the eight metre knobs are all the other lab's, at its own shipped numbers, with
+nothing exposed. **One stack of octaves was what stood here before, and it is
+what a planting field cannot be tuned against**: fBm is homogeneous, so one
+statistic describes the whole planet and there is no shore, no plain and no
+range for a species to prefer. A layer that says *lowland near the coast* needs
+a world that has one.
+
+**The picture is the planet, and clicking it is how you go somewhere.** Two
+sliders are not a way to look for a place. **Pictures show** switches the ground
+picture and every layer's picture together — planet or patch — because two
+pictures of different places are not a comparison, and over the planet a click
+puts the patch where the finger went while a right-click enlarges. Most of a
+planet with a real continent model is ocean, so the page opens at a latitude and
+longitude picked off the picture rather than wherever a homogeneous world used
+to leave land.
 
 **A tree is a skeleton, not a threshold, and that was measured rather than
-argued.** Growing wood wherever a noise field crosses a threshold is the
-obvious idea. Over a 64 m box at 4% fill it gives **172 separate pieces with
-1.7% of the wood touching the ground** — a cloud of floating fragments, which
-is debris rather than a tree. Two fields intersected reach **10.0%**, because
-the crossing of two level sets really is a curve in three dimensions and noise
-really does hold long filaments; they are still rooted nowhere. And gating the
-field by height, which is the natural way to say *no branches near the ground*,
-takes it to **0.0% both times** — the gate's job is to delete wood near the
-ground, and the trunk is the wood near the ground. The same measurement over a
-hashed skeleton is **one piece, 100% of it standing on the ground**.
+argued.** Growing wood wherever a noise field crosses a threshold is the obvious
+idea. Over a 64 m box at 4% fill it gives **172 separate pieces with 1.7% of the
+wood touching the ground** — a cloud of floating fragments, which is debris
+rather than a tree. Two fields intersected reach **10.0%**, because the crossing
+of two level sets really is a curve in three dimensions and noise really does
+hold long filaments; they are still rooted nowhere. And gating the field by
+height, which is the natural way to say *no branches near the ground*, takes it
+to **0.0% both times** — the gate's job is to delete wood near the ground, and
+the trunk is the wood near the ground. The same measurement over a hashed
+skeleton is **one piece, 100% of it standing on the ground**. The switch that
+ran the comparison is gone, because the comparison is over; the readout that
+decided it stays, and says **how many separate pieces** the wood is in and **how
+much of it is standing on the ground**.
 
 **That matters beyond looks.** The repair for a disconnected field is a flood
 fill from the trunk, and a flood fill is a global query: whether a cell survives
@@ -815,19 +909,12 @@ pure function of the address — a chunk generates its own rim rather than askin
 the chunk next door, which is what the mesher, the apron and every level of
 detail rest on. **Nothing that needs a flood fill can be terrain.**
 
-**Grown from** switches between the two on the same grid, and the readout says
-**how many separate pieces** the wood is in and **how much of it is standing on
-the ground**. At the shipped thickness the field mode reads **429 pieces, 2.7%
-rooted** against the skeleton's **100%**, and the picture is the finding: brown
-fragments hanging in the air over a bare hillside.
-
-**So noise does the other job, which is the one it is good at.** It bends the
-branches — each step of a limb leans by a lookup at its own position, so no two
-branches repeat and a whole stand leans together, off the same field the ground
-was read from. It
-cuts the leaf clusters, which is what makes a canopy rather than a ball. And
-the height gate survives, pointed at how much splitting is allowed rather than
-at what is wood: **First branch** is bare trunk under a fraction of the height.
+**So noise does the other job, which is the one it is good at.** It says where a
+layer grows. It bends the branches — each step of a limb leans by a lookup at
+its own position, so no two branches repeat and a whole stand leans together. It
+cuts the leaf clusters, which is what makes a canopy rather than a ball. And the
+height gate survives, pointed at how much splitting is allowed rather than at
+what is wood: **First branch** is bare trunk under a fraction of the height.
 
 **A branch is a direction in three dimensions, never a walk along the neighbour
 ring.** A heading carried along a path here does not close — a loop round an odd
@@ -854,12 +941,6 @@ scaled barycentric weights — and **a map cell is a straight ramp, not a
 plateau**: one height per map cell handed to every block under it builds a
 staircase of 16 m treads with a cliff at every edge.
 
-**A species is a bundle of numbers, never a model.** Picking one writes its
-numbers into the rows below and they stay editable, so the list is a set of
-starting points. **Mixed stand** hashes a species per plant out of the twelve,
-and the one named in **Species** is the one the panel is editing. **Size
-spread** scales each plant off its own hash, so a stand has saplings in it.
-
 **Collision is not a second system.** A plant is blocks, so what a player walks
 into is the block test the world already runs, and whether a leaf stops them is
 a property of the block type the way water's is. **Leaves are solid** turns that
@@ -869,85 +950,62 @@ step onto.
 **Leaves are the expense, not wood.** A canopy is a shell of one-block-thick
 surface, so almost every leaf cell it holds is drawn on several sides — at the
 shipped stand the leaf faces outnumber the wood faces several times over, and
-that, not the skeleton, is what decides whether a forest is affordable.
-**Branches** carries its own switch now, next to **Leaves'** — off, a plant
-grows as a bare trunk and no leaf cluster is asked for either, because a
-cluster hangs at a branch tip or the top of a bare trunk and there is nowhere
-left for one to sit. The panel greys the whole group rather than hiding it, the
-same rule a shown-or-not row already follows elsewhere on this page.
+that, not the skeleton, is what decides whether a forest is affordable. Each
+layer carries its own **Branches** and **Leaves** switches — off, that layer
+grows as a bare trunk and no leaf cluster is asked for either, because a cluster
+hangs at a branch tip or the top of a bare trunk and there is nowhere left for
+one to sit.
 
 **The patch is cut into chunks and every chunk generates alone.** This is the
 property the engine needs and the one a lab is most likely to fake: a chunk
 there gets an address and the seed and nothing else, so a plant whose canopy
 crosses a boundary has to be grown twice, identically, by two chunks that never
-speak. Three things had to change for that to hold. A plant is grown in **world
-coordinates**, not in the patch's own east/up/north frame, because that frame is
-one no chunk has — two chunks would each grow the tree about their own middle.
-Layers count from a **world datum**, not from the lowest ground in view, which
-is the one thing a chunk generating alone cannot know. And the bend and the leaf
-cut are read at the cell's own place in the world, so two chunks agree about the
-air inside one canopy.
+speak. It is not a switch, because the other way is not on offer. Three things
+had to change for it to hold. A plant is grown in **world coordinates**, not in
+the patch's own east/up/north frame, because that frame is one no chunk has —
+two chunks would each grow the tree about their own middle. Layers count from a
+**world datum**, not from the lowest ground in view, which is the one thing a
+chunk generating alone cannot know. And the bend and the leaf cut are read at
+the cell's own place in the world, so two chunks agree about the air inside one
+canopy.
 
-**The check is the patch against itself.** Asking whether two chunks agree about
-a cell neither owns is the wrong question — a chunk answers for its own
+**The check was the patch against itself.** Asking whether two chunks agree
+about a cell neither owns is the wrong question — a chunk answers for its own
 territory and what a plant spills past that is the neighbour's business. So the
-same ground is generated a second time in one piece and the two are compared
-cell for cell. At the shipped reach it reads **0 cells differ**, and the ladder
-down is what says the reach is load-bearing rather than decoration:
+same ground was generated a second time in one piece and the two compared cell
+for cell. At the shipped 24 m reach it read **0 cells differ**, and the ladder
+down is what says the reach is load-bearing rather than decoration: **16 m** 0,
+**8 m** 704, **none** 10,702. The reach is fixed at 24 m now and the second pass
+is gone with the panel section that switched it — which means nothing on the
+page re-checks it (F-090).
 
-| reach past the rim | cells that differ |
-|---|---|
-| 0 m | **10,702** |
-| 8 m | 704 |
-| 16 m | **0** |
-| 24 m (shipped) | **0** |
-
-**What it costs is the rim.** A chunk tests every root within reach of its own
-cells, which at 48 blocks a side and 24 m of reach is **27,360 roots against
-7,057 owned — 3.88x**. Bigger chunks amortise it; the whole point of the number
-being on the panel is that it moves when you drag either slider.
-
-**The reach has to cover the widest canopy, and the lab measures that too.** The
-shipped stand's widest plant reaches **19.8 m** sideways from its own trunk, and
-that number is why **the bend is a displacement from the heading a limb set out
-on and never a nudge added to each step**. Accumulated it is a random walk in
-direction: an 86 m trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
-wanders about a radian, which draws as a redwood sprawling **40.8 m** sideways
-from a crown twenty across. Read as a displacement it is bounded by the knob,
-and a stand still leans together because the field is the same.
+**The reach has to cover the widest canopy.** The shipped stand's widest plant
+reaches about **20 m** sideways from its own trunk, and that number is why **the
+bend is a displacement from the heading a limb set out on and never a nudge
+added to each step**. Accumulated it is a random walk in direction: an 86 m
+trunk at a 0.4 m step is 215 steps, and a nudge of 0.075 wanders about a radian,
+which draws as a redwood sprawling **40.8 m** sideways from a crown twenty
+across. Read as a displacement it is bounded by the knob, and a stand still
+leans together because the field is the same.
 
 **Level of detail is a subdivision depth, and vegetation follows it because
 vegetation is terrain.** A plant is blocks, so it is drawn by the chunk's own
 mesher at the chunk's own level — there is nothing to bake and nothing separate
 to fade. **Level of detail** draws the same ground at a shallower depth, and the
 skeleton, which is in world metres and knows nothing about resolution, is
-rasterised into whatever lattice is there. Over the shipped stand, with the
-chunk audit still reading zero at every level:
-
-| level | blocks | hexagons | plants | wood cells | leaf cells | rebuild |
-|---|---|---|---|---|---|---|
-| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 2,367 ms |
-| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 885 ms |
-| 2 | 4 m | 469 | 185 | 658 | 1,266 | 514 ms |
-| 3 | 8 m | 127 | 186 | 77 | 429 | 412 ms |
-| 4 | 16 m | 37 | 182 | 11 | 106 | 242 ms |
-
-**The plant count barely moves, and that is the point.** A root is a cell, and a
-coarse chunk's cells are not a fine chunk's cells — hashing its own would choose
-a different forest at every level and a tree would come and go as the player
-walked. So **the planting lattice is the finest one at every level**, which
-makes the same ground hold the same trees however coarsely it is drawn. It also
-means the root walk is the same size at every level: **the one part of a chunk
-whose cost does not fall with distance**. The hexagons drop fourfold a level and
-the roots do not.
+rasterised into whatever lattice is there. **The plant count barely moves, and
+that is the point.** A root is a cell, and a coarse chunk's cells are not a fine
+chunk's cells — hashing its own would choose a different forest at every level
+and a tree would come and go as the player walked. So **the planting lattice is
+the finest one at every level**, which makes the same ground hold the same trees
+however coarsely it is drawn. It also means the root walk is the same size at
+every level: **the one part of a chunk whose cost does not fall with distance**.
+The hexagons drop fourfold a level and the roots do not.
 
 **Anything a planting test reads from the drawn level makes the forest depend on
-it.** Two did. The slope limit divided by the drawn cell rather than the finest,
-which made the same hillside four times steeper a level out and refused **6,544
-of 7,045** roots at level 2 against none at level 0. And the waterline was read
-off the drawn cell, which resamples the surface, so plants at the shore came and
-went with the level. Both read the world instead now — how steep the ground is
-and how high it stands do not depend on who is asking.
+it.** The waterline was read off the drawn cell, which resamples the surface, so
+plants at the shore came and went with the level. It reads the world instead
+now — how high the ground stands does not depend on who is asking.
 
 **Past a certain cell size the canopy wins.** A twig is centimetres thick and a
 cluster is metres across, so wood beating leaf is right at the block scale and
@@ -966,19 +1024,66 @@ than it is at level 0, standing where nothing should be. Skipping it takes its
 skeleton off the bill as well, which is the only part of the plant cost that
 falls with distance.
 
-**On hills it holds.** Over a hillside with 36 m of relief across the patch and
-198 plants standing on it, the chunk audit reads **0 cells differ**. Steeper
-than that and the slope limit refuses everything — at 134 m of relief across
-96 m, **no plant stands at all**, which is the rule working rather than failing.
+**A rod and a ball are round, and a hexagon disc around them is not.** Both
+stamps drew by naming candidate cells and then walking each one's column slot by
+slot, and the naming was a **ring count chosen before a single distance was
+worked out** — so it named the disc's corners too. Measured over one stand:
+**11,240,715** candidates for the **766,211** cells of wood written, and
+**6,695,127** for the **2,154,460** columns a cluster could put a leaf in. The
+answer is to let the test name them. Every block of a column stands on **one
+line out from the planet's centre**, so how close that line comes to the shape
+settles the whole column at once — and a flood that starts where the shape sits
+and hands that question from each cell that passes to its own six neighbours
+covers the shape and **stops where the shape does**. Candidates fall to
+**2,288,188** for a rod, and the ring walk that gathered discs is gone.
+
+**A trunk is the case a line test cannot see.** The rod's reject first measured
+the distance between two infinite lines, which is a lower bound and therefore
+sound — and useless here, because a trunk points straight up, so the line
+through it passes through the planet's centre and **so does every column's**.
+Two lines through one point are never apart, so it measured nought for every
+column of every trunk and refused nothing: **76%** of candidates went through to
+be walked for **6%** of the slots written. Clamped to the rod's own two ends —
+one quadratic in the parameter along it, one clamped division — it refuses
+**96%** and the slot walk falls **8x**.
+
+**A canopy is drawn hundreds of times over.** Clusters overlap by design, which
+is what makes a crown rather than a string of balls, so the leaf stamp reaches
+**8,311,898** cell-and-layer slots to leave **35,841** leaves — every one of
+them decided **230 times**, and all but the first refused by the rank. Refusing
+them at the top of the slot walk instead of the end skips the distance, the
+square root and the noise lookup that were only ever going to be thrown away.
+
+Two smaller ones. The leaf cut reads noise only over the shell where the reading
+can still change the answer — value noise is bounded by `[-1, 1]` by
+construction, so beyond the leaves' own **Roughness** either side of the fill
+line the answer is already decided whatever the reading is, and the shell left
+is **66%** of the ball at the shipped Fill 0.62 and Roughness 0.45. And one
+octave with no fold **is** the basis at the octave's own offset, exactly, so the
+cut calls `valueNoise3` with the offset taken once rather than `octaveNoise`
+with a map lookup, a loop and a divide at every candidate cell.
+
+Together they took the level-0 rebuild of one stand from **4,990 ms to
+1,595 ms**, with the wood and leaf counts identical at every level, across all
+twelve species, and the chunk audit reading **0 cells differ**. **None of it is
+an approximation** — every reject is proved by a bound and the test that follows
+is still the authority.
+
+**What is left is threading, and the shape for it is already here.** The rebuild
+is one synchronous stretch, so the page is frozen for the whole of it however
+fast it gets. The patch is already cut into chunks that each generate alone,
+which is exactly what a worker pool needs — and cutting it up **costs nothing
+measurable**: the same stand ran 6.1 s in chunks against 6.9 s in one piece at
+the shipped reach, because what a chunk refuses to write pays for what it grows
+twice.
 
 **Two panels, one on each side, because a plant and the ground it stands on
-are different questions.** The right panel is the plant alone — planting rules,
-trunk, branches, leaves. The left panel is everything about the world it is
-planted in: the terrain knobs, how the patch is cut into chunks, and the
-readout that says what grew — a fact read back off the ground after the fact,
-so it sits with the world rather than with the knobs that shaped one plant.
-Moving a slider in one never has to be cross-referenced against a heading in
-the other, because the heading already says which question it answers.
+are different questions.** The right panel is the plants alone — every layer,
+and the one switch that says whether a leaf is something you walk into. The left
+panel is the world they are planted in: the seed, the picture, how finely the
+ground is drawn and where on the planet the patch is, and the readout that says
+what grew — a fact read back off the ground after the fact, so it sits with the
+world rather than with the knobs that shaped one plant.
 
 **On a phone each panel is its own shut drawer, with its own button.** 340 px of
 knobs against a 390 px screen means only one drawer can usefully be open at a
@@ -987,37 +1092,6 @@ own panel alone — opening one never closes the other. Each button moves above
 its own drawer when open, so the way out is never under the thing it opened. On
 a desktop neither button is on the page — the panels sit either side of the
 view and never cover it.
-
-**A rod and a ball are round, and everything gathered around them is a
-hexagon.** Both stamps walked cells the shape could not possibly reach, slot by
-slot, and the two rejects that fixed it are the same idea seen twice: every
-block of a column stands on **one line out from the planet's centre**, so one
-question about that line settles the whole column before a single slot is
-touched. For a leaf cluster it is how close the line passes to the ball's
-centre, three multiplies; for a rod it is the distance between two infinite
-lines, one cross product, which is a lower bound on the distance to any piece of
-them. Three more followed. A rod's disc is gathered **once per run of steps that
-share a cell** rather than once per step, because the walk moves 0.4 of a block
-at a time and a cell holds several. The leaf cut reads noise only over the shell
-where the reading can still change the answer -- value noise is bounded by
-`[-1, 1]` by construction, so beyond the leaves' own **Roughness** either side
-of the fill line the answer is already decided whatever the reading is, and the
-shell that is left is **66%** of the ball at the shipped Fill 0.62 and
-Roughness 0.45. And one octave with no fold **is** the basis at the octave's own
-offset, exactly, so the cut calls `valueNoise3` with the offset taken once
-rather than `octaveNoise` with a map lookup, a loop and a divide at every
-candidate cell. Together they take the level-0 rebuild from **4,990 ms to
-2,367 ms** with the wood and leaf counts identical at every level in the table
-above. **None of it is an approximation** -- each reject is proved by a bound,
-and the test that follows is still the authority.
-
-**What is left is threading, and the shape for it is already here.** The rebuild
-is one synchronous stretch, so the page is frozen for the whole of it however
-fast it gets. The patch is already cut into chunks that each generate alone and
-audit to zero, which is exactly what a worker pool needs -- and cutting it up
-**costs nothing measurable**: the same stand runs 6.1 s in chunks against 6.9 s
-in one piece at the shipped reach, because what a chunk refuses to write pays
-for what it grows twice.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 
