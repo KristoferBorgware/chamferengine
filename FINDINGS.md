@@ -10,6 +10,40 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-090 — Nothing in the vegetation lab checks any more that a chunk generates the same stand alone
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, rebuilding `demos/vegetation-lab.html` around vegetation
+layers
+**Where:** `demos/vegetation-lab.html`
+
+**What happens.** The lab still cuts the patch into chunks and still grows every
+plant within reach of a chunk's rim from the address and the seed alone -- that
+part is unchanged and is not a switch any more, because the other way is not on
+offer. What is gone is the **audit**: the second pass that generated the same
+ground in one piece and compared it cell for cell, which read **0 cells differ**
+and climbed to **704** at an 8 m reach and **10,702** at none. It was a
+checkbox in the `Chunks` section, and that section came off the panel with the
+`Ground` one when the layers arrived.
+
+**Why it matters more now than it did.** Every rule the audit was watching is
+now **per layer**: a layer's hash salt, its own noise stack, its own curve, the
+order the layers are offered a cell in. Any of those read from something a
+chunk cannot know -- a list position, a neighbour's answer, the patch's own
+frame -- and two chunks would disagree about a tree on their boundary. The rank
+rule alone once took the audit from 0 to 10 differing cells, and it was one line.
+
+**What it would take.** The pass itself is thirty lines and it still exists in
+git; what it needs is somewhere to live now that its section is gone. The
+honest place is the readout in the left panel, as a fact rather than a knob --
+it belongs with the other things read back off the ground after the fact. The
+cost is what took it off in the first place: a second full generation, which
+roughly doubles a rebuild. So it wants to run on a settled draft only, the way
+it used to, or behind a key nobody presses by accident.
+
 ### F-089 — Growing a stand of plants is one synchronous stretch, and it is already cut into the pieces a worker pool wants
 
 **Kind:** gap
