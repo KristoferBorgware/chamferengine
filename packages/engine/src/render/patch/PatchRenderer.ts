@@ -4,14 +4,7 @@ import { PATCH_SHADER } from "./PATCH_SHADER.js";
 import { PATCH_STRIDE } from "../../mesh/PatchGeometry.js";
 import type { ShadowBox } from "./PatchShadow.js";
 import { PatchShadow } from "./PatchShadow.js";
-import {
-	PATCH_FILL_SHARE,
-	PATCH_HEAD_LIFT,
-	PATCH_HEAD_SHARE,
-	PATCH_KEY,
-	PATCH_TOP_SHARE,
-	patchFill,
-} from "./PATCH_LIGHTS.js";
+import { PATCH_KEY, patchFill } from "./PATCH_LIGHTS.js";
 
 /** How the patch is drawn, beyond where the camera is. */
 export interface PatchLook {
@@ -79,20 +72,17 @@ export interface PatchLook {
 	readonly light: number;
 
 	/**
-	 * Which way the camera looks from, in the patch's own frame.
+	 * How much of the light each of the three carries: key, fill, overhead.
 	 *
-	 * One of the lights comes from here. A patch turned away from the fixed
-	 * lights would otherwise be a silhouette, and turning it is the whole way
-	 * this preview is read.
-	 *
-	 * **A direction, not a place.** A light standing at the camera is one that
-	 * can be walked into -- zoom until the eye is inside a hillside and it
-	 * lights the rock from within, and how far off it stands depends on how
-	 * wide the patch is. This is normalised here and lifted above the eye,
-	 * because the camera sits low and a light exactly at it is one more thing
-	 * shining sideways at the walls.
+	 * **How dark a shadow can be is this and nothing else.** A shadow takes one
+	 * light away, so the deepest it can go is that light's share of the total --
+	 * with the overhead at 1.35 against the key's 1, the key is a fifth of a lit
+	 * face and no shadow of it takes more than a fifth. That is why there is no
+	 * darkness knob: the balance already is one.
 	 */
-	readonly eye: readonly [number, number, number];
+	readonly keyLight: number;
+	readonly fillLight: number;
+	readonly topLight: number;
 }
 
 /**
@@ -136,10 +126,10 @@ export interface PatchUpload {
 }
 
 /**
- * A matrix, the light, the mode, the numbers the pictures read, the light that
- * follows the camera, and the two the shadows are read from.
+ * A matrix, the light, the mode, the numbers the pictures read, the two
+ * matrices the shadows are read from, and how the light is shared out.
  */
-const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 16 + 64 + 64 + 16;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 + 64 + 16 + 16;
 
 /**
  * Draws one patch of the surface, cell by cell.
@@ -385,26 +375,21 @@ export class PatchRenderer {
 	/**
 	 * The lights, as balls on a dome around the patch.
 	 *
-	 * Rebuilt only when the patch changes size or the camera light turns, which
-	 * is what `span` and the head direction between them say. Every ball is a
+	 * Rebuilt only when the patch changes size, which
+	 * is what `span` says. Every ball is a
 	 * subdivided octahedron -- eight triangles refined twice, which is 128
 	 * faces and round enough at this size -- written straight out with the
 	 * marker's colour on the channels the fragment reads for it.
 	 */
-	private buildLamps(span: number, head: readonly number[]): void {
+	private buildLamps(span: number, look: PatchLook): void {
 		const { device } = this.ctx;
 		// Direction, colour and share, in the order the shader weighs them, and
 		// every direction and every share read from the one place they live --
 		// a ball that has drifted from its own light is read as the truth.
 		const lamps: [number[], number[], number][] = [
-			[[...PATCH_KEY], [1, 0.86, 0.55], 1],
-			[patchFill(), [0.4, 0.55, 0.85], PATCH_FILL_SHARE],
-			[[0, 1, 0], [1, 1, 0.95], PATCH_TOP_SHARE],
-			[
-				[head[0]!, head[1]!, head[2]!],
-				[0.55, 0.95, 0.7],
-				PATCH_HEAD_SHARE,
-			],
+			[[...PATCH_KEY], [1, 0.86, 0.55], look.keyLight],
+			[patchFill(), [0.4, 0.55, 0.85], look.fillLight],
+			[[0, 1, 0], [1, 1, 0.95], look.topLight],
 		];
 		const out: number[] = [];
 		// One octant of an octahedron, refined; the eight sign flips give the
@@ -521,16 +506,6 @@ export class PatchRenderer {
 			20,
 		);
 		this.data.set([look.low, look.high, look.light, 0], 28);
-		// Lifted well above the eye, then normalised, so it is the same light at
-		// every zoom and on a patch of any width.
-		const lift = PATCH_HEAD_LIFT;
-		const [ex, ey, ez] = look.eye;
-		const len = Math.sqrt(ex * ex + ez * ez) || 1;
-		const hx = ex / len;
-		const hy = ey / len + lift;
-		const hz = ez / len;
-		const head = Math.sqrt(hx * hx + hy * hy + hz * hz) || 1;
-		this.data.set([hx / head, hy / head, hz / head, 0], 32);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,
@@ -560,8 +535,8 @@ export class PatchRenderer {
 				this.groundVertices,
 			);
 		}
-		this.data.set(this.shadow.matrices[0]!, 36);
-		this.data.set(this.shadow.matrices[1]!, 52);
+		this.data.set(this.shadow.matrices[0]!, 32);
+		this.data.set(this.shadow.matrices[1]!, 48);
 		this.data.set(
 			[
 				look.keyShadow ? 1 : 0,
@@ -569,8 +544,9 @@ export class PatchRenderer {
 				this.shadow.texel,
 				this.shadow.bias,
 			],
-			68,
+			64,
 		);
+		this.data.set([look.keyLight, look.fillLight, look.topLight, 0], 68);
 
 		device.queue.writeBuffer(this.uniform, 0, this.data);
 		this.data[21] = 1;
@@ -580,15 +556,10 @@ export class PatchRenderer {
 		device.queue.writeBuffer(this.seaUniform, 0, this.data);
 		this.data[23] = 0;
 		if (look.showLights) {
-			const head = this.data.subarray(32, 35);
-			const turned = `${look.span}/${head[0]}/${head[1]}/${head[2]}`;
+			const turned = `${look.span}/${look.keyLight}/${look.fillLight}/${look.topLight}`;
 			if (turned !== this.lampSpanKey) {
 				this.lampSpanKey = turned;
-				this.buildLamps(Math.max(1, look.span), [
-					head[0]!,
-					head[1]!,
-					head[2]!,
-				]);
+				this.buildLamps(Math.max(1, look.span), look);
 			}
 			this.data[21] = 2;
 			device.queue.writeBuffer(this.lampUniform, 0, this.data);

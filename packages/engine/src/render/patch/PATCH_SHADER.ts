@@ -2,12 +2,7 @@ import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
-import {
-	PATCH_FILL_SHARE,
-	PATCH_HEAD_SHARE,
-	PATCH_TOP_SHARE,
-	patchFill,
-} from "./PATCH_LIGHTS.js";
+import { patchFill } from "./PATCH_LIGHTS.js";
 
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
@@ -57,19 +52,6 @@ const SEA_CLARITY = ${SEA_CLARITY}.0;
  */
 const SUN_SHARE = ${SUN_SHARE};
 
-/**
- * How strong each light is against the key, from the one place they live.
- *
- * See PATCH_LIGHTS.ts: the shader shades with them, the renderer sends the
- * key, and the markers stand balls where they shine from -- and a ball that has
- * drifted from its own light is read as the truth.
- */
-const KEY_TOP = ${PATCH_TOP_SHARE};
-const KEY_FILL = ${PATCH_FILL_SHARE};
-
-/** How much the light that follows the camera carries. */
-const KEY_HEAD = ${PATCH_HEAD_SHARE};
-
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
@@ -90,8 +72,6 @@ struct View {
 	 * how bright is right is a matter of the screen it is read on.
 	 */
 	ground   : vec4f,
-	/** The direction of the light that follows the camera. */
-	head     : vec4f,
 	/** Where the key and the fill each recorded the patch from. */
 	keyLight : mat4x4f,
 	fillLight: mat4x4f,
@@ -100,6 +80,16 @@ struct View {
 	 * w: how far a sample is pushed toward the light before it is compared.
 	 */
 	shadow   : vec4f,
+	/**
+	 * How much of the light each of the three carries: key, fill, overhead.
+	 *
+	 * **How dark a shadow can be is this and nothing else.** A shadow takes one
+	 * light away, so the deepest it can ever go is that light's share of the
+	 * total -- with the overhead light at 1.35 against the key's 1, the key is
+	 * a fifth of a lit face and no shadow of it can take more than a fifth.
+	 * That is why there is no darkness knob: the balance already is one.
+	 */
+	shares   : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -281,17 +271,16 @@ fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 	let key = normalize(view.sun.xyz);
 	// **A key light alone leaves half the shape unreadable.** Every face turned
 	// away from it falls back on the sky term, which depends only on how far up
-	// the face points -- so two walls facing opposite ways read the same, and a
-	// patch lit from behind is a silhouette with a lit rim.
+	// the face points -- so two walls facing opposite ways would read the same.
+	// The fill separates those; the one overhead separates a cap from a wall.
 	//
 	// The fill, mirrored across the patch and levelled off; see
 	// PATCH_LIGHTS.ts for why it stays above the horizon.
 	let fill = normalize(vec3f(${patchFill().join(", ")}));
 	let top = vec3f(0.0, 1.0, 0.0);
 	// **Each light is shadowed by its own map and by nothing else.** The one
-	// overhead and the one at the camera have none, and that is deliberate:
-	// between them they are what keeps every face readable, and a face they
-	// could not reach is a face nothing says anything about.
+	// overhead has none: it is what keeps every cap readable, and a cap it
+	// could not reach is a cap nothing says anything about.
 	let toKey = max(0.0, dot(n, key));
 	let toFill = max(0.0, dot(n, fill));
 	let keyOpen = select(
@@ -305,12 +294,13 @@ fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 		view.shadow.y > 0.5,
 	);
 	let lit =
-		toKey * keyOpen +
-		KEY_FILL * toFill * fillOpen +
-		KEY_TOP * max(0.0, dot(n, top)) +
-		KEY_HEAD * max(0.0, dot(n, view.head.xyz));
+		view.shares.x * toKey * keyOpen +
+		view.shares.y * toFill * fillOpen +
+		view.shares.z * max(0.0, dot(n, top));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
-	let total = 1.0 + KEY_FILL + KEY_TOP + KEY_HEAD;
+	// Every light turned off leaves the sky term, which is the one thing here
+	// with no direction -- flat, and never a divide by nothing.
+	let total = max(1e-4, view.shares.x + view.shares.y + view.shares.z);
 	return direct * (lit / total) + (1.0 - direct) * openness;
 }
 

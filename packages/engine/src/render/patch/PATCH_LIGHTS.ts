@@ -56,19 +56,6 @@ export const PATCH_TOP_SHARE = 1.35;
 /** How much of the light the fill carries. Enough that no face is black. */
 export const PATCH_FILL_SHARE = 0.15;
 
-/**
- * How much the light that follows the camera carries.
- *
- * **The one light that cannot leave a face unreadable**, so nothing being
- * looked at is ever lit by the sky term alone -- which is what made a patch
- * seen from the wrong side a flat silhouette. Small, because it comes from
- * where the viewer is and a strong light there flattens everything it reaches.
- */
-export const PATCH_HEAD_SHARE = 0.18;
-
-/** How far the camera light is lifted above the eye before it is normalised. */
-export const PATCH_HEAD_LIFT = 1.2;
-
 /** The fill's own direction, which is the key's, mirrored and levelled. */
 export function patchFill(): [number, number, number] {
 	const across = Math.hypot(PATCH_KEY[0], PATCH_KEY[2]) || 1;

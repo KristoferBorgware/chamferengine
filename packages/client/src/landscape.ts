@@ -334,12 +334,14 @@ const look = {
 	rawHigh: 1,
 	low: 0,
 	high: 1,
-	eye: [0, 1, 1] as [number, number, number],
 	showLights: false,
 	span: 1,
 	light: 1,
 	keyShadow: false,
 	fillShadow: false,
+	keyLight: 1,
+	fillLight: 0.15,
+	topLight: 1.35,
 };
 
 /**
@@ -636,13 +638,13 @@ function render(): void {
 		Math.sin(camera.pitch) * reach + span * camera.lift,
 		Math.cos(camera.yaw) * Math.cos(camera.pitch) * reach,
 	);
-	// One of the lights stands here, so where the camera is has to reach the
-	// shader as well as the matrix.
-	look.eye = [eye.x, eye.y, eye.z];
 	look.showLights = k.showLights;
 	look.light = k.patchLight;
 	look.keyShadow = k.keyShadow;
 	look.fillShadow = k.fillShadow;
+	look.keyLight = k.keyLight;
+	look.fillLight = k.fillLight;
+	look.topLight = k.topLight;
 	look.span = span;
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(

@@ -392,6 +392,26 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **The three shares are the shadow's depth as well.** A shadow
+				// takes one light away, so the deepest it can go is that
+				// light's share of the total -- which is why there is no
+				// darkness knob beside the switches: this is one already, and a
+				// second over the top would be two answers to one question.
+				key: "keyLight",
+				label: "Key light",
+				digits: 2,
+			},
+			{
+				key: "fillLight",
+				label: "Fill light",
+				digits: 2,
+			},
+			{
+				key: "topLight",
+				label: "Light from above",
+				digits: 2,
+			},
+			{
 				// **One map fitted to the patch, not cascades.** Cascades exist
 				// because a view of a world is unbounded; this patch is a box
 				// whose corners are known before anything is drawn, so one map

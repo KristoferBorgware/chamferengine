@@ -354,6 +354,24 @@ export interface PlanetKnobs {
 	keyShadow: boolean;
 	fillShadow: boolean;
 
+	/**
+	 * How much of the bench's light each of the three carries.
+	 *
+	 * **How dark a shadow can be is this and nothing else.** A shadow takes one
+	 * light away, so the deepest it can go is that light's share of the total --
+	 * with the overhead light at `1.35` against the key's `1`, the key is about
+	 * a fifth of a lit face and no shadow of it can take more than a fifth.
+	 * That is why there is no darkness knob: the balance already is one, and a
+	 * second one over the top of it would be two answers to one question.
+	 *
+	 * Only the key and the fill cast, so turning the overhead down is what
+	 * makes a shadow read -- at the cost of the thing it was raised for, which
+	 * is telling a cap from a wall.
+	 */
+	keyLight: number;
+	fillLight: number;
+	topLight: number;
+
 	showLights: boolean;
 
 	/**
@@ -996,6 +1014,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchDetail: 2,
 	keyShadow: false,
 	fillShadow: false,
+	keyLight: 1,
+	fillLight: 0.15,
+	topLight: 1.35,
 	showLights: false,
 	patchLight: 1.5,
 	patchPicture: "ground",
@@ -1427,6 +1448,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "\u00b0",
 	},
 	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	fillLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	topLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	keyShadow: { ...TOGGLE, rebuilds: false },
 	fillShadow: { ...TOGGLE, rebuilds: false },
 	showLights: { ...TOGGLE, rebuilds: false },
