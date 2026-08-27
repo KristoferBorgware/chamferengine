@@ -18,6 +18,7 @@ import {
 } from "chamfer/mesh";
 import {
 	CARVE_LAYER_DEFAULT,
+	SPECKLE,
 	carveSeed,
 	layerNoiseSettings,
 	octaveNoise,
@@ -401,7 +402,14 @@ export class BenchWorkerCore {
 			carve: carveOf,
 		};
 		return {
-			mesh: columnPatchMesh(layout, ground, { radius, seaLevel: 0 }),
+			mesh: columnPatchMesh(layout, ground, {
+				radius,
+				seaLevel: 0,
+				// The world's own seed and the world's own switch, so a hexagon
+				// on the bench is the shade that hexagon will be.
+				seed: settings.seedNumber,
+				speckle: settings.knobs.speckle ? SPECKLE : 0,
+			}),
 			dug,
 			stacks: { stacked, deepest },
 			hanging: floatingRock(layout, ground, block),

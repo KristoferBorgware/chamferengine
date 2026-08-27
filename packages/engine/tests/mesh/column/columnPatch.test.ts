@@ -194,6 +194,8 @@ describe("columnPatchMesh", () => {
 		const mesh = columnPatchMesh(patch, flat(patch.count, 40, 100), {
 			radius: RADIUS,
 			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
 		});
 		expect(mesh.groundVertices % 3).toBe(0);
 		let sides = 0;
@@ -213,11 +215,15 @@ describe("columnPatchMesh", () => {
 		const dry = columnPatchMesh(patch, flat(patch.count, 40, 100), {
 			radius: RADIUS,
 			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
 		});
 		expect(dry.waterVertices).toBe(0);
 		const wet = columnPatchMesh(patch, flat(patch.count, -40, 100), {
 			radius: RADIUS,
 			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
 		});
 		expect(wet.waterVertices).toBeGreaterThan(0);
 		expect(wet.landShare).toBe(0);
@@ -233,6 +239,8 @@ describe("columnPatchMesh", () => {
 		const mesh = columnPatchMesh(patch, flat(patch.count, -40, 100), {
 			radius: RADIUS,
 			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
 		});
 		for (let v = mesh.groundVertices; v < mesh.groundVertices + 3; v++)
 			expect(mesh.vertices[v * PATCH_STRIDE + 6]).toBeCloseTo(-40, 4);
@@ -243,6 +251,8 @@ describe("columnPatchMesh", () => {
 		const mesh = columnPatchMesh(patch, flat(patch.count, 40, 100), {
 			radius: RADIUS,
 			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
 		});
 		expect(mesh.vertices.length).toBe(
 			(mesh.groundVertices + mesh.waterVertices) * PATCH_STRIDE,

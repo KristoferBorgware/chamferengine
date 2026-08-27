@@ -12,6 +12,30 @@ const COLOR_SEED_OFFSET = 3;
  */
 export const SPECKLE = 0.06;
 
+/**
+ * How far a cell's colour drifts from its type's base, as a multiplier.
+ *
+ * **Pulled out because two places want it and only one wants a colour.** The
+ * world's mesher bakes it into a vertex colour; the landscape bench draws the
+ * material bands in a shader and wants the drift alone. Written twice, the two
+ * would agree until either was retuned.
+ *
+ * The offset comes from the integer hash, so a cell takes the same shade on
+ * every machine and on every frame.
+ */
+export function speckleShade(
+	face: number,
+	i: number,
+	j: number,
+	seed: number,
+	speckle: number = SPECKLE,
+): number {
+	if (speckle === 0) return 1;
+	const noise =
+		hash3(face * 8191 + i, j, i ^ j, (seed + COLOR_SEED_OFFSET) | 0) - 0.5;
+	return 1 + noise * 2 * speckle;
+}
+
 /** The base color of each block type, as linear red, green and blue. */
 export const BLOCK_COLORS: Readonly<
 	Record<number, readonly [number, number, number]>
@@ -55,9 +79,7 @@ export function blockColor(
 		out[at + 2] = base[2];
 		return;
 	}
-	const noise =
-		hash3(face * 8191 + i, j, i ^ j, (seed + COLOR_SEED_OFFSET) | 0) - 0.5;
-	const shade = 1 + noise * 2 * speckle;
+	const shade = speckleShade(face, i, j, seed, speckle);
 	out[at] = base[0] * shade;
 	out[at + 1] = base[1] * shade;
 	out[at + 2] = base[2] * shade;

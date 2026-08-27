@@ -377,6 +377,16 @@ const GROUPS: Group[] = [
 				],
 			},
 			{
+				// **The one thing that says where one hexagon ends.** A slope
+				// of one material at one height is a single sheet of colour
+				// however it is lit, and the lattice the world is built on --
+				// which is this bench's whole subject -- is invisible in it.
+				// The same knob and the same drift the world's own mesher
+				// bakes, so a hexagon here is the shade that hexagon will be.
+				key: "speckle",
+				label: "Speckle",
+			},
+			{
 				key: "patchSurface",
 				label: "Surface",
 				choices: [

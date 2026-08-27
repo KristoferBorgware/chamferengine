@@ -79,8 +79,10 @@ export function patchVertices(
 		vertices[at + 9] = erosion[cell]!;
 		vertices[at + 10] = peaks[cell]!;
 		// A surface patch reads the map and the carve is not in it, so the
-		// channel is there and says nothing.
+		// channel is there and says nothing; and it draws map cells rather than
+		// blocks, so there is no block to speckle.
 		vertices[at + 11] = 0;
+		vertices[at + 12] = 1;
 	}
 
 	// A flat normal per triangle would need its own vertices; these are shared
