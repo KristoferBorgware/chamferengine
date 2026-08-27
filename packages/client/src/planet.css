@@ -646,6 +646,25 @@ body.bench .knobs {
 	padding-top: 12px;
 }
 
+/* **A layer's heading is its curve's colour**, and the same four the bench's
+   pictures are named by: four curves with one colour between them are four
+   curves a reader has to keep track of by position. */
+.knobs h2.tint-cont .knobs-fold {
+	color: #ffd166;
+}
+
+.knobs h2.tint-ero .knobs-fold {
+	color: #8ce99a;
+}
+
+.knobs h2.tint-pv .knobs-fold {
+	color: #ff9db1;
+}
+
+.knobs h2.tint-cliff .knobs-fold {
+	color: #c9a7ff;
+}
+
 /* No fold on the bench: the panel is half of what the page is for. */
 body.bench .knobs-head {
 	display: none;

@@ -294,7 +294,7 @@ export interface PlanetKnobs {
 	seaLevel: number;
 
 	/**
-	 * Where the terrain bench is standing and what it draws.
+	 * Where the landscape bench is standing and what it draws.
 	 *
 	 * **None of these is a world parameter.** Every other knob here is one the
 	 * engine reads; these move the preview and leave the ground where it was,
@@ -947,7 +947,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// whatever time it is frozen at is the light every look at this world is
 	// taken in -- and this was `0.18`, which puts the sun **24.6 degrees under
 	// the horizon** at the place the shipped seed spawns on. The ground was
-	// being judged, and its colours compared against the terrain bench's, in
+	// being judged, and its colours compared against the landscape bench's, in
 	// the dark. This is the sun 44.6 degrees up over that spawn: bright, and
 	// still low enough to model a hillside rather than flatten it the way noon
 	// does. A different seed spawns at a different longitude, where the same

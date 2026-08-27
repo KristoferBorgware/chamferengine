@@ -459,6 +459,7 @@ const GROUPS: Group[] = [
 	{
 		title: "The ground",
 		where: "both",
+		side: "left",
 		folded: true,
 		tab: "terrain",
 		knobs: [
@@ -1112,11 +1113,24 @@ export class ParameterPanel {
 	 * is mounted here stays while the rows below it move.
 	 */
 	mount(element: HTMLElement): void {
+		// **On the bench the picture goes with the world, not with the
+		// layers.** The right pane is the four layers and nothing else, so a
+		// reader dragging a curve never has to scroll past the map to reach
+		// the next one -- and what a layer did is on the other side of the
+		// window rather than above the knob that did it.
+		if (this.leftBody) {
+			this.leftBody.insertBefore(element, this.leftBody.firstChild);
+			return;
+		}
 		this.root.insertBefore(element, this.root.children[1] ?? null);
 	}
 
 	/** Put an element at the bottom of the scrolling rows. */
 	footer(element: HTMLElement): void {
+		if (this.leftBody) {
+			this.leftBody.appendChild(element);
+			return;
+		}
 		this.root.querySelector(".knobs-body")?.appendChild(element);
 	}
 
@@ -1199,6 +1213,11 @@ export class ParameterPanel {
 			if (group.folded) section.classList.add("shut");
 
 			const head = document.createElement("h2");
+			// **A layer's heading is its curve's colour.** Four curves with one
+			// colour between them are four curves a reader has to keep track of
+			// by position; the pictures the bench draws are named by the same
+			// four, so the tint is what ties a section to what it drew.
+			if (group.tint) head.classList.add(`tint-${group.tint}`);
 			const toggle = document.createElement("button");
 			toggle.className = "knobs-fold";
 			toggle.textContent = group.title;
@@ -1340,10 +1359,10 @@ export class ParameterPanel {
 		// the ground is the whole window rather than a picture over one.
 		if (!this.bench) {
 			const bench = document.createElement("a");
-			bench.textContent = "Terrain bench";
-			bench.href = "./terrain.html";
+			bench.textContent = "Landscape bench";
+			bench.href = "./landscape.html";
 			bench.onclick = () => {
-				bench.href = `./terrain.html?${this.settings.toParams().toString()}`;
+				bench.href = `./landscape.html?${this.settings.toParams().toString()}`;
 			};
 			bar.appendChild(bench);
 		}

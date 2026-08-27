@@ -1,5 +1,5 @@
 /**
- * What the terrain bench draws, as the named choices behind its selects.
+ * What the landscape bench draws, as the named choices behind its selects.
  *
  * Each of these is a picture of the same ground rather than a different world,
  * so switching between them is a uniform or a redraw and never a rebuild.

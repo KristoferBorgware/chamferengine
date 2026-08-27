@@ -15,7 +15,7 @@ export type PatchOptions = PatchPlace & PatchFields;
  * the cells and lays out their corners; `patchVertices` pours the ground into
  * what it found. A caller drawing a patch once wants this. A caller whose patch
  * stands still while the ground under it moves -- which is every knob on the
- * terrain bench -- keeps the layout and runs the fill alone.
+ * landscape bench -- keeps the layout and runs the fill alone.
  */
 export function coarsePatchMesh(
 	grid: CoarseGrid,

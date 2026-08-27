@@ -23,7 +23,7 @@ import {
 } from "chamfer/render";
 
 /**
- * The terrain bench: one patch of a planet, and the knobs that shape it.
+ * The landscape bench: one patch of a planet, and the four layers that shape it.
  *
  * **Its own page, not a pane over the world.** Choosing terrain numbers is
  * looking at ground, and a world drawn behind the thing being judged is a
