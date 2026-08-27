@@ -806,7 +806,7 @@ three are settled without knowing where anybody is standing.
 Two things about light are **not** facts about the world alone, and both of
 them are cheap to read off the picture once it exists.
 
-### Ambient occlusion sees what the block grid was never told
+### SSAO sees what the block grid was never told
 
 The baked terms know a column and they know a corner. Neither knows that one
 hill stands in front of another, or that a wall built this morning now shades
@@ -832,7 +832,20 @@ occlusion has to exist first, which means finding out where the geometry is
 twice: a depth-only pass with no fragment stage, then the occlusion, then the
 world. **That second pass over the geometry is what the switch is for.**
 
-Two details are not optional. **The normal is reconstructed rather than
+**Occlusion is measured against the tangent plane, never by comparing two
+distances from the eye.** The obvious construction -- step off into a
+hemisphere, project the step back onto the screen, and call it blocked where
+the surface there is nearer the eye -- self-occludes. On any surface seen at
+an angle a step *along* the ground lands further from the eye than where it
+started, so it counts as blocked; how much depends on which way that sample
+happened to point, and each pixel turns its samples differently. The result is
+hatching over every flat hillside that no blur can remove, because it is
+signal rather than noise. What is asked instead is whether a neighbouring
+surface stands **above the plane this surface lies in** -- a neighbour on the
+same flat ground is in that plane and contributes nothing, however the samples
+were turned.
+
+Two further details are not optional. **The normal is reconstructed rather than
 stored** -- there is no G-buffer here, and the terrain shader derives its own
 normal the same way, from how the world position changes across a pixel, so
 the two agree by construction. But a plain derivative straddles a silhouette
@@ -842,7 +855,7 @@ depth instead. And **an occluder far in front occludes nothing**: it is a
 different part of the world that happens to line up, and without that test
 every silhouette casts a dark halo onto the ground behind it.
 
-### A bounce is the one indirect term that can run after the world
+### SSGI is the one indirect term that can run after the world
 
 Every light in this world arrives straight from its source. A sunlit cliff
 throws nothing onto the shaded ground beside it, and an overhang is the same
@@ -864,9 +877,21 @@ colour at all: it is downstream of the shading it gathers from. It costs no
 second look at the geometry, which is the whole difference between the two in
 what they are worth turning on.
 
-A surface gives back a fraction of what it takes, never all of it. Grass and
-stone return about a third; anything near 1 makes the frame feed itself and the
-picture climbs.
+**How the sum is normalised decides whether the term exists at all.** Dividing
+by the sample count is the hemisphere average, and it is correct and useless:
+on a voxel hillside only two or three samples in sixteen find a surface turned
+back toward this one, so the answer lands at a few percent of a colour that
+was itself dark, and the whole term arrives as a rounding error. Divided by
+its own accumulated weight instead, it is *what colour the light bouncing in
+here is* -- an ordinary scene colour -- and a second factor says *how much of
+the ring found anything at all*. Both mean something, and the strength dial
+then scales a quantity that has a size to it.
+
+The falloff over distance is linear rather than inverse-square, for the same
+reason. A physical falloff belongs to a point source; every sample here is a
+patch of surface whose area grows with distance in the same proportion, and
+the two cancel. Inverse-square in metres left a neighbour two metres off worth
+a fifth and one ten metres off worth a hundredth.
 
 The standing limit of the technique is worth being plain about: **it only knows
 what is on screen.** A wall out of frame bounces nothing, so turning the camera
@@ -879,8 +904,12 @@ it, contributing least.
 Neither is the world being drawn wrongly without it, and both cost real time
 per frame: the occlusion a whole extra pass over the geometry, the bounce three
 full-screen passes and a gather. They are separate rows because they cost
-different things, the same way **Marching shadows** and **Shadow maps** were
-separate rows for the same reason.
+different things, the same way **Marching shadows** and **Shadow maps** were,
+and each row names its own technique -- **SSAO** and **SSGI** -- because a
+reader who wants one of them off is looking for the technique rather than for
+a description of what it does. Naming the first **Contact shadows** was worse
+than a rename: that is a different effect, a short march *toward the light*,
+with a light direction in it that ambient occlusion does not have.
 
 ---
 

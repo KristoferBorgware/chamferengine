@@ -29,19 +29,19 @@
  * The gather is noisy for the same reason the occlusion is, and is blurred
  * the same way, by a second pipeline that will not cross a depth step.
  */
-export const SCREEN_BOUNCE_SHADER = /* wgsl */ `
+export const SSGI_SHADER = /* wgsl */ `
 struct Look {
 	inverseViewProj : mat4x4f,
 	viewProj        : mat4x4f,
 	// xyz eye, w how far a bounce reaches in metres
 	eye             : vec4f,
-	// x strength, y sample count, z blur radius, w how much a surface may give
+	// x strength, y sample count, z blur radius, w spare
 	dial            : vec4f,
-	// x how far apart two pixels may be in METRES and still blur together.
-	// The reach above is in pixels, because the gather works in the picture;
-	// this is in metres, because whether two pixels are the same surface is a
-	// fact about the world. They are different quantities and were briefly
-	// the same one.
+	// x how far apart two pixels may be in METRES and still blur together,
+	// y how far a bounce may carry in METRES. The reach above is in pixels,
+	// because the gather works in the picture; both of these are in metres,
+	// because how far apart two surfaces really are is a fact about the world
+	// and not about how much screen they happen to fill.
 	limit           : vec4f,
 };
 @group(0) @binding(0) var<uniform> look : Look;
@@ -77,10 +77,11 @@ fn turnAt(pixel : vec2f) -> f32 {
 
 /** The normal a pixel's depth implies, taking each axis's closer neighbour. */
 fn normalAt(at : vec2i, size : vec2f, here : vec3f) -> vec3f {
-	let left = worldAt(at + vec2i(-1, 0), size);
-	let right = worldAt(at + vec2i(1, 0), size);
-	let down = worldAt(at + vec2i(0, -1), size);
-	let up = worldAt(at + vec2i(0, 1), size);
+	let bounds = vec2i(size) - vec2i(1);
+	let left = worldAt(clamp(at + vec2i(-1, 0), vec2i(0), bounds), size);
+	let right = worldAt(clamp(at + vec2i(1, 0), vec2i(0), bounds), size);
+	let down = worldAt(clamp(at + vec2i(0, -1), vec2i(0), bounds), size);
+	let up = worldAt(clamp(at + vec2i(0, 1), vec2i(0), bounds), size);
 	let acrossX = select(here - left, right - here,
 		length(right - here) < length(here - left));
 	let acrossY = select(here - down, up - here,
@@ -105,6 +106,8 @@ fn gatherMain(in : ScreenOut) -> @location(0) vec4f {
 	let turn = turnAt(in.clip.xy);
 
 	var bounced = vec3f(0.0);
+	var weight = 0.0;
+	var filled = 0.0;
 	for (var n = 0.0; n < count; n = n + 1.0) {
 		// A ring of screen offsets, spiralling out, turned per pixel. Screen
 		// space rather than world space because what is being gathered lives
@@ -136,18 +139,36 @@ fn gatherMain(in : ScreenOut) -> @location(0) vec4f {
 		let leaves = max(0.0, dot(theirs, -direction));
 		if (leaves <= 0.0) { continue; }
 
-		// Falls off with distance the way light does, over a reach measured
-		// in metres rather than in pixels -- so a bounce does not grow as a
-		// wall comes closer and fills more of the screen.
-		let fade = 1.0 / (1.0 + apart * apart);
-		bounced = bounced
-			+ textureLoad(scene, other, 0).rgb * (lands * leaves * fade);
+		// **Beyond this it is a different place, not a neighbour.** The reach
+		// above is in pixels, so at the horizon a few of them span hundreds
+		// of metres, and without a limit in metres a distant hillside would
+		// light the ground underfoot.
+		if (apart > look.limit.y) { continue; }
+		// **Linear over that limit, not inverse-square.** A physical falloff
+		// belongs to a point source; every sample here is a patch of surface
+		// whose area grows with distance in the same proportion, and the two
+		// cancel. Inverse-square in metres left a neighbour two metres off
+		// worth a fifth and one ten metres off worth a hundredth, which is
+		// what made the whole term arrive as nothing.
+		let fade = 1.0 - apart / look.limit.y;
+		let share = lands * leaves * fade;
+		bounced = bounced + textureLoad(scene, other, 0).rgb * share;
+		weight = weight + share;
+		filled = filled + 1.0;
 	}
-	// **A surface gives back a fraction of what it takes**, never all of it:
-	// the ground is not a mirror, and a bounce worth all of the light would
-	// grow every time the frame fed itself.
-	let given = look.dial.w;
-	return vec4f(bounced * (look.dial.x * given / count), 1.0);
+	if (weight <= 0.0) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+	// **Two factors that each mean something, rather than one tiny one.**
+	// Dividing the sum by the sample count is the hemisphere average, and it
+	// is correct and useless: on a voxel hillside only two or three samples in
+	// sixteen find a surface turned back toward this one, so the answer landed
+	// at a few percent of a colour that was itself dark, and the whole term
+	// arrived as a rounding error. Divided by its own weight instead, the
+	// first factor is *what colour the light bouncing in here is* -- an
+	// ordinary scene colour -- and the second is *how much of the ring found
+	// anything at all*. The dial then scales something with a size to it.
+	let colour = bounced / weight;
+	let coverage = filled / count;
+	return vec4f(colour * (coverage * look.dial.x), 1.0);
 }
 
 @fragment

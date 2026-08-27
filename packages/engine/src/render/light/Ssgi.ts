@@ -1,6 +1,6 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { Mat4 } from "../../math/Mat4.js";
-import { SCREEN_BOUNCE_SHADER } from "./SCREEN_BOUNCE_SHADER.js";
+import { SSGI_SHADER } from "./SSGI_SHADER.js";
 
 /** Two matrices, the eye and its reach, four dials, and the blur's limit. */
 const BOUNCE_BYTES = 64 + 64 + 16 + 16 + 16;
@@ -9,7 +9,7 @@ const BOUNCE_BYTES = 64 + 64 + 16 + 16 + 16;
  * One bounce of light from surface to surface, gathered off the frame.
  *
  * Runs after the world pass and before the air, because what it gathers is
- * the lit colour that pass just wrote. See {@link SCREEN_BOUNCE_SHADER} for
+ * the lit colour that pass just wrote. See {@link SSGI_SHADER} for
  * what it computes, and for the limit it inherits from working in screen
  * space at all.
  *
@@ -19,7 +19,7 @@ const BOUNCE_BYTES = 64 + 64 + 16 + 16 + 16;
  * because a pass cannot read the image it draws into and there is nothing it
  * needs from that image anyway: light adds.
  */
-export class ScreenBounce {
+export class Ssgi {
 	private readonly ctx: GpuContext;
 	private readonly gatherPipeline: GPURenderPipeline;
 	private readonly blurPipeline: GPURenderPipeline;
@@ -48,19 +48,19 @@ export class ScreenBounce {
 	strength = 1;
 
 	/** Directions tried per pixel. */
-	samples = 12;
+	samples = 16;
 
 	/** Half the width of the blur window, in pixels. */
 	blur = 2;
 
 	/**
-	 * The share of the light landing on a surface that leaves it again.
+	 * How far a bounce may carry in metres, whatever it spans on screen.
 	 *
-	 * A real albedo, roughly: grass and stone give back a third or less of
-	 * what they take. Anything near 1 makes the frame feed itself and the
-	 * picture climbs.
+	 * The reach above is in pixels, so a few of them cover centimetres
+	 * underfoot and hundreds of metres at the horizon. Without this a distant
+	 * hillside lights the ground at your feet.
 	 */
-	albedo = 0.35;
+	carry = 24;
 
 	/**
 	 * How far apart two pixels may be, in metres, and still be blurred
@@ -72,7 +72,7 @@ export class ScreenBounce {
 		this.ctx = ctx;
 		const { device, sceneFormat } = ctx;
 		const module = device.createShaderModule({
-			code: SCREEN_BOUNCE_SHADER,
+			code: SSGI_SHADER,
 		});
 		this.layout = device.createBindGroupLayout({
 			entries: [
@@ -183,11 +183,14 @@ export class ScreenBounce {
 				Math.max(0, this.strength),
 				Math.max(1, Math.round(this.samples)),
 				Math.max(0, Math.round(this.blur)),
-				Math.max(0, this.albedo),
+				0,
 			],
 			36,
 		);
-		this.data.set([Math.max(0, this.blurApart), 0, 0, 0], 40);
+		this.data.set(
+			[Math.max(0, this.blurApart), Math.max(0.01, this.carry), 0, 0],
+			40,
+		);
 		this.ctx.device.queue.writeBuffer(this.uniform, 0, this.data);
 
 		this.run(

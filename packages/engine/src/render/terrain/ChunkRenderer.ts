@@ -14,9 +14,9 @@ import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
-import { ScreenAmbient } from "../light/ScreenAmbient.js";
-import { ScreenBounce } from "../light/ScreenBounce.js";
 import { ScreenDepth } from "../light/ScreenDepth.js";
+import { Ssao } from "../light/Ssao.js";
+import { Ssgi } from "../light/Ssgi.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
@@ -116,16 +116,16 @@ export class ChunkRenderer implements ShadowCaster {
 	 * the geometry is, and this world already bakes two occlusion terms the
 	 * mesher can compute for nothing.
 	 */
-	readonly screenAmbient: ScreenAmbient;
+	readonly ssao: Ssao;
 
 	/** One bounce of light between surfaces, gathered off the frame. */
-	readonly screenBounce: ScreenBounce;
+	readonly ssgi: Ssgi;
 
-	/** Whether {@link screenAmbient} runs at all. */
-	ambientOn = false;
+	/** Whether {@link ssao} runs at all. */
+	ssaoOn = false;
 
-	/** Whether {@link screenBounce} runs at all. */
-	bounceOn = false;
+	/** Whether {@link ssgi} runs at all. */
+	ssgiOn = false;
 
 	/**
 	 * The air, marched over the finished frame.
@@ -237,13 +237,13 @@ export class ChunkRenderer implements ShadowCaster {
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
 		this.cloudShadow = new CloudShadow(ctx, 1024);
 		this.screenDepth = new ScreenDepth(ctx, this.chunkLayout);
-		this.screenAmbient = new ScreenAmbient(ctx);
-		this.screenBounce = new ScreenBounce(ctx);
+		this.ssao = new Ssao(ctx);
+		this.ssgi = new Ssgi(ctx);
 		this.sunViews = new SunViews(
 			ctx,
 			this.cascades,
 			this.cloudShadow,
-			this.screenAmbient.openView,
+			this.ssao.openView,
 		);
 		this.casters.push(this);
 
@@ -485,9 +485,9 @@ export class ChunkRenderer implements ShadowCaster {
 		// Both screen-space passes reconstruct a world position from a depth,
 		// which is one inverse between them rather than one each.
 		const unproject =
-			this.ambientOn || this.bounceOn ? frame.viewProj.inverse() : null;
-		this.sunViews.openSky = this.screenAmbient.openView;
-		if (this.ambientOn) {
+			this.ssaoOn || this.ssgiOn ? frame.viewProj.inverse() : null;
+		this.sunViews.openSky = this.ssao.openView;
+		if (this.ssaoOn) {
 			this.screenDepth.render(
 				encoder,
 				frame.viewProj,
@@ -498,7 +498,7 @@ export class ChunkRenderer implements ShadowCaster {
 						draw(pass, chunk, chunk.opaque);
 				},
 			);
-			this.screenAmbient.resolve(
+			this.ssao.resolve(
 				encoder,
 				this.screenDepth.view!,
 				drawWidth,
@@ -507,7 +507,7 @@ export class ChunkRenderer implements ShadowCaster {
 				frame.viewProj,
 				unproject!,
 			);
-			this.sunViews.openSky = this.screenAmbient.view;
+			this.sunViews.openSky = this.ssao.view;
 		}
 
 		const timing = this.clock.writes();
@@ -575,8 +575,8 @@ export class ChunkRenderer implements ShadowCaster {
 		// light adds rather than scaling anything, so it needs nothing
 		// separated out of that colour -- which is what lets it run here at
 		// all, where ambient occlusion could not.
-		if (this.bounceOn) {
-			this.screenBounce.resolve(
+		if (this.ssgiOn) {
+			this.ssgi.resolve(
 				encoder,
 				depth.createView(),
 				this.atmosphere.sceneTarget(drawWidth, drawHeight),

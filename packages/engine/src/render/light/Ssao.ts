@@ -1,6 +1,6 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { Mat4 } from "../../math/Mat4.js";
-import { SCREEN_AMBIENT_SHADER } from "./SCREEN_AMBIENT_SHADER.js";
+import { SSAO_SHADER } from "./SSAO_SHADER.js";
 
 /** Two matrices, the eye and its reach, and four dials. */
 const AMBIENT_BYTES = 64 + 64 + 16 + 16;
@@ -10,7 +10,7 @@ const AMBIENT_BYTES = 64 + 64 + 16 + 16;
  *
  * The pass runs between {@link ScreenDepth} and the world pass, so what it
  * writes is ready for the terrain shader to read while it is deciding a
- * surface's light. See {@link SCREEN_AMBIENT_SHADER} for what it computes and
+ * surface's light. See {@link SSAO_SHADER} for what it computes and
  * why it may only touch the ambient share.
  *
  * **Two pipelines and two images, because a few samples a pixel are noisy.**
@@ -18,7 +18,7 @@ const AMBIENT_BYTES = 64 + 64 + 16 + 16;
  * depth step. Both are `r8unorm`: occlusion is a fraction, and a byte
  * resolves it more finely than the blur that follows can preserve.
  */
-export class ScreenAmbient {
+export class Ssao {
 	private readonly ctx: GpuContext;
 	private readonly occlusionPipeline: GPURenderPipeline;
 	private readonly blurPipeline: GPURenderPipeline;
@@ -44,16 +44,16 @@ export class ScreenAmbient {
 	strength = 0.9;
 
 	/**
-	 * How far in front a surface must stand before it counts, in metres.
+	 * How far above the tangent plane a neighbour must stand before it counts.
 	 *
-	 * Without it a surface occludes itself: the reconstructed position and
-	 * the sampled one are the same point to within a rounding, so half the
-	 * samples read as blocked and flat ground comes out grey.
+	 * A sine rather than a distance: it is the rise of the direction toward
+	 * the neighbour, so `0.05` is about three degrees. It is what keeps the
+	 * rounding in a reconstructed position from reading as a slope.
 	 */
 	bias = 0.05;
 
 	/** Directions tried per pixel. */
-	samples = 12;
+	samples = 16;
 
 	/** Half the width of the blur window, in pixels. */
 	blur = 2;
@@ -62,7 +62,7 @@ export class ScreenAmbient {
 		this.ctx = ctx;
 		const { device } = ctx;
 		const module = device.createShaderModule({
-			code: SCREEN_AMBIENT_SHADER,
+			code: SSAO_SHADER,
 		});
 		this.layout = device.createBindGroupLayout({
 			entries: [

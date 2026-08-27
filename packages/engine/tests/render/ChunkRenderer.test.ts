@@ -129,34 +129,34 @@ describe("what a frame encodes", () => {
 			// before either existed -- not a pass that runs and returns 1.
 			const off = count(() => {});
 			const bare = count((r) => {
-				r.ambientOn = false;
-				r.bounceOn = false;
+				r.ssaoOn = false;
+				r.ssgiOn = false;
 			});
 			expect(off.geometry).toBe(bare.geometry);
 			expect(off.screen).toBe(bare.screen);
 		});
 
-		it("draws the geometry a second time for the occlusion", () => {
+		it("draws the geometry a second time for SSAO", () => {
 			// **This is what the occlusion costs**, and the reason it is a
 			// switch rather than always on: the sky's share is decided while
 			// the world is being drawn, so where the geometry is has to be
 			// known before that pass, which means finding out twice.
 			const off = count(() => {});
 			const on = count((r) => {
-				r.ambientOn = true;
+				r.ssaoOn = true;
 			});
 			expect(on.geometry).toBe(off.geometry + 1);
 			// Occlusion, then the blur that makes it usable.
 			expect(on.screen).toBe(off.screen + 2);
 		});
 
-		it("adds the bounce without drawing the geometry again", () => {
+		it("adds SSGI without drawing the geometry again", () => {
 			// The bounce gathers from the lit colour the world pass already
 			// wrote, so it needs no second look at the geometry -- which is
 			// the whole difference between the two in what they cost.
 			const off = count(() => {});
 			const on = count((r) => {
-				r.bounceOn = true;
+				r.ssgiOn = true;
 			});
 			expect(on.geometry).toBe(off.geometry);
 			// Gather, blur, and add it back over the frame.
@@ -168,8 +168,8 @@ describe("what a frame encodes", () => {
 			// switching it on changes what every terrain pipeline reads. One
 			// unbound group refuses the whole command buffer.
 			const { draws } = count((r) => {
-				r.ambientOn = true;
-				r.bounceOn = true;
+				r.ssaoOn = true;
+				r.ssgiOn = true;
 			});
 			expect(draws.length).toBeGreaterThan(0);
 			for (const drawn of draws)

@@ -13,7 +13,7 @@ const VIEW_BYTES = 64;
  * decided inside the terrain shader while the world is being drawn -- so a
  * pass reading the depth the world pass *wrote* is already too late to change
  * it. This draws the same geometry with no fragment stage at all, which hands
- * {@link ScreenAmbient} a depth buffer one pass early.
+ * {@link Ssao} a depth buffer one pass early.
  *
  * It is the cascades' own shader with the view matrix in place of the light's,
  * because *how far is the nearest surface* is one question however it is

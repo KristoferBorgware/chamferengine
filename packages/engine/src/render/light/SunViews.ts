@@ -17,7 +17,7 @@ import type { GpuContext } from "../gpu/GpuContext.js";
  * because coverage is a quantity to be blended and not a depth to be compared.
  *
  * **The seventh is not the sun's at all**: it is how much sky each pixel can
- * see, from {@link ScreenAmbient}. It is here because there is no fourth group
+ * see, from {@link Ssao}. It is here because there is no fourth group
  * to put it in and it is read by exactly the shaders this group already
  * serves -- so what this class really holds is everything the ground's light
  * is read from that is not the ground itself.

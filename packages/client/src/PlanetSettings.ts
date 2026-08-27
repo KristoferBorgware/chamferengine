@@ -802,13 +802,13 @@ export interface PlanetKnobs {
 	 * decided while the world is being drawn, so the occlusion has to exist
 	 * before that -- which means finding out where the geometry is twice.
 	 */
-	contactShadows: boolean;
+	ssao: boolean;
 
 	/** How far over a surface the occlusion looks, in metres. */
-	contactReach: number;
+	ssaoReach: number;
 
 	/** How much of the sky a fully blocked pixel loses. */
-	contactStrength: number;
+	ssaoStrength: number;
 
 	/**
 	 * Whether light bounces once from surface to surface.
@@ -822,13 +822,13 @@ export interface PlanetKnobs {
 	 * technique: a wall out of frame bounces nothing, so turning the camera
 	 * changes the light.
 	 */
-	bouncedLight: boolean;
+	ssgi: boolean;
 
 	/** How far across the picture a bounce carries, in pixels. */
-	bounceReach: number;
+	ssgiReach: number;
 
 	/** How much of the gathered bounce is added. */
-	bounceStrength: number;
+	ssgiStrength: number;
 
 	/**
 	 * How many times the canvas the world is drawn at before it is put back.
@@ -1033,12 +1033,12 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// spills -- lit ground sits near 1 and the sun sits at 120.
 	bloomThreshold: 1.1,
 	bloomStrength: 0.55,
-	contactShadows: false,
-	contactReach: 1.6,
-	contactStrength: 0.9,
-	bouncedLight: false,
-	bounceReach: 48,
-	bounceStrength: 1,
+	ssao: false,
+	ssaoReach: 1.6,
+	ssaoStrength: 0.9,
+	ssgi: false,
+	ssgiReach: 48,
+	ssgiStrength: 1.5,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1530,18 +1530,18 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
-	contactShadows: { ...TOGGLE, rebuilds: false },
-	contactReach: { low: 0.2, high: 6, step: 0.1, rebuilds: false, unit: "m" },
-	contactStrength: {
+	ssao: { ...TOGGLE, rebuilds: false },
+	ssaoReach: { low: 0.2, high: 6, step: 0.1, rebuilds: false, unit: "m" },
+	ssaoStrength: {
 		low: 0,
 		high: 2,
 		step: 0.05,
 		rebuilds: false,
 		unit: "",
 	},
-	bouncedLight: { ...TOGGLE, rebuilds: false },
-	bounceReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
-	bounceStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "" },
+	ssgi: { ...TOGGLE, rebuilds: false },
+	ssgiReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
+	ssgiStrength: { low: 0, high: 6, step: 0.05, rebuilds: false, unit: "" },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },

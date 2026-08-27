@@ -2034,9 +2034,8 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
-- **AMBIENT OCCLUSION MUST RUN BEFORE THE LIGHT IT CHANGES, AND A BOUNCE IS
-  THE ONE INDIRECT TERM THAT CAN RUN AFTER** (`ScreenAmbient`, `ScreenBounce`,
-  `ScreenDepth`, doc 16). Two screen-space terms, and the difference between
+- **SSAO MUST RUN BEFORE THE LIGHT IT CHANGES, AND SSGI IS THE ONE INDIRECT
+  TERM THAT CAN RUN AFTER** (`Ssao`, `Ssgi`, `ScreenDepth`, doc 16). Two screen-space terms, and the difference between
   them decides everything about what each one costs. **Occlusion scales the
   sky's share of a surface**, and that share is decided inside
   `TERRAIN_SHADER` while the world is being drawn -- so a pass reading the
@@ -2051,20 +2050,37 @@ Violating any of these breaks the design. They are not tunable.
   gathers from. It costs no second look at the geometry. **Never multiply a
   whole pixel by an occlusion factor**: the sun either reaches a face or does
   not and the cascades already answer that, so scaling everything draws dirt
-  across ground in full sunlight. **The normal is reconstructed, never
-  stored** -- the terrain shader derives its own the same way, so the two
-  agree by construction -- but **a plain derivative straddles a silhouette**
-  and averages two surfaces metres apart, so each axis takes whichever
-  neighbour is closer in depth. **An occluder far in front occludes nothing**,
-  or every silhouette casts a dark halo on the ground behind it. Both are
+  across ground in full sunlight. **OCCLUSION IS MEASURED AGAINST
+  THE TANGENT PLANE, NEVER BY COMPARING TWO DISTANCES FROM THE EYE**: stepping
+  into a hemisphere and calling it blocked where the surface there is nearer
+  self-occludes, because on any surface seen at an angle a step **along** the
+  ground lands further from the eye than it started -- and how much depends on
+  which way that sample pointed, so a flat hillside comes out covered in
+  hatching **no blur can remove, because it is signal rather than noise**.
+  Ask instead whether a neighbour stands **above the plane this surface lies
+  in**: a neighbour on the same flat ground is in that plane and contributes
+  nothing however the samples were turned. **The normal is reconstructed,
+  never stored** -- the terrain shader derives its own the same way, so the
+  two agree by construction -- but **a plain derivative straddles a
+  silhouette** and averages two surfaces metres apart, so each axis takes
+  whichever neighbour is closer in depth. **HOW SSGI'S SUM IS NORMALISED
+  DECIDES WHETHER THE TERM EXISTS**: dividing by the sample count is the
+  hemisphere average and is correct and useless -- on a voxel hillside two or
+  three samples in sixteen find a surface turned back toward this one, so the
+  answer lands at a few percent of a colour that was itself dark and arrives
+  as a rounding error. Divide by the accumulated **weight** instead, which is
+  the colour bouncing in, and multiply by **how much of the ring found
+  anything**. Its falloff is **linear, never inverse-square** -- a physical
+  falloff belongs to a point source, and every sample here is a patch whose
+  area grows with distance in the same proportion. Both are
   blurred before anything reads them, and **neither blur may cross a depth
   step**. The occlusion joins **group 2**, which `SunViews` owns and both the
   terrain and the sea declare -- there is no fourth bind group left -- and it
   is read through a **clamped** `textureLoad`, because the off case is one
   texel wide and a load outside a texture returns **zero**, which here means
-  fully shut in and would black the world out rather than leave it alone. Both
-  ship **off**; the case for either is a measurement on real hardware that
-  nobody has taken.
+  fully shut in and would black the world out rather than leave it alone. **Each row names its own technique** -- calling SSAO
+  **Contact shadows** was worse than a rename, since that is a different
+  effect with a light direction in it. Both ship **off**.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

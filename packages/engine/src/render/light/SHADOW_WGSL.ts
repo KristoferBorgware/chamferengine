@@ -47,7 +47,7 @@ struct CloudCover {
 @group(2) @binding(5) var cloudSample : sampler;
 
 /**
- * How much of the sky each pixel can see, from {@link ScreenAmbient}.
+ * How much of the sky each pixel can see, from {@link Ssao}.
  *
  * One texel of pure openness when the effect is off, so this is read the same
  * way either way and no shader has a branch for a feature nobody turned on.

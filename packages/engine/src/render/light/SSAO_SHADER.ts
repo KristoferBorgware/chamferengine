@@ -7,9 +7,7 @@
  * grid, decided before anything is on screen. Neither can see that one hill
  * stands in front of another, or that a placed wall now shades the ground a
  * metre from it, because at the moment they are computed there is no view.
- * This is the term that can: it asks, for the surface at this pixel, how much
- * of the hemisphere over it is filled by other surfaces the camera can also
- * see.
+ * This is the term that can.
  *
  * **It scales the ambient and never the direct sun.** A lit wall is lit
  * whatever stands beside it -- the sun either reaches it or does not, and the
@@ -17,6 +15,24 @@
  * factor is the common mistake and it draws dirt in the sunlight. So what
  * comes out of here is read inside the terrain shader and multiplied into the
  * sky's share alone.
+ *
+ * **Occlusion is measured against the tangent plane, never by comparing two
+ * distances from the eye.** The obvious construction -- step off into a
+ * hemisphere, project the step back onto the screen, and call it blocked
+ * where the surface there is nearer the eye -- self-occludes: on any surface
+ * seen at an angle, a step *along* the ground lands further from the eye than
+ * where it started, so it counts as blocked. How much depends on which way
+ * that particular sample happened to point, and each pixel turns its samples
+ * differently, so a flat hillside comes out covered in hatching that no blur
+ * can remove because it is signal rather than noise. What is asked instead is
+ * whether a neighbouring surface stands **above the plane this surface lies
+ * in**: a neighbour on the same flat ground is in that plane and contributes
+ * nothing at all, however far away it is or however the samples were turned.
+ *
+ * That also makes the sampling simpler. There is no hemisphere to build and
+ * nothing to project: the neighbours are read straight off the screen, and
+ * how far to reach across it in pixels comes from how many metres one pixel
+ * covers here, which the normal reconstruction already had to work out.
  *
  * **The normal is reconstructed, not stored.** There is no G-buffer here and
  * the terrain shader derives its own normal the same way, from how the world
@@ -26,18 +42,16 @@
  * closer in depth: the near surface keeps its own normal at the edge instead
  * of borrowing the sky's.
  *
- * The occlusion is noisy by nature -- a handful of samples per pixel, turned
- * a different way at each one so the pattern does not repeat -- so it is
- * blurred before anything reads it, by a second pipeline in this same file
- * that refuses to blur across a depth step.
+ * What is left is blurred before anything reads it, by a second pipeline in
+ * this same file that refuses to blur across a depth step.
  */
-export const SCREEN_AMBIENT_SHADER = /* wgsl */ `
+export const SSAO_SHADER = /* wgsl */ `
 struct Look {
 	inverseViewProj : mat4x4f,
 	viewProj        : mat4x4f,
-	// xyz eye, w how far the hemisphere reaches in metres
+	// xyz eye, w how far the occlusion reaches in metres
 	eye             : vec4f,
-	// x strength, y bias in metres, z sample count, w blur radius in texels
+	// x strength, y bias, z sample count, w blur radius in texels
 	dial            : vec4f,
 };
 @group(0) @binding(0) var<uniform> look : Look;
@@ -59,6 +73,9 @@ fn vertexMain(@builtin(vertex_index) index : u32) -> ScreenOut {
 
 /** Nothing was drawn at this pixel, so there is no surface to occlude. */
 const NOTHING = 1.0;
+
+/** The furthest across the screen a gather will reach, in pixels. */
+const WIDEST = 64.0;
 
 /**
  * The world point a pixel's depth stands at.
@@ -87,41 +104,21 @@ fn turnAt(pixel : vec2f) -> f32 {
 		* fract(dot(pixel, vec2f(0.06711056, 0.00583715)))) * 6.2831853;
 }
 
-/**
- * A direction spread evenly over the hemisphere around a normal.
- *
- * The sunflower spiral: the nth of a count, lifted off the surface by the
- * square root of its share so the samples are even by area rather than by
- * angle, and turned by the pixel's own offset so neighbouring pixels never
- * sample the same set.
- */
-fn hemisphere(n : f32, count : f32, normal : vec3f, turn : f32) -> vec3f {
-	let up = select(
-		vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(normal.z) > 0.9);
-	let across = normalize(cross(up, normal));
-	let along = cross(normal, across);
-	let rise = sqrt((n + 0.5) / count);
-	let angle = turn + n * 2.3999632;
-	let flat = sqrt(1.0 - rise * rise);
-	return across * (cos(angle) * flat)
-		+ along * (sin(angle) * flat)
-		+ normal * rise;
-}
-
 @fragment
 fn occlusionMain(in : ScreenOut) -> @location(0) f32 {
 	let at = vec2i(in.clip.xy);
 	let size = vec2f(textureDimensions(sceneDepth));
+	let bounds = vec2i(size) - vec2i(1);
 	if (textureLoad(sceneDepth, at, 0) >= 1.0) { return NOTHING; }
 
 	let here = worldAt(at, size);
 	// **Each axis takes its closer neighbour.** A plain derivative straddles a
 	// silhouette and returns the average of two surfaces metres apart, which
 	// tilts the normal at every edge in the picture and rings it with light.
-	let left = worldAt(at + vec2i(-1, 0), size);
-	let right = worldAt(at + vec2i(1, 0), size);
-	let down = worldAt(at + vec2i(0, -1), size);
-	let up = worldAt(at + vec2i(0, 1), size);
+	let left = worldAt(clamp(at + vec2i(-1, 0), vec2i(0), bounds), size);
+	let right = worldAt(clamp(at + vec2i(1, 0), vec2i(0), bounds), size);
+	let down = worldAt(clamp(at + vec2i(0, -1), vec2i(0), bounds), size);
+	let up = worldAt(clamp(at + vec2i(0, 1), vec2i(0), bounds), size);
 	let acrossX = select(here - left, right - here,
 		length(right - here) < length(here - left));
 	let acrossY = select(here - down, up - here,
@@ -133,38 +130,42 @@ fn occlusionMain(in : ScreenOut) -> @location(0) f32 {
 	let facing = normal * select(-1.0, 1.0, dot(normal, toEye) > 0.0);
 
 	let reach = look.eye.w;
+	// **How far to look, in pixels, from how much world one pixel covers.**
+	// A fixed pixel radius would reach centimetres underfoot and hundreds of
+	// metres at the horizon, so the same setting would mean a different thing
+	// everywhere in one picture.
+	let perPixel = max(0.0001, 0.5 * (length(acrossX) + length(acrossY)));
+	let widest = clamp(reach / perPixel, 2.0, WIDEST);
+
 	let bias = look.dial.y;
 	let count = max(1.0, floor(look.dial.z));
 	let turn = turnAt(in.clip.xy);
 	var blocked = 0.0;
 	for (var n = 0.0; n < count; n = n + 1.0) {
-		// Spread along the ray as well as over the hemisphere, so the samples
-		// fill a solid volume rather than a shell: an occluder halfway out
-		// counts as much as one at the rim.
-		let step = hemisphere(n, count, facing, turn)
-			* (reach * (0.25 + 0.75 * ((n + 0.5) / count)));
-		let sampleAt = here + step;
-		let clip = look.viewProj * vec4f(sampleAt, 1.0);
-		if (clip.w <= 0.0) { continue; }
-		let ndc = clip.xyz / clip.w;
-		let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-		if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { continue; }
-		let onScreen = vec2i(uv * size);
-		if (textureLoad(sceneDepth, onScreen, 0) >= 1.0) { continue; }
+		// A spiral of screen offsets, turned per pixel, spread by the square
+		// root of its share so the samples are even by area rather than
+		// bunched at the centre.
+		let spread = sqrt((n + 0.5) / count);
+		let angle = turn + n * 2.3999632;
+		let by = vec2i(vec2f(cos(angle), sin(angle)) * (spread * widest));
+		let other = at + by;
+		if (other.x < 0 || other.y < 0
+			|| other.x > bounds.x || other.y > bounds.y) { continue; }
+		if (textureLoad(sceneDepth, other, 0) >= 1.0) { continue; }
 
-		// Whatever the camera sees along that direction, and how far in front
-		// of the sample it stands. Positive means something is between the
-		// sample and the eye, which is what occlusion is.
-		let seen = worldAt(onScreen, size);
-		let infront = length(look.eye.xyz - sampleAt)
-			- length(look.eye.xyz - seen);
-		// **A surface far in front occludes nothing.** It is a different part
-		// of the world that happens to line up, and without this every
-		// silhouette in the picture would cast a dark halo onto the ground
-		// behind it. The fade is over the hemisphere's own reach, so the two
-		// are one number.
-		let near = clamp(reach / max(0.0001, abs(infront)), 0.0, 1.0);
-		blocked = blocked + select(0.0, near, infront > bias);
+		let there = worldAt(other, size);
+		let toward = there - here;
+		let apart = length(toward);
+		if (apart < 0.0001 || apart > reach) { continue; }
+		// **How far above this surface's own plane that neighbour stands.**
+		// Zero for anything lying in the plane, which is what flat ground
+		// gives however the samples were turned -- so flat ground is exactly
+		// open, with nothing left for a blur to have to hide.
+		let rise = dot(toward / apart, facing);
+		// Fades to nothing at the edge of the reach rather than stopping
+		// there, or the occlusion would step wherever a neighbour crossed it.
+		let fade = 1.0 - apart / reach;
+		blocked = blocked + max(0.0, rise - bias) * fade;
 	}
 	let open = 1.0 - (blocked / count) * look.dial.x;
 	return clamp(open, 0.0, 1.0);
@@ -178,11 +179,9 @@ fn blurMain(in : ScreenOut) -> @location(0) f32 {
 	// **Never across a depth step.** Two surfaces a pixel apart on screen and
 	// metres apart in the world have nothing to say about each other, and
 	// averaging them drags one surface's occlusion over the other's edge --
-	// which is a halo, the same artifact the range check above exists to
-	// stop. The window is what the reach spans, since that is the distance
-	// this term is about at all.
-	let mine = textureLoad(sceneDepth, at, 0);
-	if (mine >= 1.0) { return NOTHING; }
+	// which is a halo. The window is what the reach spans, since that is the
+	// distance this term is about at all.
+	if (textureLoad(sceneDepth, at, 0) >= 1.0) { return NOTHING; }
 	let here = worldAt(at, vec2f(size));
 	let apart = look.eye.w;
 
