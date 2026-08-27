@@ -11,14 +11,21 @@ import type { GpuContext } from "../gpu/GpuContext.js";
  * its own -- it shares this one, and the two of them are held together here
  * rather than each holding half a layout neither can build alone.
  *
- * Six bindings. The first three are the cascades: their matrices, the depth
- * array, and the comparison sampler that reads it. The last three are the
+ * Seven bindings. The first three are the cascades: their matrices, the depth
+ * array, and the comparison sampler that reads it. The next three are the
  * clouds: their one matrix, the coverage, and an ordinary filtering sampler,
  * because coverage is a quantity to be blended and not a depth to be compared.
  *
- * Either half may replace its texture when the panel changes how many texels
- * it holds, so each carries a revision and the bind group is rebuilt when
- * either moves.
+ * **The seventh is not the sun's at all**: it is how much sky each pixel can
+ * see, from {@link Ssao}. It is here because there is no fourth group
+ * to put it in and it is read by exactly the shaders this group already
+ * serves -- so what this class really holds is everything the ground's light
+ * is read from that is not the ground itself.
+ *
+ * Either shadow half may replace its texture when the panel changes how many
+ * texels it holds, so each carries a revision and the bind group is rebuilt
+ * when either moves. The seventh is compared by identity, because it is
+ * swapped for a single flat texel whenever the effect is switched off.
  */
 export class SunViews {
 	private readonly ctx: GpuContext;
@@ -31,7 +38,14 @@ export class SunViews {
 	private group: GPUBindGroup;
 	private builtFrom = -1;
 
-	constructor(ctx: GpuContext, cascades: CascadeShadow, clouds: CloudShadow) {
+	private builtOpen: GPUTextureView | null = null;
+
+	constructor(
+		ctx: GpuContext,
+		cascades: CascadeShadow,
+		clouds: CloudShadow,
+		open: GPUTextureView,
+	) {
 		this.ctx = ctx;
 		this.cascades = cascades;
 		this.clouds = clouds;
@@ -71,10 +85,25 @@ export class SunViews {
 					visibility: fragment,
 					sampler: { type: "filtering" },
 				},
+				{
+					binding: 6,
+					visibility: fragment,
+					texture: { sampleType: "float", viewDimension: "2d" },
+				},
 			],
 		});
+		this.openSky = open;
 		this.group = this.build();
 	}
+
+	/**
+	 * How much sky each pixel can see.
+	 *
+	 * Set every frame. One flat texel of pure openness means the effect is
+	 * off, and the shader reads that without a branch -- it is the same
+	 * lookup either way, returning 1.
+	 */
+	openSky: GPUTextureView;
 
 	/**
 	 * The group to set, rebuilt if either half replaced its texture.
@@ -85,12 +114,14 @@ export class SunViews {
 	 */
 	get bindGroup(): GPUBindGroup {
 		const stamp = this.cascades.revision * 1000 + this.clouds.revision;
-		if (stamp !== this.builtFrom) this.group = this.build();
+		if (stamp !== this.builtFrom || this.builtOpen !== this.openSky)
+			this.group = this.build();
 		return this.group;
 	}
 
 	private build(): GPUBindGroup {
 		this.builtFrom = this.cascades.revision * 1000 + this.clouds.revision;
+		this.builtOpen = this.openSky;
 		return this.ctx.device.createBindGroup({
 			layout: this.layout,
 			entries: [
@@ -103,6 +134,7 @@ export class SunViews {
 				{ binding: 3, resource: { buffer: this.clouds.uniformBuffer } },
 				{ binding: 4, resource: this.clouds.view },
 				{ binding: 5, resource: this.clouds.sampler },
+				{ binding: 6, resource: this.openSky },
 			],
 		});
 	}

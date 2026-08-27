@@ -824,6 +824,47 @@ export interface PlanetKnobs {
 	bloomStrength: number;
 
 	/**
+	 * Whether how much sky a pixel can see is worked out from the picture.
+	 *
+	 * Screen-space ambient occlusion. The mesher already bakes two occlusion
+	 * terms -- how much sky a column stands under, and how boxed in a corner
+	 * is -- and both are facts about the block grid, settled before there is
+	 * a view. This one can see that one hill stands in front of another, or
+	 * that a wall built this morning shades the ground beside it.
+	 *
+	 * **It costs a whole extra pass over the geometry.** The sky's share is
+	 * decided while the world is being drawn, so the occlusion has to exist
+	 * before that -- which means finding out where the geometry is twice.
+	 */
+	ssao: boolean;
+
+	/** How far over a surface the occlusion looks, in metres. */
+	ssaoReach: number;
+
+	/** How much of the sky a fully blocked pixel loses. */
+	ssaoStrength: number;
+
+	/**
+	 * Whether light bounces once from surface to surface.
+	 *
+	 * Screen-space global illumination. Every light in this world arrives
+	 * straight from its source, so a sunlit cliff throws nothing onto the
+	 * shaded ground beside it. This gathers what the frame already drew and
+	 * adds a share of it back.
+	 *
+	 * **It only knows what is on screen**, which is the standing limit of the
+	 * technique: a wall out of frame bounces nothing, so turning the camera
+	 * changes the light.
+	 */
+	ssgi: boolean;
+
+	/** How far across the picture a bounce carries, in pixels. */
+	ssgiReach: number;
+
+	/** How much of the gathered bounce is added. */
+	ssgiStrength: number;
+
+	/**
 	 * How many times the canvas the world is drawn at before it is put back.
 	 *
 	 * **The one antialiasing a world of hard edges answers to.** A voxel
@@ -1029,6 +1070,12 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// spills -- lit ground sits near 1 and the sun sits at 120.
 	bloomThreshold: 1.1,
 	bloomStrength: 0.55,
+	ssao: false,
+	ssaoReach: 1.6,
+	ssaoStrength: 0.9,
+	ssgi: false,
+	ssgiReach: 48,
+	ssgiStrength: 1.5,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1524,6 +1571,18 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
+	ssao: { ...TOGGLE, rebuilds: false },
+	ssaoReach: { low: 0.2, high: 6, step: 0.1, rebuilds: false, unit: "m" },
+	ssaoStrength: {
+		low: 0,
+		high: 2,
+		step: 0.05,
+		rebuilds: false,
+		unit: "",
+	},
+	ssgi: { ...TOGGLE, rebuilds: false },
+	ssgiReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
+	ssgiStrength: { low: 0, high: 6, step: 0.05, rebuilds: false, unit: "" },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },

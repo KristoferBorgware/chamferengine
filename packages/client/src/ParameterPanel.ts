@@ -781,6 +781,41 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => k.bloomOn,
 			},
 			{
+				key: "ssao",
+				label: "SSAO",
+				enabledWhen: (k) => !k.plain,
+				given: () => "a second pass over the geometry",
+			},
+			{
+				key: "ssaoReach",
+				label: "SSAO reach",
+				digits: 1,
+				enabledWhen: (k) => !k.plain && k.ssao,
+			},
+			{
+				key: "ssaoStrength",
+				label: "SSAO strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.ssao,
+			},
+			{
+				key: "ssgi",
+				label: "SSGI",
+				enabledWhen: (k) => !k.plain,
+				given: () => "only from what is on screen",
+			},
+			{
+				key: "ssgiReach",
+				label: "SSGI reach",
+				enabledWhen: (k) => !k.plain && k.ssgi,
+			},
+			{
+				key: "ssgiStrength",
+				label: "SSGI strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.ssgi,
+			},
+			{
 				key: "superSample",
 				label: "Supersample",
 				digits: 2,

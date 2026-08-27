@@ -198,6 +198,7 @@ fn lightOn(
 	away : f32,
 	ambient : f32,
 	direct : f32,
+	pixel : vec2f,
 ) -> vec3f {
 	let day = frame.night.x;
 	var lambert = max(dot(normal, frame.sun.xyz), 0.0);
@@ -233,7 +234,13 @@ fn lightOn(
 	// that tint is enough to read as sky without turning grey stone blue.
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
-	let fromSky = tint * (ambient * openness * day * frame.sky.w);
+	// **What stands around this pixel, and it touches the ambient alone.**
+	// The mesher's two occlusion terms are facts about the block grid, fixed
+	// before there is a view; this one can see that a hill stands in front of
+	// another, or that a wall built this morning now shades the ground beside
+	// it. Off, it reads a flat 1 and the line below is what it always was.
+	let seen = skyOpenAt(pixel);
+	let fromSky = tint * (ambient * openness * day * frame.sky.w * seen);
 	let fromSun = sunColor(up) * (direct * lambert * day * frame.night.z);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a
@@ -250,7 +257,7 @@ fn lightOn(
 	// so the sun and the moon add on top of it rather than having to beat it:
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
-	let night = vec3f(frame.night.y * openness);
+	let night = vec3f(frame.night.y * openness * seen);
 	return max(night, fromSky) + fromSun + fromMoon;
 }
 
@@ -267,8 +274,8 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// whatever the balance is and only what stands at an angle to the sun
 	// moves.
 	let direct = SUN_SHARE;
-	let lit =
-		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
+	let lit = in.color
+		* lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.clip.xy);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -286,8 +293,8 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// Water takes less of its light from the sun than stone does: a look
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
-	let lit =
-		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
+	let lit = in.color
+		* lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.clip.xy);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

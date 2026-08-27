@@ -2427,6 +2427,14 @@ async function main(): Promise<void> {
 		renderer.bloom.threshold = current.knobs.bloomThreshold;
 		renderer.bloom.strength = current.knobs.bloomStrength;
 		renderer.superSample = current.knobs.superSample;
+		// Both screen-space terms, each on its own switch. SSAO costs a second
+		// pass over the geometry and SSGI does not, so they are never one row.
+		renderer.ssaoOn = !PLAIN && current.knobs.ssao;
+		renderer.ssao.reach = current.knobs.ssaoReach;
+		renderer.ssao.strength = current.knobs.ssaoStrength;
+		renderer.ssgiOn = !PLAIN && current.knobs.ssgi;
+		renderer.ssgi.reach = current.knobs.ssgiReach;
+		renderer.ssgi.strength = current.knobs.ssgiStrength;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		// Where the cloud shadow box is centred. Nothing set this while the
 		// coarse map was on the GPU and the renderer could read sea level off
