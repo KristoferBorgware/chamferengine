@@ -379,6 +379,33 @@
 			const RIDGE_GAIN = 2.2;
 
 			/**
+			 * Every octave's own offset, worked out once per seed instead of per
+			 * sample.
+			 *
+			 * **An octave's offset is a property of the octave and the seed, and
+			 * of nothing else** -- it never depended on the point being sampled,
+			 * and computing it inside the sampling loop meant three hashes a
+			 * sample thrown away. Bit for bit the same number: the stored value
+			 * is exactly the `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to
+			 * compute, and the settings' own offset is still added at the point
+			 * of use.
+			 */
+			const OCTAVE_OFFSETS = new Map();
+
+			function offsetsFor(seed, octaves) {
+				const held = OCTAVE_OFFSETS.get(seed);
+				if (held && held.length >= octaves * 3) return held;
+				const made = new Float64Array(octaves * 3);
+				for (let o = 0; o < octaves; o++) {
+					made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+				}
+				OCTAVE_OFFSETS.set(seed, made);
+				return made;
+			}
+
+			/**
 			 * Octaves of value noise with the panel's own parameters, in
 			 * `[-1, 1]`.
 			 *
@@ -407,12 +434,11 @@
 				let f = s.frequency;
 				let weight = 1;
 				const ridge = s.ridge;
+				const spread = offsetsFor(seed, s.octaves);
 				for (let o = 0; o < s.octaves; o++) {
-					const ox =
-						(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetX;
-					const oy =
-						(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetY;
-					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+					const ox = spread[o * 3] + s.offsetX;
+					const oy = spread[o * 3 + 1] + s.offsetY;
+					const oz = spread[o * 3 + 2];
 					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 					let signal = n;
 					if (ridge > 0) {

@@ -520,6 +520,33 @@
 			const RIDGE_GAIN = 2.2;
 
 			/**
+			 * Every octave's own offset, worked out once per seed instead of per
+			 * sample.
+			 *
+			 * **An octave's offset is a property of the octave and the seed, and
+			 * of nothing else** -- it never depended on the point being sampled,
+			 * and computing it inside the sampling loop meant three hashes a
+			 * sample thrown away. Bit for bit the same number: the stored value
+			 * is exactly the `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to
+			 * compute, and the settings' own offset is still added at the point
+			 * of use.
+			 */
+			const OCTAVE_OFFSETS = new Map();
+
+			function offsetsFor(seed, octaves) {
+				const held = OCTAVE_OFFSETS.get(seed);
+				if (held && held.length >= octaves * 3) return held;
+				const made = new Float64Array(octaves * 3);
+				for (let o = 0; o < octaves; o++) {
+					made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+				}
+				OCTAVE_OFFSETS.set(seed, made);
+				return made;
+			}
+
+			/**
 			 * Octaves of value noise with the panel's own parameters, in
 			 * `[-1, 1]`.
 			 *
@@ -551,12 +578,11 @@
 				let f = s.frequency;
 				let weight = 1;
 				const ridge = s.ridge;
+				const spread = offsetsFor(seed, s.octaves);
 				for (let o = 0; o < s.octaves; o++) {
-					const ox =
-						(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetX;
-					const oy =
-						(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetY;
-					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+					const ox = spread[o * 3] + s.offsetX;
+					const oy = spread[o * 3 + 1] + s.offsetY;
+					const oz = spread[o * 3 + 2];
 					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 					let signal = n;
 					if (ridge > 0) {
@@ -2339,6 +2365,17 @@
 				const mark = new Int32Array(count).fill(-1);
 				const bag = new Int32Array(4096);
 				let era = 0;
+				// **A rod's candidates, gathered once for the whole rod.** The
+				// walk steps every 0.4 of a block and a cell stays inside the
+				// disc for a dozen steps or more, so gathering per step tests
+				// the same cell against the same segment over and over. These
+				// four hold the union instead: which cells the walk ever saw,
+				// and the lowest and highest the axis stood while it saw them.
+				const seen = new Int32Array(count);
+				const seenLow = new Float64Array(count);
+				const seenHigh = new Float64Array(count);
+				const seenList = new Int32Array(count);
+				let seenEra = 0;
 				const gather = (from, rings) => {
 					era++;
 					let used = 0;
@@ -2422,6 +2459,32 @@
 					const rings = Math.min(9, Math.ceil((wide + block) / cellMetres) + 1);
 					let wasCell = -1;
 					let wasLayer = 0;
+					seenEra++;
+					let listed = 0;
+					// **A disc depends on the cell the axis sits in, and
+					// nothing else.** The walk steps every 0.4 of a block, so
+					// two or three steps in a row share a seat and gather the
+					// identical ring around it. These three hold the run:
+					// which seat it is, and the lowest and highest the axis
+					// stood while it stayed there.
+					let runSeat = -1;
+					let runLow = 0;
+					let runHigh = 0;
+					const flush = () => {
+						const used = gather(runSeat, rings);
+						for (let q = 0; q < used; q++) {
+							const c = bag[q];
+							if (seen[c] !== seenEra) {
+								seen[c] = seenEra;
+								seenLow[c] = runLow;
+								seenHigh[c] = runHigh;
+								seenList[listed++] = c;
+							} else {
+								if (runLow < seenLow[c]) seenLow[c] = runLow;
+								if (runHigh > seenHigh[c]) seenHigh[c] = runHigh;
+							}
+						}
+					};
 					for (let s = 0; s <= steps; s++) {
 						const t = s / steps;
 						const px = ax + ux * t, py = ay + uy * t, pz = az + uz * t;
@@ -2450,34 +2513,79 @@
 							wasCell = seat;
 							wasLayer = here;
 						}
-						const used = gather(seat, rings);
-						for (let q = 0; q < used; q++) {
-							const c = bag[q];
-							const lo = Math.max(0, layerAt(c, stands - wide - block));
-							const hi = Math.min(
-								LAYERS - 1,
-								layerAt(c, stands + wide + block),
-							);
-							// The true distance from the block's own centre to
-							// the rod's axis, so a rod is a rod and not a
-							// staircase of discs.
-							for (let slot = lo; slot <= hi; slot++) {
-								const my = top[c] + (slot - SUNK + 0.5) * block;
-								const reach2 = radius + my;
-								const cx = dirX[c] * reach2;
-								const cy = dirY[c] * reach2;
-								const cz = dirZ[c] * reach2;
-								const dx = cx - ax, dy = cy - ay, dz = cz - az;
-								let along =
-									run > 0 ? (dx * ux + dy * uy + dz * uz) / (run * run) : 0;
-								along = Math.max(0, Math.min(1, along));
-								const ex = dx - ux * along;
-								const ey = dy - uy * along;
-								const ez = dz - uz * along;
-								const r = ra + (rb - ra) * along;
-								if (ex * ex + ey * ey + ez * ez <= r * r)
-									write(c, slot, WOOD);
-							}
+						// **Noted, not tested.** The test below is against the
+						// whole segment, so its answer does not depend on which
+						// step happened to gather the cell -- which means the
+						// walk only has to record the band of heights the axis
+						// swept while this cell was in reach, and the test can
+						// run once per cell afterwards.
+						if (seat !== runSeat) {
+							if (runSeat >= 0) flush();
+							runSeat = seat;
+							runLow = stands;
+							runHigh = stands;
+						} else if (stands < runLow) runLow = stands;
+						else if (stands > runHigh) runHigh = stands;
+					}
+					if (runSeat >= 0) flush();
+					// **The same set of cells and slots the per-step loop
+					// covered, each visited once.** Consecutive steps are 0.4 of
+					// a block apart and every step's band reaches at least a
+					// block either side, so the bands overlap and their union is
+					// one band -- from the lowest the axis stood to the highest,
+					// widened the same way.
+					// **A whole column is thrown out with one cross product.**
+					// The disc gathered around each step is a hexagon and the
+					// rod is round, so its corners hold columns the rod never
+					// reaches -- and each of those used to be walked slot by
+					// slot. Every block of a column stands on one line out from
+					// the planet's centre, and **the distance between two
+					// infinite lines is never more than the distance between
+					// any pieces of them**, so a column whose line passes
+					// further from the rod's line than the rod is thick cannot
+					// hold a single block of it. That distance is
+					// `|A . (d x u)| / |d x u|`, and squaring both sides leaves
+					// no square root and no division.
+					//
+					// It is a reject and not the test: a column beside the rod
+					// but past its end still passes here, and the slot walk
+					// below is what refuses it.
+					const wide2 = wide * wide;
+					const overRun = run > 0 ? 1 / (run * run) : 0;
+					for (let q = 0; q < listed; q++) {
+						const c = seenList[q];
+						const dx0 = dirX[c], dy0 = dirY[c], dz0 = dirZ[c];
+						const nx = dy0 * uz - dz0 * uy;
+						const ny = dz0 * ux - dx0 * uz;
+						const nz = dx0 * uy - dy0 * ux;
+						const miss = ax * nx + ay * ny + az * nz;
+						if (miss * miss > wide2 * (nx * nx + ny * ny + nz * nz)) continue;
+						const base = top[c];
+						const lo = Math.max(
+							0,
+							SUNK + Math.floor((seenLow[c] - wide - block - base) / block),
+						);
+						const hi = Math.min(
+							LAYERS - 1,
+							SUNK + Math.floor((seenHigh[c] + wide + block - base) / block),
+						);
+						// The true distance from the block's own centre to the
+						// rod's axis, so a rod is a rod and not a staircase of
+						// discs.
+						for (let slot = lo; slot <= hi; slot++) {
+							const my = base + (slot - SUNK + 0.5) * block;
+							const reach2 = radius + my;
+							const cx = dx0 * reach2;
+							const cy = dy0 * reach2;
+							const cz = dz0 * reach2;
+							const dx = cx - ax, dy = cy - ay, dz = cz - az;
+							let along = (dx * ux + dy * uy + dz * uz) * overRun;
+							along = Math.max(0, Math.min(1, along));
+							const ex = dx - ux * along;
+							const ey = dy - uy * along;
+							const ez = dz - uz * along;
+							const r = ra + (rb - ra) * along;
+							if (ex * ex + ey * ey + ez * ez <= r * r) write(c, slot, WOOD);
 						}
 					}
 				};
@@ -2495,18 +2603,47 @@
 				 * second costs eight more hashed lattice corners for every
 				 * candidate cell of every cluster, and a canopy has hundreds of
 				 * clusters -- it is the largest single bill on the page.
+				 *
+				 * **And one octave with no fold IS the basis, moved.**
+				 * `octaveNoise` at one octave scales the reading by an amplitude
+				 * of `1` and divides by a summed amplitude of `1`, both exact,
+				 * so what comes back is `valueNoise3` at the octave's own
+				 * hashed offset and nothing else. Those three offsets are a
+				 * property of the seed, so they are taken once here -- from
+				 * `offsetsFor`, the engine's own table, rather than from a
+				 * second copy of the rule -- and the cut calls the basis
+				 * directly. Bit for bit the same number, without a map lookup,
+				 * a loop and a divide at every candidate cell of every cluster.
 				 */
-				const leafNoise = (spec) => ({
-					frequency: 1 / Math.max(0.4, spec.leafRadius * 0.55),
-					octaves: 1,
-					persistence: 0.5,
-					lacunarity: 2,
-					offsetX: 0,
-					offsetY: 0,
-					ridge: 0,
-				});
+				const leafNoise = (spec) => {
+					const spread = offsetsFor(seed + 71, 1);
+					return {
+						f: 1 / Math.max(0.4, spec.leafRadius * 0.55),
+						ox: spread[0],
+						oy: spread[1],
+						oz: spread[2],
+					};
+				};
 				const cluster = (x, y, z, r, spec, noise) => {
 					if (r <= 0) return;
+					// **Most of a canopy is decided before the noise is read.**
+					// The cut is `1 - away + rough * 0.6 * n` against
+					// `1 - leafFill`, and `n` is one octave of value noise, which
+					// is bounded by `[-1, 1]` by construction -- eight hashed
+					// corners in `[0, 1)` under weights that sum to one, doubled
+					// and shifted. So the noise can only ever move the answer
+					// over a shell `rough * 0.6` wide either side of the fill
+					// line: inside it every reading writes and outside it none
+					// does, whatever the reading is. At the shipped Fill 0.62
+					// and Roughness 0.45 that shell runs from 0.35 of the radius
+					// to 0.89, so the lookup -- eight hashes and a trilinear
+					// blend, the largest single bill on the page -- runs for
+					// **66%** of the ball rather than all of it.
+					// **Not an approximation**: the two sides are proved by the
+					// bound, so every cell gets the answer it would have got.
+					const sway = spec.leafRough > 0 ? spec.leafRough * 0.6 : 0;
+					const sure = spec.leafFill - sway;
+					const never = spec.leafFill + sway;
 					const seat = cellOf(x, y, z);
 					if (seat < 0) return;
 					const stands = metresOf(x, y, z);
@@ -2524,10 +2661,35 @@
 						return;
 					}
 					const used = gather(seat, Math.min(12, Math.ceil(r / cellMetres) + 1));
+					// **A column either meets the ball or it does not, and that
+					// is three multiplies.** The gathered disc is a hexagon and
+					// the ball is round, so its corners hold columns the ball
+					// never reaches -- and every one of them used to be walked
+					// slot by slot with a square root at each. A cell's blocks
+					// all stand on one ray out from the planet's centre, so how
+					// close that ray ever comes to the ball's centre settles the
+					// whole column at once: `perp2` is that distance squared,
+					// and past the radius nothing on the column can be inside.
+					// What is left is a band along the ray, `hit` either side of
+					// the nearest point, which is tighter than the height band
+					// it replaces by exactly the amount the ray leans.
+					const far2 = x * x + y * y + z * z;
 					for (let q = 0; q < used; q++) {
 						const c = bag[q];
-						const lo = Math.max(0, layerAt(c, stands - r));
-						const hi = Math.min(LAYERS - 1, layerAt(c, stands + r));
+						const along = dirX[c] * x + dirY[c] * y + dirZ[c] * z;
+						const room = r * r - (far2 - along * along);
+						if (room <= 0) continue;
+						// A block either end, because the band is worked out in
+						// floating point and the test below is the authority.
+						const hit = Math.sqrt(room) + block;
+						const lo = Math.max(
+							0,
+							SUNK + Math.floor((along - hit - radius - top[c]) / block),
+						);
+						const hi = Math.min(
+							LAYERS - 1,
+							SUNK + Math.floor((along + hit - radius - top[c]) / block),
+						);
 						for (let slot = lo; slot <= hi; slot++) {
 							const my = top[c] + (slot - SUNK + 0.5) * block;
 							const reach2 = radius + my;
@@ -2535,17 +2697,24 @@
 							const cy = dirY[c] * reach2;
 							const cz = dirZ[c] * reach2;
 							const dx = cx - x, dy = cy - y, dz = cz - z;
-							const away = Math.sqrt(dx * dx + dy * dy + dz * dz) / r;
-							if (away > 1) continue;
-							const cut =
-								1 -
-								away +
-								(spec.leafRough > 0
-									? spec.leafRough *
-										0.6 *
-										octaveNoise(cx, cy, cz, seed + 71, noise)
-									: 0);
-							if (cut > 1 - spec.leafFill) write(c, slot, LEAF);
+							const off2 = dx * dx + dy * dy + dz * dz;
+							if (off2 > r * r) continue;
+							const away = Math.sqrt(off2) / r;
+							if (away >= never) continue;
+							if (away >= sure) {
+								const cut =
+									1 -
+									away +
+									sway *
+										valueNoise3(
+											cx * noise.f + noise.ox,
+											cy * noise.f + noise.oy,
+											cz * noise.f + noise.oz,
+											seed + 71,
+										);
+								if (!(cut > 1 - spec.leafFill)) continue;
+							}
+							write(c, slot, LEAF);
 						}
 					}
 				};

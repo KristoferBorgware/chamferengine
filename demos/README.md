@@ -925,11 +925,11 @@ chunk audit still reading zero at every level:
 
 | level | blocks | hexagons | plants | wood cells | leaf cells | rebuild |
 |---|---|---|---|---|---|---|
-| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 4,990 ms |
-| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 1,669 ms |
-| 2 | 4 m | 469 | 185 | 658 | 1,266 | 1,006 ms |
-| 3 | 8 m | 127 | 186 | 77 | 429 | 917 ms |
-| 4 | 16 m | 37 | 182 | 11 | 106 | 580 ms |
+| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 2,367 ms |
+| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 885 ms |
+| 2 | 4 m | 469 | 185 | 658 | 1,266 | 514 ms |
+| 3 | 8 m | 127 | 186 | 77 | 429 | 412 ms |
+| 4 | 16 m | 37 | 182 | 11 | 106 | 242 ms |
 
 **The plant count barely moves, and that is the point.** A root is a cell, and a
 coarse chunk's cells are not a fine chunk's cells — hashing its own would choose
@@ -986,6 +986,37 @@ own panel alone — opening one never closes the other. Each button moves above
 its own drawer when open, so the way out is never under the thing it opened. On
 a desktop neither button is on the page — the panels sit either side of the
 view and never cover it.
+
+**A rod and a ball are round, and everything gathered around them is a
+hexagon.** Both stamps walked cells the shape could not possibly reach, slot by
+slot, and the two rejects that fixed it are the same idea seen twice: every
+block of a column stands on **one line out from the planet's centre**, so one
+question about that line settles the whole column before a single slot is
+touched. For a leaf cluster it is how close the line passes to the ball's
+centre, three multiplies; for a rod it is the distance between two infinite
+lines, one cross product, which is a lower bound on the distance to any piece of
+them. Three more followed. A rod's disc is gathered **once per run of steps that
+share a cell** rather than once per step, because the walk moves 0.4 of a block
+at a time and a cell holds several. The leaf cut reads noise only over the shell
+where the reading can still change the answer -- value noise is bounded by
+`[-1, 1]` by construction, so beyond the leaves' own **Roughness** either side
+of the fill line the answer is already decided whatever the reading is, and the
+shell that is left is **66%** of the ball at the shipped Fill 0.62 and
+Roughness 0.45. And one octave with no fold **is** the basis at the octave's own
+offset, exactly, so the cut calls `valueNoise3` with the offset taken once
+rather than `octaveNoise` with a map lookup, a loop and a divide at every
+candidate cell. Together they take the level-0 rebuild from **4,990 ms to
+2,367 ms** with the wood and leaf counts identical at every level in the table
+above. **None of it is an approximation** -- each reject is proved by a bound,
+and the test that follows is still the authority.
+
+**What is left is threading, and the shape for it is already here.** The rebuild
+is one synchronous stretch, so the page is frozen for the whole of it however
+fast it gets. The patch is already cut into chunks that each generate alone and
+audit to zero, which is exactly what a worker pool needs -- and cutting it up
+**costs nothing measurable**: the same stand runs 6.1 s in chunks against 6.9 s
+in one piece at the shipped reach, because what a chunk refuses to write pays
+for what it grows twice.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

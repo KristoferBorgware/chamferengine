@@ -22,6 +22,40 @@ const OCTAVE_SPREAD = 1000;
 const RIDGE_GAIN = 2.2;
 
 /**
+ * Every octave's own offset, worked out once per seed instead of per sample.
+ *
+ * **An octave's offset is a property of the octave and the seed, and of
+ * nothing else** -- it never depended on the point being sampled, and
+ * computing it inside the sampling loop meant three hashes a sample thrown
+ * away. Over a coarse map that is three hashes per cell per octave; over the
+ * vegetation lab's leaf cut, where one octave is read at every candidate cell
+ * of every cluster, it was the larger half of what `octaveNoise` itself cost.
+ *
+ * **Bit for bit the same number.** The stored value is exactly the
+ * `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to compute, and the
+ * settings' own offset is still added at the point of use, so the argument
+ * handed to the basis is the same `double` it always was.
+ *
+ * Keyed by seed and grown to the deepest octave count that seed has been
+ * asked for. A world uses a handful of seeds -- one per layer, plus the few a
+ * lab adds for a bend or a cut -- so this never grows into a leak.
+ */
+const OCTAVE_OFFSETS = new Map<number, Float64Array>();
+
+function offsetsFor(seed: number, octaves: number): Float64Array {
+	const held = OCTAVE_OFFSETS.get(seed);
+	if (held && held.length >= octaves * 3) return held;
+	const made = new Float64Array(octaves * 3);
+	for (let o = 0; o < octaves; o++) {
+		made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+		made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+		made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+	}
+	OCTAVE_OFFSETS.set(seed, made);
+	return made;
+}
+
+/**
  * Octaves of value noise, with the shape and the parameters of the reference
  * implementation, in `[-1, 1]`.
  *
@@ -73,12 +107,11 @@ export function octaveNoise(
 	let f = settings.frequency;
 	let weight = 1;
 	const ridge = settings.ridge;
+	const spread = offsetsFor(seed, settings.octaves);
 	for (let o = 0; o < settings.octaves; o++) {
-		const ox =
-			(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetX;
-		const oy =
-			(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetY;
-		const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+		const ox = spread[o * 3]! + settings.offsetX;
+		const oy = spread[o * 3 + 1]! + settings.offsetY;
+		const oz = spread[o * 3 + 2]!;
 		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 		let signal = n;
 		if (ridge > 0) {
