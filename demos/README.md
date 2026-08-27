@@ -1129,6 +1129,32 @@ humidity across, temperature up, one dot per biome, and every point of the
 square belonging to whichever dot is nearest. Drag a dot and the planet
 recolours under it.
 
+**The terrain names the ground, and the climate only says which kind of that
+ground this one is.** Temperature and humidity cannot say that a place is a
+mountain, and altitude barely helps: measured on the shipped world, the median
+temperature of peaks sits **0.033** of the diagram below the lowlands', which is
+nothing. So a single diagram read everywhere puts a desert on a summit — **13.1%
+of peak ground** came out Desert and **52.1%** came out some dry lowland type.
+The three terrain layers decide the landform first, and each landform carries
+its own partition of the same square. A desert filed under the lowlands is not
+in the peaks' diagram at all.
+
+**Six landforms, and a grid that says which is which.** The three curves'
+answers — how high the continent stands, how much erosion takes away, how far
+the relief swings — are cut into indices, and a grid gives every combination a
+landform: **sharp and high is a peak, worn and high is a plateau**, and low
+relief is a valley wherever it is. Three sheets, one per continentalness band,
+five erosion rows and five peaks-and-valleys columns, with the measured share of
+the planet's land written on every cell so a combination nothing falls in is
+visible rather than argued about. On the shipped world that comes to **Lowlands
+38.2%, Valleys 21.8%, Slopes 19.8%, Peaks 9.9%, Plateau 8.7%, Shore 1.8%**.
+
+**The shore is a height, not a cell of the grid.** Sea level here is a radius
+and every height is measured from it, so *the ground has barely come out of the
+water* is one comparison — and it cannot be true on a mountain however close to
+the coast it stands. **1.1%** of land is under 8 m and **3.4%** under 20 m,
+which is a beach rather than a region.
+
 **Temperature is three terms and none of them is a biome.** Latitude is one dot
 product against the axis, `+1` on the equator and `-1` at either pole. Altitude
 cools what stands up out of the ground, which is what puts snow on a mountain in
@@ -1168,6 +1194,12 @@ taken, and the diagram dithers each border by exactly that much: a checked strip
 either side of a line is the diagram saying how ragged that border will be on
 the ground.
 
+**The dot cloud is filtered to the ground the tab is about.** A cloud of every
+climate on the planet says nothing about where a peak's biomes should sit; the
+peaks' own climates do. Peaks stand at a median **477 m** against the lowlands'
+**140 m**, so their cloud is the cold end of the square — and a dot placed
+outside it is a biome that will never be built.
+
 **The share beside each name is read back, not set.** A dot is placed in the
 climate square and how much ground that comes to depends on where the two fields
 actually go, counted over the planet's own cells at level 5. **Show on it** puts
@@ -1175,13 +1207,18 @@ that same reading on the diagram as a cloud of dots — the patch, which is one
 place, or the planet, where a region with no dots over it is a biome this world
 never builds.
 
-**Start from** carries two sets. The plain one is a dozen names spread over the
-whole square. The other is **Holdridge's life zones**, a real classification of
+**Start from** carries two sets. The plain one is 33 names spread over the six
+landforms. The other is **Holdridge's life zones**, a real classification of
 exactly this shape — a name for every pair of temperature and rainfall, so it
-drops onto a set of dots without being reshaped. His own chart is a **triangle**
-rather than a square, because cold air holds little water and the
+drops onto a set of dots without being reshaped. It says nothing about
+landforms, and that is what `any` is for: every zone is allowed on every kind of
+ground, and the page is back to one diagram read everywhere. His own chart is a
+**triangle** rather than a square, because cold air holds little water and the
 cold-and-soaking corner has no zone in it; here the polar dot simply owns that
-whole end, and the planet's cloud shows the same corner empty.
+whole end, and the planet's cloud shows the same corner empty. It is also banded
+by **altitude as well as latitude** — the same zones stack up a mountain in the
+tropics as run toward the pole at sea level, which is what the temperature
+field's altitude term does.
 
 **The hexagons are map cells, not blocks.** The map is the terrain, and the
 narrowest octave of a climate field is hundreds of metres wide — drawn on the
