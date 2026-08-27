@@ -865,11 +865,15 @@ a property of the block type the way water's is. **Leaves are solid** turns that
 over and the readout says what it costs: how much of the ground you could still
 step onto.
 
-**The cost section is bars, because leaves are the expense and a number in a
-sentence hides that.** A canopy is a shell of one-block-thick surface, so almost
-every leaf cell it holds is drawn on several sides — at the shipped stand the
-leaf faces outnumber the wood faces several times over, and that, not the
-skeleton, is what decides whether a forest is affordable.
+**Leaves are the expense, not wood.** A canopy is a shell of one-block-thick
+surface, so almost every leaf cell it holds is drawn on several sides — at the
+shipped stand the leaf faces outnumber the wood faces several times over, and
+that, not the skeleton, is what decides whether a forest is affordable.
+**Branches** carries its own switch now, next to **Leaves'** — off, a plant
+grows as a bare trunk and no leaf cluster is asked for either, because a
+cluster hangs at a branch tip or the top of a bare trunk and there is nowhere
+left for one to sit. The panel greys the whole group rather than hiding it, the
+same rule a shown-or-not row already follows elsewhere on this page.
 
 **The patch is cut into chunks and every chunk generates alone.** This is the
 property the engine needs and the one a lab is most likely to fake: a chunk
@@ -966,12 +970,21 @@ falls with distance.
 than that and the slope limit refuses everything — at 134 m of relief across
 96 m, **no plant stands at all**, which is the rule working rather than failing.
 
-**On a phone the panel is shut and a button opens it.** It is 340 px of knobs
-against a 390 px screen, so left open it is the page and the plants are a strip
-above it; shut, they have the whole screen and one tap brings the knobs back.
-The button moves above the panel when it opens, so the way out is never under
-the thing it opened. On a desktop the button is not on the page at all — there
-the panel sits beside the view and never covers it.
+**Two panels, one on each side, because a plant and the ground it stands on
+are different questions.** The left panel is the plant alone — trunk, branches,
+leaves, and the readout that says what grew — and nothing there depends on
+which world it is planted in. The right panel is everything about that world:
+planting rules, the terrain knobs, how the patch is cut into chunks. Moving a
+slider in one never has to be cross-referenced against a heading in the other,
+because the heading already says which question it answers.
+
+**On a phone each panel is its own shut drawer, with its own button.** 340 px of
+knobs against a 390 px screen means only one drawer can usefully be open at a
+time, so **Plants** and **World** sit at opposite corners and answer for their
+own panel alone — opening one never closes the other. Each button moves above
+its own drawer when open, so the way out is never under the thing it opened. On
+a desktop neither button is on the page — the panels sit either side of the
+view and never cover it.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
 

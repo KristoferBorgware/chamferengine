@@ -44,30 +44,42 @@
 			   to reach a knob must not carry the thing being judged off the top
 			   of the panel, so there are two sections and only the lower one
 			   moves. */
-			#panel {
+			/* **Two panels, one on each side of the view.** The right one is
+			   the world a plant stands on -- terrain, planting rules, how the
+			   patch is cut into chunks; the left is the plant itself -- trunk,
+			   branches, leaves -- and carries the readout, because the readout
+			   is a fact about the plants. */
+			#panel,
+			#panelLeft {
 				position: fixed;
 				top: 0;
-				right: 0;
 				bottom: 0;
 				width: 340px;
 				display: flex;
 				flex-direction: column;
 				background: rgba(18, 22, 29, 0.94);
-				border-left: 1px solid var(--edge);
 				backdrop-filter: blur(6px);
 			}
-			#head {
+			#panel {
+				right: 0;
+				border-left: 1px solid var(--edge);
+			}
+			#panelLeft {
+				left: 0;
+				border-right: 1px solid var(--edge);
+			}
+			.head {
 				flex: 0 0 auto;
 				padding: 10px 14px 8px;
 				border-bottom: 1px solid var(--edge);
 			}
-			#scroller {
+			.scroller {
 				flex: 1 1 auto;
 				overflow-y: auto;
 				overscroll-behavior: contain;
 				padding: 0 14px 24px;
 			}
-			#panel h1 {
+			.head h1 {
 				font-size: 14px;
 				margin: 0 0 6px;
 				letter-spacing: 0.01em;
@@ -202,42 +214,6 @@
 			#recipe .p {
 				color: var(--plan);
 			}
-			#profile {
-				margin-top: 12px;
-				border-top: 1px solid var(--edge);
-				padding-top: 8px;
-			}
-			#profile > summary {
-				cursor: pointer;
-				font-size: 11px;
-				text-transform: uppercase;
-				letter-spacing: 0.08em;
-				color: var(--dim);
-				list-style: none;
-			}
-			#profile > summary::-webkit-details-marker {
-				display: none;
-			}
-			#profile > summary::before {
-				content: "▾ ";
-			}
-			#profile:not([open]) > summary::before {
-				content: "▸ ";
-			}
-			#graph {
-				width: 100%;
-				height: auto;
-				display: block;
-				margin-top: 8px;
-				border: 1px solid var(--edge);
-				border-radius: 4px;
-				background: #0b0e13;
-			}
-			#graphsays {
-				color: var(--dim);
-				font-size: 10.5px;
-				margin: 3px 0 0;
-			}
 			.group {
 				border-top: 1px solid var(--edge);
 				margin: 10px 0 0;
@@ -366,26 +342,30 @@
 			   above it. Shut, the plants have the whole screen and one tap
 			   brings the knobs back. It is off the desktop layout entirely --
 			   there the panel sits beside the view and never covers it. */
-			#toggle {
+			#toggle,
+			#toggleLeft {
 				display: none;
 			}
 			@media (max-width: 760px) {
-				#panel {
+				#panel,
+				#panelLeft {
 					width: 100%;
 					top: auto;
 					height: 68%;
 					border-left: 0;
+					border-right: 0;
 					border-top: 1px solid var(--edge);
 					transform: translateY(100%);
 					transition: transform 0.22s ease;
 				}
-				body.knobs #panel {
+				body.knobs #panel,
+				body.plants #panelLeft {
 					transform: none;
 				}
-				#toggle {
+				#toggle,
+				#toggleLeft {
 					display: block;
 					position: fixed;
-					right: 12px;
 					bottom: 12px;
 					z-index: 12;
 					padding: 9px 15px;
@@ -398,9 +378,19 @@
 					letter-spacing: 0.02em;
 					transition: bottom 0.22s ease;
 				}
-				/* Above the panel when it is open, so the way out is never
-				   under the thing it opened. */
+				#toggle {
+					right: 12px;
+				}
+				#toggleLeft {
+					left: 12px;
+				}
+				/* Above its own panel when that one is open, so the way out is
+				   never under the thing it opened. Each button only answers
+				   for its own drawer -- opening one does not move the other. */
 				body.knobs #toggle {
+					bottom: calc(68% + 12px);
+				}
+				body.plants #toggleLeft {
 					bottom: calc(68% + 12px);
 				}
 				#hint {
@@ -412,22 +402,28 @@
 	<body>
 		<canvas id="view"></canvas>
 		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
-		<button id="toggle" type="button" aria-controls="panel" aria-expanded="false">
-			Knobs
+		<button id="toggleLeft" type="button" aria-controls="panelLeft" aria-expanded="false">
+			Plants
 		</button>
-		<div id="panel">
-			<div id="head">
+		<button id="toggle" type="button" aria-controls="panel" aria-expanded="false">
+			World
+		</button>
+		<div id="panelLeft">
+			<div class="head">
 				<h1>Vegetation lab</h1>
 				<div id="recipe"></div>
 				<div id="facts"></div>
 			</div>
-			<div id="scroller">
+			<div class="scroller">
+				<div id="knobsLeft"></div>
+			</div>
+		</div>
+		<div id="panel">
+			<div class="head">
+				<h1>World</h1>
+			</div>
+			<div class="scroller">
 				<div id="knobs"></div>
-				<details id="profile" open>
-					<summary>The cost</summary>
-					<canvas id="graph" width="640" height="260"></canvas>
-					<div id="graphsays"></div>
-				</details>
 			</div>
 		</div>
 
@@ -1278,92 +1274,6 @@
 			 */
 			const KNOBS = [
 				{
-					group: "The world",
-					open: false,
-					rows: [
-						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
-						{
-							key: "subdivisionDepth",
-							label: "Subdivision depth",
-							low: 4, high: 17, step: 1, value: 13, digits: 0,
-							note: () =>
-								field
-									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
-										`block <b>${field.k.blockSize.toFixed(2)} m</b>, ` +
-										`cell <b>${field.cellMetres.toFixed(2)} m</b> across`
-									: "",
-						},
-						{
-							key: "blockSize",
-							label: "Block size",
-							low: 0.25, high: 4, step: 0.25, value: 1, digits: 2, unit: "m",
-							note: () =>
-								"a plant is measured in metres and built in blocks, " +
-								"so this is what decides whether a trunk can taper at all",
-						},
-						{
-							// The coarse map is the terrain. It is far wider than
-							// a block, so a patch this size sits on two or three
-							// of its cells and the ground under a grove is a ramp.
-							key: "coarseSpacing",
-							label: "Map cell",
-							low: 4, high: 128, step: 4, value: 16, digits: 0, unit: "m",
-							note: () =>
-								field
-									? `level <b>${field.k.level}</b> = <b>${field.k.mapMetres.toFixed(1)} m</b>, ` +
-										`<b>${(field.span / field.k.mapMetres).toFixed(1)}</b> map cells under the patch`
-									: "",
-						},
-						{
-							// **Level of detail is a subdivision depth.** The
-							// same ground drawn at a shallower one, which is the
-							// engine's rule -- levels do not nest, so a coarse
-							// mesh re-evaluates the terrain rather than dropping
-							// cells out of a fine one.
-							key: "lod",
-							label: "Level of detail",
-							low: 0,
-							high: 5,
-							step: 1,
-							value: 0,
-							digits: 0,
-							note: () =>
-								field
-									? `blocks <b>${field.block.toFixed(1)} m</b> · ` +
-										`<b>${field.count.toLocaleString()}</b> hexagons drawn over ` +
-										`<b>${field.roots.toLocaleString()}</b> planting cells — the ` +
-										`ground gets cheaper with the level and the roots do not`
-									: "",
-						},
-						{
-							key: "cells",
-							label: "Patch",
-							low: 24, high: 256, step: 8, value: 96, digits: 0,
-							unit: "blocks across",
-							note: () =>
-								field
-									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
-										`<b>${field.count.toLocaleString()}</b> hexagons` +
-										(knobs.plant === "one plant"
-											? " — held to 40 while one plant is shown"
-											: "")
-									: "",
-						},
-						{ key: "latitude", label: "Latitude", low: -85, high: 85, step: 1, value: 51, digits: 0, unit: "°" },
-						{ key: "longitude", label: "Longitude", low: -180, high: 180, step: 1, value: 51, digits: 0, unit: "°" },
-					],
-				},
-				{
-					group: "The ground",
-					open: false,
-					rows: [
-						{ key: "relief", label: "Relief", low: 0, high: 400, step: 10, value: 90, digits: 0, unit: "m" },
-						{ key: "feature", label: "Feature", low: 60, high: 4000, step: 20, value: 340, digits: 0, unit: "m" },
-						{ key: "octaves", label: "Octaves", low: 1, high: 8, step: 1, value: 4, digits: 0 },
-						{ key: "seaLevel", label: "Sea level", low: -200, high: 200, step: 5, value: -40, digits: 0, unit: "m" },
-					],
-				},
-				{
 					group: "Planting",
 					tint: "plan",
 					rows: [
@@ -1467,6 +1377,92 @@
 					],
 				},
 				{
+					group: "World",
+					open: false,
+					rows: [
+						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
+						{
+							key: "subdivisionDepth",
+							label: "Subdivision depth",
+							low: 4, high: 17, step: 1, value: 13, digits: 0,
+							note: () =>
+								field
+									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
+										`block <b>${field.k.blockSize.toFixed(2)} m</b>, ` +
+										`cell <b>${field.cellMetres.toFixed(2)} m</b> across`
+									: "",
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.25, high: 4, step: 0.25, value: 1, digits: 2, unit: "m",
+							note: () =>
+								"a plant is measured in metres and built in blocks, " +
+								"so this is what decides whether a trunk can taper at all",
+						},
+						{
+							// The coarse map is the terrain. It is far wider than
+							// a block, so a patch this size sits on two or three
+							// of its cells and the ground under a grove is a ramp.
+							key: "coarseSpacing",
+							label: "Map cell",
+							low: 4, high: 128, step: 4, value: 16, digits: 0, unit: "m",
+							note: () =>
+								field
+									? `level <b>${field.k.level}</b> = <b>${field.k.mapMetres.toFixed(1)} m</b>, ` +
+										`<b>${(field.span / field.k.mapMetres).toFixed(1)}</b> map cells under the patch`
+									: "",
+						},
+						{
+							// **Level of detail is a subdivision depth.** The
+							// same ground drawn at a shallower one, which is the
+							// engine's rule -- levels do not nest, so a coarse
+							// mesh re-evaluates the terrain rather than dropping
+							// cells out of a fine one.
+							key: "lod",
+							label: "Level of detail",
+							low: 0,
+							high: 5,
+							step: 1,
+							value: 0,
+							digits: 0,
+							note: () =>
+								field
+									? `blocks <b>${field.block.toFixed(1)} m</b> · ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons drawn over ` +
+										`<b>${field.roots.toLocaleString()}</b> planting cells — the ` +
+										`ground gets cheaper with the level and the roots do not`
+									: "",
+						},
+						{
+							key: "cells",
+							label: "Patch",
+							low: 24, high: 256, step: 8, value: 96, digits: 0,
+							unit: "blocks across",
+							note: () =>
+								field
+									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons` +
+										(knobs.plant === "one plant"
+											? " — held to 40 while one plant is shown"
+											: "")
+									: "",
+						},
+						{ key: "latitude", label: "Latitude", low: -85, high: 85, step: 1, value: 51, digits: 0, unit: "°" },
+						{ key: "longitude", label: "Longitude", low: -180, high: 180, step: 1, value: 51, digits: 0, unit: "°" },
+					],
+				},
+				{
+					group: "Ground",
+					open: false,
+					rows: [
+						{ key: "relief", label: "Relief", low: 0, high: 400, step: 10, value: 90, digits: 0, unit: "m" },
+						{ key: "feature", label: "Feature", low: 60, high: 4000, step: 20, value: 340, digits: 0, unit: "m" },
+						{ key: "octaves", label: "Octaves", low: 1, high: 8, step: 1, value: 4, digits: 0 },
+						{ key: "seaLevel", label: "Sea level", low: -200, high: 200, step: 5, value: -40, digits: 0, unit: "m" },
+					],
+				},
+				{
 					group: "Chunks",
 					tint: "plan",
 					rows: [
@@ -1532,8 +1528,9 @@
 					],
 				},
 				{
-					group: "The trunk",
+					group: "Trunk",
 					tint: "wood",
+					panel: "left",
 					rows: [
 						{ key: "height", label: "Height", low: 0.5, high: 90, step: 0.5, value: 22, digits: 1, unit: "m" },
 						{ key: "trunk", label: "Base radius", low: 0.1, high: 4, step: 0.05, value: 0.55, digits: 2, unit: "m" },
@@ -1557,7 +1554,9 @@
 				{
 					group: "Branches",
 					tint: "wood",
+					panel: "left",
 					rows: [
+						{ key: "useBranches", summary: true, value: true, title: "grow branches" },
 						{ key: "levels", label: "Splits", low: 0, high: 6, step: 1, value: 3, digits: 0 },
 						{ key: "children", label: "Branches per split", low: 1, high: 8, step: 1, value: 4, digits: 0 },
 						{ key: "spread", label: "Spread", low: 0.1, high: 1.6, step: 0.05, value: 1.15, digits: 2, unit: "rad" },
@@ -1570,8 +1569,20 @@
 				{
 					group: "Leaves",
 					tint: "leaf",
+					panel: "left",
 					rows: [
-						{ key: "useLeaves", summary: true, value: true },
+						{
+							key: "useLeaves",
+							summary: true,
+							value: true,
+							title: "grow leaves",
+							// **Branches decide whether leaves can grow at all.**
+							// Leaves live at the tips of branches or the top of a
+							// bare trunk; take the branches away and there is
+							// nowhere left for a leaf cluster to sit, so the row
+							// is disabled rather than merely dimmed.
+							disabledWhen: () => !knobs.useBranches,
+						},
 						{ key: "leafRadius", label: "Cluster", low: 0.3, high: 6, step: 0.1, value: 2.6, digits: 1, unit: "m" },
 						{ key: "leafFill", label: "Fill", low: 0.1, high: 1, step: 0.05, value: 0.62, digits: 2 },
 						{ key: "leafRough", label: "Roughness", low: 0, high: 1, step: 0.05, value: 0.45, digits: 2,
@@ -1817,6 +1828,13 @@
 			 * twelve pentagons from needing a case.
 			 */
 			function growPlant(base, stance, spec, scale, seed, out) {
+				// **Off the trunk, leaves have nothing to hang from.** A
+				// cluster sits at a branch tip or the top of a bare trunk, so
+				// turning branches off has to take leaves with it -- otherwise
+				// a plant with `Branches` unchecked still grows the one leaf
+				// ball a bare trunk's tip would carry, which is not what the
+				// switch says it does.
+				const leavesOn = knobs.useLeaves && knobs.useBranches;
 				const noise = bendSettings(spec);
 				// **The walk is in the plant's own frame and everything it
 				// records is in the world's.** Working in a frame is what makes
@@ -1959,7 +1977,7 @@
 								tag * 7 + c + j * 13 + 1,
 							);
 						}
-					else if (spec.leaves && knobs.useLeaves) {
+					else if (spec.leaves && leavesOn) {
 						const w = out3(px, py, pz);
 						out.clusters.push([w[0], w[1], w[2], spec.leafRadius * scale]);
 					}
@@ -1968,7 +1986,7 @@
 					if (
 						level <= 1 &&
 						spec.leaves &&
-						knobs.useLeaves &&
+						leavesOn &&
 						spec.leafTip < 1 &&
 						middle
 					)
@@ -1982,7 +2000,7 @@
 					0, 1, 0,
 					spec.height * scale,
 					Math.max(knobs.blockSize * 0.45, spec.trunk * scale),
-					Math.round(spec.levels),
+					knobs.useBranches ? Math.round(spec.levels) : 0,
 					true,
 					1,
 				);
@@ -3392,63 +3410,6 @@
 			}
 
 			// ---------------------------------------------------------------
-			// What it cost.
-			// ---------------------------------------------------------------
-
-			const graph = document.getElementById("graph");
-			const graphSays = document.getElementById("graphsays");
-
-			/**
-			 * The bill, as bars.
-			 *
-			 * **Leaves are the expense, not wood**, and a number in a sentence
-			 * hides that where a bar cannot. It is the one thing on this page
-			 * that decides whether a forest is affordable: a canopy is a shell
-			 * of one-block-thick surface, so almost every leaf cell it holds is
-			 * drawn on several sides.
-			 */
-			function drawGraph() {
-				const g = graph.getContext("2d");
-				g.clearRect(0, 0, graph.width, graph.height);
-				if (!field) return;
-				const bars = [
-					["ground faces", faces.ground, "#7a8493"],
-					["wood faces", faces.wood, "#c9975b"],
-					["leaf faces", faces.leaf, "#8ce99a"],
-					["wood cells", field.woodCells, "#8a6a3f"],
-					["leaf cells", field.leafCells, "#5c9c6a"],
-					["hexagons", field.count, "#3f4c5c"],
-				];
-				const most = Math.max(1, ...bars.map((b) => b[1]));
-				const pad = 96;
-				const tall = 30;
-				g.font = "13px system-ui, sans-serif";
-				g.textBaseline = "middle";
-				for (let i = 0; i < bars.length; i++) {
-					const [name, value, color] = bars[i];
-					const y = 14 + i * (tall + 10);
-					g.fillStyle = "#8b95a4";
-					g.textAlign = "right";
-					g.fillText(name, pad - 8, y + tall / 2);
-					g.fillStyle = color;
-					const wide = ((graph.width - pad - 90) * value) / most;
-					g.fillRect(pad, y, Math.max(1, wide), tall);
-					g.fillStyle = "#e8ecf2";
-					g.textAlign = "left";
-					g.fillText(value.toLocaleString(), pad + wide + 8, y + tall / 2);
-				}
-				const perPlant = field.trees
-					? Math.round((field.woodCells + field.leafCells) / field.trees)
-					: 0;
-				graphSays.textContent =
-					`${Math.round(cost)} ms · ` +
-					`${(field.vertices / 3).toLocaleString()} triangles · ` +
-					(field.trees
-						? `${perPlant.toLocaleString()} cells a plant`
-						: "nothing planted");
-			}
-
-			// ---------------------------------------------------------------
 			// The panel.
 			// ---------------------------------------------------------------
 
@@ -3502,7 +3463,8 @@
 			}
 
 			function buildPanel() {
-				const host = document.getElementById("knobs");
+				const hostRight = document.getElementById("knobs");
+				const hostLeft = document.getElementById("knobsLeft");
 				for (const group of KNOBS) {
 					const set = document.createElement("details");
 					set.className = "group" + (group.tint ? " " + group.tint : "");
@@ -3516,7 +3478,7 @@
 							box.type = "checkbox";
 							box.className = "switch";
 							box.checked = knobs[row.key];
-							box.title = "grow leaves";
+							box.title = row.title ?? "";
 							box.addEventListener("click", (e) => e.stopPropagation());
 							box.addEventListener("input", () => {
 								knobs[row.key] = box.checked;
@@ -3580,7 +3542,7 @@
 							askForRedraw();
 						});
 					}
-					host.append(set);
+					(group.panel === "left" ? hostLeft : hostRight).append(set);
 				}
 			}
 
@@ -3588,7 +3550,13 @@
 				for (const { row, wrap, readout, input, note } of rows.values()) {
 					if (row.summary) {
 						input.checked = knobs[row.key];
-						wrap.classList.toggle("off", !knobs[row.key]);
+						// **Branches decide whether leaves can grow, so the row
+						// is disabled rather than just dimmed** -- unlike a row
+						// that has nothing to say at the current settings, this
+						// one still means something, it is only unreachable
+						// while there are no branches for a leaf to hang off.
+						input.disabled = row.disabledWhen ? row.disabledWhen() : false;
+						wrap.classList.toggle("off", !knobs[row.key] || input.disabled);
 						continue;
 					}
 					// **A row with no meaning comes off the panel, it is not
@@ -3648,21 +3616,26 @@
 					generate(draft ? Math.max(24, knobs.cells >> 1) : knobs.cells);
 					buildMesh();
 					cost = performance.now() - started;
-					drawGraph();
 					refreshPanel();
 					if (!draft) writeUrl();
 					render();
 				});
 			}
 
-			// The knobs open and shut on a phone; on a desktop the button is not
-			// on the page at all and this never runs.
-			const toggle = document.getElementById("toggle");
-			toggle.addEventListener("click", () => {
-				const open = document.body.classList.toggle("knobs");
-				toggle.setAttribute("aria-expanded", String(open));
-				toggle.textContent = open ? "Close" : "Knobs";
-			});
+			// The knobs open and shut on a phone; on a desktop the buttons are
+			// not on the page at all and this never runs. Two drawers, two
+			// buttons, each answering for its own -- opening one never closes
+			// the other.
+			const drawer = (buttonId, bodyClass, label) => {
+				const button = document.getElementById(buttonId);
+				button.addEventListener("click", () => {
+					const open = document.body.classList.toggle(bodyClass);
+					button.setAttribute("aria-expanded", String(open));
+					button.textContent = open ? "Close" : label;
+				});
+			};
+			drawer("toggle", "knobs", "World");
+			drawer("toggleLeft", "plants", "Plants");
 
 			let dragging = null;
 			view.addEventListener("pointerdown", (e) => {
@@ -3708,7 +3681,6 @@
 			generate();
 			buildMesh();
 			cost = performance.now() - booted;
-			drawGraph();
 			refreshPanel();
 			render();
 		</script>
