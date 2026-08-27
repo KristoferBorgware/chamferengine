@@ -2,6 +2,7 @@
 // Does every shader the client builds actually compile?
 //
 //   node tools/probe-shaders.mjs [--url ...] [--port 9291] [--wait ms]
+//                                [--presents no]
 //
 // **A shader that will not compile draws a black window, not an error.** Its
 // module is invalid, so every pipeline built from it is invalid, so every
@@ -31,6 +32,12 @@ const flag = (name, fallback) => {
 };
 const port = Number(flag("--port", "9291"));
 const waitMs = Number(flag("--wait", "30000"));
+// **The frame-rate test is a second opinion, and not every page offers one.**
+// The world prints a rate and a gpu figure and a page that presents nothing
+// gives itself away in both; the landscape bench prints neither, so there the
+// browser's own log is the whole of the check -- which is the signal this was
+// written for, and the one that names the file, the line and the column.
+const presents = flag("--presents", "yes") !== "no";
 
 /**
  * Everything that decides whether a pipeline is built at all.
@@ -152,13 +159,19 @@ if (wrong.length > 0) {
 	console.log(`${wrong.length} complaint(s) from the browser:\n`);
 	for (const text of wrong) console.log(`${text}\n`);
 }
-if (!drawing)
+if (presents && !drawing)
 	console.log(
 		`the frame presented nothing: ${rate ? `${rate[1]} fps` : "no rate"},` +
 			` no gpu figure`,
 	);
-if (wrong.length === 0 && drawing) {
-	console.log(`every shader compiled, and the frame presents.`);
-	console.log(`   ${(readout ?? "").split("\n").slice(0, 2).join(" | ")}`);
+const ok = wrong.length === 0 && (drawing || !presents);
+if (ok) {
+	console.log(
+		presents
+			? `every shader compiled, and the frame presents.`
+			: `every shader compiled -- the browser had nothing to say.`,
+	);
+	const said = (readout ?? "").split("\n").slice(0, 2).join(" | ");
+	if (said.trim()) console.log(`   ${said}`);
 }
-process.exit(wrong.length === 0 && drawing ? 0 : 1);
+process.exit(ok ? 0 : 1);
