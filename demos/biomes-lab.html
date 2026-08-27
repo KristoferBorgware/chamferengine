@@ -391,6 +391,84 @@
 				color: var(--live);
 				border-color: var(--live);
 			}
+			#tabs {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 3px;
+				margin: 0 0 6px;
+			}
+			#tabs button {
+				flex: 1 1 auto;
+				padding: 3px 5px;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				background: #0b0e13;
+				color: var(--dim);
+				font: 10.5px/1.3 system-ui, sans-serif;
+				cursor: pointer;
+				white-space: nowrap;
+			}
+			#tabs button .swatch {
+				display: inline-block;
+				width: 7px;
+				height: 7px;
+				border-radius: 1px;
+				margin-right: 4px;
+				vertical-align: 0;
+			}
+			#tabs button.picked {
+				border-color: var(--live);
+				color: var(--ink);
+				background: rgba(111, 208, 255, 0.1);
+			}
+			#tabs button.empty {
+				color: #ff7a7a;
+			}
+			.sheet {
+				display: grid;
+				grid-template-columns: 16px repeat(5, 1fr);
+				gap: 2px;
+				margin: 4px 0 0;
+			}
+			.sheet button {
+				padding: 6px 0 4px;
+				border: 1px solid var(--edge);
+				border-radius: 2px;
+				color: #12161d;
+				font: 600 9px/1.2 system-ui, sans-serif;
+				cursor: pointer;
+				overflow: hidden;
+			}
+			.sheet button.picked {
+				outline: 2px solid var(--live);
+				outline-offset: -2px;
+			}
+			.sheet button small {
+				display: block;
+				font-weight: 400;
+				font-size: 8px;
+				opacity: 0.75;
+			}
+			.sheet .edge {
+				font-size: 8px;
+				color: var(--dim);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				writing-mode: vertical-rl;
+				transform: rotate(180deg);
+			}
+			.sheet .corner {
+				font-size: 8px;
+				color: var(--dim);
+			}
+			.sheet-foot {
+				display: flex;
+				justify-content: space-between;
+				font-size: 8.5px;
+				color: var(--dim);
+				margin: 2px 0 0 18px;
+			}
 			#hint {
 				position: fixed;
 				left: 12px;
@@ -492,6 +570,11 @@
 		<div id="panelBiomes">
 			<div class="head">
 				<h1>Biomes</h1>
+				<!-- **The terrain decides the landform, and the diagram only
+				     names it.** One tab per kind of ground, each with its own
+				     partition of the same square, so a biome placed here can
+				     only ever be built on this kind of ground. -->
+				<div id="tabs"></div>
 				<canvas id="chart" width="300" height="300"></canvas>
 				<div class="axis"><span>dry</span><span>wet</span></div>
 				<div id="chartsays"></div>
@@ -499,6 +582,7 @@
 			<div class="scroller">
 				<div class="list" id="list"></div>
 				<button id="add" type="button">add a biome</button>
+				<div id="gridHost"></div>
 				<div id="knobsBiomes"></div>
 			</div>
 		</div>
@@ -1531,48 +1615,188 @@
 			}
 
 			// ---------------------------------------------------------------
+			// The landform.
+			// ---------------------------------------------------------------
+
+			/**
+			 * What kind of ground a place is, before anything asks what grows
+			 * on it.
+			 *
+			 * **Two stages, and the terrain goes first.** Temperature and
+			 * humidity alone cannot say that a place is a mountain, so a
+			 * diagram read on them alone will put a desert on a summit. The
+			 * three terrain layers decide the landform, and the climate then
+			 * only chooses which kind of that landform this one is: a cold
+			 * peak and a hot peak are both peaks.
+			 *
+			 * The sea is not one of these -- there is no land there for a
+			 * biome to stand on, and the ocean is a surface rather than
+			 * ground.
+			 */
+			const LANDFORMS = [
+				{ key: "shore", name: "Shore", short: "shr", hex: "e0d3a8" },
+				{ key: "valleys", name: "Valleys", short: "val", hex: "4e7a4a" },
+				{ key: "lowlands", name: "Lowlands", short: "low", hex: "9ab06a" },
+				{ key: "slopes", name: "Slopes", short: "slp", hex: "7f8a72" },
+				{ key: "plateau", name: "Plateau", short: "plt", hex: "c0a878" },
+				{ key: "peaks", name: "Peaks", short: "pk", hex: "e4ebf2" },
+			];
+			const SHORE = 0;
+			/** The one a biome carries when the landform does not decide it. */
+			const ANY = "any";
+
+			/**
+			 * Where each transformed field is cut into indices.
+			 *
+			 * **The values cut here are the curves' answers, not the raw
+			 * noise.** A layer is a stack of octaves read through a curve, and
+			 * the curve is what gives the reading a meaning -- how high the
+			 * continent stands, how much erosion takes away, how far the relief
+			 * swings. The raw noise underneath is the same shape for all three.
+			 *
+			 * The edges are fixed numbers rather than shares of the world, so a
+			 * grid means the same thing on every planet, and the grid draws the
+			 * measured share of land in each cell instead. On the shipped world
+			 * they cut land into roughly even parts: continentalness runs
+			 * **0.46 to 0.89** between its 2nd and 98th percentiles, erosion
+			 * **0.04 to 0.95**, and peaks and valleys **0.24 to 0.91**.
+			 */
+			const CONT_EDGES = [0.62, 0.78];
+			const ERO_EDGES = [0.13, 0.35, 0.56, 0.82];
+			const PV_EDGES = [0.36, 0.46, 0.58, 0.71];
+			const CONT_NAMES = ["near the sea", "inland", "far inland"];
+			const ERO_NAMES = ["sharp", "", "", "", "worn"];
+			const PV_NAMES = ["valley", "", "", "", "peak"];
+
+			/** Which bucket a value falls in, given the edges between them. */
+			function bucket(v, edges) {
+				let n = 0;
+				while (n < edges.length && v >= edges[n]) n++;
+				return n;
+			}
+
+			/**
+			 * The grid: a landform for every combination of the three indices.
+			 *
+			 * Three sheets, one per continentalness band; five erosion rows,
+			 * sharp at the top; five peaks-and-valleys columns, valley on the
+			 * left. **Sharp and high is a peak, worn and high is a plateau**,
+			 * and low relief is a valley wherever it is -- which is the whole
+			 * of the rule, written where it can be read and changed rather than
+			 * buried in a condition.
+			 */
+			const DEFAULT_GRID = [
+				// near the sea: no room for a mountain range
+				"11233" + "12233" + "12223" + "12222" + "12222",
+				// inland
+				"13355" + "12355" + "12334" + "12224" + "12222",
+				// far inland
+				"13555" + "13355" + "12344" + "12244" + "12224",
+			].join("");
+
+			let grid = DEFAULT_GRID.split("").map(Number);
+
+			/** Where one sheet's cell sits in the flat grid. */
+			function gridAt(c, e, p) {
+				return (c * 5 + e) * 5 + p;
+			}
+
+			/**
+			 * The landform at one place: `-1` in the sea, `SHORE` on the first
+			 * few metres of land, and whatever the grid says everywhere else.
+			 *
+			 * **The shore is a height, not a bucket of continentalness.** Sea
+			 * level here is a radius and every height is measured from it, so
+			 * *the ground has barely come out of the water* is one comparison,
+			 * and it cannot be true on a mountain however close to the coast it
+			 * stands. On the shipped world **1.1%** of land is under 8 m and
+			 * **3.4%** under 20 m, which is a beach rather than a region.
+			 */
+			function landformAt(level, cut, swing, metres) {
+				if (metres <= TERRAIN.seaLevel) return -1;
+				if (metres <= knobs.shoreHeight) return SHORE;
+				return grid[
+					gridAt(
+						bucket(level, CONT_EDGES),
+						bucket(cut, ERO_EDGES),
+						bucket(swing, PV_EDGES),
+					)
+				];
+			}
+
+			// ---------------------------------------------------------------
 			// The diagram.
 			// ---------------------------------------------------------------
 
 			/**
 			 * The biomes, as points in the climate square.
 			 *
-			 * `t` is temperature and `h` is humidity, both `0` to `1` -- the
-			 * fields run `-1` to `1` and are halved into this square before the
-			 * lookup, so a dot at `0.5, 0.5` sits where a field reads zero.
+			 * `t` is temperature and `h` is humidity, both `0` to `1`, and
+			 * `landform` is which kind of ground this one may stand on -- one
+			 * of the six, or `any`.
 			 *
-			 * **A biome is a name, a colour and two numbers.** Nothing here
-			 * decides a height, a block or a tree: the diagram partitions the
-			 * square by nearest dot, so every possible climate has exactly one
-			 * answer and moving a dot moves a border on the planet.
+			 * **A biome is a name, a colour, two numbers and a landform.**
+			 * Nothing here decides a height, a block or a tree: the diagram
+			 * partitions the square by nearest dot **among the biomes that
+			 * landform allows**, so every climate has exactly one answer on
+			 * every kind of ground, and a desert placed in the lowlands cannot
+			 * appear on a summit however hot and dry the summit is.
 			 */
 			const PRESETS = {
 				plain: [
-					{ name: "Polar", hex: "e6eef5", t: 0.05, h: 0.35 },
-					{ name: "Tundra", hex: "9fae95", t: 0.2, h: 0.7 },
-					{ name: "Cold desert", hex: "b6ad95", t: 0.28, h: 0.08 },
-					{ name: "Taiga", hex: "3d6b63", t: 0.32, h: 0.92 },
-					{ name: "Steppe", hex: "a8a05e", t: 0.45, h: 0.32 },
-					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.55 },
-					{ name: "Forest", hex: "4a8a55", t: 0.6, h: 0.8 },
-					{ name: "Temperate rainforest", hex: "2e6b45", t: 0.66, h: 0.97 },
-					{ name: "Shrubland", hex: "9a8f50", t: 0.74, h: 0.25 },
-					{ name: "Swamp", hex: "5c6b3a", t: 0.76, h: 0.92 },
-					{ name: "Savanna", hex: "c9b45e", t: 0.85, h: 0.5 },
-					{ name: "Rainforest", hex: "2f9e2f", t: 0.92, h: 0.85 },
-					{ name: "Desert", hex: "e8c44a", t: 0.93, h: 0.12 },
+					{ name: "Icy shore", hex: "d8e4ec", t: 0.12, h: 0.5, landform: "shore" },
+					{ name: "Stony shore", hex: "8e9298", t: 0.4, h: 0.3, landform: "shore" },
+					{ name: "Beach", hex: "e6d9a8", t: 0.7, h: 0.45, landform: "shore" },
+					{ name: "Mangrove", hex: "4e6b3f", t: 0.9, h: 0.9, landform: "shore" },
+
+					{ name: "Frozen valley", hex: "cfdce6", t: 0.1, h: 0.5, landform: "valleys" },
+					{ name: "Boreal valley", hex: "3d6b56", t: 0.33, h: 0.85, landform: "valleys" },
+					{ name: "Meadow", hex: "86ad5c", t: 0.6, h: 0.6, landform: "valleys" },
+					{ name: "Swamp", hex: "4e5f33", t: 0.75, h: 0.95, landform: "valleys" },
+					{ name: "Dry basin", hex: "c9b06a", t: 0.92, h: 0.12, landform: "valleys" },
+
+					{ name: "Tundra", hex: "9fae95", t: 0.18, h: 0.6, landform: "lowlands" },
+					{ name: "Cold desert", hex: "b6ad95", t: 0.26, h: 0.08, landform: "lowlands" },
+					{ name: "Taiga", hex: "3d6b63", t: 0.33, h: 0.9, landform: "lowlands" },
+					{ name: "Steppe", hex: "a8a05e", t: 0.45, h: 0.3, landform: "lowlands" },
+					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.55, landform: "lowlands" },
+					{ name: "Forest", hex: "4a8a55", t: 0.62, h: 0.82, landform: "lowlands" },
+					{ name: "Savanna", hex: "c9b45e", t: 0.85, h: 0.5, landform: "lowlands" },
+					{ name: "Rainforest", hex: "2f9e2f", t: 0.92, h: 0.85, landform: "lowlands" },
+					{ name: "Desert", hex: "e8c44a", t: 0.93, h: 0.1, landform: "lowlands" },
+
+					{ name: "Snowy slopes", hex: "dce6ee", t: 0.15, h: 0.5, landform: "slopes" },
+					{ name: "Taiga slope", hex: "35604f", t: 0.35, h: 0.82, landform: "slopes" },
+					{ name: "Grove", hex: "5f8a5c", t: 0.58, h: 0.68, landform: "slopes" },
+					{ name: "Shrub slope", hex: "9a8f50", t: 0.72, h: 0.25, landform: "slopes" },
+					{ name: "Dry slope", hex: "b08a55", t: 0.92, h: 0.15, landform: "slopes" },
+
+					{ name: "Snowy plateau", hex: "e2eaf2", t: 0.12, h: 0.5, landform: "plateau" },
+					{ name: "Highland steppe", hex: "b0ab6a", t: 0.45, h: 0.3, landform: "plateau" },
+					{ name: "Highland forest", hex: "3f7a4a", t: 0.62, h: 0.8, landform: "plateau" },
+					{ name: "Savanna plateau", hex: "cbb768", t: 0.85, h: 0.5, landform: "plateau" },
+					{ name: "Badlands", hex: "c06a3a", t: 0.93, h: 0.1, landform: "plateau" },
+
+					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.12, h: 0.5, landform: "peaks" },
+					{ name: "Alpine forest", hex: "46705a", t: 0.42, h: 0.8, landform: "peaks" },
+					{ name: "Stony peaks", hex: "8d8f94", t: 0.55, h: 0.25, landform: "peaks" },
+					{ name: "Alpine meadow", hex: "8fb06a", t: 0.78, h: 0.6, landform: "peaks" },
+					{ name: "Cloud forest", hex: "3f8f6a", t: 0.92, h: 0.9, landform: "peaks" },
 				],
-				// **Holdridge's life zones, which are this diagram already.**
-				// A real classification of the world's vegetation by
+				// **Holdridge's life zones, which are the climate square
+				// already.** A real classification of the world's vegetation by
 				// temperature and rainfall, with a name for every pair -- so it
-				// drops onto a set of dots without being reshaped. Two things
-				// come with it. Its own chart is a **triangle**, not a square:
-				// cold air holds little water, so the cold-and-soaking corner
-				// has no zone in it, and here the polar dot simply owns that
-				// whole end. And it is banded by **altitude as well as
-				// latitude** -- the same zones stack up a mountain in the
-				// tropics as run toward the pole at sea level, which is what
-				// the temperature field's altitude term does.
+				// drops onto a set of dots without being reshaped. It says
+				// nothing about landforms, and that is exactly what `any` is
+				// for: every zone is allowed on every kind of ground, and the
+				// page is back to one diagram read everywhere. Two things come
+				// with it. Its own chart is a **triangle**, not a square: cold
+				// air holds little water, so the cold-and-soaking corner has no
+				// zone in it, and here the polar dot simply owns that whole end.
+				// And it is banded by **altitude as well as latitude** -- the
+				// same zones stack up a mountain in the tropics as run toward
+				// the pole at sea level, which is what the temperature field's
+				// altitude term does.
 				Holdridge: [
 					{ name: "Polar desert", hex: "f2f4f6", t: 0.06, h: 0.5 },
 					{ name: "Dry tundra", hex: "8d8f86", t: 0.24, h: 0.25 },
@@ -1604,8 +1828,11 @@
 			const DEFAULT_BIOMES = PRESETS.plain;
 
 			/** The live table, which the diagram edits and the URL carries. */
-			let biomes = DEFAULT_BIOMES.map((b) => ({ ...b }));
+			let biomes = DEFAULT_BIOMES.map((b) => ({ landform: ANY, ...b }));
 			let picked = 0;
+			/** Which landform's diagram is on screen, and which grid cell was last touched. */
+			let shown = 2;
+			let cellPicked = gridAt(1, 2, 2);
 
 			const RGB_OF = new Map();
 
@@ -1624,8 +1851,26 @@
 			}
 
 			/**
-			 * Which biome a climate reading lands in: the nearest dot, and
-			 * nothing else.
+			 * The biomes one landform may build, as indices into the table.
+			 *
+			 * Rebuilt whenever the table changes rather than filtered at every
+			 * lookup: a picture asks this per pixel.
+			 */
+			let allowed = [];
+
+			function regroup() {
+				allowed = LANDFORMS.map((form, n) => {
+					const out = [];
+					for (let b = 0; b < biomes.length; b++)
+						if (biomes[b].landform === form.key || biomes[b].landform === ANY)
+							out.push(b);
+					return out;
+				});
+			}
+
+			/**
+			 * Which biome a climate lands in on one kind of ground: the nearest
+			 * dot among the ones that ground allows, and nothing else.
 			 *
 			 * **Nearest point, not a table of ranges.** A range table has to
 			 * name a biome for every cell of a grid and a cell nobody filled in
@@ -1633,17 +1878,24 @@
 			 * every edge in it is the perpendicular bisector between two dots,
 			 * so a border moves when either of the two biomes it separates
 			 * moves.
+			 *
+			 * A landform with no biome at all has no answer, which is the one
+			 * state the panel refuses to leave: removing the last one is
+			 * declined rather than allowed to draw a hole in the world.
 			 */
-			function biomeOf(t, h) {
-				let best = 0;
+			function biomeOf(t, h, form) {
+				const set = allowed[form];
+				if (!set || set.length === 0) return -1;
+				let best = set[0];
 				let near = Infinity;
-				for (let n = 0; n < biomes.length; n++) {
-					const dt = t - biomes[n].t;
-					const dh = h - biomes[n].h;
+				for (let n = 0; n < set.length; n++) {
+					const b = biomes[set[n]];
+					const dt = t - b.t;
+					const dh = h - b.h;
 					const d = dt * dt + dh * dh;
 					if (d < near) {
 						near = d;
-						best = n;
+						best = set[n];
 					}
 				}
 				return best;
@@ -1773,6 +2025,31 @@
 								"settings, held fixed. The ground is the input here rather " +
 								"than the subject: climate needs a coastline to measure " +
 								"from and a mountain to be cooled by",
+						},
+					],
+				},
+				{
+					group: "The landform",
+					open: true,
+					rows: [
+						{ key: "formPicture", label: "", type: "picture", shot: "form", value: 0 },
+						{
+							key: "shoreHeight",
+							label: "Shore reaches",
+							low: 0,
+							high: 120,
+							step: 2,
+							value: 12,
+							digits: 0,
+							unit: "m above the sea",
+							note: () =>
+								field && field.byForm
+									? `land under this is Shore whatever the grid says, ` +
+										`because sea level is a radius and a height is measured ` +
+										`from it — <b>${(field.byForm[0] * 100).toFixed(
+											1,
+										)}%</b> of the planet's land`
+									: "",
 						},
 					],
 				},
@@ -2024,14 +2301,16 @@
 							key: "paint",
 							label: "The patch is coloured by",
 							type: "select",
-							options: ["biome", "ground"],
+							options: ["biome", "landform", "ground"],
 							value: "biome",
 							note: () =>
 								knobs.paint === "biome"
 									? "every hexagon takes the colour of the biome its climate " +
-										"lands in"
-									: "the engine's own elevation bands, which is what the " +
-										"terrain picture draws",
+										"lands in, on the kind of ground it stands on"
+									: knobs.paint === "landform"
+										? "the kind of ground alone, before any climate is read"
+										: "the engine's own elevation bands, which is what the " +
+											"terrain picture draws",
 						},
 					],
 				},
@@ -2177,15 +2456,16 @@
 						(b) =>
 							`${b.name.replace(/[~|]/g, " ")}~${b.hex}~${+b.t.toFixed(
 								3,
-							)}~${+b.h.toFixed(3)}`,
+							)}~${+b.h.toFixed(3)}~${b.landform ?? ANY}`,
 					)
 					.join("|");
 			}
 
 			function biomesFromText(text) {
 				const out = [];
+				const keys = [ANY, ...LANDFORMS.map((form) => form.key)];
 				for (const piece of text.split("|")) {
-					const [name, hex, t, h] = piece.split("~");
+					const [name, hex, t, h, landform] = piece.split("~");
 					if (!name || !/^[0-9a-fA-F]{6}$/.test(hex ?? "")) continue;
 					if (!Number.isFinite(Number(t)) || !Number.isFinite(Number(h))) continue;
 					out.push({
@@ -2193,9 +2473,18 @@
 						hex: hex.toLowerCase(),
 						t: Math.max(0, Math.min(1, Number(t))),
 						h: Math.max(0, Math.min(1, Number(h))),
+						// A link written before a biome carried its ground names
+						// no landform, and everywhere is where it used to be.
+						landform: keys.includes(landform) ? landform : ANY,
 					});
 				}
 				return out.length > 0 ? out : null;
+			}
+
+			/** The grid as a run of digits, and back. */
+			function gridFromText(text) {
+				if (!/^[0-5]{75}$/.test(text)) return null;
+				return text.split("").map(Number);
 			}
 
 			function toParams() {
@@ -2209,7 +2498,10 @@
 					if (knobs[key] !== row.value) p.set(key, String(knobs[key]));
 				}
 				const now = biomesToText(biomes);
-				if (now !== biomesToText(DEFAULT_BIOMES)) p.set("biomes", now);
+				if (now !== biomesToText(PRESETS[knobs.preset] ?? DEFAULT_BIOMES))
+					p.set("biomes", now);
+				const sheet = grid.join("");
+				if (sheet !== DEFAULT_GRID) p.set("grid", sheet);
 				return p;
 			}
 
@@ -2228,6 +2520,11 @@
 						biomes = read;
 						picked = 0;
 					}
+				}
+				const sheet = params.get("grid");
+				if (sheet) {
+					const read = gridFromText(sheet);
+					if (read) grid = read;
 				}
 				// **A link could otherwise build what a slider cannot reach**, so
 				// the draft settles here as well as after every move.
@@ -2320,15 +2617,38 @@
 				const out = [];
 				for (const key of ROWS.keys()) {
 					const row = ROWS.get(key);
-					if (row.type === "picture" || key === "paint" || key === "chartDots")
+					if (
+						row.type === "picture" ||
+						key === "paint" ||
+						key === "chartDots" ||
+						key === "preset" ||
+						key === "shoreHeight"
+					)
 						continue;
 					out.push(key + "=" + knobs[key]);
 				}
 				return out.join(",");
 			}
 
-			/** The planet's own climate at the tally level, held between edits. */
-			const world = { key: null, t: null, h: null, land: null, fit: null };
+			/**
+			 * The planet's own climate and ground at the tally level, held
+			 * between edits.
+			 *
+			 * The three curves' answers are held alongside the two climate
+			 * ones, because the grid is read off them and the grid is edited far
+			 * more often than the fields are resampled.
+			 */
+			const world = {
+				key: null,
+				t: null,
+				h: null,
+				land: null,
+				metres: null,
+				level: null,
+				cut: null,
+				swing: null,
+				fit: null,
+			};
 
 			/** One share of a sorted list, which is what the square is fitted to. */
 			function percentile(sorted, at) {
@@ -2390,6 +2710,10 @@
 				const t = new Float32Array(count);
 				const h = new Float32Array(count);
 				const land = new Uint8Array(count);
+				const metresAt = new Float32Array(count);
+				const level = new Float32Array(count);
+				const cut = new Float32Array(count);
+				const swing = new Float32Array(count);
 				for (let n = 0; n < count; n++) {
 					const p = WORLD[n];
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
@@ -2400,6 +2724,10 @@
 					rawH[n] = climate[1];
 					pushT[n] = warp[0];
 					pushH[n] = warp[1];
+					metresAt[n] = metres;
+					level[n] = splineAt(TERRAIN.cont.spline, said[0]);
+					cut[n] = splineAt(TERRAIN.ero.spline, said[1]);
+					swing[n] = splineAt(TERRAIN.pv.spline, said[2]);
 					land[n] = metres > TERRAIN.seaLevel ? 1 : 0;
 				}
 				world.fit = fitTo(rawT, rawH, land);
@@ -2416,6 +2744,10 @@
 				world.t = t;
 				world.h = h;
 				world.land = land;
+				world.metres = metresAt;
+				world.level = level;
+				world.cut = cut;
+				world.swing = swing;
 			}
 
 			/**
@@ -2428,14 +2760,40 @@
 			 */
 			function shares() {
 				const out = new Float64Array(biomes.length);
+				const byForm = new Float64Array(LANDFORMS.length);
+				const inCell = new Float64Array(grid.length);
 				let land = 0;
 				for (let n = 0; n < world.t.length; n++) {
 					if (!world.land[n]) continue;
 					land++;
-					out[biomeOf(world.t[n], world.h[n])]++;
+					const form = landformAt(
+						world.level[n],
+						world.cut[n],
+						world.swing[n],
+						world.metres[n],
+					);
+					byForm[form]++;
+					if (form !== SHORE)
+						inCell[
+							gridAt(
+								bucket(world.level[n], CONT_EDGES),
+								bucket(world.cut[n], ERO_EDGES),
+								bucket(world.swing[n], PV_EDGES),
+							)
+						]++;
+					const which = biomeOf(world.t[n], world.h[n], form);
+					if (which >= 0) out[which]++;
 				}
-				for (let n = 0; n < out.length; n++) out[n] /= Math.max(1, land);
-				return { share: out, land: land / world.t.length };
+				const over = Math.max(1, land);
+				for (let n = 0; n < out.length; n++) out[n] /= over;
+				for (let n = 0; n < byForm.length; n++) byForm[n] /= over;
+				for (let n = 0; n < inCell.length; n++) inCell[n] /= over;
+				return {
+					share: out,
+					byForm,
+					inCell,
+					land: land / world.t.length,
+				};
 			}
 
 			/**
@@ -2492,6 +2850,11 @@
 				const height = new Float64Array(count);
 				const climT = new Float32Array(count);
 				const climH = new Float32Array(count);
+				// The three curves' answers, held so that editing the grid
+				// re-reads them rather than resampling the noise under them.
+				const level = new Float32Array(count);
+				const cut = new Float32Array(count);
+				const swing = new Float32Array(count);
 				const degree = new Uint8Array(count);
 				const corner = new Float64Array(count * 18);
 				const ring = new Int32Array(count * 6).fill(-1);
@@ -2509,6 +2872,9 @@
 					climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
 					warpAt(p[0], p[1], p[2], seed, s, warp);
 					height[c] = metres;
+					level[c] = splineAt(TERRAIN.cont.spline, said[0]);
+					cut[c] = splineAt(TERRAIN.ero.spline, said[1]);
+					swing[c] = splineAt(TERRAIN.pv.spline, said[2]);
 					squareOf(climate, warp, square);
 					climT[c] = square[0];
 					climH[c] = square[1];
@@ -2542,7 +2908,11 @@
 					height,
 					climT,
 					climH,
+					level,
+					cut,
+					swing,
 					biome: new Int16Array(count),
+					form: new Int8Array(count),
 					lowest,
 					highest,
 					arc: Math.min(cells * k.mapMetres, Math.PI * k.radius),
@@ -2562,17 +2932,21 @@
 			 */
 			function assign() {
 				if (!field) return;
-				const { count, height, climT, climH, biome } = field;
+				regroup();
+				const { count, height, climT, climH, level, cut, swing, biome, form } =
+					field;
 				const counts = new Int32Array(biomes.length);
 				let land = 0;
 				for (let c = 0; c < count; c++) {
-					if (height[c] <= TERRAIN.seaLevel) {
+					const kind = landformAt(level[c], cut[c], swing[c], height[c]);
+					form[c] = kind;
+					if (kind < 0) {
 						biome[c] = -1;
 						continue;
 					}
-					const which = biomeOf(climT[c], climH[c]);
+					const which = biomeOf(climT[c], climH[c], kind);
 					biome[c] = which;
-					counts[which]++;
+					if (which >= 0) counts[which]++;
 					land++;
 				}
 				field.counts = counts;
@@ -2594,6 +2968,7 @@
 			const SHOTS = [
 				{ key: "biome", id: "shotBiome", name: "Biomes" },
 				{ key: "ground", id: "shotGround", name: "Terrain" },
+				{ key: "form", id: "shotForm", name: "Landform" },
 				{ key: "temp", id: "shotTemp", name: "Temperature" },
 				{ key: "hum", id: "shotHum", name: "Humidity" },
 				{ key: "warp", id: "shotWarp", name: "Biome noise" },
@@ -2723,6 +3098,10 @@
 				const pushH = new Float32Array(room);
 				const ground = new Float32Array(room * 3);
 				const land = new Uint8Array(room);
+				const metresAt = new Float32Array(room);
+				const level = new Float32Array(room);
+				const cut = new Float32Array(room);
+				const swing = new Float32Array(room);
 				for (let r = 0; r < tall; r++)
 					for (let q = 0; q < wide; q++) {
 						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
@@ -2736,6 +3115,10 @@
 						h[at] = square[1];
 						pushT[at] = warp[0];
 						pushH[at] = warp[1];
+						metresAt[at] = metres;
+						level[at] = splineAt(TERRAIN.cont.spline, said[0]);
+						cut[at] = splineAt(TERRAIN.ero.spline, said[1]);
+						swing[at] = splineAt(TERRAIN.pv.spline, said[2]);
 						land[at] = metres > TERRAIN.seaLevel ? 1 : 0;
 						const c = groundColor(metres);
 						ground[at * 3] = c[0];
@@ -2751,6 +3134,10 @@
 				sampled.pushH = pushH;
 				sampled.ground = ground;
 				sampled.land = land;
+				sampled.metres = metresAt;
+				sampled.level = level;
+				sampled.cut = cut;
+				sampled.swing = swing;
 			}
 
 			/**
@@ -2771,7 +3158,8 @@
 				}
 				const image = ctx.createImageData(wide, tall);
 				const px = image.data;
-				const { t, h, pushT, pushH, ground, land } = sampled;
+				const { t, h, pushT, pushH, ground, land, metres, level, cut, swing } =
+					sampled;
 				for (let n = 0; n < wide * tall; n++) {
 					let c;
 					if (shot.key === "ground") {
@@ -2794,8 +3182,15 @@
 						const along = Math.max(0, Math.min(0.9999, (pushH[n] + 1) / 2));
 						const into = along * PICTURE_BANDS - Math.floor(along * PICTURE_BANDS);
 						if (into < 0.06) c = [c[0] * 0.4, c[1] * 0.45, c[2] * 0.55];
+					} else if (shot.key === "form") {
+						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						c =
+							form < 0
+								? SEA_COLOR
+								: rgbOf(LANDFORMS[form].hex);
 					} else {
-						const which = land[n] === 0 ? -1 : biomeOf(t[n], h[n]);
+						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						const which = form < 0 ? -1 : biomeOf(t[n], h[n], form);
 						c =
 							which < 0
 								? [ground[n * 3], ground[n * 3 + 1], ground[n * 3 + 2]]
@@ -2807,7 +3202,7 @@
 					px[at + 2] = c[2] * 255;
 					px[at + 3] = 255;
 				}
-				if (shot.key !== "ground" && shot.key !== "biome")
+				if (shot.key !== "ground" && shot.key !== "biome" && shot.key !== "form")
 					for (let r = 0; r < tall; r++)
 						for (let q = 0; q < wide; q++) {
 							const n = r * wide + q;
@@ -2973,15 +3368,22 @@
 				const image = chartCtx.createImageData(wide, tall);
 				const px = image.data;
 				const push = knobs.warpStrength;
+				// **One landform's own partition**, because that is the set a
+				// place on that kind of ground is chosen from. A biome filed
+				// under the lowlands is not in this picture at all when the
+				// peaks are shown, which is the whole of what stops a desert
+				// appearing on a summit.
+				const set = allowed[shown] ?? [];
 				for (let r = 0; r < tall; r++) {
 					const t = 1 - (r + 0.5) / tall;
 					for (let q = 0; q < wide; q++) {
 						const h = (q + 0.5) / wide;
-						let first = 0;
-						let other = 0;
+						let first = set[0] ?? 0;
+						let other = first;
 						let near = Infinity;
 						let second = Infinity;
-						for (let n = 0; n < biomes.length; n++) {
+						for (let i = 0; i < set.length; i++) {
+							const n = set[i];
 							const dt = t - biomes[n].t;
 							const dh = h - biomes[n].h;
 							const d = dt * dt + dh * dh;
@@ -2994,6 +3396,14 @@
 								second = d;
 								other = n;
 							}
+						}
+						if (set.length === 0) {
+							const at = (r * wide + q) * 4;
+							px[at] = 24;
+							px[at + 1] = 26;
+							px[at + 2] = 32;
+							px[at + 3] = 255;
+							continue;
 						}
 						// Half the gap between the two nearest dots is how far
 						// this point stands from the line between them.
@@ -3016,24 +3426,41 @@
 				// world never builds, and one packed with them is a biome most
 				// of the ground is in. The patch is the same reading over one
 				// place, which is where the camera is standing.
+				// **Only the ground this tab is about.** A cloud of every
+				// climate on the planet says nothing about where a peak's
+				// biomes should sit; the peaks' own climates do, and on this
+				// world they are cold, because the temperature field loses
+				// height as the ground gains it.
 				const cloud =
-					knobs.chartDots === "the planet"
-						? { t: world.t, h: world.h, land: world.land, count: world.t.length }
+					knobs.chartDots === "the planet" && world.t
+						? {
+								t: world.t,
+								h: world.h,
+								form: null,
+								count: world.t.length,
+								world: true,
+							}
 						: knobs.chartDots === "the patch" && field
 							? {
 									t: field.climT,
 									h: field.climH,
-									land: field.biome,
+									form: field.form,
 									count: field.count,
+									world: false,
 								}
 							: null;
 				if (cloud) {
 					chartCtx.fillStyle = "rgba(10, 12, 16, 0.42)";
 					for (let n = 0; n < cloud.count; n++) {
-						if (
-							knobs.chartDots === "the planet" ? !cloud.land[n] : cloud.land[n] < 0
-						)
-							continue;
+						const form = cloud.world
+							? landformAt(
+									world.level[n],
+									world.cut[n],
+									world.swing[n],
+									world.metres[n],
+								)
+							: cloud.form[n];
+						if (form !== shown) continue;
 						const x = CHART_LEFT + cloud.h[n] * wide;
 						const y = (1 - cloud.t[n]) * tall;
 						chartCtx.fillRect(x - 0.5, y - 0.5, 1.6, 1.6);
@@ -3045,7 +3472,9 @@
 				// a pile of overlapping text says less than the dots alone. The
 				// one being edited is placed first and never dropped.
 				const taken = [];
-				const order = [picked, ...biomes.map((_, n) => n).filter((n) => n !== picked)];
+				const order = set.includes(picked)
+					? [picked, ...set.filter((n) => n !== picked)]
+					: [...set];
 				chartCtx.textAlign = "center";
 				for (const n of order) {
 					const b = biomes[n];
@@ -3100,16 +3529,48 @@
 				chartCtx.restore();
 			}
 
-			/** Which biome is being edited, and what it comes to on the planet. */
+			/**
+			 * Which biome is being edited, what it comes to on the planet, and
+			 * which ground it may stand on.
+			 *
+			 * **Where it stands is edited here rather than in the list**,
+			 * because changing it moves the biome out of the list this panel is
+			 * showing -- the control has to outlive the row it would sit in.
+			 */
 			function sayChart() {
 				const b = biomes[picked];
-				if (!b) return;
+				chartSays.textContent = "";
+				if (!b) {
+					chartSays.innerHTML =
+						`<b>${LANDFORMS[shown].name}</b> has no biome, so nothing can be ` +
+						`built on it — add one, or move one here`;
+					return;
+				}
 				const share = field && field.worldShare ? field.worldShare[picked] : 0;
-				chartSays.innerHTML =
+				const says = document.createElement("span");
+				says.innerHTML =
 					`<b>${b.name}</b> at temperature <b>${b.t.toFixed(
 						2,
 					)}</b>, humidity <b>${b.h.toFixed(2)}</b> — ` +
-					`<b>${(share * 100).toFixed(1)}%</b> of the planet's land`;
+					`<b>${(share * 100).toFixed(1)}%</b> of the planet's land · stands on `;
+				const pickForm = document.createElement("select");
+				for (const [value, label] of [
+					[ANY, "any ground"],
+					...LANDFORMS.map((form) => [form.key, form.name.toLowerCase()]),
+				]) {
+					const o = document.createElement("option");
+					o.value = value;
+					o.textContent = label;
+					pickForm.append(o);
+				}
+				pickForm.value = b.landform ?? ANY;
+				pickForm.addEventListener("input", () => {
+					b.landform = pickForm.value;
+					if (b.landform !== ANY) shown = LANDFORMS.findIndex((f) => f.key === b.landform);
+					askForRecolor();
+					writeUrl();
+				});
+				chartSays.append(says, pickForm);
 			}
 
 			/**
@@ -3142,7 +3603,7 @@
 				const p = chartPoint(e);
 				let near = Infinity;
 				let found = -1;
-				for (let n = 0; n < biomes.length; n++) {
+				for (const n of allowed[shown] ?? []) {
 					const dx = CHART_LEFT + biomes[n].h * p.wide - p.x;
 					const dy = (1 - biomes[n].t) * p.tall - p.y;
 					const d = dx * dx + dy * dy;
@@ -3151,8 +3612,9 @@
 						found = n;
 					}
 				}
-				const grabbed = near <= 16 * 16;
-				picked = grabbed ? found : biomeOf(p.t, p.h);
+				const grabbed = found >= 0 && near <= 16 * 16;
+				const under = biomeOf(p.t, p.h, shown);
+				picked = grabbed ? found : under >= 0 ? under : picked;
 				holding = grabbed ? found : -1;
 				if (grabbed) chart.setPointerCapture(e.pointerId);
 				refreshList();
@@ -3265,6 +3727,10 @@
 			function cellTint(c) {
 				const metres = field.height[c];
 				if (metres <= TERRAIN.seaLevel) return BAND_COLORS[0];
+				if (knobs.paint === "landform")
+					return field.form[c] < 0
+						? BAND_COLORS[0]
+						: rgbOf(LANDFORMS[field.form[c]].hex);
 				if (knobs.paint === "ground") {
 					const over = metres - TERRAIN.seaLevel;
 					if (over < GROUND_LINES.rock) return BAND_COLORS[1];
@@ -3548,8 +4014,9 @@
 			function applyPreset(name) {
 				const set = PRESETS[name];
 				if (!set) return;
-				biomes = set.map((b) => ({ ...b }));
-				picked = 0;
+				biomes = set.map((b) => ({ landform: ANY, ...b }));
+				regroup();
+				picked = (allowed[shown] ?? [])[0] ?? 0;
 			}
 
 			function buildPanel() {
@@ -3676,11 +4143,15 @@
 				}
 				if (!field) return;
 				const here = field.here >= 0 ? biomes[field.here] : null;
+				let widest = 0;
+				for (let n = 1; n < LANDFORMS.length; n++)
+					if (field.byForm[n] > field.byForm[widest]) widest = n;
 				document.getElementById("recipe").innerHTML =
-					`<i class="b">${biomes.length}</i> biomes · ` +
+					`<i class="b">${biomes.length}</i> biomes over ` +
+					`<i class="b">${LANDFORMS.length}</i> landforms · ` +
 					`<i class="b">${(field.landShare * 100).toFixed(1)}%</i> of the ` +
-					`planet is land · ` +
-					`<i class="b">${field.reached}</i> of them are ever built` +
+					`planet is land, most of it <i class="w">${LANDFORMS[widest].name}</i> · ` +
+					`<i class="b">${field.reached}</i> biomes are ever built` +
 					(here
 						? ` · here it is mostly <i class="h">${here.name}</i>`
 						: " · the patch is all sea");
@@ -3708,7 +4179,7 @@
 			function refreshList() {
 				list.textContent = "";
 				const share = field && field.worldShare ? field.worldShare : null;
-				for (let n = 0; n < biomes.length; n++) {
+				for (const n of allowed[shown] ?? []) {
 					const b = biomes[n];
 					const row = document.createElement("div");
 					row.className = "biome" + (n === picked ? " picked" : "");
@@ -3739,10 +4210,10 @@
 					drop.title = "remove this biome";
 					drop.addEventListener("click", (e) => {
 						e.stopPropagation();
-						// **The square must always have an answer**, so the last
+						// **This ground must always have an answer**, so its last
 						// biome cannot be removed: with no dots there is no
-						// nearest one and every climate would name nothing.
-						if (biomes.length <= 1) return;
+						// nearest one and every climate on it would name nothing.
+						if ((allowed[shown] ?? []).length <= 1) return;
 						biomes.splice(n, 1);
 						picked = Math.min(picked, biomes.length - 1);
 						askForRecolor();
@@ -3762,11 +4233,177 @@
 			document.getElementById("add").addEventListener("click", () => {
 				// A new dot lands in the middle of the square, where it is
 				// visible and where dragging it somewhere useful is one move.
-				biomes.push({ name: "New biome", hex: "b06fd0", t: 0.5, h: 0.5 });
+				// It belongs to the ground whose diagram is open, because that
+				// is the one being edited.
+				biomes.push({
+					name: "New biome",
+					hex: "b06fd0",
+					t: 0.5,
+					h: 0.5,
+					landform: LANDFORMS[shown].key,
+				});
 				picked = biomes.length - 1;
 				askForRecolor();
 				writeUrl();
 			});
+
+			// ---------------------------------------------------------------
+			// The tabs, and the grid that fills them.
+			// ---------------------------------------------------------------
+
+			const tabs = document.getElementById("tabs");
+			const gridHost = document.getElementById("gridHost");
+
+			/** One button per kind of ground, carrying its share of the land. */
+			function refreshTabs() {
+				tabs.textContent = "";
+				for (let n = 0; n < LANDFORMS.length; n++) {
+					const form = LANDFORMS[n];
+					const button = document.createElement("button");
+					button.type = "button";
+					const set = allowed[n] ?? [];
+					button.className =
+						(n === shown ? "picked" : "") + (set.length === 0 ? " empty" : "");
+					const swatch = document.createElement("span");
+					swatch.className = "swatch";
+					swatch.style.background = "#" + form.hex;
+					const share =
+						field && field.byForm ? (field.byForm[n] * 100).toFixed(1) + "%" : "";
+					button.append(swatch, document.createTextNode(form.name + " " + share));
+					button.title =
+						set.length === 0
+							? "no biome stands on this ground"
+							: set.length + " biomes";
+					button.addEventListener("click", () => {
+						shown = n;
+						const set2 = allowed[n] ?? [];
+						if (!set2.includes(picked) && set2.length > 0) picked = set2[0];
+						refreshTabs();
+						refreshList();
+						drawChart();
+						sayChart();
+					});
+					tabs.append(button);
+				}
+			}
+
+			/**
+			 * The grid: which landform each combination of the three terrain
+			 * indices is.
+			 *
+			 * One sheet per continentalness band, erosion down and peaks and
+			 * valleys across, and the share of the planet's land in each cell
+			 * written on it -- so a cell nothing falls in is visible rather than
+			 * argued about. Clicking a cell opens that landform's diagram and
+			 * points the select below at the cell, which is what changes it.
+			 */
+			let sheetShown = 1;
+
+			function refreshGrid() {
+				gridHost.textContent = "";
+				const set = document.createElement("details");
+				set.className = "group";
+				set.open = true;
+				const legend = document.createElement("summary");
+				legend.textContent = "The landform grid";
+				set.append(legend);
+
+				const band = document.createElement("div");
+				band.id = "tabs";
+				for (let c = 0; c < 3; c++) {
+					const button = document.createElement("button");
+					button.type = "button";
+					button.textContent = CONT_NAMES[c];
+					button.className = c === sheetShown ? "picked" : "";
+					button.addEventListener("click", () => {
+						sheetShown = c;
+						refreshGrid();
+					});
+					band.append(button);
+				}
+				set.append(band);
+
+				const sheet = document.createElement("div");
+				sheet.className = "sheet";
+				const corner = document.createElement("div");
+				corner.className = "corner";
+				sheet.append(corner);
+				for (let p = 0; p < 5; p++) {
+					const head = document.createElement("div");
+					head.className = "corner";
+					head.textContent = PV_NAMES[p];
+					sheet.append(head);
+				}
+				for (let e = 0; e < 5; e++) {
+					const edge = document.createElement("div");
+					edge.className = "edge";
+					edge.textContent = ERO_NAMES[e];
+					sheet.append(edge);
+					for (let p = 0; p < 5; p++) {
+						const at = gridAt(sheetShown, e, p);
+						const form = LANDFORMS[grid[at]];
+						const button = document.createElement("button");
+						button.type = "button";
+						button.style.background = "#" + form.hex;
+						button.className = at === cellPicked ? "picked" : "";
+						const share =
+							field && field.inCell
+								? (field.inCell[at] * 100).toFixed(1) + "%"
+								: "";
+						button.innerHTML = form.short + "<small>" + share + "</small>";
+						button.title = `${CONT_NAMES[sheetShown]}, ${
+							["sharpest", "sharp", "middling", "worn", "worn flat"][e]
+						}, ${["valley", "low", "middling", "high", "peak"][p]} → ${form.name}`;
+						button.addEventListener("click", () => {
+							cellPicked = at;
+							shown = grid[at];
+							const set2 = allowed[shown] ?? [];
+							if (!set2.includes(picked) && set2.length > 0) picked = set2[0];
+							refreshTabs();
+							refreshGrid();
+							refreshList();
+							drawChart();
+							sayChart();
+						});
+						sheet.append(button);
+					}
+				}
+				set.append(sheet);
+
+				const foot = document.createElement("div");
+				foot.className = "sheet-foot";
+				foot.innerHTML = "<span>valley</span><span>peaks &amp; valleys</span><span>peak</span>";
+				set.append(foot);
+
+				const wrap = document.createElement("div");
+				wrap.className = "knob";
+				const label = document.createElement("label");
+				label.textContent = "That cell is";
+				const pick = document.createElement("select");
+				for (let n = 0; n < LANDFORMS.length; n++) {
+					const o = document.createElement("option");
+					o.value = String(n);
+					o.textContent = LANDFORMS[n].name;
+					pick.append(o);
+				}
+				pick.value = String(grid[cellPicked]);
+				pick.addEventListener("input", () => {
+					grid[cellPicked] = Number(pick.value);
+					shown = grid[cellPicked];
+					askForRecolor();
+					writeUrl();
+				});
+				wrap.append(label, document.createElement("output"), pick);
+				const note = document.createElement("p");
+				note.className = "knob-note";
+				note.innerHTML =
+					"the three curves' answers, cut into indices — <b>Shore</b> is not " +
+					"in the grid, because it is a height rather than a combination of " +
+					"the three";
+				wrap.append(note);
+				set.append(wrap);
+				gridHost.append(set);
+			}
 
 			// ---------------------------------------------------------------
 			// Boot.
@@ -3776,6 +4413,8 @@
 			function measure() {
 				const read = shares();
 				field.worldShare = read.share;
+				field.byForm = read.byForm;
+				field.inCell = read.inCell;
 				field.landShare = read.land;
 				let reached = 0;
 				for (const v of read.share) if (v > 0) reached++;
@@ -3802,7 +4441,9 @@
 					drawChart();
 					cost = performance.now() - started;
 					refreshPanel();
+					refreshTabs();
 					refreshList();
+					refreshGrid();
 					sayChart();
 					if (!draft) writeUrl();
 					render();
@@ -3830,7 +4471,9 @@
 					drawChart();
 					cost = performance.now() - started;
 					refreshPanel();
+					refreshTabs();
 					refreshList();
+					refreshGrid();
 					sayChart();
 					render();
 				});
@@ -3904,6 +4547,11 @@
 			watchShot(SHOTS[0]);
 			buildPanel();
 			const booted = performance.now();
+			regroup();
+			// The panel opens on one kind of ground, so the biome it says it is
+			// editing has to be one of that ground's own.
+			if (!(allowed[shown] ?? []).includes(picked))
+				picked = (allowed[shown] ?? [])[0] ?? 0;
 			settle();
 			generate();
 			measure();
@@ -3912,7 +4560,9 @@
 			drawChart();
 			cost = performance.now() - booted;
 			refreshPanel();
+			refreshTabs();
 			refreshList();
+			refreshGrid();
 			sayChart();
 			render();
 		</script>

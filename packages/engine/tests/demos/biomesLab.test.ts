@@ -73,8 +73,37 @@ describe("the biomes lab's copy of the engine", () => {
 		// A table of ranges has to name a biome for every cell of a grid, and a
 		// cell nobody filled in is a hole. A Voronoi diagram has none by
 		// construction.
-		expect(lab).toContain("function biomeOf(t, h) {");
+		expect(lab).toContain("function biomeOf(t, h, form) {");
 		expect(lab).toContain("const d = dt * dt + dh * dh;");
+	});
+
+	it("lets the terrain choose the landform before the climate chooses a type", () => {
+		// **Temperature and humidity cannot say that a place is a mountain.**
+		// Measured on the shipped world, altitude drags the median temperature
+		// of peaks only 0.033 of the diagram below the lowlands', so a diagram
+		// read on climate alone puts a desert on a summit -- 13.1% of peak
+		// ground came out Desert and 52.1% came out some dry lowland type. The
+		// three terrain layers name the ground first, and the diagram then
+		// only chooses which kind of that ground this one is.
+		expect(lab).toContain("function landformAt(level, cut, swing, metres) {");
+		expect(lab).toContain("const set = allowed[form];");
+	});
+
+	it("reads the landform off the curves' answers, not the raw noise", () => {
+		// A layer is a stack of octaves read through a curve, and the curve is
+		// what gives the reading a meaning: how high the continent stands, how
+		// much erosion takes away, how far the relief swings. The raw noise
+		// under all three is the same shape.
+		expect(lab).toContain("splineAt(TERRAIN.cont.spline, said[0])");
+		expect(lab).toContain("splineAt(TERRAIN.ero.spline, said[1])");
+		expect(lab).toContain("splineAt(TERRAIN.pv.spline, said[2])");
+	});
+
+	it("keeps the shore a height rather than a cell of the grid", () => {
+		// Sea level is a radius and every height is measured from it, so *the
+		// ground has barely come out of the water* is one comparison -- and it
+		// cannot be true on a mountain however close to the coast it stands.
+		expect(lab).toContain("if (metres <= knobs.shoreHeight) return SHORE;");
 	});
 
 	it("fits the diagram to the land the planet actually has", () => {
