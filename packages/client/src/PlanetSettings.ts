@@ -307,6 +307,18 @@ export interface PlanetKnobs {
 	/** How many map cells across the bench's patch is. */
 	patchCells: number;
 
+	/**
+	 * How many levels finer than the map the bench's patch is drawn at.
+	 *
+	 * **The map is not the grid the world is built on.** A map cell is a
+	 * reading and a block is a hexagon one layer tall; between two readings the
+	 * engine lays blocks up a ramp, and everything about cliffs and overhangs
+	 * happens on that grid. Drawn a hexagon per map reading there is nowhere for
+	 * an overhang to stand, so the patch is drawn on the block grid and this is
+	 * how far under the map that is. At `0` it is the map's own level again.
+	 */
+	patchDetail: number;
+
 	/** Which step of the build the preview stops at. */
 	patchPicture: PatchPicture;
 
@@ -863,9 +875,13 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seaLevel: 0,
 	// A place with a coast, a plain and a range on it, so the bench opens on
 	// all three rather than on whichever the middle of the map happened to be.
-	patchLatitude: 45,
-	patchLongitude: 20,
-	patchCells: 176,
+	// **A coast with mountains behind it**, because the bench has to open on
+	// something the knobs can be judged against: open ocean says nothing about
+	// relief and an inland plain says nothing about the waterline.
+	patchLatitude: 65,
+	patchLongitude: -20,
+	patchCells: 32,
+	patchDetail: 2,
 	patchPicture: "ground",
 	patchSurface: "solid",
 	patchMap: "patch",
@@ -1284,7 +1300,14 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "\u00b0",
 	},
-	patchCells: { low: 48, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchDetail: {
+		low: 0,
+		high: 3,
+		step: 1,
+		rebuilds: false,
+		unit: "levels under the map",
+	},
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
@@ -1673,6 +1696,25 @@ export class PlanetSettings {
 	/** Metres across one cell of the coarse map, once its level is rounded. */
 	get coarseCell(): number {
 		return (CELL_CONSTANT * this.radius) / 2 ** this.coarseLevel;
+	}
+
+	/**
+	 * The lattice the bench's patch is drawn at, which is the block grid.
+	 *
+	 * Capped at the world's own depth: past that there is no finer lattice for
+	 * the address to name, and a patch cannot be drawn on a grid the planet
+	 * does not have.
+	 */
+	get patchLevel(): number {
+		return Math.min(
+			this.depth,
+			this.coarseLevel + Math.max(0, Math.round(this.knobs.patchDetail)),
+		);
+	}
+
+	/** How wide one of the bench patch's columns is, in metres. */
+	get patchCellMetres(): number {
+		return (CELL_CONSTANT * this.radius) / 2 ** this.patchLevel;
 	}
 
 	/**

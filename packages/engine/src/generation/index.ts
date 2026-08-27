@@ -100,3 +100,11 @@ export type { Column } from "./chunk/Column.js";
 export type { ColumnSampler } from "./chunk/ColumnSampler.js";
 export { columnBand } from "./chunk/columnBand.js";
 export { ChunkColumnSampler } from "./chunk/ChunkColumnSampler.js";
+
+export {
+	CARVE_REACH,
+	WATERLINE_REACH,
+	carveDepth,
+	carveIsRock,
+	carveSeed,
+} from "./terrain/carveDensity.js";

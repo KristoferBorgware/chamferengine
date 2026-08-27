@@ -319,6 +319,8 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 			indices: reply.geometry.indices,
 			lines: reply.geometry.lines,
 			triangleCount: reply.geometry.triangleCount,
+			groundVertices: reply.geometry.groundVertices,
+			waterVertices: reply.geometry.waterVertices,
 		});
 		look.rawLow = reply.geometry.rawLow;
 		look.rawHigh = reply.geometry.rawHigh;
@@ -333,6 +335,14 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 	panel.note(
 		"seaLevel",
 		`${(reply.facts.land * 100).toFixed(1)}% of the planet is land`,
+	);
+	// **The patch is drawn on the block grid, not the map's.** What that costs
+	// is columns, and the count is the only honest way to say it: one more
+	// level is four times as many of them.
+	panel.note(
+		"patchDetail",
+		`a column is ${reply.facts.columnMetres.toFixed(1)} m — ` +
+			`${reply.facts.cellsDrawn.toLocaleString("en-US")} in the patch`,
 	);
 	show();
 	if (pending) ask();
@@ -436,12 +446,33 @@ function say(): void {
 		(f
 			? line(
 					`patch <b>${metres(f.span)}</b> across · ` +
-						`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> cells`,
+						`<b>${f.cellsDrawn.toLocaleString("en-US")}</b> columns ` +
+						`of <b>${f.columnMetres.toFixed(1)} m</b>` +
+						(f.whole ? " — the whole planet" : ""),
 				) +
 				line(
 					`ground <b>${metres(f.lowest)}</b> to <b>${metres(f.highest)}</b> · ` +
 						`land <b>${Math.round(f.landShare * 100)}%</b>`,
-				)
+				) +
+				// **Which of the first two is bigger is the whole question about
+				// the carve.** Blocks off the top of a column only lower the
+				// ground, however many of them there are; a block taken out from
+				// under rock is a space, and a space is the only thing a height
+				// field could never have drawn.
+				(f.dugUnder + f.dugAbove > 0
+					? line(
+							`carved <b>${f.dugUnder.toLocaleString("en-US")}</b> under rock, ` +
+								`<b>${f.dugAbove.toLocaleString("en-US")}</b> off the top` +
+								(f.dugDrowned > 0
+									? ` · <b>${f.dugDrowned.toLocaleString("en-US")}</b> under the sea`
+									: ""),
+						) +
+						line(
+							`<b>${f.stacked.toLocaleString("en-US")}</b> columns hold rock over air, ` +
+								`deepest <b>${f.deepest}</b> spans · ` +
+								`<b>${f.floating.toLocaleString("en-US")}</b> floating`,
+						)
+					: "")
 			: "") +
 		(report
 			? line(

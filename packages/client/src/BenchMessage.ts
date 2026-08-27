@@ -31,9 +31,36 @@ export interface BenchStep {
 
 /** Everything a finished build hands back that is a number rather than a buffer. */
 export interface BenchFacts {
-	/** Cells on the map, and cells the patch drew. */
+	/** Cells on the map, and columns the patch drew. */
 	readonly cells: number;
 	readonly cellsDrawn: number;
+
+	/** How wide one of the patch's columns is, in metres. */
+	readonly columnMetres: number;
+
+	/** Whether the walk reached every column on the planet. */
+	readonly whole: boolean;
+
+	/**
+	 * Blocks the carve removed with rock still over them, against blocks it
+	 * took off the top of a column, against what the sea then filled.
+	 *
+	 * **The whole question about that layer is which of the first two is
+	 * bigger.** Enough blocks off the top in a row is a displaced height field
+	 * wearing a 3D field's clothes; a block taken out from *under* rock is a
+	 * space, and a space is the only thing a height field could never draw.
+	 */
+	readonly dugUnder: number;
+	readonly dugAbove: number;
+	readonly dugDrowned: number;
+
+	/** Masses of rock touching nothing that reaches the bedrock, and their spans. */
+	readonly floating: number;
+	readonly floatingSpans: number;
+
+	/** Columns holding rock over air over rock, and the deepest stack of them. */
+	readonly stacked: number;
+	readonly deepest: number;
 
 	/** How long the whole build took, in milliseconds. */
 	readonly ms: number;
@@ -109,6 +136,16 @@ export interface BenchGeometry {
 	readonly indices: Uint32Array<ArrayBuffer> | null;
 	readonly lines: Uint32Array<ArrayBuffer> | null;
 	readonly triangleCount: number;
+
+	/**
+	 * How many vertices the ground drew and how many the sea did.
+	 *
+	 * A column mesh shares no vertex -- every face is flat and carries its own
+	 * plane -- so it is drawn without indices, in two runs: the ground opaque
+	 * and the sea blended after it.
+	 */
+	readonly groundVertices: number;
+	readonly waterVertices: number;
 
 	/** What the field reached in this patch, which the Raw picture is drawn against. */
 	readonly rawLow: number;

@@ -346,6 +346,16 @@ const GROUPS: Group[] = [
 				digits: 0,
 			},
 			{
+				// **The map is not the grid the world is built on.** A map cell
+				// is a reading and a block is a hexagon one layer tall; every
+				// cliff, overhang and arch is a shape in that grid rather than
+				// in the map's, so the patch is drawn on it and this says how
+				// far under the map that is.
+				key: "patchDetail",
+				label: "Block detail",
+				digits: 0,
+			},
+			{
 				key: "patchMap",
 				label: "Map shows",
 				choices: [
@@ -360,9 +370,9 @@ const GROUPS: Group[] = [
 					{ value: "ground", label: "Ground" },
 					{ value: "height", label: "Height" },
 					{ value: "raw", label: "Raw" },
-					{ value: "terrain", label: "Terrain layer" },
-					{ value: "mountain", label: "Mountain layer" },
-					{ value: "erosion", label: "What the water did" },
+					{ value: "continent", label: "Continentalness" },
+					{ value: "erosion", label: "Erosion" },
+					{ value: "peaks", label: "Peaks & valleys" },
 				],
 			},
 			{
