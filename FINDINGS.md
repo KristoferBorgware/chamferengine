@@ -10,6 +10,41 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, giving `demos/biomes-lab.html` a temperature field that
+falls off with latitude
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`, `packages/engine/src/coordinates/`
+
+**What happens.** `directionOf(latitude, longitude)` in all three labs returns
+`[cos φ cos λ, sin φ, cos φ sin λ]`, so the pole it measures from is `+Y`. The
+engine's polar axis runs through icosahedron vertices **0 and 3**, which is
+`normalize(-1, φ, 0)` and its antipode — not `+Y`, and not anything near it. The
+same is true of the equirectangular projection every lab picture is drawn in.
+
+**Why it matters.** It was cosmetic while latitude only chose where the patch
+stood: a place is a place under any naming, and the pictures are a viewing
+convenience. A climate field ends that. Temperature in the biomes lab is
+`1 - 2|dir · pole|`, so the pole decides where the ice is, and a world built
+from the lab's numbers has its ice caps in different places from a world built
+from the engine's. **The twelve pentagons sit on exact multiples of 36° of
+longitude about the engine's axis and nowhere in particular about `+Y`**, so
+the two also disagree about whether a pentagon is at a pole — which is the one
+fact doc 20 chose the axis to get.
+
+**What would fix it.** One constant and one projection. `POLE` becomes
+`VERTICES[0]`, `directionOf` builds its frame from that axis with the prime
+meridian through vertex 11, and `pictureDirection` inverts the same construction
+so a picture's rows are the engine's own parallels. The cost is that a latitude
+and longitude written in a link mean a different place than they did, across
+every lab at once — which is an argument for doing all three in one change
+rather than for leaving it.
+
 ### F-090 — Nothing in the vegetation lab checks any more that a chunk generates the same stand alone
 
 **Kind:** risk

@@ -1,13 +1,14 @@
 # Demos
 
-Thirty-six self-contained HTML files. No build step, no `npm install`, no
+Thirty-seven self-contained HTML files. No build step, no `npm install`, no
 server required — open any of them directly in a browser. All are mobile-friendly
 and touch-enabled.
 
 Most of the 3D demos load Three.js r128 from a CDN and need an internet
 connection. The 2D ones are fully offline, and so are
 [`noise-lab.html`](noise-lab.html), [`multi-noise-lab.html`](multi-noise-lab.html),
-[`vegetation-lab.html`](vegetation-lab.html) and
+[`vegetation-lab.html`](vegetation-lab.html),
+[`biomes-lab.html`](biomes-lab.html) and
 [`cave-lab.html`](cave-lab.html), which draw their own WebGL2.
 
 ---
@@ -1119,6 +1120,79 @@ a desktop neither button is on the page — the panels sit either side of the
 view and never cover it.
 
 **Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md)
+
+### [`biomes-lab.html`](biomes-lab.html)
+**Two climate fields over the planet, and a diagram that turns a pair of them
+into a name.** The left panel is the world — the terrain, the temperature and
+humidity read off it, and the finished map. The right panel is the diagram:
+humidity across, temperature up, one dot per biome, and every point of the
+square belonging to whichever dot is nearest. Drag a dot and the planet
+recolours under it.
+
+**Temperature is three terms and none of them is a biome.** Latitude is one dot
+product against the axis, `+1` on the equator and `-1` at either pole. Altitude
+cools what stands up out of the ground, which is what puts snow on a mountain in
+a warm band — at the shipped `0.90` per kilometre the tallest ground this
+terrain builds loses `0.92` of the scale, **59° of latitude** worth. Noise is
+what stops the planet reading as a set of stripes.
+
+**Humidity is read off continentalness, because continentalness IS the distance
+from the coast.** A true distance to the nearest ocean is a flood fill, and a
+flood fill is a global query: whether a cell is wet would depend on a chain of
+cells running three chunks away. Terrain here is a pure function of the address
+— a chunk generates its own rim rather than asking the chunk next door — so
+**nothing that needs a flood fill can be terrain**. The field that already says
+*how far inland am I* costs one lookup that was taken anyway.
+
+**The square is the range the planet reaches, not the range the arithmetic
+could reach.** Every term is a noise stack or a weighted sum of them, and an
+octave stack normalised to its own peak has a standard deviation of about a
+quarter of it — so the raw readings cluster in the middle and the corners of the
+diagram name climates no ground is in. Measured on the shipped world before this
+was fitted, land humidity ran **0.27 to 0.54** of the square between its 5th and
+95th percentiles — **27%** of the width — and **6 of 13** biomes were never
+built anywhere. Stretched onto the land's own 2nd and 98th percentiles it is
+**0.09 to 0.94**, and all thirteen are built, from **1.7%** of the land to
+**15.8%**. **Fit the diagram to the planet** turns it off, which is how the
+measurement is seen. What it costs is that the two ends are a property of the
+whole world rather than of the place, so they are found once and then held —
+the same shape as the relief fit, and the same reason.
+
+**The biome noise is two fields, so the picture is a grey one and a line one.**
+A biome is chosen by a point in two dimensions, and a single field could only
+ever slide every place along one diagonal of the diagram — which frays the
+borders crossing that diagonal and leaves the ones running along it perfectly
+straight. The push toward hot is the grey; the push toward wet is its own
+contour over the top. **Push** is how far the lookup is moved before it is
+taken, and the diagram dithers each border by exactly that much: a checked strip
+either side of a line is the diagram saying how ragged that border will be on
+the ground.
+
+**The share beside each name is read back, not set.** A dot is placed in the
+climate square and how much ground that comes to depends on where the two fields
+actually go, counted over the planet's own cells at level 5. **Show on it** puts
+that same reading on the diagram as a cloud of dots — the patch, which is one
+place, or the planet, where a region with no dots over it is a biome this world
+never builds.
+
+**Start from** carries two sets. The plain one is a dozen names spread over the
+whole square. The other is **Holdridge's life zones**, a real classification of
+exactly this shape — a name for every pair of temperature and rainfall, so it
+drops onto a set of dots without being reshaped. His own chart is a **triangle**
+rather than a square, because cold air holds little water and the
+cold-and-soaking corner has no zone in it; here the polar dot simply owns that
+whole end, and the planet's cloud shows the same corner empty.
+
+**The hexagons are map cells, not blocks.** The map is the terrain, and the
+narrowest octave of a climate field is hundreds of metres wide — drawn on the
+block grid the same colour would be repeated across a thousand blocks to say
+what one map cell says. The terrain itself is the multi-noise lab's three layers
+at their shipped settings, held fixed: the ground is the input here rather than
+the subject, because climate needs a coastline to be measured from and a
+mountain to be cooled by.
+
+**Docs:** [08 — Terrain generation](../docs/08-terrain-generation.md),
+[20 — Player coordinates](../docs/20-player-coordinates.md)
 
 ### [`planet-slice-noise.html`](planet-slice-noise.html)
 A cross-section through a planet, showing the density field in volume. Push
