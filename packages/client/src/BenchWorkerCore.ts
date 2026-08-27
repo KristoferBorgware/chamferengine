@@ -29,7 +29,7 @@ import { positionOf } from "chamfer/coordinates";
 import { Vec3 } from "chamfer/math";
 
 /** How many pixels across the flat planet is drawn. */
-const PLANET_WIDE = 256;
+const PLANET_WIDE = 512;
 
 /**
  * How many points across the patch is sampled for its pictures.
@@ -40,8 +40,12 @@ const PLANET_WIDE = 256;
  * whether the narrow octaves of a folded field read as a grain or as ridges.
  * Tying the two put a 33-pixel thumbnail under every curve at the default
  * patch.
+ *
+ * Wide enough that enlarging one to fill the window still shows samples rather
+ * than a blur: the thumbnail, the small map and the enlarged picture are all
+ * this one rectangle, so it answers to the largest of the three.
  */
-const PATCH_SAMPLES = 193;
+const PATCH_SAMPLES = 385;
 
 /**
  * Everything the bench draws, built where the drawing is not.
@@ -104,7 +108,8 @@ export class BenchWorkerCore {
 			};
 
 		const grid = this.world.cells;
-		if (!grid || this.world.height.length === 0) return;
+		const fields = this.world.stacks;
+		if (!grid || !fields || this.world.height.length === 0) return;
 		const k = settings.knobs;
 		const frame = patchFrame(k.patchLatitude, k.patchLongitude);
 
@@ -113,9 +118,14 @@ export class BenchWorkerCore {
 			{
 				height: this.world.height,
 				raw: this.world.raw,
-				continent: this.world.continent,
-				erosion: this.world.erosion,
-				peaks: this.world.peaks,
+				// **A layer's picture is its own noise, not its curve's output.**
+				// The curve has a graph directly above the picture; drawing what
+				// it returned says the same thing twice and leaves the field
+				// itself -- where its shapes are and how wide they are -- with
+				// nothing showing it.
+				continent: fields.continent,
+				erosion: fields.erosion,
+				peaks: fields.peaks,
 			},
 			{
 				frame,
@@ -369,15 +379,12 @@ export class BenchWorkerCore {
 			// and says nothing.
 			if (terrain.carveLayer) {
 				const out = 1 + top / radius;
-				carveOf[c] = splineAt(
-					carve.curve,
-					octaveNoise(
-						dir.x * out,
-						dir.y * out,
-						dir.z * out,
-						seed,
-						carveNoise,
-					),
+				carveOf[c] = octaveNoise(
+					dir.x * out,
+					dir.y * out,
+					dir.z * out,
+					seed,
+					carveNoise,
 				);
 			}
 		}
@@ -461,6 +468,7 @@ export class BenchWorkerCore {
 	 */
 	private planet(): BenchSheet {
 		const grid = this.world.cells!;
+		const layers = this.world.stacks!;
 		const wide = PLANET_WIDE;
 		const tall = wide / 2;
 		const sheet = this.sheet(wide, tall);
@@ -481,9 +489,9 @@ export class BenchWorkerCore {
 				grid.blendInto(dir, blend);
 				sheet.metres[at] = readBlend(this.world.height, blend);
 				sheet.raw[at] = readBlend(this.world.raw, blend);
-				sheet.continent[at] = readBlend(this.world.continent, blend);
-				sheet.erosion[at] = readBlend(this.world.erosion, blend);
-				sheet.peaks[at] = readBlend(this.world.peaks, blend);
+				sheet.continent[at] = readBlend(layers.continent, blend);
+				sheet.erosion[at] = readBlend(layers.erosion, blend);
+				sheet.peaks[at] = readBlend(layers.peaks, blend);
 				// **No carve on the planet picture.** It is one pixel a place
 				// over the whole world, where the layer's shapes are 120 m
 				// across -- a picture of it at that scale is noise.

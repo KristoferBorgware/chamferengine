@@ -36,6 +36,9 @@ const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
 const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
 const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
 
+/** How many steps a picture of one layer's noise is cut into. */
+const PICTURE_BANDS = 9.0;
+
 /** Metres of water a look passes through before it is all water. */
 const SEA_CLARITY = ${SEA_CLARITY}.0;
 
@@ -47,6 +50,16 @@ const SEA_CLARITY = ${SEA_CLARITY}.0;
  * is the sun's height, which is the time of day and not a property of either.
  */
 const SUN_SHARE = ${SUN_SHARE};
+
+/**
+ * How strong the fill and the top light are against the key.
+ *
+ * Both well under it: a preview with three equal lights has no direction in it
+ * at all, and a hillside reads by which way it faces rather than by how bright
+ * it is.
+ */
+const KEY_FILL = 0.35;
+const KEY_TOP = 0.30;
 
 struct View {
 	viewProj : mat4x4f,
@@ -163,9 +176,23 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
  */
 fn lightOn(normal : vec3f, direct : f32) -> f32 {
 	let n = normalize(normal);
-	let lambert = max(0.0, dot(n, normalize(view.sun.xyz)));
+	let key = normalize(view.sun.xyz);
+	// **A key light alone leaves half the shape unreadable.** Every face turned
+	// away from it falls back on the sky term, which depends only on how far up
+	// the face points -- so two walls facing opposite ways read the same, and a
+	// patch lit from behind is a silhouette with a lit rim. Two more come in
+	// with it, both weaker than the key so the sense of one direction survives:
+	// a **fill** from straight opposite, which separates the faces the key
+	// never reaches, and a **top** light, which is what tells a cap from a wall
+	// where neither is facing either of the other two.
+	let fill = normalize(vec3f(-key.x, key.y * 0.35, -key.z));
+	let top = vec3f(0.0, 1.0, 0.0);
+	let lit =
+		max(0.0, dot(n, key)) +
+		KEY_FILL * max(0.0, dot(n, fill)) +
+		KEY_TOP * max(0.0, dot(n, top));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
-	return direct * lambert + (1.0 - direct) * openness;
+	return direct * (lit / (1.0 + KEY_FILL + KEY_TOP)) + (1.0 - direct) * openness;
 }
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
@@ -221,13 +248,16 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		);
 	}
 	if (picture == 3) {
-		// One control layer on its own, over its own full range: dark where it
-		// says nothing, bright where it says most.
-		return shade(
-			mix(vec3f(0.04, 0.05, 0.09), vec3f(0.6, 0.85, 1.0), clamp(in.layer, 0.0, 1.0)),
-			in.normal,
-			0.3,
-		);
+		// **One layer's own noise, cut into steps.** A smooth ramp says where a
+		// field is high and never says how fast; the steps are contours, and
+		// how wide they are is how steeply one shape runs into the next. The
+		// same nine steps and the same dark edge the flat pictures use.
+		let t = clamp((in.layer + 1.0) * 0.5, 0.0, 0.9999);
+		let step = floor(t * PICTURE_BANDS);
+		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
+		let into = t * PICTURE_BANDS - step;
+		let edge = select(1.0, 0.45, into < 0.06);
+		return shade(vec3f(grey * edge), in.normal, 0.3);
 	}
 
 	var tint : vec3f;

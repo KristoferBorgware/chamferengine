@@ -1,12 +1,7 @@
 import type { CoarseIndex } from "chamfer/generation";
 import { Vec3 } from "chamfer/math";
 import type { NoiseSettings, TerrainLayer } from "chamfer/generation";
-import {
-	makeBlend,
-	octaveNoise,
-	readBlend,
-	splineAt,
-} from "chamfer/generation";
+import { makeBlend, octaveNoise, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
 
 /** The three axes of a patch: out of the ground, east, and north. */
@@ -39,7 +34,7 @@ export interface PatchField {
 	readonly peaks: Float32Array;
 
 	/**
-	 * What the carve's curve returned at each point's own surface.
+	 * The carve's own noise at each point's surface, before its curve.
 	 *
 	 * **A picture of a 3D field has to be read somewhere**, and the surface is
 	 * the one place a reader can compare it against the ground it cuts into.
@@ -97,9 +92,11 @@ export function patchField(
 	fields: {
 		readonly height: Float32Array;
 		readonly raw: Float32Array;
-		readonly continent: Float32Array;
-		readonly erosion: Float32Array;
-		readonly peaks: Float32Array;
+		// The octave stacks themselves, which are `float64` -- a curve is
+		// evaluated at them and a rounded reading is a different world.
+		readonly continent: Float64Array;
+		readonly erosion: Float64Array;
+		readonly peaks: Float64Array;
 	},
 	options: {
 		readonly frame: PatchFrame;
@@ -172,15 +169,12 @@ export function patchField(
 				// direction scaled by how far up it is -- so a metre up moves
 				// the sample as far as a metre sideways.
 				const out = 1 + metres / radius;
-				carve[at] = splineAt(
-					options.carve.layer.curve,
-					octaveNoise(
-						dir.x * out,
-						dir.y * out,
-						dir.z * out,
-						options.carve.seed,
-						options.carve.noise,
-					),
+				carve[at] = octaveNoise(
+					dir.x * out,
+					dir.y * out,
+					dir.z * out,
+					options.carve.seed,
+					options.carve.noise,
 				);
 			}
 			if (metres < lowest) lowest = metres;

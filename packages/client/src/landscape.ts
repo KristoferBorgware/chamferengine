@@ -177,10 +177,12 @@ for (const layer of LAYER_NAMES) {
 	if (!section) continue;
 	const shot = document.createElement("canvas");
 	shot.className = "bench-layer-shot";
-	// Clicking it puts the big picture on the same layer, which is the one
-	// thing a thumbnail cannot show: the field on the ground it shapes.
-	shot.title = "show this layer on the patch";
-	shot.onclick = () => panel.set({ patchPicture: LAYER_PICTURES[layer] });
+	// **A field at panel width says where its shapes are; at this size it says
+	// what they look like.** The narrow octaves of a folded field are a grain
+	// in a thumbnail and ridges enlarged, and which of those a curve is being
+	// dragged against is the whole question.
+	shot.title = "enlarge";
+	shot.onclick = () => enlarge(layer);
 	// **Straight under the curve it belongs to.** The curve is the whole of
 	// what a layer decides and this is what it decided; a picture at the foot
 	// of the section is a picture the reader has to scroll away from the curve
@@ -191,9 +193,59 @@ for (const layer of LAYER_NAMES) {
 	layerShots.set(layer, shot);
 }
 
+/**
+ * One layer's picture, filling the window.
+ *
+ * Its own element rather than a bigger canvas in the panel, because the panel
+ * is 280 pixels wide and the whole point of enlarging is to leave that.
+ */
+const big = document.createElement("div");
+big.className = "bench-big";
+big.hidden = true;
+const bigName = document.createElement("div");
+bigName.className = "bench-big-name";
+const bigCanvas = document.createElement("canvas");
+big.append(bigName, bigCanvas);
+big.onclick = () => {
+	big.hidden = true;
+	bigShown = null;
+};
+document.body.appendChild(big);
+let bigShown: LayerName | null = null;
+
+/** Put one layer's picture on screen, large, until it is clicked away. */
+function enlarge(layer: LayerName): void {
+	bigShown = layer;
+	big.hidden = false;
+	bigName.textContent = `${LAYER_TITLES[layer]} — the field, ${
+		patchSheet
+			? `${Math.round(facts0?.span ?? 0).toLocaleString("en-US")} m of ground`
+			: ""
+	} · click to close`;
+	paintBig();
+}
+
+/** Redraw the enlarged picture, if one is up. */
+function paintBig(): void {
+	if (!bigShown || !patchSheet || big.hidden) return;
+	if (
+		bigCanvas.width !== patchSheet.width ||
+		bigCanvas.height !== patchSheet.height
+	) {
+		bigCanvas.width = patchSheet.width;
+		bigCanvas.height = patchSheet.height;
+	}
+	const ctx = bigCanvas.getContext("2d");
+	if (!ctx) return;
+	const image = ctx.createImageData(patchSheet.width, patchSheet.height);
+	paintSheet(patchSheet, LAYER_PICTURES[bigShown], image.data);
+	ctx.putImageData(image, 0, 0);
+}
+
 /** Repaint every layer thumbnail from the sheet the last build handed over. */
 function paintLayers(): void {
 	if (!patchSheet) return;
+	paintBig();
 	for (const [layer, shot] of layerShots) {
 		if (
 			shot.width !== patchSheet.width ||

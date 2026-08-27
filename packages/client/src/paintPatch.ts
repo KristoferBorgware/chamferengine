@@ -29,10 +29,36 @@ export function bandOf(metres: number): number {
 	return 3;
 }
 
+/**
+ * How many steps a noise picture is cut into.
+ *
+ * **A smooth ramp of grey says where a field is high and never says how fast.**
+ * A layer's picture is read to judge its shapes -- how wide they are, how
+ * steeply one runs into the next -- and that is a question about the gradient,
+ * which a continuous ramp shows nowhere. Cut into steps it is a contour map.
+ */
+const PICTURE_BANDS = 9;
+
+/**
+ * One noise reading as a step of grey, with a dark line at each step's edge.
+ *
+ * The reading runs `-1` to `1`, which is the whole range an octave stack fills.
+ * The line is what makes the steps read as contours rather than as posterising.
+ */
+function bandGrey(reading: number): number {
+	const t = Math.max(0, Math.min(0.9999, (reading + 1) / 2));
+	const step = Math.floor(t * PICTURE_BANDS);
+	const grey = 0.06 + (step / (PICTURE_BANDS - 1)) * 0.92;
+	const into = t * PICTURE_BANDS - step;
+	return grey * (into < 0.06 ? 0.45 : 1);
+}
+
 /** What one pixel of a picture is drawn from. */
 export interface PatchPixel {
 	readonly metres: number;
 	readonly raw: number;
+
+	/** The layer's own noise reading, `-1` to `1`, before any curve. */
 	readonly layer: number;
 
 	readonly rawLow: number;
@@ -62,10 +88,10 @@ export function paintPatch(
 		pixel.picture === "peaks" ||
 		pixel.picture === "carve"
 	) {
-		const t = Math.max(0, Math.min(1, pixel.layer));
-		px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
-		px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);
-		px[at + 2] = 255 * Math.pow(0.09 + 0.91 * t, 1 / 2.2);
+		const v = 255 * bandGrey(pixel.layer);
+		px[at] = v;
+		px[at + 1] = v;
+		px[at + 2] = v;
 		px[at + 3] = 255;
 		return;
 	}

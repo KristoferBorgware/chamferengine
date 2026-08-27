@@ -67,6 +67,19 @@ export class BenchWorld {
 	erosion: Float32Array<ArrayBuffer> = new Float32Array(0);
 	peaks: Float32Array<ArrayBuffer> = new Float32Array(0);
 
+	/**
+	 * The three octave stacks themselves, before any curve.
+	 *
+	 * **A layer's own picture is its noise, not what its curve made of it.** The
+	 * curve is a transform of the reading and has a graph of its own right above
+	 * the picture; a picture of the curve's output says the same thing twice and
+	 * leaves the field -- where its shapes are, how wide they are, how the
+	 * octaves stack -- with nothing showing it.
+	 */
+	get stacks(): LayerNoise | null {
+		return this.noise;
+	}
+
 	/** The ground in metres. */
 	private metreKey = "";
 	height: Float32Array<ArrayBuffer> = new Float32Array(0);
