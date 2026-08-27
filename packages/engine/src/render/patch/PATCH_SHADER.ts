@@ -2,6 +2,12 @@ import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
+import {
+	PATCH_FILL_SHARE,
+	PATCH_HEAD_SHARE,
+	PATCH_TOP_SHARE,
+	patchFill,
+} from "./PATCH_LIGHTS.js";
 
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
@@ -52,46 +58,17 @@ const SEA_CLARITY = ${SEA_CLARITY}.0;
 const SUN_SHARE = ${SUN_SHARE};
 
 /**
- * How strong each light is against the key.
+ * How strong each light is against the key, from the one place they live.
  *
- * **The one from straight above is the strongest, because this is a table.** A
- * patch drawn as columns of blocks has two kinds of face -- caps and vertical
- * walls -- and what makes the structure legible is that a cap is plainly
- * brighter than a wall. Only a light overhead does that; every light nearer the
- * horizon lights the walls and flattens the caps together.
- *
- * The key is under it and carries the *direction*, so a slope still reads by
- * which way it faces. The other two are small: enough that no face is black,
- * not enough to take back the contrast the first two make.
- *
- * Measured over a flat cap and eight vertical walls round the compass: with
- * the rig low, a cap came out **1.28x** the brightest wall, which is a
- * landscape and a wall of bricks shaded the same. Overhead it is **2.26x**.
- * What that costs is told between the walls themselves -- they ran **1.92x**
- * from the brightest to the darkest and now run **1.39x** -- so which way a
- * wall faces is less distinct, and which face is a cap is the thing the eye
- * needs first.
+ * See PATCH_LIGHTS.ts: the shader shades with them, the renderer sends the
+ * key, and the markers stand balls where they shine from -- and a ball that has
+ * drifted from its own light is read as the truth.
  */
-const KEY_TOP = 1.35;
-const KEY_FILL = 0.15;
+const KEY_TOP = ${PATCH_TOP_SHARE};
+const KEY_FILL = ${PATCH_FILL_SHARE};
 
-/**
- * How strong the light that follows the camera is.
- *
- * **The one light that cannot leave a face unreadable**, so nothing being
- * looked at is ever lit by the sky term alone -- which is what made a patch
- * seen from the wrong side a flat silhouette. Small, because it comes from
- * where the viewer is and a strong light there flattens everything it reaches.
- *
- * **A direction, not a place.** It was a point at the camera and that is a
- * light that can be walked into: zoom until the eye is inside a hillside and it
- * lights the rock from within, and how far away it stands depends on how wide
- * the patch is. Taken as the direction the camera looks from -- lifted well
- * above it, because the camera sits low and a light exactly at it is one more
- * thing shining sideways at the walls -- it is the same at every zoom and
- * cannot get inside anything.
- */
-const KEY_HEAD = 0.18;
+/** How much the light that follows the camera carries. */
+const KEY_HEAD = ${PATCH_HEAD_SHARE};
 
 struct View {
 	viewProj : mat4x4f,
@@ -237,11 +214,9 @@ fn lightOn(normal : vec3f, direct : f32) -> f32 {
 	// the face points -- so two walls facing opposite ways read the same, and a
 	// patch lit from behind is a silhouette with a lit rim.
 	//
-	// **The fill is opposite in the horizontal and still above the horizon.**
-	// Dropped below it, it lights the undersides of overhangs and the walls
-	// facing away from the key, which is uplighting -- and it takes back
-	// exactly the contrast the key was placed to make.
-	let fill = normalize(vec3f(-key.x, 0.55, -key.z));
+	// The fill, mirrored across the patch and levelled off; see
+	// PATCH_LIGHTS.ts for why it stays above the horizon.
+	let fill = normalize(vec3f(${patchFill().join(", ")}));
 	let top = vec3f(0.0, 1.0, 0.0);
 	let lit =
 		max(0.0, dot(n, key)) +

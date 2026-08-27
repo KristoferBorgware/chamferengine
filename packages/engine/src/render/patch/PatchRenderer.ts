@@ -2,6 +2,14 @@ import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PatchGeometry } from "../../mesh/PatchGeometry.js";
 import { PATCH_SHADER } from "./PATCH_SHADER.js";
 import { PATCH_STRIDE } from "../../mesh/PatchGeometry.js";
+import {
+	PATCH_FILL_SHARE,
+	PATCH_HEAD_LIFT,
+	PATCH_HEAD_SHARE,
+	PATCH_KEY,
+	PATCH_TOP_SHARE,
+	patchFill,
+} from "./PATCH_LIGHTS.js";
 
 /** How the patch is drawn, beyond where the camera is. */
 export interface PatchLook {
@@ -323,13 +331,18 @@ export class PatchRenderer {
 	 */
 	private buildLamps(span: number, head: readonly number[]): void {
 		const { device } = this.ctx;
-		const key = [-0.62, 1.0, 0.16];
-		// Direction, colour and share, in the order the shader weighs them.
+		// Direction, colour and share, in the order the shader weighs them, and
+		// every direction and every share read from the one place they live --
+		// a ball that has drifted from its own light is read as the truth.
 		const lamps: [number[], number[], number][] = [
-			[key, [1, 0.86, 0.55], 1],
-			[[0.62, 0.55, -0.16], [0.4, 0.55, 0.85], 0.15],
-			[[0, 1, 0], [1, 1, 0.95], 1.35],
-			[[head[0]!, head[1]!, head[2]!], [0.55, 0.95, 0.7], 0.18],
+			[[...PATCH_KEY], [1, 0.86, 0.55], 1],
+			[patchFill(), [0.4, 0.55, 0.85], PATCH_FILL_SHARE],
+			[[0, 1, 0], [1, 1, 0.95], PATCH_TOP_SHARE],
+			[
+				[head[0]!, head[1]!, head[2]!],
+				[0.55, 0.95, 0.7],
+				PATCH_HEAD_SHARE,
+			],
 		];
 		const out: number[] = [];
 		// One octant of an octahedron, refined; the eight sign flips give the
@@ -427,21 +440,9 @@ export class PatchRenderer {
 		}
 
 		this.data.set(viewProj, 0);
-		// **A high sun from over the viewer's left shoulder**, fixed, so the
-		// same setting looks the same whenever it is looked at. Left, because
-		// relief is read the way it is drawn on a map, with the light over the
-		// reader's shoulder.
-		//
-		// **It used to sit at 35 degrees, and that was right for a different
-		// picture.** A patch drawn one hexagon per map cell is a smooth
-		// surface, where the only cue is slope and a low sun is what turns the
-		// light across an 11-degree hillside -- the median of this world's
-		// land. A patch drawn as columns of blocks is not that: its faces are
-		// caps and vertical walls, ninety degrees apart, and what makes the
-		// structure legible is that a cap is plainly brighter than a wall. A
-		// sun near the horizon lights the walls and leaves the caps flat, which
-		// is a landscape with the shading of a wall of bricks.
-		this.data.set([-0.62, 1.0, 0.16, 0], 16);
+		// The key, fixed, so the same setting looks the same whenever it is
+		// looked at. See `PATCH_LIGHTS.ts` for where it stands and why.
+		this.data.set([PATCH_KEY[0], PATCH_KEY[1], PATCH_KEY[2], 0], 16);
 		this.data.set(
 			[
 				look.picture,
@@ -460,7 +461,7 @@ export class PatchRenderer {
 		this.data.set([look.low, look.high, look.light, 0], 28);
 		// Lifted well above the eye, then normalised, so it is the same light at
 		// every zoom and on a patch of any width.
-		const lift = 1.2;
+		const lift = PATCH_HEAD_LIFT;
 		const [ex, ey, ez] = look.eye;
 		const len = Math.sqrt(ex * ex + ez * ez) || 1;
 		const hx = ex / len;
