@@ -52,26 +52,46 @@ const SEA_CLARITY = ${SEA_CLARITY}.0;
 const SUN_SHARE = ${SUN_SHARE};
 
 /**
- * How strong the fill and the top light are against the key.
+ * How strong each light is against the key.
  *
- * Both well under it: a preview with three equal lights has no direction in it
- * at all, and a hillside reads by which way it faces rather than by how bright
- * it is.
+ * **The one from straight above is the strongest, because this is a table.** A
+ * patch drawn as columns of blocks has two kinds of face -- caps and vertical
+ * walls -- and what makes the structure legible is that a cap is plainly
+ * brighter than a wall. Only a light overhead does that; every light nearer the
+ * horizon lights the walls and flattens the caps together.
+ *
+ * The key is under it and carries the *direction*, so a slope still reads by
+ * which way it faces. The other two are small: enough that no face is black,
+ * not enough to take back the contrast the first two make.
+ *
+ * Measured over a flat cap and eight vertical walls round the compass: with
+ * the rig low, a cap came out **1.28x** the brightest wall, which is a
+ * landscape and a wall of bricks shaded the same. Overhead it is **2.26x**.
+ * What that costs is told between the walls themselves -- they ran **1.92x**
+ * from the brightest to the darkest and now run **1.39x** -- so which way a
+ * wall faces is less distinct, and which face is a cap is the thing the eye
+ * needs first.
  */
-const KEY_FILL = 0.35;
-const KEY_TOP = 0.30;
+const KEY_TOP = 1.35;
+const KEY_FILL = 0.15;
 
 /**
- * How strong the light standing at the camera is.
+ * How strong the light that follows the camera is.
  *
- * **The one light that cannot leave a face unreadable.** Whatever is turned
- * toward the viewer is turned toward it, so nothing being looked at is ever lit
- * only by the sky term -- which is what made a patch seen from the wrong side a
- * flat silhouette. It carries no distance falloff: over a patch a kilometre
- * across an inverse square puts the near rim at many times the far one, and the
- * far half goes black again.
+ * **The one light that cannot leave a face unreadable**, so nothing being
+ * looked at is ever lit by the sky term alone -- which is what made a patch
+ * seen from the wrong side a flat silhouette. Small, because it comes from
+ * where the viewer is and a strong light there flattens everything it reaches.
+ *
+ * **A direction, not a place.** It was a point at the camera and that is a
+ * light that can be walked into: zoom until the eye is inside a hillside and it
+ * lights the rock from within, and how far away it stands depends on how wide
+ * the patch is. Taken as the direction the camera looks from -- lifted well
+ * above it, because the camera sits low and a light exactly at it is one more
+ * thing shining sideways at the walls -- it is the same at every zoom and
+ * cannot get inside anything.
  */
-const KEY_HEAD = 0.55;
+const KEY_HEAD = 0.18;
 
 struct View {
 	viewProj : mat4x4f,
@@ -85,8 +105,8 @@ struct View {
 	lines    : vec4f,
 	/** The ground's own range in metres here, which Height is drawn against. */
 	ground   : vec4f,
-	/** Where the camera is, in the patch's own frame. */
-	eye      : vec4f,
+	/** The direction of the light that follows the camera. */
+	head     : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -108,8 +128,6 @@ struct VertexOut {
 	 */
 	@location(4)       height : f32,
 
-	/** Where this fragment is, so a light standing at the camera has a direction. */
-	@location(5)       world  : vec3f,
 
 	/**
 	 * The cell's own speckle.
@@ -119,7 +137,7 @@ struct VertexOut {
 	 * the lattice the world is built on is invisible in it -- which is the
 	 * hardest thing to read on a preview whose whole subject is that lattice.
 	 */
-	@location(6)       shade  : f32,
+	@location(5)       shade  : f32,
 };
 
 @vertex
@@ -137,7 +155,6 @@ fn vertexMain(
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
-	out.world = position;
 	out.shade = shade;
 	out.height = position.y;
 	out.metres = metres;
@@ -204,35 +221,33 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
  * stands at an angle moves. A picture of a number rather than of a place takes
  * less of it: the light is there to show the shape, not to be read off.
  */
-fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
+fn lightOn(normal : vec3f, direct : f32) -> f32 {
 	let n = normalize(normal);
 	let key = normalize(view.sun.xyz);
-	// A light standing where the viewer is, so turning the patch lights what
-	// turning it brought into view.
-	let head = normalize(view.eye.xyz - world);
 	// **A key light alone leaves half the shape unreadable.** Every face turned
 	// away from it falls back on the sky term, which depends only on how far up
 	// the face points -- so two walls facing opposite ways read the same, and a
-	// patch lit from behind is a silhouette with a lit rim. Two more come in
-	// with it, both weaker than the key so the sense of one direction survives:
-	// a **fill** from straight opposite, which separates the faces the key
-	// never reaches, and a **top** light, which is what tells a cap from a wall
-	// where neither is facing either of the other two.
-	let fill = normalize(vec3f(-key.x, key.y * 0.35, -key.z));
+	// patch lit from behind is a silhouette with a lit rim.
+	//
+	// **The fill is opposite in the horizontal and still above the horizon.**
+	// Dropped below it, it lights the undersides of overhangs and the walls
+	// facing away from the key, which is uplighting -- and it takes back
+	// exactly the contrast the key was placed to make.
+	let fill = normalize(vec3f(-key.x, 0.55, -key.z));
 	let top = vec3f(0.0, 1.0, 0.0);
 	let lit =
 		max(0.0, dot(n, key)) +
 		KEY_FILL * max(0.0, dot(n, fill)) +
 		KEY_TOP * max(0.0, dot(n, top)) +
-		KEY_HEAD * max(0.0, dot(n, head));
+		KEY_HEAD * max(0.0, dot(n, view.head.xyz));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
 	let total = 1.0 + KEY_FILL + KEY_TOP + KEY_HEAD;
 	return direct * (lit / total) + (1.0 - direct) * openness;
 }
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
-fn shade(tint : vec3f, normal : vec3f, world : vec3f, direct : f32) -> vec4f {
-	return vec4f(pow(tint * lightOn(normal, world, direct), vec3f(1.0 / 2.2)), 1.0);
+fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
+	return vec4f(pow(tint * lightOn(normal, direct), vec3f(1.0 / 2.2)), 1.0);
 }
 
 @fragment
@@ -255,7 +270,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let through = 1.0 - exp(in.metres / SEA_CLARITY);
 		let water = mix(SEA_SHALLOW, SEA_DEEP, through);
 		let lit = pow(
-			water * lightOn(in.normal, in.world, SUN_SHARE),
+			water * lightOn(in.normal, SUN_SHARE),
 			vec3f(1.0 / 2.2),
 		);
 		return vec4f(lit, mix(0.42, 0.94, through));
@@ -271,7 +286,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			0.0,
 			1.0,
 		);
-		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, in.world, 0.4);
+		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.4);
 	}
 	if (picture == 2) {
 		let t = clamp(
@@ -282,7 +297,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return shade(
 			mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
 			in.normal,
-			in.world,
 			0.35,
 		);
 	}
@@ -296,7 +310,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
 		let into = t * PICTURE_BANDS - step;
 		let edge = select(1.0, 0.45, into < 0.06);
-		return shade(vec3f(grey * edge), in.normal, in.world, 0.3);
+		return shade(vec3f(grey * edge), in.normal, 0.3);
 	}
 
 	var tint : vec3f;
@@ -318,7 +332,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	return shade(
 		contoured(tint * in.shade, in.height),
 		in.normal,
-		in.world,
 		SUN_SHARE,
 	);
 }

@@ -36,11 +36,18 @@ export interface PatchLook {
 	readonly high: number;
 
 	/**
-	 * Where the camera is, in the patch's own frame.
+	 * Which way the camera looks from, in the patch's own frame.
 	 *
-	 * One of the lights stands here. A patch turned away from the fixed lights
-	 * would otherwise be a silhouette, and turning it is the whole way this
-	 * preview is read.
+	 * One of the lights comes from here. A patch turned away from the fixed
+	 * lights would otherwise be a silhouette, and turning it is the whole way
+	 * this preview is read.
+	 *
+	 * **A direction, not a place.** A light standing at the camera is one that
+	 * can be walked into -- zoom until the eye is inside a hillside and it
+	 * lights the rock from within, and how far off it stands depends on how
+	 * wide the patch is. This is normalised here and lifted above the eye,
+	 * because the camera sits low and a light exactly at it is one more thing
+	 * shining sideways at the walls.
 	 */
 	readonly eye: readonly [number, number, number];
 }
@@ -75,10 +82,8 @@ export interface PatchUpload {
 }
 
 /**
- * A matrix, the light, the mode, the numbers the pictures read, and the eye.
- *
- * The eye is here because one of the lights stands at the camera, which needs
- * a direction per fragment rather than a fixed one.
+ * A matrix, the light, the mode, the numbers the pictures read, and the light
+ * that follows the camera.
  */
 const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 16;
 
@@ -288,14 +293,21 @@ export class PatchRenderer {
 		}
 
 		this.data.set(viewProj, 0);
-		// **A low sun from over the viewer's left shoulder**, fixed, so the same
-		// setting looks the same whenever it is looked at. Low is the whole
-		// point: at 52 degrees up, which is where this used to sit, a hillside
-		// of 11 degrees -- the median of this world's land -- turns the light
-		// by a tenth and the ground reads as one flat colour. At 35 it turns it
-		// by a quarter. Left, because relief is read the way it is drawn on a
-		// map, with the light over the reader's shoulder.
-		this.data.set([-0.82, 0.57, 0.08, 0], 16);
+		// **A high sun from over the viewer's left shoulder**, fixed, so the
+		// same setting looks the same whenever it is looked at. Left, because
+		// relief is read the way it is drawn on a map, with the light over the
+		// reader's shoulder.
+		//
+		// **It used to sit at 35 degrees, and that was right for a different
+		// picture.** A patch drawn one hexagon per map cell is a smooth
+		// surface, where the only cue is slope and a low sun is what turns the
+		// light across an 11-degree hillside -- the median of this world's
+		// land. A patch drawn as columns of blocks is not that: its faces are
+		// caps and vertical walls, ninety degrees apart, and what makes the
+		// structure legible is that a cap is plainly brighter than a wall. A
+		// sun near the horizon lights the walls and leaves the caps flat, which
+		// is a landscape with the shading of a wall of bricks.
+		this.data.set([-0.62, 1.0, 0.16, 0], 16);
 		this.data.set(
 			[
 				look.picture,
@@ -312,7 +324,16 @@ export class PatchRenderer {
 			20,
 		);
 		this.data.set([look.low, look.high, 0, 0], 28);
-		this.data.set([look.eye[0], look.eye[1], look.eye[2], 0], 32);
+		// Lifted well above the eye, then normalised, so it is the same light at
+		// every zoom and on a patch of any width.
+		const lift = 1.2;
+		const [ex, ey, ez] = look.eye;
+		const len = Math.sqrt(ex * ex + ez * ez) || 1;
+		const hx = ex / len;
+		const hy = ey / len + lift;
+		const hz = ez / len;
+		const head = Math.sqrt(hx * hx + hy * hy + hz * hz) || 1;
+		this.data.set([hx / head, hy / head, hz / head, 0], 32);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,
