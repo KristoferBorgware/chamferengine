@@ -880,6 +880,33 @@ export interface PlanetKnobs {
 	skyBounce: number;
 
 	/**
+	 * Whether a sparse grid of light probes is built inside every chunk.
+	 *
+	 * The one term here that both carries a **direction** and **follows the
+	 * sun**. A probe holds how much of the environment reaches its point and
+	 * which way that light comes from, neither of which moves when the sun
+	 * does -- so the sun is applied where the probe is read and a sunlit rim
+	 * throws a warm patch into a hollow that tracks it across the sky, from a
+	 * volume built once when the chunk was meshed.
+	 *
+	 * It is what the sky-exposure bounce cannot be, and it costs a volume per
+	 * chunk to be it.
+	 */
+	lightProbes: boolean;
+
+	/**
+	 * Cells between neighbouring probes.
+	 *
+	 * The cost dial, and it is steep: halving it multiplies both the memory
+	 * and the build by about eight. Four cells is 24 KB and 3.2 ms on a chunk
+	 * that takes 170 ms to generate; two cells is 167 KB and 20.9 ms.
+	 */
+	probeSpacing: number;
+
+	/** How much the light a probe carries is worth on a surface. */
+	probeStrength: number;
+
+	/**
 	 * How many times the canvas the world is drawn at before it is put back.
 	 *
 	 * **The one antialiasing a world of hard edges answers to.** A voxel
@@ -1092,6 +1119,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	ssgiReach: 48,
 	ssgiStrength: 1.5,
 	skyBounce: 0.35,
+	lightProbes: false,
+	probeSpacing: 4,
+	probeStrength: 1,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1208,6 +1238,8 @@ export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"ambientOcclusion",
 	"skyExposure",
 	"skyBounce",
+	"lightProbes",
+	"probeSpacing",
 	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
@@ -1601,6 +1633,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	ssgiReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
 	ssgiStrength: { low: 0, high: 6, step: 0.05, rebuilds: false, unit: "" },
 	skyBounce: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	lightProbes: { ...TOGGLE, rebuilds: true },
+	probeSpacing: { low: 2, high: 16, step: 1, rebuilds: true, unit: "cells" },
+	probeStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "" },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },

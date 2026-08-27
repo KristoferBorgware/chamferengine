@@ -3,6 +3,7 @@ import type { Box } from "../../math/Box.js";
 import type { Geometry } from "../Geometry.js";
 import type { GridParts } from "../GridPaint.js";
 import type { MeshTally } from "../meshChunk.js";
+import type { ProbeVolume } from "../../light/probeVolume.js";
 import type { TerrainOptions } from "../../generation/terrain/TerrainOptions.js";
 
 /**
@@ -36,6 +37,14 @@ export interface MeshWorkerSetup {
 
 	/** How much of the light a blocked direction intercepts comes back. */
 	readonly skyBounce?: number;
+
+	/**
+	 * Cells between light probes, or zero for none at all.
+	 *
+	 * Off means no volume is built and none travels, so a world with probes
+	 * switched off pays nothing for them -- not a pass that returns one.
+	 */
+	readonly probeSpacing?: number;
 
 	/**
 	 * Draw the world as its own grid: a flat shell of hexagons at the crust
@@ -106,6 +115,7 @@ export interface MeshRetune {
 	readonly ambientOcclusion: boolean;
 	readonly skyExposure: boolean;
 	readonly skyBounce: number;
+	readonly probeSpacing: number;
 }
 
 export type MeshWorkerMessage = MeshWorkerSetup | MeshJob | MeshRetune;
@@ -133,4 +143,15 @@ export interface MeshResult {
 	readonly opaque: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
+
+	/**
+	 * How much light reaches each point of a sparse grid over this chunk, and
+	 * which way it comes from. Absent when probes are switched off.
+	 *
+	 * It travels with the mesh because it is built from the same blocks, in
+	 * the same job, and the blocks never cross back -- so this is the only
+	 * moment anything on the thread that draws can learn what a hollow inside
+	 * the chunk looks like.
+	 */
+	readonly probes?: ProbeVolume;
 }

@@ -30,7 +30,36 @@ export interface ProbeVolume {
 	readonly firstLayer: number;
 
 	/** Four bytes a probe: a direction, then how much light. */
-	readonly data: Uint8Array;
+	readonly data: Uint8Array<ArrayBuffer>;
+
+	/**
+	 * What turns a direction into the three weights that name a lattice
+	 * point: the inverse of the chunk's own three corner directions, in
+	 * column-major order.
+	 *
+	 * **This is what lets a shader find a probe.** A vertex arrives knowing
+	 * only where it is, and a probe is filed by `(q, r, layer)` -- the
+	 * position it was built from. Going back the other way is what
+	 * `latticePosition` does forward: a point is `normalize(A*a + B*b + C*c)`,
+	 * so the weights are this matrix times the direction, divided by their own
+	 * sum. Three multiplies and a divide, against the alternative of carrying
+	 * three more floats on every vertex in the world.
+	 */
+	readonly basis: Float32Array<ArrayBuffer>;
+
+	/** The chunk triangle's side in lattice steps, which the weights scale by. */
+	readonly side: number;
+
+	/**
+	 * The three corner directions themselves, nine floats, a corner each.
+	 *
+	 * **The direction a probe stores is in the lattice's own axes**, because
+	 * that is the grid the light was passed around on -- and a shader dotting
+	 * that against a world-space sun is comparing two different spaces. These
+	 * are what turn one into the other: a step across the triangle is the
+	 * difference of two corners, and a step down is the column's own up.
+	 */
+	readonly corners: Float32Array<ArrayBuffer>;
 }
 
 /** How much light survives one step between probes. */
@@ -74,6 +103,7 @@ export function probeVolume(
 	spacing: number,
 	firstLayer: number,
 	lastLayer: number,
+	corners?: readonly (readonly [number, number, number])[],
 ): ProbeVolume {
 	const step = Math.max(1, Math.floor(spacing));
 	const across = Math.floor(chunk.m / step) + 2;
@@ -140,6 +170,26 @@ export function probeVolume(
 		next = swap;
 	}
 
+	// **Fill the rock in from the air beside it.** A surface sits where solid
+	// meets air, so a lookup there lands between a lit probe and a probe
+	// inside the ground -- and a probe inside the ground holding zero drags
+	// every surface in the world halfway to black once the two are blended.
+	// Giving each solid probe the best its air neighbours hold makes the
+	// field defined everywhere and safe to interpolate across a surface,
+	// which is the whole reason it can be sampled at all.
+	const filled = new Float32Array(now);
+	for (let d = 0; d < down; d++)
+		for (let r = 0; r < across; r++)
+			for (let q = 0; q < across; q++) {
+				const at = (d * across + r) * across + q;
+				if (air[at]) continue;
+				let best = 0;
+				for (const by of steps(q, r, d, across, down))
+					if (air[by] && now[by]! > best) best = now[by]!;
+				filled[at] = best;
+			}
+	now = filled;
+
 	const data = new Uint8Array(count * 4);
 	for (let d = 0; d < down; d++)
 		for (let r = 0; r < across; r++)
@@ -174,7 +224,16 @@ export function probeVolume(
 				);
 			}
 
-	return { spacing: step, across, down, firstLayer: top, data };
+	return {
+		spacing: step,
+		across,
+		down,
+		firstLayer: top,
+		data,
+		basis: invert3(corners),
+		corners: forward(corners),
+		side: chunk.m,
+	};
 }
 
 /** The six probes a step away, as flat indices, skipping the volume's edge. */
@@ -227,4 +286,61 @@ function reach(
 	const cd = Math.max(0, Math.min(down - 1, d));
 	const at = (cd * across + cr) * across + cq;
 	return air[at] ? light[at]! : 0;
+}
+
+/**
+ * The inverse of three corner directions, as nine floats a shader can read.
+ *
+ * Identity where the caller had no corners to give -- a volume nobody can
+ * index is still a volume, and the tests that only ask what light reaches
+ * where have no use for the mapping.
+ */
+function invert3(
+	corners?: readonly (readonly [number, number, number])[],
+): Float32Array<ArrayBuffer> {
+	const out = new Float32Array(9);
+	if (!corners || corners.length < 3) {
+		out[0] = 1;
+		out[4] = 1;
+		out[8] = 1;
+		return out;
+	}
+	const [a, b, c] = corners as readonly [
+		readonly [number, number, number],
+		readonly [number, number, number],
+		readonly [number, number, number],
+	];
+	// Columns are the three corner directions, so the determinant is their
+	// scalar triple product. Three directions to the corners of a triangle on
+	// a sphere are never coplanar, so it is never zero.
+	const det =
+		a[0] * (b[1] * c[2] - b[2] * c[1]) -
+		b[0] * (a[1] * c[2] - a[2] * c[1]) +
+		c[0] * (a[1] * b[2] - a[2] * b[1]);
+	const scale = det === 0 ? 0 : 1 / det;
+	out[0] = (b[1] * c[2] - b[2] * c[1]) * scale;
+	out[1] = (c[1] * a[2] - c[2] * a[1]) * scale;
+	out[2] = (a[1] * b[2] - a[2] * b[1]) * scale;
+	out[3] = (b[2] * c[0] - b[0] * c[2]) * scale;
+	out[4] = (c[2] * a[0] - c[0] * a[2]) * scale;
+	out[5] = (a[2] * b[0] - a[0] * b[2]) * scale;
+	out[6] = (b[0] * c[1] - b[1] * c[0]) * scale;
+	out[7] = (c[0] * a[1] - c[1] * a[0]) * scale;
+	out[8] = (a[0] * b[1] - a[1] * b[0]) * scale;
+	return out;
+}
+
+/** The three corner directions as nine floats, or zeros where none were given. */
+function forward(
+	corners?: readonly (readonly [number, number, number])[],
+): Float32Array<ArrayBuffer> {
+	const out = new Float32Array(9);
+	if (!corners || corners.length < 3) return out;
+	for (let n = 0; n < 3; n++) {
+		const corner = corners[n]!;
+		out[n * 3] = corner[0];
+		out[n * 3 + 1] = corner[1];
+		out[n * 3 + 2] = corner[2];
+	}
+	return out;
 }

@@ -36,6 +36,9 @@ interface Resident {
 	readonly bindGroup: GPUBindGroup;
 	readonly opaque: Buffers | null;
 	readonly water: Buffers | null;
+
+	/** This chunk's own probe volume, or null where it shares the empty one. */
+	readonly probes: GPUTexture | null;
 }
 
 /** A matrix, the eye, the sun, the fog, the daylight, the sky, and the moon. */
@@ -58,6 +61,9 @@ export class ChunkRenderer implements ShadowCaster {
 	private readonly waterPipeline: GPURenderPipeline;
 	private readonly frameLayout: GPUBindGroupLayout;
 	private readonly chunkLayout: GPUBindGroupLayout;
+	private readonly noProbes: GPUTexture;
+	private readonly noProbesView: GPUTextureView;
+	private readonly probeSampler: GPUSampler;
 	private readonly frameUniform: GPUBuffer;
 	private readonly frameBindGroup: GPUBindGroup;
 	private readonly frameData = new Float32Array(FRAME_BYTES / 4);
@@ -120,6 +126,23 @@ export class ChunkRenderer implements ShadowCaster {
 
 	/** One bounce of light between surfaces, gathered off the frame. */
 	readonly ssgi: Ssgi;
+
+	/**
+	 * The radius the crust's top sits at, and how tall one layer is.
+	 *
+	 * A probe is filed by the layer it stands at, and a vertex arrives
+	 * knowing only its radius -- these two are what turn one into the other.
+	 * Set by whoever owns the world's shape; a zero layer height leaves every
+	 * probe lookup on the volume's first row, which is harmless because a
+	 * chunk with no volume reads nothing anyway.
+	 */
+	crustTopRadius = 0;
+
+	/** How tall one layer is, in metres. */
+	layerHeight = 1;
+
+	/** What a probe's carried light is worth on a surface. Zero is off. */
+	probeStrength = 0;
 
 	/** Whether {@link ssao} runs at all. */
 	ssaoOn = false;
@@ -231,8 +254,51 @@ export class ChunkRenderer implements ShadowCaster {
 		this.frameLayout = device.createBindGroupLayout({
 			entries: [uniformEntry],
 		});
+		// **Group 1 is the chunk's own, and the sea does not share it.** The
+		// sea patch declares a layout of its own at the same index, so a
+		// resource that belongs to a chunk can go here without every other
+		// pipeline in the pass having to learn about it -- which is what
+		// group 2 would have cost.
 		this.chunkLayout = device.createBindGroupLayout({
-			entries: [uniformEntry],
+			entries: [
+				uniformEntry,
+				{
+					binding: 1,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: { sampleType: "float", viewDimension: "3d" },
+				},
+				{
+					binding: 2,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "filtering" },
+				},
+			],
+		});
+		// One texel of nothing, for every chunk built without probes. A
+		// pipeline missing a binding is refused and the whole frame with it,
+		// so off has to be a texture rather than an absence.
+		this.noProbes = device.createTexture({
+			size: { width: 1, height: 1, depthOrArrayLayers: 1 },
+			dimension: "3d",
+			format: "rgba8unorm",
+			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+		});
+		device.queue.writeTexture(
+			{ texture: this.noProbes },
+			new Uint8Array([128, 128, 255, 0]),
+			{ bytesPerRow: 256, rowsPerImage: 1 },
+			{ width: 1, height: 1, depthOrArrayLayers: 1 },
+		);
+		this.noProbesView = this.noProbes.createView({ dimension: "3d" });
+		// Probes are metres apart, so what is between two of them is a blend
+		// rather than a step -- the whole reason a coarse grid can stand in
+		// for a fine one.
+		this.probeSampler = device.createSampler({
+			magFilter: "linear",
+			minFilter: "linear",
+			addressModeU: "clamp-to-edge",
+			addressModeV: "clamp-to-edge",
+			addressModeW: "clamp-to-edge",
 		});
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
 		this.cloudShadow = new CloudShadow(ctx, 1024);
@@ -357,10 +423,54 @@ export class ChunkRenderer implements ShadowCaster {
 			size: CHUNK_BYTES,
 			usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 		});
+		const probes = this.uploadProbes(mesh);
+		const volume = mesh.probes;
 		device.queue.writeBuffer(
 			uniform,
 			0,
-			new Float32Array([mesh.origin.x, mesh.origin.y, mesh.origin.z, 0]),
+			new Float32Array([
+				mesh.origin.x,
+				mesh.origin.y,
+				mesh.origin.z,
+				0,
+				// How to find a probe from a cell: how many cells apart they
+				// are, how many there are each way, and which layer the top
+				// row sits at. Zero probes across says there is no volume,
+				// which is how the shader knows without a second uniform.
+				volume ? volume.spacing : 0,
+				volume ? volume.across : 0,
+				volume ? volume.down : 0,
+				volume ? volume.firstLayer : 0,
+				// The three corner directions inverted, a column per row, with
+				// the triangle's side, the crust's top and a layer's height
+				// riding in the spare lanes.
+				volume ? volume.basis[0]! : 0,
+				volume ? volume.basis[1]! : 0,
+				volume ? volume.basis[2]! : 0,
+				volume ? volume.side : 0,
+				volume ? volume.basis[3]! : 0,
+				volume ? volume.basis[4]! : 0,
+				volume ? volume.basis[5]! : 0,
+				this.crustTopRadius,
+				volume ? volume.basis[6]! : 0,
+				volume ? volume.basis[7]! : 0,
+				volume ? volume.basis[8]! : 0,
+				this.layerHeight,
+				// And the corners themselves, which is what turns the lattice
+				// direction a probe stores into a world one.
+				volume ? volume.corners[0]! : 0,
+				volume ? volume.corners[1]! : 0,
+				volume ? volume.corners[2]! : 0,
+				0,
+				volume ? volume.corners[3]! : 0,
+				volume ? volume.corners[4]! : 0,
+				volume ? volume.corners[5]! : 0,
+				0,
+				volume ? volume.corners[6]! : 0,
+				volume ? volume.corners[7]! : 0,
+				volume ? volume.corners[8]! : 0,
+				0,
+			]),
 		);
 		this.resident.set(mesh.key, {
 			key: mesh.key,
@@ -369,11 +479,59 @@ export class ChunkRenderer implements ShadowCaster {
 			uniform,
 			bindGroup: device.createBindGroup({
 				layout: this.chunkLayout,
-				entries: [{ binding: 0, resource: { buffer: uniform } }],
+				entries: [
+					{ binding: 0, resource: { buffer: uniform } },
+					{
+						binding: 1,
+						resource: probes
+							? probes.createView({ dimension: "3d" })
+							: this.noProbesView,
+					},
+					{ binding: 2, resource: this.probeSampler },
+				],
 			}),
 			opaque: this.uploadGeometry(mesh.opaque),
 			water: this.uploadGeometry(mesh.translucent),
+			probes,
 		});
+	}
+
+	/**
+	 * Put a chunk's probe volume on the GPU, or nothing where it has none.
+	 *
+	 * A 3D texture per chunk rather than one atlas for the world: a chunk
+	 * arrives and leaves on its own, and an atlas would need a free list and
+	 * a way to say where in it each chunk sits. At 24 KB a chunk the whole
+	 * resident set is a few megabytes.
+	 */
+	private uploadProbes(mesh: ChunkMesh): GPUTexture | null {
+		const volume = mesh.probes;
+		if (!volume) return null;
+		const { device } = this.ctx;
+		const texture = device.createTexture({
+			size: {
+				width: volume.across,
+				height: volume.across,
+				depthOrArrayLayers: volume.down,
+			},
+			dimension: "3d",
+			format: "rgba8unorm",
+			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+		});
+		device.queue.writeTexture(
+			{ texture },
+			volume.data,
+			{
+				bytesPerRow: volume.across * 4,
+				rowsPerImage: volume.across,
+			},
+			{
+				width: volume.across,
+				height: volume.across,
+				depthOrArrayLayers: volume.down,
+			},
+		);
+		return texture;
 	}
 
 	/** Take a chunk off the GPU. */
@@ -385,6 +543,7 @@ export class ChunkRenderer implements ShadowCaster {
 		held.opaque?.indices.destroy();
 		held.water?.vertices.destroy();
 		held.water?.indices.destroy();
+		held.probes?.destroy();
 		this.resident.delete(key);
 	}
 
@@ -419,6 +578,9 @@ export class ChunkRenderer implements ShadowCaster {
 
 		this.frameData.set(frame.viewProj.elements, 0);
 		this.frameData.set(frame.eye, 16);
+		// `eye.w`. What a probe's carried light is worth, riding in the spare
+		// lane a position leaves behind.
+		this.frameData[19] = this.probeStrength;
 		this.frameData.set(frame.sun, 20);
 		// `sun.w`. Full light, taking the whole lighting model out at once so
 		// a dug hole can be looked into.

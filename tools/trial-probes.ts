@@ -10,9 +10,11 @@ import {
 	ChunkAddress,
 	TerrainGenerator,
 	buildCoarseMap,
+	ChunkColumnSampler,
 	generateChunk,
 	seedFromString,
 } from "chamfer/generation";
+import { buildChunkMesh } from "chamfer/mesh";
 import { probeVolume } from "chamfer/light";
 
 const settings = new PlanetSettings({ plain: false });
@@ -45,7 +47,23 @@ console.log(`generate one chunk      ${genMs.toFixed(1)} ms`);
 console.log(`cells in the chunk      ${cells.toLocaleString()} (${((cells * 2) / 1024 / 1024).toFixed(1)} MB of blocks)`);
 console.log(`layers the band spans   ${band} of ${chunk.layerCount}`);
 console.log("");
-console.log(`${"spacing".padEnd(9)}${"probes".padStart(10)}${"KB".padStart(8)}${"of blocks".padStart(11)}${"build".padStart(10)}`);
+// What the chunk's own mesh costs, which is what the volume rides beside.
+const mesh = buildChunkMesh(
+	chunk,
+	new ChunkColumnSampler(chunk, terrain),
+	shape,
+	seed,
+	{ apron: true, surfaceGrid: shape.blockSize },
+);
+const meshBytes =
+	mesh.opaque.vertices.byteLength +
+	mesh.opaque.indices.byteLength +
+	mesh.translucent.vertices.byteLength +
+	mesh.translucent.indices.byteLength;
+console.log(`mesh on the GPU         ${(meshBytes / 1024).toFixed(1)} KB` +
+	` (${mesh.opaque.vertices.length / 6} vertices)`);
+console.log("");
+console.log(`${"spacing".padEnd(9)}${"probes".padStart(10)}${"KB".padStart(8)}${"of blocks".padStart(11)}${"build".padStart(10)}${"of mesh".padStart(10)}${"transient".padStart(11)}`);
 for (const spacing of [2, 4, 8, 16]) {
 	// Three runs, best of, because a first pass pays for the arrays.
 	let best = Infinity;
@@ -60,6 +78,10 @@ for (const spacing of [2, 4, 8, 16]) {
 		`${String(spacing).padEnd(9)}${probes.toLocaleString().padStart(10)}` +
 			`${(volume!.data.length / 1024).toFixed(1).padStart(8)}` +
 			`${((volume!.data.length / (cells * 2)) * 100).toFixed(2).padStart(10)}%` +
-			`${best.toFixed(1).padStart(9)} ms`,
+			`${best.toFixed(1).padStart(9)} ms` +
+			`${((volume!.data.length / meshBytes) * 100).toFixed(1).padStart(9)}%` +
+			// Two float fields and a flag while the light is being passed
+			// around, thrown away as soon as the bytes are packed.
+			`${((probes * 13) / 1024).toFixed(0).padStart(8)} KB`,
 	);
 }
