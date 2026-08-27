@@ -269,6 +269,101 @@ describe("columnPatchMesh", () => {
 	});
 });
 
+describe("which way a face points", () => {
+	/**
+	 * **A normal that is turned round is a lighting bug that no light can
+	 * fix.** A cell's rim runs counter-clockwise seen from outside the sphere
+	 * and a patch vertex is laid out as `(east, up, north)`, which swaps two
+	 * axes and flips the handedness -- so a cap following the ring in its own
+	 * order comes out pointing into the ground. Measured on flat ground before
+	 * this held: of 174 triangles, **0** faced up and **114** faced down, and
+	 * every cap was lit as though the sun were under the floor.
+	 *
+	 * The walls were right the whole time, which is why the cross product is
+	 * not the thing to turn: flipping that fixes the caps and breaks the walls,
+	 * and a mesh half inside out looks much like a mesh wholly inside out.
+	 */
+	it("gives flat ground caps that face the sky and rim walls that face out", () => {
+		const patch = layout(5, 2);
+		const mesh = columnPatchMesh(patch, flat(patch.count, 30, 70), {
+			radius: RADIUS,
+			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
+		});
+		let up = 0;
+		let down = 0;
+		let outward = 0;
+		let inward = 0;
+		for (let v = 0; v < mesh.groundVertices; v += 3) {
+			const at = v * PATCH_STRIDE;
+			const ny = mesh.vertices[at + 4]!;
+			if (ny > 0.7) {
+				up++;
+				continue;
+			}
+			if (ny < -0.7) {
+				down++;
+				continue;
+			}
+			// A wall on the rim: it must face away from the middle of the patch,
+			// which is the origin the mesh is laid out around.
+			const mid = (of: number): number =>
+				(mesh.vertices[at + of]! +
+					mesh.vertices[at + PATCH_STRIDE + of]! +
+					mesh.vertices[at + 2 * PATCH_STRIDE + of]!) /
+				3;
+			const east = mid(0);
+			const north = mid(2);
+			const away = Math.hypot(east, north) || 1;
+			const facing =
+				(mesh.vertices[at + 3]! * east +
+					mesh.vertices[at + 5]! * north) /
+				away;
+			if (facing > 0) outward++;
+			else inward++;
+		}
+		expect(down).toBe(0);
+		expect(up).toBeGreaterThan(0);
+		expect(inward).toBe(0);
+		expect(outward).toBeGreaterThan(0);
+	});
+
+	/** The underside of an overhang is the one face that should look down. */
+	it("turns the underside of an overhang the other way", () => {
+		const patch = layout(5, 1);
+		const count = patch.count;
+		const at = new Int32Array(count + 1);
+		const spans: number[] = [];
+		const height = new Float64Array(count);
+		for (let c = 0; c < count; c++) {
+			at[c] = spans.length;
+			// Bedrock, a gap, then a slab: the slab has a floor to draw.
+			spans.push(-70, -20, 20, 40);
+			height[c] = 40;
+		}
+		at[count] = spans.length;
+		const mesh = columnPatchMesh(
+			patch,
+			{
+				at,
+				spans: Float64Array.from(spans),
+				height,
+				raw: new Float32Array(count),
+				continent: new Float32Array(count),
+				erosion: new Float32Array(count),
+				peaks: new Float32Array(count),
+				carve: new Float32Array(count),
+			},
+			{ radius: RADIUS, seaLevel: 0, seed: 7, speckle: 0 },
+		);
+		let down = 0;
+		for (let v = 0; v < mesh.groundVertices; v += 3)
+			if (mesh.vertices[v * PATCH_STRIDE + 4]! < -0.7) down++;
+		expect(down).toBeGreaterThan(0);
+	});
+});
+
 describe("floatingRock", () => {
 	it("calls every column's lowest span ground", () => {
 		const patch = layout(4, 2);

@@ -225,6 +225,9 @@ export function columnPatchMesh(
 		const vx = cx - ax;
 		const vy = cy - ay;
 		const vz = cz - az;
+		// **One winding for the whole mesh**: every face is wound so that
+		// `cross(b - a, c - a)` points out of the solid it belongs to. `cap`
+		// is the one that had it backwards.
 		const nx = uy * vz - uz * vy;
 		const ny = uz * vx - ux * vz;
 		const nz = ux * vy - uy * vx;
@@ -349,20 +352,38 @@ export function columnPatchMesh(
 			// Ground only: the sea's own rim sits at one radius everywhere and
 			// would draw a second grid across the water at sea level.
 			if (waterFloor !== waterFloor) rims.push(written + 1, written + 2);
+			// **Wound against the ring's own order.** A cell's rim runs
+			// counter-clockwise seen from outside the sphere, and a patch
+			// vertex is laid out as `(east, up, north)` -- which swaps two
+			// axes and flips the handedness, so following the ring in its own
+			// order gives a cap whose normal points into the ground. Measured
+			// on flat ground before this, of 174 triangles **0** faced up and
+			// **114** faced down: every cap was lit as though the sun were
+			// under the floor, which no arrangement of lights and no exposure
+			// can reach -- and turned round, the picture's mean goes from
+			// **43.6** to **52.6** of 255 with a 95th percentile ratio of
+			// **2.15**, so the faces that gain are the ones facing the sky and
+			// they more than double.
+			//
+			// **The walls were right the whole time**, so this is what turns
+			// and not the cross product: flipping that fixes the caps and
+			// breaks the walls, and a mesh half inside out looks much like a
+			// mesh wholly inside out.
+			//
 			// **The underside of an overhang is a face too**, and it faces the
-			// other way: wound the same as the top it would be culled and the
+			// other way again: wound like the top it would be culled and the
 			// inside of the planet would show through.
 			if (upward)
 				triangle(
 					mx,
 					my,
 					mz,
-					ringX[m]!,
-					ringY[m]!,
-					ringZ[m]!,
 					ringX[b]!,
 					ringY[b]!,
 					ringZ[b]!,
+					ringX[m]!,
+					ringY[m]!,
+					ringZ[m]!,
 					metres,
 					metres,
 					metres,
@@ -372,12 +393,12 @@ export function columnPatchMesh(
 					mx,
 					my,
 					mz,
-					ringX[b]!,
-					ringY[b]!,
-					ringZ[b]!,
 					ringX[m]!,
 					ringY[m]!,
 					ringZ[m]!,
+					ringX[b]!,
+					ringY[b]!,
+					ringZ[b]!,
 					metres,
 					metres,
 					metres,
