@@ -49,6 +49,23 @@ const PLANET_WIDE = 512;
 const PATCH_SAMPLES = 385;
 
 /**
+ * How far a hexagon's shade drifts from its material's, on this bench.
+ *
+ * **Twice the world's, because this is the one picture whose subject is the
+ * lattice.** The world's `SPECKLE` puts 5.1% between the palest hexagon and the
+ * darkest once the picture is written -- about six levels of 255 on ordinary
+ * ground, which at a hexagon a few pixels across is a grain rather than a grid.
+ * At twice that it is 10.4% and the cells read.
+ *
+ * **It is not the material colour, so nothing here disagrees with the world.**
+ * The four band colours are the block registry's own; this is legibility
+ * furniture, the same kind of thing as the contour lines and the cell rims that
+ * the bench draws and the world does not -- and it is the same amount the grid
+ * overlay uses, for the same reason.
+ */
+const BENCH_SPECKLE = SPECKLE * 2;
+
+/**
  * Everything the bench draws, built where the drawing is not.
  *
  * **The thread that draws holds no map, no grid and no field.** A level-8 grid
@@ -405,10 +422,10 @@ export class BenchWorkerCore {
 			mesh: columnPatchMesh(layout, ground, {
 				radius,
 				seaLevel: 0,
-				// The world's own seed and the world's own switch, so a hexagon
-				// on the bench is the shade that hexagon will be.
+				// The world's own seed and the world's own switch, at the
+				// bench's own amount.
 				seed: settings.seedNumber,
-				speckle: settings.knobs.speckle ? SPECKLE : 0,
+				speckle: settings.knobs.speckle ? BENCH_SPECKLE : 0,
 			}),
 			dug,
 			stacks: { stacked, deepest },

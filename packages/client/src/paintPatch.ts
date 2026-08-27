@@ -126,10 +126,11 @@ export function paintPatch(
 	}
 
 	const band = BAND_COLORS[bandOf(pixel.metres)]!;
-	// Land shades by how far it stands above the band it started in, so a band
-	// is one material and still has shape in it. Sea is the floor seen through
+	// **A band is one material and one colour.** Sea is the floor seen through
 	// water, so it shades by how much water is over it -- which is why a beach
-	// shows sand and a deep does not.
+	// shows sand and a deep does not; land does not shade at all, because every
+	// pixel of this picture is a block and a colour mixed from two stops is a
+	// material nothing builds.
 	const color: [number, number, number] = [0, 0, 0];
 	let shade: number;
 	if (pixel.metres <= 0) {
@@ -147,14 +148,15 @@ export function paintPatch(
 		shade = 1;
 	} else {
 		for (let ch = 0; ch < 3; ch++) color[ch] = band[ch]!;
-		shade = 0.72 + 0.28 * Math.min(1, (pixel.metres % 100) / 100);
-		// A ring every hundred metres, on the same grid the two material lines
-		// sit on and the same one the patch draws. A flat picture has no
-		// shading at all, so this is the whole of what says how steep anything
-		// is. **Land only**: the sea is a surface at one radius, so a contour
-		// on it would be a ring drawn on water that is everywhere level.
-		const into = pixel.metres % 100;
-		if (into < 4) shade *= 0.6;
+		// **A line at every hundred metres, and flat between them.** A ramp
+		// across each band was tried and it is the wrong picture: it draws a
+		// gradient inside a material, so a hillside of one block reads as a
+		// soft wash and the picture stops naming what the world builds there.
+		// The line is what says how steep the ground is -- close together on a
+		// cliff, far apart on a plain -- and it costs the band nothing.
+		// **Land only**: the sea stands at one radius, so a contour on it would
+		// be a ring drawn on water that is everywhere level.
+		shade = pixel.metres % 100 < 6 ? 0.78 : 1;
 	}
 	px[at] = 255 * Math.pow(Math.min(1, color[0] * shade), 1 / 2.2);
 	px[at + 1] = 255 * Math.pow(Math.min(1, color[1] * shade), 1 / 2.2);
