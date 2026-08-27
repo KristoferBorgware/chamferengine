@@ -482,9 +482,12 @@ export class ChunkRenderer implements ShadowCaster {
 		// would be a frame too late to touch it. What this costs is finding
 		// out where the geometry is twice, which is why it only happens when
 		// the effect is on.
+		// Both screen-space passes reconstruct a world position from a depth,
+		// which is one inverse between them rather than one each.
+		const unproject =
+			this.ambientOn || this.bounceOn ? frame.viewProj.inverse() : null;
 		this.sunViews.openSky = this.screenAmbient.openView;
 		if (this.ambientOn) {
-			const inverse = frame.viewProj.inverse();
 			this.screenDepth.render(
 				encoder,
 				frame.viewProj,
@@ -502,7 +505,7 @@ export class ChunkRenderer implements ShadowCaster {
 				drawHeight,
 				frame.eye,
 				frame.viewProj,
-				inverse,
+				unproject!,
 			);
 			this.sunViews.openSky = this.screenAmbient.view;
 		}
@@ -581,7 +584,7 @@ export class ChunkRenderer implements ShadowCaster {
 				drawHeight,
 				frame.eye,
 				frame.viewProj,
-				frame.viewProj.inverse(),
+				unproject!,
 			);
 		}
 		// The air stands between the world and the tone curve: it reads the
