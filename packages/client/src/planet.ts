@@ -2442,6 +2442,8 @@ async function main(): Promise<void> {
 			!PLAIN && current.knobs.lightProbes
 				? current.knobs.probeStrength
 				: 0;
+		renderer.showProbes =
+			!PLAIN && current.knobs.lightProbes && current.knobs.showProbes;
 		renderer.crustTopRadius = shape.crustTopRadius;
 		renderer.layerHeight = shape.blockSize;
 		renderer.ssaoOn = !PLAIN && current.knobs.ssao;

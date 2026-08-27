@@ -809,6 +809,12 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain && k.lightProbes,
 			},
 			{
+				key: "showProbes",
+				label: "Show probes",
+				enabledWhen: (k) => !k.plain && k.lightProbes,
+				given: () => "one sphere per probe, where it stands",
+			},
+			{
 				key: "ssao",
 				label: "SSAO",
 				enabledWhen: (k) => !k.plain,

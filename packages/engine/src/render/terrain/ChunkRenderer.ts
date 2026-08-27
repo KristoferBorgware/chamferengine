@@ -14,6 +14,7 @@ import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { SunViews } from "../light/SunViews.js";
+import { PROBE_MARKER_SHADER } from "../light/PROBE_MARKER_SHADER.js";
 import { ScreenDepth } from "../light/ScreenDepth.js";
 import { Ssao } from "../light/Ssao.js";
 import { Ssgi } from "../light/Ssgi.js";
@@ -39,6 +40,9 @@ interface Resident {
 
 	/** This chunk's own probe volume, or null where it shares the empty one. */
 	readonly probes: GPUTexture | null;
+
+	/** How many probes that volume holds, for the marker draw. */
+	readonly probeCount: number;
 }
 
 /** A matrix, the eye, the sun, the fog, the daylight, the sky, and the moon. */
@@ -64,6 +68,7 @@ export class ChunkRenderer implements ShadowCaster {
 	private readonly noProbes: GPUTexture;
 	private readonly noProbesView: GPUTextureView;
 	private readonly probeSampler: GPUSampler;
+	private readonly probeMarkers: GPURenderPipeline;
 	private readonly frameUniform: GPUBuffer;
 	private readonly frameBindGroup: GPUBindGroup;
 	private readonly frameData = new Float32Array(FRAME_BYTES / 4);
@@ -143,6 +148,14 @@ export class ChunkRenderer implements ShadowCaster {
 
 	/** What a probe's carried light is worth on a surface. Zero is off. */
 	probeStrength = 0;
+
+	/**
+	 * Whether every probe is drawn as a little sphere where it stands.
+	 *
+	 * A debug view, and the only way to see a volume that is otherwise only
+	 * visible through the light it makes. See {@link PROBE_MARKER_SHADER}.
+	 */
+	showProbes = false;
 
 	/** Whether {@link ssao} runs at all. */
 	ssaoOn = false;
@@ -263,13 +276,16 @@ export class ChunkRenderer implements ShadowCaster {
 			entries: [
 				uniformEntry,
 				{
+					// **Both stages.** The terrain samples the volume per
+					// fragment; the debug markers sample it per vertex, to
+					// colour a sphere by what the probe it stands on holds.
 					binding: 1,
-					visibility: GPUShaderStage.FRAGMENT,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					texture: { sampleType: "float", viewDimension: "3d" },
 				},
 				{
 					binding: 2,
-					visibility: GPUShaderStage.FRAGMENT,
+					visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
 					sampler: { type: "filtering" },
 				},
 			],
@@ -345,6 +361,32 @@ export class ChunkRenderer implements ShadowCaster {
 			primitive: { topology: "triangle-list", cullMode: "back" },
 		} as const satisfies Partial<GPURenderPipelineDescriptor>;
 
+		// The markers read the same volume from the same bind group the
+		// terrain does, so they need no layout of their own.
+		this.probeMarkers = device.createRenderPipeline({
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [this.frameLayout, this.chunkLayout],
+			}),
+			vertex: {
+				module: device.createShaderModule({
+					code: PROBE_MARKER_SHADER,
+				}),
+				entryPoint: "vertexMain",
+			},
+			fragment: {
+				module: device.createShaderModule({
+					code: PROBE_MARKER_SHADER,
+				}),
+				entryPoint: "fragmentMain",
+				targets: [{ format }],
+			},
+			primitive: { topology: "triangle-list", cullMode: "none" },
+			depthStencil: {
+				format: "depth32float",
+				depthWriteEnabled: true,
+				depthCompare: "less",
+			},
+		});
 		this.opaquePipeline = device.createRenderPipeline({
 			...common,
 			fragment: {
@@ -493,6 +535,9 @@ export class ChunkRenderer implements ShadowCaster {
 			opaque: this.uploadGeometry(mesh.opaque),
 			water: this.uploadGeometry(mesh.translucent),
 			probes,
+			probeCount: volume
+				? volume.across * volume.across * volume.down
+				: 0,
 		});
 	}
 
@@ -719,6 +764,21 @@ export class ChunkRenderer implements ShadowCaster {
 		// The water pass sets it again for the same reason.
 		pass.setBindGroup(2, this.sunViews.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
+
+		// **The probes, where anybody asked to see them.** After the opaque
+		// terrain so a marker behind a hillside is behind it, and before the
+		// water so one under the sea reads as under it. Eight triangles an
+		// instance and one draw a chunk.
+		if (this.showProbes) {
+			pass.setPipeline(this.probeMarkers);
+			for (const chunk of visible) {
+				const probes = chunk.probeCount;
+				if (probes <= 0) continue;
+				pass.setBindGroup(1, chunk.bindGroup);
+				pass.draw(24, probes);
+			}
+			pass.setBindGroup(0, this.frameBindGroup);
+		}
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.

@@ -907,6 +907,16 @@ export interface PlanetKnobs {
 	probeStrength: number;
 
 	/**
+	 * Whether every probe is drawn as a little sphere where it stands.
+	 *
+	 * A probe volume is otherwise only visible through the light it makes,
+	 * which is the thing it is supposed to explain. The markers read the same
+	 * texture the terrain shader reads, at the same places, so a mapping that
+	 * is wrong is wrong here in the same way.
+	 */
+	showProbes: boolean;
+
+	/**
 	 * How many times the canvas the world is drawn at before it is put back.
 	 *
 	 * **The one antialiasing a world of hard edges answers to.** A voxel
@@ -1122,6 +1132,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	lightProbes: false,
 	probeSpacing: 4,
 	probeStrength: 1,
+	showProbes: false,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1636,6 +1647,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	lightProbes: { ...TOGGLE, rebuilds: true },
 	probeSpacing: { low: 2, high: 16, step: 1, rebuilds: true, unit: "cells" },
 	probeStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "" },
+	showProbes: { ...TOGGLE, rebuilds: false },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },
