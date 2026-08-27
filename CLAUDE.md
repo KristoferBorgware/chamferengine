@@ -136,6 +136,14 @@ and duplicates information found there.
 - `tools/bench.ts`, `tools/trial-*.ts` — wall-clock and count measurements over
   the real engine, run by hand. They are not part of `make-reference.js`, whose
   scripts must be plain Node and whose output is quoted in `docs/`.
+- `tools/probe-shaders.mjs` — loads the client in headless Chromium with every
+  pipeline's switch turned on and fails if the browser complains or the frame
+  presents nothing. **A shader that will not compile draws a black window, not
+  an error**: its module is invalid, every pipeline from it is invalid, and a
+  refused command buffer takes the whole frame with it while the readout keeps
+  updating over the top. Nothing in the unit tests exercises the WGSL at all —
+  the recording device takes any string as a shader — so this is the check.
+  Needs `npm run dev`.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
   (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
   source of truth. It fails the build on dead links and dead heading anchors,
