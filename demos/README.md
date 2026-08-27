@@ -809,9 +809,29 @@ noise, `-1` to `+1`; its y axis is how much of **Density** that reading takes.
 Flat at the top is a layer that grows everywhere it is allowed; a step is a
 tree line; a hump is a belt. **Density and the curve answer different
 questions** — the curve says *where* and the slider says *how many* — so
-re-drawing one never undoes the other, and the picture beside them is drawn
-past the curve rather than off the raw reading, or the curve would change
-nothing on screen.
+re-drawing one never undoes the other.
+
+**The bars behind a curve are what makes its x axis mean anything.** A field's
+range is `-1` to `+1` and it reaches nowhere near either end, so equal widths of
+a curve cover wildly unequal amounts of ground: a drag near the middle moves a
+fifth of the land and the same drag out at the end reaches a couple of percent
+of it. They are counted over the planet at level 5 — a patch is a place, and a
+place can sit entirely on one side of a curve while the world is spread across
+all of it — and **over the land alone**, because a vegetation curve is read on
+land and nowhere else and the sea is most of a planet with continents on it.
+Drawn behind the curve rather than under it, so the two share an x axis exactly
+and nothing has to be lined up by eye.
+
+**A layer's picture answers two questions and only one of them at a time.**
+**Layers show** switches every layer's picture together: `noise` is the reading
+itself, black at `-1` and white at `+1`, over the whole field with the sea
+included, because a field has a value everywhere and the ground picture above it
+already says where the land is; `density` is that reading through the curve, in
+the layer's own green, with the sea left black because nothing grows in it.
+**Noise is the default**, because a reader arriving at a layer is about to draw
+a curve, and a curve cannot be drawn against a picture the curve has already
+been applied to — past the ends of a curve every value is one colour, which is
+exactly where you need to see whether there is anything out there.
 
 **A cell holds one plant, so the order of the cards is the tie-break.** Each
 layer rolls its own hash against its own density at every root and the first

@@ -1696,6 +1696,33 @@
 									? "click a picture to move the patch · right-click enlarges"
 									: "click a picture to enlarge it",
 						},
+						{
+							// **A layer's picture answers two questions and only
+							// one of them at a time.** *Where does this grow* is
+							// the field read through the curve, which is what the
+							// world will actually do; *what does the field say*
+							// is the reading itself, which is what a curve is
+							// drawn against and the only picture that shows what
+							// is happening either side of a curve's own ends. The
+							// second is the default, because a reader arriving at
+							// a layer is about to draw a curve and cannot draw
+							// one against a picture the curve has already been
+							// applied to.
+							key: "layerPicture",
+							label: "Layers show",
+							type: "select",
+							options: ["noise", "density"],
+							value: "noise",
+							note: () =>
+								knobs.layerPicture === "noise"
+									? "the reading itself, black at −1 and white at +1 · " +
+										"the whole field, sea included, because a field has " +
+										"a value everywhere and the ground picture above " +
+										"says where the land is"
+									: "the reading through the curve, in the layer's own " +
+										"green · which is what the world will do, with the " +
+										"sea left black because nothing grows in it",
+						},
 						{ key: "groundPicture", label: "", type: "picture", value: 0 },
 						{
 							key: "subdivisionDepth",
@@ -2191,6 +2218,63 @@
 			/** Offsets from the world seed, so the three fields are three fields. */
 			const TERRAIN_SEED = { cont: 101, ero: 211, pv: 337 };
 
+			/**
+			 * The level the histograms under the curves are counted over.
+			 *
+			 * **A curve governs the planet, so what sits under it has to be
+			 * counted over the planet** -- a patch is a place, and a place can
+			 * be entirely on one side of a curve while the world is spread
+			 * across all of it. Level 5 is 10,242 cells, which is the engine's
+			 * own grid at a level coarse enough to run on every knob move.
+			 */
+			const TALLY_LEVEL = 5;
+			const TALLY_BINS = 48;
+
+			/** Every cell of the planet at that level, as directions, built once. */
+			const WORLD = (() => {
+				const n = 1 << TALLY_LEVEL;
+				const out = [];
+				for (let face = 0; face < 20; face++)
+					for (let i = 0; i <= n; i++)
+						for (let j = 0; i + j <= n; j++) {
+							// A cell on a face edge or an icosahedron vertex has
+							// several names and must be counted once, so it is
+							// taken only by the face that owns it.
+							if (canonicalCell(face, n, i, j).face !== face) continue;
+							out.push(latticePosition(face, n, i, j));
+						}
+				return out;
+			})();
+
+			/**
+			 * Which of those cells are dry, worked out once per world.
+			 *
+			 * **A vegetation curve is read on land and nowhere else**, so the
+			 * bars under it count land -- and the sea is most of a planet with
+			 * a continent model on it, so counting the whole sphere would put
+			 * two thirds of every bar under ground no plant will ever stand on.
+			 * The mask is a function of the seed and the radius alone, and both
+			 * layers and every knob move share one, so it is worked out when
+			 * either of those changes and not again.
+			 */
+			const DRY = { seed: null, radius: 0, mask: null, count: 0 };
+			function dryMask(seed, radius) {
+				if (DRY.mask && DRY.seed === seed && DRY.radius === radius) return DRY;
+				const s = terrainSettings(radius);
+				const mask = new Uint8Array(WORLD.length);
+				let count = 0;
+				for (let n = 0; n < WORLD.length; n++)
+					if (mapHeightAt(WORLD[n], seed, s) > TERRAIN.seaLevel) {
+						mask[n] = 1;
+						count++;
+					}
+				DRY.seed = seed;
+				DRY.radius = radius;
+				DRY.mask = mask;
+				DRY.count = count;
+				return DRY;
+			}
+
 			/** The three stacks at one radius, built once per rebuild. */
 			function terrainSettings(radius) {
 				const out = {};
@@ -2499,6 +2583,41 @@
 				const live = layers.filter((layer) => layer.on);
 				const liveNoise = live.map((layer) => layerSettings(layer, k.radius));
 				for (const layer of layers) layer.grown = 0;
+
+				// **What the world lands on, under each layer's curve.** Noise
+				// clusters around its own middle, so equal widths of a curve
+				// cover wildly unequal amounts of planet: a drag near the middle
+				// moves a fifth of the land and the same drag out at the end
+				// reaches a couple of percent of it. Counted on every rebuild,
+				// because every noise row moves it.
+				const dry = dryMask(seed, k.radius);
+				const bin = (v) =>
+					Math.max(
+						0,
+						Math.min(TALLY_BINS - 1, Math.floor(((v + 1) / 2) * TALLY_BINS)),
+					);
+				for (const layer of layers) {
+					if (!layer.on) {
+						layer.tally = null;
+						continue;
+					}
+					const settings = layerSettings(layer, k.radius);
+					const counts = new Float32Array(TALLY_BINS);
+					let tallest = 0;
+					for (let c = 0; c < WORLD.length; c++) {
+						if (!dry.mask[c]) continue;
+						const p = WORLD[c];
+						const at = bin(
+							octaveNoise(
+								p[0], p[1], p[2],
+								seed + saltOf(layer),
+								settings,
+							),
+						);
+						if (++counts[at] > tallest) tallest = counts[at];
+					}
+					layer.tally = { counts, tallest, land: dry.count };
+				}
 
 				// **A level of detail is a subdivision depth, and nothing else.**
 				// A coarse chunk here is drawn at a shallower depth over the same
@@ -4012,6 +4131,7 @@
 				const noiseOf = shots.map((shot) =>
 					shot.layer ? layerSettings(shot.layer, k.radius) : null,
 				);
+				const raw = knobs.layerPicture === "noise";
 				const g0 = canvas ? bigCtx : shots[0].ctx;
 				const images = shots.map(() => g0.createImageData(wide, tall));
 				const frame = planet ? null : field.frame;
@@ -4025,15 +4145,29 @@
 							let c;
 							if (!shot.layer) {
 								c = groundColor(mapHeightAt(p, field.seed, ground));
+							} else if (raw) {
+								// **The reading itself, in grey.** A curve is
+								// drawn against a field and cannot be drawn
+								// against a picture the curve has already been
+								// applied to: past the ends of a curve every
+								// value is one colour, which is exactly where a
+								// reader needs to see whether there is anything
+								// out there. No sea mask, because the field has a
+								// value everywhere and mixing two signals into
+								// one grey ramp would make neither readable.
+								const said = octaveNoise(
+									p[0], p[1], p[2],
+									field.seed + saltOf(shot.layer),
+									noiseOf[n],
+								);
+								const lit = 0.5 + said * 0.5;
+								c = [lit, lit, lit];
 							} else {
-								// **A layer's picture is what it would plant,
-								// not what its noise reads.** The reading is a
-								// number with no units and the curve is the whole
-								// point of the layer, so the picture is drawn
-								// past the curve: black where nothing grows and
+								// **What it would plant**, which is the field read
+								// through the curve: black where nothing grows and
 								// the layer's own leaf colour where it is
-								// densest. Read the noise instead and re-drawing
-								// the curve would change nothing on screen.
+								// densest, with the sea left black because
+								// nothing grows in it.
 								const share = layerShareAt(
 									shot.layer,
 									p[0], p[1], p[2],
@@ -4082,6 +4216,9 @@
 				if (!field) return;
 				const ready = SHOTS.filter((shot) => shot.ctx);
 				if (ready.length === 0) return;
+				for (const shot of ready)
+					if (shot.badge)
+						shot.badge.textContent = `${shot.layer.species} · ${knobs.layerPicture}`;
 				// Half the samples while a knob is moving, for the same reason
 				// the patch draws fewer cells: a picture that arrives after the
 				// finger has stopped is not a picture of the knob.
@@ -4116,7 +4253,9 @@
 				const tall = planet ? wide / 2 : wide;
 				bigCanvas.width = wide;
 				bigCanvas.height = tall;
-				bigName.textContent = `${shot.name} · ${
+				bigName.textContent = `${shot.name}${
+					shot.layer ? ` · ${knobs.layerPicture}` : ""
+				} · ${
 					planet
 						? "the whole planet"
 						: `${Math.round(field.span).toLocaleString()} m of ground`
@@ -4193,6 +4332,30 @@
 					const points = layer.curve;
 					g.fillStyle = "#0b0e13";
 					g.fillRect(0, 0, canvas.width, canvas.height);
+					// **The bars are what makes x mean anything.** A field's
+					// range is -1 to +1 and it reaches nowhere near either end,
+					// so where the bars pile up is the part of the curve that
+					// governs most of the land -- and a stretch of curve with no
+					// bars under it is a rule for ground nobody will ever stand
+					// on. Behind the curve rather than under it, so the two
+					// share an x axis exactly and a reader never has to line up
+					// two pictures by eye.
+					const tally = layer.tally;
+					if (tally && tally.tallest > 0) {
+						g.fillStyle = "rgba(255, 255, 255, 0.13)";
+						const wide = (canvas.width - pad * 2) / TALLY_BINS;
+						for (let n = 0; n < TALLY_BINS; n++) {
+							const tall =
+								(tally.counts[n] / tally.tallest) * (canvas.height - pad * 2);
+							if (tall <= 0) continue;
+							g.fillRect(
+								pad + n * wide,
+								canvas.height - pad - tall,
+								Math.max(1, wide - 0.5),
+								tall,
+							);
+						}
+					}
 					g.strokeStyle = "#232b36";
 					g.beginPath();
 					g.moveTo(toX(0), pad);
@@ -4641,6 +4804,7 @@
 								const name = document.createElement("b");
 								name.textContent = layer.species;
 								name.style.background = inkOf(layer.leaf);
+								shot.badge = name;
 								holder.append(shot.canvas, name);
 								wrap.append(holder);
 								set.append(wrap);
@@ -4663,7 +4827,8 @@
 								line.textContent =
 									"x: the layer's own noise, −1 to +1 · " +
 									"y: how much of Density this place takes";
-								axis.append(line);
+								const bars = document.createElement("div");
+								axis.append(line, bars);
 								const help = document.createElement("p");
 								help.className = "curve-help";
 								help.textContent =
@@ -4672,7 +4837,7 @@
 								wrap.append(label, canvas, axis, help);
 								set.append(wrap);
 								const redraw = makeCurve(canvas, layer, () => askForRedraw());
-								layerRowsShown.push({ row, wrap, redraw, context: layer });
+								layerRowsShown.push({ row, wrap, redraw, bars, context: layer });
 								continue;
 							}
 							layerRowsShown.push(
@@ -4743,6 +4908,15 @@
 				}
 				if (redraw) {
 					redraw();
+					// **An unlabelled histogram is a shape, not a
+					// measurement.** How much land it counts is what says
+					// whether a hump at the left is a continent's worth of
+					// ground or a rounding error.
+					const tally = context.tally;
+					made.bars.textContent = tally
+						? `bars: how much of the planet's ${tally.land.toLocaleString()} ` +
+							`land cells read each value`
+						: "bars: the layer is off, so nothing is counted";
 					return;
 				}
 				// **A row with no meaning comes off the panel, it is not greyed
