@@ -45,30 +45,37 @@
 			   Scrolling to reach a knob must not carry the thing being judged
 			   off the top of the panel, so there are two sections and only the
 			   lower one moves. */
-			#panel {
+			#panelWorld,
+			#panelTerrain {
 				position: fixed;
 				top: 0;
-				right: 0;
 				bottom: 0;
 				width: 340px;
 				display: flex;
 				flex-direction: column;
 				background: rgba(18, 22, 29, 0.94);
-				border-left: 1px solid var(--edge);
 				backdrop-filter: blur(6px);
 			}
-			#head {
+			#panelWorld {
+				left: 0;
+				border-right: 1px solid var(--edge);
+			}
+			#panelTerrain {
+				right: 0;
+				border-left: 1px solid var(--edge);
+			}
+			.head {
 				flex: 0 0 auto;
 				padding: 10px 14px 8px;
 				border-bottom: 1px solid var(--edge);
 			}
-			#scroller {
+			.scroller {
 				flex: 1 1 auto;
 				overflow-y: auto;
 				overscroll-behavior: contain;
 				padding: 0 14px 24px;
 			}
-			#panel h1 {
+			.head h1 {
 				font-size: 14px;
 				margin: 0 0 6px;
 				letter-spacing: 0.01em;
@@ -363,21 +370,72 @@
 				grid-column: auto;
 				width: auto;
 			}
+			/* Clear of the left panel: at 12 px it sat behind one, which is
+			   a line of instructions nobody on a desktop could read. */
 			#hint {
 				position: fixed;
-				left: 12px;
+				left: 352px;
 				bottom: 10px;
 				color: var(--dim);
 				font-size: 11.5px;
 				pointer-events: none;
 			}
+			/* **On a phone each panel is shut and there is a button to open
+			   it.** Each panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open one is the page and the view is a strip above it. Shut,
+			   the view has the whole screen and one tap brings a drawer back.
+			   It is off the desktop layout entirely -- there the panels sit
+			   beside the view and never cover it. */
+			#toggleWorld,
+			#toggleTerrain {
+				display: none;
+			}
 			@media (max-width: 760px) {
-				#panel {
+				#panelWorld,
+				#panelTerrain {
 					width: 100%;
 					top: auto;
-					height: 56%;
+					height: 68%;
 					border-left: 0;
+					border-right: 0;
 					border-top: 1px solid var(--edge);
+					transform: translateY(100%);
+					transition: transform 0.22s ease;
+				}
+				body.world #panelWorld,
+				body.terrain #panelTerrain {
+					transform: none;
+				}
+				#toggleWorld,
+				#toggleTerrain {
+					display: block;
+					position: fixed;
+					bottom: 12px;
+					z-index: 12;
+					padding: 9px 15px;
+					border: 1px solid var(--edge);
+					border-radius: 999px;
+					background: rgba(18, 22, 29, 0.94);
+					backdrop-filter: blur(6px);
+					color: var(--live);
+					font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+					letter-spacing: 0.02em;
+					transition: bottom 0.22s ease;
+				}
+				#toggleWorld {
+					left: 12px;
+				}
+				#toggleTerrain {
+					right: 12px;
+				}
+				/* Above its own panel when that one is open, so the way out is
+				   never under the thing it opened. Each button only answers for
+				   its own drawer -- opening one does not move the other. */
+				body.world #toggleWorld {
+					bottom: calc(68% + 12px);
+				}
+				body.terrain #toggleTerrain {
+					bottom: calc(68% + 12px);
 				}
 				#hint {
 					display: none;
@@ -388,20 +446,52 @@
 	<body>
 		<canvas id="view"></canvas>
 		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
-		<div id="panel">
-			<div id="head">
+		<button
+			id="toggleWorld"
+			type="button"
+			aria-controls="panelWorld"
+			aria-expanded="false"
+		>
+			World
+		</button>
+		<button
+			id="toggleTerrain"
+			type="button"
+			aria-controls="panelTerrain"
+			aria-expanded="false"
+		>
+			Terrain
+		</button>
+		<!-- **Left is the world; right is the terrain on it.** A layer is a
+		     field read through a curve and there are four of them, which is
+		     the length of this page; everything that is not one of those four
+		     -- how big the planet is, where the patch is standing, what the
+		     pictures show, the metres the curves are scaled into, and what
+		     came out -- is a different question and now a different side. The
+		     ground picture and the readout go with the world, because they are
+		     what the four layers made rather than one of the four. -->
+		<div id="panelWorld">
+			<div class="head">
 				<h1>Multi-noise lab</h1>
 				<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
 				<div id="recipe"></div>
 				<div id="facts"></div>
 			</div>
-			<div id="scroller">
-				<div id="knobs"></div>
+			<div class="scroller">
+				<div id="knobsWorld"></div>
 				<details id="profile" open>
 					<summary>Contour</summary>
 					<canvas id="graph" width="640" height="300"></canvas>
 					<div id="graphsays"></div>
 				</details>
+			</div>
+		</div>
+		<div id="panelTerrain">
+			<div class="head">
+				<h1>Terrain</h1>
+			</div>
+			<div class="scroller">
+				<div id="knobsTerrain"></div>
 			</div>
 		</div>
 
@@ -1762,7 +1852,8 @@
 
 			const KNOBS = [
 				{
-					group: "The world",
+					group: "World",
+					panel: "world",
 					open: false,
 					rows: [
 						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
@@ -2037,7 +2128,8 @@
 					[],
 				),
 				{
-					group: "The ground",
+					group: "Ground",
+					panel: "world",
 					open: true,
 					rows: [
 						{
@@ -2123,12 +2215,13 @@
 					],
 				},
 				{
-					group: "The pictures",
+					group: "Preview",
+					panel: "world",
 					open: false,
 					rows: [
 						{
 							key: "show",
-							label: "The four pictures show",
+							label: "The pictures show",
 							type: "select",
 							options: ["planet", "patch"],
 							value: "planet",
@@ -4027,7 +4120,8 @@
 			}
 
 			function buildPanel() {
-				const host = document.getElementById("knobs");
+				const hostWorld = document.getElementById("knobsWorld");
+				const hostTerrain = document.getElementById("knobsTerrain");
 				for (const group of KNOBS) {
 					// **A section folds, because three whole noise layers do not
 					// fit on one screen.** Each carries its own frequency, octave
@@ -4147,7 +4241,7 @@
 							askForRedraw();
 						});
 					}
-					host.append(set);
+					(group.panel === "world" ? hostWorld : hostTerrain).append(set);
 				}
 			}
 
@@ -4320,6 +4414,21 @@
 				{ passive: false },
 			);
 			window.addEventListener("resize", render);
+
+			// The knobs open and shut on a phone; on a desktop the buttons are
+			// not on the page at all and this never runs. Two drawers, two
+			// buttons, each answering for its own -- opening one never closes
+			// the other.
+			const drawer = (buttonId, bodyClass, label) => {
+				const button = document.getElementById(buttonId);
+				button.addEventListener("click", () => {
+					const open = document.body.classList.toggle(bodyClass);
+					button.setAttribute("aria-expanded", String(open));
+					button.textContent = open ? "Close" : label;
+				});
+			};
+			drawer("toggleWorld", "world", "World");
+			drawer("toggleTerrain", "terrain", "Terrain");
 
 			fromParams(new URLSearchParams(location.search));
 			buildPanel();

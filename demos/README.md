@@ -731,6 +731,24 @@ question.
 The three field pictures are cut into grey bands: a smooth wash shows a field's
 brightness and hides its shape, and the band edges are its contours.
 
+**Two panels, one on each side, because a layer and the world it draws on are
+different questions.** The right panel is the four layers and nothing else —
+each with its switch, its curve, its picture and its five noise rows. The left
+panel is everything that is not one of the four: **World**, the size and place
+of the planet and the patch on it; **Preview**, what the pictures show;
+**Ground**, the metres the curves are scaled into; **Contour**; and the ground
+picture and the readout, which are what the four layers made rather than one of
+the four. Moving a slider in one never has to be cross-referenced against a
+heading in the other.
+
+**On a phone each panel is its own shut drawer, with its own button.** 340 px of
+knobs against a 390 px screen means only one drawer can usefully be open at a
+time, so **Terrain** and **World** sit at opposite corners and answer for their
+own panel alone — opening one never closes the other. Each button moves above
+its own drawer when open, so the way out is never under the thing it opened. On
+a desktop neither button is on the page — the panels sit either side of the view
+and never cover it.
+
 **Every knob is in the address bar**, curves included, and only where it differs
 from the default.
 

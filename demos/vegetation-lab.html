@@ -507,9 +507,11 @@
 				grid-column: auto;
 				width: auto;
 			}
+			/* Clear of the left panel: at 12 px it sat behind one, which is
+			   a line of instructions nobody on a desktop could read. */
 			#hint {
 				position: fixed;
-				left: 12px;
+				left: 352px;
 				bottom: 10px;
 				color: var(--dim);
 				font-size: 11.5px;
