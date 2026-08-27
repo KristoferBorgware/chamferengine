@@ -3,7 +3,8 @@
 //
 //   node tools/take-frame.mjs <url> <out.png> [--wait ms] [--read selector]
 //                                             [--size WxH] [--mobile]
-//                                             [--click selector]
+//                                             [--click selector] [--eval js]
+//                                             [--after ms]
 //
 // Chromium is launched with the four flags that make it present, driven over
 // the DevTools protocol, and asked for a screenshot once the world has stopped
@@ -33,6 +34,13 @@ const mobile = args.includes("--mobile");
 // the page as it loads.** One click, after the world has settled, is enough to
 // photograph the other.
 const click = flag("--click", "");
+// **Not everything the page can do is a URL parameter or a button.** Standing
+// the player somewhere is a keypress and a prompt, and a frame of a place
+// nobody can navigate to is a frame that cannot be taken. One expression, after
+// the world has settled, reaches the rest.
+const evaluate = flag("--eval", "");
+// How long to let the page run after that, for whatever it started.
+const after = Number(flag("--after", "3000"));
 const port = Number(flag("--port", "9222"));
 
 const chrome =
@@ -125,6 +133,17 @@ if (click) {
 	});
 	// Long enough for a CSS transition to finish; nothing here times anything.
 	await sleep(600);
+}
+
+if (evaluate) {
+	const ran = await send("Runtime.evaluate", {
+		expression: evaluate,
+		returnByValue: true,
+		awaitPromise: true,
+	});
+	if (ran.exceptionDetails)
+		console.log(`   eval threw: ${ran.exceptionDetails.text}`);
+	await sleep(after);
 }
 
 const shot = await send("Page.captureScreenshot", { format: "png" });
