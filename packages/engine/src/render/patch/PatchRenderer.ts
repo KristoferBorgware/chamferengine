@@ -34,6 +34,15 @@ export interface PatchLook {
 	 */
 	readonly low: number;
 	readonly high: number;
+
+	/**
+	 * Where the camera is, in the patch's own frame.
+	 *
+	 * One of the lights stands here. A patch turned away from the fixed lights
+	 * would otherwise be a silhouette, and turning it is the whole way this
+	 * preview is read.
+	 */
+	readonly eye: readonly [number, number, number];
 }
 
 /**
@@ -65,8 +74,13 @@ export interface PatchUpload {
 	readonly waterVertices?: number;
 }
 
-/** A matrix, the light, the mode, and the four numbers the pictures read. */
-const VIEW_BYTES = 64 + 16 + 16 + 16 + 16;
+/**
+ * A matrix, the light, the mode, the numbers the pictures read, and the eye.
+ *
+ * The eye is here because one of the lights stands at the camera, which needs
+ * a direction per fragment rather than a fixed one.
+ */
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 16;
 
 /**
  * Draws one patch of the surface, cell by cell.
@@ -297,6 +311,7 @@ export class PatchRenderer {
 			20,
 		);
 		this.data.set([look.low, look.high, 0, 0], 28);
+		this.data.set([look.eye[0], look.eye[1], look.eye[2], 0], 32);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,

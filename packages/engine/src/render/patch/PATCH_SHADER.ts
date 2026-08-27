@@ -61,6 +61,18 @@ const SUN_SHARE = ${SUN_SHARE};
 const KEY_FILL = 0.35;
 const KEY_TOP = 0.30;
 
+/**
+ * How strong the light standing at the camera is.
+ *
+ * **The one light that cannot leave a face unreadable.** Whatever is turned
+ * toward the viewer is turned toward it, so nothing being looked at is ever lit
+ * only by the sky term -- which is what made a patch seen from the wrong side a
+ * flat silhouette. It carries no distance falloff: over a patch a kilometre
+ * across an inverse square puts the near rim at many times the far one, and the
+ * far half goes black again.
+ */
+const KEY_HEAD = 0.55;
+
 struct View {
 	viewProj : mat4x4f,
 	sun      : vec4f,
@@ -73,6 +85,8 @@ struct View {
 	lines    : vec4f,
 	/** The ground's own range in metres here, which Height is drawn against. */
 	ground   : vec4f,
+	/** Where the camera is, in the patch's own frame. */
+	eye      : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -93,6 +107,9 @@ struct VertexOut {
 	 * meeting there, so it runs smoothly from one cell into the next.
 	 */
 	@location(4)       height : f32,
+
+	/** Where this fragment is, so a light standing at the camera has a direction. */
+	@location(5)       world  : vec3f,
 };
 
 @vertex
@@ -109,6 +126,7 @@ fn vertexMain(
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
+	out.world = position;
 	out.height = position.y;
 	out.metres = metres;
 	out.raw = raw;
@@ -174,9 +192,12 @@ fn contoured(tint : vec3f, height : f32) -> vec3f {
  * stands at an angle moves. A picture of a number rather than of a place takes
  * less of it: the light is there to show the shape, not to be read off.
  */
-fn lightOn(normal : vec3f, direct : f32) -> f32 {
+fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 	let n = normalize(normal);
 	let key = normalize(view.sun.xyz);
+	// A light standing where the viewer is, so turning the patch lights what
+	// turning it brought into view.
+	let head = normalize(view.eye.xyz - world);
 	// **A key light alone leaves half the shape unreadable.** Every face turned
 	// away from it falls back on the sky term, which depends only on how far up
 	// the face points -- so two walls facing opposite ways read the same, and a
@@ -190,14 +211,16 @@ fn lightOn(normal : vec3f, direct : f32) -> f32 {
 	let lit =
 		max(0.0, dot(n, key)) +
 		KEY_FILL * max(0.0, dot(n, fill)) +
-		KEY_TOP * max(0.0, dot(n, top));
+		KEY_TOP * max(0.0, dot(n, top)) +
+		KEY_HEAD * max(0.0, dot(n, head));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
-	return direct * (lit / (1.0 + KEY_FILL + KEY_TOP)) + (1.0 - direct) * openness;
+	let total = 1.0 + KEY_FILL + KEY_TOP + KEY_HEAD;
+	return direct * (lit / total) + (1.0 - direct) * openness;
 }
 
 /** A tint, lit by the fixed light and given the curve a screen expects. */
-fn shade(tint : vec3f, normal : vec3f, direct : f32) -> vec4f {
-	return vec4f(pow(tint * lightOn(normal, direct), vec3f(1.0 / 2.2)), 1.0);
+fn shade(tint : vec3f, normal : vec3f, world : vec3f, direct : f32) -> vec4f {
+	return vec4f(pow(tint * lightOn(normal, world, direct), vec3f(1.0 / 2.2)), 1.0);
 }
 
 @fragment
@@ -219,7 +242,10 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		}
 		let through = 1.0 - exp(in.metres / SEA_CLARITY);
 		let water = mix(SEA_SHALLOW, SEA_DEEP, through);
-		let lit = pow(water * lightOn(in.normal, SUN_SHARE), vec3f(1.0 / 2.2));
+		let lit = pow(
+			water * lightOn(in.normal, in.world, SUN_SHARE),
+			vec3f(1.0 / 2.2),
+		);
 		return vec4f(lit, mix(0.42, 0.94, through));
 	}
 
@@ -233,7 +259,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			0.0,
 			1.0,
 		);
-		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, 0.4);
+		return shade(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), in.normal, in.world, 0.4);
 	}
 	if (picture == 2) {
 		let t = clamp(
@@ -244,6 +270,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return shade(
 			mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
 			in.normal,
+			in.world,
 			0.35,
 		);
 	}
@@ -257,7 +284,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
 		let into = t * PICTURE_BANDS - step;
 		let edge = select(1.0, 0.45, into < 0.06);
-		return shade(vec3f(grey * edge), in.normal, 0.3);
+		return shade(vec3f(grey * edge), in.normal, in.world, 0.3);
 	}
 
 	var tint : vec3f;
@@ -274,6 +301,6 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	} else {
 		tint = SNOW;
 	}
-	return shade(contoured(tint, in.height), in.normal, SUN_SHARE);
+	return shade(contoured(tint, in.height), in.normal, in.world, SUN_SHARE);
 }
 `;

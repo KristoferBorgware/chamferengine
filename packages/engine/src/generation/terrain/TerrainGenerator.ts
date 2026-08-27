@@ -7,7 +7,7 @@ import type { Vec3 } from "../../math/Vec3.js";
 import type { WorldShape } from "../../world/WorldShape.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
-import { carveIsRock, carveSeed } from "./carveDensity.js";
+import { carveDepth, carveIsRock, carveSeed } from "./carveDensity.js";
 import { caveDensity } from "./caveDensity.js";
 import { layerNoiseSettings } from "../coarse/layeredHeight.js";
 import { fbm } from "../noise/fbm.js";
@@ -178,8 +178,21 @@ export class TerrainGenerator {
 	 * whole of the deep crust: a chunk at 435 layers evaluates about 10 of them
 	 * per column and fills the rest.
 	 *
-	 * The density term takes that away, because a passage can open at any depth.
-	 * With caves on every layer is evaluated.
+	 * **Every layer a term can open has to be evaluated, and the fill starts
+	 * under the deepest of them.** Caves can open a passage at any depth, so
+	 * with caves on the whole crust is walked. The carve stops at its own
+	 * reach, which is a depth in metres and therefore a layer count -- so the
+	 * band extends to that and the fill keeps the crust below it.
+	 *
+	 * **Getting this wrong reads as the layer doing nothing.** `blockAt`
+	 * answered honestly the whole time and `fillColumn` is what a chunk build
+	 * calls: with the band at the soil alone, the carve was evaluated for about
+	 * four layers under the ground and every block it opened below that was
+	 * written over with stone. Measured over one face of the shipped world
+	 * (`tools/probe-carve-depth.ts`), that is **3,311** blocks of **1,596**
+	 * land columns opened and refilled, and **0** the other way -- which leaves
+	 * a layer that can only nibble the top of a column, so it reads as terrain
+	 * whose height moved rather than terrain with a hole in it.
 	 */
 	fillColumn(
 		column: TerrainColumn,
@@ -187,13 +200,20 @@ export class TerrainGenerator {
 		offset: number,
 		layers: number,
 	): ColumnBand {
+		const carved = this.settings.carveLayer
+			? Math.ceil(carveDepth(this.settings.carve) / this.shape.blockSize)
+			: 0;
 		const rock = this.settings.caves
 			? layers
 			: Math.min(
 					layers,
 					Math.max(
 						0,
-						column.groundLayer + Math.ceil(this.settings.soilDepth),
+						column.groundLayer +
+							Math.max(
+								Math.ceil(this.settings.soilDepth),
+								carved,
+							),
 					),
 				);
 

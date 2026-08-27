@@ -397,3 +397,58 @@ describe("the density term", () => {
 				).not.toBe(BlockType.AIR);
 	});
 });
+
+describe("the carve, written into a column", () => {
+	/**
+	 * **`blockAt` is the truth and `fillColumn` is what a chunk build calls.**
+	 * The column writer evaluates a band under the ground and fills the crust
+	 * below it with stone, which is what keeps a chunk at about ten evaluations
+	 * a column however deep the crust runs -- and it is only sound while
+	 * nothing can open air below that band. The carve can, down to its own
+	 * reach, so the band has to reach as far.
+	 *
+	 * Measured on the shipped world before this held (`probe-carve-depth.ts`):
+	 * over 1,283 land columns, 47,971 carved blocks were written back to stone
+	 * and 11 columns kept rock over air, against 299 with the band right. That
+	 * is a layer that can only nibble the top of a column, which reads as
+	 * terrain whose height moved rather than terrain with a hole in it.
+	 */
+	it("writes every block the carve opened, however deep it opened it", () => {
+		const carved = new TerrainGenerator(map.seed, shape, map, {
+			rockLine: 28,
+			snowLine: 45,
+			carveLayer: true,
+		});
+		const layers = shape.crustDepth;
+		const into = new Uint16Array(layers);
+		let checked = 0;
+		let disagreed = 0;
+		for (const column of columns(32)) {
+			if (column.elevation <= 0) continue;
+			checked++;
+			carved.fillColumn(column, into, 0, layers);
+			// The floor is bedrock whatever the terrain says, so it is the one
+			// layer the writer is meant to differ on.
+			for (let layer = column.groundLayer; layer < layers - 1; layer++)
+				if (
+					(carved.blockAt(column, layer) !== BlockType.AIR) !==
+					(into[layer] !== BlockType.AIR)
+				)
+					disagreed++;
+		}
+		expect(checked).toBeGreaterThan(0);
+		expect(disagreed).toBe(0);
+	});
+
+	/** With the layer off the fill is the shortcut it always was. */
+	it("keeps the soil band when nothing can open air below it", () => {
+		const layers = shape.crustDepth;
+		const into = new Uint16Array(layers);
+		for (const column of columns(32)) {
+			if (column.elevation <= 0) continue;
+			gen.fillColumn(column, into, 0, layers);
+			for (let layer = column.groundLayer; layer < layers - 1; layer++)
+				expect(into[layer]).not.toBe(BlockType.AIR);
+		}
+	});
+});

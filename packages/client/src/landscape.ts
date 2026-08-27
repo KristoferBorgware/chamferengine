@@ -329,13 +329,14 @@ let planetSheet: BenchSheet | null = null;
 const look = {
 	picture: 0,
 	surface: "solid" as PatchLook["surface"],
-	layer: "terrain" as PatchLook["layer"],
+	layer: "continent" as PatchLook["layer"],
 	rockLine: GROUND_LINES.rock,
 	snowLine: GROUND_LINES.snow,
 	rawLow: -1,
 	rawHigh: 1,
 	low: 0,
 	high: 1,
+	eye: [0, 1, 1] as [number, number, number],
 };
 
 /**
@@ -604,6 +605,9 @@ function render(): void {
 		Math.sin(camera.pitch) * reach + span * camera.lift,
 		Math.cos(camera.yaw) * Math.cos(camera.pitch) * reach,
 	);
+	// One of the lights stands here, so where the camera is has to reach the
+	// shader as well as the matrix.
+	look.eye = [eye.x, eye.y, eye.z];
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(
 		0.9,
