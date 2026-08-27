@@ -114,12 +114,13 @@ fn gatherMain(in : ScreenOut) -> @location(0) vec4f {
 		let angle = turn + n * 2.3999632;
 		let away = sqrt(spread) * reach;
 		let by = vec2i(vec2f(cos(angle), sin(angle)) * away);
-		let from = at + by;
-		if (from.x < 0 || from.y < 0
-			|| from.x >= i32(size.x) || from.y >= i32(size.y)) { continue; }
-		if (textureLoad(sceneDepth, from, 0) >= 1.0) { continue; }
+		let other = at + by;
+		if (other.x < 0 || other.y < 0
+			|| other.x >= i32(size.x)
+			|| other.y >= i32(size.y)) { continue; }
+		if (textureLoad(sceneDepth, other, 0) >= 1.0) { continue; }
 
-		let there = worldAt(from, size);
+		let there = worldAt(other, size);
 		let toward = there - here;
 		let apart = length(toward);
 		if (apart < 0.001) { continue; }
@@ -131,7 +132,7 @@ fn gatherMain(in : ScreenOut) -> @location(0) vec4f {
 		// back of every wall lights the ground behind it.
 		let lands = max(0.0, dot(normal, direction));
 		if (lands <= 0.0) { continue; }
-		let theirs = normalAt(from, size, there);
+		let theirs = normalAt(other, size, there);
 		let leaves = max(0.0, dot(theirs, -direction));
 		if (leaves <= 0.0) { continue; }
 
@@ -140,7 +141,7 @@ fn gatherMain(in : ScreenOut) -> @location(0) vec4f {
 		// wall comes closer and fills more of the screen.
 		let fade = 1.0 / (1.0 + apart * apart);
 		bounced = bounced
-			+ textureLoad(scene, from, 0).rgb * (lands * leaves * fade);
+			+ textureLoad(scene, other, 0).rgb * (lands * leaves * fade);
 	}
 	// **A surface gives back a fraction of what it takes**, never all of it:
 	// the ground is not a mirror, and a bounce worth all of the light would
