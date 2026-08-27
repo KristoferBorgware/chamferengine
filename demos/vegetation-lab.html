@@ -2359,45 +2359,35 @@
 				const layerAt = (c, metres) =>
 					SUNK + Math.floor((metres - top[c]) / block);
 
-				// A ring walk out from one cell, reused for every stamp. It
-				// gathers cells and carries no heading, so the half turn and the
-				// pentagons cost nothing.
-				const mark = new Int32Array(count).fill(-1);
-				const bag = new Int32Array(4096);
-				let era = 0;
-				// **A rod's candidates, gathered once for the whole rod.** The
-				// walk steps every 0.4 of a block and a cell stays inside the
-				// disc for a dozen steps or more, so gathering per step tests
-				// the same cell against the same segment over and over. These
-				// four hold the union instead: which cells the walk ever saw,
-				// and the lowest and highest the axis stood while it saw them.
+				// **A stamp's candidates are grown through its own test, never
+				// gathered around it.** Both stamps used to ask for a hexagon
+				// disc -- around every cell a rod's axis passed through, and
+				// around the cell a leaf cluster sat in -- and a disc has no way
+				// to name only the cells the shape reaches, because its ring
+				// count is chosen before a single distance is worked out.
+				// Measured over the shipped stand: **11,240,715** candidates
+				// for **766,211** cells of wood, and **6,695,127** for the
+				// **2,154,460** columns a cluster could put a leaf in.
+				//
+				// A flood asks the test instead. It starts at the cells the
+				// shape is known to sit in and hands the question on from every
+				// cell that passes to that cell's own six neighbours, so it
+				// covers the shape and stops where the shape does. The one
+				// thing it rests on is that the cells within reach of a rod or
+				// a ball are connected through cells that are also within
+				// reach; stepping past a failing cell `SLACK` times costs a
+				// ring and buys that outright.
+				//
+				// `seen` and `slackAt` are the walk's own marks and `seenList`
+				// is its queue, its answer, and the place a rod's walk leaves
+				// the cells its axis sat in -- which are the first entries of
+				// the queue and need no second array.
 				const seen = new Int32Array(count);
-				const seenLow = new Float64Array(count);
-				const seenHigh = new Float64Array(count);
 				const seenList = new Int32Array(count);
+				const slackAt = new Int8Array(count);
 				let seenEra = 0;
-				const gather = (from, rings) => {
-					era++;
-					let used = 0;
-					bag[used++] = from;
-					mark[from] = era;
-					let read = 0;
-					for (let r = 0; r < rings; r++) {
-						const stop = used;
-						for (let q = read; q < stop; q++) {
-							const c = bag[q];
-							for (let d = 0; d < 6; d++) {
-								const nb = ring[c * 6 + d];
-								if (nb < 0 || mark[nb] === era) continue;
-								if (used >= bag.length) return used;
-								mark[nb] = era;
-								bag[used++] = nb;
-							}
-						}
-						read = stop;
-					}
-					return used;
-				};
+				/** How many failing cells a flood may step past. */
+				const SLACK = 1;
 
 				// **Where a write goes, and which writes a chunk is allowed to
 				// make.** A chunk may only write the cells it owns. It grows
@@ -2431,6 +2421,22 @@
 				const canopyWins = cellMetres > widestTrunk;
 				const rankOf = (what) =>
 					what === EMPTY ? 0 : (what === LEAF) === canopyWins ? 2 : 1;
+				// **A canopy is drawn hundreds of times over.** Clusters overlap
+				// by design -- that is what makes a crown rather than a string
+				// of balls -- so over the shipped stand the leaf stamp reaches
+				// **8,311,898** cell-and-layer slots to leave **35,841** leaves,
+				// which is every one of them decided **230 times**. All but the
+				// first are refused by the rank, and refusing them at the top of
+				// the slot walk rather than at the end of it skips the distance,
+				// the square root and the noise lookup that were only ever going
+				// to be thrown away. Which is the same answer either way: a
+				// write that cannot beat what is already in the slot changes
+				// nothing, and the ownership test it skips would have refused
+				// it too.
+				const RANK = new Uint8Array(3);
+				RANK[EMPTY] = rankOf(EMPTY);
+				RANK[WOOD] = rankOf(WOOD);
+				RANK[LEAF] = rankOf(LEAF);
 				const write = (c, slot, what) => {
 					if (slot < 0 || slot >= LAYERS) return;
 					if (holds !== null && holds[c] !== holder) return;
@@ -2456,35 +2462,14 @@
 					const run = Math.sqrt(ux * ux + uy * uy + uz * uz);
 					const wide = Math.max(ra, rb);
 					const steps = Math.max(1, Math.ceil(run / (block * 0.4)));
-					const rings = Math.min(9, Math.ceil((wide + block) / cellMetres) + 1);
 					let wasCell = -1;
 					let wasLayer = 0;
 					seenEra++;
-					let listed = 0;
-					// **A disc depends on the cell the axis sits in, and
-					// nothing else.** The walk steps every 0.4 of a block, so
-					// two or three steps in a row share a seat and gather the
-					// identical ring around it. These three hold the run:
-					// which seat it is, and the lowest and highest the axis
-					// stood while it stayed there.
+					let seats = 0;
+					// **The walk steps 0.4 of a block, so a cell holds several
+					// of them.** Only the distinct ones are worth keeping, and
+					// they go straight into the queue the flood below reads.
 					let runSeat = -1;
-					let runLow = 0;
-					let runHigh = 0;
-					const flush = () => {
-						const used = gather(runSeat, rings);
-						for (let q = 0; q < used; q++) {
-							const c = bag[q];
-							if (seen[c] !== seenEra) {
-								seen[c] = seenEra;
-								seenLow[c] = runLow;
-								seenHigh[c] = runHigh;
-								seenList[listed++] = c;
-							} else {
-								if (runLow < seenLow[c]) seenLow[c] = runLow;
-								if (runHigh > seenHigh[c]) seenHigh[c] = runHigh;
-							}
-						}
-					};
 					for (let s = 0; s <= steps; s++) {
 						const t = s / steps;
 						const px = ax + ux * t, py = ay + uy * t, pz = az + uz * t;
@@ -2515,65 +2500,109 @@
 						}
 						// **Noted, not tested.** The test below is against the
 						// whole segment, so its answer does not depend on which
-						// step happened to gather the cell -- which means the
-						// walk only has to record the band of heights the axis
-						// swept while this cell was in reach, and the test can
-						// run once per cell afterwards.
+						// step happened to reach the cell.
 						if (seat !== runSeat) {
-							if (runSeat >= 0) flush();
 							runSeat = seat;
-							runLow = stands;
-							runHigh = stands;
-						} else if (stands < runLow) runLow = stands;
-						else if (stands > runHigh) runHigh = stands;
+							if (seen[seat] !== seenEra) {
+								seen[seat] = seenEra;
+								slackAt[seat] = SLACK;
+								seenList[seats++] = seat;
+							}
+						}
 					}
-					if (runSeat >= 0) flush();
-					// **The same set of cells and slots the per-step loop
-					// covered, each visited once.** Consecutive steps are 0.4 of
-					// a block apart and every step's band reaches at least a
-					// block either side, so the bands overlap and their union is
-					// one band -- from the lowest the axis stood to the highest,
-					// widened the same way.
-					// **A whole column is thrown out with one cross product.**
-					// The disc gathered around each step is a hexagon and the
-					// rod is round, so its corners hold columns the rod never
-					// reaches -- and each of those used to be walked slot by
-					// slot. Every block of a column stands on one line out from
-					// the planet's centre, and **the distance between two
-					// infinite lines is never more than the distance between
-					// any pieces of them**, so a column whose line passes
-					// further from the rod's line than the rod is thick cannot
-					// hold a single block of it. That distance is
-					// `|A . (d x u)| / |d x u|`, and squaring both sides leaves
-					// no square root and no division.
+					// **How close a column ever comes to the rod, and it has
+					// to be the rod's own length rather than the infinite line
+					// through it.** A trunk points straight up, so the line
+					// through it passes through the planet's centre -- which
+					// every column's line also does, and two lines through one
+					// point are never apart. A line test therefore measures
+					// nought for every column of every trunk and refuses
+					// nothing: measured, it let **76%** of a rod's candidates
+					// through to be walked slot by slot for **6%** of the slots
+					// written. Clamped to the rod's own ends it refuses 96% of
+					// them and the slot walk falls **8x**.
 					//
-					// It is a reject and not the test: a column beside the rod
-					// but past its end still passes here, and the slot walk
-					// below is what refuses it.
+					// The squared distance from the column's line to the point
+					// `s` along the rod is a quadratic in `s`, so its smallest
+					// value over `[0, 1]` is one clamped division and one
+					// evaluation, and past the rod's own thickness the column
+					// holds nothing.
+					//
+					// **And projecting is never lengthening**, so where the rod
+					// reaches along the column is bounded by where its two ends
+					// project, widened by the thickness -- an exact bound on the
+					// capsule, and it falls out of the two dot products the test
+					// has already taken.
 					const wide2 = wide * wide;
-					const overRun = run > 0 ? 1 / (run * run) : 0;
+					const woodRank = RANK[WOOD];
+					const homeA = ax * ax + ay * ay + az * az;
+					const alongA = ax * ux + ay * uy + az * uz;
+					const run2 = run * run;
+					const overRun = run > 0 ? 1 / run2 : 0;
+					// **The flood is the candidate list.** Every seat goes in,
+					// and a cell that passes hands the test on to its own six
+					// neighbours -- so the walk covers the tube around the rod
+					// and stops where the rod does, rather than covering a
+					// hexagon that was sized before any distance was known. A
+					// failing cell is stepped past `SLACK` times, which costs a
+					// ring and removes the one thing the argument for this rests
+					// on: that the cells within reach of a rod are connected
+					// through cells that are also within reach.
+					let listed = seats;
 					for (let q = 0; q < listed; q++) {
 						const c = seenList[q];
 						const dx0 = dirX[c], dy0 = dirY[c], dz0 = dirZ[c];
-						const nx = dy0 * uz - dz0 * uy;
-						const ny = dz0 * ux - dx0 * uz;
-						const nz = dx0 * uy - dy0 * ux;
-						const miss = ax * nx + ay * ny + az * nz;
-						if (miss * miss > wide2 * (nx * nx + ny * ny + nz * nz)) continue;
-						const base = top[c];
+						const endA = ax * dx0 + ay * dy0 + az * dz0;
+						const lean = ux * dx0 + uy * dy0 + uz * dz0;
+						const bend = run2 - lean * lean;
+						const tilt = alongA - endA * lean;
+						let near = bend > 0 ? -tilt / bend : 0;
+						near = Math.max(0, Math.min(1, near));
+						const gap =
+							homeA - endA * endA + 2 * near * tilt + near * near * bend;
+						const held = slackAt[c];
+						if (gap > wide2) {
+							if (held > 1)
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || seen[nb] === seenEra) continue;
+									seen[nb] = seenEra;
+									slackAt[nb] = held - 1;
+									seenList[listed++] = nb;
+								}
+							continue;
+						}
+						for (let d = 0; d < 6; d++) {
+							const nb = ring[c * 6 + d];
+							if (nb < 0 || seen[nb] === seenEra) continue;
+							seen[nb] = seenEra;
+							slackAt[nb] = SLACK;
+							seenList[listed++] = nb;
+						}
+						const endB = endA + lean;
+						const base = radius + top[c];
 						const lo = Math.max(
 							0,
-							SUNK + Math.floor((seenLow[c] - wide - block - base) / block),
+							SUNK +
+								Math.floor((Math.min(endA, endB) - wide - base) / block),
 						);
 						const hi = Math.min(
 							LAYERS - 1,
-							SUNK + Math.floor((seenHigh[c] + wide + block - base) / block),
+							SUNK +
+								Math.floor((Math.max(endA, endB) + wide - base) / block),
 						);
 						// The true distance from the block's own centre to the
 						// rod's axis, so a rod is a rod and not a staircase of
 						// discs.
+						const seat0 = c * LAYERS;
 						for (let slot = lo; slot <= hi; slot++) {
-							const my = base + (slot - SUNK + 0.5) * block;
+							if (RANK[target[seat0 + slot]] >= woodRank) continue;
+							// The same two additions in the same order as every
+							// other stamp: a radius carries the planet's whole
+							// magnitude, so folding it into the band's own base
+							// moves the last bit and with it the odd block on a
+							// boundary.
+							const my = top[c] + (slot - SUNK + 0.5) * block;
 							const reach2 = radius + my;
 							const cx = dx0 * reach2;
 							const cy = dy0 * reach2;
@@ -2644,6 +2673,7 @@
 					const sway = spec.leafRough > 0 ? spec.leafRough * 0.6 : 0;
 					const sure = spec.leafFill - sway;
 					const never = spec.leafFill + sway;
+					const leafRank = RANK[LEAF];
 					const seat = cellOf(x, y, z);
 					if (seat < 0) return;
 					const stands = metresOf(x, y, z);
@@ -2660,28 +2690,63 @@
 						write(seat, layerAt(seat, stands), LEAF);
 						return;
 					}
-					const used = gather(seat, Math.min(12, Math.ceil(r / cellMetres) + 1));
 					// **A column either meets the ball or it does not, and that
-					// is three multiplies.** The gathered disc is a hexagon and
-					// the ball is round, so its corners hold columns the ball
-					// never reaches -- and every one of them used to be walked
-					// slot by slot with a square root at each. A cell's blocks
-					// all stand on one ray out from the planet's centre, so how
-					// close that ray ever comes to the ball's centre settles the
-					// whole column at once: `perp2` is that distance squared,
-					// and past the radius nothing on the column can be inside.
+					// is three multiplies.** A cell's blocks all stand on one
+					// ray out from the planet's centre, so how close that ray
+					// ever comes to the ball's centre settles the whole column
+					// at once: past the radius nothing on it can be inside.
 					// What is left is a band along the ray, `hit` either side of
-					// the nearest point, which is tighter than the height band
-					// it replaces by exactly the amount the ray leans.
+					// the nearest point, which is tighter than a band of heights
+					// by exactly the amount the ray leans.
+					//
+					// **And that test is what grows the candidate list**, the
+					// same way a rod's does. A hexagon disc around the ball
+					// names its corners as candidates and has no way not to:
+					// the ring count is chosen before any distance is worked
+					// out. Flooding from the cell the cluster sits in, and
+					// handing the test on from each cell that passes to its own
+					// six neighbours, covers the ball and stops at it --
+					// **6,695,127 candidates over the shipped stand against
+					// 2,154,460 that could hold a leaf**. A failing cell is
+					// stepped past `SLACK` times, which costs a ring and buys
+					// the argument this rests on: that the columns meeting a
+					// ball are connected through columns that also meet it.
 					const far2 = x * x + y * y + z * z;
-					for (let q = 0; q < used; q++) {
-						const c = bag[q];
+					seenEra++;
+					seen[seat] = seenEra;
+					slackAt[seat] = SLACK;
+					seenList[0] = seat;
+					let listed = 1;
+					for (let q = 0; q < listed; q++) {
+						const c = seenList[q];
 						const along = dirX[c] * x + dirY[c] * y + dirZ[c] * z;
 						const room = r * r - (far2 - along * along);
-						if (room <= 0) continue;
-						// A block either end, because the band is worked out in
-						// floating point and the test below is the authority.
-						const hit = Math.sqrt(room) + block;
+						const held = slackAt[c];
+						if (room <= 0) {
+							if (held > 1)
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || seen[nb] === seenEra) continue;
+									seen[nb] = seenEra;
+									slackAt[nb] = held - 1;
+									seenList[listed++] = nb;
+								}
+							continue;
+						}
+						for (let d = 0; d < 6; d++) {
+							const nb = ring[c * 6 + d];
+							if (nb < 0 || seen[nb] === seenEra) continue;
+							seen[nb] = seenEra;
+							slackAt[nb] = SLACK;
+							seenList[listed++] = nb;
+						}
+						// **Where the ball crosses this column, exactly**: the
+						// two roots of `|u d - P| = r`. Rounding a metre to a
+						// slot already keeps a block of slack at each end, which
+						// is the whole of what floating point could cost here,
+						// so a second block on top of it was two slots a column
+						// tested for nothing.
+						const hit = Math.sqrt(room);
 						const lo = Math.max(
 							0,
 							SUNK + Math.floor((along - hit - radius - top[c]) / block),
@@ -2690,7 +2755,9 @@
 							LAYERS - 1,
 							SUNK + Math.floor((along + hit - radius - top[c]) / block),
 						);
+						const seat0 = c * LAYERS;
 						for (let slot = lo; slot <= hi; slot++) {
+							if (RANK[target[seat0 + slot]] >= leafRank) continue;
 							const my = top[c] + (slot - SUNK + 0.5) * block;
 							const reach2 = radius + my;
 							const cx = dirX[c] * reach2;

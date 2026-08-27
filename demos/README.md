@@ -925,11 +925,11 @@ chunk audit still reading zero at every level:
 
 | level | blocks | hexagons | plants | wood cells | leaf cells | rebuild |
 |---|---|---|---|---|---|---|
-| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 2,367 ms |
-| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 885 ms |
-| 2 | 4 m | 469 | 185 | 658 | 1,266 | 514 ms |
-| 3 | 8 m | 127 | 186 | 77 | 429 | 412 ms |
-| 4 | 16 m | 37 | 182 | 11 | 106 | 242 ms |
+| 0 | 1 m | 7,057 | 186 | 30,084 | 35,841 | 1,595 ms |
+| 1 | 2 m | 1,801 | 185 | 6,792 | 2,655 | 583 ms |
+| 2 | 4 m | 469 | 185 | 658 | 1,266 | 344 ms |
+| 3 | 8 m | 127 | 186 | 77 | 429 | 297 ms |
+| 4 | 16 m | 37 | 182 | 11 | 106 | 199 ms |
 
 **The plant count barely moves, and that is the point.** A root is a cell, and a
 coarse chunk's cells are not a fine chunk's cells — hashing its own would choose
@@ -987,28 +987,50 @@ its own drawer when open, so the way out is never under the thing it opened. On
 a desktop neither button is on the page — the panels sit either side of the
 view and never cover it.
 
-**A rod and a ball are round, and everything gathered around them is a
-hexagon.** Both stamps walked cells the shape could not possibly reach, slot by
-slot, and the two rejects that fixed it are the same idea seen twice: every
-block of a column stands on **one line out from the planet's centre**, so one
-question about that line settles the whole column before a single slot is
-touched. For a leaf cluster it is how close the line passes to the ball's
-centre, three multiplies; for a rod it is the distance between two infinite
-lines, one cross product, which is a lower bound on the distance to any piece of
-them. Three more followed. A rod's disc is gathered **once per run of steps that
-share a cell** rather than once per step, because the walk moves 0.4 of a block
-at a time and a cell holds several. The leaf cut reads noise only over the shell
-where the reading can still change the answer -- value noise is bounded by
-`[-1, 1]` by construction, so beyond the leaves' own **Roughness** either side
-of the fill line the answer is already decided whatever the reading is, and the
-shell that is left is **66%** of the ball at the shipped Fill 0.62 and
-Roughness 0.45. And one octave with no fold **is** the basis at the octave's own
-offset, exactly, so the cut calls `valueNoise3` with the offset taken once
-rather than `octaveNoise` with a map lookup, a loop and a divide at every
-candidate cell. Together they take the level-0 rebuild from **4,990 ms to
-2,367 ms** with the wood and leaf counts identical at every level in the table
-above. **None of it is an approximation** -- each reject is proved by a bound,
-and the test that follows is still the authority.
+**A rod and a ball are round, and a hexagon disc around them is not.** Both
+stamps drew by naming candidate cells and then walking each one's column slot by
+slot, and the naming was a **ring count chosen before a single distance was
+worked out** -- so it named the disc's corners too. Measured over the shipped
+stand: **11,240,715** candidates for the **766,211** cells of wood written, and
+**6,695,127** for the **2,154,460** columns a cluster could put a leaf in. The
+answer is to let the test name them. Every block of a column stands on **one
+line out from the planet's centre**, so how close that line comes to the shape
+settles the whole column at once -- and a flood that starts where the shape sits
+and hands that question from each cell that passes to its own six neighbours
+covers the shape and **stops where the shape does**. Candidates fall to
+**2,288,188** for a rod, and the ring walk that gathered discs is gone.
+
+**A trunk is the case a line test cannot see.** The rod's reject first measured
+the distance between two infinite lines, which is a lower bound and therefore
+sound -- and useless here, because a trunk points straight up, so the line
+through it passes through the planet's centre and **so does every column's**.
+Two lines through one point are never apart, so it measured nought for every
+column of every trunk and refused nothing: **76%** of candidates went through to
+be walked for **6%** of the slots written. Clamped to the rod's own two ends --
+one quadratic in the parameter along it, one clamped division -- it refuses
+**96%** and the slot walk falls **8x**.
+
+**A canopy is drawn hundreds of times over.** Clusters overlap by design, which
+is what makes a crown rather than a string of balls, so the leaf stamp reaches
+**8,311,898** cell-and-layer slots to leave **35,841** leaves -- every one of
+them decided **230 times**, and all but the first refused by the rank. Refusing
+them at the top of the slot walk instead of the end skips the distance, the
+square root and the noise lookup that were only ever going to be thrown away.
+
+Two smaller ones. The leaf cut reads noise only over the shell where the reading
+can still change the answer -- value noise is bounded by `[-1, 1]` by
+construction, so beyond the leaves' own **Roughness** either side of the fill
+line the answer is already decided whatever the reading is, and the shell left
+is **66%** of the ball at the shipped Fill 0.62 and Roughness 0.45. And one
+octave with no fold **is** the basis at the octave's own offset, exactly, so the
+cut calls `valueNoise3` with the offset taken once rather than `octaveNoise`
+with a map lookup, a loop and a divide at every candidate cell.
+
+Together they take the level-0 rebuild from **4,990 ms to 1,595 ms**, with the
+wood and leaf counts identical at every level in the table above, across all
+twelve species, and the chunk audit still reading **0 cells differ**. **None of
+it is an approximation** -- every reject is proved by a bound and the test that
+follows is still the authority.
 
 **What is left is threading, and the shape for it is already here.** The rebuild
 is one synchronous stretch, so the page is frozen for the whole of it however

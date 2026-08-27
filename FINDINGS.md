@@ -21,12 +21,11 @@ into the engine
 **Where:** `demos/vegetation-lab.html`, `packages/engine/src/mesh/worker/`
 
 **What happens.** The lab rebuilds the whole stand inside one animation-frame
-callback. At level 0 that is **2,367 ms** of unbroken JavaScript on the
-thread that draws, so nothing on the page answers for the whole of it -- a
-slider dragged across its range queues one of these per settle and the panel
-locks up. Five algorithmic fixes took it from **4,990 ms**, and the shape did
-not change: it is still one task, and the next factor of two would not change it
-either.
+callback. At level 0 that is **1,595 ms** of unbroken JavaScript on the thread
+that draws, so nothing on the page answers for the whole of it -- a slider
+dragged across its range queues one of these per settle and the panel locks up.
+Nine algorithmic fixes took it from **4,990 ms**, and the shape did not change:
+it is still one task, and the next factor of two would not change it either.
 
 **Why the shape is the answer rather than the constant.** Vegetation here is
 terrain -- a plant is blocks, drawn by the chunk's own mesher at the chunk's own
@@ -49,11 +48,14 @@ clock by very nearly `n`, and the freeze goes away outright at `n = 1`.
 
 **What this is not.** It is not a reason to stop optimising: a worker pool moves
 the work off the drawing thread and does not make it smaller, and the engine
-runs a chunk mesher on those same cores already. The two remaining terms are
-`gather`, which walks a hexagon disc around every cell a rod's axis passes
-through and is the largest single term left in the profile after the two stamps
-themselves, and the leaf cut's noise, which is still read once per candidate
-cell of every cluster inside the shell where the answer is undecided.
+runs a chunk mesher on those same cores already. What is left in the profile is
+flat -- the leaf stamp is still the largest single term at about a quarter of
+the rebuild, and after it come terrain noise, the position-to-cell pipeline the
+rod walk runs at every step, and the mesher, none of them far apart. The one
+named lead is that pipeline: `faceOf` searches all twenty face centroids at
+every step of every rod, where the shadow march already **rechecks the face it
+was last in** rather than searching, which is three dot products against
+twenty.
 
 ### F-088 — The multi-noise lab evaluates terrain noise at every block; the engine reads a coarse map and ramps between readings
 
