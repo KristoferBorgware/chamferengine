@@ -22,14 +22,14 @@ export function paintSheet(
 			? sheet.peaks
 			: picture === "erosion"
 				? sheet.erosion
-				: sheet.continent;
+				: picture === "carve"
+					? sheet.carve
+					: sheet.continent;
 	for (let at = 0; at < sheet.width * sheet.height; at++)
 		paintPatch(into, at * 4, {
 			metres: sheet.metres[at]!,
 			raw: sheet.raw[at]!,
 			layer: layer[at]!,
-			cut: sheet.cut[at]!,
-			cutScale: sheet.cutScale,
 			rawLow: sheet.rawLow,
 			rawHigh: sheet.rawHigh,
 			low: sheet.low,

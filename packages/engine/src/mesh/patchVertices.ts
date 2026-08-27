@@ -78,6 +78,9 @@ export function patchVertices(
 		vertices[at + 8] = continent[cell]!;
 		vertices[at + 9] = erosion[cell]!;
 		vertices[at + 10] = peaks[cell]!;
+		// A surface patch reads the map and the carve is not in it, so the
+		// channel is there and says nothing.
+		vertices[at + 11] = 0;
 	}
 
 	// A flat normal per triangle would need its own vertices; these are shared

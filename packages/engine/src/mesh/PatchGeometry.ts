@@ -19,7 +19,7 @@
  * picture would cost a rebuild of the thing the picture is of.
  */
 export interface PatchGeometry {
-	/** Position, normal, metres, raw and the two layers per vertex: 10 floats. */
+	/** Position, normal, metres, raw and the four layers per vertex. */
 	readonly vertices: Float32Array<ArrayBuffer>;
 
 	/** Triangles, three indices each. */
@@ -51,8 +51,9 @@ export interface PatchGeometry {
 /**
  * Floats per vertex: position, normal, metres, raw, and one per layer.
  *
- * Three layers rather than two, because the surface is continentalness,
- * erosion and peaks -- and a layer with no channel of its own is a layer whose
- * curve cannot be looked at.
+ * **Four layers, because a layer with no channel of its own is a layer whose
+ * curve cannot be looked at.** Three of them shape the surface; the fourth is
+ * the carve, which is a 3D field and so has no one value at a place -- what
+ * rides here is what it read at the block this face belongs to.
  */
-export const PATCH_STRIDE = 11;
+export const PATCH_STRIDE = 12;

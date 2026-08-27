@@ -5,16 +5,17 @@ import type {
 	BenchSheet,
 } from "./BenchMessage.js";
 import type { PatchLook } from "chamfer/render";
-import type { PlanetKnobs } from "./PlanetSettings.js";
+import type { LayerName, PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { BAND_COLORS } from "./paintPatch.js";
 import { GROUND_LINES } from "chamfer/generation";
 import { SEA_COLORS } from "chamfer/render";
 import { Mat4, Vec3 } from "chamfer/math";
-import { PlanetSettings } from "./PlanetSettings.js";
+import { LAYER_NAMES, LAYER_TITLES, PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { outlinePatch } from "./outlinePatch.js";
+import { LAYER_PICTURES } from "./PatchLook.js";
 import { paintSheet } from "./paintSheet.js";
 import {
 	PatchRenderer,
@@ -86,6 +87,7 @@ const PICTURE_INDEX: Record<string, number> = {
 	continent: 3,
 	erosion: 3,
 	peaks: 3,
+	carve: 3,
 };
 
 // ---------------------------------------------------------------------------
@@ -159,6 +161,54 @@ profile.appendChild(graphSays);
 panel.footer(profile);
 
 const graph = new BenchGraph(graphCanvas, graphSays);
+
+/**
+ * A picture of one layer's own field, in the section where that layer is tuned.
+ *
+ * **A curve is judged against what it did, and the two have to be in one
+ * place.** The bench's own picture select shows one layer at a time over the
+ * whole patch, which means dragging a curve, looking away to switch pictures,
+ * and looking back; a thumbnail under the curve is the same field, always the
+ * one this section decides, and it costs a pass over a rectangle already here.
+ */
+const layerShots = new Map<LayerName, HTMLCanvasElement>();
+for (const layer of LAYER_NAMES) {
+	const section = panel.section(LAYER_TITLES[layer]);
+	if (!section) continue;
+	const shot = document.createElement("canvas");
+	shot.className = "bench-layer-shot";
+	// Clicking it puts the big picture on the same layer, which is the one
+	// thing a thumbnail cannot show: the field on the ground it shapes.
+	shot.title = "show this layer on the patch";
+	shot.onclick = () => panel.set({ patchPicture: LAYER_PICTURES[layer] });
+	// **Straight under the curve it belongs to.** The curve is the whole of
+	// what a layer decides and this is what it decided; a picture at the foot
+	// of the section is a picture the reader has to scroll away from the curve
+	// to see.
+	const row = section.querySelector(":scope > .knob.curved");
+	if (row) row.after(shot);
+	else section.appendChild(shot);
+	layerShots.set(layer, shot);
+}
+
+/** Repaint every layer thumbnail from the sheet the last build handed over. */
+function paintLayers(): void {
+	if (!patchSheet) return;
+	for (const [layer, shot] of layerShots) {
+		if (
+			shot.width !== patchSheet.width ||
+			shot.height !== patchSheet.height
+		) {
+			shot.width = patchSheet.width;
+			shot.height = patchSheet.height;
+		}
+		const ctx = shot.getContext("2d");
+		if (!ctx) continue;
+		const image = ctx.createImageData(patchSheet.width, patchSheet.height);
+		paintSheet(patchSheet, LAYER_PICTURES[layer], image.data);
+		ctx.putImageData(image, 0, 0);
+	}
+}
 
 /**
  * Click the planet to stand somewhere on it.
@@ -357,6 +407,7 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
  */
 function show(): void {
 	paint();
+	paintLayers();
 	if (sections) graph.draw(sections, settings.knobs.patchAlong);
 	say();
 	render();
@@ -387,7 +438,6 @@ function paint(): void {
 function say(): void {
 	const k = settings.knobs;
 	const f = facts0;
-	const report = f?.report ?? null;
 	const metres = (v: number): string =>
 		`${Math.round(v).toLocaleString("en-US")} m`;
 	const line = (text: string): string => `<p>${text}</p>`;
@@ -473,24 +523,6 @@ function say(): void {
 								`<b>${f.floating.toLocaleString("en-US")}</b> floating`,
 						)
 					: "")
-			: "") +
-		(report
-			? line(
-					`erosion moved <b>${report.moved.toFixed(2)} m</b> a cell, ` +
-						`deepest cut <b>${metres(report.deepest)}</b>`,
-				) +
-				line(
-					`slope median <b>${report.before.median.toFixed(3)}</b> → ` +
-						`<b>${report.after.median.toFixed(3)}</b> ` +
-						`(x${(report.after.median / Math.max(1e-9, report.before.median)).toFixed(2)}) · ` +
-						`99th <b>${report.before.ninetyNine.toFixed(3)}</b> → ` +
-						`<b>${report.after.ninetyNine.toFixed(3)}</b>`,
-				) +
-				(k.patchPicture === "erosion"
-					? line(
-							`the cut picture saturates at <b>${report.scale.toFixed(1)} m</b>`,
-						)
-					: "")
 			: "");
 }
 
@@ -510,7 +542,9 @@ function render(): void {
 			? "peaks"
 			: k.patchPicture === "erosion"
 				? "erosion"
-				: "continent";
+				: k.patchPicture === "carve"
+					? "carve"
+					: "continent";
 
 	const reach = span * camera.distance;
 	const eye = new Vec3(

@@ -1,4 +1,3 @@
-import type { ErosionReport } from "./BenchWorld.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
 
 /** One rebuild of everything the bench draws. */
@@ -72,9 +71,6 @@ export interface BenchFacts {
 	readonly summit: number;
 	readonly floor: number;
 
-	/** What the erosion run did, or nothing when the water is off. */
-	readonly report: ErosionReport | null;
-
 	/** Metres from one side of the patch to the other. */
 	readonly span: number;
 
@@ -108,9 +104,8 @@ export interface BenchSheet {
 	readonly erosion: Float32Array<ArrayBuffer>;
 	readonly peaks: Float32Array<ArrayBuffer>;
 
-	/** Metres erosion moved the ground, and what a picture of it saturates at. */
-	readonly cut: Float32Array<ArrayBuffer>;
-	readonly cutScale: number;
+	/** What the carve's curve returned at each point's own surface. */
+	readonly carve: Float32Array<ArrayBuffer>;
 
 	/** What the field reached here, which the Raw picture is drawn against. */
 	readonly rawLow: number;

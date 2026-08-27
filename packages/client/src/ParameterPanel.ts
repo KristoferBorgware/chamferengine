@@ -373,6 +373,7 @@ const GROUPS: Group[] = [
 					{ value: "continent", label: "Continentalness" },
 					{ value: "erosion", label: "Erosion" },
 					{ value: "peaks", label: "Peaks & valleys" },
+					{ value: "carve", label: "Cliffs & overhangs" },
 				],
 			},
 			{
@@ -467,7 +468,7 @@ const GROUPS: Group[] = [
 		knobs: layerKnobs("carve", "Noise → density"),
 	},
 	{
-		title: "The ground",
+		title: "Ground",
 		where: "both",
 		side: "left",
 		folded: true,

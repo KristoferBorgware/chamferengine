@@ -20,6 +20,8 @@ import {
 	CARVE_LAYER_DEFAULT,
 	carveSeed,
 	layerNoiseSettings,
+	octaveNoise,
+	splineAt,
 } from "chamfer/generation";
 import { patchField, patchFrame } from "./patchField.js";
 import { makeBlend, readBlend } from "chamfer/generation";
@@ -28,6 +30,18 @@ import { Vec3 } from "chamfer/math";
 
 /** How many pixels across the flat planet is drawn. */
 const PLANET_WIDE = 256;
+
+/**
+ * How many points across the patch is sampled for its pictures.
+ *
+ * **A picture's resolution is its own, not the mesh's.** The patch is cut into
+ * columns and how many of those there are is a knob about the *world* -- how
+ * finely it is built -- while how finely it is *drawn flat* decides only
+ * whether the narrow octaves of a folded field read as a grain or as ridges.
+ * Tying the two put a 33-pixel thumbnail under every curve at the default
+ * patch.
+ */
+const PATCH_SAMPLES = 193;
 
 /**
  * Everything the bench draws, built where the drawing is not.
@@ -102,13 +116,25 @@ export class BenchWorkerCore {
 				continent: this.world.continent,
 				erosion: this.world.erosion,
 				peaks: this.world.peaks,
-				cut: this.world.delta,
 			},
 			{
 				frame,
-				cells: k.patchCells,
-				step: settings.coarseCell,
+				span: k.patchCells * settings.coarseCell,
+				across: PATCH_SAMPLES,
 				radius: settings.radius,
+				// **A picture of a 3D field has to be read somewhere**, and the
+				// surface is where a reader can compare it against the ground it
+				// cuts into.
+				carve: settings.terrainOptions().carveLayer
+					? {
+							layer: settings.layerFor("carve"),
+							noise: layerNoiseSettings(
+								settings.layerFor("carve"),
+								settings.radius,
+							),
+							seed: carveSeed(settings.seedNumber),
+						}
+					: null,
 			},
 		);
 
@@ -220,7 +246,6 @@ export class BenchWorkerCore {
 				bands: this.world.bands,
 				summit: this.world.summit,
 				floor: this.world.floor,
-				report: this.world.report,
 				land: this.world.land,
 				span,
 				lowest: reach.lowest,
@@ -282,6 +307,7 @@ export class BenchWorkerCore {
 		const continent = new Float32Array(count);
 		const erosion = new Float32Array(count);
 		const peaks = new Float32Array(count);
+		const carveOf = new Float32Array(count);
 		const runs: number[] = [];
 		const all: number[] = [];
 		const dug: Carved = { under: 0, above: 0, drowned: 0 };
@@ -338,6 +364,22 @@ export class BenchWorkerCore {
 				for (const y of runs) all.push(y);
 			}
 			height[c] = top;
+			// **Read at the top of the rock**, which is where a reader can
+			// compare it against the shape it cut. Off, the channel is there
+			// and says nothing.
+			if (terrain.carveLayer) {
+				const out = 1 + top / radius;
+				carveOf[c] = splineAt(
+					carve.curve,
+					octaveNoise(
+						dir.x * out,
+						dir.y * out,
+						dir.z * out,
+						seed,
+						carveNoise,
+					),
+				);
+			}
 		}
 		at[count] = all.length;
 
@@ -349,6 +391,7 @@ export class BenchWorkerCore {
 			continent,
 			erosion,
 			peaks,
+			carve: carveOf,
 		};
 		return {
 			mesh: columnPatchMesh(layout, ground, { radius, seaLevel: 0 }),
@@ -369,7 +412,7 @@ export class BenchWorkerCore {
 					sheet.continent.buffer,
 					sheet.erosion.buffer,
 					sheet.peaks.buffer,
-					sheet.cut.buffer,
+					sheet.carve.buffer,
 				);
 		if (reply.geometry) {
 			out.push(reply.geometry.vertices.buffer);
@@ -398,7 +441,7 @@ export class BenchWorkerCore {
 				sheet.continent[to] = field.continent[from]!;
 				sheet.erosion[to] = field.erosion[from]!;
 				sheet.peaks[to] = field.peaks[from]!;
-				sheet.cut[to] = field.cut[from]!;
+				sheet.carve[to] = field.carve[from]!;
 			}
 		return {
 			...sheet,
@@ -406,7 +449,6 @@ export class BenchWorkerCore {
 			rawHigh: field.rawHigh,
 			low: field.lowest,
 			high: field.highest,
-			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
 
@@ -442,8 +484,9 @@ export class BenchWorkerCore {
 				sheet.continent[at] = readBlend(this.world.continent, blend);
 				sheet.erosion[at] = readBlend(this.world.erosion, blend);
 				sheet.peaks[at] = readBlend(this.world.peaks, blend);
-				if (this.world.delta)
-					sheet.cut[at] = readBlend(this.world.delta, blend);
+				// **No carve on the planet picture.** It is one pixel a place
+				// over the whole world, where the layer's shapes are 120 m
+				// across -- a picture of it at that scale is noise.
 			}
 		}
 		return {
@@ -454,7 +497,6 @@ export class BenchWorkerCore {
 			// whole planet: a patch's ends would blow out everything taller.
 			low: this.world.floor,
 			high: this.world.summit,
-			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
 
@@ -462,7 +504,7 @@ export class BenchWorkerCore {
 	private sheet(
 		width: number,
 		height: number,
-	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high" | "cutScale"> {
+	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high"> {
 		const count = width * height;
 		return {
 			width,
@@ -472,7 +514,7 @@ export class BenchWorkerCore {
 			continent: new Float32Array(count),
 			erosion: new Float32Array(count),
 			peaks: new Float32Array(count),
-			cut: new Float32Array(count),
+			carve: new Float32Array(count),
 		};
 	}
 }

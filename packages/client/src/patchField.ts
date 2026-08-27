@@ -1,6 +1,12 @@
 import type { CoarseIndex } from "chamfer/generation";
 import { Vec3 } from "chamfer/math";
-import { makeBlend, readBlend } from "chamfer/generation";
+import type { NoiseSettings, TerrainLayer } from "chamfer/generation";
+import {
+	makeBlend,
+	octaveNoise,
+	readBlend,
+	splineAt,
+} from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
 
 /** The three axes of a patch: out of the ground, east, and north. */
@@ -15,7 +21,7 @@ export interface PatchField {
 	/** Points across, one more than the number of cells. */
 	readonly across: number;
 
-	/** Metres between two points, which is one map cell. */
+	/** Metres between two points. */
 	readonly step: number;
 
 	/** Metres from one side of the patch to the other. */
@@ -32,8 +38,14 @@ export interface PatchField {
 	readonly erosion: Float32Array;
 	readonly peaks: Float32Array;
 
-	/** Metres erosion moved the ground, zero everywhere when the water is off. */
-	readonly cut: Float32Array;
+	/**
+	 * What the carve's curve returned at each point's own surface.
+	 *
+	 * **A picture of a 3D field has to be read somewhere**, and the surface is
+	 * the one place a reader can compare it against the ground it cuts into.
+	 * Zero everywhere with the layer off.
+	 */
+	readonly carve: Float32Array;
 
 	readonly lowest: number;
 	readonly highest: number;
@@ -88,25 +100,36 @@ export function patchField(
 		readonly continent: Float32Array;
 		readonly erosion: Float32Array;
 		readonly peaks: Float32Array;
-		readonly cut: Float32Array | null;
 	},
 	options: {
 		readonly frame: PatchFrame;
-		readonly cells: number;
-		readonly step: number;
+
+		/** Metres from one side of the patch to the other. */
+		readonly span: number;
+
+		/** Points across, which is the picture's own resolution. */
+		readonly across: number;
+
 		readonly radius: number;
+
+		/** The carve, or nothing when the layer is off. */
+		readonly carve: {
+			readonly layer: TerrainLayer;
+			readonly noise: NoiseSettings;
+			readonly seed: number;
+		} | null;
 	},
 ): PatchField {
-	const { frame, cells, step, radius } = options;
-	const across = cells + 1;
+	const { frame, span, across, radius } = options;
+	const step = span / Math.max(1, across - 1);
 	const count = across * across;
 	const height = new Float32Array(count);
 	const raw = new Float32Array(count);
 	const continent = new Float32Array(count);
 	const erosion = new Float32Array(count);
 	const peaks = new Float32Array(count);
-	const cut = new Float32Array(count);
-	const half = (cells / 2) * step;
+	const carve = new Float32Array(count);
+	const half = span / 2;
 	let lowest = Infinity;
 	let highest = -Infinity;
 	let rawLow = Infinity;
@@ -144,7 +167,22 @@ export function patchField(
 			continent[at] = readBlend(fields.continent, blend);
 			erosion[at] = readBlend(fields.erosion, blend);
 			peaks[at] = readBlend(fields.peaks, blend);
-			if (fields.cut) cut[at] = readBlend(fields.cut, blend);
+			if (options.carve) {
+				// The point the block at the surface stands at, which is the
+				// direction scaled by how far up it is -- so a metre up moves
+				// the sample as far as a metre sideways.
+				const out = 1 + metres / radius;
+				carve[at] = splineAt(
+					options.carve.layer.curve,
+					octaveNoise(
+						dir.x * out,
+						dir.y * out,
+						dir.z * out,
+						options.carve.seed,
+						options.carve.noise,
+					),
+				);
+			}
 			if (metres < lowest) lowest = metres;
 			if (metres > highest) highest = metres;
 			if (raw[at]! < rawLow) rawLow = raw[at]!;
@@ -156,13 +194,13 @@ export function patchField(
 	return {
 		across,
 		step,
-		span: cells * step,
+		span,
 		height,
 		raw,
 		continent,
 		erosion,
 		peaks,
-		cut,
+		carve,
 		lowest,
 		highest,
 		rawLow,

@@ -91,6 +91,7 @@ fn vertexMain(
 	@location(4) continent : f32,
 	@location(5) erosion   : f32,
 	@location(6) peaks     : f32,
+	@location(7) carve     : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
@@ -103,9 +104,13 @@ fn vertexMain(
 	// now, because the surface is three layers and a layer with no channel is
 	// a layer whose curve cannot be looked at.
 	out.layer = select(
-		select(continent, erosion, view.mode.z > 0.5),
-		peaks,
-		view.mode.z > 1.5,
+		select(
+			select(continent, erosion, view.mode.z > 0.5),
+			peaks,
+			view.mode.z > 1.5,
+		),
+		carve,
+		view.mode.z > 2.5,
 	);
 	return out;
 }

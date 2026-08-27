@@ -35,9 +35,6 @@ export interface PatchPixel {
 	readonly raw: number;
 	readonly layer: number;
 
-	/** Metres erosion moved the ground here, and what the picture saturates at. */
-	readonly cut: number;
-	readonly cutScale: number;
 	readonly rawLow: number;
 	readonly rawHigh: number;
 
@@ -62,7 +59,8 @@ export function paintPatch(
 	if (
 		pixel.picture === "continent" ||
 		pixel.picture === "erosion" ||
-		pixel.picture === "peaks"
+		pixel.picture === "peaks" ||
+		pixel.picture === "carve"
 	) {
 		const t = Math.max(0, Math.min(1, pixel.layer));
 		px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);

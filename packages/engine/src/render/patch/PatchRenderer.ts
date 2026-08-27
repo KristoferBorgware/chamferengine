@@ -12,7 +12,7 @@ export interface PatchLook {
 	readonly surface: "solid" | "wire" | "both";
 
 	/** Which control layer a picture of one layer draws. */
-	readonly layer: "continent" | "erosion" | "peaks";
+	readonly layer: "continent" | "erosion" | "peaks" | "carve";
 
 	/** The two elevations that cut land into three materials, in metres. */
 	readonly rockLine: number;
@@ -158,6 +158,7 @@ export class PatchRenderer {
 					{ shaderLocation: 4, offset: 32, format: "float32" },
 					{ shaderLocation: 5, offset: 36, format: "float32" },
 					{ shaderLocation: 6, offset: 40, format: "float32" },
+					{ shaderLocation: 7, offset: 44, format: "float32" },
 				],
 			},
 		];
@@ -284,7 +285,13 @@ export class PatchRenderer {
 			[
 				look.picture,
 				0,
-				look.layer === "peaks" ? 2 : look.layer === "erosion" ? 1 : 0,
+				look.layer === "carve"
+					? 3
+					: look.layer === "peaks"
+						? 2
+						: look.layer === "erosion"
+							? 1
+							: 0,
 				0,
 			],
 			20,

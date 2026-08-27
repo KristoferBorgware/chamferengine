@@ -184,6 +184,7 @@ function flat(count: number, top: number, deep: number): ColumnGround {
 		continent: new Float32Array(count),
 		erosion: new Float32Array(count),
 		peaks: new Float32Array(count),
+		carve: new Float32Array(count),
 	};
 }
 
@@ -293,6 +294,7 @@ describe("floatingRock", () => {
 			continent: new Float32Array(count),
 			erosion: new Float32Array(count),
 			peaks: new Float32Array(count),
+			carve: new Float32Array(count),
 		};
 		const found = floatingRock(patch, ground, BLOCK);
 		expect(found.masses).toBe(1);

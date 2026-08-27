@@ -846,3 +846,21 @@ body.bench .knobs-head {
 		rgba(255, 255, 255, 0.9) 12px 18px
 	);
 }
+
+/**
+ * A layer's own field, under the curve that shapes it.
+ *
+ * Square, because the patch it is a picture of is; and drawn with no smoothing,
+ * because a map cell is a reading and a picture that blends two of them shows a
+ * value the field never had.
+ */
+.knobs .bench-layer-shot {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	margin: 0.5rem 0 0.25rem;
+	border-radius: 4px;
+	background: #0b1017;
+	image-rendering: pixelated;
+	cursor: pointer;
+}

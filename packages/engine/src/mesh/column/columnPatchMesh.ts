@@ -18,11 +18,20 @@ export interface ColumnGround {
 	/** Per column, the top of its topmost rock, which the colours read. */
 	readonly height: Float64Array;
 
-	/** Per column, what the three layer curves returned. */
+	/** Per column, what the four layer curves returned. */
 	readonly raw: Float32Array;
 	readonly continent: Float32Array;
 	readonly erosion: Float32Array;
 	readonly peaks: Float32Array;
+
+	/**
+	 * Per column, what the carve read at the top of its own rock.
+	 *
+	 * **A 3D field has no one value at a place**, so a picture of it has to be
+	 * read somewhere; the top of the rock is where a reader can compare it
+	 * against the shape it cut.
+	 */
+	readonly carve: Float32Array;
 }
 
 /** What the mesh is drawn against, beyond the ground itself. */
@@ -116,7 +125,7 @@ export function columnPatchMesh(
 	look: ColumnLook,
 ): ColumnMesh {
 	const { count, degree, corner, ring, centre, directions } = patch;
-	const { at, spans, height, raw, continent, erosion, peaks } = ground;
+	const { at, spans, height, raw, continent, erosion, peaks, carve } = ground;
 	const { radius, seaLevel } = look;
 	const frame = frameAt(centre);
 
@@ -150,6 +159,7 @@ export function columnPatchMesh(
 	let cCont = 0;
 	let cEro = 0;
 	let cPeaks = 0;
+	let cCarve = 0;
 
 	/** A direction and a height, in the frame the patch is drawn in. */
 	const local = (
@@ -222,6 +232,7 @@ export function columnPatchMesh(
 		vertices[to + 8] = cCont;
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
+		vertices[to + 11] = cCarve;
 		to += PATCH_STRIDE;
 		vertices[to] = bx;
 		vertices[to + 1] = by;
@@ -234,6 +245,7 @@ export function columnPatchMesh(
 		vertices[to + 8] = cCont;
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
+		vertices[to + 11] = cCarve;
 		to += PATCH_STRIDE;
 		vertices[to] = cx;
 		vertices[to + 1] = cy;
@@ -246,6 +258,7 @@ export function columnPatchMesh(
 		vertices[to + 8] = cCont;
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
+		vertices[to + 11] = cCarve;
 		written += 3;
 		// **What the camera has to frame is the shape, and only the shape knows
 		// what that is.** A patch's width says nothing once it is a fair share
@@ -422,6 +435,7 @@ export function columnPatchMesh(
 		cCont = continent[c]!;
 		cEro = erosion[c]!;
 		cPeaks = peaks[c]!;
+		cCarve = carve[c]!;
 		const deg = degree[c]!;
 		const from = at[c]!;
 		const to = at[c + 1]!;
@@ -474,6 +488,7 @@ export function columnPatchMesh(
 		cCont = continent[c]!;
 		cEro = erosion[c]!;
 		cPeaks = peaks[c]!;
+		cCarve = carve[c]!;
 		// **The water carries the ground under it, not the surface it is
 		// drawn at.** How much water a look passes through is what decides the
 		// colour and how much of it can be seen through, and the sheet itself
