@@ -319,8 +319,6 @@ describe("retuning the switches baked into a vertex colour", () => {
 		speckle: 0,
 		ambientOcclusion: false,
 		skyExposure: false,
-		skyBounce: 0,
-		probeSpacing: 0,
 	} as const;
 	const ON = { ...OFF, speckle: 0.2 } as const;
 

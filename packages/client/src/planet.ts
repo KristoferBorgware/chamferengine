@@ -831,12 +831,6 @@ async function main(): Promise<void> {
 			speckle: live.knobs.speckle ? SPECKLE : 0,
 			ambientOcclusion: live.knobs.ambientOcclusion,
 			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
-			// A blocked direction points at a lit surface, and some of what
-			// lands there comes back. Zero is the flat floor every enclosed
-			// face used to share.
-			skyBounce: live.knobs.skyBounce,
-			// Zero is off, and off means no volume is built and none travels.
-			probeSpacing: live.knobs.lightProbes ? live.knobs.probeSpacing : 0,
 		};
 	}
 
@@ -2433,25 +2427,6 @@ async function main(): Promise<void> {
 		renderer.bloom.threshold = current.knobs.bloomThreshold;
 		renderer.bloom.strength = current.knobs.bloomStrength;
 		renderer.superSample = current.knobs.superSample;
-		// Both screen-space terms, each on its own switch. SSAO costs a second
-		// pass over the geometry and SSGI does not, so they are never one row.
-		// The probes are built per chunk and read per fragment, so the switch
-		// is really two: whether a volume exists at all, which needs the
-		// chunks again, and what it is worth, which does not.
-		renderer.probeStrength =
-			!PLAIN && current.knobs.lightProbes
-				? current.knobs.probeStrength
-				: 0;
-		renderer.showProbes =
-			!PLAIN && current.knobs.lightProbes && current.knobs.showProbes;
-		renderer.crustTopRadius = shape.crustTopRadius;
-		renderer.layerHeight = shape.blockSize;
-		renderer.ssaoOn = !PLAIN && current.knobs.ssao;
-		renderer.ssao.reach = current.knobs.ssaoReach;
-		renderer.ssao.strength = current.knobs.ssaoStrength;
-		renderer.ssgiOn = !PLAIN && current.knobs.ssgi;
-		renderer.ssgi.reach = current.knobs.ssgiReach;
-		renderer.ssgi.strength = current.knobs.ssgiStrength;
 		renderer.cloudShadow.setSize(current.knobs.shadowTexels);
 		// Where the cloud shadow box is centred. Nothing set this while the
 		// coarse map was on the GPU and the renderer could read sea level off

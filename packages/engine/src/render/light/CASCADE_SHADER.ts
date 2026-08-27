@@ -1,9 +1,5 @@
 /**
- * What a chunk looks like from somewhere: a depth and nothing else.
- *
- * Written for the sun, and the camera asks the same question -- a screen-space
- * pass needs to know where the geometry is before the world is shaded, which is
- * this shader with the view matrix in place of the light's.
+ * What a chunk looks like from the sun: a depth and nothing else.
  *
  * There is no fragment stage. The only thing a shadow map holds is how far
  * the nearest surface is along the light, and the depth attachment records

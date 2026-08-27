@@ -170,8 +170,6 @@ export class WorkerMeshSource implements MeshSource {
 			speckle: message.speckle,
 			ambientOcclusion: message.ambientOcclusion,
 			skyExposure: message.skyExposure,
-			skyBounce: message.skyBounce,
-			probeSpacing: message.probeSpacing,
 		};
 		for (const worker of this.workers) worker.postMessage(message);
 		for (const selection of this.working.values())
@@ -402,7 +400,6 @@ export class WorkerMeshSource implements MeshSource {
 				opaque: result.opaque,
 				translucent: result.translucent,
 				tally: result.tally,
-				...(result.probes ? { probes: result.probes } : {}),
 			});
 		this.cancelled.delete(id);
 		this.pump();
