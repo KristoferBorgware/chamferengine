@@ -9,9 +9,16 @@ export interface PatchFields {
 	/** The field before sea level was taken off it. */
 	readonly raw: Float32Array;
 
-	/** What each layer's curve returned. */
-	readonly terrain: Float32Array;
-	readonly mountain: Float32Array;
+	/**
+	 * What each layer's curve returned, one field apiece.
+	 *
+	 * **Three, because the surface is three layers.** A picture of one layer on
+	 * its own is how its curve is judged -- dark where that layer says nothing,
+	 * bright where it says most -- so each one has to reach a vertex.
+	 */
+	readonly continent: Float32Array;
+	readonly erosion: Float32Array;
+	readonly peaks: Float32Array;
 }
 
 /** The vertex buffer of a patch, and what the ground in it reached. */
@@ -48,7 +55,7 @@ export function patchVertices(
 	layout: PatchLayout,
 	fields: PatchFields,
 ): PatchFill {
-	const { height, raw, terrain, mountain } = fields;
+	const { height, raw, continent, erosion, peaks } = fields;
 	const count = layout.of.length;
 	const vertices = new Float32Array(count * PATCH_STRIDE);
 
@@ -68,8 +75,9 @@ export function patchVertices(
 		vertices[at + 2] = layout.flat[v * 2 + 1]!;
 		vertices[at + 6] = height[cell]!;
 		vertices[at + 7] = raw[cell]!;
-		vertices[at + 8] = terrain[cell]!;
-		vertices[at + 9] = mountain[cell]!;
+		vertices[at + 8] = continent[cell]!;
+		vertices[at + 9] = erosion[cell]!;
+		vertices[at + 10] = peaks[cell]!;
 	}
 
 	// A flat normal per triangle would need its own vertices; these are shared

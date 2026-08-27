@@ -333,7 +333,7 @@ worker.onmessage = (event: MessageEvent<BenchReply>) => {
 	// another; only a finished map says which.
 	panel.note(
 		"mountainLine",
-		`${(reply.facts.overLine * 100).toFixed(1)}% of the planet is above it`,
+		`${(reply.facts.land * 100).toFixed(1)}% of the planet is above it`,
 	);
 	show();
 	if (pending) ask();

@@ -28,8 +28,9 @@ export interface PatchField {
 	readonly raw: Float32Array;
 
 	/** What each layer's curve returned, so a picture of either costs no rebuild. */
-	readonly terrain: Float32Array;
-	readonly mountain: Float32Array;
+	readonly continent: Float32Array;
+	readonly erosion: Float32Array;
+	readonly peaks: Float32Array;
 
 	/** Metres erosion moved the ground, zero everywhere when the water is off. */
 	readonly cut: Float32Array;
@@ -84,8 +85,9 @@ export function patchField(
 	fields: {
 		readonly height: Float32Array;
 		readonly raw: Float32Array;
-		readonly terrain: Float32Array;
-		readonly mountain: Float32Array;
+		readonly continent: Float32Array;
+		readonly erosion: Float32Array;
+		readonly peaks: Float32Array;
 		readonly cut: Float32Array | null;
 	},
 	options: {
@@ -100,8 +102,9 @@ export function patchField(
 	const count = across * across;
 	const height = new Float32Array(count);
 	const raw = new Float32Array(count);
-	const terrain = new Float32Array(count);
-	const mountain = new Float32Array(count);
+	const continent = new Float32Array(count);
+	const erosion = new Float32Array(count);
+	const peaks = new Float32Array(count);
 	const cut = new Float32Array(count);
 	const half = (cells / 2) * step;
 	let lowest = Infinity;
@@ -138,8 +141,9 @@ export function patchField(
 			const metres = readBlend(fields.height, blend);
 			height[at] = metres;
 			raw[at] = readBlend(fields.raw, blend);
-			terrain[at] = readBlend(fields.terrain, blend);
-			mountain[at] = readBlend(fields.mountain, blend);
+			continent[at] = readBlend(fields.continent, blend);
+			erosion[at] = readBlend(fields.erosion, blend);
+			peaks[at] = readBlend(fields.peaks, blend);
 			if (fields.cut) cut[at] = readBlend(fields.cut, blend);
 			if (metres < lowest) lowest = metres;
 			if (metres > highest) highest = metres;
@@ -155,8 +159,9 @@ export function patchField(
 		span: cells * step,
 		height,
 		raw,
-		terrain,
-		mountain,
+		continent,
+		erosion,
+		peaks,
 		cut,
 		lowest,
 		highest,

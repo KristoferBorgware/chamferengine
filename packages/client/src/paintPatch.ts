@@ -59,25 +59,11 @@ export function paintPatch(
 	at: number,
 	pixel: PatchPixel,
 ): void {
-	if (pixel.picture === "erosion") {
-		// **What the water did, on its own.** Cut is red and fill is blue, both
-		// against how many metres moved rather than against the height they
-		// moved from, so a valley floor a metre lower reads the same wherever
-		// it stands. Ground nothing touched is the grey in the middle. The
-		// scale is what the run reached, because how far erosion moves the
-		// ground depends on the relief, the cell and the strength.
-		const t = Math.max(
-			-1,
-			Math.min(1, pixel.cut / Math.max(0.01, pixel.cutScale)),
-		);
-		const grey = 0.18;
-		px[at] = 255 * Math.pow(grey + Math.max(0, -t) * 0.75, 1 / 2.2);
-		px[at + 1] = 255 * Math.pow(grey, 1 / 2.2);
-		px[at + 2] = 255 * Math.pow(grey + Math.max(0, t) * 0.75, 1 / 2.2);
-		px[at + 3] = 255;
-		return;
-	}
-	if (pixel.picture === "terrain" || pixel.picture === "mountain") {
+	if (
+		pixel.picture === "continent" ||
+		pixel.picture === "erosion" ||
+		pixel.picture === "peaks"
+	) {
 		const t = Math.max(0, Math.min(1, pixel.layer));
 		px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
 		px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);

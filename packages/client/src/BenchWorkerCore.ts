@@ -80,8 +80,9 @@ export class BenchWorkerCore {
 			{
 				height: this.world.height,
 				raw: this.world.raw,
-				terrain: this.world.terrain,
-				mountain: this.world.mountain,
+				continent: this.world.continent,
+				erosion: this.world.erosion,
+				peaks: this.world.peaks,
 				cut: this.world.delta,
 			},
 			{
@@ -131,8 +132,9 @@ export class BenchWorkerCore {
 			const fill = patchVertices(layout, {
 				height: this.world.height,
 				raw: this.world.raw,
-				terrain: this.world.terrain,
-				mountain: this.world.mountain,
+				continent: this.world.continent,
+				erosion: this.world.erosion,
+				peaks: this.world.peaks,
 			});
 			geometry = {
 				vertices: fill.vertices,
@@ -179,7 +181,7 @@ export class BenchWorkerCore {
 				summit: this.world.summit,
 				floor: this.world.floor,
 				report: this.world.report,
-				overLine: this.world.overLine,
+				land: this.world.land,
 				span,
 				lowest: field.lowest,
 				highest: field.highest,
@@ -200,8 +202,9 @@ export class BenchWorkerCore {
 				out.push(
 					sheet.metres.buffer,
 					sheet.raw.buffer,
-					sheet.terrain.buffer,
-					sheet.mountain.buffer,
+					sheet.continent.buffer,
+					sheet.erosion.buffer,
+					sheet.peaks.buffer,
 					sheet.cut.buffer,
 				);
 		if (reply.geometry) {
@@ -228,8 +231,9 @@ export class BenchWorkerCore {
 				const to = (n - 1 - r) * n + q;
 				sheet.metres[to] = field.height[from]!;
 				sheet.raw[to] = field.raw[from]!;
-				sheet.terrain[to] = field.terrain[from]!;
-				sheet.mountain[to] = field.mountain[from]!;
+				sheet.continent[to] = field.continent[from]!;
+				sheet.erosion[to] = field.erosion[from]!;
+				sheet.peaks[to] = field.peaks[from]!;
 				sheet.cut[to] = field.cut[from]!;
 			}
 		return {
@@ -271,8 +275,9 @@ export class BenchWorkerCore {
 				grid.blendInto(dir, blend);
 				sheet.metres[at] = readBlend(this.world.height, blend);
 				sheet.raw[at] = readBlend(this.world.raw, blend);
-				sheet.terrain[at] = readBlend(this.world.terrain, blend);
-				sheet.mountain[at] = readBlend(this.world.mountain, blend);
+				sheet.continent[at] = readBlend(this.world.continent, blend);
+				sheet.erosion[at] = readBlend(this.world.erosion, blend);
+				sheet.peaks[at] = readBlend(this.world.peaks, blend);
 				if (this.world.delta)
 					sheet.cut[at] = readBlend(this.world.delta, blend);
 			}
@@ -300,8 +305,9 @@ export class BenchWorkerCore {
 			height,
 			metres: new Float32Array(count),
 			raw: new Float32Array(count),
-			terrain: new Float32Array(count),
-			mountain: new Float32Array(count),
+			continent: new Float32Array(count),
+			erosion: new Float32Array(count),
+			peaks: new Float32Array(count),
 			cut: new Float32Array(count),
 		};
 	}

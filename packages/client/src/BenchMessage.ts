@@ -57,8 +57,8 @@ export interface BenchFacts {
 	/** How much of the patch stands above the water. */
 	readonly landShare: number;
 
-	/** How much of the planet stands above the mountain line, `0` to `1`. */
-	readonly overLine: number;
+	/** How much of the planet stands above sea level, `0` to `1`. */
+	readonly land: number;
 }
 
 /**
@@ -77,8 +77,9 @@ export interface BenchSheet {
 	/** The ground in metres, the field with no unit, and each layer's curve. */
 	readonly metres: Float32Array<ArrayBuffer>;
 	readonly raw: Float32Array<ArrayBuffer>;
-	readonly terrain: Float32Array<ArrayBuffer>;
-	readonly mountain: Float32Array<ArrayBuffer>;
+	readonly continent: Float32Array<ArrayBuffer>;
+	readonly erosion: Float32Array<ArrayBuffer>;
+	readonly peaks: Float32Array<ArrayBuffer>;
 
 	/** Metres erosion moved the ground, and what a picture of it saturates at. */
 	readonly cut: Float32Array<ArrayBuffer>;

@@ -48,5 +48,11 @@ export interface PatchGeometry {
 	readonly landShare: number;
 }
 
-/** Floats per vertex: position, normal, metres, raw, terrain, mountain. */
-export const PATCH_STRIDE = 10;
+/**
+ * Floats per vertex: position, normal, metres, raw, and one per layer.
+ *
+ * Three layers rather than two, because the surface is continentalness,
+ * erosion and peaks -- and a layer with no channel of its own is a layer whose
+ * curve cannot be looked at.
+ */
+export const PATCH_STRIDE = 11;
