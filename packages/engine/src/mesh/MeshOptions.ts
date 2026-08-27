@@ -115,6 +115,17 @@ export interface MeshOptions {
 	 * world yet, so that is the only way to see underground.
 	 */
 	readonly skyExposure?: boolean;
+
+	/**
+	 * How much of the light a blocked direction intercepts comes back.
+	 *
+	 * A direction blocked by rock points at a lit surface, and some of what
+	 * lands there returns. Zero is the flat floor every enclosed face used to
+	 * share; a third is roughly what ground gives back. See
+	 * {@link skyExposure} for what it does and for the two things it cannot
+	 * do -- carry a colour, or follow the sun.
+	 */
+	readonly skyBounce?: number;
 }
 
 export const MESH_DEFAULTS = {
@@ -125,4 +136,5 @@ export const MESH_DEFAULTS = {
 	speckle: SPECKLE,
 	ambientOcclusion: true,
 	skyExposure: true,
+	skyBounce: 0.35,
 } as const satisfies MeshOptions;

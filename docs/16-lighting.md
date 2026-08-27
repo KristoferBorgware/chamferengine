@@ -796,6 +796,54 @@ happened to land in — which is exactly what a sun does as a camera turns.
 
 ---
 
+## A blocked direction points at a lit surface
+
+The sky-exposure walk asks each of a face's six neighbours how much taller its
+ground is, counts the blocked fraction, and clamps the answer to a floor.
+
+**A direction blocked by rock points at a lit surface**, and some of what
+lands there comes back. Worth nothing, it takes everything enclosed to one
+flat floor: once every direction is blocked there is nothing left to vary, so
+a shaft reads the same number at its mouth and forty layers down.
+
+So a blocked direction returns a share of what it intercepted, decided by two
+things: how much of the light a surface gives back rather than absorbing
+(**Sky bounce**; ground returns something like a third), and how far the
+blocker rises above this face — the part of a wall a cell can see from ten
+layers down is itself ten layers into shadow, so it has less to give than the
+lip of a hollow one layer deep.
+
+> **[measured]** A face with every direction blocked, reach 6, floor 0.12.
+>
+> | layers above | bounce 0 | 0.35 | 0.60 |
+> |---|---|---|---|
+> | 1 | 0.853 | 0.903 | 0.939 |
+> | 3 | 0.560 | 0.677 | 0.760 |
+> | 6 | **0.120** | **0.295** | 0.420 |
+> | 12 | **0.120** | 0.237 | 0.320 |
+> | 40 | **0.120** | 0.166 | 0.198 |
+> | 80 | **0.120** | 0.144 | 0.162 |
+>
+> Everything from six layers down shared one number and now runs a gradient:
+> **2.46×** brighter at a hollow's lip and still falling with depth. At a
+> bounce of zero it is the old reading to the bit.
+
+**It costs nothing.** The walk already ran, over data already in hand; this
+changes what it does with a direction it was already counting. No pass, no
+storage, no protocol.
+
+Two things it deliberately does not do. **It carries no colour** — what comes
+back is a fraction of a scalar, so a red wall does not tint the floor beside
+it. And **it is the sky's bounce, never the sun's**: this is baked into the
+mesh and the sun moves, so anything following the sun would be wrong the
+moment it did, and re-baking means meshing every chunk again. A sunlit rim
+throws no warm patch on the wall opposite. Both of those need light computed
+while the world is being looked at rather than while it is being built — a
+light field of some kind, which is a milestone rather than a term in a
+function.
+
+---
+
 ## Two terms the block grid cannot see
 
 Everything above is decided before there is a view. The mesher bakes how much
