@@ -48,8 +48,6 @@ const presents = flag("--presents", "yes") !== "no";
 const SWITCHES = [
 	"seed=chamfer",
 	"subdivisionDepth=8",
-	"contactShadows=true",
-	"bouncedLight=true",
 	"cascadeShadows=true",
 	"bloomOn=true",
 	"seaDrawn=true",

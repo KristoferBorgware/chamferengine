@@ -839,99 +839,6 @@ export interface PlanetKnobs {
 	bloomStrength: number;
 
 	/**
-	 * Whether how much sky a pixel can see is worked out from the picture.
-	 *
-	 * Screen-space ambient occlusion. The mesher already bakes two occlusion
-	 * terms -- how much sky a column stands under, and how boxed in a corner
-	 * is -- and both are facts about the block grid, settled before there is
-	 * a view. This one can see that one hill stands in front of another, or
-	 * that a wall built this morning shades the ground beside it.
-	 *
-	 * **It costs a whole extra pass over the geometry.** The sky's share is
-	 * decided while the world is being drawn, so the occlusion has to exist
-	 * before that -- which means finding out where the geometry is twice.
-	 */
-	ssao: boolean;
-
-	/** How far over a surface the occlusion looks, in metres. */
-	ssaoReach: number;
-
-	/** How much of the sky a fully blocked pixel loses. */
-	ssaoStrength: number;
-
-	/**
-	 * Whether light bounces once from surface to surface.
-	 *
-	 * Screen-space global illumination. Every light in this world arrives
-	 * straight from its source, so a sunlit cliff throws nothing onto the
-	 * shaded ground beside it. This gathers what the frame already drew and
-	 * adds a share of it back.
-	 *
-	 * **It only knows what is on screen**, which is the standing limit of the
-	 * technique: a wall out of frame bounces nothing, so turning the camera
-	 * changes the light.
-	 */
-	ssgi: boolean;
-
-	/** How far across the picture a bounce carries, in pixels. */
-	ssgiReach: number;
-
-	/** How much of the gathered bounce is added. */
-	ssgiStrength: number;
-
-	/**
-	 * How much of the light a blocked direction intercepts comes back.
-	 *
-	 * A direction blocked by rock points at a lit surface, and some of what
-	 * lands there returns. Baked into the mesh by the same walk that decides
-	 * how much sky a face sees, so it costs no pass of its own and needs the
-	 * chunks built again to move.
-	 *
-	 * **It is the sky's bounce, never the sun's.** A baked term cannot follow
-	 * a sun that moves, so a sunlit rim throws no warm patch on the wall
-	 * opposite -- what it does is stop everything enclosed sharing one flat
-	 * floor. Zero is that floor, and is what this was before.
-	 */
-	skyBounce: number;
-
-	/**
-	 * Whether a sparse grid of light probes is built inside every chunk.
-	 *
-	 * The one term here that both carries a **direction** and **follows the
-	 * sun**. A probe holds how much of the environment reaches its point and
-	 * which way that light comes from, neither of which moves when the sun
-	 * does -- so the sun is applied where the probe is read and a sunlit rim
-	 * throws a warm patch into a hollow that tracks it across the sky, from a
-	 * volume built once when the chunk was meshed.
-	 *
-	 * It is what the sky-exposure bounce cannot be, and it costs a volume per
-	 * chunk to be it.
-	 */
-	lightProbes: boolean;
-
-	/**
-	 * Cells between neighbouring probes.
-	 *
-	 * The cost dial, and it is steep: halving it multiplies both the memory
-	 * and the build by about eight. Four cells is 24 KB and 3.2 ms on a chunk
-	 * that takes 170 ms to generate; two cells is 167 KB and 20.9 ms.
-	 */
-	probeSpacing: number;
-
-	/** How much the light a probe carries is worth on a surface. */
-	probeStrength: number;
-
-	/**
-	 * Whether every probe is drawn as a little sphere where it stands.
-	 *
-	 * A probe volume is otherwise only visible through the light it makes,
-	 * which is the thing it is supposed to explain. The markers read the same
-	 * texture the terrain shader reads, at the same places, so a mapping that
-	 * is wrong is wrong here in the same way.
-	 */
-	showProbes: boolean;
-
-	/**
 	 * How many times the canvas the world is drawn at before it is put back.
 	 *
 	 * **The one antialiasing a world of hard edges answers to.** A voxel
@@ -1139,17 +1046,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// spills -- lit ground sits near 1 and the sun sits at 120.
 	bloomThreshold: 1.1,
 	bloomStrength: 0.55,
-	ssao: false,
-	ssaoReach: 1.6,
-	ssaoStrength: 0.9,
-	ssgi: false,
-	ssgiReach: 48,
-	ssgiStrength: 1.5,
-	skyBounce: 0.35,
-	lightProbes: false,
-	probeSpacing: 4,
-	probeStrength: 1,
-	showProbes: false,
 	superSample: 1,
 	walkSpeed: PLAYER_DEFAULTS.walkSpeed,
 	flySpeed: PLAYER_DEFAULTS.flySpeed,
@@ -1265,9 +1161,6 @@ export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
-	"skyBounce",
-	"lightProbes",
-	"probeSpacing",
 	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
@@ -1650,23 +1543,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "",
 	},
 	bloomStrength: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
-	ssao: { ...TOGGLE, rebuilds: false },
-	ssaoReach: { low: 0.2, high: 6, step: 0.1, rebuilds: false, unit: "m" },
-	ssaoStrength: {
-		low: 0,
-		high: 2,
-		step: 0.05,
-		rebuilds: false,
-		unit: "",
-	},
-	ssgi: { ...TOGGLE, rebuilds: false },
-	ssgiReach: { low: 8, high: 160, step: 4, rebuilds: false, unit: "px" },
-	ssgiStrength: { low: 0, high: 6, step: 0.05, rebuilds: false, unit: "" },
-	skyBounce: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
-	lightProbes: { ...TOGGLE, rebuilds: true },
-	probeSpacing: { low: 2, high: 16, step: 1, rebuilds: true, unit: "cells" },
-	probeStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "" },
-	showProbes: { ...TOGGLE, rebuilds: false },
 	superSample: { low: 1, high: 2, step: 0.25, rebuilds: false, unit: "x" },
 	walkSpeed: { low: 0.5, high: 20, step: 0.5, rebuilds: false, unit: "m/s" },
 	flySpeed: { low: 2, high: 120, step: 1, rebuilds: false, unit: "m/s" },

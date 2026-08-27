@@ -604,13 +604,10 @@ describe("what a live rebuild can show", () => {
 		"speckle",
 		"ambientOcclusion",
 		"skyExposure",
-		"skyBounce",
-		"lightProbes",
-		"probeSpacing",
 		"fullbright",
 	] as const;
 
-	it("names the same knobs the client routes on", () => {
+	it("names the same four the client routes on", () => {
 		// `BAKED_KNOBS` is what decides a knob takes the cheap path -- the
 		// meshes again and not the map. A key listed here and missing there
 		// would quietly go on rebuilding the coarse map it cannot move.

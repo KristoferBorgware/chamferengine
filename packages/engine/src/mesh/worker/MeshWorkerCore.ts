@@ -12,13 +12,8 @@ import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
-import { MESH_DEFAULTS } from "../MeshOptions.js";
 import { SPECKLE } from "../../generation/terrain/blockColor.js";
-import type { ProbeVolume } from "../../light/probeVolume.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
-import { joinPath } from "../../addressing/lattice/joinPath.js";
-import { latticePosition } from "../../addressing/lattice/latticePosition.js";
-import { probeVolume } from "../../light/probeVolume.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
 import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
@@ -48,8 +43,6 @@ export class MeshWorkerCore {
 	private speckle: number;
 	private ambientOcclusion: boolean;
 	private skyExposure: boolean;
-	private skyBounce: number;
-	private probeSpacing: number;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -79,8 +72,6 @@ export class MeshWorkerCore {
 		this.speckle = setup.speckle ?? SPECKLE;
 		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.skyExposure = setup.skyExposure ?? true;
-		this.skyBounce = setup.skyBounce ?? MESH_DEFAULTS.skyBounce;
-		this.probeSpacing = setup.probeSpacing ?? 0;
 		this.options = setup.terrain;
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
@@ -111,8 +102,6 @@ export class MeshWorkerCore {
 		this.speckle = message.speckle;
 		this.ambientOcclusion = message.ambientOcclusion;
 		this.skyExposure = message.skyExposure;
-		this.skyBounce = message.skyBounce;
-		this.probeSpacing = message.probeSpacing;
 	}
 
 	run(job: MeshJob): MeshResult {
@@ -163,7 +152,6 @@ export class MeshWorkerCore {
 				speckle: this.speckle,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
-				skyBounce: this.skyBounce,
 				grid: this.grid
 					? {
 							...this.grid,
@@ -185,10 +173,6 @@ export class MeshWorkerCore {
 			opaque: mesh.opaque,
 			translucent: mesh.translucent,
 			tally: mesh.tally,
-			// **Built here or never.** The blocks do not cross back, so this
-			// is the only moment anything on the thread that draws can learn
-			// the shape of a hollow inside this chunk.
-			...(this.probeSpacing > 0 ? { probes: this.probesFor(chunk) } : {}),
 		};
 	}
 
@@ -219,53 +203,13 @@ export class MeshWorkerCore {
 	}
 
 	/** The buffers in a result, for a caller transferring rather than copying. */
-	/**
-	 * A probe volume over the band this chunk's blocks actually occupy.
-	 *
-	 * The crust runs over a thousand layers and the terrain is a shell inside
-	 * it, so covering the whole depth would spend nearly all of the volume on
-	 * solid rock nobody can stand in. The band the generator already wrote is
-	 * 71 layers of 1,232 on the shipped world, and that is the difference
-	 * between a volume worth carrying and one that is not.
-	 */
-	private probesFor(chunk: Chunk): ProbeVolume {
-		let first = chunk.layerCount;
-		let last = 0;
-		for (let slot = 0; slot < chunk.slots; slot++) {
-			const top = chunk.band[slot * 2]!;
-			const bottom = chunk.band[slot * 2 + 1]!;
-			if (top >= 0 && top < first) first = top;
-			if (bottom > last) last = bottom;
-		}
-		if (first > last) first = last;
-		// The triangle's own three corners, as directions. A vertex is a
-		// blend of them, so their inverse is what takes a vertex back to the
-		// lattice point a probe is filed under.
-		const [i0, j0] = joinPath(chunk.address.path, 0, 0, chunk.depth);
-		const n = 1 << chunk.depth;
-		const corner = (i: number, j: number): [number, number, number] => {
-			const at = latticePosition(chunk.address.face, n, i, j);
-			return [at.x, at.y, at.z];
-		};
-		return probeVolume(chunk, this.probeSpacing, first, last, [
-			corner(i0, j0),
-			corner(i0 + chunk.m, j0),
-			corner(i0, j0 + chunk.m),
-		]);
-	}
-
 	static buffers(result: MeshResult): ArrayBuffer[] {
-		const out = [
+		return [
 			result.opaque.vertices.buffer,
 			result.opaque.indices.buffer,
 			result.translucent.vertices.buffer,
 			result.translucent.indices.buffer,
 		];
-		// Transferred like the geometry rather than copied. It is small, but
-		// it is built in this worker and read on the other side exactly once,
-		// which is the shape a transfer is for.
-		if (result.probes) out.push(result.probes.data.buffer as ArrayBuffer);
-		return out;
 	}
 
 	private generator(lod: number): TerrainGenerator {

@@ -340,8 +340,6 @@ describe("WorkerMeshSource", () => {
 			speckle: 0,
 			ambientOcclusion: false,
 			skyExposure: false,
-			skyBounce: 0,
-			probeSpacing: 0,
 		} satisfies MeshRetune;
 
 		it("tells every worker and posts no map", () => {

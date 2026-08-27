@@ -29,10 +29,6 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * is doing, which is the color of everything the sun does not reach
  * directly, and `sky.w` is what that ambient light is worth.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
- *
- * \`eye.w\` is what a light probe's carried light is worth on a surface, and
- * zero takes the whole probe term out. It rides in the eye's spare lane
- * because a position needs three numbers and the slot was already there.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
 ${SHADOW_WGSL}
@@ -73,33 +69,15 @@ struct Frame {
 };
 struct Chunk {
 	origin : vec4f,
-	// x cells between probes, y probes across, z probes down, w the layer the
-	// top row sits at. A zero count says this chunk has no volume.
-	probeGrid : vec4f,
-	// The inverse of the chunk's three corner directions, a column each, and
-	// in \`w\` the triangle's side, the crust's top radius and how tall a layer
-	// is -- everything needed to take a position back to the lattice point a
-	// probe is filed under.
-	probeA : vec4f,
-	probeB : vec4f,
-	probeC : vec4f,
-	// The three corner directions themselves, which turn a lattice direction
-	// into a world one.
-	cornerA : vec4f,
-	cornerB : vec4f,
-	cornerC : vec4f,
 };
 @group(0) @binding(0) var<uniform> frame : Frame;
 @group(1) @binding(0) var<uniform> chunk : Chunk;
-@group(1) @binding(1) var probeVolume : texture_3d<f32>;
-@group(1) @binding(2) var probeSample : sampler;
 struct VertexOut {
 	@builtin(position) clip  : vec4f,
 	@location(0)       color : vec3f,
 	@location(1)       local : vec3f,
 	@location(2)       up    : vec3f,
 	@location(3)       depth : f32,
-	@location(4)       probe : vec3f,
 };
 
 @vertex
@@ -122,56 +100,7 @@ fn vertexMain(
 	out.local = position;
 	out.up = normalize(world);
 	out.depth = length(world - frame.eye.xyz);
-	// **Pushed out along the column's own up before the volume is read.** A
-	// probe standing where a surface stands is inside the rock that surface
-	// is the top of, and reads as dark; half a spacing out is the air the
-	// light is actually in. Up rather than the face's normal, because a
-	// normal is read from derivatives and there are none in a vertex stage.
-	out.probe = probeAt(world + normalize(world) * probeLift());
 	return out;
-}
-
-/**
- * Where in its chunk's probe volume a world position sits, in texture
- * coordinates.
- *
- * A lattice point is \`normalize(A*a + B*b + C*c)\` for three weights that sum
- * to one, so the weights are the inverse of those three corners times the
- * direction, divided by their own sum. Scaled by the triangle's side they are
- * the \`(q, r)\` a probe is filed under, and the layer is how far the radius
- * has fallen from the crust's top.
- *
- * Worked out per **vertex** rather than per fragment: the volume is a smooth
- * field metres between samples, so what a triangle wants across its face is
- * exactly the blend a varying already gives it for nothing.
- */
-/** Half a probe spacing, in metres. */
-fn probeLift() -> f32 {
-	return 0.5 * max(1.0, chunk.probeGrid.x) * chunk.probeC.w;
-}
-
-fn probeAt(world : vec3f) -> vec3f {
-	let dir = normalize(world);
-	let raw = vec3f(
-		dot(chunk.probeA.xyz, dir),
-		dot(chunk.probeB.xyz, dir),
-		dot(chunk.probeC.xyz, dir),
-	);
-	let sum = raw.x + raw.y + raw.z;
-	let weights = raw / max(1e-9, sum);
-	let side = chunk.probeA.w;
-	let q = weights.y * side;
-	let r = weights.z * side;
-	let layer = (chunk.probeB.w - length(world)) / max(1e-6, chunk.probeC.w);
-
-	let spacing = max(1.0, chunk.probeGrid.x);
-	let across = max(1.0, chunk.probeGrid.y);
-	let down = max(1.0, chunk.probeGrid.z);
-	return vec3f(
-		(q / spacing + 0.5) / across,
-		(r / spacing + 0.5) / across,
-		((layer - chunk.probeGrid.w) / spacing + 0.5) / down,
-	);
 }
 
 /**
@@ -269,8 +198,6 @@ fn lightOn(
 	away : f32,
 	ambient : f32,
 	direct : f32,
-	pixel : vec2f,
-	probe : vec3f,
 ) -> vec3f {
 	let day = frame.night.x;
 	var lambert = max(dot(normal, frame.sun.xyz), 0.0);
@@ -306,46 +233,7 @@ fn lightOn(
 	// that tint is enough to read as sky without turning grey stone blue.
 	let lum = max(0.001, dot(frame.sky.rgb, vec3f(0.2126, 0.7152, 0.0722)));
 	let tint = mix(vec3f(1.0), frame.sky.rgb / lum, 0.5);
-	// **What stands around this pixel, and it touches the ambient alone.**
-	// The mesher's two occlusion terms are facts about the block grid, fixed
-	// before there is a view; this one can see that a hill stands in front of
-	// another, or that a wall built this morning now shades the ground beside
-	// it. Off, it reads a flat 1 and the line below is what it always was.
-	let seen = skyOpenAt(pixel);
-	// **What the probes say, and what makes them worth their volume.** A
-	// probe holds how much of the environment reaches its point and which way
-	// that light comes from -- neither of which knows about the sun, which is
-	// exactly why the sun can be applied here rather than baked. So a hollow
-	// takes the sky in proportion to what actually reaches it, and takes the
-	// *sun* whenever the way in happens to point at it: a sunlit rim throws a
-	// warm patch onto the wall opposite, and the patch moves as the sun does.
-	//
-	// The probe count is zero where a chunk has no volume, and then the whole
-	// term is multiplied out and the lighting below is what it always was.
-	let hasProbes = step(0.5, chunk.probeGrid.y) * frame.eye.w;
-	let carried = textureSample(probeVolume, probeSample, probe);
-	let reaches = carried.a;
-	// **Out of the lattice's axes and into the world's.** The direction a
-	// probe carries is a gradient over q, r and layer, which is the grid the
-	// light was passed around on; a step across the triangle is the
-	// difference of two of its corners and a step down is the column's own
-	// up. Dotting the lattice vector straight against the sun compares two
-	// different spaces and gives nothing.
-	let lattice = carried.rgb * 2.0 - 1.0;
-	let axisQ = normalize(chunk.cornerB.xyz - chunk.cornerA.xyz);
-	let axisR = normalize(chunk.cornerC.xyz - chunk.cornerA.xyz);
-	let inbound = normalize(
-		axisQ * lattice.x + axisR * lattice.y + up * lattice.z + up * 1e-6);
-	// The light arrives along the way in, so a face turned toward that way
-	// takes it and one turned away does not.
-	let facing = max(0.0, dot(normal, inbound));
-	let bounced = hasProbes * reaches * facing;
-	// **The probes only ever add.** Scaling the sky term by what a probe
-	// carries was tried and double-counts: the mesher's own sky exposure has
-	// already darkened this face for the same rock, so the two multiply and
-	// open ground comes out dimmer for switching probes on. Indirect light
-	// adds, so it goes on top and the term below is untouched.
-	let fromSky = tint * (ambient * openness * day * frame.sky.w * seen);
+	let fromSky = tint * (ambient * openness * day * frame.sky.w);
 	let fromSun = sunColor(up) * (direct * lambert * day * frame.night.z);
 	// **The moon is the only thing with a direction after dark.** Without it
 	// every face of a block takes the same light all night and a block is a
@@ -362,15 +250,8 @@ fn lightOn(
 	// so the sun and the moon add on top of it rather than having to beat it:
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
-	let night = vec3f(frame.night.y * openness * seen);
-	// The sun, arriving by way of somewhere else. It is gated on the sun
-	// being over this place's horizon the way everything else is, and on the
-	// way in pointing somewhere near it -- which is what carries a rim's
-	// colour into a hollow and what makes the patch move across the day.
-	let alongSun = max(0.0, dot(inbound, frame.sun.xyz));
-	let fromBounce =
-		sunColor(up) * (bounced * alongSun * day * frame.night.z * direct);
-	return max(night, fromSky) + fromSun + fromMoon + fromBounce;
+	let night = vec3f(frame.night.y * openness);
+	return max(night, fromSky) + fromSun + fromMoon;
 }
 
 @fragment
@@ -386,17 +267,8 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// whatever the balance is and only what stands at an angle to the sun
 	// moves.
 	let direct = SUN_SHARE;
-	let lit = in.color
-		* lightOn(
-			normal,
-			up,
-			world,
-			in.depth,
-			1.0 - direct,
-			direct,
-			in.clip.xy,
-			in.probe,
-		);
+	let lit =
+		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -414,17 +286,8 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// Water takes less of its light from the sun than stone does: a look
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
-	let lit = in.color
-		* lightOn(
-			normal,
-			up,
-			world,
-			in.depth,
-			1.0 - direct,
-			direct,
-			in.clip.xy,
-			in.probe,
-		);
+	let lit =
+		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

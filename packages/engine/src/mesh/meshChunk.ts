@@ -92,13 +92,8 @@ const SKY_FLOOR = 0.12;
  * under the ground beside it or standing clear of it -- so a cliff face stays
  * bright as it should while a cave a metre away goes dark.
  */
-function skyAt(
-	on: boolean,
-	layer: number,
-	around: readonly number[],
-	bounce: number,
-): number {
-	return on ? skyExposure(layer, around, SKY_REACH, SKY_FLOOR, bounce) : 1;
+function skyAt(on: boolean, layer: number, around: readonly number[]): number {
+	return on ? skyExposure(layer, around, SKY_REACH, SKY_FLOOR) : 1;
 }
 
 /**
@@ -241,7 +236,6 @@ export function meshChunk(
 	const settings = { ...MESH_DEFAULTS, ...options };
 	const light = settings.ambientOcclusion ? AMBIENT_OCCLUSION : FLAT_LIGHT;
 	const exposed = settings.skyExposure;
-	const bounced = settings.skyBounce;
 	const depth = chunk.depth;
 	const n = 1 << depth;
 	const face = chunk.address.face;
@@ -407,7 +401,6 @@ export function meshChunk(
 				mix,
 				light,
 				exposed,
-				bounced,
 			);
 		}
 
@@ -484,7 +477,6 @@ export function meshChunk(
 			seamFloor,
 			light,
 			exposed,
-			bounced,
 		);
 	}
 	return tally;
@@ -559,7 +551,6 @@ function meshCell(
 	mix: number,
 	light: readonly number[],
 	exposed: boolean,
-	bounced: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -632,7 +623,7 @@ function meshCell(
 				(corner) =>
 					occlusion(ring, degree, corner, corner + 1, layer - 1),
 				light,
-				skyAt(exposed, layer, around, bounced),
+				skyAt(exposed, layer, around),
 			);
 			tally.faces++;
 		}
@@ -647,7 +638,7 @@ function meshCell(
 				false,
 				() => 0,
 				light,
-				skyAt(exposed, layer, around, bounced),
+				skyAt(exposed, layer, around),
 			);
 			tally.faces++;
 		}
@@ -670,7 +661,7 @@ function meshCell(
 				false,
 				() => 0,
 				light,
-				skyAt(exposed, floor, around, bounced),
+				skyAt(exposed, floor, around),
 			);
 			tally.faces++;
 		}
@@ -711,8 +702,8 @@ function meshCell(
 				true,
 				true,
 				light,
-				skyAt(exposed, groundCap, around, bounced),
-				skyAt(exposed, groundCap, around, bounced),
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
@@ -768,8 +759,8 @@ function meshCell(
 				!wallAbove,
 				!wallBelow,
 				light,
-				skyAt(exposed, layer, around, bounced),
-				skyAt(exposed, end, around, bounced),
+				skyAt(exposed, layer, around),
+				skyAt(exposed, end, around),
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -811,7 +802,6 @@ function meshApronCell(
 	seamFloor: (cell: Cell) => number,
 	light: readonly number[],
 	exposed: boolean,
-	bounced: number,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -881,7 +871,7 @@ function meshApronCell(
 			true,
 			(corner) => occlusion(ring, degree, corner, corner + 1, layer - 1),
 			light,
-			skyAt(exposed, layer, around, bounced),
+			skyAt(exposed, layer, around),
 		);
 		tally.faces++;
 	}
@@ -916,8 +906,8 @@ function meshApronCell(
 				true,
 				true,
 				light,
-				skyAt(exposed, groundCap, around, bounced),
-				skyAt(exposed, groundCap, around, bounced),
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
@@ -987,8 +977,8 @@ function meshApronCell(
 				!wallAbove,
 				!wallBelow,
 				light,
-				skyAt(exposed, layer, around, bounced),
-				skyAt(exposed, end, around, bounced),
+				skyAt(exposed, layer, around),
+				skyAt(exposed, end, around),
 			);
 			tally.faces++;
 			tally.merged += end - layer;
@@ -1055,8 +1045,8 @@ function meshApronCell(
 				true,
 				true,
 				light,
-				skyAt(exposed, groundCap, around, bounced),
-				skyAt(exposed, groundCap, around, bounced),
+				skyAt(exposed, groundCap, around),
+				skyAt(exposed, groundCap, around),
 			);
 			tally.faces++;
 		}
