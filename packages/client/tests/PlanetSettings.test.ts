@@ -605,6 +605,8 @@ describe("what a live rebuild can show", () => {
 		"ambientOcclusion",
 		"skyExposure",
 		"skyBounce",
+		"lightProbes",
+		"probeSpacing",
 		"fullbright",
 	] as const;
 

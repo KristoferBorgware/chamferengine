@@ -2056,6 +2056,38 @@ Violating any of these breaks the design. They are not tunable.
   than while it is built, which is a light field and a milestone rather than a
   term in a function. It joins `BAKED_KNOBS`, so it takes the re-mesh path and
   stays out of a world's identity.
+- **A PROBE STORES WHAT THE SUN DOES NOT MOVE, AND THE SUN IS APPLIED WHERE
+  THE PROBE IS READ** (`probeVolume`, **Light probes**,
+  `tools/trial-probes.ts`, doc 16). A sparse grid inside every chunk holding
+  how much of the environment reaches a point and **which way it comes from**
+  -- neither of which knows about the sun. So a sunlit rim throws a warm patch
+  onto the wall opposite and **the patch moves across the day**, out of a
+  volume built once at mesh time. Storing irradiance would bake the sun in and
+  be wrong the moment it moved, which is the ceiling every baked term hits.
+  **Light is passed between probes, never traced**: open probes start full,
+  rock starts empty, and a few rounds of each taking its neighbours' **best**
+  -- an average dims a corridor along its length, because half of every
+  probe's neighbours are the rock beside it. The direction is the **gradient**
+  of the field and costs nothing once the field exists. **The band is what
+  makes it small**: the shipped world's crust is 1,232 layers and a chunk's
+  band spans **71**, so at 4-cell spacing a volume is **6,156 probes, 24 KB
+  and 3.1 ms** beside a chunk's **917 KB** of mesh and **150 ms** of
+  generation -- **2.6%** of the mesh it rides with. Three things only a frame
+  showed. **Probes may only ADD**: scaling the sky term by what a probe
+  carries double-counts the mesher's own sky exposure and open ground comes
+  out *dimmer* for switching them on. **Fill the rock in from the air beside
+  it** and lift the lookup half a spacing along `up`, or a surface samples
+  between a lit probe and one inside the ground and every face in the world
+  goes halfway to black. **And the direction has to leave the lattice** -- it
+  is a gradient over `(q, r, layer)` and the shader was dotting it against a
+  world-space sun, two different spaces, giving exactly nothing; a step across
+  the triangle is the difference of two corner directions and a step down is
+  the column's own up. **A PROBE HAS NO ADDRESS**: it is filed by the lattice
+  point it was built at, the way a vertex is, so the delta store, the side
+  table, interest routing and edit messages -- all keyed by cell ID -- never
+  see one, and the 64-bit word is untouched. **Show probes** draws each one
+  where it stands from the same texture the shader reads, which is the only
+  way to see a volume otherwise visible only through the light it makes.
 - **SSAO MUST RUN BEFORE THE LIGHT IT CHANGES, AND SSGI IS THE ONE INDIRECT
   TERM THAT CAN RUN AFTER** (`Ssao`, `Ssgi`, `ScreenDepth`, doc 16). Two screen-space terms, and the difference between
   them decides everything about what each one costs. **Occlusion scales the

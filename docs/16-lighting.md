@@ -961,6 +961,83 @@ with a light direction in it that ambient occlusion does not have.
 
 ---
 
+## Light probes: the one term that carries a direction and follows the sun
+
+Everything above is either baked, and so cannot follow a sun that moves, or
+read off the screen, and so knows only what is drawn. A hollow with its lit
+rim behind the camera gets nothing from either.
+
+A **probe volume** is a sparse grid inside every chunk, holding two things per
+point: how much of the environment reaches it, and which way that light comes
+from. **Neither of those knows about the sun**, which is the whole design —
+the sun is applied where the probe is *read*, in the shader, so a sunlit rim
+throws a warm patch onto the wall opposite and the patch moves across the day,
+out of a volume built once when the chunk was meshed. Storing irradiance
+instead would bake the sun in and be wrong the moment it moved.
+
+**Light is passed between probes rather than traced.** Every probe in the open
+starts full and every probe inside rock starts empty; then a few times over,
+each takes the best its neighbours can pass it, less what a step costs. No
+rays and no acceleration structure, and it fills a hollow the way light does,
+in from the opening. A probe takes its neighbours' *best* rather than their
+average, or a corridor dims along its length purely because half of every
+probe's neighbours are the rock beside it. Which way the light comes from is
+the **gradient** of how much there is, which falls out for nothing once the
+field exists.
+
+> **[measured]** The shipped world at depth 13. A chunk is 2,642,640 cells and
+> 5.0 MB of blocks that takes ~150 ms to generate, and puts 917 KB of mesh on
+> the GPU. Its **band spans 71 layers of 1,232**, which is what makes the
+> volume small — the terrain is a shell inside a deep crust.
+>
+> | spacing | probes | KB | of the mesh | build | transient |
+> |---|---|---|---|---|---|
+> | 2 | 42,772 | 167.1 | 18.2% | 22.0 ms | 543 KB |
+> | **4** | **6,156** | **24.0** | **2.6%** | **3.1 ms** | 78 KB |
+> | 8 | 1,000 | 3.9 | 0.4% | 0.5 ms | 13 KB |
+> | 16 | 216 | 0.8 | 0.1% | 0.1 ms | 3 KB |
+>
+> Four cells is the default: 24 KB beside 917 KB of mesh, and 3.1 ms against
+> the 150 ms generating the chunk it describes already costs.
+
+Three things it needs that only a rendered frame showed.
+
+**The probes may only add.** Scaling the sky term by what a probe carries
+double-counts — the mesher's own sky exposure has already darkened that face
+for the same rock — so the two multiply and open ground comes out *dimmer*
+for switching probes on.
+
+**The rock has to be filled in from the air beside it.** A surface sits where
+solid meets air, so a lookup there lands between a lit probe and one inside
+the ground, and a probe inside the ground holding zero drags every surface
+halfway to black once the two are blended. Each solid probe takes the best its
+air neighbours hold, and the lookup is pushed half a spacing out along the
+column's own up.
+
+**And the direction has to leave the lattice.** What a probe stores is a
+gradient over `(q, r, layer)` — the grid the light was passed around on — and
+dotting that against a world-space sun compares two different spaces and gives
+exactly nothing. A step across the triangle is the difference of two corner
+directions and a step down is the column's own up.
+
+> **[measured]** One view, probes off against on at strength 2: mean **77.3 to
+> 81.1** of 255, 95th percentile of the per-pixel ratio exactly **1.000** — it
+> only ever adds light — and 5th percentile **0.612**, so the faces it reaches
+> are **63% brighter**.
+
+**Nothing about a probe is addressed.** It is filed by the lattice point it
+was built at, the way a vertex is, and it has no cell ID, no chunk key and no
+layer field — so the delta store, the side table, interest routing and edit
+messages, all of which are keyed by cell ID, never see one. That keeps
+"derived, never stored" true by construction rather than by discipline, which
+is the same rule [doc 32](32-sky-clouds-and-moon.md) applies to clouds.
+
+**Show probes** draws every one of them as a little sphere where it stands,
+reading the same texture the terrain shader reads. A volume is otherwise only
+visible through the light it makes, which is the thing it is meant to explain.
+
+---
+
 ## What this forces elsewhere
 
 - **`neighbour(id, k)` gains two radial cases**, up and down, which are `layer ±

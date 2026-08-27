@@ -820,6 +820,33 @@ const GROUPS: Group[] = [
 				given: () => "the sky's bounce, not the sun's",
 			},
 			{
+				key: "lightProbes",
+				label: "Light probes",
+				enabledWhen: (k) => !k.plain,
+				given: () => "a volume per chunk; follows the sun",
+			},
+			{
+				key: "probeSpacing",
+				label: "Probe spacing",
+				enabledWhen: (k) => !k.plain && k.lightProbes,
+				given: (s) =>
+					`about ${(24 * (4 / s.knobs.probeSpacing) ** 3).toFixed(
+						0,
+					)} KB a chunk`,
+			},
+			{
+				key: "probeStrength",
+				label: "Probe strength",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.lightProbes,
+			},
+			{
+				key: "showProbes",
+				label: "Show probes",
+				enabledWhen: (k) => !k.plain && k.lightProbes,
+				given: () => "one sphere per probe, where it stands",
+			},
+			{
 				key: "ssao",
 				label: "SSAO",
 				enabledWhen: (k) => !k.plain,

@@ -6,3 +6,5 @@ export { solarNoonTime } from "./solarNoonTime.js";
 export { terminatorSpeed } from "./terminatorSpeed.js";
 export { daylight } from "./daylight.js";
 export { skyExposure } from "./skyExposure.js";
+export { probeVolume } from "./probeVolume.js";
+export type { ProbeVolume } from "./probeVolume.js";
