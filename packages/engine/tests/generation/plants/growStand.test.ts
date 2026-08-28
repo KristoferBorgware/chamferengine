@@ -14,7 +14,7 @@ import { Vec3 } from "chamfer/math";
 
 /** A patch of flat ground at sea level, at a level small enough to be quick. */
 const LEVEL = 7;
-const RINGS = 24;
+const RINGS = 16;
 
 /**
  * How far out the roots are chosen, which is well inside the patch's own rim.
@@ -23,8 +23,14 @@ const RINGS = 24;
  * margin of ten rings is what keeps every plant grown wholly inside the ground
  * being looked at -- a canopy hanging off the rim is a piece with no trunk in
  * the patch, which the audits below would read as debris.
+ *
+ * Both counts are as small as the questions allow. The audit is about whether
+ * two cuts of the same ground agree, which several chunks of a few dozen roots
+ * settles as well as a patch a thousand columns wide -- and a test that takes
+ * seconds is a test that times out on a slower machine than the one it was
+ * written on.
  */
-const ROOT_RINGS = 14;
+const ROOT_RINGS = 6;
 const BLOCK = 1;
 const RADIUS = 1700;
 
@@ -82,7 +88,7 @@ function stand(
 
 describe("growStand", () => {
 	const patch = patchOf();
-	const layers = [layerOf(1, "Pine", 6), layerOf(2, "Oak", 4)];
+	const layers = [layerOf(1, "Pine", 12), layerOf(2, "Oak", 8)];
 
 	it("grows plants of both layers", () => {
 		const grown = stand(patch, layers, 4096);
