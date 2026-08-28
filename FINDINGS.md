@@ -261,33 +261,6 @@ on the first frame instead of drawing something.
 
 ---
 
-### F-105 — Nothing checks that two chunks of the world grow one tree the same way
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-28, growing the world's own plants in its own chunks
-**Where:** `packages/engine/tests/generation/chunk/plantChunk.test.ts`
-
-**What happens.** The bench's audit compares one patch cut into chunks against
-the same patch grown whole, and reads 0 cells differing. The world's own path
-is a different one: `plantChunk` builds its patch from a chunk's triangle plus
-a ring, maps roots at the world's depth onto columns drawn at the chunk's
-level, and writes into layers counted downward from the crust top. None of
-those three conversions is covered by that audit, and the test beside it checks
-only that a chunk is repeatable and writes nothing over the ground.
-
-**Why it matters.** The failure it would catch is the one that does not look
-like a failure: a tree that comes apart along a chunk boundary reads as two
-half-trees, and at a distance as a thinner forest. It is also exactly the class
-of bug the delta store's own history is full of.
-
-**What would fix it.** Grow two neighbouring chunks and compare the cells they
-both hold -- a chunk generates the ring past its own rim, so the same cell is
-reachable from both and the two answers have to match. Twenty lines, and it
-belongs beside the audit that already exists.
-
 ### F-104 — The vegetation bench draws a plinth taller than the ground it is a bench for
 
 **Kind:** cleanup
@@ -2560,6 +2533,41 @@ from the world again.
 
 
 ## Closed
+
+### F-105 — Nothing checks that two chunks of the world grow one tree the same way
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Closed:** 2026-08-28, fixed in `packages/engine/tests/generation/chunk/
+plantNeighbours.test.ts`. Two chunks either side of a shared edge are grown and
+every cell they both wrote is compared -- six pairs and `124` cells on the test
+world. It catches what it is for: replacing the cell address in the choice of
+template with the patch-local index makes it report
+`4,63,80,37: 10 against 11`, one chunk's wood against the other's leaf.
+A second test grows one chunk from two template stores, which is what two
+workers do.
+**Where:** `packages/engine/tests/generation/chunk/plantChunk.test.ts`
+
+**What happens.** The bench's audit compares one patch cut into chunks against
+the same patch grown whole, and reads 0 cells differing. The world's own path
+is a different one: `plantChunk` builds its patch from a chunk's triangle plus
+a ring, maps roots at the world's depth onto columns drawn at the chunk's
+level, and writes into layers counted downward from the crust top. None of
+those three conversions is covered by that audit, and the test beside it checks
+only that a chunk is repeatable and writes nothing over the ground.
+
+**Why it matters.** The failure it would catch is the one that does not look
+like a failure: a tree that comes apart along a chunk boundary reads as two
+half-trees, and at a distance as a thinner forest. It is also exactly the class
+of bug the delta store's own history is full of.
+
+**What would fix it.** Grow two neighbouring chunks and compare the cells they
+both hold -- a chunk generates the ring past its own rim, so the same cell is
+reachable from both and the two answers have to match. Twenty lines, and it
+belongs beside the audit that already exists.
 
 ### F-106 — A plant is grown twice for a cell that two chunks both hold
 
