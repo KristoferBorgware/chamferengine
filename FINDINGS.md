@@ -10,6 +10,75 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-109 — A chunk's apron draws no trees, so a canopy is walled off at every chunk edge
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
+`packages/engine/src/generation/chunk/ChunkColumnSampler.ts`
+
+**What happens.** `plantChunk` writes only into the slots the chunk holds --
+that is the rule that stops two chunks writing the same cell twice. Everything
+past the rim is served by `ChunkColumnSampler`, which **regenerates** those
+columns from the generator, and the generator does not know about plants: a
+tree is a walk over every root within reach of the rim, never a property of one
+column. So a rim cell asking its ring whether to draw a side face is told air
+wherever the neighbour's answer is a trunk or a leaf, and emits a wall; the
+neighbouring chunk, whose own rim cell holds the plant, emits the matching wall
+from its side. Two coplanar faces where a canopy crosses a boundary, and the
+apron -- which draws the ring outright, one cell past the rim -- draws that ring
+with no plants in it at all.
+
+**Why it matters.** It is the same shape as the LOD seam the apron exists to
+close, arriving one subsystem later: what is drawn is not wrong so much as
+doubled, so it reads as a faint outline through a canopy that spans two chunks
+rather than as a hole. At the shipped 64 m chunk against a canopy about 20 m
+wide, a fair share of the forest sits on a boundary.
+
+**What would fix it.** The sampler is already the one thing that reconciles a
+chunk's own cells with the ones it regenerates -- `applyDeltas` hands it what
+fell outside the triangle for exactly this reason. `plantChunk` can do the
+same: keep the cells it grew that landed on the ring rather than dropping them,
+and hand them to the sampler as an overlay. It costs nothing to grow, because
+those plants were grown anyway (F-106); what is added is the write.
+
+### F-108 — Trees stop at a line two levels out, and the line is visible
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts` (`PLANT_LEVELS`)
+
+**What happens.** Roots are chosen at the world's own lattice whatever level a
+chunk is drawn at, because a coarse chunk hashing its own cells would pick a
+different forest at every level and a tree would come and go as the player
+walked. A chunk covers four times the ground at each level, so the roots it
+walks quadruple with it: measured on the shipped world -- depth 13, 1 m blocks,
+64 m chunks, two layers -- one chunk grows 35 plants in 760 ms at the finest
+level, 89 in 448 ms at one, 379 in 935 ms at two and 2,272 in 2,440 ms at
+three. At the sixth, which the selection reaches, the browser runs out of
+memory before a chunk finishes. `PLANT_LEVELS = 2` caps it, and the forest
+therefore ends at the boundary between the second and third level of detail.
+
+**Why it matters.** It is a tree line drawn by the renderer rather than by the
+world -- a ring of bare ground at a fixed distance from the player that moves
+with them. Nothing else in the engine has an edge at a level boundary: the
+apron exists precisely so a level change is invisible.
+
+**What would fix it.** Two candidates, and nobody has measured either. A coarse
+chunk could grow **fewer** plants rather than all of them -- taking one root in
+`4^lod` by a rule that depends only on the root, so the survivors are the same
+set every chunk agrees on and the forest thins with distance instead of
+stopping. Or the far levels could draw a plant as a **billboard** off the same
+root hash, which is what the cloud deck already does for a puff. The first
+keeps trees as blocks and is the smaller change; the second is the one that
+looks right at a kilometre.
+
 ### F-107 — Growing a chunk's plants costs about as much again as its ground
 
 **Kind:** performance
