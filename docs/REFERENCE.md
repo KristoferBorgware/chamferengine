@@ -121,7 +121,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 413 ns -- a timing, so it moves run to run
+   this machine, now: 282 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -1426,7 +1426,7 @@ worked planet: R = 1700 m, D = 11, chunk level C = 6
 
 3. the cost of not being clever: one dot product per player per update
    20,000 updates x 200 players = 4.0M tests, single threaded
-   comfortably over 100M tests per second  (this run: 190M -- a timing, so it moves run to run)
+   comfortably over 100M tests per second  (this run: 364M -- a timing, so it moves run to run)
    A busy server does not produce 20,000 chunk updates a second. The whole
    question is smaller than the machinery doc 11 imagined for it.
 
@@ -2337,7 +2337,7 @@ Cited by [doc 09](09-ray-traversal.md).
 ```
 1. the boundary a step actually crosses
    200,000 random points, each rounded to its cell by hexRound:
-   inside |coordinate - centre| <= 1/2 ......... 75.1%  (doc 09)
+   inside |coordinate - centre| <= 1/2 ......... 75.0%  (doc 09)
    inside |difference - centre's| <= 1 ......... 100.0%
 
    DOC 09 NAMES THE WRONG HEXAGON, and it is the rotated one rather than a
@@ -2353,7 +2353,7 @@ Cited by [doc 09](09-ray-traversal.md).
 
 2. crossing a face edge -- two things change, and they are not the same thing
    20,000 points just past a face edge, re-expressed by the reflection:
-   the direction it describes moves by 2.28 degrees on average, 6.48 at worst
+   the direction it describes moves by 2.28 degrees on average, 6.50 at worst
 
    SO USE IT FOR THE NAME AND NOT FOR THE FRAME. On a lattice point it
    lands on the right cell every time -- verification/neighbour.js checks
@@ -2486,7 +2486,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 1369 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 742 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
