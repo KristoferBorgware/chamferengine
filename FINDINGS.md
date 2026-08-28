@@ -10,6 +10,44 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-108 — A patch vertex is laid out in four places and only three of them are checked
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, while fixing the light markers in the cave bench
+**Where:** `packages/engine/src/mesh/PatchGeometry.ts`,
+`packages/engine/src/render/patch/PatchRenderer.ts`,
+`packages/engine/src/render/patch/PATCH_SHADER.ts`
+
+**What happens.** One patch vertex is described four times over. `PATCH_STRIDE`
+says how many floats it is; the pipeline's `attributes` list says where each
+channel sits in those floats; the shader's `vertexMain` parameters say what
+each channel is called; and `PatchRenderer.buildLamps` writes a vertex by
+pushing that many numbers in that order, positionally, with nothing naming
+them. The first three are read by the same compiler and disagree loudly. The
+fourth is a `number[]`, so a channel added to the vertex and not added there
+leaves `out.length / PATCH_STRIDE` a fraction -- the vertex count is wrong,
+every attribute after the first is read out of the middle of its neighbour, and
+what draws is triangles of the right count and the wrong everything.
+
+**Why it matters.** It has happened twice in a fortnight, both times when the
+vertex grew: master's plant material took the stride to 14 and the cave bench's
+crust depth took it to 15, and each time the lamp writer stayed where it was.
+It does not fail as an error. It draws -- large, translucent, coloured shards
+under the patch -- and reads as a bug in the lighting rather than in a buffer,
+which is where the last two hours went.
+
+**What would fix it.** Give the layout one name. A `patchVertex(...)` that
+takes the channels by name and returns the floats, used by `buildLamps` and by
+whatever else writes a vertex by hand, with a `length` the compiler ties to
+`PATCH_STRIDE`. Failing that, the cheap half: assert in `buildLamps` that
+`out.length % PATCH_STRIDE === 0` and throw, so a stride that has moved says so
+on the first frame instead of drawing something.
+
+---
+
 ### F-107 — Growing a chunk's plants costs about as much again as its ground
 
 **Kind:** performance

@@ -41,8 +41,23 @@ export const MAX_CAVE_LAYERS = 512;
  * `600,000` triangles and about `108 MB`, which is the largest the page has
  * been seen to hold comfortably.
  *
+ * **What binds is the frame, not the memory, and it binds three times sooner.**
+ * A patch made of blocks is drawn five times a frame -- once for the picture
+ * and **four** more times for the depth maps, two lights with two cascades
+ * each. Measured (`tools/trial-cave-load.ts`) on the shipped patch of `12,481`
+ * columns: a `50 m` reach is `624,050` blocks, `206,724` triangles and
+ * `1,033,620` through the pipe a frame; `160 m` is `1,996,960` blocks and
+ * `3,267,210` a frame, and the mesh alone takes `822 ms` to build against
+ * `192 ms`. Both are inside the memory figure above and only the first is a
+ * preview somebody can turn a camera in.
+ *
+ * So the budget is the `50 m` one. **The maps are recorded when something they
+ * read moves rather than once a frame** (`PatchRenderer`), which takes the four
+ * redraws off an orbit -- but a knob that moves the mesh still pays them, and
+ * the mesh build is paid whatever the shadows do.
+ *
  * The cap is real rather than advisory: the walk takes as many layers as the
  * product allows and the readout says how deep it went, so a slider asking for
  * more than this gets less and says so.
  */
-export const MAX_CAVE_BLOCKS = 2_000_000;
+export const MAX_CAVE_BLOCKS = 625_000;
