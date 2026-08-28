@@ -3,6 +3,9 @@ import { PATCH_STRIDE } from "../PatchGeometry.js";
 import { Vec3 } from "../../math/Vec3.js";
 import { AMBIENT_OCCLUSION } from "../AMBIENT_OCCLUSION.js";
 import { speckleShade } from "../../generation/terrain/blockColor.js";
+import type { Stand } from "../../generation/plants/growStand.js";
+import { PLANT_EMPTY, PLANT_LEAF } from "../../generation/plants/growStand.js";
+import { hash3 } from "../../generation/noise/hash3.js";
 
 /** The ground a patch stands on, one entry per column. */
 export interface ColumnGround {
@@ -34,6 +37,29 @@ export interface ColumnGround {
 	 * against the shape it cut.
 	 */
 	readonly carve: Float32Array;
+}
+
+/**
+ * A stand of plants standing on the same columns, drawn with the ground.
+ *
+ * **One buffer, because a plant is terrain.** The wood and the leaves are
+ * blocks on the same lattice, lit by the same rig and recorded by the same
+ * shadow pass, so they are triangles in the opaque run rather than a mesh of
+ * their own.
+ */
+export interface ColumnPlants {
+	readonly stand: Stand;
+
+	/**
+	 * Per column, the top of its own ground and which layer that top is.
+	 *
+	 * Handed in rather than read back off the spans, because a slot index is
+	 * counted from these two and the stand was grown against them: worked out
+	 * a second time here, a rounding either way would move every plant by a
+	 * block.
+	 */
+	readonly top: Float64Array;
+	readonly groundLayer: Int32Array;
 }
 
 /** What the mesh is drawn against, beyond the ground itself. */
@@ -71,8 +97,16 @@ export interface ColumnMesh {
 	/** Position, normal, metres and the three layers: {@link PATCH_STRIDE}. */
 	readonly vertices: Float32Array<ArrayBuffer>;
 
-	/** How many vertices the ground drew, which the opaque pass takes. */
+	/**
+	 * How many vertices the opaque pass takes: the ground, then the plants.
+	 *
+	 * One run, because both are opaque and both cast. What the plants alone
+	 * came to is {@link plantVertices}, which is a readout rather than a draw.
+	 */
 	readonly groundVertices: number;
+
+	/** How many of those the plants drew. */
+	readonly plantVertices: number;
 
 	/** How many the water drew, blended after every opaque one. */
 	readonly waterVertices: number;
@@ -126,6 +160,18 @@ export interface ColumnMesh {
  */
 const LIP_SHARE = 0.06;
 
+/**
+ * How much darker a leaf is drawn than the color it is written in.
+ *
+ * A leaf green sits within a few hundredths of the ground's grass, so side by
+ * side the two read as one surface. A cluster is a shell of one-block-thick
+ * surface anyway, and almost every cell of it has other leaves over it.
+ */
+const LEAF_SHADE = 0.66;
+
+/** How far a plant cell's color drifts from its layer's, either way. */
+const PLANT_GRAIN = 0.14;
+
 /** The three axes of the patch: out of the ground, east, and north. */
 function frameAt(at: Vec3): { up: Vec3; east: Vec3; north: Vec3 } {
 	const up = at.normalize();
@@ -159,6 +205,7 @@ export function columnPatchMesh(
 	patch: ColumnPatch,
 	ground: ColumnGround,
 	look: ColumnLook,
+	plants: ColumnPlants | null = null,
 ): ColumnMesh {
 	const {
 		count,
@@ -207,6 +254,15 @@ export function columnPatchMesh(
 	let cPeaks = 0;
 	let cCarve = 0;
 	let cShade = 1;
+	/** Which palette entry the face is drawn from, `0` for the ground itself. */
+	let cMaterial = 0;
+	/**
+	 * Whether faces take the ground's corner shading and go into the wireframe.
+	 *
+	 * The plants take neither: their shade is a grain of their own, and a rim
+	 * line round every leaf is a solid sheet rather than a lattice.
+	 */
+	let grounded = true;
 	/** The three corners' own shading, refilled per triangle. */
 	let sA = 1;
 	let sB = 1;
@@ -288,6 +344,7 @@ export function columnPatchMesh(
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sA;
+		vertices[to + 13] = cMaterial;
 		to += PATCH_STRIDE;
 		vertices[to] = bx;
 		vertices[to + 1] = by;
@@ -302,6 +359,7 @@ export function columnPatchMesh(
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sB;
+		vertices[to + 13] = cMaterial;
 		to += PATCH_STRIDE;
 		vertices[to] = cx;
 		vertices[to + 1] = cy;
@@ -316,6 +374,7 @@ export function columnPatchMesh(
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sC;
+		vertices[to + 13] = cMaterial;
 		written += 3;
 		// **What the camera has to frame is the shape, and only the shape knows
 		// what that is.** A patch's width says nothing once it is a fair share
@@ -430,7 +489,7 @@ export function columnPatchMesh(
 		// takes none of this -- shading it would draw the hillside's own
 		// occlusion onto the water beside it.
 		const water = waterFloor === waterFloor;
-		const flat = upward && !water ? capShade(c, metres) : 1;
+		const flat = upward && !water && grounded ? capShade(c, metres) : 1;
 		for (let m = 0; m < deg; m++) {
 			local(
 				corner[c * 18 + m * 3]!,
@@ -452,7 +511,8 @@ export function columnPatchMesh(
 			// the middle is always first, so the edge is the two after it.
 			// Ground only: the sea's own rim sits at one radius everywhere and
 			// would draw a second grid across the water at sea level.
-			if (waterFloor !== waterFloor) rims.push(written + 1, written + 2);
+			if (grounded && waterFloor !== waterFloor)
+				rims.push(written + 1, written + 2);
 			sA = flat;
 			sB = flat;
 			sC = flat;
@@ -527,8 +587,10 @@ export function columnPatchMesh(
 		local(corner[a]!, corner[a + 1]!, corner[a + 2]!, below, p3);
 		// One face carries the gradient of the whole run: its top vertices are
 		// read at the top and its bottom ones at the bottom.
-		const overhead = wallShade(c, top - blockMetres * 0.5);
-		const underfoot = wallShade(c, below + blockMetres * 0.5);
+		const overhead = grounded ? wallShade(c, top - blockMetres * 0.5) : 1;
+		const underfoot = grounded
+			? wallShade(c, below + blockMetres * 0.5)
+			: 1;
 		sA = overhead;
 		sB = overhead;
 		sC = underfoot;
@@ -638,6 +700,78 @@ export function columnPatchMesh(
 			}
 		}
 	}
+	const soilVertices = written;
+
+	// **Everything standing on the ground, in the same run.** A plant is
+	// blocks, so it is drawn the way the ground is: a cap wherever nothing
+	// stands over a slot, a floor wherever nothing stands under one, and a
+	// side wherever the neighbour's own slot at the same height is empty.
+	//
+	// **A slot index is counted from each column's own ground**, so a side
+	// looks the neighbour up at a converted index rather than at the same
+	// number -- and anything under the neighbour's own surface is rock the
+	// ground pass has already drawn.
+	if (plants) {
+		grounded = false;
+		const { stand, top: standTop, groundLayer } = plants;
+		const { blocks, owner, layers: slots, sunk } = stand;
+		for (let c = 0; c < count; c++) {
+			const deg = degree[c]!;
+			const base = c * slots;
+			for (let slot = 0; slot < slots; slot++) {
+				const what = blocks[base + slot]!;
+				if (what === PLANT_EMPTY) continue;
+				const from = standTop[c]! + (slot - sunk) * blockMetres;
+				const to = from + blockMetres;
+				// **The palette runs wood then leaf per layer**, so a face
+				// carries which plant put it there as well as which half of
+				// that plant it is.
+				const kind = owner[base + slot]!;
+				cMaterial =
+					kind > 0 ? kind * 2 - (what === PLANT_LEAF ? 0 : 1) : 0;
+				// **A canopy is darker than the grass under it, and it has to
+				// be.** A leaf green sits within a few hundredths of the
+				// ground's grass, so side by side the two read as one surface
+				// and a tree disappears into the hillside. A cluster is a
+				// shell anyway: almost every cell of it has other leaves over
+				// it.
+				const shade = what === PLANT_LEAF ? LEAF_SHADE : 1;
+				// A grain off the cell's own address, so a canopy is not one
+				// flat color and nothing has to be stored.
+				cShade =
+					shade *
+					(1 -
+						PLANT_GRAIN +
+						2 * PLANT_GRAIN * hash3(c, slot, what, seed));
+				if (
+					slot + 1 >= slots ||
+					blocks[base + slot + 1] === PLANT_EMPTY
+				)
+					cap(c, to, true);
+				if (slot > sunk && blocks[base + slot - 1] === PLANT_EMPTY)
+					cap(c, from, false);
+				for (let m = 0; m < deg; m++) {
+					const found = ring[c * 6 + m]!;
+					if (found < 0) {
+						wall(c, m, deg, to, from);
+						continue;
+					}
+					const across = slot + groundLayer[c]! - groundLayer[found]!;
+					if (across < sunk) continue;
+					if (
+						across < slots &&
+						blocks[found * slots + across] !== PLANT_EMPTY
+					)
+						continue;
+					wall(c, m, deg, to, from);
+				}
+			}
+		}
+		grounded = true;
+		cMaterial = 0;
+		cShade = 1;
+	}
+	const plantVertices = written - soilVertices;
 	const groundVertices = written;
 
 	// The sea, last, so it is one run of triangles the caller can blend after
@@ -681,6 +815,7 @@ export function columnPatchMesh(
 		// handed across a worker boundary would move the whole of it.
 		vertices: vertices.slice(0, written * PATCH_STRIDE),
 		groundVertices,
+		plantVertices,
 		waterVertices: written - groundVertices,
 		lowest: count ? lowest : 0,
 		highest: count ? highest : 0,

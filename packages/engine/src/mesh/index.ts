@@ -46,6 +46,7 @@ export type {
 	ColumnGround,
 	ColumnLook,
 	ColumnMesh,
+	ColumnPlants,
 } from "./column/columnPatchMesh.js";
 export { columnPatchMesh } from "./column/columnPatchMesh.js";
 export type { FloatingRock } from "./column/floatingRock.js";

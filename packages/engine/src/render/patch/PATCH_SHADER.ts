@@ -4,6 +4,15 @@ import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 import { patchFill } from "./PATCH_LIGHTS.js";
 
+/**
+ * How many colors the plant palette holds: a wood and a leaf per layer.
+ *
+ * A fixed array because a uniform is a fixed size, and eight kinds of plant on
+ * one patch is more than a reader tunes at once. A draw with fewer leaves the
+ * rest black, and nothing indexes them.
+ */
+export const PLANT_COLORS = 16;
+
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
 	return `vec3f(${color[0]}, ${color[1]}, ${color[2]})`;
@@ -36,6 +45,9 @@ const STONE = ${wgsl(BLOCK_COLORS[BlockType.STONE]!)};
 const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
 const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
 const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
+
+/** How many wood and leaf colors the palette holds: two per layer. */
+const PLANT_COLORS = ${PLANT_COLORS};
 
 /** How many steps a picture of one layer's noise is cut into. */
 const PICTURE_BANDS = 9.0;
@@ -104,6 +116,17 @@ struct View {
 	shadowing : vec4f,
 	/** Per map: what a texel is worth on the ground, and its own depth bias. */
 	fit      : array<vec4f, 4>,
+	/**
+	 * The color of everything standing on the ground, wood then leaf per layer.
+	 *
+	 * **A material rather than a height.** The ground's color is what a
+	 * hillside is made of, which follows from how high it stands and is worked
+	 * out below; a plant's does not follow from anything on the face, so the
+	 * face carries an index and this says what that index is. A vertex color
+	 * would say the same thing at three times the width, on the buffer that is
+	 * rewritten whenever the ground moves.
+	 */
+	plants   : array<vec4f, ${PLANT_COLORS}>,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -239,6 +262,15 @@ struct VertexOut {
 
 	/** Where this fragment is, which is what a shadow map is read at. */
 	@location(6)       world  : vec3f,
+
+	/**
+	 * Which palette entry the face is drawn from, zero for the ground itself.
+	 *
+	 * Flat, because it names a material rather than measuring one: interpolated
+	 * across a triangle it would read as a fraction of a palette entry
+	 * somewhere in the middle of every face.
+	 */
+	@location(7) @interpolate(flat) material : u32,
 };
 
 @vertex
@@ -252,11 +284,13 @@ fn vertexMain(
 	@location(6) peaks     : f32,
 	@location(7) carve     : f32,
 	@location(8) shade     : f32,
+	@location(9) material  : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
 	out.shade = shade;
+	out.material = u32(material + 0.5);
 	out.world = position;
 	out.height = position.y;
 	out.metres = metres;
@@ -408,6 +442,17 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		return vec4f(0.42, 0.82, 1.0, 1.0);
 	}
 	let picture = i32(view.mode.x);
+
+	// **What stands on the ground keeps its own color in every picture.** The
+	// pictures are of the ground -- how high it is, what one layer's field
+	// reads there -- and a plant is not that ground; drawn in a picture's own
+	// ramp a canopy reads as a hillside at whatever height its leaves happened
+	// to reach. The shade it carries is its layer's own grain and a leaf's
+	// darkening, both baked by the mesher.
+	if (in.material > 0u) {
+		let tint = view.plants[in.material - 1u].rgb * in.shade;
+		return shade(tint, in.normal, in.world, SUN_SHARE);
+	}
 
 	// **The sea is a sheet over the ground and carries the ground's own
 	// height**, so how much water a look passes through is on the vertex: it

@@ -49,16 +49,22 @@ export interface PatchGeometry {
 }
 
 /**
- * Floats per vertex: position, normal, metres, raw, and one per layer.
+ * Floats per vertex: position, normal, metres, raw, one per layer, the cell's
+ * own speckle, and which material the face is.
  *
  * **Four layers, because a layer with no channel of its own is a layer whose
  * curve cannot be looked at.** Three of them shape the surface; the fourth is
  * the carve, which is a 3D field and so has no one value at a place -- what
  * rides here is what it read at the block this face belongs to.
  *
- * Plus one: the cell's own speckle, which is a fact about the cell rather than
- * about the ground, and the one thing on a preview that says where one hexagon
- * ends and the next begins where both are the same material and the same
- * height.
+ * The speckle is a fact about the cell rather than about the ground, and the
+ * one thing on a preview that says where one hexagon ends and the next begins
+ * where both are the same material and the same height.
+ *
+ * **The material is what a face is made of, where that is not the ground.** A
+ * hillside takes its color from how high it stands, which the shader works out
+ * from the metres already here; a plant standing on it does not, so the face
+ * carries an index into the palette of woods and leaves the draw was given.
+ * Zero is the ground and every other face writes it.
  */
-export const PATCH_STRIDE = 13;
+export const PATCH_STRIDE = 14;
