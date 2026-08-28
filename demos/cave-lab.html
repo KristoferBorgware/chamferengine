@@ -7,6 +7,11 @@
 		<style>
 			:root {
 				color-scheme: dark;
+				/* One source for both panel widths: the canvas is a replaced element
+				   and does not stretch to its offsets, so its width is computed from
+				   these rather than left to the layout. */
+				--left-panel: 260px;
+				--right-panel: 330px;
 				--ink: #e8ecf2;
 				--dim: #8b95a4;
 				--panel: #12161d;
@@ -26,10 +31,14 @@
 				color: var(--ink);
 				font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 			}
+			/* The world is drawn in the gap between the two panels, not behind
+			   them: a canvas the full width of the window centres its perspective
+			   on the window and puts the planet off to one side of what is left. */
 			#view {
 				position: fixed;
-				inset: 0;
-				width: 100%;
+				top: 0;
+				left: var(--left-panel);
+				width: calc(100% - var(--left-panel) - var(--right-panel));
 				height: 100%;
 				display: block;
 				touch-action: none;
@@ -41,17 +50,29 @@
 			/* The plan and the readout are the reference and never scroll away;
 			   only the knobs move, so what is being judged stays on screen while
 			   it is being changed. */
-			#panel {
+			#panel,
+			#left {
 				position: fixed;
 				top: 0;
-				right: 0;
 				bottom: 0;
-				width: 330px;
 				display: flex;
 				flex-direction: column;
 				background: rgba(18, 22, 29, 0.94);
-				border-left: 1px solid var(--edge);
 				backdrop-filter: blur(6px);
+			}
+			#panel {
+				right: 0;
+				width: var(--right-panel);
+				border-left: 1px solid var(--edge);
+			}
+			/* The world is what is being judged, so the knobs that decide how it is
+			   looked at sit on their own side and never scroll the carve away. */
+			#left {
+				left: 0;
+				width: var(--left-panel);
+				border-right: 1px solid var(--edge);
+				overflow-y: auto;
+				padding: 10px 14px 24px;
 			}
 			#fixed {
 				padding: 12px 14px 10px;
@@ -174,20 +195,31 @@
 			}
 			#hint {
 				position: fixed;
-				left: 14px;
+				left: calc(var(--left-panel) + 14px);
 				bottom: 12px;
 				color: #6d768c;
 				font-size: 11.5px;
 				pointer-events: none;
 			}
-			@media (max-width: 760px) {
-				#panel {
-					width: 100%;
-					top: auto;
-					height: 62%;
+			/* Too narrow for two columns beside the world: everything stacks and
+			   the page scrolls, rather than one panel covering the other. */
+			@media (max-width: 900px) {
+				html,
+				body {
+					height: auto;
+					overflow: auto;
 				}
 				#view {
-					bottom: 62%;
+					position: static;
+					width: 100%;
+					height: 55vh;
+				}
+				#panel,
+				#left {
+					position: static;
+					width: 100%;
+					border: 0;
+					border-top: 1px solid var(--edge);
 				}
 				#hint {
 					display: none;
@@ -213,6 +245,7 @@
 			</div>
 			<div id="knobs"></div>
 		</div>
+		<div id="left"></div>
 		<script>
 			// =============================================================
 			// The noise, copied from the engine so the picture is the world's.
@@ -454,7 +487,8 @@
 
 			const KNOBS = [
 				{
-					group: "The carve",
+					group: "Carve",
+					side: "right",
 					open: true,
 					rows: [
 						{ key: "seed", label: "Seed", type: "text" },
@@ -477,7 +511,8 @@
 					],
 				},
 				{
-					group: "A way in",
+					group: "Entrances",
+					side: "right",
 					open: true,
 					rows: [
 						{
@@ -516,7 +551,8 @@
 					],
 				},
 				{
-					group: "The ground over it",
+					group: "Ground",
+					side: "left",
 					open: false,
 					rows: [
 						{
@@ -538,7 +574,8 @@
 					],
 				},
 				{
-					group: "The volume",
+					group: "Volume",
+					side: "left",
 					open: false,
 					rows: [
 						{ key: "cells", label: "Cells across", low: 12, high: 96, step: 2 },
@@ -555,7 +592,8 @@
 					],
 				},
 				{
-					group: "Looking at it",
+					group: "View",
+					side: "left",
 					open: true,
 					rows: [
 						{ key: "show", label: "Draw", type: "select", options: ["rock", "void"] },
@@ -1684,7 +1722,12 @@
 			const rows = new Map();
 
 			function buildPanel() {
-				const host = document.getElementById("knobs");
+				// Two columns: the carve on the right beside the picture it draws, and
+				// everything about how the world is looked at on the left.
+				const hosts = {
+					right: document.getElementById("knobs"),
+					left: document.getElementById("left"),
+				};
 				for (const group of KNOBS) {
 					const set = document.createElement("details");
 					set.className = "group";
@@ -1759,7 +1802,7 @@
 						set.append(wrap);
 						rows.set(row.key, { row, input, show });
 					}
-					host.append(set);
+					hosts[group.side ?? "right"].append(set);
 				}
 
 				const note = document.createElement("p");
@@ -1769,7 +1812,7 @@
 					"so the passages can be looked into. Draw · void turns the " +
 					"world inside out and draws the caves as the solid, which is " +
 					"the only view that shows a network from outside it.";
-				host.append(note);
+				hosts.right.append(note);
 			}
 
 			let pending = 0;
