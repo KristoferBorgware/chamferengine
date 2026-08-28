@@ -366,14 +366,23 @@ export function plantChunk(
 		}
 	}
 
-	// **Written in slot order and then in layer order**, which is ascending in
-	// the index the two are packed into -- so the reader searches rather than
-	// scanning, and nothing has to sort.
+	// **Sorted, because the reader searches rather than scans.** The columns
+	// are walked in the order the patch was laid out, which is the order the
+	// triangle was enumerated in and the ring grown in -- neither of which is
+	// the order a slot's rank runs in.
+	const order = where.map((_, at) => at);
+	order.sort((a, b) => where[a]! - where[b]!);
+	const at = new Uint32Array(order.length);
+	const held = new Uint16Array(order.length);
+	for (let n = 0; n < order.length; n++) {
+		at[n] = where[order[n]!]!;
+		held[n] = what[order[n]!]!;
+	}
 	return {
 		plants: stand.plants,
 		wood: stand.wood,
 		leaf: stand.leaf,
-		where: Uint32Array.from(where),
-		what: Uint16Array.from(what),
+		where: at,
+		what: held,
 	};
 }
