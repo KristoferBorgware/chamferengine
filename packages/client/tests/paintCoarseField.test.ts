@@ -139,8 +139,10 @@ describe("paintCoarseField", () => {
 				picture: "ground",
 			});
 			for (let channel = 0; channel < 3; channel++) {
-				expect(px[channel], `channel ${channel} at ${metres}`)
-					.toBeGreaterThanOrEqual(0);
+				expect(
+					px[channel],
+					`channel ${channel} at ${metres}`,
+				).toBeGreaterThanOrEqual(0);
 				expect(px[channel]).toBeLessThanOrEqual(255);
 			}
 			expect(px[3]).toBe(255);

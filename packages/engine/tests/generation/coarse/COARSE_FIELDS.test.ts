@@ -91,7 +91,10 @@ describe("COARSE_FIELDS", () => {
 				GROUND_LINES.rock,
 				GROUND_LINES.snow,
 			])
-				expect(Math.abs(metres % 100), `${field.id} at ${metres} m`).toBe(0);
+				expect(
+					Math.abs(metres % 100),
+					`${field.id} at ${metres} m`,
+				).toBe(0);
 	});
 
 	it("names each picture once", () => {
