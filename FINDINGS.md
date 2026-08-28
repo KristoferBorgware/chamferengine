@@ -10,6 +10,43 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-112 — A template is a shape in cells, so one tree is wider at a face centre than at a corner
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-28, stamping pre-grown plants instead of growing each one
+**Where:** `packages/engine/src/generation/plants/PlantTemplate.ts`,
+`packages/engine/src/generation/plants/buildPlantTemplate.ts`
+
+**What happens.** A plant used to be a shape in **metres**: the stamp asked
+which cell each point of a rod fell in, so a tree was the same size everywhere.
+A template is a shape in **cells** -- a list of steps in the face's own lattice
+-- and cell spacing is not uniform. `uniform.js` measures it varying `1.41:1`
+across an icosahedron face, narrowest at a pentagon. Measured on the shipped
+world at depth 13, ten lattice steps span **10.98 m** at the middle of a face,
+**10.27 m** halfway along an edge and **8.75 m** near a corner.
+
+So one template draws a tree about a fifth narrower near a face corner than at
+a face centre. **Height is exact either way**, because a template's vertical
+offsets are layers and layers do not vary -- one radius for the whole planet.
+A tree near a pentagon is therefore a little more slender than the same tree in
+the middle of a face.
+
+**Why it matters.** Barely, and it should be written down anyway. The variation
+is smooth over a face `7,100 m` across, so nothing has an edge, and the twenty
+faces make it a slow twenty-fold pattern rather than noise. Nobody standing in
+a forest can see it. What it would spoil is any later feature that reads a
+plant's width in metres and expects the species to answer for it.
+
+**What would fix it.** Choose the size rung from the local spacing rather than
+from the plant's hash alone: the template set already spans a range of sizes,
+and picking a wider one where the lattice is narrow keeps the metres roughly
+right for no extra memory. The reference point is the other half of it -- the
+templates are built at the middle of face 0, where the spacing is widest, so
+every tree is at most narrower and never wider.
+
 ### F-111 — A stand does not lean together, and two places say it does
 
 **Kind:** bug
@@ -137,6 +174,13 @@ line, so on level ground the bare band is over the edge of the world. What
 shows is anything standing above the horizon further off -- a hillside or a
 range, which is exactly where a forest is read at a glance.
 
+**Stamping pre-grown plants does not lift it.** `3acb167` took the plant pass
+from `6,021 ms` to `566 ms` over twelve chunks, and none of that is the root
+walk: the walk enumerates the candidate cells and hashes each one, which
+happens before any plant is grown. What ran the browser out of memory at lod 6
+is `8,392,705` lattice points held in a `Set` and three arrays, and that is
+exactly as true now.
+
 **What would fix it.** Two candidates, and nobody has measured either. A coarse
 chunk could grow **fewer** plants rather than all of them -- taking one root in
 `4^lod` by a rule that depends only on the root, so the survivors are the same
@@ -182,70 +226,6 @@ whatever else writes a vertex by hand, with a `length` the compiler ties to
 on the first frame instead of drawing something.
 
 ---
-
-### F-107 — Growing a chunk's plants costs three times what generating its ground does
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** high
-**Effort:** medium
-**Found:** 2026-08-28, growing the world's own plants in its own chunks
-**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
-`packages/engine/src/generation/plants/growStand.ts`
-
-**What happens.** A chunk grows every plant within `24 m` of its rim and writes
-only what it owns, which is what makes two chunks agree about a tree that
-straddles them. Measured on the shipped world -- depth 13, 1 m blocks, 64 m
-chunks, the two default layers -- over **12 chunks drawn at random over the
-sphere and kept only where 95% or more of their columns stand above the
-water**, at the finest level, best of three passes
-(`tools/trial-plant-cost.ts`):
-
-| | ms |
-|---|---|
-| generate the ground | 2,715 total, ~165 a chunk |
-| mesh it, no trees | ~57 a chunk |
-| **grow the plants** | **6,021 total, x3.0 the ground's own generate** |
-| mesh it again, with trees | ~85 a chunk |
-
-**The whole job goes from 2,715 ms to 8,970 ms: +230%.** The middle chunk is
-**+210%** and the range is **+15% to +572%**, tracking how many plants the
-noise put there -- 0 to 82 over these twelve. **96% of what the trees add is
-the growing**, not the meshing: the mesh carries 140% to 445% more faces and
-still costs only 4% of the difference.
-
-**A chunk that grows nothing still pays 36 ms, +16%.** The root walk runs
-whether or not it finds a plant, so ground the curve rules out is not free.
-
-**Where the growing goes**, per plant (`tools/trial-plant-split.ts`, against
-the 13-21 ms a plant costs in the table above):
-
-| | Pine | Oak | share |
-|---|---|---|---|
-| the skeleton walk (`growPlant`) | 0.53 ms | 0.74 ms | **~4%** |
-| the address lookups it then does | 0.89 ms | 1.34 ms | **~7%** |
-| the rod and cluster floods, and the writes | the rest | the rest | **~89%** |
-
-A pine is 395 rods and 288 leaf clusters, and asks `directionToCell` 1,261
-times; an oak is 561 and 378, and asks 1,905 times. **Nearly all of the cost is
-rasterising the skeleton into cells**, not building it and not looking the
-cells up.
-
-These are software-adapter timings and move run to run; read the ratios.
-
-**Why it matters.** At full detail the trees cost more than three times what
-the ground does, and full detail is where the player is standing. The pool
-absorbs it the way it absorbs the ground, so it reads as chunks arriving later
-rather than as a stutter. It is also the reason for the tree line (F-109): the
-same walk quadruples per level of detail.
-
-**What would make it smaller.** F-103 is most of it: the rod walk asks
-`directionToCell` at every step and that call allocates seven objects for an
-answer that is three integers. After that the leaf stamp is the largest single
-term, and the lab took one stand from 4,990 ms to 1,595 ms without changing any
-of the shapes it drew. The +16% floor is separate and cheaper to close: a
-plant is decided by a hash of its root cell, so a whole triangle of roots can
-be refused before any of them is turned into a position.
 
 ### F-106 — A plant is grown twice for a cell that two chunks both hold
 
@@ -327,41 +307,6 @@ shadow maps are fitted to, so it costs texels as well as attention.
 column is drawn, defaulting to what it does now. The carve stays exactly as it
 is -- this is only how much of the column the mesh emits, and the walls between
 two columns are already cut off at whatever the lower one reaches.
-
-### F-103 — Every plant cell goes through `directionToCell`, which allocates
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-28, building the vegetation bench against the engine
-**Where:** `packages/engine/src/generation/plants/growStand.ts`,
-`packages/engine/src/addressing/lookup/`
-
-**What happens.** A rod steps four tenths of a block along its own length and
-asks which column each step landed in; a leaf cluster asks once. Both go
-through `directionToCell`, which takes a `Vec3` -- so every step allocates one
-for the direction, `barycentricOf` allocates four more for its cross products,
-and `hexRound` returns a fresh array. Seven allocations for an answer that is
-three integers, several hundred thousand times per stand.
-
-**Why it matters, and by how much.** The stand is the whole of what the bench
-builds, and the lookup is the innermost thing in it: a shipped patch is
-`2,500 ms` in the worker, and the pipeline the rod walk runs at every step is
-the named lead in that profile. **Counted on the world's own chunk path it is
-smaller than that reading suggests** -- a pine asks 1,261 times and an oak
-1,905, at `0.70 us` a call, which is `0.89` and `1.34 ms` against the `13-21 ms`
-a plant costs in a chunk: **about 7%** (`tools/trial-plant-split.ts`, F-107).
-Worth doing, and not the thing to do first. `faceOf` searching all twenty face
-centroids at every step is the other half of the same call, where the shadow
-march already rechecks the face it was last in -- three dot products against
-twenty.
-
-**Why it is not fixed here.** A second copy of position-to-cell taking bare
-numbers is exactly the drift this project keeps out of the codebase, so the
-answer is to widen the addressing subsystem's own surface rather than to write
-one beside it. That is a change with readers everywhere and wants measuring on
-its own.
 
 ### F-102 — The vegetation lab's "Only at the tips" has never done anything
 
@@ -2609,6 +2554,117 @@ from the world again.
 
 
 ## Closed
+
+### F-107 — Growing a chunk's plants costs three times what generating its ground does
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Closed:** 2026-08-28, fixed in `3acb167` -- a plant is grown once per
+species and stamped after that. Over the same twelve land chunks the whole job
+goes from `2,715 ms` without the trees and `8,970 ms` with, to `2,855` and
+`3,636`: **+230% becomes +27%**, and the plant pass itself `6,021 ms` to
+`566 ms`. What the table below measures is still what a plant costs to *grow*;
+there are now sixteen of them a species instead of one per tree.
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
+`packages/engine/src/generation/plants/growStand.ts`
+
+**What happens.** A chunk grows every plant within `24 m` of its rim and writes
+only what it owns, which is what makes two chunks agree about a tree that
+straddles them. Measured on the shipped world -- depth 13, 1 m blocks, 64 m
+chunks, the two default layers -- over **12 chunks drawn at random over the
+sphere and kept only where 95% or more of their columns stand above the
+water**, at the finest level, best of three passes
+(`tools/trial-plant-cost.ts`):
+
+| | ms |
+|---|---|
+| generate the ground | 2,715 total, ~165 a chunk |
+| mesh it, no trees | ~57 a chunk |
+| **grow the plants** | **6,021 total, x3.0 the ground's own generate** |
+| mesh it again, with trees | ~85 a chunk |
+
+**The whole job goes from 2,715 ms to 8,970 ms: +230%.** The middle chunk is
+**+210%** and the range is **+15% to +572%**, tracking how many plants the
+noise put there -- 0 to 82 over these twelve. **96% of what the trees add is
+the growing**, not the meshing: the mesh carries 140% to 445% more faces and
+still costs only 4% of the difference.
+
+**A chunk that grows nothing still pays 36 ms, +16%.** The root walk runs
+whether or not it finds a plant, so ground the curve rules out is not free.
+
+**Where the growing goes**, per plant (`tools/trial-plant-split.ts`, against
+the 13-21 ms a plant costs in the table above):
+
+| | Pine | Oak | share |
+|---|---|---|---|
+| the skeleton walk (`growPlant`) | 0.53 ms | 0.74 ms | **~4%** |
+| the address lookups it then does | 0.89 ms | 1.34 ms | **~7%** |
+| the rod and cluster floods, and the writes | the rest | the rest | **~89%** |
+
+A pine is 395 rods and 288 leaf clusters, and asks `directionToCell` 1,261
+times; an oak is 561 and 378, and asks 1,905 times. **Nearly all of the cost is
+rasterising the skeleton into cells**, not building it and not looking the
+cells up.
+
+These are software-adapter timings and move run to run; read the ratios.
+
+**Why it matters.** At full detail the trees cost more than three times what
+the ground does, and full detail is where the player is standing. The pool
+absorbs it the way it absorbs the ground, so it reads as chunks arriving later
+rather than as a stutter. It is also the reason for the tree line (F-109): the
+same walk quadruples per level of detail.
+
+**What would make it smaller.** F-103 is most of it: the rod walk asks
+`directionToCell` at every step and that call allocates seven objects for an
+answer that is three integers. After that the leaf stamp is the largest single
+term, and the lab took one stand from 4,990 ms to 1,595 ms without changing any
+of the shapes it drew. The +16% floor is separate and cheaper to close: a
+plant is decided by a hash of its root cell, so a whole triangle of roots can
+be refused before any of them is turned into a position.
+
+### F-103 — Every plant cell goes through `directionToCell`, which allocates
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, building the vegetation bench against the engine
+**Closed:** 2026-08-28, declined -- `3acb167` took the call off the path this
+entry is about. A plant is rasterised once per species into a template and
+stamped from an integer table after that, so `directionToCell` runs sixteen
+times a species per level of detail rather than `1,261` times for every pine of
+every chunk. The allocation is still there and is still worth removing one day;
+it no longer costs anything worth measuring.
+**Where:** `packages/engine/src/generation/plants/growStand.ts`,
+`packages/engine/src/addressing/lookup/`
+
+**What happens.** A rod steps four tenths of a block along its own length and
+asks which column each step landed in; a leaf cluster asks once. Both go
+through `directionToCell`, which takes a `Vec3` -- so every step allocates one
+for the direction, `barycentricOf` allocates four more for its cross products,
+and `hexRound` returns a fresh array. Seven allocations for an answer that is
+three integers, several hundred thousand times per stand.
+
+**Why it matters, and by how much.** The stand is the whole of what the bench
+builds, and the lookup is the innermost thing in it: a shipped patch is
+`2,500 ms` in the worker, and the pipeline the rod walk runs at every step is
+the named lead in that profile. **Counted on the world's own chunk path it is
+smaller than that reading suggests** -- a pine asks 1,261 times and an oak
+1,905, at `0.70 us` a call, which is `0.89` and `1.34 ms` against the `13-21 ms`
+a plant costs in a chunk: **about 7%** (`tools/trial-plant-split.ts`, F-107).
+Worth doing, and not the thing to do first. `faceOf` searching all twenty face
+centroids at every step is the other half of the same call, where the shadow
+march already rechecks the face it was last in -- three dot products against
+twenty.
+
+**Why it is not fixed here.** A second copy of position-to-cell taking bare
+numbers is exactly the drift this project keeps out of the codebase, so the
+answer is to widen the addressing subsystem's own surface rather than to write
+one beside it. That is a change with readers everywhere and wants measuring on
+its own.
 
 ### F-101 — The cliffs layer walked four hundred and eighty layers of every column, and was most of what a chunk cost
 
