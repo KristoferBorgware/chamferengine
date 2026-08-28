@@ -8,7 +8,13 @@ import type { WorldShape } from "../../world/WorldShape.js";
 import { NoiseCorners } from "../noise/NoiseCorners.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
-import { carveDepth, carveIsRock, carveSeed } from "./carveDensity.js";
+import {
+	carveDepth,
+	carveIsRock,
+	carveMargin,
+	carveSeed,
+	carveStep,
+} from "./carveDensity.js";
 import { caveCeilingAt } from "./caveCeilingAt.js";
 import { caveDensity } from "./caveDensity.js";
 import { layerNoiseSettings } from "../coarse/layeredHeight.js";
@@ -61,6 +67,18 @@ export class TerrainGenerator {
 	 * order simply misses.
 	 */
 	private readonly carveCorners: NoiseCorners;
+
+	/**
+	 * The most the cliffs layer's margin can move between one block and the
+	 * next, and room to hold one column's worth of its answers.
+	 *
+	 * `0` says nothing may be skipped, which is a folded field or the layer
+	 * being off.
+	 */
+	private readonly carveMask: Uint8Array;
+
+	/** The most that margin can move between one block of a column and the next. */
+	private readonly carveStride: number;
 	private readonly carveSeed: number;
 
 	constructor(
@@ -78,11 +96,19 @@ export class TerrainGenerator {
 		this.carveCorners = new NoiseCorners(
 			Math.max(1, this.settings.carve.octaves),
 		);
+		this.carveMask = new Uint8Array(this.shape.crustDepth);
 		this.carveNoise = layerNoiseSettings(
 			this.settings.carve,
 			shape.seaLevelRadius,
 		);
 		this.carveSeed = carveSeed(seed);
+		this.carveStride = carveStep(
+			shape.seaLevelRadius,
+			shape.blockSize,
+			this.settings.carve,
+			this.carveNoise,
+			this.settings.carveHold,
+		);
 	}
 
 	/**
@@ -146,7 +172,11 @@ export class TerrainGenerator {
 	}
 
 	/** What block sits at one layer of a column. */
-	blockAt(column: TerrainColumn, layer: number): BlockType {
+	blockAt(
+		column: TerrainColumn,
+		layer: number,
+		carved: boolean | null = null,
+	): BlockType {
 		if (layer < 0 || layer >= this.shape.crustDepth) return BlockType.AIR;
 
 		// Above the ground is air, even below sea level. The sea is a surface
@@ -165,20 +195,23 @@ export class TerrainGenerator {
 		// rule paints what survives both.
 		if (
 			this.settings.carveLayer &&
-			!carveIsRock(
-				column.x,
-				column.y,
-				column.z,
-				this.shape.seaLevelRadius,
-				column.elevation,
-				depthBelow,
-				this.carveSeed,
-				this.settings.carve,
-				this.carveNoise,
-				this.settings.carveHold,
-				undefined,
-				undefined,
-				this.carveCorners,
+			!(
+				carved ??
+				carveIsRock(
+					column.x,
+					column.y,
+					column.z,
+					this.shape.seaLevelRadius,
+					column.elevation,
+					depthBelow,
+					this.carveSeed,
+					this.settings.carve,
+					this.carveNoise,
+					this.settings.carveHold,
+					undefined,
+					undefined,
+					this.carveCorners,
+				)
 			)
 		)
 			return BlockType.AIR;
@@ -248,10 +281,21 @@ export class TerrainGenerator {
 	): ColumnBand {
 		const rock = this.openTo(column, layers);
 
+		// **The cliffs layer is walked with a stride the field itself allows.**
+		// It is three quarters of what a column costs, and a margin further
+		// from nought than the most it can move in a block is the same answer
+		// for that many blocks -- so it is read where it is close to changing
+		// its mind and skipped where it is not.
+		const carved = this.carveRun(column, rock);
+
 		let first = layers;
 		let last = -1;
 		for (let layer = 0; layer < rock; layer++) {
-			const block = this.blockAt(column, layer);
+			const block = this.blockAt(
+				column,
+				layer,
+				carved ? carved[layer] === 1 : null,
+			);
 			into[offset + layer] = block;
 			if (block !== BlockType.AIR) {
 				if (first === layers) first = layer;
@@ -270,6 +314,59 @@ export class TerrainGenerator {
 		into[offset + layers - 1] = BlockType.BEDROCK;
 		if (first === layers) first = layers - 1;
 		return { first, last };
+	}
+
+	/**
+	 * The cliffs layer's answer for every layer of a column, skipping what it
+	 * can.
+	 *
+	 * **A margin says how far this block is from being the other thing**, and
+	 * {@link carveStep} says the most that can move between one block and the
+	 * next -- so a margin of `m` settles the next `floor(|m| / step)` blocks
+	 * without reading them. The bound is the field's own steepest slope along
+	 * the ray a column stands on, so this is not an approximation of the walk
+	 * it replaces: it is the same answer for every layer, and the tests hold it
+	 * to that.
+	 *
+	 * Nothing here when the layer is off, or when a fold makes the bound
+	 * unsound -- the caller then reads every block, as it always did.
+	 */
+	private carveRun(column: TerrainColumn, rock: number): Uint8Array | null {
+		if (!this.settings.carveLayer) return null;
+		const out = this.carveMask.length >= rock ? this.carveMask : null;
+		if (!out) return null;
+		const step = this.carveStride;
+		if (step <= 0) return null;
+		const from = Math.max(0, column.groundLayer);
+		// Above the ground nothing is asked, and the loop below fills from
+		// there; what is over it is air whatever this says.
+		out.fill(1, 0, Math.min(rock, from));
+		let layer = from;
+		while (layer < rock) {
+			const margin = carveMargin(
+				column.x,
+				column.y,
+				column.z,
+				this.shape.seaLevelRadius,
+				column.elevation,
+				(layer - column.groundLayer + 1) * this.shape.blockSize,
+				this.carveSeed,
+				this.settings.carve,
+				this.carveNoise,
+				this.settings.carveHold,
+				undefined,
+				undefined,
+				this.carveCorners,
+			);
+			const same = margin > 0 ? 1 : 0;
+			// **How far this answer reaches**, and never less than the block it
+			// was read for.
+			const span = Math.max(1, 1 + Math.floor(Math.abs(margin) / step));
+			const to = Math.min(rock, layer + span);
+			out.fill(same, layer, to);
+			layer = to;
+		}
+		return out;
 	}
 
 	/**

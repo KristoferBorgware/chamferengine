@@ -120,6 +120,8 @@ export {
 	CARVE_SQUASH,
 	carveDepth,
 	carveIsRock,
+	carveMargin,
+	carveStep,
 	carveSeed,
 } from "./terrain/carveDensity.js";
 

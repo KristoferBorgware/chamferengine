@@ -20,7 +20,9 @@ import {
 	buildCoarseMap,
 	carveDepth,
 	carveIsRock,
+	carveMargin,
 	carveSeed,
+	carveStep,
 	generateChunk,
 	layerNoiseSettings,
 	seedFromString,
@@ -158,7 +160,7 @@ const line = (
 	ms: number,
 ): void =>
 	console.log(
-		`${stride}`.padEnd(9) +
+		`${stride === 0 ? "bounded" : stride}`.padEnd(9) +
 			`${(reads / columns.length).toFixed(1)}`.padStart(10) +
 			`${((100 * reads) / (columns.length * steps)).toFixed(0)}%`.padStart(8) +
 			`${ms.toFixed(0)} ms`.padStart(10) +
@@ -222,6 +224,59 @@ function strided(
 		reads++;
 	}
 	return reads;
+}
+
+/**
+ * The walk the engine runs: read a margin, skip what its own bound allows.
+ *
+ * **Exact, and that is the difference.** A margin further from nought than the
+ * most it can move in a block is the same answer for that many blocks, so
+ * nothing is assumed about the layers in between -- they are proved.
+ */
+const bound = carveStep(shape.seaLevelRadius, block, layer, noise);
+{
+	const got = new Uint8Array(steps);
+	let reads = 0;
+	let wrong = 0;
+	const walk = (one: (typeof columns)[number]): number => {
+		const step = bound;
+		let count = 0;
+		let s = 0;
+		while (s < steps) {
+			const margin = carveMargin(
+				one.at.x,
+				one.at.y,
+				one.at.z,
+				shape.seaLevelRadius,
+				one.elevation,
+				s * block,
+				carve,
+				layer,
+				noise,
+			);
+			count++;
+			const span = Math.max(1, 1 + Math.floor(Math.abs(margin) / step));
+			const to = Math.min(steps, s + span);
+			got.fill(margin > 0 ? 1 : 0, s, to);
+			s = to;
+		}
+		return count;
+	};
+	for (let c = 0; c < columns.length; c++) {
+		reads += walk(columns[c]!);
+		const said = truth[c]!;
+		for (let t = 0; t < steps; t++) if (got[t] !== said[t]) wrong++;
+	}
+	let least = Infinity;
+	for (let pass = 0; pass < 3; pass++) {
+		const at = performance.now();
+		for (let c = 0; c < columns.length; c++) walk(columns[c]!);
+		least = Math.min(least, performance.now() - at);
+	}
+	console.log(
+		`the bound the engine runs: a margin moves at most ${bound.toFixed(4)} a block\n`,
+	);
+	line(0, reads, wrong, 0, least);
 }
 
 for (const stride of STRIDES) {

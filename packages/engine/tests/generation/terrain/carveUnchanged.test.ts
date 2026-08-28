@@ -124,6 +124,47 @@ describe("the cliffs layer, sped up", () => {
 		expect(checked).toBeGreaterThan(2000);
 	});
 
+	/**
+	 * **The stride is exact or it is nothing.**
+	 *
+	 * `fillColumn` walks the cliffs layer with a stride the field's own slope
+	 * allows -- a margin further from nought than the most it can move in a
+	 * block settles that many blocks without reading them. That is a bound and
+	 * not a guess, so the column it writes has to be the column read a block at
+	 * a time, everywhere. A stride that merely *usually* agrees loses a
+	 * one-block pocket of air here and a one-block shelf of rock there, at the
+	 * surface, where they show.
+	 */
+	it("writes the column a block-by-block read gives, every block", () => {
+		let wrong = "";
+		let checked = 0;
+		let land = 0;
+		for (const at of everywhere(400)) {
+			const cell = positionToCell(at, shape.n);
+			const column = terrain.columnAt(cell.face, cell.i, cell.j);
+			if (column.groundRadius <= shape.seaLevelRadius) continue;
+			land++;
+			const into = new Uint16Array(shape.crustDepth);
+			terrain.fillColumn(column, into, 0, shape.crustDepth);
+			for (let layer = 0; layer < shape.crustDepth - 1; layer++) {
+				// The floor of the world is written by `fillColumn` itself and
+				// is not what this is about.
+				const said = terrain.blockAt(column, layer);
+				if (into[layer] !== said) {
+					wrong = `${cell.face},${cell.i},${cell.j} layer ${layer}: ${into[layer]} against ${said}`;
+					break;
+				}
+				checked++;
+			}
+			if (wrong) break;
+		}
+		expect(wrong).toBe("");
+		expect(land).toBeGreaterThan(50);
+		// Sixty-six thousand blocks on this world; well clear of a run that
+		// found no land and checked nothing.
+		expect(checked).toBeGreaterThan(50000);
+	});
+
 	// Two generators of one world, read in different orders, are one world.
 	it("gives two generators of one world the same blocks", () => {
 		const other = new TerrainGenerator(map.seed, shape, map, {

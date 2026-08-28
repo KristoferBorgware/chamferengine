@@ -172,7 +172,50 @@ export function carveIsRock(
 	squash: number = CARVE_SQUASH,
 	corners: NoiseCorners | null = null,
 ): boolean {
-	if (depthBelow >= deep) return true;
+	return (
+		carveMargin(
+			x,
+			y,
+			z,
+			radius,
+			elevation,
+			depthBelow,
+			seed,
+			layer,
+			settings,
+			hold,
+			deep,
+			squash,
+			corners,
+		) > 0
+	);
+}
+
+/**
+ * How far this block is from being the other thing, positive for rock.
+ *
+ * **The same sum {@link carveIsRock} tests, handed back rather than compared.**
+ * A caller walking a column can then skip the layers a bound says cannot reach
+ * the other side of nought, which is what {@link carveStep} is for. The two
+ * early exits come back as `1` and `-1`, which are past any bound and stop a
+ * walk skipping through the end of the reach or the waterline.
+ */
+export function carveMargin(
+	x: number,
+	y: number,
+	z: number,
+	radius: number,
+	elevation: number,
+	depthBelow: number,
+	seed: number,
+	layer: TerrainLayer,
+	settings: NoiseSettings,
+	hold: number = WATERLINE_REACH * Math.max(1, layer.metres),
+	deep: number = carveDepth(layer),
+	squash: number = CARVE_SQUASH,
+	corners: NoiseCorners | null = null,
+): number {
+	if (depthBelow >= deep) return 1;
 	// Metres above sea level at this block, which is what both added terms are
 	// measured against.
 	const up = elevation - depthBelow;
@@ -182,7 +225,7 @@ export function carveIsRock(
 	// the ground, so on any column standing lower than that a real share of
 	// what is walked is under the sea. One comparison against a stack of
 	// octaves.
-	if (up <= 0) return true;
+	if (up <= 0) return 1;
 	// **Faster down than across**, so a shape is shorter than it is wide and the
 	// density can change its mind inside a hillside. See {@link CARVE_SQUASH}.
 	const out = 1 + (up * squash) / radius;
@@ -197,7 +240,85 @@ export function carveIsRock(
 	const said = splineAt(layer.curve, read) * 2 - 1;
 	const held = Math.max(0, Math.min(1, 1 - up / Math.max(1e-6, hold)));
 	const density = said + (1 - said) * held;
-	return density + depthBelow / deep > 0;
+	return density + depthBelow / deep;
+}
+
+/**
+ * The most {@link carveMargin} can move between one block of a column and the
+ * next, or `0` where nothing can be said.
+ *
+ * **Every block of a column stands on one ray**, so walking down one walks the
+ * sample point along a straight line -- and the field, the waterline term and
+ * the depth ramp all have bounded slopes along it. Add them and a margin
+ * further from nought than `k` times this cannot reach the other side within
+ * `k` blocks, so those blocks are the same answer without being read.
+ *
+ * The three parts:
+ *
+ * - **The field.** Trilinear value noise faded by the quintic has
+ *   `|d/dt| <= 15/8` per axis per lattice unit -- the fade's own steepest slope
+ *   -- times `1` for the corner spread, doubled because the reading is
+ *   `s * 2 - 1`; over three axes that is `2 * 15/8 * sqrt(3)`. The sample point
+ *   moves `squash * blockMetres / radius` in direction units a block, and each
+ *   octave reads it that many times its own frequency. The curve is straight
+ *   between its points, so its steepest segment carries the reading through,
+ *   doubled again by `splineAt(...) * 2 - 1`.
+ *
+ * **One bound for the planet, not one for each column.** Weighting the three
+ * axes by how much of its own direction a column carries -- `|x| + |y| + |z|`,
+ * against `sqrt(3)` for the worst -- is a real tightening and not worth having:
+ * measured, it takes a column from `90.3` readings to `86.2`, `4.5%`, and the
+ * arithmetic to work it out costs at least that back
+ * (`tools/trial-carve-stride.ts`).
+ * - **The waterline.** `1 - up / hold` moves `blockMetres / hold` a block, and
+ *   it enters the density weighted by `1 - said`, which reaches `2`.
+ * - **The depth ramp.** `blockMetres / deep` a block, and it only ever adds.
+ *
+ * **A folded field is refused.** With `fold` above nought an octave is creased
+ * and then weighted by the octave above it, and the product of two moving
+ * numbers is not bounded by this sum. Returning `0` there says *no block may be
+ * skipped*, which is the walk this replaces.
+ */
+export function carveStep(
+	radius: number,
+	blockMetres: number,
+	layer: TerrainLayer,
+	settings: NoiseSettings,
+	hold: number = WATERLINE_REACH * Math.max(1, layer.metres),
+	deep: number = carveDepth(layer),
+	squash: number = CARVE_SQUASH,
+): number {
+	if (layer.fold > 0) return 0;
+	// The steepest the reading can move per lattice unit, over three axes.
+	const gradient = 2 * (15 / 8) * Math.sqrt(3);
+	// How far the sample point travels in direction units, one block down.
+	const travel = (squash * blockMetres) / radius;
+	let sum = 0;
+	let total = 0;
+	let amplitude = 1;
+	let f = settings.frequency;
+	for (let o = 0; o < settings.octaves; o++) {
+		sum += amplitude * gradient * travel * f;
+		total += amplitude;
+		amplitude *= settings.persistence;
+		f *= settings.lacunarity;
+	}
+	const read = total > 0 ? sum / total : 0;
+	// The curve is straight between its points, so its steepest segment is the
+	// most it can carry through -- and `splineAt(...) * 2 - 1` doubles it.
+	let slope = 0;
+	for (let n = 1; n < layer.curve.length; n++) {
+		const [x0, y0] = layer.curve[n - 1]!;
+		const [x1, y1] = layer.curve[n]!;
+		const span = x1 - x0;
+		if (span <= 1e-9) continue;
+		slope = Math.max(slope, Math.abs((y1 - y0) / span));
+	}
+	return (
+		2 * slope * read +
+		(2 * blockMetres) / Math.max(1e-6, hold) +
+		blockMetres / Math.max(1e-6, deep)
+	);
 }
 
 /** The carve's own seed, kept beside the offset so both are read in one place. */
