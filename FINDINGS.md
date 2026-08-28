@@ -14,7 +14,7 @@ and how to write one. The open list stays in the order things were found.
 
 **Kind:** bug
 **Milestone:** 0.5.0
-**Priority:** medium
+**Priority:** low
 **Effort:** medium
 **Found:** 2026-08-28, growing the world's own plants in its own chunks
 **Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
@@ -26,17 +26,18 @@ past the rim is served by `ChunkColumnSampler`, which **regenerates** those
 columns from the generator, and the generator does not know about plants: a
 tree is a walk over every root within reach of the rim, never a property of one
 column. So a rim cell asking its ring whether to draw a side face is told air
-wherever the neighbour's answer is a trunk or a leaf, and emits a wall; the
-neighbouring chunk, whose own rim cell holds the plant, emits the matching wall
-from its side. Two coplanar faces where a canopy crosses a boundary, and the
-apron -- which draws the ring outright, one cell past the rim -- draws that ring
-with no plants in it at all.
+wherever the neighbour's answer is a trunk or a leaf, and emits a wall the
+neighbour -- which holds both cells and sees both solid -- emits nothing to
+match. And the apron, which draws that ring outright one cell past the rim,
+draws it with no plants in it at all.
 
-**Why it matters.** It is the same shape as the LOD seam the apron exists to
-close, arriving one subsystem later: what is drawn is not wrong so much as
-doubled, so it reads as a faint outline through a canopy that spans two chunks
-rather than as a hole. At the shipped 64 m chunk against a canopy about 20 m
-wide, a fair share of the forest sits on a boundary.
+**Why it matters.** Mostly it does not show, which is why it is filed rather
+than fixed: the neighbouring chunk holds the cell the apron got wrong and draws
+it correctly, and the spurious wall stands **inside** a canopy, where opaque
+leaves hide it. What it costs is faces nobody sees and one more place where two
+chunks disagree about a cell they both hold -- the exact class of bug the delta
+store's history is made of, and the reason `ChunkColumnSampler`'s own comment
+is three paragraphs long.
 
 **What would fix it.** The sampler is already the one thing that reconciles a
 chunk's own cells with the ones it regenerates -- `applyDeltas` hands it what
