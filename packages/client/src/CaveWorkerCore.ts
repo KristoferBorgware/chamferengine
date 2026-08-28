@@ -333,15 +333,15 @@ export class CaveWorkerCore {
 					sheet.peaks.buffer,
 					sheet.carve.buffer,
 				);
+		// **Only the two the plan built for this reply.** A transferred buffer
+		// is detached where it was, and a cell's place, its corners, its degree
+		// and its ring are the *patch's* -- held here so that moving the plan's
+		// own depth costs no layout. Handing those over would empty the copy
+		// this side is keeping, and the next plan would post a detached array
+		// and fail outright. They are copied by the clone instead, which is the
+		// same bytes and the right owner.
 		if (reply.cells)
-			out.push(
-				reply.cells.at.buffer,
-				reply.cells.corners.buffer,
-				reply.cells.degree.buffer,
-				reply.cells.ring.buffer,
-				reply.cells.value.buffer,
-				reply.cells.open.buffer,
-			);
+			out.push(reply.cells.value.buffer, reply.cells.open.buffer);
 		return out;
 	}
 

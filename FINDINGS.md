@@ -92,41 +92,6 @@ engine's own `growPlant` does not carry it, so the bench and the lab now draw
 different canopies at the same numbers -- which is the second reason to close
 this rather than leave the two disagreeing.
 
-### F-101 — The cliffs layer walks four hundred and eighty layers of every column, and is most of what a chunk costs
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-28, measuring what a cave costs a chunk
-**Where:** `packages/engine/src/generation/terrain/carveDensity.ts`,
-`CARVE_REACH`; `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
-`fillColumn`; measured by `tools/trial-caves.ts`
-
-**What happens.** `fillColumn` evaluates a column down to the deepest layer any
-term can open and fills the crust below it with stone, so each term's reach is
-what it costs. The carve's is `CARVE_REACH` shape widths -- **four** of them,
-at the shipped 120 m shape, which is `480 m` and therefore **480 layers** at a
-1 m block. Measured over six chunks of the shipped world at chunk level 7, a
-chunk takes **157 ms** with the layer off and **699 ms** with it on: it is
-**×4.4** of everything else generation does, and about `78%` of a chunk's whole
-bill.
-
-**Why it matters.** What that depth buys is not visible. The density gains a
-full `1` over the reach, so a reading has to beat `depthBelow / 480` to open
-anything -- past a hundred metres or so it is refusing nearly everything it is
-asked, and the last three hundred layers are evaluated to be told no. The world
-is a metre a block and a player digs tens of metres, not hundreds. Meanwhile
-the number is what makes chunk builds slow enough that the residency loop runs
-a backlog of a hundred and fifty chunks on a normal walk.
-
-**What would fix it.** Measure what depth the layer actually opens anything at
--- the share of blocks it takes, by depth -- and set the reach from that rather
-than from the shape width. It is one constant and one measurement, and
-`trial-caves.ts` already builds the world it would be measured on. What it must
-not become is a knob: the reach is what makes the depth term a bound rather
-than a suggestion, and a reader given it would be setting a cost.
-
 ### F-100 — The cave lab's rarity means something else on a planet, and the lab still ships the patch's own figure
 
 **Kind:** risk
@@ -2347,6 +2312,40 @@ from the world again.
 
 
 ## Closed
+
+### F-101 — The cliffs layer walked four hundred and eighty layers of every column, and was most of what a chunk cost
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, measuring what a cave costs a chunk
+**Closed:** 2026-08-28. `CARVE_REACH` is `0.5` shape widths -- `60 m` at the
+shipped shape against `480 m`. Measured over the land columns of the shipped
+world (`tools/trial-carve-reach.ts`), the layer opened `17.2%` of the blocks
+**eighty metres under the ground** and `1.4%` two hundred down, which is a cave
+system rather than a hillside; at half a width it is `0.0%` by fifty metres and
+`36.8%` at five, so the cliffs it is named for are all still there. A chunk of
+the shipped world went from `699 ms` to `277 ms` (`tools/trial-caves.ts`), and
+the landscape bench's own patch from `91,419` blocks carved under rock to `0`
+with `52,744` off the top against `261,866`.
+**Where:** `packages/engine/src/generation/terrain/carveDensity.ts`
+
+**What it cost, and what would buy it back.** The depth was also the only thing
+making overhangs: the layer's shapes are as tall as they are wide, so at a
+120 m shape the density needs a hundred metres of depth to change its mind, and
+rock over air over rock happened at all only because the reach was hundreds of
+metres. Land columns holding one go from **`19.9%` at four widths to `0.0%` at
+half a width**. `CARVE_SQUASH` is the measured lever that has both -- read the
+field faster down a column than across the ground and the shapes are shorter
+than they are wide, taking half a width to `9.9%` at `x2` and `30.7%` at `x8`,
+which is more overhangs than the deep reach ever gave. It is in the engine at
+`1`, off, because at `x8` it also makes the *surface* patchy at block scale: a
+column loses three blocks off its top where its neighbour loses none, and green
+ground with grey cliffs in it becomes green and grey speckle. Which of the two
+matters more is a decision about how the world should look rather than a
+measurement.
+
 
 ### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
 
