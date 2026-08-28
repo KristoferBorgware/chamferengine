@@ -226,24 +226,7 @@ export class TerrainGenerator {
 		offset: number,
 		layers: number,
 	): ColumnBand {
-		const carved = this.settings.carveLayer
-			? Math.ceil(carveDepth(this.settings.carve) / this.shape.blockSize)
-			: 0;
-		const hollowed = this.settings.caves
-			? Math.ceil(this.settings.caveDepth / this.shape.blockSize)
-			: 0;
-		const rock = Math.min(
-			layers,
-			Math.max(
-				0,
-				column.groundLayer +
-					Math.max(
-						Math.ceil(this.settings.soilDepth),
-						carved,
-						hollowed,
-					),
-			),
-		);
+		const rock = this.openTo(column, layers);
 
 		let first = layers;
 		let last = -1;
@@ -267,6 +250,57 @@ export class TerrainGenerator {
 		into[offset + layers - 1] = BlockType.BEDROCK;
 		if (first === layers) first = layers - 1;
 		return { first, last };
+	}
+
+	/**
+	 * The layer under which every term has run out and the crust is solid.
+	 *
+	 * Each of the three things that can open a layer states its own reach in
+	 * metres, so each is a layer count: the soil's depth, the carve's and the
+	 * caves'. Below the deepest of them nothing is evaluated, because nothing
+	 * could be anything but stone.
+	 */
+	private openTo(column: TerrainColumn, layers: number): number {
+		const carved = this.settings.carveLayer
+			? Math.ceil(carveDepth(this.settings.carve) / this.shape.blockSize)
+			: 0;
+		const hollowed = this.settings.caves
+			? Math.ceil(this.settings.caveDepth / this.shape.blockSize)
+			: 0;
+		return Math.min(
+			layers,
+			Math.max(
+				0,
+				column.groundLayer +
+					Math.max(
+						Math.ceil(this.settings.soilDepth),
+						carved,
+						hollowed,
+					),
+			),
+		);
+	}
+
+	/**
+	 * The topmost layer of a column that holds a block.
+	 *
+	 * **The height field is where the ground would be, not where it is.** The
+	 * carve cuts cliffs and overhangs into the top of a column and the caves
+	 * hollow it, both after `groundLayer` is decided -- so anything placed at
+	 * that layer can be standing over nothing. This walks down until it finds
+	 * the block that is really there, which is `first` in the band
+	 * {@link fillColumn} returns and is what the mesher draws the ground at.
+	 *
+	 * **There is always an answer.** Below {@link openTo} no term is evaluated
+	 * and the crust is filled solid, so the walk is bounded by the deepest
+	 * reach any of them claims and never by the crust.
+	 */
+	topSolidLayer(column: TerrainColumn): number {
+		const layers = this.shape.crustDepth;
+		const rock = this.openTo(column, layers);
+		for (let layer = Math.max(0, column.groundLayer); layer < rock; layer++)
+			if (this.blockAt(column, layer) !== BlockType.AIR) return layer;
+		return Math.min(rock, layers - 1);
 	}
 
 	/**

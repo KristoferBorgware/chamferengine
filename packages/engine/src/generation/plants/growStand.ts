@@ -75,6 +75,20 @@ export interface StandPatch {
 /** Where the ground stands under each column of the patch. */
 export interface StandGround {
 	/**
+	 * The true ground under one column, worked out only when it is needed.
+	 *
+	 * **What a column's ground costs and where it is needed are wildly
+	 * different.** Every column of the patch has one, and a chunk knows its own
+	 * for nothing because its build already recorded them -- but the ring past
+	 * its rim does not, and finding one there means walking down through
+	 * whatever the carve and the caves took off the top. That walk is only ever
+	 * needed for a ring column a plant is actually rooted in, which is a
+	 * handful against a couple of thousand, so it is asked for rather than
+	 * filled in. Returns the layer, and may correct the arrays below in place.
+	 */
+	readonly correct?: (column: number) => number;
+
+	/**
 	 * Per column, the top of its topmost rock, in metres above sea level.
 	 *
 	 * Already on the block grid, so a plant's foot is the surface the mesh
@@ -209,6 +223,7 @@ export function growStand(
 	const templates = options.templates ?? null;
 	const { count, ring, directions } = patch;
 	const { top, groundLayer } = ground;
+	const groundOf = ground.correct ?? ((c: number): number => groundLayer[c]!);
 	const n = 2 ** patch.level;
 	const rootN = 2 ** rootLevel;
 
@@ -729,7 +744,7 @@ export function growStand(
 		// A cell's slot is counted from its own column's ground, and a
 		// template's is counted from the root's, so the two differ by the step
 		// between those grounds -- which `groundLayer` already holds, negated.
-		const rootGround = groundLayer[c]!;
+		const rootGround = groundOf(c);
 		const step: [number, number] = [0, 0];
 		for (let k = 0; k < template.count; k++) {
 			orientTemplate(template.di[k]!, template.dj[k]!, turn, step);
@@ -782,6 +797,7 @@ export function growStand(
 		const ux = roots.directions[r * 3]!;
 		const uy = roots.directions[r * 3 + 1]!;
 		const uz = roots.directions[r * 3 + 2]!;
+		groundOf(c);
 		const foot = radius + top[c]!;
 		const base: [number, number, number] = [
 			ux * foot,
