@@ -27,6 +27,7 @@ const BIOMES = fileURLToPath(
 const BLOCKS = [
 	["the noise kernel", "// ===== BEGIN engine noise kernel =====", "// ===== END engine noise kernel ====="],
 	["the coarse grid", "// ===== BEGIN engine coarse grid =====", "// ===== END engine coarse grid ====="],
+	["the coordinates", "// ===== BEGIN engine coordinates =====", "// ===== END engine coordinates ====="],
 ] as const;
 
 /** One marked block of a page, as source. */
