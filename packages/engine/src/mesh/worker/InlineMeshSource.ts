@@ -36,6 +36,7 @@ export class InlineMeshSource implements MeshSource {
 			opaque: result.opaque,
 			translucent: result.translucent,
 			tally: result.tally,
+			...(result.plants ? { plants: result.plants } : {}),
 		});
 	}
 

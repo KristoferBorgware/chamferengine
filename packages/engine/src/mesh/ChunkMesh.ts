@@ -1,4 +1,5 @@
 import type { Box } from "../math/Box.js";
+import type { PlantCells } from "./worker/MeshJob.js";
 import type { Geometry } from "./Geometry.js";
 import type { MeshTally } from "./meshChunk.js";
 import type { Vec3 } from "../math/Vec3.js";
@@ -33,4 +34,14 @@ export interface ChunkMesh {
 	readonly opaque: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
+
+	/**
+	 * Every cell this chunk's plants wrote, or absent where none did.
+	 *
+	 * A plant is a block like any other, so everything that asks what is
+	 * somewhere has to get the same answer -- and the seed cannot give it,
+	 * because a plant comes out of a walk over every root within reach of the
+	 * chunk's rim rather than out of one column.
+	 */
+	readonly plants?: PlantCells;
 }

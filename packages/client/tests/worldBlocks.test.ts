@@ -78,6 +78,7 @@ describe("worldBlocks", () => {
 			() => terrain,
 			() => shape,
 			() => edits,
+			() => null,
 		);
 
 		const surface = at.scale(shape.radiusOfLayer(layer) - 0.5);
@@ -114,6 +115,7 @@ describe("worldBlocks", () => {
 			() => live,
 			() => liveShape,
 			() => edits,
+			() => null,
 		);
 
 		const surface = at.scale(liveShape.radiusOfLayer(layer) - 0.5);
@@ -150,6 +152,7 @@ describe("worldBlocks", () => {
 			() => terrain,
 			() => shape,
 			() => edits,
+			() => null,
 		);
 		const floor = shape.crustDepth - 1;
 		const cell = { ...positionToCell(at, shape.n), layer: floor };

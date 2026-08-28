@@ -400,6 +400,7 @@ export class WorkerMeshSource implements MeshSource {
 				opaque: result.opaque,
 				translucent: result.translucent,
 				tally: result.tally,
+				...(result.plants ? { plants: result.plants } : {}),
 			});
 		this.cancelled.delete(id);
 		this.pump();
