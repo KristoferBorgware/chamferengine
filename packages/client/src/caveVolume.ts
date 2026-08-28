@@ -1,7 +1,14 @@
 import type { ColumnPatch } from "chamfer/mesh";
 import type { CoarseGrid } from "chamfer/generation";
 import type { PlanetSettings } from "./PlanetSettings.js";
-import { AIR, CUT, MAX_CAVE_LAYERS, ROCK, VOID } from "./CaveBlock.js";
+import {
+	AIR,
+	CUT,
+	MAX_CAVE_BLOCKS,
+	MAX_CAVE_LAYERS,
+	ROCK,
+	VOID,
+} from "./CaveBlock.js";
 import {
 	CARVE_LAYER_DEFAULT,
 	carveDepth,
@@ -129,12 +136,21 @@ export function caveVolume(
 	// the world cuts blocks on -- two neighbouring columns therefore cut theirs
 	// on the same planes and a step between them is a block rather than a
 	// rounding.
+	// **The two sliders multiply, and the product is what has to be held.** A
+	// wide patch cut finely is tens of thousands of columns and a deep reach is
+	// hundreds of layers; asked for both, the mesh those blocks make is what
+	// runs out of memory. The walk takes as many layers as
+	// {@link MAX_CAVE_BLOCKS} allows and the readout says how deep it went, so
+	// a slider asking for more gets less rather than a page that stops.
+	const count = patch.count;
 	const layers = Math.max(
 		2,
-		Math.min(MAX_CAVE_LAYERS, Math.ceil(reach / block)),
+		Math.min(
+			MAX_CAVE_LAYERS,
+			Math.floor(MAX_CAVE_BLOCKS / Math.max(1, count)),
+			Math.ceil(reach / block),
+		),
 	);
-
-	const count = patch.count;
 	const kind = new Uint8Array(count * layers);
 	const topLayer = new Int32Array(count);
 	const surface = new Float64Array(count);

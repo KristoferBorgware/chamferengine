@@ -463,6 +463,9 @@ worker.onmessage = (event: MessageEvent<CaveReply>) => {
 	);
 	// **A crust in metres is a count of blocks**, and the count is what a walk
 	// costs: one field reading a block, once a column.
+	// **What the reach came to in blocks**, which is what the walk costs. The
+	// slider's own end already moves with the patch, so a reach this patch has
+	// no room for cannot be dragged to in the first place.
 	panel.note(
 		"caveDepth",
 		`${Math.round(reply.facts.crust / settings.knobs.blockSize)} layers`,
