@@ -153,10 +153,15 @@ interface Group {
 	 *
 	 * A group appears on the cave bench exactly when it appears on the
 	 * landscape bench, on the same side, unless this says otherwise: `"off"`
-	 * takes it away and a side moves it. **The four layer groups move left**,
-	 * because the cave bench's right panel is the caves and nothing else --
-	 * everything about the ground they stand in is what is being looked at
-	 * rather than what is being worked.
+	 * takes it away and a side moves it.
+	 *
+	 * **The rows that shape the ground are off it.** The two benches read and
+	 * write one set of parameters and a link carries every one of them, so a
+	 * terrain layer tuned on the landscape bench arrives here already tuned --
+	 * and a second copy of those rows is a second place to change them, on a
+	 * page whose subject is what is *under* the ground rather than the shape of
+	 * it. What stays is the world as it came out, where the patch is standing,
+	 * how it is lit, and the caves.
 	 */
 	readonly cave?: "off" | "left" | "right";
 
@@ -444,6 +449,18 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **The sky the mesher cannot see, drawn in as a fade.** The
+				// world bakes how much sky each face takes from the ground
+				// around it; a patch mesh bakes only the corner's own
+				// occlusion, which says what stands beside a face and nothing
+				// about what is over it -- so a chamber forty blocks down is
+				// lit exactly like the meadow.
+				key: "patchDepthShade",
+				label: "Depth shading",
+				digits: 2,
+				says: "How much darker the ground gets with depth under its own surface, over the crust the patch drew. It stands in for the sky exposure the world bakes and this mesh does not, which is the only thing that says how far down a passage runs. At zero the floor of a cave is lit the same as the meadow over it.",
+			},
+			{
 				// **The one thing that says where one hexagon ends.** A slope
 				// of one material at one height is a single sheet of colour
 				// however it is lit, and the lattice the world is built on is
@@ -547,7 +564,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Continentalness",
 		where: "both",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "cont",
@@ -559,7 +576,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Erosion",
 		where: "both",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "ero",
@@ -582,7 +599,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Peaks & valleys",
 		where: "both",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "pv",
@@ -591,7 +608,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Cliffs & overhangs",
 		where: "both",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "cliff",
@@ -622,6 +639,14 @@ const GROUPS: Group[] = [
 		where: "cave",
 		cave: "right",
 		knobs: [
+			{
+				// **The other layer that takes blocks out of a column**, and
+				// the one row of the landscape bench's own work that belongs
+				// here: what it leaves standing is what a cave is cut into.
+				key: "carveLayer",
+				label: "Cliffs & overhangs",
+				says: "The layer that cuts cliffs, overhangs and arches into the ground the map placed. It and the caves cut one planet, so some overlap is the point rather than a confusion -- and its density gains a full 1 over its own reach, so it has stopped altogether well below where it works. What each of the two took is counted apart. Its own rows are on the landscape bench.",
+			},
 			{
 				key: "caves",
 				label: "On",
@@ -739,6 +764,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Ground",
 		where: "both",
+		cave: "off",
 		side: "left",
 		folded: true,
 		tab: "terrain",

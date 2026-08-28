@@ -73,38 +73,6 @@ moves every frame anybody has taken of it, and the two shadow cascades are
 fitted from the same numbers -- so it wants a frame taken before and after
 rather than a line changed on the way past.
 
-### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-28, reading a cave's cross-section on the cave bench
-**Where:** `packages/engine/src/render/patch/PATCH_SHADER.ts`, the ground
-picture; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, the
-material rule
-
-**What happens.** The patch shader picks a block colour from the vertex's
-height above the sea and nothing else: sand under the water, grass to the rock
-line, stone to the snow line, snow over it. The world's own rule reads **two**
-numbers -- that elevation *and* how far under its own surface the block sits --
-so the top four blocks of a column are soil and everything below them is stone.
-Drawn by elevation alone, a patch whose ground stands at `150 m` is grass from
-the surface to the bottom of the crust.
-
-**Why it matters.** It is invisible on the landscape bench, whose subject is a
-surface and whose cut face is a rim nobody reads. It is the whole picture on
-the cave bench: a cave is looked at through a cross-section, and there the
-ceiling, the floor, the wall and the meadow forty blocks above are one flat
-green. What makes a passage legible today is the corner shading and the face
-normals alone, which is a lot to ask of them.
-
-**What would fix it.** The vertex already carries its own metres and the mesh
-knows the column's surface, so the depth below it is a subtraction -- one more
-channel on the vertex, or the difference between two numbers already there, and
-the shader's four bands become the registry's own five. `PATCH_STRIDE` is 13 and
-would go to 14.
-
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
 **Kind:** doc
@@ -2262,6 +2230,52 @@ from the world again.
 
 
 ## Closed
+
+### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, reading a cave's cross-section on the cave bench
+**Closed:** 2026-08-28. `PATCH_STRIDE` is 14 and the extra channel is how far
+under its own column's surface a vertex sits -- not under the topmost rock,
+which under an overhang is metres away. The shader runs the world's own rule
+off it: stone below the soil, sand through the whole soil band under water,
+snow on the top layer above the snow line, stone above the rock line, dirt
+under that layer and grass on it. A patch drawn from the map alone leaves the
+channel at zero, which is the surface, and paints exactly as it did. On the
+landscape bench the cut face and every carved hillside now show the soil band
+and the stone under it where they were one flat green. **A depth fade came
+with it** (`patchDepthShade`), standing in for the sky exposure this mesh does
+not bake: at full strength it takes the world's mean to `0.922` of what it was
+with a fifth percentile of `0.765` and a ninety-fifth of `1.000` -- it only
+ever darkens, and what it darkens is what is deep.
+**Where:** `packages/engine/src/render/patch/PATCH_SHADER.ts`, the ground
+picture; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, the
+material rule
+
+**What happens.** The patch shader picks a block colour from the vertex's
+height above the sea and nothing else: sand under the water, grass to the rock
+line, stone to the snow line, snow over it. The world's own rule reads **two**
+numbers -- that elevation *and* how far under its own surface the block sits --
+so the top four blocks of a column are soil and everything below them is stone.
+Drawn by elevation alone, a patch whose ground stands at `150 m` is grass from
+the surface to the bottom of the crust.
+
+**Why it matters.** It is invisible on the landscape bench, whose subject is a
+surface and whose cut face is a rim nobody reads. It is the whole picture on
+the cave bench: a cave is looked at through a cross-section, and there the
+ceiling, the floor, the wall and the meadow forty blocks above are one flat
+green. What makes a passage legible today is the corner shading and the face
+normals alone, which is a lot to ask of them.
+
+**What would fix it.** The vertex already carries its own metres and the mesh
+knows the column's surface, so the depth below it is a subtraction -- one more
+channel on the vertex, or the difference between two numbers already there, and
+the shader's four bands become the registry's own five. `PATCH_STRIDE` is 13 and
+would go to 14.
+
 
 ### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 

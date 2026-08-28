@@ -422,6 +422,23 @@ export interface PlanetKnobs {
 	showLights: boolean;
 
 	/**
+	 * How much a preview darkens with depth under its own surface, `0` for none.
+	 *
+	 * **A stand-in for the sky the mesher cannot see.** The world bakes how
+	 * much sky each face takes from the ground around it -- 1.000 at the
+	 * surface, a fifth of that on the floor of a shaft -- and a patch mesh
+	 * bakes only the corner's own occlusion, which says what stands beside a
+	 * face and nothing about what is over it. Without something in its place a
+	 * chamber forty blocks down is lit exactly like the meadow, and a picture
+	 * of a cave has no depth in it at all.
+	 *
+	 * Legibility furniture, of the same kind as the contour lines and the cell
+	 * rims the bench draws and the world does not. It runs over the crust the
+	 * patch actually drew, so it reads the same at any depth.
+	 */
+	patchDepthShade: number;
+
+	/**
 	 * How bright the bench's preview is, as one multiplier before the curve.
 	 *
 	 * **A preview cannot be brighter than what it is made of.** Grass is `0.44`
@@ -1117,6 +1134,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	fillLight: PATCH_FILL_SHARE,
 	topLight: PATCH_TOP_SHARE,
 	showLights: false,
+	patchDepthShade: 0.55,
 	patchLight: 1.5,
 	patchPicture: "ground",
 	patchSurface: "solid",
@@ -1595,6 +1613,13 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	keyShadow: { ...TOGGLE, rebuilds: false },
 	fillShadow: { ...TOGGLE, rebuilds: false },
 	showLights: { ...TOGGLE, rebuilds: false },
+	patchDepthShade: {
+		low: 0,
+		high: 1,
+		step: 0.05,
+		rebuilds: false,
+		unit: "",
+	},
 	patchLight: { low: 0.4, high: 3, step: 0.1, rebuilds: false, unit: "x" },
 	patchDetail: {
 		low: 0,

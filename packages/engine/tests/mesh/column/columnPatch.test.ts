@@ -180,6 +180,9 @@ function flat(count: number, top: number, deep: number): ColumnGround {
 		at,
 		spans: Float64Array.from(spans),
 		height,
+		// Flat ground with nothing taken out of it, so where the map put the
+		// ground and the top of the rock are one number.
+		surface: height,
 		raw: new Float32Array(count),
 		continent: new Float32Array(count),
 		erosion: new Float32Array(count),
@@ -361,6 +364,7 @@ describe("which way a face points", () => {
 				at,
 				spans: Float64Array.from(spans),
 				height,
+				surface: height,
 				raw: new Float32Array(count),
 				continent: new Float32Array(count),
 				erosion: new Float32Array(count),
@@ -401,6 +405,7 @@ describe("corner shading", () => {
 			at,
 			spans: Float64Array.from(spans),
 			height,
+			surface: height,
 			raw: new Float32Array(count),
 			continent: new Float32Array(count),
 			erosion: new Float32Array(count),
@@ -484,6 +489,7 @@ describe("floatingRock", () => {
 			at,
 			spans: Float64Array.from(spans),
 			height,
+			surface: height,
 			raw: new Float32Array(count),
 			continent: new Float32Array(count),
 			erosion: new Float32Array(count),

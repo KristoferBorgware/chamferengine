@@ -1,3 +1,4 @@
+import type { BenchSheet } from "./BenchMessage.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
 
 /** One rebuild of everything the cave bench draws. */
@@ -204,6 +205,18 @@ export interface CaveReady {
 	/** Absent when the plan was kept, for the same reason. */
 	readonly plan: CavePlanSheet | null;
 	readonly cells: CaveCells | null;
+
+	/**
+	 * The small map: this patch, and the planet it is a patch of.
+	 *
+	 * **The two benches are benches of one world**, so the way to stand
+	 * somewhere else is the same on both -- click the planet. Each is sent
+	 * only when it moved: the planet answers to the world's own rows and the
+	 * patch to where it is standing, and a knob that moves neither sends
+	 * nothing.
+	 */
+	readonly patch: BenchSheet | null;
+	readonly planet: BenchSheet | null;
 }
 
 export type CaveReply = CaveStep | CaveFailed | CaveReady;

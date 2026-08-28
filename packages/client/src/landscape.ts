@@ -8,7 +8,8 @@ import type { PatchLook } from "chamfer/render";
 import type { LayerName, PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { BAND_COLORS } from "./paintPatch.js";
-import { GROUND_LINES } from "chamfer/generation";
+import { GROUND_LINES, TERRAIN_DEFAULTS } from "chamfer/generation";
+import { columnDepth } from "chamfer/mesh";
 import {
 	PATCH_FILL_SHARE,
 	PATCH_KEY_SHARE,
@@ -335,6 +336,10 @@ const look = {
 	layer: "continent" as PatchLook["layer"],
 	rockLine: GROUND_LINES.rock,
 	snowLine: GROUND_LINES.snow,
+	soilMetres: 0,
+	blockMetres: 1,
+	shadeDepth: 1,
+	shadeAmount: 0,
 	rawLow: -1,
 	rawHigh: 1,
 	low: 0,
@@ -658,6 +663,20 @@ function render(): void {
 	look.shadowStrength = k.shadowStrength;
 	look.shadowStrength = k.shadowStrength;
 	look.span = span;
+	// **What a block is made of is a depth question as well as an elevation
+	// one**, so the shader is told how deep the soil runs and how thick one
+	// block is -- the world's own two lengths, in metres.
+	look.soilMetres = TERRAIN_DEFAULTS.soilDepth * k.blockSize;
+	look.blockMetres = k.blockSize;
+	// **The crust the patch drew**, so the fade reads the same however deep
+	// the layer's own reach runs.
+	look.shadeDepth = Math.max(
+		1,
+		(facts0?.highest ?? 0) -
+			(facts0?.lowest ?? 0) +
+			columnDepth(settings.layerFor("carve"), k.blockSize),
+	);
+	look.shadeAmount = k.patchDepthShade;
 	// The near cascade is sized from how far off the viewer is, so its texels
 	// tighten with the zoom.
 	look.eye = [eye.x, eye.y, eye.z];

@@ -49,16 +49,24 @@ export interface PatchGeometry {
 }
 
 /**
- * Floats per vertex: position, normal, metres, raw, and one per layer.
+ * Floats per vertex: position, normal, metres, raw, one per layer, the
+ * speckle, and how far under its own surface the point sits.
  *
  * **Four layers, because a layer with no channel of its own is a layer whose
  * curve cannot be looked at.** Three of them shape the surface; the fourth is
  * the carve, which is a 3D field and so has no one value at a place -- what
  * rides here is what it read at the block this face belongs to.
  *
- * Plus one: the cell's own speckle, which is a fact about the cell rather than
- * about the ground, and the one thing on a preview that says where one hexagon
- * ends and the next begins where both are the same material and the same
- * height.
+ * Plus the cell's own speckle, which is a fact about the cell rather than about
+ * the ground, and the one thing on a preview that says where one hexagon ends
+ * and the next begins where both are the same material and the same height.
+ *
+ * **And plus the depth, because a block is made of what its depth says.** The
+ * world covers rock with a few blocks of soil and shows bare stone under that,
+ * so a colour picked from the height above the sea alone paints a whole crust
+ * the colour of the meadow on top of it -- which is invisible on a preview of a
+ * surface and is the entire picture on a preview of a cave. A patch drawn from
+ * the map alone leaves it at zero, which is the surface, and comes out exactly
+ * as it did before.
  */
-export const PATCH_STRIDE = 13;
+export const PATCH_STRIDE = 14;
