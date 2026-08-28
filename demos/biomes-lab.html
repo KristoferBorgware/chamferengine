@@ -1299,6 +1299,113 @@
 			}
 			// ===== END engine coarse grid =====
 
+			// ===== BEGIN engine coordinates =====
+			// Where the planet's poles are, and the two functions that turn a
+			// latitude and a longitude into a place. Marked and copied the same
+			// way the two blocks above are, and for the same reason: three
+			// pages that each invent a compass is how they came to disagree
+			// about which way east is.
+
+			/** Two vectors crossed, in the order that gives a right-handed set. */
+			function cross3(a, b) {
+				return [
+					a[1] * b[2] - a[2] * b[1],
+					a[2] * b[0] - a[0] * b[2],
+					a[0] * b[1] - a[1] * b[0],
+				];
+			}
+
+			/**
+			 * The planet's north pole: icosahedron vertex 0, whose antipode is
+			 * vertex 3.
+			 *
+			 * All six antipodal pentagon pairs give one distinct latitude
+			 * signature -- the same world seen from six angles -- so the choice
+			 * cannot be made on merit and is made on the face table instead:
+			 * this is the only pair whose polar caps are contiguous runs of face
+			 * indices. It puts a pentagon at each pole and all twelve on exact
+			 * multiples of 36 degrees of longitude.
+			 */
+			const NORTH_AXIS = VERTICES[0];
+
+			/**
+			 * Longitude zero: the meridian through vertex 11.
+			 *
+			 * That vertex is one of the five pentagons of the northern ring, at
+			 * latitude `atan(1/2)` = 26.565 degrees, so it does not lie on the
+			 * equator and is leaned onto it before it can be an axis.
+			 */
+			const MERIDIAN_X = (() => {
+				const v = VERTICES[11];
+				const along =
+					v[0] * NORTH_AXIS[0] + v[1] * NORTH_AXIS[1] + v[2] * NORTH_AXIS[2];
+				return normalize3([
+					v[0] - along * NORTH_AXIS[0],
+					v[1] - along * NORTH_AXIS[1],
+					v[2] - along * NORTH_AXIS[2],
+				]);
+			})();
+
+			/** A quarter turn east of the prime meridian, which completes the frame. */
+			const MERIDIAN_Y = cross3(NORTH_AXIS, MERIDIAN_X);
+
+			/**
+			 * A latitude and a longitude in radians, as a unit direction.
+			 *
+			 * **Built in the planet's own frame, and that frame is
+			 * right-handed.** The obvious spelling --
+			 * `[cos p cos l, sin p, cos p sin l]` -- is the standard
+			 * construction with two of its three axes swapped, and a swap is a
+			 * reflection: longitude then runs the other way round the pole, so
+			 * a map drawn from it is the mirror of the ground a compass frame
+			 * describes. Written against three named axes there is nothing to
+			 * swap.
+			 */
+			function spherePoint(lat, lon) {
+				const ring = Math.cos(lat);
+				const height = Math.sin(lat);
+				const across = ring * Math.cos(lon);
+				const along = ring * Math.sin(lon);
+				return [
+					MERIDIAN_X[0] * across + MERIDIAN_Y[0] * along + NORTH_AXIS[0] * height,
+					MERIDIAN_X[1] * across + MERIDIAN_Y[1] * along + NORTH_AXIS[1] * height,
+					MERIDIAN_X[2] * across + MERIDIAN_Y[2] * along + NORTH_AXIS[2] * height,
+				];
+			}
+
+			/** The same, in degrees, which is what a row on the panel carries. */
+			function directionOf(latitude, longitude) {
+				return spherePoint(
+					(latitude * Math.PI) / 180,
+					(longitude * Math.PI) / 180,
+				);
+			}
+
+			/**
+			 * East, up and north at one place on the planet.
+			 *
+			 * Up is `normalize(position)` and there is no global north -- the
+			 * hairy ball theorem forbids one -- so east is taken against the
+			 * polar axis, and against the prime meridian at the poles
+			 * themselves, where longitude means nothing and any perpendicular
+			 * will do.
+			 *
+			 * `east` comes out as the direction longitude increases in and
+			 * `north` as the direction latitude increases in, so a frame and
+			 * the map `spherePoint` draws agree about every direction.
+			 */
+			function frameOf(up) {
+				let east = cross3(NORTH_AXIS, up);
+				let len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				if (len < 1e-9) {
+					east = cross3(MERIDIAN_X, up);
+					len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				}
+				east = [east[0] / len, east[1] / len, east[2] / len];
+				return { east, up, north: cross3(up, east) };
+			}
+			// ===== END engine coordinates =====
+
 			// ---------------------------------------------------------------
 			// The ground the climate is read over.
 			// ---------------------------------------------------------------
@@ -1518,17 +1625,6 @@
 			// ---------------------------------------------------------------
 
 			/**
-			 * The axis latitude is measured from.
-			 *
-			 * The engine's own polar axis runs through icosahedron vertices 0
-			 * and 3; this page measures from `+Y`, which is the axis its
-			 * latitude and longitude rows already name and the axis its pictures
-			 * are projected on. Climate read about any other axis would draw
-			 * bands that lean across every picture on the panel.
-			 */
-			const POLE = [0, 1, 0];
-
-			/**
 			 * How high the ground has to stand to lose one full unit of
 			 * temperature, in metres.
 			 *
@@ -1558,7 +1654,9 @@
 			 * am I* costs one lookup that was taken anyway.
 			 */
 			function climateAt(x, y, z, said, metres, seed, s, k, out) {
-				const away = Math.abs(x * POLE[0] + y * POLE[1] + z * POLE[2]);
+				const away = Math.abs(
+					x * NORTH_AXIS[0] + y * NORTH_AXIS[1] + z * NORTH_AXIS[2],
+				);
 				const lapse = metres > 0 ? (k.tempLapse * metres) / LAPSE_METRES : 0;
 				out[0] =
 					k.tempEquator * (1 - 2 * away) +
@@ -1997,7 +2095,7 @@
 							low: -85,
 							high: 85,
 							step: 1,
-							value: 3,
+							value: 30,
 							digits: 0,
 							unit: "°",
 							note: () =>
@@ -2010,7 +2108,7 @@
 							low: -180,
 							high: 180,
 							step: 1,
-							value: 126,
+							value: 100,
 							digits: 0,
 							unit: "°",
 						},
@@ -2585,39 +2683,6 @@
 			// The world, and the patch cut out of it.
 			// ---------------------------------------------------------------
 
-			/** A latitude and a longitude, as a unit direction. */
-			function directionOf(latitude, longitude) {
-				const lat = (latitude * Math.PI) / 180;
-				const lon = (longitude * Math.PI) / 180;
-				const ring = Math.cos(lat);
-				return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
-			}
-
-			function cross3(a, b) {
-				return [
-					a[1] * b[2] - a[2] * b[1],
-					a[2] * b[0] - a[0] * b[2],
-					a[0] * b[1] - a[1] * b[0],
-				];
-			}
-
-			/**
-			 * East, up and north at one place on the planet.
-			 *
-			 * Up is `normalize(position)` and there is no global north, so north
-			 * is whatever is left after east is taken out of the polar axis.
-			 */
-			function frameOf(up) {
-				let east = cross3(POLE, up);
-				let len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
-				if (len < 1e-9) {
-					east = cross3([1, 0, 0], up);
-					len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
-				}
-				east = east.map((v) => v / len);
-				return { east, up, north: cross3(up, east) };
-			}
-
 			/**
 			 * The level the planet-wide shares are counted over.
 			 *
@@ -3151,10 +3216,13 @@
 			 */
 			function pictureDirection(q, r, wide, tall, frame, half, radius) {
 				if (!frame) {
-					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
-					const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
-					const ring = Math.cos(lat);
-					return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+					// **The planet's own parallels and meridians**, from the same
+					// construction a latitude row uses, so the box drawn on this
+					// picture and the ground inside it are the same way round.
+					return spherePoint(
+						(0.5 - (r + 0.5) / tall) * Math.PI,
+						((q + 0.5) / wide) * 2 * Math.PI - Math.PI,
+					);
 				}
 				const u = (((q + 0.5) / wide) * 2 - 1) * (half / radius);
 				const v = (1 - ((r + 0.5) / tall) * 2) * (half / radius);

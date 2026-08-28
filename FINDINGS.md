@@ -10,44 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-097 — A patch picture and the planet picture disagree about which way longitude runs
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-28, checking the biomes lab's patch against its own map after
-righting the renderer's frame
-**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
-`demos/vegetation-lab.html`
-
-**What happens.** Every lab's `frameOf` builds `east` as `cross(pole, up)`, and
-that is a proper right-handed compass frame: `cross(east, north)` is `up`,
-measured. But `directionOf(latitude, longitude)` builds a place as
-`[cos φ cos λ, sin φ, cos φ sin λ]`, and the derivative of that along longitude
-is the **opposite** vector: `frame.east · ∂p/∂λ` is exactly **−1**, while
-`frame.north · ∂p/∂φ` is **+1**. The planet picture draws longitude increasing
-to the right, so it and the patch picture — which draws `frame.east` to the
-right — are left-right mirrors of one another. The patch's own outline is drawn
-on the planet picture from latitude and longitude, so it sits in the right
-place and shows the wrong hand.
-
-**Why it matters.** The two pictures are meant to be read together: one says
-where on the planet the patch is and the other says what is in it. A coast that
-runs down the left of one runs down the right of the other. It is invisible on
-open ground and plain on a shoreline, which is what a person navigates by.
-
-**What would fix it, and why it is not one line.** A map with north up and
-longitude increasing to the right, rendered in 3D by a right-handed renderer, needs the
-renderer's third axis to be south — and that forces `cross(east, up)` to be
-north, which is the opposite of what a right-handed compass frame gives. The
-lab's own parameterization is the loose end: `[cos φ cos λ, sin φ, cos φ sin λ]`
-is the standard one with **y and z swapped**, which is a reflection, so its
-longitude runs the other way round the pole. Fixing it means changing where
-every latitude and longitude lands, across every lab and every saved link at
-once — which is the same change F-091 describes for the polar axis, and wants
-doing with it rather than twice.
-
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
 **Kind:** doc
@@ -161,41 +123,6 @@ separate question from the terrain model.
 `chamfer/generation` and callable by anyone reading the barrel -- which is the
 part that matters, because the name `erosion` now means the field and a caller
 finding `erodeDroplets` beside it will reasonably think the two are related.
-
-### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-27, giving `demos/biomes-lab.html` a temperature field that
-falls off with latitude
-**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
-`demos/vegetation-lab.html`, `packages/engine/src/coordinates/`
-
-**What happens.** `directionOf(latitude, longitude)` in all three labs returns
-`[cos φ cos λ, sin φ, cos φ sin λ]`, so the pole it measures from is `+Y`. The
-engine's polar axis runs through icosahedron vertices **0 and 3**, which is
-`normalize(-1, φ, 0)` and its antipode — not `+Y`, and not anything near it. The
-same is true of the equirectangular projection every lab picture is drawn in.
-
-**Why it matters.** It was cosmetic while latitude only chose where the patch
-stood: a place is a place under any naming, and the pictures are a viewing
-convenience. A climate field ends that. Temperature in the biomes lab is
-`1 - 2|dir · pole|`, so the pole decides where the ice is, and a world built
-from the lab's numbers has its ice caps in different places from a world built
-from the engine's. **The twelve pentagons sit on exact multiples of 36° of
-longitude about the engine's axis and nowhere in particular about `+Y`**, so
-the two also disagree about whether a pentagon is at a pole — which is the one
-fact doc 20 chose the axis to get.
-
-**What would fix it.** One constant and one projection. `POLE` becomes
-`VERTICES[0]`, `directionOf` builds its frame from that axis with the prime
-meridian through vertex 11, and `pictureDirection` inverts the same construction
-so a picture's rows are the engine's own parallels. The cost is that a latitude
-and longitude written in a link mean a different place than they did, across
-every lab at once — which is an argument for doing all three in one change
-rather than for leaving it.
 
 ### F-090 — Nothing in the vegetation lab checks any more that a chunk generates the same stand alone
 
@@ -2232,6 +2159,92 @@ from the world again.
 
 
 ## Closed
+
+### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, giving `demos/biomes-lab.html` a temperature field that
+falls off with latitude
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`, `packages/engine/src/coordinates/`
+**Closed:** 2026-08-28. `NORTH_AXIS` is icosahedron vertex 0 and the prime
+meridian is leaned off vertex 11, in a marked block all three labs share.
+Measured: vertex 0 comes out at latitude **+90** and vertex 3 at **−90**, vertex
+11 at longitude **0** and latitude **26.565°**, and all twelve pentagons on exact
+multiples of **36°** of longitude — which is the fact the axis was chosen for.
+The cost landed as expected: every lab's opening latitude and longitude named
+somewhere new and all three were re-picked.
+
+**What happens.** `directionOf(latitude, longitude)` in all three labs returns
+`[cos φ cos λ, sin φ, cos φ sin λ]`, so the pole it measures from is `+Y`. The
+engine's polar axis runs through icosahedron vertices **0 and 3**, which is
+`normalize(-1, φ, 0)` and its antipode — not `+Y`, and not anything near it. The
+same is true of the equirectangular projection every lab picture is drawn in.
+
+**Why it matters.** It was cosmetic while latitude only chose where the patch
+stood: a place is a place under any naming, and the pictures are a viewing
+convenience. A climate field ends that. Temperature in the biomes lab is
+`1 - 2|dir · pole|`, so the pole decides where the ice is, and a world built
+from the lab's numbers has its ice caps in different places from a world built
+from the engine's. **The twelve pentagons sit on exact multiples of 36° of
+longitude about the engine's axis and nowhere in particular about `+Y`**, so
+the two also disagree about whether a pentagon is at a pole — which is the one
+fact doc 20 chose the axis to get.
+
+**What would fix it.** One constant and one projection. `POLE` becomes
+`VERTICES[0]`, `directionOf` builds its frame from that axis with the prime
+meridian through vertex 11, and `pictureDirection` inverts the same construction
+so a picture's rows are the engine's own parallels. The cost is that a latitude
+and longitude written in a link mean a different place than they did, across
+every lab at once — which is an argument for doing all three in one change
+rather than for leaving it.
+
+### F-097 — A patch picture and the planet picture disagree about which way longitude runs
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, checking the biomes lab's patch against its own map after
+righting the renderer's frame
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`
+**Closed:** 2026-08-28, fixed in the same change as F-091 — the two were one
+loose end. `spherePoint` builds a place against three named axes rather than by
+spelling out a formula, so there is nothing left to swap, and every lab reads it
+out of one marked block the tests hold identical. Measured after, in all three:
+`frame.east` against the direction longitude increases in is **+1**, and
+`frame.north` against latitude's is **+1**.
+
+**What happens.** Every lab's `frameOf` builds `east` as `cross(pole, up)`, and
+that is a proper right-handed compass frame: `cross(east, north)` is `up`,
+measured. But `directionOf(latitude, longitude)` builds a place as
+`[cos φ cos λ, sin φ, cos φ sin λ]`, and the derivative of that along longitude
+is the **opposite** vector: `frame.east · ∂p/∂λ` is exactly **−1**, while
+`frame.north · ∂p/∂φ` is **+1**. The planet picture draws longitude increasing
+to the right, so it and the patch picture — which draws `frame.east` to the
+right — are left-right mirrors of one another. The patch's own outline is drawn
+on the planet picture from latitude and longitude, so it sits in the right
+place and shows the wrong hand.
+
+**Why it matters.** The two pictures are meant to be read together: one says
+where on the planet the patch is and the other says what is in it. A coast that
+runs down the left of one runs down the right of the other. It is invisible on
+open ground and plain on a shoreline, which is what a person navigates by.
+
+**What would fix it, and why it is not one line.** A map with north up and
+longitude increasing to the right, rendered in 3D by a right-handed renderer, needs the
+renderer's third axis to be south — and that forces `cross(east, up)` to be
+north, which is the opposite of what a right-handed compass frame gives. The
+lab's own parameterization is the loose end: `[cos φ cos λ, sin φ, cos φ sin λ]`
+is the standard one with **y and z swapped**, which is a reflection, so its
+longitude runs the other way round the pole. Fixing it means changing where
+every latitude and longitude lands, across every lab and every saved link at
+once — which is the same change F-091 describes for the polar axis, and wants
+doing with it rather than twice.
 
 ### F-095 — The globe in the panel is painted by a different function from the two flat maps
 

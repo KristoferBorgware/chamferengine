@@ -45,6 +45,8 @@ const BEGIN = "// ===== BEGIN engine noise kernel =====";
 const END = "// ===== END engine noise kernel =====";
 const LATTICE_BEGIN = "// ===== BEGIN engine coarse grid =====";
 const LATTICE_END = "// ===== END engine coarse grid =====";
+const COORDS_BEGIN = "// ===== BEGIN engine coordinates =====";
+const COORDS_END = "// ===== END engine coordinates =====";
 
 /** One marked block of the page, as source. */
 function block(page: string, begin: string, end: string): string {
@@ -98,15 +100,27 @@ function demoKernel(): {
 		j: number,
 	) => [number, number, number][];
 	directionToCell: (x: number, y: number, z: number, n: number) => FaceCell;
+	NORTH_AXIS: [number, number, number];
+	MERIDIAN_X: [number, number, number];
+	MERIDIAN_Y: [number, number, number];
+	VERTICES: [number, number, number][];
+	directionOf: (latitude: number, longitude: number) => [number, number, number];
+	frameOf: (up: [number, number, number]) => {
+		east: [number, number, number];
+		up: [number, number, number];
+		north: [number, number, number];
+	};
 } {
 	const page = readFileSync(HTML, "utf8");
 	// Both blocks together, because the page runs them together. They are
 	// written to touch no document and no window, so they run here exactly as
 	// they run in the page.
 	const source =
-		block(page, BEGIN, END) + block(page, LATTICE_BEGIN, LATTICE_END);
+		block(page, BEGIN, END) +
+		block(page, LATTICE_BEGIN, LATTICE_END) +
+		block(page, COORDS_BEGIN, COORDS_END);
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, faceOf, barycentricOf, hexRound, latticePosition, canonicalCell, neighbour, cellCorners, directionToCell };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, faceOf, barycentricOf, hexRound, latticePosition, canonicalCell, neighbour, cellCorners, directionToCell, NORTH_AXIS, MERIDIAN_X, MERIDIAN_Y, VERTICES, directionOf, frameOf };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -134,6 +148,74 @@ function settings(over: Partial<NoiseSettings> = {}): NoiseSettings {
 		...over,
 	};
 }
+
+/** A latitude and a longitude in degrees, read back off a direction. */
+function placeOf(p: readonly number[]): { lat: number; lon: number } {
+	const dot = (a: readonly number[], b: readonly number[]) =>
+		a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	return {
+		lat:
+			(Math.asin(Math.max(-1, Math.min(1, dot(p, demo.NORTH_AXIS)))) * 180) /
+			Math.PI,
+		lon:
+			(Math.atan2(dot(p, demo.MERIDIAN_Y), dot(p, demo.MERIDIAN_X)) * 180) /
+			Math.PI,
+	};
+}
+
+describe("the lab's latitude and longitude", () => {
+	it("measures from the engine's own polar axis", () => {
+		// **Icosahedron vertices 0 and 3.** All six antipodal pentagon pairs
+		// give one distinct latitude signature, so the choice is made on the
+		// face table instead: this is the only pair whose polar caps are
+		// contiguous runs of face indices.
+		expect(placeOf(demo.VERTICES[0]).lat).toBeCloseTo(90, 9);
+		expect(placeOf(demo.VERTICES[3]).lat).toBeCloseTo(-90, 9);
+	});
+
+	it("puts the prime meridian through vertex 11", () => {
+		const at = placeOf(demo.VERTICES[11]);
+		expect(at.lon).toBeCloseTo(0, 9);
+		// The northern pentagon ring sits at atan(1/2).
+		expect(at.lat).toBeCloseTo((Math.atan(0.5) * 180) / Math.PI, 9);
+	});
+
+	it("puts all twelve pentagons on exact multiples of 36 degrees", () => {
+		for (const v of demo.VERTICES) {
+			const at = placeOf(v);
+			// Longitude means nothing at a pole, so those two are exempt.
+			if (Math.abs(Math.abs(at.lat) - 90) < 1e-9) continue;
+			expect(Math.abs(at.lon / 36 - Math.round(at.lon / 36))).toBeLessThan(1e-9);
+		}
+	});
+
+	it("gives a frame whose east and north are the map's own", () => {
+		// **This is the pair that used to disagree.** A frame built one way and
+		// a map drawn another are mirror images, and the patch then reads
+		// backwards against the picture of where it is.
+		const step = 1e-5;
+		for (const [lat, lon] of [
+			[0, 0],
+			[23, 57],
+			[-41, -122],
+			[67, 179],
+		]) {
+			const p = demo.directionOf(lat, lon);
+			const frame = demo.frameOf(p);
+			const along = (q: readonly number[]) => {
+				const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+				const len = Math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2);
+				return [d[0] / len, d[1] / len, d[2] / len];
+			};
+			const east = along(demo.directionOf(lat, lon + step));
+			const north = along(demo.directionOf(lat + step, lon));
+			const dot = (a: readonly number[], b: readonly number[]) =>
+				a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+			expect(dot(frame.east, east)).toBeCloseTo(1, 6);
+			expect(dot(frame.north, north)).toBeCloseTo(1, 6);
+		}
+	});
+});
 
 describe("the multi-noise lab's patch", () => {
 	it("is handed a right-handed frame, so it is not a mirror of its own map", () => {

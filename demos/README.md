@@ -1156,7 +1156,9 @@ the coast it stands. **1.1%** of land is under 8 m and **3.4%** under 20 m,
 which is a beach rather than a region.
 
 **Temperature is three terms and none of them is a biome.** Latitude is one dot
-product against the axis, `+1` on the equator and `-1` at either pole. Altitude
+product against the axis — **the engine's own**, through icosahedron vertices 0
+and 3, which puts a pentagon at each pole and all twelve on exact multiples of
+36° of longitude — `+1` on the equator and `-1` at either pole. Altitude
 cools what stands up out of the ground, which is what puts snow on a mountain in
 a warm band — at the shipped `0.90` per kilometre the tallest ground this
 terrain builds loses `0.92` of the scale, **59° of latitude** worth. Noise is
