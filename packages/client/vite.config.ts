@@ -19,6 +19,7 @@ export default defineConfig({
 				landing: entry("index"),
 				planet: entry("planet"),
 				landscape: entry("landscape"),
+				vegetation: entry("vegetation"),
 			},
 		},
 	},

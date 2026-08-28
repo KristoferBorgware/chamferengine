@@ -112,6 +112,40 @@ interface Knob {
 		readonly value: string;
 		readonly label: string;
 	}[];
+
+	/**
+	 * Which pages the row belongs on, when that is narrower than its group's.
+	 *
+	 * The two benches cut their patch differently -- one in map cells, one in
+	 * blocks -- so the rows that say how wide it is sit in one group and answer
+	 * for one page each.
+	 */
+	readonly where?: "world" | "bench" | "veg" | "benches" | "both";
+}
+
+/**
+ * Which page a panel is on.
+ *
+ * Three, because there are three: the planet, the landscape bench and the
+ * vegetation bench. The two benches share the world a patch stands in and
+ * differ in what is being judged on it, so most groups name both.
+ */
+export type PanelPage = "world" | "bench" | "veg";
+
+/** Whether one group or row belongs on the page being built. */
+function onPage(where: Group["where"], page: PanelPage): boolean {
+	switch (where ?? "world") {
+		case "world":
+			return page === "world";
+		case "bench":
+			return page === "bench";
+		case "veg":
+			return page === "veg";
+		case "benches":
+			return page !== "world";
+		default:
+			return true;
+	}
 }
 
 /** One titled run of rows. */
@@ -127,9 +161,10 @@ interface Group {
 	 * The bench and the planet share every knob that decides the map, and
 	 * neither has any use for the other's. There is no sky on the bench and no
 	 * preview patch on the planet, so a row for either on the wrong page is a
-	 * row that moves nothing. Groups say `world` unless told otherwise.
+	 * row that moves nothing. Groups say `world` unless told otherwise, and
+	 * `benches` is both benches and not the planet.
 	 */
-	readonly where?: "world" | "bench" | "both";
+	readonly where?: "world" | "bench" | "veg" | "benches" | "both";
 
 	/**
 	 * Which of the bench's two panels the group stands in.
@@ -271,7 +306,7 @@ const GROUPS: Group[] = [
 		// the numbers writes them into it. It is the first thing on the left
 		// because a reader turning a knob on the right is asking what it did.
 		title: "General",
-		where: "bench",
+		where: "benches",
 		side: "left",
 		knobs: [],
 	},
@@ -279,7 +314,7 @@ const GROUPS: Group[] = [
 		// How the planet is cut up. Every row moves the ground's resolution or
 		// the world's size rather than its shape.
 		title: "Planet",
-		where: "bench",
+		where: "benches",
 		side: "left",
 		folded: true,
 		knobs: [
@@ -327,7 +362,7 @@ const GROUPS: Group[] = [
 		// the engine: they move the picture and leave the ground exactly where
 		// it was, so a link carrying them describes the same planet.
 		title: "Viewport",
-		where: "bench",
+		where: "benches",
 		side: "left",
 		knobs: [
 			{
@@ -343,6 +378,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchCells",
 				label: "Cells across",
+				where: "bench",
 				digits: 0,
 			},
 			{
@@ -353,6 +389,27 @@ const GROUPS: Group[] = [
 				// far under the map that is.
 				key: "patchDetail",
 				label: "Block detail",
+				where: "bench",
+				digits: 0,
+			},
+			{
+				// **Blocks, because a plant is measured in metres and built in
+				// blocks.** This patch is the block grid itself with the map
+				// read underneath it, so its width is a count of blocks rather
+				// than of map cells.
+				key: "patchBlocks",
+				label: "Patch",
+				where: "veg",
+				digits: 0,
+			},
+			{
+				// **A level of detail is a subdivision depth and nothing
+				// else.** The same ground drawn at a shallower one, with the
+				// planting lattice left at the finest -- so the hexagons drop
+				// fourfold a level and the plants do not move.
+				key: "patchLod",
+				label: "Level of detail",
+				where: "veg",
 				digits: 0,
 			},
 			{
@@ -388,6 +445,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchAlong",
 				label: "Contour along",
+				where: "bench",
 				choices: [
 					{ value: "x", label: "East" },
 					{ value: "z", label: "North" },
@@ -404,7 +462,7 @@ const GROUPS: Group[] = [
 		// Not "Light": the world has a group of that name already, and two
 		// sections sharing one are two the panel cannot tell apart.
 		title: "Lighting",
-		where: "bench",
+		where: "benches",
 		side: "left",
 		folded: true,
 		knobs: [
@@ -1194,6 +1252,15 @@ export class ParameterPanel {
 	private readonly bench: boolean;
 
 	/**
+	 * Which page this panel is on, which decides every group it draws.
+	 *
+	 * The vegetation bench builds one panel down the left and keeps its right
+	 * for the plants, so `bench` says how the panel is laid out and this says
+	 * what goes in it.
+	 */
+	private readonly page: PanelPage;
+
+	/**
 	 * The bench's second panel, down the left of the window.
 	 *
 	 * **Two panels because there are two questions.** The left says what the
@@ -1204,6 +1271,14 @@ export class ParameterPanel {
 	 */
 	private leftBody: HTMLElement | null = null;
 
+	/**
+	 * Whether this panel is the only one, standing down the left.
+	 *
+	 * The vegetation bench keeps its right side for the plants, so every group
+	 * lands here and there is no second panel to send half of them to.
+	 */
+	private readonly oneSided: boolean;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
@@ -1212,9 +1287,15 @@ export class ParameterPanel {
 			settings: PlanetSettings,
 			terrain: boolean,
 		) => void = () => {},
-		options: { readonly bench?: boolean } = {},
+		options: {
+			readonly bench?: boolean;
+			readonly page?: PanelPage;
+			readonly side?: "left" | "right";
+		} = {},
 	) {
 		this.bench = options.bench ?? false;
+		this.page = options.page ?? (this.bench ? "bench" : "world");
+		this.oneSided = options.side === "left";
 		// The draft is dragged, and a curve is an array: taken by reference it
 		// would be written back into whoever handed these over.
 		this.draft = copyKnobs(settings.knobs);
@@ -1222,7 +1303,7 @@ export class ParameterPanel {
 		this.onDraft = onDraft;
 		this.onLiveRebuild = onLiveRebuild;
 		this.root = document.createElement("aside");
-		this.root.className = "knobs";
+		this.root.className = this.oneSided ? "knobs knobs-left" : "knobs";
 		this.build();
 		document.body.appendChild(this.root);
 	}
@@ -1307,7 +1388,7 @@ export class ParameterPanel {
 		body.className = "knobs-body";
 		this.root.appendChild(body);
 
-		if (this.bench) {
+		if (this.bench && !this.oneSided) {
 			const aside = document.createElement("aside");
 			aside.className = "knobs knobs-left";
 			const left = document.createElement("div");
@@ -1349,6 +1430,7 @@ export class ParameterPanel {
 			section.appendChild(head);
 
 			for (const knob of group.knobs) {
+				if (knob.where && !onPage(knob.where, this.page)) continue;
 				const row = this.row(knob);
 				this.rows.push(row);
 				section.appendChild(row.wrap);
@@ -1364,9 +1446,7 @@ export class ParameterPanel {
 		// open, not filed under one of two questions the way a knob is.
 		if (!this.bench)
 			for (const group of GROUPS) {
-				const where = group.where ?? "world";
-				if (where !== "both" && (where === "bench") !== this.bench)
-					continue;
+				if (!onPage(group.where, this.page)) continue;
 				if (!group.aboveTabs) continue;
 				body.appendChild(buildSection(group));
 				handled.add(group);
@@ -1415,9 +1495,7 @@ export class ParameterPanel {
 		// happens to read it.
 		for (const group of GROUPS) {
 			if (handled.has(group)) continue;
-			const where = group.where ?? "world";
-			if (where !== "both" && (where === "bench") !== this.bench)
-				continue;
+			if (!onPage(group.where, this.page)) continue;
 			const into =
 				group.side === "left" && this.leftBody
 					? this.leftBody
