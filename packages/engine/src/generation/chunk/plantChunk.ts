@@ -11,6 +11,7 @@ import { joinPath } from "../../addressing/lattice/joinPath.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
 import { neighbour } from "../../addressing/neighbours/neighbour.js";
 import { rank } from "../../addressing/lattice/rank.js";
+import { layoutFits, plantPatchLayout } from "./plantPatchLayout.js";
 
 /**
  * How far past its own rim a chunk grows plants, in metres, when nothing knows.
@@ -117,62 +118,128 @@ export function plantChunk(
 	const reach = templates ? templates.reachFor(layers) : PLANT_REACH;
 	const hops = Math.max(1, Math.ceil(reach / block));
 
-	// The chunk's own lattice points, then everything within reach of them.
-	// **Canonicalised as they are keyed**, because a cell on a face edge has
-	// more than one name and a walk that did not would enter one column twice.
+	// **Every chunk of a level walks the same shape**, so the shape is worked
+	// out once and this adds the chunk's own origin to it. `joinPath` maps a
+	// triangle's `(q, r)` onto its face as `i = A + s * q`, `j = B + s * r` --
+	// a translation and a sign, the sign being the middle child's half turn --
+	// and the six lattice directions come in opposite pairs, so one table
+	// serves an upright triangle and a turned one alike.
+	const [originI, originJ] = joinPath(chunk.address.path, 0, 0, depth);
+	const [stepI] = joinPath(chunk.address.path, 1, 0, depth);
+	const layout = plantPatchLayout(m, hops, stepI - originI);
+
 	const keyOf = (face: number, i: number, j: number): number =>
 		(face * (n + 1) + i) * (n + 1) + j;
-	const seen = new Map<number, number>();
-	const face: number[] = [];
-	const iOf: number[] = [];
-	const jOf: number[] = [];
-	// Where an owned column lives in the chunk's own array, `-1` for the ring
-	// past its rim -- which is grown from and never written to.
-	const slotOf: number[] = [];
-	const add = (
-		one: { face: number; i: number; j: number },
-		slot: number,
-	): number => {
-		const cell = canonicalCell(one.face, n, one.i, one.j);
-		const key = keyOf(cell.face, cell.i, cell.j);
-		const held = seen.get(key);
-		if (held !== undefined) {
-			if (slot >= 0) slotOf[held] = slot;
-			return held;
-		}
-		const at = face.length;
-		seen.set(key, at);
-		face.push(cell.face);
-		iOf.push(cell.i);
-		jOf.push(cell.j);
-		slotOf.push(slot);
-		return at;
-	};
+	let face: Int32Array;
+	let iOf: Int32Array;
+	let jOf: Int32Array;
+	let slotOf: Int32Array;
+	let ring: Int32Array;
 
-	let frontier: number[] = [];
-	for (let q = 0; q <= m; q++)
-		for (let r = 0; q + r <= m; r++) {
-			const [i, j] = joinPath(chunk.address.path, q, r, depth);
-			frontier.push(
-				add({ face: chunk.address.face, i, j }, rank(q, r, m)),
-			);
+	if (layoutFits(layout, originI, originJ, n)) {
+		// **Nothing here touches a face edge**, which is what the fit test
+		// says: no cell has a second name, no neighbour reflects onto another
+		// face, and the flat table is exact. The ring is shared rather than
+		// copied, because nothing ever writes to it.
+		const count = layout.count;
+		face = new Int32Array(count).fill(chunk.address.face);
+		iOf = new Int32Array(count);
+		jOf = new Int32Array(count);
+		for (let c = 0; c < count; c++) {
+			iOf[c] = originI + layout.di[c]!;
+			jOf[c] = originJ + layout.dj[c]!;
 		}
-	for (let hop = 0; hop < hops && frontier.length > 0; hop++) {
-		const next: number[] = [];
-		for (const c of frontier)
-			for (let d = 0; d < 6; d++) {
-				const nb = neighbour(face[c]!, n, iOf[c]!, jOf[c]!, d);
-				if (!nb) continue;
-				const before = face.length;
-				const at = add(nb, -1);
-				if (at >= before) next.push(at);
+		slotOf = layout.slot;
+		ring = layout.ring;
+	} else {
+		// **A patch near a face edge is walked**, because a cell on one has
+		// more than one name and its ring reaches onto another face. About one
+		// chunk in forty is here.
+		const walked = walkPatch();
+		face = walked.face;
+		iOf = walked.i;
+		jOf = walked.j;
+		slotOf = walked.slot;
+		ring = walked.ring;
+	}
+
+	/**
+	 * The patch found by stepping the lattice, which is the answer everywhere.
+	 *
+	 * **Canonicalised as it is keyed**, because a cell on a face edge has more
+	 * than one name and a walk that did not would enter one column twice.
+	 */
+	function walkPatch(): {
+		face: Int32Array;
+		i: Int32Array;
+		j: Int32Array;
+		slot: Int32Array;
+		ring: Int32Array;
+	} {
+		const here = new Map<number, number>();
+		const f: number[] = [];
+		const ii: number[] = [];
+		const jj: number[] = [];
+		const own: number[] = [];
+		const add = (
+			one: { face: number; i: number; j: number },
+			slot: number,
+		): number => {
+			const cell = canonicalCell(one.face, n, one.i, one.j);
+			const key = keyOf(cell.face, cell.i, cell.j);
+			const was = here.get(key);
+			if (was !== undefined) {
+				if (slot >= 0) own[was] = slot;
+				return was;
 			}
-		frontier = next;
+			const at = f.length;
+			here.set(key, at);
+			f.push(cell.face);
+			ii.push(cell.i);
+			jj.push(cell.j);
+			own.push(slot);
+			return at;
+		};
+		let frontier: number[] = [];
+		for (let q = 0; q <= m; q++)
+			for (let r = 0; q + r <= m; r++) {
+				const [i, j] = joinPath(chunk.address.path, q, r, depth);
+				frontier.push(
+					add({ face: chunk.address.face, i, j }, rank(q, r, m)),
+				);
+			}
+		for (let hop = 0; hop < hops && frontier.length > 0; hop++) {
+			const next: number[] = [];
+			for (const c of frontier)
+				for (let d = 0; d < 6; d++) {
+					const nb = neighbour(f[c]!, n, ii[c]!, jj[c]!, d);
+					if (!nb) continue;
+					const before = f.length;
+					const at = add(nb, -1);
+					if (at >= before) next.push(at);
+				}
+			frontier = next;
+		}
+		const links = new Int32Array(f.length * 6).fill(-1);
+		for (let c = 0; c < f.length; c++)
+			for (let d = 0; d < 6; d++) {
+				const nb = neighbour(f[c]!, n, ii[c]!, jj[c]!, d);
+				if (!nb) continue;
+				const one = canonicalCell(nb.face, n, nb.i, nb.j);
+				const to = here.get(keyOf(one.face, one.i, one.j));
+				if (to !== undefined) links[c * 6 + d] = to;
+			}
+		return {
+			face: Int32Array.from(f),
+			i: Int32Array.from(ii),
+			j: Int32Array.from(jj),
+			slot: Int32Array.from(own),
+			ring: links,
+		};
 	}
 
 	const count = face.length;
 	const directions = new Float64Array(count * 3);
-	const ring = new Int32Array(count * 6).fill(-1);
 	const top = new Float64Array(count);
 	const groundLayer = new Int32Array(count);
 	const owned = new Uint8Array(count);
@@ -183,13 +250,6 @@ export function plantChunk(
 		directions[c * 3] = p.x;
 		directions[c * 3 + 1] = p.y;
 		directions[c * 3 + 2] = p.z;
-		for (let d = 0; d < 6; d++) {
-			const nb = neighbour(face[c]!, n, iOf[c]!, jOf[c]!, d);
-			if (!nb) continue;
-			const one = canonicalCell(nb.face, n, nb.i, nb.j);
-			const to = seen.get(keyOf(one.face, one.i, one.j));
-			if (to !== undefined) ring[c * 6 + d] = to;
-		}
 		// **The ground as this chunk drew it**, so a plant's foot stands on the
 		// block under it rather than a rounding away from one. A layer counts
 		// downward from the crust top, and a stand counts upward from the

@@ -88,6 +88,8 @@ export { Chunk } from "./chunk/Chunk.js";
 export { generateChunk } from "./chunk/generateChunk.js";
 export type { PlantedChunk } from "./chunk/plantChunk.js";
 export { PLANT_LEVELS, PLANT_REACH, plantChunk } from "./chunk/plantChunk.js";
+export type { PlantPatchLayout } from "./chunk/plantPatchLayout.js";
+export { layoutFits, plantPatchLayout } from "./chunk/plantPatchLayout.js";
 export type { OutsideBlocks } from "./chunk/OutsideBlocks.js";
 export { outsideKey } from "./chunk/OutsideBlocks.js";
 export { applyDeltas } from "./chunk/applyDeltas.js";
