@@ -10,6 +10,56 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-111 — A stand does not lean together, and two places say it does
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, explaining how one plant is built
+**Where:** `packages/engine/src/generation/plants/growPlant.ts`,
+`packages/engine/src/generation/plants/growStand.ts` (`raise`),
+`packages/client/src/PLANT_ROWS.ts` (**Bend feature**)
+
+**What happens.** The bend that pushes each step of a limb off its heading is
+read from noise at **world** coordinates, and `growPlant`'s own comment says
+why: read in the plant's own frame "it would be a different field for every
+plant, and a stand would not lean together". The panel says the same to the
+player -- **Bend feature** is "how far you walk before the bend changes its
+mind, so a whole stand leans together". But `raise` hands `growPlant` the seed
+`seed + floor(roll * 100000)`, where `roll` is a hash of the plant's own cell,
+and that seed is what the bend's `octaveNoise` is keyed on. **Every plant reads
+its own field.** World coordinates then buy continuity along one trunk and
+nothing between two.
+
+**Measured** (`tools/trial-lean.ts`): a line of pines at **Bend** 0.6 and
+**Bend feature** 20 m, taking the horizontal direction each trunk's top has
+leaned in and correlating neighbours.
+
+| apart | a seed per plant (ships) | one seed for the stand |
+|---|---|---|
+| 1 m | **0.033** | **0.985** |
+| 2 m | 0.068 | 0.947 |
+| 5 m | -0.059 | 0.777 |
+| 10 m | 0.050 | 0.459 |
+
+Shared, the agreement falls off over the feature's own 20 m, which is exactly
+what the row promises. As it ships there is no agreement at any spacing.
+
+**Why it matters.** A stand leaning one way is what reads as weather -- a
+hillside of trees all bent off the prevailing wind. Without it **Bend** is
+per-tree crookedness and nothing more, and **Bend feature** controls a length
+nobody can see, because a single trunk is shorter than the feature anyway. Two
+pieces of prose describe a behaviour the engine does not have, which is worse
+than not having it.
+
+**What would fix it.** The per-plant seed is doing two jobs. It has to stay for
+the branch turn and lean hashes -- `hash3(c, level * 31 + j, tag, seed)` -- or
+every tree of a species forks at identical angles. The bend needs the **world**
+seed instead, shared by everything on the planet. Pass two seeds into
+`growPlant`, or key the three bend axes off the world seed the stand already
+holds.
+
 ### F-110 — A chunk's apron draws no trees, so a canopy is walled off at every chunk edge
 
 **Kind:** bug
