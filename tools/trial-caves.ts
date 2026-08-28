@@ -78,9 +78,10 @@ console.log(
 		` chunks at level ${settings.chunkLevel}`,
 );
 // **With the cliffs layer off is where the caves' own bill shows.** That layer
-// reaches four of its own shape widths down -- 480 layers on this world -- so
-// with it on the fill is already walking most of what an unbounded cave would
-// ask for, and the caves look cheap because something else is paying.
+// reaches one of its own shape widths down -- 120 layers on this world -- so
+// with it on the fill is already walking part of what an unbounded cave would
+// ask for, and the caves look cheaper than they are because something else is
+// paying for the first hundred metres.
 for (const carve of [false, true]) {
 	const off = timed(carve, false, 0);
 	const bounded = timed(carve, true, settings.knobs.caveDepth);

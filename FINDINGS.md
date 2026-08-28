@@ -2584,7 +2584,10 @@ from the world again.
 **Priority:** medium
 **Effort:** medium
 **Found:** 2026-08-28, measuring what a cave costs a chunk
-**Closed:** 2026-08-28. `CARVE_REACH` is `0.5` shape widths -- `60 m` at the
+**Closed:** 2026-08-28, and **re-tuned the same day when the cost it named
+turned out to be the drama** -- see the last paragraph. `CARVE_REACH` is now
+`1` shape width with `CARVE_SQUASH` at `4`; the numbers below are the reading
+that closed it, at `0.5` and no squash. `CARVE_REACH` was `0.5` shape widths -- `60 m` at the
 shipped shape against `480 m`. Measured over the land columns of the shipped
 world (`tools/trial-carve-reach.ts`), the layer opened `17.2%` of the blocks
 **eighty metres under the ground** and `1.4%` two hundred down, which is a cave
@@ -2603,12 +2606,25 @@ metres. Land columns holding one go from **`19.9%` at four widths to `0.0%` at
 half a width**. `CARVE_SQUASH` is the measured lever that has both -- read the
 field faster down a column than across the ground and the shapes are shorter
 than they are wide, taking half a width to `9.9%` at `x2` and `30.7%` at `x8`,
-which is more overhangs than the deep reach ever gave. It is in the engine at
+which is more overhangs than the deep reach ever gave. It was in the engine at
 `1`, off, because at `x8` it also makes the *surface* patchy at block scale: a
 column loses three blocks off its top where its neighbour loses none, and green
 ground with grey cliffs in it becomes green and grey speckle. Which of the two
 matters more is a decision about how the world should look rather than a
 measurement.
+
+**That decision was made, and it went the other way.** With the reach at half a
+width the landscape bench drew `4` of `12,481` columns holding rock over air
+against `1,938` before, which reads as the layer having become a change to the
+height map -- which is what it had become. The setting is now `1` width read
+`x4`: `9,190` columns, `6` spans at the deepest, the patch keeping its mass
+(`88`-`202 m` against `77`-`209 m` uncarved, where four widths ate it to
+`22 m`), for `461 ms` a chunk against `820 ms` at four widths and `317 ms` at
+half a width. **The lesson is that the cost measurement was sound and
+incomplete**: it priced the layers walked and did not price what the layer is
+for, so a `2.6x` saving was taken against a feature going to zero, and nothing
+in the trial's own output said so. `tools/trial-carve-reach.ts` reports the
+overhang share for exactly that reason, and it was already reporting it.
 
 
 ### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
