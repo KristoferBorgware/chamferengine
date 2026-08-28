@@ -97,6 +97,19 @@ export interface PatchLook {
 	readonly shadowStrength: number;
 
 	/**
+	 * Paint the key's shadow factor itself, white to black, instead of the
+	 * picture.
+	 *
+	 * **A shadow that misbehaves cannot be judged through the lighting.** The
+	 * factor reaches the eye multiplied by the light's share, the face's own
+	 * angle and the exposure, so acne reads as texture and a misplaced map
+	 * reads as nothing at all -- this is how the checkerboard the maps shipped
+	 * with was found. Reached from the page by the \`shadowDebug=1\` query
+	 * parameter alone: it is a diagnostic, not a picture anybody composes.
+	 */
+	readonly debugShadow?: boolean;
+
+	/**
 	 * Where the camera is, which is what the near cascade is sized from.
 	 *
 	 * Not a light: the rig is four directions and none of them stands
@@ -309,7 +322,16 @@ export class PatchRenderer {
 				})),
 				{
 					binding: 4,
-					resource: device.createSampler({ compare: "less" }),
+					// **Linear, and the filtering is of comparisons.** The
+					// hardware blends the four yes-or-nos around the tap, so
+					// each of the nine taps is already soft -- with nearest,
+					// every tap is a coin and a marginal surface renders as a
+					// checkerboard of them, which is the acne this had.
+					resource: device.createSampler({
+						compare: "less",
+						magFilter: "linear",
+						minFilter: "linear",
+					}),
 				},
 			],
 		});
@@ -594,7 +616,7 @@ export class PatchRenderer {
 				look.keyShadow ? 1 : 0,
 				look.fillShadow ? 1 : 0,
 				this.shadow.texel,
-				0,
+				look.debugShadow ? 1 : 0,
 			],
 			96,
 		);

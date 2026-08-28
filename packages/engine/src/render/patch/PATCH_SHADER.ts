@@ -143,9 +143,11 @@ fn sampled(
 	// moves the sample toward the light, which takes the same distance off
 	// every shadow -- and on terracing whose steps cast a metre or two that was
 	// the whole shadow. Along the normal it leaves its own surface without
-	// moving down the light at all, so a short shadow keeps its length. Half a
-	// texel of the map this slot holds, which is what the cascades bought.
-	let out = world + normal * view.fit[slot].x * 0.5;
+	// moving down the light at all, so a short shadow keeps its length. 1.7
+	// texels of the map this slot holds, the same lift the world's own
+	// cascades use: at half a texel the surface still read its own depth at
+	// even odds, which rendered as a checkerboard over every wall.
+	let out = world + normal * view.fit[slot].x * 1.7;
 	let clip = view.maps[slot] * vec4f(out, 1.0);
 	let ndc = clip.xyz / clip.w;
 	if (ndc.z < 0.0 || ndc.z > 1.0) {
@@ -203,14 +205,7 @@ fn reaches(
 	if (open < 0.0) {
 		return 1.0;
 	}
-	// **How much of its light a shadow takes** -- at 1 the light is gone where
-	// the map says so. There is no darkness in metres to set: a shadow removes
-	// a light, and how dark that is depends on what share that light had.
-	//
-	// Past 1 this extrapolates, which is what lets a shadow eat into the other
-	// lights as well and is the only way a rig with a weak key draws a shadow
-	// worth looking at. A light cannot be less than none, so it floors at 0.
-	return max(0.0, mix(1.0, open, view.shadowing.x));
+	return open;
 }
 
 struct VertexOut {
@@ -355,10 +350,27 @@ fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 		reaches(fillNear, fillFar, 2, world, n, toFill),
 		view.shadow.y > 0.5,
 	);
-	let lit =
-		view.shares.x * toKey * keyOpen +
-		view.shares.y * toFill * fillOpen +
+	// **Strength up to 1 is physical: it says how much of its own light a
+	// shadow takes.** The shares are normalized below, so even a full shadow
+	// of the key only removes the key's fraction of the total -- on a rig
+	// balanced for a readable preview that is about a third, which is why a
+	// physical shadow here is faint however the maps are tuned.
+	let hold = min(view.shadowing.x, 1.0);
+	let keyShade = 1.0 - hold * (1.0 - keyOpen);
+	let fillShade = 1.0 - hold * (1.0 - fillOpen);
+	var lit =
+		view.shares.x * toKey * keyShade +
+		view.shares.y * toFill * fillShade +
 		view.shares.z * max(0.0, dot(n, top));
+	// **Past 1 the shadow stops being a light being blocked and becomes a
+	// picture of the shape**: the same shadow scales the whole direct sum,
+	// overhead light included, so at the top of the knob a shadowed face
+	// keeps only the sky's share. Driven by the darker of the two maps,
+	// because two lights agreeing something is behind cover is not twice the
+	// cover.
+	let spill = max(0.0, view.shadowing.x - 1.0);
+	let cover = min(keyOpen, fillOpen);
+	lit = lit * max(0.0, 1.0 - spill * (1.0 - cover));
 	let openness = mix(0.42, 1.0, 0.5 + 0.5 * n.y);
 	// Every light turned off leaves the sky term, which is the one thing here
 	// with no direction -- flat, and never a divide by nothing.
@@ -374,6 +386,12 @@ fn shade(tint : vec3f, normal : vec3f, world : vec3f, direct : f32) -> vec4f {
 
 @fragment
 fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
+	if (view.shadow.w > 0.5) {
+		let dn = normalize(in.normal);
+		let dk = normalize(view.sun.xyz);
+		let df = max(0.0, dot(dn, dk));
+		return vec4f(vec3f(reaches(keyNear, keyFar, 0, in.world, dn, df)), 1.0);
+	}
 	// **The lights themselves, drawn where they shine from.** Each marker
 	// carries its own colour on the layer channel and takes no light at all --
 	// a lamp lit by the rig it is a picture of would be a picture of something

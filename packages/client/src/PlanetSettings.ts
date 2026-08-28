@@ -1003,7 +1003,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchSpeckle: 0.35,
 	keyShadow: true,
 	fillShadow: false,
-	shadowStrength: 1,
+	shadowStrength: 2,
 	keyLight: PATCH_KEY_SHARE,
 	fillLight: PATCH_FILL_SHARE,
 	topLight: PATCH_TOP_SHARE,

@@ -348,6 +348,7 @@ const look = {
 	fillLight: PATCH_FILL_SHARE,
 	topLight: PATCH_TOP_SHARE,
 	shadowStrength: 1,
+	debugShadow: false,
 	eye: [0, 1, 1] as [number, number, number],
 };
 
@@ -647,6 +648,8 @@ function render(): void {
 	);
 	look.showLights = k.showLights;
 	look.light = k.patchLight;
+	look.debugShadow =
+		new URLSearchParams(location.search).get("shadowDebug") === "1";
 	look.keyShadow = k.keyShadow;
 	look.fillShadow = k.fillShadow;
 	look.keyLight = k.keyLight;
