@@ -10,6 +10,56 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-115 — Reading the cliffs layer every second block halves it, and loses one cell in ten thousand
+
+**Kind:** idea
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, taking the cliffs layer's cost apart
+**Where:** `packages/engine/src/generation/terrain/TerrainGenerator.ts`
+(`fillColumn`), `tools/trial-carve-stride.ts`
+
+**What happens.** The layer is read once a block down a column -- `120`
+readings over its `120 m` reach -- while its field crosses only `4` lattice
+cells of its widest octave and `16` of its finest. Reading every second layer
+and filling in between two samples that agree, reading every layer between two
+that disagree, was measured over `8,580` land columns of the shipped world:
+
+| stride | readings a column | time | wrong | of all cells |
+|---|---|---|---|---|
+| 1 | 120.0 | 667 ms | 0 | 0% |
+| **2** | **62.9 (52%)** | **351 ms (53%)** | **101** | **0.0098%** |
+| 3 | 45.7 | 235 ms | 345 | 0.0335% |
+| 4 | 38.3 | 214 ms | 988 | 0.0960% |
+
+**It halves the layer**, which is about three quarters of what a chunk of
+ground costs: a chunk at `138 ms` today would come out near `83 ms`. That is a
+projection from the layer's own share, not a chunk measured with this in it.
+
+**What it gets wrong.** Every loss is a **run of one layer** -- the field
+crosses the threshold and comes back inside two blocks, so two samples that
+agree hide it. At stride 2 that is `70` pockets of air filled in and `31`
+blocks of rock taken away over a million cells, and **the shallowest sits one
+layer under the ground**, which is a block appearing or disappearing at the
+surface rather than somewhere nobody will dig. One column in eighty-five has
+one wrong block somewhere in its walk.
+
+**Why it is not done here.** It is not exact, so it is a different world -- and
+unlike the blend (F-114), where the exact form turned out to be just as fast,
+here the saving *is* the approximation. That is a terrain decision: the ground
+moves by one block in about ten thousand, and whether that shows is a question
+for a frame rather than for a table.
+
+**What would fix it, and what would make it exact.** The change is in
+`fillColumn`: walk the carve in a strided pass first, into a per-layer mask,
+then run the caves and the material rule over that. Making it exact needs a
+bound on how far the density can move in one layer -- the noise's own gradient
+is bounded and the walk's step in lattice units is known, so a sample far
+enough from the threshold provably cannot cross and come back. That would keep
+the saving where the field is calm and pay full price near a surface, which is
+where the one-layer runs are.
+
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance
