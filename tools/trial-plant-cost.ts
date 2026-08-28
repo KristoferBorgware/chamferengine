@@ -1,6 +1,6 @@
 // What the trees add to building one chunk, at the finest level.
 //
-//   npx vite-node tools/trial-plant-cost.ts [chunks]
+//   npx vite-node tools/trial-plant-cost.ts [chunks] [caves]
 //
 // A chunk in a worker is generated, planted and meshed, and the plants cost
 // twice: once to grow and again in the mesh, because a tree is blocks and
@@ -35,7 +35,9 @@ const WANT = Number(process.argv[2] ?? 8);
 const LAND_SHARE = 0.95;
 const PASSES = 3;
 
-const settings = new PlanetSettings({ plain: false });
+// **Caves are off in the shipped world**, so they are asked for by name.
+const withCaves = process.argv.includes("caves");
+const settings = new PlanetSettings({ plain: false, caves: withCaves });
 const seed = seedFromString(settings.knobs.seed);
 const map = buildCoarseMap(seed, settings.coarseOptions());
 const shape = settings.shapeFor(map);
@@ -134,7 +136,9 @@ function best(run: () => void): number {
 console.log(
 	`depth ${settings.depth}, block ${settings.knobs.blockSize} m, chunks at ` +
 		`level ${chunkLevel} — ${settings.chunkSpan.toFixed(0)} m across, ` +
-		`${settings.plantLayers.length} layers`,
+		`${settings.plantLayers.length} layers, ` +
+		`cliffs ${settings.knobs.carveLayer ? "on" : "off"}, ` +
+		`caves ${settings.knobs.caves ? "on" : "off"}`,
 );
 console.log(
 	"\n" +
