@@ -123,6 +123,12 @@
 				margin: 0 6px 0 0;
 				vertical-align: -1px;
 			}
+			.group.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			.group.off > summary {
+				color: var(--dim);
+			}
 			/* The enlarged picture. A field at panel width shows where its
 			   features are; at this size it shows what they look like. */
 			#big {
@@ -1586,7 +1592,7 @@
 			 */
 			function squareOf(climate, warp, out) {
 				const fit = world.fit;
-				const push = knobs.warpStrength;
+				const push = knobs.useWarp ? knobs.warpStrength : 0;
 				out[0] = Math.max(
 					0,
 					Math.min(1, (climate[0] - fit.tLo) / fit.tSpan + push * warp[0]),
@@ -2065,18 +2071,16 @@
 							note: () =>
 								field && world.fit
 									? knobs.fit
-										? `the square is stretched onto the land's own 2nd and ` +
-											`98th percentiles — temperature spans <b>${world.fit.tSpan.toFixed(
-												2,
-											)}</b> and humidity <b>${world.fit.hSpan.toFixed(
-												2,
-											)}</b> of the raw scale, and <b>${field.reached}</b> of ` +
-											`<b>${biomes.length}</b> biomes are built somewhere`
-										: `off: the raw readings go straight into the square. An ` +
-											`octave stack has a standard deviation of about a quarter ` +
-											`of its own peak, so they cluster in the middle and ` +
-											`<b>${biomes.length - field.reached}</b> of ` +
-											`<b>${biomes.length}</b> biomes are never built`
+										? `the coldest place on the planet is put at the bottom of ` +
+											`the diagram and the hottest at the top, and the same for ` +
+											`dry and wet across it — so every corner of the square is ` +
+											`weather that exists somewhere. <b>${field.reached}</b> of ` +
+											`<b>${biomes.length}</b> biomes are built`
+										: `off: the readings go in as they come. They bunch up in ` +
+											`the middle, because adding noise together always does, ` +
+											`so the corners of the diagram name weather no ground ` +
+											`has and <b>${biomes.length - field.reached}</b> of ` +
+											`<b>${biomes.length}</b> biomes are never built anywhere`
 									: "",
 						},
 					],
@@ -2138,7 +2142,12 @@
 							value: 0.35,
 							digits: 2,
 							note: () =>
-								"what stops the planet reading as a set of stripes",
+								knobs.tempNoise === 0
+									? "at zero the planet is perfectly striped: every place the " +
+										"same distance from the equator, at the same height, is " +
+										"exactly as warm"
+									: "how far a place may drift from what its latitude and its " +
+										"height say, so a cold pocket can sit next to a warm one",
 						},
 						{
 							key: "tempFeature",
@@ -2200,6 +2209,12 @@
 							step: 0.05,
 							value: 0.5,
 							digits: 2,
+							note: () =>
+								knobs.humNoise === 0
+									? "at zero, how far inland a place is decides how wet it is " +
+										"and nothing else does"
+									: "how far a place may drift from what the coast says, so a " +
+										"wet valley can sit in a dry region",
 						},
 						{
 							key: "humFeature",
@@ -2235,6 +2250,17 @@
 					tint: "wild",
 					open: true,
 					rows: [
+						// **A switch on the section, not a row inside it.** It
+						// governs every row below it, so a reader meets it
+						// before the thing it governs rather than among them.
+						{
+							key: "useWarp",
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+							title: "ragged borders",
+						},
 						{ key: "warpPicture", label: "", type: "picture", shot: "warp", value: 0 },
 						{
 							key: "warpStrength",
@@ -2245,13 +2271,15 @@
 							value: 0.12,
 							digits: 2,
 							note: () =>
-								knobs.warpStrength === 0
-									? "off: a border on the planet is exactly the line the " +
-										"diagram draws"
-									: `the lookup is moved up to <b>${knobs.warpStrength.toFixed(
+								!knobs.useWarp || knobs.warpStrength === 0
+									? "a border between two biomes is exactly the line the " +
+										"diagram draws, everywhere on the planet"
+									: `before the biome is looked up, the place's weather is ` +
+										`nudged by up to <b>${knobs.warpStrength.toFixed(
 											2,
-										)}</b> of the diagram's width before it is taken, so a ` +
-										`border frays over the ground it would otherwise cut in a line`,
+										)}</b> of the diagram's width — so a border comes out ` +
+										`ragged instead of clean. The checked strip either side of ` +
+										`every line in the diagram is how far the nudge reaches`,
 						},
 						{
 							key: "warpFeature",
@@ -3367,7 +3395,7 @@
 				chartCtx.clearRect(0, 0, side, side);
 				const image = chartCtx.createImageData(wide, tall);
 				const px = image.data;
-				const push = knobs.warpStrength;
+				const push = knobs.useWarp ? knobs.warpStrength : 0;
 				// **One landform's own partition**, because that is the set a
 				// place on that kind of ground is chosen from. A biome filed
 				// under the lowlands is not in this picture at all when the
@@ -3766,6 +3794,22 @@
 				const ringY = new Float64Array(6);
 				const ringZ = new Float64Array(6);
 				const localP = new Float64Array(3);
+				/**
+				 * A direction and a height, as metres in the patch's own frame.
+				 *
+				 * **The third axis is south, and it has to be.** East, up and
+				 * north in that order is a **left-handed** triple -- measured,
+				 * `cross(east, up) · north` is `-1` -- and handing a left-handed
+				 * basis to a right-handed renderer draws the mirror image of the
+				 * ground. From overhead the frame's east then lands on the right
+				 * of the screen where the map puts it and its north lands at the
+				 * **bottom**, so the view is the map flipped top to bottom.
+				 * Negating one axis rights it, and negating this one is what
+				 * makes the default view agree with the map: at yaw zero the
+				 * camera stands south of the patch looking north, so north is
+				 * away from the eye and east is on the right, exactly as the
+				 * picture draws them.
+				 */
 				const local = (dx, dy, dz, metres) => {
 					const s = radius + metres;
 					const rx = dx * s - centre[0] * radius;
@@ -3773,7 +3817,11 @@
 					const rz = dz * s - centre[2] * radius;
 					localP[0] = rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
 					localP[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
-					localP[2] = rx * frame.north[0] + ry * frame.north[1] + rz * frame.north[2];
+					localP[2] = -(
+						rx * frame.north[0] +
+						ry * frame.north[1] +
+						rz * frame.north[2]
+					);
 					return localP;
 				};
 
@@ -4030,6 +4078,25 @@
 					legend.textContent = group.group;
 					set.append(legend);
 					for (const row of group.rows) {
+						if (row.summary) {
+							const box = document.createElement("input");
+							box.type = "checkbox";
+							box.className = "switch";
+							box.checked = knobs[row.key];
+							box.title = row.title ?? "";
+							box.addEventListener("click", (e) => e.stopPropagation());
+							// **A switch on a field is a resample, not a
+							// recolour.** The push is applied where the two
+							// climate readings are taken, so turning it off
+							// changes the readings the diagram is then handed.
+							box.addEventListener("input", () => {
+								knobs[row.key] = box.checked;
+								askForRedraw(false);
+							});
+							legend.prepend(box);
+							rows.set(row.key, { row, wrap: set, input: box });
+							continue;
+						}
 						const wrap = document.createElement("div");
 						let input = null;
 						let readout = null;
@@ -4120,6 +4187,11 @@
 
 			function refreshPanel() {
 				for (const { row, wrap, readout, input, note } of rows.values()) {
+					if (row.summary) {
+						input.checked = knobs[row.key];
+						wrap.classList.toggle("off", !knobs[row.key]);
+						continue;
+					}
 					if (row.type === "picture") {
 						if (note) note.innerHTML = row.note();
 						continue;

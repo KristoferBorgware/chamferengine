@@ -1184,6 +1184,17 @@ measurement is seen. What it costs is that the two ends are a property of the
 whole world rather than of the place, so they are found once and then held —
 the same shape as the relief fit, and the same reason.
 
+**The patch and the picture of it are the same way round, and that took a
+one-line fix.** A patch-local frame is `east`, `up`, `north`, and that triple is
+**left-handed** — `cross(east, up) · north` is exactly `−1` — so handing it to a
+right-handed renderer draws the mirror image. Projected from overhead, the
+frame's east landed at screen `+0.104`, the right, where the map puts it, and
+its north landed at `−0.185`, the bottom, where the map puts the top: the view
+was the map flipped top to bottom, which no camera angle recovers. The renderer
+takes **south** as its third axis, which rights it and makes yaw zero the view
+from the south looking north — north away from the eye, east on the right,
+exactly as the picture draws them.
+
 **The biome noise is two fields, so the picture is a grey one and a line one.**
 A biome is chosen by a point in two dimensions, and a single field could only
 ever slide every place along one diagonal of the diagram — which frays the
@@ -1192,7 +1203,9 @@ straight. The push toward hot is the grey; the push toward wet is its own
 contour over the top. **Push** is how far the lookup is moved before it is
 taken, and the diagram dithers each border by exactly that much: a checked strip
 either side of a line is the diagram saying how ragged that border will be on
-the ground.
+the ground. The section carries its own switch, and what it is worth is
+measured: turning it off moves **8.5%** of the planet's land into a different
+biome, all of it within a step of a border.
 
 **The dot cloud is filtered to the ground the tab is about.** A cloud of every
 climate on the planet says nothing about where a peak's biomes should sit; the

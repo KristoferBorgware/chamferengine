@@ -10,6 +10,39 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-092 — The multi-noise and vegetation labs draw the patch as a mirror of their own map
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, tracking down why the biomes lab's patch disagreed with
+the picture of the same ground
+**Where:** `demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+
+**What happens.** Both labs build a patch-local frame as `east`, `up`, `north`
+and hand the renderer `[east, up, north]` as `[x, y, z]`. That triple is
+**left-handed** — measured in the biomes lab before the fix,
+`cross(east, up) · north` is exactly **−1** — and a left-handed basis given to a
+right-handed renderer draws the mirror image. Projected from overhead at yaw
+zero, the frame's east lands at screen **+0.104** (the right, where the picture
+puts it) and its north lands at **−0.185**, the bottom, where the picture puts
+the top. So the view is the map flipped top to bottom, which is a reflection
+rather than a turn: no camera angle recovers it.
+
+**Why it matters.** Both labs draw the same ground twice, once as a picture of
+the patch from above and once as hexagon columns, and the two are meant to be
+read against each other. They disagree about which side of a hill a cliff is on.
+It is invisible on a symmetric landscape and obvious on a coastline, which is
+where a person looks.
+
+**What would fix it.** One line in each: `local()` writes the negated north
+component into `localP[2]`, so the renderer's third axis is south and the triple
+is right-handed. That also makes yaw zero the view from the south looking north,
+which is the orientation the map already draws — north away from the eye, east
+on the right. `demos/biomes-lab.html` carries the fix and the comment that
+explains it.
+
 ### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 
 **Kind:** risk
