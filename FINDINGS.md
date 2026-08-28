@@ -10,6 +10,97 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-107 — Growing a chunk's plants costs about as much again as its ground
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
+`packages/engine/src/generation/plants/growStand.ts`
+
+**What happens.** A chunk grows every plant within `24 m` of its rim and writes
+only what it owns, which is what makes two chunks agree about a tree that
+straddles them. Measured on the shipped world -- depth 13, 1 m blocks, chunks
+64 m across, two layers (`tools/trial-plant-chunk.ts`):
+
+| level | slots | ground | plants | plants ÷ ground |
+|---|---|---|---|---|
+| lod 0 | 2,145 | 645 ms | **884 ms** | 1.4x |
+| lod 2 | 153 | 16 ms | 112 ms | 7.1x |
+| lod 4 | 15 | 0.4 ms | 32 ms | 91.7x |
+
+These are software-adapter timings and move run to run; read the ratios.
+
+**Why it matters.** The absolute figure falls with distance -- a chunk covers
+the same triangle at every level, so the roots are the same set and the stamps
+land in a coarser lattice -- but at full detail it doubles what a chunk costs,
+and full detail is where the player is standing. The pool absorbs it the way it
+absorbs the ground, so it reads as chunks arriving later rather than as a
+stutter.
+
+**What would make it smaller.** F-103 is most of it: the rod walk asks
+`directionToCell` at every step and that call allocates seven objects for an
+answer that is three integers. After that the leaf stamp is the largest single
+term, and the lab took one stand from 4,990 ms to 1,595 ms without changing any
+of the shapes it drew.
+
+### F-106 — A plant is grown twice for a cell that two chunks both hold
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`
+
+**What happens.** A chunk grows every plant rooted within reach of its rim and
+drops what falls outside its own triangle. That is the rule that makes two
+chunks agree without speaking, and it is also work done twice: at the shipped
+64 m chunk with a 24 m reach, the ring past the rim holds about as many cells
+as the triangle does, so a plant near a boundary is grown by two chunks and a
+plant near a corner by three.
+
+**Why it is not a bug.** The alternative is a chunk asking its neighbour what
+it grew, and a chunk that reads its neighbour is not terrain -- the mesher, the
+apron and every level of detail rest on a chunk being a pure function of its
+address. The lab measured the same trade on a patch and found the cut costs
+nothing measurable, because what a chunk refuses to write pays for what it
+grows twice.
+
+**What would shrink it.** A cheaper refusal: a plant is decided by a hash of
+its root cell, so a chunk could reject a root whose species cannot reach it
+before growing the skeleton at all -- the widest reach is a property of the
+species and the size hash, both known before the first rod.
+
+### F-105 — Nothing checks that two chunks of the world grow one tree the same way
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/tests/generation/chunk/plantChunk.test.ts`
+
+**What happens.** The bench's audit compares one patch cut into chunks against
+the same patch grown whole, and reads 0 cells differing. The world's own path
+is a different one: `plantChunk` builds its patch from a chunk's triangle plus
+a ring, maps roots at the world's depth onto columns drawn at the chunk's
+level, and writes into layers counted downward from the crust top. None of
+those three conversions is covered by that audit, and the test beside it checks
+only that a chunk is repeatable and writes nothing over the ground.
+
+**Why it matters.** The failure it would catch is the one that does not look
+like a failure: a tree that comes apart along a chunk boundary reads as two
+half-trees, and at a distance as a thinner forest. It is also exactly the class
+of bug the delta store's own history is full of.
+
+**What would fix it.** Grow two neighbouring chunks and compare the cells they
+both hold -- a chunk generates the ring past its own rim, so the same cell is
+reachable from both and the two answers have to match. Twenty lines, and it
+belongs beside the audit that already exists.
+
 ### F-104 — The vegetation bench draws a plinth taller than the ground it is a bench for
 
 **Kind:** cleanup
