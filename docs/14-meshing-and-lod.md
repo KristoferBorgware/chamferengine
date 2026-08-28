@@ -105,17 +105,56 @@ So the working number is **4 triangles per cell on flat ground, about 9 on
 mountainous ground**. Vertical merging is not a nice-to-have — without it the raw
 face column is the cost, and it is five times worse.
 
-### Caves — and a warning about the density term
+### Caves — a band around a field's own zero
 
-The density field from [doc 08](08-terrain-generation.md) is
-`(surfaceRadius − |p|) + noise3D(p) × strength`. The bias term grows by 1 per
-metre of depth, so **enclosed voids only form when the noise gradient beats
-it** — amplitude divided by feature size must exceed 1. Turn the strength up
-without raising the frequency and you do not get caves; you get a rougher
-surface and a much larger bill for it.
+A cave is hollow where the noise sits inside a band either side of zero:
+`|fbm(p)| < threshold`, between a ceiling that wanders from column to column and
+a floor at a fixed depth. **The zero set of a field in space is a set of
+surfaces, and the band around one is a slab** — so what this carves is one
+folded sheet running through the crust rather than a network of corridors, and
+the band says how *wide* every passage is rather than how many there are.
 
-> **[verified]** `verification/volume.js`, 64 layers under 30 m of relief.
-> Feature size is `R / frequency`.
+> **[verified]** `verification/volume.js` §3b, the same 1,200 columns and 64
+> layers under 30 m of relief. The first row is what ships.
+>
+> | Scale | Band | Ceiling | Reach | Cave cells | Multi-span | Faces/column | Mouths |
+> |---|---|---|---|---|---|---|---|
+> | **24 m** | **0.12** | **6 m** | **28 m** | **788** | **81.0%** | **32.1** | 0 |
+> | 24 m | 0.06 | 6 m | 28 m | 703 | 71.6% | 20.7 | 0 |
+> | 24 m | 0.20 | 6 m | 28 m | 876 | 89.9% | 36.4 | 0 |
+> | 12 m | 0.12 | 6 m | 28 m | 1,322 | 94.8% | 34.0 | 1 |
+> | 48 m | 0.12 | 6 m | 28 m | 518 | 62.0% | 30.3 | 2 |
+> | 24 m | 0.12 | 6 m | 120 m | 1,653 | 95.0% | 78.8 | 0 |
+
+Three things to take from that table.
+
+**Nearly every column holds more than one slab of rock.** At the shipped
+settings **81%** do. One sheet running through the whole patch puts rock above
+the passage and rock below it everywhere it goes, where a field of scattered
+pockets would leave most columns whole. That share is what the chunk boundary
+rules below have to cope with, and it is the number to hold on to.
+
+**Widening the band does not open a second system.** From 0.06 to 0.20 the
+multi-span share runs 71.6% to 89.9% and the faces 20.7 to 36.4 — the sheet
+gets fatter and stays one sheet. What moves the count of passages is the
+**scale**: a 12 m feature carves 1,322 cells where a 48 m one carves 518.
+
+**The floor is what makes caves affordable.** A passage is free to be at any
+depth, so there is nothing to work out from the ground and nothing a fill can
+stand in for: without a floor a column is evaluated to the bottom of the crust.
+The last row is the same rule reaching 120 m instead of 28, at **78.8** faces a
+column against 32.1.
+
+### The density term, and why it is not this
+
+[Doc 08](08-terrain-generation.md) argues a different rule —
+`(surfaceRadius − |p|) + noise3D(p) × strength`, solid where that is positive.
+Its bias term grows by 1 per metre of depth, so **enclosed voids only form when
+the noise gradient beats it**: amplitude divided by feature size must exceed 1.
+Turn the strength up without raising the frequency and you do not get caves; you
+get a rougher surface and a much larger bill for it.
+
+> **[verified]** `verification/volume.js` §3, the same patch.
 >
 > | Freq | Strength | Feature | Gradient | Cave cells | Spans/column | Faces/column |
 > |---|---|---|---|---|---|---|
@@ -125,17 +164,14 @@ surface and a much larger bill for it.
 > | 220 | 26 | 7.7 m | 1.68 | 186 | 1.243 | 11.6 |
 > | 140 | 40 | 12.1 m | 1.65 | 185 | 1.242 | 17.5 |
 
-Two things to take from that table.
+**Most of that term's cost is not caves.** Going from no carving to strength 26
+at low frequency multiplies faces **11×** while carving **zero** voids — all of
+it is surface roughening, which section 2 already accounts for.
 
-**Most of the density term's cost is not caves.** Going from no carving to
-strength 26 at low frequency multiplies faces **11×** while carving **zero**
-voids — all of it is surface roughening, which section 2 already accounts for.
-Real caves add only about another 20% on top.
-
-**Caves are what create multi-span columns.** With genuine voids, 8% to 24% of
-columns hold more than one separate slab of rock. On flat or merely rough
-terrain every column is a single span. That distinction is what the chunk
-boundary rules below have to cope with.
+**The band has no bias term, so it has no gradient to beat.** The two rules
+share a name and nothing else: the gradient condition belongs to this table and
+not to the one above it, and so do its 8%-to-24% multi-span columns. Anything
+quoting a cave number has to say which of the two it came from.
 
 Cave surface is still **invisible** — enclosed by definition, nothing outside
 the rock can see it until a player opens a way in. **Cull interior geometry by
@@ -559,9 +595,11 @@ The apron is not free of the deeper problem, and neither was the skirt.
 ### Neither closes a cave mouth, and a volume has more than one surface
 
 That covers a height field, where every rim column has exactly one slab of rock
-and therefore one surface to hang from. Under a density field, 13–32% of columns
-have several — and a skirt cannot reach the others, because **a skirt hangs
-downward and a cave mouth is a horizontal hole in the boundary plane.**
+and therefore one surface to hang from. With caves on, **81% of columns have
+several** — and a skirt cannot reach the others, because **a skirt hangs
+downward and a cave mouth is a horizontal hole in the boundary plane.** The
+density term the section above declines would have left 13–32%; the band the
+engine runs leaves nearly all of them.
 
 The failure is specific. A cave in the fine chunk runs up to the rim. The coarse
 neighbour ran the height-field term only, so it is solid rock at that depth — but

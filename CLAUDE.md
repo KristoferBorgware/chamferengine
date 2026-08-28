@@ -347,7 +347,7 @@ Violating any of these breaks the design. They are not tunable.
 | range to a peak of height h | `R·acos(R/(R+1.7)) + R·acos(R/(R+h))` | 60 m hill → 521 m, 47× the cells | `volume.js` |
 | triangles per cell, real terrain | `4.0` flat → `9.5` at 120 m relief | saturates; merging absorbs relief | `volume.js` |
 | density-term face cost | `≈11×`, mostly roughening | caves need gradient > 1 | `volume.js` |
-| multi-span columns with caves | `13–32%` | what the seam rule must handle | `volume.js` |
+| multi-span columns with caves | `81%` | the band the engine runs; the density term gave 13–32% | `volume.js` |
 | holes at a LOD seam | `1150` naive, `1074` aproned, `0` seam-owned | over 385 rim columns | `seam.js` |
 | skirt walls in the cap plane | `85%` of rim columns at a LOD seam | 100% at a same-level one; why the skirt went | `seam.js` |
 | density term vs height term | `51×` full crust, `26×` banded | per chunk, noise evaluations | `volume.js` |
@@ -642,7 +642,13 @@ Violating any of these breaks the design. They are not tunable.
   (amplitude / feature size) exceeds 1 — the bias grows 1 per metre of depth
   (`volume.js`). Raising `strength` without raising frequency buys a rougher
   surface and an 11x face bill and **zero caves**. Caves are what create
-  multi-span columns (13-32% of them); rough surfaces do not.
+  multi-span columns; rough surfaces do not. **That whole paragraph is about a
+  rule the engine does not run** -- `caveDensity` is a **band** around the
+  field's own zero, `|fbm| < threshold`, with no bias term and so no gradient to
+  beat. Measured at the shipped knobs (`volume.js` 3b), the band leaves **81%**
+  of columns holding more than one slab against the density term's 13-32%,
+  costs **32.1** faces a column, and widening it fattens one sheet rather than
+  opening a second system.
 - **THE APRON IS A LID, AND A LID HAS AN OUTER EDGE** (`meshApronCell`,
   `SEAM_JUMP`, `plans/v0.4.1.md` I-16). A chunk draws its own cells and one ring
   past them, and that ring emits up-caps plus a wall wherever a ring cell stands

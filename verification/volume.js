@@ -154,6 +154,83 @@ for (const [freq,strength] of [[40,0],[40,26],[140,26],[220,26],[140,40]]){
 console.log('   freq 40 carves nothing at all -- gradient 0.31, the bias always wins.');
 console.log('   Only the high-frequency rows make real voids, and those are what drive');
 console.log('   both the face count and the multi-span columns the skirt has to handle.');
+console.log('   THE ENGINE DOES NOT RUN THIS RULE. Section 3b measures the one it does.');
+
+// ---- 3b. the rule that ships: a BAND around the field's own zero ------------
+// `caveDensity` is hollow where |fbm| < threshold, between a ceiling that
+// wanders per column and a floor at `reach`. There is no bias term, so there is
+// no gradient to beat -- which is the whole reason section 3's table does not
+// describe this. The zero set of a field is a set of SURFACES and a band round
+// one is a slab, so what this carves is one folded sheet rather than a network
+// of corridors.
+console.log('\n3b. the rule the engine RUNS: hollow where |fbm| < threshold');
+console.log('   Same 1,200 columns and 64 layers. Ceiling wanders per column so a');
+console.log('   passage reaches daylight through a mouth rather than under your feet.');
+console.log('   scale  band  ceiling  reach   cave cells  multi-span  faces/column  mouths');
+const CAVE_OCT=3, MOUTH_OCT=2, VARY=10, RARE=0.5, MOUTH=60;
+// The ceiling this column keeps over it: `caveCeilingAt`, in the script's own
+// noise. It only ever comes down.
+const ceilingAt=(dir,ceiling)=>{
+  if (VARY<=0) return ceiling;
+  const n=fbm(mul(dir,R),1/MOUTH,MOUTH_OCT);
+  return ceiling - VARY*Math.max(0,(n-RARE)/(1-RARE));
+};
+function band(scale, threshold, ceiling, reach){
+  const solid=new Map();
+  for (const v of sub){
+    const dir=g.pts[v], surf=R + 30*fbm(dir,6,5), col=new Uint8Array(LAYERS);
+    const ceil=ceilingAt(dir,ceiling);
+    for (let y=0;y<LAYERS;y++){
+      const r=surf - y*BLK, depth=surf-r;
+      let rock=1;
+      if (depth>=ceil && depth<=reach){
+        const n=fbm(mul(dir,r),1/scale,CAVE_OCT);
+        if (n>-threshold && n<threshold) rock=0;
+      }
+      col[y]=rock;
+    }
+    solid.set(v,col);
+  }
+  return solid;
+}
+for (const [scale,threshold,ceiling,reach] of
+     [[24,0.12,6,28],[24,0.06,6,28],[24,0.20,6,28],[12,0.12,6,28],[48,0.12,6,28],[24,0.12,6,120]]){
+  const solid=band(scale,threshold,ceiling,reach);
+  const at=(v,y)=> y<0 ? 0 : y>=LAYERS ? 1 : (solid.get(v)?.[y] ?? 1);
+  let faces=0, caveCells=0, many=0, mouths=0;
+  for (const v of sub){
+    let prev=0, open=false, spans=0;
+    for (let y=0;y<LAYERS;y++){
+      const me=at(v,y);
+      if (me && !prev) spans++;
+      prev=me;
+      if (!me){
+        // A void with nothing but void above it has reached the daylight.
+        if (y===0) open=true;
+        if (y>0 && at(v,y-1)) caveCells++;
+        continue;
+      }
+      if (!at(v,y-1)) faces++;
+      if (!at(v,y+1)) faces++;
+      for (const w of g.nb[v]) if (subSet.has(w) && !at(w,y)) faces++;
+    }
+    if (open) mouths++;
+    if (spans>1) many++;
+  }
+  console.log(`   ${String(scale).padStart(5)}m ${threshold.toFixed(2).padStart(5)}`
+    +` ${String(ceiling+' m').padStart(8)} ${String(reach+' m').padStart(6)}`
+    +` ${caveCells.toLocaleString('en-US').padStart(12)}`
+    +` ${((100*many)/sub.length).toFixed(1).padStart(10)}%`
+    +` ${(faces/sub.length).toFixed(1).padStart(13)} ${mouths.toString().padStart(7)}`);
+}
+console.log('   The first row is what ships, and the multi-span share is the number');
+console.log('   that moves: the density term left 8-24% of columns holding more than');
+console.log('   one slab and this leaves nearly ALL of them, because the sheet runs');
+console.log('   through the whole patch rather than carving pockets here and there.');
+console.log('   The band decides how WIDE every passage is, not how many there are --');
+console.log('   doubling it does not open a second system, it fattens the one sheet.');
+console.log('   And the floor at 28 m is what makes caves affordable: the last row is');
+console.log('   the same rule reaching to 120 m, at over twice the faces a column.');
 
 // ---- 4. what LOD does to a cave -------------------------------------------
 // LOD resamples the terrain function at a coarser spacing. A feature narrower

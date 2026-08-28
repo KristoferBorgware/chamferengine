@@ -460,8 +460,8 @@ rather than by the algorithm.
 
 The boundary rule is the part worth carrying away, because the obvious answer was
 wrong. A **skirt** — a vertical apron one coarse cell deep — closes the surface
-step where two LOD levels meet, and that is all it closes. Under a density field
-13–32% of columns hold more than one slab of rock, and a skirt cannot reach the
+step where two LOD levels meet, and that is all it closes. With caves on **81%**
+of columns hold more than one slab of rock, and a skirt cannot reach the
 cave mouths: it hangs *downward*, and a cave mouth is a *horizontal* hole. Doc 14
 measures 1,060 holes left over 385 rim columns with skirts alone. The fix is
 **seam ownership** — the finer chunk emits a face wherever its solidity differs

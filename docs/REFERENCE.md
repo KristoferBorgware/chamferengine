@@ -121,7 +121,7 @@ authority.js -- what the server must know, per cheat, and what it costs
    one solidity(cell) query: 310 ns, recorded
    (doc 28 measured Rust at 1.14x C and JS at 1.75x, so read this as an
     upper bound -- Rust is about 202 ns)
-   this machine, now: 282 ns -- a timing, so it moves run to run
+   this machine, now: 288 ns -- a timing, so it moves run to run
 
    against generating a whole chunk, which is what "the server runs the
    generator" is usually taken to mean:
@@ -2337,7 +2337,7 @@ Cited by [doc 09](09-ray-traversal.md).
 ```
 1. the boundary a step actually crosses
    200,000 random points, each rounded to its cell by hexRound:
-   inside |coordinate - centre| <= 1/2 ......... 75.0%  (doc 09)
+   inside |coordinate - centre| <= 1/2 ......... 74.9%  (doc 09)
    inside |difference - centre's| <= 1 ......... 100.0%
 
    DOC 09 NAMES THE WRONG HEXAGON, and it is the rotated one rather than a
@@ -2353,7 +2353,7 @@ Cited by [doc 09](09-ray-traversal.md).
 
 2. crossing a face edge -- two things change, and they are not the same thing
    20,000 points just past a face edge, re-expressed by the reflection:
-   the direction it describes moves by 2.28 degrees on average, 6.50 at worst
+   the direction it describes moves by 2.28 degrees on average, 6.51 at worst
 
    SO USE IT FOR THE NAME AND NOT FOR THE FRAME. On a lattice point it
    lands on the right cell every time -- verification/neighbour.js checks
@@ -2486,7 +2486,7 @@ Cited by [doc 21](21-rivers-and-erosion.md).
    longest continuous flow path: 46 cells = 0.74 km
    the planet is 10.68 km around, so that is 0.07x the circumference
 
-   whole pass: well under a second for 163,842 cells  (this run 742 ms -- a timing, so it moves run to run)
+   whole pass: well under a second for 163,842 cells  (this run 733 ms -- a timing, so it moves run to run)
    At level 8 that is four times the cells and still seconds, once, at world
    creation. This is not a runtime cost.
 
@@ -3094,6 +3094,26 @@ Cited by [doc 08](08-terrain-generation.md), [doc 14](14-meshing-and-lod.md).
    freq 40 carves nothing at all -- gradient 0.31, the bias always wins.
    Only the high-frequency rows make real voids, and those are what drive
    both the face count and the multi-span columns the skirt has to handle.
+   THE ENGINE DOES NOT RUN THIS RULE. Section 3b measures the one it does.
+
+3b. the rule the engine RUNS: hollow where |fbm| < threshold
+   Same 1,200 columns and 64 layers. Ceiling wanders per column so a
+   passage reaches daylight through a mouth rather than under your feet.
+   scale  band  ceiling  reach   cave cells  multi-span  faces/column  mouths
+      24m  0.12      6 m   28 m          788       81.0%          32.1       0
+      24m  0.06      6 m   28 m          703       71.6%          20.7       0
+      24m  0.20      6 m   28 m          876       89.9%          36.4       0
+      12m  0.12      6 m   28 m        1,322       94.8%          34.0       1
+      48m  0.12      6 m   28 m          518       62.0%          30.3       2
+      24m  0.12      6 m  120 m        1,653       95.0%          78.8       0
+   The first row is what ships, and the multi-span share is the number
+   that moves: the density term left 8-24% of columns holding more than
+   one slab and this leaves nearly ALL of them, because the sheet runs
+   through the whole patch rather than carving pockets here and there.
+   The band decides how WIDE every passage is, not how many there are --
+   doubling it does not open a second system, it fattens the one sheet.
+   And the floor at 28 m is what makes caves affordable: the last row is
+   the same rule reaching to 120 m, at over twice the faces a column.
 
 4. the smallest feature each level can still represent
    level   cell spacing   a 3 m cave   a 10 m canyon   a 40 m valley

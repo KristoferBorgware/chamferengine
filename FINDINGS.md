@@ -625,56 +625,6 @@ detail (70.8% of columns overhang at detail 2 against 71.4% at detail 3): the
 density layer is 3D and is read per point at every setting, so it never goes
 through the map at all.
 
-### F-078 — The cave function in the engine is not the cave function the corpus measured
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-25, reading the generator before discussing cave generation
-**Where:** `packages/engine/src/generation/terrain/caveDensity.ts`; the
-measurements are `verification/volume.js` section 3 and doc 14's cave table
-
-**What happens.** Two different carving rules share one name. Doc 08 and
-`verification/volume.js` argue a **signed density** — solid where
-`(surfaceRadius − r) + noise × strength > 0` — whose first term is a bias
-growing 1 per metre of depth, which is where the rule *an enclosed void needs
-the noise gradient, amplitude over feature size, to beat 1* comes from, and
-where doc 14's `11×` face bill and `13–32%` multi-span columns were measured.
-`caveDensity` does not do that. It is a **band around zero**: hollow where
-`|fbm| < caveThreshold`, three octaves at a `caveScale` of 24 m, with a hard
-refusal inside `caveCeiling`, 6 m, of the surface. There is no bias term, so
-there is no gradient to beat, and the doc comment on the function states the
-gradient rule anyway.
-
-**Why it matters.** Every number the project holds about caves describes the
-form that is not running. A band of fixed width carves **sheets of roughly one
-thickness everywhere**, and the two knobs a person would reach for move it in
-ways the corpus does not predict: raising `caveThreshold` widens every passage
-at once rather than opening more of them, and `caveScale` moves feature size
-with no coupled amplitude. So the first attempt to tune caves will be tuned
-against measurements taken of something else, and the face and column counts
-that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
-more than one span — are counts of the density field's caves, not of these.
-
-**What has moved.** The band is the form that ships, and it is now measured:
-the cave bench (`packages/client/caves.html`) walks a patch of the real engine
-and reports face cost, multi-span share, mouth count, passage width and how
-many separate systems the void breaks into. The gradient sentence is off
-`caveDensity`'s comment, which now says what the band does and names the bias
-term it has not got.
-
-**What is left.** `verification/volume.js` section 3 still measures the
-**density** form, so every cave number quoted in `docs/REFERENCE.md` and doc 14
--- `1,074` cave mouths, `13–32%` of columns with more than one span, the `11x`
-face bill -- is a count of caves the engine does not carve. Those are the
-figures F-025 rests on. What it wants is a section of that script measuring the
-band, at the numbers the bench now reports, and the doc 14 table rewritten from
-it. It is a verification script and a document rather than a function, which is
-why it did not go with the rest.
-
----
-
 ### F-082 — `--bad` is defined as itself, so nothing the panel refuses is drawn in red
 
 **Kind:** bug
@@ -1312,7 +1262,7 @@ The product stays under `2^53` with room to spare: 20 faces times `2^36` is
 
 **Kind:** gap
 **Milestone:** 0.5.0
-**Priority:** low
+**Priority:** medium
 **Effort:** large
 **Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
 **Where:** `packages/engine/src/mesh/meshChunk.ts` and
@@ -1332,6 +1282,13 @@ is not built.
 v0.1.2's pause, so no shipped world has a multi-span column. The first
 release that turns caves on gets sky-through-the-planet back, at exactly the
 joins v0.1.2 closed for the surface.
+
+**And it is worse than this entry was filed against, 2026-08-28.** The
+`13-32%` above is the density term doc 08 argues, which the engine does not
+run; measured on the band it does run (`volume.js` 3b, F-078), **81%** of
+columns hold more than one slab. So this is not a hole at the joins of the
+minority of columns that happen to have a cave in them -- it is a hole at very
+nearly every join, the moment caves go on.
 
 **What would fix it.** Seam-owned faces need to know the neighbour's level,
 which the mesher deliberately does not: a blind guess emits walls above a
@@ -2558,6 +2515,68 @@ from the world again.
 
 
 ## Closed
+
+### F-078 — The cave function in the engine is not the cave function the corpus measured
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, reading the generator before discussing cave generation
+**Closed:** 2026-08-28, fixed. `verification/volume.js` gains a section 3b
+measuring the **band** over the same 1,200 columns section 3 measures the
+density over, and doc 14's cave section is rewritten from it -- the band first,
+as the rule that runs, and the density term after it as the rule doc 08 argues
+and this one is not. **The number that moves is the multi-span share: 81% at
+the shipped knobs against 13-32%.** One sheet running through the whole patch
+puts rock above a passage and rock below it everywhere it goes, where scattered
+pockets leave most columns whole. Also measured: `32.1` faces a column, `788`
+cave cells, and that widening the band from `0.06` to `0.20` runs the share
+`71.6%` to `89.9%` while the faces run `20.7` to `36.4` -- it fattens one sheet
+rather than opening a second. Doc 11 and this file's own table carried the old
+figure and now carry the new one.
+**Where:** `packages/engine/src/generation/terrain/caveDensity.ts`; the
+measurements are `verification/volume.js` section 3 and doc 14's cave table
+
+**What happens.** Two different carving rules share one name. Doc 08 and
+`verification/volume.js` argue a **signed density** — solid where
+`(surfaceRadius − r) + noise × strength > 0` — whose first term is a bias
+growing 1 per metre of depth, which is where the rule *an enclosed void needs
+the noise gradient, amplitude over feature size, to beat 1* comes from, and
+where doc 14's `11×` face bill and `13–32%` multi-span columns were measured.
+`caveDensity` does not do that. It is a **band around zero**: hollow where
+`|fbm| < caveThreshold`, three octaves at a `caveScale` of 24 m, with a hard
+refusal inside `caveCeiling`, 6 m, of the surface. There is no bias term, so
+there is no gradient to beat, and the doc comment on the function states the
+gradient rule anyway.
+
+**Why it matters.** Every number the project holds about caves describes the
+form that is not running. A band of fixed width carves **sheets of roughly one
+thickness everywhere**, and the two knobs a person would reach for move it in
+ways the corpus does not predict: raising `caveThreshold` widens every passage
+at once rather than opening more of them, and `caveScale` moves feature size
+with no coupled amplitude. So the first attempt to tune caves will be tuned
+against measurements taken of something else, and the face and column counts
+that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
+more than one span — are counts of the density field's caves, not of these.
+
+**What has moved.** The band is the form that ships, and it is now measured:
+the cave bench (`packages/client/caves.html`) walks a patch of the real engine
+and reports face cost, multi-span share, mouth count, passage width and how
+many separate systems the void breaks into. The gradient sentence is off
+`caveDensity`'s comment, which now says what the band does and names the bias
+term it has not got.
+
+**What is left.** `verification/volume.js` section 3 still measures the
+**density** form, so every cave number quoted in `docs/REFERENCE.md` and doc 14
+-- `1,074` cave mouths, `13–32%` of columns with more than one span, the `11x`
+face bill -- is a count of caves the engine does not carve. Those are the
+figures F-025 rests on. What it wants is a section of that script measuring the
+band, at the numbers the bench now reports, and the doc 14 table rewritten from
+it. It is a verification script and a document rather than a function, which is
+why it did not go with the rest.
+
+---
 
 ### F-115 — Reading the cliffs layer every second block halves it, and loses one cell in ten thousand
 
