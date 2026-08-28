@@ -1,6 +1,6 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PatchGeometry } from "../../mesh/PatchGeometry.js";
-import { PATCH_SHADER, PLANT_COLORS } from "./PATCH_SHADER.js";
+import { PATCH_SHADER } from "./PATCH_SHADER.js";
 import { PATCH_STRIDE } from "../../mesh/PatchGeometry.js";
 import type { ShadowBox } from "./PatchShadow.js";
 import { PatchShadow } from "./PatchShadow.js";
@@ -110,16 +110,6 @@ export interface PatchLook {
 	readonly debugShadow?: boolean;
 
 	/**
-	 * The color of everything standing on the ground, wood then leaf per layer.
-	 *
-	 * **In the order the stand was grown in**, because a face carries the index
-	 * rather than the color. Taken with the mesh rather than read off a panel:
-	 * a layer may have been deleted between the build and the frame, and the
-	 * faces it left behind still have to be drawn as what grew them.
-	 */
-	readonly plantColors: readonly (readonly [number, number, number])[];
-
-	/**
 	 * Where the camera is, which is what the near cascade is sized from.
 	 *
 	 * Not a light: the rig is four directions and none of them stands
@@ -173,8 +163,7 @@ export interface PatchUpload {
  * A matrix, the light, the mode, the numbers the pictures read, the two
  * matrices the shadows are read from, and how the light is shared out.
  */
-const VIEW_BYTES =
-	64 + 16 + 16 + 16 + 16 + 64 * 4 + 16 + 16 + 16 + 16 * 4 + 16 * PLANT_COLORS;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 * 4 + 16 + 16 + 16 + 16 * 4;
 
 /**
  * How many maps a light is cut into.
@@ -638,12 +627,6 @@ export class PatchRenderer {
 		this.data.set([look.keyLight, look.fillLight, look.topLight, 0], 100);
 		this.data.set([look.shadowStrength, 0, 0, 0], 104);
 		this.data.set(this.shadow.fit, 108);
-		// **Wood then leaf per layer, and the rest left dark.** A face carries
-		// the index into this, so an entry nothing indexes is never read.
-		for (let n = 0; n < PLANT_COLORS; n++) {
-			const tint = look.plantColors[n] ?? [0, 0, 0];
-			this.data.set([tint[0], tint[1], tint[2], 1], 124 + n * 4);
-		}
 
 		device.queue.writeBuffer(this.uniform, 0, this.data);
 		this.data[21] = 1;

@@ -591,6 +591,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Continentalness",
 		where: "both",
+		veg: "off",
 		cave: "left",
 		folded: true,
 		tab: "terrain",
@@ -603,6 +604,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Erosion",
 		where: "both",
+		veg: "off",
 		cave: "left",
 		folded: true,
 		tab: "terrain",
@@ -626,6 +628,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Peaks & valleys",
 		where: "both",
+		veg: "off",
 		cave: "left",
 		folded: true,
 		tab: "terrain",
@@ -635,6 +638,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Cliffs & overhangs",
 		where: "both",
+		veg: "off",
 		cave: "left",
 		folded: true,
 		tab: "terrain",
@@ -783,6 +787,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Ground",
 		where: "both",
+		veg: "off",
 		side: "left",
 		folded: true,
 		tab: "terrain",
@@ -1509,6 +1514,18 @@ export class ParameterPanel {
 	set(values: Partial<PlanetKnobs>): void {
 		Object.assign(this.draft, values);
 		this.touch(false, "patchLatitude");
+	}
+
+	/**
+	 * Put a knob into the draft without telling anyone it moved.
+	 *
+	 * **For a knob some other panel owns.** The vegetation bench edits the
+	 * plants and this panel writes the link, so the draft has to hold what that
+	 * panel decided -- and saying it moved would ask for the build that is
+	 * already running because of it.
+	 */
+	carry(values: Partial<PlanetKnobs>): void {
+		Object.assign(this.draft, values);
 	}
 
 	/**

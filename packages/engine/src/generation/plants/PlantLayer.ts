@@ -22,7 +22,13 @@ export interface PlantLayer {
 	 */
 	readonly id: number;
 
-	/** Which species' numbers the shape started from. */
+	/**
+	 * Which species this is, which is also which blocks it writes.
+	 *
+	 * The name outlives the numbers: a layer started from `Oak` and dragged
+	 * apart is still oak wood and oak leaves, because what a block *is* belongs
+	 * to the registry and what shape it grows in belongs here.
+	 */
 	readonly species: string;
 
 	/** Whether the layer grows at all. */
@@ -52,8 +58,4 @@ export interface PlantLayer {
 
 	/** The plant this layer grows. */
 	readonly shape: PlantShape;
-
-	/** Linear red, green and blue for its wood and its leaves. */
-	readonly wood: readonly [number, number, number];
-	readonly leaf: readonly [number, number, number];
 }

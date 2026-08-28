@@ -6,6 +6,8 @@ import type {
 	PatchPicture,
 	PatchSurface,
 } from "./PatchLook.js";
+import type { PlantLayerDraft } from "./PlantDraft.js";
+import { PLANT_LAYERS_DEFAULT, plantLayersFromText } from "./PlantDraft.js";
 import {
 	CAVE_DRAWS,
 	CAVE_PLANS,
@@ -367,6 +369,21 @@ export interface PlanetKnobs {
 	 * counts is a property of the block type the way water's is.
 	 */
 	leavesCollide: boolean;
+
+	/**
+	 * Every kind of plant this world grows, as one string.
+	 *
+	 * **The query string is the only place a world is written down**, so what
+	 * grows on one belongs to the same definition its ground does. A link from
+	 * any bench lands on any other with the same planet and the same forest,
+	 * and the vegetation bench is the page that edits it rather than the page
+	 * that owns it.
+	 *
+	 * One value rather than one per layer, because every other knob in a world
+	 * travels as one value and this is a knob like the rest.
+	 * {@link plantLayersFromText} is what reads it.
+	 */
+	plants: string;
 
 	/**
 	 * Whether to draw a ball where each of the bench's lights shines from.
@@ -1141,6 +1158,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchBlocks: 96,
 	patchLod: 0,
 	leavesCollide: true,
+	plants: PLANT_LAYERS_DEFAULT,
 	patchOcclusion: 1,
 	patchSpeckle: 0.35,
 	keyShadow: true,
@@ -1645,6 +1663,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	patchLod: { low: 0, high: 5, step: 1, rebuilds: false, unit: "levels" },
 	leavesCollide: { ...TOGGLE, rebuilds: false },
+	plants: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
@@ -2100,6 +2119,16 @@ export class PlanetSettings {
 			2,
 			this.depth - Math.max(0, Math.round(this.knobs.patchLod)),
 		);
+	}
+
+	/**
+	 * Every kind of plant this world grows.
+	 *
+	 * Decoded rather than held, because the knob is what a link carries and a
+	 * decoded copy beside it is a second answer to one question.
+	 */
+	get plantLayers(): PlantLayerDraft[] {
+		return plantLayersFromText(this.knobs.plants);
 	}
 
 	/** How wide one column of the vegetation patch is, in metres. */
@@ -2613,7 +2642,10 @@ export class PlanetSettings {
 			if (TRANSIENT.has(key)) continue;
 			const raw = params.get(key);
 			if (raw === null) continue;
+			// The two knobs that are text rather than a number or a name from
+			// a list: what the world is called, and what grows on it.
 			if (key === "seed") knobs.seed = raw;
+			else if (key === "plants") knobs.plants = raw;
 			// The knobs that name one of a fixed set. A link can say anything,
 			// so what it says has to be on the list or the world keeps the
 			// value it had.

@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { PlantLayer } from "chamfer/generation";
 import {
 	PLANT_SPECIES,
-	PLANT_WOOD,
 	growStand,
+	isPlantWood,
+	plantBlocksOf,
 	plantRoots,
 	standPieces,
 	standWalkable,
@@ -60,8 +61,6 @@ function layerOf(id: number, species: string, density: number): PlantLayer {
 			[1, 1],
 		],
 		shape: PLANT_SPECIES[species]!,
-		wood: PLANT_SPECIES[species]!.wood,
-		leaf: PLANT_SPECIES[species]!.leaf,
 	};
 }
 
@@ -124,20 +123,21 @@ describe("growStand", () => {
 		const both = stand(patch, layers, 16);
 		const oakAlone = stand(patch, [layers[1]!], 16);
 		// Oak takes what Pine left, so dropping Pine can only add oaks; every
-		// cell the pair's oaks wrote has to still be an oak's. `owner` is a
-		// position in the list of layers that grew rather than an id, because
-		// it is what a palette is indexed by -- so oak is the second of two and
-		// the first of one, and the salt that chose its forest is the id
-		// underneath. The two stands hold a different number of slots per
-		// column, because the tallest species in each is different, so a cell
-		// is found by its column and its slot rather than by one index.
+		// cell the pair's oaks wrote has to still be an oak's. A cell holds the
+		// block itself, so which species wrote it is a question the registry
+		// answers. The two stands hold a different number of slots per column,
+		// because the tallest species in each is different, so a cell is found
+		// by its column and its slot rather than by one index.
 		let lost = 0;
+		const oak = plantBlocksOf("Oak");
 		const slots = Math.min(both.layers, oakAlone.layers);
+		const isOak = (block: number): boolean =>
+			block === oak.wood || block === oak.leaf;
 		for (let c = 0; c < patch.count; c++)
 			for (let slot = 0; slot < slots; slot++)
 				if (
-					both.owner[c * both.layers + slot] === 2 &&
-					oakAlone.owner[c * oakAlone.layers + slot] !== 1
+					isOak(both.blocks[c * both.layers + slot]!) &&
+					!isOak(oakAlone.blocks[c * oakAlone.layers + slot]!)
 				)
 					lost++;
 		expect(lost).toBe(0);
@@ -238,6 +238,6 @@ describe("growStand", () => {
 			},
 		);
 		expect(grown.plants).toBe(0);
-		expect(grown.blocks.some((cell) => cell === PLANT_WOOD)).toBe(false);
+		expect(grown.blocks.some((cell) => isPlantWood(cell))).toBe(false);
 	});
 });

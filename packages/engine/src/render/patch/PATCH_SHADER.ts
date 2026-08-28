@@ -1,21 +1,27 @@
 import { BLOCK_COLORS } from "../../generation/terrain/blockColor.js";
-import { BlockType } from "../../generation/terrain/BlockType.js";
+import { BLOCK_NAMES, BlockType } from "../../generation/terrain/BlockType.js";
 import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 import { patchFill } from "./PATCH_LIGHTS.js";
 
-/**
- * How many colors the plant palette holds: a wood and a leaf per layer.
- *
- * A fixed array because a uniform is a fixed size, and eight kinds of plant on
- * one patch is more than a reader tunes at once. A draw with fewer leaves the
- * rest black, and nothing indexes them.
- */
-export const PLANT_COLORS = 16;
-
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
 	return `vec3f(${color[0]}, ${color[1]}, ${color[2]})`;
+}
+
+/**
+ * The whole block registry, in the order its numbers were assigned.
+ *
+ * **Written in from the registry rather than passed per draw.** A face carries
+ * the block it is made of, and what that block looks like is a property of the
+ * world -- so the table is the same for every patch, every picture and every
+ * bench, and a stand of forty species costs no more than a stand of one.
+ */
+function blockTints(): string {
+	const entries = BLOCK_NAMES.map((_, block) =>
+		wgsl(BLOCK_COLORS[block] ?? [0, 0, 0]),
+	);
+	return `array<vec3f, ${entries.length}>(\n\t${entries.join(",\n\t")}\n)`;
 }
 
 /**
@@ -46,8 +52,17 @@ const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
 const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
 const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
 
-/** How many wood and leaf colors the palette holds: two per layer. */
-const PLANT_COLORS = ${PLANT_COLORS};
+/**
+ * Every block's own colour, indexed by the number the registry gave it.
+ *
+ * A private var rather than a const, because a face carries its block as a
+ * number worked out while drawing and a const array can only be read at an
+ * index the compiler already knows.
+ */
+var<private> BLOCK_TINTS : array<vec3f, ${BLOCK_NAMES.length}> = ${blockTints()};
+
+/** How many entries that table holds, so a stray index cannot leave it. */
+const BLOCK_KINDS : u32 = ${BLOCK_NAMES.length}u;
 
 /** How many steps a picture of one layer's noise is cut into. */
 const PICTURE_BANDS = 9.0;
@@ -116,17 +131,6 @@ struct View {
 	shadowing : vec4f,
 	/** Per map: what a texel is worth on the ground, and its own depth bias. */
 	fit      : array<vec4f, 4>,
-	/**
-	 * The color of everything standing on the ground, wood then leaf per layer.
-	 *
-	 * **A material rather than a height.** The ground's color is what a
-	 * hillside is made of, which follows from how high it stands and is worked
-	 * out below; a plant's does not follow from anything on the face, so the
-	 * face carries an index and this says what that index is. A vertex color
-	 * would say the same thing at three times the width, on the buffer that is
-	 * rewritten whenever the ground moves.
-	 */
-	plants   : array<vec4f, ${PLANT_COLORS}>,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -457,7 +461,11 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// fast the height changes across a pixel, which is only defined where the
 	// whole quad is running. A shader that will not compile draws a black
 	// window rather than an error.
-	let plantTint = view.plants[max(in.material, 1u) - 1u].rgb * in.shade;
+	// **A material rather than a height.** A hillside's colour follows from how
+	// high it stands, which is worked out below; a plant's does not follow from
+	// anything on the face, so the face carries the block and this reads what
+	// that block looks like.
+	let plantTint = BLOCK_TINTS[min(in.material, BLOCK_KINDS - 1u)] * in.shade;
 	let isPlant = in.material > 0u;
 
 	// **The sea is a sheet over the ground and carries the ground's own

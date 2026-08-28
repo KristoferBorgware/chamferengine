@@ -16,11 +16,7 @@ import { PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { PlantPanel } from "./PlantPanel.js";
-import {
-	openingLayers,
-	plantLayersFromParams,
-	plantLayersToParams,
-} from "./PlantDraft.js";
+import { plantLayersToText } from "./PlantDraft.js";
 import { outlinePatch } from "./outlinePatch.js";
 import { paintSheet } from "./paintSheet.js";
 import {
@@ -61,9 +57,12 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
 ]);
 
 let settings = PlanetSettings.fromParams(new URLSearchParams(location.search));
-const layers =
-	plantLayersFromParams(new URLSearchParams(location.search)) ??
-	openingLayers();
+
+// **The world's own plants, read out of the world.** They travel in the query
+// string with every other knob, so a link from any bench opens here on the same
+// planet with the same forest -- and what this panel edits is written straight
+// back into it.
+const layers = settings.plantLayers;
 
 /** One linear colour part of the way to another. */
 function mixed(
@@ -199,16 +198,23 @@ mapCanvas.addEventListener("click", (event) => {
 	});
 });
 
-/** Everything the bench is holding, as a query string. */
-function linkParams(): URLSearchParams {
-	const out = settings.toParams();
-	plantLayersToParams(plants.layers, out);
-	if (plants.picture !== "noise") out.set("layerPicture", plants.picture);
-	return out;
-}
-
+/**
+ * Write the world back into the address bar, and into the way out of here.
+ *
+ * **The layers are a knob of the world**, so they are folded into the draft
+ * rather than added to the link beside it: the planet page and every other
+ * bench read the same string, and the way back carries the forest with it.
+ */
 function writeUrl(): void {
-	const params = linkParams();
+	settings = new PlanetSettings({
+		...settings.knobs,
+		plants: plantLayersToText(plants.layers),
+	});
+	// The panel writes the link and holds its own copy of the draft, so what
+	// this page decided about the plants has to reach it.
+	panel.carry({ plants: settings.knobs.plants });
+	const params = settings.toParams();
+	if (plants.picture !== "noise") params.set("layerPicture", plants.picture);
 	history.replaceState(null, "", `?${params.toString()}`);
 	const planetParams = settings.toParams();
 	planetParams.set("panel", "1");
@@ -234,7 +240,6 @@ let renderer: PatchRenderer | null = null;
 let span = 1;
 let patchSheet: BenchSheet | null = null;
 let planetSheet: BenchSheet | null = null;
-let palette: readonly (readonly [number, number, number])[] = [];
 
 const look = {
 	picture: 0,
@@ -256,7 +261,6 @@ const look = {
 	topLight: PATCH_TOP_SHARE,
 	shadowStrength: 1,
 	debugShadow: false,
-	plantColors: [] as readonly (readonly [number, number, number])[],
 	eye: [0, 1, 1] as [number, number, number],
 };
 
@@ -370,7 +374,6 @@ worker.onmessage = (event: MessageEvent<VegetationReply>) => {
 	patchSheet = reply.patch;
 	if (reply.planet) planetSheet = reply.planet;
 	if (reply.geometry && renderer) {
-		palette = reply.geometry.palette;
 		renderer.upload({
 			vertices: reply.geometry.vertices,
 			indices: null,
@@ -571,7 +574,6 @@ function render(): void {
 	look.topLight = k.topLight;
 	look.shadowStrength = k.shadowStrength;
 	look.span = span;
-	look.plantColors = palette;
 	look.eye = [eye.x, eye.y, eye.z];
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, focus, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(

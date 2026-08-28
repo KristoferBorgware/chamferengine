@@ -121,6 +121,13 @@ export type { PlantShape } from "./plants/PlantShape.js";
 export type { PlantSpecies } from "./plants/PLANT_SPECIES.js";
 export { PLANT_SPECIES, PLANT_SPECIES_NAMES } from "./plants/PLANT_SPECIES.js";
 export type { PlantLayer } from "./plants/PlantLayer.js";
+export type { PlantBlocks } from "./plants/PLANT_BLOCKS.js";
+export {
+	PLANT_BLOCKS,
+	isPlantLeaf,
+	isPlantWood,
+	plantBlocksOf,
+} from "./plants/PLANT_BLOCKS.js";
 export { plantSalt } from "./plants/plantSalt.js";
 export { plantLayerNoise } from "./plants/plantLayerNoise.js";
 export { plantDensityAt } from "./plants/plantDensityAt.js";
@@ -137,13 +144,7 @@ export type {
 	StandOptions,
 	StandPatch,
 } from "./plants/growStand.js";
-export {
-	PLANT_EMPTY,
-	PLANT_LEAF,
-	PLANT_WOOD,
-	STAND_SUNK,
-	growStand,
-} from "./plants/growStand.js";
+export { STAND_SUNK, growStand } from "./plants/growStand.js";
 export type { StandPieces } from "./plants/standPieces.js";
 export { standPieces } from "./plants/standPieces.js";
 export { standWalkable } from "./plants/standWalkable.js";

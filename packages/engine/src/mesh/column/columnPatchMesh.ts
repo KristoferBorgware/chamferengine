@@ -4,7 +4,8 @@ import { columnFrame } from "./columnFrame.js";
 import { AMBIENT_OCCLUSION } from "../AMBIENT_OCCLUSION.js";
 import { speckleShade } from "../../generation/terrain/blockColor.js";
 import type { Stand } from "../../generation/plants/growStand.js";
-import { PLANT_EMPTY, PLANT_LEAF } from "../../generation/plants/growStand.js";
+import { BlockType } from "../../generation/terrain/BlockType.js";
+import { isPlantLeaf } from "../../generation/plants/PLANT_BLOCKS.js";
 import { hash3 } from "../../generation/noise/hash3.js";
 
 /** The ground a patch stands on, one entry per column. */
@@ -705,28 +706,27 @@ export function columnPatchMesh(
 	if (plants) {
 		grounded = false;
 		const { stand, top: standTop, groundLayer } = plants;
-		const { blocks, owner, layers: slots, sunk } = stand;
+		const { blocks, layers: slots, sunk } = stand;
 		for (let c = 0; c < count; c++) {
 			const deg = degree[c]!;
 			const base = c * slots;
 			for (let slot = 0; slot < slots; slot++) {
 				const what = blocks[base + slot]!;
-				if (what === PLANT_EMPTY) continue;
+				if (what === BlockType.AIR) continue;
 				const from = standTop[c]! + (slot - sunk) * blockMetres;
 				const to = from + blockMetres;
-				// **The palette runs wood then leaf per layer**, so a face
-				// carries which plant put it there as well as which half of
-				// that plant it is.
-				const kind = owner[base + slot]!;
-				cMaterial =
-					kind > 0 ? kind * 2 - (what === PLANT_LEAF ? 0 : 1) : 0;
+				// **The face carries the block itself.** The shader holds the
+				// registry's own colours, so what rides here is which entry of
+				// it this face is made of rather than a slot in a palette
+				// assembled for one draw.
+				cMaterial = what;
 				// **A canopy is darker than the grass under it, and it has to
 				// be.** A leaf green sits within a few hundredths of the
 				// ground's grass, so side by side the two read as one surface
 				// and a tree disappears into the hillside. A cluster is a
 				// shell anyway: almost every cell of it has other leaves over
 				// it.
-				const shade = what === PLANT_LEAF ? LEAF_SHADE : 1;
+				const shade = isPlantLeaf(what) ? LEAF_SHADE : 1;
 				// A grain off the cell's own address, so a canopy is not one
 				// flat color and nothing has to be stored.
 				cShade =
@@ -736,10 +736,10 @@ export function columnPatchMesh(
 						2 * PLANT_GRAIN * hash3(c, slot, what, seed));
 				if (
 					slot + 1 >= slots ||
-					blocks[base + slot + 1] === PLANT_EMPTY
+					blocks[base + slot + 1] === BlockType.AIR
 				)
 					cap(c, to, true);
-				if (slot > sunk && blocks[base + slot - 1] === PLANT_EMPTY)
+				if (slot > sunk && blocks[base + slot - 1] === BlockType.AIR)
 					cap(c, from, false);
 				for (let m = 0; m < deg; m++) {
 					const found = ring[c * 6 + m]!;
@@ -751,7 +751,7 @@ export function columnPatchMesh(
 					if (across < sunk) continue;
 					if (
 						across < slots &&
-						blocks[found * slots + across] !== PLANT_EMPTY
+						blocks[found * slots + across] !== BlockType.AIR
 					)
 						continue;
 					wall(c, m, deg, to, from);

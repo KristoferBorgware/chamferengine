@@ -1,4 +1,6 @@
 import { BlockType } from "./BlockType.js";
+import { PLANT_BLOCKS } from "../plants/PLANT_BLOCKS.js";
+import { PLANT_SPECIES } from "../plants/PLANT_SPECIES.js";
 import { hash3 } from "../noise/hash3.js";
 
 /** Offset from the world seed, so the speckle does not follow the terrain. */
@@ -48,6 +50,16 @@ export const BLOCK_COLORS: Readonly<
 	[BlockType.SNOW]: [0.92, 0.94, 0.97],
 	[BlockType.WATER]: [0.12, 0.32, 0.55],
 	[BlockType.BEDROCK]: [0.17, 0.16, 0.19],
+	// **A plant's two colours are the species' own**, written in from the one
+	// table that describes it rather than copied out here -- a registry green
+	// a shade off the species green is a picture that answers a slightly
+	// different question than the one asked of it.
+	...Object.fromEntries(
+		Object.entries(PLANT_BLOCKS).flatMap(([species, blocks]) => [
+			[blocks.wood, PLANT_SPECIES[species]!.wood],
+			[blocks.leaf, PLANT_SPECIES[species]!.leaf],
+		]),
+	),
 };
 
 /**

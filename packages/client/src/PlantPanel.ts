@@ -3,24 +3,13 @@ import type { PlantRow, PlantSection } from "./PLANT_ROWS.js";
 import type { PlantPicture } from "./paintPlantSheet.js";
 import type { PlantSheet, PlantTally } from "./VegetationMessage.js";
 import { PLANT_SECTIONS } from "./PLANT_ROWS.js";
-import { PLANT_COLORS } from "chamfer/render";
 import {
 	PLANT_SPECIES,
 	PLANT_SPECIES_NAMES,
 	splineAt,
 } from "chamfer/generation";
-import { applySpecies, makePlantLayer } from "./PlantDraft.js";
+import { applySpecies, makePlantLayer, plantInk } from "./PlantDraft.js";
 import { paintPlantSheet } from "./paintPlantSheet.js";
-
-/**
- * How many layers one patch may hold.
- *
- * A face carries an index into the palette of woods and leaves the draw was
- * given, and that palette is a fixed-size uniform: two entries a layer, so half
- * of it. More kinds of plant than this on one patch is more than a reader tunes
- * at once anyway.
- */
-const MOST_LAYERS = PLANT_COLORS / 2;
 
 /** A linear colour as the hex a stylesheet takes, through the screen's curve. */
 function inkOf(color: readonly [number, number, number]): string {
@@ -232,8 +221,9 @@ export class PlantPanel {
 		// most of.
 		const chip = document.createElement("span");
 		chip.className = "chip";
-		chip.style.background = inkOf(layer.leaf);
-		chip.style.boxShadow = `inset 0 0 0 2px ${inkOf(layer.wood)}`;
+		const ink = plantInk(layer.species);
+		chip.style.background = inkOf(ink.leaf);
+		chip.style.boxShadow = `inset 0 0 0 2px ${inkOf(ink.wood)}`;
 
 		const name = document.createElement("span");
 		name.textContent = layer.species;
@@ -361,7 +351,7 @@ export class PlantPanel {
 		canvas.onclick = () => this.enlarge(layer.id);
 		const badge = document.createElement("b");
 		badge.textContent = layer.species;
-		badge.style.background = inkOf(layer.leaf);
+		badge.style.background = inkOf(plantInk(layer.species).leaf);
 		holder.append(canvas, badge);
 		wrap.append(holder);
 		this.built.push({
@@ -481,7 +471,7 @@ export class PlantPanel {
 			g.moveTo(toX(0), pad);
 			g.lineTo(toX(0), canvas.height - pad);
 			g.stroke();
-			g.strokeStyle = inkOf(layer.leaf);
+			g.strokeStyle = inkOf(plantInk(layer.species).leaf);
 			g.lineWidth = 1.5 * dpr;
 			g.beginPath();
 			for (let px = pad; px <= canvas.width - pad; px++) {
@@ -703,7 +693,7 @@ export class PlantPanel {
 			sheet,
 			metres,
 			layer.curve,
-			layer.leaf,
+			plantInk(layer.species).leaf,
 			this.picture,
 			image.data,
 		);
@@ -741,7 +731,9 @@ export class PlantPanel {
 			}
 			if (made.badge) {
 				made.badge.textContent = layer.species;
-				made.badge.style.background = inkOf(layer.leaf);
+				made.badge.style.background = inkOf(
+					plantInk(layer.species).leaf,
+				);
 				continue;
 			}
 			if (!input || !readout) continue;
@@ -763,15 +755,6 @@ export class PlantPanel {
 			const layer = this.layers.find((one) => one.id === id);
 			if (layer) card.classList.toggle("off", !layer.on);
 		}
-		// **A face carries an index into a palette of a fixed size**, so there
-		// is a number of layers past which a plant would be drawn in a color
-		// nobody chose. The button says how many are left rather than refusing
-		// a click that looks as though it should work.
-		const room = MOST_LAYERS - this.layers.length;
-		this.add.disabled = room <= 0;
-		this.add.textContent =
-			room > 0
-				? "+ Vegetation"
-				: `${MOST_LAYERS} kinds of plant is all one patch holds`;
+		this.add.textContent = "+ Vegetation";
 	}
 }

@@ -349,8 +349,6 @@ const look = {
 	topLight: PATCH_TOP_SHARE,
 	shadowStrength: 1,
 	debugShadow: false,
-	// Nothing stands on this bench's ground, so nothing indexes the palette.
-	plantColors: [] as readonly (readonly [number, number, number])[],
 	eye: [0, 1, 1] as [number, number, number],
 };
 

@@ -1,5 +1,5 @@
 import type { Stand } from "./growStand.js";
-import { PLANT_LEAF, PLANT_WOOD } from "./growStand.js";
+import { isPlantLeaf, isPlantWood } from "./PLANT_BLOCKS.js";
 
 /**
  * How much of the land a player could still step onto, `0` to `1`.
@@ -26,8 +26,8 @@ export function standWalkable(
 		if (height[c]! <= seaLevel) continue;
 		land++;
 		for (let up = 0; up < knee; up++) {
-			const what = blocks[c * layers + sunk + up];
-			if (what === PLANT_WOOD || (what === PLANT_LEAF && leavesCollide)) {
+			const what = blocks[c * layers + sunk + up]!;
+			if (isPlantWood(what) || (isPlantLeaf(what) && leavesCollide)) {
 				blocked++;
 				break;
 			}

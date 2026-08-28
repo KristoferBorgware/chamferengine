@@ -14,11 +14,8 @@ import { plantFrame } from "./PlantFrame.js";
 import { plantLayerNoise } from "./plantLayerNoise.js";
 import { plantSalt } from "./plantSalt.js";
 import { valueNoise3 } from "../noise/valueNoise3.js";
-
-/** What one slot of a column holds above the ground. */
-export const PLANT_EMPTY = 0;
-export const PLANT_WOOD = 1;
-export const PLANT_LEAF = 2;
+import { BLOCK_NAMES, BlockType } from "../terrain/BlockType.js";
+import { plantBlocksOf } from "./PLANT_BLOCKS.js";
 
 /**
  * Slots of headroom under a column's own ground.
@@ -106,11 +103,15 @@ export interface Stand {
 	readonly layers: number;
 	readonly sunk: number;
 
-	/** Per column and slot, {@link PLANT_WOOD} or {@link PLANT_LEAF}. */
+	/**
+	 * Per column and slot, the block standing there, or air.
+	 *
+	 * **The registry's own numbers**, so a stand is the same kind of thing a
+	 * chunk of terrain is: the colour, the name and whether it stops a player
+	 * are properties of the type rather than of anything a bench holds beside
+	 * it.
+	 */
 	readonly blocks: Uint8Array;
-
-	/** Per column and slot, which live layer put it there, counting from 1. */
-	readonly owner: Uint8Array;
 
 	/** Per live layer, how many plants it grew in territory it owned. */
 	readonly grown: Int32Array;
@@ -209,7 +210,9 @@ export function growStand(
 		STAND_SUNK + Math.ceil(reachUp / block) + 3,
 	);
 	const blocks = new Uint8Array(count * slots);
-	const owner = new Uint8Array(count * slots);
+	// The two blocks each live layer writes, taken once from its species.
+	const wood = live.map((layer) => plantBlocksOf(layer.species).wood);
+	const leafOf = live.map((layer) => plantBlocksOf(layer.species).leaf);
 
 	/** Which column of this patch a point in space falls in, `-1` off it. */
 	const columnOf = (px: number, py: number, pz: number): number => {
@@ -238,10 +241,15 @@ export function growStand(
 	// happens to arrive second makes the answer depend on the order plants are
 	// grown in, and a chunk grows them in a different order from its neighbour.
 	const canopyWins = block > widestTrunk;
-	const RANK = new Uint8Array(3);
-	RANK[PLANT_EMPTY] = 0;
-	RANK[PLANT_WOOD] = canopyWins ? 1 : 2;
-	RANK[PLANT_LEAF] = canopyWins ? 2 : 1;
+	const WOOD_RANK = canopyWins ? 1 : 2;
+	const LEAF_RANK = canopyWins ? 2 : 1;
+	// A rank per block type, so the slot walk asks one array rather than
+	// working out which species and which half a number belongs to.
+	const RANK = new Uint8Array(BLOCK_NAMES.length);
+	for (let n = 0; n < live.length; n++) {
+		RANK[wood[n]!] = WOOD_RANK;
+		RANK[leafOf[n]!] = LEAF_RANK;
+	}
 
 	// **Where a write goes, and which writes a chunk is allowed to make.** A
 	// chunk may only write the cells it owns; what a plant rooted outside puts
@@ -249,14 +257,15 @@ export function growStand(
 	// what proves the neighbour grew it too.
 	let holds: Int32Array | null = null;
 	let holder = 0;
-	let painting = 0;
+	/** The two blocks the plant being grown writes. */
+	let woodBlock = 0;
+	let leafBlock = 0;
 	const write = (c: number, slot: number, what: number): void => {
 		if (slot < 0 || slot >= slots) return;
 		if (holds !== null && holds[c] !== holder) return;
 		const at = c * slots + slot;
 		if (RANK[what]! <= RANK[blocks[at]!]!) return;
 		blocks[at] = what;
-		owner[at] = painting;
 	};
 
 	// **A stamp's candidates are grown through its own test, never gathered
@@ -317,14 +326,14 @@ export function growStand(
 			// pieces.
 			const here = slotAt(c, metresOf(px, py, pz));
 			if (here >= 0 && here < slots) {
-				write(c, here, PLANT_WOOD);
+				write(c, here, woodBlock);
 				if (wasCell >= 0 && wasCell !== c) {
 					// A slot is counted from the column's own ground, so
 					// carrying one across to another column converts it rather
 					// than reusing the number.
 					const bridge =
 						wasSlot + groundLayer[wasCell]! - groundLayer[c]!;
-					if (bridge !== here) write(c, bridge, PLANT_WOOD);
+					if (bridge !== here) write(c, bridge, woodBlock);
 				}
 				wasCell = c;
 				wasSlot = here;
@@ -357,7 +366,7 @@ export function growStand(
 		// lengthening**, so how far the rod reaches along the column is bounded
 		// by where its two ends project, widened by the thickness.
 		const wide2 = wide * wide;
-		const woodRank = RANK[PLANT_WOOD]!;
+		const woodRank = WOOD_RANK;
 		const homeA = ax * ax + ay * ay + az * az;
 		const alongA = ax * ux + ay * uy + az * uz;
 		const run2 = run * run;
@@ -428,7 +437,7 @@ export function growStand(
 				const ez = dz - uz * along;
 				const r = ra + (rb - ra) * along;
 				if (ex * ex + ey * ey + ez * ez <= r * r)
-					write(c, slot, PLANT_WOOD);
+					write(c, slot, woodBlock);
 			}
 		}
 	};
@@ -469,7 +478,7 @@ export function growStand(
 		const sway = rough > 0 ? rough * 0.6 : 0;
 		const sure = fill - sway;
 		const never = fill + sway;
-		const leafRank = RANK[PLANT_LEAF]!;
+		const leafRank = LEAF_RANK;
 		const home = columnOf(x, y, z);
 		if (home < 0) return;
 		// **A cluster narrower than a cell still has to land somewhere.** A rod
@@ -477,7 +486,7 @@ export function growStand(
 		// as a whole block while a canopy smaller than one cell passes no
 		// distance test at all and disappears.
 		if (r < block * 0.6) {
-			write(home, slotAt(home, metresOf(x, y, z)), PLANT_LEAF);
+			write(home, slotAt(home, metresOf(x, y, z)), leafBlock);
 			return;
 		}
 		// **A column either meets the ball or it does not, and that is three
@@ -559,7 +568,7 @@ export function growStand(
 							);
 					if (!(cut > 1 - fill)) continue;
 				}
-				write(c, slot, PLANT_LEAF);
+				write(c, slot, leafBlock);
 			}
 		}
 	};
@@ -647,7 +656,8 @@ export function growStand(
 		const i = roots.i[r]!;
 		const j = roots.j[r]!;
 		const shape = live[layer]!.shape;
-		painting = layer + 1;
+		woodBlock = wood[layer]!;
+		leafBlock = leafOf[layer]!;
 		const scale =
 			1 +
 			shape.sizeSpread *
@@ -831,23 +841,24 @@ export function growStand(
 	}
 	holds = null;
 
-	let wood = 0;
-	let leaf = 0;
+	let woodCells = 0;
+	let leafCells = 0;
 	for (let at = 0; at < blocks.length; at++) {
-		if (blocks[at] === PLANT_WOOD) wood++;
-		else if (blocks[at] === PLANT_LEAF) leaf++;
+		const what = blocks[at]!;
+		if (what === BlockType.AIR) continue;
+		if (RANK[what] === WOOD_RANK) woodCells++;
+		else leafCells++;
 	}
 
 	return {
 		layers: slots,
 		sunk: STAND_SUNK,
 		blocks,
-		owner,
 		grown,
 		plants,
 		refused,
-		wood,
-		leaf,
+		wood: woodCells,
+		leaf: leafCells,
 		tallest,
 		shortest: shortest === Infinity ? 0 : shortest,
 		widest,

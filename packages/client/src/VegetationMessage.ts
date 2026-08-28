@@ -141,15 +141,6 @@ export interface VegetationGeometry {
 
 	readonly rawLow: number;
 	readonly rawHigh: number;
-
-	/**
-	 * Wood then leaf per grown layer, which is what a face's material indexes.
-	 *
-	 * Taken with the mesh rather than read off the panel: a layer may have been
-	 * deleted between the build and the frame, and the faces it left behind
-	 * still have to be drawn as what grew them.
-	 */
-	readonly palette: readonly (readonly [number, number, number])[];
 }
 
 /** A build finished, with everything drawn from it. */

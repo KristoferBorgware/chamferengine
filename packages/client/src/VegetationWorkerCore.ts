@@ -297,10 +297,6 @@ export class VegetationWorkerCore {
 			bounds: mesh.bounds,
 			rawLow: mesh.rawLow,
 			rawHigh: mesh.rawHigh,
-			palette: live.flatMap((layer) => [
-				layer.wood as readonly [number, number, number],
-				layer.leaf as readonly [number, number, number],
-			]),
 		};
 
 		yield {

@@ -1,5 +1,5 @@
 import type { Stand, StandPatch } from "./growStand.js";
-import { PLANT_WOOD } from "./growStand.js";
+import { isPlantWood } from "./PLANT_BLOCKS.js";
 
 /** How many separate pieces the wood is in, and how much of it reaches down. */
 export interface StandPieces {
@@ -43,7 +43,7 @@ export function standPieces(
 	let pieces = 0;
 	let rooted = 0;
 	for (let start = 0; start < blocks.length; start++) {
-		if (blocks[start] !== PLANT_WOOD || seen[start]) continue;
+		if (!isPlantWood(blocks[start]!) || seen[start]) continue;
 		pieces++;
 		let deep = 0;
 		let size = 0;
@@ -58,7 +58,7 @@ export function standPieces(
 			if (slot === sunk) down = true;
 			const push = (q: number): void => {
 				if (q < 0 || q >= blocks.length) return;
-				if (blocks[q] !== PLANT_WOOD || seen[q]) return;
+				if (!isPlantWood(blocks[q]!) || seen[q]) return;
 				seen[q] = 1;
 				stack[deep++] = q;
 			};

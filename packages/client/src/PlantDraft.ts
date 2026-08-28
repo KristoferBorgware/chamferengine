@@ -1,5 +1,5 @@
 import type { PlantLayer, PlantShape, PlantSpecies } from "chamfer/generation";
-import { PLANT_SPECIES } from "chamfer/generation";
+import { BLOCK_COLORS, PLANT_SPECIES, plantBlocksOf } from "chamfer/generation";
 
 /** Every numbered row a vegetation layer carries. */
 export type PlantNumberKey =
@@ -100,9 +100,24 @@ export interface PlantLayerDraft {
 	values: Record<PlantNumberKey, number>;
 
 	curve: [number, number][];
+}
 
-	wood: [number, number, number];
-	leaf: [number, number, number];
+/**
+ * The two colours a species is drawn in, read off the block registry.
+ *
+ * **The card and the tree it grew are the same thing on screen**, so the chip,
+ * the curve and the picture take the colour the world would build there rather
+ * than a copy kept beside it.
+ */
+export function plantInk(species: string): {
+	wood: readonly [number, number, number];
+	leaf: readonly [number, number, number];
+} {
+	const blocks = plantBlocksOf(species);
+	return {
+		wood: BLOCK_COLORS[blocks.wood] ?? [0.36, 0.26, 0.18],
+		leaf: BLOCK_COLORS[blocks.leaf] ?? [0.24, 0.44, 0.2],
+	};
 }
 
 /** A new layer, starting from one species' numbers. */
@@ -124,8 +139,6 @@ export function makePlantLayer(species: string, id: number): PlantLayerDraft {
 			[-1, 1],
 			[1, 1],
 		],
-		wood: [...preset.wood] as [number, number, number],
-		leaf: [...preset.leaf] as [number, number, number],
 	};
 	applySpecies(layer, species);
 	return layer;
@@ -140,8 +153,6 @@ export function applySpecies(layer: PlantLayerDraft, species: string): void {
 		layer.values[key] = preset[key as keyof PlantShape] as number;
 	layer.leaves = preset.leaves;
 	layer.branches = preset.branches;
-	layer.wood = [...preset.wood] as [number, number, number];
-	layer.leaf = [...preset.leaf] as [number, number, number];
 }
 
 /** One layer as the engine takes it. */
@@ -181,8 +192,6 @@ export function plantLayerOf(layer: PlantLayerDraft): PlantLayer {
 			leafTip: v.leafTip,
 			sizeSpread: v.sizeSpread,
 		},
-		wood: layer.wood,
-		leaf: layer.leaf,
 	};
 }
 
@@ -192,89 +201,56 @@ export function copyPlantLayer(layer: PlantLayerDraft): PlantLayerDraft {
 		...layer,
 		values: { ...layer.values },
 		curve: layer.curve.map(([x, y]) => [x, y] as [number, number]),
-		wood: [...layer.wood] as [number, number, number],
-		leaf: [...layer.leaf] as [number, number, number],
 	};
 }
 
 /**
- * What a page with no link in it opens with.
+ * Every layer as one string, which is how a world carries its plants.
  *
- * **Two layers, because one proves nothing.** A single layer is a density with
- * a curve on it and could as well have been a slider; two say what the
- * arrangement is for -- a pine belt and an oak wood, each with its own field,
- * its own curve and its own shape, meeting wherever both curves allow. The
- * curves are drawn to put them in different places rather than left flat, or
- * the opening view is two species evenly mixed over the whole planet.
- */
-export function openingLayers(): PlantLayerDraft[] {
-	const pine = makePlantLayer("Pine", 1);
-	pine.values.density = 2.5;
-	pine.values.feature = 260;
-	pine.values.featureScale = 5;
-	pine.curve = [
-		[-1, 0],
-		[-0.05, 0],
-		[0.35, 1],
-		[1, 1],
-	];
-	const oak = makePlantLayer("Oak", 2);
-	oak.values.density = 1.6;
-	oak.values.feature = 380;
-	oak.values.featureScale = 4;
-	oak.curve = [
-		[-1, 1],
-		[-0.2, 0.85],
-		[0.2, 0],
-		[1, 0],
-	];
-	return [pine, oak];
-}
-
-/**
- * Every layer as query parameters, one per layer.
+ * **The query string is the only place a world is written down**, so what grows
+ * on one is part of the same definition its ground is: a link from any bench
+ * lands on any other with the same planet and the same forest. One parameter
+ * rather than one per layer, because every knob in a world travels as one
+ * value and this is a knob like the rest.
  *
- * **A layer travels whole**, named `v1`, `v2` and so on: the species, then
- * every row that has moved off what that species wrote, then the curve. A link
- * carries a stand of three species without carrying three species' worth of
+ * A layer reads as its species, then every row that has moved off what that
+ * species wrote, then the curve; layers are separated by `;` and their parts by
+ * `|`. So a stand of three species is carried without three species' worth of
  * defaults.
  */
-export function plantLayersToParams(
-	layers: readonly PlantLayerDraft[],
-	params: URLSearchParams,
-): void {
-	layers.forEach((layer, at) => {
-		const fresh = makePlantLayer(layer.species, layer.id);
-		const parts = [layer.species];
-		if (!layer.on) parts.push("off");
-		if (!layer.open) parts.push("shut");
-		if (layer.branches !== fresh.branches)
-			parts.push(`branches=${layer.branches ? 1 : 0}`);
-		if (layer.leaves !== fresh.leaves)
-			parts.push(`leaves=${layer.leaves ? 1 : 0}`);
-		for (const key of Object.keys(layer.values) as PlantNumberKey[])
-			if (layer.values[key] !== fresh.values[key])
-				parts.push(`${key}=${+layer.values[key].toFixed(4)}`);
-		parts.push(
-			"curve=" +
-				layer.curve
-					.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`)
-					.join(","),
-		);
-		params.set(`v${at + 1}`, parts.join("|"));
-	});
+export function plantLayersToText(layers: readonly PlantLayerDraft[]): string {
+	return layers
+		.map((layer) => {
+			const fresh = makePlantLayer(layer.species, layer.id);
+			const parts = [layer.species];
+			if (!layer.on) parts.push("off");
+			if (!layer.open) parts.push("shut");
+			if (layer.branches !== fresh.branches)
+				parts.push(`branches=${layer.branches ? 1 : 0}`);
+			if (layer.leaves !== fresh.leaves)
+				parts.push(`leaves=${layer.leaves ? 1 : 0}`);
+			for (const key of Object.keys(layer.values) as PlantNumberKey[])
+				if (layer.values[key] !== fresh.values[key])
+					parts.push(`${key}=${+layer.values[key].toFixed(4)}`);
+			parts.push(
+				"curve=" +
+					layer.curve
+						.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`)
+						.join(","),
+			);
+			return parts.join("|");
+		})
+		.join(";");
 }
 
-/** Every layer a link carries, or nothing when it carries none. */
-export function plantLayersFromParams(
-	params: URLSearchParams,
-): PlantLayerDraft[] | null {
+/** Every layer a world's own string carries, in the order it holds them. */
+export function plantLayersFromText(text: string): PlantLayerDraft[] {
 	const out: PlantLayerDraft[] = [];
-	for (let at = 1; ; at++) {
-		const text = params.get(`v${at}`);
-		if (text === null) break;
-		const parts = text.split("|");
-		const layer = makePlantLayer(parts[0] ?? "Custom", at);
+	if (text.trim() === "") return out;
+	for (const one of text.split(";")) {
+		if (one.trim() === "") continue;
+		const parts = one.split("|");
+		const layer = makePlantLayer(parts[0] ?? "Custom", out.length + 1);
 		for (const part of parts.slice(1)) {
 			if (part === "off") {
 				layer.on = false;
@@ -316,5 +292,19 @@ export function plantLayersFromParams(
 		}
 		out.push(layer);
 	}
-	return out.length > 0 ? out : null;
+	return out;
 }
+
+/**
+ * What a world with nothing said about its plants grows.
+ *
+ * **Two layers, because one proves nothing.** A single layer is a density with
+ * a curve on it and could as well have been a slider; two say what the
+ * arrangement is for -- a pine belt and an oak wood, each with its own field,
+ * its own curve and its own shape, meeting wherever both curves allow. The
+ * curves are drawn to put them in different places rather than left flat, or
+ * the opening view is two species evenly mixed over the whole planet.
+ */
+export const PLANT_LAYERS_DEFAULT =
+	"Pine|density=2.5|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1;" +
+	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0";
