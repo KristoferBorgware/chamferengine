@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { COARSE_FIELDS, buildCoarseMap } from "chamfer/generation";
+import {
+	COARSE_FIELDS,
+	GROUND_LINES,
+	buildCoarseMap,
+	coarseFieldOf,
+	makeBlend,
+	readBlend,
+} from "chamfer/generation";
+import { positionOf } from "chamfer/coordinates";
+import { paintPatch } from "../src/paintPatch.js";
 import { paintCoarseField } from "../src/paintCoarseField.js";
 
 const W = 96;
@@ -27,9 +36,10 @@ describe("paintCoarseField", () => {
 	});
 
 	/**
-	 * The reason this walks cells rather than pixels. A map far finer than the
-	 * picture drawn one cell per pixel shows one cell in five and speckles;
-	 * averaging every cell that lands on a pixel does not.
+	 * The reason a pixel takes a blend rather than the one cell it lands on. A
+	 * map far finer than the picture drawn one cell per pixel shows one cell in
+	 * five and speckles; the blend of the three cells around the direction does
+	 * not.
 	 */
 	it("draws a picture, not one flat color", () => {
 		const px = paint();
@@ -66,61 +76,91 @@ describe("paintCoarseField", () => {
 		}
 	});
 
-	it("draws a banded picture only in colors the world builds", () => {
-		// The whole reason the Ground picture is banded: every pixel of it is a
-		// block, so a color that is not one of the ramp's own stops is a block
-		// that does not exist. Averaging cells into a pixel is what would
-		// invent one, and it happens before the ramp rather than after it.
-		const banded = COARSE_FIELDS.filter((f) => f.ramp.hard);
-		expect(banded.length).toBeGreaterThan(0);
-		for (const which of banded) {
-			const allowed = new Set(
-				which.ramp.stops.map(
-					(c) =>
-						(Math.round(255 * c[0]) << 16) |
-						(Math.round(255 * c[1]) << 8) |
-						Math.round(255 * c[2]),
-				),
-			);
-			const px = paint(which);
-			for (let at = 0; at < W * H; at++)
-				expect(
-					allowed.has(
-						(px[at * 4]! << 16) |
-							(px[at * 4 + 1]! << 8) |
-							px[at * 4 + 2]!,
-					),
-					`${which.id} pixel ${at}`,
-				).toBe(true);
-		}
+	it("names a block on land and water over the sea", () => {
+		// **The Ground picture is bands, and the bands are the world's own
+		// materials.** What is checked is which channel leads rather than the
+		// exact triple, because the painter is the bench's: land takes a
+		// contour line every hundred metres and the sea is the floor seen
+		// through however much water stands over it, so neither lands on a
+		// stop exactly. Grass leads in green, water in blue, and snow is
+		// bright in all three.
+		const which = COARSE_FIELDS.find((f) => f.id === "ground")!;
+		const px = paint(which);
+		const blend = makeBlend();
+		const values = coarseFieldOf(map, which);
+		let land = 0;
+		let sea = 0;
+		for (let r = 0; r < H; r++)
+			for (let q = 0; q < W; q++) {
+				const dir = positionOf(
+					{
+						latitude: (0.5 - (r + 0.5) / H) * 180,
+						longitude: ((q + 0.5) / W) * 360 - 180,
+						altitude: 0,
+					},
+					1,
+				);
+				map.index.blendInto(dir, blend);
+				const metres = readBlend(values, blend);
+				const at = (r * W + q) * 4;
+				const [red, green, blue] = [px[at]!, px[at + 1]!, px[at + 2]!];
+				// **At the waterline the sea is sand**, because what makes
+				// water blue here is how much of it a look passes through and
+				// at the shore that is none -- and the shallows above it are
+				// the teal the ocean shell is drawn in, whose green leads its
+				// blue. What is blue is a deep, so that is where this asks.
+				if (metres < -150) {
+					sea++;
+					expect(blue, `sea at ${r},${q}`).toBeGreaterThan(red);
+				} else if (metres > 0 && metres < GROUND_LINES.rock) {
+					land++;
+					expect(green, `grass at ${r},${q}`).toBeGreaterThan(red);
+					expect(green).toBeGreaterThan(blue);
+				}
+			}
+		// A picture of one material tests nothing about the other.
+		expect(land).toBeGreaterThan(100);
+		expect(sea).toBeGreaterThan(100);
 	});
 
-	it("holds a value outside a ramp at the ramp's own ends", () => {
-		// The ground field's ramp stops well inside what a height can reach, so
-		// the deepest sea and the tallest peak have to land on the end stops
+	it("holds a height past the last material line at that material", () => {
+		// The material lines stop well inside what a height can reach, so the
+		// deepest sea and the tallest peak have to land on the end materials
 		// rather than running off them.
-		const px = paint();
-		const first = field.ramp.stops[0]!;
-		const last = field.ramp.stops[field.ramp.stops.length - 1]!;
-		for (let at = 0; at < W * H; at++)
+		const px = new Uint8ClampedArray(4);
+		for (const metres of [-5000, 5000]) {
+			paintPatch(px, 0, {
+				metres,
+				raw: metres,
+				layer: 0,
+				rawLow: -400,
+				rawHigh: 400,
+				low: -400,
+				high: 400,
+				picture: "ground",
+			});
 			for (let channel = 0; channel < 3; channel++) {
-				const value = px[at * 4 + channel]!;
-				const ends = [first[channel]!, last[channel]!].map(
-					(v) => 255 * v,
-				);
-				const low = Math.min(
-					...field.ramp.stops.map((s) => 255 * s[channel]!),
-				);
-				const high = Math.max(
-					...field.ramp.stops.map((s) => 255 * s[channel]!),
-				);
-				expect(
-					value,
-					`channel ${channel} at ${at}`,
-				).toBeGreaterThanOrEqual(Math.floor(low) - 1);
-				expect(value).toBeLessThanOrEqual(Math.ceil(high) + 1);
-				expect(ends.length).toBe(2);
+				expect(px[channel], `channel ${channel} at ${metres}`)
+					.toBeGreaterThanOrEqual(0);
+				expect(px[channel]).toBeLessThanOrEqual(255);
 			}
+			expect(px[3]).toBe(255);
+		}
+		// Under the sea it is water and over the snow line it is snow, at any
+		// distance past either.
+		paintPatch(px, 0, {
+			metres: 5000,
+			raw: 0,
+			layer: 0,
+			rawLow: -400,
+			rawHigh: 400,
+			low: -400,
+			high: 400,
+			picture: "ground",
+		});
+		expect(px[0]).toBeGreaterThan(200);
+		expect(px[1]).toBeGreaterThan(200);
+		expect(px[2]).toBeGreaterThan(200);
 	});
 
 	it("fills a picture wider than the map has cells across", () => {

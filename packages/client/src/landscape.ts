@@ -9,7 +9,12 @@ import type { LayerName, PlanetKnobs } from "./PlanetSettings.js";
 import { BenchGraph } from "./BenchGraph.js";
 import { BAND_COLORS } from "./paintPatch.js";
 import { GROUND_LINES } from "chamfer/generation";
-import { SEA_COLORS } from "chamfer/render";
+import {
+	PATCH_FILL_SHARE,
+	PATCH_KEY_SHARE,
+	PATCH_TOP_SHARE,
+	SEA_COLORS,
+} from "chamfer/render";
 import { Mat4, Vec3 } from "chamfer/math";
 import { LAYER_NAMES, LAYER_TITLES, PlanetSettings } from "./PlanetSettings.js";
 import { PLAYER_DEFAULTS } from "chamfer/player";
@@ -339,9 +344,11 @@ const look = {
 	light: 1,
 	keyShadow: true,
 	fillShadow: false,
-	keyLight: 1.25,
-	fillLight: 0.2,
-	topLight: 0.75,
+	keyLight: PATCH_KEY_SHARE,
+	fillLight: PATCH_FILL_SHARE,
+	topLight: PATCH_TOP_SHARE,
+	shadowStrength: 1,
+	eye: [0, 1, 1] as [number, number, number],
 };
 
 /**
@@ -645,7 +652,12 @@ function render(): void {
 	look.keyLight = k.keyLight;
 	look.fillLight = k.fillLight;
 	look.topLight = k.topLight;
+	look.shadowStrength = k.shadowStrength;
+	look.shadowStrength = k.shadowStrength;
 	look.span = span;
+	// The near cascade is sized from how far off the viewer is, so its texels
+	// tighten with the zoom.
+	look.eye = [eye.x, eye.y, eye.z];
 	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(
 		0.9,

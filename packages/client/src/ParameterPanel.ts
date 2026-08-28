@@ -377,15 +377,37 @@ const GROUPS: Group[] = [
 				],
 			},
 			{
-				// **The one thing that says where one hexagon ends.** A slope
-				// of one material at one height is a single sheet of colour
-				// however it is lit, and the lattice the world is built on --
-				// which is this bench's whole subject -- is invisible in it.
-				// The same knob and the same drift the world's own mesher
-				// bakes, so a hexagon here is the shade that hexagon will be.
-				key: "speckle",
-				label: "Speckle",
+				key: "patchSurface",
+				label: "Surface",
+				choices: [
+					{ value: "solid", label: "Solid" },
+					{ value: "wire", label: "Cell rims" },
+					{ value: "both", label: "Both" },
+				],
 			},
+			{
+				key: "patchAlong",
+				label: "Contour along",
+				choices: [
+					{ value: "x", label: "East" },
+					{ value: "z", label: "North" },
+				],
+			},
+		],
+	},
+	{
+		// **The lights are their own question.** Where the patch stands and
+		// which picture is on it are about what is being looked at; how it is
+		// lit is about being able to see it at all, and mixing the two put half
+		// a dozen rows about light in the middle of the viewport's own.
+		//
+		// Not "Light": the world has a group of that name already, and two
+		// sections sharing one are two the panel cannot tell apart.
+		title: "Lighting",
+		where: "bench",
+		side: "left",
+		folded: true,
+		knobs: [
 			{
 				key: "patchLight",
 				label: "Brightness",
@@ -402,11 +424,11 @@ const GROUPS: Group[] = [
 				digits: 2,
 			},
 			{
-				// **The three shares are the shadow's depth as well.** A shadow
-				// takes one light away, so the deepest it can go is that
-				// light's share of the total -- which is why there is no
-				// darkness knob beside the switches: this is one already, and a
-				// second over the top would be two answers to one question.
+				// **The three shares bound the shadow's depth.** A shadow
+				// takes one light away, so the deepest it can ever go is that
+				// light's share of the total -- a shadow that reads too faint
+				// is as often a key carrying too little as a shadow set too
+				// weak. Shadow strength divides what is left of that share.
 				key: "keyLight",
 				label: "Key light",
 				digits: 2,
@@ -422,10 +444,14 @@ const GROUPS: Group[] = [
 				digits: 2,
 			},
 			{
-				// **One map fitted to the patch, not cascades.** Cascades exist
-				// because a view of a world is unbounded; this patch is a box
-				// whose corners are known before anything is drawn, so one map
-				// over it is finer than any number of pieces would be.
+				// **Two cascades a light, and one map was measured to be
+				// too coarse.** The patch is a box whose corners are known
+				// before anything is drawn, so one map over the whole of it
+				// looked like enough -- and at 2,048 texels over a 1,100 m
+				// patch a texel is 0.66 m on the ground while the steps
+				// casting the shadows are one block tall. The near cascade is
+				// sized from how far off the camera is, so its texels follow
+				// what is being looked at.
 				key: "keyShadow",
 				label: "Shadow from the key",
 			},
@@ -442,21 +468,14 @@ const GROUPS: Group[] = [
 				label: "Show the lights",
 			},
 			{
-				key: "patchSurface",
-				label: "Surface",
-				choices: [
-					{ value: "solid", label: "Solid" },
-					{ value: "wire", label: "Cell rims" },
-					{ value: "both", label: "Both" },
-				],
-			},
-			{
-				key: "patchAlong",
-				label: "Contour along",
-				choices: [
-					{ value: "x", label: "East" },
-					{ value: "z", label: "North" },
-				],
+				// **How much of its light a shadow takes, not how dark it is.**
+				// A shadow removes a light, so how dark it looks depends on
+				// what share that light had -- a shadow that reads too faint is
+				// usually a key that carries too little.
+				key: "shadowStrength",
+				label: "Shadow strength",
+				digits: 2,
+				enabledWhen: (k) => k.keyShadow || k.fillShadow,
 			},
 		],
 	},

@@ -15,6 +15,13 @@ const SIZE = 2048;
 /**
  * How far a sample is pushed toward the light before it is compared, in metres.
  *
+ * **Small, because the normal offset does the work now.** A depth bias moves a
+ * sample along the light, which shortens every shadow by the same distance --
+ * on terracing whose steps cast a metre or two that is the whole shadow. Pushing
+ * the sample along its own **normal** instead moves it out of its own surface
+ * without moving it along the light at all, so a short shadow keeps its length.
+ * This is what is left over for the depth the offset cannot reach.
+ *
  * **A surface records its own depth, so reading the map at itself is a coin
  * toss** -- half the samples come back nearer and half further, which draws as
  * stripes across every lit face.
@@ -27,19 +34,30 @@ const SIZE = 2048;
  * terraced ground -- with nothing at all. A sixth of a block is enough to stop
  * the stripes and short enough to keep a block's shadow touching it.
  */
-const BIAS_METRES = 0.15;
+const BIAS_METRES = 0.02;
 
 /**
  * One shadow map per light, for the landscape bench.
  *
- * **Not cascades, and that is the point.** Cascades exist because a view of a
- * world is unbounded: the near ground wants centimetres a texel and the far
- * ground cannot have them, so the range is cut into pieces and each gets its
- * own map. A bench patch is a box a kilometre across whose corners are all
- * known before anything is drawn, so one map fitted to that box beats any
- * number of cascades over it -- at 2,048 texels across the shipped patch it is
- * about **half a metre** a texel, which is finer than the blocks it is
- * shadowing.
+ * **Two cascades a light, and the first attempt at one map was wrong.** The
+ * argument against cascades was that a bench patch is a box whose corners are
+ * all known before anything is drawn, so one map fitted to it beats any number
+ * of pieces over it. The box is bounded; what it holds is not proportionate to
+ * it. Measured (`tools/probe-shadow-fit.ts`), the shipped patch fits in a map
+ * **672 m** across, which at 2,048 texels is **0.657 m** a texel -- and a 1 m
+ * step of terracing casts **1.73 m**. Between a normal offset of a texel and a
+ * half and a 3x3 blur a texel wide, the whole shadow was inside the error: on
+ * against off measured **0.00** of 255, everywhere.
+ *
+ * That is the cascade case exactly -- the near ground wants centimetres a texel
+ * and the far ground cannot have them -- and it arrives here because the
+ * features are three orders of magnitude smaller than the box, not because the
+ * box is unbounded.
+ *
+ * **The near cascade is sized from the camera rather than from the patch**, so
+ * it tightens as the viewer zooms in and the texels follow what is being looked
+ * at. The far one covers the whole patch and catches everything the near one
+ * does not reach.
  *
  * **Fitted to the mesh's own box, not to the ground's range.** A patch's width
  * says nothing about how far its crust runs down, and the lip hanging off the
@@ -53,16 +71,16 @@ export class PatchShadow {
 	private readonly maps: GPUTexture[] = [];
 	private readonly views: GPUTextureView[] = [];
 
-	private biasDepth = 0;
+	/** One matrix per light and cascade, in the order the world pass reads them. */
+	readonly matrices: Float32Array[] = [];
 
-	/** The light matrices the world pass reads, one per light. */
-	readonly matrices: Float32Array[] = [
-		new Float32Array(16),
-		new Float32Array(16),
-	];
+	/** Per light and cascade: what a texel is worth on the ground, and the bias. */
+	readonly fit: Float32Array = new Float32Array(16);
 
-	constructor(ctx: GpuContext, lights: number) {
+	constructor(ctx: GpuContext, lights: number, cascades: number) {
 		this.ctx = ctx;
+		for (let n = 0; n < lights * cascades; n++)
+			this.matrices.push(new Float32Array(16));
 		const { device } = ctx;
 		const module = device.createShaderModule({
 			code: PATCH_SHADOW_SHADER,
@@ -104,7 +122,7 @@ export class PatchShadow {
 				depthCompare: "less",
 			},
 		});
-		for (let n = 0; n < lights; n++) {
+		for (let n = 0; n < lights * cascades; n++) {
 			const map = device.createTexture({
 				size: [SIZE, SIZE],
 				format: "depth32float",
@@ -133,19 +151,9 @@ export class PatchShadow {
 		return this.views[light]!;
 	}
 
-	/** How wide one texel is in the map's own depth range, for the blur. */
+	/** How wide one texel is across the map, for the blur. */
 	get texel(): number {
 		return 1 / SIZE;
-	}
-
-	/**
-	 * The bias in the depth range the last box was fitted to.
-	 *
-	 * Set when a light is recorded, because the range is the box's own size and
-	 * the shader compares in that range rather than in metres.
-	 */
-	get bias(): number {
-		return this.biasDepth;
 	}
 
 	/**
@@ -160,47 +168,100 @@ export class PatchShadow {
 	 */
 	record(
 		encoder: GPUCommandEncoder,
-		light: number,
+		slot: number,
 		direction: readonly [number, number, number],
 		box: ShadowBox,
 		vertices: GPUBuffer,
 		count: number,
 	): void {
 		const { device } = this.ctx;
-		const middle: [number, number, number] = [
-			(box.low[0] + box.high[0]) / 2,
-			(box.low[1] + box.high[1]) / 2,
-			(box.low[2] + box.high[2]) / 2,
-		];
-		const reach =
-			Math.hypot(
-				box.high[0] - box.low[0],
-				box.high[1] - box.low[1],
-				box.high[2] - box.low[2],
-			) / 2 || 1;
 		const len = Math.hypot(direction[0], direction[1], direction[2]) || 1;
-		const eye: [number, number, number] = [
-			middle[0] + (direction[0] / len) * reach * 2,
-			middle[1] + (direction[1] / len) * reach * 2,
-			middle[2] + (direction[2] / len) * reach * 2,
+		const to: [number, number, number] = [
+			direction[0] / len,
+			direction[1] / len,
+			direction[2] / len,
 		];
-		// Any axis not along the light gives an up; the light is never straight
-		// down the world's own y here, but the guard costs one comparison.
+		// The light's own three axes, so the box can be measured in them.
 		const up: [number, number, number] =
-			Math.abs(direction[1] / len) > 0.999 ? [1, 0, 0] : [0, 1, 0];
+			Math.abs(to[1]) > 0.999 ? [1, 0, 0] : [0, 1, 0];
+		const rx = [
+			up[1] * to[2] - up[2] * to[1],
+			up[2] * to[0] - up[0] * to[2],
+			up[0] * to[1] - up[1] * to[0],
+		];
+		const rl = Math.hypot(rx[0]!, rx[1]!, rx[2]!) || 1;
+		const ax: [number, number, number] = [
+			rx[0]! / rl,
+			rx[1]! / rl,
+			rx[2]! / rl,
+		];
+		const ay: [number, number, number] = [
+			to[1] * ax[2] - to[2] * ax[1],
+			to[2] * ax[0] - to[0] * ax[2],
+			to[0] * ax[1] - to[1] * ax[0],
+		];
+
+		// **Fitted in the light's own axes, not by the box's diagonal.** A
+		// diagonal covers the box whichever way the light points and is simple;
+		// it is also far too big here, because a bench patch is a wide, shallow
+		// slab with several hundred metres of crust hanging under it, and the
+		// crust runs mostly along the light's depth -- which costs nothing --
+		// while the diagonal charges for it laterally. Measured on the shipped
+		// patch, the diagonal asks for 1,712 m across and the real extent is
+		// 1,127 m: a third of every texel spent on nothing.
+		let loU = Infinity;
+		let hiU = -Infinity;
+		let loV = Infinity;
+		let hiV = -Infinity;
+		let loW = Infinity;
+		let hiW = -Infinity;
+		for (let corner = 0; corner < 8; corner++) {
+			const px = (corner & 1 ? box.high : box.low)[0]!;
+			const py = (corner & 2 ? box.high : box.low)[1]!;
+			const pz = (corner & 4 ? box.high : box.low)[2]!;
+			const u = px * ax[0] + py * ax[1] + pz * ax[2];
+			const v = px * ay[0] + py * ay[1] + pz * ay[2];
+			const w = px * to[0] + py * to[1] + pz * to[2];
+			if (u < loU) loU = u;
+			if (u > hiU) hiU = u;
+			if (v < loV) loV = v;
+			if (v > hiV) hiV = v;
+			if (w < loW) loW = w;
+			if (w > hiW) hiW = w;
+		}
+		const half = Math.max(1, Math.max(hiU - loU, hiV - loV) / 2);
+		const deep = Math.max(1, hiW - loW);
+		// The middle of the box in the light's axes, put back in the patch's.
+		const midU = (loU + hiU) / 2;
+		const midV = (loV + hiV) / 2;
+		const midW = (loW + hiW) / 2;
+		const middle: [number, number, number] = [
+			ax[0] * midU + ay[0] * midV + to[0] * midW,
+			ax[1] * midU + ay[1] * midV + to[1] * midW,
+			ax[2] * midU + ay[2] * midV + to[2] * midW,
+		];
+		const back = deep;
+		const eye: [number, number, number] = [
+			middle[0] + to[0] * back,
+			middle[1] + to[1] * back,
+			middle[2] + to[2] * back,
+		];
 		const view = Mat4.lookAt(eye, middle, up);
-		const proj = Mat4.orthographic(reach, reach, reach * 3);
-		// The near and far planes are `reach` and `reach * 3`, so the depth the
-		// shader compares in spans `reach * 2` metres.
-		this.biasDepth = BIAS_METRES / (reach * 2);
+		const proj = Mat4.orthographic(half, back - deep / 2, back + deep / 2);
 		const matrix = proj.multiply(view).elements;
-		this.matrices[light]!.set(matrix);
-		device.queue.writeBuffer(this.uniforms[light]!, 0, matrix);
+		this.matrices[slot]!.set(matrix);
+		// **What one texel is worth on the ground, in metres.** The world pass
+		// pushes its sample along the surface normal by about this, which is
+		// what stops a face shadowing itself without eating the length off
+		// every short shadow the way a depth bias does.
+		this.fit[slot * 4] = (half * 2) / SIZE;
+		this.fit[slot * 4 + 1] = BIAS_METRES / deep;
+		device.queue.writeBuffer(this.uniforms[slot]!, 0, matrix);
 
 		const pass = encoder.beginRenderPass({
 			colorAttachments: [],
 			depthStencilAttachment: {
-				view: this.views[light]!,
+				view: this.views[slot]!,
 				depthClearValue: 1,
 				depthLoadOp: "clear",
 				depthStoreOp: "store",
@@ -208,7 +269,7 @@ export class PatchShadow {
 		});
 		if (count > 0) {
 			pass.setPipeline(this.pipeline);
-			pass.setBindGroup(0, this.groups[light]!);
+			pass.setBindGroup(0, this.groups[slot]!);
 			pass.setVertexBuffer(0, vertices);
 			pass.draw(count);
 		}

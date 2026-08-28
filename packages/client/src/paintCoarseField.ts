@@ -1,21 +1,35 @@
 import type { CoarseField, CoarseMap } from "chamfer/generation";
-import { coarseFieldOf } from "chamfer/generation";
-import { geographicOf } from "chamfer/coordinates";
-import { rampColor } from "./rampColor.js";
-import { latticePosition, positionToCell } from "chamfer/addressing";
+import { coarseFieldOf, makeBlend, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
+import { paintPatch } from "./paintPatch.js";
 
 /**
  * Draw one field of a coarse map into an image, longitude across and latitude
  * down.
  *
- * **Every cell is drawn, and a pixel is the average of the cells that land on
- * it.** A map at level 8 holds 655,362 cells against a picture of 131,072
- * pixels, so asking each pixel which cell it sits on would show one cell in
- * five and drop the rest — which reads as speckle, because neighbouring cells
- * of a field with relief in it are not the same color. Walking the cells
- * instead makes the picture a mean rather than a sample, and costs one pass
- * over the map rather than one lookup per pixel.
+ * **A pixel asks the map what the ground is under it, and the map blends.**
+ * The map holds 655,362 cells at the shipped level against a picture of
+ * 131,072 pixels, and the obvious two ways of getting from one to the other
+ * are both wrong. Asking each pixel which single cell it sits on shows one
+ * cell in five and drops the rest, which reads as speckle. Scattering every
+ * cell into whichever pixel it lands in and averaging looks safe and is the
+ * one that shipped here: the cells fall on a lattice and the pixels on a
+ * rectangle, so a pixel catches four cells or twelve with nothing saying
+ * which -- and the mean of four is not the mean of twelve. Under a picture
+ * whose colours are **bands**, a pixel a few metres either side of the rock
+ * line then flips material on the count alone, which is the mottling that
+ * made this picture disagree with the bench's over the same ground.
+ *
+ * The blend is the third way and the one the bench already used: the three
+ * cells of the triangle a direction lands in, weighted by where in it the
+ * direction fell. It is smooth, it costs one lookup a pixel rather than one
+ * pass over the whole map, and it is the same reading `columnAt` takes -- so
+ * the picture is of the ground the world builds rather than of the sampling.
+ *
+ * **The colour comes from `paintPatch`, which is the bench's own painter.**
+ * Two pictures of one planet drawn by two functions is two answers to what the
+ * ground is made of, and they had drifted: this one had no depth in the water
+ * and no contour on the land.
  *
  * The rectangle is the picture and never the storage. It stretches at the top
  * and bottom, where a row of pixels covers a few metres of ground, and that is
@@ -31,69 +45,27 @@ export function paintCoarseField(
 	into: Uint8ClampedArray,
 ): void {
 	const values = coarseFieldOf(map, field);
-	const n = 1 << map.level;
-	const sum = new Float32Array(width * height);
-	const count = new Uint32Array(width * height);
-	// A cell on a face edge answers to several names and is one cell. Taking it
-	// once per name would weight the thirty seams twice over and the twelve
-	// icosahedron vertices five times.
-	const taken = new Uint8Array(map.count);
-
-	for (let face = 0; face < 20; face++)
-		for (let i = 0; i <= n; i++)
-			for (let j = 0; i + j <= n; j++) {
-				const cell = map.index.indexOf(face, i, j);
-				if (cell < 0 || taken[cell]) continue;
-				taken[cell] = 1;
-
-				const place = geographicOf(latticePosition(face, n, i, j), 1);
-				const x = Math.min(
-					width - 1,
-					Math.max(
-						0,
-						Math.floor(((place.longitude + 180) / 360) * width),
-					),
-				);
-				const y = Math.min(
-					height - 1,
-					Math.max(
-						0,
-						Math.floor(((90 - place.latitude) / 180) * height),
-					),
-				);
-				const at = y * width + x;
-				sum[at]! += values[cell] ?? 0;
-				count[at]!++;
-			}
-
-	// Near the poles a row of pixels is wider than the ring of cells under it,
-	// so some pixels catch nothing. Those few ask which cell they sit on, which
-	// is the lookup this function avoids everywhere else.
-	for (let at = 0; at < width * height; at++) {
-		if (count[at]) continue;
-		const y = Math.floor(at / width);
-		const x = at - y * width;
-		const place = {
-			latitude: 90 - ((y + 0.5) / height) * 180,
-			longitude: ((x + 0.5) / width) * 360 - 180,
-			altitude: 0,
-		};
-		const cell = positionToCell(positionOf(place, 1), n);
-		sum[at] = values[map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
-		count[at] = 1;
-	}
-
-	// Averaging the values and then coloring, rather than averaging colors: a
-	// mean of two heights is a height, while a mean of two colors off a ramp is
-	// whatever the ramp does between them.
-	for (let at = 0; at < width * height; at++) {
-		const [r, g, b] = rampColor(
-			count[at] ? sum[at]! / count[at]! : 0,
-			field,
-		);
-		into[at * 4] = r;
-		into[at * 4 + 1] = g;
-		into[at * 4 + 2] = b;
-		into[at * 4 + 3] = 255;
+	// Ground names the block that stands there; every other field is a height
+	// read against its own ramp, which is what the grey picture is.
+	const picture = field.id === "ground" ? "ground" : "height";
+	const blend = makeBlend();
+	for (let r = 0; r < height; r++) {
+		const latitude = (0.5 - (r + 0.5) / height) * 180;
+		for (let q = 0; q < width; q++) {
+			const longitude = ((q + 0.5) / width) * 360 - 180;
+			const dir = positionOf({ latitude, longitude, altitude: 0 }, 1);
+			map.index.blendInto(dir, blend);
+			const metres = readBlend(values, blend);
+			paintPatch(into, (r * width + q) * 4, {
+				metres,
+				raw: metres,
+				layer: 0,
+				rawLow: field.ramp.low,
+				rawHigh: field.ramp.high,
+				low: field.ramp.low,
+				high: field.ramp.high,
+				picture,
+			});
+		}
 	}
 }

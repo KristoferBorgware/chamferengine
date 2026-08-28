@@ -360,6 +360,16 @@ export interface PlanetKnobs {
 	fillShadow: boolean;
 
 	/**
+	 * How much of its light a shadow takes, `0` to `1`.
+	 *
+	 * **Not a darkness.** A shadow removes a light, so how dark it looks
+	 * depends on what share that light had -- this is only how much of it goes.
+	 * A shadow that reads too faint is usually a key that carries too little,
+	 * not a shadow that is too weak.
+	 */
+	shadowStrength: number;
+
+	/**
 	 * How much of the bench's light each of the three carries.
 	 *
 	 * **How dark a shadow can be is this and nothing else.** A shadow takes one
@@ -388,6 +398,22 @@ export interface PlanetKnobs {
 	 * it costs a rebuild and drawing it costs nothing.
 	 */
 	patchOcclusion: number;
+
+	/**
+	 * How far a hexagon's shade drifts from its material's, on the bench.
+	 *
+	 * **An amount rather than a switch, because the world's own is too small to
+	 * see here.** `SPECKLE` is `0.06`, which after the curve a picture is
+	 * written with is about `5%` between the palest hexagon and the darkest --
+	 * five levels of 255 on ordinary ground, which is a grain you have to go
+	 * looking for. This bench's whole subject is the lattice, so how far the
+	 * drift goes is a thing to set rather than a constant to argue about.
+	 *
+	 * It is not the material colour: the four band colours are still the block
+	 * registry's own, and this is legibility furniture of the same kind as the
+	 * contour lines and the cell rims the bench draws and the world does not.
+	 */
+	patchSpeckle: number;
 
 	showLights: boolean;
 
@@ -974,8 +1000,10 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchCells: 32,
 	patchDetail: 2,
 	patchOcclusion: 1,
+	patchSpeckle: 0.35,
 	keyShadow: true,
 	fillShadow: false,
+	shadowStrength: 1,
 	keyLight: PATCH_KEY_SHARE,
 	fillLight: PATCH_FILL_SHARE,
 	topLight: PATCH_TOP_SHARE,
@@ -983,7 +1011,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLight: 1.5,
 	patchPicture: "ground",
 	patchSurface: "solid",
-	patchMap: "patch",
+	patchMap: "planet",
 	patchAlong: "x",
 	crustMetres: 1232,
 	atmosphereOn: true,
@@ -1403,9 +1431,11 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
 	patchOcclusion: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
+	patchSpeckle: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	fillLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	topLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	shadowStrength: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
 	keyShadow: { ...TOGGLE, rebuilds: false },
 	fillShadow: { ...TOGGLE, rebuilds: false },
 	showLights: { ...TOGGLE, rebuilds: false },

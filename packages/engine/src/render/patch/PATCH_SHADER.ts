@@ -72,9 +72,11 @@ struct View {
 	 * how bright is right is a matter of the screen it is read on.
 	 */
 	ground   : vec4f,
-	/** Where the key and the fill each recorded the patch from. */
-	keyLight : mat4x4f,
-	fillLight: mat4x4f,
+	/**
+	 * Where each light recorded the patch from: near cascade, then far, for the
+	 * key and then the fill.
+	 */
+	maps     : array<mat4x4f, 4>,
 	/**
 	 * x: the key's shadow is on. y: the fill's is on. z: one texel of the map.
 	 * w: how far a sample is pushed toward the light before it is compared.
@@ -90,6 +92,13 @@ struct View {
 	 * That is why there is no darkness knob: the balance already is one.
 	 */
 	shares   : vec4f,
+	/**
+	 * x: how much of its light a shadow takes. y: a texel on the ground, in
+	 * metres, which is how far a sample is pushed along its own normal.
+	 */
+	shadowing : vec4f,
+	/** Per map: what a texel is worth on the ground, and its own depth bias. */
+	fit      : array<vec4f, 4>,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -100,9 +109,11 @@ struct View {
  * answers -- is this point behind the surface the light saw -- and filtering
  * the depths instead averages two surfaces and puts a shadow halfway up a wall.
  */
-@group(1) @binding(0) var keyDepth  : texture_depth_2d;
-@group(1) @binding(1) var fillDepth : texture_depth_2d;
-@group(1) @binding(2) var depthCompare : sampler_comparison;
+@group(1) @binding(0) var keyNear  : texture_depth_2d;
+@group(1) @binding(1) var keyFar   : texture_depth_2d;
+@group(1) @binding(2) var fillNear : texture_depth_2d;
+@group(1) @binding(3) var fillFar  : texture_depth_2d;
+@group(1) @binding(4) var depthCompare : sampler_comparison;
 
 /**
  * How much of one light reaches a point.
@@ -116,39 +127,81 @@ struct View {
  * and a clamped read at the rim would smear the edge column across everything
  * beyond it.
  */
-fn reaches(
+fn sampled(
 	depth : texture_depth_2d,
-	lightViewProj : mat4x4f,
+	slot : i32,
 	world : vec3f,
+	normal : vec3f,
 	facing : f32,
 ) -> f32 {
-	let clip = lightViewProj * vec4f(world, 1.0);
+	// **Pushed out along its own normal, not along the light.** A depth bias
+	// moves the sample toward the light, which takes the same distance off
+	// every shadow -- and on terracing whose steps cast a metre or two that was
+	// the whole shadow. Along the normal it leaves its own surface without
+	// moving down the light at all, so a short shadow keeps its length. Half a
+	// texel of the map this slot holds, which is what the cascades bought.
+	let out = world + normal * view.fit[slot].x * 0.5;
+	let clip = view.maps[slot] * vec4f(out, 1.0);
 	let ndc = clip.xyz / clip.w;
 	if (ndc.z < 0.0 || ndc.z > 1.0) {
-		return 1.0;
+		return -1.0;
 	}
 	let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-		return 1.0;
+	// **Inside by a texel, not merely inside.** The blur reads a ring around
+	// the point, and at the very edge some of that ring is off the map -- which
+	// draws the rim column across everything just beyond it.
+	let edge = view.shadowing.z;
+	if (uv.x < edge || uv.x > 1.0 - edge || uv.y < edge || uv.y > 1.0 - edge) {
+		return -1.0;
 	}
-	// **A face turned away from the light needs no map to be dark**, and
-	// asking anyway is what makes the far side of every column stripe: it is
-	// exactly the surface that recorded the depth it is being compared with.
-	if (facing <= 0.0) {
-		return 1.0;
-	}
-	// The bias eases off as a face turns edge-on to the light, where one texel
-	// of the map covers the most depth.
-	let slope = view.shadow.w * (1.0 + 2.0 * (1.0 - facing));
-	let at = ndc.z - slope;
+	// What is left for the depth the offset cannot reach, eased off as a face
+	// turns edge-on to the light where one texel covers the most depth.
+	let at = ndc.z - view.fit[slot].y * (1.0 + 2.0 * (1.0 - facing));
 	var sum = 0.0;
 	for (var y = -1; y <= 1; y++) {
 		for (var x = -1; x <= 1; x++) {
-			let tap = uv + vec2f(f32(x), f32(y)) * view.shadow.z;
+			let tap = uv + vec2f(f32(x), f32(y)) * view.shadowing.z;
 			sum = sum + textureSampleCompareLevel(depth, depthCompare, tap, at);
 		}
 	}
 	return sum / 9.0;
+}
+
+/**
+ * How much of one light reaches a point, from the tightest map that holds it.
+ *
+ * **The near cascade first.** It is sized from how far off the camera is, so it
+ * tightens as the viewer zooms and its texels follow what is being looked at;
+ * the far one covers the whole patch and catches whatever falls outside. A
+ * point in neither is lit, because a light that never recorded it has said
+ * nothing about it.
+ *
+ * **A face turned away from the light needs no map to be dark**, and asking
+ * anyway is what makes the far side of every column stripe: it is exactly the
+ * surface that recorded the depth it would be compared with.
+ */
+fn reaches(
+	nearDepth : texture_depth_2d,
+	farDepth : texture_depth_2d,
+	slot : i32,
+	world : vec3f,
+	normal : vec3f,
+	facing : f32,
+) -> f32 {
+	if (facing <= 0.0) {
+		return 1.0;
+	}
+	var open = sampled(nearDepth, slot, world, normal, facing);
+	if (open < 0.0) {
+		open = sampled(farDepth, slot + 1, world, normal, facing);
+	}
+	if (open < 0.0) {
+		return 1.0;
+	}
+	// **How much of its light a shadow takes** -- at 1 the light is gone where
+	// the map says so. There is no darkness in metres to set: a shadow removes
+	// a light, and how dark that is depends on what share that light had.
+	return mix(1.0, open, view.shadowing.x);
 }
 
 struct VertexOut {
@@ -285,12 +338,12 @@ fn lightOn(normal : vec3f, world : vec3f, direct : f32) -> f32 {
 	let toFill = max(0.0, dot(n, fill));
 	let keyOpen = select(
 		1.0,
-		reaches(keyDepth, view.keyLight, world, toKey),
+		reaches(keyNear, keyFar, 0, world, n, toKey),
 		view.shadow.x > 0.5,
 	);
 	let fillOpen = select(
 		1.0,
-		reaches(fillDepth, view.fillLight, world, toFill),
+		reaches(fillNear, fillFar, 2, world, n, toFill),
 		view.shadow.y > 0.5,
 	);
 	let lit =

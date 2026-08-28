@@ -351,30 +351,33 @@ export function columnPatchMesh(
 	};
 
 	/**
-	 * How much a corner of a cap is darkened by the rock standing at it.
+	 * How much a cap is darkened by the rock standing around it.
 	 *
-	 * A corner of a hexagon is shared by three cells, so a cap's rim vertex has
-	 * this cell and **two** others touching it -- and the shade takes three
-	 * values. A cube's corner is shared by four, so the tables written for cube
-	 * worlds have four entries and do not carry over; this is the engine's own
-	 * three, which is what keeps a preview of a hillside the hillside the world
-	 * builds.
+	 * **One value for the whole cap, not one per corner.** Per corner is what
+	 * the world's own mesher does, and it is right there: a cell is a metre
+	 * across and a long way off. Here a cell fills a good part of the screen,
+	 * and a value at each corner interpolated across the middle draws a smeared
+	 * wedge over every hexagon -- which reads as banding rather than as
+	 * anything standing beside it. Flat, a cap is either in a hollow or it is
+	 * not, and the lattice stays crisp.
 	 *
-	 * Measured a block above the cap, because a neighbour level with it is
-	 * standing beside the corner rather than over it.
+	 * The steps are the world's own {@link AMBIENT_OCCLUSION}, reached by how
+	 * much of the ring stands over the cap rather than by a count of two.
+	 * Measured a block above it, because a neighbour level with a cap is
+	 * standing beside the cell rather than over it.
 	 */
-	const cornerShade = (
-		c: number,
-		m: number,
-		deg: number,
-		top: number,
-	): number => {
+	const capShade = (c: number, top: number): number => {
 		if (occlusion <= 0) return 1;
 		const over = top + blockMetres * 0.5;
+		const deg = degree[c]!;
 		let shut = 0;
-		if (solidAt(ring[c * 6 + ((m - 1 + deg) % deg)]!, over)) shut++;
-		if (solidAt(ring[c * 6 + m]!, over)) shut++;
-		const dark = AMBIENT_OCCLUSION[shut] ?? 1;
+		for (let k = 0; k < deg; k++)
+			if (solidAt(ring[c * 6 + k]!, over)) shut++;
+		const steps = AMBIENT_OCCLUSION.length - 1;
+		const dark =
+			AMBIENT_OCCLUSION[
+				Math.min(steps, Math.round((shut / deg) * steps * 2))
+			] ?? 1;
 		// The knob fades the whole term toward no shading at all rather than
 		// changing its steps, so off is the flat colour to the bit.
 		return 1 + (dark - 1) * occlusion;
@@ -418,23 +421,16 @@ export function columnPatchMesh(
 	 * caps meet along their shared edge with nothing between them.
 	 */
 	const rims: number[] = [];
-	const rimShade = new Float64Array(6);
 	const cap = (c: number, metres: number, upward: boolean): void => {
 		const deg = degree[c]!;
 		let mx = 0;
 		let my = 0;
 		let mz = 0;
-		// **The middle of a cap takes the average of its own rim**, so a cell
-		// with one shaded corner darkens across rather than in a wedge.
-		let middleShade = 0;
-		// The sea is one sheet at one radius and nothing stands around its
-		// corners, so it takes none of this -- shading it would draw the
-		// hillside's own occlusion onto the water beside it.
+		// The sea is one sheet at one radius and nothing stands around it, so it
+		// takes none of this -- shading it would draw the hillside's own
+		// occlusion onto the water beside it.
 		const water = waterFloor === waterFloor;
-		for (let m = 0; m < deg; m++) {
-			rimShade[m] = upward && !water ? cornerShade(c, m, deg, metres) : 1;
-			middleShade += rimShade[m]! / deg;
-		}
+		const flat = upward && !water ? capShade(c, metres) : 1;
 		for (let m = 0; m < deg; m++) {
 			local(
 				corner[c * 18 + m * 3]!,
@@ -457,9 +453,9 @@ export function columnPatchMesh(
 			// Ground only: the sea's own rim sits at one radius everywhere and
 			// would draw a second grid across the water at sea level.
 			if (waterFloor !== waterFloor) rims.push(written + 1, written + 2);
-			sA = middleShade;
-			sB = upward ? rimShade[b]! : rimShade[m]!;
-			sC = upward ? rimShade[m]! : rimShade[b]!;
+			sA = flat;
+			sB = flat;
+			sC = flat;
 			// **Wound against the ring's own order.** A cell's rim runs
 			// counter-clockwise seen from outside the sphere, and a patch
 			// vertex is laid out as `(east, up, north)` -- which swaps two

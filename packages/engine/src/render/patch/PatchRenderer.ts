@@ -83,6 +83,24 @@ export interface PatchLook {
 	readonly keyLight: number;
 	readonly fillLight: number;
 	readonly topLight: number;
+
+	/**
+	 * How much of its light a shadow takes, `0` to `1`.
+	 *
+	 * **Not a darkness in metres.** A shadow removes a light, so how dark it
+	 * looks depends on what share that light had -- this is only how much of it
+	 * goes, and the shares above decide the rest.
+	 */
+	readonly shadowStrength: number;
+
+	/**
+	 * Where the camera is, which is what the near cascade is sized from.
+	 *
+	 * Not a light: the rig is four directions and none of them stands
+	 * anywhere. This is how far off the viewer is, so the tight map tightens
+	 * with the zoom.
+	 */
+	readonly eye: readonly [number, number, number];
 }
 
 /**
@@ -129,7 +147,25 @@ export interface PatchUpload {
  * A matrix, the light, the mode, the numbers the pictures read, the two
  * matrices the shadows are read from, and how the light is shared out.
  */
-const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 + 64 + 16 + 16;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 * 4 + 16 + 16 + 16 + 16 * 4;
+
+/**
+ * How many maps a light is cut into.
+ *
+ * **Two, and the near one is sized from the camera.** One map over the whole
+ * patch is 0.657 m a texel and a step of terracing casts 1.73 m, so the shadow
+ * lived inside the bias and the blur; a second map that tightens as the viewer
+ * zooms puts several texels across a block wherever they are looking.
+ */
+const CASCADES = 2;
+
+/**
+ * How much of the camera's own reach the near cascade covers.
+ *
+ * Wide enough that its edge is off the screen at any ordinary angle, tight
+ * enough that the texels are worth having.
+ */
+const NEAR_REACH = 0.4;
 
 /**
  * Draws one patch of the surface, cell by cell.
@@ -246,33 +282,30 @@ export class PatchRenderer {
 		// sampler cannot go in a uniform buffer and every pipeline here shares
 		// one layout -- so the maps are bound once and read by whichever draw
 		// asks for them.
-		this.shadow = new PatchShadow(ctx, 2);
+		this.shadow = new PatchShadow(ctx, 2, CASCADES);
 		const shadowLayout = device.createBindGroupLayout({
 			entries: [
-				{
-					binding: 0,
+				...[0, 1, 2, 3].map((binding) => ({
+					binding,
 					visibility: GPUShaderStage.FRAGMENT,
-					texture: { sampleType: "depth" },
-				},
+					texture: { sampleType: "depth" as const },
+				})),
 				{
-					binding: 1,
+					binding: 4,
 					visibility: GPUShaderStage.FRAGMENT,
-					texture: { sampleType: "depth" },
-				},
-				{
-					binding: 2,
-					visibility: GPUShaderStage.FRAGMENT,
-					sampler: { type: "comparison" },
+					sampler: { type: "comparison" as const },
 				},
 			],
 		});
 		this.shadowGroup = device.createBindGroup({
 			layout: shadowLayout,
 			entries: [
-				{ binding: 0, resource: this.shadow.view(0) },
-				{ binding: 1, resource: this.shadow.view(1) },
+				...[0, 1, 2, 3].map((binding) => ({
+					binding,
+					resource: this.shadow.view(binding),
+				})),
 				{
-					binding: 2,
+					binding: 4,
 					resource: device.createSampler({ compare: "less" }),
 				},
 			],
@@ -520,33 +553,51 @@ export class PatchRenderer {
 			[0, PATCH_KEY, look.keyShadow],
 			[1, patchFill(), look.fillShadow],
 		];
+		// **The near cascade is a box around what the camera is looking at**,
+		// which on this bench is always the middle of the patch -- so its size
+		// follows the zoom and its texels follow the eye. Clamped to the patch,
+		// because a box larger than the thing in it buys nothing.
+		const eyeReach = Math.hypot(look.eye[0], look.eye[1], look.eye[2]);
+		const near = Math.min(look.span, Math.max(1, eyeReach * NEAR_REACH));
+		const boxes: ShadowBox[] = [
+			{
+				low: [-near / 2, this.bounds.low[1], -near / 2],
+				high: [near / 2, this.bounds.high[1], near / 2],
+			},
+			this.bounds,
+		];
 		for (const [light, direction, on] of casting) {
-			// **A map nobody recorded is cleared to the far plane**, which
-			// every comparison passes -- so a switch that is off reads as no
-			// shadow rather than as everything in shadow, and the fragment's
-			// own toggle need not agree with this loop to be safe.
-			if (!on || !this.vertices || this.groundVertices === 0) continue;
-			this.shadow.record(
-				encoder,
-				light,
-				[direction[0]!, direction[1]!, direction[2]!],
-				this.bounds,
-				this.vertices,
-				this.groundVertices,
-			);
+			for (let cascade = 0; cascade < CASCADES; cascade++) {
+				const slot = light * CASCADES + cascade;
+				// **A map nobody recorded is cleared to the far plane**, which
+				// every comparison passes -- so a switch that is off reads as no
+				// shadow rather than as everything in shadow.
+				if (!on || !this.vertices || this.groundVertices === 0)
+					continue;
+				this.shadow.record(
+					encoder,
+					slot,
+					[direction[0]!, direction[1]!, direction[2]!],
+					boxes[cascade]!,
+					this.vertices,
+					this.groundVertices,
+				);
+			}
 		}
-		this.data.set(this.shadow.matrices[0]!, 32);
-		this.data.set(this.shadow.matrices[1]!, 48);
+		for (let slot = 0; slot < 2 * CASCADES; slot++)
+			this.data.set(this.shadow.matrices[slot]!, 32 + slot * 16);
 		this.data.set(
 			[
 				look.keyShadow ? 1 : 0,
 				look.fillShadow ? 1 : 0,
 				this.shadow.texel,
-				this.shadow.bias,
+				0,
 			],
-			64,
+			96,
 		);
-		this.data.set([look.keyLight, look.fillLight, look.topLight, 0], 68);
+		this.data.set([look.keyLight, look.fillLight, look.topLight, 0], 100);
+		this.data.set([look.shadowStrength, 0, 0, 0], 104);
+		this.data.set(this.shadow.fit, 108);
 
 		device.queue.writeBuffer(this.uniform, 0, this.data);
 		this.data[21] = 1;

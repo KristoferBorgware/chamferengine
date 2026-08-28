@@ -10,6 +10,40 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-095 — The globe in the panel is painted by a different function from the two flat maps
+
+**Kind:** inconsistency
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, making the panel's flat map agree with the landscape bench's
+**Where:** `packages/client/src/SphereView.ts`, `rampColor`
+
+**What happens.** There are three pictures of one planet in the client: the
+bench's flat map, the panel's flat map and the panel's globe. The two flat
+ones now go through `paintPatch`, which is the world's own block colours, the
+ocean shell's two colours blended by how much water a look passes through, and
+a contour line every hundred metres. The globe still goes through `rampColor`,
+which reads the field's six equal stops from -100 m to 500 m. So the same
+ocean is a flat single blue on the ball and a shore-to-deep gradient on the
+sheet beside it, and the land has contours on one and none on the other.
+
+**Why it matters.** The two sit in the same fold of the same panel, a
+centimetre apart, and a reader comparing them has no way to know that one of
+the differences is the drawing and none of it is the world. The band
+elevations do agree -- the ramp's stops land on 300 m and 400 m, which is
+where `GROUND_LINES` puts rock and snow -- so what disagrees is only the water
+and the contours, which is exactly the kind of difference that reads as a
+different planet rather than as a different painter.
+
+**What would fix it.** Give `SphereView` the same treatment the flat map just
+had: a colour per cell from `paintPatch` rather than from `rampColor`. It
+already walks cells rather than pixels, so it needs the height and nothing
+else, and `paintPatch` writes into four bytes which is what the vertex colour
+wants. `rampColor` then has no caller and goes with it, along with the `ramp`
+field on `CoarseField` -- which is the second reason to do it, since a stop
+list nothing reads is a second statement of where the material lines are.
+
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
 **Kind:** doc
