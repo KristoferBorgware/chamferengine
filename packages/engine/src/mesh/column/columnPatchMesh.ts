@@ -1,6 +1,7 @@
 import type { ColumnPatch } from "./ColumnPatch.js";
 import { PATCH_STRIDE } from "../PatchGeometry.js";
 import { Vec3 } from "../../math/Vec3.js";
+import { AMBIENT_OCCLUSION } from "../AMBIENT_OCCLUSION.js";
 import { speckleShade } from "../../generation/terrain/blockColor.js";
 
 /** The ground a patch stands on, one entry per column. */
@@ -42,6 +43,21 @@ export interface ColumnLook {
 
 	/** How far a cell's colour may drift from its material's, `0` for none. */
 	readonly speckle: number;
+
+	/** One block, which is how far above a cap a neighbour has to stand to shade it. */
+	readonly blockMetres: number;
+
+	/**
+	 * How much a corner darkens for the rock standing around it, `0` for none.
+	 *
+	 * **The one shading term a vertex has to carry.** Which way a face points
+	 * is a fact the shader works out for itself; what stands *around* a corner
+	 * is not on the face at all, so no light can find it. Without it a crevice
+	 * has no bottom, a notch reads as flat ground, and two caps at the same
+	 * height are the same colour whatever is beside them -- which is most of
+	 * what makes a landscape of blocks look like a sheet of them.
+	 */
+	readonly occlusion: number;
 
 	/** The planet's radius in metres, which turns a direction into a place. */
 	readonly radius: number;
@@ -156,7 +172,7 @@ export function columnPatchMesh(
 		j: jOf,
 	} = patch;
 	const { at, spans, height, raw, continent, erosion, peaks, carve } = ground;
-	const { radius, seaLevel, seed, speckle } = look;
+	const { radius, seaLevel, seed, speckle, blockMetres, occlusion } = look;
 	const frame = frameAt(centre);
 
 	// **The buffer starts at what a patch actually uses and grows if it needs
@@ -191,6 +207,10 @@ export function columnPatchMesh(
 	let cPeaks = 0;
 	let cCarve = 0;
 	let cShade = 1;
+	/** The three corners' own shading, refilled per triangle. */
+	let sA = 1;
+	let sB = 1;
+	let sC = 1;
 
 	/** A direction and a height, in the frame the patch is drawn in. */
 	const local = (
@@ -267,7 +287,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
-		vertices[to + 12] = cShade;
+		vertices[to + 12] = cShade * sA;
 		to += PATCH_STRIDE;
 		vertices[to] = bx;
 		vertices[to + 1] = by;
@@ -281,7 +301,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
-		vertices[to + 12] = cShade;
+		vertices[to + 12] = cShade * sB;
 		to += PATCH_STRIDE;
 		vertices[to] = cx;
 		vertices[to + 1] = cy;
@@ -295,7 +315,7 @@ export function columnPatchMesh(
 		vertices[to + 9] = cEro;
 		vertices[to + 10] = cPeaks;
 		vertices[to + 11] = cCarve;
-		vertices[to + 12] = cShade;
+		vertices[to + 12] = cShade * sC;
 		written += 3;
 		// **What the camera has to frame is the shape, and only the shape knows
 		// what that is.** A patch's width says nothing once it is a fair share
@@ -322,6 +342,66 @@ export function columnPatchMesh(
 		if (cz > hiZ) hiZ = cz;
 	};
 
+	/** Whether a column holds rock at one height. */
+	const solidAt = (c: number, y: number): boolean => {
+		if (c < 0) return false;
+		for (let pair = at[c]!; pair < at[c + 1]!; pair += 2)
+			if (y >= spans[pair]! && y < spans[pair + 1]!) return true;
+		return false;
+	};
+
+	/**
+	 * How much a corner of a cap is darkened by the rock standing at it.
+	 *
+	 * A corner of a hexagon is shared by three cells, so a cap's rim vertex has
+	 * this cell and **two** others touching it -- and the shade takes three
+	 * values. A cube's corner is shared by four, so the tables written for cube
+	 * worlds have four entries and do not carry over; this is the engine's own
+	 * three, which is what keeps a preview of a hillside the hillside the world
+	 * builds.
+	 *
+	 * Measured a block above the cap, because a neighbour level with it is
+	 * standing beside the corner rather than over it.
+	 */
+	const cornerShade = (
+		c: number,
+		m: number,
+		deg: number,
+		top: number,
+	): number => {
+		if (occlusion <= 0) return 1;
+		const over = top + blockMetres * 0.5;
+		let shut = 0;
+		if (solidAt(ring[c * 6 + ((m - 1 + deg) % deg)]!, over)) shut++;
+		if (solidAt(ring[c * 6 + m]!, over)) shut++;
+		const dark = AMBIENT_OCCLUSION[shut] ?? 1;
+		// The knob fades the whole term toward no shading at all rather than
+		// changing its steps, so off is the flat colour to the bit.
+		return 1 + (dark - 1) * occlusion;
+	};
+
+	/**
+	 * How much of the sky a point on a wall can see, from its own six
+	 * neighbours.
+	 *
+	 * **A wall takes its two ends**, so one face carries the gradient a shaft
+	 * has: the top vertices are read at the top of the run and the bottom ones
+	 * at the bottom, and a merged run of any length costs nothing more. This is
+	 * what gives a hole a floor rather than a flat sheet of the block it is cut
+	 * into.
+	 */
+	const wallShade = (c: number, y: number): number => {
+		if (occlusion <= 0) return 1;
+		const deg = degree[c]!;
+		let shut = 0;
+		for (let k = 0; k < deg; k++) if (solidAt(ring[c * 6 + k]!, y)) shut++;
+		const open = 1 - shut / deg;
+		// The same floor a fully enclosed corner takes, so the two terms agree
+		// about how dark shut-in is.
+		const dark = AMBIENT_OCCLUSION[AMBIENT_OCCLUSION.length - 1]!;
+		return 1 + (dark - 1) * (1 - open) * occlusion;
+	};
+
 	const p0: [number, number, number] = [0, 0, 0];
 	const p1: [number, number, number] = [0, 0, 0];
 	const p2: [number, number, number] = [0, 0, 0];
@@ -338,11 +418,23 @@ export function columnPatchMesh(
 	 * caps meet along their shared edge with nothing between them.
 	 */
 	const rims: number[] = [];
+	const rimShade = new Float64Array(6);
 	const cap = (c: number, metres: number, upward: boolean): void => {
 		const deg = degree[c]!;
 		let mx = 0;
 		let my = 0;
 		let mz = 0;
+		// **The middle of a cap takes the average of its own rim**, so a cell
+		// with one shaded corner darkens across rather than in a wedge.
+		let middleShade = 0;
+		// The sea is one sheet at one radius and nothing stands around its
+		// corners, so it takes none of this -- shading it would draw the
+		// hillside's own occlusion onto the water beside it.
+		const water = waterFloor === waterFloor;
+		for (let m = 0; m < deg; m++) {
+			rimShade[m] = upward && !water ? cornerShade(c, m, deg, metres) : 1;
+			middleShade += rimShade[m]! / deg;
+		}
 		for (let m = 0; m < deg; m++) {
 			local(
 				corner[c * 18 + m * 3]!,
@@ -365,6 +457,9 @@ export function columnPatchMesh(
 			// Ground only: the sea's own rim sits at one radius everywhere and
 			// would draw a second grid across the water at sea level.
 			if (waterFloor !== waterFloor) rims.push(written + 1, written + 2);
+			sA = middleShade;
+			sB = upward ? rimShade[b]! : rimShade[m]!;
+			sC = upward ? rimShade[m]! : rimShade[b]!;
 			// **Wound against the ring's own order.** A cell's rim runs
 			// counter-clockwise seen from outside the sphere, and a patch
 			// vertex is laid out as `(east, up, north)` -- which swaps two
@@ -434,6 +529,13 @@ export function columnPatchMesh(
 		local(corner[b]!, corner[b + 1]!, corner[b + 2]!, top, p1);
 		local(corner[b]!, corner[b + 1]!, corner[b + 2]!, below, p2);
 		local(corner[a]!, corner[a + 1]!, corner[a + 2]!, below, p3);
+		// One face carries the gradient of the whole run: its top vertices are
+		// read at the top and its bottom ones at the bottom.
+		const overhead = wallShade(c, top - blockMetres * 0.5);
+		const underfoot = wallShade(c, below + blockMetres * 0.5);
+		sA = overhead;
+		sB = overhead;
+		sC = underfoot;
 		triangle(
 			p0[0],
 			p0[1],
@@ -448,6 +550,9 @@ export function columnPatchMesh(
 			top,
 			below,
 		);
+		sA = overhead;
+		sB = underfoot;
+		sC = underfoot;
 		triangle(
 			p0[0],
 			p0[1],

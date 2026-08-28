@@ -337,11 +337,11 @@ const look = {
 	showLights: false,
 	span: 1,
 	light: 1,
-	keyShadow: false,
+	keyShadow: true,
 	fillShadow: false,
-	keyLight: 1,
-	fillLight: 0.15,
-	topLight: 1.35,
+	keyLight: 1.25,
+	fillLight: 0.2,
+	topLight: 0.75,
 };
 
 /**

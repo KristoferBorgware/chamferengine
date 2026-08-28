@@ -36,3 +36,12 @@ export { AimRenderer } from "./aim/AimRenderer.js";
 export type { BoundsBox } from "./bounds/BoundsBox.js";
 export { boundsGeometry } from "./bounds/boundsGeometry.js";
 export { BoundsRenderer } from "./bounds/BoundsRenderer.js";
+
+export {
+	PATCH_KEY,
+	PATCH_KEY_SHARE,
+	PATCH_FILL_SHARE,
+	PATCH_TOP_SHARE,
+	PATCH_FILL_LIFT,
+	patchFill,
+} from "./patch/PATCH_LIGHTS.js";

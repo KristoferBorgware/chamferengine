@@ -203,9 +203,17 @@ export class BenchWorkerCore {
 
 		let geometry: BenchGeometry | null = null;
 		const cellsDrawn = this.cellsDrawn;
+		// **Every knob the mesh bakes belongs in this key**, not only the ones
+		// that move a block. The speckle and the corner shading are multiplied
+		// into a vertex colour and no shader can divide one back out, so a
+		// mesh kept across a change to either is a mesh drawn with the setting
+		// the reader has just turned off -- which reads as a switch that does
+		// nothing at all. The speckle was in exactly that state.
 		const groundKey = `${this.world.ms}/${JSON.stringify(
 			settings.terrainOptions(),
-		)}/${settings.knobs.blockSize}`;
+		)}/${settings.knobs.blockSize}/${settings.knobs.speckle}/${
+			settings.knobs.patchOcclusion
+		}`;
 		let span = this.span;
 		let dug = this.dug;
 		let stacks = this.stacks;
@@ -429,6 +437,8 @@ export class BenchWorkerCore {
 				// bench's own amount.
 				seed: settings.seedNumber,
 				speckle: settings.knobs.speckle ? BENCH_SPECKLE : 0,
+				blockMetres: block,
+				occlusion: settings.knobs.patchOcclusion,
 			}),
 			dug,
 			stacks: { stacked, deepest },

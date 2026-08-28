@@ -28,6 +28,11 @@ import {
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+import {
+	PATCH_FILL_SHARE,
+	PATCH_KEY_SHARE,
+	PATCH_TOP_SHARE,
+} from "chamfer/render";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -371,6 +376,18 @@ export interface PlanetKnobs {
 	keyLight: number;
 	fillLight: number;
 	topLight: number;
+
+	/**
+	 * How much a corner of the bench's ground darkens for the rock around it.
+	 *
+	 * **The one shading term a vertex has to carry.** Which way a face points
+	 * is a fact the shader works out for itself; what stands *around* a corner
+	 * is not on the face at all, so no light can find it -- a crevice has no
+	 * bottom, a notch reads as flat ground, and two caps at the same height are
+	 * the same colour whatever is beside them. Baked into the mesh, so moving
+	 * it costs a rebuild and drawing it costs nothing.
+	 */
+	patchOcclusion: number;
 
 	showLights: boolean;
 
@@ -956,11 +973,12 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLongitude: -20,
 	patchCells: 32,
 	patchDetail: 2,
-	keyShadow: false,
+	patchOcclusion: 1,
+	keyShadow: true,
 	fillShadow: false,
-	keyLight: 1,
-	fillLight: 0.15,
-	topLight: 1.35,
+	keyLight: PATCH_KEY_SHARE,
+	fillLight: PATCH_FILL_SHARE,
+	topLight: PATCH_TOP_SHARE,
 	showLights: false,
 	patchLight: 1.5,
 	patchPicture: "ground",
@@ -1384,6 +1402,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "\u00b0",
 	},
 	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchOcclusion: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
 	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	fillLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	topLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },

@@ -392,6 +392,16 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **What stands around a corner is not on the face at all**, so
+				// no light can find it: a crevice has no bottom and a notch
+				// reads as flat ground until this says otherwise. Baked into the
+				// mesh, so moving it costs a rebuild and drawing it costs
+				// nothing.
+				key: "patchOcclusion",
+				label: "Corner shading",
+				digits: 2,
+			},
+			{
 				// **The three shares are the shadow's depth as well.** A shadow
 				// takes one light away, so the deepest it can go is that
 				// light's share of the total -- which is why there is no

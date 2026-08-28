@@ -45,16 +45,28 @@ export const PATCH_FILL_LIFT = 0.2;
 /**
  * How strong the light from straight above is.
  *
- * **The strongest of the four, because this is a table.** A patch of columns
- * has two kinds of face -- caps and vertical walls -- and what makes the
- * structure legible is that a cap is plainly brighter than a wall. Only a light
- * overhead does that; everything nearer the horizon lights the walls and
- * flattens the caps together.
+ * **It used to be the strongest, and it was covering for two things that are
+ * fixed now.** A mesh whose caps pointed into the ground needed a great deal of
+ * light from above to look lit at all, and a mesh with no corner shading needed
+ * it to tell a cap from a wall. With the normals right and the corners shaded,
+ * what it is for is keeping a wall off black -- and holding it above the key
+ * only flattened the picture and left every shadow a smudge.
  */
-export const PATCH_TOP_SHARE = 1.35;
+export const PATCH_TOP_SHARE = 0.75;
+
+/**
+ * How much of the light the key carries.
+ *
+ * **A shadow is only ever as deep as its light's share of the total.** The
+ * overhead light stood at 1.35 against the key's 1, which made the key a fifth
+ * of a lit face -- so the shadows it cast could take a fifth away at the very
+ * most and read as a smudge. The two are the other way round now: the key leads
+ * and the overhead light is what stops a wall going black.
+ */
+export const PATCH_KEY_SHARE = 1.25;
 
 /** How much of the light the fill carries. Enough that no face is black. */
-export const PATCH_FILL_SHARE = 0.15;
+export const PATCH_FILL_SHARE = 0.2;
 
 /** The fill's own direction, which is the key's, mirrored and levelled. */
 export function patchFill(): [number, number, number] {

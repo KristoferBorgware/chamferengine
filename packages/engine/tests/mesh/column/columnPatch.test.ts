@@ -196,6 +196,8 @@ describe("columnPatchMesh", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		expect(mesh.groundVertices % 3).toBe(0);
 		let sides = 0;
@@ -217,6 +219,8 @@ describe("columnPatchMesh", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		expect(dry.waterVertices).toBe(0);
 		const wet = columnPatchMesh(patch, flat(patch.count, -40, 100), {
@@ -224,6 +228,8 @@ describe("columnPatchMesh", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		expect(wet.waterVertices).toBeGreaterThan(0);
 		expect(wet.landShare).toBe(0);
@@ -241,6 +247,8 @@ describe("columnPatchMesh", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		for (let v = mesh.groundVertices; v < mesh.groundVertices + 3; v++)
 			expect(mesh.vertices[v * PATCH_STRIDE + 6]).toBeCloseTo(-40, 4);
@@ -253,6 +261,8 @@ describe("columnPatchMesh", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		expect(mesh.vertices.length).toBe(
 			(mesh.groundVertices + mesh.waterVertices) * PATCH_STRIDE,
@@ -290,6 +300,8 @@ describe("which way a face points", () => {
 			seaLevel: 0,
 			seed: 7,
 			speckle: 0,
+			blockMetres: 1,
+			occlusion: 0,
 		});
 		let up = 0;
 		let down = 0;
@@ -355,12 +367,89 @@ describe("which way a face points", () => {
 				peaks: new Float32Array(count),
 				carve: new Float32Array(count),
 			},
-			{ radius: RADIUS, seaLevel: 0, seed: 7, speckle: 0 },
+			{
+				radius: RADIUS,
+				seaLevel: 0,
+				seed: 7,
+				speckle: 0,
+				blockMetres: 1,
+				occlusion: 0,
+			},
 		);
 		let down = 0;
 		for (let v = 0; v < mesh.groundVertices; v += 3)
 			if (mesh.vertices[v * PATCH_STRIDE + 4]! < -0.7) down++;
 		expect(down).toBeGreaterThan(0);
+	});
+});
+
+describe("corner shading", () => {
+	/** One column standing a block proud of a flat plain around it. */
+	const stepped = (count: number, tall: number): ColumnGround => {
+		const at = new Int32Array(count + 1);
+		const spans: number[] = [];
+		const height = new Float64Array(count);
+		for (let c = 0; c < count; c++) {
+			at[c] = spans.length;
+			// The middle column is the one that stands up.
+			const top = c === 0 ? tall : 0;
+			spans.push(-60, top);
+			height[c] = top;
+		}
+		at[count] = spans.length;
+		return {
+			at,
+			spans: Float64Array.from(spans),
+			height,
+			raw: new Float32Array(count),
+			continent: new Float32Array(count),
+			erosion: new Float32Array(count),
+			peaks: new Float32Array(count),
+			carve: new Float32Array(count),
+		};
+	};
+
+	const shades = (occlusion: number): number[] => {
+		const patch = layout(5, 1);
+		const mesh = columnPatchMesh(patch, stepped(patch.count, 4), {
+			radius: RADIUS,
+			seaLevel: 0,
+			seed: 7,
+			speckle: 0,
+			blockMetres: 1,
+			occlusion,
+		});
+		const out: number[] = [];
+		for (let v = 0; v < mesh.groundVertices; v++)
+			out.push(mesh.vertices[v * PATCH_STRIDE + 12]!);
+		return out;
+	};
+
+	/**
+	 * **Off is the flat colour to the bit.** A knob whose zero is a hash
+	 * multiplied by nothing is a knob that cannot be compared against, and a
+	 * picture of the world has to be holdable against a picture of the map.
+	 */
+	it("shades nothing at zero", () => {
+		for (const shade of shades(0)) expect(shade).toBe(1);
+	});
+
+	/**
+	 * **What stands around a corner is not on the face at all**, so no light can
+	 * find it. A column standing proud of the plain has to darken the corners of
+	 * the caps beside it, and nothing else in the mesh may move.
+	 */
+	it("darkens the corners a standing column reaches, and only those", () => {
+		const flatOff = shades(0);
+		const withIt = shades(1);
+		expect(withIt.length).toBe(flatOff.length);
+		let darker = 0;
+		for (let v = 0; v < withIt.length; v++) {
+			// It only ever takes light away.
+			expect(withIt[v]!).toBeLessThanOrEqual(flatOff[v]! + 1e-9);
+			if (withIt[v]! < flatOff[v]! - 1e-9) darker++;
+		}
+		expect(darker).toBeGreaterThan(0);
 	});
 });
 
