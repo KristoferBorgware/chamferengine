@@ -10,42 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-114 — Two thirds of a noise reading is the weighted sum, and it is written the long way
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-28, taking the cliffs layer's cost apart
-**Where:** `packages/engine/src/generation/noise/valueNoise3.ts`
-
-**What happens.** A reading hashes eight lattice corners and then blends them by
-the faded position inside the cell. The blend is written as eight terms, each
-one three multiplies and an add -- **24 multiplies** for what trilinear
-interpolation does in **seven lerps**. Measured by holding the corners still so
-only the blend runs (`NoiseCorners`), a reading costs `144.5 ns` hashing every
-time and `90.0 ns` with the corners remembered: **the hashing is 38% of it and
-the blend is the other 62%**.
-
-**Why it matters.** The cliffs layer is `82%` of what a chunk of ground costs
-and it is nothing but readings -- `120` a column, three octaves each. Caching
-the corners took a chunk from `196 ms` to `145 ms`; what is left is mostly this
-blend, and the same seven-lerp form every other implementation of value noise
-uses would cut a good part of it.
-
-**Why it is not done here.** **It is different arithmetic, so it is a different
-world.** Eight weighted terms and seven nested lerps agree to about a
-last-bit and not to the bit, so every height, every cliff and every cave moves
-a little -- which is a terrain change and the owner's call, not a free
-optimisation. It is bit-identical across machines either way (doc 23), so
-nothing about determinism argues against it; what argues against it is that
-worlds already built would not come back the same.
-
-**What would fix it.** Write the blend as three fades and seven lerps, take one
-frame of the same seed before and after, and decide whether the ground moved
-anywhere a person would notice. If it is adopted it should go in with any other
-world-moving change rather than on its own.
-
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance
@@ -2586,6 +2550,54 @@ from the world again.
 
 
 ## Closed
+
+### F-114 — Two thirds of a noise reading is the weighted sum, and it is written the long way
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, taking the cliffs layer's cost apart
+**Closed:** 2026-08-28, fixed, and **the trade this entry describes turned out
+not to exist**. The eight products written out -- same order, same
+associations, so the same number to the bit -- run at **52%** of the loop, and
+seven nested lerps run at 48%. Measured
+(`tools/trial-noise-blend.ts`): the loop `23.8 ns`, unrolled `12.3 ns` and
+`100.00%` identical over 200,000 real readings, nested `11.5 ns` and `47.4%`
+identical with a worst gap of `8.9e-16`. So the world-moving form buys a
+nanosecond on a reading and costs every world its ground; the exact one takes
+almost all of the win for nothing. What was slow was never the twenty-four
+multiplies -- it was the loop, the bit twiddling that recovered each corner's
+offsets, three ternaries choosing a weight, and `1 - u` being worked out four
+times over. **A chunk of ground goes from `147.2 ms` to `138.0 ms`.**
+**Where:** `packages/engine/src/generation/noise/valueNoise3.ts`
+
+**What happens.** A reading hashes eight lattice corners and then blends them by
+the faded position inside the cell. The blend is written as eight terms, each
+one three multiplies and an add -- **24 multiplies** for what trilinear
+interpolation does in **seven lerps**. Measured by holding the corners still so
+only the blend runs (`NoiseCorners`), a reading costs `144.5 ns` hashing every
+time and `90.0 ns` with the corners remembered: **the hashing is 38% of it and
+the blend is the other 62%**.
+
+**Why it matters.** The cliffs layer is `82%` of what a chunk of ground costs
+and it is nothing but readings -- `120` a column, three octaves each. Caching
+the corners took a chunk from `196 ms` to `145 ms`; what is left is mostly this
+blend, and the same seven-lerp form every other implementation of value noise
+uses would cut a good part of it.
+
+**Why it is not done here.** **It is different arithmetic, so it is a different
+world.** Eight weighted terms and seven nested lerps agree to about a
+last-bit and not to the bit, so every height, every cliff and every cave moves
+a little -- which is a terrain change and the owner's call, not a free
+optimisation. It is bit-identical across machines either way (doc 23), so
+nothing about determinism argues against it; what argues against it is that
+worlds already built would not come back the same.
+
+**What would fix it.** Write the blend as three fades and seven lerps, take one
+frame of the same seed before and after, and decide whether the ground moved
+anywhere a person would notice. If it is adopted it should go in with any other
+world-moving change rather than on its own.
 
 ### F-105 — Nothing checks that two chunks of the world grow one tree the same way
 
