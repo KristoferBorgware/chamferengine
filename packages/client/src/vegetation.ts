@@ -508,7 +508,15 @@ function say(): void {
 // The patch, which is the point of the bench.
 // ---------------------------------------------------------------------------
 
-const camera = { yaw: -0.7, pitch: 0.35, distance: 1.1, lift: 0 };
+/**
+ * Where the eye starts.
+ *
+ * **Low and close, because a plant is what is being judged.** The landscape
+ * bench frames a hillside and stands well back from it; here the tallest thing
+ * on the ground is twenty metres, so the opening view is one a person could
+ * stand in and still holds the whole patch.
+ */
+const camera = { yaw: -0.7, pitch: 0.45, distance: 1.5, lift: 0 };
 
 function render(): void {
 	if (!renderer) return;
@@ -524,10 +532,17 @@ function render(): void {
 					? "carve"
 					: "continent";
 
+	// **The eye looks at the ground, not at sea level.** A patch is laid out
+	// with its heights measured from the water, so a plateau two hundred metres
+	// up puts the frame's own origin that far underground -- and a camera aimed
+	// there is a camera inside the hill. The middle of what this patch actually
+	// reached is what it circles instead, so a stand reads the same wherever on
+	// the planet it stands.
+	const focus = facts0 ? (facts0.lowest + facts0.highest) / 2 : 0;
 	const reach = span * camera.distance;
 	const eye = new Vec3(
 		Math.sin(camera.yaw) * Math.cos(camera.pitch) * reach,
-		Math.sin(camera.pitch) * reach + span * camera.lift,
+		Math.sin(camera.pitch) * reach + span * camera.lift + focus,
 		Math.cos(camera.yaw) * Math.cos(camera.pitch) * reach,
 	);
 	look.showLights = k.showLights;
@@ -543,7 +558,7 @@ function render(): void {
 	look.span = span;
 	look.plantColors = palette;
 	look.eye = [eye.x, eye.y, eye.z];
-	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, 0, 0], [0, 1, 0]);
+	const view = Mat4.lookAt([eye.x, eye.y, eye.z], [0, focus, 0], [0, 1, 0]);
 	const proj = Mat4.perspective(
 		0.9,
 		canvas.width / Math.max(1, canvas.height),

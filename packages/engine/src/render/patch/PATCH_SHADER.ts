@@ -449,10 +449,16 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// ramp a canopy reads as a hillside at whatever height its leaves happened
 	// to reach. The shade it carries is its layer's own grain and a leaf's
 	// darkening, both baked by the mesher.
-	if (in.material > 0u) {
-		let tint = view.plants[in.material - 1u].rgb * in.shade;
-		return shade(tint, in.normal, in.world, SUN_SHARE);
-	}
+	//
+	// **Chosen rather than branched on**, and that is a requirement rather
+	// than a preference: which material a face is differs between two
+	// fragments of one quad, so returning early on it leaves the rest of this
+	// function in non-uniform control flow -- and the contour below reads how
+	// fast the height changes across a pixel, which is only defined where the
+	// whole quad is running. A shader that will not compile draws a black
+	// window rather than an error.
+	let plantTint = view.plants[max(in.material, 1u) - 1u].rgb * in.shade;
+	let isPlant = in.material > 0u;
 
 	// **The sea is a sheet over the ground and carries the ground's own
 	// height**, so how much water a look passes through is on the vertex: it
@@ -487,7 +493,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			1.0,
 		);
 		return shade(
-			mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t),
+			select(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), plantTint, isPlant),
 			in.normal,
 			in.world,
 			0.4,
@@ -500,7 +506,11 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			1.0,
 		);
 		return shade(
-			mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
+			select(
+				mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
+				plantTint,
+				isPlant,
+			),
 			in.normal,
 			in.world,
 			0.35,
@@ -516,7 +526,12 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
 		let into = t * PICTURE_BANDS - step;
 		let edge = select(1.0, 0.45, into < 0.06);
-		return shade(vec3f(grey * edge), in.normal, in.world, 0.3);
+		return shade(
+			select(vec3f(grey * edge), plantTint, isPlant),
+			in.normal,
+			in.world,
+			0.3,
+		);
 	}
 
 	var tint : vec3f;
@@ -536,7 +551,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// **Only the picture of the ground takes it.** The rest are pictures of a
 	// number, and a speckle there is noise drawn over the answer.
 	return shade(
-		contoured(tint * in.shade, in.height),
+		select(contoured(tint * in.shade, in.height), plantTint, isPlant),
 		in.normal,
 		in.world,
 		SUN_SHARE,

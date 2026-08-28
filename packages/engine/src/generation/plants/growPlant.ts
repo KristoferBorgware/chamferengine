@@ -99,6 +99,13 @@ export function growPlant(
 		trunk: boolean,
 		tag: number,
 	): void => {
+		// **A limb with no length is not a limb.** A trunk's children are as
+		// long as the trunk left above them, so a whorl that lands on the very
+		// last step of the walk asks for one of length nought -- and the rod
+		// stamp has a floor under its radius, which draws that as a whole block
+		// of wood standing at a point. Its own children would be the same
+		// again, so the subtree goes with it.
+		if (!(len > 0)) return;
 		const steps = Math.max(2, Math.round(len / step));
 		const run = len / steps;
 		// **The bend is a displacement from the heading this limb set out on,
