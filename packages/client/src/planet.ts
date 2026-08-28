@@ -75,6 +75,7 @@ import {
 } from "chamfer/sky";
 import { MapPreview } from "./MapPreview.js";
 import { ParameterPanel } from "./ParameterPanel.js";
+import { PlantCellStore } from "./PlantCellStore.js";
 import { plantLayerOf } from "./PlantDraft.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
@@ -933,6 +934,17 @@ async function main(): Promise<void> {
 	const drawn = new Set<number>();
 	const building = new Map<number, ChunkSelection>();
 	const arrived: ChunkMesh[] = [];
+
+	/**
+	 * The plant blocks of every chunk drawn at full detail.
+	 *
+	 * **A plant is a block like any other**, so collision, the ray walk and
+	 * what a player is standing in all have to see it -- and none of them can
+	 * re-derive it from the address the way they re-derive terrain. The cells
+	 * come back with the mesh that drew them and are kept here for as long as
+	 * that mesh is.
+	 */
+	let plantCells = new PlantCellStore(DEPTH, CHUNK_LEVEL, shape.crustDepth);
 	let wantedNow = 0;
 
 	/**
@@ -1020,6 +1032,7 @@ async function main(): Promise<void> {
 			if (covering > 0 && ready) {
 				retiring.delete(id);
 				drawn.delete(id);
+				forget(id);
 				renderer.drop(id);
 			}
 		}
@@ -1037,6 +1050,12 @@ async function main(): Promise<void> {
 	 * the camera.
 	 */
 	const RETIRE_BUDGET = 1;
+
+	/** Let go of a chunk's plants when its mesh goes. */
+	function forget(id: number): void {
+		const at = selectionOf(id);
+		if (at.chunkLevel === CHUNK_LEVEL) plantCells.drop(at.key);
+	}
 
 	/** Give up the furthest retired chunks once too many are being held. */
 	function trimRetired(from: Vec3): void {
@@ -1060,6 +1079,7 @@ async function main(): Promise<void> {
 		for (const { id } of byDistance.slice(0, retiring.size - allowed)) {
 			retiring.delete(id);
 			drawn.delete(id);
+			forget(id);
 			renderer.drop(id);
 		}
 	}
@@ -1402,6 +1422,7 @@ async function main(): Promise<void> {
 		() => terrain,
 		() => shape,
 		() => edits,
+		() => plantCells,
 	);
 
 	/**
@@ -1750,6 +1771,7 @@ async function main(): Promise<void> {
 		drawn.clear();
 		for (const id of retiring) renderer.drop(id);
 		retiring.clear();
+		plantCells.forget();
 		building.clear();
 		arrived.length = 0;
 		wantedNow = 0;
@@ -2213,6 +2235,12 @@ async function main(): Promise<void> {
 			// buffer and a draw until the next selection notices.
 			if (!keep.has(mesh.key)) continue;
 			drawn.add(mesh.key);
+			// **Only a chunk at the world's own cut answers a collision.** A
+			// coarse one names a different triangle and holds a different
+			// lattice, and nobody stands near enough to one to touch it.
+			const at = selectionOf(mesh.key);
+			if (at.chunkLevel === CHUNK_LEVEL)
+				plantCells.put(at.key, mesh.plants);
 			renderer.upload(mesh);
 			uploaded = true;
 		}

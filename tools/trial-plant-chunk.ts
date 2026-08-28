@@ -58,8 +58,12 @@ console.log(
 );
 console.log(`${layers.length} layers: ${layers.map((l) => l.species).join(", ")}`);
 
-for (const lod of [0, 2, 4]) {
+for (const lod of [0, 1, 2, 3]) {
 	const level = shape.atLod(lod);
+	// **A coarse chunk drops its chunk level as well as its depth**, so every
+	// chunk holds the same slots however far off it is -- which is what makes
+	// the ground cheap at distance and the roots exactly not.
+	const cut = chunkLevel - lod;
 	const terrain = new TerrainGenerator(
 		seed,
 		level,
@@ -70,7 +74,15 @@ for (const lod of [0, 2, 4]) {
 	const address = chunkUnder();
 
 	let at = performance.now();
-	const chunk = generateChunk(terrain, address, chunkLevel, level.crustDepth);
+	const chunk = generateChunk(
+		terrain,
+		ChunkAddress.fromKey(
+			Math.floor(address.key / 4 ** lod),
+			cut,
+		),
+		cut,
+		level.crustDepth,
+	);
 	const groundMs = performance.now() - at;
 
 	at = performance.now();

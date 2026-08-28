@@ -6,9 +6,19 @@ import {
 	buildCoarseMap,
 	seedFromString,
 } from "chamfer/generation";
+import {
+	ChunkAddress,
+	generateChunk,
+	isPlantWood,
+	maxElevationFor,
+	plantChunk,
+} from "chamfer/generation";
 import { DeltaStore, STORE_VERSION, packBlockState } from "chamfer/edit";
+import { PlantCellStore } from "../src/PlantCellStore.js";
+import { splitPath } from "chamfer/addressing";
+import { PLANT_SPECIES } from "chamfer/generation";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
-import { positionToCell } from "chamfer/addressing";
+import { joinPath, positionToCell, rank } from "chamfer/addressing";
 import { Vec3 } from "chamfer/math";
 import { worldBlocks } from "../src/worldBlocks.js";
 
@@ -78,6 +88,7 @@ describe("worldBlocks", () => {
 			() => terrain,
 			() => shape,
 			() => edits,
+			() => null,
 		);
 
 		const surface = at.scale(shape.radiusOfLayer(layer) - 0.5);
@@ -114,6 +125,7 @@ describe("worldBlocks", () => {
 			() => live,
 			() => liveShape,
 			() => edits,
+			() => null,
 		);
 
 		const surface = at.scale(liveShape.radiusOfLayer(layer) - 0.5);
@@ -150,6 +162,7 @@ describe("worldBlocks", () => {
 			() => terrain,
 			() => shape,
 			() => edits,
+			() => null,
 		);
 		const floor = shape.crustDepth - 1;
 		const cell = { ...positionToCell(at, shape.n), layer: floor };
@@ -159,5 +172,134 @@ describe("worldBlocks", () => {
 		expect(world.blockAt({ ...cell, layer: floor + 1 })).toBe(
 			BlockType.AIR,
 		);
+	});
+
+	// **A plant is a block like any other, and the seed does not know about
+	// it.** A tree comes out of a walk over every root within reach of a
+	// chunk's rim rather than out of the column being asked about, so the
+	// generator says air where one stands -- which is a player walking through
+	// a trunk, a click passing through a canopy, and a branch that cannot be
+	// broken.
+	it("answers for a plant the seed cannot see", () => {
+		const options = { level: 6, cellMetres: 100, relief: 100 };
+		const chunkLevel = 4;
+		const grownShape = new WorldShape(
+			RADIUS,
+			DEPTH,
+			maxElevationFor(options),
+			maxCrustDepth(DEPTH),
+		);
+		const grownTerrain = new TerrainGenerator(map.seed, grownShape, map);
+		const layer = {
+			id: 1,
+			species: "Pine",
+			on: true,
+			density: 40,
+			feature: 300,
+			featureScale: 4,
+			octaves: 3,
+			persistence: 0.5,
+			lacunarity: 2,
+			fold: 0,
+			curve: [
+				[-1, 1],
+				[1, 1],
+			] as [number, number][],
+			shape: PLANT_SPECIES.Pine!,
+		};
+
+		// A chunk with land on it, grown, and one cell a plant wrote.
+		let found: {
+			cell: { face: number; i: number; j: number; layer: number };
+			block: number;
+		} | null = null;
+		for (let n = 0; n < 200 && !found; n++) {
+			const golden = Math.PI * (3 - Math.sqrt(5));
+			const y = 1 - (2 * n + 1) / 200;
+			const ring = Math.sqrt(Math.max(0, 1 - y * y));
+			const at = new Vec3(
+				Math.cos(n * golden) * ring,
+				y,
+				Math.sin(n * golden) * ring,
+			).normalize();
+			const cell = positionToCell(at, grownShape.n);
+			const split = splitPath(cell.i, cell.j, DEPTH, chunkLevel);
+			const address = new ChunkAddress(cell.face, split.path);
+			const chunk = generateChunk(
+				grownTerrain,
+				address,
+				chunkLevel,
+				grownShape.crustDepth,
+			);
+			const cells = plantChunk(
+				chunk,
+				grownTerrain,
+				grownShape,
+				[layer],
+				map.seed,
+			);
+			if (!cells || cells.where.length === 0) continue;
+			const store = new PlantCellStore(
+				DEPTH,
+				chunkLevel,
+				grownShape.crustDepth,
+			);
+			store.put(address.key, cells);
+			const edits = new DeltaStore({ ...header(), chunkLevel });
+			const world = worldBlocks(
+				() => grownTerrain,
+				() => grownShape,
+				() => edits,
+				() => store,
+			);
+			// **A cell strictly inside the triangle.** Every chunk fills the
+			// slots on its own rim as well, and the descent awards those to a
+			// neighbour -- so a rim cell is answered by the chunk next door,
+			// which grew the same plant and is not in this store.
+			for (let at2 = 0; at2 < cells.where.length; at2++) {
+				if (!isPlantWood(cells.what[at2]!)) continue;
+				const slot = Math.floor(
+					cells.where[at2]! / grownShape.crustDepth,
+				);
+				const inLayer =
+					cells.where[at2]! - slot * grownShape.crustDepth;
+				// Find the lattice point that slot belongs to by walking the
+				// triangle: the chunk holds them in rank order.
+				let q = 0;
+				let r = 0;
+				const m = 1 << (DEPTH - chunkLevel);
+				outer: for (let a = 0; a <= m; a++)
+					for (let b = 0; a + b <= m; b++)
+						if (rank(a, b, m) === slot) {
+							q = a;
+							r = b;
+							break outer;
+						}
+				const m2 = 1 << (DEPTH - chunkLevel);
+				if (q === 0 || r === 0 || q + r === m2) continue;
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				const one = {
+					face: address.face,
+					i,
+					j,
+					layer: inLayer,
+				};
+				expect(world.blockAt(one)).toBe(cells.what[at2]!);
+				// And the generator alone still says air there, which is the
+				// whole reason this wire exists.
+				expect(
+					grownTerrain.blockAt(
+						grownTerrain.columnAt(one.face, one.i, one.j),
+						one.layer,
+					),
+				).toBe(BlockType.AIR);
+				// **Broken stays broken**: a record is read before the plant.
+				edits.write(one, packBlockState(BlockType.AIR));
+				expect(world.blockAt(one)).toBe(BlockType.AIR);
+				found = { cell: one, block: cells.what[at2]! };
+				break;
+			}
+		}
+		expect(found).not.toBeNull();
 	});
 });

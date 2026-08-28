@@ -23,11 +23,52 @@ import { rank } from "../../addressing/lattice/rank.js";
  */
 export const PLANT_REACH = 24;
 
-/** How many plants a chunk grew, and what they left in it. */
+/**
+ * How many levels of detail grow plants at all.
+ *
+ * **A chunk covers four times the ground at each level and holds the same
+ * slots**, so the terrain gets cheaper with distance and the planting does the
+ * opposite: the roots are chosen at the world's own lattice whatever is drawn,
+ * because a coarse chunk hashing its own cells would pick a different forest at
+ * every level and a tree would come and go as the player walked. Measured on
+ * the shipped world -- depth 13, 1 m blocks, 64 m chunks, two layers -- one
+ * chunk grows 35 plants in 760 ms at the finest level, 89 in 448 ms one level
+ * out, 379 in 935 ms at two, and 2,272 in 2,440 ms at three. At six, which the
+ * selection reaches, it is sixty-four times that again and the browser runs out
+ * of memory before it finishes.
+ *
+ * **Two levels, because the third has nothing to draw with.** A block is 1 m at
+ * the finest level and 2 m at the next, so a 22 m pine is 22 and 11 blocks
+ * tall; at 4 m it is five blocks and one wide, and at 8 m a forest comes out as
+ * bare poles at exactly the distance it should read as green. What that costs
+ * is a line at the edge of the second level where the trees stop.
+ */
+export const PLANT_LEVELS = 2;
+
+/** How many plants a chunk grew, and every cell they left in it. */
 export interface PlantedChunk {
 	readonly plants: number;
 	readonly wood: number;
 	readonly leaf: number;
+
+	/**
+	 * Every cell the plants wrote, as `slot * layerCount + layer`, ascending.
+	 *
+	 * **A plant is a block like any other, and everything that asks what is
+	 * somewhere has to get the same answer.** The blocks themselves never leave
+	 * the worker -- a chunk is half a megabyte of them and the thread that
+	 * draws has no use for the rest -- but collision, the ray walk and what a
+	 * player is standing in all ask on that thread, and they cannot read what
+	 * the seed says because the seed does not know about the trees. So the
+	 * cells the plants wrote come back, which is a small fraction of a chunk
+	 * and the only part of it that is not a function of the address alone.
+	 *
+	 * Ascending, because it is searched rather than iterated.
+	 */
+	readonly where: Uint32Array<ArrayBuffer>;
+
+	/** What stands in each of those cells. */
+	readonly what: Uint16Array<ArrayBuffer>;
 }
 
 /**
@@ -301,29 +342,47 @@ export function plantChunk(
 	// surface and a chunk counts layers downward from the crust top, so one
 	// subtraction turns the first into the second.
 	const layerCount = chunk.layerCount;
-	let written = 0;
+	const where: number[] = [];
+	const what: number[] = [];
 	for (let c = 0; c < count; c++) {
 		const slot = slotOf[c]!;
 		if (slot < 0) continue;
 		const base = slot * layerCount;
 		const surface = -groundLayer[c]!;
 		for (let s = 0; s < stand.layers; s++) {
-			const what = stand.blocks[c * stand.layers + s]!;
-			if (what === BlockType.AIR) continue;
+			const plant = stand.blocks[c * stand.layers + s]!;
+			if (plant === BlockType.AIR) continue;
 			// A stand's own zero is the block sitting on the ground, which is
 			// the layer above the surface layer.
 			const layer = surface - 1 - (s - stand.sunk);
 			if (layer < 0 || layer >= layerCount) continue;
 			if (chunk.blocks[base + layer] !== BlockType.AIR) continue;
-			chunk.blocks[base + layer] = what;
-			written++;
+			chunk.blocks[base + layer] = plant;
+			where.push(base + layer);
+			what.push(plant);
 			// The band is what the mesher walks, and a canopy stands over
 			// everything the ground pass found.
 			if (layer < chunk.band[slot * 2]!) chunk.band[slot * 2] = layer;
 		}
 	}
 
-	return written > 0
-		? { plants: stand.plants, wood: stand.wood, leaf: stand.leaf }
-		: { plants: stand.plants, wood: 0, leaf: 0 };
+	// **Sorted, because the reader searches rather than scans.** The columns
+	// are walked in the order the patch was laid out, which is the order the
+	// triangle was enumerated in and the ring grown in -- neither of which is
+	// the order a slot's rank runs in.
+	const order = where.map((_, at) => at);
+	order.sort((a, b) => where[a]! - where[b]!);
+	const at = new Uint32Array(order.length);
+	const held = new Uint16Array(order.length);
+	for (let n = 0; n < order.length; n++) {
+		at[n] = where[order[n]!]!;
+		held[n] = what[order[n]!]!;
+	}
+	return {
+		plants: stand.plants,
+		wood: stand.wood,
+		leaf: stand.leaf,
+		where: at,
+		what: held,
+	};
 }

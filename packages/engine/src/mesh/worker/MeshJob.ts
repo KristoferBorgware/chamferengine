@@ -141,4 +141,24 @@ export interface MeshResult {
 	readonly opaque: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
+
+	/**
+	 * Every cell this chunk's plants wrote, or absent where none did.
+	 *
+	 * **The one part of a chunk that is not a pure function of its address at
+	 * the asking end.** Terrain can be re-derived by anything that wants it,
+	 * which is why blocks never cross back; a plant is grown from a walk over
+	 * every root within reach of the chunk's rim, and the thread that draws
+	 * cannot afford to run that to answer where a player's foot is. So these
+	 * come with the mesh, and collision, the ray walk and what a player stands
+	 * in all read the same blocks that were drawn.
+	 */
+	readonly plants?: PlantCells;
+}
+
+/** One chunk's plant blocks, as the two arrays a structured clone carries. */
+export interface PlantCells {
+	/** `slot * layerCount + layer`, ascending. */
+	readonly where: Uint32Array<ArrayBuffer>;
+	readonly what: Uint16Array<ArrayBuffer>;
 }

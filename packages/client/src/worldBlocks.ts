@@ -1,5 +1,6 @@
 import type { BlockProbe } from "chamfer/player";
 import type { CellRef, DeltaStore } from "chamfer/edit";
+import type { PlantCellStore } from "./PlantCellStore.js";
 import type { TerrainGenerator } from "chamfer/generation";
 import type { WorldShape } from "chamfer/world";
 import { BlockType } from "chamfer/generation";
@@ -31,6 +32,13 @@ export interface WorldBlocks {
  * Collision, floating and whether the camera is under water are the same
  * question, so all three come through here.
  *
+ * **A plant is a block like any other**, and the seed does not know about the
+ * trees: one comes out of a walk over every root within reach of a chunk's
+ * rim, not out of the column being asked about. So the cells a chunk's plants
+ * wrote come back with its mesh, and are read here between the record of what
+ * a player changed and what the seed made -- a broken branch stays broken, and
+ * an unbroken one stops you.
+ *
  * **Everything is taken as a function, because everything here is replaced.**
  * The store is replaced when a saved world finishes loading; the generator and
  * the shape are replaced whenever a terrain knob rebuilds the world. A probe
@@ -42,6 +50,7 @@ export function worldBlocks(
 	terrain: () => TerrainGenerator,
 	shape: () => WorldShape,
 	edits: () => DeltaStore,
+	plants: () => PlantCellStore | null,
 ): WorldBlocks {
 	const blockAt = (cell: CellRef): BlockType => {
 		const world = shape();
@@ -51,6 +60,12 @@ export function worldBlocks(
 		if (cell.layer === world.crustDepth - 1) return BlockType.BEDROCK;
 		const changed = edits().read(cell);
 		if (changed !== undefined) return typeOf(changed) as BlockType;
+		// **Before the seed and after the record.** A plant stands in air the
+		// seed left empty, so it can only ever fill a cell the generator would
+		// call air -- and a record of somebody breaking it has already been
+		// read above.
+		const grown = plants()?.at(cell) ?? 0;
+		if (grown !== 0) return grown as BlockType;
 		const ground = terrain();
 		const column = ground.columnAt(cell.face, cell.i, cell.j);
 		return ground.blockAt(column, cell.layer);

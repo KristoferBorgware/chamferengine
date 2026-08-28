@@ -19,6 +19,7 @@ export { opacityOf } from "./opacityOf.js";
 export { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 export type {
 	MeshJob,
+	PlantCells,
 	MeshResult,
 	MeshRetune,
 	MeshWorkerMessage,

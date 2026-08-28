@@ -19,7 +19,7 @@ import { buildChunkMesh } from "../buildChunkMesh.js";
 import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
 import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
-import { plantChunk } from "../../generation/chunk/plantChunk.js";
+import { PLANT_LEVELS, plantChunk } from "../../generation/chunk/plantChunk.js";
 
 /**
  * The working half of a mesh worker, with no reference to `Worker`, `self` or
@@ -130,15 +130,21 @@ export class MeshWorkerCore {
 		// so a broken branch stays broken: a delta is the record of what
 		// somebody did to the world the seed makes, and the world the seed
 		// makes has trees in it.
-		if (this.plants.length > 0 && !this.grid)
-			plantChunk(
-				chunk,
-				this.generator(job.lod),
-				shape,
-				this.plants,
-				this.seed,
-				this.shape.subdivisionDepth,
-			);
+		// **Only the near levels grow plants at all**, and only the finest sends
+		// its cells back: a player reaches six blocks and stands in one chunk,
+		// so what has to answer a collision is under their feet, and a chunk
+		// drawn coarse is a long way off.
+		const grown =
+			this.plants.length > 0 && !this.grid && job.lod < PLANT_LEVELS
+				? plantChunk(
+						chunk,
+						this.generator(job.lod),
+						shape,
+						this.plants,
+						this.seed,
+						this.shape.subdivisionDepth,
+					)
+				: null;
 		// What lands in the triangle is written into the chunk; what lands on
 		// the ring past its rim comes back and goes to the sampler, which is
 		// the only thing that ever reads those cells.
@@ -197,6 +203,9 @@ export class MeshWorkerCore {
 			opaque: mesh.opaque,
 			translucent: mesh.translucent,
 			tally: mesh.tally,
+			...(grown && job.lod === 0
+				? { plants: { where: grown.where, what: grown.what } }
+				: {}),
 		};
 	}
 
