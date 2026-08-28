@@ -66,10 +66,26 @@ three. At the sixth, which the selection reaches, the browser runs out of
 memory before a chunk finishes. `PLANT_LEVELS = 2` caps it, and the forest
 therefore ends at the boundary between the second and third level of detail.
 
+**Where that boundary is.** A chunk splits while it is nearer than `detail`
+times its own width, so a chunk drawn one level coarse than finest sits between
+`detail x 2w` and `detail x 4w` of the eye. On the shipped world -- 64 m
+chunks, `detail` 1.5 -- the forest ends at **384 m**. It is a distance from the
+camera, so it travels with the player and trees appear out of nothing as they
+walk toward them.
+
 **Why it matters.** It is a tree line drawn by the renderer rather than by the
-world -- a ring of bare ground at a fixed distance from the player that moves
-with them. Nothing else in the engine has an edge at a level boundary: the
-apron exists precisely so a level change is invisible.
+world, and it is an edge rather than a fade. Nothing else in the engine has one
+at a level boundary: the apron exists precisely so a level change is invisible.
+Two frames of one vantage attribute it -- `?seed=chamfer` from 734 m up draws a
+forest in the near band and bare hillside past it, and `&chunkCells=32`, a knob
+that **moves no block**, halves the line to 192 m and leaves the same terrain
+with **no tree anywhere in view**.
+
+**What saves it on the ground.** A walking player rarely sees it. The horizon
+at 1.7 m eye on this 6,801 m planet is `sqrt(2Rh)` = **152 m**, well inside the
+line, so on level ground the bare band is over the edge of the world. What
+shows is anything standing above the horizon further off -- a hillside or a
+range, which is exactly where a forest is read at a glance.
 
 **What would fix it.** Two candidates, and nobody has measured either. A coarse
 chunk could grow **fewer** plants rather than all of them -- taking one root in
