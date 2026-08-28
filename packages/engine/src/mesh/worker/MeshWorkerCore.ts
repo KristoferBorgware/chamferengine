@@ -17,7 +17,9 @@ import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
 import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
+import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
+import { plantChunk } from "../../generation/chunk/plantChunk.js";
 
 /**
  * The working half of a mesh worker, with no reference to `Worker`, `self` or
@@ -54,6 +56,14 @@ export class MeshWorkerCore {
 	 */
 	private readonly byLod = new Map<number, TerrainGenerator>();
 
+	/**
+	 * Every kind of plant this world grows.
+	 *
+	 * Held for the worker's life beside the map, because a forest is part of
+	 * the world's definition rather than of any one chunk.
+	 */
+	private readonly plants: readonly PlantLayer[];
+
 	/** The grid switches, and the one flat column every grid cell reads. */
 	private readonly grid: GridParts | null;
 	private readonly flat: Column | null;
@@ -73,6 +83,7 @@ export class MeshWorkerCore {
 		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.skyExposure = setup.skyExposure ?? true;
 		this.options = setup.terrain;
+		this.plants = setup.plants ?? [];
 		this.grid = setup.grid ?? null;
 		// Two solid layers, so the top cap is the only face a cell has: the
 		// layer under the surface is solid too, and a bottom face is only
@@ -115,6 +126,19 @@ export class MeshWorkerCore {
 						job.chunkLevel,
 						shape.crustDepth,
 					);
+		// **The plants are grown before anything a player changed is applied**,
+		// so a broken branch stays broken: a delta is the record of what
+		// somebody did to the world the seed makes, and the world the seed
+		// makes has trees in it.
+		if (this.plants.length > 0 && !this.grid)
+			plantChunk(
+				chunk,
+				this.generator(job.lod),
+				shape,
+				this.plants,
+				this.seed,
+				this.shape.subdivisionDepth,
+			);
 		// What lands in the triangle is written into the chunk; what lands on
 		// the ring past its rim comes back and goes to the sampler, which is
 		// the only thing that ever reads those cells.

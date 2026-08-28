@@ -386,6 +386,16 @@ export interface PlanetKnobs {
 	plants: string;
 
 	/**
+	 * Whether the world grows the plants its own link describes.
+	 *
+	 * **A plant is blocks**, so growing them is a chunk's own work: it adds a
+	 * pass over every chunk roughly as long as the one that makes its ground,
+	 * and it is off the drawing thread the way the ground already is. Off is
+	 * the bare planet, and every layer stays in the link.
+	 */
+	vegetation: boolean;
+
+	/**
 	 * Whether to draw a ball where each of the bench's lights shines from.
 	 *
 	 * **They are directions, not places**, so the balls stand on a dome around
@@ -1159,6 +1169,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLod: 0,
 	leavesCollide: true,
 	plants: PLANT_LAYERS_DEFAULT,
+	vegetation: true,
 	patchOcclusion: 1,
 	patchSpeckle: 0.35,
 	keyShadow: true,
@@ -1664,6 +1675,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	patchLod: { low: 0, high: 5, step: 1, rebuilds: false, unit: "levels" },
 	leavesCollide: { ...TOGGLE, rebuilds: false },
 	plants: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	vegetation: { ...TOGGLE, rebuilds: true },
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },

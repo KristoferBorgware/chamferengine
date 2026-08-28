@@ -90,6 +90,18 @@ export interface StandOptions {
 	/** How many cells across the patch is cut into chunks. */
 	readonly chunkCells: number;
 
+	/**
+	 * Per column, whether this build may write it, or nothing for all of them.
+	 *
+	 * **A chunk in the world is already one chunk**, so it is handed the cells
+	 * it owns rather than a cut to make: the patch it is given is its own
+	 * triangle plus the ring a plant can reach in from, every root on it is
+	 * grown, and what falls outside is the neighbour's to grow for itself. The
+	 * bench cuts a patch up instead, which is the same rule run several times
+	 * over so the answers can be compared.
+	 */
+	readonly owned?: Uint8Array | null;
+
 	/** How far past its own rim a chunk grows plants, in metres. */
 	readonly chunkReach: number;
 
@@ -759,6 +771,75 @@ export function growStand(
 		(under[c] ??= []).push(r);
 	}
 
+	/** What was grown, counted off the blocks once the writing has stopped. */
+	const report = (chunks = 1): Stand => {
+		let woodCells = 0;
+		let leafCells = 0;
+		for (let at = 0; at < blocks.length; at++) {
+			const what = blocks[at]!;
+			if (what === BlockType.AIR) continue;
+			if (RANK[what] === WOOD_RANK) woodCells++;
+			else leafCells++;
+		}
+		return {
+			layers: slots,
+			sunk: STAND_SUNK,
+			blocks,
+			grown,
+			plants,
+			refused,
+			wood: woodCells,
+			leaf: leafCells,
+			tallest,
+			shortest: shortest === Infinity ? 0 : shortest,
+			widest,
+			chunks,
+			rootsTested,
+			rootsOwned,
+		};
+	};
+
+	/** Grow every root standing on one run of columns, into whatever it owns. */
+	const raiseOver = (over: Int32Array, used: number, round: number): void => {
+		holder = round;
+		for (let q = 0; q < used; q++) {
+			const c = over[q]!;
+			const here = under[c];
+			if (here === undefined) continue;
+			const owned = holds === null || holds[c] === round;
+			if (owned) rootsOwned += here.length;
+			rootsTested += here.length;
+			for (const r of here) {
+				const answer = plantAt(r);
+				if (answer === -1) continue;
+				if (answer === -2) {
+					if (owned) refused++;
+					continue;
+				}
+				raise(r, answer);
+				if (owned) {
+					grown[answer]!++;
+					plants++;
+				}
+			}
+		}
+	};
+
+	// **A chunk that knows what it owns is grown in one pass.** Everything it
+	// was handed is offered a plant and only its own cells are written, which
+	// is the whole rule -- the cut below is that rule applied several times to
+	// one patch so the answers can be compared.
+	if (options.owned) {
+		const mine = new Int32Array(count);
+		for (let c = 0; c < count; c++) mine[c] = options.owned[c] ? 1 : 0;
+		holds = mine;
+		const every = new Int32Array(count);
+		for (let c = 0; c < count; c++) every[c] = c;
+		raiseOver(every, count, 1);
+		holds = null;
+		return report();
+	}
+
 	// **Cut into chunks, and every chunk generates alone.** A chunk is the
 	// triangle a cell's scaled barycentric weights floor into -- one level of
 	// the same hierarchy the coarse lookup descends -- so this is the engine's
@@ -816,54 +897,9 @@ export function growStand(
 			read = stop;
 		}
 		holds = mine;
-		holder = round;
-		for (let q = 0; q < used; q++) {
-			const c = reach[q]!;
-			const here = under[c];
-			if (here === undefined) continue;
-			const owned = mine[c] === round;
-			if (owned) rootsOwned += here.length;
-			rootsTested += here.length;
-			for (const r of here) {
-				const answer = plantAt(r);
-				if (answer === -1) continue;
-				if (answer === -2) {
-					if (owned) refused++;
-					continue;
-				}
-				raise(r, answer);
-				if (owned) {
-					grown[answer]!++;
-					plants++;
-				}
-			}
-		}
+		raiseOver(reach, used, round);
 	}
 	holds = null;
 
-	let woodCells = 0;
-	let leafCells = 0;
-	for (let at = 0; at < blocks.length; at++) {
-		const what = blocks[at]!;
-		if (what === BlockType.AIR) continue;
-		if (RANK[what] === WOOD_RANK) woodCells++;
-		else leafCells++;
-	}
-
-	return {
-		layers: slots,
-		sunk: STAND_SUNK,
-		blocks,
-		grown,
-		plants,
-		refused,
-		wood: woodCells,
-		leaf: leafCells,
-		tallest,
-		shortest: shortest === Infinity ? 0 : shortest,
-		widest,
-		chunks: held.size,
-		rootsTested,
-		rootsOwned,
-	};
+	return report(held.size);
 }

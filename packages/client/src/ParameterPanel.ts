@@ -831,6 +831,26 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **What grows on the world, which is not what shapes it.** The kinds
+		// of plant are chosen on the vegetation bench and travel in the link;
+		// this is the one row about them the world itself has, and it is
+		// whether they are grown at all.
+		title: "Vegetation",
+		where: "world",
+		folded: true,
+		tab: "terrain",
+		knobs: [
+			{
+				key: "vegetation",
+				label: "Grow the plants",
+				says:
+					"a plant is blocks, so a chunk grows its own -- which adds " +
+					"a pass about as long as the one that makes its ground. " +
+					"Which plants, and where, is the vegetation bench.",
+			},
+		],
+	},
+	{
 		title: "Paused",
 		folded: true,
 		knobs: [

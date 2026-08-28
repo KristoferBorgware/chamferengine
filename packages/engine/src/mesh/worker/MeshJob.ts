@@ -3,6 +3,7 @@ import type { Box } from "../../math/Box.js";
 import type { Geometry } from "../Geometry.js";
 import type { GridParts } from "../GridPaint.js";
 import type { MeshTally } from "../meshChunk.js";
+import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
 import type { TerrainOptions } from "../../generation/terrain/TerrainOptions.js";
 
 /**
@@ -42,6 +43,17 @@ export interface MeshWorkerSetup {
 	readonly grid?: GridParts | undefined;
 
 	readonly terrain: TerrainOptions;
+
+	/**
+	 * Every kind of plant this world grows, or none.
+	 *
+	 * **Vegetation is terrain**, so it is grown here with the ground: a chunk
+	 * gets an address and the seed and writes plants into the same blocks, and
+	 * nothing downstream -- the mesher, the ray walk, the player's collision --
+	 * knows they are anything but blocks. An empty list is a world with no
+	 * plants and costs one comparison.
+	 */
+	readonly plants?: readonly PlantLayer[];
 }
 
 /**

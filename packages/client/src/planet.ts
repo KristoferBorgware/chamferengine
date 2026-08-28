@@ -75,6 +75,7 @@ import {
 } from "chamfer/sky";
 import { MapPreview } from "./MapPreview.js";
 import { ParameterPanel } from "./ParameterPanel.js";
+import { plantLayerOf } from "./PlantDraft.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
@@ -863,6 +864,13 @@ async function main(): Promise<void> {
 					}
 				: undefined,
 			terrain: live.terrainOptions(),
+			// **The world's own forest, out of the world's own link.** Which
+			// kinds of plant it grows is part of the definition a link
+			// carries, the same way its relief is -- the vegetation bench is
+			// where that is chosen and this is where it is grown.
+			plants: live.knobs.vegetation
+				? live.plantLayers.map(plantLayerOf)
+				: [],
 		};
 	}
 
