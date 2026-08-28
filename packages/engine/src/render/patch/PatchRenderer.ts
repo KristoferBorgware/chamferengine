@@ -256,6 +256,34 @@ export class PatchRenderer {
 	private lineCount = 0;
 	private groundVertices = 0;
 	private bounds: ShadowBox = { low: [-1, -1, -1], high: [1, 1, 1] };
+
+	/**
+	 * What the depth maps standing in the textures were recorded from.
+	 *
+	 * **A shadow map is not a picture of the camera**, so orbiting one does not
+	 * change a texel of it: the two lights are constants, the far cascade is
+	 * the mesh's own box, and the near one is sized off how far back the eye
+	 * stands rather than which way it stands. Everything the record reads is
+	 * in this key, and a frame whose key matches the one already recorded
+	 * binds those textures again instead of drawing the mesh into them.
+	 *
+	 * **The saving is the whole geometry, four times over.** Two lights with
+	 * two cascades each redraw every triangle the picture draws --
+	 * `tools/trial-cave-load.ts`: at the cave bench's 50 m reach that is
+	 * 206,724 triangles for the picture and **1,033,620** through the pipe,
+	 * and at 160 m it is 653,442 against **3,267,210**. A voxel volume is
+	 * every wall, floor and roof of every passage, where the landscape bench's
+	 * patch is a surface -- which is why the cost shows here first.
+	 */
+	private shadowKey = "";
+
+	/**
+	 * How many times a mesh has been uploaded, which is what says it moved.
+	 *
+	 * A count rather than a comparison: the vertices are handed over and
+	 * dropped, so there is nothing left to compare a new upload against.
+	 */
+	private uploads = 0;
 	private waterVertices = 0;
 	private depth: GPUTexture | null = null;
 
@@ -420,6 +448,7 @@ export class PatchRenderer {
 	/** Put a freshly built patch on the GPU, dropping whatever was there. */
 	upload(patch: PatchUpload): void {
 		const { device } = this.ctx;
+		this.uploads++;
 		this.vertices?.destroy();
 		this.vertices = null;
 		this.triangleCount = patch.triangleCount;
@@ -528,6 +557,9 @@ export class PatchRenderer {
 					// The ground's own material, so a lamp never indexes the
 					// plant palette.
 					0,
+					// No crust over a lamp: it is its own surface, so the depth
+					// fade leaves it alone.
+					0,
 				);
 			}
 		};
@@ -635,6 +667,20 @@ export class PatchRenderer {
 			},
 			this.bounds,
 		];
+		// **Recorded when something the record reads has moved, and not once a
+		// frame.** The maps hold the same depths on a camera that only orbits,
+		// and redrawing the mesh four times to arrive at them again is the
+		// largest thing a frame does on a patch made of blocks.
+		const wanted = [
+			this.uploads,
+			look.keyShadow ? 1 : 0,
+			look.fillShadow ? 1 : 0,
+			near.toFixed(3),
+			...this.bounds.low,
+			...this.bounds.high,
+		].join("/");
+		const record = wanted !== this.shadowKey;
+		this.shadowKey = wanted;
 		for (const [light, direction, on] of casting) {
 			for (let cascade = 0; cascade < CASCADES; cascade++) {
 				const slot = light * CASCADES + cascade;
@@ -643,6 +689,12 @@ export class PatchRenderer {
 				// shadow rather than as everything in shadow.
 				if (!on || !this.vertices || this.groundVertices === 0)
 					continue;
+				// **The matrices stay put with the maps they belong to.** They
+				// are fitted inside `record` and read after this loop, and
+				// every input to that fit is in the key -- so a frame that
+				// records nothing shades against the transform it recorded
+				// with.
+				if (!record) continue;
 				this.shadow.record(
 					encoder,
 					slot,
