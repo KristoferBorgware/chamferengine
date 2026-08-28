@@ -49,8 +49,8 @@ const PATCH_SAMPLES = 385;
  * per layer and its whole job is to say where a field's shapes are and how wide
  * they are, which a quarter of the samples answers as well.
  */
-const SHOT_WIDE = 256;
-const SHOT_PATCH = 224;
+const SHOT_WIDE = 512;
+const SHOT_PATCH = 320;
 
 /** How many bins the histogram behind a curve is cut into. */
 const TALLY_BINS = 48;
@@ -98,6 +98,28 @@ export class VegetationWorkerCore {
 
 	/** Which world the last sent planet sheet was of, so an unmoved one is not resent. */
 	private planetKey = "";
+
+	/**
+	 * The layer pictures, held between builds.
+	 *
+	 * **A layer's field answers to its own noise rows and to nothing else**, so
+	 * dragging a trunk radius, adding a second species or moving a curve
+	 * re-reads a field that has not changed -- a hundred thousand samples per
+	 * layer for the same numbers. Keyed by the rectangle being drawn and by the
+	 * rows the field is made of.
+	 *
+	 * These are copied into the reply rather than moved, which is what lets
+	 * them be kept: a transferred buffer is gone from here.
+	 */
+	private shotKey = "";
+	private shotDirs = new Float64Array(0);
+	private shotMetres: Float32Array<ArrayBuffer> = new Float32Array(0);
+	private shotWide = 0;
+	private shotTall = 0;
+	private readonly shotOf = new Map<
+		number,
+		{ readonly key: string; readonly noise: Float32Array<ArrayBuffer> }
+	>();
 
 	*steps(
 		request: VegetationRequest,
@@ -451,39 +473,80 @@ export class VegetationWorkerCore {
 
 		// The directions every picture is read at, taken once and shared: the
 		// ground under them is the same ground whichever layer is asking.
-		const dirs = new Float64Array(count * 3);
-		const metres = new Float32Array(count);
-		const blend = makeBlend();
-		for (let r = 0; r < tall; r++)
-			for (let q = 0; q < wide; q++) {
-				const at = r * wide + q;
-				let dir: Vec3;
-				if (planet) {
-					const latitude = (0.5 - (r + 0.5) / tall) * 180;
-					const longitude = ((q + 0.5) / wide) * 360 - 180;
-					dir = positionOf({ latitude, longitude, altitude: 0 }, 1);
-				} else {
-					// North is up on a picture, and the patch is read from its
-					// south edge outward.
-					const east = ((q + 0.5) / wide - 0.5) * span;
-					const north = (0.5 - (r + 0.5) / tall) * span;
-					dir = frame.up
-						.scale(radius)
-						.add(frame.east.scale(east))
-						.add(frame.north.scale(north))
-						.normalize();
+		const where = JSON.stringify([
+			planet,
+			wide,
+			settings.knobs.patchLatitude,
+			settings.knobs.patchLongitude,
+			Math.round(span),
+			radius,
+			this.world.ms,
+		]);
+		if (where !== this.shotKey) {
+			this.shotKey = where;
+			this.shotOf.clear();
+			this.shotWide = wide;
+			this.shotTall = tall;
+			this.shotDirs = new Float64Array(count * 3);
+			this.shotMetres = new Float32Array(count);
+			const blend = makeBlend();
+			for (let r = 0; r < tall; r++)
+				for (let q = 0; q < wide; q++) {
+					const at = r * wide + q;
+					let dir: Vec3;
+					if (planet) {
+						const latitude = (0.5 - (r + 0.5) / tall) * 180;
+						const longitude = ((q + 0.5) / wide) * 360 - 180;
+						dir = positionOf(
+							{ latitude, longitude, altitude: 0 },
+							1,
+						);
+					} else {
+						// North is up on a picture, and the patch is read from
+						// its south edge outward.
+						const east = ((q + 0.5) / wide - 0.5) * span;
+						const north = (0.5 - (r + 0.5) / tall) * span;
+						dir = frame.up
+							.scale(radius)
+							.add(frame.east.scale(east))
+							.add(frame.north.scale(north))
+							.normalize();
+					}
+					this.shotDirs[at * 3] = dir.x;
+					this.shotDirs[at * 3 + 1] = dir.y;
+					this.shotDirs[at * 3 + 2] = dir.z;
+					grid.blendInto(dir, blend);
+					this.shotMetres[at] = readBlend(this.world.height, blend);
 				}
-				dirs[at * 3] = dir.x;
-				dirs[at * 3 + 1] = dir.y;
-				dirs[at * 3 + 2] = dir.z;
-				grid.blendInto(dir, blend);
-				metres[at] = readBlend(this.world.height, blend);
-			}
+		}
 
 		const sheets = live.map((layer) => {
+			const key = JSON.stringify([
+				where,
+				seed,
+				layer.id,
+				layer.feature,
+				layer.featureScale,
+				layer.octaves,
+				layer.persistence,
+				layer.lacunarity,
+				layer.fold,
+			]);
+			const held = this.shotOf.get(layer.id);
+			if (held?.key === key)
+				return {
+					id: layer.id,
+					width: wide,
+					height: tall,
+					noise: held.noise,
+				};
 			const settingsOf = plantLayerNoise(layer, radius);
 			const salt = (seed + plantSalt(layer.id)) | 0;
-			const noise = new Float32Array(count);
+			const noise = new Float32Array(count) as Float32Array<ArrayBuffer>;
+			// The directions are the ones the rectangle was laid out with,
+			// whether that happened this build or an earlier one: what has
+			// changed is the field read at them.
+			const dirs = this.shotDirs;
 			for (let at = 0; at < count; at++)
 				noise[at] = octaveNoise(
 					dirs[at * 3]!,
@@ -492,20 +555,16 @@ export class VegetationWorkerCore {
 					salt,
 					settingsOf,
 				);
-			return {
-				id: layer.id,
-				width: wide,
-				height: tall,
-				noise: noise as Float32Array<ArrayBuffer>,
-			};
+			this.shotOf.set(layer.id, { key, noise });
+			return { id: layer.id, width: wide, height: tall, noise };
 		});
 		return {
 			sheets,
 			shot: {
 				id: 0,
-				width: wide,
-				height: tall,
-				noise: metres as Float32Array<ArrayBuffer>,
+				width: this.shotWide,
+				height: this.shotTall,
+				noise: this.shotMetres,
 			},
 		};
 	}
@@ -580,8 +639,9 @@ export class VegetationWorkerCore {
 					sheet.peaks.buffer,
 					sheet.carve.buffer,
 				);
-		for (const sheet of reply.sheets) out.push(sheet.noise.buffer);
-		out.push(reply.shot.noise.buffer);
+		// **The layer pictures are copied rather than moved.** They are held
+		// between builds so a field nobody changed is not read again, and a
+		// transferred buffer is gone from the side that sent it.
 		for (const tally of reply.tallies) out.push(tally.counts.buffer);
 		if (reply.geometry) {
 			out.push(reply.geometry.vertices.buffer);

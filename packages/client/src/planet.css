@@ -943,7 +943,7 @@ body.bench .knobs-head {
 	background: rgba(18, 22, 29, 0.94);
 	backdrop-filter: blur(6px);
 	border-left: 1px solid var(--edge);
-	z-index: 3;
+	z-index: 20;
 }
 
 /* The head is fixed and only the cards scroll: reaching for a knob must not
@@ -1244,7 +1244,7 @@ body.bench .knobs-head {
 .plants-pick {
 	position: fixed;
 	inset: 0;
-	z-index: 11;
+	z-index: 31;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1311,10 +1311,12 @@ body.bench .knobs-head {
 
 /* The enlarged picture. A field at panel width says where its shapes are; at
    this size it says what they look like. */
+/* Over both panels: an overlay half the window can be read through is an
+   overlay that has not opened. */
 .plants-big {
 	position: fixed;
 	inset: 0;
-	z-index: 10;
+	z-index: 30;
 	display: flex;
 	align-items: center;
 	justify-content: center;

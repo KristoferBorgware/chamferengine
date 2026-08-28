@@ -3,6 +3,7 @@ import type { PlantRow, PlantSection } from "./PLANT_ROWS.js";
 import type { PlantPicture } from "./paintPlantSheet.js";
 import type { PlantSheet, PlantTally } from "./VegetationMessage.js";
 import { PLANT_SECTIONS } from "./PLANT_ROWS.js";
+import { PLANT_COLORS } from "chamfer/render";
 import {
 	PLANT_SPECIES,
 	PLANT_SPECIES_NAMES,
@@ -10,6 +11,16 @@ import {
 } from "chamfer/generation";
 import { applySpecies, makePlantLayer } from "./PlantDraft.js";
 import { paintPlantSheet } from "./paintPlantSheet.js";
+
+/**
+ * How many layers one patch may hold.
+ *
+ * A face carries an index into the palette of woods and leaves the draw was
+ * given, and that palette is a fixed-size uniform: two entries a layer, so half
+ * of it. More kinds of plant than this on one patch is more than a reader tunes
+ * at once anyway.
+ */
+const MOST_LAYERS = PLANT_COLORS / 2;
 
 /** A linear colour as the hex a stylesheet takes, through the screen's curve. */
 function inkOf(color: readonly [number, number, number]): string {
@@ -62,11 +73,21 @@ export class PlantPanel {
 	private readonly counts = new Map<number, HTMLElement>();
 	private built: Built[] = [];
 	private readonly onChange: (settled: boolean) => void;
+
+	/**
+	 * Which picture every layer draws changed, which is not a build.
+	 *
+	 * The reading is already here and the curve is read over it on this
+	 * thread, so choosing between them is a repaint -- but it is part of what a
+	 * link carries, and the page that owns the link is the one that writes it.
+	 */
+	private readonly onPicture: () => void;
 	private readonly picker: HTMLElement;
 	private readonly big: HTMLElement;
 	private readonly bigCanvas: HTMLCanvasElement;
 	private readonly bigName: HTMLElement;
 	private bigShown = 0;
+	private readonly add: HTMLButtonElement;
 	private drawn: Drawn | null = null;
 	private nextId = 1;
 
@@ -86,10 +107,12 @@ export class PlantPanel {
 		options: {
 			readonly picture?: PlantPicture;
 			readonly extras?: HTMLElement;
+			readonly onPicture?: () => void;
 		} = {},
 	) {
 		this.layers = layers;
 		this.onChange = onChange;
+		this.onPicture = options.onPicture ?? (() => {});
 		this.picture = options.picture ?? "noise";
 		for (const layer of layers)
 			this.nextId = Math.max(this.nextId, layer.id + 1);
@@ -116,14 +139,13 @@ export class PlantPanel {
 		this.host = document.createElement("div");
 		scroller.append(this.host);
 
-		const add = document.createElement("button");
-		add.type = "button";
-		add.className = "plants-add";
-		add.textContent = "+ Vegetation";
-		add.onclick = () => {
+		this.add = document.createElement("button");
+		this.add.type = "button";
+		this.add.className = "plants-add";
+		this.add.onclick = () => {
 			this.picker.hidden = false;
 		};
-		scroller.append(add);
+		scroller.append(this.add);
 		document.body.append(this.root);
 
 		this.picker = this.buildPicker();
@@ -167,6 +189,7 @@ export class PlantPanel {
 			this.picture = select.value as PlantPicture;
 			say();
 			this.paint();
+			this.onPicture();
 		};
 		say();
 		wrap.append(label, select, note);
@@ -647,8 +670,20 @@ export class PlantPanel {
 		if (this.bigShown === 0 || this.big.hidden) return;
 		const layer = this.layers.find((one) => one.id === this.bigShown);
 		const sheet = drawn.sheets.find((one) => one.id === this.bigShown);
-		if (layer && sheet)
-			this.drawShot(this.bigCanvas, sheet, layer, drawn.metres);
+		if (!layer || !sheet) return;
+		this.drawShot(this.bigCanvas, sheet, layer, drawn.metres);
+		// **The point of enlarging is to leave the panel**, and a canvas takes
+		// its own sample count as its width unless something says otherwise --
+		// which draws a 256-pixel picture in the middle of the window. Sized
+		// here rather than in the stylesheet, because the two sheets have
+		// different shapes: the planet is twice as wide as it is tall and the
+		// patch is square, so what fits is a question about this sheet.
+		const across = Math.min(
+			window.innerWidth * 0.94,
+			((window.innerHeight * 0.86) / sheet.height) * sheet.width,
+		);
+		this.bigCanvas.style.width = `${Math.round(across)}px`;
+		this.bigCanvas.style.height = "auto";
 	}
 
 	private drawShot(
@@ -728,5 +763,15 @@ export class PlantPanel {
 			const layer = this.layers.find((one) => one.id === id);
 			if (layer) card.classList.toggle("off", !layer.on);
 		}
+		// **A face carries an index into a palette of a fixed size**, so there
+		// is a number of layers past which a plant would be drawn in a color
+		// nobody chose. The button says how many are left rather than refusing
+		// a click that looks as though it should work.
+		const room = MOST_LAYERS - this.layers.length;
+		this.add.disabled = room <= 0;
+		this.add.textContent =
+			room > 0
+				? "+ Vegetation"
+				: `${MOST_LAYERS} kinds of plant is all one patch holds`;
 	}
 }

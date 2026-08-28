@@ -1558,15 +1558,19 @@ export class ParameterPanel {
 		// **The way to the bench, carrying this world with it.** Choosing
 		// terrain numbers is looking at ground, and the bench is a page where
 		// the ground is the whole window rather than a picture over one.
-		if (!this.bench) {
-			const bench = document.createElement("a");
-			bench.textContent = "Landscape bench";
-			bench.href = "./landscape.html";
-			bench.onclick = () => {
-				bench.href = `./landscape.html?${this.settings.toParams().toString()}`;
-			};
-			bar.appendChild(bench);
-		}
+		if (!this.bench)
+			for (const [label, page] of [
+				["Landscape bench", "landscape"],
+				["Vegetation bench", "vegetation"],
+			] as const) {
+				const link = document.createElement("a");
+				link.textContent = label;
+				link.href = `./${page}.html`;
+				link.onclick = () => {
+					link.href = `./${page}.html?${this.settings.toParams().toString()}`;
+				};
+				bar.appendChild(link);
+			}
 		// **On the bench the two buttons belong with the seed.** Nothing there
 		// waits for a Rebuild, so the bar is not a footer to a page of pending
 		// changes; it is a world's name and the two things done with a world,

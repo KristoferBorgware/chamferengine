@@ -177,6 +177,7 @@ const plants = new PlantPanel(layers, (settled) => changed(settled), {
 	picture: (new URLSearchParams(location.search).get("layerPicture") ??
 		"noise") as PlantPicture,
 	extras: collide,
+	onPicture: () => writeUrl(),
 });
 
 // ---------------------------------------------------------------------------
