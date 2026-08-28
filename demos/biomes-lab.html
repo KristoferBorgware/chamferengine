@@ -432,7 +432,7 @@
 			}
 			.sheet {
 				display: grid;
-				grid-template-columns: 16px repeat(5, 1fr);
+				grid-template-columns: 16px repeat(var(--columns, 3), 1fr);
 				gap: 2px;
 				margin: 4px 0 0;
 			}
@@ -1573,6 +1573,20 @@
 						TERRAIN[which].octaves,
 						TERRAIN[which].fold,
 					);
+				// **The landform reads its own copy of the relief, and reads it
+				// coarse.** The terrain's own stack runs to a 75 m octave
+				// because its job is to carve one gully; asking it what kind of
+				// place this is at that size asks a per-gully question and gets
+				// a per-gully answer. Measured, the peaks-and-valleys bucket
+				// flipped between neighbouring cells on **30.9%** of pairs
+				// against continentalness's **0%**. Same field, same curve, same
+				// seed -- fewer octaves.
+				out.formPv = stackOf(
+					k.radius,
+					TERRAIN.pv.metres * TERRAIN.pv.scale,
+					k.formDetail,
+					TERRAIN.pv.fold,
+				);
 				out.temp = stackOf(k.radius, k.tempFeature, k.tempOctaves, 0);
 				out.hum = stackOf(k.radius, k.humFeature, k.humOctaves, 0);
 				out.warp = stackOf(k.radius, k.warpFeature, k.warpOctaves, 0);
@@ -1591,6 +1605,21 @@
 				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.cont, s.cont);
 				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.ero, s.ero);
 				out[2] = octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.pv);
+			}
+
+			/**
+			 * What the landform reads for relief, which is not what the ground
+			 * reads.
+			 *
+			 * The two answers differ only in how much fine detail is in them,
+			 * so a place high on the coarse reading is high on the fine one
+			 * too -- a peak is still on a peak.
+			 */
+			function formSwingAt(x, y, z, seed, s) {
+				return splineAt(
+					TERRAIN.pv.spline,
+					octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.formPv),
+				);
 			}
 
 			/** How much erosion takes away here: `0` leaves the ground alone. */
@@ -1765,12 +1794,15 @@
 			 * **0.46 to 0.89** between its 2nd and 98th percentiles, erosion
 			 * **0.04 to 0.95**, and peaks and valleys **0.24 to 0.91**.
 			 */
-			const CONT_EDGES = [0.62, 0.78];
-			const ERO_EDGES = [0.13, 0.35, 0.56, 0.82];
-			const PV_EDGES = [0.36, 0.46, 0.58, 0.71];
-			const CONT_NAMES = ["near the sea", "inland", "far inland"];
-			const ERO_NAMES = ["sharp", "", "", "", "worn"];
-			const PV_NAMES = ["valley", "", "", "", "peak"];
+			const CONT_EDGES = [0.69];
+			const ERO_EDGES = [0.3, 0.68];
+			const PV_EDGES = [0.38, 0.76];
+			const CONT_NAMES = ["near the sea", "inland"];
+			const ERO_NAMES = ["sharp", "middling", "worn"];
+			const PV_NAMES = ["valley", "middling", "peak"];
+			const CONT_BANDS = CONT_EDGES.length + 1;
+			const ERO_BANDS = ERO_EDGES.length + 1;
+			const PV_BANDS = PV_EDGES.length + 1;
 
 			/** Which bucket a value falls in, given the edges between them. */
 			function bucket(v, edges) {
@@ -1782,27 +1814,30 @@
 			/**
 			 * The grid: a landform for every combination of the three indices.
 			 *
-			 * Three sheets, one per continentalness band; five erosion rows,
-			 * sharp at the top; five peaks-and-valleys columns, valley on the
+			 * Two sheets, one per continentalness band; three erosion rows,
+			 * sharp at the top; three peaks-and-valleys columns, valley on the
 			 * left. **Sharp and high is a peak, worn and high is a plateau**,
-			 * and low relief is a valley wherever it is -- which is the whole
+			 * and low relief is low ground wherever it is -- which is the whole
 			 * of the rule, written where it can be read and changed rather than
 			 * buried in a condition.
+			 *
+			 * **Every edge between two bands is a place the landform flips**, so
+			 * the count of bands is the count of chances to flip. Cut from five
+			 * rows and five columns to three and three, the twelve internal
+			 * edges become four.
 			 */
 			const DEFAULT_GRID = [
-				// near the sea: no room for a mountain range
-				"11233" + "12233" + "12223" + "12222" + "12222",
+				// near the sea: low ground, and no room for a range
+				"133" + "223" + "222",
 				// inland
-				"13355" + "12355" + "12334" + "12224" + "12222",
-				// far inland
-				"13555" + "13355" + "12344" + "12244" + "12224",
+				"135" + "124" + "224",
 			].join("");
 
 			let grid = DEFAULT_GRID.split("").map(Number);
 
 			/** Where one sheet's cell sits in the flat grid. */
 			function gridAt(c, e, p) {
-				return (c * 5 + e) * 5 + p;
+				return (c * ERO_BANDS + e) * PV_BANDS + p;
 			}
 
 			/**
@@ -1848,44 +1883,39 @@
 			 */
 			const PRESETS = {
 				plain: [
-					{ name: "Icy shore", hex: "d8e4ec", t: 0.12, h: 0.5, landform: "shore" },
-					{ name: "Stony shore", hex: "8e9298", t: 0.4, h: 0.3, landform: "shore" },
-					{ name: "Beach", hex: "e6d9a8", t: 0.7, h: 0.45, landform: "shore" },
-					{ name: "Mangrove", hex: "4e6b3f", t: 0.9, h: 0.9, landform: "shore" },
+					// **Each landform's dots sit inside that ground's own
+					// measured climate**, not spread evenly over a square most
+					// of it never reaches. Peaks run 0.00 to 0.49 in
+					// temperature because the ground cools as it rises, so a
+					// hot peak is not a rare biome, it is no biome at all; a
+					// dot placed out there would never be built and the two
+					// that were left would split the cloud between them.
+					{ name: "Icy shore", hex: "d8e4ec", t: 0.3, h: 0.6, landform: "shore" },
+					{ name: "Stony shore", hex: "8e9298", t: 0.62, h: 0.45, landform: "shore" },
+					{ name: "Beach", hex: "e6d9a8", t: 0.9, h: 0.8, landform: "shore" },
 
-					{ name: "Frozen valley", hex: "cfdce6", t: 0.1, h: 0.5, landform: "valleys" },
-					{ name: "Boreal valley", hex: "3d6b56", t: 0.33, h: 0.85, landform: "valleys" },
-					{ name: "Meadow", hex: "86ad5c", t: 0.6, h: 0.6, landform: "valleys" },
-					{ name: "Swamp", hex: "4e5f33", t: 0.75, h: 0.95, landform: "valleys" },
-					{ name: "Dry basin", hex: "c9b06a", t: 0.92, h: 0.12, landform: "valleys" },
+					{ name: "Frozen valley", hex: "cfdce6", t: 0.17, h: 0.49, landform: "valleys" },
+					{ name: "Swamp", hex: "4e5f33", t: 0.45, h: 0.78, landform: "valleys" },
+					{ name: "Dry basin", hex: "c9b06a", t: 0.7, h: 0.25, landform: "valleys" },
 
-					{ name: "Tundra", hex: "9fae95", t: 0.18, h: 0.6, landform: "lowlands" },
-					{ name: "Cold desert", hex: "b6ad95", t: 0.26, h: 0.08, landform: "lowlands" },
-					{ name: "Taiga", hex: "3d6b63", t: 0.33, h: 0.9, landform: "lowlands" },
-					{ name: "Steppe", hex: "a8a05e", t: 0.45, h: 0.3, landform: "lowlands" },
-					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.55, landform: "lowlands" },
-					{ name: "Forest", hex: "4a8a55", t: 0.62, h: 0.82, landform: "lowlands" },
-					{ name: "Savanna", hex: "c9b45e", t: 0.85, h: 0.5, landform: "lowlands" },
-					{ name: "Rainforest", hex: "2f9e2f", t: 0.92, h: 0.85, landform: "lowlands" },
-					{ name: "Desert", hex: "e8c44a", t: 0.93, h: 0.1, landform: "lowlands" },
+					{ name: "Tundra", hex: "9fae95", t: 0.3, h: 0.28, landform: "lowlands" },
+					{ name: "Taiga", hex: "3d6b63", t: 0.3, h: 0.78, landform: "lowlands" },
+					{ name: "Steppe", hex: "a8a05e", t: 0.58, h: 0.28, landform: "lowlands" },
+					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.78, landform: "lowlands" },
+					{ name: "Desert", hex: "e8c44a", t: 0.84, h: 0.28, landform: "lowlands" },
+					{ name: "Rainforest", hex: "2f9e2f", t: 0.84, h: 0.78, landform: "lowlands" },
 
-					{ name: "Snowy slopes", hex: "dce6ee", t: 0.15, h: 0.5, landform: "slopes" },
-					{ name: "Taiga slope", hex: "35604f", t: 0.35, h: 0.82, landform: "slopes" },
-					{ name: "Grove", hex: "5f8a5c", t: 0.58, h: 0.68, landform: "slopes" },
-					{ name: "Shrub slope", hex: "9a8f50", t: 0.72, h: 0.25, landform: "slopes" },
-					{ name: "Dry slope", hex: "b08a55", t: 0.92, h: 0.15, landform: "slopes" },
+					{ name: "Snowy slopes", hex: "dce6ee", t: 0.15, h: 0.63, landform: "slopes" },
+					{ name: "Grove", hex: "5f8a5c", t: 0.42, h: 0.87, landform: "slopes" },
+					{ name: "Dry slope", hex: "b08a55", t: 0.79, h: 0.32, landform: "slopes" },
 
-					{ name: "Snowy plateau", hex: "e2eaf2", t: 0.12, h: 0.5, landform: "plateau" },
-					{ name: "Highland steppe", hex: "b0ab6a", t: 0.45, h: 0.3, landform: "plateau" },
-					{ name: "Highland forest", hex: "3f7a4a", t: 0.62, h: 0.8, landform: "plateau" },
-					{ name: "Savanna plateau", hex: "cbb768", t: 0.85, h: 0.5, landform: "plateau" },
-					{ name: "Badlands", hex: "c06a3a", t: 0.93, h: 0.1, landform: "plateau" },
+					{ name: "Frozen plateau", hex: "e2eaf2", t: 0.25, h: 0.45, landform: "plateau" },
+					{ name: "Highland steppe", hex: "b0ab6a", t: 0.57, h: 0.55, landform: "plateau" },
+					{ name: "Badlands", hex: "c06a3a", t: 0.81, h: 0.18, landform: "plateau" },
 
-					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.12, h: 0.5, landform: "peaks" },
-					{ name: "Alpine forest", hex: "46705a", t: 0.42, h: 0.8, landform: "peaks" },
-					{ name: "Stony peaks", hex: "8d8f94", t: 0.55, h: 0.25, landform: "peaks" },
-					{ name: "Alpine meadow", hex: "8fb06a", t: 0.78, h: 0.6, landform: "peaks" },
-					{ name: "Cloud forest", hex: "3f8f6a", t: 0.92, h: 0.9, landform: "peaks" },
+					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.05, h: 0.45, landform: "peaks" },
+					{ name: "Stony peaks", hex: "8d8f94", t: 0.21, h: 0.18, landform: "peaks" },
+					{ name: "Alpine forest", hex: "46705a", t: 0.41, h: 0.62, landform: "peaks" },
 				],
 				// **Holdridge's life zones, which are the climate square
 				// already.** A real classification of the world's vegetation by
@@ -1936,7 +1966,7 @@
 			let picked = 0;
 			/** Which landform's diagram is on screen, and which grid cell was last touched. */
 			let shown = 2;
-			let cellPicked = gridAt(1, 2, 2);
+			let cellPicked = gridAt(1, 1, 1);
 
 			const RGB_OF = new Map();
 
@@ -2137,6 +2167,29 @@
 					open: true,
 					rows: [
 						{ key: "formPicture", label: "", type: "picture", shot: "form", value: 0 },
+						{
+							key: "formDetail",
+							label: "Relief detail",
+							low: 1,
+							high: 4,
+							step: 1,
+							value: 1,
+							digits: 0,
+							unit: "octaves",
+							note: () =>
+								field
+									? `the landform reads the relief at <b>${Math.round(
+											(TERRAIN.pv.metres * TERRAIN.pv.scale) /
+												2 ** (knobs.formDetail - 1),
+										).toLocaleString()} m</b> — <b>${(
+											(TERRAIN.pv.metres * TERRAIN.pv.scale) /
+											2 ** (knobs.formDetail - 1) /
+											field.k.mapMetres
+										).toFixed(1)}</b> map cells. The ground keeps its own <b>4</b> ` +
+										`octaves whatever this says, so no hill moves; at 4 the two ` +
+										`readings are the same and a landform changes with every gully`
+									: "",
+						},
 						{
 							key: "shoreHeight",
 							label: "Shore reaches",
@@ -2623,7 +2676,8 @@
 
 			/** The grid as a run of digits, and back. */
 			function gridFromText(text) {
-				if (!/^[0-5]{75}$/.test(text)) return null;
+				if (text.length !== DEFAULT_GRID.length) return null;
+				if (!/^[0-5]+$/.test(text)) return null;
 				return text.split("").map(Number);
 			}
 
@@ -2835,7 +2889,7 @@
 					metresAt[n] = metres;
 					level[n] = splineAt(TERRAIN.cont.spline, said[0]);
 					cut[n] = splineAt(TERRAIN.ero.spline, said[1]);
-					swing[n] = splineAt(TERRAIN.pv.spline, said[2]);
+					swing[n] = formSwingAt(p[0], p[1], p[2], seed, s);
 					land[n] = metres > TERRAIN.seaLevel ? 1 : 0;
 				}
 				world.fit = fitTo(rawT, rawH, land);
@@ -2982,7 +3036,7 @@
 					height[c] = metres;
 					level[c] = splineAt(TERRAIN.cont.spline, said[0]);
 					cut[c] = splineAt(TERRAIN.ero.spline, said[1]);
-					swing[c] = splineAt(TERRAIN.pv.spline, said[2]);
+					swing[c] = formSwingAt(p[0], p[1], p[2], seed, s);
 					squareOf(climate, warp, square);
 					climT[c] = square[0];
 					climH[c] = square[1];
@@ -3287,7 +3341,7 @@
 						metresAt[at] = metres;
 						level[at] = splineAt(TERRAIN.cont.spline, said[0]);
 						cut[at] = splineAt(TERRAIN.ero.spline, said[1]);
-						swing[at] = splineAt(TERRAIN.pv.spline, said[2]);
+						swing[at] = formSwingAt(p[0], p[1], p[2], seed, s);
 						land[at] = metres > TERRAIN.seaLevel ? 1 : 0;
 						const c = groundColor(metres);
 						ground[at * 3] = c[0];
@@ -4550,7 +4604,7 @@
 
 				const band = document.createElement("div");
 				band.id = "tabs";
-				for (let c = 0; c < 3; c++) {
+				for (let c = 0; c < CONT_BANDS; c++) {
 					const button = document.createElement("button");
 					button.type = "button";
 					button.textContent = CONT_NAMES[c];
@@ -4565,21 +4619,22 @@
 
 				const sheet = document.createElement("div");
 				sheet.className = "sheet";
+				sheet.style.setProperty("--columns", String(PV_BANDS));
 				const corner = document.createElement("div");
 				corner.className = "corner";
 				sheet.append(corner);
-				for (let p = 0; p < 5; p++) {
+				for (let p = 0; p < PV_BANDS; p++) {
 					const head = document.createElement("div");
 					head.className = "corner";
 					head.textContent = PV_NAMES[p];
 					sheet.append(head);
 				}
-				for (let e = 0; e < 5; e++) {
+				for (let e = 0; e < ERO_BANDS; e++) {
 					const edge = document.createElement("div");
 					edge.className = "edge";
 					edge.textContent = ERO_NAMES[e];
 					sheet.append(edge);
-					for (let p = 0; p < 5; p++) {
+					for (let p = 0; p < PV_BANDS; p++) {
 						const at = gridAt(sheetShown, e, p);
 						const form = LANDFORMS[grid[at]];
 						const button = document.createElement("button");
@@ -4589,9 +4644,9 @@
 						const read = counted();
 						const share = read.inCell ? asShare(read.inCell[at]) : "";
 						button.innerHTML = form.short + "<small>" + share + "</small>";
-						button.title = `${CONT_NAMES[sheetShown]}, ${
-							["sharpest", "sharp", "middling", "worn", "worn flat"][e]
-						}, ${["valley", "low", "middling", "high", "peak"][p]} → ${form.name}`;
+						button.title =
+							`${CONT_NAMES[sheetShown]}, ${ERO_NAMES[e]} erosion, ` +
+							`${PV_NAMES[p]} relief → ${form.name}`;
 						button.addEventListener("click", () => {
 							cellPicked = at;
 							shown = grid[at];
