@@ -86,10 +86,10 @@ every tree is at most narrower and never wider.
 **Kind:** bug
 **Milestone:** 0.5.0
 **Priority:** medium
-**Effort:** small
+**Effort:** medium
 **Found:** 2026-08-28, explaining how one plant is built
 **Where:** `packages/engine/src/generation/plants/growPlant.ts`,
-`packages/engine/src/generation/plants/growStand.ts` (`raise`),
+`packages/engine/src/generation/plants/growStand.ts` (`stamp`),
 `packages/client/src/PLANT_ROWS.ts` (**Bend feature**)
 
 **What happens.** The bend that pushes each step of a limb off its heading is
@@ -97,39 +97,56 @@ read from noise at **world** coordinates, and `growPlant`'s own comment says
 why: read in the plant's own frame "it would be a different field for every
 plant, and a stand would not lean together". The panel says the same to the
 player -- **Bend feature** is "how far you walk before the bend changes its
-mind, so a whole stand leans together". But `raise` hands `growPlant` the seed
-`seed + floor(roll * 100000)`, where `roll` is a hash of the plant's own cell,
-and that seed is what the bend's `octaveNoise` is keyed on. **Every plant reads
-its own field.** World coordinates then buy continuity along one trunk and
-nothing between two.
+mind, so a whole stand leans together". Neither is true.
 
-**Measured** (`tools/trial-lean.ts`): a line of pines at **Bend** 0.6 and
-**Bend feature** 20 m, taking the horizontal direction each trunk's top has
-leaned in and correlating neighbours.
+**Measured** on isolated plants (`tools/trial-lean.ts`): a line of pines at
+**Bend** 0.6 and **Bend feature** 20 m, correlating the direction each trunk's
+top has leaned in.
 
-| apart | a seed per plant (ships) | one seed for the stand |
+| apart | a seed per plant | one seed for the stand |
 |---|---|---|
 | 1 m | **0.033** | **0.985** |
 | 2 m | 0.068 | 0.947 |
 | 5 m | -0.059 | 0.777 |
 | 10 m | 0.050 | 0.459 |
 
-Shared, the agreement falls off over the feature's own 20 m, which is exactly
-what the row promises. As it ships there is no agreement at any spacing.
+**Stamping pre-grown plants moved the reason, and made it structural.** A plant
+is no longer grown where it stands: it is grown once at a reference point and
+stamped, so the bend field is read at that one place and **baked into the
+template**. Sharing the field between plants -- the fix this entry first named
+-- can no longer do anything, because there is only ever one place it is read.
+What decides which way a stamped plant leans in the world is which of the
+twelve turns the stamp lays it down at, and that is a hash of the plant's own
+cell: a different way for every tree, by construction.
 
-**Why it matters.** A stand leaning one way is what reads as weather -- a
-hillside of trees all bent off the prevailing wind. Without it **Bend** is
-per-tree crookedness and nothing more, and **Bend feature** controls a length
-nobody can see, because a single trunk is shorter than the feature anyway. Two
-pieces of prose describe a behaviour the engine does not have, which is worse
-than not having it.
+**The templates do lean, which is what makes a fix possible.** Measured over
+the shipped set, a pine's crown sits `0.81 m` from its own foot at the median
+and `2.26 m` at worst; an oak's `1.51 m` and `4.13 m`. Turn those together and
+a stand leans together.
 
-**What would fix it.** The per-plant seed is doing two jobs. It has to stay for
-the branch turn and lean hashes -- `hash3(c, level * 31 + j, tag, seed)` -- or
-every tree of a species forks at identical angles. The bend needs the **world**
-seed instead, shared by everything on the planet. Pass two seeds into
-`growPlant`, or key the three bend axes off the world seed the stand already
-holds.
+**Why it matters.** A hillside of trees bent off the prevailing wind is the
+effect the row is named for, and there is nothing there. **Bend** is per-tree
+crookedness and **Bend feature** sets a length nobody can see, because a single
+trunk is shorter than it anyway.
+
+**What would fix it, in three parts.** Every template of a species has to wander
+in **one** field, which is a bend seed held still while the variant seed moves
+(`StandOptions`, one parameter); the turn has to come from a smooth field
+rather than a hash; and that field needs a scale of its own, because
+**Bend feature** runs 1 to 40 m and a field finer than the spacing between
+trees puts neighbours in different buckets of the twelve. That third part is a
+new row on the panel and a decision about what wind is, which is why this is
+not the small fix it was first filed as.
+
+**And it needs a probe that measures lean rather than crowding.** The obvious
+one -- read the direction the canopy near each trunk sits in, correlate
+neighbours -- does not work: two columns two metres apart see largely the same
+canopy cells, so it reports `0.546` within `6 m` whether the plants are turned
+by a field or by a hash, which are the opposite answers. It is kept as
+`tools/trial-stand-lean.ts` with that written on it. What would measure it is
+the template's own known lean rotated by the turn the stamp chose, correlated
+over neighbouring roots -- which needs the stand to report which template and
+which turn each plant got.
 
 ### F-110 — A chunk's apron draws no trees, so a canopy is walled off at every chunk edge
 
