@@ -72,7 +72,9 @@ export {
 	isTranslucent,
 } from "./terrain/BlockType.js";
 export { TerrainGenerator } from "./terrain/TerrainGenerator.js";
+export { caveCeilingAt } from "./terrain/caveCeilingAt.js";
 export { caveDensity } from "./terrain/caveDensity.js";
+export { caveField } from "./terrain/caveField.js";
 export {
 	blockColor,
 	speckleShade,

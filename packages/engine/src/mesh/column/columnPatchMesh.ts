@@ -1,6 +1,6 @@
 import type { ColumnPatch } from "./ColumnPatch.js";
 import { PATCH_STRIDE } from "../PatchGeometry.js";
-import { Vec3 } from "../../math/Vec3.js";
+import { columnFrame } from "./columnFrame.js";
 import { AMBIENT_OCCLUSION } from "../AMBIENT_OCCLUSION.js";
 import { speckleShade } from "../../generation/terrain/blockColor.js";
 import type { Stand } from "../../generation/plants/growStand.js";
@@ -172,15 +172,6 @@ const LEAF_SHADE = 0.66;
 /** How far a plant cell's color drifts from its layer's, either way. */
 const PLANT_GRAIN = 0.14;
 
-/** The three axes of the patch: out of the ground, east, and north. */
-function frameAt(at: Vec3): { up: Vec3; east: Vec3; north: Vec3 } {
-	const up = at.normalize();
-	const pole = new Vec3(0, 1, 0);
-	const along = Math.abs(up.dot(pole)) > 0.999 ? new Vec3(1, 0, 0) : pole;
-	const east = along.cross(up).normalize();
-	return { up, east, north: up.cross(east).normalize() };
-}
-
 /**
  * A patch of the world drawn as columns of blocks.
  *
@@ -220,7 +211,7 @@ export function columnPatchMesh(
 	} = patch;
 	const { at, spans, height, raw, continent, erosion, peaks, carve } = ground;
 	const { radius, seaLevel, seed, speckle, blockMetres, occlusion } = look;
-	const frame = frameAt(centre);
+	const frame = columnFrame(centre);
 
 	// **The buffer starts at what a patch actually uses and grows if it needs
 	// more.** A column's ceiling is two caps plus a wall an edge -- 30

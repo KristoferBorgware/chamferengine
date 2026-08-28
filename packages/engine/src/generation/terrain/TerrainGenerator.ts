@@ -8,6 +8,7 @@ import type { WorldShape } from "../../world/WorldShape.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
 import { carveDepth, carveIsRock, carveSeed } from "./carveDensity.js";
+import { caveCeilingAt } from "./caveCeilingAt.js";
 import { caveDensity } from "./caveDensity.js";
 import { layerNoiseSettings } from "../coarse/layeredHeight.js";
 import { fbm } from "../noise/fbm.js";
@@ -111,6 +112,19 @@ export class TerrainGenerator {
 			groundLayer: this.shape.layerOfSurface(groundRadius),
 			waterLayer: this.shape.layerOfSurface(waterRadius),
 			elevation,
+			caveCeiling: this.settings.caves
+				? caveCeilingAt(
+						p.x,
+						p.y,
+						p.z,
+						this.shape.seaLevelRadius,
+						this.seed,
+						this.settings.caveCeiling,
+						this.settings.caveVary,
+						this.settings.caveRare,
+						this.settings.caveMouthScale,
+					)
+				: this.settings.caveCeiling,
 		};
 	}
 
@@ -151,6 +165,10 @@ export class TerrainGenerator {
 
 		if (this.settings.caves) {
 			const radius = this.shape.radiusOfLayer(layer);
+			// **The ceiling is a fact about the column and the sheet is a fact
+			// about the point**, so the column carries the first and only the
+			// second is read here: the dip wanders over the ground, and every
+			// layer of one column sits under the same amount of rock.
 			const hollow = caveDensity(
 				column.x,
 				column.y,
@@ -160,7 +178,7 @@ export class TerrainGenerator {
 				this.seed,
 				this.settings.caveScale,
 				this.settings.caveThreshold,
-				this.settings.caveCeiling,
+				column.caveCeiling,
 			);
 			// A cave below the water table stays dry. Water is written by the
 			// generator and never flows, so a passage under a lake is a passage,

@@ -35,6 +35,7 @@ export { WorkerMeshSource } from "./worker/WorkerMeshSource.js";
 
 export type { ColumnPatch, ColumnPlace } from "./column/ColumnPatch.js";
 export { columnPatchLayout } from "./column/columnPatchLayout.js";
+export { columnFrame } from "./column/columnFrame.js";
 export type { Carved } from "./column/columnSpans.js";
 export {
 	MAX_CARVE_LAYERS,

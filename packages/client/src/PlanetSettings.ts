@@ -1,10 +1,14 @@
 import type {
+	CaveDraw,
+	CavePlan,
 	PatchAlong,
 	PatchMap,
 	PatchPicture,
 	PatchSurface,
 } from "./PatchLook.js";
 import {
+	CAVE_DRAWS,
+	CAVE_PLANS,
 	PATCH_ALONGS,
 	PATCH_MAPS,
 	PATCH_PICTURES,
@@ -470,6 +474,111 @@ export interface PlanetKnobs {
 
 	/** Which way the contour graph's sections run. */
 	patchAlong: PatchAlong;
+
+	/**
+	 * Whether the cave carve runs at all.
+	 *
+	 * **Off, no world holds a single cave.** The carve that cuts cliffs and
+	 * overhangs is a different layer and stays where it was; this is the one
+	 * that hollows the rock under the ground.
+	 */
+	caves: boolean;
+
+	/**
+	 * Metres across one shape of the cave field, which is a passage's own size.
+	 *
+	 * The field's zero set is a set of surfaces and a passage is the band round
+	 * one, so this is how far it is from one fold of the sheet to the next --
+	 * how far a walk goes before the passage turns.
+	 */
+	caveScale: number;
+
+	/**
+	 * How much of the field's range is open, either side of zero.
+	 *
+	 * **This is a passage's width and not how many there are.** Widening the
+	 * band fattens every passage at once, because there is one sheet and this
+	 * says how thick a slab is taken round it. Squeezed narrow enough to be a
+	 * corridor the sheet stops being connected at all.
+	 */
+	caveThreshold: number;
+
+	/**
+	 * Metres of rock kept over the roof of a cave, before the ceiling dips.
+	 *
+	 * The deepest the ceiling ever sits: {@link caveVary} comes off this, so at
+	 * a dip of zero it is the depth caves start at everywhere.
+	 */
+	caveCeiling: number;
+
+	/**
+	 * How far the ceiling may come down from that, in metres.
+	 *
+	 * **This is what gives a cave a way in.** A ceiling the same everywhere is
+	 * a yes or a no on one number -- at a few metres nothing ever breaks the
+	 * ground and at zero the sheet opens it everywhere, with no setting
+	 * between. A dip deep enough to reach the surface reaches it across the
+	 * whole dip region at once, so either side of a usable setting is touchy.
+	 */
+	caveVary: number;
+
+	/**
+	 * How high the ceiling field has to read before the ceiling moves at all.
+	 *
+	 * Only the top of the field does anything, and where its top starts is set
+	 * rather than assumed: a field never sees its own full range over a patch,
+	 * so a figure borrowed from a standard deviation dips the ceiling over half
+	 * the ground and opens it everywhere again.
+	 */
+	caveRare: number;
+
+	/** Metres over which the ceiling changes, which is how wide one dip is. */
+	caveMouthScale: number;
+
+	/**
+	 * Metres of crust the cave bench walks and draws under the ground.
+	 *
+	 * **Not the world's crust.** A world runs a thousand layers down and a
+	 * passage may be at any depth, so the walk is one field reading a block;
+	 * this is how much of that a patch is asked for at once. What is under it
+	 * is rock nobody is looking at.
+	 */
+	caveCrust: number;
+
+	/** Whether the cave bench draws the rock or the caves themselves. */
+	caveDraw: CaveDraw;
+
+	/** What the cave bench's plan picture shows. */
+	cavePlan: CavePlan;
+
+	/**
+	 * Metres below the ground the plan picture is taken at.
+	 *
+	 * **A sheet has no plan of its own.** What it carves six metres down is a
+	 * different picture from what it carves twenty metres down, so the plan is
+	 * one slice and this names which.
+	 */
+	caveSlice: number;
+
+	/**
+	 * Whether the plan draws the contour on the lattice as well as on a raster.
+	 *
+	 * The blue line is marching squares over a square sample grid, which is a
+	 * picture of the field; the amber one is the same contour taken on the
+	 * hexagons the world is built out of. Where the two part company is where
+	 * the lattice cannot draw what the field says.
+	 */
+	caveLattice: boolean;
+
+	/**
+	 * How much of the block is kept, across and along, `1` for all of it.
+	 *
+	 * The far corner comes off so the passages can be looked into. A cell the
+	 * cut takes is removed from the world rather than hidden, so the faces
+	 * behind it are drawn and the cut reads as a cross-section.
+	 */
+	caveCutAcross: number;
+	caveCutAlong: number;
 
 	/** Metres from the top of the tallest ground to the floor of the world. */
 	crustMetres: number;
@@ -1046,6 +1155,25 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchSurface: "solid",
 	patchMap: "planet",
 	patchAlong: "x",
+	// The cave lab's own settings, which are what its measurements were taken
+	// at: a 24 m feature, a 0.12 band, 6 m of rock over the roof and a 10 m dip
+	// above a rarity of 0.7. Ceiling dips of 5, 10 and 15 m give 0, 12 and 346
+	// mouths over one patch, so 10 is the usable one and either side of it is
+	// touchy.
+	caves: false,
+	caveScale: 24,
+	caveThreshold: 0.12,
+	caveCeiling: 6,
+	caveVary: 10,
+	caveRare: 0.5,
+	caveMouthScale: 60,
+	caveCrust: 28,
+	caveDraw: "rock",
+	cavePlan: "both",
+	caveSlice: 12,
+	caveLattice: true,
+	caveCutAcross: 0.62,
+	caveCutAlong: 0.62,
 	crustMetres: 1232,
 	atmosphereOn: true,
 	inScatteringPoints: 10,
@@ -1440,6 +1568,29 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "x",
 	},
 	carveCurve: { ...TOGGLE, rebuilds: true },
+	// **The cave rule's own rows.** Every one of them is a rebuild: a cave is
+	// blocks removed from a column, and no shader can put a block back.
+	caves: { ...TOGGLE, rebuilds: true },
+	caveScale: { low: 4, high: 120, step: 2, rebuilds: true, unit: "m" },
+	caveThreshold: {
+		low: 0.005,
+		high: 0.4,
+		step: 0.005,
+		rebuilds: true,
+		unit: "",
+	},
+	caveCeiling: { low: 0, high: 24, step: 0.5, rebuilds: true, unit: "m" },
+	caveVary: { low: 0, high: 120, step: 5, rebuilds: true, unit: "m" },
+	caveRare: { low: 0, high: 0.95, step: 0.01, rebuilds: true, unit: "" },
+	caveMouthScale: { low: 15, high: 200, step: 5, rebuilds: true, unit: "m" },
+	caveCrust: { low: 8, high: 400, step: 4, rebuilds: true, unit: "m" },
+	caveSlice: { low: 1, high: 200, step: 1, rebuilds: true, unit: "m" },
+	// The cut and the two pictures move no block, so neither costs a walk.
+	caveLattice: { ...TOGGLE, rebuilds: false },
+	caveCutAcross: { low: 0.2, high: 1, step: 0.02, rebuilds: false, unit: "" },
+	caveCutAlong: { low: 0.2, high: 1, step: 0.02, rebuilds: false, unit: "" },
+	caveDraw: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	cavePlan: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	erosionBite: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
 	relief: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
 	seaDepth: { low: 0, high: 2000, step: 20, rebuilds: true, unit: "m" },
@@ -1462,7 +1613,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "\u00b0",
 	},
-	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchCells: { low: 4, high: 256, step: 4, rebuilds: false, unit: "cells" },
 	patchOcclusion: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
 	patchSpeckle: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
@@ -1480,7 +1631,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	patchLight: { low: 0.4, high: 3, step: 0.1, rebuilds: false, unit: "x" },
 	patchDetail: {
 		low: 0,
-		high: 3,
+		high: 5,
 		step: 1,
 		rebuilds: false,
 		unit: "levels under the map",
@@ -1689,7 +1840,41 @@ const PATCH_CHOICES: Record<string, readonly string[]> = {
 	patchSurface: PATCH_SURFACES,
 	patchMap: PATCH_MAPS,
 	patchAlong: PATCH_ALONGS,
+	caveDraw: CAVE_DRAWS,
+	cavePlan: CAVE_PLANS,
 };
+
+/**
+ * The most columns either bench will lay out at once.
+ *
+ * **A level finer is four times the columns**, and the cave bench walks every
+ * block of every one of them -- so a slider a notch too far is not a slower
+ * page, it is a page that stops answering.
+ *
+ * Set at the largest patch either bench could already build: the landscape
+ * bench's 32 map cells at three levels under the map, which is `49,537`
+ * columns against the `12,481` it opens on. What it takes away is the
+ * combinations past that -- 256 cells at three levels is **3.1 million**
+ * columns, which was reachable before and answered no faster for being asked.
+ */
+const MAX_PATCH_COLUMNS = 60000;
+
+/** How many columns a walk of `rings` rings around one cell reaches. */
+function patchColumns(across: number): number {
+	const rings = Math.max(1, across >> 1);
+	return 3 * rings * (rings + 1) + 1;
+}
+
+/** The widest patch, in map cells across, that stays inside that count. */
+function widestPatch(detail: number, range: KnobRange): number {
+	let across = range.low;
+	while (
+		across < range.high &&
+		patchColumns((across + range.step) << detail) <= MAX_PATCH_COLUMNS
+	)
+		across += range.step;
+	return across;
+}
 
 /** The nearest power of two, for turning a size in metres into a level. */
 function levelFor(span: number, size: number): number {
@@ -2079,6 +2264,16 @@ export class PlanetSettings {
 			carveLayer: this.coarseMapRuns && this.knobs.carveLayer,
 			carve: this.layerFor("carve"),
 			carveHold: this.knobs.carveHold,
+			// **The cave rule is one thing and the carve is another**, and they
+			// run in that order: the carve decides whether there is a block at
+			// all, and the caves hollow what it left.
+			caves: this.knobs.caves,
+			caveScale: this.knobs.caveScale,
+			caveThreshold: this.knobs.caveThreshold,
+			caveCeiling: this.knobs.caveCeiling,
+			caveVary: this.knobs.caveVary,
+			caveRare: this.knobs.caveRare,
+			caveMouthScale: this.knobs.caveMouthScale,
 		};
 	}
 
@@ -2174,6 +2369,34 @@ export class PlanetSettings {
 			// land a factor of root two under what it asked for.
 			case "coarseSpacing":
 				return narrowed({ low: up(3 * k.blockSize) });
+
+			// **How wide the patch is and how finely it is cut are one
+			// quantity.** A level finer is four times the columns, and the
+			// cave bench walks every block of every one of them -- so the two
+			// sliders bound each other rather than each carrying a ceiling
+			// that only makes sense beside a particular value of the other.
+			// What each of them may reach is whatever leaves the count under
+			// {@link MAX_PATCH_COLUMNS}.
+			case "patchCells":
+				return narrowed({
+					high: down(
+						widestPatch(this.patchLevel - this.coarseLevel, range),
+					),
+				});
+			case "patchDetail": {
+				// Past the world's own depth there is no finer lattice for the
+				// address to name, so a level asked for beyond it costs
+				// nothing and is not narrowed away.
+				const deepest = this.depth - this.coarseLevel;
+				let most = range.low;
+				while (
+					most < range.high &&
+					patchColumns(k.patchCells << Math.min(most + 1, deepest)) <=
+						MAX_PATCH_COLUMNS
+				)
+					most++;
+				return narrowed({ high: most });
+			}
 
 			// The world is the map, so an octave narrower than two map cells is
 			// ground that would not exist. Each layer is asked against its own

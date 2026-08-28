@@ -68,8 +68,45 @@ export interface TerrainOptions {
 	/** How much of the noise range is open. Higher opens more. */
 	readonly caveThreshold?: number;
 
-	/** Metres below the surface at which caves start. */
+	/**
+	 * Metres of rock kept over the roof of a cave, before the ceiling dips.
+	 *
+	 * The number {@link caveVary} comes off, so it is the deepest the ceiling
+	 * ever sits rather than the depth it sits at.
+	 */
 	readonly caveCeiling?: number;
+
+	/**
+	 * How far the ceiling may come down from {@link caveCeiling}, in metres.
+	 *
+	 * **This is what gives a cave a way in.** A ceiling the same everywhere is
+	 * a yes or a no on one number: at a few metres nothing ever breaks the
+	 * ground and at zero the sheet opens it everywhere. A ceiling that wanders
+	 * puts the decision somewhere. At `0` the ceiling is the constant one to
+	 * the bit.
+	 */
+	readonly caveVary?: number;
+
+	/**
+	 * How high the ceiling field has to read before the ceiling moves at all.
+	 *
+	 * A rarity, from `0` -- the ceiling dips over the whole world -- to just
+	 * under `1`. It cannot be a constant: over any patch smaller than the
+	 * planet the field never sees its own full range, so what share of the
+	 * ground clears a given figure depends on how wide the shapes are.
+	 *
+	 * **Measured over the whole sphere rather than over a patch.** At the
+	 * shipped `6 m` ceiling and `10 m` dip, the share of the planet whose
+	 * ceiling reaches within half a block of the surface runs `1.153%` at
+	 * `0.2`, `0.346%` at `0.4`, `0.170%` at `0.5` and `0.021%` at `0.7` --
+	 * against `0.19%` of the ground the cave lab's own trial opened. `0.5` is
+	 * the figure that reproduces it; `0.7` is what that trial asked for, and
+	 * over its 95 m patch that number meant something else entirely.
+	 */
+	readonly caveRare?: number;
+
+	/** Metres over which the ceiling changes, which is how wide a dip is. */
+	readonly caveMouthScale?: number;
 }
 
 export const TERRAIN_DEFAULTS = {
@@ -83,4 +120,7 @@ export const TERRAIN_DEFAULTS = {
 	caveScale: 24,
 	caveThreshold: 0.12,
 	caveCeiling: 6,
+	caveVary: 0,
+	caveRare: 0.5,
+	caveMouthScale: 60,
 } as const satisfies Required<TerrainOptions>;

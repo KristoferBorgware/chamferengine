@@ -54,6 +54,15 @@ touching the source: `&apron=false` draws the same world with the apron off,
 noise, its water and its sky. Two frames from two URLs attribute an artifact to
 the thing that causes it.
 
+Two more pages take the same parameters and draw one patch of that world
+instead of standing in it. `/landscape.html` is the surface and the layers that
+shape it; `/caves.html` is a block of ground with a corner cut off it and the
+rule that hollowed it. **Neither prints a frame rate**, so the readout to wait
+on is one of their own -- `--read ".bench-facts"` on the first and
+`--read ".cave-plan-says"` on the second -- and `tools/probe-shaders.mjs` needs
+`--presents no` to check either of them, because its second opinion is a rate
+that is not there.
+
 ## A window is part of what is drawn, and a shut panel is a second frame
 
 `tools/take-frame.mjs` photographs at **1280 x 800** with the page told it is a

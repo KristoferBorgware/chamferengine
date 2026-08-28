@@ -103,7 +103,7 @@ const panel = new ParameterPanel(
 	(draft) => moved(draft),
 	(draft) => moved(draft),
 	() => {},
-	{ bench: true, page: "veg", side: "left" },
+	{ bench: true, page: "vegetation", side: "left" },
 );
 
 const head = document.createElement("div");

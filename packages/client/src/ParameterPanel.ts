@@ -114,38 +114,32 @@ interface Knob {
 	}[];
 
 	/**
-	 * Which pages the row belongs on, when that is narrower than its group's.
+	 * What this knob decides, in a line under its row.
 	 *
-	 * The two benches cut their patch differently -- one in map cells, one in
-	 * blocks -- so the rows that say how wide it is sit in one group and answer
-	 * for one page each.
+	 * **For a row whose label cannot carry its own meaning.** Most knobs here
+	 * are named for what they do and a sentence under them would be noise; a
+	 * few are not -- a band width that fattens every passage rather than
+	 * opening more of them, a rarity that cannot be a constant -- and for those
+	 * the reader has nowhere else to find out. Distinct from {@link
+	 * Knob.given}, which says what the world got when a slider asked for
+	 * something it could not have, and from {@link ParameterPanel.note}, which
+	 * a build fills in.
 	 */
-	readonly where?: "world" | "bench" | "veg" | "benches" | "both";
-}
+	readonly says?: string;
 
-/**
- * Which page a panel is on.
- *
- * Three, because there are three: the planet, the landscape bench and the
- * vegetation bench. The two benches share the world a patch stands in and
- * differ in what is being judged on it, so most groups name both.
- */
-export type PanelPage = "world" | "bench" | "veg";
+	/** `"off"` for a row that decides nothing on the cave bench. */
+	readonly cave?: "off";
 
-/** Whether one group or row belongs on the page being built. */
-function onPage(where: Group["where"], page: PanelPage): boolean {
-	switch (where ?? "world") {
-		case "world":
-			return page === "world";
-		case "bench":
-			return page === "bench";
-		case "veg":
-			return page === "veg";
-		case "benches":
-			return page !== "world";
-		default:
-			return true;
-	}
+	/**
+	 * Where this row stands on the vegetation bench.
+	 *
+	 * `"off"` takes it away and `"only"` keeps it nowhere else. **The benches
+	 * cut their patch differently** -- the landscape bench in map cells,
+	 * because the map is the terrain, and this one in blocks, because a plant
+	 * is metres tall and blocks wide -- so the rows that say how wide it is sit
+	 * in one group and answer for one page each.
+	 */
+	readonly veg?: "off" | "only";
 }
 
 /** One titled run of rows. */
@@ -164,7 +158,28 @@ interface Group {
 	 * row that moves nothing. Groups say `world` unless told otherwise, and
 	 * `benches` is both benches and not the planet.
 	 */
-	readonly where?: "world" | "bench" | "veg" | "benches" | "both";
+	readonly where?: "world" | "bench" | "both" | "cave" | "veg";
+
+	/**
+	 * Where this group stands on the cave bench, when that differs.
+	 *
+	 * A group appears on the cave bench exactly when it appears on the
+	 * landscape bench, on the same side, unless this says otherwise: `"off"`
+	 * takes it away and a side moves it. **The four layer groups move left**,
+	 * because the cave bench's right panel is the caves and nothing else --
+	 * everything about the ground they stand in is what is being looked at
+	 * rather than what is being worked.
+	 */
+	readonly cave?: "off" | "left" | "right";
+
+	/**
+	 * Whether this group stands on the vegetation bench.
+	 *
+	 * It appears there exactly when it appears on the landscape bench unless
+	 * this says otherwise. That bench builds one panel down the left and keeps
+	 * its right for the plants, so there is no side to name.
+	 */
+	readonly veg?: "off";
 
 	/**
 	 * Which of the bench's two panels the group stands in.
@@ -306,7 +321,7 @@ const GROUPS: Group[] = [
 		// the numbers writes them into it. It is the first thing on the left
 		// because a reader turning a knob on the right is asking what it did.
 		title: "General",
-		where: "benches",
+		where: "bench",
 		side: "left",
 		knobs: [],
 	},
@@ -314,7 +329,7 @@ const GROUPS: Group[] = [
 		// How the planet is cut up. Every row moves the ground's resolution or
 		// the world's size rather than its shape.
 		title: "Planet",
-		where: "benches",
+		where: "bench",
 		side: "left",
 		folded: true,
 		knobs: [
@@ -362,7 +377,7 @@ const GROUPS: Group[] = [
 		// the engine: they move the picture and leave the ground exactly where
 		// it was, so a link carrying them describes the same planet.
 		title: "Viewport",
-		where: "benches",
+		where: "bench",
 		side: "left",
 		knobs: [
 			{
@@ -378,7 +393,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchCells",
 				label: "Cells across",
-				where: "bench",
+				veg: "off",
 				digits: 0,
 			},
 			{
@@ -389,7 +404,7 @@ const GROUPS: Group[] = [
 				// far under the map that is.
 				key: "patchDetail",
 				label: "Block detail",
-				where: "bench",
+				veg: "off",
 				digits: 0,
 			},
 			{
@@ -399,7 +414,7 @@ const GROUPS: Group[] = [
 				// than of map cells.
 				key: "patchBlocks",
 				label: "Patch",
-				where: "veg",
+				veg: "only",
 				digits: 0,
 			},
 			{
@@ -409,7 +424,7 @@ const GROUPS: Group[] = [
 				// fourfold a level and the plants do not move.
 				key: "patchLod",
 				label: "Level of detail",
-				where: "veg",
+				veg: "only",
 				digits: 0,
 			},
 			{
@@ -444,8 +459,9 @@ const GROUPS: Group[] = [
 			},
 			{
 				key: "patchAlong",
+				cave: "off",
+				veg: "off",
 				label: "Contour along",
-				where: "bench",
 				choices: [
 					{ value: "x", label: "East" },
 					{ value: "z", label: "North" },
@@ -462,7 +478,7 @@ const GROUPS: Group[] = [
 		// Not "Light": the world has a group of that name already, and two
 		// sections sharing one are two the panel cannot tell apart.
 		title: "Lighting",
-		where: "benches",
+		where: "bench",
 		side: "left",
 		folded: true,
 		knobs: [
@@ -575,6 +591,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Continentalness",
 		where: "both",
+		cave: "left",
 		folded: true,
 		tab: "terrain",
 		tint: "cont",
@@ -586,6 +603,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Erosion",
 		where: "both",
+		cave: "left",
 		folded: true,
 		tab: "terrain",
 		tint: "ero",
@@ -608,6 +626,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Peaks & valleys",
 		where: "both",
+		cave: "left",
 		folded: true,
 		tab: "terrain",
 		tint: "pv",
@@ -616,6 +635,7 @@ const GROUPS: Group[] = [
 	{
 		title: "Cliffs & overhangs",
 		where: "both",
+		cave: "left",
 		folded: true,
 		tab: "terrain",
 		tint: "cliff",
@@ -634,6 +654,129 @@ const GROUPS: Group[] = [
 				label: "Held off above the water",
 				digits: 0,
 				enabledWhen: (k) => !k.plain && k.carveLayer,
+			},
+		],
+	},
+	{
+		// **The cave carve, beside the plan it draws.** A band around zero of a
+		// field in space: the zero set of a field in space is a set of
+		// surfaces, so what this cuts is one folded sheet running through the
+		// crust rather than a network of corridors.
+		title: "Carve",
+		where: "cave",
+		cave: "right",
+		knobs: [
+			{
+				key: "caves",
+				label: "On",
+				says: "Off, no world holds a single cave. The carve that cuts cliffs and overhangs is a different layer and keeps working either way.",
+			},
+			{
+				key: "caveScale",
+				label: "Feature size",
+				digits: 0,
+				enabledWhen: (k) => k.caves,
+				says: "How far it is from one fold of the sheet to the next, which is how far a walk goes before the passage turns.",
+			},
+			{
+				key: "caveThreshold",
+				label: "Band width",
+				digits: 3,
+				enabledWhen: (k) => k.caves,
+				says: "How much of the field's range is open, either side of zero. It is a passage's width and not how many there are: widening it fattens every passage at once, and squeezed narrow enough to be a corridor the sheet stops being connected at all.",
+			},
+			{
+				key: "caveCrust",
+				label: "Crust walked",
+				digits: 0,
+				enabledWhen: (k) => k.caves,
+				says: "How much crust under the ground this patch is asked for. Not the world's crust: a passage may be at any depth, so the walk is one field reading a block, and what is under this is rock nobody is looking at.",
+			},
+		],
+	},
+	{
+		// **A cave nobody can walk into is a cave nobody meets.** The ceiling
+		// wanders over the ground and comes down where a second field clears a
+		// rarity, so a mouth is where the ground allows one and the sheet
+		// happens to be there -- two conditions rather than one.
+		title: "Entrances",
+		where: "cave",
+		cave: "right",
+		knobs: [
+			{
+				key: "caveCeiling",
+				label: "Rock kept over the roof",
+				digits: 1,
+				enabledWhen: (k) => k.caves,
+				says: "The deepest the ceiling ever sits. The dip below comes off this, so with no dip it is the depth caves start at everywhere.",
+			},
+			{
+				key: "caveVary",
+				label: "Ceiling dips by up to",
+				digits: 0,
+				enabledWhen: (k) => k.caves,
+				says: "What gives a cave a way in. A ceiling the same everywhere is a yes or a no on one number, with nothing between never breaking the ground and opening it everywhere. Once a dip is deep enough to reach the surface it reaches it across the whole dip region at once, so either side of a usable setting is touchy.",
+			},
+			{
+				key: "caveRare",
+				label: "Only where the field clears",
+				digits: 2,
+				enabledWhen: (k) => k.caves && k.caveVary > 0,
+				says: "Where the ceiling field's own top starts. It cannot be a constant: over any patch the field never sees its full range, so a figure borrowed from a standard deviation dips the ceiling over half the ground and opens it everywhere again.",
+			},
+			{
+				key: "caveMouthScale",
+				label: "Ceiling changes over",
+				digits: 0,
+				enabledWhen: (k) => k.caves && k.caveVary > 0,
+				says: "How wide one dip in the ceiling is, in metres of ground.",
+			},
+		],
+	},
+	{
+		// **What is being looked at, and how much of it is in the way.** None
+		// of these is read by the engine: they cut the block open and choose a
+		// picture, and leave every block exactly where it was.
+		title: "The cut",
+		where: "cave",
+		cave: "left",
+		knobs: [
+			{
+				key: "caveDraw",
+				label: "Draw",
+				choices: [
+					{ value: "rock", label: "Rock" },
+					{ value: "void", label: "The caves" },
+				],
+				says: "Drawing the void turns the world inside out and draws the caves as the solid, which is the only view that shows a network from outside it.",
+			},
+			{
+				key: "caveCutAcross",
+				label: "Cut across",
+				digits: 2,
+				says: "Takes the far corner off the block so the passages can be looked into. A cell the cut takes is removed from the world rather than hidden, so the faces behind it are drawn and the cut reads as a cross-section.",
+			},
+			{ key: "caveCutAlong", label: "Cut along", digits: 2 },
+			{
+				key: "cavePlan",
+				label: "Plan shows",
+				choices: [
+					{ value: "field", label: "The field" },
+					{ value: "contour", label: "Contour" },
+					{ value: "hexes", label: "Hexagons" },
+					{ value: "both", label: "Field and hexagons" },
+				],
+				says: "The plan above the knobs, at one depth. A sheet has no plan of its own: what it carves six metres down is a different picture from what it carves twenty metres down.",
+			},
+			{
+				key: "caveSlice",
+				label: "Plan drawn at a depth of",
+				digits: 0,
+			},
+			{
+				key: "caveLattice",
+				label: "Contour the lattice as well",
+				says: "The blue line is the contour taken on a square sample grid, which is a picture of the field; the amber one is the same contour taken on the hexagons the world is built out of. Where the two part company is where the lattice cannot draw what the field says.",
 			},
 		],
 	},
@@ -1252,13 +1395,13 @@ export class ParameterPanel {
 	private readonly bench: boolean;
 
 	/**
-	 * Which page this panel is on, which decides every group it draws.
+	 * Which bench this is, when it is one.
 	 *
-	 * The vegetation bench builds one panel down the left and keeps its right
-	 * for the plants, so `bench` says how the panel is laid out and this says
-	 * what goes in it.
+	 * The three benches share every knob that decides the world and differ in
+	 * what they are benches *of*, so the page is a property of the panel rather
+	 * than of any row.
 	 */
-	private readonly page: PanelPage;
+	private readonly page: "world" | "landscape" | "cave" | "vegetation";
 
 	/**
 	 * The bench's second panel, down the left of the window.
@@ -1289,12 +1432,12 @@ export class ParameterPanel {
 		) => void = () => {},
 		options: {
 			readonly bench?: boolean;
-			readonly page?: PanelPage;
+			readonly page?: "world" | "landscape" | "cave" | "vegetation";
 			readonly side?: "left" | "right";
 		} = {},
 	) {
 		this.bench = options.bench ?? false;
-		this.page = options.page ?? (this.bench ? "bench" : "world");
+		this.page = options.page ?? (this.bench ? "landscape" : "world");
 		this.oneSided = options.side === "left";
 		// The draft is dragged, and a curve is an array: taken by reference it
 		// would be written back into whoever handed these over.
@@ -1315,14 +1458,21 @@ export class ParameterPanel {
 	 * reach a knob must never carry the picture off the top of the panel, which
 	 * is the one thing a panel must not do to the thing it is a panel of. What
 	 * is mounted here stays while the rows below it move.
+	 *
+	 * **The left panel on a bench, unless the right one is asked for.** The
+	 * landscape bench's picture is a map of the whole world, which belongs
+	 * beside what the world came out as; the cave bench's is a plan of the very
+	 * thing the rows under it decide, and a picture on the other side of the
+	 * window from its own knobs is a picture a reader has to look away to
+	 * check.
 	 */
-	mount(element: HTMLElement): void {
+	mount(element: HTMLElement, side: "left" | "right" = "left"): void {
 		// **On the bench the picture goes with the world, not with the
 		// layers.** The right pane is the four layers and nothing else, so a
 		// reader dragging a curve never has to scroll past the map to reach
 		// the next one -- and what a layer did is on the other side of the
 		// window rather than above the knob that did it.
-		if (this.leftBody) {
+		if (this.leftBody && side === "left") {
 			this.leftBody.insertBefore(element, this.leftBody.firstChild);
 			return;
 		}
@@ -1375,6 +1525,29 @@ export class ParameterPanel {
 	/** The world the sliders currently describe. */
 	get settings(): PlanetSettings {
 		return new PlanetSettings(this.draft);
+	}
+
+	/**
+	 * Whether one group belongs on this page.
+	 *
+	 * The two benches share every group the landscape bench has, because they
+	 * share the world; what separates them is the group that is only on one of
+	 * them and the four layer groups the cave bench moves to its other side.
+	 */
+	private shows(group: Group): boolean {
+		const where = group.where ?? "world";
+		if (this.page === "cave")
+			return (
+				group.cave !== "off" &&
+				(where === "cave" || where === "bench" || where === "both")
+			);
+		if (this.page === "vegetation")
+			return (
+				group.veg !== "off" &&
+				(where === "veg" || where === "bench" || where === "both")
+			);
+		if (where === "cave" || where === "veg") return false;
+		return where === "both" || (where === "bench") === this.bench;
 	}
 
 	private build(): void {
@@ -1430,9 +1603,24 @@ export class ParameterPanel {
 			section.appendChild(head);
 
 			for (const knob of group.knobs) {
-				if (knob.where && !onPage(knob.where, this.page)) continue;
+				if (this.page === "cave" && knob.cave === "off") continue;
+				if (
+					this.page === "vegetation"
+						? knob.veg === "off"
+						: knob.veg === "only"
+				)
+					continue;
 				const row = this.row(knob);
 				this.rows.push(row);
+				// **Under the row, not in a tooltip.** A knob whose label
+				// cannot carry its own meaning is a knob a reader has to guess
+				// at, and a hover is not something a panel says it has.
+				if (knob.says) {
+					const says = document.createElement("p");
+					says.className = "knob-says";
+					says.textContent = knob.says;
+					row.wrap.appendChild(says);
+				}
 				section.appendChild(row.wrap);
 			}
 			this.sections.set(group.title, section);
@@ -1446,7 +1634,7 @@ export class ParameterPanel {
 		// open, not filed under one of two questions the way a knob is.
 		if (!this.bench)
 			for (const group of GROUPS) {
-				if (!onPage(group.where, this.page)) continue;
+				if (!this.shows(group)) continue;
 				if (!group.aboveTabs) continue;
 				body.appendChild(buildSection(group));
 				handled.add(group);
@@ -1495,9 +1683,11 @@ export class ParameterPanel {
 		// happens to read it.
 		for (const group of GROUPS) {
 			if (handled.has(group)) continue;
-			if (!onPage(group.where, this.page)) continue;
+			if (!this.shows(group)) continue;
+			const side =
+				this.page === "cave" ? (group.cave ?? group.side) : group.side;
 			const into =
-				group.side === "left" && this.leftBody
+				side === "left" && this.leftBody
 					? this.leftBody
 					: (((group.tab ?? "settings") === "terrain"
 							? terrainTab
@@ -1559,17 +1749,18 @@ export class ParameterPanel {
 		// terrain numbers is looking at ground, and the bench is a page where
 		// the ground is the whole window rather than a picture over one.
 		if (!this.bench)
-			for (const [label, page] of [
+			for (const [name, page] of [
 				["Landscape bench", "landscape"],
 				["Vegetation bench", "vegetation"],
+				["Cave bench", "caves"],
 			] as const) {
-				const link = document.createElement("a");
-				link.textContent = label;
-				link.href = `./${page}.html`;
-				link.onclick = () => {
-					link.href = `./${page}.html?${this.settings.toParams().toString()}`;
+				const bench = document.createElement("a");
+				bench.textContent = name;
+				bench.href = `./${page}.html`;
+				bench.onclick = () => {
+					bench.href = `./${page}.html?${this.settings.toParams().toString()}`;
 				};
-				bar.appendChild(link);
+				bar.appendChild(bench);
 			}
 		// **On the bench the two buttons belong with the seed.** Nothing there
 		// waits for a Rebuild, so the bar is not a footer to a page of pending
