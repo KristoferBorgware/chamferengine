@@ -50,6 +50,7 @@ function sweep(
 	opened: number[];
 	overhangs: number;
 	deep: number;
+	columns: number;
 } {
 	const deep = carveDepth(layer, widths);
 	const opened = DEPTHS.map(() => 0);
@@ -108,12 +109,20 @@ function sweep(
 		opened: opened.map((v) => v / Math.max(1, columns)),
 		overhangs: overhangs / Math.max(1, columns),
 		deep,
+		columns,
 	};
 }
 
+// **What every share below is a share of.** A measurement whose denominator
+// is not on the page is a measurement nobody can check.
+const sample = sweep(1, 1).columns;
 console.log(
 	`the shipped world: a ${layer.metres} m shape, ${block} m blocks,` +
 		` cliffs held off ${hold} m above the water`,
+);
+console.log(
+	`${sample.toLocaleString("en-US")} land columns over one face,` +
+		` every share below is of those`,
 );
 for (const squash of [1, 2, 4, 8]) {
 	console.log(
