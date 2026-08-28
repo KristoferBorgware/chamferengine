@@ -1,19 +1,64 @@
-import type { KnobRange, PlanetKnobs } from "./PlanetSettings.js";
+import type { KnobRange, LayerName, PlanetKnobs } from "./PlanetSettings.js";
 import {
 	KNOB_RANGES,
+	LAYER_NAMES,
+	LAYER_TITLES,
+	LIVE_TERRAIN_KNOBS,
 	REMESH_KNOBS,
 	PlanetSettings,
 	copyKnobs,
 } from "./PlanetSettings.js";
 import {
-	MOUNTAIN_SEED_OFFSET,
-	TERRAIN_SEED_OFFSET,
+	CARVE_SEED_OFFSET,
+	CONTINENT_SEED_OFFSET,
+	EROSION_SEED_OFFSET,
+	PEAKS_SEED_OFFSET,
 	layerNoiseSettings,
 	octaveNoise,
 	seedFromString,
 	splineAt,
 } from "chamfer/generation";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+
+/** Each layer's own seed offset, so the four are four fields. */
+const LAYER_SEED_OFFSETS: Record<LayerName, number> = {
+	continent: CONTINENT_SEED_OFFSET,
+	erosion: EROSION_SEED_OFFSET,
+	peaks: PEAKS_SEED_OFFSET,
+	carve: CARVE_SEED_OFFSET,
+};
+
+/**
+ * The colour each layer's curve is drawn in.
+ *
+ * The same four the group headings and the bench's pictures use: a reader
+ * looking at four curves has nothing else to tell them apart by.
+ */
+const LAYER_INKS: Record<LayerName, string> = {
+	continent: "#ffd166",
+	erosion: "#8ce99a",
+	peaks: "#ff9db1",
+	carve: "#c9a7ff",
+};
+
+/**
+ * Where the dashed line sits on each curve, in that curve's own units.
+ *
+ * Erosion has none: its axis is how much is taken away, from none to all of
+ * it, and there is no level on that worth naming.
+ */
+const CURVE_MARKS: Record<LayerName, { at: number; name: string } | null> = {
+	// The middle of the curve is the waterline, and where the curve crosses it
+	// is the coast.
+	continent: { at: 0.5, name: "sea" },
+	erosion: null,
+	// Half way up leaves the column where the continent put it: below cuts a
+	// valley and above raises a peak.
+	peaks: { at: 0.5, name: "level" },
+	// The density runs -1 to +1 and a block is rock where it is over zero, so
+	// half way up this axis is that rule drawn on the curve.
+	carve: { at: 0.5, name: "rock" },
+};
 
 /** One row of the panel. */
 interface Knob {
@@ -114,7 +159,101 @@ interface Group {
 	 */
 	readonly aboveTabs?: boolean;
 
+	/**
+	 * The colour this group's heading and its curve are drawn in.
+	 *
+	 * **A layer and its curve have to be the same colour**, or a reader looking
+	 * at four curves has nothing to tell them apart by -- and the pictures the
+	 * bench draws are named by the same four.
+	 */
+	readonly tint?: "cont" | "ero" | "pv" | "cliff";
+
 	readonly knobs: Knob[];
+}
+
+/**
+ * The rows every layer carries, stamped out once per layer.
+ *
+ * **Written once, because the whole claim is that the layers differ in what
+ * they say rather than in what they are.** A layer given a row its neighbours
+ * have not got would be a fifth idea smuggled into a comparison of four.
+ *
+ * **The curve goes first**, because it is what the layer is for: the stack's
+ * own rows only say how coarse or fine the reading is, and the curve is the
+ * decision. The carve has no fold -- a fold creases a whole world at once,
+ * which is what makes it a landform knob, and a crease in a carve field is one
+ * nobody can see from inside the cave it cuts.
+ */
+function layerKnobs(layer: LayerName, curveLabel: string): Knob[] {
+	const on = (k: PlanetKnobs): boolean =>
+		!k.plain && (k as unknown as Record<string, boolean>)[`${layer}Layer`]!;
+	const rows: Knob[] = [
+		{
+			key: `${layer}Layer` as keyof PlanetKnobs,
+			map: true,
+			label: "On",
+			enabledWhen: (k) => !k.plain,
+		},
+		{
+			key: `${layer}Curve` as keyof PlanetKnobs,
+			map: true,
+			label: curveLabel,
+			curve: true,
+			enabledWhen: on,
+		},
+		{
+			key: `${layer}Feature` as keyof PlanetKnobs,
+			map: true,
+			label: "Feature",
+			digits: 0,
+			enabledWhen: on,
+		},
+		{
+			key: `${layer}FeatureScale` as keyof PlanetKnobs,
+			map: true,
+			label: "Feature scale",
+			digits: 0,
+			enabledWhen: on,
+			given: (s) =>
+				`widest ${Math.round(s.widestOf(layer)).toLocaleString()} m, narrowest ${Math.round(s.narrowestOf(layer)).toLocaleString()} m`,
+		},
+		{
+			key: `${layer}Octaves` as keyof PlanetKnobs,
+			map: true,
+			label: "Octaves",
+			digits: 0,
+			enabledWhen: on,
+		},
+		{
+			key: `${layer}Persistence` as keyof PlanetKnobs,
+			map: true,
+			label: "Falloff",
+			digits: 2,
+			enabledWhen: on,
+		},
+		{
+			key: `${layer}Lacunarity` as keyof PlanetKnobs,
+			map: true,
+			label: "Step between octaves",
+			digits: 1,
+			enabledWhen: on,
+		},
+	];
+	if (layer !== "carve")
+		rows.push({
+			key: `${layer}Fold` as keyof PlanetKnobs,
+			map: true,
+			label: "Fold",
+			digits: 2,
+			enabledWhen: on,
+			given: (s) =>
+				(s.knobs as unknown as Record<string, number>)[
+					`${layer}Fold`
+				] === 0
+					? "the plain sum, bit for bit"
+					: "creases every octave at its own zero crossing, which is the only place a ridge line can come from",
+		});
+	return rows;
 }
 
 /**
@@ -207,6 +346,16 @@ const GROUPS: Group[] = [
 				digits: 0,
 			},
 			{
+				// **The map is not the grid the world is built on.** A map cell
+				// is a reading and a block is a hexagon one layer tall; every
+				// cliff, overhang and arch is a shape in that grid rather than
+				// in the map's, so the patch is drawn on it and this says how
+				// far under the map that is.
+				key: "patchDetail",
+				label: "Block detail",
+				digits: 0,
+			},
+			{
 				key: "patchMap",
 				label: "Map shows",
 				choices: [
@@ -221,9 +370,10 @@ const GROUPS: Group[] = [
 					{ value: "ground", label: "Ground" },
 					{ value: "height", label: "Height" },
 					{ value: "raw", label: "Raw" },
-					{ value: "terrain", label: "Terrain layer" },
-					{ value: "mountain", label: "Mountain layer" },
-					{ value: "erosion", label: "What the water did" },
+					{ value: "continent", label: "Continentalness" },
+					{ value: "erosion", label: "Erosion" },
+					{ value: "peaks", label: "Peaks & valleys" },
+					{ value: "carve", label: "Cliffs & overhangs" },
 				],
 			},
 			{
@@ -242,6 +392,102 @@ const GROUPS: Group[] = [
 					{ value: "x", label: "East" },
 					{ value: "z", label: "North" },
 				],
+			},
+		],
+	},
+	{
+		// **The lights are their own question.** Where the patch stands and
+		// which picture is on it are about what is being looked at; how it is
+		// lit is about being able to see it at all, and mixing the two put half
+		// a dozen rows about light in the middle of the viewport's own.
+		//
+		// Not "Light": the world has a group of that name already, and two
+		// sections sharing one are two the panel cannot tell apart.
+		title: "Lighting",
+		where: "bench",
+		side: "left",
+		folded: true,
+		knobs: [
+			{
+				key: "patchLight",
+				label: "Brightness",
+				digits: 1,
+			},
+			{
+				// **The one thing that says where one hexagon ends.** A slope
+				// of one material at one height is a single sheet of colour
+				// however it is lit, and the lattice the world is built on is
+				// invisible in it -- which is the hardest thing to read on a
+				// preview whose whole subject is that lattice. The world's own
+				// drift, at the bench's own amount, because a bench is looked
+				// at from further off than a player stands.
+				key: "patchSpeckle",
+				label: "Speckle",
+				digits: 2,
+			},
+			{
+				// **What stands around a corner is not on the face at all**, so
+				// no light can find it: a crevice has no bottom and a notch
+				// reads as flat ground until this says otherwise. Baked into the
+				// mesh, so moving it costs a rebuild and drawing it costs
+				// nothing.
+				key: "patchOcclusion",
+				label: "Corner shading",
+				digits: 2,
+			},
+			{
+				// **The three shares bound the shadow's depth.** A shadow
+				// takes one light away, so the deepest it can ever go is that
+				// light's share of the total -- a shadow that reads too faint
+				// is as often a key carrying too little as a shadow set too
+				// weak. Shadow strength divides what is left of that share.
+				key: "keyLight",
+				label: "Key light",
+				digits: 2,
+			},
+			{
+				key: "fillLight",
+				label: "Fill light",
+				digits: 2,
+			},
+			{
+				key: "topLight",
+				label: "Light from above",
+				digits: 2,
+			},
+			{
+				// **Two cascades a light, and one map was measured to be
+				// too coarse.** The patch is a box whose corners are known
+				// before anything is drawn, so one map over the whole of it
+				// looked like enough -- and at 2,048 texels over a 1,100 m
+				// patch a texel is 0.66 m on the ground while the steps
+				// casting the shadows are one block tall. The near cascade is
+				// sized from how far off the camera is, so its texels follow
+				// what is being looked at.
+				key: "keyShadow",
+				label: "Shadow from the key",
+			},
+			{
+				key: "fillShadow",
+				label: "Shadow from the fill",
+			},
+			{
+				// **A light with no direction you can see is a light you tune
+				// by guessing.** These are directions rather than places, so
+				// each one is drawn on a dome around the patch, sized by how
+				// much of the light it carries.
+				key: "showLights",
+				label: "Show the lights",
+			},
+			{
+				// **How much of its light a shadow takes, not how dark it is.**
+				// A shadow removes a light, so how dark it looks depends on
+				// what share that light had -- a shadow that reads too faint is
+				// usually a key that carries too little.
+				key: "shadowStrength",
+				label: "Shadow strength",
+				digits: 2,
+				enabledWhen: (k) => k.keyShadow || k.fillShadow,
 			},
 		],
 	},
@@ -269,149 +515,85 @@ const GROUPS: Group[] = [
 		knobs: [],
 	},
 	{
-		title: "Terrain",
+		title: "Continentalness",
 		where: "both",
 		folded: true,
 		tab: "terrain",
+		tint: "cont",
+		knobs: layerKnobs(
+			"continent",
+			"Continentalness → how high the land stands",
+		),
+	},
+	{
+		title: "Erosion",
+		where: "both",
+		folded: true,
+		tab: "terrain",
+		tint: "ero",
 		knobs: [
+			...layerKnobs("erosion", "Erosion → how much it cuts away"),
 			{
-				key: "terrainCurve",
+				// **The half of erosion that is not about relief.** Water lowers
+				// a range as well as smoothing it, and where the height is one
+				// function of all three fields, erosion changes the level by
+				// construction. Flattened into one line it has to be a term of
+				// its own.
+				key: "erosionBite",
 				map: true,
-				label: "Noise \u2192 base height",
-				curve: true,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "terrainFeature",
-				map: true,
-				label: "Feature",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "terrainFeatureScale",
-				map: true,
-				label: "Feature scale",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "terrainOctaves",
-				map: true,
-				label: "Octaves",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
+				label: "Wears the level down",
+				digits: 2,
+				enabledWhen: (k) => !k.plain && k.erosionLayer,
 			},
 		],
 	},
 	{
-		title: "Mountains",
+		title: "Peaks & valleys",
 		where: "both",
 		folded: true,
 		tab: "terrain",
+		tint: "pv",
+		knobs: layerKnobs("peaks", "Peaks & valleys → the relief itself"),
+	},
+	{
+		title: "Cliffs & overhangs",
+		where: "both",
+		folded: true,
+		tab: "terrain",
+		tint: "cliff",
 		knobs: [
+			...layerKnobs("carve", "Noise → density"),
 			{
-				key: "mountainLayer",
+				// **The layer opens nothing at the waterline, and this is how
+				// far up that reaches.** What it opens below the sea fills, and
+				// a slot of water dropping through the crust reads as a fault
+				// rather than a cave -- so at a few metres this is a shoreline
+				// rule. Turned up it keeps the layer off the low ground
+				// altogether, and cliffs and arches appear only on what stands
+				// well above the sea.
+				key: "carveHold",
 				map: true,
-				label: "Mountains on",
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "merge",
-				map: true,
-				label: "How they merge",
-				choices: [
-					{ value: "gated", label: "Above the line" },
-					{ value: "roughen", label: "Roughen" },
-				],
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainLine",
-				map: true,
-				label: "Mountain line",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-				shownWhen: (k) => k.merge === "gated",
-			},
-			{
-				key: "mountainDetail",
-				map: true,
-				label: "Detail on top",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainCurve",
-				map: true,
-				label: "Noise \u2192 range height",
-				curve: true,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainFeature",
-				map: true,
-				label: "Feature",
+				label: "Held off above the water",
 				digits: 0,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainFeatureScale",
-				map: true,
-				label: "Feature scale",
-				digits: 0,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
-			},
-			{
-				key: "mountainOctaves",
-				map: true,
-				label: "Octaves",
-				digits: 0,
-				enabledWhen: (k) => !k.plain && k.mountainLayer,
+				enabledWhen: (k) => !k.plain && k.carveLayer,
 			},
 		],
 	},
 	{
-		// **How much of the planet is land, and how tall it stands.** Land is a
-		// percentile of the field and Relief is what the tallest point of it
-		// comes to in metres, so the two are independent: moving one never
-		// moves the other.
-		title: "Land",
+		title: "Ground",
 		where: "both",
+		side: "left",
 		folded: true,
 		tab: "terrain",
 		knobs: [
-			{
-				key: "landFraction",
-				map: true,
-				label: "Land",
-				digits: 2,
-				enabledWhen: (k) => !k.plain,
-			},
 			{
 				key: "relief",
 				map: true,
 				label: "Relief",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
-			},
-		],
-	},
-	{
-		// **Sea level moves the water and Sea depth moves the floor**, and
-		// neither moves a metre of land: draining is the same picture as
-		// taking that much ocean away.
-		title: "Sea",
-		where: "both",
-		folded: true,
-		tab: "terrain",
-		knobs: [
-			{
-				key: "seaLevel",
-				map: true,
-				label: "Sea level",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
+				given: (s) =>
+					`the top half of the continentalness curve, so the highest a continent stands before peaks are added — a full peak reaches ${Math.round(s.knobs.relief + s.knobs.peakRelief)} m`,
 			},
 			{
 				key: "seaDepth",
@@ -419,68 +601,26 @@ const GROUPS: Group[] = [
 				label: "Sea depth",
 				digits: 0,
 				enabledWhen: (k) => !k.plain,
+				given: () =>
+					"the bottom half of the same curve · it deepens the ocean and leaves the land where it is, because the coast is where the curve crosses the middle",
 			},
-		],
-	},
-	{
-		// **The one pass that is not a function of a point.** Every other knob
-		// here is read at the place it is asked about; water walks, so these
-		// are read over the whole planet on one grid before any of it can be
-		// drawn -- and that grid is the slowest step of a map build by a wide
-		// margin, so the switch above the strength is what a person reaches for
-		// rather than dragging the slider to nothing. Folded and off, because
-		// neither walk carves yet: both take the median hillslope up rather
-		// than leaving it alone while the tail grows.
-		title: "Erosion",
-		where: "both",
-		folded: true,
-		tab: "terrain",
-		knobs: [
 			{
-				key: "erosionOn",
+				key: "peakRelief",
 				map: true,
-				label: "Erosion",
+				label: "Peak relief",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.peaksLayer,
+				given: (s) =>
+					`a full peak over a full valley is ${Math.round(2 * s.knobs.peakRelief)} m`,
+			},
+			{
+				key: "seaLevel",
+				map: true,
+				label: "Sea level",
+				digits: 0,
 				enabledWhen: (k) => !k.plain,
-			},
-			{
-				key: "erosion",
-				map: true,
-				label: "Strength",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.erosionOn,
-			},
-			{
-				key: "erosionWalk",
-				map: true,
-				label: "Droplets",
-				choices: [
-					{ value: "cell", label: "Cell to cell" },
-					{ value: "free", label: "Free position" },
-				],
-				enabledWhen: (k) => !k.plain && k.erosionOn,
-			},
-			{
-				key: "erosionInertia",
-				map: true,
-				label: "Keeps direction",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.erosionOn,
-				shownWhen: (k) => k.erosionWalk === "free",
-			},
-			{
-				key: "erosionCutShare",
-				map: true,
-				label: "Cut spread",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.erosionOn,
-				shownWhen: (k) => k.erosionWalk === "cell",
-			},
-			{
-				key: "erosionMaxCut",
-				map: true,
-				label: "Deepest cut",
-				digits: 2,
-				enabledWhen: (k) => !k.plain && k.erosionOn,
+				given: () =>
+					"the water moves off the curve's own middle · at no erosion bite the whole field lifts by exactly these metres and no ground moves",
 			},
 		],
 	},
@@ -1007,8 +1147,17 @@ export class ParameterPanel {
 	 * rebuild** is on, instead of the knob only marking the Rebuild button
 	 * dirty. Never called for a knob outside that set: those still need the
 	 * device and the address width a full reload gives them.
+	 *
+	 * `terrain` says whether **this** key moves the ground. False means it is
+	 * one of {@link BAKED_KNOBS}, so the map, the shape, the peaks and the
+	 * generators all still describe this world and only the meshes are wrong.
+	 * A caller that debounces has to remember a true across the window: the
+	 * panel reports each key as it moves and never how the window ends.
 	 */
-	private readonly onLiveRebuild: (settings: PlanetSettings) => void;
+	private readonly onLiveRebuild: (
+		settings: PlanetSettings,
+		terrain: boolean,
+	) => void;
 	private readonly rows: Row[] = [];
 
 	/** Each named part's own element, so another pane can host one. */
@@ -1059,7 +1208,10 @@ export class ParameterPanel {
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
 		onDraft: (settings: PlanetSettings) => void = () => {},
-		onLiveRebuild: (settings: PlanetSettings) => void = () => {},
+		onLiveRebuild: (
+			settings: PlanetSettings,
+			terrain: boolean,
+		) => void = () => {},
 		options: { readonly bench?: boolean } = {},
 	) {
 		this.bench = options.bench ?? false;
@@ -1084,11 +1236,24 @@ export class ParameterPanel {
 	 * is mounted here stays while the rows below it move.
 	 */
 	mount(element: HTMLElement): void {
+		// **On the bench the picture goes with the world, not with the
+		// layers.** The right pane is the four layers and nothing else, so a
+		// reader dragging a curve never has to scroll past the map to reach
+		// the next one -- and what a layer did is on the other side of the
+		// window rather than above the knob that did it.
+		if (this.leftBody) {
+			this.leftBody.insertBefore(element, this.leftBody.firstChild);
+			return;
+		}
 		this.root.insertBefore(element, this.root.children[1] ?? null);
 	}
 
 	/** Put an element at the bottom of the scrolling rows. */
 	footer(element: HTMLElement): void {
+		if (this.leftBody) {
+			this.leftBody.appendChild(element);
+			return;
+		}
 		this.root.querySelector(".knobs-body")?.appendChild(element);
 	}
 
@@ -1171,6 +1336,11 @@ export class ParameterPanel {
 			if (group.folded) section.classList.add("shut");
 
 			const head = document.createElement("h2");
+			// **A layer's heading is its curve's colour.** Four curves with one
+			// colour between them are four curves a reader has to keep track of
+			// by position; the pictures the bench draws are named by the same
+			// four, so the tint is what ties a section to what it drew.
+			if (group.tint) head.classList.add(`tint-${group.tint}`);
 			const toggle = document.createElement("button");
 			toggle.className = "knobs-fold";
 			toggle.textContent = group.title;
@@ -1312,10 +1482,10 @@ export class ParameterPanel {
 		// the ground is the whole window rather than a picture over one.
 		if (!this.bench) {
 			const bench = document.createElement("a");
-			bench.textContent = "Terrain bench";
-			bench.href = "./terrain.html";
+			bench.textContent = "Landscape bench";
+			bench.href = "./landscape.html";
 			bench.onclick = () => {
-				bench.href = `./terrain.html?${this.settings.toParams().toString()}`;
+				bench.href = `./landscape.html?${this.settings.toParams().toString()}`;
 			};
 			bar.appendChild(bench);
 		}
@@ -1480,8 +1650,7 @@ export class ParameterPanel {
 			this.draft[knob.key] as unknown as [number, number][];
 
 		/** Which layer this curve reads, from the knob it belongs to. */
-		const layer: "terrain" | "mountain" =
-			knob.key === "terrainCurve" ? "terrain" : "mountain";
+		const layer = (knob.key as string).replace("Curve", "") as LayerName;
 
 		// **Where the world actually lands on this curve.** Behind the curve
 		// is a histogram of the layer's own field over the sphere, sampled the
@@ -1505,6 +1674,9 @@ export class ParameterPanel {
 				k[`${layer}Feature`],
 				k[`${layer}FeatureScale`],
 				k[`${layer}Octaves`],
+				k[`${layer}Persistence`],
+				k[`${layer}Lacunarity`],
+				k[`${layer}Fold`],
 			].join(":");
 			if (key === histKey) return;
 			histKey = key;
@@ -1512,10 +1684,7 @@ export class ParameterPanel {
 				this.settings.layerFor(layer),
 				this.settings.radius,
 			);
-			const offset =
-				layer === "terrain"
-					? TERRAIN_SEED_OFFSET
-					: MOUNTAIN_SEED_OFFSET;
+			const offset = LAYER_SEED_OFFSETS[layer];
 			const seed = (seedFromString(this.draft.seed) + offset) | 0;
 			hist = new Float32Array(HIST_BINS);
 			histMax = 0;
@@ -1568,27 +1737,28 @@ export class ParameterPanel {
 			g.moveTo(toX(0), pad);
 			g.lineTo(toX(0), canvas.height - pad);
 			g.stroke();
-			// The gate is drawn on the curve it cuts: Mountain line is a
-			// height on this curve's own vertical axis, so saying it as a
-			// number in another group would make the reader hold two pictures
-			// at once.
-			if (knob.key === "terrainCurve" && this.draft.merge === "gated") {
-				let low = Infinity;
-				let high = -Infinity;
-				for (const [, out] of curve) {
-					if (out < low) low = out;
-					if (out > high) high = out;
-				}
-				g.strokeStyle = "rgba(255, 180, 84, 0.55)";
+			// **The line every curve is read against, drawn on the curve
+			// itself.** On continentalness it is sea level: the curve gives a
+			// height and where it crosses this line is the coast. On peaks and
+			// valleys it is the level the continent already set, so above the
+			// line is a peak and below it a valley. On the carve it is the line
+			// between air and rock. Saying any of them as a number somewhere
+			// else would make the reader hold two pictures at once.
+			const mark = CURVE_MARKS[layer];
+			if (mark) {
+				const at = toY(mark.at);
+				g.strokeStyle = "rgba(111, 208, 255, 0.5)";
 				g.setLineDash([3 * dpr, 3 * dpr]);
 				g.beginPath();
-				const at = toY(low + this.draft.mountainLine * (high - low));
 				g.moveTo(pad, at);
 				g.lineTo(canvas.width - pad, at);
 				g.stroke();
 				g.setLineDash([]);
+				g.fillStyle = "rgba(111, 208, 255, 0.8)";
+				g.font = `${9 * dpr}px system-ui, sans-serif`;
+				g.fillText(mark.name, pad + 2 * dpr, at - 3 * dpr);
 			}
-			g.strokeStyle = "#6fd0ff";
+			g.strokeStyle = LAYER_INKS[layer];
 			g.lineWidth = 1.5 * dpr;
 			g.beginPath();
 			for (let px = pad; px <= canvas.width - pad; px++) {
@@ -1741,7 +1911,15 @@ export class ParameterPanel {
 			// new ground, not the new sea radius or the new sky, so Rebuild is
 			// still the way to see everything the knob changed.
 			if (this.liveRebuild && this.settings.problems().length === 0) {
-				if (REMESH_KNOBS.has(key)) this.onLiveRebuild(this.settings);
+				// The panel reports what this one key is. Whoever owns the
+				// settle timer owns remembering the strongest key inside the
+				// window, because it is the one that knows when the window
+				// closed.
+				if (REMESH_KNOBS.has(key))
+					this.onLiveRebuild(
+						this.settings,
+						LIVE_TERRAIN_KNOBS.has(key),
+					);
 			}
 		} else {
 			this.onLive(this.settings);
@@ -1794,10 +1972,11 @@ export class ParameterPanel {
 			`<span>chunk <b>${settings.chunkSpan.toFixed(0)} m</b></span>` +
 			`<span>chunk level <b>${settings.chunkLevel}</b></span>` +
 			`<span>map cell <b>${settings.coarseCell.toFixed(0)} m</b>, level <b>${settings.coarseLevel}</b></span>` +
-			`<span>terrain <b>${settings.widestOf("terrain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("terrain").toFixed(0)} m</b>, over <b>${settings.knobs.terrainOctaves}</b> octaves</span>` +
-			(settings.knobs.mountainLayer
-				? `<span>mountains <b>${settings.widestOf("mountain").toFixed(0)} m</b> down to <b>${settings.narrowestOf("mountain").toFixed(0)} m</b>, over <b>${settings.knobs.mountainOctaves}</b> octaves</span>`
-				: `<span>mountain layer <b>off</b></span>`) +
+			LAYER_NAMES.map((layer) =>
+				settings.layerOn(layer)
+					? `<span>${LAYER_TITLES[layer].toLowerCase()} <b>${settings.widestOf(layer).toFixed(0)} m</b> down to <b>${settings.narrowestOf(layer).toFixed(0)} m</b>, over <b>${(settings.knobs as unknown as Record<string, number>)[`${layer}Octaves`]}</b> octaves</span>`
+					: `<span>${LAYER_TITLES[layer].toLowerCase()} <b>off</b></span>`,
+			).join("") +
 			// The camera's own height, not a figure typed in beside it: the two
 			// drifted apart the moment one of them moved.
 			`<span>horizon at eye height <b>${(settings.radius * Math.acos(settings.radius / (settings.radius + PLAYER_DEFAULTS.eyeHeight))).toFixed(0)} m</b></span>` +

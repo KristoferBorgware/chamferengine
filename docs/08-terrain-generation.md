@@ -487,21 +487,52 @@ the one above it, so the fine detail lands on ground the coarse octaves already
 raised — which is what leaves the flats flat instead of crinkling the whole
 planet.
 
-> **[verified]** The same seed and the same 300 m of relief, as the fold is
-> turned up:
->
-> | Ridge | median | 90th | 99th | steepest |
-> |---|---|---|---|---|
-> | 0 | 11.0° | 24.9° | 37.5° | 55.4° |
-> | 0.2 | 19.1° | 42.9° | 58.8° | 72.9° |
-> | 0.4 | 25.9° | 51.3° | 67.2° | 79.6° |
-> | 0.6 | 24.3° | 47.8° | 63.7° | 77.0° |
-> | 0.8 | 24.2° | 46.8° | 62.4° | 75.9° |
+**The crest slides, and the two shapes are never mixed.** A plain octave peaks
+where it reads `+1` and a fold peaks where it reads `0`, so the two disagree
+about which end is high: adding them in proportion subtracts on the positive
+half and adds on the negative one. `octaveNoise` moves the crest instead —
+`pivot` is where the field's `+1` sits, at `n = 1` unfolded and `n = 0` fully
+folded, and the crease is measured from there. Both ends are the arithmetic
+they would be either way, to the bit.
 
-The gradient settles above about `0.4`, because the weighting starts taking back
-what the fold adds; what keeps changing past that is how much of the roughness
-sits on high ground rather than everywhere. At `0` the field is bit-for-bit the
-plain sum.
+> **[verified]** Gradient over a 3,400 m patch sampled every 13.3 m, at 300 m
+> of relief, four octaves of a 600 m field. Blending the two shapes against
+> moving one crest:
+>
+> | Fold | blended, median | crest moved, median | blended, 99th | crest moved, 99th |
+> |---|---|---|---|---|
+> | 0 | 13.8° | 13.8° | 47.9° | 47.9° |
+> | 0.2 | **10.9°** | 15.1° | 48.7° | 51.3° |
+> | 0.4 | 13.8° | 17.5° | 55.2° | 55.6° |
+> | 0.6 | 18.6° | 21.2° | 61.9° | 60.9° |
+> | 0.8 | 22.9° | 25.6° | 67.3° | 66.8° |
+> | 1 | 26.9° | 26.9° | 71.3° | 71.3° |
+
+**Blended, a little fold made the ground flatter than none at all** — 10.9°
+against 13.8° at the median. Moving the crest, the fold steepens the ground at
+every setting it is turned to, which is the only behaviour a dial can be read
+from. At `0` and at `1` the field is bit-for-bit what it always was; measured
+over 200,000 directions at each end, every sample is identical and the largest
+gap is zero.
+
+> **[verified]** What the cancellation cost the field itself, over the whole
+> planet: the spread of the top tenth of values against the spread of the
+> bottom tenth. Blended, the positive half loses its range in the middle of the
+> dial and the ridges pile against a ceiling; with the crest moved, the top
+> leads at every setting.
+>
+> | Fold | blended | crest moved |
+> |---|---|---|
+> | 0 | top ×1.08 | top ×1.08 |
+> | 0.2 | **bottom ×1.78** | top ×1.35 |
+> | 0.35 | **bottom ×2.47** | top ×1.35 |
+> | 0.5 | **bottom ×1.39** | top ×1.43 |
+> | 0.8 | top ×1.32 | top ×1.49 |
+> | 1 | top ×2.20 | top ×2.20 |
+
+Which end of a field carries its range decides which way a curve read against
+it has to rise. Blended, that answer **reversed** somewhere near a fold of
+`0.72`, and nothing said so.
 
 **The generator sets this to zero everywhere, and the next section is why.**
 `octaveNoise` takes the parameter and every measurement above describes what it

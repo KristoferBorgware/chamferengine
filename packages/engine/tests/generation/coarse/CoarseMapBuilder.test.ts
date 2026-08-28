@@ -55,26 +55,26 @@ describe("CoarseMapBuilder", () => {
 
 	it("starts at the top on a first run, whatever step it is asked for", () => {
 		const builder = new CoarseMapBuilder(LEVEL);
-		same(wanted, builder.run(SEED, OPTIONS, "erosion"));
+		same(wanted, builder.run(SEED, OPTIONS, "metres"));
 	});
 
-	/** A knob that only reaches erosion must still answer to a changed value. */
+	/** A knob that only reaches the second step must still answer to a change. */
 	it("picks up a changed option at the step that option reaches", () => {
 		const builder = new CoarseMapBuilder(LEVEL);
 		builder.run(SEED, OPTIONS);
-		const cut = { ...OPTIONS, erosion: 0.8 };
-		const partial = builder.run(SEED, cut, coarseStageOf("erosion"));
-		same(buildCoarseMap(SEED, cut), partial);
+		const taller = { ...OPTIONS, relief: 1600 };
+		const partial = builder.run(SEED, taller, coarseStageOf("relief"));
+		same(buildCoarseMap(SEED, taller), partial);
 
-		const land = { ...OPTIONS, landFraction: 0.6 };
-		const fromSea = builder.run(SEED, land, coarseStageOf("landFraction"));
-		same(buildCoarseMap(SEED, land), fromSea);
+		const flat = { ...OPTIONS, peaksLayer: false };
+		const fromCurves = builder.run(SEED, flat, coarseStageOf("peaksLayer"));
+		same(buildCoarseMap(SEED, flat), fromCurves);
 	});
 
 	it("reuses one grid across runs", () => {
 		const builder = new CoarseMapBuilder(LEVEL);
 		const first = builder.run(SEED, OPTIONS);
-		const second = builder.run(SEED, OPTIONS, "erosion");
+		const second = builder.run(SEED, OPTIONS, "metres");
 		expect(second.index).toBe(first.index);
 		expect(second.index).toBe(builder.grid);
 	});
@@ -83,21 +83,17 @@ describe("CoarseMapBuilder", () => {
 		for (const option of [
 			"level",
 			"cellMetres",
-			"terrain",
-			"mountain",
-			"mountainLayer",
-			"merge",
-			"mountainLine",
-			"detail",
+			"continent",
+			"erosion",
+			"peaks",
+			"continentLayer",
+			"erosionLayer",
+			"peaksLayer",
+			"erosionBite",
 			"relief",
 			"seaDepth",
-			"landFraction",
+			"peakRelief",
 			"seaLevel",
-			"erosion",
-			"erosionWalk",
-			"erosionMaxCut",
-			"erosionCutShare",
-			"erosionInertia",
 		] as const)
 			expect(COARSE_STAGES).toContain(coarseStageOf(option));
 	});

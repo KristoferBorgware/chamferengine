@@ -22,6 +22,40 @@ const OCTAVE_SPREAD = 1000;
 const RIDGE_GAIN = 2.2;
 
 /**
+ * Every octave's own offset, worked out once per seed instead of per sample.
+ *
+ * **An octave's offset is a property of the octave and the seed, and of
+ * nothing else** -- it never depended on the point being sampled, and
+ * computing it inside the sampling loop meant three hashes a sample thrown
+ * away. Over a coarse map that is three hashes per cell per octave; over the
+ * vegetation lab's leaf cut, where one octave is read at every candidate cell
+ * of every cluster, it was the larger half of what `octaveNoise` itself cost.
+ *
+ * **Bit for bit the same number.** The stored value is exactly the
+ * `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to compute, and the
+ * settings' own offset is still added at the point of use, so the argument
+ * handed to the basis is the same `double` it always was.
+ *
+ * Keyed by seed and grown to the deepest octave count that seed has been
+ * asked for. A world uses a handful of seeds -- one per layer, plus the few a
+ * lab adds for a bend or a cut -- so this never grows into a leak.
+ */
+const OCTAVE_OFFSETS = new Map<number, Float64Array>();
+
+function offsetsFor(seed: number, octaves: number): Float64Array {
+	const held = OCTAVE_OFFSETS.get(seed);
+	if (held && held.length >= octaves * 3) return held;
+	const made = new Float64Array(octaves * 3);
+	for (let o = 0; o < octaves; o++) {
+		made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+		made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+		made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+	}
+	OCTAVE_OFFSETS.set(seed, made);
+	return made;
+}
+
+/**
  * Octaves of value noise, with the shape and the parameters of the reference
  * implementation, in `[-1, 1]`.
  *
@@ -73,20 +107,42 @@ export function octaveNoise(
 	let f = settings.frequency;
 	let weight = 1;
 	const ridge = settings.ridge;
+	const spread = offsetsFor(seed, settings.octaves);
 	for (let o = 0; o < settings.octaves; o++) {
-		const ox =
-			(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetX;
-		const oy =
-			(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + settings.offsetY;
-		const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+		const ox = spread[o * 3]! + settings.offsetX;
+		const oy = spread[o * 3 + 1]! + settings.offsetY;
+		const oz = spread[o * 3 + 2]!;
 		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 		let signal = n;
 		if (ridge > 0) {
-			// `1 - |n|` folds the octave at its own zero crossing, and the fold
-			// is a crease. Squaring sharpens it and pulls the low ground down.
-			const fold = 1 - Math.abs(n);
-			const crease = fold * fold;
-			signal = n * (1 - ridge) + (crease * 2 - 1) * ridge;
+			// **The fold's crest moves; the two shapes are never mixed.**
+			// Folding at the zero crossing and then blending that against the
+			// plain octave adds an even function to an odd one, and the two
+			// disagree about which end is high: plain noise peaks at `n = 1`
+			// and a fold peaks at `n = 0`, so on the positive side they cancel.
+			// Measured over the planet, that cost the whole positive half its
+			// range at part settings -- the spread of the top tenth against the
+			// bottom tenth ran `1 : 3.34` at a fold of `0.35`, and the field's
+			// maximum fell to `0.338` against the plain sum's `0.807`. The
+			// ridges piled against a ceiling with nothing above them, and a
+			// curve read against the field had to rise to the *left* to find
+			// any spread of height.
+			//
+			// One shape whose crest slides instead. `pivot` is where the crest
+			// sits: `n = 1` at no fold, `n = 0` at full fold. `away` is how far
+			// this sample is from it as a fraction of the furthest anything can
+			// be, so the field reaches `+1` at the crest and `-1` at the far
+			// end **at every setting**.
+			//
+			// Both ends are the arithmetic they always were. At `1` the pivot
+			// is `0`, `away` is `|n|` and the crease is `(1 - |n|)²` -- bit for
+			// bit. At `0` it is `(1 + n) / 2`, so the signal is `n` -- which is
+			// the branch this one does not take, and the two agree in the
+			// limit.
+			const pivot = 1 - ridge;
+			const away = Math.abs(n - pivot) / (1 + pivot);
+			const crease = (1 - away) * (1 - ridge * away);
+			signal = crease * 2 - 1;
 			signal *= weight;
 			weight = Math.min(
 				1,

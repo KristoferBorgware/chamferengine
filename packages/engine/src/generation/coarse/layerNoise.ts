@@ -2,8 +2,9 @@ import type { CoarseGrid } from "./CoarseGrid.js";
 import type { CoarseMapOptions } from "./CoarseMapOptions.js";
 import { COARSE_MAP_DEFAULTS } from "./CoarseMapOptions.js";
 import {
-	MOUNTAIN_SEED_OFFSET,
-	TERRAIN_SEED_OFFSET,
+	CONTINENT_SEED_OFFSET,
+	EROSION_SEED_OFFSET,
+	PEAKS_SEED_OFFSET,
 	layerNoiseSettings,
 	radiusOf,
 } from "./layeredHeight.js";
@@ -11,27 +12,30 @@ import { octaveNoise } from "../noise/octaveNoise.js";
 
 /** Each layer's octave stack, read at every cell, before any curve touches it. */
 export interface LayerNoise {
-	readonly terrain: Float64Array;
-
-	/** Nothing when the mountain layer is off, because then it is never read. */
-	readonly mountain: Float64Array | null;
+	readonly continent: Float64Array;
+	readonly erosion: Float64Array;
+	readonly peaks: Float64Array;
 }
 
 /**
- * The two layers' noise over the whole map, with no curve applied.
+ * The three layers' noise over the whole map, with no curve applied.
  *
  * **A curve is not a field.** The octave stacks answer to the seed, the layer
- * widths and the octave counts; the curves, the merge, the line and the balance
- * are read *from* those numbers afterwards. Splitting the two lets a caller
- * that is dragging a curve keep the field it already has -- measured on the
- * shipped level-8 map in the browser, the stacks are `410 ms` of an `840 ms`
- * rebuild, so the drag that changes no noise at all was paying half its cost
- * for it.
+ * widths, the octave counts, the falloffs and the folds; the curves and every
+ * metre knob are read *from* those numbers afterwards. Splitting the two lets a
+ * caller that is dragging a curve keep the field it already has -- measured on
+ * the shipped level-8 map in the browser, the stacks are the larger half of a
+ * rebuild, so the drag that changes no noise at all was paying for it.
  *
- * The cost of holding it is two `float64` fields, `10.5 MB` at level 8, against
- * the grid's own 31 MB of directions and rings that are already resident.
- * `float64` and not `float32`: the value is what a spline is evaluated at, and
- * a rounded one is a different world.
+ * The cost of holding it is three `float64` fields, `15.7 MB` at level 8,
+ * against the grid's own 31 MB of directions and rings that are already
+ * resident. `float64` and not `float32`: the value is what a spline is
+ * evaluated at, and a rounded one is a different world.
+ *
+ * **A layer that is off is still read.** Its switch says what the height does
+ * with it, not whether the field exists -- the panel draws every layer's
+ * picture and histogram whether or not the world is reading it, because what a
+ * switched-off layer *would* put back is the thing being decided.
  */
 export function layerNoise(
 	grid: CoarseGrid,
@@ -40,20 +44,23 @@ export function layerNoise(
 ): LayerNoise {
 	const s = { ...COARSE_MAP_DEFAULTS, ...options };
 	const radius = radiusOf(s.cellMetres, s.level);
-	const terrain = layerNoiseSettings(s.terrain, radius);
-	const mountain = layerNoiseSettings(s.mountain, radius);
-	const terrainSeed = (seed + TERRAIN_SEED_OFFSET) | 0;
-	const mountainSeed = (seed + MOUNTAIN_SEED_OFFSET) | 0;
+	const continent = layerNoiseSettings(s.continent, radius);
+	const erosion = layerNoiseSettings(s.erosion, radius);
+	const peaks = layerNoiseSettings(s.peaks, radius);
+	const continentSeed = (seed + CONTINENT_SEED_OFFSET) | 0;
+	const erosionSeed = (seed + EROSION_SEED_OFFSET) | 0;
+	const peaksSeed = (seed + PEAKS_SEED_OFFSET) | 0;
 
-	const terrainOf = new Float64Array(grid.count);
-	const mountainOf = s.mountainLayer ? new Float64Array(grid.count) : null;
+	const continentOf = new Float64Array(grid.count);
+	const erosionOf = new Float64Array(grid.count);
+	const peaksOf = new Float64Array(grid.count);
 	for (let cell = 0; cell < grid.count; cell++) {
 		const x = grid.directions[cell * 3]!;
 		const y = grid.directions[cell * 3 + 1]!;
 		const z = grid.directions[cell * 3 + 2]!;
-		terrainOf[cell] = octaveNoise(x, y, z, terrainSeed, terrain);
-		if (mountainOf)
-			mountainOf[cell] = octaveNoise(x, y, z, mountainSeed, mountain);
+		continentOf[cell] = octaveNoise(x, y, z, continentSeed, continent);
+		erosionOf[cell] = octaveNoise(x, y, z, erosionSeed, erosion);
+		peaksOf[cell] = octaveNoise(x, y, z, peaksSeed, peaks);
 	}
-	return { terrain: terrainOf, mountain: mountainOf };
+	return { continent: continentOf, erosion: erosionOf, peaks: peaksOf };
 }

@@ -1,6 +1,4 @@
 import type { CoarseField } from "./CoarseField.js";
-import { BLOCK_COLORS } from "../terrain/blockColor.js";
-import { BlockType } from "../terrain/BlockType.js";
 
 /**
  * Every picture the editor can draw of a coarse map, in the order it lists
@@ -22,55 +20,27 @@ export const COARSE_FIELDS: readonly CoarseField[] = [
 		label: "Height",
 		scale: "linear",
 		// Grey, and absolute metres like the other one, so Relief brightens it
-		// rather than being normalised away. Sea level is the middle stop.
+		// rather than being normalised away. Sea level is the middle of it.
 		ramp: {
 			low: -400,
 			high: 400,
-			stops: [
-				[0.03, 0.03, 0.04],
-				[0.26, 0.27, 0.3],
-				[0.5, 0.51, 0.54],
-				[0.76, 0.77, 0.79],
-				[1.0, 1.0, 1.0],
-			],
 		},
 	},
 	{
 		id: "ground",
 		key: "height",
-		stage: "erosion",
+		stage: "metres",
 		label: "Ground",
 		scale: "linear",
-		// **Bands, not a blend, and every band is one of the world's blocks.**
-		// This picture answers "what is the ground made of here", and the world
-		// answers that with four blocks divided by three elevations -- so a
-		// color between two of them is a block nothing builds. The bands run on
-		// a 100 m grid so all three elevations land on edges: water under sea
-		// level, grass to 300 m, bare stone from 300 to 400, snow over 400.
-		//
-		// **Water is one band because water is one block.** Depth is not a
-		// second material -- what makes deep water darker than shallow is how
-		// much of it a look passes through -- so shading it would draw sea
-		// floors this world does not have. Height is the picture depth is read
-		// from.
-		//
-		// Absolute metres rather than a range stretched to fit whatever this
-		// planet holds. A ramp scaled to the field would draw every world the
-		// same and make Relief a knob with no picture; stated in metres, a
-		// 300 m world is green to its summit and raising Relief walks its peaks
-		// up into rock and then snow.
+		// **This picture names blocks, so it carries no range of its own to
+		// speak of.** What is the ground made of here is answered by the four
+		// materials and the two elevations `GROUND_LINES` fixes, in absolute
+		// metres, and the painter reads them there. The two numbers below are
+		// only what the grey pictures of the same field are stretched between,
+		// kept on the 100 m grid the material lines sit on.
 		ramp: {
 			low: -100,
 			high: 500,
-			hard: true,
-			stops: [
-				BLOCK_COLORS[BlockType.WATER]!,
-				BLOCK_COLORS[BlockType.GRASS]!,
-				BLOCK_COLORS[BlockType.GRASS]!,
-				BLOCK_COLORS[BlockType.GRASS]!,
-				BLOCK_COLORS[BlockType.STONE]!,
-				BLOCK_COLORS[BlockType.SNOW]!,
-			],
 		},
 	},
 ] as const;

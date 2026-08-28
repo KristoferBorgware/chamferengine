@@ -1,6 +1,11 @@
 import type { Column } from "../../generation/chunk/Column.js";
 import type { GridParts } from "../GridPaint.js";
-import type { MeshJob, MeshResult, MeshWorkerSetup } from "./MeshJob.js";
+import type {
+	MeshJob,
+	MeshResult,
+	MeshRetune,
+	MeshWorkerSetup,
+} from "./MeshJob.js";
 import { BlockType } from "../../generation/terrain/BlockType.js";
 import { Chunk } from "../../generation/chunk/Chunk.js";
 import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
@@ -31,9 +36,13 @@ export class MeshWorkerCore {
 	private readonly seed: number;
 	private readonly apron: boolean;
 	private readonly debugSeams: boolean;
-	private readonly speckle: number;
-	private readonly ambientOcclusion: boolean;
-	private readonly skyExposure: boolean;
+
+	// The three a {@link retune} replaces. They are baked into a vertex colour
+	// and read nothing else, so changing one needs the meshes again and needs
+	// the map, the shape and the generators exactly as they are.
+	private speckle: number;
+	private ambientOcclusion: boolean;
+	private skyExposure: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -79,6 +88,20 @@ export class MeshWorkerCore {
 					waterRadius: 0,
 				}
 			: null;
+	}
+
+	/**
+	 * Change the switches baked into a vertex colour, keeping everything else.
+	 *
+	 * The map, the shape, the seed and the per-level generators are what a
+	 * setup is expensive for, and not one of them is a function of these
+	 * three. Every chunk still has to be built again, because what they
+	 * change is already multiplied into the colours of the ones that exist.
+	 */
+	retune(message: MeshRetune): void {
+		this.speckle = message.speckle;
+		this.ambientOcclusion = message.ambientOcclusion;
+		this.skyExposure = message.skyExposure;
 	}
 
 	run(job: MeshJob): MeshResult {

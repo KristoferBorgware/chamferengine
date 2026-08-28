@@ -1,0 +1,4740 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Biomes lab — climate, and the diagram that reads it</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--ink: #e8ecf2;
+				--dim: #8b95a4;
+				--panel: #12161d;
+				--edge: #232b36;
+				--live: #6fd0ff;
+				--heat: #ff9d6b;
+				--wet: #6fe0c0;
+				--wild: #c79dff;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				overflow: hidden;
+				background: #070a0e;
+				color: var(--ink);
+				font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+			}
+			#view {
+				position: fixed;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				display: block;
+				touch-action: none;
+				cursor: grab;
+			}
+			#view:active {
+				cursor: grabbing;
+			}
+			/* **Two panels, one on each side of the view.** The left one is the
+			   planet -- where the patch is standing, what the ground does, and
+			   the two climate fields read off it -- and carries the finished
+			   map, which is what everything else is judged against. The right
+			   one is the diagram: where each biome sits in temperature and
+			   humidity, and nothing else. */
+			#panelWorld,
+			#panelBiomes {
+				position: fixed;
+				top: 0;
+				bottom: 0;
+				width: 340px;
+				display: flex;
+				flex-direction: column;
+				background: rgba(18, 22, 29, 0.94);
+				backdrop-filter: blur(6px);
+			}
+			#panelWorld {
+				left: 0;
+				border-right: 1px solid var(--edge);
+			}
+			#panelBiomes {
+				right: 0;
+				border-left: 1px solid var(--edge);
+			}
+			.head {
+				flex: 0 0 auto;
+				padding: 10px 14px 8px;
+				border-bottom: 1px solid var(--edge);
+			}
+			.scroller {
+				flex: 1 1 auto;
+				overflow-y: auto;
+				overscroll-behavior: contain;
+				padding: 0 14px 24px;
+			}
+			.head h1 {
+				font-size: 14px;
+				margin: 0 0 6px;
+				letter-spacing: 0.01em;
+			}
+			/* A picture sits where the thing it shows is tuned. */
+			.shot {
+				position: relative;
+				line-height: 0;
+				margin: 6px 0 0;
+			}
+			.shot canvas {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+				cursor: crosshair;
+			}
+			.shot b {
+				position: absolute;
+				left: 4px;
+				top: 4px;
+				font: 600 9.5px/1.4 system-ui, sans-serif;
+				letter-spacing: 0.02em;
+				padding: 1px 4px;
+				border-radius: 2px;
+				color: #12161d;
+				background: var(--live);
+				pointer-events: none;
+			}
+			.shot.heat b {
+				background: var(--heat);
+			}
+			.shot.wet b {
+				background: var(--wet);
+			}
+			.shot.wild b {
+				background: var(--wild);
+			}
+			.group > summary > .switch {
+				accent-color: var(--live);
+				margin: 0 6px 0 0;
+				vertical-align: -1px;
+			}
+			.group.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			.group.off > summary {
+				color: var(--dim);
+			}
+			/* The enlarged picture. A field at panel width shows where its
+			   features are; at this size it shows what they look like. */
+			#big {
+				position: fixed;
+				inset: 0;
+				z-index: 10;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(4, 6, 9, 0.88);
+				backdrop-filter: blur(3px);
+				cursor: zoom-out;
+			}
+			#big[hidden] {
+				display: none;
+			}
+			#big figure {
+				margin: 0;
+				max-width: 94vw;
+				max-height: 94vh;
+			}
+			#big canvas {
+				display: block;
+				max-width: 94vw;
+				max-height: 86vh;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+			}
+			#big figcaption {
+				display: flex;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 16px;
+				margin-top: 8px;
+				font-size: 12px;
+				color: var(--dim);
+			}
+			#big figcaption b {
+				color: var(--ink);
+				font-size: 13px;
+				letter-spacing: 0.02em;
+			}
+			#facts {
+				color: var(--dim);
+				font-size: 11px;
+				margin: 7px 0 0;
+			}
+			#facts b {
+				color: var(--ink);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			#recipe {
+				margin: 6px 0 0;
+				padding: 5px 6px;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				background: #0b0e13;
+				color: var(--dim);
+				font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			#recipe i {
+				font-style: normal;
+				font-weight: 600;
+			}
+			#recipe .h {
+				color: var(--heat);
+			}
+			#recipe .w {
+				color: var(--wet);
+			}
+			#recipe .b {
+				color: var(--live);
+			}
+			.group {
+				border-top: 1px solid var(--edge);
+				margin: 10px 0 0;
+				padding: 0 0 6px;
+			}
+			.group > summary {
+				padding: 8px 0 4px;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				cursor: pointer;
+				list-style: none;
+				user-select: none;
+			}
+			.group > summary::-webkit-details-marker {
+				display: none;
+			}
+			.group > summary::before {
+				content: "▸ ";
+				color: var(--edge);
+			}
+			.group[open] > summary::before {
+				content: "▾ ";
+			}
+			.group > summary:hover {
+				color: var(--live);
+			}
+			.group.heat > summary {
+				color: var(--heat);
+			}
+			.group.wet > summary {
+				color: var(--wet);
+			}
+			.group.wild > summary {
+				color: var(--wild);
+			}
+			.knob[hidden] {
+				display: none;
+			}
+			.knob {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				align-items: center;
+				gap: 2px 8px;
+				margin: 7px 0;
+			}
+			.knob label {
+				font-size: 12px;
+			}
+			.knob output {
+				font-variant-numeric: tabular-nums;
+				color: var(--live);
+				font-size: 11.5px;
+			}
+			.knob-note {
+				grid-column: 1 / -1;
+				font-size: 10.5px;
+				color: var(--dim);
+				margin: 1px 0 0;
+			}
+			.knob-note b {
+				color: var(--live);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			.knob input[type="range"],
+			.knob select,
+			.knob input[type="text"] {
+				grid-column: 1 / -1;
+				width: 100%;
+				accent-color: var(--live);
+			}
+			.knob select,
+			.knob input[type="text"] {
+				background: #0b0e13;
+				color: var(--ink);
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				padding: 3px 5px;
+				font: inherit;
+			}
+			.knob.pictured {
+				grid-template-columns: 1fr;
+				margin: 9px 0 4px;
+			}
+			.knob.check {
+				grid-template-columns: auto 1fr;
+			}
+			.knob.check input {
+				grid-column: auto;
+				width: auto;
+			}
+			/* **The diagram is the tool, so it is the first thing in its own
+			   panel and it does not scroll away.** Every biome is a dot on it
+			   and dragging one is the edit; the list underneath names them. */
+			#chart {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				touch-action: none;
+				cursor: crosshair;
+			}
+			.axis {
+				display: flex;
+				justify-content: space-between;
+				font-size: 9.5px;
+				line-height: 1.4;
+				color: var(--dim);
+				margin: 3px 0 0;
+				font-variant-numeric: tabular-nums;
+			}
+			#chartsays {
+				font-size: 10.5px;
+				color: var(--dim);
+				margin: 4px 0 0;
+			}
+			#chartsays b {
+				color: var(--live);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			.list {
+				margin: 10px 0 0;
+			}
+			.biome {
+				display: grid;
+				grid-template-columns: auto 1fr auto auto;
+				align-items: center;
+				gap: 6px;
+				padding: 3px 4px;
+				border: 1px solid transparent;
+				border-radius: 3px;
+				cursor: pointer;
+			}
+			.biome.picked {
+				border-color: var(--live);
+				background: rgba(111, 208, 255, 0.08);
+			}
+			.biome input[type="color"] {
+				width: 22px;
+				height: 18px;
+				padding: 0;
+				border: 1px solid var(--edge);
+				border-radius: 2px;
+				background: none;
+			}
+			.biome input[type="text"] {
+				background: none;
+				border: 0;
+				color: var(--ink);
+				font: inherit;
+				padding: 1px 2px;
+				min-width: 0;
+			}
+			.biome input[type="text"]:focus {
+				background: #0b0e13;
+				outline: 1px solid var(--edge);
+			}
+			.biome .share {
+				font-variant-numeric: tabular-nums;
+				font-size: 10.5px;
+				color: var(--dim);
+			}
+			.biome .drop {
+				background: none;
+				border: 0;
+				color: var(--dim);
+				cursor: pointer;
+				font: 13px/1 system-ui, sans-serif;
+				padding: 0 2px;
+			}
+			.biome .drop:hover {
+				color: #ff7a7a;
+			}
+			#add {
+				margin: 8px 0 0;
+				width: 100%;
+				padding: 5px;
+				border: 1px dashed var(--edge);
+				border-radius: 3px;
+				background: none;
+				color: var(--dim);
+				font: inherit;
+				cursor: pointer;
+			}
+			#add:hover {
+				color: var(--live);
+				border-color: var(--live);
+			}
+			#tabs {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 3px;
+				margin: 0 0 6px;
+			}
+			#tabs button {
+				flex: 1 1 auto;
+				padding: 3px 5px;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				background: #0b0e13;
+				color: var(--dim);
+				font: 10.5px/1.3 system-ui, sans-serif;
+				cursor: pointer;
+				white-space: nowrap;
+			}
+			#tabs button .swatch {
+				display: inline-block;
+				width: 7px;
+				height: 7px;
+				border-radius: 1px;
+				margin-right: 4px;
+				vertical-align: 0;
+			}
+			#tabs button.picked {
+				border-color: var(--live);
+				color: var(--ink);
+				background: rgba(111, 208, 255, 0.1);
+			}
+			#tabs button.empty {
+				color: #ff7a7a;
+			}
+			.sheet {
+				display: grid;
+				grid-template-columns: 16px repeat(5, 1fr);
+				gap: 2px;
+				margin: 4px 0 0;
+			}
+			.sheet button {
+				padding: 6px 0 4px;
+				border: 1px solid var(--edge);
+				border-radius: 2px;
+				color: #12161d;
+				font: 600 9px/1.2 system-ui, sans-serif;
+				cursor: pointer;
+				overflow: hidden;
+			}
+			.sheet button.picked {
+				outline: 2px solid var(--live);
+				outline-offset: -2px;
+			}
+			.sheet button small {
+				display: block;
+				font-weight: 400;
+				font-size: 8px;
+				opacity: 0.75;
+			}
+			.sheet .edge {
+				font-size: 8px;
+				color: var(--dim);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				writing-mode: vertical-rl;
+				transform: rotate(180deg);
+			}
+			.sheet .corner {
+				font-size: 8px;
+				color: var(--dim);
+			}
+			.sheet-foot {
+				display: flex;
+				justify-content: space-between;
+				font-size: 8.5px;
+				color: var(--dim);
+				margin: 2px 0 0 18px;
+			}
+			#hint {
+				position: fixed;
+				left: 12px;
+				bottom: 10px;
+				color: var(--dim);
+				font-size: 11.5px;
+				pointer-events: none;
+			}
+			/* **On a phone each panel is shut and there is a button to open
+			   it.** Each panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open one is the page and the view is a strip above it. */
+			#toggleWorld,
+			#toggleBiomes {
+				display: none;
+			}
+			@media (max-width: 760px) {
+				#panelWorld,
+				#panelBiomes {
+					width: 100%;
+					top: auto;
+					height: 68%;
+					border-left: 0;
+					border-right: 0;
+					border-top: 1px solid var(--edge);
+					transform: translateY(100%);
+					transition: transform 0.22s ease;
+				}
+				body.knobs #panelWorld,
+				body.biomes #panelBiomes {
+					transform: none;
+				}
+				#toggleWorld,
+				#toggleBiomes {
+					display: block;
+					position: fixed;
+					bottom: 12px;
+					z-index: 12;
+					padding: 9px 15px;
+					border: 1px solid var(--edge);
+					border-radius: 999px;
+					background: rgba(18, 22, 29, 0.94);
+					backdrop-filter: blur(6px);
+					color: var(--live);
+					font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+					letter-spacing: 0.02em;
+					transition: bottom 0.22s ease;
+				}
+				#toggleWorld {
+					left: 12px;
+				}
+				#toggleBiomes {
+					right: 12px;
+				}
+				body.knobs #toggleWorld {
+					bottom: calc(68% + 12px);
+				}
+				body.biomes #toggleBiomes {
+					bottom: calc(68% + 12px);
+				}
+				#hint {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="view"></canvas>
+		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
+		<button
+			id="toggleWorld"
+			type="button"
+			aria-controls="panelWorld"
+			aria-expanded="false"
+		>
+			World
+		</button>
+		<button
+			id="toggleBiomes"
+			type="button"
+			aria-controls="panelBiomes"
+			aria-expanded="false"
+		>
+			Biomes
+		</button>
+		<!-- **The finished map is in the head of the world panel**, because it
+		     is what the diagram on the other side is being judged against and it
+		     must not scroll away from either. -->
+		<div id="panelWorld">
+			<div class="head">
+				<h1>Biomes lab</h1>
+				<div class="shot"><canvas id="shotBiome"></canvas><b>Biomes</b></div>
+				<div id="recipe"></div>
+				<div id="facts"></div>
+			</div>
+			<div class="scroller">
+				<div id="knobsWorld"></div>
+			</div>
+		</div>
+		<div id="panelBiomes">
+			<div class="head">
+				<h1>Biomes</h1>
+				<!-- **The terrain decides the landform, and the diagram only
+				     names it.** One tab per kind of ground, each with its own
+				     partition of the same square, so a biome placed here can
+				     only ever be built on this kind of ground. -->
+				<div id="tabs"></div>
+				<canvas id="chart" width="300" height="300"></canvas>
+				<div class="axis"><span>dry</span><span>wet</span></div>
+				<div id="chartsays"></div>
+			</div>
+			<div class="scroller">
+				<div class="list" id="list"></div>
+				<button id="add" type="button">add a biome</button>
+				<div id="gridHost"></div>
+				<div id="knobsBiomes"></div>
+			</div>
+		</div>
+		<div id="big" hidden>
+			<figure>
+				<canvas id="bigShot"></canvas>
+				<figcaption>
+					<b id="bigName"></b>
+					<span>click anywhere, or press Escape, to close</span>
+				</figcaption>
+			</figure>
+		</div>
+
+		<script>
+			"use strict";
+
+			// ===== BEGIN engine noise kernel =====
+			// A hand port of packages/engine/src/generation/noise. A demo here
+			// carries no imports and no build step, so this is a copy -- and a
+			// copy that has drifted from the engine is a lab that teaches the
+			// wrong lesson, which is why
+			// packages/engine/tests/demos/multiNoiseLab.test.ts digests this
+			// block against the real functions.
+			/** `2^32`, the divisor that turns a `uint32` into a fraction of one. */
+			const U32 = 4294967296;
+
+			/** Three integer coordinates and a seed, mixed into `[0, 1)`. */
+			function hash3(x, y, z, seed) {
+				let h =
+					(Math.imul(x | 0, 374761393) +
+						Math.imul(y | 0, 668265263) +
+						Math.imul(z | 0, 1274126177) +
+						Math.imul(seed | 0, 1013904223)) >>>
+					0;
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				h = (h ^ (h >>> 16)) >>> 0;
+				return h / U32;
+			}
+
+			/** A seed someone typed, reduced to the `uint32` the hash takes. */
+			function seedFromString(text) {
+				let h = 2166136261 >>> 0;
+				for (let i = 0; i < text.length; i++) {
+					h = (h ^ text.charCodeAt(i)) >>> 0;
+					h = Math.imul(h, 16777619) >>> 0;
+				}
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				return (h ^ (h >>> 16)) >>> 0;
+			}
+
+			/**
+			 * The quintic curve, `6t^5 - 15t^4 + 10t^3`.
+			 *
+			 * Zero in the first and second derivative at both ends, so a normal
+			 * has no crease where one lattice cell meets the next. Smoothstep is
+			 * flat in the first derivative only and leaves a curvature jump at
+			 * every lattice plane, which shading draws as a grid.
+			 */
+			function fade(t) {
+				return t * t * t * (t * (t * 6 - 15) + 10);
+			}
+
+			/** Trilinear value noise, in `[-1, 1]`. */
+			function valueNoise3(px, py, pz, seed) {
+				const xi = Math.floor(px);
+				const yi = Math.floor(py);
+				const zi = Math.floor(pz);
+				const u = fade(px - xi);
+				const v = fade(py - yi);
+				const w = fade(pz - zi);
+				let s = 0;
+				for (let c = 0; c < 8; c++) {
+					const dx = c & 1;
+					const dy = (c >> 1) & 1;
+					const dz = (c >> 2) & 1;
+					const wx = dx ? u : 1 - u;
+					const wy = dy ? v : 1 - v;
+					const wz = dz ? w : 1 - w;
+					s += wx * wy * wz * hash3(xi + dx, yi + dy, zi + dz, seed);
+				}
+				return s * 2 - 1;
+			}
+
+			const OCTAVE_SPREAD = 1000;
+			const RIDGE_GAIN = 2.2;
+
+			/**
+			 * Every octave's own offset, worked out once per seed instead of per
+			 * sample.
+			 *
+			 * **An octave's offset is a property of the octave and the seed, and
+			 * of nothing else** -- it never depended on the point being sampled,
+			 * and computing it inside the sampling loop meant three hashes a
+			 * sample thrown away. Bit for bit the same number: the stored value
+			 * is exactly the `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to
+			 * compute, and the settings' own offset is still added at the point
+			 * of use.
+			 */
+			const OCTAVE_OFFSETS = new Map();
+
+			function offsetsFor(seed, octaves) {
+				const held = OCTAVE_OFFSETS.get(seed);
+				if (held && held.length >= octaves * 3) return held;
+				const made = new Float64Array(octaves * 3);
+				for (let o = 0; o < octaves; o++) {
+					made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+				}
+				OCTAVE_OFFSETS.set(seed, made);
+				return made;
+			}
+
+			/**
+			 * Octaves of value noise with the panel's own parameters, in
+			 * `[-1, 1]`.
+			 *
+			 * Every octave gets its own hashed offset, or two octaves of one
+			 * seeded lattice share zero crossings wherever their frequencies land
+			 * near a whole multiple and the ground grows a repeating grain.
+			 * Octaves accumulate low frequency first, because floating-point
+			 * addition is not associative -- the other order moves the result by
+			 * `1.4e-17` at four and five octaves and by nothing at six and
+			 * eight, which is the kind of error testing never finds. And the sum
+			 * is divided by the total amplitude, so adding an octave adds detail
+			 * without making the world taller.
+			 *
+			 * **`ridge` folds each octave at its own zero crossing**, and that
+			 * fold is the only place a crease can come from: every octave of a
+			 * plain sum is smooth in its first and second derivative, so every
+			 * summit a plain sum builds is a dome. At `0` the sum is returned
+			 * bit for bit.
+			 *
+			 * **It creases a whole layer at once**, moving the character of
+			 * every place in that layer together, so it belongs to a layer that
+			 * already says *where* -- fold the layer that decides a coastline
+			 * and every coastline on the planet is creased.
+			 */
+			function octaveNoise(x, y, z, seed, s) {
+				let sum = 0;
+				let amplitude = 1;
+				let total = 0;
+				let f = s.frequency;
+				let weight = 1;
+				const ridge = s.ridge;
+				const spread = offsetsFor(seed, s.octaves);
+				for (let o = 0; o < s.octaves; o++) {
+					const ox = spread[o * 3] + s.offsetX;
+					const oy = spread[o * 3 + 1] + s.offsetY;
+					const oz = spread[o * 3 + 2];
+					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+					let signal = n;
+					if (ridge > 0) {
+						// **The fold's crest moves; the two shapes are never
+						// mixed.** Folding at the zero crossing and blending
+						// that against the plain octave adds an even function to
+						// an odd one, and the two disagree about which end is
+						// high -- plain noise peaks at `n = 1` and a fold peaks
+						// at `n = 0` -- so on the positive side they cancel.
+						// Measured over the planet, the spread of the top tenth
+						// against the bottom tenth ran `1 : 3.34` at a fold of
+						// 0.35 and the maximum fell to 0.338 against the plain
+						// sum's 0.807. One shape whose crest slides instead: the
+						// field reaches +1 at the crest and -1 at the far end at
+						// every setting, and both ends are the arithmetic they
+						// always were.
+						const pivot = 1 - ridge;
+						const away = Math.abs(n - pivot) / (1 + pivot);
+						const crease = (1 - away) * (1 - ridge * away);
+						signal = crease * 2 - 1;
+						signal *= weight;
+						weight = Math.min(
+							1,
+							Math.max(0, 1 - ridge + ridge * crease * RIDGE_GAIN),
+						);
+					}
+					sum += amplitude * signal;
+					total += amplitude;
+					amplitude *= s.persistence;
+					f *= s.lacunarity;
+				}
+				if (s.normalise === false) return sum;
+				return total > 0 ? sum / total : 0;
+			}
+			// ===== END engine noise kernel =====
+
+			// ===== BEGIN engine coarse grid =====
+			// A hand port of packages/engine/src/addressing. Same reason the
+			// noise above is a copy: a demo here carries no imports and no build
+			// step, and packages/engine/tests/demos/multiNoiseLab.test.ts runs
+			// this block against the real functions, so a copy that has drifted
+			// fails a test rather than drawing a world the engine does not build.
+			//
+			// **The patch is the engine's own lattice**, not a hex grid that
+			// looks like one: the cells come from `positionToCell`, the ring
+			// from `neighbour`, and the hexagons from `cellCorners`. Porting the
+			// lab into the engine is deleting this block and importing the six
+			// names it defines.
+
+			/** The golden ratio, which is what puts the twelve vertices where they are. */
+			const PHI = (1 + Math.sqrt(5)) / 2;
+
+			/** Three components divided by their own length. */
+			function normalize3(v) {
+				const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+				return [v[0] / l, v[1] / l, v[2] / l];
+			}
+
+			/**
+			 * The twelve icosahedron vertices, as unit directions.
+			 *
+			 * A cell sits on a vertex of the subdivided icosahedron, so these
+			 * twelve are the twelve pentagons at every depth and in every world.
+			 * The order is fixed: vertices 0 and 3 carry the coordinate poles and
+			 * vertex 11 carries the prime meridian.
+			 */
+			const VERTICES = [
+				[-1, PHI, 0],
+				[1, PHI, 0],
+				[-1, -PHI, 0],
+				[1, -PHI, 0],
+				[0, -1, PHI],
+				[0, 1, PHI],
+				[0, -1, -PHI],
+				[0, 1, -PHI],
+				[PHI, 0, -1],
+				[PHI, 0, 1],
+				[-PHI, 0, -1],
+				[-PHI, 0, 1],
+			].map(normalize3);
+
+			/**
+			 * The twenty faces, each three indices into the vertex table.
+			 *
+			 * Every triple runs counter-clockwise seen from outside the sphere,
+			 * so a direction table written in one face's frame means the same
+			 * turn on all twenty.
+			 */
+			const FACES = [
+				[0, 11, 5],
+				[0, 5, 1],
+				[0, 1, 7],
+				[0, 7, 10],
+				[0, 10, 11],
+				[1, 5, 9],
+				[5, 11, 4],
+				[11, 10, 2],
+				[10, 7, 6],
+				[7, 1, 8],
+				[3, 9, 4],
+				[3, 4, 2],
+				[3, 2, 6],
+				[3, 6, 8],
+				[3, 8, 9],
+				[4, 9, 5],
+				[2, 4, 11],
+				[6, 2, 10],
+				[8, 6, 7],
+				[9, 8, 1],
+			];
+
+			/**
+			 * The direction of each face's centroid.
+			 *
+			 * The perpendicular bisector between two adjacent centroids contains
+			 * the edge those faces share, so the nearest centroid to a direction
+			 * names the face that direction falls in, exactly.
+			 */
+			const FACE_CENTROIDS = FACES.map(([a, b, c]) =>
+				normalize3([
+					VERTICES[a][0] + VERTICES[b][0] + VERTICES[c][0],
+					VERTICES[a][1] + VERTICES[b][1] + VERTICES[c][1],
+					VERTICES[a][2] + VERTICES[b][2] + VERTICES[c][2],
+				]),
+			);
+
+			/**
+			 * The six lattice steps, counter-clockwise seen from outside.
+			 *
+			 * Index 0 is the step from the face's vertex `A` toward `B`, the
+			 * offset `(+1, 0)`. That anchor is a property of the cell's own face,
+			 * so it never depends on how the cell was reached.
+			 */
+			const DIRECTIONS = [
+				[1, 0],
+				[0, 1],
+				[-1, 1],
+				[-1, 0],
+				[0, -1],
+				[1, -1],
+			];
+
+			/**
+			 * For each face, where each of its three edges leads.
+			 *
+			 * Twenty faces times three edges is sixty entries, each a face number
+			 * and an edge number: 180 bytes for every seam on the planet. Edge
+			 * `e` runs from vertex `e` to vertex `(e + 1) % 3`. Every matched
+			 * pair is traversed in opposite directions by its two faces, which is
+			 * the signature of consistent outward winding, so no orientation flag
+			 * is stored.
+			 */
+			const FACE_ADJACENCY = FACES.map((f, at) =>
+				[0, 1, 2].map((e) => {
+					const a = f[e];
+					const b = f[(e + 1) % 3];
+					for (let g = 0; g < 20; g++) {
+						if (g === at) continue;
+						for (let other = 0; other < 3; other++) {
+							const c = FACES[g][other];
+							const d = FACES[g][(other + 1) % 3];
+							if ((a === c && b === d) || (a === d && b === c))
+								return { face: g, edge: other };
+						}
+					}
+					throw new Error(`face ${at} edge ${e} has no neighbour`);
+				}),
+			);
+
+			/**
+			 * Turn a set of weights on global vertex numbers into an offset on
+			 * `face`.
+			 *
+			 * The weights need not be whole. A lattice point carries integers and
+			 * a droplet standing between cells carries the fractions between
+			 * them, and both are the same three numbers attached to the same
+			 * three vertices.
+			 */
+			function offsetOn(face, weights) {
+				const ids = FACES[face];
+				let total = 0;
+				const w = ids.map((v) => {
+					const x = weights.get(v) ?? 0;
+					total += x;
+					return x;
+				});
+				if (total === 0) return null;
+				for (const v of weights.keys()) if (!ids.includes(v)) return null;
+				return { face, i: w[1], j: w[2] };
+			}
+
+			/**
+			 * The barycentric weights of a lattice point on its face's vertices.
+			 *
+			 * Written this way a lattice point is a set of integer weights
+			 * attached to global vertex numbers, and that description never
+			 * mentions a face.
+			 */
+			function latticeWeights(n, i, j) {
+				return [n - i - j, i, j];
+			}
+
+			/**
+			 * The direction of lattice point `(i, j)` on `face`, at `n = 2^level`.
+			 *
+			 * One barycentric blend evaluated once at full depth, then one
+			 * normalize. Building the same point by repeated arc-midpoint
+			 * subdivision lands on a different sphere, 38.97 m out on a 1,700 m
+			 * planet, and the error is fixed in metres rather than shrinking with
+			 * depth.
+			 */
+			function latticePosition(face, n, i, j) {
+				const [ia, ib, ic] = FACES[face];
+				const [wa, wb, wc] = latticeWeights(n, i, j);
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				return normalize3([
+					a[0] * wa + b[0] * wb + c[0] * wc,
+					a[1] * wa + b[1] * wb + c[1] * wc,
+					a[2] * wa + b[2] * wb + c[2] * wc,
+				]);
+			}
+
+			/**
+			 * Every face-and-offset pair that names the same lattice point.
+			 *
+			 * A point strictly inside a face has one. A point on a face edge has
+			 * two, and a point at an icosahedron vertex has five, since five
+			 * faces meet there. The point is found by matching weights against
+			 * global vertex numbers, so no geometry is involved.
+			 */
+			function cellRepresentations(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				const ids = FACES[face];
+				const carried = new Map();
+				for (let x = 0; x < 3; x++) if (w[x] > 0) carried.set(ids[x], w[x]);
+				const out = [];
+				for (let g = 0; g < 20; g++) {
+					const gv = FACES[g];
+					let ok = true;
+					for (const v of carried.keys()) if (!gv.includes(v)) ok = false;
+					if (!ok) continue;
+					out.push({
+						face: g,
+						i: carried.get(gv[1]) ?? 0,
+						j: carried.get(gv[2]) ?? 0,
+					});
+				}
+				return out;
+			}
+
+			/**
+			 * The one representation a cell is numbered from: the lowest face.
+			 *
+			 * The same rule that awards a border cell to the lowest chunk
+			 * containing it, applied one level up.
+			 *
+			 * **A cell has a second name only on a face edge, and that is three
+			 * comparisons rather than a search.** A weight of zero is what puts
+			 * the point on the edge opposite that vertex; two zeros put it on an
+			 * icosahedron vertex. With no zero the point is strictly inside its
+			 * own face, which names it and nothing else does -- and without the
+			 * guard, better than 97% of calls walk all twenty faces to hand back
+			 * the cell they were given. **This lab is the caller that made it
+			 * worth guarding**: it canonicalises every cell of a patch that can
+			 * be the whole planet, where the engine's own bulk caller already
+			 * carried the same test at its call site.
+			 */
+			function canonicalCell(face, n, i, j) {
+				if (i > 0 && j > 0 && i + j < n) return { face, i, j };
+				const all = cellRepresentations(face, n, i, j);
+				let best = all[0];
+				for (const c of all) if (c.face < best.face) best = c;
+				return best;
+			}
+
+			/**
+			 * Move a set of weights across the edge opposite vertex `leaving`.
+			 *
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
+			}
+
+
+			/**
+			 * Which of the twenty faces a direction falls in.
+			 *
+			 * Twenty dot products, take the largest. Exact rather than an
+			 * approximation: the perpendicular bisector plane between two
+			 * adjacent face centroids contains the two vertices of the edge they
+			 * share, so the face boundaries are the Voronoi boundaries of the
+			 * centroids.
+			 */
+			function faceOf(x, y, z) {
+				let best = 0;
+				let bestDot = -Infinity;
+				for (let f = 0; f < 20; f++) {
+					const c = FACE_CENTROIDS[f];
+					const d = x * c[0] + y * c[1] + z * c[2];
+					if (d > bestDot) {
+						bestDot = d;
+						best = f;
+					}
+				}
+				return best;
+			}
+
+			/**
+			 * Where a direction sits inside a face, as three weights summing to 1.
+			 *
+			 * Cramer's rule on `[A B C] w = dir`, rescaled, which is the same
+			 * blend `latticePosition` runs forwards. A negative weight means the
+			 * direction is outside this face.
+			 */
+			function barycentricOf(face, x, y, z) {
+				const [ia, ib, ic] = FACES[face];
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				const bc = [
+					b[1] * c[2] - b[2] * c[1],
+					b[2] * c[0] - b[0] * c[2],
+					b[0] * c[1] - b[1] * c[0],
+				];
+				const dc = [
+					y * c[2] - z * c[1],
+					z * c[0] - x * c[2],
+					x * c[1] - y * c[0],
+				];
+				const bd = [
+					b[1] * z - b[2] * y,
+					b[2] * x - b[0] * z,
+					b[0] * y - b[1] * x,
+				];
+				const det = a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2];
+				const wa = (x * bc[0] + y * bc[1] + z * bc[2]) / det;
+				const wb = (a[0] * dc[0] + a[1] * dc[1] + a[2] * dc[2]) / det;
+				const wc = (a[0] * bd[0] + a[1] * bd[1] + a[2] * bd[2]) / det;
+				const s = wa + wb + wc;
+				return [wa / s, wb / s, wc / s];
+			}
+
+			/**
+			 * The icosahedron vertex a cell sits on, or `-1` when it sits on none.
+			 *
+			 * A cell is a vertex when two of its three weights are zero, which
+			 * puts all of its weight on one corner. Those twelve cells are the
+			 * pentagons.
+			 */
+			function pentagonVertex(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				let full = -1;
+				let zeros = 0;
+				for (let x = 0; x < 3; x++) {
+					if (w[x] === 0) zeros++;
+					else full = x;
+				}
+				return zeros === 2 ? FACES[face][full] : -1;
+			}
+
+			/**
+			 * The five neighbours of the pentagon on icosahedron vertex `p`, in
+			 * order around it, starting from the step `startFace` takes toward
+			 * its own next vertex.
+			 *
+			 * The ring is built by rotating face to face around the vertex rather
+			 * than by reflecting across one edge. Two of the five faces meeting
+			 * at a vertex touch the starting face only at that vertex, so a
+			 * single reflection cannot reach them.
+			 */
+			function pentagonRing(p, n, startFace) {
+				let g = startFace;
+				const ring = [];
+				for (let s = 0; s < 5; s++) {
+					const e = FACES[g].indexOf(p);
+					// Faces wind A -> B -> C counter-clockwise from outside, so
+					// at vertex p the next cell round is the one toward the
+					// following vertex, and the next face round is the one across
+					// the edge that arrives back at p.
+					const x = FACES[g][(e + 1) % 3];
+					const cell = offsetOn(
+						g,
+						new Map([
+							[p, n - 1],
+							[x, 1],
+						]),
+					);
+					if (cell) ring.push(cell);
+					g = FACE_ADJACENCY[g][(e + 2) % 3].face;
+				}
+				return ring;
+			}
+
+			/**
+			 * The neighbour of `(face, i, j)` in direction `k`, at subdivision `n`.
+			 *
+			 * Returns `null` only for `k = 5` on one of the twelve pentagons,
+			 * whose ring is five long. That is a direction which does not exist
+			 * rather than a gap: the ring is short, never holed and never
+			 * doubled.
+			 *
+			 * Away from those twelve, stepping off the face is a reflection and
+			 * the whole of it is three additions. A lattice point is integer
+			 * weights on global vertex numbers; step outside and exactly one
+			 * weight goes negative. Reflecting across the shared edge sends
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)`,
+			 * where `gamma` is the negative one. The point itself does not move
+			 * -- only the name it is written under.
+			 */
+			function neighbour(face, n, i, j, k) {
+				const p = pentagonVertex(face, n, i, j);
+				if (p >= 0) return pentagonRing(p, n, face)[k] ?? null;
+
+				const [di, dj] = DIRECTIONS[k];
+				const ni = i + di;
+				const nj = j + dj;
+				const w = latticeWeights(n, ni, nj);
+
+				let negative = -1;
+				for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+				if (negative < 0) return { face, i: ni, j: nj };
+
+				// The edge opposite the vertex whose weight went negative is the
+				// one crossed, and the reflection over it is the whole of the step.
+				return acrossEdge(face, w, negative);
+			}
+
+			/**
+			 * The corners of a cell's polygon, counter-clockwise seen from
+			 * outside.
+			 *
+			 * A corner sits at the centroid of one of the triangles meeting at
+			 * the cell, so corner `k` comes from the cell together with its
+			 * neighbours in directions `k` and `k + 1`. Six of them on a hexagon,
+			 * five on a pentagon.
+			 *
+			 * The three lattice points are averaged as **integer weights on
+			 * global vertex numbers**, and only then blended and projected.
+			 * Averaging first and projecting second is what keeps the 30 face
+			 * edges seamless: the sum never mentions a face, so two faces sharing
+			 * a corner compute the same number rather than two numbers that
+			 * nearly agree. Projecting each point and then averaging the results
+			 * gives a different curve.
+			 */
+			function cellCorners(face, n, i, j) {
+				const ring = [];
+				for (let k = 0; k < 6; k++) {
+					const nb = neighbour(face, n, i, j, k);
+					if (nb) ring.push(nb);
+				}
+				const degree = ring.length;
+				const total = new Float64Array(12);
+				const out = [];
+				for (let k = 0; k < degree; k++) {
+					const b = (k + 1) % degree;
+					total.fill(0);
+					addWeights(total, face, n, i, j);
+					addWeights(total, ring[k].face, n, ring[k].i, ring[k].j);
+					addWeights(total, ring[b].face, n, ring[b].i, ring[b].j);
+					let x = 0;
+					let y = 0;
+					let z = 0;
+					for (let v = 0; v < 12; v++) {
+						const w = total[v];
+						if (w === 0) continue;
+						const p = VERTICES[v];
+						x += p[0] * w;
+						y += p[1] * w;
+						z += p[2] * w;
+					}
+					const length = Math.sqrt(x * x + y * y + z * z);
+					out.push([x / length, y / length, z / length]);
+				}
+				return out;
+			}
+
+			/** Add one lattice point's weights into the running total over the twelve vertices. */
+			function addWeights(total, face, n, i, j) {
+				const ids = FACES[face];
+				total[ids[0]] += n - i - j;
+				total[ids[1]] += i;
+				total[ids[2]] += j;
+			}
+
+			/**
+			 * Round three continuous barycentric coordinates to a lattice point.
+			 *
+			 * Rounding each one on its own breaks the sum: `(4.7, 8.6, 2.7)` sums
+			 * to 16 and rounds to `(5, 9, 3)`, which sums to 17 and names no
+			 * lattice point at all. The repair recomputes whichever coordinate
+			 * moved furthest from the other two, because that is the one the
+			 * measurement knows least about.
+			 *
+			 * The third coordinate exists for this. Two cannot detect the error.
+			 */
+			function hexRound(ka, kb, kc, n) {
+				let ra = Math.round(ka);
+				let rb = Math.round(kb);
+				let rc = Math.round(kc);
+				const da = Math.abs(ra - ka);
+				const db = Math.abs(rb - kb);
+				const dc = Math.abs(rc - kc);
+				if (da > db && da > dc) ra = n - rb - rc;
+				else if (db > dc) rb = n - ra - rc;
+				else rc = n - ra - rb;
+				return [ra, rb, rc];
+			}
+
+			/**
+			 * Which lattice point a direction belongs to, at subdivision `n`.
+			 *
+			 * Three steps, all arithmetic: nearest face centroid, then where
+			 * inside that face, then round to a lattice point. A cell is by
+			 * definition the set of directions this maps to it -- never a
+			 * nearest-centre search, which disagrees with the rounding on about
+			 * 1% of the sphere.
+			 *
+			 * **It does not canonicalise, and that is deliberate.** A cell on a
+			 * face edge has two names and a cell on an icosahedron vertex has
+			 * five, and which one comes back here is whichever face the direction
+			 * fell in. Picking one of them is the caller's job, at the moment it
+			 * uses the cell as a key -- which is what `generate` does.
+			 */
+			function directionToCell(x, y, z, n) {
+				const face = faceOf(x, y, z);
+				const [a, b, c] = barycentricOf(face, x, y, z);
+				const [, i, j] = hexRound(a * n, b * n, c * n, n);
+				return { face, i, j };
+			}
+			// ===== END engine coarse grid =====
+
+			// ---------------------------------------------------------------
+			// The ground the climate is read over.
+			// ---------------------------------------------------------------
+
+			/**
+			 * `blockSize = K * radius / 2^depth`, which ties the three together
+			 * so any two fix the third.
+			 */
+			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
+
+			/**
+			 * The two elevations that cut the land into three bands, and the
+			 * colour of each -- the engine's own numbers, so a colour here names
+			 * the block the world would build there.
+			 */
+			const GROUND_LINES = { rock: 300, snow: 400 };
+			const BAND_COLORS = [
+				[0.76, 0.7, 0.5],
+				[0.26, 0.44, 0.19],
+				[0.42, 0.42, 0.45],
+				[0.92, 0.94, 0.97],
+			];
+			/** What the sea is, and how far a look reaches into it. */
+			const SEA_COLOR = [0.12, 0.32, 0.55];
+			const SEA_CLARITY = 45;
+
+			/**
+			 * The three terrain layers at the multi-noise lab's shipped
+			 * settings, held as constants rather than as rows.
+			 *
+			 * **The landscape is the input here, not the subject.** A biome is
+			 * decided by climate, and climate needs a coastline to be measured
+			 * from and a mountain to be cooled by -- so the ground is one fixed
+			 * world that every reading is taken against. Continentalness sets
+			 * the level, erosion decides how much relief survives there, and
+			 * peaks and valleys is the relief itself; the curves are read at a
+			 * noise value in `[-1, 1]` and answer in `[0, 1]`.
+			 */
+			const TERRAIN = {
+				cont: {
+					metres: 600,
+					scale: 10,
+					octaves: 3,
+					fold: 0,
+					spline: [
+						[-1, 0],
+						[-0.34, 0.0967],
+						[-0.06, 0.29],
+						[0.06, 0.3222],
+						// The shore, pinned on the waterline: everything left of
+						// it is under water and everything right of it is land.
+						[0.0876, 0.5],
+						[0.1, 0.536],
+						[0.26, 0.652],
+						[0.46, 0.8405],
+						[1, 1],
+					],
+				},
+				ero: {
+					metres: 750,
+					scale: 10,
+					octaves: 4,
+					fold: 0,
+					spline: [
+						[-1, 0],
+						[-0.3, 0.05],
+						[-0.1, 0.45],
+						[0.05, 0.82],
+						[0.3, 0.94],
+						[1, 0.98],
+					],
+				},
+				pv: {
+					metres: 600,
+					scale: 1,
+					octaves: 4,
+					fold: 0.85,
+					spline: [
+						[-1, 0.06],
+						[-0.45, 0.24],
+						[-0.05, 0.42],
+						[0.25, 0.58],
+						[0.55, 0.84],
+						[1, 1],
+					],
+				},
+				relief: 800,
+				seaDepth: 360,
+				peakRelief: 220,
+				seaLevel: 0,
+				erosionBite: 0.55,
+			};
+
+			/** The three layers, in the order they are read. */
+			const LAYERS = ["cont", "ero", "pv"];
+
+			/**
+			 * Offsets from the world seed, so every field is a different field.
+			 *
+			 * The three terrain offsets are the multi-noise lab's, so one seed
+			 * builds one planet across both pages. The climate fields take
+			 * offsets of their own.
+			 */
+			const SEED_OFFSET = {
+				cont: 101,
+				ero: 211,
+				pv: 337,
+				temp: 449,
+				hum: 557,
+				warpT: 613,
+				warpH: 811,
+			};
+
+			/**
+			 * A curve read at `at`, straight-line between the points it holds.
+			 *
+			 * Outside the outermost points the curve holds its end value, so a
+			 * field that reaches further than the curve was drawn for still has
+			 * an answer.
+			 */
+			function splineAt(points, at) {
+				if (points.length === 0) return 0;
+				if (at <= points[0][0]) return points[0][1];
+				const last = points[points.length - 1];
+				if (at >= last[0]) return last[1];
+				for (let n = 1; n < points.length; n++) {
+					const [x1, y1] = points[n];
+					if (at > x1) continue;
+					const [x0, y0] = points[n - 1];
+					const span = x1 - x0;
+					if (span <= 1e-9) return y1;
+					return y0 + ((y1 - y0) * (at - x0)) / span;
+				}
+				return last[1];
+			}
+
+			/**
+			 * One noise stack, described in metres and read as a frequency.
+			 *
+			 * The sample point is a unit direction, so a frequency counts how
+			 * many times the widest octave repeats across the whole planet:
+			 * metres divided by the radius reach it, and the number a person
+			 * sets means the same thing whatever size the planet is.
+			 */
+			function stackOf(radius, metres, octaves, fold) {
+				return {
+					frequency: radius / metres,
+					octaves: Math.round(octaves),
+					persistence: 0.5,
+					lacunarity: 2,
+					offsetX: 0,
+					offsetY: 0,
+					ridge: fold ?? 0,
+					normalise: true,
+				};
+			}
+
+			/** Every stack this page reads, built once per rebuild. */
+			function settingsFor(k) {
+				const out = {};
+				for (const which of LAYERS)
+					out[which] = stackOf(
+						k.radius,
+						TERRAIN[which].metres * TERRAIN[which].scale,
+						TERRAIN[which].octaves,
+						TERRAIN[which].fold,
+					);
+				out.temp = stackOf(k.radius, k.tempFeature, k.tempOctaves, 0);
+				out.hum = stackOf(k.radius, k.humFeature, k.humOctaves, 0);
+				out.warp = stackOf(k.radius, k.warpFeature, k.warpOctaves, 0);
+				return out;
+			}
+
+			/**
+			 * What the three terrain fields say at one direction, each in
+			 * `[-1, 1]`.
+			 *
+			 * **Sampled from the direction vector, in 3D world space** -- never
+			 * from a face's own `(i, j)`, which is discontinuous at all thirty
+			 * face edges and shows the discontinuity as a seam in the ground.
+			 */
+			function fieldsAt(x, y, z, seed, s, out) {
+				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.cont, s.cont);
+				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.ero, s.ero);
+				out[2] = octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.pv);
+			}
+
+			/** How much erosion takes away here: `0` leaves the ground alone. */
+			function erosionCut(said) {
+				return splineAt(TERRAIN.ero.spline, said[1]);
+			}
+
+			/** The three fields as one height, in metres above sea level. */
+			function heightFrom(said) {
+				const level = splineAt(TERRAIN.cont.spline, said[0]);
+				// Land and the sea floor scale apart, each to its own number.
+				// The curve's middle is the waterline, so above it Relief alone
+				// says how tall land gets and below it Sea depth alone says how
+				// deep the floor goes.
+				const base =
+					level >= 0.5
+						? ((level - 0.5) / 0.5) * TERRAIN.relief
+						: -((0.5 - level) / 0.5) * TERRAIN.seaDepth;
+				const cut = erosionCut(said);
+				const swing = splineAt(TERRAIN.pv.spline, said[2]) * 2 - 1;
+				const over = base - TERRAIN.seaLevel;
+				const worn = 1 - TERRAIN.erosionBite * cut;
+				return (
+					TERRAIN.seaLevel +
+					(over > 0 ? over * worn : over) +
+					(1 - cut) * swing * TERRAIN.peakRelief
+				);
+			}
+
+			// ---------------------------------------------------------------
+			// The climate.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The axis latitude is measured from.
+			 *
+			 * The engine's own polar axis runs through icosahedron vertices 0
+			 * and 3; this page measures from `+Y`, which is the axis its
+			 * latitude and longitude rows already name and the axis its pictures
+			 * are projected on. Climate read about any other axis would draw
+			 * bands that lean across every picture on the panel.
+			 */
+			const POLE = [0, 1, 0];
+
+			/**
+			 * How high the ground has to stand to lose one full unit of
+			 * temperature, in metres.
+			 *
+			 * The temperature scale runs `-1` at a pole to `+1` at the equator,
+			 * so this is the altitude that moves a place a whole hemisphere's
+			 * worth of climate. A thousand metres makes the number on the panel
+			 * readable as *units per kilometre*.
+			 */
+			const LAPSE_METRES = 1000;
+
+			/**
+			 * Temperature and humidity at one place, each in `[-1, 1]`.
+			 *
+			 * **Three terms decide temperature and none of them is a biome.**
+			 * Latitude is one dot product against the axis, `+1` on the equator
+			 * and `-1` at either pole. Altitude cools what stands up out of the
+			 * ground, which is the term that puts snow on a mountain standing in
+			 * a warm band. Noise is what stops the planet reading as a set of
+			 * stripes.
+			 *
+			 * **Humidity is read off continentalness, because continentalness
+			 * IS the distance from the coast.** A true distance to the nearest
+			 * ocean is a flood fill over the map, and a flood fill is a global
+			 * query: whether a cell is wet would depend on a chain of cells
+			 * running three chunks away, which terrain generated a chunk at a
+			 * time cannot answer. The field that already says *how far inland
+			 * am I* costs one lookup that was taken anyway.
+			 */
+			function climateAt(x, y, z, said, metres, seed, s, k, out) {
+				const away = Math.abs(x * POLE[0] + y * POLE[1] + z * POLE[2]);
+				const lapse = metres > 0 ? (k.tempLapse * metres) / LAPSE_METRES : 0;
+				out[0] =
+					k.tempEquator * (1 - 2 * away) +
+					k.tempNoise * octaveNoise(x, y, z, seed + SEED_OFFSET.temp, s.temp) -
+					lapse;
+				out[1] =
+					-k.humOcean * said[0] +
+					k.humNoise * octaveNoise(x, y, z, seed + SEED_OFFSET.hum, s.hum);
+			}
+
+			/**
+			 * The two readings as a point in the diagram's own square.
+			 *
+			 * **The square is the range the planet reaches, not the range the
+			 * arithmetic could reach.** Every term above is a noise stack or a
+			 * weighted sum of them, and an octave stack normalised to its own
+			 * peak has a standard deviation of about a quarter of it -- so the
+			 * raw readings cluster in the middle and the corners of the diagram
+			 * name climates no ground on the planet is in. Measured on the
+			 * shipped world before this was fitted, land humidity ran
+			 * **0.27 to 0.54** of the square between its 5th and 95th
+			 * percentiles, **27%** of the width, and **6 of 13** biomes were
+			 * never built anywhere.
+			 *
+			 * So the ends are measured over the planet's own land and the
+			 * square is stretched onto them, exactly as the ground's own metre
+			 * scale divides by the height field's own peak. What it costs is
+			 * that the two numbers are a property of the whole world rather
+			 * than of the place, so they are found once and then held -- the
+			 * same shape as the relief fit, and the same reason.
+			 */
+			function squareOf(climate, warp, out) {
+				const fit = world.fit;
+				const push = knobs.useWarp ? knobs.warpStrength : 0;
+				out[0] = Math.max(
+					0,
+					Math.min(1, (climate[0] - fit.tLo) / fit.tSpan + push * warp[0]),
+				);
+				out[1] = Math.max(
+					0,
+					Math.min(1, (climate[1] - fit.hLo) / fit.hSpan + push * warp[1]),
+				);
+			}
+
+			/**
+			 * How far the biome lookup is pushed off the climate it was handed,
+			 * as a displacement in the diagram's own `0..1` square.
+			 *
+			 * **Two stacks, sharing every setting and differing only in seed.**
+			 * A biome is chosen by a point in two dimensions, so what jitters
+			 * that choice has to be a vector: one field could only ever slide
+			 * every place along one diagonal, which draws stripes across the
+			 * planet rather than a ragged edge. The picture of it carries the
+			 * temperature push in red and the humidity push in blue for that
+			 * reason -- it is two fields, and it is drawn as two.
+			 */
+			function warpAt(x, y, z, seed, s, out) {
+				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.warpT, s.warp);
+				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.warpH, s.warp);
+			}
+
+			// ---------------------------------------------------------------
+			// The landform.
+			// ---------------------------------------------------------------
+
+			/**
+			 * What kind of ground a place is, before anything asks what grows
+			 * on it.
+			 *
+			 * **Two stages, and the terrain goes first.** Temperature and
+			 * humidity alone cannot say that a place is a mountain, so a
+			 * diagram read on them alone will put a desert on a summit. The
+			 * three terrain layers decide the landform, and the climate then
+			 * only chooses which kind of that landform this one is: a cold
+			 * peak and a hot peak are both peaks.
+			 *
+			 * The sea is not one of these -- there is no land there for a
+			 * biome to stand on, and the ocean is a surface rather than
+			 * ground.
+			 */
+			const LANDFORMS = [
+				{ key: "shore", name: "Shore", short: "shr", hex: "e0d3a8" },
+				{ key: "valleys", name: "Valleys", short: "val", hex: "4e7a4a" },
+				{ key: "lowlands", name: "Lowlands", short: "low", hex: "9ab06a" },
+				{ key: "slopes", name: "Slopes", short: "slp", hex: "7f8a72" },
+				{ key: "plateau", name: "Plateau", short: "plt", hex: "c0a878" },
+				{ key: "peaks", name: "Peaks", short: "pk", hex: "e4ebf2" },
+			];
+			const SHORE = 0;
+			/** The one a biome carries when the landform does not decide it. */
+			const ANY = "any";
+
+			/**
+			 * Where each transformed field is cut into indices.
+			 *
+			 * **The values cut here are the curves' answers, not the raw
+			 * noise.** A layer is a stack of octaves read through a curve, and
+			 * the curve is what gives the reading a meaning -- how high the
+			 * continent stands, how much erosion takes away, how far the relief
+			 * swings. The raw noise underneath is the same shape for all three.
+			 *
+			 * The edges are fixed numbers rather than shares of the world, so a
+			 * grid means the same thing on every planet, and the grid draws the
+			 * measured share of land in each cell instead. On the shipped world
+			 * they cut land into roughly even parts: continentalness runs
+			 * **0.46 to 0.89** between its 2nd and 98th percentiles, erosion
+			 * **0.04 to 0.95**, and peaks and valleys **0.24 to 0.91**.
+			 */
+			const CONT_EDGES = [0.62, 0.78];
+			const ERO_EDGES = [0.13, 0.35, 0.56, 0.82];
+			const PV_EDGES = [0.36, 0.46, 0.58, 0.71];
+			const CONT_NAMES = ["near the sea", "inland", "far inland"];
+			const ERO_NAMES = ["sharp", "", "", "", "worn"];
+			const PV_NAMES = ["valley", "", "", "", "peak"];
+
+			/** Which bucket a value falls in, given the edges between them. */
+			function bucket(v, edges) {
+				let n = 0;
+				while (n < edges.length && v >= edges[n]) n++;
+				return n;
+			}
+
+			/**
+			 * The grid: a landform for every combination of the three indices.
+			 *
+			 * Three sheets, one per continentalness band; five erosion rows,
+			 * sharp at the top; five peaks-and-valleys columns, valley on the
+			 * left. **Sharp and high is a peak, worn and high is a plateau**,
+			 * and low relief is a valley wherever it is -- which is the whole
+			 * of the rule, written where it can be read and changed rather than
+			 * buried in a condition.
+			 */
+			const DEFAULT_GRID = [
+				// near the sea: no room for a mountain range
+				"11233" + "12233" + "12223" + "12222" + "12222",
+				// inland
+				"13355" + "12355" + "12334" + "12224" + "12222",
+				// far inland
+				"13555" + "13355" + "12344" + "12244" + "12224",
+			].join("");
+
+			let grid = DEFAULT_GRID.split("").map(Number);
+
+			/** Where one sheet's cell sits in the flat grid. */
+			function gridAt(c, e, p) {
+				return (c * 5 + e) * 5 + p;
+			}
+
+			/**
+			 * The landform at one place: `-1` in the sea, `SHORE` on the first
+			 * few metres of land, and whatever the grid says everywhere else.
+			 *
+			 * **The shore is a height, not a bucket of continentalness.** Sea
+			 * level here is a radius and every height is measured from it, so
+			 * *the ground has barely come out of the water* is one comparison,
+			 * and it cannot be true on a mountain however close to the coast it
+			 * stands. On the shipped world **1.1%** of land is under 8 m and
+			 * **3.4%** under 20 m, which is a beach rather than a region.
+			 */
+			function landformAt(level, cut, swing, metres) {
+				if (metres <= TERRAIN.seaLevel) return -1;
+				if (metres <= knobs.shoreHeight) return SHORE;
+				return grid[
+					gridAt(
+						bucket(level, CONT_EDGES),
+						bucket(cut, ERO_EDGES),
+						bucket(swing, PV_EDGES),
+					)
+				];
+			}
+
+			// ---------------------------------------------------------------
+			// The diagram.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The biomes, as points in the climate square.
+			 *
+			 * `t` is temperature and `h` is humidity, both `0` to `1`, and
+			 * `landform` is which kind of ground this one may stand on -- one
+			 * of the six, or `any`.
+			 *
+			 * **A biome is a name, a colour, two numbers and a landform.**
+			 * Nothing here decides a height, a block or a tree: the diagram
+			 * partitions the square by nearest dot **among the biomes that
+			 * landform allows**, so every climate has exactly one answer on
+			 * every kind of ground, and a desert placed in the lowlands cannot
+			 * appear on a summit however hot and dry the summit is.
+			 */
+			const PRESETS = {
+				plain: [
+					{ name: "Icy shore", hex: "d8e4ec", t: 0.12, h: 0.5, landform: "shore" },
+					{ name: "Stony shore", hex: "8e9298", t: 0.4, h: 0.3, landform: "shore" },
+					{ name: "Beach", hex: "e6d9a8", t: 0.7, h: 0.45, landform: "shore" },
+					{ name: "Mangrove", hex: "4e6b3f", t: 0.9, h: 0.9, landform: "shore" },
+
+					{ name: "Frozen valley", hex: "cfdce6", t: 0.1, h: 0.5, landform: "valleys" },
+					{ name: "Boreal valley", hex: "3d6b56", t: 0.33, h: 0.85, landform: "valleys" },
+					{ name: "Meadow", hex: "86ad5c", t: 0.6, h: 0.6, landform: "valleys" },
+					{ name: "Swamp", hex: "4e5f33", t: 0.75, h: 0.95, landform: "valleys" },
+					{ name: "Dry basin", hex: "c9b06a", t: 0.92, h: 0.12, landform: "valleys" },
+
+					{ name: "Tundra", hex: "9fae95", t: 0.18, h: 0.6, landform: "lowlands" },
+					{ name: "Cold desert", hex: "b6ad95", t: 0.26, h: 0.08, landform: "lowlands" },
+					{ name: "Taiga", hex: "3d6b63", t: 0.33, h: 0.9, landform: "lowlands" },
+					{ name: "Steppe", hex: "a8a05e", t: 0.45, h: 0.3, landform: "lowlands" },
+					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.55, landform: "lowlands" },
+					{ name: "Forest", hex: "4a8a55", t: 0.62, h: 0.82, landform: "lowlands" },
+					{ name: "Savanna", hex: "c9b45e", t: 0.85, h: 0.5, landform: "lowlands" },
+					{ name: "Rainforest", hex: "2f9e2f", t: 0.92, h: 0.85, landform: "lowlands" },
+					{ name: "Desert", hex: "e8c44a", t: 0.93, h: 0.1, landform: "lowlands" },
+
+					{ name: "Snowy slopes", hex: "dce6ee", t: 0.15, h: 0.5, landform: "slopes" },
+					{ name: "Taiga slope", hex: "35604f", t: 0.35, h: 0.82, landform: "slopes" },
+					{ name: "Grove", hex: "5f8a5c", t: 0.58, h: 0.68, landform: "slopes" },
+					{ name: "Shrub slope", hex: "9a8f50", t: 0.72, h: 0.25, landform: "slopes" },
+					{ name: "Dry slope", hex: "b08a55", t: 0.92, h: 0.15, landform: "slopes" },
+
+					{ name: "Snowy plateau", hex: "e2eaf2", t: 0.12, h: 0.5, landform: "plateau" },
+					{ name: "Highland steppe", hex: "b0ab6a", t: 0.45, h: 0.3, landform: "plateau" },
+					{ name: "Highland forest", hex: "3f7a4a", t: 0.62, h: 0.8, landform: "plateau" },
+					{ name: "Savanna plateau", hex: "cbb768", t: 0.85, h: 0.5, landform: "plateau" },
+					{ name: "Badlands", hex: "c06a3a", t: 0.93, h: 0.1, landform: "plateau" },
+
+					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.12, h: 0.5, landform: "peaks" },
+					{ name: "Alpine forest", hex: "46705a", t: 0.42, h: 0.8, landform: "peaks" },
+					{ name: "Stony peaks", hex: "8d8f94", t: 0.55, h: 0.25, landform: "peaks" },
+					{ name: "Alpine meadow", hex: "8fb06a", t: 0.78, h: 0.6, landform: "peaks" },
+					{ name: "Cloud forest", hex: "3f8f6a", t: 0.92, h: 0.9, landform: "peaks" },
+				],
+				// **Holdridge's life zones, which are the climate square
+				// already.** A real classification of the world's vegetation by
+				// temperature and rainfall, with a name for every pair -- so it
+				// drops onto a set of dots without being reshaped. It says
+				// nothing about landforms, and that is exactly what `any` is
+				// for: every zone is allowed on every kind of ground, and the
+				// page is back to one diagram read everywhere. Two things come
+				// with it. Its own chart is a **triangle**, not a square: cold
+				// air holds little water, so the cold-and-soaking corner has no
+				// zone in it, and here the polar dot simply owns that whole end.
+				// And it is banded by **altitude as well as latitude** -- the
+				// same zones stack up a mountain in the tropics as run toward
+				// the pole at sea level, which is what the temperature field's
+				// altitude term does.
+				Holdridge: [
+					{ name: "Polar desert", hex: "f2f4f6", t: 0.06, h: 0.5 },
+					{ name: "Dry tundra", hex: "8d8f86", t: 0.24, h: 0.25 },
+					{ name: "Moist tundra", hex: "6f8c86", t: 0.24, h: 0.47 },
+					{ name: "Wet tundra", hex: "43809b", t: 0.24, h: 0.65 },
+					{ name: "Rain tundra", hex: "2a76c0", t: 0.24, h: 0.85 },
+					{ name: "Boreal desert", hex: "b9a878", t: 0.4, h: 0.06 },
+					{ name: "Dry scrub", hex: "9aa46a", t: 0.4, h: 0.24 },
+					{ name: "Boreal moist forest", hex: "7fae7a", t: 0.4, h: 0.48 },
+					{ name: "Boreal wet forest", hex: "57a89a", t: 0.4, h: 0.68 },
+					{ name: "Boreal rain forest", hex: "35a2b8", t: 0.4, h: 0.88 },
+					{ name: "Desert scrub", hex: "c3c07a", t: 0.58, h: 0.14 },
+					{ name: "Steppe", hex: "b6c46f", t: 0.58, h: 0.34 },
+					{ name: "Moist forest", hex: "86c07a", t: 0.58, h: 0.55 },
+					{ name: "Wet forest", hex: "5fbf94", t: 0.58, h: 0.75 },
+					{ name: "Temperate rain forest", hex: "46c2ae", t: 0.58, h: 0.93 },
+					{ name: "Subtropical desert", hex: "e8dc7a", t: 0.78, h: 0.05 },
+					{ name: "Thorn woodland", hex: "cfd96f", t: 0.78, h: 0.25 },
+					{ name: "Dry forest", hex: "a5d772", t: 0.78, h: 0.45 },
+					{ name: "Subtropical moist forest", hex: "78d67f", t: 0.78, h: 0.68 },
+					{ name: "Tropical desert", hex: "f4ef7a", t: 0.95, h: 0.04 },
+					{ name: "Tropical dry forest", hex: "c9ee72", t: 0.95, h: 0.35 },
+					{ name: "Tropical wet forest", hex: "63ec8e", t: 0.95, h: 0.66 },
+					{ name: "Tropical rain forest", hex: "3aecb0", t: 0.95, h: 0.9 },
+				],
+			};
+
+			/** The set the page opens with, and the one the URL is measured against. */
+			const DEFAULT_BIOMES = PRESETS.plain;
+
+			/** The live table, which the diagram edits and the URL carries. */
+			let biomes = DEFAULT_BIOMES.map((b) => ({ landform: ANY, ...b }));
+			let picked = 0;
+			/** Which landform's diagram is on screen, and which grid cell was last touched. */
+			let shown = 2;
+			let cellPicked = gridAt(1, 2, 2);
+
+			const RGB_OF = new Map();
+
+			/** A six-digit hex colour as three fractions, looked up once. */
+			function rgbOf(hex) {
+				let held = RGB_OF.get(hex);
+				if (held) return held;
+				const n = parseInt(hex, 16);
+				held = [
+					((n >> 16) & 255) / 255,
+					((n >> 8) & 255) / 255,
+					(n & 255) / 255,
+				];
+				RGB_OF.set(hex, held);
+				return held;
+			}
+
+			/**
+			 * The biomes one landform may build, as indices into the table.
+			 *
+			 * Rebuilt whenever the table changes rather than filtered at every
+			 * lookup: a picture asks this per pixel.
+			 */
+			let allowed = [];
+
+			function regroup() {
+				allowed = LANDFORMS.map((form, n) => {
+					const out = [];
+					for (let b = 0; b < biomes.length; b++)
+						if (biomes[b].landform === form.key || biomes[b].landform === ANY)
+							out.push(b);
+					return out;
+				});
+			}
+
+			/**
+			 * Which biome a climate lands in on one kind of ground: the nearest
+			 * dot among the ones that ground allows, and nothing else.
+			 *
+			 * **Nearest point, not a table of ranges.** A range table has to
+			 * name a biome for every cell of a grid and a cell nobody filled in
+			 * is a hole; a Voronoi diagram has no holes by construction, and
+			 * every edge in it is the perpendicular bisector between two dots,
+			 * so a border moves when either of the two biomes it separates
+			 * moves.
+			 *
+			 * A landform with no biome at all has no answer, which is the one
+			 * state the panel refuses to leave: removing the last one is
+			 * declined rather than allowed to draw a hole in the world.
+			 */
+			function biomeOf(t, h, form) {
+				const set = allowed[form];
+				if (!set || set.length === 0) return -1;
+				let best = set[0];
+				let near = Infinity;
+				for (let n = 0; n < set.length; n++) {
+					const b = biomes[set[n]];
+					const dt = t - b.t;
+					const dh = h - b.h;
+					const d = dt * dt + dh * dh;
+					if (d < near) {
+						near = d;
+						best = set[n];
+					}
+				}
+				return best;
+			}
+
+
+			// ---------------------------------------------------------------
+			// The knobs.
+			// ---------------------------------------------------------------
+
+			let field = null;
+			let cost = 0;
+
+			/** How many hexagons the patch walk may reach while a knob moves. */
+			const PATCH_CELLS = 24000;
+
+			const KNOBS = [
+				{
+					group: "The world",
+					open: false,
+					rows: [
+						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
+						{
+							// **Depth and block size fix the radius**, so the
+							// radius is not a row: it is quantised to powers of
+							// two, and a slider for it would have positions that
+							// build the same planet.
+							key: "subdivisionDepth",
+							label: "Subdivision depth",
+							low: 4,
+							high: 17,
+							step: 1,
+							value: 13,
+							digits: 0,
+							note: () =>
+								field
+									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
+										`<b>${Math.round(2 * Math.PI * field.k.radius).toLocaleString()} m</b> around · ` +
+										`equator to pole is <b>${Math.round(
+											(Math.PI / 2) * field.k.radius,
+										).toLocaleString()} m</b>`
+									: "",
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.5,
+							high: 4,
+							step: 0.25,
+							value: 1,
+							digits: 2,
+							unit: "m",
+						},
+						{
+							// **The map is the terrain.** The engine reads a
+							// height off one cell of a coarse map and adds
+							// nothing, so this is the resolution the ground is
+							// built at, and the hexagons of the patch are those
+							// cells.
+							key: "coarseSpacing",
+							label: "Map cell",
+							low: 4,
+							high: 128,
+							step: 4,
+							value: 32,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `level <b>${field.k.level}</b>, which gives ` +
+										`<b>${field.k.mapMetres.toFixed(1)} m</b> and ` +
+										`<b>${(10 * 4 ** field.k.level + 2).toLocaleString()}</b> cells on the planet`
+									: "",
+						},
+						{
+							key: "cells",
+							label: "Patch",
+							low: 16,
+							high: 192,
+							step: 8,
+							value: 48,
+							digits: 0,
+							unit: "map cells across",
+							note: () =>
+								field
+									? `<b>${Math.round(field.arc).toLocaleString()} m</b> of ground, ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons`
+									: "",
+						},
+						{
+							key: "latitude",
+							label: "Latitude",
+							low: -85,
+							high: 85,
+							step: 1,
+							value: 3,
+							digits: 0,
+							unit: "°",
+							note: () =>
+								"the climate is measured from this same axis, so a band " +
+								"on a picture is a band of latitude",
+						},
+						{
+							key: "longitude",
+							label: "Longitude",
+							low: -180,
+							high: 180,
+							step: 1,
+							value: 126,
+							digits: 0,
+							unit: "°",
+						},
+					],
+				},
+				{
+					group: "The terrain",
+					open: true,
+					rows: [
+						{
+							key: "groundPicture",
+							label: "",
+							type: "picture",
+							shot: "ground",
+							value: 0,
+							note: () =>
+								"the multi-noise lab's three layers at their shipped " +
+								"settings, held fixed. The ground is the input here rather " +
+								"than the subject: climate needs a coastline to measure " +
+								"from and a mountain to be cooled by",
+						},
+					],
+				},
+				{
+					group: "The landform",
+					open: true,
+					rows: [
+						{ key: "formPicture", label: "", type: "picture", shot: "form", value: 0 },
+						{
+							key: "shoreHeight",
+							label: "Shore reaches",
+							low: 0,
+							high: 120,
+							step: 2,
+							value: 12,
+							digits: 0,
+							unit: "m above the sea",
+							note: () =>
+								field && field.byForm
+									? `land under this is Shore whatever the grid says, ` +
+										`because sea level is a radius and a height is measured ` +
+										`from it — <b>${(field.byForm[0] * 100).toFixed(
+											1,
+										)}%</b> of the planet's land`
+									: "",
+						},
+					],
+				},
+				{
+					group: "The climate",
+					open: true,
+					rows: [
+						{
+							key: "fit",
+							label: "Fit the diagram to the planet",
+							type: "check",
+							value: true,
+							note: () =>
+								field && world.fit
+									? knobs.fit
+										? `the coldest place on the planet is put at the bottom of ` +
+											`the diagram and the hottest at the top, and the same for ` +
+											`dry and wet across it — so every corner of the square is ` +
+											`weather that exists somewhere. <b>${field.reached}</b> of ` +
+											`<b>${biomes.length}</b> biomes are built`
+										: `off: the readings go in as they come. They bunch up in ` +
+											`the middle, because adding noise together always does, ` +
+											`so the corners of the diagram name weather no ground ` +
+											`has and <b>${biomes.length - field.reached}</b> of ` +
+											`<b>${biomes.length}</b> biomes are never built anywhere`
+									: "",
+						},
+					],
+				},
+				{
+					group: "Temperature",
+					tint: "heat",
+					open: true,
+					rows: [
+						{ key: "tempPicture", label: "", type: "picture", shot: "temp", value: 0 },
+						{
+							key: "tempEquator",
+							label: "Equator to pole",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.7,
+							digits: 2,
+							note: () =>
+								knobs.tempEquator === 0
+									? "off: latitude decides nothing and the planet has no bands"
+									: `latitude owns <b>${Math.round(
+											knobs.tempEquator * 100,
+										)}%</b> of the scale, so the equator reads ` +
+										`<b>+${knobs.tempEquator.toFixed(2)}</b> and either pole ` +
+										`<b>−${knobs.tempEquator.toFixed(2)}</b> before anything else is added`,
+						},
+						{
+							key: "tempLapse",
+							label: "Altitude cools",
+							low: 0,
+							high: 3,
+							step: 0.05,
+							value: 0.9,
+							digits: 2,
+							unit: "per km",
+							note: () =>
+								knobs.tempLapse === 0
+									? "off: a summit reads the same as the plain it stands on"
+									: `the tallest ground this terrain builds is about <b>${(
+											TERRAIN.relief + TERRAIN.peakRelief
+										).toLocaleString()} m</b>, which loses <b>${(
+											(knobs.tempLapse * (TERRAIN.relief + TERRAIN.peakRelief)) /
+											LAPSE_METRES
+										).toFixed(2)}</b> of the scale — ` +
+										`<b>${(
+											((knobs.tempLapse * (TERRAIN.relief + TERRAIN.peakRelief)) /
+												LAPSE_METRES /
+												Math.max(0.01, 2 * knobs.tempEquator)) *
+											90
+										).toFixed(0)}°</b> of latitude`,
+						},
+						{
+							key: "tempNoise",
+							label: "Wander",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.35,
+							digits: 2,
+							note: () =>
+								knobs.tempNoise === 0
+									? "at zero the planet is perfectly striped: every place the " +
+										"same distance from the equator, at the same height, is " +
+										"exactly as warm"
+									: "how far a place may drift from what its latitude and its " +
+										"height say, so a cold pocket can sit next to a warm one",
+						},
+						{
+							key: "tempFeature",
+							label: "Feature",
+							low: 200,
+							high: 8000,
+							step: 100,
+							value: 3000,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `narrowest octave <b>${Math.round(
+											narrowestOf("temp"),
+										).toLocaleString()} m</b> = <b>${(
+											narrowestOf("temp") / field.k.mapMetres
+										).toFixed(1)}</b> map cells`
+									: "",
+						},
+						{
+							key: "tempOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 6,
+							step: 1,
+							value: 3,
+							digits: 0,
+						},
+					],
+				},
+				{
+					group: "Humidity",
+					tint: "wet",
+					open: true,
+					rows: [
+						{ key: "humPicture", label: "", type: "picture", shot: "hum", value: 0 },
+						{
+							key: "humOcean",
+							label: "The coast wets it",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.6,
+							digits: 2,
+							note: () =>
+								knobs.humOcean === 0
+									? "off: humidity is noise alone and an inland desert is as " +
+										"likely on a beach"
+									: "read off continentalness, which is the field that already " +
+										"says how far inland a place is. A true distance to the " +
+										"nearest ocean is a flood fill, and terrain generated a " +
+										"chunk at a time cannot run one",
+						},
+						{
+							key: "humNoise",
+							label: "Wander",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.5,
+							digits: 2,
+							note: () =>
+								knobs.humNoise === 0
+									? "at zero, how far inland a place is decides how wet it is " +
+										"and nothing else does"
+									: "how far a place may drift from what the coast says, so a " +
+										"wet valley can sit in a dry region",
+						},
+						{
+							key: "humFeature",
+							label: "Feature",
+							low: 200,
+							high: 8000,
+							step: 100,
+							value: 2200,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `narrowest octave <b>${Math.round(
+											narrowestOf("hum"),
+										).toLocaleString()} m</b> = <b>${(
+											narrowestOf("hum") / field.k.mapMetres
+										).toFixed(1)}</b> map cells`
+									: "",
+						},
+						{
+							key: "humOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 6,
+							step: 1,
+							value: 3,
+							digits: 0,
+						},
+					],
+				},
+				{
+					group: "Biome noise",
+					tint: "wild",
+					open: true,
+					rows: [
+						// **A switch on the section, not a row inside it.** It
+						// governs every row below it, so a reader meets it
+						// before the thing it governs rather than among them.
+						{
+							key: "useWarp",
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+							title: "ragged borders",
+						},
+						{ key: "warpPicture", label: "", type: "picture", shot: "warp", value: 0 },
+						{
+							key: "warpStrength",
+							label: "Push",
+							low: 0,
+							high: 0.5,
+							step: 0.01,
+							value: 0.12,
+							digits: 2,
+							note: () =>
+								!knobs.useWarp || knobs.warpStrength === 0
+									? "a border between two biomes is exactly the line the " +
+										"diagram draws, everywhere on the planet"
+									: `before the biome is looked up, the place's weather is ` +
+										`nudged by up to <b>${knobs.warpStrength.toFixed(
+											2,
+										)}</b> of the diagram's width — so a border comes out ` +
+										`ragged instead of clean. The checked strip either side of ` +
+										`every line in the diagram is how far the nudge reaches`,
+						},
+						{
+							key: "warpFeature",
+							label: "Feature",
+							low: 100,
+							high: 4000,
+							step: 50,
+							value: 700,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `narrowest octave <b>${Math.round(
+											narrowestOf("warp"),
+										).toLocaleString()} m</b> = <b>${(
+											narrowestOf("warp") / field.k.mapMetres
+										).toFixed(1)}</b> map cells`
+									: "",
+						},
+						{
+							key: "warpOctaves",
+							label: "Octaves",
+							low: 1,
+							high: 6,
+							step: 1,
+							value: 3,
+							digits: 0,
+						},
+					],
+				},
+				{
+					group: "The pictures",
+					open: false,
+					rows: [
+						{
+							key: "show",
+							label: "The pictures show",
+							type: "select",
+							options: ["planet", "patch"],
+							value: "planet",
+							note: () =>
+								knobs.show === "planet"
+									? "click any of them to move the patch there"
+									: "the ground the view is drawing, from above",
+						},
+						{
+							key: "paint",
+							label: "The patch is coloured by",
+							type: "select",
+							options: ["biome", "landform", "ground"],
+							value: "biome",
+							note: () =>
+								knobs.paint === "biome"
+									? "every hexagon takes the colour of the biome its climate " +
+										"lands in, on the kind of ground it stands on"
+									: knobs.paint === "landform"
+										? "the kind of ground alone, before any climate is read"
+										: "the engine's own elevation bands, which is what the " +
+											"terrain picture draws",
+						},
+					],
+				},
+				{
+					group: "The diagram",
+					panel: "biomes",
+					open: true,
+					rows: [
+						{
+							key: "preset",
+							label: "Start from",
+							type: "select",
+							options: ["plain", "Holdridge"],
+							value: "plain",
+							note: () =>
+								knobs.preset === "Holdridge"
+									? "Leslie Holdridge's life zones, which are a real " +
+										"classification of exactly this shape: a name for every " +
+										"pair of temperature and rainfall. His chart is a " +
+										"<b>triangle</b> rather than a square, because cold air " +
+										"holds little water and the cold-and-soaking corner does " +
+										"not exist on Earth"
+									: "a dozen names spread over the whole square. Picking a " +
+										"set writes its dots and they stay draggable",
+						},
+						{
+							key: "counted",
+							label: "Count the shares over",
+							type: "select",
+							options: ["the planet", "the patch"],
+							value: "the planet",
+							note: () =>
+								knobs.counted === "the patch"
+									? "every share on this panel is of the ground in view — what " +
+										"the camera is standing in, which is one place and not a " +
+										"world"
+									: "every share on this panel is of the whole planet's land, " +
+										"which is what says whether a biome is worth keeping at all",
+						},
+						{
+							key: "chartDots",
+							label: "Show on it",
+							type: "select",
+							options: ["nothing", "the patch", "the planet"],
+							value: "the patch",
+							note: () =>
+								knobs.chartDots === "the planet"
+									? "one dot per cell of the planet at a coarse level, so a " +
+										"region of the square with no dots over it is a biome " +
+										"this world never builds"
+									: knobs.chartDots === "the patch"
+										? "one dot per hexagon in view, so the diagram says which " +
+											"part of itself the camera is standing in"
+										: "",
+						},
+					],
+				},
+			];
+
+			const knobs = {};
+			for (const g of KNOBS) for (const r of g.rows) knobs[r.key] = r.value;
+
+			const ROWS = new Map();
+			for (const g of KNOBS) for (const r of g.rows) ROWS.set(r.key, r);
+			const rows = new Map();
+
+			/** What the knobs come to once the ones that imply others are read. */
+			function derived() {
+				const k = {};
+				for (const key of ROWS.keys()) k[key] = knobs[key];
+				k.radius =
+					(knobs.blockSize * 2 ** knobs.subdivisionDepth) / CELL_CONSTANT;
+				// The coarse map's level, chosen exactly as the engine chooses
+				// it, and capped at 9 the same way.
+				k.level = Math.max(
+					2,
+					Math.min(
+						knobs.subdivisionDepth,
+						9,
+						Math.max(
+							0,
+							Math.round(
+								Math.log2((CELL_CONSTANT * k.radius) / knobs.coarseSpacing),
+							),
+						),
+					),
+				);
+				k.mapMetres = (CELL_CONSTANT * k.radius) / 2 ** k.level;
+				k.blockMetres =
+					(CELL_CONSTANT * k.radius) / 2 ** knobs.subdivisionDepth;
+				return k;
+			}
+
+			/** How wide the narrowest octave of one climate field is, in metres. */
+			function narrowestOf(which) {
+				return (
+					knobs[which + "Feature"] /
+					2 ** (Math.round(knobs[which + "Octaves"]) - 1)
+				);
+			}
+
+			/**
+			 * A knob's own ends, narrowed by the rest of the draft.
+			 *
+			 * A slider that cannot reach a refusal beats a refusal that explains
+			 * itself. Three bind here: the map cannot be finer than the block
+			 * grid it is read on, a climate field cannot carry an octave the map
+			 * is too coarse to draw, and the patch walk has to finish while a
+			 * slider is moving.
+			 */
+			function liveRange(row) {
+				if (row.key === "coarseSpacing") {
+					const k = derived();
+					return { ...row, low: Math.max(row.low, Math.ceil(k.blockMetres * 4)) };
+				}
+				if (row.key === "cells") {
+					// `3r(r+1) + 1` cells inside radius `r`, and the walk starts
+					// at half the width.
+					const reach = Math.floor((Math.sqrt(1 + (4 * PATCH_CELLS) / 3) - 1) / 2);
+					return {
+						...row,
+						high: Math.max(
+							row.low,
+							Math.min(row.high, Math.floor((2 * reach) / row.step) * row.step),
+						),
+					};
+				}
+				const climate = ["temp", "hum", "warp"].find(
+					(which) => row.key === which + "Octaves",
+				);
+				if (climate) {
+					// Each octave is half the last, and the map cannot carry one
+					// narrower than two of its own cells.
+					const k = derived();
+					const room =
+						1 +
+						Math.floor(Math.log2(knobs[climate + "Feature"] / (2 * k.mapMetres)));
+					return { ...row, high: Math.max(row.low, Math.min(row.high, room)) };
+				}
+				return row;
+			}
+
+			/** Pull every knob inside its own narrowed ends, inward only. */
+			function settle() {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						if (r.digits === undefined || r.type) continue;
+						const live = liveRange(r);
+						knobs[r.key] = Math.min(live.high, Math.max(live.low, knobs[r.key]));
+					}
+			}
+
+			/** The whole table as one query-string value, and back. */
+			function biomesToText(list) {
+				return list
+					.map(
+						(b) =>
+							`${b.name.replace(/[~|]/g, " ")}~${b.hex}~${+b.t.toFixed(
+								3,
+							)}~${+b.h.toFixed(3)}~${b.landform ?? ANY}`,
+					)
+					.join("|");
+			}
+
+			function biomesFromText(text) {
+				const out = [];
+				const keys = [ANY, ...LANDFORMS.map((form) => form.key)];
+				for (const piece of text.split("|")) {
+					const [name, hex, t, h, landform] = piece.split("~");
+					if (!name || !/^[0-9a-fA-F]{6}$/.test(hex ?? "")) continue;
+					if (!Number.isFinite(Number(t)) || !Number.isFinite(Number(h))) continue;
+					out.push({
+						name,
+						hex: hex.toLowerCase(),
+						t: Math.max(0, Math.min(1, Number(t))),
+						h: Math.max(0, Math.min(1, Number(h))),
+						// A link written before a biome carried its ground names
+						// no landform, and everywhere is where it used to be.
+						landform: keys.includes(landform) ? landform : ANY,
+					});
+				}
+				return out.length > 0 ? out : null;
+			}
+
+			/** The grid as a run of digits, and back. */
+			function gridFromText(text) {
+				if (!/^[0-5]{75}$/.test(text)) return null;
+				return text.split("").map(Number);
+			}
+
+			function toParams() {
+				const p = new URLSearchParams();
+				for (const [key, row] of ROWS) {
+					if (row.type === "picture") continue;
+					if (row.type === "check") {
+						if (knobs[key] !== row.value) p.set(key, knobs[key] ? "1" : "0");
+						continue;
+					}
+					if (knobs[key] !== row.value) p.set(key, String(knobs[key]));
+				}
+				const now = biomesToText(biomes);
+				if (now !== biomesToText(PRESETS[knobs.preset] ?? DEFAULT_BIOMES))
+					p.set("biomes", now);
+				const sheet = grid.join("");
+				if (sheet !== DEFAULT_GRID) p.set("grid", sheet);
+				return p;
+			}
+
+			function fromParams(params) {
+				for (const [key, row] of ROWS) {
+					const raw = params.get(key);
+					if (raw === null || row.type === "picture") continue;
+					if (row.type === "check") knobs[key] = raw === "1";
+					else if (row.type === "text" || row.type === "select") knobs[key] = raw;
+					else if (Number.isFinite(Number(raw))) knobs[key] = Number(raw);
+				}
+				const table = params.get("biomes");
+				if (table) {
+					const read = biomesFromText(table);
+					if (read) {
+						biomes = read;
+						picked = 0;
+					}
+				}
+				const sheet = params.get("grid");
+				if (sheet) {
+					const read = gridFromText(sheet);
+					if (read) grid = read;
+				}
+				// **A link could otherwise build what a slider cannot reach**, so
+				// the draft settles here as well as after every move.
+				settle();
+			}
+
+			function writeUrl() {
+				const p = toParams();
+				const url = p.toString()
+					? location.pathname + "?" + p.toString()
+					: location.pathname;
+				history.replaceState(null, "", url);
+			}
+
+			// ---------------------------------------------------------------
+			// The world, and the patch cut out of it.
+			// ---------------------------------------------------------------
+
+			/** A latitude and a longitude, as a unit direction. */
+			function directionOf(latitude, longitude) {
+				const lat = (latitude * Math.PI) / 180;
+				const lon = (longitude * Math.PI) / 180;
+				const ring = Math.cos(lat);
+				return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+			}
+
+			function cross3(a, b) {
+				return [
+					a[1] * b[2] - a[2] * b[1],
+					a[2] * b[0] - a[0] * b[2],
+					a[0] * b[1] - a[1] * b[0],
+				];
+			}
+
+			/**
+			 * East, up and north at one place on the planet.
+			 *
+			 * Up is `normalize(position)` and there is no global north, so north
+			 * is whatever is left after east is taken out of the polar axis.
+			 */
+			function frameOf(up) {
+				let east = cross3(POLE, up);
+				let len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				if (len < 1e-9) {
+					east = cross3([1, 0, 0], up);
+					len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				}
+				east = east.map((v) => v / len);
+				return { east, up, north: cross3(up, east) };
+			}
+
+			/**
+			 * The level the planet-wide shares are counted over.
+			 *
+			 * **A diagram governs the planet, so what sits under it has to be
+			 * counted over the planet** -- a patch is a place, and a place can
+			 * be entirely inside one biome while the world holds twelve. Level 5
+			 * is 10,242 cells, which is the engine's own grid at a level coarse
+			 * enough to run on every knob move.
+			 */
+			const TALLY_LEVEL = 5;
+
+			/** Every cell of the planet at one level, as directions, built once. */
+			const WORLD = (() => {
+				const n = 1 << TALLY_LEVEL;
+				const out = [];
+				for (let face = 0; face < 20; face++)
+					for (let i = 0; i <= n; i++)
+						for (let j = 0; i + j <= n; j++) {
+							// A cell on a face edge or an icosahedron vertex has
+							// several names and must be counted once, so it is
+							// taken only by the face that owns it.
+							if (canonicalCell(face, n, i, j).face !== face) continue;
+							out.push(latticePosition(face, n, i, j));
+						}
+				return out;
+			})();
+
+			/**
+			 * What every reading depends on, as one string.
+			 *
+			 * **Moving a dot on the diagram changes no field.** Temperature,
+			 * humidity, the push and the ground are all functions of the seed
+			 * and the rows above; the diagram only decides which name the
+			 * finished pair of numbers is given. So the readings are held, and
+			 * dragging a biome across the square recolours a planet already
+			 * sampled instead of sampling it again.
+			 */
+			function sampleKey() {
+				const out = [];
+				for (const key of ROWS.keys()) {
+					const row = ROWS.get(key);
+					if (
+						row.type === "picture" ||
+						key === "paint" ||
+						key === "chartDots" ||
+						key === "counted" ||
+						key === "preset" ||
+						key === "shoreHeight"
+					)
+						continue;
+					out.push(key + "=" + knobs[key]);
+				}
+				return out.join(",");
+			}
+
+			/**
+			 * The planet's own climate and ground at the tally level, held
+			 * between edits.
+			 *
+			 * The three curves' answers are held alongside the two climate
+			 * ones, because the grid is read off them and the grid is edited far
+			 * more often than the fields are resampled.
+			 */
+			const world = {
+				key: null,
+				t: null,
+				h: null,
+				land: null,
+				metres: null,
+				level: null,
+				cut: null,
+				swing: null,
+				fit: null,
+			};
+
+			/** One share of a sorted list, which is what the square is fitted to. */
+			function percentile(sorted, at) {
+				if (sorted.length === 0) return 0;
+				return sorted[
+					Math.max(0, Math.min(sorted.length - 1, Math.round(at * (sorted.length - 1))))
+				];
+			}
+
+			/**
+			 * Where the diagram's square starts and stops, in the fields' own
+			 * units.
+			 *
+			 * **Over land, because the diagram is about land.** Half the planet
+			 * is ocean and the ocean sits at one end of the humidity field by
+			 * construction, so fitting over everything would spend a third of
+			 * the square on water nobody puts a biome on.
+			 *
+			 * The 2nd and 98th percentiles rather than the ends: a fit to the
+			 * extremes hands the whole middle of the square to the middle of the
+			 * field, and the outer 4% saturating is what makes a desert a region
+			 * rather than a rim.
+			 */
+			const FIT_TAIL = 0.02;
+
+			function fitTo(rawT, rawH, land) {
+				if (!knobs.fit)
+					return { tLo: -1, tSpan: 2, hLo: -1, hSpan: 2, fitted: false };
+				const t = [];
+				const h = [];
+				for (let n = 0; n < land.length; n++) {
+					if (!land[n]) continue;
+					t.push(rawT[n]);
+					h.push(rawH[n]);
+				}
+				if (t.length < 16)
+					return { tLo: -1, tSpan: 2, hLo: -1, hSpan: 2, fitted: false };
+				t.sort((a, b) => a - b);
+				h.sort((a, b) => a - b);
+				const tLo = percentile(t, FIT_TAIL);
+				const hLo = percentile(h, FIT_TAIL);
+				const tSpan = Math.max(1e-6, percentile(t, 1 - FIT_TAIL) - tLo);
+				const hSpan = Math.max(1e-6, percentile(h, 1 - FIT_TAIL) - hLo);
+				return { tLo, tSpan, hLo, hSpan, fitted: true, raw: { tSpan, hSpan } };
+			}
+
+			function tallyWorld(seed, s, k) {
+				const key = sampleKey();
+				if (world.key === key) return;
+				const said = [0, 0, 0];
+				const climate = [0, 0];
+				const warp = [0, 0];
+				const square = [0, 0];
+				const count = WORLD.length;
+				const rawT = new Float32Array(count);
+				const rawH = new Float32Array(count);
+				const pushT = new Float32Array(count);
+				const pushH = new Float32Array(count);
+				const t = new Float32Array(count);
+				const h = new Float32Array(count);
+				const land = new Uint8Array(count);
+				const metresAt = new Float32Array(count);
+				const level = new Float32Array(count);
+				const cut = new Float32Array(count);
+				const swing = new Float32Array(count);
+				for (let n = 0; n < count; n++) {
+					const p = WORLD[n];
+					fieldsAt(p[0], p[1], p[2], seed, s, said);
+					const metres = heightFrom(said);
+					climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
+					warpAt(p[0], p[1], p[2], seed, s, warp);
+					rawT[n] = climate[0];
+					rawH[n] = climate[1];
+					pushT[n] = warp[0];
+					pushH[n] = warp[1];
+					metresAt[n] = metres;
+					level[n] = splineAt(TERRAIN.cont.spline, said[0]);
+					cut[n] = splineAt(TERRAIN.ero.spline, said[1]);
+					swing[n] = splineAt(TERRAIN.pv.spline, said[2]);
+					land[n] = metres > TERRAIN.seaLevel ? 1 : 0;
+				}
+				world.fit = fitTo(rawT, rawH, land);
+				for (let n = 0; n < count; n++) {
+					climate[0] = rawT[n];
+					climate[1] = rawH[n];
+					warp[0] = pushT[n];
+					warp[1] = pushH[n];
+					squareOf(climate, warp, square);
+					t[n] = square[0];
+					h[n] = square[1];
+				}
+				world.key = key;
+				world.t = t;
+				world.h = h;
+				world.land = land;
+				world.metres = metresAt;
+				world.level = level;
+				world.cut = cut;
+				world.swing = swing;
+			}
+
+			/**
+			 * How much of the planet's land each biome covers.
+			 *
+			 * Read back rather than set: a dot is placed in the climate square
+			 * and what that comes to on the ground is a measurement, because how
+			 * much planet sits under one patch of the square depends on where
+			 * the two fields actually go.
+			 */
+			function shares() {
+				const out = new Float64Array(biomes.length);
+				const byForm = new Float64Array(LANDFORMS.length);
+				const inCell = new Float64Array(grid.length);
+				let land = 0;
+				for (let n = 0; n < world.t.length; n++) {
+					if (!world.land[n]) continue;
+					land++;
+					const form = landformAt(
+						world.level[n],
+						world.cut[n],
+						world.swing[n],
+						world.metres[n],
+					);
+					byForm[form]++;
+					if (form !== SHORE)
+						inCell[
+							gridAt(
+								bucket(world.level[n], CONT_EDGES),
+								bucket(world.cut[n], ERO_EDGES),
+								bucket(world.swing[n], PV_EDGES),
+							)
+						]++;
+					const which = biomeOf(world.t[n], world.h[n], form);
+					if (which >= 0) out[which]++;
+				}
+				const over = Math.max(1, land);
+				for (let n = 0; n < out.length; n++) out[n] /= over;
+				for (let n = 0; n < byForm.length; n++) byForm[n] /= over;
+				for (let n = 0; n < inCell.length; n++) inCell[n] /= over;
+				return {
+					share: out,
+					byForm,
+					inCell,
+					land: land / world.t.length,
+				};
+			}
+
+			/**
+			 * The patch: the engine's own map cells, walked out from the one the
+			 * camera stands over.
+			 *
+			 * **Hexagons are map cells here.** The map is the terrain, and a
+			 * biome is decided by fields whose narrowest octave is hundreds of
+			 * metres wide -- drawn on the block grid the same colours would be
+			 * repeated across a thousand blocks to say what one map cell says.
+			 *
+			 * `neighbour` is what walks, so a patch that reaches a face edge
+			 * crosses it the way the engine does and a patch that reaches a
+			 * pentagon gets a five-sided cell.
+			 */
+			function generate(cells = knobs.cells) {
+				const k = derived();
+				const seed = seedFromString(knobs.seed);
+				const s = settingsFor(k);
+				tallyWorld(seed, s, k);
+
+				const n = 2 ** k.level;
+				const middle = directionOf(knobs.latitude, knobs.longitude);
+				const found = directionToCell(middle[0], middle[1], middle[2], n);
+				const start = canonicalCell(found.face, n, found.i, found.j);
+				const reach = Math.max(1, cells >> 1);
+				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
+				const at = new Map();
+				const list = [];
+				const add = (c) => {
+					const key = keyOf(c);
+					if (at.has(key)) return false;
+					at.set(key, list.length);
+					list.push(c);
+					return true;
+				};
+				add(start);
+				let frontier = [start];
+				for (let r = 0; r < reach; r++) {
+					const next = [];
+					for (const c of frontier)
+						for (let d = 0; d < 6; d++) {
+							const nb = neighbour(c.face, n, c.i, c.j, d);
+							if (!nb) continue;
+							const cell = canonicalCell(nb.face, n, nb.i, nb.j);
+							if (add(cell)) next.push(cell);
+						}
+					frontier = next;
+				}
+
+				const count = list.length;
+				const centre = latticePosition(start.face, n, start.i, start.j);
+				const frame = frameOf(centre);
+				const height = new Float64Array(count);
+				const climT = new Float32Array(count);
+				const climH = new Float32Array(count);
+				// The three curves' answers, held so that editing the grid
+				// re-reads them rather than resampling the noise under them.
+				const level = new Float32Array(count);
+				const cut = new Float32Array(count);
+				const swing = new Float32Array(count);
+				const degree = new Uint8Array(count);
+				const corner = new Float64Array(count * 18);
+				const ring = new Int32Array(count * 6).fill(-1);
+				const said = [0, 0, 0];
+				const climate = [0, 0];
+				const warp = [0, 0];
+				const square = [0, 0];
+				let lowest = Infinity;
+				let highest = -Infinity;
+				for (let c = 0; c < count; c++) {
+					const cell = list[c];
+					const p = latticePosition(cell.face, n, cell.i, cell.j);
+					fieldsAt(p[0], p[1], p[2], seed, s, said);
+					const metres = heightFrom(said);
+					climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
+					warpAt(p[0], p[1], p[2], seed, s, warp);
+					height[c] = metres;
+					level[c] = splineAt(TERRAIN.cont.spline, said[0]);
+					cut[c] = splineAt(TERRAIN.ero.spline, said[1]);
+					swing[c] = splineAt(TERRAIN.pv.spline, said[2]);
+					squareOf(climate, warp, square);
+					climT[c] = square[0];
+					climH[c] = square[1];
+					if (metres < lowest) lowest = metres;
+					if (metres > highest) highest = metres;
+					const corners = cellCorners(cell.face, n, cell.i, cell.j);
+					degree[c] = corners.length;
+					for (let v = 0; v < corners.length; v++) {
+						corner[c * 18 + v * 3] = corners[v][0];
+						corner[c * 18 + v * 3 + 1] = corners[v][1];
+						corner[c * 18 + v * 3 + 2] = corners[v][2];
+					}
+					for (let d = 0; d < 6; d++) {
+						const nb = neighbour(cell.face, n, cell.i, cell.j, d);
+						if (!nb) continue;
+						const hit = at.get(keyOf(canonicalCell(nb.face, n, nb.i, nb.j)));
+						if (hit !== undefined) ring[c * 6 + d] = hit;
+					}
+				}
+
+				field = {
+					k,
+					seed,
+					s,
+					count,
+					centre,
+					frame,
+					degree,
+					corner,
+					ring,
+					height,
+					climT,
+					climH,
+					level,
+					cut,
+					swing,
+					biome: new Int16Array(count),
+					form: new Int8Array(count),
+					lowest,
+					highest,
+					arc: Math.min(cells * k.mapMetres, Math.PI * k.radius),
+					span: cells * k.mapMetres,
+					cellsAsked: cells,
+					sampleKey: sampleKey(),
+					draft: cells < knobs.cells,
+				};
+				assign();
+			}
+
+			/**
+			 * Which biome every hexagon of the patch is in.
+			 *
+			 * Split out from the sampling because it is the only part a drag on
+			 * the diagram changes.
+			 */
+			function assign() {
+				if (!field) return;
+				regroup();
+				const { count, height, climT, climH, level, cut, swing, biome, form } =
+					field;
+				// **The same three counts the planet is measured by, over the
+				// patch instead.** A place is not a planet: a patch can hold
+				// nine of thirty-three biomes and none of the ones a dot was
+				// dragged for, and the share that says whether a dot is worth
+				// keeping is a different number from the share that says what
+				// is under the camera.
+				const counts = new Int32Array(biomes.length);
+				const byForm = new Float64Array(LANDFORMS.length);
+				const inCell = new Float64Array(grid.length);
+				let land = 0;
+				for (let c = 0; c < count; c++) {
+					const kind = landformAt(level[c], cut[c], swing[c], height[c]);
+					form[c] = kind;
+					if (kind < 0) {
+						biome[c] = -1;
+						continue;
+					}
+					byForm[kind]++;
+					if (kind !== SHORE)
+						inCell[
+							gridAt(
+								bucket(level[c], CONT_EDGES),
+								bucket(cut[c], ERO_EDGES),
+								bucket(swing[c], PV_EDGES),
+							)
+						]++;
+					const which = biomeOf(climT[c], climH[c], kind);
+					biome[c] = which;
+					if (which >= 0) counts[which]++;
+					land++;
+				}
+				const over = Math.max(1, land);
+				field.counts = counts;
+				field.land = land;
+				field.patchShare = Array.from(counts, (v) => v / over);
+				field.patchByForm = Array.from(byForm, (v) => v / over);
+				field.patchInCell = Array.from(inCell, (v) => v / over);
+				field.here = land > 0 ? counts.indexOf(Math.max(...counts)) : -1;
+				let seen = 0;
+				for (const v of counts) if (v > 0) seen++;
+				field.seen = seen;
+			}
+
+			/**
+			 * Which set of shares the panel is showing, and what to call it.
+			 *
+			 * **One switch over every figure**, because a percentage next to a
+			 * name is worthless if the reader has to remember which of two
+			 * things each one counts. The tabs, the list, the grid and the line
+			 * under the diagram all read this.
+			 */
+			/**
+			 * A share as text, with nothing written as a dash.
+			 *
+			 * **None and nearly none are different answers**, and one decimal
+			 * cannot tell them apart: a single hexagon of an 1,800 cell patch is
+			 * 0.1%, so anything rounding to 0.0% would read as absent when it is
+			 * merely small. A dash means the ground is not there at all.
+			 */
+			function asShare(v) {
+				if (v === undefined || v === null) return "";
+				if (v === 0) return "—";
+				return (v * 100).toFixed(1) + "%";
+			}
+
+			function counted() {
+				const patch = knobs.counted === "the patch";
+				if (!field) return { share: null, byForm: null, inCell: null, patch };
+				return {
+					patch,
+					share: patch ? field.patchShare : field.worldShare,
+					byForm: patch ? field.patchByForm : field.byForm,
+					inCell: patch ? field.patchInCell : field.inCell,
+					of: patch ? "the patch's land" : "the planet's land",
+				};
+			}
+
+			// ---------------------------------------------------------------
+			// The pictures.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The five pictures, and which canvas each one lands in.
+			 *
+			 * The finished map is in the panel's head; every field picture sits
+			 * in the section of the panel that tunes it, so the thing being
+			 * judged never scrolls away from the knob being turned.
+			 */
+			const SHOTS = [
+				{ key: "biome", id: "shotBiome", name: "Biomes" },
+				{ key: "ground", id: "shotGround", name: "Terrain" },
+				{ key: "form", id: "shotForm", name: "Landform" },
+				{ key: "temp", id: "shotTemp", name: "Temperature" },
+				{ key: "hum", id: "shotHum", name: "Humidity" },
+				{ key: "warp", id: "shotWarp", name: "Biome noise" },
+			];
+			const SHOT_OF = new Map(SHOTS.map((shot) => [shot.key, shot]));
+
+			/** How many steps a field picture is cut into. */
+			const PICTURE_BANDS = 9;
+
+			/** Cold to hot, and dry to wet, as the two ramps the fields read on. */
+			const HEAT_RAMP = [
+				[0.62, 0.79, 0.92],
+				[0.93, 0.93, 0.88],
+				[0.85, 0.35, 0.26],
+			];
+			const GREY_RAMP = [
+				[0.09, 0.1, 0.12],
+				[0.55, 0.56, 0.6],
+				[0.95, 0.96, 0.98],
+			];
+			const WET_RAMP = [
+				[0.86, 0.78, 0.5],
+				[0.92, 0.92, 0.9],
+				[0.16, 0.4, 0.7],
+			];
+
+			/**
+			 * One reading in `[-1, 1]` as a step along a ramp, with a line at
+			 * the edge of each step.
+			 *
+			 * **Bands, not a wash.** A smooth gradient of a noise field shows
+			 * its brightness and hides its shape; cutting it into steps draws
+			 * the contour lines, and the contours are what say whether a field
+			 * is broad and rolling or narrow and folded.
+			 */
+			function bandRamp(v, ramp) {
+				const t = Math.max(0, Math.min(0.9999, (v + 1) / 2));
+				const step = Math.floor(t * PICTURE_BANDS);
+				const along = (step / (PICTURE_BANDS - 1)) * (ramp.length - 1);
+				const lo = Math.min(ramp.length - 1, Math.floor(along));
+				const hi = Math.min(ramp.length - 1, lo + 1);
+				const mix = along - lo;
+				const into = t * PICTURE_BANDS - step;
+				const edge = into < 0.06 ? 0.5 : 1;
+				return [
+					(ramp[lo][0] + (ramp[hi][0] - ramp[lo][0]) * mix) * edge,
+					(ramp[lo][1] + (ramp[hi][1] - ramp[lo][1]) * mix) * edge,
+					(ramp[lo][2] + (ramp[hi][2] - ramp[lo][2]) * mix) * edge,
+				];
+			}
+
+			/**
+			 * One height, as the colour the ground would be.
+			 *
+			 * Sea is one colour deepening with how much water a look passes
+			 * through, because the ocean is a surface and holds no blocks; land
+			 * is banded every hundred metres so a slope reads as a slope.
+			 */
+			function groundColor(metres) {
+				const over = metres - TERRAIN.seaLevel;
+				if (over <= 0) {
+					const through = 1 - Math.exp(over / SEA_CLARITY);
+					return BAND_COLORS[0].map((c, n) => c + (SEA_COLOR[n] - c) * through);
+				}
+				const band =
+					over < GROUND_LINES.rock ? 1 : over < GROUND_LINES.snow ? 2 : 3;
+				const into = ((over / 100) % 1) * 100;
+				const edge = into < 6 ? 0.78 : 1;
+				return BAND_COLORS[band].map((c) => c * edge);
+			}
+
+			/**
+			 * The direction a pixel of a picture is looking at.
+			 *
+			 * Over the planet it is longitude across and latitude down, the one
+			 * projection where a direction is two cosines and no case analysis.
+			 * Over the patch it is the exponential map out of the patch's own
+			 * frame, so metres out from the middle become radians of arc.
+			 */
+			function pictureDirection(q, r, wide, tall, frame, half, radius) {
+				if (!frame) {
+					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
+					const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
+					const ring = Math.cos(lat);
+					return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+				}
+				const u = (((q + 0.5) / wide) * 2 - 1) * (half / radius);
+				const v = (1 - ((r + 0.5) / tall) * 2) * (half / radius);
+				const a = Math.sqrt(u * u + v * v);
+				if (a < 1e-12) return frame.up;
+				const c = Math.cos(a);
+				const sn = Math.sin(a) / a;
+				return normalize3([
+					frame.up[0] * c + (frame.east[0] * u + frame.north[0] * v) * sn,
+					frame.up[1] * c + (frame.east[1] * u + frame.north[1] * v) * sn,
+					frame.up[2] * c + (frame.east[2] * u + frame.north[2] * v) * sn,
+				]);
+			}
+
+			/**
+			 * Every reading behind the pictures, sampled once and held.
+			 *
+			 * Five pictures come out of one pass, because the fields they draw
+			 * are read at one point together and the ground is made of three of
+			 * them. Held across a drag on the diagram, which changes none of
+			 * them.
+			 */
+			const sampled = { key: null, wide: 0, tall: 0 };
+
+			function sampleShots(wide, tall) {
+				const key = sampleKey() + "|" + wide + "x" + tall;
+				if (sampled.key === key) return;
+				const planet = knobs.show === "planet";
+				const frame = planet ? null : field.frame;
+				const half = field.arc / 2;
+				const k = field.k;
+				const seed = field.seed;
+				const s = field.s;
+				const said = [0, 0, 0];
+				const climate = [0, 0];
+				const warp = [0, 0];
+				const square = [0, 0];
+				const room = wide * tall;
+				const t = new Float32Array(room);
+				const h = new Float32Array(room);
+				const pushT = new Float32Array(room);
+				const pushH = new Float32Array(room);
+				const ground = new Float32Array(room * 3);
+				const land = new Uint8Array(room);
+				const metresAt = new Float32Array(room);
+				const level = new Float32Array(room);
+				const cut = new Float32Array(room);
+				const swing = new Float32Array(room);
+				for (let r = 0; r < tall; r++)
+					for (let q = 0; q < wide; q++) {
+						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
+						fieldsAt(p[0], p[1], p[2], seed, s, said);
+						const metres = heightFrom(said);
+						climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
+						warpAt(p[0], p[1], p[2], seed, s, warp);
+						const at = r * wide + q;
+						squareOf(climate, warp, square);
+						t[at] = square[0];
+						h[at] = square[1];
+						pushT[at] = warp[0];
+						pushH[at] = warp[1];
+						metresAt[at] = metres;
+						level[at] = splineAt(TERRAIN.cont.spline, said[0]);
+						cut[at] = splineAt(TERRAIN.ero.spline, said[1]);
+						swing[at] = splineAt(TERRAIN.pv.spline, said[2]);
+						land[at] = metres > TERRAIN.seaLevel ? 1 : 0;
+						const c = groundColor(metres);
+						ground[at * 3] = c[0];
+						ground[at * 3 + 1] = c[1];
+						ground[at * 3 + 2] = c[2];
+					}
+				sampled.key = key;
+				sampled.wide = wide;
+				sampled.tall = tall;
+				sampled.t = t;
+				sampled.h = h;
+				sampled.pushT = pushT;
+				sampled.pushH = pushH;
+				sampled.ground = ground;
+				sampled.land = land;
+				sampled.metres = metresAt;
+				sampled.level = level;
+				sampled.cut = cut;
+				sampled.swing = swing;
+			}
+
+			/**
+			 * One picture, painted out of the held readings.
+			 *
+			 * **The coastline is drawn on every field picture.** A climate map
+			 * on its own is a set of blobs with nothing to place them against; a
+			 * line where the ground crosses sea level says which blob is over a
+			 * continent and which is over an ocean, which is the whole question
+			 * a humidity field is being read for.
+			 */
+			function paintShot(shot, ctx, target) {
+				const wide = sampled.wide;
+				const tall = sampled.tall;
+				if (target.width !== wide || target.height !== tall) {
+					target.width = wide;
+					target.height = tall;
+				}
+				const image = ctx.createImageData(wide, tall);
+				const px = image.data;
+				const { t, h, pushT, pushH, ground, land, metres, level, cut, swing } =
+					sampled;
+				for (let n = 0; n < wide * tall; n++) {
+					let c;
+					if (shot.key === "ground") {
+						c = [ground[n * 3], ground[n * 3 + 1], ground[n * 3 + 2]];
+					} else if (shot.key === "temp") {
+						c = bandRamp(2 * t[n] - 1, HEAT_RAMP);
+					} else if (shot.key === "hum") {
+						c = bandRamp(2 * h[n] - 1, WET_RAMP);
+					} else if (shot.key === "warp") {
+						// **Two fields, so a grey one and a line one.** A biome
+						// is chosen by a point in two dimensions, and a single
+						// field could only ever slide every place along one
+						// diagonal of the diagram -- which frays the borders
+						// crossing that diagonal and leaves the ones running
+						// along it perfectly straight. The push toward hot is
+						// the grey; the push toward wet is drawn as its own
+						// contour over the top, because two washes of colour in
+						// one picture read as neither.
+						c = bandRamp(pushT[n], GREY_RAMP);
+						const along = Math.max(0, Math.min(0.9999, (pushH[n] + 1) / 2));
+						const into = along * PICTURE_BANDS - Math.floor(along * PICTURE_BANDS);
+						if (into < 0.06) c = [c[0] * 0.4, c[1] * 0.45, c[2] * 0.55];
+					} else if (shot.key === "form") {
+						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						c =
+							form < 0
+								? SEA_COLOR
+								: rgbOf(LANDFORMS[form].hex);
+					} else {
+						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						const which = form < 0 ? -1 : biomeOf(t[n], h[n], form);
+						c =
+							which < 0
+								? [ground[n * 3], ground[n * 3 + 1], ground[n * 3 + 2]]
+								: rgbOf(biomes[which].hex);
+					}
+					const at = n * 4;
+					px[at] = c[0] * 255;
+					px[at + 1] = c[1] * 255;
+					px[at + 2] = c[2] * 255;
+					px[at + 3] = 255;
+				}
+				if (shot.key !== "ground" && shot.key !== "biome" && shot.key !== "form")
+					for (let r = 0; r < tall; r++)
+						for (let q = 0; q < wide; q++) {
+							const n = r * wide + q;
+							const right = q + 1 < wide && land[n] !== land[n + 1];
+							const under = r + 1 < tall && land[n] !== land[n + wide];
+							if (!right && !under) continue;
+							const at = n * 4;
+							px[at] = 12;
+							px[at + 1] = 14;
+							px[at + 2] = 18;
+						}
+				ctx.putImageData(image, 0, 0);
+				if (knobs.show === "planet") outlinePatch(ctx, wide, tall);
+			}
+
+			/** Where the patch is standing, drawn on a picture of the planet. */
+			function outlinePatch(g, wide, tall) {
+				const k = field.k;
+				const lat = (knobs.latitude * Math.PI) / 180;
+				const across = field.arc / k.radius / Math.max(0.15, Math.cos(lat));
+				const down = field.arc / k.radius;
+				const box = {
+					x:
+						((knobs.longitude + 180) / 360) * wide -
+						(across / (4 * Math.PI)) * wide,
+					y: (0.5 - knobs.latitude / 180) * tall - (down / (2 * Math.PI)) * tall,
+					w: Math.max(3, (across / (2 * Math.PI)) * wide),
+					h: Math.max(3, (down / Math.PI) * tall),
+				};
+				g.strokeStyle = "rgba(255, 90, 90, 0.95)";
+				g.lineWidth = 1;
+				g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+			}
+
+			function drawPictures() {
+				if (!field) return;
+				const ready = SHOTS.filter((shot) => shot.ctx);
+				if (ready.length === 0) return;
+				// Half the samples while a knob is moving, for the same reason
+				// the patch draws fewer cells: a picture that arrives after the
+				// finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 156 : 312;
+				sampleShots(wide, knobs.show === "planet" ? wide / 2 : wide);
+				for (const shot of ready) paintShot(shot, shot.ctx, shot.canvas);
+				if (!field.draft && !big.hidden && bigShown) drawBig(bigShown);
+			}
+
+			// ---------------------------------------------------------------
+			// The enlarged picture.
+			// ---------------------------------------------------------------
+
+			const big = document.getElementById("big");
+			const bigCanvas = document.getElementById("bigShot");
+			const bigCtx = bigCanvas.getContext("2d");
+			const bigName = document.getElementById("bigName");
+			let bigShown = null;
+
+			/**
+			 * One picture, large.
+			 *
+			 * **A field at panel width says where its features are; at this size
+			 * it says what they look like.** The narrow octaves of a climate
+			 * field are a grain at 312 pixels and a pattern at 1,024, and which
+			 * of those a border is being dragged against is the whole question.
+			 */
+			function drawBig(shot) {
+				if (!field) return;
+				bigShown = shot;
+				const planet = knobs.show === "planet";
+				const wide = planet ? 1024 : 720;
+				bigName.textContent = `${shot.name} · ${
+					planet
+						? "the whole planet"
+						: `${Math.round(field.span).toLocaleString()} m of ground`
+				}`;
+				big.hidden = false;
+				const held = sampled.key;
+				sampleShots(wide, planet ? wide / 2 : wide);
+				paintShot(shot, bigCtx, bigCanvas);
+				// The panel's pictures are a different size, so the held
+				// readings have to be dropped rather than left claiming to
+				// answer for them.
+				if (held !== sampled.key) sampled.key = null;
+			}
+
+			function closeBig() {
+				big.hidden = true;
+				bigShown = null;
+			}
+			big.addEventListener("click", closeBig);
+			window.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") closeBig();
+			});
+
+			/**
+			 * **A latitude and a longitude are a place, and two sliders are not
+			 * a way to look for one.** Clicking a picture of the planet puts the
+			 * patch where the finger went: the projection is longitude across
+			 * and latitude down, so it inverts to two divisions. Over the patch
+			 * there is nowhere to jump to, so a click enlarges instead.
+			 */
+			function watchShot(shot) {
+				shot.canvas.addEventListener("click", (e) => {
+					if (knobs.show !== "planet") return drawBig(shot);
+					const box = shot.canvas.getBoundingClientRect();
+					const across = (e.clientX - box.left) / box.width;
+					const down = (e.clientY - box.top) / box.height;
+					const row = ROWS.get("latitude");
+					knobs.longitude = Math.round(across * 360 - 180);
+					knobs.latitude = Math.max(
+						row.low,
+						Math.min(row.high, Math.round((0.5 - down) * 180)),
+					);
+					askForRedraw(false);
+				});
+				shot.canvas.addEventListener("contextmenu", (e) => {
+					e.preventDefault();
+					drawBig(shot);
+				});
+				shot.canvas.title =
+					"click to enlarge, or to move the patch when the pictures show " +
+					"the planet (right-click always enlarges)";
+			}
+
+			// ---------------------------------------------------------------
+			// The diagram.
+			// ---------------------------------------------------------------
+
+			const chart = document.getElementById("chart");
+			const chartCtx = chart.getContext("2d");
+			const chartSays = document.getElementById("chartsays");
+
+			/** How wide the diagram is drawn, and the room its two labels take. */
+			const CHART_SIDE = 300;
+			const CHART_LEFT = 20;
+			const CHART_FOOT = 18;
+
+			/**
+			 * The diagram: every climate the planet could reach, coloured by the
+			 * biome that would be built there.
+			 *
+			 * **Humidity across and temperature up**, both `0` to `1`, and every
+			 * point of the square belongs to whichever dot is nearest. So there
+			 * is no climate without a biome and no biome without a border --
+			 * what a dot decides is where its own borders fall against its
+			 * neighbours', and dragging one moves several at once.
+			 *
+			 * **The borders are drawn dithered by exactly what the biome noise
+			 * pushes.** The lookup on the planet is moved off its true climate
+			 * before it is taken, so a strip either side of every line here can
+			 * come out as either biome; drawing it as a check of the two is the
+			 * diagram saying how ragged that border will be on the ground.
+			 */
+			function drawChart() {
+				const side = CHART_SIDE;
+				if (chart.width !== side) {
+					chart.width = side;
+					chart.height = side;
+				}
+				const wide = side - CHART_LEFT;
+				const tall = side - CHART_FOOT;
+				chartCtx.clearRect(0, 0, side, side);
+				const image = chartCtx.createImageData(wide, tall);
+				const px = image.data;
+				const push = knobs.useWarp ? knobs.warpStrength : 0;
+				// **One landform's own partition**, because that is the set a
+				// place on that kind of ground is chosen from. A biome filed
+				// under the lowlands is not in this picture at all when the
+				// peaks are shown, which is the whole of what stops a desert
+				// appearing on a summit.
+				const set = allowed[shown] ?? [];
+				for (let r = 0; r < tall; r++) {
+					const t = 1 - (r + 0.5) / tall;
+					for (let q = 0; q < wide; q++) {
+						const h = (q + 0.5) / wide;
+						let first = set[0] ?? 0;
+						let other = first;
+						let near = Infinity;
+						let second = Infinity;
+						for (let i = 0; i < set.length; i++) {
+							const n = set[i];
+							const dt = t - biomes[n].t;
+							const dh = h - biomes[n].h;
+							const d = dt * dt + dh * dh;
+							if (d < near) {
+								second = near;
+								other = first;
+								near = d;
+								first = n;
+							} else if (d < second) {
+								second = d;
+								other = n;
+							}
+						}
+						if (set.length === 0) {
+							const at = (r * wide + q) * 4;
+							px[at] = 24;
+							px[at + 1] = 26;
+							px[at + 2] = 32;
+							px[at + 3] = 255;
+							continue;
+						}
+						// Half the gap between the two nearest dots is how far
+						// this point stands from the line between them.
+						const gap = (Math.sqrt(second) - Math.sqrt(near)) / 2;
+						const which =
+							gap < push && ((q >> 1) + (r >> 1)) % 2 === 1 ? other : first;
+						const c = rgbOf(biomes[which].hex);
+						const at = (r * wide + q) * 4;
+						px[at] = c[0] * 255;
+						px[at + 1] = c[1] * 255;
+						px[at + 2] = c[2] * 255;
+						px[at + 3] = 255;
+					}
+				}
+				chartCtx.putImageData(image, CHART_LEFT, 0);
+
+				// **What the world actually reaches, over the diagram that
+				// names it.** A square has a climate in every corner and a
+				// planet does not: a region with no dots over it is a biome this
+				// world never builds, and one packed with them is a biome most
+				// of the ground is in. The patch is the same reading over one
+				// place, which is where the camera is standing.
+				// **Only the ground this tab is about.** A cloud of every
+				// climate on the planet says nothing about where a peak's
+				// biomes should sit; the peaks' own climates do, and on this
+				// world they are cold, because the temperature field loses
+				// height as the ground gains it.
+				const cloud =
+					knobs.chartDots === "the planet" && world.t
+						? {
+								t: world.t,
+								h: world.h,
+								form: null,
+								count: world.t.length,
+								world: true,
+							}
+						: knobs.chartDots === "the patch" && field
+							? {
+									t: field.climT,
+									h: field.climH,
+									form: field.form,
+									count: field.count,
+									world: false,
+								}
+							: null;
+				if (cloud) {
+					chartCtx.fillStyle = "rgba(10, 12, 16, 0.42)";
+					for (let n = 0; n < cloud.count; n++) {
+						const form = cloud.world
+							? landformAt(
+									world.level[n],
+									world.cut[n],
+									world.swing[n],
+									world.metres[n],
+								)
+							: cloud.form[n];
+						if (form !== shown) continue;
+						const x = CHART_LEFT + cloud.h[n] * wide;
+						const y = (1 - cloud.t[n]) * tall;
+						chartCtx.fillRect(x - 0.5, y - 0.5, 1.6, 1.6);
+					}
+				}
+
+				// **A label is drawn only where one fits.** A set of two dozen
+				// zones has more names than a 300 pixel square has room for, and
+				// a pile of overlapping text says less than the dots alone. The
+				// one being edited is placed first and never dropped.
+				const taken = [];
+				const order = set.includes(picked)
+					? [picked, ...set.filter((n) => n !== picked)]
+					: [...set];
+				chartCtx.textAlign = "center";
+				for (const n of order) {
+					const b = biomes[n];
+					if (!b) continue;
+					const x = CHART_LEFT + b.h * wide;
+					const y = (1 - b.t) * tall;
+					const mine = n === picked;
+					chartCtx.font = (mine ? "600 " : "") + "10px system-ui, sans-serif";
+					const room = chartCtx.measureText(b.name).width;
+					const lx = Math.max(
+						CHART_LEFT + room / 2 + 2,
+						Math.min(side - room / 2 - 2, x),
+					);
+					// A dot near the top has no room over it, so its name goes
+					// under it instead of off the edge.
+					const box = {
+						x: lx - room / 2 - 2,
+						y: y - 18 < 0 ? y + 6 : y - 18,
+						w: room + 4,
+						h: 12,
+					};
+					const clash = taken.some(
+						(o) =>
+							box.x < o.x + o.w &&
+							o.x < box.x + box.w &&
+							box.y < o.y + o.h &&
+							o.y < box.y + box.h,
+					);
+					if (!clash) {
+						taken.push(box);
+						chartCtx.fillStyle = "rgba(12, 14, 18, 0.75)";
+						chartCtx.fillRect(box.x, box.y, box.w, box.h);
+						chartCtx.fillStyle = mine ? "#6fd0ff" : "#e8ecf2";
+						chartCtx.fillText(b.name, lx, box.y + 9);
+					}
+					chartCtx.beginPath();
+					chartCtx.arc(x, y, mine ? 5 : 3.5, 0, Math.PI * 2);
+					chartCtx.fillStyle = "rgba(12, 14, 18, 0.85)";
+					chartCtx.fill();
+					chartCtx.lineWidth = mine ? 2 : 1;
+					chartCtx.strokeStyle = mine ? "#6fd0ff" : "rgba(232, 236, 242, 0.8)";
+					chartCtx.stroke();
+				}
+
+				chartCtx.font = "9.5px system-ui, sans-serif";
+				chartCtx.fillStyle = "#8b95a4";
+				chartCtx.fillText("humidity", CHART_LEFT + wide / 2, side - 5);
+				chartCtx.save();
+				chartCtx.translate(9, tall / 2);
+				chartCtx.rotate(-Math.PI / 2);
+				chartCtx.fillText("temperature", 0, 0);
+				chartCtx.restore();
+			}
+
+			/**
+			 * Which biome is being edited, what it comes to on the planet, and
+			 * which ground it may stand on.
+			 *
+			 * **Where it stands is edited here rather than in the list**,
+			 * because changing it moves the biome out of the list this panel is
+			 * showing -- the control has to outlive the row it would sit in.
+			 */
+			function sayChart() {
+				const b = biomes[picked];
+				chartSays.textContent = "";
+				if (!b) {
+					chartSays.innerHTML =
+						`<b>${LANDFORMS[shown].name}</b> has no biome, so nothing can be ` +
+						`built on it — add one, or move one here`;
+					return;
+				}
+				const read = counted();
+				const share = read.share ? read.share[picked] : 0;
+				const says = document.createElement("span");
+				says.innerHTML =
+					`<b>${b.name}</b> at temperature <b>${b.t.toFixed(
+						2,
+					)}</b>, humidity <b>${b.h.toFixed(2)}</b> — ` +
+					`<b>${asShare(share)}</b> of ${read.of} · stands on `;
+				const pickForm = document.createElement("select");
+				for (const [value, label] of [
+					[ANY, "any ground"],
+					...LANDFORMS.map((form) => [form.key, form.name.toLowerCase()]),
+				]) {
+					const o = document.createElement("option");
+					o.value = value;
+					o.textContent = label;
+					pickForm.append(o);
+				}
+				pickForm.value = b.landform ?? ANY;
+				pickForm.addEventListener("input", () => {
+					b.landform = pickForm.value;
+					if (b.landform !== ANY) shown = LANDFORMS.findIndex((f) => f.key === b.landform);
+					askForRecolor();
+					writeUrl();
+				});
+				chartSays.append(says, pickForm);
+			}
+
+			/**
+			 * Dragging a dot, which is the whole edit.
+			 *
+			 * A click away from every dot selects the biome whose region was
+			 * clicked and moves nothing: a diagram where clicking anywhere
+			 * dragged something would have no way to look at a border without
+			 * changing it.
+			 */
+			let holding = -1;
+
+			function chartPoint(e) {
+				const box = chart.getBoundingClientRect();
+				const wide = CHART_SIDE - CHART_LEFT;
+				const tall = CHART_SIDE - CHART_FOOT;
+				const x = ((e.clientX - box.left) / box.width) * CHART_SIDE;
+				const y = ((e.clientY - box.top) / box.height) * CHART_SIDE;
+				return {
+					x,
+					y,
+					h: Math.max(0, Math.min(1, (x - CHART_LEFT) / wide)),
+					t: Math.max(0, Math.min(1, 1 - y / tall)),
+					wide,
+					tall,
+				};
+			}
+
+			chart.addEventListener("pointerdown", (e) => {
+				const p = chartPoint(e);
+				let near = Infinity;
+				let found = -1;
+				for (const n of allowed[shown] ?? []) {
+					const dx = CHART_LEFT + biomes[n].h * p.wide - p.x;
+					const dy = (1 - biomes[n].t) * p.tall - p.y;
+					const d = dx * dx + dy * dy;
+					if (d < near) {
+						near = d;
+						found = n;
+					}
+				}
+				const grabbed = found >= 0 && near <= 16 * 16;
+				const under = biomeOf(p.t, p.h, shown);
+				picked = grabbed ? found : under >= 0 ? under : picked;
+				holding = grabbed ? found : -1;
+				if (grabbed) chart.setPointerCapture(e.pointerId);
+				refreshList();
+				drawChart();
+				sayChart();
+			});
+
+			chart.addEventListener("pointermove", (e) => {
+				if (holding < 0) return;
+				const p = chartPoint(e);
+				biomes[holding].t = p.t;
+				biomes[holding].h = p.h;
+				askForRecolor();
+			});
+
+			const dropDot = () => {
+				if (holding < 0) return;
+				holding = -1;
+				writeUrl();
+			};
+			chart.addEventListener("pointerup", dropDot);
+			chart.addEventListener("pointercancel", dropDot);
+
+			// ---------------------------------------------------------------
+			// The patch, as hexagon columns.
+			// ---------------------------------------------------------------
+
+			const view = document.getElementById("view");
+			const gl = view.getContext("webgl2", { antialias: true });
+
+			const VERTEX_SOURCE = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec3 position;
+			layout(location = 1) in vec3 tint;
+			layout(location = 2) in vec3 normal;
+			uniform mat4 viewProj;
+			out vec3 vNormal;
+			out vec3 vTint;
+			void main() {
+				vNormal = normal;
+				vTint = tint;
+				gl_Position = viewProj * vec4(position, 1.0);
+			}`;
+
+			const FRAGMENT_SOURCE = `#version 300 es
+			precision highp float;
+			in vec3 vNormal;
+			in vec3 vTint;
+			uniform vec3 sun;
+			uniform int water;
+			out vec4 color;
+			void main() {
+				vec3 n = normalize(vNormal);
+				if (!gl_FrontFacing) n = -n;
+				float lit = 0.32 + 0.68 * max(0.0, dot(n, normalize(sun)));
+				if (water == 1) {
+					color = vec4(pow(vec3(0.12, 0.32, 0.55) * lit, vec3(1.0 / 2.2)), 0.7);
+					return;
+				}
+				color = vec4(pow(vTint * lit, vec3(1.0 / 2.2)), 1.0);
+			}`;
+
+			function compile(kind, source) {
+				const shader = gl.createShader(kind);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+					throw new Error(gl.getShaderInfoLog(shader) ?? "shader");
+				return shader;
+			}
+
+			const program = gl.createProgram();
+			gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX_SOURCE));
+			gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT_SOURCE));
+			gl.linkProgram(program);
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+				throw new Error(gl.getProgramInfoLog(program) ?? "link");
+			const uViewProj = gl.getUniformLocation(program, "viewProj");
+			const uSun = gl.getUniformLocation(program, "sun");
+			const uWater = gl.getUniformLocation(program, "water");
+
+			const vao = gl.createVertexArray();
+			gl.bindVertexArray(vao);
+			const positionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+			gl.enableVertexAttribArray(0);
+			gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+			const tintBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, tintBuffer);
+			gl.enableVertexAttribArray(1);
+			gl.vertexAttribPointer(1, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+			const normalBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+			gl.enableVertexAttribArray(2);
+			gl.vertexAttribPointer(2, 3, gl.BYTE, true, 0, 0);
+
+			let groundCount = 0;
+			let waterFrom = 0;
+			let waterCount = 0;
+			let bounds = { x: 0, y: 0, z: 0, reach: 1, floor: 0 };
+
+			/**
+			 * What one hexagon is painted.
+			 *
+			 * **A hexagon takes the colour of the biome its climate lands in**,
+			 * which is the whole page in one line. Under the water it takes the
+			 * sea instead: there is no land there for a biome to be, and the
+			 * diagram is about land.
+			 */
+			function cellTint(c) {
+				const metres = field.height[c];
+				if (metres <= TERRAIN.seaLevel) return BAND_COLORS[0];
+				if (knobs.paint === "landform")
+					return field.form[c] < 0
+						? BAND_COLORS[0]
+						: rgbOf(LANDFORMS[field.form[c]].hex);
+				if (knobs.paint === "ground") {
+					const over = metres - TERRAIN.seaLevel;
+					if (over < GROUND_LINES.rock) return BAND_COLORS[1];
+					if (over < GROUND_LINES.snow) return BAND_COLORS[2];
+					return BAND_COLORS[3];
+				}
+				const which = field.biome[c];
+				return which < 0 ? BAND_COLORS[0] : rgbOf(biomes[which].hex);
+			}
+
+			function buildMesh() {
+				if (!field) return;
+				const { count, degree, corner, ring, centre, frame, height, k } = field;
+				const radius = k.radius;
+
+				let room = count * 24 * 3;
+				let position = new Float32Array(room * 3);
+				let tint = new Uint8Array(room * 3);
+				let normal = new Int8Array(room * 3);
+				let vertices = 0;
+				let loX = Infinity, hiX = -Infinity;
+				let loY = Infinity, hiY = -Infinity;
+				let loZ = Infinity, hiZ = -Infinity;
+				const roomFor = () => {
+					if (vertices + 3 <= room) return;
+					room = Math.max(room * 2, vertices + 3);
+					const a = new Float32Array(room * 3); a.set(position); position = a;
+					const b = new Uint8Array(room * 3); b.set(tint); tint = b;
+					const c = new Int8Array(room * 3); c.set(normal); normal = c;
+				};
+
+				const ringX = new Float64Array(6);
+				const ringY = new Float64Array(6);
+				const ringZ = new Float64Array(6);
+				const localP = new Float64Array(3);
+				/**
+				 * A direction and a height, as metres in the patch's own frame.
+				 *
+				 * **The third axis is south, and it has to be.** East, up and
+				 * north in that order is a **left-handed** triple -- measured,
+				 * `cross(east, up) · north` is `-1` -- and handing a left-handed
+				 * basis to a right-handed renderer draws the mirror image of the
+				 * ground. From overhead the frame's east then lands on the right
+				 * of the screen where the map puts it and its north lands at the
+				 * **bottom**, so the view is the map flipped top to bottom.
+				 * Negating one axis rights it, and negating this one is what
+				 * makes the default view agree with the map: at yaw zero the
+				 * camera stands south of the patch looking north, so north is
+				 * away from the eye and east is on the right, exactly as the
+				 * picture draws them.
+				 */
+				const local = (dx, dy, dz, metres) => {
+					const s = radius + metres;
+					const rx = dx * s - centre[0] * radius;
+					const ry = dy * s - centre[1] * radius;
+					const rz = dz * s - centre[2] * radius;
+					localP[0] = rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
+					localP[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
+					localP[2] = -(
+						rx * frame.north[0] +
+						ry * frame.north[1] +
+						rz * frame.north[2]
+					);
+					return localP;
+				};
+
+				let paint = [0, 0, 0];
+				const triangle = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+					const ux = bx - ax, uy = by - ay, uz = bz - az;
+					const vx = cx - ax, vy = cy - ay, vz = cz - az;
+					const nx = uy * vz - uz * vy;
+					const ny = uz * vx - ux * vz;
+					const nz = ux * vy - uy * vx;
+					// `sqrt(x*x + y*y + z*z)`, never `Math.hypot`, which is a
+					// library routine rather than an IEEE operation.
+					const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+					const n8 = [
+						Math.round((nx / len) * 127),
+						Math.round((ny / len) * 127),
+						Math.round((nz / len) * 127),
+					];
+					roomFor();
+					const at = vertices * 3;
+					for (let v = 0; v < 3; v++)
+						for (let x = 0; x < 3; x++) {
+							normal[at + v * 3 + x] = n8[x];
+							tint[at + v * 3 + x] = Math.max(
+								0,
+								Math.min(255, Math.round(paint[x] * 255)),
+							);
+						}
+					position[at] = ax; position[at + 1] = ay; position[at + 2] = az;
+					position[at + 3] = bx; position[at + 4] = by; position[at + 5] = bz;
+					position[at + 6] = cx; position[at + 7] = cy; position[at + 8] = cz;
+					vertices += 3;
+					if (ax < loX) loX = ax; if (ax > hiX) hiX = ax;
+					if (bx < loX) loX = bx; if (bx > hiX) hiX = bx;
+					if (cx < loX) loX = cx; if (cx > hiX) hiX = cx;
+					if (ay < loY) loY = ay; if (ay > hiY) hiY = ay;
+					if (by < loY) loY = by; if (by > hiY) hiY = by;
+					if (cy < loY) loY = cy; if (cy > hiY) hiY = cy;
+					if (az < loZ) loZ = az; if (az > hiZ) hiZ = az;
+					if (bz < loZ) loZ = bz; if (bz > hiZ) hiZ = bz;
+					if (cz < loZ) loZ = cz; if (cz > hiZ) hiZ = cz;
+				};
+
+				const cap = (c, metres) => {
+					const deg = degree[c];
+					let mx = 0, my = 0, mz = 0;
+					for (let v = 0; v < deg; v++) {
+						const p = local(
+							corner[c * 18 + v * 3],
+							corner[c * 18 + v * 3 + 1],
+							corner[c * 18 + v * 3 + 2],
+							metres,
+						);
+						ringX[v] = p[0]; ringY[v] = p[1]; ringZ[v] = p[2];
+						mx += p[0] / deg; my += p[1] / deg; mz += p[2] / deg;
+					}
+					for (let v = 0; v < deg; v++) {
+						const b = (v + 1) % deg;
+						triangle(mx, my, mz, ringX[v], ringY[v], ringZ[v], ringX[b], ringY[b], ringZ[b]);
+					}
+				};
+
+				/** One side of a cell, between two heights. */
+				const side = (c, edge, high, low) => {
+					const deg = degree[c];
+					const a = ((edge - 1 + deg) % deg) * 3 + c * 18;
+					const b = edge * 3 + c * 18;
+					const t1 = local(corner[a], corner[a + 1], corner[a + 2], high);
+					const ax = t1[0], ay = t1[1], az = t1[2];
+					const t2 = local(corner[b], corner[b + 1], corner[b + 2], high);
+					const bx = t2[0], by = t2[1], bz = t2[2];
+					const t3 = local(corner[b], corner[b + 1], corner[b + 2], low);
+					const cx = t3[0], cy = t3[1], cz = t3[2];
+					const t4 = local(corner[a], corner[a + 1], corner[a + 2], low);
+					triangle(ax, ay, az, bx, by, bz, cx, cy, cz);
+					triangle(ax, ay, az, cx, cy, cz, t4[0], t4[1], t4[2]);
+				};
+
+				// ---- the ground ----
+				const lip = field.span * 0.05;
+				const sea = TERRAIN.seaLevel;
+				for (let c = 0; c < count; c++) {
+					const raw = cellTint(c);
+					// A speckle off the cell's own address, so a band of one
+					// biome reads as hexagons rather than as one flat sheet, and
+					// nothing has to be stored to get it.
+					const grain = 0.94 + 0.12 * hash3(c, field.biome[c], 7, field.seed + 3);
+					paint = [raw[0] * grain, raw[1] * grain, raw[2] * grain];
+					cap(c, height[c]);
+					const deg = degree[c];
+					for (let e = 0; e < deg; e++) {
+						const nb = ring[c * 6 + e];
+						const rim = nb < 0;
+						const below = rim ? height[c] - lip : height[nb];
+						if (below >= height[c]) continue;
+						side(c, e, height[c], below);
+					}
+				}
+				groundCount = vertices;
+
+				// ---- the sea, last, so it blends over what is behind it ----
+				waterFrom = vertices;
+				paint = SEA_COLOR;
+				for (let c = 0; c < count; c++) {
+					if (height[c] >= sea) continue;
+					cap(c, sea);
+					const deg = degree[c];
+					for (let e = 0; e < deg; e++)
+						if (ring[c * 6 + e] < 0) side(c, e, sea, height[c]);
+				}
+				waterCount = vertices - waterFrom;
+
+				bounds = {
+					floor: hiY,
+					x: (loX + hiX) / 2,
+					y: (loY + hiY) / 2,
+					z: (loZ + hiZ) / 2,
+					reach:
+						Math.sqrt((hiX - loX) ** 2 + (hiY - loY) ** 2 + (hiZ - loZ) ** 2) /
+							2 || field.span,
+				};
+
+				gl.bindVertexArray(vao);
+				for (const [buffer, data, wide] of [
+					[positionBuffer, position, 3],
+					[tintBuffer, tint, 3],
+					[normalBuffer, normal, 3],
+				]) {
+					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+					gl.bufferData(
+						gl.ARRAY_BUFFER,
+						data.subarray(0, vertices * wide),
+						gl.DYNAMIC_DRAW,
+					);
+				}
+				field.vertices = vertices;
+			}
+
+			function multiply(a, b) {
+				const out = new Float32Array(16);
+				for (let c = 0; c < 4; c++)
+					for (let r = 0; r < 4; r++) {
+						let s = 0;
+						for (let i = 0; i < 4; i++) s += a[i * 4 + r] * b[c * 4 + i];
+						out[c * 4 + r] = s;
+					}
+				return out;
+			}
+
+			function perspective(fov, aspect, near, far) {
+				const f = 1 / Math.tan(fov / 2);
+				const out = new Float32Array(16);
+				out[0] = f / aspect;
+				out[5] = f;
+				out[10] = (far + near) / (near - far);
+				out[11] = -1;
+				out[14] = (2 * far * near) / (near - far);
+				return out;
+			}
+
+			function lookAt(eye, to, upHint) {
+				const f = [to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]];
+				const fl = Math.sqrt(f[0] ** 2 + f[1] ** 2 + f[2] ** 2) || 1;
+				const z = f.map((v) => v / fl);
+				let x = cross3(z, upHint);
+				const xl = Math.sqrt(x[0] ** 2 + x[1] ** 2 + x[2] ** 2) || 1;
+				x = x.map((v) => v / xl);
+				const y = cross3(x, z);
+				const out = new Float32Array(16);
+				out[0] = x[0]; out[4] = x[1]; out[8] = x[2];
+				out[1] = y[0]; out[5] = y[1]; out[9] = y[2];
+				out[2] = -z[0]; out[6] = -z[1]; out[10] = -z[2];
+				out[12] = -(x[0] * eye[0] + x[1] * eye[1] + x[2] * eye[2]);
+				out[13] = -(y[0] * eye[0] + y[1] * eye[1] + y[2] * eye[2]);
+				out[14] = z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2];
+				out[15] = 1;
+				return out;
+			}
+
+			const camera = { yaw: -0.7, pitch: 0.42, distance: 1.05, lift: 0 };
+
+			function render() {
+				const wide = view.clientWidth;
+				const tall = view.clientHeight;
+				const dpr = Math.min(2, window.devicePixelRatio || 1);
+				view.width = Math.max(1, Math.round(wide * dpr));
+				view.height = Math.max(1, Math.round(tall * dpr));
+				gl.viewport(0, 0, view.width, view.height);
+				gl.clearColor(0.027, 0.039, 0.055, 1);
+				gl.enable(gl.DEPTH_TEST);
+				gl.disable(gl.CULL_FACE);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				if (!field) return;
+				const reach = bounds.reach;
+				const away = reach * 2.4 * camera.distance;
+				const eye = [
+					bounds.x + Math.cos(camera.pitch) * Math.sin(camera.yaw) * away,
+					Math.max(
+						bounds.y + Math.sin(camera.pitch) * away + camera.lift * reach,
+						bounds.floor + reach * 0.15,
+					),
+					bounds.z + Math.cos(camera.pitch) * Math.cos(camera.yaw) * away,
+				];
+				const proj = perspective(
+					0.9,
+					view.width / Math.max(1, view.height),
+					Math.max(0.05, reach * 0.005),
+					away + reach * 6,
+				);
+				const viewProj = multiply(
+					proj,
+					lookAt(eye, [bounds.x, bounds.y, bounds.z], [0, 1, 0]),
+				);
+				gl.useProgram(program);
+				gl.bindVertexArray(vao);
+				gl.uniformMatrix4fv(uViewProj, false, viewProj);
+				gl.uniform3f(uSun, 0.42, 0.78, 0.46);
+				gl.uniform1i(uWater, 0);
+				gl.disable(gl.BLEND);
+				gl.depthMask(true);
+				gl.drawArrays(gl.TRIANGLES, 0, groundCount);
+				if (waterCount > 0) {
+					gl.uniform1i(uWater, 1);
+					gl.enable(gl.BLEND);
+					gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+					gl.depthMask(false);
+					gl.drawArrays(gl.TRIANGLES, waterFrom, waterCount);
+					gl.depthMask(true);
+					gl.disable(gl.BLEND);
+				}
+			}
+
+			// ---------------------------------------------------------------
+			// The panel.
+			// ---------------------------------------------------------------
+
+			/** Write a preset's dots into the table, keeping them draggable. */
+			function applyPreset(name) {
+				const set = PRESETS[name];
+				if (!set) return;
+				biomes = set.map((b) => ({ landform: ANY, ...b }));
+				regroup();
+				picked = (allowed[shown] ?? [])[0] ?? 0;
+			}
+
+			function buildPanel() {
+				const hostWorld = document.getElementById("knobsWorld");
+				const hostBiomes = document.getElementById("knobsBiomes");
+				for (const group of KNOBS) {
+					const set = document.createElement("details");
+					set.className = "group" + (group.tint ? " " + group.tint : "");
+					set.open = group.open !== false;
+					const legend = document.createElement("summary");
+					legend.textContent = group.group;
+					set.append(legend);
+					for (const row of group.rows) {
+						if (row.summary) {
+							const box = document.createElement("input");
+							box.type = "checkbox";
+							box.className = "switch";
+							box.checked = knobs[row.key];
+							box.title = row.title ?? "";
+							box.addEventListener("click", (e) => e.stopPropagation());
+							// **A switch on a field is a resample, not a
+							// recolour.** The push is applied where the two
+							// climate readings are taken, so turning it off
+							// changes the readings the diagram is then handed.
+							box.addEventListener("input", () => {
+								knobs[row.key] = box.checked;
+								askForRedraw(false);
+							});
+							legend.prepend(box);
+							rows.set(row.key, { row, wrap: set, input: box });
+							continue;
+						}
+						const wrap = document.createElement("div");
+						let input = null;
+						let readout = null;
+						if (row.type === "picture") {
+							// A picture sits where the thing it shows is tuned,
+							// so it is a row of the panel like any other.
+							wrap.className = "knob pictured";
+							const shot = SHOT_OF.get(row.shot);
+							const holder = document.createElement("div");
+							holder.className = "shot" + (group.tint ? " " + group.tint : "");
+							const canvas = document.createElement("canvas");
+							canvas.id = shot.id;
+							const tag = document.createElement("b");
+							tag.textContent = shot.name;
+							holder.append(canvas, tag);
+							wrap.append(holder);
+							shot.canvas = canvas;
+							shot.ctx = canvas.getContext("2d");
+							watchShot(shot);
+						} else {
+							wrap.className = "knob";
+							const label = document.createElement("label");
+							label.textContent = row.label;
+							if (row.type === "select") {
+								input = document.createElement("select");
+								for (const option of row.options) {
+									const o = document.createElement("option");
+									o.value = option;
+									o.textContent = option;
+									input.append(o);
+								}
+								input.value = knobs[row.key];
+							} else if (row.type === "text") {
+								input = document.createElement("input");
+								input.type = "text";
+								input.value = knobs[row.key];
+							} else if (row.type === "check") {
+								wrap.className = "knob check";
+								input = document.createElement("input");
+								input.type = "checkbox";
+								input.checked = knobs[row.key];
+							} else {
+								input = document.createElement("input");
+								input.type = "range";
+								input.min = row.low;
+								input.max = row.high;
+								input.step = row.step;
+								input.value = knobs[row.key];
+							}
+							readout = document.createElement("output");
+							if (row.type === "check") wrap.append(input, label);
+							else wrap.append(label, readout, input);
+						}
+						let note = null;
+						if (row.note) {
+							note = document.createElement("p");
+							note.className = "knob-note";
+							wrap.append(note);
+						}
+						set.append(wrap);
+						rows.set(row.key, { row, wrap, input, readout, note });
+						if (!input) continue;
+						input.addEventListener("input", () => {
+							if (row.type === "check") knobs[row.key] = input.checked;
+							else if (row.type === "select" || row.type === "text")
+								knobs[row.key] = input.value;
+							else knobs[row.key] = Number(input.value);
+							// **Picking a set writes its dots into the diagram**,
+							// which is what makes the list a set of starting
+							// points rather than a menu of results.
+							if (row.key === "preset") {
+								applyPreset(input.value);
+								askForRecolor();
+								writeUrl();
+								return;
+							}
+							if (row.key === "paint") {
+								askForRecolor();
+								writeUrl();
+								return;
+							}
+							// **Which numbers are shown changes no number.**
+							// Neither of these touches a field, a mesh or a
+							// picture, so redrawing the world for them would be
+							// a rebuild to change a caption.
+							if (row.key === "counted" || row.key === "chartDots") {
+								refreshReadouts();
+								return;
+							}
+							askForRedraw();
+						});
+					}
+					(group.panel === "biomes" ? hostBiomes : hostWorld).append(set);
+				}
+			}
+
+			function refreshPanel() {
+				for (const { row, wrap, readout, input, note } of rows.values()) {
+					if (row.summary) {
+						input.checked = knobs[row.key];
+						wrap.classList.toggle("off", !knobs[row.key]);
+						continue;
+					}
+					if (row.type === "picture") {
+						if (note) note.innerHTML = row.note();
+						continue;
+					}
+					if (row.type === "check") {
+						input.checked = knobs[row.key];
+						readout.textContent = "";
+					} else if (row.type === "select" || row.type === "text") {
+						input.value = knobs[row.key];
+						readout.textContent = "";
+					} else {
+						const live = liveRange(row);
+						input.min = live.low;
+						input.max = live.high;
+						input.value = knobs[row.key];
+						readout.textContent =
+							Number(knobs[row.key]).toFixed(row.digits ?? 2) +
+							(row.unit ? " " + row.unit : "");
+					}
+					if (note) note.innerHTML = row.note();
+				}
+				if (!field) return;
+				const here = field.here >= 0 ? biomes[field.here] : null;
+				const read = counted();
+				let widest = 0;
+				for (let n = 1; n < LANDFORMS.length; n++)
+					if (read.byForm[n] > read.byForm[widest]) widest = n;
+				const land = read.patch
+					? field.land / Math.max(1, field.count)
+					: field.landShare;
+				document.getElementById("recipe").innerHTML =
+					`<i class="b">${biomes.length}</i> biomes over ` +
+					`<i class="b">${LANDFORMS.length}</i> landforms · ` +
+					`<i class="b">${(land * 100).toFixed(1)}%</i> of ` +
+					`${read.patch ? "the patch" : "the planet"} is land, most of it ` +
+					`<i class="w">${LANDFORMS[widest].name}</i> · ` +
+					(read.patch
+						? `<i class="b">${field.seen}</i> of them are in view`
+						: `<i class="b">${field.reached}</i> of them are built somewhere`) +
+					(here
+						? ` · mostly <i class="h">${here.name}</i>`
+						: " · the patch is all sea");
+				document.getElementById("facts").innerHTML =
+					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
+					`<b>${field.count.toLocaleString()}</b> hexagons · ` +
+					`ground <b>${Math.round(field.lowest)}</b> to ` +
+					`<b>${Math.round(field.highest)} m</b> · ` +
+					`<b>${Math.round(cost)} ms</b>`;
+			}
+
+			/** Every figure on the panel, redrawn from readings already taken. */
+			function refreshReadouts() {
+				refreshPanel();
+				refreshTabs();
+				refreshList();
+				refreshGrid();
+				drawChart();
+				sayChart();
+				writeUrl();
+			}
+
+			// ---------------------------------------------------------------
+			// The list.
+			// ---------------------------------------------------------------
+
+			const list = document.getElementById("list");
+
+			/**
+			 * The table as rows, which is where a biome is named and coloured.
+			 *
+			 * The share beside each one is read back off the planet rather than
+			 * set: a dot is placed in the climate square, and how much ground
+			 * that comes to depends on where the two fields actually go.
+			 */
+			function refreshList() {
+				list.textContent = "";
+				const share = counted().share;
+				for (const n of allowed[shown] ?? []) {
+					const b = biomes[n];
+					const row = document.createElement("div");
+					row.className = "biome" + (n === picked ? " picked" : "");
+					const color = document.createElement("input");
+					color.type = "color";
+					color.value = "#" + b.hex;
+					color.addEventListener("input", () => {
+						b.hex = color.value.slice(1).toLowerCase();
+						askForRecolor();
+					});
+					color.addEventListener("change", writeUrl);
+					const name = document.createElement("input");
+					name.type = "text";
+					name.value = b.name;
+					name.addEventListener("input", () => {
+						b.name = name.value.replace(/[~|]/g, " ");
+						drawChart();
+						sayChart();
+					});
+					name.addEventListener("change", writeUrl);
+					const says = document.createElement("span");
+					says.className = "share";
+					says.textContent = share ? asShare(share[n]) : "";
+					const drop = document.createElement("button");
+					drop.className = "drop";
+					drop.type = "button";
+					drop.textContent = "×";
+					drop.title = "remove this biome";
+					drop.addEventListener("click", (e) => {
+						e.stopPropagation();
+						// **This ground must always have an answer**, so its last
+						// biome cannot be removed: with no dots there is no
+						// nearest one and every climate on it would name nothing.
+						if ((allowed[shown] ?? []).length <= 1) return;
+						biomes.splice(n, 1);
+						picked = Math.min(picked, biomes.length - 1);
+						askForRecolor();
+						writeUrl();
+					});
+					row.addEventListener("click", () => {
+						picked = n;
+						refreshList();
+						drawChart();
+						sayChart();
+					});
+					row.append(color, name, says, drop);
+					list.append(row);
+				}
+			}
+
+			document.getElementById("add").addEventListener("click", () => {
+				// A new dot lands in the middle of the square, where it is
+				// visible and where dragging it somewhere useful is one move.
+				// It belongs to the ground whose diagram is open, because that
+				// is the one being edited.
+				biomes.push({
+					name: "New biome",
+					hex: "b06fd0",
+					t: 0.5,
+					h: 0.5,
+					landform: LANDFORMS[shown].key,
+				});
+				picked = biomes.length - 1;
+				askForRecolor();
+				writeUrl();
+			});
+
+			// ---------------------------------------------------------------
+			// The tabs, and the grid that fills them.
+			// ---------------------------------------------------------------
+
+			const tabs = document.getElementById("tabs");
+			const gridHost = document.getElementById("gridHost");
+
+			/** One button per kind of ground, carrying its share of the land. */
+			function refreshTabs() {
+				tabs.textContent = "";
+				for (let n = 0; n < LANDFORMS.length; n++) {
+					const form = LANDFORMS[n];
+					const button = document.createElement("button");
+					button.type = "button";
+					const set = allowed[n] ?? [];
+					button.className =
+						(n === shown ? "picked" : "") + (set.length === 0 ? " empty" : "");
+					const swatch = document.createElement("span");
+					swatch.className = "swatch";
+					swatch.style.background = "#" + form.hex;
+					const read = counted();
+					const share = read.byForm ? asShare(read.byForm[n]) : "";
+					button.append(swatch, document.createTextNode(form.name + " " + share));
+					button.title =
+						set.length === 0
+							? "no biome stands on this ground"
+							: set.length + " biomes";
+					button.addEventListener("click", () => {
+						shown = n;
+						const set2 = allowed[n] ?? [];
+						if (!set2.includes(picked) && set2.length > 0) picked = set2[0];
+						refreshTabs();
+						refreshList();
+						drawChart();
+						sayChart();
+					});
+					tabs.append(button);
+				}
+			}
+
+			/**
+			 * The grid: which landform each combination of the three terrain
+			 * indices is.
+			 *
+			 * One sheet per continentalness band, erosion down and peaks and
+			 * valleys across, and the share of the planet's land in each cell
+			 * written on it -- so a cell nothing falls in is visible rather than
+			 * argued about. Clicking a cell opens that landform's diagram and
+			 * points the select below at the cell, which is what changes it.
+			 */
+			let sheetShown = 1;
+
+			function refreshGrid() {
+				gridHost.textContent = "";
+				const set = document.createElement("details");
+				set.className = "group";
+				set.open = true;
+				const legend = document.createElement("summary");
+				legend.textContent = "The landform grid";
+				set.append(legend);
+
+				const band = document.createElement("div");
+				band.id = "tabs";
+				for (let c = 0; c < 3; c++) {
+					const button = document.createElement("button");
+					button.type = "button";
+					button.textContent = CONT_NAMES[c];
+					button.className = c === sheetShown ? "picked" : "";
+					button.addEventListener("click", () => {
+						sheetShown = c;
+						refreshGrid();
+					});
+					band.append(button);
+				}
+				set.append(band);
+
+				const sheet = document.createElement("div");
+				sheet.className = "sheet";
+				const corner = document.createElement("div");
+				corner.className = "corner";
+				sheet.append(corner);
+				for (let p = 0; p < 5; p++) {
+					const head = document.createElement("div");
+					head.className = "corner";
+					head.textContent = PV_NAMES[p];
+					sheet.append(head);
+				}
+				for (let e = 0; e < 5; e++) {
+					const edge = document.createElement("div");
+					edge.className = "edge";
+					edge.textContent = ERO_NAMES[e];
+					sheet.append(edge);
+					for (let p = 0; p < 5; p++) {
+						const at = gridAt(sheetShown, e, p);
+						const form = LANDFORMS[grid[at]];
+						const button = document.createElement("button");
+						button.type = "button";
+						button.style.background = "#" + form.hex;
+						button.className = at === cellPicked ? "picked" : "";
+						const read = counted();
+						const share = read.inCell ? asShare(read.inCell[at]) : "";
+						button.innerHTML = form.short + "<small>" + share + "</small>";
+						button.title = `${CONT_NAMES[sheetShown]}, ${
+							["sharpest", "sharp", "middling", "worn", "worn flat"][e]
+						}, ${["valley", "low", "middling", "high", "peak"][p]} → ${form.name}`;
+						button.addEventListener("click", () => {
+							cellPicked = at;
+							shown = grid[at];
+							const set2 = allowed[shown] ?? [];
+							if (!set2.includes(picked) && set2.length > 0) picked = set2[0];
+							refreshTabs();
+							refreshGrid();
+							refreshList();
+							drawChart();
+							sayChart();
+						});
+						sheet.append(button);
+					}
+				}
+				set.append(sheet);
+
+				const foot = document.createElement("div");
+				foot.className = "sheet-foot";
+				foot.innerHTML = "<span>valley</span><span>peaks &amp; valleys</span><span>peak</span>";
+				set.append(foot);
+
+				const wrap = document.createElement("div");
+				wrap.className = "knob";
+				const label = document.createElement("label");
+				label.textContent = "That cell is";
+				const pick = document.createElement("select");
+				for (let n = 0; n < LANDFORMS.length; n++) {
+					const o = document.createElement("option");
+					o.value = String(n);
+					o.textContent = LANDFORMS[n].name;
+					pick.append(o);
+				}
+				pick.value = String(grid[cellPicked]);
+				pick.addEventListener("input", () => {
+					grid[cellPicked] = Number(pick.value);
+					shown = grid[cellPicked];
+					askForRecolor();
+					writeUrl();
+				});
+				wrap.append(label, document.createElement("output"), pick);
+				const note = document.createElement("p");
+				note.className = "knob-note";
+				note.innerHTML =
+					"the three curves' answers, cut into indices — <b>Shore</b> is not " +
+					"in the grid, because it is a height rather than a combination of " +
+					"the three";
+				wrap.append(note);
+				set.append(wrap);
+				gridHost.append(set);
+			}
+
+			// ---------------------------------------------------------------
+			// Boot.
+			// ---------------------------------------------------------------
+
+			/** What the planet-wide count comes to, held on the patch. */
+			function measure() {
+				const read = shares();
+				field.worldShare = read.share;
+				field.byForm = read.byForm;
+				field.inCell = read.inCell;
+				field.landShare = read.land;
+				let reached = 0;
+				for (const v of read.share) if (v > 0) reached++;
+				field.reached = reached;
+			}
+
+			let pending = false;
+			let settleTimer = 0;
+
+			/** Everything, because a row that samples the world moved. */
+			function askForRedraw(draft = true) {
+				clearTimeout(settleTimer);
+				if (draft) settleTimer = setTimeout(() => askForRedraw(false), 220);
+				if (pending) return;
+				pending = true;
+				requestAnimationFrame(() => {
+					pending = false;
+					const started = performance.now();
+					settle();
+					generate(draft ? Math.max(16, knobs.cells >> 1) : knobs.cells);
+					measure();
+					buildMesh();
+					drawPictures();
+					drawChart();
+					cost = performance.now() - started;
+					refreshPanel();
+					refreshTabs();
+					refreshList();
+					refreshGrid();
+					sayChart();
+					if (!draft) writeUrl();
+					render();
+				});
+			}
+
+			/**
+			 * Everything a dot on the diagram touches, which is not the fields.
+			 *
+			 * Temperature, humidity and the push are functions of the seed and
+			 * the rows on the other panel; a dot only decides which name the
+			 * finished pair of numbers is given. So dragging one recolours a
+			 * planet already sampled, and the map keeps up with the finger.
+			 */
+			function askForRecolor() {
+				if (pending) return;
+				pending = true;
+				requestAnimationFrame(() => {
+					pending = false;
+					const started = performance.now();
+					assign();
+					measure();
+					buildMesh();
+					drawPictures();
+					drawChart();
+					cost = performance.now() - started;
+					refreshPanel();
+					refreshTabs();
+					refreshList();
+					refreshGrid();
+					sayChart();
+					render();
+				});
+			}
+
+			// The knobs open and shut on a phone; on a desktop the buttons are
+			// not on the page at all and this never runs.
+			const drawer = (buttonId, bodyClass, label) => {
+				const button = document.getElementById(buttonId);
+				button.addEventListener("click", () => {
+					const open = document.body.classList.toggle(bodyClass);
+					button.setAttribute("aria-expanded", String(open));
+					button.textContent = open ? "Close" : label;
+				});
+			};
+			drawer("toggleWorld", "knobs", "World");
+			drawer("toggleBiomes", "biomes", "Biomes");
+
+			let dragging = null;
+			view.addEventListener("pointerdown", (e) => {
+				dragging = { x: e.clientX, y: e.clientY, shift: e.shiftKey };
+				view.setPointerCapture(e.pointerId);
+			});
+			view.addEventListener("pointermove", (e) => {
+				if (!dragging) return;
+				const dx = e.clientX - dragging.x;
+				const dy = e.clientY - dragging.y;
+				dragging.x = e.clientX;
+				dragging.y = e.clientY;
+				if (dragging.shift) camera.lift += dy * 0.002;
+				else {
+					camera.yaw -= dx * 0.006;
+					camera.pitch = Math.max(-0.2, Math.min(1.5, camera.pitch + dy * 0.005));
+				}
+				render();
+			});
+			const stop = () => {
+				dragging = null;
+			};
+			view.addEventListener("pointerup", stop);
+			view.addEventListener("pointercancel", stop);
+			view.addEventListener(
+				"wheel",
+				(e) => {
+					e.preventDefault();
+					camera.distance = Math.max(
+						0.05,
+						Math.min(6, camera.distance * Math.exp(e.deltaY * 0.001)),
+					);
+					render();
+				},
+				{ passive: false },
+			);
+			window.addEventListener("resize", render);
+
+			{
+				// **A preset is read before the rows under it**, because reading
+				// one writes the very dots a link was written to carry.
+				const params = new URLSearchParams(location.search);
+				const named = params.get("preset");
+				if (named && PRESETS[named]) {
+					knobs.preset = named;
+					applyPreset(named);
+				}
+				fromParams(params);
+			}
+			// The finished map is in the panel's head rather than in a row, so
+			// it is wired up here rather than by the row that draws a picture.
+			SHOTS[0].canvas = document.getElementById("shotBiome");
+			SHOTS[0].ctx = SHOTS[0].canvas.getContext("2d");
+			watchShot(SHOTS[0]);
+			buildPanel();
+			const booted = performance.now();
+			regroup();
+			// The panel opens on one kind of ground, so the biome it says it is
+			// editing has to be one of that ground's own.
+			if (!(allowed[shown] ?? []).includes(picked))
+				picked = (allowed[shown] ?? [])[0] ?? 0;
+			settle();
+			generate();
+			measure();
+			buildMesh();
+			drawPictures();
+			drawChart();
+			cost = performance.now() - booted;
+			refreshPanel();
+			refreshTabs();
+			refreshList();
+			refreshGrid();
+			sayChart();
+			render();
+		</script>
+	</body>
+</html>

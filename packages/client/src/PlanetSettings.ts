@@ -12,25 +12,27 @@ import {
 } from "./PatchLook.js";
 import type {
 	CoarseMapOptions,
-	ErosionWalk,
-	MountainMerge,
 	TerrainLayer,
 	TerrainOptions,
 } from "chamfer/generation";
 import {
+	CARVE_LAYER_DEFAULT,
+	CONTINENT_LAYER_DEFAULT,
 	CoarseMap,
-	DROPLET,
-	EROSION_WALKS,
+	EROSION_LAYER_DEFAULT,
 	GROUND_LINES,
-	LAYER_LACUNARITY,
-	MOUNTAIN_MERGES,
-	MOUNTAIN_LAYER_DEFAULT,
-	TERRAIN_LAYER_DEFAULT,
+	PEAKS_LAYER_DEFAULT,
+	maxElevationFor,
 	seedFromString,
 } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+import {
+	PATCH_FILL_SHARE,
+	PATCH_KEY_SHARE,
+	PATCH_TOP_SHARE,
+} from "chamfer/render";
 
 /**
  * The level a flat coarse map is built at when the coarse map is off.
@@ -95,6 +97,49 @@ const MAX_COARSE_LEVEL = 9;
 export type Curve = readonly (readonly [number, number])[];
 
 /**
+ * The four layers, by the prefix every one of their knobs carries.
+ *
+ * Written once, because every list of them -- the panel's sections, the URL,
+ * the stage keys, the map's narrowest octave -- has to be the same four in the
+ * same order or one of them quietly goes missing.
+ */
+export type LayerName = "continent" | "erosion" | "peaks" | "carve";
+
+export const LAYER_NAMES: readonly LayerName[] = [
+	"continent",
+	"erosion",
+	"peaks",
+	"carve",
+] as const;
+
+/**
+ * The three that reach the coarse map.
+ *
+ * **The carve is read per block and never touches the map**, so a map fine
+ * enough to carry its narrowest octave is a map sized for a field it will never
+ * hold -- and the carve is measured against the crust, which is metres where
+ * the others are kilometres.
+ */
+export const MAP_LAYERS: readonly LayerName[] = [
+	"continent",
+	"erosion",
+	"peaks",
+] as const;
+
+/** Every knob that is a curve, so a link and a copy know one when they see it. */
+export const CURVE_KEYS: ReadonlySet<keyof PlanetKnobs> = new Set(
+	LAYER_NAMES.map((layer) => `${layer}Curve` as keyof PlanetKnobs),
+);
+
+/** What each layer is called on the panel and in a refusal. */
+export const LAYER_TITLES: Record<LayerName, string> = {
+	continent: "Continentalness",
+	erosion: "Erosion",
+	peaks: "Peaks & valleys",
+	carve: "Cliffs & overhangs",
+};
+
+/**
  * A knobs object that shares nothing with the one it came from.
  *
  * **Every knob but two is a number, a string or a boolean, and those copy
@@ -108,8 +153,10 @@ export type Curve = readonly (readonly [number, number])[];
 export function copyKnobs(knobs: PlanetKnobs): PlanetKnobs {
 	return {
 		...knobs,
-		terrainCurve: knobs.terrainCurve.map(([x, y]) => [x, y]),
-		mountainCurve: knobs.mountainCurve.map(([x, y]) => [x, y]),
+		continentCurve: knobs.continentCurve.map(([x, y]) => [x, y]),
+		erosionCurve: knobs.erosionCurve.map(([x, y]) => [x, y]),
+		peaksCurve: knobs.peaksCurve.map(([x, y]) => [x, y]),
+		carveCurve: knobs.carveCurve.map(([x, y]) => [x, y]),
 	};
 }
 
@@ -171,73 +218,98 @@ export interface PlanetKnobs {
 	coarseSpacing: number;
 
 	/**
-	 * The layer that draws the land: continents at its widest octaves, ground
-	 * underfoot at its narrowest.
+	 * The four layers, each a whole octave stack read through its own curve.
+	 *
+	 * **The order is the whole construction.** Continentalness sets the level,
+	 * erosion decides how much relief survives there, and peaks and valleys is
+	 * the relief itself; the carve then cuts into the ground those three
+	 * placed. Reading them the other way round -- relief first, then a
+	 * continent under it -- gives a mountain range that starts in the sea,
+	 * because nothing in the range's own field knows where it is.
+	 *
+	 * **Every layer carries the same rows**, because the claim is that they
+	 * differ in what they *say* rather than in what they *are*. A layer given a
+	 * row its neighbours do not have would be a fifth idea smuggled into a
+	 * comparison of four. The one exception is the fold, which the carve has
+	 * not got: a fold creases a whole world at once, and a crease in a carve
+	 * field is invisible from inside the cave it cuts.
 	 */
-	terrainFeature: number;
-	terrainFeatureScale: number;
-	terrainOctaves: number;
+	continentLayer: boolean;
+	continentFeature: number;
+	continentFeatureScale: number;
+	continentOctaves: number;
+	continentPersistence: number;
+	continentLacunarity: number;
+	continentFold: number;
+	continentCurve: Curve;
 
-	/** The curve that layer's value is read through, as `[in, out]` points. */
-	terrainCurve: Curve;
+	erosionLayer: boolean;
+	erosionFeature: number;
+	erosionFeatureScale: number;
+	erosionOctaves: number;
+	erosionPersistence: number;
+	erosionLacunarity: number;
+	erosionFold: number;
+	erosionCurve: Curve;
 
-	/** Whether the mountain layer runs at all. */
-	mountainLayer: boolean;
+	peaksLayer: boolean;
+	peaksFeature: number;
+	peaksFeatureScale: number;
+	peaksOctaves: number;
+	peaksPersistence: number;
+	peaksLacunarity: number;
+	peaksFold: number;
+	peaksCurve: Curve;
 
-	/** How the mountain layer reaches the ground. */
-	merge: MountainMerge;
+	carveLayer: boolean;
 
-	/** Where the gate opens, as a fraction of the terrain curve's own reach. */
-	mountainLine: number;
+	/**
+	 * How far above sea level the carve stays held off, in metres.
+	 *
+	 * At and below the waterline nothing is carved, because what the layer
+	 * opens down there fills. This is how far up that reaches: a shoreline rule
+	 * at a few metres, and turned up it keeps the layer off the low ground
+	 * entirely so cliffs and arches appear only well above the sea.
+	 */
+	carveHold: number;
+	carveFeature: number;
+	carveFeatureScale: number;
+	carveOctaves: number;
+	carvePersistence: number;
+	carveLacunarity: number;
+	carveCurve: Curve;
 
-	/** The balance between the two layers. */
-	mountainDetail: number;
+	/**
+	 * How much of the level erosion takes with the relief, `0` to `1`.
+	 *
+	 * Water wears a range down as well as smoothing it, and where the height is
+	 * one function of all three fields, erosion changes the level by
+	 * construction. Flattened into one line it has to be a term of its own.
+	 */
+	erosionBite: number;
 
-	/** The layer that draws the ranges. */
-	mountainFeature: number;
-	mountainFeatureScale: number;
-	mountainOctaves: number;
-	mountainCurve: Curve;
-
-	/** Metres from sea level to the tallest ground. */
+	/**
+	 * Metres from the continentalness curve's middle to the tallest ground the
+	 * level alone can reach.
+	 *
+	 * **A bound rather than an answer.** The height comes out of the curve in
+	 * metres, so nothing divides by the field's own peak -- which is what buys
+	 * a coast no metre knob moves, and costs this being the exact height of the
+	 * tallest mountain. A full peak stands `peakRelief` above it.
+	 */
 	relief: number;
 
-	/** Metres from sea level down to the deepest sea floor. */
+	/** Metres from that middle down to the deepest sea floor. */
 	seaDepth: number;
 
-	/** Metres the water is dropped below the level Land chose. Never above zero. */
+	/** Metres a full peak stands over the level the continent set. */
+	peakRelief: number;
+
+	/** Metres the water is moved from the curve's own middle. Below zero drains. */
 	seaLevel: number;
 
 	/**
-	 * Whether water cuts into the ground at all.
-	 *
-	 * Off by default: neither walk passes the test a carving pass has to pass,
-	 * which is that the median hillslope holds while the tail grows. It is the
-	 * slowest step of a map build by a wide margin, so turning it on costs a
-	 * rebuild that turning any other knob does not.
-	 */
-	erosionOn: boolean;
-
-	/** How hard the water cuts, once it is cutting at all. */
-	erosion: number;
-
-	/** How a droplet moves over the map. */
-	erosionWalk: ErosionWalk;
-
-	/** The most of one step's fall a single droplet may cut, as a fraction. */
-	erosionMaxCut: number;
-
-	/** What a cell keeps of the material cut from it. `cell` walk only. */
-	erosionCutShare: number;
-
-	/** How much of the previous direction a droplet keeps. `free` walk only. */
-	erosionInertia: number;
-
-	/** How much of the surface stands above the sea. */
-	landFraction: number;
-
-	/**
-	 * Where the terrain bench is standing and what it draws.
+	 * Where the landscape bench is standing and what it draws.
 	 *
 	 * **None of these is a world parameter.** Every other knob here is one the
 	 * engine reads; these move the preview and leave the ground where it was,
@@ -249,6 +321,113 @@ export interface PlanetKnobs {
 
 	/** How many map cells across the bench's patch is. */
 	patchCells: number;
+
+	/**
+	 * How many levels finer than the map the bench's patch is drawn at.
+	 *
+	 * **The map is not the grid the world is built on.** A map cell is a
+	 * reading and a block is a hexagon one layer tall; between two readings the
+	 * engine lays blocks up a ramp, and everything about cliffs and overhangs
+	 * happens on that grid. Drawn a hexagon per map reading there is nowhere for
+	 * an overhang to stand, so the patch is drawn on the block grid and this is
+	 * how far under the map that is. At `0` it is the map's own level again.
+	 */
+	patchDetail: number;
+
+	/**
+	 * Whether to draw a ball where each of the bench's lights shines from.
+	 *
+	 * **They are directions, not places**, so the balls stand on a dome around
+	 * the patch: what they say is which way each light comes from and how much
+	 * of the total it carries, which is its size. Nothing about the picture
+	 * changes when they are on -- they are drawn over it and take no light
+	 * themselves, because a lamp lit by the rig it is a picture of would be a
+	 * picture of something else.
+	 */
+	/**
+	 * Whether the key and the fill cast a shadow on the bench.
+	 *
+	 * **Only those two, and not cascades.** Cascades exist because a view of a
+	 * world is unbounded -- the near ground wants centimetres a texel and the
+	 * far ground cannot have them -- and a bench patch is a box whose corners
+	 * are all known before anything is drawn, so one map fitted to that box
+	 * beats any number of pieces over it. The light overhead and the one at the
+	 * camera cast nothing: between them they are what keeps every face
+	 * readable, and a face they could not reach is a face nothing says anything
+	 * about.
+	 */
+	keyShadow: boolean;
+	fillShadow: boolean;
+
+	/**
+	 * How much of its light a shadow takes, `0` to `1`.
+	 *
+	 * **Not a darkness.** A shadow removes a light, so how dark it looks
+	 * depends on what share that light had -- this is only how much of it goes.
+	 * A shadow that reads too faint is usually a key that carries too little,
+	 * not a shadow that is too weak.
+	 */
+	shadowStrength: number;
+
+	/**
+	 * How much of the bench's light each of the three carries.
+	 *
+	 * **How dark a shadow can be is this and nothing else.** A shadow takes one
+	 * light away, so the deepest it can go is that light's share of the total --
+	 * with the overhead light at `1.35` against the key's `1`, the key is about
+	 * a fifth of a lit face and no shadow of it can take more than a fifth.
+	 * That is why there is no darkness knob: the balance already is one, and a
+	 * second one over the top of it would be two answers to one question.
+	 *
+	 * Only the key and the fill cast, so turning the overhead down is what
+	 * makes a shadow read -- at the cost of the thing it was raised for, which
+	 * is telling a cap from a wall.
+	 */
+	keyLight: number;
+	fillLight: number;
+	topLight: number;
+
+	/**
+	 * How much a corner of the bench's ground darkens for the rock around it.
+	 *
+	 * **The one shading term a vertex has to carry.** Which way a face points
+	 * is a fact the shader works out for itself; what stands *around* a corner
+	 * is not on the face at all, so no light can find it -- a crevice has no
+	 * bottom, a notch reads as flat ground, and two caps at the same height are
+	 * the same colour whatever is beside them. Baked into the mesh, so moving
+	 * it costs a rebuild and drawing it costs nothing.
+	 */
+	patchOcclusion: number;
+
+	/**
+	 * How far a hexagon's shade drifts from its material's, on the bench.
+	 *
+	 * **An amount rather than a switch, because the world's own is too small to
+	 * see here.** `SPECKLE` is `0.06`, which after the curve a picture is
+	 * written with is about `5%` between the palest hexagon and the darkest --
+	 * five levels of 255 on ordinary ground, which is a grain you have to go
+	 * looking for. This bench's whole subject is the lattice, so how far the
+	 * drift goes is a thing to set rather than a constant to argue about.
+	 *
+	 * It is not the material colour: the four band colours are still the block
+	 * registry's own, and this is legibility furniture of the same kind as the
+	 * contour lines and the cell rims the bench draws and the world does not.
+	 */
+	patchSpeckle: number;
+
+	showLights: boolean;
+
+	/**
+	 * How bright the bench's preview is, as one multiplier before the curve.
+	 *
+	 * **A preview cannot be brighter than what it is made of.** Grass is `0.44`
+	 * of green, so a cap of it lit perfectly still comes out at `176` of 255 --
+	 * no arrangement of lights makes this picture bright, because the lights are
+	 * already giving it everything they have. This is the one thing that does,
+	 * and it is a knob because how bright is right is a matter of the screen it
+	 * is read on.
+	 */
+	patchLight: number;
 
 	/** Which step of the build the preview stops at. */
 	patchPicture: PatchPicture;
@@ -483,11 +662,17 @@ export interface PlanetKnobs {
 	 * Whether a cell's colour drifts a little from its block's own.
 	 *
 	 * On, every cell is moved up to 6% either way by a hash of its own address.
-	 * **Off by default**, so a cell is exactly the colour the block registry
-	 * names: the ground reads as the material it is made of, and a picture of
-	 * the world can be held against a picture of the map. What the drift buys
-	 * is that a hillside of one block type is not one flat sheet, and the light
-	 * and the block terraces already say most of that.
+	 * **On by default**, because a hillside of one material at one height is a
+	 * single sheet of colour however it is lit, and the drift is the only thing
+	 * in the picture that says where one hexagon ends and the next begins. That
+	 * is what the landscape bench is for looking at, and it is what the ground
+	 * underfoot is made of.
+	 *
+	 * What it costs is that a cell is no longer exactly the colour the block
+	 * registry names, so a frame of the world cannot be held against a frame of
+	 * the map colour for colour. Turn it off for that -- the row is on the
+	 * bench's viewport and in the world's drawing settings, and it is the same
+	 * knob in both.
 	 */
 	speckle: boolean;
 
@@ -760,39 +945,73 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// slider carries the decade and the fine one picks the value inside it,
 	// because one slider cannot hold a hundred metres and a hundred kilometres
 	// at a resolution anybody can drag.
-	terrainFeature: 600,
-	terrainFeatureScale: 4,
-	terrainOctaves: 6,
-	terrainCurve: TERRAIN_LAYER_DEFAULT.curve,
-	mountainLayer: true,
-	merge: "gated",
-	mountainLine: 0.5,
-	mountainDetail: 7,
-	mountainFeature: 480,
-	mountainFeatureScale: 2,
-	mountainOctaves: 4,
-	mountainCurve: MOUNTAIN_LAYER_DEFAULT.curve,
-	relief: 1100,
-	seaDepth: 130,
+	continentLayer: true,
+	continentFeature: 600,
+	continentFeatureScale: 10,
+	continentOctaves: 3,
+	continentPersistence: 0.5,
+	continentLacunarity: 2,
+	continentFold: 0,
+	continentCurve: CONTINENT_LAYER_DEFAULT.curve,
+	erosionLayer: true,
+	erosionFeature: 750,
+	erosionFeatureScale: 10,
+	erosionOctaves: 4,
+	erosionPersistence: 0.5,
+	erosionLacunarity: 2,
+	erosionFold: 0,
+	erosionCurve: EROSION_LAYER_DEFAULT.curve,
+	// **Folded, and the only layer that is.** A ridge is a crease and the only
+	// place a crease comes from is an absolute value; folding either of the
+	// other two creases the coast of every continent instead.
+	peaksLayer: true,
+	peaksFeature: 600,
+	peaksFeatureScale: 1,
+	peaksOctaves: 4,
+	peaksPersistence: 0.5,
+	peaksLacunarity: 2,
+	peaksFold: 0.85,
+	peaksCurve: PEAKS_LAYER_DEFAULT.curve,
+	// **Measured against the crust, not against a landform.** The other three
+	// draw continents and ranges and a hundred metres is the smallest thing
+	// worth calling one; this has to swing several times inside a crust a
+	// couple of hundred metres deep or what comes out is a lowered surface
+	// rather than an overhang.
+	carveLayer: true,
+	carveHold: 30,
+	carveFeature: 120,
+	carveFeatureScale: 1,
+	carveOctaves: 3,
+	carvePersistence: 0.5,
+	carveLacunarity: 2,
+	carveCurve: CARVE_LAYER_DEFAULT.curve,
+	erosionBite: 0.55,
+	relief: 800,
+	seaDepth: 360,
+	peakRelief: 220,
 	seaLevel: 0,
-	erosionOn: false,
-	// **A strength the switch can actually reach.** Zero is what turns erosion
-	// off, and with a switch above it that is a slider position meaning the
-	// same as the switch: ticking the box would build the same world.
-	erosion: 0.5,
-	erosionWalk: "cell",
-	erosionMaxCut: DROPLET.maxCut,
-	erosionCutShare: DROPLET.cutShare,
-	erosionInertia: DROPLET.inertia,
-	landFraction: 0.65,
 	// A place with a coast, a plain and a range on it, so the bench opens on
 	// all three rather than on whichever the middle of the map happened to be.
-	patchLatitude: 45,
-	patchLongitude: 20,
-	patchCells: 176,
+	// **A coast with mountains behind it**, because the bench has to open on
+	// something the knobs can be judged against: open ocean says nothing about
+	// relief and an inland plain says nothing about the waterline.
+	patchLatitude: 65,
+	patchLongitude: -20,
+	patchCells: 32,
+	patchDetail: 2,
+	patchOcclusion: 1,
+	patchSpeckle: 0.35,
+	keyShadow: true,
+	fillShadow: false,
+	shadowStrength: 2,
+	keyLight: PATCH_KEY_SHARE,
+	fillLight: PATCH_FILL_SHARE,
+	topLight: PATCH_TOP_SHARE,
+	showLights: false,
+	patchLight: 1.5,
 	patchPicture: "ground",
 	patchSurface: "solid",
-	patchMap: "patch",
+	patchMap: "planet",
 	patchAlong: "x",
 	crustMetres: 1232,
 	atmosphereOn: true,
@@ -856,7 +1075,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	seamOverlay: false,
 	selectBounds: false,
 	patchBounds: false,
-	speckle: false,
+	speckle: true,
 	ambientOcclusion: true,
 	skyExposure: true,
 	gridMode: false,
@@ -871,7 +1090,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	// whatever time it is frozen at is the light every look at this world is
 	// taken in -- and this was `0.18`, which puts the sun **24.6 degrees under
 	// the horizon** at the place the shipped seed spawns on. The ground was
-	// being judged, and its colours compared against the terrain bench's, in
+	// being judged, and its colours compared against the landscape bench's, in
 	// the dark. This is the sun 44.6 degrees up over that spawn: bright, and
 	// still low enough to model a hillside rather than flatten it the way noon
 	// does. A different seed spawns at a different longitude, where the same
@@ -941,51 +1160,89 @@ const TOGGLE: Pick<KnobRange, "low" | "high" | "step" | "unit"> = {
 export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"seed",
 	"coarseSpacing",
-	"terrainFeature",
-	"terrainFeatureScale",
-	"terrainOctaves",
-	"terrainCurve",
-	"mountainLayer",
-	"merge",
-	"mountainLine",
-	"mountainDetail",
-	"mountainFeature",
-	"mountainFeatureScale",
-	"mountainOctaves",
-	"mountainCurve",
-	"landFraction",
+	"continentLayer",
+	"continentFeature",
+	"continentFeatureScale",
+	"continentOctaves",
+	"continentPersistence",
+	"continentLacunarity",
+	"continentFold",
+	"continentCurve",
+	"erosionLayer",
+	"erosionFeature",
+	"erosionFeatureScale",
+	"erosionOctaves",
+	"erosionPersistence",
+	"erosionLacunarity",
+	"erosionFold",
+	"erosionCurve",
+	"peaksLayer",
+	"peaksFeature",
+	"peaksFeatureScale",
+	"peaksOctaves",
+	"peaksPersistence",
+	"peaksLacunarity",
+	"peaksFold",
+	"peaksCurve",
+	// **The carve is read per block, not per map cell**, so it never touches
+	// the map -- and it still belongs here, because every chunk has to be
+	// generated again for a cliff to appear or go.
+	"carveLayer",
+	"carveFeature",
+	"carveFeatureScale",
+	"carveOctaves",
+	"carvePersistence",
+	"carveLacunarity",
+	"carveCurve",
+	"carveHold",
+	"erosionBite",
 	"seaLevel",
 	"relief",
 	"seaDepth",
-	"erosionOn",
-	"erosion",
-	"erosionWalk",
-	"erosionMaxCut",
-	"erosionCutShare",
-	"erosionInertia",
+	"peakRelief",
+] satisfies (keyof PlanetKnobs)[]);
+
+/**
+ * The knobs that need the chunks built again and move no block doing it.
+ *
+ * What they change is **baked into the vertex colours** rather than read by a
+ * shader, so nothing on screen moves until each chunk is meshed again -- and
+ * the map, the shape, the peaks and the generators are all exactly what they
+ * were, because the terrain reads a face and a lattice offset and never sees
+ * one of these. That is what lets them take a cheaper path than a terrain
+ * knob: the pool is retuned in place rather than replaced, which skips the
+ * coarse map.
+ *
+ * **They are deliberately not in {@link LIVE_TERRAIN_KNOBS}**, which
+ * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
+ * set, so a knob joining it files a player's buildings under a different world
+ * every time it is turned. Needing the same work as a terrain knob is not the
+ * same thing as being one, and this is the set that says so.
+ *
+ * **`fullbright` is here and reaches the mesher through `skyExposure`.** The
+ * sky term is a number multiplied into a vertex colour, and no shader can
+ * divide one back out of what it was handed, so full light has to stop it
+ * being baked rather than override it afterwards.
+ */
+export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
+	"speckle",
+	"ambientOcclusion",
+	"skyExposure",
+	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
  * The knobs a live rebuild can show, which is every one needing the chunks
  * meshed again.
  *
- * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving. The rest here leave
- * every block exactly where it was and still need the same work, because what
- * they change is **baked into the vertex colours** rather than read by a
- * shader -- so nothing on screen moves until each chunk is built again.
- *
- * **They are deliberately not in `LIVE_TERRAIN_KNOBS` itself**, which
- * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
- * set, so a knob joining it files a player's buildings under a different world
- * every time it is turned. Needing the same work as a terrain knob is not the
- * same thing as being one, and this is the set that says so.
+ * {@link LIVE_TERRAIN_KNOBS} is the ground itself moving and needs the map
+ * built again with it; {@link BAKED_KNOBS} needs only the meshes. Which of the
+ * two a key falls in decides which path it takes, and this set is what says a
+ * key takes either.
  */
 export const REMESH_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	...LIVE_TERRAIN_KNOBS,
-	"speckle",
-	"ambientOcclusion",
-	"skyExposure",
-	"fullbright",
+	...BAKED_KNOBS,
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -1022,60 +1279,142 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	blockSize: { low: 0.5, high: 4, step: 0.25, rebuilds: true, unit: "m" },
 	chunkCells: { low: 8, high: 64, step: 8, rebuilds: true, unit: "cells" },
 	coarseSpacing: { low: 4, high: 128, step: 4, rebuilds: true, unit: "m" },
-	terrainFeature: {
+	continentLayer: { ...TOGGLE, rebuilds: true },
+	continentFeature: {
 		low: 100,
 		high: 1000,
 		step: 10,
 		rebuilds: true,
 		unit: "m",
 	},
-	terrainFeatureScale: {
+	continentFeatureScale: {
 		low: 1,
 		high: 100,
 		step: 1,
 		rebuilds: true,
 		unit: "x",
 	},
-	terrainOctaves: { low: 1, high: 12, step: 1, rebuilds: true, unit: "" },
-	terrainCurve: { ...TOGGLE, rebuilds: true },
-	mountainLayer: { ...TOGGLE, rebuilds: true },
-	merge: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
-	mountainLine: { low: 0, high: 0.95, step: 0.01, rebuilds: true, unit: "" },
-	mountainDetail: { low: 0, high: 10, step: 0.05, rebuilds: true, unit: "" },
-	mountainFeature: {
-		low: 100,
-		high: 1000,
-		step: 10,
-		rebuilds: true,
-		unit: "m",
-	},
-	mountainFeatureScale: {
-		low: 1,
-		high: 100,
-		step: 1,
-		rebuilds: true,
-		unit: "x",
-	},
-	mountainOctaves: { low: 1, high: 12, step: 1, rebuilds: true, unit: "" },
-	mountainCurve: { ...TOGGLE, rebuilds: true },
-	relief: { low: 20, high: 2400, step: 20, rebuilds: true, unit: "m" },
-	seaDepth: { low: 10, high: 1200, step: 10, rebuilds: true, unit: "m" },
-	// The water can be drained and no further: under the fit the deepest point
-	// is exactly Sea depth down, so a lower level is a planet with no ocean and
-	// a slider position meaning the same as the one beside it.
-	seaLevel: { low: -1200, high: 0, step: 5, rebuilds: true, unit: "m" },
-	erosionOn: { ...TOGGLE, rebuilds: true },
-	erosion: { low: 0.05, high: 1, step: 0.05, rebuilds: true, unit: "" },
-	erosionWalk: { low: 0, high: 0, step: 1, rebuilds: true, unit: "" },
-	erosionMaxCut: {
-		low: 0.01,
-		high: 0.5,
-		step: 0.01,
+	continentOctaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
+	continentPersistence: {
+		low: 0.1,
+		high: 0.9,
+		step: 0.05,
 		rebuilds: true,
 		unit: "",
 	},
-	erosionCutShare: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
-	erosionInertia: { low: 0, high: 0.9, step: 0.05, rebuilds: true, unit: "" },
+	continentLacunarity: {
+		low: 1.5,
+		high: 3,
+		step: 0.1,
+		rebuilds: true,
+		unit: "x",
+	},
+	continentFold: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	continentCurve: { ...TOGGLE, rebuilds: true },
+	erosionLayer: { ...TOGGLE, rebuilds: true },
+	erosionFeature: {
+		low: 100,
+		high: 1000,
+		step: 10,
+		rebuilds: true,
+		unit: "m",
+	},
+	erosionFeatureScale: {
+		low: 1,
+		high: 100,
+		step: 1,
+		rebuilds: true,
+		unit: "x",
+	},
+	erosionOctaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
+	erosionPersistence: {
+		low: 0.1,
+		high: 0.9,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	erosionLacunarity: {
+		low: 1.5,
+		high: 3,
+		step: 0.1,
+		rebuilds: true,
+		unit: "x",
+	},
+	erosionFold: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	erosionCurve: { ...TOGGLE, rebuilds: true },
+	peaksLayer: { ...TOGGLE, rebuilds: true },
+	peaksFeature: {
+		low: 100,
+		high: 1000,
+		step: 10,
+		rebuilds: true,
+		unit: "m",
+	},
+	peaksFeatureScale: {
+		low: 1,
+		high: 100,
+		step: 1,
+		rebuilds: true,
+		unit: "x",
+	},
+	peaksOctaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
+	peaksPersistence: {
+		low: 0.1,
+		high: 0.9,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	peaksLacunarity: {
+		low: 1.5,
+		high: 3,
+		step: 0.1,
+		rebuilds: true,
+		unit: "x",
+	},
+	peaksFold: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	peaksCurve: { ...TOGGLE, rebuilds: true },
+	carveLayer: { ...TOGGLE, rebuilds: true },
+	carveHold: { low: 0, high: 600, step: 5, rebuilds: true, unit: "m" },
+	carveFeature: {
+		low: 10,
+		high: 1000,
+		step: 10,
+		rebuilds: true,
+		unit: "m",
+	},
+	carveFeatureScale: {
+		low: 1,
+		high: 100,
+		step: 1,
+		rebuilds: true,
+		unit: "x",
+	},
+	carveOctaves: { low: 1, high: 8, step: 1, rebuilds: true, unit: "" },
+	carvePersistence: {
+		low: 0.1,
+		high: 0.9,
+		step: 0.05,
+		rebuilds: true,
+		unit: "",
+	},
+	carveLacunarity: {
+		low: 1.5,
+		high: 3,
+		step: 0.1,
+		rebuilds: true,
+		unit: "x",
+	},
+	carveCurve: { ...TOGGLE, rebuilds: true },
+	erosionBite: { low: 0, high: 1, step: 0.05, rebuilds: true, unit: "" },
+	relief: { low: 100, high: 3000, step: 20, rebuilds: true, unit: "m" },
+	seaDepth: { low: 0, high: 2000, step: 20, rebuilds: true, unit: "m" },
+	peakRelief: { low: 0, high: 1500, step: 10, rebuilds: true, unit: "m" },
+	// **The water moves off the curve's own middle, either way.** Below zero
+	// drains and above it floods, and neither moves the ground -- at no erosion
+	// bite the whole field lifts by exactly these metres.
+	seaLevel: { low: -1200, high: 400, step: 5, rebuilds: true, unit: "m" },
 	patchLatitude: {
 		low: -85,
 		high: 85,
@@ -1090,18 +1429,33 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "\u00b0",
 	},
-	patchCells: { low: 48, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchCells: { low: 16, high: 256, step: 8, rebuilds: false, unit: "cells" },
+	patchOcclusion: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
+	patchSpeckle: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
+	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	fillLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	topLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
+	// **Past 1 it is no longer physical, and that is the point.** At 1 a
+	// shadow takes the whole of its light and the deepest it can go is that
+	// light's share of the total -- which on a rig balanced for a readable
+	// preview is a fifth of a lit face. Past 1 it goes on taking from the
+	// other two, which is a picture of the shape rather than of the light.
+	shadowStrength: { low: 0, high: 5, step: 0.05, rebuilds: false, unit: "x" },
+	keyShadow: { ...TOGGLE, rebuilds: false },
+	fillShadow: { ...TOGGLE, rebuilds: false },
+	showLights: { ...TOGGLE, rebuilds: false },
+	patchLight: { low: 0.4, high: 3, step: 0.1, rebuilds: false, unit: "x" },
+	patchDetail: {
+		low: 0,
+		high: 3,
+		step: 1,
+		rebuilds: false,
+		unit: "levels under the map",
+	},
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchAlong: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
-	landFraction: {
-		low: 0.05,
-		high: 0.8,
-		step: 0.05,
-		rebuilds: true,
-		unit: "",
-	},
 	// A crust is a count of layers and a layer is a block tall, so the metres
 	// it reaches are the layer field's 2,048 times whatever a block is: 2,048 m
 	// at a 1 m block and 8,192 m at a 4 m one, which is the largest any world
@@ -1489,6 +1843,25 @@ export class PlanetSettings {
 	}
 
 	/**
+	 * The lattice the bench's patch is drawn at, which is the block grid.
+	 *
+	 * Capped at the world's own depth: past that there is no finer lattice for
+	 * the address to name, and a patch cannot be drawn on a grid the planet
+	 * does not have.
+	 */
+	get patchLevel(): number {
+		return Math.min(
+			this.depth,
+			this.coarseLevel + Math.max(0, Math.round(this.knobs.patchDetail)),
+		);
+	}
+
+	/** How wide one of the bench patch's columns is, in metres. */
+	get patchCellMetres(): number {
+		return (CELL_CONSTANT * this.radius) / 2 ** this.patchLevel;
+	}
+
+	/**
 	 * Metres across the narrowest feature the octave stack makes.
 	 *
 	 * Each octave is half as wide as the one above it, so the last one is the
@@ -1499,25 +1872,32 @@ export class PlanetSettings {
 	 * is the map.
 	 */
 	get smallestLandform(): number {
-		return Math.min(
-			this.narrowestOf("terrain"),
-			this.knobs.mountainLayer ? this.narrowestOf("mountain") : Infinity,
-		);
+		let narrowest = Infinity;
+		for (const layer of MAP_LAYERS) {
+			if (!this.layerOn(layer)) continue;
+			narrowest = Math.min(narrowest, this.narrowestOf(layer));
+		}
+		return narrowest;
+	}
+
+	/** Whether one layer reaches the ground at all. */
+	layerOn(layer: LayerName): boolean {
+		const k = this.knobs as unknown as Record<string, boolean>;
+		return k[`${layer}Layer`]!;
 	}
 
 	/**
 	 * Metres across the narrowest octave one layer makes.
 	 *
-	 * Each layer carries its own width and its own octave count, so the two are
-	 * asked separately: a map fine enough for the terrain layer's last octave
-	 * may be far too coarse for the mountain layer's, which is narrower by
-	 * design.
+	 * Each layer carries its own width, octave count and step between octaves,
+	 * so the three are asked together: a map fine enough for one layer's last
+	 * octave may be far too coarse for another's.
 	 */
-	narrowestOf(layer: "terrain" | "mountain"): number {
+	narrowestOf(layer: LayerName): number {
 		const k = this.knobs as unknown as Record<string, number>;
 		return (
 			this.widestOf(layer) /
-			LAYER_LACUNARITY ** (k[`${layer}Octaves`]! - 1)
+			k[`${layer}Lacunarity`]! ** (k[`${layer}Octaves`]! - 1)
 		);
 	}
 
@@ -1528,16 +1908,19 @@ export class PlanetSettings {
 	 * field for the histogram behind the curve -- the same frequency the
 	 * generator will actually use, not a hand-converted approximation of it.
 	 */
-	layerFor(layer: "terrain" | "mountain"): TerrainLayer {
+	layerFor(layer: LayerName): TerrainLayer {
 		const k = this.knobs as unknown as Record<string, number>;
-		const curve =
-			layer === "terrain"
-				? this.knobs.terrainCurve
-				: this.knobs.mountainCurve;
+		const curves = this.knobs as unknown as Record<string, Curve>;
 		return {
 			metres: this.widestOf(layer),
 			octaves: k[`${layer}Octaves`]!,
-			curve,
+			persistence: k[`${layer}Persistence`]!,
+			lacunarity: k[`${layer}Lacunarity`]!,
+			// **The carve has no fold and the fold is what a fold is for**: a
+			// crease belongs on peaks and valleys, and a crease in a carve field
+			// is one nobody can see from inside the cave it cuts.
+			fold: layer === "carve" ? 0 : k[`${layer}Fold`]!,
+			curve: curves[`${layer}Curve`]!,
 		};
 	}
 
@@ -1548,7 +1931,7 @@ export class PlanetSettings {
 	 * inside it: one slider cannot hold a hundred metres and a hundred
 	 * kilometres at a resolution anybody can drag.
 	 */
-	widestOf(layer: "terrain" | "mountain"): number {
+	widestOf(layer: LayerName): number {
 		const k = this.knobs as unknown as Record<string, number>;
 		return Math.max(1, k[`${layer}Feature`]! * k[`${layer}FeatureScale`]!);
 	}
@@ -1610,31 +1993,32 @@ export class PlanetSettings {
 		return {
 			level: this.coarseLevel,
 			cellMetres: this.coarseCell,
-			terrain: this.layerFor("terrain"),
-			mountain: this.layerFor("mountain"),
-			mountainLayer: this.knobs.mountainLayer,
-			merge: this.knobs.merge,
-			mountainLine: this.knobs.mountainLine,
-			detail: this.knobs.mountainDetail,
+			continent: this.layerFor("continent"),
+			erosion: this.layerFor("erosion"),
+			peaks: this.layerFor("peaks"),
+			continentLayer: this.knobs.continentLayer,
+			erosionLayer: this.knobs.erosionLayer,
+			peaksLayer: this.knobs.peaksLayer,
+			erosionBite: this.knobs.erosionBite,
 			relief: this.relief,
 			seaDepth: this.seaDepth,
-			landFraction: this.knobs.landFraction,
+			peakRelief: this.knobs.peakRelief,
 			seaLevel: this.coarseMapRuns ? this.knobs.seaLevel : 0,
-			// The switch is what turns the pass off, and off is a strength of
-			// zero: the pass returns on its first line and the ground is the
-			// noise exactly as it fell.
-			erosion: this.knobs.erosionOn ? this.knobs.erosion : 0,
-			erosionWalk: this.knobs.erosionWalk,
-			erosionMaxCut: this.knobs.erosionMaxCut,
-			erosionCutShare: this.knobs.erosionCutShare,
-			erosionInertia: this.knobs.erosionInertia,
 		};
 	}
 
 	terrainOptions(): TerrainOptions {
-		// The two are absolute metres, the same metres the Ground map's bands
-		// are drawn on, so a colour on the map is the block the world builds.
-		return { rockLine: GROUND_LINES.rock, snowLine: GROUND_LINES.snow };
+		// The two lines are absolute metres, the same metres the Ground map's
+		// bands are drawn on, so a colour on the map is the block the world
+		// builds. **The carve is here and not in the map's options** because it
+		// is read per block down a column and never touches the map.
+		return {
+			rockLine: GROUND_LINES.rock,
+			snowLine: GROUND_LINES.snow,
+			carveLayer: this.coarseMapRuns && this.knobs.carveLayer,
+			carve: this.layerFor("carve"),
+			carveHold: this.knobs.carveHold,
+		};
 	}
 
 	/**
@@ -1660,17 +2044,17 @@ export class PlanetSettings {
 	 * map fine enough for the terrain layer's last octave may be far too coarse
 	 * for the mountain layer's, which is narrower by design.
 	 */
-	private octaveWall(
-		layer: "terrain" | "mountain",
-		range: KnobRange,
-	): number {
+	private octaveWall(layer: LayerName, range: KnobRange): number {
+		const k = this.knobs as unknown as Record<string, number>;
+		const step = Math.max(1.01, k[`${layer}Lacunarity`]!);
 		return Math.max(
 			range.low,
 			Math.min(
 				range.high,
 				1 +
 					Math.floor(
-						Math.log2(this.widestOf(layer) / (2 * this.coarseCell)),
+						Math.log(this.widestOf(layer) / (2 * this.coarseCell)) /
+							Math.log(step),
 					),
 			),
 		);
@@ -1733,16 +2117,19 @@ export class PlanetSettings {
 			// The world is the map, so an octave narrower than two map cells is
 			// ground that would not exist. Each layer is asked against its own
 			// width and its own count: they do not share either.
-			case "terrainOctaves":
-				return narrowed({ high: this.octaveWall("terrain", range) });
-			case "mountainOctaves":
-				return narrowed({ high: this.octaveWall("mountain", range) });
+			case "continentOctaves":
+				return narrowed({ high: this.octaveWall("continent", range) });
+			case "erosionOctaves":
+				return narrowed({ high: this.octaveWall("erosion", range) });
+			case "peaksOctaves":
+				return narrowed({ high: this.octaveWall("peaks", range) });
 			// Even one octave has to be two map cells wide, and the fine slider
 			// reaches its own bottom, so the coarse one starts where their
 			// product does. What is cut off is a landform the map could not
 			// draw at any octave count.
-			case "terrainFeatureScale":
-			case "mountainFeatureScale":
+			case "continentFeatureScale":
+			case "erosionFeatureScale":
+			case "peaksFeatureScale":
 				return narrowed({
 					low: up(
 						(2 * this.coarseCell) /
@@ -1753,11 +2140,7 @@ export class PlanetSettings {
 										string,
 										number
 									>
-								)[
-									key === "terrainFeatureScale"
-										? "terrainFeature"
-										: "mountainFeature"
-								]!,
+								)[key.replace("FeatureScale", "Feature")]!,
 							),
 					),
 				});
@@ -1825,12 +2208,15 @@ export class PlanetSettings {
 			"subdivisionDepth",
 			"chunkCells",
 			"coarseSpacing",
-			"terrainFeatureScale",
-			"terrainOctaves",
-			"mountainFeatureScale",
-			"mountainOctaves",
+			"continentFeatureScale",
+			"continentOctaves",
+			"erosionFeatureScale",
+			"erosionOctaves",
+			"peaksFeatureScale",
+			"peaksOctaves",
 			"relief",
 			"seaDepth",
+			"peakRelief",
 			"seaLevel",
 			"crustMetres",
 			"lowDeck",
@@ -1888,17 +2274,20 @@ export class PlanetSettings {
 			// The world is the map, so a feature the map cannot draw is a
 			// feature the ground does not have. Two samples across it is the
 			// least that describes it.
-			for (const layer of ["terrain", "mountain"] as const) {
-				if (layer === "mountain" && !k.mountainLayer) continue;
+			// **The carve is not asked**, because it is read per block and
+			// never goes near the map: a map cell coarser than its narrowest
+			// octave costs it nothing.
+			for (const layer of MAP_LAYERS) {
+				if (!this.layerOn(layer)) continue;
 				const narrowest = this.narrowestOf(layer);
 				if (this.coarseCell * 2 <= narrowest) continue;
 				const most = this.octaveWall(
 					layer,
 					KNOB_RANGES[`${layer}Octaves`]!,
 				);
-				const name = layer === "terrain" ? "Terrain" : "Mountain";
+				const name = LAYER_TITLES[layer];
 				out.push(
-					`The ${layer} layer's narrowest octave is ${Math.round(narrowest)} m across and a map cell is ${Math.round(this.coarseCell)} m, so the map cannot draw the finest ground it is being asked for — and the world is the map, so that ground would not exist. Lower ${name} octaves to ${Math.max(1, most)}, raise ${name} scale, or lower Map cell.`,
+					`The ${name} layer's narrowest octave is ${Math.round(narrowest)} m across and a map cell is ${Math.round(this.coarseCell)} m, so the map cannot draw the finest ground it is being asked for — and the world is the map, so that ground would not exist. Lower ${name} octaves to ${Math.max(1, most)}, raise ${name} scale, or lower Map cell.`,
 				);
 			}
 		}
@@ -1941,21 +2330,16 @@ export class PlanetSettings {
 			const raw = params.get(key);
 			if (raw === null) continue;
 			if (key === "seed") knobs.seed = raw;
-			// The two knobs that name one of a fixed set. A link can say
-			// anything, so what it says has to be on the list or the world
-			// keeps the value it had.
-			else if (key === "merge") {
-				if (MOUNTAIN_MERGES.includes(raw as MountainMerge))
-					knobs.merge = raw as MountainMerge;
-			} else if (key === "erosionWalk") {
-				if (EROSION_WALKS.includes(raw as ErosionWalk))
-					knobs.erosionWalk = raw as ErosionWalk;
-			} else if (PATCH_CHOICES[key as string]) {
+			// The knobs that name one of a fixed set. A link can say anything,
+			// so what it says has to be on the list or the world keeps the
+			// value it had.
+			else if (PATCH_CHOICES[key as string]) {
 				if (PATCH_CHOICES[key as string]!.includes(raw))
 					(knobs as unknown as Record<string, string>)[key] = raw;
-			} else if (key === "terrainCurve" || key === "mountainCurve") {
+			} else if (CURVE_KEYS.has(key)) {
 				const curve = curveFromText(raw);
-				if (curve) knobs[key] = curve;
+				if (curve)
+					(knobs as unknown as Record<string, Curve>)[key] = curve;
 			} else if (typeof PLANET_DEFAULTS[key] === "boolean")
 				(knobs as unknown as Record<string, boolean>)[key] =
 					raw === "true";
@@ -1998,9 +2382,9 @@ export class PlanetSettings {
 		) as (keyof PlanetKnobs)[]) {
 			if (TRANSIENT.has(key)) continue;
 			const value = this.knobs[key];
-			if (key === "terrainCurve" || key === "mountainCurve") {
+			if (CURVE_KEYS.has(key)) {
 				const now = curveToText(value as Curve);
-				if (now !== curveToText(PLANET_DEFAULTS[key]))
+				if (now !== curveToText(PLANET_DEFAULTS[key] as Curve))
 					params.set(key, now);
 				continue;
 			}

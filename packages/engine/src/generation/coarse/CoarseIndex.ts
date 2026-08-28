@@ -23,7 +23,10 @@ export function makeBlend(): CoarseBlend {
  * A cell of `-1` is a corner the reflection could not name and reads as zero,
  * which is what the single-field lookup has always done.
  */
-export function readBlend(field: Float32Array, blend: CoarseBlend): number {
+export function readBlend(
+	field: Float32Array | Float64Array,
+	blend: CoarseBlend,
+): number {
 	const { cells, weights } = blend;
 	return (
 		weights[0]! * (cells[0]! < 0 ? 0 : field[cells[0]!]!) +

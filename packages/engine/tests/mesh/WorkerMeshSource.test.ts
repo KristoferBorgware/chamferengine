@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
 	MeshJob,
 	MeshResult,
+	MeshRetune,
 	MeshWorkerHandle,
 	MeshWorkerSetup,
 } from "chamfer/mesh";
@@ -45,12 +46,14 @@ class FakeWorker implements MeshWorkerHandle {
 	onmessage: ((event: MessageEvent<MeshResult>) => void) | null = null;
 	onerror: ((event: ErrorEvent) => void) | null = null;
 	readonly setups: MeshWorkerSetup[] = [];
+	readonly retunes: MeshRetune[] = [];
 	readonly jobs: MeshJob[] = [];
 	terminated = false;
 
 	postMessage(message: unknown): void {
-		const typed = message as MeshWorkerSetup | MeshJob;
+		const typed = message as MeshWorkerSetup | MeshJob | MeshRetune;
 		if (typed.kind === "setup") this.setups.push(typed);
+		else if (typed.kind === "retune") this.retunes.push(typed);
 		else this.jobs.push(typed);
 	}
 
@@ -329,6 +332,79 @@ describe("WorkerMeshSource", () => {
 		workers[1]!.answer();
 		expect((await fine).key).not.toBe((await coarse).key);
 		source.dispose();
+	});
+
+	describe("retune", () => {
+		const SWITCHES = {
+			kind: "retune",
+			speckle: 0,
+			ambientOcclusion: false,
+			skyExposure: false,
+		} satisfies MeshRetune;
+
+		it("tells every worker and posts no map", () => {
+			const { source, workers } = pool(3);
+			source.retune(SWITCHES);
+			for (const worker of workers) {
+				expect(worker.retunes).toEqual([SWITCHES]);
+				// The map is what a setup is expensive for, and a retune is
+				// the message for the knobs that leave it alone. One setup
+				// each, from being spawned, and no second one.
+				expect(worker.setups.length).toBe(1);
+			}
+			source.dispose();
+		});
+
+		it("throws away what was already on a worker and asks again", async () => {
+			// A job on a worker was posted under the old switches, so its
+			// colours are the ones the player has just turned off. And
+			// `request` chains onto a job already in flight rather than
+			// posting a second one -- so the caller asking again after the
+			// retune gets handed exactly that stale mesh, and nothing ever
+			// asks a third time. It is drawn with the old lighting for good.
+			const { source, workers } = pool(1);
+			const waiting = source.request(pick(7));
+			expect(workers[0]!.jobs.length).toBe(1);
+
+			source.retune(SWITCHES);
+			// The worker answers the job it was already holding.
+			workers[0]!.answer();
+			await Promise.resolve();
+
+			// Put back on the queue rather than handed over: the same chunk
+			// is posted a second time, now that the worker has the switches.
+			expect(workers[0]!.jobs.length).toBe(1);
+			let settled = false;
+			void waiting.then(() => (settled = true));
+			await Promise.resolve();
+			expect(settled).toBe(false);
+
+			workers[0]!.answer();
+			await waiting;
+			source.dispose();
+		});
+
+		it("carries into a worker spawned to replace a dead one", async () => {
+			const { source, workers } = pool(1);
+			source.retune(SWITCHES);
+			const waiting = source.request(pick(4));
+			workers[0]!.die();
+			// The replacement is told the setup the pool holds now. Told the
+			// one it opened with, it would quietly build the requeued chunk
+			// with the switches the player has just turned off -- and that
+			// chunk is the one on screen.
+			const spawned = workers[1]!;
+			expect(spawned.setups.length).toBe(1);
+			expect(spawned.setups[0]!.speckle).toBe(0);
+			expect(spawned.setups[0]!.ambientOcclusion).toBe(false);
+			expect(spawned.setups[0]!.skyExposure).toBe(false);
+			// And the map came with it: a retune replaces three fields of the
+			// setup and none of the rest.
+			expect(spawned.setups[0]!.map).toBe(SETUP.map);
+			spawned.answer();
+			await waiting;
+			source.dispose();
+		});
 	});
 
 	it("rejects everything outstanding when disposed", async () => {

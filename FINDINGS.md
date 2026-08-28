@@ -10,6 +10,303 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-097 — A patch picture and the planet picture disagree about which way longitude runs
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, checking the biomes lab's patch against its own map after
+righting the renderer's frame
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`
+
+**What happens.** Every lab's `frameOf` builds `east` as `cross(pole, up)`, and
+that is a proper right-handed compass frame: `cross(east, north)` is `up`,
+measured. But `directionOf(latitude, longitude)` builds a place as
+`[cos φ cos λ, sin φ, cos φ sin λ]`, and the derivative of that along longitude
+is the **opposite** vector: `frame.east · ∂p/∂λ` is exactly **−1**, while
+`frame.north · ∂p/∂φ` is **+1**. The planet picture draws longitude increasing
+to the right, so it and the patch picture — which draws `frame.east` to the
+right — are left-right mirrors of one another. The patch's own outline is drawn
+on the planet picture from latitude and longitude, so it sits in the right
+place and shows the wrong hand.
+
+**Why it matters.** The two pictures are meant to be read together: one says
+where on the planet the patch is and the other says what is in it. A coast that
+runs down the left of one runs down the right of the other. It is invisible on
+open ground and plain on a shoreline, which is what a person navigates by.
+
+**What would fix it, and why it is not one line.** A map with north up and
+longitude increasing to the right, rendered in 3D by a right-handed renderer, needs the
+renderer's third axis to be south — and that forces `cross(east, up)` to be
+north, which is the opposite of what a right-handed compass frame gives. The
+lab's own parameterization is the loose end: `[cos φ cos λ, sin φ, cos φ sin λ]`
+is the standard one with **y and z swapped**, which is a reflection, so its
+longitude runs the other way round the pole. Fixing it means changing where
+every latitude and longitude lands, across every lab and every saved link at
+once — which is the same change F-091 describes for the polar axis, and wants
+doing with it rather than twice.
+
+### F-094 — Doc 08 describes a terrain model the engine stopped running
+
+**Kind:** doc
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-27, building the landscape bench against the shipped engine
+**Where:** [`docs/08-terrain-generation.md`](docs/08-terrain-generation.md);
+`packages/engine/src/generation/coarse/shapeLayers.ts`,
+`packages/engine/src/generation/terrain/carveDensity.ts`
+
+**What happens.** Doc 08 argues a surface built from **two** noise stacks -- a
+terrain layer and a mountain layer gated on it -- scaled into metres by a fit
+that puts sea level at a **percentile** of the finished field. The engine now
+builds it from **three**, and the metres come out of the continentalness
+curve rather than from a fit: the curve's own middle is the waterline, so the
+coast is where a reader drew it and no percentile is computed anywhere. There
+is a **fourth** layer as well, the carve, which the document does not mention
+at all -- a 3D density field read per block that cuts cliffs, overhangs and
+arches into the finished ground, held off at the waterline.
+
+The document is still right about everything under those two headings: the
+noise basis, the fold and its measured pivot, why one scale for land and sea
+spent the mountains' budget, the three absolute material lines and the
+measurement that put Relief at 600 m. What has moved is the layer count, the
+name of each layer, and how a reading becomes a metre.
+
+**What it costs to leave.** Doc 08 is the page anyone reading the generator is
+sent to, and the two disagree about the shape of the thing rather than about a
+number: a reader looking for `landFraction` finds an argument for a knob the
+engine does not have, and a reader looking for the carve finds nothing. The
+knock-on is that **doc 11's still-open list and doc 26's triage both count
+against the old model**, so neither can be trusted about what is left.
+
+**Why it is not fixed in the same turn.** `docs/` argues each decision from a
+measurement, and three of the four layers here were chosen in the lab against
+measurements that are in the lab's own comments rather than in
+`verification/`. Rewriting the page properly means deciding which of those get
+a script and re-running them at the engine's own numbers, which is its own
+piece of work.
+
+### F-093 — A planet smaller than its own layer widths comes out all sea or all land, and nothing says so
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/TerrainLayer.ts`,
+`packages/client/src/PlanetSettings.ts`
+
+**What happens.** The coast is where the continentalness curve crosses its own
+middle, so how much land a world has is decided by how far that layer's field
+swings. The layer is stated in metres and the noise takes `radius / metres` as
+its frequency -- so on a planet **smaller than the layer's widest octave** the
+frequency drops below one, the field barely varies over the whole sphere, and it
+can sit entirely on one side of the curve's middle.
+
+Measured on one seed at four sizes, with the shipped 6,000 m continentalness
+layer:
+
+| radius | ground | land |
+|---|---|---|
+| 1,700 m | −425 to −15 m | **0.0%** |
+| 3,400 m | −372 to 366 m | 24.2% |
+| 5,313 m | −429 to 670 m | 21.8% |
+| 10,626 m | −450 to 736 m | 24.3% |
+
+A 1,700 m planet is not an odd request -- it is the radius a level-6 map at 32 m
+cells gives, and it is the worked planet several verification scripts use. The
+world it builds is entirely ocean, drawn in one flat colour, with no refusal and
+nothing on the panel to point at.
+
+**Why it is not simply a smaller default.** The defaults are the lab's, and the
+lab's planet is 6,801 m. Shrinking them to suit a small world would make the
+shipped one's continents into hills. What the panel is missing is the other
+guard it already has in the other direction: it refuses a map too coarse to draw
+a layer's narrowest octave, and has nothing to say about a planet too small to
+hold its widest.
+
+**What it would take.** One line in `problems()` per map layer: if the widest
+octave is over about half the planet's circumference, say so and name the scale
+row that fixes it. The number wants measuring rather than guessing -- what
+matters is the frequency at which the field stops crossing the curve's middle,
+which is a property of the octave count and the falloff as well as the width.
+
+### F-092 — The droplet walk has no caller inside the engine any more
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-27, moving the multi-noise lab's terrain model into the engine
+**Where:** `packages/engine/src/generation/coarse/erodeDroplets.ts`,
+`erodeFreeDroplets.ts`, `DROPLET.ts`, `ErosionOptions.ts`, `ErosionWalk.ts`
+
+**What happens.** Erosion in the new model is a **field**: a noise stack read
+through a curve that says, per place, how much of the relief survives there and
+how far the level is worn down with it. It is one lookup per map cell and it is
+on by default. The droplet walk is a different thing that happened to share the
+name -- a pass that moves material downhill over the finished map -- and it is
+off the map build entirely: no option, no stage, no call.
+
+**Why it is not deleted in the same turn.** `demos/noise-lab.html` ports both
+walks and `packages/engine/tests/demos/noiseLab.test.ts` digests the port
+against the engine's own, so the functions are still exercised and still
+documented. Deleting them means deciding what happens to that lab, which is a
+separate question from the terrain model.
+
+**What it costs to leave.** Five files and their tests, reachable from
+`chamfer/generation` and callable by anyone reading the barrel -- which is the
+part that matters, because the name `erosion` now means the field and a caller
+finding `erodeDroplets` beside it will reasonably think the two are related.
+
+### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, giving `demos/biomes-lab.html` a temperature field that
+falls off with latitude
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`, `packages/engine/src/coordinates/`
+
+**What happens.** `directionOf(latitude, longitude)` in all three labs returns
+`[cos φ cos λ, sin φ, cos φ sin λ]`, so the pole it measures from is `+Y`. The
+engine's polar axis runs through icosahedron vertices **0 and 3**, which is
+`normalize(-1, φ, 0)` and its antipode — not `+Y`, and not anything near it. The
+same is true of the equirectangular projection every lab picture is drawn in.
+
+**Why it matters.** It was cosmetic while latitude only chose where the patch
+stood: a place is a place under any naming, and the pictures are a viewing
+convenience. A climate field ends that. Temperature in the biomes lab is
+`1 - 2|dir · pole|`, so the pole decides where the ice is, and a world built
+from the lab's numbers has its ice caps in different places from a world built
+from the engine's. **The twelve pentagons sit on exact multiples of 36° of
+longitude about the engine's axis and nowhere in particular about `+Y`**, so
+the two also disagree about whether a pentagon is at a pole — which is the one
+fact doc 20 chose the axis to get.
+
+**What would fix it.** One constant and one projection. `POLE` becomes
+`VERTICES[0]`, `directionOf` builds its frame from that axis with the prime
+meridian through vertex 11, and `pictureDirection` inverts the same construction
+so a picture's rows are the engine's own parallels. The cost is that a latitude
+and longitude written in a link mean a different place than they did, across
+every lab at once — which is an argument for doing all three in one change
+rather than for leaving it.
+
+### F-090 — Nothing in the vegetation lab checks any more that a chunk generates the same stand alone
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-27, rebuilding `demos/vegetation-lab.html` around vegetation
+layers
+**Where:** `demos/vegetation-lab.html`
+
+**What happens.** The lab still cuts the patch into chunks and still grows every
+plant within reach of a chunk's rim from the address and the seed alone -- that
+part is unchanged and is not a switch any more, because the other way is not on
+offer. What is gone is the **audit**: the second pass that generated the same
+ground in one piece and compared it cell for cell, which read **0 cells differ**
+and climbed to **704** at an 8 m reach and **10,702** at none. It was a
+checkbox in the `Chunks` section, and that section came off the panel with the
+`Ground` one when the layers arrived.
+
+**Why it matters more now than it did.** Every rule the audit was watching is
+now **per layer**: a layer's hash salt, its own noise stack, its own curve, the
+order the layers are offered a cell in. Any of those read from something a
+chunk cannot know -- a list position, a neighbour's answer, the patch's own
+frame -- and two chunks would disagree about a tree on their boundary. The rank
+rule alone once took the audit from 0 to 10 differing cells, and it was one line.
+
+**What it would take.** The pass itself is thirty lines and it still exists in
+git; what it needs is somewhere to live now that its section is gone. The
+honest place is the readout in the left panel, as a fact rather than a knob --
+it belongs with the other things read back off the ground after the fact. The
+cost is what took it off in the first place: a second full generation, which
+roughly doubles a rebuild. So it wants to run on a settled draft only, the way
+it used to, or behind a key nobody presses by accident.
+
+### F-089 — Growing a stand of plants is one synchronous stretch, and it is already cut into the pieces a worker pool wants
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-27, profiling `demos/vegetation-lab.html` before porting it
+into the engine
+**Where:** `demos/vegetation-lab.html`, `packages/engine/src/mesh/worker/`
+
+**What happens.** The lab rebuilds the whole stand inside one animation-frame
+callback. At level 0 that is **1,595 ms** of unbroken JavaScript on the thread
+that draws, so nothing on the page answers for the whole of it -- a slider
+dragged across its range queues one of these per settle and the panel locks up.
+Nine algorithmic fixes took it from **4,990 ms**, and the shape did not change:
+it is still one task, and the next factor of two would not change it either.
+
+**Why the shape is the answer rather than the constant.** Vegetation here is
+terrain -- a plant is blocks, drawn by the chunk's own mesher at the chunk's own
+level. So it belongs where terrain already goes:
+`WorkerMeshSource` hands a pool of workers one chunk at a time, tells each one
+the world once as a `MeshWorkerSetup`, and takes a mesh back. **A chunk already
+generates its whole stand alone and audits to zero cells differing**, which is
+the property that pool requires and the one thing a lab is most likely to fake.
+Nothing about the plants would have to move: `MeshWorkerSetup` grows the fields
+a species table needs, `meshChunk` grows a call, and the plants are written into
+the block array the mesher already reads.
+
+**What it would cost, measured.** Cutting the patch into chunks looks like it
+should cost time -- a chunk grows every plant within reach of its rim, **6.84x**
+the roots it owns at the shipped 24 m -- and measured it costs none, because a
+chunk refuses to write what it does not own and that refusal pays for what it
+grows twice: the same stand runs **6.1 s cut into chunks against 6.9 s in one
+piece**. So a pool over `n` cores divides the wall
+clock by very nearly `n`, and the freeze goes away outright at `n = 1`.
+
+**What this is not.** It is not a reason to stop optimising: a worker pool moves
+the work off the drawing thread and does not make it smaller, and the engine
+runs a chunk mesher on those same cores already. What is left in the profile is
+flat -- the leaf stamp is still the largest single term at about a quarter of
+the rebuild, and after it come terrain noise, the position-to-cell pipeline the
+rod walk runs at every step, and the mesher, none of them far apart. The one
+named lead is that pipeline: `faceOf` searches all twenty face centroids at
+every step of every rod, where the shadow march already **rechecks the face it
+was last in** rather than searching, which is three dot products against
+twenty.
+
+### F-088 — The multi-noise lab evaluates terrain noise at every block; the engine reads a coarse map and ramps between readings
+
+**Kind:** unverified claim
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-26, moving `demos/multi-noise-lab.html` onto the block grid
+**Where:** `demos/multi-noise-lab.html`, `packages/engine/src/generation/coarse/`
+
+**What happens.** The lab's patch is now cut at the block level rather than the
+map's, and every column reads the three noise stacks **at its own direction**.
+The engine does not: `columnAt` reads a height off the coarse map, which holds
+one value per map cell, and the ground between two readings is a straight ramp.
+So at **Block detail 2** the lab draws four blocks across a map cell, each with
+its own noise reading, where the engine would draw four blocks on one ramp.
+
+**Why it may not matter.** The narrowest octave any layer is allowed is two map
+cells, so the field is smooth at the scale the ramp spans and the two ought to
+be within a fraction of a block of each other almost everywhere. Nothing has
+measured that. What it would take is one probe reading a layer both ways over a
+patch and reporting the distribution of the difference in blocks -- and a
+straight answer would either close this or say what **Block detail** costs in
+honesty above the level the map is at.
+
+**What it is not.** It is not the reason the carve reads the same at every block
+detail (70.8% of columns overhang at detail 2 against 71.4% at detail 3): the
+density layer is 3D and is read per point at every setting, so it never goes
+through the map at all.
+
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 
 **Kind:** risk
@@ -1737,12 +2034,15 @@ the relief survives at that place, and peaks and valleys is the relief. Erosion
 field says there.
 
 Measured over the planet's own cells at level 6 with the lab's shipped knobs,
-the fraction of relief kept on land runs `0.08` at the tenth percentile, `0.51`
-at the median and `0.95` at the ninetieth. Two frames of one place with the
-erosion curve pinned to each end: at `0.02` the patch is a smooth continental
-ramp with a clean shoreline and no ridge on it, ground `-145` to `752 m`; at
-`1.0` it is ridges everywhere, `-342` to `1,028 m`. The land share moves from
-`38.8%` to `38.5%` across that, because erosion moves relief and not level.
+the fraction of the relief erosion cuts away on land runs `0.05` at the tenth
+percentile, `0.46` at the median and `0.90` at the ninetieth — the whole range,
+across one world. Two frames of one place with the erosion curve pinned to each
+end: cutting nothing, the patch is ridges everywhere, ground `-288` to `659 m`;
+cutting all of it, a smooth continental ramp with a clean shoreline and no ridge
+on it, `-236` to `230 m`. Over the planet that is a 95th percentile of height
+falling `537 m` to `256 m` while the land share moves `37.7%` to `38.2%`,
+because what erosion takes is relief and — in proportion to its own second
+term — level, never the coastline.
 
 **Why it matters.** The gated merge answers *may this place be mountain* with a
 yes or a no read off the terrain layer's own height, so how rough a place is and
@@ -1756,6 +2056,17 @@ the engine runs today, plus a third curve on the panel and in every stored
 world's identity. `volume.js` prices the height term against the density term
 and not against itself, so what a third layer costs per chunk is not measured.
 
+**It also takes a metre budget the two-layer merge does not.** Peaks and
+valleys is applied about the level continentalness set, so wherever the
+continent curve is shallower in metres than the peak height, the third field
+decides land-or-sea rather than relief and the coastline speckles. Measured on
+the lab's own world: with the continent curve spanning `771 m` over the range
+continentalness actually reaches and a peak of `420 m`, peaks flipped **7.8%**
+of the planet from what the continent said and **89.9%** of it sat within one
+peak of sea level. Steepening the curve's coastal segment and widening its
+axis to `2,000 m` takes that to **0.9%** and **50.8%**. A shipped world would
+need the same care, and nothing in the engine currently states that budget.
+
 **What would fix it.** Nothing is broken, so this is a decision rather than a
 repair, and it belongs in a release worked through the three steps of
 [`HOW-TO-WRITE-PLANS.md`](HOW-TO-WRITE-PLANS.md): the lab is step 2 for one
@@ -1765,9 +2076,550 @@ curve that multiplies is the right shape for it — the lab's erosion curve only
 ever takes relief away, and a curve that could also lower the base would let a
 worn region sit lower as well as flatter.
 
+
+### F-086 — A tree is wider than the reach an edit is routed over, and nothing generates a structure across a chunk rim
+
+**Kind:** gap
+**Milestone:** beyond 1.0.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-26, building `demos/vegetation-lab.html`
+**Where:** `packages/engine/src/generation/chunk/chunksReading.ts`,
+`MESHER_REACH`, `packages/engine/src/generation/ChunkColumnSampler.ts`
+
+**What is missing.** The vegetation lab grows plants from a hash of the cell
+they stand on and rasterises them into the block grid, and it does that over a
+whole patch at once, which a lab may do and a chunk may not. In the engine a
+chunk generates its own contents alone -- `columnAt(face, i, j)` takes an
+address and no neighbour -- and a plant does not fit inside one column. A
+canopy measured in the lab reaches **3 to 4 m** on the shipped 1 m block, and a
+redwood's reaches **6 m**; a chunk at depth 13 cut at chunk level 6 is 64 cells
+a side. So every chunk holds parts of plants rooted in the chunks around it,
+out to the widest canopy the species table allows.
+
+**Why it is not the reach that already exists.** `MESHER_REACH` is **2** -- a
+rim cell asks its own ring and an apron cell asks its own ring, which is the
+furthest a *face* decision reaches. A plant is not a face decision: it is
+content, generated from an address that may be six cells outside the triangle.
+The two numbers are unrelated and the plant one is set by the species table
+rather than by the mesher, so it moves whenever somebody adds a bigger tree.
+
+**What it costs to close.** A root is a hash test on a cell, so a chunk can
+enumerate candidate roots over its own triangle grown by the widest canopy and
+grow the ones that hit. It stays a pure function of the address -- no flood
+fill, no fetch -- and the bill is the rim: at 64 cells a side, growing the
+triangle by 6 cells is about **1.4x** the cells to test for a root, and only
+the ones that hit cost anything after that. What has to be written down
+somewhere both ends read is the widest canopy, the way `MESHER_REACH` is
+written down once, or a chunk and its neighbour disagree about whether a tree
+exists.
+
+**The lab now does it, and it holds.** `demos/vegetation-lab.html` cuts its
+patch into the same triangles -- a cell's scaled barycentric weights floored,
+one level of the hierarchy `coarseCorners` already descends -- and generates
+each one alone, writing only the cells it owns. The check is the patch against
+itself: the same ground generated a second time in one piece, compared cell for
+cell. At 48 blocks a chunk and 24 m of reach it reads **0 cells differ**, and
+the reach is load-bearing rather than decorative -- **10,702** cells differ at
+no reach at all, **704** at 8 m, **0** from 16 m up. The cost is the rim:
+**27,360** roots tested against **7,057** owned, **3.88x**.
+
+**Three things had to change for that to hold**, and all three are the same
+mistake in different places: reading something the patch knows and a chunk does
+not. A plant is grown in **world coordinates** rather than the patch's own
+east/up/north frame, because two chunks would each grow one tree about their own
+middle. Layers count from a **world datum** rather than the lowest ground in
+view. And the bend and the leaf cut are read at the cell's own place in the
+world. **Any of the three left in place makes a tree change shape at a chunk
+boundary**, which is the failure this finding is about.
+
+**It also priced the reach, which turned up a defect.** The widest plant in the
+shipped stand reaches **19.8 m** sideways from its trunk -- but only after
+fixing the bend, which was a nudge added to each step and so a random walk in
+direction: an 86 m trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
+wanders about a radian, measuring **40.8 m** of sideways reach on a crown twenty
+across. A displacement from the heading a limb set out on is bounded by the knob
+and leans a stand together just the same.
+
+**Level of detail is the same mechanism and it holds too.** A plant is blocks,
+so it is drawn by the chunk's own mesher at the chunk's own level -- there is
+nothing to bake and nothing separate to fade. The lab draws the same ground at a
+shallower depth and rasterises the same skeleton, which is in world metres and
+knows nothing about resolution, into whatever lattice is there. Over five
+levels the hexagons drop fourfold a level, the rebuild falls from **4,990 ms to
+580 ms**, and the chunk audit reads **0 cells differ at every one**.
+
+**But the roots do not get cheaper, and that is structural.** A root is a cell,
+and a coarse chunk's cells are not a fine chunk's cells -- hashing its own would
+choose a different forest at every level and a tree would come and go as a
+player walked. So the planting lattice is the **finest** one whatever is being
+drawn, and the root walk is the same size at every level: **the one part of a
+chunk whose cost does not fall with distance**. Plant counts across levels 0 to
+4 are 186, 185, 185, 186, 182 -- the drift is only plants shorter than one
+block, which are not grown because a rod's own minimum radius would draw a 0.9 m
+heather as a whole 8 m block.
+
+**Three rules came out of it, and all three are things a chunk must not read.**
+A planting test that reads the drawn level makes the forest depend on it: the
+slope limit divided by the drawn cell rather than the finest, which refused
+**6,544 of 7,045** roots at level 2 against none at level 0, and the waterline
+was read off the drawn cell, which resamples the surface. And **material
+precedence must be a rank fixed before any plant is grown, never a permission**
+-- past a cell wider than a trunk the canopy has to win or a forest draws as
+bare poles (**2,938 wood cells against 62 leaf** at level 3), but letting a leaf
+overwrite wood where it happens to arrive second makes the answer depend on the
+order plants are grown in, and a chunk grows them in a different order from its
+neighbour. Measured, that alone took the audit from **0 cells differing to 10**.
+
+**What is left for the engine.** The reach has to be written down once where
+both the store and the mesher read it, the way `MESHER_REACH` is, or a chunk and
+its neighbour disagree about whether a tree exists. And the root walk not
+falling with distance is a real bill nobody has priced against a real frame: a
+coarse chunk covers four times the ground of the one a level finer, so it grows
+four times as many plants while its terrain costs the same. Whether that wants a
+coarser planting lattice -- one tree possible per four or eight cells rather
+than per cell, which would make the walk fall with the level and cost the
+density of small plants -- is undecided.
+
+### F-085 — `tools/bench.ts` crashes before it measures anything, and its header reads knobs that no longer exist
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, trying to measure `canonicalCell`'s guard against a real frame
+**Where:** `tools/bench.ts`, `packages/engine/src/generation/chunk/ChunkPeaks.ts`
+`peakOf`
+
+**What happens.** `npx vite-node tools/bench.ts` builds the coarse map, prints
+its header, and then throws on the first scene:
+
+```
+TypeError: Cannot read properties of undefined (reading '0')
+    at ChunkPeaks.peakOf (ChunkPeaks.ts:144)
+    at walk (selectChunks.ts:113)
+    at selectChunks (selectChunks.ts:194)
+```
+
+`peakOf` reads `this.levels[deepest]`, and at the shipped settings — depth 13
+cut at chunk level 7 — `deepest` lands past the end of the pyramid, which is
+capped at level 6. Nothing is measured: the run dies before the first scene is
+timed.
+
+The header is stale in the same direction. It prints `height scale undefined`
+and `landforms undefined m down to 75 m in undefined octaves`, because it reads
+`heightScale` and the landform rows that went when the map became the terrain
+and the detail tier was removed.
+
+**Why it matters.** This is the only harness that measures what a frame costs
+on a CPU — selection, generation and meshing over the reference scenes — and
+the numbers 0.1.0 recorded were read off it. While it throws, there is no way
+to answer *is this change faster* about the thing that actually runs, and the
+temptation is to answer it from a micro-benchmark instead. That is exactly what
+happened here: F-084 was closed on a ratio that turned out not to reach a
+frame, and it took writing a second harness to find that out.
+
+**What would fix it.** Two repairs, neither large. Clamp `deepest` to the
+pyramid's own cap in `peakOf` — the cap is deliberate (F-023 built it that way,
+finer triangles read their ancestor) and the reader is what has not been told.
+Then take the dead knob names out of the header, or read them off
+`PlanetSettings` the way the world itself is read, so the header cannot drift
+from the world again.
+
 ---
 
+---
+
+
 ## Closed
+
+### F-095 — The globe in the panel is painted by a different function from the two flat maps
+
+**Kind:** inconsistency
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, making the panel's flat map agree with the landscape bench's
+**Where:** `packages/client/src/SphereView.ts`, `rampColor`
+
+**What happens.** There are three pictures of one planet in the client: the
+bench's flat map, the panel's flat map and the panel's globe. The two flat
+ones now go through `paintPatch`, which is the world's own block colours, the
+ocean shell's two colours blended by how much water a look passes through, and
+a contour line every hundred metres. The globe still goes through `rampColor`,
+which reads the field's six equal stops from -100 m to 500 m. So the same
+ocean is a flat single blue on the ball and a shore-to-deep gradient on the
+sheet beside it, and the land has contours on one and none on the other.
+
+**Why it matters.** The two sit in the same fold of the same panel, a
+centimetre apart, and a reader comparing them has no way to know that one of
+the differences is the drawing and none of it is the world. The band
+elevations do agree -- the ramp's stops land on 300 m and 400 m, which is
+where `GROUND_LINES` puts rock and snow -- so what disagrees is only the water
+and the contours, which is exactly the kind of difference that reads as a
+different planet rather than as a different painter.
+
+**What would fix it.** Give `SphereView` the same treatment the flat map just
+had: a colour per cell from `paintPatch` rather than from `rampColor`. It
+already walks cells rather than pixels, so it needs the height and nothing
+else, and `paintPatch` writes into four bytes which is what the vertex colour
+wants. `rampColor` then has no caller and goes with it, along with the `ramp`
+field on `CoarseField` -- which is the second reason to do it, since a stop
+list nothing reads is a second statement of where the material lines are.
+
+**Closed:** 2026-08-28, and the second reason turned out to be the larger one.
+The ball takes the blend of the three cells around each triangle's middle,
+the same reading the flat map and the terrain itself take, and colours it
+through `paintPatch`. What went with `rampColor` is `CoarseRamp`'s whole
+colour list: the material elevations were written down twice, once as evenly
+spaced stops over -100 m to 500 m and once in `GROUND_LINES`, and the tests
+that held the two together are gone because there is nothing left to hold
+apart. `CoarseRamp` is a low and a high, which is what the grey pictures are
+stretched between and is a property of the field rather than of the world.
+
+### F-096 — The multi-noise and vegetation labs draw the patch as a mirror of their own map
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, tracking down why the biomes lab's patch disagreed with
+the picture of the same ground
+**Where:** `demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+**Closed:** 2026-08-28, fixed in `3dc17a1` — both labs write the negated north
+component into the renderer's third axis, so it is south and the triple is
+right-handed. Measured after, on the multi-noise lab from overhead at yaw zero:
+the frame's east lands at screen **+0.249**, the right, and its north at
+**+0.439**, the top, where the map draws them — against **+0.250** and
+**−0.314** before.
+
+**What happens.** Both labs build a patch-local frame as `east`, `up`, `north`
+and hand the renderer `[east, up, north]` as `[x, y, z]`. That triple is
+**left-handed** — measured in the biomes lab before the fix,
+`cross(east, up) · north` is exactly **−1** — and a left-handed basis given to a
+right-handed renderer draws the mirror image. Projected from overhead at yaw
+zero, the frame's east lands at screen **+0.104** (the right, where the picture
+puts it) and its north lands at **−0.185**, the bottom, where the picture puts
+the top. So the view is the map flipped top to bottom, which is a reflection
+rather than a turn: no camera angle recovers it.
+
+**Why it matters.** Both labs draw the same ground twice, once as a picture of
+the patch from above and once as hexagon columns, and the two are meant to be
+read against each other. They disagree about which side of a hill a cliff is on.
+It is invisible on a symmetric landscape and obvious on a coastline, which is
+where a person looks.
+
+**What would fix it.** One line in each: `local()` writes the negated north
+component into `localP[2]`, so the renderer's third axis is south and the triple
+is right-handed. That also makes yaw zero the view from the south looking north,
+which is the orientation the map already draws — north away from the eye, east
+on the right. `demos/biomes-lab.html` carries the fix and the comment that
+explains it.
+
+### F-087 — Under a fold of 0.72 the range was in the field's negative half, so a ridged layer's peaks were its low values
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-26, tuning peaks and valleys in `demos/multi-noise-lab.html`
+**Where:** `packages/engine/src/generation/noise/octaveNoise.ts`,
+`demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+
+**What happens.** The fold blends two functions of the raw octave:
+
+```
+signal = n * (1 - ridge) + (crease * 2 - 1) * ridge
+```
+
+`n` is **odd** and `crease * 2 - 1` is **even**, so on the positive side the
+two partly cancel and on the negative side they add. The field stays correctly
+shaped -- the high values really are the thin ridge network, measured over the
+whole planet as a top-tenth neighbour agreement of **71.9%** against the bottom
+tenth's **87.5%**, where a plain sum gives 87.1% and 87.6% -- but the positive
+half is left with **no room above the ridges**. They pile against a ceiling.
+
+Measured, the spread of the top tenth against the spread of the bottom tenth
+over 20 faces at level 7:
+
+| fold | max | top tail | bottom tail | |
+|---|---|---|---|---|
+| 0.00 | 0.807 | 0.486 | 0.496 | even |
+| 0.20 | 0.429 | 0.198 | 0.467 | bottom **x2.35** |
+| 0.35 | 0.338 | 0.129 | 0.431 | bottom **x3.34** |
+| 0.50 | 0.474 | 0.227 | 0.391 | bottom x1.72 |
+| 0.65 | 0.613 | 0.311 | 0.346 | bottom x1.11 |
+| 0.80 | 0.755 | 0.390 | 0.297 | top x1.31 |
+| 0.85 | 0.802 | 0.415 | 0.280 | top x1.48 |
+| 1.00 | 0.944 | 0.490 | 0.234 | top **x2.10** |
+
+**The crossover is near 0.72**, and the worst setting is around **0.35**, where
+the maximum falls to `0.338` -- lower than the plain sum's `0.807` -- and the
+top tenth is squeezed into `0.129` of range.
+
+**What it costs.** A curve read against that field has to rise to the **left**
+to get a spread of peak heights, which is the opposite of what a layer called
+peaks and valleys leads a reader to expect, and the opposite of what the same
+knob asks for above 0.72. Turning one knob past `0.72` reverses which end of
+another control means *high ground*. Nothing warns of it.
+
+**What is not wrong.** The picture is not inverted -- `bandGrey` is monotone in
+the value, so `+1` is white. And the shipped world is above the crossover: peaks
+and valleys ships at **0.85**, where the top has x1.48 the range. This bites
+only a reader who turns the fold down.
+
+**Closed:** 2026-08-26 -- **the crest moves and the two shapes are never
+mixed.** `pivot` is where the field's `+1` sits, at `n = 1` unfolded and
+`n = 0` fully folded, and the crease is measured from there:
+
+```
+pivot  = 1 - ridge
+away   = |n - pivot| / (1 + pivot)
+crease = (1 - away) * (1 - ridge * away)
+```
+
+One shape at every setting rather than a proportion of two, so nothing can
+cancel: the field reaches `+1` at the crest and `-1` at the far end whatever
+the dial says. The top tenth leads at every setting -- **x1.08 just off zero
+rising to x2.20 at 1** -- and the gradient rises monotonically where the blend
+made a light fold *flatter* than none (`10.9°` against `13.8°` at the median).
+
+**Both ends are unchanged to the bit.** At `1` the pivot is `0`, `away` is
+`|n|` and the crease is `(1 - away) * (1 - away)` -- the same two operands the
+squared fold multiplied. At `0` the branch is not taken. Checked over 200,000
+directions at each end: every sample identical, largest gap exactly zero. So no
+shipped world moves -- `layeredHeight` passes `ridge: 0` and nothing else in
+the engine sets it -- and only a lab with the fold strictly between 0 and 1
+draws a different field.
+
+`tools/trial-fold.ts` measures both forms side by side and is what the tables
+above and in doc 08 come from.
+
+### F-084 — `canonicalCell` scans twenty faces to hand back the cell it was given, and almost every call is that scan
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, raising the multi-noise lab's patch to half a million cells
+**Where:** `packages/engine/src/addressing/neighbours/canonicalCell.ts`,
+`packages/engine/src/addressing/neighbours/cellRepresentations.ts`
+
+**What happens.** `canonicalCell` asks `cellRepresentations` for every name a
+lattice point has and keeps the one on the lowest face. `cellRepresentations`
+builds a `Map` of the point's non-zero weights and then walks all twenty faces,
+testing each against that map with `includes` and building an array for the ones
+that match. It does this on every call.
+
+A point has more than one name only when it sits on a face edge or at an
+icosahedron vertex, and that is exactly when one of its three weights
+`(n - i - j, i, j)` is zero — three comparisons. Everywhere else the answer is
+the cell that was passed in.
+
+**Why it matters.** The share of points that need the search is small and gets
+smaller with depth. A face at subdivision `n` holds `(n+1)(n+2)/2` lattice
+points and `3n` of them sit on an edge, so at level 8 it is **768 of 33,153**,
+or `2.32%`; at level 11 it is `0.29%`. **Better than 97% of the calls walk
+twenty faces and allocate a map and an array to return their own argument.**
+
+Measured over one patch of 180,589 cells at level 8, taking the ring of all six
+neighbours of every cell — 1.08 million steps, which is what a mesher or a
+delta write does: **1,207 ms canonicalising every step against 70 ms
+canonicalising only where a weight is zero, and the same answer on all of
+them.** That is **17x**, and `neighbour` itself is 52 ms of the total, so the
+canonicalisation is not a cost beside the walk — it *is* the walk.
+
+It is on hot paths. `cellSlot` canonicalises before keying a row, `owns` and
+`chunksHolding` canonicalise while descending, and `DeltaStore.write` reaches
+`chunksReading`, which is the ring of every cell it touches.
+
+**What would fix it.** One guard at the top of `canonicalCell`: if no weight is
+zero, return `{ face, i, j }`. The search below it is then reached only by the
+points that have something to search for, and nothing else changes — the
+function's answer is identical, which is what makes this a cleanup rather than a
+decision. `cellRepresentations` keeps its full behaviour for the callers that
+want every name.
+
+`demos/multi-noise-lab.html` already guards at its own call sites rather than
+inside its port of the function, so the ported block still matches the engine
+line for line and the guard can be dropped there once the engine carries it.
+
+**Closed:** 2026-08-25, by one guard at the top of `canonicalCell`: with no
+zero weight the point is strictly inside its own face, so `{ face, i, j }` is
+the answer and the search below is never reached. `cellRepresentations` keeps
+its full behaviour for the callers that want every name.
+
+**The entry above overstates what this is worth, and the measurement that
+closed it is what showed that.** The function itself is `9.4x` cheaper —
+1,083,531 calls go from `1,790 ms` to `191 ms`, same answer on every one — and
+**the engine does not get faster**, because nothing in it canonicalises in
+bulk without already guarding:
+
+- `CoarseGrid` is the one path that walks the whole lattice, and it *already
+  carried the identical test at its call site* — `shared` is the same
+  zero-weight check. World creation does not move: **2,923 ms against
+  2,907 ms** for the coarse map at level 8.
+- A chunk build asks only **1,550** times, about **1.4%** of its own 175 ms,
+  so generating and meshing does not move either: **183 ms a chunk against
+  176 ms**, inside a run-to-run spread of 4,025–4,694 ms over the same 24
+  chunks.
+
+So the claim in the entry — that `encodeCell`, `cellSlot` and the mesher's
+rings would each get their share of `9x` — was reasoning from a micro-benchmark
+to a frame, and the frame says no. What the guard actually buys is that a
+caller no longer has to know any of this: bulk canonicalising was a footgun,
+and `CoarseGrid` is a call site that had to carry the test itself to avoid it.
+`demos/multi-noise-lab.html` is the caller that met the footgun, canonicalising
+every cell of a patch that can be the whole planet.
+
+Kept anyway on that ground, at no cost: it is three comparisons, the answer is
+identical, and `packages/engine/tests/addressing/neighbours/canonicalCell.test.ts`
+pins it against the search it replaces over **every** cell of the whole lattice
+at levels 1, 2, 4 and 8 rather than over a sample, and checks the implication it
+rests on — a cell with a second name always has a zero weight. The lab carries
+the same guard in its port, so that block still matches the engine line for
+line.
+
+`tools/trial-canonical.ts` runs all three measurements and is the thing to
+re-run before believing a ratio like this one again.
+
+---
+
+### F-083 — Switching Full light rebuilds the coarse map, which the switch cannot move
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-25, asked what flipping the switch actually costs
+**Where:** `packages/client/src/planet.ts` (`flushTerrain`, `onLiveRebuild`),
+`packages/client/src/PlanetSettings.ts` (`REMESH_KNOBS`)
+
+**What happens.** **Full light**, **Sky exposure**, **Corner shading** and
+**Speckle** are in `REMESH_KNOBS` because the mesher bakes them into the
+vertex colours, so moving one has to build the meshes again. The panel routes
+every one of them to `onLiveRebuild`, which is `flushTerrain` -- and
+`flushTerrain` is the path a *terrain* knob takes. It regenerates the coarse
+map from the seed, rebuilds the shape, the peaks pyramid and all seven
+generators, and disposes and recreates the whole worker pool, before a single
+chunk is meshed. None of that is a function of the four knobs that took the
+path.
+
+> **[measured]** The shipped world, before any chunk is meshed: coarse map
+> **1,144 ms**, peaks pyramid **127 ms**, shape and the seven generators
+> **4 ms** together -- **1,276 ms** of work whose every input the four baked
+> knobs leave exactly as it was. The re-mesh that follows is the only part
+> the knob asked for.
+
+**Why it matters.** It reads as a switch that hangs the tab for over a second
+for no reason a player can see, and it is the same second whether the world
+is a shipped one or a plain one. It also makes the four baked knobs feel
+like world settings rather than view settings, which is the opposite of what
+they are: not one of them moves a block.
+
+**What would fix it.** Two candidates, and they are not the same size.
+
+**A: a re-mesh path that is not `flushTerrain`.** Keep the map, the shape,
+the peaks and the generators; hand the pool a new `meshSetup` and rebuild
+the meshes. The obstacle is that a worker's setup is fixed for its life, so
+either the pool is recreated (cheap next to the map) or the setup becomes a
+message the pool can take. Removes the 1,271 ms and leaves the re-mesh.
+
+**B: stop baking the sky exposure at all.** Carry it as its own vertex
+attribute rather than multiplied into the colour, and the shader can ignore
+it on a uniform -- which makes **Full light** and **Sky exposure** take
+effect on the next frame with no rebuild of any kind. It costs **4 bytes a
+vertex** on the current 24-byte stride, a sixth more vertex memory, and it
+does not help **Speckle** or **Corner shading**, which vary per vertex and
+so cannot be divided back out by a uniform. B is the better answer for the
+two knobs a player actually reaches for underground; A is the one that
+helps all four.
+
+F-056, *Live rebuild flushes the terrain and nothing that follows from its
+shape*, is the same function seen from the other side: that entry is about
+what `flushTerrain` fails to update, this one about what it updates and did
+not need to.
+
+**Closed:** 2026-08-25, candidate A. `BAKED_KNOBS` is now a set of its own
+and takes its own path: `flushMeshes` retunes the worker pool in place and
+drops every chunk, where `flushTerrain` still rebuilds the map for a knob that
+moves the ground. What the cheap path skips is **978 ms** on the shipped world
+at depth 13 -- 835 ms of coarse map, 139 ms of peak pyramid, 4 ms for the shape
+and the eight generators (`tools/trial-remesh.ts`) -- and not one input to any
+of them is a function of a baked knob.
+
+The pool is retuned rather than replaced, so the map's five typed arrays are
+not structured-cloned once per worker either. A `retune` message carries the
+three switches; `WorkerMeshSource` folds them into the setup it holds, so a
+worker spawned later to replace a dead one gets them too rather than quietly
+going back to what the player has just turned off.
+
+**Keeping the pool is what made a job in flight a problem.** Replacing it
+rejected everything a worker was holding; keeping it means those jobs finish
+under the switches they were posted with, and `request` chains onto a job in
+flight rather than posting a second one -- so the caller asking again is
+handed exactly that stale mesh and nothing asks a third time. Up to one chunk
+per worker would have kept the old lighting until something else rebuilt it,
+scattered wherever the pool happened to be busy. `retune` marks every running
+job stale, which `finish` already knows how to re-post.
+
+What is left is the re-mesh itself, which is the work the knob actually asked
+for. Confirmed in the real client (`tools/probe-remesh-path.mjs`): Full light
+and Corner shading take the mesh path, Relief takes the terrain path, and the
+readout now says which -- it claimed "rebuilding the terrain" for a knob that
+rebuilds no terrain, which is what made the two impossible to tell apart from
+outside.
+
+Candidate B -- carrying the sky exposure as its own vertex attribute, so no
+rebuild is needed at all -- is untouched and still costs 4 bytes a vertex. It
+is worth less now than it was: what it removes is a re-mesh rather than a
+re-mesh plus a map.
+
+---
+
+### F-080 — The Prettier range is a caret, so two machines disagree about what formatted means
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** trivial
+**Found:** 2026-08-25, running `npm run format:check` before a push
+**Where:** `package.json`, the `prettier` devDependency
+
+**What happens.** `format:check` reports `packages/client/src/PatchLook.ts`
+and `packages/client/src/SphereView.ts` as unformatted on a clean tree.
+Neither file has been edited since the merge that brought it in, and it was
+formatted when it was written. What changed is the formatter: the dependency
+is pinned as `^3.4.2`, this container resolved it to **3.9.6**, and 3.9
+lays a union type out differently -- a short union that 3.4 broke onto one
+line per member, 3.9 collapses onto a single line.
+
+**Why it matters.** Running `--write` here fixes the check on this machine
+and breaks it on any machine that resolved 3.4.x, so the two files would
+flip back and forth with every session and every diff would carry
+whitespace nobody chose. The formatter is a tool whose whole value is that
+everybody gets the same answer, and a caret range is the one thing that
+stops it giving one. It also means `format:check` is red for reasons
+unrelated to whatever a session is actually doing, which trains people to
+ignore it.
+
+**What would fix it.** Pin the exact version -- `"prettier": "3.9.6"`, no
+caret -- and run `--write` once over the whole repo in the same commit, so
+the tree and the pin agree from that point on. A lockfile alone is not
+enough, because `npm install` in a fresh container with no lockfile entry
+for a transitively hoisted tool still picks the newest match. Nothing else
+in the toolchain has this shape: `typecheck`, `check-style.js` and
+`build-docs.js` all run code that lives in this repository.
+
+**Closed:** 2026-08-25, pinned to `3.9.6` exactly, with the three files
+reformatted in the same commit. The flip-flop is not hypothetical: while this
+entry was being written another session pushed a commit reformatting
+`meshChunk.test.ts` in the **opposite** direction -- expanding a union its
+Prettier wanted expanded -- which turned a file that passed here into a third
+failure the moment it was merged. `package-lock.json` already resolved
+`3.9.6`, so the tree and the lock now agree and the range can no longer drift
+under a fresh install.
+---
 
 ### F-079 — Speckle is part of a world's identity, so turning it off loses every block the player placed
 

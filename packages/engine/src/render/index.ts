@@ -25,6 +25,10 @@ export { buildPuffMesh } from "./clouds/buildPuffMesh.js";
 export { BloomPass } from "./bloom/BloomPass.js";
 export { BLOOM_SHADER } from "./bloom/BLOOM_SHADER.js";
 
+export type { PlayerBody } from "./player/PlayerBody.js";
+export { CAPSULE_STRIDE, capsuleGeometry } from "./player/capsuleGeometry.js";
+export { PlayerRenderer } from "./player/PlayerRenderer.js";
+
 export type { AimTarget } from "./aim/AimTarget.js";
 export { aimGeometry } from "./aim/aimGeometry.js";
 export { AimRenderer } from "./aim/AimRenderer.js";
@@ -32,3 +36,12 @@ export { AimRenderer } from "./aim/AimRenderer.js";
 export type { BoundsBox } from "./bounds/BoundsBox.js";
 export { boundsGeometry } from "./bounds/boundsGeometry.js";
 export { BoundsRenderer } from "./bounds/BoundsRenderer.js";
+
+export {
+	PATCH_KEY,
+	PATCH_KEY_SHARE,
+	PATCH_FILL_SHARE,
+	PATCH_TOP_SHARE,
+	PATCH_FILL_LIFT,
+	patchFill,
+} from "./patch/PATCH_LIGHTS.js";

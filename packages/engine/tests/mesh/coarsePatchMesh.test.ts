@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
 	CoarseGrid,
 	layerNoise,
-	metreHeight,
 	seedFromString,
 	shapeLayers,
 } from "chamfer/generation";
@@ -34,22 +33,21 @@ function ground(
 ): {
 	height: Float32Array;
 	raw: Float32Array;
-	terrain: Float32Array;
-	mountain: Float32Array;
+	continent: Float32Array;
+	erosion: Float32Array;
+	peaks: Float32Array;
 } {
-	const field = shapeLayers(noise, {});
+	// **No erosion bite, so draining is a drain.** Erosion wears land toward
+	// the waterline, so moving the waterline with the bite on moves how far
+	// each place is worn as well as where the water is -- which is right, and
+	// not the thing this file is about.
+	const field = shapeLayers(noise, { relief, seaLevel, erosionBite: 0 });
 	return {
-		height: Float32Array.from(
-			metreHeight(field.raw, {
-				landFraction: 0.65,
-				relief,
-				seaDepth: 130,
-				seaLevel,
-			}),
-		),
+		height: Float32Array.from(field.raw),
 		raw: Float32Array.from(field.raw),
-		terrain: field.terrain,
-		mountain: field.mountain,
+		continent: field.continent,
+		erosion: field.erosion,
+		peaks: field.peaks,
 	};
 }
 

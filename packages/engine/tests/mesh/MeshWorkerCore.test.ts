@@ -6,6 +6,7 @@ import {
 	TerrainGenerator,
 	BlockType,
 	buildCoarseMap,
+	maxElevationFor,
 	coarseChunkKey,
 	generateChunk,
 	seedFromString,
@@ -29,9 +30,20 @@ const SEED = seedFromString("worker");
 let map: CoarseMap;
 let shape: WorldShape;
 
+/**
+ * A world whose ground fits the crust the shape below has.
+ *
+ * The height is no longer fitted to its own peak, so the ground spans
+ * `-(seaDepth + peakRelief)` to `relief + peakRelief` and a fixture has to say
+ * both halves. At this depth a block is about 4 m and the crust is 40 of them,
+ * so there are 160 m of it: `120` above the waterline and `40` below.
+ */
+const MAP = { level: 5, relief: 100, peakRelief: 20, seaDepth: 20 } as const;
+const MAX_ELEVATION = maxElevationFor(MAP);
+
 beforeAll(() => {
-	shape = new WorldShape(1700, DEPTH, 150, LAYERS);
-	map = buildCoarseMap(SEED, { level: 5 });
+	shape = new WorldShape(1700, DEPTH, MAX_ELEVATION, LAYERS);
+	map = buildCoarseMap(SEED, MAP);
 });
 
 function setup() {
@@ -40,7 +52,7 @@ function setup() {
 		map: map.toSnapshot(),
 		seaLevelRadius: 1700,
 		subdivisionDepth: DEPTH,
-		maxElevation: 150,
+		maxElevation: MAX_ELEVATION,
 		crustDepth: LAYERS,
 		apron: true,
 		terrain: {},
@@ -283,5 +295,83 @@ describe("a change carried into a chunk drawn coarse", () => {
 				`the same geometry at lod ${lod}`,
 			).not.toEqual([...plain.opaque.vertices]);
 		}
+	});
+});
+
+describe("retuning the switches baked into a vertex colour", () => {
+	const JOB = {
+		kind: "chunk",
+		id: 1,
+		key: 512,
+		chunkLevel: CHUNK_LEVEL,
+		lod: 0,
+	} as const;
+
+	// **Speckle is the one of the three this ground shows.** Sky exposure and
+	// the corner shading both need somewhere the sky is actually blocked, and
+	// open hillside is not: every column here reaches the sky and every corner
+	// sees the same neighbours, so both come out flat whichever way they are
+	// set. `meshChunk.test.ts` builds a shaft to exercise those two. Speckle
+	// varies per cell on any terrain at all, so it is what says a retune
+	// reached the mesher.
+	const OFF = {
+		kind: "retune",
+		speckle: 0,
+		ambientOcclusion: false,
+		skyExposure: false,
+	} as const;
+	const ON = { ...OFF, speckle: 0.2 } as const;
+
+	/** The colour half of every vertex, which is where the three land. */
+	function colors(vertices: Float32Array): Float32Array {
+		const out = new Float32Array(vertices.length / 2);
+		for (let v = 0, n = 0; v < vertices.length; v += 6, n += 3) {
+			out[n] = vertices[v + 3]!;
+			out[n + 1] = vertices[v + 4]!;
+			out[n + 2] = vertices[v + 5]!;
+		}
+		return out;
+	}
+
+	it("gives what a core built with the same switches gives", () => {
+		// The whole of what the cheap path claims: a pool already holding the
+		// map can be told these three and build exactly what a pool made from
+		// scratch for them would have built. If this ever stops holding, a
+		// live rebuild draws a different world from the one a reload does.
+		const retuned = new MeshWorkerCore({
+			...setup(),
+			...OFF,
+			kind: "setup",
+		});
+		retuned.retune(ON);
+		const fresh = new MeshWorkerCore({ ...setup(), ...ON, kind: "setup" });
+		const mine = retuned.run(JOB).opaque.vertices;
+		expect(mine).toEqual(fresh.run(JOB).opaque.vertices);
+		// Not vacuous: the two settings really do draw different colours.
+		const before = new MeshWorkerCore({
+			...setup(),
+			...OFF,
+			kind: "setup",
+		});
+		expect(colors(mine)).not.toEqual(
+			colors(before.run(JOB).opaque.vertices),
+		);
+	});
+
+	it("moves the colours and leaves every position where it was", () => {
+		// These knobs move no block. The terrain reads a face and a lattice
+		// offset and has never been told about one of them, which is what
+		// lets the map, the shape and the generators stay exactly as they are
+		// while the meshes are built again.
+		const core = new MeshWorkerCore({ ...setup(), ...OFF, kind: "setup" });
+		const before = core.run(JOB).opaque.vertices.slice();
+		core.retune(ON);
+		const after = core.run({ ...JOB, id: 2 }).opaque.vertices;
+
+		expect(after.length).toBe(before.length);
+		for (let v = 0; v < before.length; v += 6)
+			for (let axis = 0; axis < 3; axis++)
+				expect(after[v + axis]).toBe(before[v + axis]);
+		expect(colors(after)).not.toEqual(colors(before));
 	});
 });

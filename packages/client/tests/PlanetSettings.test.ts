@@ -8,8 +8,10 @@ import {
 } from "chamfer/generation";
 import type { PlanetKnobs } from "../src/PlanetSettings.js";
 import {
+	BAKED_KNOBS,
 	FLAT_COARSE_LEVEL,
 	KNOB_RANGES,
+	LIVE_TERRAIN_KNOBS,
 	PLANET_DEFAULTS,
 	PlanetSettings,
 	REMESH_KNOBS,
@@ -255,13 +257,13 @@ describe("the two layers", () => {
 		// The coarse slider carries the decade and the fine one picks the value
 		// inside it, so what the layer is set to is the product.
 		const s = new PlanetSettings({
-			terrainFeature: 500,
-			terrainFeatureScale: 8,
-			mountainFeature: 250,
-			mountainFeatureScale: 8,
+			continentFeature: 500,
+			continentFeatureScale: 8,
+			peaksFeature: 250,
+			peaksFeatureScale: 8,
 		});
-		expect(s.widestOf("terrain")).toBeCloseTo(4000, 6);
-		expect(s.widestOf("mountain")).toBeCloseTo(2000, 6);
+		expect(s.widestOf("continent")).toBeCloseTo(4000, 6);
+		expect(s.widestOf("peaks")).toBeCloseTo(2000, 6);
 	});
 
 	it("names the narrowest octave each layer makes", () => {
@@ -269,34 +271,46 @@ describe("the two layers", () => {
 		// an eighth of the widest feature. The two layers are asked separately:
 		// they carry their own width and their own count.
 		const s = new PlanetSettings({
-			terrainFeature: 500,
-			terrainFeatureScale: 8,
-			terrainOctaves: 4,
-			mountainFeature: 250,
-			mountainFeatureScale: 8,
-			mountainOctaves: 3,
+			continentFeature: 500,
+			continentFeatureScale: 8,
+			continentOctaves: 4,
+			peaksFeature: 250,
+			peaksFeatureScale: 8,
+			peaksOctaves: 3,
 		});
-		expect(s.narrowestOf("terrain")).toBeCloseTo(500, 6);
-		expect(s.narrowestOf("mountain")).toBeCloseTo(500, 6);
+		expect(s.narrowestOf("continent")).toBeCloseTo(500, 6);
+		expect(s.narrowestOf("peaks")).toBeCloseTo(500, 6);
 		expect(s.smallestLandform).toBeCloseTo(500, 6);
 	});
 
-	it("takes the narrower of the two, and ignores a layer that is off", () => {
-		const both = new PlanetSettings({
-			terrainFeature: 500,
-			terrainFeatureScale: 8,
-			terrainOctaves: 1,
-			mountainFeature: 500,
-			mountainFeatureScale: 8,
-			mountainOctaves: 4,
-			mountainLayer: true,
+	it("takes the narrowest of the three, and ignores a layer that is off", () => {
+		// **Three layers reach the map and the carve does not**, so the map has
+		// to be fine enough for whichever of the three cuts finest -- and a
+		// layer that is off asks nothing of it.
+		const wide = {
+			continentFeature: 500,
+			continentFeatureScale: 8,
+			continentOctaves: 1,
+			erosionFeature: 500,
+			erosionFeatureScale: 8,
+			erosionOctaves: 1,
+			peaksFeature: 500,
+			peaksFeatureScale: 8,
+			peaksOctaves: 4,
+		};
+		const all = new PlanetSettings(wide);
+		expect(all.smallestLandform).toBeCloseTo(500, 6);
+		const flat = new PlanetSettings({ ...wide, peaksLayer: false });
+		expect(flat.smallestLandform).toBeCloseTo(4000, 6);
+		// The carve is measured against the crust rather than a landform, and
+		// it never touches the map.
+		const cut = new PlanetSettings({
+			...wide,
+			peaksLayer: false,
+			carveFeature: 20,
+			carveOctaves: 4,
 		});
-		expect(both.smallestLandform).toBeCloseTo(500, 6);
-		const alone = new PlanetSettings({
-			...both.knobs,
-			mountainLayer: false,
-		});
-		expect(alone.smallestLandform).toBeCloseTo(4000, 6);
+		expect(cut.smallestLandform).toBeCloseTo(4000, 6);
 	});
 
 	it("refuses ground the map is too coarse to draw", () => {
@@ -304,83 +318,83 @@ describe("the two layers", () => {
 		// ground that would not exist. Refusing beats building it invisibly.
 		const tooFine = new PlanetSettings({
 			plain: false,
-			terrainFeature: 500,
-			terrainFeatureScale: 8,
-			terrainOctaves: 8,
+			continentFeature: 500,
+			continentFeatureScale: 8,
+			continentOctaves: 8,
 			coarseSpacing: 128,
 		});
 		expect(tooFine.problems().join(" ")).toMatch(/narrowest octave/);
 	});
 });
 
-describe("the erosion rows", () => {
-	it("carries the walk through a query string, and refuses a name off the list", () => {
-		// A link is how a world travels, and it can say anything: a knob that
-		// names one of a fixed set keeps the value it had rather than taking a
-		// word nothing in the engine answers to.
-		const chosen = PlanetSettings.fromParams(
-			new URLSearchParams(
-				"erosion=0.6&erosionWalk=free&erosionInertia=0.45",
-			),
-		);
-		expect(chosen.knobs.erosionWalk).toBe("free");
-		expect(chosen.knobs.erosionInertia).toBeCloseTo(0.45, 9);
-		expect(chosen.toParams().get("erosionWalk")).toBe("free");
-		const nonsense = PlanetSettings.fromParams(
-			new URLSearchParams("erosionWalk=sideways"),
-		);
-		expect(nonsense.knobs.erosionWalk).toBe("cell");
-	});
-
-	it("hands every erosion row to the engine", () => {
+describe("the layer rows", () => {
+	it("hands every layer's whole stack to the engine", () => {
+		// **A layer is a stack, not a frequency.** Every row of it has to reach
+		// the engine or the panel is showing a knob the world does not read.
 		const options = new PlanetSettings({
-			erosionOn: true,
-			erosion: 0.4,
-			erosionWalk: "free",
-			erosionMaxCut: 0.03,
-			erosionCutShare: 0.1,
-			erosionInertia: 0.6,
+			continentFeature: 400,
+			continentFeatureScale: 5,
+			continentOctaves: 5,
+			continentPersistence: 0.35,
+			continentLacunarity: 2.4,
+			continentFold: 0.2,
 		}).coarseOptions();
-		expect(options.erosion).toBeCloseTo(0.4, 9);
-		expect(options.erosionWalk).toBe("free");
-		expect(options.erosionMaxCut).toBeCloseTo(0.03, 9);
-		expect(options.erosionCutShare).toBeCloseTo(0.1, 9);
-		expect(options.erosionInertia).toBeCloseTo(0.6, 9);
+		expect(options.continent!.metres).toBe(2000);
+		expect(options.continent!.octaves).toBe(5);
+		expect(options.continent!.persistence).toBeCloseTo(0.35, 9);
+		expect(options.continent!.lacunarity).toBeCloseTo(2.4, 9);
+		expect(options.continent!.fold).toBeCloseTo(0.2, 9);
 	});
 
-	it("hands the engine a strength of zero when the switch is off", () => {
-		// Off is a strength of zero rather than a flag the pass reads: the pass
-		// returns on its first line and the ground is the noise exactly as it
-		// fell. That also means the map editor routes the switch to the erosion
-		// step, because it compares the options the engine is handed.
-		const off = new PlanetSettings({ erosionOn: false, erosion: 1 });
-		expect(off.coarseOptions().erosion).toBe(0);
-		const on = new PlanetSettings({ erosionOn: true, erosion: 1 });
-		expect(on.coarseOptions().erosion).toBe(1);
+	it("gives the carve no fold, whatever a link says", () => {
+		// A fold creases a whole world at once, which is what makes it a
+		// landform knob; a crease in a carve field is one nobody can see from
+		// inside the cave it cuts. The row is not on the panel and the layer
+		// takes a zero rather than whatever happened to be in the draft.
+		const carve = new PlanetSettings({}).terrainOptions().carve!;
+		expect(carve.fold).toBe(0);
 	});
 
-	it("keeps the strength off its own bottom, because the switch is the off", () => {
-		// A slider that reaches zero beside a switch that means zero is a
-		// position meaning the same as the switch.
-		expect(new PlanetSettings({}).rangeFor("erosion").low).toBeGreaterThan(
-			0,
+	it("keeps the carve out of the map and in the terrain", () => {
+		// It is read per block down a column, so a map cell coarser than its
+		// narrowest octave costs it nothing -- and a map that had to carry it
+		// would be sized for a field it never holds.
+		const settings = new PlanetSettings({ carveFeature: 20 });
+		expect(
+			(settings.coarseOptions() as unknown as Record<string, unknown>)
+				.carve,
+		).toBeUndefined();
+		expect(settings.terrainOptions().carve!.metres).toBe(20);
+		expect(settings.smallestLandform).toBeGreaterThan(20);
+	});
+
+	it("carries every curve through a query string", () => {
+		const link = new URLSearchParams(
+			"continentCurve=-1:0,1:1&peaksCurve=-1:0.2,0:0.5,1:0.9",
 		);
+		const chosen = PlanetSettings.fromParams(link);
+		expect(chosen.knobs.continentCurve).toEqual([
+			[-1, 0],
+			[1, 1],
+		]);
+		expect(chosen.knobs.peaksCurve.length).toBe(3);
+		expect(chosen.toParams().get("continentCurve")).toBe("-1:0,1:1");
 	});
 });
 
 describe("a curve round-trips through a query string", () => {
 	it("carries a dragged curve and leaves a default one out", () => {
 		const plain = new PlanetSettings({}).toParams();
-		expect(plain.get("terrainCurve")).toBeNull();
+		expect(plain.get("continentCurve")).toBeNull();
 		const moved = new PlanetSettings({
-			terrainCurve: [
+			continentCurve: [
 				[-1, 0.1],
 				[0.2, 0.4],
 				[1, 0.9],
 			],
 		});
 		const back = PlanetSettings.fromParams(moved.toParams());
-		expect(back.knobs.terrainCurve).toEqual([
+		expect(back.knobs.continentCurve).toEqual([
 			[-1, 0.1],
 			[0.2, 0.4],
 			[1, 0.9],
@@ -395,18 +409,20 @@ describe("a curve round-trips through a query string", () => {
 	 * work was on the screen and in no query string.
 	 */
 	it("gives every world its own curves", () => {
-		const was = curveToText(PLANET_DEFAULTS.terrainCurve);
+		const was = curveToText(PLANET_DEFAULTS.continentCurve);
 		const one = new PlanetSettings();
 		const two = new PlanetSettings();
-		expect(one.knobs.terrainCurve).not.toBe(PLANET_DEFAULTS.terrainCurve);
-		expect(one.knobs.terrainCurve).not.toBe(two.knobs.terrainCurve);
+		expect(one.knobs.continentCurve).not.toBe(
+			PLANET_DEFAULTS.continentCurve,
+		);
+		expect(one.knobs.continentCurve).not.toBe(two.knobs.continentCurve);
 
 		// Drag a point, the way the panel does.
-		(one.knobs.terrainCurve as [number, number][])[1]![1] = 0.77;
-		expect(curveToText(PLANET_DEFAULTS.terrainCurve)).toBe(was);
-		expect(curveToText(two.knobs.terrainCurve)).toBe(was);
-		expect(one.toParams().get("terrainCurve")).toBe(
-			curveToText(one.knobs.terrainCurve),
+		(one.knobs.continentCurve as [number, number][])[1]![1] = 0.77;
+		expect(curveToText(PLANET_DEFAULTS.continentCurve)).toBe(was);
+		expect(curveToText(two.knobs.continentCurve)).toBe(was);
+		expect(one.toParams().get("continentCurve")).toBe(
+			curveToText(one.knobs.continentCurve),
 		);
 	});
 
@@ -415,8 +431,8 @@ describe("a curve round-trips through a query string", () => {
 			[-1, 0],
 			[1, 1],
 		];
-		const world = new PlanetSettings({ mountainCurve: mine });
-		(world.knobs.mountainCurve as [number, number][])[0]![1] = 0.5;
+		const world = new PlanetSettings({ peaksCurve: mine });
+		(world.knobs.peaksCurve as [number, number][])[0]![1] = 0.5;
 		expect(mine[0]![1]).toBe(0);
 	});
 });
@@ -509,12 +525,14 @@ describe("a world read from a link", () => {
 	});
 
 	it("leaves a world it can build exactly as the link states it", () => {
-		const query = "seed=elsewhere&relief=240&seaDepth=80&landFraction=0.4";
+		const query =
+			"seed=elsewhere&relief=240&seaDepth=80&peakRelief=60&erosionBite=0.3";
 		const settings = PlanetSettings.fromParams(new URLSearchParams(query));
 		expect(settings.knobs.seed).toBe("elsewhere");
 		expect(settings.knobs.relief).toBe(240);
 		expect(settings.knobs.seaDepth).toBe(80);
-		expect(settings.knobs.landFraction).toBe(0.4);
+		expect(settings.knobs.peakRelief).toBe(60);
+		expect(settings.knobs.erosionBite).toBeCloseTo(0.3, 9);
 	});
 });
 
@@ -588,6 +606,27 @@ describe("what a live rebuild can show", () => {
 		"skyExposure",
 		"fullbright",
 	] as const;
+
+	it("names the same four the client routes on", () => {
+		// `BAKED_KNOBS` is what decides a knob takes the cheap path -- the
+		// meshes again and not the map. A key listed here and missing there
+		// would quietly go on rebuilding the coarse map it cannot move.
+		expect([...BAKED_KNOBS].sort()).toEqual([...BAKED].sort());
+	});
+
+	it("splits the remesh set cleanly in two", () => {
+		// Every key that needs a rebuild is in exactly one of the two, so the
+		// panel's question -- does this key move the ground -- always has an
+		// answer, and nothing needing the map ever takes the path that keeps
+		// it.
+		for (const key of REMESH_KNOBS)
+			expect(LIVE_TERRAIN_KNOBS.has(key) !== BAKED_KNOBS.has(key)).toBe(
+				true,
+			);
+		for (const key of BAKED_KNOBS) expect(REMESH_KNOBS.has(key)).toBe(true);
+		for (const key of LIVE_TERRAIN_KNOBS)
+			expect(REMESH_KNOBS.has(key)).toBe(true);
+	});
 
 	it("rebuilds for a knob that is baked into the mesh", () => {
 		// The panel only calls `onLiveRebuild` for a key in this set. Left out

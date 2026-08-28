@@ -15,6 +15,7 @@
 				--cont: #ffd166;
 				--ero: #8ce99a;
 				--pv: #ff9db1;
+				--cliff: #c9a7ff;
 			}
 			* {
 				box-sizing: border-box;
@@ -44,43 +45,46 @@
 			   Scrolling to reach a knob must not carry the thing being judged
 			   off the top of the panel, so there are two sections and only the
 			   lower one moves. */
-			#panel {
+			#panelWorld,
+			#panelTerrain {
 				position: fixed;
 				top: 0;
-				right: 0;
 				bottom: 0;
 				width: 340px;
 				display: flex;
 				flex-direction: column;
 				background: rgba(18, 22, 29, 0.94);
-				border-left: 1px solid var(--edge);
 				backdrop-filter: blur(6px);
 			}
-			#head {
+			#panelWorld {
+				left: 0;
+				border-right: 1px solid var(--edge);
+			}
+			#panelTerrain {
+				right: 0;
+				border-left: 1px solid var(--edge);
+			}
+			.head {
 				flex: 0 0 auto;
 				padding: 10px 14px 8px;
 				border-bottom: 1px solid var(--edge);
 			}
-			#scroller {
+			.scroller {
 				flex: 1 1 auto;
 				overflow-y: auto;
 				overscroll-behavior: contain;
 				padding: 0 14px 24px;
 			}
-			#panel h1 {
+			.head h1 {
 				font-size: 14px;
 				margin: 0 0 6px;
 				letter-spacing: 0.01em;
 			}
-			/* **The three fields and what they make, all four at once.** The
-			   whole point of the construction is that one field cannot say what
-			   three can, and a picture selector shows one at a time -- which
-			   hides exactly the comparison the page is about. */
-			#pictures {
-				display: grid;
-				grid-template-columns: 1fr 1fr;
-				gap: 5px;
-			}
+			/* **A picture of a field sits where that field is tuned.** The
+			   ground they make together is the thing being judged, so it stays
+			   at the top where scrolling to reach a knob cannot carry it off;
+			   each layer's own field goes in that layer's section, directly
+			   above the curve it is read through. */
 			.shot {
 				position: relative;
 				line-height: 0;
@@ -113,8 +117,73 @@
 			.shot.pv b {
 				background: var(--pv);
 			}
+			.shot.cliff b {
+				background: var(--cliff);
+			}
 			.shot.out b {
 				background: var(--live);
+			}
+			.group > summary > .switch {
+				accent-color: var(--live);
+				margin: 0 6px 0 0;
+				vertical-align: -1px;
+			}
+			.group.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			.group.off > summary {
+				color: var(--dim);
+			}
+			#recipe .gone {
+				color: #5a6470;
+			}
+			.knob.pictured {
+				grid-template-columns: 1fr;
+				margin: 9px 0 4px;
+			}
+			/* The enlarged picture. A field at panel width shows where its
+			   features are; at this size it shows what they look like. */
+			#big {
+				position: fixed;
+				inset: 0;
+				z-index: 10;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(4, 6, 9, 0.88);
+				backdrop-filter: blur(3px);
+				cursor: zoom-out;
+			}
+			#big[hidden] {
+				display: none;
+			}
+			#big figure {
+				margin: 0;
+				max-width: 94vw;
+				max-height: 94vh;
+			}
+			#big canvas {
+				display: block;
+				max-width: 94vw;
+				max-height: 86vh;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+			}
+			#big figcaption {
+				display: flex;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 16px;
+				margin-top: 8px;
+				font-size: 12px;
+				color: var(--dim);
+			}
+			#big figcaption b {
+				color: var(--ink);
+				font-size: 13px;
+				letter-spacing: 0.02em;
 			}
 			#facts {
 				color: var(--dim);
@@ -147,6 +216,45 @@
 			}
 			#recipe .p {
 				color: var(--pv);
+			}
+			#recipe .f {
+				color: var(--cliff);
+			}
+			#profile {
+				margin-top: 12px;
+				border-top: 1px solid var(--edge);
+				padding-top: 8px;
+			}
+			#profile > summary {
+				cursor: pointer;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				list-style: none;
+			}
+			#profile > summary::-webkit-details-marker {
+				display: none;
+			}
+			#profile > summary::before {
+				content: "▾ ";
+			}
+			#profile:not([open]) > summary::before {
+				content: "▸ ";
+			}
+			#graph {
+				width: 100%;
+				height: auto;
+				display: block;
+				margin-top: 8px;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				background: #0b0e13;
+			}
+			#graphsays {
+				color: var(--dim);
+				font-size: 10.5px;
+				margin: 3px 0 0;
 			}
 			.group {
 				border-top: 1px solid var(--edge);
@@ -184,6 +292,9 @@
 			}
 			.group.pv > summary {
 				color: var(--pv);
+			}
+			.group.cliff > summary {
+				color: var(--cliff);
 			}
 			.knob {
 				display: grid;
@@ -246,11 +357,10 @@
 				line-height: 1.35;
 			}
 			.axis {
-				display: flex;
-				justify-content: space-between;
 				font-size: 9.5px;
+				line-height: 1.4;
 				color: var(--dim);
-				margin: 1px 0 0;
+				margin: 2px 0 0;
 				font-variant-numeric: tabular-nums;
 			}
 			.knob.check {
@@ -260,21 +370,72 @@
 				grid-column: auto;
 				width: auto;
 			}
+			/* Clear of the left panel: at 12 px it sat behind one, which is
+			   a line of instructions nobody on a desktop could read. */
 			#hint {
 				position: fixed;
-				left: 12px;
+				left: 352px;
 				bottom: 10px;
 				color: var(--dim);
 				font-size: 11.5px;
 				pointer-events: none;
 			}
+			/* **On a phone each panel is shut and there is a button to open
+			   it.** Each panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open one is the page and the view is a strip above it. Shut,
+			   the view has the whole screen and one tap brings a drawer back.
+			   It is off the desktop layout entirely -- there the panels sit
+			   beside the view and never cover it. */
+			#toggleWorld,
+			#toggleTerrain {
+				display: none;
+			}
 			@media (max-width: 760px) {
-				#panel {
+				#panelWorld,
+				#panelTerrain {
 					width: 100%;
 					top: auto;
-					height: 56%;
+					height: 68%;
 					border-left: 0;
+					border-right: 0;
 					border-top: 1px solid var(--edge);
+					transform: translateY(100%);
+					transition: transform 0.22s ease;
+				}
+				body.world #panelWorld,
+				body.terrain #panelTerrain {
+					transform: none;
+				}
+				#toggleWorld,
+				#toggleTerrain {
+					display: block;
+					position: fixed;
+					bottom: 12px;
+					z-index: 12;
+					padding: 9px 15px;
+					border: 1px solid var(--edge);
+					border-radius: 999px;
+					background: rgba(18, 22, 29, 0.94);
+					backdrop-filter: blur(6px);
+					color: var(--live);
+					font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+					letter-spacing: 0.02em;
+					transition: bottom 0.22s ease;
+				}
+				#toggleWorld {
+					left: 12px;
+				}
+				#toggleTerrain {
+					right: 12px;
+				}
+				/* Above its own panel when that one is open, so the way out is
+				   never under the thing it opened. Each button only answers for
+				   its own drawer -- opening one does not move the other. */
+				body.world #toggleWorld {
+					bottom: calc(68% + 12px);
+				}
+				body.terrain #toggleTerrain {
+					bottom: calc(68% + 12px);
 				}
 				#hint {
 					display: none;
@@ -285,21 +446,60 @@
 	<body>
 		<canvas id="view"></canvas>
 		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
-		<div id="panel">
-			<div id="head">
+		<button
+			id="toggleWorld"
+			type="button"
+			aria-controls="panelWorld"
+			aria-expanded="false"
+		>
+			World
+		</button>
+		<button
+			id="toggleTerrain"
+			type="button"
+			aria-controls="panelTerrain"
+			aria-expanded="false"
+		>
+			Terrain
+		</button>
+		<!-- **Left is the world; right is the terrain on it.** A layer is a
+		     field read through a curve and there are four of them, which is
+		     the length of this page; everything that is not one of those four
+		     -- how big the planet is, where the patch is standing, what the
+		     pictures show, the metres the curves are scaled into, and what
+		     came out -- is a different question and now a different side. The
+		     ground picture and the readout go with the world, because they are
+		     what the four layers made rather than one of the four. -->
+		<div id="panelWorld">
+			<div class="head">
 				<h1>Multi-noise lab</h1>
-				<div id="pictures">
-					<div class="shot cont"><canvas id="shotCont"></canvas><b>Continentalness</b></div>
-					<div class="shot ero"><canvas id="shotEro"></canvas><b>Erosion</b></div>
-					<div class="shot pv"><canvas id="shotPv"></canvas><b>Peaks &amp; valleys</b></div>
-					<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
-				</div>
+				<div class="shot out"><canvas id="shotOut"></canvas><b>Terrain</b></div>
 				<div id="recipe"></div>
 				<div id="facts"></div>
 			</div>
-			<div id="scroller">
-				<div id="knobs"></div>
+			<div class="scroller">
+				<div id="knobsWorld"></div>
+				<details id="profile" open>
+					<summary>Contour</summary>
+					<canvas id="graph" width="640" height="300"></canvas>
+					<div id="graphsays"></div>
+				</details>
 			</div>
+		</div>
+		<div id="panelTerrain">
+			<div class="head">
+				<h1>Terrain</h1>
+			</div>
+			<div class="scroller">
+				<div id="knobsTerrain"></div>
+			</div>
+		</div>
+
+		<div id="big" hidden>
+			<figure>
+				<canvas id="bigShot"></canvas>
+				<figcaption><b id="bigName"></b><span>click anywhere, or press Escape, to close</span></figcaption>
+			</figure>
 		</div>
 
 		<script>
@@ -378,6 +578,33 @@
 			const RIDGE_GAIN = 2.2;
 
 			/**
+			 * Every octave's own offset, worked out once per seed instead of per
+			 * sample.
+			 *
+			 * **An octave's offset is a property of the octave and the seed, and
+			 * of nothing else** -- it never depended on the point being sampled,
+			 * and computing it inside the sampling loop meant three hashes a
+			 * sample thrown away. Bit for bit the same number: the stored value
+			 * is exactly the `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to
+			 * compute, and the settings' own offset is still added at the point
+			 * of use.
+			 */
+			const OCTAVE_OFFSETS = new Map();
+
+			function offsetsFor(seed, octaves) {
+				const held = OCTAVE_OFFSETS.get(seed);
+				if (held && held.length >= octaves * 3) return held;
+				const made = new Float64Array(octaves * 3);
+				for (let o = 0; o < octaves; o++) {
+					made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+				}
+				OCTAVE_OFFSETS.set(seed, made);
+				return made;
+			}
+
+			/**
 			 * Octaves of value noise with the panel's own parameters, in
 			 * `[-1, 1]`.
 			 *
@@ -391,13 +618,16 @@
 			 * is divided by the total amplitude, so adding an octave adds detail
 			 * without making the world taller.
 			 *
-			 * **`ridge` is in the engine and is not on this panel.** It folds
-			 * each octave at its own zero crossing, which creases a whole world
-			 * at once -- it moves the character of every place together, and
-			 * what a second layer exists for is to make places differ. Both
-			 * layers pass zero. The parameter stays because this block is the
-			 * engine's function and a copy that has dropped an argument is a
-			 * copy that has drifted.
+			 * **`ridge` folds each octave at its own zero crossing**, and that
+			 * fold is the only place a crease can come from: every octave of a
+			 * plain sum is smooth in its first and second derivative, so every
+			 * summit a plain sum builds is a dome. At `0` the sum is returned
+			 * bit for bit.
+			 *
+			 * **It creases a whole layer at once**, moving the character of
+			 * every place in that layer together, so it belongs to a layer that
+			 * already says *where* -- fold the layer that decides a coastline
+			 * and every coastline on the planet is creased.
 			 */
 			function octaveNoise(x, y, z, seed, s) {
 				let sum = 0;
@@ -406,18 +636,31 @@
 				let f = s.frequency;
 				let weight = 1;
 				const ridge = s.ridge;
+				const spread = offsetsFor(seed, s.octaves);
 				for (let o = 0; o < s.octaves; o++) {
-					const ox =
-						(2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetX;
-					const oy =
-						(2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD + s.offsetY;
-					const oz = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+					const ox = spread[o * 3] + s.offsetX;
+					const oy = spread[o * 3 + 1] + s.offsetY;
+					const oz = spread[o * 3 + 2];
 					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
 					let signal = n;
 					if (ridge > 0) {
-						const fold = 1 - Math.abs(n);
-						const crease = fold * fold;
-						signal = n * (1 - ridge) + (crease * 2 - 1) * ridge;
+						// **The fold's crest moves; the two shapes are never
+						// mixed.** Folding at the zero crossing and blending
+						// that against the plain octave adds an even function to
+						// an odd one, and the two disagree about which end is
+						// high -- plain noise peaks at `n = 1` and a fold peaks
+						// at `n = 0` -- so on the positive side they cancel.
+						// Measured over the planet, the spread of the top tenth
+						// against the bottom tenth ran `1 : 3.34` at a fold of
+						// 0.35 and the maximum fell to 0.338 against the plain
+						// sum's 0.807. One shape whose crest slides instead: the
+						// field reaches +1 at the crest and -1 at the far end at
+						// every setting, and both ends are the arithmetic they
+						// always were.
+						const pivot = 1 - ridge;
+						const away = Math.abs(n - pivot) / (1 + pivot);
+						const crease = (1 - away) * (1 - ridge * away);
+						signal = crease * 2 - 1;
 						signal *= weight;
 						weight = Math.min(
 							1,
@@ -655,8 +898,20 @@
 			 *
 			 * The same rule that awards a border cell to the lowest chunk
 			 * containing it, applied one level up.
+			 *
+			 * **A cell has a second name only on a face edge, and that is three
+			 * comparisons rather than a search.** A weight of zero is what puts
+			 * the point on the edge opposite that vertex; two zeros put it on an
+			 * icosahedron vertex. With no zero the point is strictly inside its
+			 * own face, which names it and nothing else does -- and without the
+			 * guard, better than 97% of calls walk all twenty faces to hand back
+			 * the cell they were given. **This lab is the caller that made it
+			 * worth guarding**: it canonicalises every cell of a patch that can
+			 * be the whole planet, where the engine's own bulk caller already
+			 * carried the same test at its call site.
 			 */
 			function canonicalCell(face, n, i, j) {
+				if (i > 0 && j > 0 && i + j < n) return { face, i, j };
 				const all = cellRepresentations(face, n, i, j);
 				let best = all[0];
 				for (const c of all) if (c.face < best.face) best = c;
@@ -1005,21 +1260,171 @@
 			 * that starts in the sea, because nothing in the range's own field
 			 * knows where it is.
 			 */
-			const LAYERS = ["cont", "ero", "pv"];
-
-			/** Offsets from the world seed, so the three layers are three fields. */
-			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337 };
+			const LAYERS = ["cont", "ero", "pv", "cliff"];
 
 			/**
-			 * `blockSize = K * radius / 2^depth`, so a depth and a radius fix the
-			 * spacing between two cells and there is nothing left to round.
+			 * The two elevations that cut the land into three bands, and the
+			 * colour of each.
+			 *
+			 * **Absolute metres, because the map is.** A fraction of relief
+			 * agrees at one relief and drifts at every other, so the engine
+			 * bands on fixed heights: water under sea level, grass to 300 m,
+			 * bare stone to 400 m, snow over it. These are the engine's own
+			 * numbers and the engine's own colours, so a colour here names the
+			 * block the world would build there.
+			 */
+			const GROUND_LINES = { rock: 300, snow: 400 };
+			const BAND_COLORS = [
+				[0.76, 0.7, 0.5],
+				[0.26, 0.44, 0.19],
+				[0.42, 0.42, 0.45],
+				[0.92, 0.94, 0.97],
+			];
+			/** What the sea is, and how far a look reaches into it. */
+			const SEA_COLOR = [0.12, 0.32, 0.55];
+			const SEA_CLARITY = 45;
+
+			/**
+			 * How wide the patch may be in *blocks*, which is what bounds both
+			 * the walk that enumerates it and the walk down every column.
+			 * `Patch` is set in map cells and `Block detail` multiplies it, so
+			 * the pair of them is what has to be held rather than either alone.
+			 */
+			const PATCH_COLUMNS = 256;
+			/**
+			 * How many blocks of one column the carve may read. Everything
+			 * outside the band is settled without a reading, so this bounds the
+			 * band and `Squash` is the end that moves to keep it.
+			 */
+			const MAX_CARVE_LAYERS = 512;
+
+
+			/** Offsets from the world seed, so the three layers are three fields. */
+			const SEED_OFFSET = { cont: 101, ero: 211, pv: 337, cliff: 977 };
+
+			/**
+			 * The carve: one noise value per hexagon, and air where it is not
+			 * positive.
+			 *
+			 * **One thing is added and it is not a knob.** The density gains a
+			 * full `1` over four shape widths of depth, so nothing deeper than
+			 * that is ever air -- which is *do not cut below the crust* written
+			 * as arithmetic rather than as a rule. It is measured in the layer's
+			 * own scale because that is the only length the layer has, so
+			 * widening `Feature` widens the shapes and lets them reach deeper by
+			 * the same factor rather than needing a second slider to agree with
+			 * the first.
+			 *
+			 * **Nothing else.** No curve to remap the reading, no share of the
+			 * crust, no strength -- the value the field gives at that block plus
+			 * how deep the block is, and that is the whole rule. What it looks like is the question this
+			 * exists to answer, so anything that could be tuned to flatter it is
+			 * left out.
+			 *
+			 * The one number it cannot do without is how big the shapes are, and
+			 * **that number is not applied to the reading -- it is applied to the
+			 * position handed in.** The noise is defined on a grid of whole
+			 * numbers, a random value at each and a smooth blend between, so one
+			 * unit of input is one blob whatever else happens. What decides how
+			 * big a blob is *in metres* is the only conversion there is: the
+			 * world position divided by this before the lookup. Two blocks `60 m`
+			 * apart land a whole unit apart and agree about nothing; two blocks
+			 * `6 m` apart land a tenth of a unit apart and read almost the same.
+			 *
+			 * `60 m` is the shipped block times about eight, which is the size a
+			 * grid can draw and a person can walk through. **It is also what the
+			 * squash is measured in**: the lift is `squash` per `60 m` of depth,
+			 * so the layer has one length rather than two.
+			 */
+			/**
+			 * How many shape widths of depth the density takes to gain a full
+			 * `1`, past which nothing is ever air.
+			 *
+			 * **Four, because a reading is not `-1`.** An octave stack is
+			 * normalised to its own peak and its standard deviation is about a
+			 * quarter of that, so an ordinary negative reading is near `-0.25`
+			 * and would be cancelled after a *quarter* of the span. Set at one
+			 * shape width the layer all but disappears -- measured, 0.7% of
+			 * columns holding rock over air over rock against 40% at a quarter
+			 * of that rate. Four widths puts a typical reading's reach at about
+			 * one width and the deepest readings at three, which is a cave
+			 * system rather than a dimple.
+			 */
+			const CARVE_REACH = 4;
+			/**
+			 * How far above sea level the layer takes to come back, in shape
+			 * widths.
+			 *
+			 * **At the waterline the density is `1` and nothing is carved.** The
+			 * layer draws cliffs and overhangs, which are things on a hillside;
+			 * run it down through the waterline and what it opens fills, which
+			 * draws as a slot of water dropping through the crust and reads as a
+			 * fault rather than a cave. Caves are a different layer's job and
+			 * this one has to stop. Against the same world with the hold
+			 * off, the layer puts **43%** of everything it takes under the sea;
+			 * at any setting of this it is **0%**, and the patch's lowest ground
+			 * is `-152 m` against `-328 m` because the sea floor is not cut
+			 * into.
+			 *
+			 * **It is a floor and not a band.** Suppressing a slice either side
+			 * of the waterline and letting the layer back in underneath moves
+			 * the slots down rather than removing them; at and below sea level
+			 * the density is `1` outright, and it fades back in over this many
+			 * shape widths above it. Measured in the layer's own scale for the
+			 * same reason the depth term is: it is the only length the layer
+			 * has, so widening `Feature` widens the shapes and lifts the fade
+			 * with them rather than needing a second slider to agree with the
+			 * first.
+			 *
+			 * **The fade is what stops the waterline being a shelf.** With no
+			 * fade at all the density jumps from the reading to `1` across one
+			 * plane, and every carve that would have gone below stops on it:
+			 * **42.8%** of every hole in the patch had its floor on that one
+			 * layer. What a fade costs is the layer's own work, and it costs it
+			 * steadily -- 2,743 holes at no fade, 2,173 at a quarter, 1,666 at a
+			 * half and 820 at a whole one. So this is the shortest fade that is
+			 * not a step: a quarter of a shape width keeps **79%** of the holes
+			 * and spreads the crossing over about four blocks at the shipped
+			 * block size.
+			 *
+			 * **How piled-up the floors are does not choose between short
+			 * fades**, and it looks as though it does. At the shipped 8 m block
+			 * the busiest layer holds 48.7% at `0.15`, 32.8% at `0.25` and 39.0%
+			 * at `0.35`, which reads as a minimum; at a 16 m block the order
+			 * reverses. It is where the crossing happens to land against a block
+			 * boundary, so it is a property of the block size and not of the
+			 * fade.
+			 */
+			const WATERLINE_REACH = 0.25;
+			/** How wide the widest shapes are, which is what the position is divided by. */
+			function cliffMetres(k) {
+				return k.cliffMetres;
+			}
+
+			/**
+			 * The field at one point of the column, read the same size in every
+			 * direction.
+			 *
+			 * The sample point is the direction scaled by `1 + metres / radius`,
+			 * which is the world point that block stands at -- so a metre up
+			 * moves it exactly as far as a metre sideways.
+			 */
+			function densityAt(dx, dy, dz, metres, k, seed, v) {
+				const out = 1 + metres / k.radius;
+				return octaveNoise(
+					dx * out,
+					dy * out,
+					dz * out,
+					seed + SEED_OFFSET.cliff,
+					v,
+				);
+			}
+
+			/**
+			 * `blockSize = K * radius / 2^depth`, which ties the three together
+			 * so any two fix the third.
 			 */
 			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
-
-			/** How wide one hexagon is, centre to centre, in metres. */
-			function cellMetres(k) {
-				return (CELL_CONSTANT * k.radius) / 2 ** k.subdivisionDepth;
-			}
 
 			/**
 			 * One layer's noise stack, read off that layer's own rows.
@@ -1038,7 +1443,14 @@
 			 */
 			function layerSettings(k, which) {
 				return {
-					frequency: k.radius / Math.max(1, k[which + "Feature"]),
+					// **A layer is set in metres and the noise takes a
+					// frequency.** The sample point is a unit direction, so a
+					// frequency counts how many times the widest octave repeats
+					// across the whole planet: the same number is hills on one
+					// world and continents on another. Metres divided by the
+					// radius reach the frequency, and the number a person sets
+					// then means the same thing whatever size the planet is.
+					frequency: k.radius / k[which + "Metres"],
 					octaves: k[which + "Octaves"],
 					persistence: k[which + "Persistence"],
 					lacunarity: k[which + "Lacunarity"],
@@ -1051,7 +1463,10 @@
 					// It belongs on peaks and valleys and nowhere else -- folding
 					// continentalness creases the coast of every continent at
 					// once.
-					ridge: k[which + "Fold"],
+					// **The carve has no fold row and the fold is what a fold is
+					// for**: a crease belongs on peaks and valleys, and a crease
+					// in a cave field is a crease nobody can see from inside it.
+					ridge: k[which + "Fold"] ?? 0,
 					normalise: true,
 				};
 			}
@@ -1075,6 +1490,13 @@
 				out[0] = octaveNoise(x, y, z, seed + SEED_OFFSET.cont, s.cont);
 				out[1] = octaveNoise(x, y, z, seed + SEED_OFFSET.ero, s.ero);
 				out[2] = octaveNoise(x, y, z, seed + SEED_OFFSET.pv, s.pv);
+				// **The fourth is read at the surface here and everywhere else
+				// in the column.** The other three are fields over a sphere and
+				// have one value per place; this one has a value per *point*, so
+				// what a picture and a histogram can show is the slice of it the
+				// ground happens to pass through. The terrain reads it again at
+				// every block of `carveColumn`.
+				out[3] = octaveNoise(x, y, z, seed + SEED_OFFSET.cliff, s.cliff);
 				return out;
 			}
 
@@ -1082,37 +1504,255 @@
 			 * The three readings turned into one height, in metres above sea
 			 * level.
 			 *
-			 * **This is the whole model, and it is three curve reads and one
-			 * multiply.**
+			 * **This is the whole model.**
 			 *
-			 * - The continentalness curve is read on an axis running from
-			 *   `-seaDepth` at the bottom to `relief` at the top, so its answer
-			 *   is already a height: the floor of the ocean at one end, the top
-			 *   of a plateau at the other.
-			 * - The erosion curve answers **how much of the relief survives
-			 *   here**, from all of it to none. It multiplies, so a region the
-			 *   curve sends to zero is flat whatever the third field is doing --
-			 *   which is the one thing a single stack of octaves can never say.
+			 * - The continentalness curve **is a height, not a land-or-sea
+			 *   switch**. Its **middle is the waterline**, and the two halves
+			 *   scale apart: up to `relief` above it, down to `seaDepth` below,
+			 *   so its answer is already in metres -- an ocean floor at one end,
+			 *   the top of a plateau at the other. Which of those is coast falls
+			 *   out of it rather than being decided by it, and **only the curve
+			 *   decides it**: sea level is drawn across the curve, and where the
+			 *   curve crosses that line is the shore. It is the level the other
+			 *   two layers then work on, so it is where the ground would stand
+			 *   before erosion wears it and before peaks and valleys is added.
+			 * - The erosion curve answers **how much erosion takes away here**,
+			 *   from none of it to all of it -- up is more cut away, because the
+			 *   layer is called erosion and erosion is removal. What is left of
+			 *   the relief is `1 - cut(E)`, so a region the curve sends to `1` is
+			 *   flat whatever the third field is doing, which is the one thing a
+			 *   single stack of octaves can never say.
 			 * - The peaks-and-valleys curve is the relief, signed: its `0.5` is
 			 *   the level the continent set, below it cuts a valley and above it
 			 *   raises a peak.
 			 *
+			 * **Erosion does two things: it flattens, and it lowers.** It takes
+			 * the relief outright -- what survives is `1 - cut(E)` -- and it
+			 * takes the level in proportion to `Wears the level down`, because
+			 * water wears a range down as well as smoothing it, and in a nested
+			 * spline, where the height is one function of all three fields,
+			 * erosion changes the level by construction.
+			 *
+			 * So both are one minus a share of the same cut: the relief keeps
+			 * `1 - cut(E)`, and the level keeps that same cut scaled by whatever
+			 * `Wears the level down` is set to. Turn that knob all the way up and
+			 * the two are the same number, so land the curve fully cuts is
+			 * flattened and lowered together and ends at sea level; turn it off
+			 * and the level keeps all of its height while only the bumps go.
+			 *
+			 * **Below sea level nothing is worn**: the ocean floor is not what
+			 * the rain is falling on, and wearing it would lift the sea bed
+			 * toward the surface.
+			 *
 			 * So high continentalness with low erosion and high peaks is a steep
-			 * ridge, and the same continentalness and the same peaks under high
-			 * erosion is a plain at the same height.
+			 * ridge; the same continentalness and the same peaks under high
+			 * erosion is a plain, and a lower one than the continent asked for.
 			 */
+			/**
+			 * How much erosion takes away here: `0` leaves the ground alone, `1`
+			 * takes all of the relief.
+			 *
+			 * **Pulled out because two things read it.** The height uses it to
+			 * flatten the relief and lower the level; the carve uses it to
+			 * shorten its own reach, so a worn place gets no cliffs for the same
+			 * reason it gets no peaks -- one field, one meaning, two readers.
+			 */
+			function erosionCut(said, k) {
+				return k.useEro ? splineAt(k.eroSpline, said[1]) : 0;
+			}
+
 			function heightFrom(said, k) {
+				// **Each layer's off is an exact statement about what it
+				// contributes, not a hidden default.** Erosion off keeps all of
+				// the relief, which is the multiply's own neutral; peaks off adds
+				// none, which is the sum's. Continentalness has no neutral --
+				// something has to set the level -- so off reads its curve at the
+				// middle of the field, which is the one level a field with
+				// nothing to say would give: a flat plain, and whatever the other
+				// two do on top of it.
+				const level = k.useCont
+					? splineAt(k.contSpline, said[0])
+					: splineAt(k.contSpline, 0);
+				// **Land and the sea floor scale apart, each to its own knob.**
+				// The curve's middle is the waterline, so above it `Relief` alone
+				// says how tall land gets and below it `Sea depth` alone says how
+				// deep the floor goes. One scale for the whole axis looks obvious
+				// and is what makes `Sea depth` flood the world: it rescales the
+				// metres a curve point is worth, which drags sea level across the
+				// curve and moves the coast. Split, neither knob moves the coast
+				// -- the coast is where the curve crosses the middle, and only
+				// the curve puts it there.
 				const base =
-					-k.seaDepth +
-					splineAt(k.contSpline, said[0]) * (k.relief + k.seaDepth);
-				const kept = splineAt(k.eroSpline, said[1]);
-				const swing = splineAt(k.pvSpline, said[2]) * 2 - 1;
-				return base + kept * swing * k.peakRelief;
+					level >= 0.5
+						? ((level - 0.5) / 0.5) * k.relief
+						: -((0.5 - level) / 0.5) * k.seaDepth;
+				const cut = erosionCut(said, k);
+				const swing = k.usePv ? splineAt(k.pvSpline, said[2]) * 2 - 1 : 0;
+				const over = base - k.seaLevel;
+				const worn = 1 - k.erosionBite * cut;
+				return (
+					k.seaLevel +
+					(over > 0 ? over * worn : over) +
+					(1 - cut) * swing * k.peakRelief
+				);
 			}
 
 			// ---------------------------------------------------------------
 			// The knobs.
 			// ---------------------------------------------------------------
+
+			/**
+			 * How deep the layer works, which is the depth the rule already
+			 * guarantees rather than a knob.
+			 *
+			 * The density gains a full `1` over `CARVE_REACH` shape widths, so
+			 * nothing under that can be air whatever the field says. That is the
+			 * bottom of the walk, and it is also what a column is drawn down to:
+			 * a carve whose whole point is taking blocks out from under other
+			 * blocks needs the volume it works in to be on screen.
+			 */
+			function carveCrust(k) {
+				return Math.min(
+					CARVE_REACH * cliffMetres(k),
+					// The walk is one block a step, so this is what stops a
+					// world with kilometres of relief asking for a column walked
+					// for kilometres.
+					k.blockMetres * MAX_CARVE_LAYERS,
+				);
+			}
+
+			/**
+			 * One column of ground, as the heights where rock starts and stops.
+			 *
+			 * **The density says air or rock, and the graph says which is
+			 * which.** A 3D noise field gives one number per point; a block is
+			 * rock where that number is over the line and air where it is under
+			 * it, and the curve is what moves a reading from one side of the line
+			 * to the other. Everything else here is about *where that rule is
+			 * allowed to apply*.
+			 *
+			 * **Two terms are added to it, and both push toward rock.**
+			 *
+			 * - **Depth.** The density gains a full `1` over the crust, so at the
+			 *   bottom of the crust nothing the noise can say reaches air. That
+			 *   is the *do not cut below the crust* rule, enforced by the number
+			 *   rather than by a clamp -- caves are a different layer's job, and
+			 *   this one has to stop.
+			 * - **`Squash`.** A flat lift on the whole field. At `0` it adds
+			 *   nothing and the noise decides the whole crust, which is the
+			 *   wildest the layer gets; at `1` it lifts the field clear of the
+			 *   line and nothing is carved anywhere.
+			 *
+			 * **It takes rock away and never puts any back.** Nothing above the
+			 * surface the three fields drew is ever kept, so the ground can only
+			 * end up lower than they drew it -- a mountain here is something the
+			 * carve left standing, never something it built.
+			 *
+			 * Returns pairs of heights, low to high, snapped to the block grid.
+			 */
+			/**
+			 * What the last `carveColumn` removed, split into the two kinds.
+			 *
+			 * **The whole question about this layer is which of these two
+			 * numbers is bigger.** A block taken off the top of a column lowers
+			 * the ground, and enough of those in a row is a displaced height
+			 * field wearing a 3D field's clothes -- it cannot make an arch, an
+			 * overhang or a floating island however deep it goes. A block taken
+			 * out from *under* rock is a space, and a space is the only thing a
+			 * height field could never have drawn.
+			 */
+			const carved = { under: 0, above: 0, drowned: 0 };
+
+			function carveColumn(dx, dy, dz, surface, k, seed, s, out) {
+				out.length = 0;
+				carved.under = 0;
+				carved.above = 0;
+				carved.drowned = 0;
+				const block = k.blockMetres;
+				const crust = carveCrust(k);
+				// Layer indices, so two neighbouring columns cut their blocks on
+				// the same planes -- a grid one column rounded for itself would
+				// draw a step between every pair of columns and nowhere else.
+				const first = Math.floor((surface - crust) / block);
+				const last = Math.floor(surface / block);
+				let from = first * block;
+				let rock = true;
+				for (let L = first; L <= last; L++) {
+					const y = (L + 0.5) * block;
+					// Above the ground the three fields drew there is nothing to
+					// carve and nothing to keep.
+					let solid = y < surface;
+					// **One reading decides one block, and that is the rule.** One
+					// reading at this block, air where it is not positive --
+					// plus the one thing added to it, which is a lift that grows
+					// with how far under the ground the block is.
+					if (solid && k.useCliff) {
+						// **The curve is a transform of the reading, and its
+						// middle is the line between air and rock.** A straight
+						// line hands the field through unchanged; anything else
+						// moves which readings are which.
+						const read = densityAt(dx, dy, dz, y, k, seed, s.cliff);
+						const said = splineAt(k.cliffSpline, read) * 2 - 1;
+						// **The waterline holds the layer off.** `hold` is 1 at
+						// and below sea level and nought a shape width or so
+						// above it, and the reading is blended toward solid by
+						// it -- so a cliff carved into a headland stops at the
+						// water rather than running on down and filling.
+						const hold = Math.max(
+							0,
+							Math.min(
+								1,
+								1 - (y - k.seaLevel) / (WATERLINE_REACH * cliffMetres(k)),
+							),
+						);
+						const density = said + (1 - said) * hold;
+						solid = density + (surface - y) / crust > 0;
+					}
+					if (!solid && y < surface) {
+						carved.above++;
+						// **The sea is a surface at a fixed radius, so anything
+						// opened under it is filled and seen as water.** On low
+						// ground that is most of the carve, and a reader looking
+						// at a flat blue sheet has no way to tell that the layer
+						// did anything there at all.
+						if (y < k.seaLevel) carved.drowned++;
+					}
+					if (solid === rock) continue;
+					// A block is rock or air whole, so the face is the plane
+					// between two layers rather than the point the density
+					// crossed the line.
+					if (rock) out.push(from, L * block);
+					else from = L * block;
+					rock = solid;
+				}
+				if (rock) out.push(from, (last + 1) * block);
+				// Everything dug under the highest rock left standing is a hole;
+				// the rest is the top of the column having moved down.
+				if (out.length > 0) {
+					const top = out[out.length - 1];
+					let above = 0;
+					for (let y = top + block / 2; y < surface; y += block) above++;
+					carved.under = carved.above - above;
+					carved.above = above;
+				}
+				return out;
+			}
+
+			/**
+			 * The top of the topmost rock at one place, which is what a picture
+			 * of the ground has to draw.
+			 *
+			 * **A carve moves the surface, so a map that skips it is a map of a
+			 * world nobody is standing on** -- the plane shows a spire and the
+			 * picture beside it shows the hillside the spire was cut out of.
+			 * Under an overhang the two are not even close.
+			 */
+			function surfaceAt(dx, dy, dz, said, k, seed, s, out) {
+				const base = heightFrom(said, k);
+				if (!k.useCliff) return base;
+				carveColumn(dx, dy, dz, base, k, seed, s, out);
+				return out.length > 0 ? out[out.length - 1] : base - carveCrust(k);
+			}
 
 			/**
 			 * The four rows every noise layer carries, plus the fold.
@@ -1122,23 +1762,50 @@
 			 * what they *are*. A layer given a row its neighbours do not have
 			 * would be a fourth idea smuggled into a comparison of three.
 			 */
-			function layerRows(which, feature, low, high, octaves, fold) {
+			function layerRows(which, feature, scale, octaves, fold, extra = []) {
 				return [
 					{
+						// **A size in metres, because a frequency is a number
+						// about a sphere and a landform is a thing on the
+						// ground.** The coarse slider carries the decade and the
+						// fine one picks the value inside it, since one slider
+						// cannot hold a hundred metres and a hundred kilometres
+						// at a resolution anybody can drag.
 						key: which + "Feature",
 						label: "Feature",
-						low,
-						high,
-						step: (high - low) / 100,
+						// **The density layer is measured against the crust, not
+						// against a landform.** The other three draw continents
+						// and mountain ranges, and a hundred metres is the
+						// smallest thing worth calling one; this one has to
+						// swing several times inside a crust a couple of hundred
+						// metres deep or what comes out is a lowered surface.
+						low: which === "cliff" ? 10 : 100,
+						high: 1000,
+						step: 10,
 						value: feature,
 						digits: 0,
 						unit: "m",
+					},
+					{
+						key: which + "FeatureScale",
+						label: "Feature scale",
+						low: 1,
+						high: 100,
+						step: 1,
+						value: scale,
+						digits: 0,
+						unit: "x",
 						note: () =>
 							field
-								? `narrowest octave <b>${Math.round(
+								? `widest <b>${Math.round(
+										featureMetres(which),
+									).toLocaleString()} m</b>, narrowest <b>${Math.round(
 										narrowestOf(which),
-									).toLocaleString()} m</b>, ` +
-									`<b>${(narrowestOf(which) / field.cellMetres).toFixed(1)}</b> cells wide`
+									).toLocaleString()} m</b> = ` +
+									`<b>${(
+										narrowestOf(which) /
+										(which === "cliff" ? field.blockMetres : field.cellMetres)
+									).toFixed(1)}</b> ${which === "cliff" ? "blocks" : "map cells"}`
 								: "",
 					},
 					{
@@ -1178,59 +1845,175 @@
 						value: fold,
 						digits: 2,
 						note: () =>
-							"0 is the plain sum, bit for bit; 1 creases every octave " +
-							"at its own zero crossing",
+							knobs[which + "Fold"] === 0
+								? "the plain sum, bit for bit"
+								: "creases every octave at its own zero crossing · the " +
+									"crest slides from the field's high end to its middle, so " +
+									"the range stays in the positive half at every setting — " +
+									"<b>1.1x</b> the negative one just off zero, <b>2.2x</b> at 1",
 					},
+					...extra,
 				];
+			}
+
+			/**
+			 * A layer's section: the switch, then the graph, then the picture,
+			 * then the knobs.
+			 *
+			 * **The curve is what the layer is for, so it goes first.** A layer
+			 * is a stack of octaves read through a curve, and the stack's own
+			 * rows only say how coarse or fine the reading is -- they are the
+			 * setup, and the curve is the decision. The picture sits between
+			 * them because it is what both are being judged against.
+			 */
+			function layerGroup(
+				group,
+				which,
+				tint,
+				spline,
+				feature,
+				scale,
+				octaves,
+				fold,
+				extra = [],
+			) {
+				return {
+					group,
+					tint,
+					open: true,
+					rows: [
+						// **A switch on the section, not a row inside it.** It
+						// governs every row below it, so a reader meets it before
+						// the thing it governs rather than among them.
+						{
+							key: "use" + which[0].toUpperCase() + which.slice(1),
+							label: "on",
+							type: "check",
+							summary: true,
+							value: true,
+						},
+						spline,
+						// The layer's own field, drawn where it is being tuned
+						// rather than at the top of the panel. Click it for a
+						// large one.
+						{ key: which + "Picture", label: "", type: "picture", value: 0 },
+						// **The carve has no fold.** A fold creases a whole world
+						// at once, which is what makes it a landform knob; a
+						// crease in a cave field is one nobody can see from
+						// inside the cave.
+						...layerRows(which, feature, scale, octaves, fold, extra).filter(
+							(row) => row.key !== "cliffFold",
+						),
+					],
+				};
 			}
 
 			const KNOBS = [
 				{
-					group: "The world",
+					group: "World",
+					panel: "world",
 					open: false,
 					rows: [
 						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
 						{
-							key: "radius",
-							label: "Radius",
-							low: 400,
-							high: 8000,
-							step: 100,
-							value: 1700,
-							digits: 0,
-							unit: "m",
-						},
-						{
-							// Depth and radius fix the spacing, so this row is
-							// how wide a hexagon is and the readout says so in
-							// metres. A cell size cannot be asked for directly:
-							// it is quantised to powers of two, and a slider for
-							// it would have positions that build the same world.
+							// **Depth and block size fix the radius**, so the
+							// radius is not a knob: it is quantised to powers of
+							// two, and a slider for it would have positions that
+							// build the same planet.
 							key: "subdivisionDepth",
 							label: "Subdivision depth",
 							low: 4,
-							high: 12,
+							high: 17,
 							step: 1,
-							value: 7,
+							value: 13,
 							digits: 0,
 							note: () =>
 								field
-									? `one hexagon is <b>${field.cellMetres.toFixed(1)} m</b> across`
+									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
+										`<b>${Math.round(2 * Math.PI * field.k.radius).toLocaleString()} m</b> around`
+									: "",
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.5,
+							high: 4,
+							step: 0.25,
+							value: 1,
+							digits: 2,
+							unit: "m",
+						},
+						{
+							// **The map is the terrain.** The engine reads a
+							// height off one cell of a coarse map and adds
+							// nothing, so this is the resolution the ground is
+							// actually built at, and the hexagons of the patch
+							// are those cells.
+							key: "coarseSpacing",
+							label: "Map cell",
+							low: 4,
+							high: 128,
+							step: 4,
+							value: 32,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								field
+									? `level <b>${field.k.level}</b>, which gives ` +
+										`<b>${field.cellMetres.toFixed(1)} m</b> and ` +
+										`<b>${(10 * 4 ** field.k.level + 2).toLocaleString()}</b> cells on the planet`
+									: "",
+						},
+						{
+							// **The map is not the grid the world is built
+							// on.** A map cell is a reading and a block is a
+							// hexagon one layer tall; between two readings the
+							// engine lays blocks up a ramp. Everything about
+							// cliffs and overhangs happens on that grid, so the
+							// patch is drawn on it -- this is how many levels
+							// finer than the map that is.
+							key: "blockDetail",
+							label: "Block detail",
+							low: 0,
+							high: 3,
+							step: 1,
+							value: 2,
+							digits: 0,
+							unit: "levels under the map",
+							note: () =>
+								field
+									? `a block is <b>${field.k.blockMetres.toFixed(1)} m</b>, ` +
+										`so <b>${2 ** field.k.blockDetail}</b> across a map cell — ` +
+										`<b>${field.count.toLocaleString()}</b> columns in the patch`
 									: "",
 						},
 						{
 							key: "cells",
 							label: "Patch",
 							low: 16,
-							high: 96,
+							high: 1024,
 							step: 8,
-							value: 64,
+							value: 32,
 							digits: 0,
-							unit: "cells across",
+							unit: "map cells across",
+							// **What is reached against what there is, because a
+							// threshold here is two different measurements.**
+							// This knob is map cells *across* and the walk's
+							// own limit is a *radius*, so a wrap figure worked
+							// out from the half-circumference reads half of what
+							// it has to say -- at a 128 m map cell it names 167
+							// where the planet needs 334, and a reader who does
+							// what it says gets 20,057 of 40,962 hexagons.
+							// Counting what the walk actually reached needs no
+							// threshold and cannot be out by a factor.
 							note: () =>
 								field
-									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
-										`<b>${field.count.toLocaleString()}</b> hexagons`
+									? field.whole
+										? "the walk has reached every cell on the planet"
+										: `<b>${Math.round(field.arc).toLocaleString()} m</b> of ground, ` +
+											`<b>${field.count.toLocaleString()}</b> of the planet's ` +
+											`<b>${(10 * 4 ** field.k.blockLevel + 2).toLocaleString()}</b> ` +
+											`columns — raise this or coarsen Map cell for the rest`
 									: "",
 						},
 						{
@@ -1239,7 +2022,7 @@
 							low: -85,
 							high: 85,
 							step: 1,
-							value: -14,
+							value: 3,
 							digits: 0,
 							unit: "°",
 						},
@@ -1249,117 +2032,195 @@
 							low: -180,
 							high: 180,
 							step: 1,
-							value: -124,
+							value: 126,
 							digits: 0,
 							unit: "°",
 						},
 					],
 				},
-				{
-					group: "Continentalness",
-					tint: "cont",
-					open: true,
-					rows: [
-						...layerRows("cont", 1400, 400, 8000, 3, 0),
+				layerGroup(
+					"Continentalness",
+					"cont",
+					"cont",
+					{
+						key: "contSpline",
+						label: "Continentalness → how high the land stands",
+						type: "spline",
+						// A shelf, a short steep rise, and land that keeps
+						// climbing. **The steep part is the coast**, and it has
+						// to be steep in metres: peaks and valleys is applied
+						// about whatever level this curve sets, so wherever the
+						// curve is shallower than a peak is tall, the third
+						// field decides land-or-sea rather than relief and the
+						// coastline speckles.
+						value: [
+							[-1, 0],
+							[-0.34, 0.0967],
+							[-0.06, 0.29],
+							[0.06, 0.3222],
+							// The shore, pinned on the waterline. Everything left
+							// of it is under water and everything right of it is
+							// land, which is the one thing this curve decides.
+							[0.0876, 0.5],
+							[0.1, 0.536],
+							[0.26, 0.652],
+							[0.46, 0.8405],
+							[1, 1],
+						],
+					},
+					600,
+					10,
+					3,
+					0,
+				),
+				layerGroup(
+					"Erosion",
+					"ero",
+					"ero",
+					{
+						key: "eroSpline",
+						label: "Erosion → how much it cuts away",
+						type: "spline",
+						// Rising, and in steps rather than as a ramp. A step is
+						// what puts an edge between a range and the plain beside
+						// it; a ramp gives every place a little of both and the
+						// planet one texture.
+						value: [
+							[-1, 0],
+							[-0.3, 0.05],
+							[-0.1, 0.45],
+							[0.05, 0.82],
+							[0.3, 0.94],
+							[1, 0.98],
+						],
+					},
+					750,
+					10,
+					4,
+					0,
+					[
 						{
-							key: "contSpline",
-							label: "Continentalness → the level here",
-							type: "spline",
-							// A shelf, a short steep rise, and land that keeps
-							// climbing. The steep part is the coast: without it
-							// the curve is one long fade and every shoreline on
-							// the planet is a beach a kilometre wide.
-							value: [
-								[-1, 0.02],
-								[-0.28, 0.1],
-								[0.02, 0.21],
-								[0.12, 0.3],
-								[0.28, 0.44],
-								[0.5, 0.72],
-								[1, 1],
-							],
+							// **The half of erosion that is not about relief.**
+							// Water lowers a range as well as smoothing it, and
+							// in a nested spline -- where the height is one
+							// function of all three fields -- erosion changes the
+							// level by construction. Flattened into one line it
+							// has to be a term of its own.
+							key: "erosionBite",
+							label: "Wears the level down",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 0.55,
+							digits: 2,
+							note: () =>
+								knobs.erosionBite === 0
+									? "off: erosion takes the relief and leaves the level alone"
+									: `the level keeps <b>1 − ${knobs.erosionBite.toFixed(
+											2,
+										)} × cut(E)</b> of its height, so land the curve fully cuts ` +
+										`is dropped <b>${Math.round(
+											knobs.erosionBite * 100,
+										)}%</b> of the way to sea level`,
 						},
 					],
-				},
+				),
+				// **Folded, and it is the only layer that is.** A ridge is a
+				// crease and the only place a crease comes from is an absolute
+				// value. Folding either of the other two creases the coast of
+				// every continent instead.
+				layerGroup(
+					"Peaks & valleys",
+					"pv",
+					"pv",
+					{
+						key: "pvSpline",
+						label: "Peaks & valleys → the relief itself",
+						type: "spline",
+						// Half way up is the level the continent set: below cuts
+						// a valley, above raises a peak.
+						value: [
+							[-1, 0.06],
+							[-0.45, 0.24],
+							[-0.05, 0.42],
+							[0.25, 0.58],
+							[0.55, 0.84],
+							[1, 1],
+						],
+					},
+					600,
+					1,
+					4,
+					0.85,
+				),
+				// **Applied to the result of the other three, not beside them.**
+				// The three fields answer *how high*; this one answers *is this
+				// point rock*, and it is read down the column the first three
+				// already placed.
+				// **The carve is a layer like the other three, so it is built by
+				// the same function.** It has a field, a curve on that field, a
+				// picture of it and the same four noise rows; what it does not
+				// have is a fold, which creases a whole world at once and is
+				// invisible from inside a cave.
+				layerGroup(
+					"Cliffs & overhangs",
+					"cliff",
+					"cliff",
+					{
+						key: "cliffSpline",
+						label: "Noise → density",
+						type: "spline",
+						// **A straight line is the field itself**, which is where
+						// a reader should start: the shipped world is the plain
+						// rule and every shape in it comes from the noise rather
+						// than from anything done to it afterwards.
+						value: [
+							[-1, 0],
+							[1, 1],
+						],
+					},
+					120,
+					1,
+					3,
+					0,
+					[],
+				),
 				{
-					group: "Erosion",
-					tint: "ero",
-					open: true,
-					rows: [
-						...layerRows("ero", 1800, 400, 8000, 4, 0),
-						{
-							key: "eroSpline",
-							label: "Erosion → how much relief survives",
-							type: "spline",
-							// Falling, and in steps rather than as a ramp. A step
-							// is what puts an edge between a range and the plain
-							// beside it; a ramp gives every place a little of
-							// both and the planet one texture.
-							value: [
-								[-1, 1],
-								[-0.3, 0.95],
-								[-0.1, 0.55],
-								[0.05, 0.18],
-								[0.3, 0.06],
-								[1, 0.02],
-							],
-						},
-					],
-				},
-				{
-					group: "Peaks & valleys",
-					tint: "pv",
-					open: true,
-					rows: [
-						// **Folded, and it is the only layer that is.** A ridge
-						// is a crease and the only place a crease comes from is
-						// an absolute value. Folding either of the other two
-						// creases the coast of every continent instead.
-						...layerRows("pv", 400, 60, 3000, 4, 0.85),
-						{
-							key: "pvSpline",
-							label: "Peaks & valleys → the relief itself",
-							type: "spline",
-							// Half way up is the level the continent set: below
-							// cuts a valley, above raises a peak.
-							value: [
-								[-1, 0.06],
-								[-0.45, 0.24],
-								[-0.05, 0.42],
-								[0.25, 0.58],
-								[0.55, 0.84],
-								[1, 1],
-							],
-						},
-					],
-				},
-				{
-					group: "The ground",
+					group: "Ground",
+					panel: "world",
 					open: true,
 					rows: [
 						{
 							key: "relief",
 							label: "Relief",
 							low: 100,
-							high: 2000,
+							high: 3000,
 							step: 20,
-							value: 900,
+							value: 800,
 							digits: 0,
 							unit: "m",
 							note: () =>
-								"the top of the continentalness curve, so the " +
-								"highest a continent can stand before peaks are added",
+								"the top half of the continentalness curve, measured from " +
+								"its middle, so the highest a continent can stand before " +
+								"peaks are added — and what carries ground past the rock " +
+								"line at 300 m and the snow line at 400 m. It scales the " +
+								"land and leaves the sea floor where it is",
 						},
 						{
 							key: "seaDepth",
 							label: "Sea depth",
 							low: 0,
-							high: 1200,
+							high: 2000,
 							step: 20,
-							value: 340,
+							value: 360,
 							digits: 0,
 							unit: "m",
-							note: () => "the bottom of the same curve",
+							note: () =>
+								"the bottom half of the same curve, measured from its " +
+								"middle — which is where the water sits until Sea level " +
+								"drains it. It deepens the ocean and leaves the land where " +
+								"it is; the coast is where the curve crosses the middle, " +
+								"and no metre knob moves it",
 						},
 						{
 							key: "peakRelief",
@@ -1367,7 +2228,7 @@
 							low: 0,
 							high: 1500,
 							step: 10,
-							value: 420,
+							value: 220,
 							digits: 0,
 							unit: "m",
 							note: () =>
@@ -1379,28 +2240,46 @@
 									: "",
 						},
 						{
+							// **Heights are metres above sea level, so sea level is
+							// zero by construction and the knob only drains.**
+							// Dropping it uncovers the shallow floor that was
+							// already there and moves no ground at all.
 							key: "seaLevel",
 							label: "Sea level",
-							low: -400,
-							high: 400,
+							low: -1200,
+							high: 0,
 							step: 5,
 							value: 0,
 							digits: 0,
 							unit: "m",
+							// **Draining moves no ground, so what changes is how much
+							// of it is wet.** Sea depth and Relief are measured
+							// from the curve's middle and stay exactly what they
+							// say; the two numbers that follow the water are the
+							// ones a reader is actually asking about, so they are
+							// spelled out rather than left to be worked out.
 							note: () =>
 								field
-									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land`
+									? `<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land` +
+										(knobs.seaLevel < 0
+											? ` — the ground has not moved, so the water reaches <b>${Math.round(
+													knobs.seaDepth + knobs.seaLevel,
+												).toLocaleString()} m</b> deep and land stands <b>${Math.round(
+													knobs.relief - knobs.seaLevel,
+												).toLocaleString()} m</b> over it`
+											: "")
 									: "",
 						},
 					],
 				},
 				{
-					group: "The pictures",
+					group: "Preview",
+					panel: "world",
 					open: false,
 					rows: [
 						{
 							key: "show",
-							label: "The four pictures show",
+							label: "The pictures show",
 							type: "select",
 							options: ["planet", "patch"],
 							value: "planet",
@@ -1437,8 +2316,17 @@
 							continue;
 						}
 						if (v === r.value) continue;
-						out.set(r.key, String(v));
+						out.set(r.key, r.type === "check" ? (v ? "1" : "0") : String(v));
 					}
+				// The eye, and only when it has been moved -- a link to the
+				// opening view should read as the opening view.
+				for (const [key, at] of [
+					["eyeYaw", "yaw"],
+					["eyePitch", "pitch"],
+					["eyeZoom", "distance"],
+					["eyeLift", "lift"],
+				])
+					if (camera[at] !== EYE[at]) out.set(key, camera[at].toFixed(3));
 				return out;
 			}
 
@@ -1450,7 +2338,8 @@
 						if (r.type === "spline") {
 							const points = splineFromText(raw);
 							if (points) knobs[r.key] = points;
-						} else if (r.type === "select")
+						} else if (r.type === "check") knobs[r.key] = raw !== "0";
+						else if (r.type === "select")
 							knobs[r.key] = r.options.includes(raw) ? raw : r.value;
 						else if (r.type === "text") knobs[r.key] = raw;
 						else {
@@ -1462,6 +2351,20 @@
 								: r.value;
 						}
 					}
+				// **The eye is part of what a link shows.** A cliff seen from
+				// overhead is a colour and seen from beside it is a cliff, so a
+				// link that carries the world and not the angle it was found at
+				// hands over half of what was found.
+				for (const [key, at, low, high] of [
+					["eyeYaw", "yaw", -Math.PI * 2, Math.PI * 2],
+					["eyePitch", "pitch", -0.2, 1.5],
+					["eyeZoom", "distance", 0.2, 6],
+					["eyeLift", "lift", -2, 2],
+				]) {
+					const v = Number(params.get(key));
+					if (params.get(key) !== null && Number.isFinite(v))
+						camera[at] = Math.min(high, Math.max(low, v));
+				}
 			}
 
 			function writeUrl() {
@@ -1476,20 +2379,149 @@
 				return knobs[key];
 			}
 
-			/** Every knob in one object, which is what the field is generated from. */
+			/** Metres across a layer's widest octave, which is what its two rows set. */
+			function featureMetres(which) {
+				return Math.max(
+					1,
+					knobs[which + "Feature"] * knobs[which + "FeatureScale"],
+				);
+			}
+
+			/**
+			 * Metres across a layer's narrowest octave.
+			 *
+			 * Each octave is `Step between octaves` times narrower than the one
+			 * above it, so the last is the widest divided by that step to the
+			 * power of one less than the count. **This is the number the map has
+			 * to be fine enough to draw**: ground the map cannot carry is ground
+			 * the world does not have.
+			 */
+			function narrowestOf(which) {
+				return (
+					featureMetres(which) /
+					knobs[which + "Lacunarity"] ** (knobs[which + "Octaves"] - 1)
+				);
+			}
+
+			/**
+			 * What the knobs come to, in the units the engine states them in.
+			 *
+			 * **Depth and block size fix the radius**, and the map cell picks the
+			 * level nearest the spacing asked for -- then the cell is whatever
+			 * that level actually gives, because a level is a whole number and a
+			 * spacing is not.
+			 */
 			function derived() {
 				const k = {};
 				for (const key of ROWS.keys()) k[key] = knobs[key];
-				k.cellMetres = cellMetres(k);
+				k.radius =
+					(knobs.blockSize * 2 ** knobs.subdivisionDepth) / CELL_CONSTANT;
+				k.level = Math.max(
+					2,
+					Math.min(
+						knobs.subdivisionDepth,
+						9,
+						Math.max(
+							0,
+							Math.round(
+								Math.log2((CELL_CONSTANT * k.radius) / knobs.coarseSpacing),
+							),
+						),
+					),
+				);
+				k.cellMetres = (CELL_CONSTANT * k.radius) / 2 ** k.level;
+				// **The block grid, which is what the world is actually built
+				// out of.** The map is the terrain and a map cell is coarse, so
+				// the ground between two map readings is a ramp; the engine
+				// builds that ramp out of blocks, and a block is a hexagon one
+				// layer tall at the *subdivision* level rather than the map's.
+				// Drawn at the map's own level a hillside is one hexagon per
+				// reading and there is nowhere for a cliff to stand.
+				k.blockLevel = Math.min(17, k.level + k.blockDetail);
+				k.blockMetres = (CELL_CONSTANT * k.radius) / 2 ** k.blockLevel;
+				for (const which of LAYERS) k[which + "Metres"] = featureMetres(which);
 				return k;
 			}
 
-			/** The narrowest octave a layer reaches, in metres. */
-			function narrowestOf(which) {
-				return (
-					knobs[which + "Feature"] /
-					knobs[which + "Lacunarity"] ** (knobs[which + "Octaves"] - 1)
-				);
+			/**
+			 * A knob's own ends, narrowed by the rest of the draft.
+			 *
+			 * **A slider that cannot be moved into a refusal beats a refusal that
+			 * explains itself.** The world is the map, so an octave narrower than
+			 * a map cell is ground the map cannot carry and the world would not
+			 * build. Rather than let a slider reach that and then complain, the
+			 * slider's own end moves. The narrowing only ever moves an end
+			 * inward.
+			 */
+			function liveRange(row) {
+				// The sea can be drained and no further: below the bottom of the
+				// continentalness curve there is no ocean left to take away.
+				if (row.key === "seaLevel")
+					return { ...row, low: Math.max(row.low, -knobs.seaDepth) };
+				// **A block grid four levels under the map is sixteen times the
+				// columns across and two hundred and fifty-six times as many of
+				// them.** The patch is set in map cells, so the two knobs
+				// multiply, and this end moves rather than letting the pair of
+				// them ask for a patch nothing can build.
+				if (row.key === "blockDetail")
+					return {
+						...row,
+						high: Math.max(
+							row.low,
+							Math.min(
+								row.high,
+								Math.floor(Math.log2(PATCH_COLUMNS / knobs.cells)),
+							),
+						),
+					};
+				// **The carve is walked block by block, and the reach is how
+				// many.** Everything further from the surface than the reach is
+				// settled without a reading -- rock below, air above -- so this
+				// end moves with the block size rather than letting a reach of
+				// kilometres be asked for at a four-metre block.
+				const layer = LAYERS.find((l) => row.key.startsWith(l));
+				if (!layer) return row;
+				const what = row.key.slice(layer.length);
+				if (what !== "Octaves" && what !== "FeatureScale") return row;
+				// **The two point layers are read at every block and the other
+				// three once a map cell**, so what they must not be finer than is
+				// the block. Held to the map cell they could not carry a space
+				// the grid has room to draw.
+				const derivedK = derived();
+				const cell =
+					layer === "cliff" ? derivedK.blockMetres : derivedK.cellMetres;
+				if (what === "FeatureScale") {
+					// Even one octave has to be two map cells wide, and the fine
+					// slider reaches its own bottom, so the coarse one starts
+					// where their product does.
+					const least = (2 * cell) / knobs[layer + "Feature"];
+					return {
+						...row,
+						low: Math.min(row.high, Math.max(row.low, Math.ceil(least))),
+					};
+				}
+				// Each octave is narrower by the step, so the count stops where
+				// the narrowest one is still two map cells across.
+				const room =
+					1 +
+					Math.floor(
+						Math.log(featureMetres(layer) / (2 * cell)) /
+							Math.log(knobs[layer + "Lacunarity"]),
+					);
+				return { ...row, high: Math.max(row.low, Math.min(row.high, room)) };
+			}
+
+			/** Pull every knob inside its own narrowed ends, inward only. */
+			function settle() {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						if (r.digits === undefined || r.type) continue;
+						const live = liveRange(r);
+						knobs[r.key] = Math.min(
+							live.high,
+							Math.max(live.low, knobs[r.key]),
+						);
+					}
 			}
 
 			/** A latitude and a longitude, as a unit direction. */
@@ -1539,7 +2571,7 @@
 				const k = derived();
 				const seed = seedFromString(knobs.seed);
 				const s = settingsFor(k);
-				const said = [0, 0, 0];
+				const said = [0, 0, 0, 0];
 
 				// **What the world lands on, under each curve.** Noise clusters
 				// around its own middle, so equal widths of a curve cover wildly
@@ -1550,8 +2582,9 @@
 					contSpline: new Float32Array(TALLY_BINS),
 					eroSpline: new Float32Array(TALLY_BINS),
 					pvSpline: new Float32Array(TALLY_BINS),
+					cliffSpline: new Float32Array(TALLY_BINS),
 				};
-				const keys = ["contSpline", "eroSpline", "pvSpline"];
+				const keys = ["contSpline", "eroSpline", "pvSpline", "cliffSpline"];
 				const bin = (v) =>
 					Math.max(
 						0,
@@ -1560,7 +2593,7 @@
 				let land = 0;
 				for (const p of WORLD) {
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
-					for (let x = 0; x < 3; x++) tally[keys[x]][bin(said[x])]++;
+					for (let x = 0; x < 4; x++) tally[keys[x]][bin(said[x])]++;
 					if (heightFrom(said, k) > k.seaLevel) land++;
 				}
 				let tallest = 0;
@@ -1571,13 +2604,21 @@
 				// camera is standing over. `neighbour` is what walks, so a patch
 				// that reaches a face edge crosses it the way the engine does and
 				// a patch that reaches a pentagon gets a five-sided cell.
-				const n = 2 ** k.subdivisionDepth;
+				//
+				// **At the block's level, not the map's.** The map is the
+				// terrain and says how high the ground is; what the ground is
+				// *made of* is blocks, and a cliff, an overhang and a floating
+				// island are all shapes in that grid rather than in the map's.
+				// Drawn a hexagon per map reading there is nowhere for any of
+				// them to stand -- which is what `Block detail` sets, and at 0
+				// this is the map's own level again.
+				const n = 2 ** k.blockLevel;
 				const middle = directionOf(k.latitude, k.longitude);
 				// Canonicalised, because the walk keys every cell it reaches and
 				// a cell on a face edge has more than one name.
 				const found = directionToCell(middle[0], middle[1], middle[2], n);
 				const start = canonicalCell(found.face, n, found.i, found.j);
-				const radius = Math.max(1, cells >> 1);
+				const radius = Math.max(1, (cells << k.blockDetail) >> 1);
 				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
 				const at = new Map();
 				const list = [];
@@ -1603,8 +2644,18 @@
 				}
 
 				const count = list.length;
+				const arc = Math.min(cells * k.cellMetres, Math.PI * k.radius);
 				const height = new Float64Array(count);
-				const layer = new Float32Array(count * 3);
+				const layer = new Float32Array(count * 4);
+				// **A column is a list of heights where rock starts and stops,
+				// not one height.** With the cliff layer off every column holds
+				// exactly one pair and the mesh is the height field it always
+				// was; with it on a column can hold three or five, and rock over
+				// air over rock is a shape the old array could not hold at all.
+				// Kept flat: `spanAt[c]` to `spanAt[c + 1]` indexes `span`.
+				const spanAt = new Int32Array(count + 1);
+				const runs2 = [];
+				const runs = [];
 				// **The polygon and the ring are asked for once, here, and read
 				// from typed arrays afterwards.** Both are pure functions of the
 				// address, so a mesh that recomputed them would be doing the same
@@ -1616,12 +2667,41 @@
 				const centre = latticePosition(start.face, n, start.i, start.j);
 				let lowest = Infinity;
 				let highest = -Infinity;
+				let stacked = 0;
+				let deepest = 1;
+				let dugUnder = 0;
+				let dugAbove = 0;
+				let dugDrowned = 0;
 				for (let c = 0; c < count; c++) {
 					const cell = list[c];
 					const p = latticePosition(cell.face, n, cell.i, cell.j);
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
-					for (let x = 0; x < 3; x++) layer[c * 3 + x] = said[x];
-					const m = heightFrom(said, k);
+					for (let x = 0; x < 4; x++) layer[c * 4 + x] = said[x];
+					const base = heightFrom(said, k);
+					spanAt[c] = runs2.length;
+					let m = base;
+					if (k.useCliff) {
+						carveColumn(p[0], p[1], p[2], base, k, seed, s, runs);
+						for (const y of runs) runs2.push(y);
+						// **The height a colour and a coastline read is the top
+						// of the topmost rock**, which under an overhang is not
+						// the surface the three fields drew, and under a column
+						// carved away entirely is nothing at all.
+						m = runs.length > 0 ? runs[runs.length - 1] : base;
+						dugUnder += carved.under;
+						dugAbove += carved.above;
+						dugDrowned += carved.drowned;
+						if (runs.length > 2) stacked++;
+						if (runs.length / 2 > deepest) deepest = runs.length / 2;
+					} else {
+						// **The same block grid with the layer off**, because the
+						// grid is the world's and not the layer's: the ground is
+						// the height field rounded to the nearest layer boundary,
+						// which is the terracing the engine builds and the shape
+						// a carve is cut out of.
+						m = Math.round(base / k.blockMetres) * k.blockMetres;
+						runs2.push(m - carveCrust(k), m);
+					}
 					height[c] = m;
 					if (m < lowest) lowest = m;
 					if (m > highest) highest = m;
@@ -1645,6 +2725,64 @@
 						if (found !== undefined) ring[c * 6 + d] = found;
 					}
 				}
+				spanAt[count] = runs2.length;
+
+				// **A floating island is a question a column cannot answer.**
+				// How many spans a column holds says there is air under some
+				// rock; whether that rock is *attached to anything* is a fact
+				// about the patch, so it takes a walk over the whole of it.
+				// Every column's lowest span reaches the bedrock under the
+				// carve -- below one reach nothing is ever dug -- so those are
+				// the ground, and any run of rock that never joins one is
+				// hanging in the air.
+				const spans = Float64Array.from(runs2);
+				const pieces = spans.length / 2;
+				const owner = new Int32Array(pieces);
+				for (let i = 0; i < pieces; i++) owner[i] = i;
+				const rootOf = (i) => {
+					let r = i;
+					while (owner[r] !== r) r = owner[r];
+					// Flatten on the way back, or a patch this size walks the
+					// same chain thousands of times.
+					while (owner[i] !== r) {
+						const up = owner[i];
+						owner[i] = r;
+						i = up;
+					}
+					return r;
+				};
+				const join = (a, b) => {
+					const ra = rootOf(a);
+					const rb = rootOf(b);
+					if (ra !== rb) owner[ra < rb ? rb : ra] = ra < rb ? ra : rb;
+				};
+				// Two spans in neighbouring columns are one piece of rock when
+				// they share a block layer. Half a block of overlap is the test,
+				// because the spans are already on the grid and a touch of
+				// exactly zero is two floors meeting rather than rock joining.
+				const touch = k.blockMetres * 0.5;
+				for (let c = 0; c < count; c++)
+					for (let d = 0; d < 6; d++) {
+						const found = ring[c * 6 + d];
+						if (found <= c) continue;
+						for (let a = spanAt[c]; a < spanAt[c + 1]; a += 2)
+							for (let b = spanAt[found]; b < spanAt[found + 1]; b += 2)
+								if (
+									Math.min(spans[a + 1], spans[b + 1]) -
+										Math.max(spans[a], spans[b]) >
+									touch
+								)
+									join(a / 2, b / 2);
+					}
+				const grounded = new Uint8Array(pieces);
+				for (let c = 0; c < count; c++) grounded[rootOf(spanAt[c] / 2)] = 1;
+				let floating = 0;
+				let floatingSpans = 0;
+				for (let i = 0; i < pieces; i++) {
+					if (grounded[rootOf(i)]) continue;
+					floatingSpans++;
+					if (rootOf(i) === i) floating++;
+				}
 
 				field = {
 					k,
@@ -1657,12 +2795,46 @@
 					count,
 					height,
 					layer,
+					// **Not `span`.** That name is already the patch's own width
+					// in metres, a few lines down, and a duplicate key in an
+					// object literal is not an error -- the later one simply
+					// wins. The column heights became a number, every `top` came
+					// back `undefined`, and the ground drew as garbage.
+					spanAt,
+					spans,
+					// Masses of rock touching nothing that reaches the bedrock,
+					// and how many column-spans they are made of.
+					floating,
+					floatingSpans,
+					// Blocks removed with rock still over them, against blocks
+					// removed off the top of a column. The first is the only kind
+					// a height field could not have drawn.
+					dugUnder,
+					dugAbove,
+					dugDrowned,
+					// How much of the patch the density actually lifted off the
+					// height field: a column with one pair is a surface, and a
+					// column with two or more is an overhang.
+					stacked,
+					deepest,
 					degree,
 					corner,
 					ring,
 					centre,
 					cellMetres: k.cellMetres,
+					blockMetres: k.blockMetres,
+					// **What was asked for, what is covered, and how wide that
+					// is in a straight line -- three different numbers once the
+					// patch is a fair share of the planet.** A patch is an arc,
+					// so it stops growing at the antipode however many cells are
+					// asked for, and what a camera has to frame is the chord
+					// under that arc rather than the arc itself. At the antipode
+					// the chord is the planet's diameter and the walk has
+					// enumerated every cell there is.
 					span: cells * k.cellMetres,
+					arc,
+					across: 2 * k.radius * Math.sin(arc / (2 * k.radius)),
+					whole: count === 10 * 4 ** k.blockLevel + 2,
 					tally,
 					tallest,
 					landShare: land / WORLD.length,
@@ -1698,16 +2870,24 @@
 				return { up, east, north: cross3(up, east) };
 			}
 
+			/**
+			 * The four pictures: one per field, and the ground they make.
+			 *
+			 * `layer` is which of the three readings a picture draws, or `-1` for
+			 * the ground. The three field pictures live in their own layer's
+			 * section of the panel and the ground stays in the head, so the thing
+			 * being judged never scrolls away from the knob being turned.
+			 */
 			const SHOTS = [
-				{ id: "shotCont", layer: 0 },
-				{ id: "shotEro", layer: 1 },
-				{ id: "shotPv", layer: 2 },
-				{ id: "shotOut", layer: -1 },
+				{ id: "shotOut", key: "out", layer: -1, name: "Terrain" },
+				{ id: "shotCont", key: "cont", layer: 0, name: "Continentalness" },
+				{ id: "shotEro", key: "ero", layer: 1, name: "Erosion" },
+				{ id: "shotPv", key: "pv", layer: 2, name: "Peaks & valleys" },
+				{ id: "shotCliff", key: "cliff", layer: 3, name: "Density at the surface" },
 			];
-			for (const shot of SHOTS) {
-				shot.canvas = document.getElementById(shot.id);
-				shot.ctx = shot.canvas.getContext("2d");
-			}
+			const SHOT_OF = new Map(SHOTS.map((shot) => [shot.key, shot]));
+			SHOTS[0].canvas = document.getElementById("shotOut");
+			SHOTS[0].ctx = SHOTS[0].canvas.getContext("2d");
 
 			/** How many grey steps a layer picture is cut into. */
 			const PICTURE_BANDS = 9;
@@ -1741,19 +2921,22 @@
 			 */
 			function groundColor(metres, k) {
 				const over = metres - k.seaLevel;
+				// Bare sand seen through water, because the ocean is a surface
+				// and holds no blocks: what makes a deep blue is how much water
+				// a look passes through to reach the floor.
 				if (over <= 0) {
-					const deep = Math.min(1, -over / Math.max(1, k.seaDepth));
-					return [
-						0.10 - 0.07 * deep,
-						0.16 - 0.12 * deep,
-						0.42 - 0.30 * deep,
-					];
+					const through = 1 - Math.exp(over / SEA_CLARITY);
+					return BAND_COLORS[0].map(
+						(c, n) => c + (SEA_COLOR[n] - c) * through,
+					);
 				}
-				const t = Math.min(1, over / Math.max(1, k.relief + k.peakRelief));
-				const g = 0.34 + t * 0.62;
+				const band =
+					over < GROUND_LINES.rock ? 1 : over < GROUND_LINES.snow ? 2 : 3;
+				// A contour every hundred metres, so a slope reads as a slope
+				// rather than as one flat sheet of the block that stands on it.
 				const into = ((over / 100) % 1) * 100;
-				const edge = into < 6 ? 0.74 : 1;
-				return [g * 0.92 * edge, g * edge, g * 0.86 * edge];
+				const edge = into < 6 ? 0.78 : 1;
+				return BAND_COLORS[band].map((c) => c * edge);
 			}
 
 			/**
@@ -1785,87 +2968,159 @@
 				]);
 			}
 
-			function drawPictures() {
-				if (!field) return;
+			/**
+			 * Paint some or all of the pictures into their own canvases.
+			 *
+			 * **One sampling pass, however many are wanted.** The three fields
+			 * come out of one call at each point and the ground is made of the
+			 * same three, so drawing four pictures costs what drawing one costs
+			 * plus the writing. `only` narrows it to a single picture at a size
+			 * of its own, which is what the enlarged view asks for.
+			 */
+			function paintShots(shots, wide, tall, only = null) {
 				const planet = knobs.show === "planet";
-				// Half the samples while a knob is moving, for the same reason
-				// the plane draws fewer cells: a picture that arrives after the
-				// finger has stopped is not a picture of the knob.
-				const wide = field.draft ? 96 : 192;
-				const tall = planet ? wide / 2 : wide;
 				const frame = planet ? null : frameOf(field.centre);
-				const half = field.span / 2;
+				const half = field.arc / 2;
 				const k = field.k;
-				const said = [0, 0, 0];
-
-				const pixels = SHOTS.map((shot) => {
-					if (shot.canvas.width !== wide || shot.canvas.height !== tall) {
-						shot.canvas.width = wide;
-						shot.canvas.height = tall;
+				const said = [0, 0, 0, 0];
+				const runs = [];
+				const images = shots.map((shot) => {
+					const target = only ?? shot.canvas;
+					if (target.width !== wide || target.height !== tall) {
+						target.width = wide;
+						target.height = tall;
 					}
-					return shot.ctx.createImageData(wide, tall);
+					return (only ? bigCtx : shot.ctx).createImageData(wide, tall);
 				});
-
+				const wantsAll = shots.some((shot) => shot.layer < 0);
 				for (let r = 0; r < tall; r++)
 					for (let q = 0; q < wide; q++) {
-						const p = pictureDirection(
-							q,
-							r,
-							wide,
-							tall,
-							frame,
-							half,
-							k.radius,
-						);
-						fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
+						// A single field picture reads one stack rather than
+						// three, which is three times less work for the
+						// enlarged view of a layer.
+						if (wantsAll || shots.length > 1)
+							fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						else
+							said[shots[0].layer] = octaveNoise(
+								p[0],
+								p[1],
+								p[2],
+								field.seed + SEED_OFFSET[shots[0].key],
+								field.s[shots[0].key],
+							);
 						const at = (r * wide + q) * 4;
-						for (let x = 0; x < 4; x++) {
+						for (let n = 0; n < shots.length; n++) {
+							const shot = shots[n];
 							const c =
-								x === 3
-									? groundColor(heightFrom(said, k), k)
-									: bandGrey(said[x]);
-							const px = pixels[x].data;
+								shot.layer < 0
+									? groundColor(
+											surfaceAt(
+												p[0], p[1], p[2], said, k, field.seed, field.s, runs,
+											),
+											k,
+										)
+									: bandGrey(said[shot.layer]);
+							const px = images[n].data;
 							px[at] = c[0] * 255;
 							px[at + 1] = c[1] * 255;
 							px[at + 2] = c[2] * 255;
 							px[at + 3] = 255;
 						}
 					}
-
-				for (let x = 0; x < 4; x++) {
-					SHOTS[x].ctx.putImageData(pixels[x], 0, 0);
-					if (!planet) continue;
-					// Where the plane is standing, so the pictures and the ground
-					// are one place rather than five.
-					const lat = (knobs.latitude * Math.PI) / 180;
-					const across =
-						field.span / k.radius / Math.max(0.15, Math.cos(lat));
-					const box = {
-						x:
-							((knobs.longitude + 180) / 360) * wide -
-							(across / (4 * Math.PI)) * wide,
-						y:
-							(0.5 - knobs.latitude / 180) * tall -
-							(field.span / k.radius / (2 * Math.PI)) * tall,
-						w: Math.max(3, (across / (2 * Math.PI)) * wide),
-						h: Math.max(3, (field.span / k.radius / Math.PI) * tall),
-					};
-					const g = SHOTS[x].ctx;
-					g.strokeStyle = "rgba(255, 90, 90, 0.95)";
-					g.lineWidth = 1;
-					g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+				for (let n = 0; n < shots.length; n++) {
+					const g = only ? bigCtx : shots[n].ctx;
+					g.putImageData(images[n], 0, 0);
+					if (planet) outlinePatch(g, wide, tall);
 				}
 			}
 
+			/** Where the plane is standing, drawn on a picture of the planet. */
+			function outlinePatch(g, wide, tall) {
+				const k = field.k;
+				const lat = (knobs.latitude * Math.PI) / 180;
+				const across = field.arc / k.radius / Math.max(0.15, Math.cos(lat));
+				const down = field.arc / k.radius;
+				const box = {
+					x:
+						((knobs.longitude + 180) / 360) * wide -
+						(across / (4 * Math.PI)) * wide,
+					y: (0.5 - knobs.latitude / 180) * tall - (down / (2 * Math.PI)) * tall,
+					w: Math.max(3, (across / (2 * Math.PI)) * wide),
+					h: Math.max(3, (down / Math.PI) * tall),
+				};
+				g.strokeStyle = "rgba(255, 90, 90, 0.95)";
+				g.lineWidth = 1;
+				g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+			}
+
+			function drawPictures() {
+				if (!field) return;
+				const ready = SHOTS.filter((shot) => shot.ctx);
+				if (ready.length === 0) return;
+				// Half the samples while a knob is moving, for the same reason
+				// the plane draws fewer cells: a picture that arrives after the
+				// finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 156 : 312;
+				paintShots(ready, wide, knobs.show === "planet" ? wide / 2 : wide);
+				// The large one is a thousand pixels across and follows the
+				// knobs, but only once they have settled -- redrawing it every
+				// frame of a drag would cost more than everything else here put
+				// together.
+				if (!field.draft && !big.hidden && bigShown) drawBig(bigShown);
+			}
+
+			// ---------------------------------------------------------------
+			// The enlarged picture.
+			// ---------------------------------------------------------------
+
+			const big = document.getElementById("big");
+			const bigCanvas = document.getElementById("bigShot");
+			const bigCtx = bigCanvas.getContext("2d");
+			const bigName = document.getElementById("bigName");
+			let bigShown = null;
+
 			/**
-			 * **A latitude and a longitude are a place, and two sliders are not
-			 * a way to look for one.** Clicking a planet picture puts the patch
-			 * where the finger went: the projection is longitude across and
-			 * latitude down, so it inverts to two divisions.
+			 * One picture, large.
+			 *
+			 * **A field at panel width says where its features are; at this size
+			 * it says what they look like.** The narrow octaves of a folded field
+			 * are a grain at 312 pixels and ridges at 1,024, and which of those a
+			 * curve is being dragged against is the whole question.
 			 */
-			for (const shot of SHOTS)
+			function drawBig(shot) {
+				if (!field) return;
+				bigShown = shot;
+				const planet = knobs.show === "planet";
+				const wide = planet ? 1024 : 720;
+				bigName.textContent = `${shot.name} · ${
+					planet
+						? "the whole planet"
+						: `${Math.round(field.span).toLocaleString()} m of ground`
+				}`;
+				big.hidden = false;
+				paintShots([shot], wide, planet ? wide / 2 : wide, bigCanvas);
+			}
+
+			function closeBig() {
+				big.hidden = true;
+				bigShown = null;
+			}
+			big.addEventListener("click", closeBig);
+			window.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") closeBig();
+			});
+
+			/**
+			 * **A latitude and a longitude are a place, and two sliders are not a
+			 * way to look for one.** Clicking a picture of the planet puts the
+			 * patch where the finger went: the projection is longitude across and
+			 * latitude down, so it inverts to two divisions. Over the patch there
+			 * is nowhere to jump to, so a click enlarges instead.
+			 */
+			function watchShot(shot) {
 				shot.canvas.addEventListener("click", (e) => {
-					if (knobs.show !== "planet") return;
+					if (knobs.show !== "planet") return drawBig(shot);
 					const box = shot.canvas.getBoundingClientRect();
 					const across = (e.clientX - box.left) / box.width;
 					const down = (e.clientY - box.top) / box.height;
@@ -1877,6 +3132,178 @@
 					);
 					askForRedraw(false);
 				});
+				// Over the planet a click already means "go there", so the large
+				// view is on a second button rather than fighting it.
+				shot.canvas.addEventListener("contextmenu", (e) => {
+					e.preventDefault();
+					drawBig(shot);
+				});
+				shot.canvas.title =
+					"click to enlarge, or to move the patch when the pictures show the planet " +
+					"(right-click always enlarges)";
+			}
+			watchShot(SHOTS[0]);
+
+			// ---------------------------------------------------------------
+			// The contour: every line of the patch, over one another.
+			// ---------------------------------------------------------------
+
+			const graphCanvas = document.getElementById("graph");
+			const graphCtx = graphCanvas.getContext("2d");
+			const graphSays = document.getElementById("graphsays");
+
+			/** How many sections are drawn, and how many points each carries. */
+			const GRAPH_LINES = 80;
+			const GRAPH_ALONG = 120;
+
+			/**
+			 * The patch in section, every line of it at once.
+			 *
+			 * **One section says what one line of ground does; all of them
+			 * together draw the silhouette** -- how high the patch stands, where
+			 * its ridges are, and how much of it sits at any height, because
+			 * where the lines bunch is where most of the ground is. Read against
+			 * the two elevations that decide what the ground is made of, it is
+			 * the one picture that says whether a world reaches the snow line at
+			 * all.
+			 *
+			 * **The lines are the height function, not the mesh.** A patch here
+			 * is a disc of hexagons rather than a grid, and there is no row to
+			 * walk; sampled through the patch's own frame instead, these are
+			 * parallel cuts across exactly the ground the plane is drawing.
+			 */
+			function drawGraph() {
+				if (!field) return;
+				// Drawn in a fixed logical box and scaled up to whatever the
+				// canvas is, so the text keeps its size on screen rather than
+				// shrinking with the panel.
+				const scale = graphCanvas.width / 320;
+				const width = 320;
+				const height = graphCanvas.height / scale;
+				const g = graphCtx;
+				g.setTransform(1, 0, 0, 1, 0, 0);
+				g.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+				g.setTransform(scale, 0, 0, scale, 0, 0);
+				const pad = { left: 40, right: 8, top: 10, bottom: 24 };
+				const plotW = width - pad.left - pad.right;
+				const plotH = height - pad.top - pad.bottom;
+				g.fillStyle = "#0b0e13";
+				g.fillRect(0, 0, width, height);
+
+				const k = field.k;
+				const frame = frameOf(field.centre);
+				const half = field.arc / 2;
+				const said = [0, 0, 0, 0];
+				const lines = [];
+				let lowest = Infinity;
+				let highest = -Infinity;
+				for (let r = 0; r < GRAPH_LINES; r++) {
+					const line = new Float64Array(GRAPH_ALONG);
+					for (let q = 0; q < GRAPH_ALONG; q++) {
+						const p = pictureDirection(
+							q,
+							r,
+							GRAPH_ALONG,
+							GRAPH_LINES,
+							frame,
+							half,
+							k.radius,
+						);
+						fieldsAt(p[0], p[1], p[2], field.seed, field.s, said);
+						const h = heightFrom(said, k);
+						line[q] = h;
+						if (h < lowest) lowest = h;
+						if (h > highest) highest = h;
+					}
+					lines.push(line);
+				}
+
+				let yLow = Math.min(lowest, k.seaLevel);
+				let yHigh = Math.max(highest, k.seaLevel + 1);
+				const room = (yHigh - yLow) * 0.06 || 1;
+				yLow -= room;
+				yHigh += room;
+				const toX = (at) => pad.left + (at / (GRAPH_ALONG - 1)) * plotW;
+				const toY = (v) =>
+					pad.top + plotH - ((v - yLow) / (yHigh - yLow)) * plotH;
+
+				// Sea level and the two material lines, so a section can be read
+				// against the elevations that decide what the ground is made of.
+				const marks = [
+					[k.seaLevel, "#3b6ea8", "sea"],
+					[k.seaLevel + GROUND_LINES.rock, "#5a5a62", "rock"],
+					[k.seaLevel + GROUND_LINES.snow, "#8a8f98", "snow"],
+				];
+				g.font = "9.5px system-ui, sans-serif";
+				for (const [metres, color, name] of marks) {
+					if (metres < yLow || metres > yHigh) continue;
+					const y = toY(metres);
+					g.strokeStyle = color;
+					g.setLineDash(metres === k.seaLevel ? [] : [3, 3]);
+					g.beginPath();
+					g.moveTo(pad.left, y);
+					g.lineTo(width - pad.right, y);
+					g.stroke();
+					g.setLineDash([]);
+					g.fillStyle = color;
+					g.fillText(name, 4, y + 3);
+				}
+
+				g.strokeStyle = "#2b3542";
+				g.beginPath();
+				g.moveTo(pad.left, pad.top);
+				g.lineTo(pad.left, pad.top + plotH);
+				g.lineTo(width - pad.right, pad.top + plotH);
+				g.stroke();
+				g.fillStyle = "#8b95a4";
+				g.fillText(`${Math.round(yHigh)} m`, 4, pad.top + 8);
+				g.fillText(`${Math.round(yLow)} m`, 4, pad.top + plotH - 1);
+				g.textAlign = "center";
+				g.fillText(
+					`${Math.round(field.arc).toLocaleString()} m across the patch, every line of it`,
+					pad.left + plotW / 2,
+					height - 6,
+				);
+				g.textAlign = "left";
+
+				// Faint, and many: where the lines bunch is where most of the
+				// ground stands, so the silhouette carries the distribution as
+				// well as the shape.
+				g.lineWidth = 0.4;
+				g.strokeStyle = "rgba(111, 208, 255, 0.15)";
+				for (const line of lines) {
+					g.beginPath();
+					for (let at = 0; at < GRAPH_ALONG; at++) {
+						const x = toX(at);
+						const y = toY(line[at]);
+						if (at === 0) g.moveTo(x, y);
+						else g.lineTo(x, y);
+					}
+					g.stroke();
+				}
+				// The middle line solid, so there is one section to read against
+				// the elevations rather than only a mass.
+				g.lineWidth = 1.1;
+				g.strokeStyle = "#6fd0ff";
+				g.beginPath();
+				const mid = lines[GRAPH_LINES >> 1];
+				for (let at = 0; at < GRAPH_ALONG; at++) {
+					const x = toX(at);
+					const y = toY(mid[at]);
+					if (at === 0) g.moveTo(x, y);
+					else g.lineTo(x, y);
+				}
+				g.stroke();
+				g.lineWidth = 1;
+
+				const off = LAYERS.filter(
+					(l) => !knobs["use" + l[0].toUpperCase() + l.slice(1)],
+				);
+				graphSays.textContent =
+					`${GRAPH_LINES} lines · ground ${Math.round(lowest)} to ` +
+					`${Math.round(highest)} m` +
+					(off.length ? ` · ${off.length} layer off` : "");
+			}
 
 			// ---------------------------------------------------------------
 			// The plane: the patch as hexagon columns.
@@ -1888,8 +3315,8 @@
 			const VERTEX_SOURCE = `#version 300 es
 			precision highp float;
 			layout(location = 0) in vec3 position;
-			layout(location = 1) in vec3 normal;
-			layout(location = 2) in float metres;
+			layout(location = 1) in float metres;
+			layout(location = 2) in vec3 normal;
 			uniform mat4 viewProj;
 			out vec3 vNormal;
 			out float vMetres;
@@ -1905,32 +3332,76 @@
 			in float vMetres;
 			uniform vec3 sun;
 			uniform float seaLevel;
-			uniform float reach;
+			uniform float rockLine;
+			uniform float snowLine;
 			uniform int water;
 			out vec4 color;
 			void main() {
+				// **The normal is stored, and it is stored as three bytes.**
+				// Taking it from the change of position across a pixel is what
+				// the engine's terrain shader does and it is wrong here: a
+				// derivative is a difference over a two-by-two block of pixels,
+				// and a map cell at this scale is a few pixels across, so most
+				// pixels straddle the line where a cap meets a wall and average
+				// the two into a normal belonging to neither. The whole patch
+				// then shades as one tone. A face normal quantised to one part in
+				// 127 is
+				// far finer than any shading can show, so the attribute costs a
+				// quarter of what a float one would.
+				//
 				// Nothing here is culled, because a hexagon column's walls are
 				// emitted without a winding rule and a wall seen from inside a
 				// valley is a wall seen from its back.
 				vec3 n = normalize(vNormal);
 				if (!gl_FrontFacing) n = -n;
-				float lit = 0.30 + 0.70 * max(0.0, dot(n, normalize(sun)));
+				// **Three terms, because the badly lit part of a patch and the
+				// badly lit part of a globe are not the same surfaces.**
+				//
+				// A patch's dark faces are the walls turned away from the light
+				// -- cliff faces, block sides, the cut rim -- and their normals
+				// point the opposite way, so a second light opposite the first
+				// is exactly what reaches them. Rendered on its own that fill
+				// lights the anti-sun walls and nothing else: every cap in the
+				// picture comes out black.
+				//
+				// **A globe's dark part is the terminator, and a light opposite
+				// the key cannot reach it**, because those normals are square to
+				// the key and both max() terms are zero there by construction.
+				// Measured on the whole planet, adding the opposite fill alone
+				// moved the frame's mean from 49.7 to 50.4 of 255 and left the
+				// dark limb where it was. What reaches it is a light that wraps:
+				// half the dot product plus a half, which is still 0.5 where the
+				// clamped one has already gone to nothing.
+				//
+				// The four numbers sum to 1.0 at a face square to the key, so
+				// the lit side reads exactly as it did.
+				vec3 key = normalize(sun);
+				float towards = dot(n, key);
+				float lit =
+					0.16 +
+					0.60 * (0.5 + 0.5 * towards) +
+					0.24 * max(0.0, towards) +
+					0.18 * max(0.0, -towards);
 				if (water == 1) {
 					// The ocean is a surface and holds no blocks, so it is one
 					// translucent sheet at its own radius rather than a column of
 					// water cells.
-					color = vec4(pow(vec3(0.10, 0.26, 0.46) * lit, vec3(1.0 / 2.2)), 0.72);
+					color = vec4(pow(vec3(0.12, 0.32, 0.55) * lit, vec3(1.0 / 2.2)), 0.72);
 					return;
 				}
+				// **Three bands on two absolute elevations**, the engine's own,
+				// so a colour on the plane names the block the world would build
+				// there and agrees with the colour on the map above it.
 				float over = vMetres - seaLevel;
 				vec3 tint;
 				if (over <= 0.0) {
-					tint = vec3(0.62, 0.56, 0.40);
+					tint = vec3(0.76, 0.70, 0.50);
+				} else if (over < rockLine) {
+					tint = vec3(0.26, 0.44, 0.19);
+				} else if (over < snowLine) {
+					tint = vec3(0.42, 0.42, 0.45);
 				} else {
-					float t = clamp(over / max(1.0, reach), 0.0, 1.0);
-					tint = mix(vec3(0.24, 0.42, 0.19), vec3(0.46, 0.46, 0.48),
-						smoothstep(0.18, 0.45, t));
-					tint = mix(tint, vec3(0.94, 0.95, 0.98), smoothstep(0.58, 0.85, t));
+					tint = vec3(0.92, 0.94, 0.97);
 				}
 				color = vec4(pow(tint * lit, vec3(1.0 / 2.2)), 1.0);
 			}`;
@@ -1953,23 +3424,27 @@
 			const uViewProj = gl.getUniformLocation(program, "viewProj");
 			const uSun = gl.getUniformLocation(program, "sun");
 			const uSeaLevel = gl.getUniformLocation(program, "seaLevel");
-			const uReach = gl.getUniformLocation(program, "reach");
+			const uRock = gl.getUniformLocation(program, "rockLine");
+			const uSnow = gl.getUniformLocation(program, "snowLine");
 			const uWater = gl.getUniformLocation(program, "water");
 
 			const vao = gl.createVertexArray();
 			gl.bindVertexArray(vao);
 			const positionBuffer = gl.createBuffer();
-			const normalBuffer = gl.createBuffer();
 			const metreBuffer = gl.createBuffer();
+			const normalBuffer = gl.createBuffer();
 			for (const [at, buffer, size] of [
 				[0, positionBuffer, 3],
-				[1, normalBuffer, 3],
-				[2, metreBuffer, 1],
+				[1, metreBuffer, 1],
 			]) {
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				gl.enableVertexAttribArray(at);
 				gl.vertexAttribPointer(at, size, gl.FLOAT, false, 0, 0);
 			}
+			gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+			gl.enableVertexAttribArray(2);
+			// Signed bytes read back as `-1 .. 1`, which is all a unit normal is.
+			gl.vertexAttribPointer(2, 3, gl.BYTE, true, 0, 0);
 			gl.enable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			gl.enable(gl.BLEND);
@@ -1979,6 +3454,8 @@
 			let groundCount = 0;
 			let waterFrom = 0;
 			let waterCount = 0;
+			/** The box the patch actually occupies, which is what the eye frames. */
+			let bounds = null;
 
 			/**
 			 * The patch as triangles: a cap on every cell, a wall wherever it
@@ -1997,16 +3474,39 @@
 				const radius = k.radius;
 				const frame = frameOf(centre);
 
-				// **The buffers are sized before anything is written into
-				// them.** A cell emits two caps and, per edge, at most one wall
-				// and at most one curtain of water -- so 36 triangles is the
-				// ceiling, and growing a plain array to reach it costs more than
-				// the arithmetic that fills it.
-				const room = count * 36 * 3;
-				const position = new Float32Array(room * 3);
-				const normal = new Float32Array(room * 3);
-				const metre = new Float32Array(room);
+				// **The buffers start at what a patch actually uses and grow if
+				// it needs more.** A cell's ceiling is two caps plus, per edge, a
+				// wall and a curtain of water -- 36 triangles -- and real terrain
+				// runs nearer twelve, so at the largest patch the ceiling would
+				// ask for a quarter of a gigabyte to hold a tenth of that.
+				// Growing costs one copy at each doubling and the estimate is
+				// right for almost every patch, so almost every rebuild does
+				// none.
+				let room = count * 10 * 3;
+				let position = new Float32Array(room * 3);
+				let metre = new Float32Array(room);
+				let normal = new Int8Array(room * 3);
 				let vertices = 0;
+				let loX = Infinity;
+				let hiX = -Infinity;
+				let loY = Infinity;
+				let hiY = -Infinity;
+				let loZ = Infinity;
+				let hiZ = -Infinity;
+				/** Make sure three more vertices fit, whatever it takes. */
+				const roomFor = () => {
+					if (vertices + 3 <= room) return;
+					room = Math.max(room * 2, vertices + 3);
+					const wider = new Float32Array(room * 3);
+					wider.set(position);
+					position = wider;
+					const wider2 = new Float32Array(room);
+					wider2.set(metre);
+					metre = wider2;
+					const wider3 = new Int8Array(room * 3);
+					wider3.set(normal);
+					normal = wider3;
+				};
 
 				// One cell's corners, in the patch's own frame, refilled per
 				// cell rather than allocated.
@@ -2014,7 +3514,22 @@
 				const ringY = new Float64Array(6);
 				const ringZ = new Float64Array(6);
 
-				/** A direction and a height, in the frame the patch is drawn in. */
+				/**
+				 * A direction and a height, as metres in the patch's own frame.
+				 *
+				 * **The third axis is south, and it has to be.** East, up and
+				 * north in that order is a **left-handed** triple -- measured,
+				 * `cross(east, up) . north` is `-1` -- and handing a left-handed
+				 * basis to a right-handed renderer draws the mirror image of the
+				 * ground. From overhead the frame's east then lands on the right
+				 * of the screen where the map puts it and its north lands at the
+				 * **bottom**, so the view is the map flipped top to bottom.
+				 * Negating one axis rights it, and negating this one is what
+				 * makes the default view agree with the map: at yaw zero the
+				 * camera stands south of the patch looking north, so north is
+				 * away from the eye and east is on the right, exactly as the
+				 * picture draws them.
+				 */
 				const localX = new Float64Array(3);
 				const local = (dx, dy, dz, metres) => {
 					const s2 = radius + metres;
@@ -2024,8 +3539,11 @@
 					localX[0] =
 						rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
 					localX[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
-					localX[2] =
-						rx * frame.north[0] + ry * frame.north[1] + rz * frame.north[2];
+					localX[2] = -(
+						rx * frame.north[0] +
+						ry * frame.north[1] +
+						rz * frame.north[2]
+					);
 					return localX;
 				};
 
@@ -2034,9 +3552,11 @@
 				 * corner.
 				 *
 				 * Every face here is flat, so the cross product of two of its
-				 * edges is the normal exactly and no normal has to be stored per
-				 * cell or averaged between cells. **The height is per corner
-				 * because a wall has two ends**: given the height of the cell it
+				 * edges is the normal exactly -- nothing has to be averaged
+				 * between cells, and the three components go in as bytes.
+				 *
+				 * **The height is per corner because a wall has two ends**:
+				 * given the height of the cell it
 				 * stands on, the cut face of a snow-capped mountain is snow all
 				 * the way down to the sea floor. Its top corners take the top and
 				 * its bottom corners take the bottom, so one wall carries the
@@ -2051,26 +3571,55 @@
 					const vx = cx - ax;
 					const vy = cy - ay;
 					const vz = cz - az;
-					let nx = uy * vz - uz * vy;
-					let ny = uz * vx - ux * vz;
-					let nz = ux * vy - uy * vx;
-					const len = Math.hypot(nx, ny, nz) || 1;
-					nx /= len;
-					ny /= len;
-					nz /= len;
+					const nx = uy * vz - uz * vy;
+					const ny = uz * vx - ux * vz;
+					const nz = ux * vy - uy * vx;
+					// **`sqrt(x*x + y*y + z*z)`, never `Math.hypot`.** `hypot` is a
+					// library routine rather than an IEEE operation and differs by
+					// a unit in the last place between runtimes; this is the one
+					// place here that normalises, and it runs once per triangle.
+					const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+					const bx8 = Math.round((nx / len) * 127);
+					const by8 = Math.round((ny / len) * 127);
+					const bz8 = Math.round((nz / len) * 127);
+					roomFor();
 					const at3 = vertices * 3;
+					for (let v = 0; v < 3; v++) {
+						normal[at3 + v * 3] = bx8;
+						normal[at3 + v * 3 + 1] = by8;
+						normal[at3 + v * 3 + 2] = bz8;
+					}
 					position[at3] = ax; position[at3 + 1] = ay; position[at3 + 2] = az;
 					position[at3 + 3] = bx; position[at3 + 4] = by; position[at3 + 5] = bz;
 					position[at3 + 6] = cx; position[at3 + 7] = cy; position[at3 + 8] = cz;
-					for (let v = 0; v < 3; v++) {
-						normal[at3 + v * 3] = nx;
-						normal[at3 + v * 3 + 1] = ny;
-						normal[at3 + v * 3 + 2] = nz;
-					}
 					metre[vertices] = ma;
 					metre[vertices + 1] = mb;
 					metre[vertices + 2] = mc;
 					vertices += 3;
+					// **What the camera has to frame is the shape, and only the
+					// shape knows what that is.** A patch's width says nothing
+					// once it is a fair share of the planet: the ground curves
+					// away, and past the antipode it comes back. The box around
+					// what was actually written covers a flat patch, a curved
+					// cap and a whole globe with no case of its own.
+					if (ax < loX) loX = ax;
+					if (ax > hiX) hiX = ax;
+					if (bx < loX) loX = bx;
+					if (bx > hiX) hiX = bx;
+					if (cx < loX) loX = cx;
+					if (cx > hiX) hiX = cx;
+					if (ay < loY) loY = ay;
+					if (ay > hiY) hiY = ay;
+					if (by < loY) loY = by;
+					if (by > hiY) hiY = by;
+					if (cy < loY) loY = cy;
+					if (cy > hiY) hiY = cy;
+					if (az < loZ) loZ = az;
+					if (az > hiZ) hiZ = az;
+					if (bz < loZ) loZ = bz;
+					if (bz > hiZ) hiZ = bz;
+					if (cz < loZ) loZ = cz;
+					if (cz > hiZ) hiZ = cz;
 				};
 
 				/**
@@ -2111,52 +3660,117 @@
 					}
 				};
 
-				const floor = field.lowest - field.span * 0.05;
+				// **The rim is a lip, not a plinth.** Run it down to one floor
+				// under the lowest ground and a patch with a kilometre of relief
+				// becomes a slab whose cut face is taller than the terrain on
+				// top of it, which is what the eye then sees from any low angle.
+				// Hung a fixed depth under each rim cell instead, the block reads
+				// as ground with an edge.
+				const lip = field.across * 0.06;
+				const { spanAt, spans } = field;
+
+				/**
+				 * Where a column stops being drawn.
+				 *
+				 * **Down to the bottom of the crust, so a column is a column.**
+				 * Hung a lip under the rock instead, the patch is a shell: from
+				 * underneath there is nothing but the back of the ground, and a
+				 * carve whose whole point is that it takes blocks out from under
+				 * other blocks has nowhere to show that it did. The crust is a
+				 * quarter of Relief and the carve cannot reach past it, so
+				 * drawing to it is drawing exactly the volume the layer works
+				 * in.
+				 *
+				 * **The bottom of the lowest span is that plane already**: the
+				 * walk starts at the crust bottom and everything under it is
+				 * rock, so no wall is ever drawn between two columns down there
+				 * and the cost is the rim alone.
+				 *
+				 * A wall between two columns still reaches whichever of the two
+				 * floors is lower, or a neighbour further down leaves a gap
+				 * between the bottom of one and the top of the other, with the
+				 * inside of the planet behind it.
+				 */
+				const floorOf = (c) => spans[spanAt[c]] - lip;
+
+				/** One side of a cell, between two heights. */
+				const wall = (c, m, deg, top, below) => {
+					if (below >= top) return;
+					const a = ((m - 1 + deg) % deg) * 3 + c * 18;
+					const b = m * 3 + c * 18;
+					const t1 = local(corner[a], corner[a + 1], corner[a + 2], top);
+					const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
+					const t2 = local(corner[b], corner[b + 1], corner[b + 2], top);
+					const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
+					const t3 = local(corner[b], corner[b + 1], corner[b + 2], below);
+					const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
+					const t4 = local(corner[a], corner[a + 1], corner[a + 2], below);
+					triangle(
+						aTopX, aTopY, aTopZ,
+						bTopX, bTopY, bTopZ,
+						bLowX, bLowY, bLowZ,
+						top, top, below,
+					);
+					triangle(
+						aTopX, aTopY, aTopZ,
+						bLowX, bLowY, bLowZ,
+						t4[0], t4[1], t4[2],
+						top, below, below,
+					);
+				};
+
 				for (let c = 0; c < count; c++) {
 					const deg = degree[c];
-					const h = height[c];
-					cap(c, h);
-					// A wall wherever the cell stands over its neighbour. The
-					// edge toward neighbour `m` runs from corner `m - 1` to
-					// corner `m`, which is how `cellCorners` numbers them.
-					for (let m = 0; m < deg; m++) {
-						const found = ring[c * 6 + m];
-						// **A patch is a block of ground, not a shell.** Off the
-						// rim there is no neighbour to stand over, and with
-						// nothing drawn there the eye looks straight in at the
-						// underside of the far side of the patch. The rim runs
-						// down to a floor under the lowest ground instead.
-						const rim = found < 0;
-						const below = rim ? floor : height[found];
-						if (below >= h && !(rim && h < k.seaLevel)) continue;
-						// **The cut face of the block runs up to the waterline.**
-						// The sea is translucent, so a curtain of it hung against
-						// the background blends over nothing and reads as a dark
-						// wedge past the coast. Standing the rock up behind it
-						// gives it a sea floor to be shallow over.
-						const top = rim && h < k.seaLevel ? k.seaLevel : h;
-						const a = ((m - 1 + deg) % deg) * 3 + c * 18;
-						const b = m * 3 + c * 18;
-						const t1 = local(corner[a], corner[a + 1], corner[a + 2], top);
-						const aTopX = t1[0]; const aTopY = t1[1]; const aTopZ = t1[2];
-						const t2 = local(corner[b], corner[b + 1], corner[b + 2], top);
-						const bTopX = t2[0]; const bTopY = t2[1]; const bTopZ = t2[2];
-						const t3 = local(corner[b], corner[b + 1], corner[b + 2], below);
-						const bLowX = t3[0]; const bLowY = t3[1]; const bLowZ = t3[2];
-						const t4 = local(corner[a], corner[a + 1], corner[a + 2], below);
-						const aLowX = t4[0]; const aLowY = t4[1]; const aLowZ = t4[2];
-						triangle(
-							aTopX, aTopY, aTopZ,
-							bTopX, bTopY, bTopZ,
-							bLowX, bLowY, bLowZ,
-							top, top, below,
-						);
-						triangle(
-							aTopX, aTopY, aTopZ,
-							bLowX, bLowY, bLowZ,
-							aLowX, aLowY, aLowZ,
-							top, below, below,
-						);
+					const from = spanAt[c];
+					const to = spanAt[c + 1];
+					// **A column is drawn span by span, and the bottom one runs
+					// off the picture.** Everything under the band is rock, so
+					// the lowest pair's floor is where the drawing stops rather
+					// than where the rock does -- the same lip the height field
+					// always hung off its rim, now hung off the whole patch.
+					const floor = floorOf(c);
+					for (let pair = from; pair < to; pair += 2) {
+						const bottom = pair === from ? floor : spans[pair];
+						const top = spans[pair + 1];
+						cap(c, top);
+						// **The underside of an overhang is a face too.** A
+						// height field never had one; a column with air beneath
+						// it does, and leaving it out is a hole you can see the
+						// inside of the planet through.
+						if (pair > from) cap(c, spans[pair]);
+						for (let m = 0; m < deg; m++) {
+							const found = ring[c * 6 + m];
+							if (found < 0) {
+								// Off the rim there is no neighbour to stand
+								// over. The cut face of the block runs up to the
+								// waterline, because the sea is translucent and a
+								// curtain of it against the background reads as a
+								// dark wedge past the coast.
+								const lift =
+									pair + 2 >= to && top < k.seaLevel ? k.seaLevel : top;
+								wall(c, m, deg, lift, bottom);
+								continue;
+							}
+							// **What is exposed is this span less the
+							// neighbour's spans.** A height field only ever had
+							// to compare two numbers; with overhangs on both
+							// sides the answer is an interval difference, and
+							// the parts left over are the cliff faces.
+							let open =
+								pair === from ? Math.min(bottom, floorOf(found)) : bottom;
+							const nFrom = spanAt[found];
+							const nTo = spanAt[found + 1];
+							for (let q = nFrom; q < nTo; q += 2) {
+								const lo = q === nFrom ? -Infinity : spans[q];
+								const hi = spans[q + 1];
+								if (hi <= open) continue;
+								if (lo >= top) break;
+								wall(c, m, deg, Math.min(top, lo), open);
+								open = Math.max(open, hi);
+								if (open >= top) break;
+							}
+							wall(c, m, deg, top, open);
+						}
 					}
 				}
 				groundCount = vertices;
@@ -2203,12 +3817,19 @@
 				}
 				waterFrom = groundCount;
 				waterCount = vertices - groundCount;
+				bounds = {
+					x: (loX + hiX) / 2,
+					y: (loY + hiY) / 2,
+					z: (loZ + hiZ) / 2,
+					reach:
+						Math.hypot(hiX - loX, hiY - loY, hiZ - loZ) / 2 || field.across,
+				};
 
 				gl.bindVertexArray(vao);
 				for (const [buffer, data, wide] of [
 					[positionBuffer, position, 3],
-					[normalBuffer, normal, 3],
 					[metreBuffer, metre, 1],
+					[normalBuffer, normal, 3],
 				]) {
 					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 					// Only the part that was written. The rest of the buffer is
@@ -2221,7 +3842,8 @@
 				}
 			}
 
-			const camera = { yaw: -0.7, pitch: 0.36, distance: 2.5, lift: 0 };
+			const EYE = { yaw: -0.7, pitch: 0.5, distance: 1.75, lift: 0 };
+			const camera = { ...EYE };
 
 			function multiply(a, b) {
 				const out = new Float32Array(16);
@@ -2268,21 +3890,21 @@
 				}
 				gl.viewport(0, 0, width, height);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-				if (!field || groundCount === 0) return;
+				if (!field || groundCount === 0 || !bounds) return;
 
-				const span = field.span;
 				// **A patch as tall as it is wide is framed by neither on its
-				// own.** The ground here runs from a sea floor to a summit, and
-				// a camera placed off the width alone looks at the middle of the
-				// map with the mountains out of frame above it.
-				const tall = field.highest - field.lowest;
-				const reach = Math.hypot(span, tall) / 2;
+				// own**, and one that has curved round the planet is framed by
+				// neither at all. The box the mesh actually filled says where to
+				// stand and how far back, whether that is a flat field, a
+				// hillside, or a globe.
+				const reach = bounds.reach;
 				const away = reach * camera.distance;
-				const middle = (field.highest + field.lowest) / 2;
 				const eye = [
-					Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
-					Math.sin(camera.pitch) * away + middle + camera.lift * span,
-					Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
+					bounds.x + Math.sin(camera.yaw) * Math.cos(camera.pitch) * away,
+					bounds.y +
+						Math.sin(camera.pitch) * away +
+						camera.lift * reach,
+					bounds.z + Math.cos(camera.yaw) * Math.cos(camera.pitch) * away,
 				];
 				const proj = perspective(
 					0.9,
@@ -2294,11 +3916,15 @@
 				gl.uniformMatrix4fv(
 					uViewProj,
 					false,
-					multiply(proj, lookAt(eye, [0, middle, 0], [0, 1, 0])),
+					multiply(
+						proj,
+						lookAt(eye, [bounds.x, bounds.y, bounds.z], [0, 1, 0]),
+					),
 				);
 				gl.uniform3f(uSun, 0.42, 0.72, 0.55);
 				gl.uniform1f(uSeaLevel, field.k.seaLevel);
-				gl.uniform1f(uReach, field.k.relief + field.k.peakRelief);
+				gl.uniform1f(uRock, GROUND_LINES.rock);
+				gl.uniform1f(uSnow, GROUND_LINES.snow);
 				gl.bindVertexArray(vao);
 				gl.uniform1i(uWater, 0);
 				gl.depthMask(true);
@@ -2327,12 +3953,13 @@
 				contSpline: "#ffd166",
 				eroSpline: "#8ce99a",
 				pvSpline: "#ff9db1",
+				cliffSpline: "#c9a7ff",
 			};
 
 			/**
 			 * One editable curve, over the histogram of what the world lands on.
 			 *
-			 * Across is that layer's own noise value, up is what it controls. The
+			 * X is that layer's own noise value, y is what it controls. The
 			 * four points it opens with are a starting shape and not the shape:
 			 * click the empty curve to add a point, shift-click one to take it
 			 * away, and only the two ends are pinned, in x alone, so the curve
@@ -2376,20 +4003,27 @@
 					g.lineTo(toX(0), canvas.height - pad);
 					g.stroke();
 					// **The line every curve is read against, drawn on the curve
-					// itself.** On continentalness it is sea level, which is where
-					// the coast is; on peaks and valleys it is the level the
-					// continent already set, so above the line is a peak and below
-					// it a valley. Saying either as a number somewhere else would
-					// make the reader hold two pictures at once.
+					// itself and named there.** On continentalness it is sea
+					// level: the curve gives a height, and where it crosses this
+					// line is the coast. On peaks and valleys it is the level the
+					// continent already set, so above the line is a peak and
+					// below it a valley. Saying either as a number somewhere else
+					// would make the reader hold two pictures at once.
 					const mark = markOn(key);
-					if (mark !== null) {
+					if (mark) {
+						const y = toY(mark.at);
 						g.strokeStyle = "rgba(111, 208, 255, 0.5)";
 						g.setLineDash([3, 3]);
 						g.beginPath();
-						g.moveTo(pad, toY(mark));
-						g.lineTo(canvas.width - pad, toY(mark));
+						g.moveTo(pad, y);
+						g.lineTo(canvas.width - pad, y);
 						g.stroke();
 						g.setLineDash([]);
+						// **An unlabelled line is a line nobody can read.** The
+						// contour graph names its own; so does this one.
+						g.fillStyle = "rgba(111, 208, 255, 0.8)";
+						g.font = "9px system-ui, sans-serif";
+						g.fillText(mark.name, pad + 2, y - 3);
 					}
 					g.strokeStyle = CURVE_TINT[key] ?? "#6fd0ff";
 					g.lineWidth = 1.5;
@@ -2486,30 +4120,84 @@
 
 			/** Where the dashed line sits on a curve, in the curve's own units. */
 			function markOn(key) {
-				if (key === "pvSpline") return 0.5;
+				if (key === "pvSpline") return { at: 0.5, name: "level" };
+				// Half way up leaves the column where the three fields put it:
+				// the density is zero there, so it neither carves in nor builds
+				// out.
+				// **The line between air and rock.** The density runs -1 to +1
+				// and a block is rock where it is over zero, so half way up this
+				// axis is that rule drawn on the curve: everything the curve
+				// puts above the line is stone and everything under it is air,
+				// before the depth term and `Squash` push a reading back over.
+				// Over the line is rock and under it is air, which is the whole
+				// of what the layer does with a reading.
+				if (key === "cliffSpline") return { at: 0.5, name: "rock" };
 				if (key !== "contSpline") return null;
-				const span = knobs.relief + knobs.seaDepth;
-				if (span <= 0) return null;
-				const at = (knobs.seaLevel + knobs.seaDepth) / span;
-				return at >= 0 && at <= 1 ? at : null;
+				// The middle of the curve is the waterline, and draining moves
+				// the water down the sea half -- so the line stays what the curve
+				// is read against: cross it and you are on land.
+				if (knobs.seaDepth <= 0) return { at: 0.5, name: "sea" };
+				const at = 0.5 * (1 + knobs.seaLevel / knobs.seaDepth);
+				return { at: Math.max(0, Math.min(0.5, at)), name: "sea" };
 			}
 
-			/** What a curve's own two ends mean, written under it. */
+			/**
+			 * What a curve's two axes are, written under it as two statements.
+			 *
+			 * **A label says what an axis is, and never what a knob already
+			 * says.** Reprinting Relief, Sea depth and Peaks as the ends of
+			 * the axis puts the same three numbers on screen twice, a few
+			 * centimetres apart, and they are the numbers a reader came from
+			 * rather than the ones they came for.
+			 *
+			 * **And it points at the line rather than naming where it sits.**
+			 * Sea level is the middle of the continentalness axis only while
+			 * the sea is undrained -- move Sea level or Sea depth and the
+			 * dashed line moves down the sea half, so a label saying "in the
+			 * middle" is true at the shipped knobs and a lie one drag later.
+			 * The graph already draws the line and names it; the axis says
+			 * which line to look at and lets it stand where it stands.
+			 *
+			 * **X is the field and y is the consequence, and only y may claim
+			 * one.** Naming the ends of x "untouched" and "most eroded" reads
+			 * as a fact about the ground, and it is not: the field is a raw
+			 * reading and the curve is the only thing that says what a reading
+			 * costs. Drag the curve flat and nothing is eroded anywhere, while
+			 * an end labelled that way still says otherwise. So x names the
+			 * field and its range, and nothing else.
+			 */
 			function axisOf(key) {
+				const layer = key.slice(0, -6);
+				const field = {
+					cont: "continentalness",
+					ero: "erosion",
+					pv: "peaks & valleys",
+					cliff: "density",
+				}[layer];
 				if (key === "contSpline")
-					return [
-						`${Math.round(-knobs.seaDepth).toLocaleString()} m`,
-						`${Math.round(knobs.relief).toLocaleString()} m`,
-					];
-				if (key === "eroSpline") return ["no relief kept", "all of it"];
-				return [
-					`-${Math.round(knobs.peakRelief).toLocaleString()} m`,
-					`+${Math.round(knobs.peakRelief).toLocaleString()} m`,
-				];
+					return {
+						x: `x · the ${field} field, -1 to +1`,
+						y: "y · the height · the blue line is sea level",
+					};
+				if (key === "eroSpline")
+					return {
+						x: `x · the ${field} field, -1 to +1`,
+						y: "y · how much of the relief it cuts away, none to all of it",
+					};
+				if (key === "cliffSpline")
+					return {
+						x: "x · the density field read at this point, -1 to +1",
+						y: "y · the density it becomes, -1 to +1 · over the blue line the block is rock and under it is air · a straight line hands the field through untouched",
+					};
+				return {
+					x: `x · the ${field} field, -1 to +1`,
+					y: "y · the relief · the blue line is the continent's own level",
+				};
 			}
 
 			function buildPanel() {
-				const host = document.getElementById("knobs");
+				const hostWorld = document.getElementById("knobsWorld");
+				const hostTerrain = document.getElementById("knobsTerrain");
 				for (const group of KNOBS) {
 					// **A section folds, because three whole noise layers do not
 					// fit on one screen.** Each carries its own frequency, octave
@@ -2522,10 +4210,44 @@
 					legend.textContent = group.group;
 					set.append(legend);
 					for (const row of group.rows) {
+						if (row.summary) {
+							// A checkbox inside a summary would open and shut the
+							// section as well as answer its own question, so the
+							// click is stopped before it reaches the details.
+							const box = document.createElement("input");
+							box.type = "checkbox";
+							box.className = "switch";
+							box.checked = knobs[row.key];
+							box.title = `turn this layer off`;
+							box.addEventListener("click", (e) => e.stopPropagation());
+							box.addEventListener("input", () => {
+								knobs[row.key] = box.checked;
+								askForRedraw(false);
+							});
+							legend.prepend(box);
+							rows.set(row.key, { row, wrap: set, input: box });
+							continue;
+						}
 						const wrap = document.createElement("div");
 						const label = document.createElement("label");
 						label.textContent = row.label;
 						let input;
+						if (row.type === "picture") {
+							// The layer's own field, in the layer's own section.
+							const shot = SHOT_OF.get(row.key.replace("Picture", ""));
+							wrap.className = "knob pictured";
+							const holder = document.createElement("div");
+							holder.className = "shot " + shot.key;
+							shot.canvas = document.createElement("canvas");
+							shot.ctx = shot.canvas.getContext("2d");
+							const name = document.createElement("b");
+							name.textContent = shot.name;
+							holder.append(shot.canvas, name);
+							wrap.append(holder);
+							set.append(wrap);
+							watchShot(shot);
+							continue;
+						}
 						if (row.type === "spline") {
 							wrap.className = "knob curved";
 							input = document.createElement("canvas");
@@ -2536,7 +4258,14 @@
 							axis.className = "axis";
 							const help = document.createElement("p");
 							help.className = "curve-help";
+							// **The bars are what makes x mean anything.** A
+							// field's range is -1 to +1 and it reaches nowhere near
+							// either end, so where the bars pile up is the part of
+							// the curve that governs most of the planet -- and a
+							// stretch of curve with no bars under it is a shape
+							// nobody will ever stand on.
 							help.textContent =
+								"the bars are how much of the planet reads each value · " +
 								"drag a point · click the curve to add one · " +
 								"shift-click a point to remove it";
 							wrap.append(label, input, axis, help);
@@ -2588,27 +4317,42 @@
 							askForRedraw();
 						});
 					}
-					host.append(set);
+					(group.panel === "world" ? hostWorld : hostTerrain).append(set);
 				}
 			}
 
 			function refreshPanel() {
-				for (const { row, readout, input, note, redraw, axis } of rows.values()) {
+				for (const { row, wrap, readout, input, note, redraw, axis } of rows.values()) {
+					if (row.summary) {
+						input.checked = knobs[row.key];
+						// **A layer that is off still draws its own picture and
+						// its own histogram**, because what it would put back is
+						// the thing being decided. The section dims to say the
+						// world is not reading it.
+						wrap.classList.toggle("off", !knobs[row.key]);
+						continue;
+					}
+					if (row.type === "picture") continue;
 					if (redraw) {
 						redraw();
-						const [low, high] = axisOf(row.key);
 						axis.textContent = "";
-						const a = document.createElement("span");
-						const b = document.createElement("span");
-						a.textContent = low;
-						b.textContent = high;
-						axis.append(a, b);
+						const said = axisOf(row.key);
+						for (const text of [said.x, said.y]) {
+							const line = document.createElement("div");
+							line.textContent = text;
+							axis.append(line);
+						}
 						continue;
 					}
 					if (row.type === "select" || row.type === "text") {
 						input.value = knobs[row.key];
 						readout.textContent = "";
 					} else {
+						// The ends move with the rest of the draft, so a slider
+						// cannot be dragged into a world the map could not carry.
+						const live = liveRange(row);
+						input.min = live.low;
+						input.max = live.high;
 						input.value = knobs[row.key];
 						readout.textContent =
 							Number(knobs[row.key]).toFixed(row.digits ?? 2) +
@@ -2619,18 +4363,63 @@
 				if (!field) return;
 				// **The one line the whole page is about**, written out with the
 				// numbers the knobs are currently set to.
+				// **The one line the whole page is about**, with the terms a
+				// switch has taken out shown as what they became rather than
+				// removed -- a reader has to see that erosion off is a 1 and
+				// peaks off is a 0, or "off" is just a gap.
+				const k = field.k;
+				const term = (on, live, dead, tint) =>
+					on
+						? `<i class="${tint}">${live}</i>`
+						: `<i class="gone">${dead}</i>`;
+				// **Both terms are one minus a share of the same cut**, which is
+				// the whole of what erosion does here and is worth showing rather
+				// than hiding behind two symbols.
+				const lowers = k.useEro && k.erosionBite > 0;
 				recipe.innerHTML =
-					'height = <i class="c">level(C)</i><br />' +
-					'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ <i class="e">kept(E)</i> × ' +
-					'<i class="p">relief(P)</i> × ' +
-					`${Math.round(field.k.peakRelief).toLocaleString()} m`;
+					`height = sea + (${term(k.useCont, "level(C)", "level(0)", "c")} − sea) × ` +
+					`${term(lowers, "worn(E)", "1", "e")}<br />` +
+					"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ " +
+					`${term(k.useEro, "(1 − cut(E))", "1", "e")} × ` +
+					`${term(k.usePv, "relief(P)", "0", "p")} × ` +
+					`${Math.round(k.peakRelief).toLocaleString()} m` +
+					// **A second line, because the fourth layer is not a term in
+					// the first.** The three fields sum to one height; the
+					// density then asks, at every point of the column that height
+					// placed, whether to take that point away.
+					(k.useCliff
+						? '<br />air under height where <i class="f">density(D)</i>' +
+							` + (height − y) ÷ ${Math.round(
+								CARVE_REACH * cliffMetres(k),
+							).toLocaleString()} m` +
+							" ≤ 0"
+						: "") +
+					(k.useCliff
+						? ""
+						: "<br /><i class=\"gone\">rock below height, air above</i>");
 				facts.innerHTML =
-					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
-					`<b>${field.count.toLocaleString()}</b> hexagons of ` +
-					`<b>${field.cellMetres.toFixed(1)} m</b> · ` +
+					(field.whole
+						? "patch is <b>the whole planet</b>, "
+						: `patch <b>${Math.round(field.arc).toLocaleString()} m</b> across, `) +
+					`<b>${field.count.toLocaleString()}</b> columns of ` +
+					`<b>${field.blockMetres.toFixed(1)} m</b> blocks · ` +
 					`ground <b>${Math.round(field.lowest).toLocaleString()}</b> to ` +
 					`<b>${Math.round(field.highest).toLocaleString()} m</b> · ` +
 					`<b>${(field.landShare * 100).toFixed(1)}%</b> of the planet is land · ` +
+					(knobs.useCliff
+						? `<b>${((100 * field.stacked) / Math.max(1, field.count)).toFixed(
+								1,
+							)}%</b> of columns overhang, deepest <b>${field.deepest}</b> ` +
+							`layers of rock · <b>${(
+								(100 * field.dugUnder) /
+								Math.max(1, field.dugUnder + field.dugAbove)
+							).toFixed(1)}%</b> of what went was taken out from under rock ` +
+							`rather than off the top, <b>${(
+								(100 * field.dugDrowned) /
+								Math.max(1, field.dugUnder + field.dugAbove)
+							).toFixed(0)}%</b> of it under the sea, ` +
+							`<b>${field.floating.toLocaleString()}</b> floating masses · `
+						: "") +
 					`<b>${cost.toFixed(0)} ms</b>`;
 			}
 
@@ -2645,6 +4434,7 @@
 				requestAnimationFrame(() => {
 					pending = false;
 					const started = performance.now();
+					settle();
 					// A draft covers the same ground with fewer cells, so the
 					// hexagons grow as the count falls and the patch keeps its
 					// width -- a picture that arrives after the finger has
@@ -2652,6 +4442,7 @@
 					generate(draft ? Math.max(16, knobs.cells >> 1) : knobs.cells);
 					buildMesh();
 					drawPictures();
+					drawGraph();
 					cost = performance.now() - started;
 					refreshPanel();
 					if (!draft) writeUrl();
@@ -2700,14 +4491,31 @@
 			);
 			window.addEventListener("resize", render);
 
+			// The knobs open and shut on a phone; on a desktop the buttons are
+			// not on the page at all and this never runs. Two drawers, two
+			// buttons, each answering for its own -- opening one never closes
+			// the other.
+			const drawer = (buttonId, bodyClass, label) => {
+				const button = document.getElementById(buttonId);
+				button.addEventListener("click", () => {
+					const open = document.body.classList.toggle(bodyClass);
+					button.setAttribute("aria-expanded", String(open));
+					button.textContent = open ? "Close" : label;
+				});
+			};
+			drawer("toggleWorld", "world", "World");
+			drawer("toggleTerrain", "terrain", "Terrain");
+
 			fromParams(new URLSearchParams(location.search));
 			buildPanel();
 			// The first draw goes through the same timed path every later one
 			// does, so the cost on screen is a real number from the start.
 			const booted = performance.now();
+			settle();
 			generate();
 			buildMesh();
 			drawPictures();
+			drawGraph();
 			cost = performance.now() - booted;
 			refreshPanel();
 			render();

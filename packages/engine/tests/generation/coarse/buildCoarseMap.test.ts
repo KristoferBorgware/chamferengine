@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { CoarseMapOptions, MetreScale } from "chamfer/generation";
+import type { CoarseMapOptions } from "chamfer/generation";
 import {
+	CONTINENT_LAYER_DEFAULT,
 	CoarseGrid,
-	TERRAIN_LAYER_DEFAULT,
 	buildCoarseMap,
 	erodeDroplets,
+	heightFrom,
 	layerNoise,
 	layeredHeight,
-	metreHeight,
-	seaLevelFor,
 	seedFromString,
 	shapeLayers,
 } from "chamfer/generation";
@@ -20,46 +19,114 @@ const LEVEL = 5;
 const CELL = 200;
 
 describe("the coarse map", () => {
-	it("leaves the intended fraction of the surface above sea level", () => {
-		// Sea level is zero by construction, so "is this land" is one
-		// comparison and there is no stored level to disagree with it.
-		for (const landFraction of [0.1, 0.3, 0.6]) {
-			const map = buildCoarseMap(1, {
-				level: LEVEL,
-				landFraction,
-				erosion: 0,
-			});
-			let land = 0;
-			for (const h of map.height) if (h > 0) land++;
-			expect(land / map.count).toBeCloseTo(landFraction, 2);
-		}
+	const wet = (over: CoarseMapOptions): number => {
+		const map = buildCoarseMap(1, { level: LEVEL, ...over });
+		let land = 0;
+		for (const h of map.height) if (h > 0) land++;
+		return land;
+	};
+
+	it("puts the coast where the continentalness curve crosses its middle", () => {
+		// **The level's shore is the curve's own middle and no metre knob moves
+		// it.** That is what the height coming out metric buys, against a fit
+		// to an asked-for land share where dragging Relief moved the coast.
+		const flat = { peakRelief: 0 };
+		const base = wet(flat);
+		expect(wet({ ...flat, relief: 2000 })).toBe(base);
+		expect(wet({ ...flat, seaDepth: 900 })).toBe(base);
+		expect(wet({ ...flat, erosionBite: 0 })).toBe(base);
 	});
 
-	it("puts the sea floor exactly where Sea depth asks for it", () => {
-		// The two are scaled apart, because one scale for both let the ocean
-		// spend twice the layer budget the mountains got, on ground nobody
-		// ever sees.
-		for (const seaDepth of [50, 120, 400]) {
+	it("lets the peak term move the shoreline, and only the peak term", () => {
+		// **Peaks are added after the level, so they cross the waterline.** A
+		// cell the curve put just under can be lifted over by a peak and one
+		// just over can be cut below by a valley, which is what makes a coast
+		// ragged rather than a contour of one field. It is a perturbation of
+		// the line and not a new line: measured on this world it moves a few
+		// percent of the cells, where the curve itself moves all of them.
+		const flat = wet({ peakRelief: 0 });
+		const peaked = wet({ peakRelief: 220 });
+		expect(peaked).not.toBe(flat);
+		expect(Math.abs(peaked - flat) / flat).toBeLessThan(0.1);
+	});
+
+	it("moves the shore when the continentalness curve moves", () => {
+		const all = buildCoarseMap(1, { level: LEVEL }).count;
+		// Every point of the curve lifted above its middle: all of it is land.
+		const raised = wet({
+			peakRelief: 0,
+			continent: {
+				...CONTINENT_LAYER_DEFAULT,
+				curve: [
+					[-1, 0.6],
+					[1, 1],
+				],
+			},
+		});
+		expect(raised).toBe(all);
+		// And dropped below it: none of it is.
+		const sunk = wet({
+			peakRelief: 0,
+			continent: {
+				...CONTINENT_LAYER_DEFAULT,
+				curve: [
+					[-1, 0],
+					[1, 0.4],
+				],
+			},
+		});
+		expect(sunk).toBe(0);
+	});
+
+	it("scales land and the sea floor apart", () => {
+		// One scale for the whole axis is what makes a sea-depth knob flood the
+		// world: it rescales the metres a curve point is worth, which drags sea
+		// level across the curve and moves the coast.
+		const deepest = (seaDepth: number): number => {
+			// The peak term is added after the level and does not scale with
+			// it, so it is taken out to measure the level alone.
 			const map = buildCoarseMap(1, {
 				level: LEVEL,
 				seaDepth,
-				erosion: 0,
+				peakRelief: 0,
 			});
 			let floor = 0;
 			for (const h of map.height) if (h < floor) floor = h;
-			expect(-floor).toBeCloseTo(seaDepth, 1);
-		}
-	});
-
-	it("puts its tallest ground exactly where Relief asks for it", () => {
-		// The knob is the answer, not a multiplier on however high this seed's
-		// noise happened to reach, so two seeds at one setting give two worlds
-		// of the same stature.
-		for (const relief of [200, 600, 2000]) {
-			const map = buildCoarseMap(1, { level: LEVEL, relief, erosion: 0 });
+			return floor;
+		};
+		expect(deepest(800)).toBeCloseTo(2 * deepest(400), 6);
+		const tallest = (relief: number): number => {
+			const map = buildCoarseMap(1, {
+				level: LEVEL,
+				relief,
+				// The peak term is added after the level and does not scale
+				// with it, so it is taken out to measure the level alone.
+				peakRelief: 0,
+				erosionBite: 0,
+			});
 			let peak = 0;
 			for (const h of map.height) if (h > peak) peak = h;
-			expect(peak).toBeCloseTo(relief, 1);
+			return peak;
+		};
+		expect(tallest(1600)).toBeCloseTo(2 * tallest(800), 6);
+	});
+
+	it("holds the tallest ground inside relief plus the peak scale", () => {
+		// **Relief is no longer a fit.** With the metres coming out of the
+		// curve there is nothing dividing by the field's own peak, so the
+		// tallest point is what the curve reached times relief plus a full
+		// peak -- bounded rather than exact, which is what buys a coast no
+		// metre knob can move.
+		for (const relief of [200, 600, 2000]) {
+			const map = buildCoarseMap(1, {
+				level: LEVEL,
+				relief,
+				peakRelief: 220,
+			});
+			let peak = 0;
+			for (const h of map.height) if (h > peak) peak = h;
+			expect(peak).toBeLessThanOrEqual(relief + 220 + 1e-6);
+			expect(peak).toBeGreaterThan(0);
 		}
 	});
 
@@ -78,92 +145,73 @@ describe("the coarse map", () => {
 			if (a.height[cell] !== b.height[cell]) differ++;
 		expect(differ).toBeGreaterThan(a.count / 2);
 	});
-
-	it("moves the ground itself, not only what erodes it", () => {
-		// One seed for the whole world. There was a second one for a while, and
-		// it split them: typing a new word gave back the same continents with
-		// different channels cut into them.
-		const a = buildCoarseMap(1, { level: LEVEL, erosion: 0 });
-		const b = buildCoarseMap(2, { level: LEVEL, erosion: 0 });
-		let differ = 0;
-		for (let cell = 0; cell < a.count; cell++)
-			if (a.height[cell] !== b.height[cell]) differ++;
-		expect(differ).toBeGreaterThan(a.count / 2);
-	});
 });
 
-describe("metreHeight", () => {
-	const scale = (
-		relief: number,
-		seaDepth: number,
-		over: Partial<MetreScale> = {},
-	): MetreScale => ({
-		landFraction: 0.5,
-		relief,
-		seaDepth,
-		seaLevel: 0,
-		...over,
+describe("heightFrom", () => {
+	it("wears the level down in proportion to the bite, and never the sea bed", () => {
+		// Erosion takes the relief outright and the level in proportion, and
+		// below sea level nothing is worn: the ocean floor is not what the rain
+		// is falling on, and wearing it would lift the bed toward the surface.
+		const high = (bite: number): number =>
+			heightFrom(1, 0.3, 0, { erosionBite: bite, peakRelief: 0 });
+		expect(high(0)).toBeGreaterThan(high(1));
+		const low = (bite: number): number =>
+			heightFrom(-1, 0.3, 0, { erosionBite: bite, peakRelief: 0 });
+		expect(low(0)).toBe(low(1));
 	});
 
-	it("puts the waterline at zero whatever the field was doing", () => {
-		const raw = Float64Array.from([-3, -1, 0, 2, 5, 9]);
-		const metres = metreHeight(raw, scale(100, 100));
-		const sea = seaLevelFor(raw, 0.5);
-		for (let cell = 0; cell < raw.length; cell++)
-			expect(metres[cell]! > 0).toBe(raw[cell]! > sea);
+	it("adds no peak where erosion has taken everything", () => {
+		// What survives is `1 - cut`, so a region the curve sends to 1 is flat
+		// whatever peaks and valleys is doing -- the one thing a single stack of
+		// octaves can never say.
+		const flat = {
+			erosion: {
+				...CONTINENT_LAYER_DEFAULT,
+				curve: [
+					[-1, 1],
+					[1, 1],
+				] as const,
+			},
+			erosionBite: 0,
+		};
+		expect(heightFrom(0.5, 0, 1, flat)).toBe(heightFrom(0.5, 0, -1, flat));
 	});
 
-	it("scales the sea floor by the same number as the peaks", () => {
-		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
-		const a = metreHeight(raw, scale(100, 100));
-		const b = metreHeight(raw, scale(400, 400));
-		for (let cell = 0; cell < raw.length; cell++)
-			expect(b[cell]).toBeCloseTo(4 * a[cell]!, 6);
+	it("reads continentalness at the middle of the field when it is off", () => {
+		// Off has to be an exact statement about what the layer contributes,
+		// and continentalness has no neutral -- something must set the level.
+		expect(heightFrom(0.9, 0, 0, { continentLayer: false })).toBe(
+			heightFrom(0, 0, 0, {}),
+		);
 	});
 
-	it("puts the tallest point at exactly Relief, whatever the field reached", () => {
-		// The fit divides by the field's own peak, which is what makes Relief a
-		// number that can be asked for rather than a multiplier on however far
-		// this seed's noise happened to go.
+	it("agrees with the whole-map build cell for cell", () => {
 		const grid = new CoarseGrid(LEVEL);
-		const field = layeredHeight(grid, seedFromString("chamfer"));
-		const height = metreHeight(field.raw, {
-			landFraction: 0.65,
-			relief: 1100,
-			seaDepth: 130,
-			seaLevel: 0,
-		});
-		let tallest = -Infinity;
-		let deepest = Infinity;
-		for (const v of height) {
-			if (v > tallest) tallest = v;
-			if (v < deepest) deepest = v;
-		}
-		expect(tallest).toBeCloseTo(1100, 6);
-		expect(deepest).toBeCloseTo(-130, 6);
+		const seed = seedFromString("chamfer");
+		const noise = layerNoise(grid, seed);
+		const field = shapeLayers(noise);
+		for (let cell = 0; cell < grid.count; cell += 37)
+			expect(field.raw[cell]).toBe(
+				heightFrom(
+					noise.continent[cell]!,
+					noise.erosion[cell]!,
+					noise.peaks[cell]!,
+				),
+			);
 	});
 
-	it("lifts every height by the metres the sea was dropped", () => {
-		// Draining moves the water, never the ground: the whole field shifts by
-		// one number and its shape is untouched.
-		const raw = Float64Array.from([-4, -1, 0, 1, 2, 4]);
-		const wet = metreHeight(raw, scale(100, 100));
-		const dry = metreHeight(raw, scale(100, 100, { seaLevel: -30 }));
-		for (let cell = 0; cell < raw.length; cell++)
-			expect(dry[cell]).toBeCloseTo(wet[cell]! + 30, 9);
+	it("reports the land share it actually drew", () => {
+		const grid = new CoarseGrid(LEVEL);
+		const field = layeredHeight(grid, 1);
+		let dry = 0;
+		for (const h of field.raw) if (h > 0) dry++;
+		expect(field.land).toBeCloseTo(dry / grid.count, 9);
 	});
 });
 
 describe("erodeDroplets", () => {
 	const grid = new CoarseGrid(LEVEL);
-	const ground = (): Float64Array =>
-		metreHeight(layeredHeight(grid, 21).raw, {
-			landFraction: 0.3,
-			relief: 600,
-			seaDepth: 240,
-			seaLevel: 0,
-		});
-
+	const ground = (): Float64Array => layeredHeight(grid, 21).raw;
 	it("does nothing at all at a strength of zero", () => {
 		const before = ground();
 		const after = Float64Array.from(before);
@@ -215,16 +263,6 @@ describe("erodeDroplets", () => {
 	});
 });
 
-describe("seaLevelFor", () => {
-	it("returns a level float32 holds exactly", () => {
-		const height = new Float64Array(1000);
-		for (let cell = 0; cell < height.length; cell++)
-			height[cell] = Math.sin(cell) * 0.7;
-		const level = seaLevelFor(height, 0.3);
-		expect(Math.fround(level)).toBe(level);
-	});
-});
-
 describe("sampling a fine cell", () => {
 	it("returns the stored value at a cell the coarse map sits on", () => {
 		const map = buildCoarseMap(1, { level: 4 });
@@ -251,16 +289,17 @@ describe("the two halves of the surface pass", () => {
 	/**
 	 * The reason the halves exist is speed, so the thing to guarantee is that
 	 * speed changed and nothing else. Bit-for-bit, not close to: the field is
-	 * what a spline is evaluated at and what a sea level is a percentile of.
+	 * what a spline is evaluated at, and a rounded one is a different world.
 	 */
 	const same = (options: CoarseMapOptions): void => {
 		const whole = layeredHeight(grid, seed, options);
 		const halves = shapeLayers(layerNoise(grid, seed, options), options);
-		expect(halves.overLine).toBe(whole.overLine);
+		expect(halves.land).toBe(whole.land);
 		for (let cell = 0; cell < grid.count; cell++) {
 			expect(halves.raw[cell]).toBe(whole.raw[cell]);
-			expect(halves.terrain[cell]).toBe(whole.terrain[cell]);
-			expect(halves.mountain[cell]).toBe(whole.mountain[cell]);
+			expect(halves.continent[cell]).toBe(whole.continent[cell]);
+			expect(halves.erosion[cell]).toBe(whole.erosion[cell]);
+			expect(halves.peaks[cell]).toBe(whole.peaks[cell]);
 		}
 	};
 
@@ -268,74 +307,13 @@ describe("the two halves of the surface pass", () => {
 		same({});
 	});
 
-	it("gives the roughen merge bit for bit", () => {
-		same({ merge: "roughen" });
+	it("gives a world with a layer switched off bit for bit", () => {
+		same({ continentLayer: false });
+		same({ erosionLayer: false });
+		same({ peaksLayer: false });
 	});
 
-	it("gives a world with no mountain layer bit for bit", () => {
-		same({ mountainLayer: false });
-		same({ mountainLayer: false, merge: "roughen" });
-	});
-
-	/** What the cache is for: one field, read through two different curves. */
-	it("re-shapes one field into two worlds", () => {
-		const noise = layerNoise(grid, seed);
-		const straight = shapeLayers(noise, {
-			terrain: {
-				...TERRAIN_LAYER_DEFAULT,
-				curve: [
-					[-1, 0],
-					[1, 1],
-				],
-			},
-		});
-		const shipped = shapeLayers(noise, {});
-		let apart = 0;
-		for (let cell = 0; cell < grid.count; cell++)
-			if (straight.raw[cell] !== shipped.raw[cell]) apart++;
-		expect(apart).toBeGreaterThan(grid.count * 0.9);
-	});
-});
-
-describe("the mountain line", () => {
-	const grid = new CoarseGrid(LEVEL);
-	const share = (mountainLine: number): number =>
-		layeredHeight(grid, seedFromString("chamfer"), { mountainLine })
-			.overLine;
-
-	/**
-	 * The number the row shows is a count, and this is why it is worth showing:
-	 * the line is a fraction of the terrain curve's own reach and the curve
-	 * decides how much world lands in the top of it, so the same fraction opens
-	 * the gate over wildly different amounts of planet.
-	 */
-	it("falls as the line rises, and never rises", () => {
-		let last = 1.0001;
-		for (const line of [0, 0.25, 0.5, 0.75, 0.95]) {
-			const now = share(line);
-			expect(now).toBeLessThanOrEqual(last);
-			last = now;
-		}
-	});
-
-	it("is the whole planet at the bottom of the curve and little at the top", () => {
-		expect(share(0)).toBeGreaterThan(0.99);
-		expect(share(0.95)).toBeLessThan(0.1);
-	});
-
-	it("counts the cells the map is built from", () => {
-		const line = 0.5;
-		const field = layeredHeight(grid, seedFromString("chamfer"), {
-			mountainLine: line,
-		});
-		// Every cell whose terrain curve stands above the line, counted here
-		// the long way round: the share is that count over the grid's own
-		// cells, so a hundredth of a cell of rounding is a real disagreement.
-		expect(field.overLine * grid.count).toBeCloseTo(
-			Math.round(field.overLine * grid.count),
-			9,
-		);
-		expect(field.overLine).toBeGreaterThan(0);
-		expect(field.overLine).toBeLessThan(1);
+	it("gives a world with every metre knob moved bit for bit", () => {
+		same({ relief: 1500, seaDepth: 700, peakRelief: 40, seaLevel: -60 });
 	});
 });

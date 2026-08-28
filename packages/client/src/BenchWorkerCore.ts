@@ -8,14 +8,44 @@ import type {
 } from "./BenchMessage.js";
 import { BenchWorld } from "./BenchWorld.js";
 import { PlanetSettings } from "./PlanetSettings.js";
-import type { PatchLayout } from "chamfer/mesh";
-import { patchLayout, patchVertices } from "chamfer/mesh";
+import type { Carved, ColumnPatch } from "chamfer/mesh";
+import {
+	columnPatchLayout,
+	columnPatchMesh,
+	columnSpans,
+	floatingRock,
+	plainSpan,
+} from "chamfer/mesh";
+import {
+	CARVE_LAYER_DEFAULT,
+	carveSeed,
+	layerNoiseSettings,
+	octaveNoise,
+	splineAt,
+} from "chamfer/generation";
 import { patchField, patchFrame } from "./patchField.js";
 import { makeBlend, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
+import { Vec3 } from "chamfer/math";
 
 /** How many pixels across the flat planet is drawn. */
-const PLANET_WIDE = 256;
+const PLANET_WIDE = 512;
+
+/**
+ * How many points across the patch is sampled for its pictures.
+ *
+ * **A picture's resolution is its own, not the mesh's.** The patch is cut into
+ * columns and how many of those there are is a knob about the *world* -- how
+ * finely it is built -- while how finely it is *drawn flat* decides only
+ * whether the narrow octaves of a folded field read as a grain or as ridges.
+ * Tying the two put a 33-pixel thumbnail under every curve at the default
+ * patch.
+ *
+ * Wide enough that enlarging one to fill the window still shows samples rather
+ * than a blur: the thumbnail, the small map and the enlarged picture are all
+ * this one rectangle, so it answers to the largest of the three.
+ */
+const PATCH_SAMPLES = 385;
 
 /**
  * Everything the bench draws, built where the drawing is not.
@@ -53,12 +83,19 @@ export class BenchWorkerCore {
 	 * this page is nearly all of them -- keeps the first and runs the second.
 	 */
 	private patchKey = "";
-	private layout: PatchLayout | null = null;
+	private layout: ColumnPatch | null = null;
 	private groundKey = "";
 	private cellsDrawn = 0;
 
 	/** Which world the last sent planet sheet was of, so an unmoved one is not resent. */
 	private planetKey = "";
+
+	/** What the last column build reached, so an unbuilt reply can repeat it. */
+	private span = 0;
+	private dug: Carved = { under: 0, above: 0, drowned: 0 };
+	private stacks = { stacked: 0, deepest: 1 };
+	private hanging = { masses: 0, spans: 0 };
+	private reach = { lowest: 0, highest: 0, landShare: 0 };
 
 	*steps(request: BenchRequest): Generator<BenchStep | BenchReady> {
 		const settings = new PlanetSettings(request.knobs);
@@ -71,7 +108,8 @@ export class BenchWorkerCore {
 			};
 
 		const grid = this.world.cells;
-		if (!grid || this.world.height.length === 0) return;
+		const fields = this.world.stacks;
+		if (!grid || !fields || this.world.height.length === 0) return;
 		const k = settings.knobs;
 		const frame = patchFrame(k.patchLatitude, k.patchLongitude);
 
@@ -80,32 +118,45 @@ export class BenchWorkerCore {
 			{
 				height: this.world.height,
 				raw: this.world.raw,
-				terrain: this.world.terrain,
-				mountain: this.world.mountain,
-				cut: this.world.delta,
+				// **A layer's picture is its own noise, not its curve's output.**
+				// The curve has a graph directly above the picture; drawing what
+				// it returned says the same thing twice and leaves the field
+				// itself -- where its shapes are and how wide they are -- with
+				// nothing showing it.
+				continent: fields.continent,
+				erosion: fields.erosion,
+				peaks: fields.peaks,
 			},
 			{
 				frame,
-				cells: k.patchCells,
-				step: settings.coarseCell,
+				span: k.patchCells * settings.coarseCell,
+				across: PATCH_SAMPLES,
 				radius: settings.radius,
+				// **A picture of a 3D field has to be read somewhere**, and the
+				// surface is where a reader can compare it against the ground it
+				// cuts into.
+				carve: settings.terrainOptions().carveLayer
+					? {
+							layer: settings.layerFor("carve"),
+							noise: layerNoiseSettings(
+								settings.layerFor("carve"),
+								settings.radius,
+							),
+							seed: carveSeed(settings.seedNumber),
+						}
+					: null,
 			},
 		);
 
 		// **The patch is laid out when it moves and filled when the ground
-		// does.** Neither is a picture: both control layers ride on the vertex,
-		// so choosing one is a uniform and reaches none of this.
-		const place = {
-			at: frame.up,
-			cells: k.patchCells,
-			radius: settings.radius,
-		};
+		// does.** Where it stands and how fine it is cut decide which columns
+		// it holds; what stands in them is every other knob.
+		const level = settings.patchLevel;
 		const wanted = JSON.stringify([
 			k.patchLatitude,
 			k.patchLongitude,
 			k.patchCells,
-			settings.radius,
-			settings.coarseLevel,
+			level,
 		]);
 		let laidOut = false;
 		if (wanted !== this.patchKey || !this.layout) {
@@ -117,34 +168,70 @@ export class BenchWorkerCore {
 				says: "cutting the patch",
 				done: 0,
 			};
-			this.layout = patchLayout(grid, place);
-			this.cellsDrawn = this.layout.cellCount;
+			this.layout = columnPatchLayout({
+				at: frame.up,
+				level,
+				// The knob is map cells *across* and the walk's own limit is a
+				// **radius**, at the finer lattice the patch is drawn on.
+				rings: Math.max(
+					1,
+					(k.patchCells << (level - settings.coarseLevel)) >> 1,
+				),
+			});
+			this.cellsDrawn = this.layout.count;
 			laidOut = true;
 		}
 		const layout = this.layout;
 
 		let geometry: BenchGeometry | null = null;
 		const cellsDrawn = this.cellsDrawn;
-		const span = layout.span;
-		if (laidOut || String(this.world.ms) !== this.groundKey) {
-			this.groundKey = String(this.world.ms);
-			const fill = patchVertices(layout, {
-				height: this.world.height,
-				raw: this.world.raw,
-				terrain: this.world.terrain,
-				mountain: this.world.mountain,
-			});
+		// **Every knob the mesh bakes belongs in this key**, not only the ones
+		// that move a block. The speckle and the corner shading are multiplied
+		// into a vertex colour and no shader can divide one back out, so a
+		// mesh kept across a change to either is a mesh drawn with the setting
+		// the reader has just turned off -- which reads as a switch that does
+		// nothing at all. The speckle was in exactly that state.
+		const groundKey = `${this.world.ms}/${JSON.stringify(
+			settings.terrainOptions(),
+		)}/${settings.knobs.blockSize}/${settings.knobs.patchSpeckle}/${
+			settings.knobs.patchOcclusion
+		}`;
+		let span = this.span;
+		let dug = this.dug;
+		let stacks = this.stacks;
+		let hanging = this.hanging;
+		let reach = this.reach;
+		if (laidOut || groundKey !== this.groundKey) {
+			this.groundKey = groundKey;
+			yield {
+				kind: "step",
+				token: request.token,
+				says: "walking the columns",
+				done: 0,
+			};
+			const built = this.columns(settings, layout);
+			const mesh = built.mesh;
+			span = this.span = mesh.span;
+			dug = this.dug = built.dug;
+			stacks = this.stacks = built.stacks;
+			hanging = this.hanging = built.hanging;
+			reach = this.reach = {
+				lowest: mesh.lowest,
+				highest: mesh.highest,
+				landShare: mesh.landShare,
+			};
 			geometry = {
-				vertices: fill.vertices,
-				// **Copied, because a sent buffer is a gone buffer.** The
-				// layout is kept here and handing its own arrays over would
-				// detach them; this is paid when the patch moves and never
-				// while the ground does.
-				indices: laidOut ? Uint32Array.from(layout.indices) : null,
-				lines: laidOut ? Uint32Array.from(layout.lines) : null,
-				triangleCount: layout.triangleCount,
-				rawLow: fill.rawLow,
-				rawHigh: fill.rawHigh,
+				vertices: mesh.vertices,
+				// A column mesh shares no vertex, so there is nothing for an
+				// index to name: the two runs are named by their lengths.
+				indices: null,
+				lines: mesh.lines,
+				triangleCount: mesh.groundVertices / 3,
+				groundVertices: mesh.groundVertices,
+				waterVertices: mesh.waterVertices,
+				bounds: mesh.bounds,
+				rawLow: mesh.rawLow,
+				rawHigh: mesh.rawHigh,
 			};
 		}
 
@@ -178,17 +265,166 @@ export class BenchWorkerCore {
 				bands: this.world.bands,
 				summit: this.world.summit,
 				floor: this.world.floor,
-				report: this.world.report,
-				overLine: this.world.overLine,
+				land: this.world.land,
 				span,
-				lowest: field.lowest,
-				highest: field.highest,
-				landShare: field.landShare,
+				lowest: reach.lowest,
+				highest: reach.highest,
+				landShare: reach.landShare,
+				columnMetres: settings.patchCellMetres,
+				whole: layout.whole,
+				dugUnder: dug.under,
+				dugAbove: dug.above,
+				dugDrowned: dug.drowned,
+				floating: hanging.masses,
+				floatingSpans: hanging.spans,
+				stacked: stacks.stacked,
+				deepest: stacks.deepest,
 			},
 			patch: this.patch(field),
 			planet,
 			geometry,
 			sections,
+		};
+	}
+
+	/**
+	 * Every column of the patch walked, and the mesh poured into what it found.
+	 *
+	 * **The map is read the way the world reads it** -- one blend of the three
+	 * map samples around each column's direction -- so the ground here is the
+	 * ground the world would build there, and not a second evaluation of the
+	 * noise that would agree with it only approximately.
+	 *
+	 * The carve is the expensive half: a block a step down as deep as the layer
+	 * reaches, once per column. With the layer off no field is read at all and
+	 * the column is the height field rounded to the block grid, which is the
+	 * terracing the world builds and the shape a carve is cut out of.
+	 */
+	private columns(
+		settings: PlanetSettings,
+		layout: ColumnPatch,
+	): {
+		mesh: ReturnType<typeof columnPatchMesh>;
+		dug: Carved;
+		stacks: { stacked: number; deepest: number };
+		hanging: { masses: number; spans: number };
+	} {
+		const grid = this.world.cells!;
+		const terrain = settings.terrainOptions();
+		// `terrainOptions` always fills it; the type has it optional because the
+		// engine's own default stands in for a caller that leaves it out.
+		const carve = terrain.carve ?? CARVE_LAYER_DEFAULT;
+		const radius = settings.radius;
+		const block = settings.knobs.blockSize;
+		const carveNoise = layerNoiseSettings(carve, radius);
+		const seed = carveSeed(settings.seedNumber);
+
+		const count = layout.count;
+		const at = new Int32Array(count + 1);
+		const height = new Float64Array(count);
+		const raw = new Float32Array(count);
+		const continent = new Float32Array(count);
+		const erosion = new Float32Array(count);
+		const peaks = new Float32Array(count);
+		const carveOf = new Float32Array(count);
+		const runs: number[] = [];
+		const all: number[] = [];
+		const dug: Carved = { under: 0, above: 0, drowned: 0 };
+		const carved: Carved = { under: 0, above: 0, drowned: 0 };
+		let stacked = 0;
+		let deepest = 1;
+
+		const blend = makeBlend();
+		for (let c = 0; c < count; c++) {
+			// A `Vec3` a column rather than one refilled: it is immutable, and
+			// an allocation here is one per column against a walk of hundreds of
+			// blocks inside it.
+			const dir = new Vec3(
+				layout.directions[c * 3]!,
+				layout.directions[c * 3 + 1]!,
+				layout.directions[c * 3 + 2]!,
+			);
+			grid.blendInto(dir, blend);
+			const base = readBlend(this.world.height, blend);
+			raw[c] = readBlend(this.world.raw, blend);
+			continent[c] = readBlend(this.world.continent, blend);
+			erosion[c] = readBlend(this.world.erosion, blend);
+			peaks[c] = readBlend(this.world.peaks, blend);
+
+			at[c] = all.length;
+			let top: number;
+			if (terrain.carveLayer) {
+				columnSpans(
+					dir.x,
+					dir.y,
+					dir.z,
+					base,
+					radius,
+					block,
+					seed,
+					carve,
+					carveNoise,
+					runs,
+					carved,
+					0,
+					terrain.carveHold,
+				);
+				for (const y of runs) all.push(y);
+				// **The height a colour and a coastline read is the top of the
+				// topmost rock**, which under an overhang is not the surface the
+				// three fields drew, and under a column carved away entirely is
+				// nothing at all.
+				top = runs.length > 0 ? runs[runs.length - 1]! : base;
+				dug.under += carved.under;
+				dug.above += carved.above;
+				dug.drowned += carved.drowned;
+				if (runs.length > 2) stacked++;
+				if (runs.length / 2 > deepest) deepest = runs.length / 2;
+			} else {
+				top = plainSpan(base, block, carve, runs);
+				for (const y of runs) all.push(y);
+			}
+			height[c] = top;
+			// **Read at the top of the rock**, which is where a reader can
+			// compare it against the shape it cut. Off, the channel is there
+			// and says nothing.
+			if (terrain.carveLayer) {
+				const out = 1 + top / radius;
+				carveOf[c] = octaveNoise(
+					dir.x * out,
+					dir.y * out,
+					dir.z * out,
+					seed,
+					carveNoise,
+				);
+			}
+		}
+		at[count] = all.length;
+
+		const ground = {
+			at,
+			spans: Float64Array.from(all),
+			height,
+			raw,
+			continent,
+			erosion,
+			peaks,
+			carve: carveOf,
+		};
+		return {
+			mesh: columnPatchMesh(layout, ground, {
+				radius,
+				seaLevel: 0,
+				// The world's own seed and the world's own switch, at the
+				// bench's own amount.
+				seed: settings.seedNumber,
+				speckle: settings.knobs.patchSpeckle,
+				blockMetres: block,
+				occlusion: settings.knobs.patchOcclusion,
+			}),
+			dug,
+			stacks: { stacked, deepest },
+			hanging: floatingRock(layout, ground, block),
 		};
 	}
 
@@ -200,9 +436,10 @@ export class BenchWorkerCore {
 				out.push(
 					sheet.metres.buffer,
 					sheet.raw.buffer,
-					sheet.terrain.buffer,
-					sheet.mountain.buffer,
-					sheet.cut.buffer,
+					sheet.continent.buffer,
+					sheet.erosion.buffer,
+					sheet.peaks.buffer,
+					sheet.carve.buffer,
 				);
 		if (reply.geometry) {
 			out.push(reply.geometry.vertices.buffer);
@@ -228,9 +465,10 @@ export class BenchWorkerCore {
 				const to = (n - 1 - r) * n + q;
 				sheet.metres[to] = field.height[from]!;
 				sheet.raw[to] = field.raw[from]!;
-				sheet.terrain[to] = field.terrain[from]!;
-				sheet.mountain[to] = field.mountain[from]!;
-				sheet.cut[to] = field.cut[from]!;
+				sheet.continent[to] = field.continent[from]!;
+				sheet.erosion[to] = field.erosion[from]!;
+				sheet.peaks[to] = field.peaks[from]!;
+				sheet.carve[to] = field.carve[from]!;
 			}
 		return {
 			...sheet,
@@ -238,7 +476,6 @@ export class BenchWorkerCore {
 			rawHigh: field.rawHigh,
 			low: field.lowest,
 			high: field.highest,
-			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
 
@@ -251,6 +488,14 @@ export class BenchWorkerCore {
 	 */
 	private planet(): BenchSheet {
 		const grid = this.world.cells!;
+		const layers = this.world.stacks!;
+		// **No carve here, and it is not an omission.** Its shapes are 120 m and
+		// this picture is 512 points around a 42,730 m circumference -- one
+		// point every 83 m, so a shape is not two points across and
+		// neighbouring points are unrelated. What that draws is television
+		// static: an honest sampling of the field and a picture of nothing. The
+		// carve's picture is always the patch, where the same shape is forty
+		// points across.
 		const wide = PLANET_WIDE;
 		const tall = wide / 2;
 		const sheet = this.sheet(wide, tall);
@@ -271,10 +516,9 @@ export class BenchWorkerCore {
 				grid.blendInto(dir, blend);
 				sheet.metres[at] = readBlend(this.world.height, blend);
 				sheet.raw[at] = readBlend(this.world.raw, blend);
-				sheet.terrain[at] = readBlend(this.world.terrain, blend);
-				sheet.mountain[at] = readBlend(this.world.mountain, blend);
-				if (this.world.delta)
-					sheet.cut[at] = readBlend(this.world.delta, blend);
+				sheet.continent[at] = readBlend(layers.continent, blend);
+				sheet.erosion[at] = readBlend(layers.erosion, blend);
+				sheet.peaks[at] = readBlend(layers.peaks, blend);
 			}
 		}
 		return {
@@ -285,7 +529,6 @@ export class BenchWorkerCore {
 			// whole planet: a patch's ends would blow out everything taller.
 			low: this.world.floor,
 			high: this.world.summit,
-			cutScale: this.world.report?.scale ?? 1,
 		};
 	}
 
@@ -293,16 +536,17 @@ export class BenchWorkerCore {
 	private sheet(
 		width: number,
 		height: number,
-	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high" | "cutScale"> {
+	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high"> {
 		const count = width * height;
 		return {
 			width,
 			height,
 			metres: new Float32Array(count),
 			raw: new Float32Array(count),
-			terrain: new Float32Array(count),
-			mountain: new Float32Array(count),
-			cut: new Float32Array(count),
+			continent: new Float32Array(count),
+			erosion: new Float32Array(count),
+			peaks: new Float32Array(count),
+			carve: new Float32Array(count),
 		};
 	}
 }

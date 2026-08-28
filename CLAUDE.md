@@ -136,6 +136,14 @@ and duplicates information found there.
 - `tools/bench.ts`, `tools/trial-*.ts` — wall-clock and count measurements over
   the real engine, run by hand. They are not part of `make-reference.js`, whose
   scripts must be plain Node and whose output is quoted in `docs/`.
+- `tools/probe-shaders.mjs` — loads the client in headless Chromium with every
+  pipeline's switch turned on and fails if the browser complains or the frame
+  presents nothing. **A shader that will not compile draws a black window, not
+  an error**: its module is invalid, every pipeline from it is invalid, and a
+  refused command buffer takes the whole frame with it while the readout keeps
+  updating over the top. Nothing in the unit tests exercises the WGSL at all —
+  the recording device takes any string as a shader — so this is the check.
+  Needs `npm run dev`.
 - `tools/build-docs.js` — renders all Markdown to a linked site in `site/`
   (`--watch`, `--serve`). Generated output is gitignored; Markdown is the
   source of truth. It fails the build on dead links and dead heading anchors,
@@ -966,8 +974,9 @@ Violating any of these breaks the design. They are not tunable.
   of it has an edge. **The only place a crease comes from is an absolute
   value**: `1 - |n|` folds an octave at its own zero crossing, squaring sharpens
   the fold, and weighting each ridged octave by the one above it keeps the flats
-  flat. At `ridge` 0.6 the median goes to **24.3°** and the 99th to **63.7°**.
-  **At 0 it is bit-for-bit the plain sum.**
+  flat. Over a 3,400 m patch sampled every 13.3 m at 300 m of relief, a fold of
+  0.6 takes the median from `13.8°` to **21.2°** and the 99th from `47.9°` to
+  **60.9°**. **At 0 it is bit-for-bit the plain sum.**
 - **THE SEA FLOOR WAS SPENDING THE MOUNTAINS' BUDGET** (`metreHeight`, doc 08).
   One scale for the whole field looks obvious and caps the peaks: noise is
   symmetric about its own middle and sea level is a percentile **above** it, so
@@ -1012,12 +1021,31 @@ Violating any of these breaks the design. They are not tunable.
   the layers decide where land is, so it was a second answer to a question that
   now has one.
 - **RIDGE IS IN THE ENGINE AND NOTHING SETS IT** (`octaveNoise`, doc 08). The
-  fold is real and measured — `1 - |n|` at 0.6 takes the median land gradient
-  from `11.0°` to `24.3°` and the 99th from `37.5°` to `63.7°` — and it creases
-  the **whole world at once**, moving the character of every place together,
-  which is the one thing a landscape must not do. The mountain layer replaced
-  it because a layer says *where*. The parameter stays because doc 08 argues it
-  from that measurement and this is the function the measurement is of.
+  fold is real and measured — over a 3,400 m patch sampled every 13.3 m at
+  300 m of relief, 0.6 takes the median land gradient from `13.8°` to `21.2°`
+  and the 99th from `47.9°` to `60.9°` — and it creases the **whole world at
+  once**, moving the character of every place together, which is the one thing
+  a landscape must not do. The mountain layer replaced it because a layer says
+  *where*. The parameter stays because doc 08 argues it from that measurement
+  and this is the function the measurement is of.
+- **A FOLD MOVES ITS CREST; IT IS NEVER MIXED WITH THE SHAPE IT REPLACES**
+  (`octaveNoise`, doc 08, `tools/trial-fold.ts`, F-087 closed). A plain octave
+  peaks where it reads `+1` and a fold peaks where it reads `0`, so the two
+  **disagree about which end is high**: adding them in proportion subtracts on
+  the positive half and adds on the negative one. Measured over the planet,
+  that cost the positive half its range across the middle of the dial — the
+  spread of the top tenth against the bottom tenth ran **bottom ×2.47 at a fold
+  of 0.35**, the field's maximum fell to `0.337` against the plain sum's
+  `0.735`, and **which end of the field carried its range reversed near 0.72**
+  with nothing saying so. A little fold also made the ground *flatter* than
+  none: `10.9°` at the median against `13.8°` at zero. `octaveNoise` moves the
+  crest instead — `pivot` is where `+1` sits, at `n = 1` unfolded and `n = 0`
+  fully folded, and the crease is measured from there, so the field reaches
+  `+1` at the crest and `-1` at the far end **at every setting**. The top leads
+  at every setting (×1.08 to ×2.20) and the gradient rises monotonically.
+  **Both ends are unchanged to the bit** — 200,000 of 200,000 samples identical
+  at 0 and at 1, largest gap zero — so no shipped world moves: `layeredHeight`
+  passes `ridge: 0`, and nothing else in the engine sets it.
 - **THE ONE SCALE THE FIT CANNOT DIVIDE OUT IS PEAK SCALE** (`metreHeight`,
   doc 08). The metre step divides by the field's own peak, so the tallest point
   is Relief whatever the shape knobs say — which is what makes Relief
@@ -1101,6 +1129,39 @@ Violating any of these breaks the design. They are not tunable.
   proves the feature works and the checkbox proves nothing. Ten rows were dead
   this way, both shadow toggles among them. The frame reads `current`, which
   `onLiveKnob` reassigns; anything else that a frame reads goes there too.
+- **NEEDING THE MESHES AGAIN IS NOT NEEDING THE MAP AGAIN** (`BAKED_KNOBS`,
+  `flushMeshes`, `WorkerMeshSource.retune`, F-083). Four knobs -- speckle,
+  corner shading, sky exposure and full light -- change a number the mesher
+  multiplies into a vertex colour, which no shader can divide back out, so
+  every chunk has to be built again. They were routed down `flushTerrain`, the
+  path a **terrain** knob takes, which regenerates the coarse map from the
+  seed and rebuilds the shape, the peak pyramid, all the generators and the
+  whole worker pool first. **Not one input to any of that is a function of any
+  of the four**: the terrain reads a face and a lattice offset and has never
+  been told about one of them. Measured on the shipped world at depth 13
+  (`tools/trial-remesh.ts`), that is **978 ms** before a single chunk is
+  meshed -- **835 ms** of coarse map, **139 ms** of peak pyramid, 4 ms for the
+  shape and the eight generators. `flushMeshes` keeps all of it and **retunes
+  the pool in place**, which also stops the map's five typed arrays being
+  structured-cloned once per worker, and it is not `async`: there is no long
+  synchronous stretch to yield the thread before. **A retune folds into the
+  setup the pool holds**, or a worker spawned to replace a dead one quietly
+  goes back to the switches the player has just turned off. **And a job
+  already ON a worker was posted under the old switches** -- `request` chains
+  onto a job in flight rather than posting a second one, so the caller asking
+  again is handed exactly that stale mesh and nothing ever asks a third time.
+  Up to one chunk per worker keeps the old lighting for good, scattered
+  wherever the pool was busy, which is the shape of lighting that looks wrong
+  and cannot be pointed at. `retune` marks every running job **stale**, the
+  same way `invalidate` handles a job whose store moved; a job still in the
+  **queue** needs nothing, because it is posted after the retune. Replacing
+  the pool never needed this -- `dispose` rejects everything in flight -- so
+  keeping it is what created the case. **And the readout
+  has to say which ran** -- it claimed "rebuilding the terrain" for a knob
+  that rebuilds no terrain, which is what made the two paths impossible to
+  tell apart from outside and is how `tools/probe-remesh-path.mjs` checks the
+  routing in the real client. What is left is the re-mesh, which is the work
+  the knob actually asked for.
 - **A row with no meaning comes off the panel, it is not greyed out**
   (`Knob.shownWhen`, `ParameterPanel`). **Mountain line** shows only under the
   gated merge, which is the only one with a gate. A disabled row is a question

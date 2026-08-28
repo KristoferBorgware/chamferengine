@@ -17,14 +17,19 @@ export function paintSheet(
 	picture: PatchPicture,
 	into: Uint8ClampedArray,
 ): void {
-	const layer = picture === "mountain" ? sheet.mountain : sheet.terrain;
+	const layer =
+		picture === "peaks"
+			? sheet.peaks
+			: picture === "erosion"
+				? sheet.erosion
+				: picture === "carve"
+					? sheet.carve
+					: sheet.continent;
 	for (let at = 0; at < sheet.width * sheet.height; at++)
 		paintPatch(into, at * 4, {
 			metres: sheet.metres[at]!,
 			raw: sheet.raw[at]!,
 			layer: layer[at]!,
-			cut: sheet.cut[at]!,
-			cutScale: sheet.cutScale,
 			rawLow: sheet.rawLow,
 			rawHigh: sheet.rawHigh,
 			low: sheet.low,

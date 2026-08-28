@@ -1,5 +1,5 @@
 /**
- * What the terrain bench draws, as the named choices behind its selects.
+ * What the landscape bench draws, as the named choices behind its selects.
  *
  * Each of these is a picture of the same ground rather than a different world,
  * so switching between them is a uniform or a redraw and never a rebuild.
@@ -7,21 +7,31 @@
 
 /** Which step of the build the preview stops at. */
 export type PatchPicture =
-	| "ground"
-	| "height"
-	| "raw"
-	| "terrain"
-	| "mountain"
-	| "erosion";
+	"ground" | "height" | "raw" | "continent" | "erosion" | "peaks" | "carve";
 
 export const PATCH_PICTURES: readonly PatchPicture[] = [
 	"ground",
 	"height",
 	"raw",
-	"terrain",
-	"mountain",
+	"continent",
 	"erosion",
+	"peaks",
+	"carve",
 ] as const;
+
+/**
+ * The picture that shows one layer's own curve, or nothing for the rest.
+ *
+ * **A layer's picture is what its curve returned, never the raw reading.** The
+ * curve is the whole of what a layer decides, so a picture drawn before it is a
+ * picture a drag on the curve would not change.
+ */
+export const LAYER_PICTURES = {
+	continent: "continent",
+	erosion: "erosion",
+	peaks: "peaks",
+	carve: "carve",
+} as const;
 
 /** Whether the preview draws the surface, the cell rims, or both. */
 export type PatchSurface = "solid" | "wire" | "both";

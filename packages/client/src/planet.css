@@ -646,6 +646,25 @@ body.bench .knobs {
 	padding-top: 12px;
 }
 
+/* **A layer's heading is its curve's colour**, and the same four the bench's
+   pictures are named by: four curves with one colour between them are four
+   curves a reader has to keep track of by position. */
+.knobs h2.tint-cont .knobs-fold {
+	color: #ffd166;
+}
+
+.knobs h2.tint-ero .knobs-fold {
+	color: #8ce99a;
+}
+
+.knobs h2.tint-pv .knobs-fold {
+	color: #ff9db1;
+}
+
+.knobs h2.tint-cliff .knobs-fold {
+	color: #c9a7ff;
+}
+
 /* No fold on the bench: the panel is half of what the page is for. */
 body.bench .knobs-head {
 	display: none;
@@ -826,4 +845,71 @@ body.bench .knobs-head {
 		transparent 6px 12px,
 		rgba(255, 255, 255, 0.9) 12px 18px
 	);
+}
+
+/**
+ * A layer's own field, under the curve that shapes it.
+ *
+ * Square, because the patch it is a picture of is; and drawn with no smoothing,
+ * because a map cell is a reading and a picture that blends two of them shows a
+ * value the field never had.
+ */
+.knobs .bench-layer-shot {
+	display: block;
+	width: 100%;
+	/* **The canvas's own shape, not a square.** The patch is square and the
+	   planet is twice as wide as it is tall, so a fixed ratio squashes one of
+	   them -- and the picture stops being a picture of the field. */
+	height: auto;
+	margin: 0.5rem 0 0.25rem;
+	border-radius: 4px;
+	background: #0b1017;
+	image-rendering: pixelated;
+	cursor: pointer;
+}
+
+/**
+ * One layer's picture, filling the window.
+ *
+ * Over everything, because it is looked at instead of the bench rather than
+ * beside it; clicking anywhere closes it, so there is no button to find.
+ */
+.bench-big {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.75rem;
+	padding: 2rem;
+	background: rgba(6, 10, 16, 0.94);
+	cursor: zoom-out;
+}
+
+/* `display: flex` beats what `[hidden]` sets, so the attribute alone leaves a
+   full-window black sheet over the whole bench. */
+.bench-big[hidden] {
+	display: none;
+}
+
+.bench-big-name {
+	font-size: 0.8rem;
+	letter-spacing: 0.04em;
+	color: #9fb3c8;
+}
+
+/* Square, and no smoothing: a sample is a reading, and a blend of two of them
+   shows a value the field never had. */
+.bench-big canvas {
+	/* Bounded on each side separately, so the canvas keeps its own shape: a
+	   square patch and a planet twice as wide as it is tall both fit, and
+	   neither is stretched to the other's. */
+	max-width: 92vw;
+	max-height: 82vh;
+	width: auto;
+	height: auto;
+	border-radius: 6px;
+	image-rendering: pixelated;
 }

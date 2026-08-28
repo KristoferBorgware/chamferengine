@@ -3,38 +3,10 @@ import type { PlanetSettings } from "./PlanetSettings.js";
 import { bandOf } from "./paintPatch.js";
 import {
 	CoarseGrid,
-	DROPLET,
-	erodeDroplets,
-	erodeFreeDroplets,
 	layerNoise,
-	metreHeight,
 	seedFromString,
 	shapeLayers,
 } from "chamfer/generation";
-
-/** What one erosion run did, in the numbers a carving pass is judged by. */
-export interface ErosionReport {
-	readonly droplets: number;
-
-	/** Metres of cut the picture saturates at. */
-	readonly scale: number;
-
-	readonly before: Slopes;
-	readonly after: Slopes;
-
-	/** Metres the ground moved, per cell, and the deepest single cut. */
-	readonly moved: number;
-	readonly deepest: number;
-
-	readonly ms: number;
-}
-
-/** Three percentiles of how steep the land is, in metres of fall per metre. */
-export interface Slopes {
-	readonly median: number;
-	readonly ninety: number;
-	readonly ninetyNine: number;
-}
 
 /** What a stage of the build is doing, for a line the reader can watch. */
 export interface BenchProgress {
@@ -42,9 +14,6 @@ export interface BenchProgress {
 	readonly says: string;
 	readonly done: number;
 }
-
-/** How many droplets one slice of the erosion pass runs before it reports. */
-const DROPLET_SLICE = 40000;
 
 /**
  * The planet's map, built for the bench and held between redraws.
@@ -92,22 +61,28 @@ export class BenchWorld {
 	 */
 	private wide: Float64Array = new Float64Array(0);
 	raw: Float32Array<ArrayBuffer> = new Float32Array(0);
-	terrain: Float32Array<ArrayBuffer> = new Float32Array(0);
-	mountain: Float32Array<ArrayBuffer> = new Float32Array(0);
 
-	/** The ground in metres, before erosion and after it. */
+	/** What each layer's curve returned at each cell, for its own picture. */
+	continent: Float32Array<ArrayBuffer> = new Float32Array(0);
+	erosion: Float32Array<ArrayBuffer> = new Float32Array(0);
+	peaks: Float32Array<ArrayBuffer> = new Float32Array(0);
+
+	/**
+	 * The three octave stacks themselves, before any curve.
+	 *
+	 * **A layer's own picture is its noise, not what its curve made of it.** The
+	 * curve is a transform of the reading and has a graph of its own right above
+	 * the picture; a picture of the curve's output says the same thing twice and
+	 * leaves the field -- where its shapes are, how wide they are, how the
+	 * octaves stack -- with nothing showing it.
+	 */
+	get stacks(): LayerNoise | null {
+		return this.noise;
+	}
+
+	/** The ground in metres. */
 	private metreKey = "";
-	private uneroded: Float64Array = new Float64Array(0);
 	height: Float32Array<ArrayBuffer> = new Float32Array(0);
-
-	/** Metres erosion moved the ground, or nothing when the water is off. */
-	delta: Float32Array<ArrayBuffer> | null = null;
-
-	private cutKey = "";
-	private buildingKey = "";
-
-	/** What the last erosion run did, or nothing when the water is off. */
-	report: ErosionReport | null = null;
 
 	/** What the build is doing now, or nothing when it is not running. */
 	progress: BenchProgress | null = null;
@@ -130,12 +105,14 @@ export class BenchWorld {
 	floor = 0;
 
 	/**
-	 * How much of the planet stands above the mountain line, `0` to `1`.
+	 * How much of the planet stands above sea level, `0` to `1`.
 	 *
-	 * A property of the shape stage, so it survives an erosion run: what the
-	 * gate lets through is decided before a single droplet falls.
+	 * **A measurement and not a knob.** The coast is where the continentalness
+	 * curve crosses its own middle, so the land share falls out of that curve
+	 * and is read back off the finished field. A property of the shape stage,
+	 * because no metre knob moves it.
 	 */
-	overLine = 0;
+	land = 0;
 
 	/** The grid the fields are indexed by, once there is one. */
 	get cells(): CoarseGrid | null {
@@ -151,8 +128,7 @@ export class BenchWorld {
 	*build(settings: PlanetSettings): Generator<BenchProgress> {
 		const options = settings.coarseOptions();
 		const keys = this.keysOf(settings);
-		if (keys.cut === this.cutKey) return;
-		this.buildingKey = keys.cut;
+		if (keys.metres === this.metreKey) return;
 		const started = performance.now();
 		const say = (
 			stage: BenchProgress["stage"],
@@ -173,7 +149,6 @@ export class BenchWorld {
 			this.noiseKey = "";
 			this.shapeKey = "";
 			this.metreKey = "";
-			this.cutKey = "";
 		}
 		const grid = this.grid!;
 		const seed = seedFromString(settings.knobs.seed);
@@ -189,93 +164,29 @@ export class BenchWorld {
 
 		if (keys.shape !== this.shapeKey) {
 			yield say("height", "reading the curves", 0.5);
+			// **The curves and the metres are one pass now.** The height comes
+			// out in metres here rather than being scaled into them
+			// afterwards, because the continentalness curve's middle is the
+			// waterline -- so there is no percentile to find and no peak to
+			// divide by, and the stage that used to do both is gone.
 			const field = shapeLayers(this.noise!, options);
 			this.wide = field.raw;
 			this.raw = Float32Array.from(field.raw);
-			this.terrain = field.terrain as Float32Array<ArrayBuffer>;
-			this.mountain = field.mountain as Float32Array<ArrayBuffer>;
-			this.overLine = field.overLine;
+			this.continent = field.continent as Float32Array<ArrayBuffer>;
+			this.erosion = field.erosion as Float32Array<ArrayBuffer>;
+			this.peaks = field.peaks as Float32Array<ArrayBuffer>;
+			this.land = field.land;
 			this.shapeKey = keys.shape;
 			this.metreKey = "";
 		}
 
-		if (keys.metres !== this.metreKey) {
-			yield say("metres", "filling the sea", 0);
-			// **Sea level is a percentile and the scale is a maximum**, and
-			// both are read over the cells the world is built from. A few
-			// thousand directions find the percentile and miss the maximum --
-			// an extreme is the largest of whatever was looked at.
-			this.uneroded = metreHeight(this.wide, {
-				landFraction: options.landFraction!,
-				relief: options.relief!,
-				seaDepth: options.seaDepth!,
-				seaLevel: options.seaLevel!,
-			});
-			this.metreKey = keys.metres;
-			this.cutKey = "";
-		}
-
-		const strength = options.erosion ?? 0;
-		if (strength <= 0) {
-			this.height = Float32Array.from(this.uneroded);
-			this.delta = null;
-			this.report = null;
-			this.cutKey = keys.cut;
-			this.progress = null;
-			this.ms = performance.now() - started;
-			this.countBands();
-			return;
-		}
-
-		const cellMetres = options.cellMetres!;
-		const before = this.slopes(this.uneroded, cellMetres);
-		const cutting = Float64Array.from(this.uneroded);
-		const cut =
-			options.erosionWalk === "free" ? erodeFreeDroplets : erodeDroplets;
-		const shared = {
-			maxCut: options.erosionMaxCut!,
-			cutShare: options.erosionCutShare!,
-			inertia: options.erosionInertia!,
-		};
-		const droplets = Math.round(strength * DROPLET.perCell * grid.count);
-		for (let from = 0; from < droplets; from += DROPLET_SLICE) {
-			cut(grid, cutting, seed, strength, cellMetres, {
-				...shared,
-				from,
-				take: DROPLET_SLICE,
-			});
-			yield say(
-				"erosion",
-				"cutting the valleys",
-				Math.min(1, (from + DROPLET_SLICE) / droplets),
-			);
-		}
-
-		let moved = 0;
-		let deepest = 0;
-		const delta = new Float64Array(grid.count);
-		for (let cell = 0; cell < grid.count; cell++) {
-			const d = cutting[cell]! - this.uneroded[cell]!;
-			delta[cell] = d;
-			moved += Math.abs(d);
-			if (-d > deepest) deepest = -d;
-		}
-		// What a picture of the cut saturates at. The deepest single cut is a
-		// spike and would leave the rest of the map grey, so this is the reach
-		// of all but the loudest fiftieth.
-		const sorted = Float64Array.from(delta, Math.abs).sort();
-		this.height = Float32Array.from(cutting);
-		this.delta = Float32Array.from(delta);
-		this.report = {
-			droplets,
-			scale: Math.max(0.01, sorted[Math.floor(sorted.length * 0.98)]!),
-			before,
-			after: this.slopes(cutting, cellMetres),
-			moved: moved / grid.count,
-			deepest,
-			ms: performance.now() - started,
-		};
-		this.cutKey = keys.cut;
+		// **The droplet walk is gone from the map build.** Erosion in this
+		// model is a field read through a curve, one lookup a cell in the pass
+		// above; the walk that moved material downhill over a finished map was
+		// a different thing that shared its name, and the stage that ran it,
+		// the delta it wrote and the report it made are all gone with it.
+		this.height = Float32Array.from(this.wide);
+		this.metreKey = keys.metres;
 		this.progress = null;
 		this.ms = performance.now() - started;
 		this.countBands();
@@ -286,7 +197,7 @@ export class BenchWorld {
 		const counts = [0, 0, 0, 0];
 		let summit = -Infinity;
 		let floor = Infinity;
-		const height = this.height.length ? this.height : this.uneroded;
+		const height = this.height.length ? this.height : this.wide;
 		for (let cell = 0; cell < height.length; cell++) {
 			const m = height[cell]!;
 			if (m > summit) summit = m;
@@ -299,86 +210,50 @@ export class BenchWorld {
 		this.floor = Number.isFinite(floor) ? floor : 0;
 	}
 
-	/**
-	 * How steep the land is, as three percentiles.
-	 *
-	 * The steepest of a cell's six neighbours, over land cells only, because
-	 * the number this answers is what a hillside does. **A pass that carves
-	 * moves the tail and leaves the middle alone**; one whose median climbs
-	 * with it is adding roughness everywhere instead.
-	 */
-	private slopes(height: Float64Array, cellMetres: number): Slopes {
-		const grid = this.grid!;
-		const out: number[] = [];
-		for (let cell = 0; cell < grid.count; cell += 7) {
-			if (height[cell]! <= 0) continue;
-			let worst = 0;
-			for (let k = 0; k < 6; k++) {
-				const other = grid.ring[cell * 6 + k]!;
-				if (other < 0) continue;
-				const fall =
-					Math.abs(height[cell]! - height[other]!) / cellMetres;
-				if (fall > worst) worst = fall;
-			}
-			out.push(worst);
-		}
-		out.sort((a, b) => a - b);
-		const at = (p: number): number =>
-			out.length === 0
-				? 0
-				: out[Math.min(out.length - 1, Math.floor(out.length * p))]!;
-		return { median: at(0.5), ninety: at(0.9), ninetyNine: at(0.99) };
-	}
-
 	/** Which knobs each stage of the build depends on. */
 	private keysOf(settings: PlanetSettings): {
 		noise: string;
 		shape: string;
 		metres: string;
-		cut: string;
 	} {
 		const o = settings.coarseOptions();
 		// **A layer's width and its octave count, never its curve.** These four
 		// are every number `layerNoiseSettings` reads; the curves are the whole
 		// of what the stage after this one takes, which is what makes dragging
 		// one cheap.
+		// **A layer's stack, never its curve.** Everything here is a number
+		// `layerNoiseSettings` reads; the curves and every metre knob are the
+		// whole of what the stage after this one takes, which is what makes
+		// dragging one cheap.
+		const stack = (layer: (typeof o)["continent"]): unknown => [
+			layer!.metres,
+			layer!.octaves,
+			layer!.persistence,
+			layer!.lacunarity,
+			layer!.fold,
+		];
 		const noise = JSON.stringify([
 			settings.knobs.seed,
 			o.level,
 			o.cellMetres,
-			o.terrain!.metres,
-			o.terrain!.octaves,
-			o.mountain!.metres,
-			o.mountain!.octaves,
-			o.mountainLayer,
+			stack(o.continent),
+			stack(o.erosion),
+			stack(o.peaks),
 		]);
 		const shape = JSON.stringify([
 			noise,
-			o.terrain!.curve,
-			o.mountain!.curve,
-			o.merge,
-			o.mountainLine,
-			o.detail,
-		]);
-		const metres = JSON.stringify([
-			shape,
-			o.landFraction,
+			o.continent!.curve,
+			o.erosion!.curve,
+			o.peaks!.curve,
+			o.continentLayer,
+			o.erosionLayer,
+			o.peaksLayer,
+			o.erosionBite,
 			o.relief,
 			o.seaDepth,
+			o.peakRelief,
 			o.seaLevel,
 		]);
-		return {
-			noise,
-			shape,
-			metres,
-			cut: JSON.stringify([
-				metres,
-				o.erosion,
-				o.erosionWalk,
-				o.erosionMaxCut,
-				o.erosionCutShare,
-				o.erosionInertia,
-			]),
-		};
+		return { noise, shape, metres: shape };
 	}
 }

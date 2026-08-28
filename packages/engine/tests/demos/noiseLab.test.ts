@@ -7,7 +7,6 @@ import {
 	erodeFreeDroplets,
 	hash3,
 	octaveNoise,
-	seaLevelFor,
 	seedFromString,
 	valueNoise3,
 } from "chamfer/generation";
@@ -77,7 +76,6 @@ function demoKernel(): {
 		seed: number,
 		s: NoiseSettings,
 	) => number;
-	seaLevelFor: typeof seaLevelFor;
 	CoarseGrid: new (level: number) => CoarseGrid;
 	erodeDroplets: (
 		grid: CoarseGrid,
@@ -113,7 +111,7 @@ function demoKernel(): {
 	const source =
 		block(page, BEGIN, END) + block(page, COARSE_BEGIN, COARSE_END);
 	const build = new Function(
-		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, seaLevelFor, CoarseGrid, erodeDroplets, erodeFreeDroplets, faceOf, barycentricOf, acrossEdge };`,
+		`${source}\nreturn { hash3, seedFromString, valueNoise3, octaveNoise, CoarseGrid, erodeDroplets, erodeFreeDroplets, faceOf, barycentricOf, acrossEdge };`,
 	) as () => ReturnType<typeof demoKernel>;
 	return build();
 }
@@ -192,17 +190,6 @@ describe("the noise lab's copy of the engine's noise", () => {
 				octaveNoise(x, y, z, seed, s),
 			);
 		}
-	});
-
-	it("puts sea level at the same percentile", () => {
-		const seed = seedFromString("chamfer");
-		const raw = new Float64Array(977);
-		for (let n = 0; n < raw.length; n++) {
-			const [x, y, z] = direction(n);
-			raw[n] = octaveNoise(x, y, z, seed, settings());
-		}
-		for (const land of [0.1, 0.3, 0.65, 0.9])
-			expect(demo.seaLevelFor(raw, land)).toBe(seaLevelFor(raw, land));
 	});
 
 	it("agrees on a whole field, digest for digest", () => {

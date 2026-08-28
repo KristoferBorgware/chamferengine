@@ -1,4 +1,4 @@
-import type { ChunkMesh } from "chamfer/mesh";
+import type { ChunkMesh, MeshRetune } from "chamfer/mesh";
 import type { ChunkSelection, CoarseMap } from "chamfer/generation";
 import type { WorldShape } from "chamfer/world";
 import { Frustum, Mat4, Vec3, type Box } from "chamfer/math";
@@ -58,6 +58,7 @@ import {
 	ChunkRenderer,
 	FrameTimer,
 	MarkerRenderer,
+	PlayerRenderer,
 	NoWebGPUError,
 	SEA_COLORS,
 	SeaRenderer,
@@ -77,6 +78,7 @@ import { ParameterPanel } from "./ParameterPanel.js";
 import { TouchControls } from "./TouchControls.js";
 import { EditDb } from "./EditDb.js";
 import type { PlanetKnobs } from "./PlanetSettings.js";
+import type { PlayerBody } from "chamfer/render";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 import { behindPlayer } from "./behindPlayer.js";
 
@@ -305,7 +307,7 @@ let onLiveKnob: (live: PlanetSettings) => void = () => {};
  * {@link onLiveKnob}; before that a checkbox with nothing to flush is a
  * checkbox that does nothing, which is correct.
  */
-let onLiveRebuild: (live: PlanetSettings) => void = () => {};
+let onLiveRebuild: (live: PlanetSettings, terrain: boolean) => void = () => {};
 
 /**
  * Editor mode.
@@ -368,7 +370,7 @@ if (params.get("panel") === "1") {
 			onLiveKnob(live);
 		},
 		(draft) => maps?.changed(draft),
-		(live) => onLiveRebuild(live),
+		(live, terrain) => onLiveRebuild(live, terrain),
 	);
 	onPanelSet = (values) => panel.set(values);
 	// **The picture of the planet lives in the panel, in a fold of its own.**
@@ -546,9 +548,18 @@ async function main(): Promise<void> {
 	// the water as well as the ground: it says where a click goes rather than
 	// being a thing that lives in the world.
 	const aim = new AimRenderer(ctx);
+	// The player themselves, once the camera trails far enough back to see
+	// one. Nothing to draw in first person, which is where a world opens.
+	const playerBody = new PlayerRenderer(ctx);
 	// The volumes the culling tests against, drawn only when asked for.
 	const bounds = new BoundsRenderer(ctx);
 	renderer.layers = [
+		// **A player is a thing in the world, so it goes in with the world.**
+		// Before the sea, which is translucent and writes depth: drawn after
+		// it, a player standing in the shallows would be cut off at the
+		// waterline rather than seen through it, the way the sea floor under
+		// them already is.
+		playerBody,
 		// After the ground, so the water is drawn over the floor it covers,
 		// and before the clouds, which are further off than any of it.
 		...(sea ? [sea] : []),
@@ -634,7 +645,11 @@ async function main(): Promise<void> {
 		},
 	);
 	let flying = true;
-	let chase = 6;
+	// **A world opens at the eye.** Third person is a thing to ask for with
+	// the wheel, not the view somebody is given: the camera behind the
+	// shoulder is for looking at the player, and there is nothing to look at
+	// until someone goes and finds it.
+	let chase = 0;
 
 	// The twelve pentagons and the two poles, which are two of the twelve.
 	const places = landmarks();
@@ -792,12 +807,43 @@ async function main(): Promise<void> {
 	 * one function is what keeps a knob added to the setup message from being
 	 * added in one of the two places and not the other.
 	 */
+	/**
+	 * The switches the mesher bakes into a vertex colour, read off a draft.
+	 *
+	 * These are the whole of what {@link BAKED_KNOBS} reaches. They move no
+	 * block -- the terrain is a function of a face and a lattice offset and
+	 * never sees one of them -- so a pool already holding the map can be told
+	 * these three and keep everything else it has built.
+	 *
+	 * **Full light has to reach the bake as well as the shader.** The sky
+	 * exposure is multiplied into the vertex colours here, and nothing the
+	 * shader computes afterwards can divide a number back out of what it was
+	 * handed -- so a cave would stay at the 12% a shut-in cell is baked to
+	 * however far the sun was said to reach. The corner shading stays: it is
+	 * how much of the sky a corner sees rather than whether the sun arrives,
+	 * it bottoms out at 0.55 rather than 0.12, and it is what keeps a cave's
+	 * edges readable. It has a switch of its own for anyone who disagrees.
+	 */
+	function meshRetune(live: PlanetSettings): MeshRetune {
+		return {
+			kind: "retune",
+			// Zero is off, and off is the flat colour the registry names.
+			speckle: live.knobs.speckle ? SPECKLE : 0,
+			ambientOcclusion: live.knobs.ambientOcclusion,
+			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
+		};
+	}
+
 	function meshSetup(
 		builtMap: CoarseMap,
 		builtShape: WorldShape,
 		live: PlanetSettings,
 	) {
 		return {
+			// The three baked switches, taken from the one place that spells
+			// them out, so a setup and a retune can never disagree about what
+			// the same draft means. First, so `kind` below overrides theirs.
+			...meshRetune(live),
 			kind: "setup" as const,
 			map: builtMap.toSnapshot(),
 			seaLevelRadius: RADIUS,
@@ -806,19 +852,6 @@ async function main(): Promise<void> {
 			crustDepth: builtShape.crustDepth,
 			apron: APRON,
 			debugSeams: live.knobs.seamOverlay,
-			// Zero is off, and off is the flat colour the registry names.
-			speckle: live.knobs.speckle ? SPECKLE : 0,
-			ambientOcclusion: live.knobs.ambientOcclusion,
-			// **Full light has to reach the bake as well as the shader.** The
-			// sky exposure is multiplied into the vertex colours here, and
-			// nothing the shader computes afterwards can divide a number back
-			// out of what it was handed -- so a cave would stay at the 12% a
-			// shut-in cell is baked to however far the sun was said to reach.
-			// The corner shading stays: it is how much of the sky a corner
-			// sees rather than whether the sun arrives, it bottoms out at
-			// 0.55 rather than 0.12, and it is what keeps a cave's edges
-			// readable. It has a switch of its own for anyone who disagrees.
-			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode
@@ -1106,6 +1139,41 @@ async function main(): Promise<void> {
 				? shape.crustTopRadius
 				: RADIUS,
 		};
+	}
+
+	/** The body last handed over, so a player standing still is not rebuilt. */
+	let bodyAt: PlayerBody | null = null;
+
+	/**
+	 * Draw the player, once the camera is far enough back to see one.
+	 *
+	 * **The test is where the camera ended up, not how far back it was
+	 * asked to go.** `behindPlayer` gives the offset up whenever the ground is
+	 * in the way, so a player backed into a corner has the camera at their own
+	 * eye however far the wheel was turned -- and a capsule drawn there is the
+	 * inside of its own head filling the screen.
+	 */
+	function markPlayer(from: Vec3): void {
+		if (from.sub(player.eye).length() <= player.radius) {
+			playerBody.body = null;
+			bodyAt = null;
+			return;
+		}
+		// A step too small to move a pixel of it is not worth rebuilding a
+		// thousand vertices for, and this runs once a frame.
+		if (
+			bodyAt &&
+			bodyAt.position.sub(player.position).length() < 1e-3 &&
+			bodyAt.heading.dot(player.heading) > 1 - 1e-9
+		)
+			return;
+		bodyAt = {
+			position: player.position,
+			heading: player.heading,
+			height: player.height,
+			radius: player.radius,
+		};
+		playerBody.body = bodyAt;
 	}
 
 	/**
@@ -1596,11 +1664,48 @@ async function main(): Promise<void> {
 		// until the page was reloaded.
 		attachDeltas();
 
-		// Every chunk on screen was built from the map that just left. None of
-		// it describes this one, so all of it goes -- back to nothing rather
-		// than to whatever the old selection happened to leave drawn, or the
-		// new ground would show through a patchwork of the last one until the
-		// selection caught up on its own.
+		dropEveryChunk();
+	}
+
+	/**
+	 * Build every chunk again, keeping the map and everything made from it.
+	 *
+	 * **What {@link BAKED_KNOBS} changes is a number multiplied into a vertex
+	 * colour**, so every chunk on screen is wrong and nothing else is. The
+	 * map, the shape, the peaks and the per-level generators are all still
+	 * pictures of this world, because the terrain reads a face and a lattice
+	 * offset and has never been told about any of these switches.
+	 *
+	 * So the pool is **retuned rather than replaced**. Measured on the
+	 * shipped world, what `flushTerrain` spends before a single chunk is
+	 * meshed is 1,144 ms of coarse map and 127 ms of peak pyramid, and not
+	 * one input to either of them is a function of these knobs. A fresh pool
+	 * would also structured-clone the map's five typed arrays once per
+	 * worker, which is the same map arriving again.
+	 *
+	 * Not `async`, and that is the difference a person feels: there is no
+	 * long synchronous stretch to yield the thread before, so nothing has to
+	 * be painted first and the switch takes effect on the next frame the
+	 * chunks come back on.
+	 */
+	function flushMeshes(live: PlanetSettings): void {
+		if (live.problems().length > 0) return;
+		// **The readout must not claim a terrain rebuild here.** Nothing
+		// about the ground moved, and a status line saying it did is how the
+		// two paths become impossible to tell apart from outside.
+		report([`seed "${live.knobs.seed}"`, "rebuilding the meshes..."]);
+		source.retune(meshRetune(live));
+		dropEveryChunk();
+	}
+
+	/**
+	 * Throw away every chunk drawn, drawing or waiting, and ask again.
+	 *
+	 * Back to nothing rather than to whatever the last selection happened to
+	 * leave on screen: the new ground would otherwise show through a
+	 * patchwork of the old until the selection caught up on its own.
+	 */
+	function dropEveryChunk(): void {
 		for (const id of drawn) renderer.drop(id);
 		drawn.clear();
 		for (const id of retiring) renderer.drop(id);
@@ -1613,10 +1718,10 @@ async function main(): Promise<void> {
 		lastWantedAddrs = [];
 		lastWantedOnFace = [];
 
-		// The peak pyramid was rebuilt from the new map, which is a picture of
-		// the generated world and holds nothing anybody placed. Without this a
-		// tower is culled with the hillside it stands on the moment a knob
-		// moves, exactly as it was before it was ever told about.
+		// The peak pyramid is a picture of the generated world and holds
+		// nothing anybody placed. Without this a tower is culled with the
+		// hillside it stands on the moment a knob moves, exactly as it was
+		// before it was ever told about.
 		for (const key of edits.touched()) liftReaders(key);
 
 		refresh();
@@ -1631,10 +1736,21 @@ async function main(): Promise<void> {
 	 */
 	const LIVE_REBUILD_SETTLE_MS = 350;
 	let liveRebuildTimer = 0;
-	onLiveRebuild = (live) => {
+
+	// **The stronger of the two wins across a settle.** The panel reports each
+	// key as it moves; this owns the window, so it is what has to remember
+	// that a knob moving the ground was in it. A terrain knob followed by
+	// three baked ones still needs the map -- the reverse does not need it at
+	// all.
+	let liveRebuildGround = false;
+	onLiveRebuild = (live, terrain) => {
+		liveRebuildGround ||= terrain;
 		clearTimeout(liveRebuildTimer);
 		liveRebuildTimer = window.setTimeout(() => {
-			void flushTerrain(live);
+			const ground = liveRebuildGround;
+			liveRebuildGround = false;
+			if (ground) void flushTerrain(live);
+			else flushMeshes(live);
 		}, LIVE_REBUILD_SETTLE_MS);
 	};
 
@@ -2135,6 +2251,7 @@ async function main(): Promise<void> {
 			.add(up.scale(Math.sin(player.pitch)))
 			.normalize();
 		const from = behindPlayer(player.eye, look, up, chase, rayWorld);
+		markPlayer(from);
 		const target = player.eye.add(look.scale(50));
 
 		// The ray a click acts along is the player's own. Where it lands on

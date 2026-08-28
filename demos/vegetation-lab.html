@@ -1,0 +1,5120 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Vegetation lab — trees grown from a seed</title>
+		<style>
+			:root {
+				color-scheme: dark;
+				--ink: #e8ecf2;
+				--dim: #8b95a4;
+				--panel: #12161d;
+				--edge: #232b36;
+				--live: #6fd0ff;
+				--wood: #c9975b;
+				--leaf: #8ce99a;
+				--plan: #ff9db1;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				overflow: hidden;
+				background: #070a0e;
+				color: var(--ink);
+				font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+			}
+			#view {
+				position: fixed;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				display: block;
+				touch-action: none;
+				cursor: grab;
+			}
+			#view:active {
+				cursor: grabbing;
+			}
+			/* **The grove is the reference; the knobs are the work.** Scrolling
+			   to reach a knob must not carry the thing being judged off the top
+			   of the panel, so there are two sections and only the lower one
+			   moves. */
+			/* **Two panels, one on each side of the view.** The left one is
+			   the world a plant stands on -- terrain, planting rules, how the
+			   patch is cut into chunks -- and carries the readout, a fact about
+			   the plants read back after the fact rather than a knob; the right
+			   is the plant itself -- planting rules for it, trunk, branches,
+			   leaves. */
+			#panelWorld,
+			#panelPlants {
+				position: fixed;
+				top: 0;
+				bottom: 0;
+				width: 340px;
+				display: flex;
+				flex-direction: column;
+				background: rgba(18, 22, 29, 0.94);
+				backdrop-filter: blur(6px);
+			}
+			#panelWorld {
+				left: 0;
+				border-right: 1px solid var(--edge);
+			}
+			#panelPlants {
+				right: 0;
+				border-left: 1px solid var(--edge);
+			}
+			.head {
+				flex: 0 0 auto;
+				padding: 10px 14px 8px;
+				border-bottom: 1px solid var(--edge);
+			}
+			.scroller {
+				flex: 1 1 auto;
+				overflow-y: auto;
+				overscroll-behavior: contain;
+				padding: 0 14px 24px;
+			}
+			.head h1 {
+				font-size: 14px;
+				margin: 0 0 6px;
+				letter-spacing: 0.01em;
+			}
+			/* A picture sits where the thing it shows is tuned. */
+			.shot {
+				position: relative;
+				line-height: 0;
+			}
+			.shot canvas {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+				cursor: crosshair;
+			}
+			.shot b {
+				position: absolute;
+				left: 4px;
+				top: 4px;
+				font: 600 9.5px/1.4 system-ui, sans-serif;
+				letter-spacing: 0.02em;
+				padding: 1px 4px;
+				border-radius: 2px;
+				color: #12161d;
+				background: var(--wood);
+				pointer-events: none;
+			}
+			.shot.leaf b {
+				background: var(--leaf);
+			}
+			.shot.plan b {
+				background: var(--plan);
+			}
+			.shot.out b {
+				background: var(--live);
+			}
+			.group > summary > .switch {
+				accent-color: var(--live);
+				margin: 0 6px 0 0;
+				vertical-align: -1px;
+			}
+			.group.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			.group.off > summary {
+				color: var(--dim);
+			}
+			#recipe .gone {
+				color: #5a6470;
+			}
+			.knob.pictured {
+				grid-template-columns: 1fr;
+				margin: 9px 0 4px;
+			}
+			/* The enlarged picture. A field at panel width shows where its
+			   features are; at this size it shows what they look like. */
+			#big {
+				position: fixed;
+				inset: 0;
+				z-index: 10;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(4, 6, 9, 0.88);
+				backdrop-filter: blur(3px);
+				cursor: zoom-out;
+			}
+			#big[hidden] {
+				display: none;
+			}
+			#big figure {
+				margin: 0;
+				max-width: 94vw;
+				max-height: 94vh;
+			}
+			#big canvas {
+				display: block;
+				max-width: 94vw;
+				max-height: 86vh;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				image-rendering: pixelated;
+				background: #0b0e13;
+			}
+			#big figcaption {
+				display: flex;
+				justify-content: space-between;
+				align-items: baseline;
+				gap: 16px;
+				margin-top: 8px;
+				font-size: 12px;
+				color: var(--dim);
+			}
+			#big figcaption b {
+				color: var(--ink);
+				font-size: 13px;
+				letter-spacing: 0.02em;
+			}
+			#facts {
+				color: var(--dim);
+				font-size: 11px;
+				margin: 7px 0 0;
+			}
+			#facts b {
+				color: var(--ink);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			#recipe {
+				margin: 6px 0 0;
+				padding: 5px 6px;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				background: #0b0e13;
+				color: var(--dim);
+				font: 10.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			#recipe i {
+				font-style: normal;
+				font-weight: 600;
+			}
+			#recipe .c {
+				color: var(--wood);
+			}
+			#recipe .e {
+				color: var(--leaf);
+			}
+			#recipe .p {
+				color: var(--plan);
+			}
+			.group {
+				border-top: 1px solid var(--edge);
+				margin: 10px 0 0;
+				padding: 0 0 6px;
+			}
+			.group > summary {
+				padding: 8px 0 4px;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--dim);
+				cursor: pointer;
+				list-style: none;
+				user-select: none;
+			}
+			.group > summary::-webkit-details-marker {
+				display: none;
+			}
+			.group > summary::before {
+				content: "▸ ";
+				color: var(--edge);
+			}
+			.group[open] > summary::before {
+				content: "▾ ";
+			}
+			.group > summary:hover {
+				color: var(--live);
+			}
+			.group.wood > summary {
+				color: var(--wood);
+			}
+			.group.leaf > summary {
+				color: var(--leaf);
+			}
+			.group.plan > summary {
+				color: var(--plan);
+			}
+			.knob[hidden] {
+				display: none;
+			}
+			.knob {
+				display: grid;
+				grid-template-columns: 1fr auto;
+				align-items: center;
+				gap: 2px 8px;
+				margin: 7px 0;
+			}
+			.knob label {
+				font-size: 12px;
+			}
+			.knob output {
+				font-variant-numeric: tabular-nums;
+				color: var(--live);
+				font-size: 11.5px;
+			}
+			.knob-note {
+				grid-column: 1 / -1;
+				font-size: 10.5px;
+				color: var(--dim);
+				margin: 1px 0 0;
+			}
+			.knob-note b {
+				color: var(--live);
+				font-weight: 600;
+				font-variant-numeric: tabular-nums;
+			}
+			.knob input[type="range"],
+			.knob select,
+			.knob input[type="text"] {
+				grid-column: 1 / -1;
+				width: 100%;
+				accent-color: var(--live);
+			}
+			.knob select,
+			.knob input[type="text"] {
+				background: #0b0e13;
+				color: var(--ink);
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				padding: 3px 5px;
+				font: inherit;
+			}
+			.knob.curved {
+				grid-template-columns: 1fr;
+			}
+			.curve {
+				width: 100%;
+				height: auto;
+				display: block;
+				border: 1px solid var(--edge);
+				border-radius: 3px;
+				touch-action: none;
+				cursor: crosshair;
+			}
+			.curve-help {
+				font-size: 10px;
+				color: var(--dim);
+				margin: 2px 0 0;
+				line-height: 1.35;
+			}
+			.axis {
+				font-size: 9.5px;
+				line-height: 1.4;
+				color: var(--dim);
+				margin: 2px 0 0;
+				font-variant-numeric: tabular-nums;
+			}
+			/* A layer is a card, not another fold in a long list: it holds
+			   four sections of its own, so it needs an edge a reader can see
+			   the whole of. */
+			.layer {
+				border: 1px solid var(--edge);
+				border-radius: 5px;
+				margin: 0 0 10px;
+				background: #0e1219;
+			}
+			.layer > summary {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				padding: 7px 9px;
+				cursor: pointer;
+				list-style: none;
+				font-weight: 600;
+				letter-spacing: 0.02em;
+				border-bottom: 1px solid transparent;
+			}
+			.layer[open] > summary {
+				border-bottom-color: var(--edge);
+			}
+			.layer > summary::-webkit-details-marker {
+				display: none;
+			}
+			.layer > summary::before {
+				content: "▸";
+				color: var(--dim);
+				font-size: 10px;
+			}
+			.layer[open] > summary::before {
+				content: "▾";
+			}
+			.layer > summary .grown {
+				margin-left: auto;
+				font-weight: 400;
+				font-size: 11px;
+				color: var(--dim);
+				font-variant-numeric: tabular-nums;
+			}
+			.layer.off > summary {
+				color: var(--dim);
+			}
+			.layer.off > .body {
+				opacity: 0.4;
+			}
+			.layer > .body {
+				padding: 2px 9px 9px;
+			}
+			/* The swatch is the layer's own wood and leaf, which is what makes
+			   a card and the tree it grew the same thing on screen. */
+			.layer .chip {
+				width: 10px;
+				height: 10px;
+				border-radius: 2px;
+				flex: none;
+			}
+			.layer .drop {
+				border: 0;
+				background: none;
+				color: var(--dim);
+				cursor: pointer;
+				font: inherit;
+				padding: 0 2px;
+				line-height: 1;
+			}
+			.layer .drop:hover {
+				color: #ff9db1;
+			}
+			/* A section inside a layer, one step quieter than the card. */
+			.sub {
+				margin: 8px 0 0;
+				border-top: 1px solid var(--edge);
+			}
+			.sub > summary {
+				padding: 6px 0 4px;
+				cursor: pointer;
+				list-style: none;
+				font-size: 11.5px;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				color: var(--dim);
+			}
+			.sub > summary::-webkit-details-marker {
+				display: none;
+			}
+			.sub > summary::before {
+				content: "▸ ";
+				font-size: 9px;
+			}
+			.sub[open] > summary::before {
+				content: "▾ ";
+			}
+			.sub > summary > .switch {
+				accent-color: var(--live);
+				margin: 0 5px 0 0;
+				vertical-align: -1px;
+			}
+			.sub.off > *:not(summary) {
+				opacity: 0.4;
+			}
+			#addLayer {
+				width: 100%;
+				border: 1px dashed var(--edge);
+				border-radius: 5px;
+				background: none;
+				color: var(--live);
+				font: inherit;
+				padding: 8px;
+				cursor: pointer;
+			}
+			#addLayer:hover {
+				border-color: var(--live);
+				background: rgba(111, 208, 255, 0.06);
+			}
+			/* Picking a species is picking a starting point, so it is a grid of
+			   named things rather than a dropdown -- the list is what the choice
+			   is, and a shut menu hides it. */
+			#pick {
+				position: fixed;
+				inset: 0;
+				z-index: 11;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(4, 6, 9, 0.88);
+				backdrop-filter: blur(3px);
+			}
+			#pick[hidden] {
+				display: none;
+			}
+			#pick > div {
+				background: var(--panel);
+				border: 1px solid var(--edge);
+				border-radius: 6px;
+				padding: 16px;
+				max-width: 460px;
+				width: calc(100vw - 32px);
+			}
+			#pick h2 {
+				margin: 0 0 4px;
+				font-size: 14px;
+				letter-spacing: 0.03em;
+			}
+			#pick p {
+				margin: 0 0 12px;
+				font-size: 11.5px;
+				color: var(--dim);
+				line-height: 1.4;
+			}
+			#pickList {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+				gap: 6px;
+			}
+			#pickList button {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				border: 1px solid var(--edge);
+				border-radius: 4px;
+				background: #0e1219;
+				color: var(--ink);
+				font: inherit;
+				padding: 7px 8px;
+				cursor: pointer;
+				text-align: left;
+			}
+			#pickList button:hover {
+				border-color: var(--live);
+			}
+			#pickList .chip {
+				width: 10px;
+				height: 10px;
+				border-radius: 2px;
+				flex: none;
+			}
+			.knob.check {
+				grid-template-columns: auto 1fr;
+			}
+			.knob.check input {
+				grid-column: auto;
+				width: auto;
+			}
+			/* Clear of the left panel: at 12 px it sat behind one, which is
+			   a line of instructions nobody on a desktop could read. */
+			#hint {
+				position: fixed;
+				left: 352px;
+				bottom: 10px;
+				color: var(--dim);
+				font-size: 11.5px;
+				pointer-events: none;
+			}
+			/* **On a phone each panel is shut and there is a button to open
+			   it.** Each panel is 340 px of knobs and a phone is 390 px wide, so
+			   left open one is the page and the view is a strip above it. Shut,
+			   the view has the whole screen and one tap brings a drawer back.
+			   It is off the desktop layout entirely -- there the panels sit
+			   beside the view and never cover it. */
+			#toggleWorld,
+			#togglePlants {
+				display: none;
+			}
+			@media (max-width: 760px) {
+				#panelWorld,
+				#panelPlants {
+					width: 100%;
+					top: auto;
+					height: 68%;
+					border-left: 0;
+					border-right: 0;
+					border-top: 1px solid var(--edge);
+					transform: translateY(100%);
+					transition: transform 0.22s ease;
+				}
+				body.knobs #panelWorld,
+				body.plants #panelPlants {
+					transform: none;
+				}
+				#toggleWorld,
+				#togglePlants {
+					display: block;
+					position: fixed;
+					bottom: 12px;
+					z-index: 12;
+					padding: 9px 15px;
+					border: 1px solid var(--edge);
+					border-radius: 999px;
+					background: rgba(18, 22, 29, 0.94);
+					backdrop-filter: blur(6px);
+					color: var(--live);
+					font: 600 13px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+					letter-spacing: 0.02em;
+					transition: bottom 0.22s ease;
+				}
+				#toggleWorld {
+					left: 12px;
+				}
+				#togglePlants {
+					right: 12px;
+				}
+				/* Above its own panel when that one is open, so the way out is
+				   never under the thing it opened. Each button only answers
+				   for its own drawer -- opening one does not move the other. */
+				body.knobs #toggleWorld {
+					bottom: calc(68% + 12px);
+				}
+				body.plants #togglePlants {
+					bottom: calc(68% + 12px);
+				}
+				#hint {
+					display: none;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="view"></canvas>
+		<div id="hint">drag to turn · wheel to zoom · shift-drag to raise the eye</div>
+		<button
+			id="toggleWorld"
+			type="button"
+			aria-controls="panelWorld"
+			aria-expanded="false"
+		>
+			World
+		</button>
+		<button
+			id="togglePlants"
+			type="button"
+			aria-controls="panelPlants"
+			aria-expanded="false"
+		>
+			Plants
+		</button>
+		<!-- **Left is the world a plant stands on; right is the plant.** The
+		     readout is a fact about the plants, and it sits with the world
+		     panel anyway -- it is what that ground grew, read back after the
+		     fact, the same way a photograph of a garden belongs beside the
+		     garden and not folded into the seed packet. -->
+		<div id="panelWorld">
+			<div class="head">
+				<h1>Vegetation lab</h1>
+				<div id="recipe"></div>
+				<div id="facts"></div>
+			</div>
+			<div class="scroller">
+				<div id="knobsWorld"></div>
+			</div>
+		</div>
+		<div id="panelPlants">
+			<div class="head">
+				<h1>Plants</h1>
+			</div>
+			<div class="scroller">
+				<div id="knobsPlants"></div>
+				<div id="layers"></div>
+				<button id="addLayer" type="button">+ Vegetation</button>
+			</div>
+		</div>
+
+		<div id="big" hidden>
+			<figure>
+				<canvas id="bigShot"></canvas>
+				<figcaption><b id="bigName"></b><span>click anywhere, or press Escape, to close</span></figcaption>
+			</figure>
+		</div>
+
+		<div id="pick" hidden>
+			<div>
+				<h2>A new layer</h2>
+				<p>
+					A species is a bundle of numbers, never a model — picking one
+					writes its numbers into the layer and they stay editable
+					afterwards. <b>Custom</b> starts from the plain defaults.
+				</p>
+				<div id="pickList"></div>
+			</div>
+		</div>
+
+		<script>
+			"use strict";
+
+
+			// ===== BEGIN engine noise kernel =====
+			// A hand port of packages/engine/src/generation/noise. A demo here
+			// carries no imports and no build step, so this is a copy -- and a
+			// copy that has drifted from the engine is a lab that teaches the
+			// wrong lesson, which is why
+			// packages/engine/tests/demos/multiNoiseLab.test.ts digests this
+			// block against the real functions.
+			/** `2^32`, the divisor that turns a `uint32` into a fraction of one. */
+			const U32 = 4294967296;
+
+			/** Three integer coordinates and a seed, mixed into `[0, 1)`. */
+			function hash3(x, y, z, seed) {
+				let h =
+					(Math.imul(x | 0, 374761393) +
+						Math.imul(y | 0, 668265263) +
+						Math.imul(z | 0, 1274126177) +
+						Math.imul(seed | 0, 1013904223)) >>>
+					0;
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				h = (h ^ (h >>> 16)) >>> 0;
+				return h / U32;
+			}
+
+			/** A seed someone typed, reduced to the `uint32` the hash takes. */
+			function seedFromString(text) {
+				let h = 2166136261 >>> 0;
+				for (let i = 0; i < text.length; i++) {
+					h = (h ^ text.charCodeAt(i)) >>> 0;
+					h = Math.imul(h, 16777619) >>> 0;
+				}
+				h = (h ^ (h >>> 13)) >>> 0;
+				h = Math.imul(h, 1274126177) >>> 0;
+				return (h ^ (h >>> 16)) >>> 0;
+			}
+
+			/**
+			 * The quintic curve, `6t^5 - 15t^4 + 10t^3`.
+			 *
+			 * Zero in the first and second derivative at both ends, so a normal
+			 * has no crease where one lattice cell meets the next. Smoothstep is
+			 * flat in the first derivative only and leaves a curvature jump at
+			 * every lattice plane, which shading draws as a grid.
+			 */
+			function fade(t) {
+				return t * t * t * (t * (t * 6 - 15) + 10);
+			}
+
+			/** Trilinear value noise, in `[-1, 1]`. */
+			function valueNoise3(px, py, pz, seed) {
+				const xi = Math.floor(px);
+				const yi = Math.floor(py);
+				const zi = Math.floor(pz);
+				const u = fade(px - xi);
+				const v = fade(py - yi);
+				const w = fade(pz - zi);
+				let s = 0;
+				for (let c = 0; c < 8; c++) {
+					const dx = c & 1;
+					const dy = (c >> 1) & 1;
+					const dz = (c >> 2) & 1;
+					const wx = dx ? u : 1 - u;
+					const wy = dy ? v : 1 - v;
+					const wz = dz ? w : 1 - w;
+					s += wx * wy * wz * hash3(xi + dx, yi + dy, zi + dz, seed);
+				}
+				return s * 2 - 1;
+			}
+
+			const OCTAVE_SPREAD = 1000;
+			const RIDGE_GAIN = 2.2;
+
+			/**
+			 * Every octave's own offset, worked out once per seed instead of per
+			 * sample.
+			 *
+			 * **An octave's offset is a property of the octave and the seed, and
+			 * of nothing else** -- it never depended on the point being sampled,
+			 * and computing it inside the sampling loop meant three hashes a
+			 * sample thrown away. Bit for bit the same number: the stored value
+			 * is exactly the `(2 * hash - 1) * OCTAVE_SPREAD` the loop used to
+			 * compute, and the settings' own offset is still added at the point
+			 * of use.
+			 */
+			const OCTAVE_OFFSETS = new Map();
+
+			function offsetsFor(seed, octaves) {
+				const held = OCTAVE_OFFSETS.get(seed);
+				if (held && held.length >= octaves * 3) return held;
+				const made = new Float64Array(octaves * 3);
+				for (let o = 0; o < octaves; o++) {
+					made[o * 3] = (2 * hash3(o, 0, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 1] = (2 * hash3(o, 1, 0, seed) - 1) * OCTAVE_SPREAD;
+					made[o * 3 + 2] = (2 * hash3(o, 2, 0, seed) - 1) * OCTAVE_SPREAD;
+				}
+				OCTAVE_OFFSETS.set(seed, made);
+				return made;
+			}
+
+			/**
+			 * Octaves of value noise with the panel's own parameters, in
+			 * `[-1, 1]`.
+			 *
+			 * Every octave gets its own hashed offset, or two octaves of one
+			 * seeded lattice share zero crossings wherever their frequencies land
+			 * near a whole multiple and the ground grows a repeating grain.
+			 * Octaves accumulate low frequency first, because floating-point
+			 * addition is not associative -- the other order moves the result by
+			 * `1.4e-17` at four and five octaves and by nothing at six and
+			 * eight, which is the kind of error testing never finds. And the sum
+			 * is divided by the total amplitude, so adding an octave adds detail
+			 * without making the world taller.
+			 *
+			 * **`ridge` folds each octave at its own zero crossing**, and that
+			 * fold is the only place a crease can come from: every octave of a
+			 * plain sum is smooth in its first and second derivative, so every
+			 * summit a plain sum builds is a dome. At `0` the sum is returned
+			 * bit for bit.
+			 *
+			 * **It creases a whole layer at once**, moving the character of
+			 * every place in that layer together, so it belongs to a layer that
+			 * already says *where* -- fold the layer that decides a coastline
+			 * and every coastline on the planet is creased.
+			 */
+			function octaveNoise(x, y, z, seed, s) {
+				let sum = 0;
+				let amplitude = 1;
+				let total = 0;
+				let f = s.frequency;
+				let weight = 1;
+				const ridge = s.ridge;
+				const spread = offsetsFor(seed, s.octaves);
+				for (let o = 0; o < s.octaves; o++) {
+					const ox = spread[o * 3] + s.offsetX;
+					const oy = spread[o * 3 + 1] + s.offsetY;
+					const oz = spread[o * 3 + 2];
+					const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+					let signal = n;
+					if (ridge > 0) {
+						// **The fold's crest moves; the two shapes are never
+						// mixed.** Folding at the zero crossing and blending
+						// that against the plain octave adds an even function to
+						// an odd one, and the two disagree about which end is
+						// high -- plain noise peaks at `n = 1` and a fold peaks
+						// at `n = 0` -- so on the positive side they cancel.
+						// Measured over the planet, the spread of the top tenth
+						// against the bottom tenth ran `1 : 3.34` at a fold of
+						// 0.35 and the maximum fell to 0.338 against the plain
+						// sum's 0.807. One shape whose crest slides instead: the
+						// field reaches +1 at the crest and -1 at the far end at
+						// every setting, and both ends are the arithmetic they
+						// always were.
+						const pivot = 1 - ridge;
+						const away = Math.abs(n - pivot) / (1 + pivot);
+						const crease = (1 - away) * (1 - ridge * away);
+						signal = crease * 2 - 1;
+						signal *= weight;
+						weight = Math.min(
+							1,
+							Math.max(0, 1 - ridge + ridge * crease * RIDGE_GAIN),
+						);
+					}
+					sum += amplitude * signal;
+					total += amplitude;
+					amplitude *= s.persistence;
+					f *= s.lacunarity;
+				}
+				if (s.normalise === false) return sum;
+				return total > 0 ? sum / total : 0;
+			}
+			// ===== END engine noise kernel =====
+
+			// ===== BEGIN engine coarse grid =====
+			// A hand port of packages/engine/src/addressing. Same reason the
+			// noise above is a copy: a demo here carries no imports and no build
+			// step, and packages/engine/tests/demos/multiNoiseLab.test.ts runs
+			// this block against the real functions, so a copy that has drifted
+			// fails a test rather than drawing a world the engine does not build.
+			//
+			// **The patch is the engine's own lattice**, not a hex grid that
+			// looks like one: the cells come from `positionToCell`, the ring
+			// from `neighbour`, and the hexagons from `cellCorners`. Porting the
+			// lab into the engine is deleting this block and importing the six
+			// names it defines.
+
+			/** The golden ratio, which is what puts the twelve vertices where they are. */
+			const PHI = (1 + Math.sqrt(5)) / 2;
+
+			/** Three components divided by their own length. */
+			function normalize3(v) {
+				const l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+				return [v[0] / l, v[1] / l, v[2] / l];
+			}
+
+			/**
+			 * The twelve icosahedron vertices, as unit directions.
+			 *
+			 * A cell sits on a vertex of the subdivided icosahedron, so these
+			 * twelve are the twelve pentagons at every depth and in every world.
+			 * The order is fixed: vertices 0 and 3 carry the coordinate poles and
+			 * vertex 11 carries the prime meridian.
+			 */
+			const VERTICES = [
+				[-1, PHI, 0],
+				[1, PHI, 0],
+				[-1, -PHI, 0],
+				[1, -PHI, 0],
+				[0, -1, PHI],
+				[0, 1, PHI],
+				[0, -1, -PHI],
+				[0, 1, -PHI],
+				[PHI, 0, -1],
+				[PHI, 0, 1],
+				[-PHI, 0, -1],
+				[-PHI, 0, 1],
+			].map(normalize3);
+
+			/**
+			 * The twenty faces, each three indices into the vertex table.
+			 *
+			 * Every triple runs counter-clockwise seen from outside the sphere,
+			 * so a direction table written in one face's frame means the same
+			 * turn on all twenty.
+			 */
+			const FACES = [
+				[0, 11, 5],
+				[0, 5, 1],
+				[0, 1, 7],
+				[0, 7, 10],
+				[0, 10, 11],
+				[1, 5, 9],
+				[5, 11, 4],
+				[11, 10, 2],
+				[10, 7, 6],
+				[7, 1, 8],
+				[3, 9, 4],
+				[3, 4, 2],
+				[3, 2, 6],
+				[3, 6, 8],
+				[3, 8, 9],
+				[4, 9, 5],
+				[2, 4, 11],
+				[6, 2, 10],
+				[8, 6, 7],
+				[9, 8, 1],
+			];
+
+			/**
+			 * The direction of each face's centroid.
+			 *
+			 * The perpendicular bisector between two adjacent centroids contains
+			 * the edge those faces share, so the nearest centroid to a direction
+			 * names the face that direction falls in, exactly.
+			 */
+			const FACE_CENTROIDS = FACES.map(([a, b, c]) =>
+				normalize3([
+					VERTICES[a][0] + VERTICES[b][0] + VERTICES[c][0],
+					VERTICES[a][1] + VERTICES[b][1] + VERTICES[c][1],
+					VERTICES[a][2] + VERTICES[b][2] + VERTICES[c][2],
+				]),
+			);
+
+			/**
+			 * The six lattice steps, counter-clockwise seen from outside.
+			 *
+			 * Index 0 is the step from the face's vertex `A` toward `B`, the
+			 * offset `(+1, 0)`. That anchor is a property of the cell's own face,
+			 * so it never depends on how the cell was reached.
+			 */
+			const DIRECTIONS = [
+				[1, 0],
+				[0, 1],
+				[-1, 1],
+				[-1, 0],
+				[0, -1],
+				[1, -1],
+			];
+
+			/**
+			 * For each face, where each of its three edges leads.
+			 *
+			 * Twenty faces times three edges is sixty entries, each a face number
+			 * and an edge number: 180 bytes for every seam on the planet. Edge
+			 * `e` runs from vertex `e` to vertex `(e + 1) % 3`. Every matched
+			 * pair is traversed in opposite directions by its two faces, which is
+			 * the signature of consistent outward winding, so no orientation flag
+			 * is stored.
+			 */
+			const FACE_ADJACENCY = FACES.map((f, at) =>
+				[0, 1, 2].map((e) => {
+					const a = f[e];
+					const b = f[(e + 1) % 3];
+					for (let g = 0; g < 20; g++) {
+						if (g === at) continue;
+						for (let other = 0; other < 3; other++) {
+							const c = FACES[g][other];
+							const d = FACES[g][(other + 1) % 3];
+							if ((a === c && b === d) || (a === d && b === c))
+								return { face: g, edge: other };
+						}
+					}
+					throw new Error(`face ${at} edge ${e} has no neighbour`);
+				}),
+			);
+
+			/**
+			 * Turn a set of weights on global vertex numbers into an offset on
+			 * `face`.
+			 *
+			 * The weights need not be whole. A lattice point carries integers and
+			 * a droplet standing between cells carries the fractions between
+			 * them, and both are the same three numbers attached to the same
+			 * three vertices.
+			 */
+			function offsetOn(face, weights) {
+				const ids = FACES[face];
+				let total = 0;
+				const w = ids.map((v) => {
+					const x = weights.get(v) ?? 0;
+					total += x;
+					return x;
+				});
+				if (total === 0) return null;
+				for (const v of weights.keys()) if (!ids.includes(v)) return null;
+				return { face, i: w[1], j: w[2] };
+			}
+
+			/**
+			 * The barycentric weights of a lattice point on its face's vertices.
+			 *
+			 * Written this way a lattice point is a set of integer weights
+			 * attached to global vertex numbers, and that description never
+			 * mentions a face.
+			 */
+			function latticeWeights(n, i, j) {
+				return [n - i - j, i, j];
+			}
+
+			/**
+			 * The direction of lattice point `(i, j)` on `face`, at `n = 2^level`.
+			 *
+			 * One barycentric blend evaluated once at full depth, then one
+			 * normalize. Building the same point by repeated arc-midpoint
+			 * subdivision lands on a different sphere, 38.97 m out on a 1,700 m
+			 * planet, and the error is fixed in metres rather than shrinking with
+			 * depth.
+			 */
+			function latticePosition(face, n, i, j) {
+				const [ia, ib, ic] = FACES[face];
+				const [wa, wb, wc] = latticeWeights(n, i, j);
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				return normalize3([
+					a[0] * wa + b[0] * wb + c[0] * wc,
+					a[1] * wa + b[1] * wb + c[1] * wc,
+					a[2] * wa + b[2] * wb + c[2] * wc,
+				]);
+			}
+
+			/**
+			 * Every face-and-offset pair that names the same lattice point.
+			 *
+			 * A point strictly inside a face has one. A point on a face edge has
+			 * two, and a point at an icosahedron vertex has five, since five
+			 * faces meet there. The point is found by matching weights against
+			 * global vertex numbers, so no geometry is involved.
+			 */
+			function cellRepresentations(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				const ids = FACES[face];
+				const carried = new Map();
+				for (let x = 0; x < 3; x++) if (w[x] > 0) carried.set(ids[x], w[x]);
+				const out = [];
+				for (let g = 0; g < 20; g++) {
+					const gv = FACES[g];
+					let ok = true;
+					for (const v of carried.keys()) if (!gv.includes(v)) ok = false;
+					if (!ok) continue;
+					out.push({
+						face: g,
+						i: carried.get(gv[1]) ?? 0,
+						j: carried.get(gv[2]) ?? 0,
+					});
+				}
+				return out;
+			}
+
+			/**
+			 * The one representation a cell is numbered from: the lowest face.
+			 *
+			 * The same rule that awards a border cell to the lowest chunk
+			 * containing it, applied one level up.
+			 *
+			 * **A cell has a second name only on a face edge, and that is three
+			 * comparisons rather than a search.** A weight of zero is what puts
+			 * the point on the edge opposite that vertex; two zeros put it on an
+			 * icosahedron vertex. With no zero the point is strictly inside its
+			 * own face, which names it and nothing else does -- and without the
+			 * guard, better than 97% of calls walk all twenty faces to hand back
+			 * the cell they were given. **This lab is the caller that made it
+			 * worth guarding**: it canonicalises every cell of a patch that can
+			 * be the whole planet, where the engine's own bulk caller already
+			 * carried the same test at its call site.
+			 */
+			function canonicalCell(face, n, i, j) {
+				if (i > 0 && j > 0 && i + j < n) return { face, i, j };
+				const all = cellRepresentations(face, n, i, j);
+				let best = all[0];
+				for (const c of all) if (c.face < best.face) best = c;
+				return best;
+			}
+
+			/**
+			 * Move a set of weights across the edge opposite vertex `leaving`.
+			 *
+			 * A point on a face is three weights on that face's three **global**
+			 * vertex numbers, and that description never mentions a face. Sending
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)` --
+			 * `gamma` being the weight on the vertex left behind, and the third
+			 * vertex the one the face over the edge carries instead -- writes the
+			 * same point under the other face's name. At a `gamma` of zero, which
+			 * is a point standing exactly on the edge, it moves nothing at all.
+			 *
+			 * The map is linear, so it carries a **direction** as readily as a
+			 * position: hand it the three components of a step and it hands back
+			 * that step continuing onto the other face. That is what lets a
+			 * droplet walk off one face and keep going.
+			 */
+			function acrossEdge(face, weights, leaving) {
+				const here = FACES[face];
+				const link = FACE_ADJACENCY[face][(leaving + 1) % 3];
+				const gamma = weights[leaving];
+				const u = here[(leaving + 1) % 3];
+				const v = here[(leaving + 2) % 3];
+				const third = FACES[link.face].find((x) => x !== u && x !== v);
+				return offsetOn(
+					link.face,
+					new Map([
+						[u, weights[(leaving + 1) % 3] + gamma],
+						[v, weights[(leaving + 2) % 3] + gamma],
+						[third, -gamma],
+					]),
+				);
+			}
+
+
+			/**
+			 * Which of the twenty faces a direction falls in.
+			 *
+			 * Twenty dot products, take the largest. Exact rather than an
+			 * approximation: the perpendicular bisector plane between two
+			 * adjacent face centroids contains the two vertices of the edge they
+			 * share, so the face boundaries are the Voronoi boundaries of the
+			 * centroids.
+			 */
+			function faceOf(x, y, z) {
+				let best = 0;
+				let bestDot = -Infinity;
+				for (let f = 0; f < 20; f++) {
+					const c = FACE_CENTROIDS[f];
+					const d = x * c[0] + y * c[1] + z * c[2];
+					if (d > bestDot) {
+						bestDot = d;
+						best = f;
+					}
+				}
+				return best;
+			}
+
+			/**
+			 * Where a direction sits inside a face, as three weights summing to 1.
+			 *
+			 * Cramer's rule on `[A B C] w = dir`, rescaled, which is the same
+			 * blend `latticePosition` runs forwards. A negative weight means the
+			 * direction is outside this face.
+			 */
+			function barycentricOf(face, x, y, z) {
+				const [ia, ib, ic] = FACES[face];
+				const a = VERTICES[ia];
+				const b = VERTICES[ib];
+				const c = VERTICES[ic];
+				const bc = [
+					b[1] * c[2] - b[2] * c[1],
+					b[2] * c[0] - b[0] * c[2],
+					b[0] * c[1] - b[1] * c[0],
+				];
+				const dc = [
+					y * c[2] - z * c[1],
+					z * c[0] - x * c[2],
+					x * c[1] - y * c[0],
+				];
+				const bd = [
+					b[1] * z - b[2] * y,
+					b[2] * x - b[0] * z,
+					b[0] * y - b[1] * x,
+				];
+				const det = a[0] * bc[0] + a[1] * bc[1] + a[2] * bc[2];
+				const wa = (x * bc[0] + y * bc[1] + z * bc[2]) / det;
+				const wb = (a[0] * dc[0] + a[1] * dc[1] + a[2] * dc[2]) / det;
+				const wc = (a[0] * bd[0] + a[1] * bd[1] + a[2] * bd[2]) / det;
+				const s = wa + wb + wc;
+				return [wa / s, wb / s, wc / s];
+			}
+
+			/**
+			 * The icosahedron vertex a cell sits on, or `-1` when it sits on none.
+			 *
+			 * A cell is a vertex when two of its three weights are zero, which
+			 * puts all of its weight on one corner. Those twelve cells are the
+			 * pentagons.
+			 */
+			function pentagonVertex(face, n, i, j) {
+				const w = latticeWeights(n, i, j);
+				let full = -1;
+				let zeros = 0;
+				for (let x = 0; x < 3; x++) {
+					if (w[x] === 0) zeros++;
+					else full = x;
+				}
+				return zeros === 2 ? FACES[face][full] : -1;
+			}
+
+			/**
+			 * The five neighbours of the pentagon on icosahedron vertex `p`, in
+			 * order around it, starting from the step `startFace` takes toward
+			 * its own next vertex.
+			 *
+			 * The ring is built by rotating face to face around the vertex rather
+			 * than by reflecting across one edge. Two of the five faces meeting
+			 * at a vertex touch the starting face only at that vertex, so a
+			 * single reflection cannot reach them.
+			 */
+			function pentagonRing(p, n, startFace) {
+				let g = startFace;
+				const ring = [];
+				for (let s = 0; s < 5; s++) {
+					const e = FACES[g].indexOf(p);
+					// Faces wind A -> B -> C counter-clockwise from outside, so
+					// at vertex p the next cell round is the one toward the
+					// following vertex, and the next face round is the one across
+					// the edge that arrives back at p.
+					const x = FACES[g][(e + 1) % 3];
+					const cell = offsetOn(
+						g,
+						new Map([
+							[p, n - 1],
+							[x, 1],
+						]),
+					);
+					if (cell) ring.push(cell);
+					g = FACE_ADJACENCY[g][(e + 2) % 3].face;
+				}
+				return ring;
+			}
+
+			/**
+			 * The neighbour of `(face, i, j)` in direction `k`, at subdivision `n`.
+			 *
+			 * Returns `null` only for `k = 5` on one of the twelve pentagons,
+			 * whose ring is five long. That is a direction which does not exist
+			 * rather than a gap: the ring is short, never holed and never
+			 * doubled.
+			 *
+			 * Away from those twelve, stepping off the face is a reflection and
+			 * the whole of it is three additions. A lattice point is integer
+			 * weights on global vertex numbers; step outside and exactly one
+			 * weight goes negative. Reflecting across the shared edge sends
+			 * `(alpha, beta, gamma)` to `(alpha + gamma, beta + gamma, -gamma)`,
+			 * where `gamma` is the negative one. The point itself does not move
+			 * -- only the name it is written under.
+			 */
+			function neighbour(face, n, i, j, k) {
+				const p = pentagonVertex(face, n, i, j);
+				if (p >= 0) return pentagonRing(p, n, face)[k] ?? null;
+
+				const [di, dj] = DIRECTIONS[k];
+				const ni = i + di;
+				const nj = j + dj;
+				const w = latticeWeights(n, ni, nj);
+
+				let negative = -1;
+				for (let x = 0; x < 3; x++) if (w[x] < 0) negative = x;
+				if (negative < 0) return { face, i: ni, j: nj };
+
+				// The edge opposite the vertex whose weight went negative is the
+				// one crossed, and the reflection over it is the whole of the step.
+				return acrossEdge(face, w, negative);
+			}
+
+			/**
+			 * The corners of a cell's polygon, counter-clockwise seen from
+			 * outside.
+			 *
+			 * A corner sits at the centroid of one of the triangles meeting at
+			 * the cell, so corner `k` comes from the cell together with its
+			 * neighbours in directions `k` and `k + 1`. Six of them on a hexagon,
+			 * five on a pentagon.
+			 *
+			 * The three lattice points are averaged as **integer weights on
+			 * global vertex numbers**, and only then blended and projected.
+			 * Averaging first and projecting second is what keeps the 30 face
+			 * edges seamless: the sum never mentions a face, so two faces sharing
+			 * a corner compute the same number rather than two numbers that
+			 * nearly agree. Projecting each point and then averaging the results
+			 * gives a different curve.
+			 */
+			function cellCorners(face, n, i, j) {
+				const ring = [];
+				for (let k = 0; k < 6; k++) {
+					const nb = neighbour(face, n, i, j, k);
+					if (nb) ring.push(nb);
+				}
+				const degree = ring.length;
+				const total = new Float64Array(12);
+				const out = [];
+				for (let k = 0; k < degree; k++) {
+					const b = (k + 1) % degree;
+					total.fill(0);
+					addWeights(total, face, n, i, j);
+					addWeights(total, ring[k].face, n, ring[k].i, ring[k].j);
+					addWeights(total, ring[b].face, n, ring[b].i, ring[b].j);
+					let x = 0;
+					let y = 0;
+					let z = 0;
+					for (let v = 0; v < 12; v++) {
+						const w = total[v];
+						if (w === 0) continue;
+						const p = VERTICES[v];
+						x += p[0] * w;
+						y += p[1] * w;
+						z += p[2] * w;
+					}
+					const length = Math.sqrt(x * x + y * y + z * z);
+					out.push([x / length, y / length, z / length]);
+				}
+				return out;
+			}
+
+			/** Add one lattice point's weights into the running total over the twelve vertices. */
+			function addWeights(total, face, n, i, j) {
+				const ids = FACES[face];
+				total[ids[0]] += n - i - j;
+				total[ids[1]] += i;
+				total[ids[2]] += j;
+			}
+
+			/**
+			 * Round three continuous barycentric coordinates to a lattice point.
+			 *
+			 * Rounding each one on its own breaks the sum: `(4.7, 8.6, 2.7)` sums
+			 * to 16 and rounds to `(5, 9, 3)`, which sums to 17 and names no
+			 * lattice point at all. The repair recomputes whichever coordinate
+			 * moved furthest from the other two, because that is the one the
+			 * measurement knows least about.
+			 *
+			 * The third coordinate exists for this. Two cannot detect the error.
+			 */
+			function hexRound(ka, kb, kc, n) {
+				let ra = Math.round(ka);
+				let rb = Math.round(kb);
+				let rc = Math.round(kc);
+				const da = Math.abs(ra - ka);
+				const db = Math.abs(rb - kb);
+				const dc = Math.abs(rc - kc);
+				if (da > db && da > dc) ra = n - rb - rc;
+				else if (db > dc) rb = n - ra - rc;
+				else rc = n - ra - rb;
+				return [ra, rb, rc];
+			}
+
+			/**
+			 * Which lattice point a direction belongs to, at subdivision `n`.
+			 *
+			 * Three steps, all arithmetic: nearest face centroid, then where
+			 * inside that face, then round to a lattice point. A cell is by
+			 * definition the set of directions this maps to it -- never a
+			 * nearest-centre search, which disagrees with the rounding on about
+			 * 1% of the sphere.
+			 *
+			 * **It does not canonicalise, and that is deliberate.** A cell on a
+			 * face edge has two names and a cell on an icosahedron vertex has
+			 * five, and which one comes back here is whichever face the direction
+			 * fell in. Picking one of them is the caller's job, at the moment it
+			 * uses the cell as a key -- which is what `generate` does.
+			 */
+			function directionToCell(x, y, z, n) {
+				const face = faceOf(x, y, z);
+				const [a, b, c] = barycentricOf(face, x, y, z);
+				const [, i, j] = hexRound(a * n, b * n, c * n, n);
+				return { face, i, j };
+			}
+			// ===== END engine coarse grid =====
+			// ---------------------------------------------------------------
+			// The plants.
+			// ---------------------------------------------------------------
+
+			/**
+			 * `blockSize = K * radius / 2^depth`, which ties the three together
+			 * so any two fix the third.
+			 */
+			const CELL_CONSTANT = Math.sqrt((8 * Math.PI) / (10 * Math.sqrt(3)));
+
+			/**
+			 * The two elevations that cut the land into three bands, and the
+			 * colour of each -- the engine's own numbers, so a colour here names
+			 * the block the world would build there.
+			 */
+			const GROUND_LINES = { rock: 300, snow: 400 };
+			const BAND_COLORS = [
+				[0.76, 0.7, 0.5],
+				[0.26, 0.44, 0.19],
+				[0.42, 0.42, 0.45],
+				[0.92, 0.94, 0.97],
+			];
+			const SEA_COLOR = [0.12, 0.32, 0.55];
+
+
+			/**
+			 * Twelve plants, as twelve parameter sets over one grower.
+			 *
+			 * **A species is a bundle of numbers, never a model.** Nothing here
+			 * is authored geometry: picking one writes its numbers into the rows
+			 * below and they stay editable, so the list is a set of starting
+			 * points rather than a menu of results.
+			 */
+			const SPECIES = {
+				Pine: {
+					height: 22, trunk: 0.55, taper: 0.72, first: 0.42,
+					children: 4, spread: 1.15, lengthRatio: 0.52, radiusRatio: 0.42,
+					levels: 3, up: 0.1, droop: 0.15, bend: 0.18, bendFeature: 14,
+					leaves: true, leafRadius: 2.6, leafRough: 0.45, leafFill: 0.62,
+					leafTip: 0.35, wood: [0.32, 0.22, 0.15], leaf: [0.12, 0.3, 0.16],
+				},
+				Spruce: {
+					height: 26, trunk: 0.5, taper: 0.68, first: 0.22,
+					children: 5, spread: 1.3, lengthRatio: 0.42, radiusRatio: 0.38,
+					levels: 2, up: 0.05, droop: 0.3, bend: 0.12, bendFeature: 12,
+					leaves: true, leafRadius: 2.2, leafRough: 0.4, leafFill: 0.7,
+					leafTip: 0.15, wood: [0.28, 0.2, 0.15], leaf: [0.1, 0.26, 0.15],
+				},
+				Oak: {
+					height: 16, trunk: 1.1, taper: 0.66, first: 0.35,
+					children: 3, spread: 0.85, lengthRatio: 0.72, radiusRatio: 0.6,
+					levels: 4, up: 0.28, droop: 0.05, bend: 0.4, bendFeature: 9,
+					leaves: true, leafRadius: 3.4, leafRough: 0.55, leafFill: 0.6,
+					leafTip: 0.6, wood: [0.36, 0.25, 0.16], leaf: [0.2, 0.42, 0.16],
+				},
+				Birch: {
+					height: 19, trunk: 0.42, taper: 0.78, first: 0.55,
+					children: 2, spread: 0.7, lengthRatio: 0.66, radiusRatio: 0.58,
+					levels: 4, up: 0.34, droop: 0.08, bend: 0.3, bendFeature: 11,
+					leaves: true, leafRadius: 2.4, leafRough: 0.6, leafFill: 0.5,
+					leafTip: 0.75, wood: [0.82, 0.8, 0.74], leaf: [0.3, 0.5, 0.2],
+				},
+				Willow: {
+					height: 14, trunk: 0.9, taper: 0.7, first: 0.3,
+					children: 3, spread: 1.0, lengthRatio: 0.78, radiusRatio: 0.55,
+					levels: 4, up: -0.18, droop: 0.55, bend: 0.45, bendFeature: 8,
+					leaves: true, leafRadius: 2.8, leafRough: 0.5, leafFill: 0.55,
+					leafTip: 0.5, wood: [0.3, 0.24, 0.18], leaf: [0.34, 0.48, 0.2],
+				},
+				Palm: {
+					height: 15, trunk: 0.5, taper: 0.9, first: 0.9,
+					children: 7, spread: 1.25, lengthRatio: 0.36, radiusRatio: 0.3,
+					levels: 1, up: -0.1, droop: 0.6, bend: 0.5, bendFeature: 16,
+					leaves: true, leafRadius: 2.0, leafRough: 0.3, leafFill: 0.75,
+					leafTip: 0.9, wood: [0.44, 0.34, 0.2], leaf: [0.24, 0.46, 0.18],
+				},
+				Baobab: {
+					height: 13, trunk: 2.4, taper: 0.5, first: 0.7,
+					children: 4, spread: 1.05, lengthRatio: 0.48, radiusRatio: 0.4,
+					levels: 3, up: 0.2, droop: 0.1, bend: 0.35, bendFeature: 10,
+					leaves: true, leafRadius: 2.2, leafRough: 0.6, leafFill: 0.45,
+					leafTip: 0.7, wood: [0.5, 0.42, 0.3], leaf: [0.28, 0.4, 0.18],
+				},
+				Redwood: {
+					height: 62, trunk: 2.6, taper: 0.72, first: 0.5,
+					children: 4, spread: 1.1, lengthRatio: 0.44, radiusRatio: 0.4,
+					levels: 3, up: 0.12, droop: 0.2, bend: 0.15, bendFeature: 22,
+					leaves: true, leafRadius: 4.0, leafRough: 0.45, leafFill: 0.6,
+					leafTip: 0.4, wood: [0.4, 0.22, 0.14], leaf: [0.14, 0.3, 0.16],
+				},
+				Bush: {
+					height: 2.6, trunk: 0.22, taper: 0.7, first: 0.08,
+					children: 4, spread: 1.1, lengthRatio: 0.66, radiusRatio: 0.6,
+					levels: 3, up: 0.3, droop: 0.1, bend: 0.55, bendFeature: 4,
+					leaves: true, leafRadius: 1.1, leafRough: 0.6, leafFill: 0.7,
+					leafTip: 0.4, wood: [0.3, 0.24, 0.16], leaf: [0.22, 0.44, 0.18],
+				},
+				Heather: {
+					height: 0.9, trunk: 0.12, taper: 0.7, first: 0.05,
+					children: 3, spread: 1.2, lengthRatio: 0.7, radiusRatio: 0.6,
+					levels: 2, up: 0.35, droop: 0.05, bend: 0.6, bendFeature: 2.5,
+					leaves: true, leafRadius: 0.6, leafRough: 0.65, leafFill: 0.8,
+					leafTip: 0.5, wood: [0.32, 0.26, 0.18], leaf: [0.44, 0.36, 0.5],
+				},
+				Deadwood: {
+					height: 12, trunk: 0.7, taper: 0.62, first: 0.3,
+					children: 3, spread: 1.15, lengthRatio: 0.6, radiusRatio: 0.5,
+					levels: 4, up: 0.15, droop: 0.25, bend: 0.7, bendFeature: 6,
+					leaves: false, leafRadius: 1.4, leafRough: 0.7, leafFill: 0.3,
+					leafTip: 0.8, wood: [0.42, 0.38, 0.32], leaf: [0.4, 0.4, 0.3],
+				},
+				Cactus: {
+					height: 4.5, trunk: 0.7, taper: 0.85, first: 0.45,
+					children: 2, spread: 1.45, lengthRatio: 0.5, radiusRatio: 0.8,
+					levels: 1, up: 0.9, droop: 0, bend: 0.05, bendFeature: 20,
+					leaves: false, leafRadius: 0.8, leafRough: 0.5, leafFill: 0.5,
+					leafTip: 1, wood: [0.24, 0.42, 0.24], leaf: [0.3, 0.5, 0.28],
+				},
+			};
+
+			/**
+			 * What a layer starts from when no species is picked.
+			 *
+			 * **`Custom` is a species like the rest of them**, spelled out
+			 * rather than left as a gap, so a layer built from it is a layer
+			 * with numbers in it that a reader can see and drag. What makes it
+			 * different is only that nothing named it after a real plant.
+			 */
+			const CUSTOM = {
+				height: 12, trunk: 0.5, taper: 0.72, first: 0.4,
+				children: 3, spread: 1.1, lengthRatio: 0.6, radiusRatio: 0.5,
+				levels: 3, up: 0.15, droop: 0.15, bend: 0.25, bendFeature: 12,
+				leaves: true, leafRadius: 2.2, leafRough: 0.5, leafFill: 0.6,
+				leafTip: 0.5, wood: [0.36, 0.26, 0.18], leaf: [0.24, 0.44, 0.2],
+			};
+
+			/** Every species a new layer may start from, `Custom` first. */
+			const PRESETS = { Custom: CUSTOM, ...SPECIES };
+			const PRESET_NAMES = Object.keys(PRESETS);
+
+			// ---------------------------------------------------------------
+			// The knobs.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The rows every vegetation layer carries, in the sections a reader
+			 * meets them in.
+			 *
+			 * **A layer is one kind of plant and everywhere it grows**, which
+			 * is two questions and not one. *Where* is a noise field of its own
+			 * read through a curve, exactly the way a landform layer works in
+			 * the multi-noise lab -- and it has to be a field rather than a
+			 * number, because "pine on the northern slopes and palm at the
+			 * shore" is a statement about places and a density is a statement
+			 * about a planet. *What* is the trunk, the branches and the leaves,
+			 * which is the plant the field then puts there.
+			 *
+			 * **Every row here is per layer.** Two layers are two whole
+			 * plants -- their own noise, their own curve, their own shape --
+			 * and nothing is shared but the world they stand on. That is what
+			 * makes adding a second species an addition rather than a mode.
+			 */
+			const LAYER_SECTIONS = [
+				{
+					name: "Where it grows",
+					open: true,
+					rows: [
+						{
+							key: "curve",
+							label: "Noise → density",
+							type: "spline",
+							// **Flat at the top.** A new layer grows everywhere
+							// its density allows, which is the plainest thing it
+							// can do and the one a reader can then carve into.
+							value: [
+								[-1, 1],
+								[1, 1],
+							],
+						},
+						{ key: "picture", label: "", type: "picture" },
+						{
+							key: "density",
+							label: "Density",
+							low: 0, high: 40, step: 0.1, value: 3, digits: 1,
+							unit: "plants per 100 blocks",
+							note: (layer) =>
+								`the densest the curve can ask for · the curve says ` +
+								`<b>where</b> and this says <b>how many</b>, so ` +
+								`re-drawing one never undoes the other`,
+						},
+						{
+							// **A size in metres, because a frequency is a number
+							// about a sphere and a stand of trees is a thing on
+							// the ground.** The coarse slider carries the decade
+							// and the fine one picks the value inside it, since
+							// one slider cannot hold a hundred metres and a
+							// hundred kilometres at a resolution anybody can drag.
+							key: "feature",
+							label: "Feature",
+							low: 20, high: 1000, step: 10, value: 300, digits: 0,
+							unit: "m",
+						},
+						{
+							key: "featureScale",
+							label: "Feature scale",
+							low: 1, high: 100, step: 1, value: 4, digits: 0, unit: "x",
+							note: (layer) =>
+								`widest <b>${Math.round(
+									layer.values.feature * layer.values.featureScale,
+								).toLocaleString()} m</b>, narrowest <b>${Math.round(
+									(layer.values.feature * layer.values.featureScale) /
+										layer.values.lacunarity ** (layer.values.octaves - 1),
+								).toLocaleString()} m</b>`,
+						},
+						{ key: "octaves", label: "Octaves", low: 1, high: 8, step: 1, value: 3, digits: 0 },
+						{ key: "persistence", label: "Falloff", low: 0.1, high: 0.9, step: 0.05, value: 0.5, digits: 2 },
+						{
+							key: "lacunarity",
+							label: "Step between octaves",
+							low: 1.5, high: 3, step: 0.1, value: 2, digits: 1, unit: "x",
+						},
+						{
+							key: "fold",
+							label: "Fold",
+							low: 0, high: 1, step: 0.05, value: 0, digits: 2,
+							note: (layer) =>
+								layer.values.fold === 0
+									? "the plain sum, bit for bit"
+									: "creases every octave at its own zero crossing, which " +
+										"draws a stand with an edge rather than one that fades",
+						},
+						{
+							key: "sizeSpread",
+							label: "Size spread",
+							low: 0, high: 0.8, step: 0.05, value: 0.4, digits: 2,
+							note: () =>
+								"each plant scales off its own hash, so a stand has " +
+								"saplings in it",
+						},
+					],
+				},
+				{
+					name: "Trunk",
+					rows: [
+						{ key: "height", label: "Height", low: 0.5, high: 90, step: 0.5, value: 22, digits: 1, unit: "m" },
+						{ key: "trunk", label: "Base radius", low: 0.1, high: 4, step: 0.05, value: 0.55, digits: 2, unit: "m" },
+						{
+							key: "taper", label: "Taper", low: 0.3, high: 1, step: 0.02, value: 0.72, digits: 2,
+							note: () => "the radius left at the top of each length of branch",
+						},
+						{
+							key: "first",
+							label: "First branch",
+							low: 0, high: 0.95, step: 0.05, value: 0.42, digits: 2,
+							unit: "of the height",
+							note: () => "bare trunk under this",
+						},
+						{
+							key: "bend", label: "Bend", low: 0, high: 1, step: 0.05, value: 0.18, digits: 2,
+							note: () => "how far the noise pushes each step of a branch off its heading",
+						},
+						{
+							key: "bendFeature", label: "Bend feature", low: 1, high: 40, step: 0.5, value: 14, digits: 1, unit: "m",
+							note: () => "how far you walk before the bend changes its mind, so a whole stand leans together",
+						},
+					],
+				},
+				{
+					name: "Branches",
+					on: "useBranches",
+					rows: [
+						{ key: "useBranches", switch: true, value: true, title: "grow branches" },
+						{ key: "levels", label: "Splits", low: 0, high: 6, step: 1, value: 3, digits: 0 },
+						{ key: "children", label: "Branches per split", low: 1, high: 8, step: 1, value: 4, digits: 0 },
+						{ key: "spread", label: "Spread", low: 0.1, high: 1.6, step: 0.05, value: 1.15, digits: 2, unit: "rad" },
+						{ key: "lengthRatio", label: "Length kept", low: 0.2, high: 0.95, step: 0.02, value: 0.52, digits: 2 },
+						{ key: "radiusRatio", label: "Radius kept", low: 0.2, high: 0.95, step: 0.02, value: 0.42, digits: 2 },
+						{ key: "up", label: "Upward pull", low: -0.5, high: 1, step: 0.05, value: 0.1, digits: 2 },
+						{ key: "droop", label: "Droop", low: 0, high: 1, step: 0.05, value: 0.15, digits: 2 },
+					],
+				},
+				{
+					name: "Leaves",
+					on: "useLeaves",
+					rows: [
+						{
+							key: "useLeaves",
+							switch: true,
+							value: true,
+							title: "grow leaves",
+							// **Branches decide whether leaves can grow at all.**
+							// Leaves live at the tips of branches or the top of a
+							// bare trunk; take the branches away and there is
+							// nowhere left for a leaf cluster to sit, so the row
+							// is disabled rather than merely dimmed.
+							disabledWhen: (layer) => !layer.values.useBranches,
+						},
+						{ key: "leafRadius", label: "Cluster", low: 0.3, high: 6, step: 0.1, value: 2.6, digits: 1, unit: "m" },
+						{ key: "leafFill", label: "Fill", low: 0.1, high: 1, step: 0.05, value: 0.62, digits: 2 },
+						{
+							key: "leafRough", label: "Roughness", low: 0, high: 1, step: 0.05, value: 0.45, digits: 2,
+							note: () => "noise cut into the cluster, which is what makes a canopy rather than a ball",
+						},
+						{ key: "leafTip", label: "Only at the tips", low: 0, high: 1, step: 0.05, value: 0.35, digits: 2 },
+					],
+				},
+			];
+
+			/** Every layer row by key, and the shape rows a species writes. */
+			const LAYER_ROWS = new Map();
+			for (const part of LAYER_SECTIONS)
+				for (const row of part.rows) LAYER_ROWS.set(row.key, row);
+			/** The rows a species writes when it is picked. */
+			const SHAPE_KEYS = [
+				"height", "trunk", "taper", "first", "children", "spread",
+				"lengthRatio", "radiusRatio", "levels", "up", "droop", "bend",
+				"bendFeature", "leafRadius", "leafRough", "leafFill", "leafTip",
+			];
+
+			/**
+			 * Every world row: what it is called, what it may be, and what it
+			 * opens at.
+			 *
+			 * **The world rows are the other labs' rows, spelled the same and
+			 * defaulting to the same values**, so a seed and a depth mean one
+			 * thing across the whole set of them. What differs is the level the
+			 * hexagons are drawn at: the map is the terrain, so a landscape lab
+			 * draws map cells, and a plant stands on **blocks** -- the patch
+			 * here is the block grid at the full subdivision depth, with the
+			 * coarse map read underneath it exactly as the engine reads it.
+			 */
+			const KNOBS = [
+				{
+					group: "World",
+					open: true,
+					rows: [
+						{ key: "seed", label: "Seed", type: "text", value: "chamfer" },
+						{
+							// **The pictures are the whole planet or the patch,
+							// and every one of them switches together.** A
+							// vegetation field read at planet scale says which
+							// continents a species is on; read over the patch it
+							// says which side of one hill. Asking that question
+							// once, for all the pictures at once, is what lets
+							// the ground picture and a layer's own picture be
+							// compared -- two pictures of different places are
+							// not a comparison.
+							key: "show",
+							label: "Pictures show",
+							type: "select",
+							options: ["planet", "patch"],
+							value: "planet",
+							note: () =>
+								knobs.show === "planet"
+									? "click a picture to move the patch · right-click enlarges"
+									: "click a picture to enlarge it",
+						},
+						{
+							// **A layer's picture answers two questions and only
+							// one of them at a time.** *Where does this grow* is
+							// the field read through the curve, which is what the
+							// world will actually do; *what does the field say*
+							// is the reading itself, which is what a curve is
+							// drawn against and the only picture that shows what
+							// is happening either side of a curve's own ends. The
+							// second is the default, because a reader arriving at
+							// a layer is about to draw a curve and cannot draw
+							// one against a picture the curve has already been
+							// applied to.
+							key: "layerPicture",
+							label: "Layers show",
+							type: "select",
+							options: ["noise", "density"],
+							value: "noise",
+							note: () =>
+								knobs.layerPicture === "noise"
+									? "the reading itself, black at −1 and white at +1 · " +
+										"the whole field, sea included, because a field has " +
+										"a value everywhere and the ground picture above " +
+										"says where the land is"
+									: "the reading through the curve, in the layer's own " +
+										"green · which is what the world will do, with the " +
+										"sea left black because nothing grows in it",
+						},
+						{ key: "groundPicture", label: "", type: "picture", value: 0 },
+						{
+							key: "subdivisionDepth",
+							label: "Subdivision depth",
+							low: 4, high: 17, step: 1, value: 13, digits: 0,
+							note: () =>
+								field
+									? `radius <b>${Math.round(field.k.radius).toLocaleString()} m</b>, ` +
+										`block <b>${field.k.blockSize.toFixed(2)} m</b>, ` +
+										`cell <b>${field.cellMetres.toFixed(2)} m</b> across`
+									: "",
+						},
+						{
+							key: "blockSize",
+							label: "Block size",
+							low: 0.25, high: 4, step: 0.25, value: 1, digits: 2, unit: "m",
+							note: () =>
+								"a plant is measured in metres and built in blocks, " +
+								"so this is what decides whether a trunk can taper at all",
+						},
+						{
+							// The coarse map is the terrain. It is far wider than
+							// a block, so a patch this size sits on two or three
+							// of its cells and the ground under a grove is a ramp.
+							key: "coarseSpacing",
+							label: "Map cell",
+							low: 4, high: 128, step: 4, value: 16, digits: 0, unit: "m",
+							note: () =>
+								field
+									? `level <b>${field.k.level}</b> = <b>${field.k.mapMetres.toFixed(1)} m</b>, ` +
+										`<b>${(field.span / field.k.mapMetres).toFixed(1)}</b> map cells under the patch`
+									: "",
+						},
+						{
+							// **Level of detail is a subdivision depth.** The
+							// same ground drawn at a shallower one, which is the
+							// engine's rule -- levels do not nest, so a coarse
+							// mesh re-evaluates the terrain rather than dropping
+							// cells out of a fine one.
+							key: "lod",
+							label: "Level of detail",
+							low: 0, high: 5, step: 1, value: 0, digits: 0,
+							note: () =>
+								field
+									? `blocks <b>${field.block.toFixed(1)} m</b> · ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons drawn over ` +
+										`<b>${field.roots.toLocaleString()}</b> planting cells — the ` +
+										`ground gets cheaper with the level and the roots do not`
+									: "",
+						},
+						{
+							key: "cells",
+							label: "Patch",
+							low: 24, high: 256, step: 8, value: 96, digits: 0,
+							unit: "blocks across",
+							note: () =>
+								field
+									? `<b>${Math.round(field.span).toLocaleString()} m</b> of ground, ` +
+										`<b>${field.count.toLocaleString()}</b> hexagons`
+									: "",
+						},
+						// **Where the page opens is a place that has ground on
+						// it**, chosen off the picture rather than left where a
+						// one-stack world happened to put land: with a real
+						// continent model most of the planet is ocean, and a lab
+						// about plants that opens under water has nothing on
+						// screen and nothing to say why.
+						{ key: "latitude", label: "Latitude", low: -85, high: 85, step: 1, value: 20, digits: 0, unit: "°" },
+						{ key: "longitude", label: "Longitude", low: -180, high: 180, step: 1, value: 10, digits: 0, unit: "°" },
+					],
+				},
+				{
+					group: "Plants",
+					tint: "leaf",
+					panel: "plants",
+					rows: [
+						{
+							key: "leavesCollide",
+							label: "Leaves are solid",
+							type: "check",
+							value: true,
+							note: () =>
+								field
+									? `<b>${(100 * field.walkable).toFixed(1)}%</b> of the ground ` +
+										`can be walked onto — the rest is blocked at knee height`
+									: "",
+						},
+					],
+				},
+			];
+
+			/**
+			 * How the patch is cut into chunks, and how far past its own rim a
+			 * chunk looks.
+			 *
+			 * **Not knobs, because per-chunk generation is not an option here.**
+			 * A chunk gets an address and the seed and nothing else, so a plant
+			 * whose canopy crosses a boundary is grown twice, identically, by
+			 * two chunks that never speak -- that is the property this lab
+			 * exists to hold, and a switch for it would suggest the other way
+			 * were also on offer. The reach has to cover the widest canopy: at
+			 * 24 m the same ground cut up and generated whole came out **0 cells
+			 * different**, at 16 m 0, at 8 m 704 and at none 10,702.
+			 */
+			const CHUNK_CELLS = 48;
+			const CHUNK_REACH = 24;
+
+			/** Every world row by key, and the draft the panel is editing. */
+			const ROWS = new Map();
+			for (const group of KNOBS)
+				for (const row of group.rows) ROWS.set(row.key, row);
+			const knobs = {};
+			for (const [key, row] of ROWS) knobs[key] = row.value;
+			const rows = new Map();
+			let field = null;
+			let cost = 0;
+
+			// ---------------------------------------------------------------
+			// The layers.
+			// ---------------------------------------------------------------
+
+			/**
+			 * Every vegetation layer, in the order they are offered a cell.
+			 *
+			 * **A cell holds one plant, so the order is the tie-break.** Each
+			 * layer rolls its own hash against its own density at every root,
+			 * and the first one that wants the cell takes it -- which makes a
+			 * layer's density the share of what is *left*, not of the ground.
+			 * Any other rule needs the layers to know about each other, and a
+			 * layer that reads its neighbour is not a layer.
+			 */
+			const layers = [];
+			let nextLayerId = 1;
+
+			/**
+			 * A layer's own salt, taken from its id rather than its position.
+			 *
+			 * **Deleting the first of three layers must not re-plant the other
+			 * two.** An index would do exactly that: every hash under it would
+			 * shift and the whole planet would be re-sown by an edit that said
+			 * nothing about it. An id is handed out once and travels in the
+			 * link, so a layer keeps its own forest for as long as it exists.
+			 */
+			function saltOf(layer) {
+				return 909 + layer.id * 7919;
+			}
+
+			/** A new layer, starting from one species' numbers. */
+			function makeLayer(species) {
+				const preset = PRESETS[species] ?? CUSTOM;
+				const values = {};
+				for (const [key, row] of LAYER_ROWS) {
+					if (row.type === "spline") continue;
+					values[key] = row.value;
+				}
+				for (const key of SHAPE_KEYS) values[key] = preset[key];
+				values.useLeaves = preset.leaves;
+				return {
+					id: nextLayerId++,
+					species,
+					values,
+					curve: LAYER_ROWS.get("curve").value.map((point) => [...point]),
+					wood: preset.wood,
+					leaf: preset.leaf,
+					on: true,
+					open: true,
+					// Filled by every rebuild, so the card can say what it grew.
+					grown: 0,
+				};
+			}
+
+			/** Write a species' numbers into a layer that already exists. */
+			function applySpecies(layer, species) {
+				const preset = PRESETS[species] ?? CUSTOM;
+				layer.species = species;
+				for (const key of SHAPE_KEYS) layer.values[key] = preset[key];
+				layer.values.useLeaves = preset.leaves;
+				layer.wood = preset.wood;
+				layer.leaf = preset.leaf;
+			}
+
+			/** A layer's noise stack, read off its own rows. */
+			function layerSettings(layer, radius) {
+				const v = layer.values;
+				return {
+					frequency: radius / Math.max(1, v.feature * v.featureScale),
+					octaves: Math.round(v.octaves),
+					persistence: v.persistence,
+					lacunarity: v.lacunarity,
+					offsetX: 0,
+					offsetY: 0,
+					ridge: v.fold,
+				};
+			}
+
+			/**
+			 * How much of this layer one place will take, in `[0, 1]`.
+			 *
+			 * The field is read **in 3D world space from the direction vector**,
+			 * never from a face's own `(i, j)` -- face coordinates are
+			 * discontinuous at all thirty face edges, and a stand of trees that
+			 * stopped dead along one would be the seam made visible.
+			 */
+			function layerShareAt(layer, x, y, z, seed, settings) {
+				return splineAt(
+					layer.curve,
+					octaveNoise(x, y, z, seed + saltOf(layer), settings),
+				);
+			}
+
+			/** A CSS colour out of one of a layer's two float triples. */
+			function inkOf(rgb) {
+				return `rgb(${rgb.map((c) => Math.round(c * 255)).join(",")})`;
+			}
+
+			/** What the knobs come to once the ones that imply others are read. */
+			function derived() {
+				const k = {};
+				for (const key of ROWS.keys()) k[key] = knobs[key];
+				k.radius =
+					(knobs.blockSize * 2 ** knobs.subdivisionDepth) / CELL_CONSTANT;
+				// The coarse map's level, chosen exactly as the engine chooses
+				// it, and capped at 9 the same way.
+				k.level = Math.max(
+					2,
+					Math.min(
+						knobs.subdivisionDepth,
+						9,
+						Math.max(
+							0,
+							Math.round(
+								Math.log2((CELL_CONSTANT * k.radius) / knobs.coarseSpacing),
+							),
+						),
+					),
+				);
+				k.mapMetres = (CELL_CONSTANT * k.radius) / 2 ** k.level;
+				k.blockMetres =
+					(CELL_CONSTANT * k.radius) / 2 ** knobs.subdivisionDepth;
+				return k;
+			}
+
+			/**
+			 * A knob's own ends, narrowed by the rest of the draft.
+			 *
+			 * A slider that cannot reach a refusal beats a refusal that explains
+			 * itself. Two bind here: the map cannot be finer than the block grid
+			 * it is read on, and a patch of block cells has to stay small enough
+			 * to build while a slider is moving.
+			 */
+			function liveRange(row) {
+				if (row.key === "coarseSpacing") {
+					const k = derived();
+					return {
+						...row,
+						low: Math.max(row.low, Math.ceil(k.blockMetres * 4)),
+					};
+				}
+				return row;
+			}
+
+			/** Pull every knob inside its own narrowed ends, inward only. */
+			function settle() {
+				for (const g of KNOBS)
+					for (const r of g.rows) {
+						if (r.digits === undefined || r.type) continue;
+						const live = liveRange(r);
+						knobs[r.key] = Math.min(live.high, Math.max(live.low, knobs[r.key]));
+					}
+			}
+
+			/** A latitude and a longitude, as a unit direction. */
+			function directionOf(latitude, longitude) {
+				const lat = (latitude * Math.PI) / 180;
+				const lon = (longitude * Math.PI) / 180;
+				return [
+					Math.cos(lat) * Math.cos(lon),
+					Math.sin(lat),
+					Math.cos(lat) * Math.sin(lon),
+				];
+			}
+
+			function cross3(a, b) {
+				return [
+					a[1] * b[2] - a[2] * b[1],
+					a[2] * b[0] - a[0] * b[2],
+					a[0] * b[1] - a[1] * b[0],
+				];
+			}
+
+			/**
+			 * East, up and north at one place on the planet.
+			 *
+			 * Up is `normalize(position)` and there is no global north, so north
+			 * is whatever is left after east is taken out of the polar axis.
+			 */
+			function frameOf(up) {
+				const axis = [0, 1, 0];
+				let east = cross3(axis, up);
+				let len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				if (len < 1e-9) {
+					east = cross3([1, 0, 0], up);
+					len = Math.sqrt(east[0] ** 2 + east[1] ** 2 + east[2] ** 2);
+				}
+				east = east.map((v) => v / len);
+				const north = cross3(up, east);
+				return { east, up, north };
+			}
+
+			/**
+			 * The coarse map cell a block cell reads its ground from.
+			 *
+			 * **Scale the barycentric weights and repair them, never shift
+			 * `(i, j)`.** A cell is a Voronoi region and a shift is a floor, so
+			 * shifting names the wrong cell for 43.9% of cells one level out and
+			 * 79.3% four levels out. `hexRound` on the scaled weights is the
+			 * engine's own answer.
+			 */
+			function coarseOf(face, n, i, j, m) {
+				const s = n / m;
+				const [, ci, cj] = hexRound((n - i - j) / s, i / s, j / s, m);
+				return { face, i: ci, j: cj };
+			}
+
+			/**
+			 * The three coarse lattice points a block cell stands between, and
+			 * how much of each it takes.
+			 *
+			 * **A map cell is a straight ramp, not a plateau.** The map is the
+			 * terrain and its cells are far wider than a block -- 16 m here
+			 * against 1 m -- so reading one height per map cell and giving it to
+			 * every block underneath builds a staircase of 16 m treads with a
+			 * cliff at every edge. Interpolated instead, the same map draws a
+			 * hillside: measured on the shipped world, a map cell's own ramp
+			 * rises 4.0 m at the median of land cells, which is one block of
+			 * climb every eight.
+			 *
+			 * Which three points, on a triangular lattice, is decided by what is
+			 * left over when the three scaled weights are floored: one leftover
+			 * is an upward triangle and two is a downward one.
+			 */
+			function coarseCorners(face, n, i, j, m) {
+				const s = n / m;
+				const u = (n - i - j) / s;
+				const v = i / s;
+				const w = j / s;
+				const fu = Math.floor(u);
+				const fv = Math.floor(v);
+				const fw = Math.floor(w);
+				const over = m - (fu + fv + fw);
+				const du = u - fu;
+				const dv = v - fv;
+				const dw = w - fw;
+				if (over <= 0)
+					return [[fv, fw, 1], [fv, fw, 0], [fv, fw, 0]];
+				if (over === 1)
+					return [
+						[fv, fw, du],
+						[fv + 1, fw, dv],
+						[fv, fw + 1, dw],
+					];
+				return [
+					[fv + 1, fw + 1, 1 - du],
+					[fv, fw + 1, 1 - dv],
+					[fv + 1, fw, 1 - dw],
+				];
+			}
+
+			// ---------------------------------------------------------------
+			// The terrain.
+			// ---------------------------------------------------------------
+
+			/**
+			 * A curve read at `at`, straight-line between the points it holds.
+			 *
+			 * `at` is a noise value in `[-1, 1]` and the answer is in `[0, 1]`.
+			 * Outside the outermost points the curve holds its end value, so a
+			 * field that reaches further than the curve was drawn for still has
+			 * an answer and the answer is the one the edge of the curve gave.
+			 */
+			function splineAt(points, at) {
+				if (points.length === 0) return 0;
+				if (at <= points[0][0]) return points[0][1];
+				const last = points[points.length - 1];
+				if (at >= last[0]) return last[1];
+				for (let n = 1; n < points.length; n++) {
+					const [x1, y1] = points[n];
+					if (at > x1) continue;
+					const [x0, y0] = points[n - 1];
+					const span = x1 - x0;
+					if (span <= 1e-9) return y1;
+					return y0 + ((y1 - y0) * (at - x0)) / span;
+				}
+				return last[1];
+			}
+
+			/** A curve as a query-string value, and back. */
+			function splineToText(points) {
+				return points
+					.map(([x, y]) => `${+x.toFixed(3)}:${+y.toFixed(3)}`)
+					.join(",");
+			}
+			function splineFromText(text) {
+				const out = [];
+				for (const pair of String(text).split(",")) {
+					const [x, y] = pair.split(":").map(Number);
+					if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+					out.push([
+						Math.max(-1, Math.min(1, x)),
+						Math.max(0, Math.min(1, y)),
+					]);
+				}
+				out.sort((a, b) => a[0] - b[0]);
+				return out.length >= 2 ? out : null;
+			}
+
+			/**
+			 * **The terrain here is the multi-noise lab's, frozen.**
+			 *
+			 * This lab is about what grows on a hillside, not about the
+			 * hillside, and the two want opposite things from a panel: a
+			 * landscape lab earns its length by putting every term of the model
+			 * on screen, and here every one of those rows is a row between a
+			 * reader and the plants. So the model is the other lab's -- three
+			 * fields read through three curves, continentalness setting the
+			 * level, erosion deciding how much relief survives and peaks and
+			 * valleys being the relief -- at that lab's own shipped numbers,
+			 * with nothing exposed. **A seed is the whole of the input.**
+			 *
+			 * One stack of octaves was what stood here before, and it is what a
+			 * planting field cannot be tuned against: fBm is homogeneous, so
+			 * one statistic describes the whole planet and there is no shore,
+			 * no plain and no range for a species to prefer. A vegetation layer
+			 * that says *this kind grows on lowland near the coast* needs a
+			 * world that has one.
+			 */
+			const TERRAIN = {
+				relief: 800,
+				seaDepth: 360,
+				peakRelief: 220,
+				seaLevel: 0,
+				erosionBite: 0.55,
+				cont: {
+					metres: 6000,
+					octaves: 3,
+					persistence: 0.5,
+					lacunarity: 2,
+					ridge: 0,
+					curve: [
+						[-1, 0],
+						[-0.34, 0.0967],
+						[-0.06, 0.29],
+						[0.06, 0.3222],
+						[0.0876, 0.5],
+						[0.1, 0.536],
+						[0.26, 0.652],
+						[0.46, 0.8405],
+						[1, 1],
+					],
+				},
+				ero: {
+					metres: 7500,
+					octaves: 4,
+					persistence: 0.5,
+					lacunarity: 2,
+					ridge: 0,
+					curve: [
+						[-1, 0],
+						[-0.3, 0.05],
+						[-0.1, 0.45],
+						[0.05, 0.82],
+						[0.3, 0.94],
+						[1, 0.98],
+					],
+				},
+				pv: {
+					metres: 600,
+					octaves: 4,
+					persistence: 0.5,
+					lacunarity: 2,
+					ridge: 0.85,
+					curve: [
+						[-1, 0.06],
+						[-0.45, 0.24],
+						[-0.05, 0.42],
+						[0.25, 0.58],
+						[0.55, 0.84],
+						[1, 1],
+					],
+				},
+			};
+
+			/** Offsets from the world seed, so the three fields are three fields. */
+			const TERRAIN_SEED = { cont: 101, ero: 211, pv: 337 };
+
+			/**
+			 * The level the histograms under the curves are counted over.
+			 *
+			 * **A curve governs the planet, so what sits under it has to be
+			 * counted over the planet** -- a patch is a place, and a place can
+			 * be entirely on one side of a curve while the world is spread
+			 * across all of it. Level 5 is 10,242 cells, which is the engine's
+			 * own grid at a level coarse enough to run on every knob move.
+			 */
+			const TALLY_LEVEL = 5;
+			const TALLY_BINS = 48;
+
+			/** Every cell of the planet at that level, as directions, built once. */
+			const WORLD = (() => {
+				const n = 1 << TALLY_LEVEL;
+				const out = [];
+				for (let face = 0; face < 20; face++)
+					for (let i = 0; i <= n; i++)
+						for (let j = 0; i + j <= n; j++) {
+							// A cell on a face edge or an icosahedron vertex has
+							// several names and must be counted once, so it is
+							// taken only by the face that owns it.
+							if (canonicalCell(face, n, i, j).face !== face) continue;
+							out.push(latticePosition(face, n, i, j));
+						}
+				return out;
+			})();
+
+			/**
+			 * Which of those cells are dry, worked out once per world.
+			 *
+			 * **A vegetation curve is read on land and nowhere else**, so the
+			 * bars under it count land -- and the sea is most of a planet with
+			 * a continent model on it, so counting the whole sphere would put
+			 * two thirds of every bar under ground no plant will ever stand on.
+			 * The mask is a function of the seed and the radius alone, and both
+			 * layers and every knob move share one, so it is worked out when
+			 * either of those changes and not again.
+			 */
+			const DRY = { seed: null, radius: 0, mask: null, count: 0 };
+			function dryMask(seed, radius) {
+				if (DRY.mask && DRY.seed === seed && DRY.radius === radius) return DRY;
+				const s = terrainSettings(radius);
+				const mask = new Uint8Array(WORLD.length);
+				let count = 0;
+				for (let n = 0; n < WORLD.length; n++)
+					if (mapHeightAt(WORLD[n], seed, s) > TERRAIN.seaLevel) {
+						mask[n] = 1;
+						count++;
+					}
+				DRY.seed = seed;
+				DRY.radius = radius;
+				DRY.mask = mask;
+				DRY.count = count;
+				return DRY;
+			}
+
+			/** The three stacks at one radius, built once per rebuild. */
+			function terrainSettings(radius) {
+				const out = {};
+				for (const which of ["cont", "ero", "pv"]) {
+					const part = TERRAIN[which];
+					out[which] = {
+						// A layer is set in metres and the noise takes a
+						// frequency: the sample point is a unit direction, so a
+						// frequency counts how many times the widest octave
+						// repeats across the whole planet. Metres divided by the
+						// radius reach it, and the number then means the same
+						// thing whatever size the planet is.
+						frequency: radius / part.metres,
+						octaves: part.octaves,
+						persistence: part.persistence,
+						lacunarity: part.lacunarity,
+						offsetX: 0,
+						offsetY: 0,
+						ridge: part.ridge,
+					};
+				}
+				return out;
+			}
+
+			/**
+			 * The ground, in metres against sea level, at one coarse map cell.
+			 *
+			 * Continentalness sets the level and its curve's **middle is the
+			 * waterline**, with the two halves scaling apart -- up to `relief`
+			 * above it and down to `seaDepth` below -- so the coast is where the
+			 * curve crosses the middle and no metre knob moves it. Erosion says
+			 * how much of the relief is taken away and, in proportion to
+			 * `erosionBite`, how much of the level goes with it, because water
+			 * wears a range down as well as smoothing it. Peaks and valleys is
+			 * the relief itself, signed about the level the continent set.
+			 * Below sea level nothing is worn: the ocean floor is not what the
+			 * rain is falling on.
+			 */
+			function mapHeightAt(p, seed, s) {
+				const cont = octaveNoise(p[0], p[1], p[2], seed + TERRAIN_SEED.cont, s.cont);
+				const ero = octaveNoise(p[0], p[1], p[2], seed + TERRAIN_SEED.ero, s.ero);
+				const pv = octaveNoise(p[0], p[1], p[2], seed + TERRAIN_SEED.pv, s.pv);
+				const level = splineAt(TERRAIN.cont.curve, cont);
+				const base =
+					level >= 0.5
+						? ((level - 0.5) / 0.5) * TERRAIN.relief
+						: -((0.5 - level) / 0.5) * TERRAIN.seaDepth;
+				const cut = splineAt(TERRAIN.ero.curve, ero);
+				const swing = splineAt(TERRAIN.pv.curve, pv) * 2 - 1;
+				const over = base - TERRAIN.seaLevel;
+				const worn = 1 - TERRAIN.erosionBite * cut;
+				return (
+					TERRAIN.seaLevel +
+					(over > 0 ? over * worn : over) +
+					(1 - cut) * swing * TERRAIN.peakRelief
+				);
+			}
+
+			/** A layer's own numbers, in the shape the grower reads. */
+			function shapeOf(layer) {
+				return layer.values;
+			}
+
+			/** The noise the bend is read off, shared by every plant in a stand. */
+			function bendSettings(spec) {
+				return {
+					frequency: 1 / Math.max(0.5, spec.bendFeature),
+					octaves: 2,
+					persistence: 0.5,
+					lacunarity: 2,
+					offsetX: 0,
+					offsetY: 0,
+					ridge: 0,
+				};
+			}
+
+			/**
+			 * One plant, as a list of tapered rods and a list of leaf clusters.
+			 *
+			 * **Nothing decides here whether a cell is wood.** The skeleton is
+			 * geometry in the patch's own frame -- east, up, north, in metres --
+			 * and turning it into cells is a separate step, because the two
+			 * answer different questions and the second one has to go through
+			 * the engine's own `positionToCell` to be true.
+			 *
+			 * **A branch is a direction in three dimensions, never a walk along
+			 * the neighbour ring.** A heading carried along a path here does not
+			 * close -- a loop round an odd number of pentagons comes back
+			 * rotated one index at any radius -- and 46% of chunks are turned
+			 * half a turn, so a branch that stepped by direction index would
+			 * grow one shape in one chunk and its mirror image in the next. It
+			 * also never asks for neighbour `k = 5`, which is what keeps the
+			 * twelve pentagons from needing a case.
+			 */
+			function growPlant(base, stance, spec, scale, seed, out) {
+				// **Off the trunk, leaves have nothing to hang from.** A
+				// cluster sits at a branch tip or the top of a bare trunk, so
+				// turning branches off has to take leaves with it -- otherwise
+				// a plant with `Branches` unchecked still grows the one leaf
+				// ball a bare trunk's tip would carry, which is not what the
+				// switch says it does.
+				//
+				// **Read off the layer's own numbers, not the page's.** Every
+				// switch here belongs to one kind of plant, so a bare-trunk
+				// cactus and a full oak stand in the same patch.
+				const leavesOn = spec.useLeaves && spec.useBranches;
+				const noise = bendSettings(spec);
+				// **The walk is in the plant's own frame and everything it
+				// records is in the world's.** Working in a frame is what makes
+				// a branch angle mean anything -- up is up and a spread is a
+				// spread; recording in the world is what lets two chunks that
+				// both hold this plant put its cells in the same places. The
+				// bend is read in world coordinates for the same reason: read in
+				// the plant's frame it would be a different field for every
+				// plant, and a stand would not lean together.
+				const world = [0, 0, 0];
+				const out3 = (x, y, z) => {
+					world[0] =
+						base[0] + stance.east[0] * x + stance.up[0] * y + stance.north[0] * z;
+					world[1] =
+						base[1] + stance.east[1] * x + stance.up[1] * y + stance.north[1] * z;
+					world[2] =
+						base[2] + stance.east[2] * x + stance.up[2] * y + stance.north[2] * z;
+					return world;
+				};
+				const step = Math.max(0.35, knobs.blockSize * 0.6);
+				const grow = (
+					px, py, pz, dx, dy, dz, len, rad, level, trunk, tag,
+				) => {
+					const steps = Math.max(2, Math.round(len / step));
+					const run = len / steps;
+					// **The bend is a displacement from the heading this limb
+					// set out on, never a nudge added to the last step.**
+					// Accumulated, it is a random walk in direction: an 86 m
+					// trunk at a 0.4 m step is 215 steps, and a nudge of 0.075
+					// each time wanders about a radian, which measured as a
+					// canopy reaching 40.8 m sideways from a tree 20 m wide.
+					// Read as a displacement it is bounded by the knob, and a
+					// stand still leans together because the field is the same.
+					const sx = dx, sy = dy, sz = dz;
+					// Where children leave this limb: spread along the bare
+					// fraction of a trunk, gathered at the tip of anything else.
+					const from = trunk ? spec.first : 0.82;
+					const kids = Math.max(1, Math.round(spec.children));
+					const joints = [];
+					// **Whorls are spread up the trunk, not taken as they come.**
+					// Pushing a joint at every step past the bare fraction fills
+					// the quota in the first few steps, so every branch leaves
+					// within a metre or two of the same height: the tree comes
+					// out as a low disc of branches with a bare pole standing
+					// out of the top of it. The heights are worked out first and
+					// the walk pushes a joint as it passes each one.
+					const whorls = [];
+					if (trunk)
+						for (let w = 0; w < kids; w++)
+							whorls.push(from + ((0.97 - from) * (w + 0.4)) / kids);
+					let nextWhorl = 0;
+					// Half way along, for the leaves a limb carries rather than
+					// the ones at its end -- pushing those at the tip too puts
+					// two clusters on one point and pays for both.
+					let middle = null;
+					for (let s = 0; s < steps; s++) {
+						const ax = px, ay = py, az = pz;
+						const at = (s + 1) / steps;
+						dx = sx;
+						dy = sy;
+						dz = sz;
+						if (spec.bend > 0) {
+							const push = spec.bend * 0.8;
+							const w = out3(px, py, pz);
+							const wx = w[0], wy = w[1], wz = w[2];
+							dx += push * octaveNoise(wx, wy, wz, seed + 11, noise);
+							dy += push * 0.4 * octaveNoise(wx, wy, wz, seed + 23, noise);
+							dz += push * octaveNoise(wx, wy, wz, seed + 37, noise);
+						}
+						// **The lean is a share of the way along, not a
+						// per-step addition**, for the same reason: a limb
+						// rises or droops by a fixed amount over its own
+						// length whatever that length is. A trunk does
+						// neither -- it is what up and droop are measured
+						// against.
+						if (!trunk) dy += spec.up * at * 0.9 - spec.droop * at * 1.2;
+						const m = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+						dx /= m; dy /= m; dz /= m;
+						px += dx * run; py += dy * run; pz += dz * run;
+						const r0 = rad * (1 - (1 - spec.taper) * (s / steps));
+						const r1 = rad * (1 - (1 - spec.taper) * at);
+						const a3 = out3(ax, ay, az);
+						const aw = [a3[0], a3[1], a3[2]];
+						const b3 = out3(px, py, pz);
+						out.rods.push([aw[0], aw[1], aw[2], b3[0], b3[1], b3[2], r0, r1]);
+						if (s === steps >> 1) middle = [b3[0], b3[1], b3[2]];
+						// **A trunk carries whorls and a limb forks.** Spreading
+						// the children of every limb along its own length reads
+						// as one child each, because a 1.6 m twig at a 0.6 m
+						// step has one point past the four fifths mark -- the
+						// tree then halves its branch count at every level and
+						// comes out as a stick. A limb splits at its tip
+						// instead, into as many as the row asks for.
+						if (level > 0) {
+							if (trunk) {
+								if (nextWhorl < whorls.length && at >= whorls[nextWhorl]) {
+									nextWhorl++;
+									joints.push([px, py, pz, dx, dy, dz, at]);
+								}
+							} else if (s === steps - 1 && joints.length < 1)
+								joints.push([px, py, pz, dx, dy, dz, at]);
+						}
+					}
+					const perJoint = trunk ? 2 : kids;
+					if (level > 0)
+						for (let j = 0; j < joints.length; j++)
+						for (let c = 0; c < perJoint; c++) {
+							const [jx, jy, jz, jdx, jdy, jdz, at] = joints[j];
+							// **Round the limb by a hashed angle, not a stored
+							// one.** Every plant on the planet is a hash of its
+							// own cell, so variety costs a multiply rather than
+							// a table of authored shapes.
+							const turn =
+								2 *
+								Math.PI *
+								(c / perJoint + hash3(c, level * 31 + j, tag, seed));
+							const side = frameOf([jdx, jdy, jdz]);
+							const lean =
+								spec.spread *
+								(0.6 + 0.8 * hash3(c + j * 17, tag, level, seed + 5));
+							let nx = jdx + (Math.cos(turn) * side.east[0] + Math.sin(turn) * side.north[0]) * lean;
+							let ny = jdy + (Math.cos(turn) * side.east[1] + Math.sin(turn) * side.north[1]) * lean + spec.up * 0.3;
+							let nz = jdz + (Math.cos(turn) * side.east[2] + Math.sin(turn) * side.north[2]) * lean;
+							const m = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+							// **A trunk's branches are as long as the trunk left
+							// above them, not as long as the trunk.** A fixed
+							// share of the whole makes the lowest branch half the
+							// tree's height, which is a candelabra; a share of
+							// what is left gives a crown that closes at the top.
+							const childLen = trunk
+								? spec.height * scale * spec.lengthRatio * (1 - at) * 0.6
+								: len * spec.lengthRatio;
+							grow(
+								jx, jy, jz,
+								nx / m, ny / m, nz / m,
+								childLen,
+								rad * spec.radiusRatio,
+								level - 1,
+								false,
+								tag * 7 + c + j * 13 + 1,
+							);
+						}
+					else if (leavesOn) {
+						const w = out3(px, py, pz);
+						out.clusters.push([w[0], w[1], w[2], spec.leafRadius * scale]);
+					}
+					// Leaves along the limb as well as at its end, in the share
+					// **Only at the tips** leaves to the limb.
+					if (
+						level <= 1 &&
+						spec.leaves &&
+						leavesOn &&
+						spec.leafTip < 1 &&
+						middle
+					)
+						out.clusters.push([
+							middle[0], middle[1], middle[2],
+							spec.leafRadius * scale * (1 - spec.leafTip) * 0.9,
+						]);
+				};
+				grow(
+					0, 0, 0,
+					0, 1, 0,
+					spec.height * scale,
+					Math.max(knobs.blockSize * 0.45, spec.trunk * scale),
+					spec.useBranches ? Math.round(spec.levels) : 0,
+					true,
+					1,
+				);
+			}
+
+			/** What a cell holds above the ground. */
+			const EMPTY = 0;
+			const WOOD = 1;
+			const LEAF = 2;
+			/** Layers of headroom under a column's own ground, for a canopy that
+			 * hangs out over a drop. */
+			const SUNK = 8;
+
+			/**
+			 * The patch, its ground, and everything standing on it.
+			 *
+			 * **The hexagons are blocks, not map cells.** The other labs draw
+			 * the coarse map, because the map is the terrain and a landscape is
+			 * what they are about. A plant is metres tall and blocks wide, so
+			 * this patch is the block grid at the full subdivision depth and the
+			 * map is read underneath it -- through `hexRound` on scaled
+			 * barycentric weights, which is how the engine finds a coarse cell
+			 * from a fine one.
+			 */
+			function generate(cells = knobs.cells) {
+				const k = derived();
+				const seed = seedFromString(knobs.seed);
+				const ground = terrainSettings(k.radius);
+				// **The layers that are actually on**, with their own noise
+				// stack worked out once. A layer that is off is not in the list
+				// at all rather than tested and refused, so turning one off
+				// costs nothing and the tie-break order is over the ones that
+				// are left.
+				const live = layers.filter((layer) => layer.on);
+				const liveNoise = live.map((layer) => layerSettings(layer, k.radius));
+				for (const layer of layers) layer.grown = 0;
+
+				// **What the world lands on, under each layer's curve.** Noise
+				// clusters around its own middle, so equal widths of a curve
+				// cover wildly unequal amounts of planet: a drag near the middle
+				// moves a fifth of the land and the same drag out at the end
+				// reaches a couple of percent of it. Counted on every rebuild,
+				// because every noise row moves it.
+				const dry = dryMask(seed, k.radius);
+				const bin = (v) =>
+					Math.max(
+						0,
+						Math.min(TALLY_BINS - 1, Math.floor(((v + 1) / 2) * TALLY_BINS)),
+					);
+				for (const layer of layers) {
+					if (!layer.on) {
+						layer.tally = null;
+						continue;
+					}
+					const settings = layerSettings(layer, k.radius);
+					const counts = new Float32Array(TALLY_BINS);
+					let tallest = 0;
+					for (let c = 0; c < WORLD.length; c++) {
+						if (!dry.mask[c]) continue;
+						const p = WORLD[c];
+						const at = bin(
+							octaveNoise(
+								p[0], p[1], p[2],
+								seed + saltOf(layer),
+								settings,
+							),
+						);
+						if (++counts[at] > tallest) tallest = counts[at];
+					}
+					layer.tally = { counts, tallest, land: dry.count };
+				}
+
+				// **A level of detail is a subdivision depth, and nothing else.**
+				// A coarse chunk here is drawn at a shallower depth over the same
+				// ground, which is the engine's own rule: levels do not nest, so
+				// a coarse mesh re-evaluates the terrain rather than dropping
+				// cells from a fine one. Blocks are wider and taller by the same
+				// factor, and a plant is rasterised into whatever lattice the
+				// chunk is drawn at.
+				const lod = Math.round(knobs.lod);
+				const grain = 2 ** lod;
+				const n = 2 ** Math.max(2, knobs.subdivisionDepth - lod);
+				// **The planting lattice is the finest one, at every level.** A
+				// root is a cell, and a coarse chunk's cells are not the fine
+				// chunk's cells -- hashing its own would choose a different
+				// forest for every level and a tree would come and go as the
+				// player walked. So the roots are enumerated at full depth
+				// whatever is being drawn, which is the one part of this that
+				// does NOT get cheaper with distance.
+				const rootN = 2 ** knobs.subdivisionDepth;
+				const m = 2 ** k.level;
+				const middle = directionOf(knobs.latitude, knobs.longitude);
+				const drawn = Math.max(4, cells >> lod);
+				const found = directionToCell(middle[0], middle[1], middle[2], n);
+				const start = canonicalCell(found.face, n, found.i, found.j);
+				const reach = Math.max(1, drawn >> 1);
+				const keyOf = (c) => (c.face * (n + 1) + c.i) * (n + 1) + c.j;
+				const at = new Map();
+				const list = [];
+				const add = (c) => {
+					const key = keyOf(c);
+					if (at.has(key)) return false;
+					at.set(key, list.length);
+					list.push(c);
+					return true;
+				};
+				add(start);
+				let frontier = [start];
+				for (let r = 0; r < reach; r++) {
+					const next = [];
+					for (const c of frontier)
+						for (let d = 0; d < 6; d++) {
+							const nb = neighbour(c.face, n, c.i, c.j, d);
+							if (!nb) continue;
+							const cell = canonicalCell(nb.face, n, nb.i, nb.j);
+							if (add(cell)) next.push(cell);
+						}
+					frontier = next;
+				}
+
+				const count = list.length;
+				const centre = latticePosition(start.face, n, start.i, start.j);
+				const frame = frameOf(centre);
+				const radius = k.radius;
+				// A layer is as thick as a cell is wide, and both grow with the
+				// level -- the engine shifts the layer index by the level for
+				// exactly this reason.
+				const block = k.blockSize * grain;
+				const height = new Float64Array(count);
+				const localX = new Float64Array(count);
+				const localZ = new Float64Array(count);
+				const degree = new Uint8Array(count);
+				// **The cell's own direction, kept.** Everything a plant does is
+				// in world coordinates now, so this is read once per stamped
+				// cell rather than recomputed from the lattice.
+				const dirX = new Float64Array(count);
+				const dirY = new Float64Array(count);
+				const dirZ = new Float64Array(count);
+				const corner = new Float64Array(count * 18);
+				const ring = new Int32Array(count * 6).fill(-1);
+				// **One height per map cell, and every block cell under it reads
+				// the same one** -- so the ground is faceted at the map's own
+				// resolution, which is what the engine builds.
+				const mapHeight = new Map();
+				/** One coarse lattice point's height, asked for once. */
+				const mapAt = (face, ci, cj) => {
+					const key = (face * (m + 1) + ci) * (m + 1) + cj;
+					let h = mapHeight.get(key);
+					if (h === undefined) {
+						const q = latticePosition(face, m, ci, cj);
+						h = mapHeightAt(q, seed, ground);
+						mapHeight.set(key, h);
+					}
+					return h;
+				};
+				let lowest = Infinity;
+				let highest = -Infinity;
+				for (let c = 0; c < count; c++) {
+					const cell = list[c];
+					const p = latticePosition(cell.face, n, cell.i, cell.j);
+					dirX[c] = p[0];
+					dirY[c] = p[1];
+					dirZ[c] = p[2];
+					localX[c] =
+						(p[0] - centre[0]) * radius * frame.east[0] +
+						(p[1] - centre[1]) * radius * frame.east[1] +
+						(p[2] - centre[2]) * radius * frame.east[2];
+					localZ[c] =
+						(p[0] - centre[0]) * radius * frame.north[0] +
+						(p[1] - centre[1]) * radius * frame.north[1] +
+						(p[2] - centre[2]) * radius * frame.north[2];
+					let h = 0;
+					for (const [ci, cj, weight] of coarseCorners(
+						cell.face, n, cell.i, cell.j, m,
+					)) {
+						if (weight === 0) continue;
+						h += weight * mapAt(cell.face, ci, cj);
+					}
+					height[c] = h;
+					if (h < lowest) lowest = h;
+					if (h > highest) highest = h;
+					const corners = cellCorners(cell.face, n, cell.i, cell.j);
+					degree[c] = corners.length;
+					for (let v = 0; v < corners.length; v++) {
+						corner[c * 18 + v * 3] = corners[v][0];
+						corner[c * 18 + v * 3 + 1] = corners[v][1];
+						corner[c * 18 + v * 3 + 2] = corners[v][2];
+					}
+					for (let d = 0; d < 6; d++) {
+						const nb = neighbour(cell.face, n, cell.i, cell.j, d);
+						if (!nb) continue;
+						const hit = at.get(keyOf(canonicalCell(nb.face, n, nb.i, nb.j)));
+						if (hit !== undefined) ring[c * 6 + d] = hit;
+					}
+				}
+
+				// **A layer is a whole block, and the surface is where the
+				// rounding puts it.** Two columns a metre apart in height stand
+				// on the same layer boundary or on two, never half way between,
+				// which is what a wall between them is drawn from.
+				// **The datum is the world's, never the patch's.** Counting
+				// layers from the lowest ground in view makes a column's height
+				// depend on what else was drawn, which is the one thing a chunk
+				// generating alone cannot know. Sea level is zero by
+				// construction, so zero is the datum.
+				const datum = 0;
+				const groundLayer = new Int32Array(count);
+				const top = new Float64Array(count);
+				for (let c = 0; c < count; c++) {
+					groundLayer[c] = Math.floor((height[c] - datum) / block);
+					top[c] = datum + (groundLayer[c] + 1) * block;
+				}
+
+				// **The roots, at the finest lattice, whatever is being drawn.**
+				// A coarse chunk covers four times the ground of the one a level
+				// finer and holds the same number of cells, so its terrain costs
+				// the same at every level -- that is what makes distance cheap.
+				// The plants do not follow: they are chosen per fine cell, and
+				// the same ground holds the same trees however coarsely it is
+				// drawn, so this walk is the same size at every level. **It is
+				// the one part of a chunk whose cost does not fall with
+				// distance**, and the readout says so.
+				const roots = [];
+				{
+					const fine = directionToCell(middle[0], middle[1], middle[2], rootN);
+					const seedCell = canonicalCell(fine.face, rootN, fine.i, fine.j);
+					const keyFine = (c) => (c.face * (rootN + 1) + c.i) * (rootN + 1) + c.j;
+					const seen = new Set([keyFine(seedCell)]);
+					roots.push(seedCell);
+					let edge = [seedCell];
+					const want = Math.max(1, cells >> 1);
+					for (let r = 0; r < want; r++) {
+						const next = [];
+						for (const c of edge)
+							for (let d = 0; d < 6; d++) {
+								const nb = neighbour(c.face, rootN, c.i, c.j, d);
+								if (!nb) continue;
+								const cell = canonicalCell(nb.face, rootN, nb.i, nb.j);
+								const key = keyFine(cell);
+								if (seen.has(key)) continue;
+								seen.add(key);
+								roots.push(cell);
+								next.push(cell);
+							}
+						edge = next;
+					}
+				}
+				// Which drawn cell each root stands on, and where it stands.
+				const rootSeat = new Int32Array(roots.length).fill(-1);
+				const rootDir = new Float64Array(roots.length * 3);
+				// **The ground at the root's own point, not at the cell it is
+				// drawn on.** A coarse level resamples the surface, so a shore
+				// read off the drawn cell moves a metre or two every level and a few
+				// plants at the waterline come and go with the level. The map is
+				// the terrain and a point's height on it does not depend on who
+				// asks.
+				const rootHeight = new Float64Array(roots.length);
+				for (let r = 0; r < roots.length; r++) {
+					const cell = roots[r];
+					const p = latticePosition(cell.face, rootN, cell.i, cell.j);
+					let h = 0;
+					for (const [ci, cj, weight] of coarseCorners(
+						cell.face, rootN, cell.i, cell.j, m,
+					)) {
+						if (weight === 0) continue;
+						h += weight * mapAt(cell.face, ci, cj);
+					}
+					rootHeight[r] = h;
+					rootDir[r * 3] = p[0];
+					rootDir[r * 3 + 1] = p[1];
+					rootDir[r * 3 + 2] = p[2];
+					const coarse =
+						rootN === n
+							? cell
+							: coarseOf(cell.face, rootN, cell.i, cell.j, n);
+					const seat = at.get(keyOf(canonicalCell(coarse.face, n, coarse.i, coarse.j)));
+					if (seat !== undefined) rootSeat[r] = seat;
+				}
+
+				// How tall the tallest thing that could stand here is, which is
+				// what the voxel field has to have room for -- over every layer,
+				// because any of them may put a plant on any cell.
+				let reachUp = 0;
+				let widestTrunk = 0;
+				for (const layer of live) {
+					const v = layer.values;
+					reachUp = Math.max(
+						reachUp,
+						v.height * (1 + v.sizeSpread) + v.leafRadius * 1.6,
+					);
+					// The widest trunk any layer can grow, which is where a cell
+					// stops being narrower than the wood in it.
+					widestTrunk = Math.max(widestTrunk, v.trunk * (1 + v.sizeSpread));
+				}
+				const LAYERS = Math.min(
+					320,
+					SUNK + Math.ceil(reachUp / block) + 3,
+				);
+				const veg = new Uint8Array(count * LAYERS);
+				// **Which layer put a cell there**, so a stand of two species is
+				// not one colour. Nought means nothing grew there.
+				const owner = new Uint8Array(count * LAYERS);
+				const cellMetres = k.blockMetres * grain;
+
+				// **A plant is grown in world coordinates, and that is what lets
+				// a chunk grow it alone.** Every earlier version worked in the
+				// patch's own east/up/north frame with the origin at the patch
+				// centre, which is a frame no chunk has: two chunks holding one
+				// tree would each grow it about their own middle and disagree
+				// about every cell of it. Nothing below mentions the patch. A
+				// point is three numbers in the planet's own space, the cell it
+				// falls in comes from `directionToCell` on that point, and how
+				// high it stands is its distance from the centre less the
+				// radius -- all three of which any chunk can work out from an
+				// address and the seed.
+				const cellOf = (px, py, pz) => {
+					const len = Math.sqrt(px * px + py * py + pz * pz) || 1;
+					const c = directionToCell(px / len, py / len, pz / len, n);
+					const hit = at.get(keyOf(canonicalCell(c.face, n, c.i, c.j)));
+					return hit === undefined ? -1 : hit;
+				};
+				const metresOf = (px, py, pz) =>
+					Math.sqrt(px * px + py * py + pz * pz) - radius;
+				/** Which layer of a column a height in metres lands in. */
+				const layerAt = (c, metres) =>
+					SUNK + Math.floor((metres - top[c]) / block);
+
+				// **A stamp's candidates are grown through its own test, never
+				// gathered around it.** Both stamps used to ask for a hexagon
+				// disc -- around every cell a rod's axis passed through, and
+				// around the cell a leaf cluster sat in -- and a disc has no way
+				// to name only the cells the shape reaches, because its ring
+				// count is chosen before a single distance is worked out.
+				// Measured over the shipped stand: **11,240,715** candidates
+				// for **766,211** cells of wood, and **6,695,127** for the
+				// **2,154,460** columns a cluster could put a leaf in.
+				//
+				// A flood asks the test instead. It starts at the cells the
+				// shape is known to sit in and hands the question on from every
+				// cell that passes to that cell's own six neighbours, so it
+				// covers the shape and stops where the shape does. The one
+				// thing it rests on is that the cells within reach of a rod or
+				// a ball are connected through cells that are also within
+				// reach; stepping past a failing cell `SLACK` times costs a
+				// ring and buys that outright.
+				//
+				// `seen` and `slackAt` are the walk's own marks and `seenList`
+				// is its queue, its answer, and the place a rod's walk leaves
+				// the cells its axis sat in -- which are the first entries of
+				// the queue and need no second array.
+				const seen = new Int32Array(count);
+				const seenList = new Int32Array(count);
+				const slackAt = new Int8Array(count);
+				let seenEra = 0;
+				/** How many failing cells a flood may step past. */
+				const SLACK = 1;
+
+				// **Where a write goes, and which writes a chunk is allowed to
+				// make.** A chunk may only write the cells it owns. It grows
+				// plants rooted outside itself all the same -- that is the whole
+				// point -- but what those plants put down beyond its own
+				// territory is the neighbour's business, and dropping it on the
+				// floor here is what proves the neighbour got it too.
+				let target = veg;
+				let tint = owner;
+				let holds = null;
+				let holder = 0;
+				let painting = 0;
+				// **A cell takes what most fills it, and past a certain cell
+				// size that is the canopy.** A twig is centimetres thick and a
+				// cluster is metres across, so wood beating leaf is right at the
+				// block scale and exactly wrong once a block is wider than a
+				// trunk: at level 3, an 8 m block, a forest drew 2,938 wood
+				// cells against **62** leaf, because every cluster lands on the
+				// same cell as the twig it hangs from and was refused there --
+				// bare brown poles at exactly the distance a forest should read
+				// as green.
+				//
+				// **The rule is a rank and not a permission**, and that
+				// distinction is the whole of it. Letting a leaf overwrite wood
+				// where it happens to arrive second makes the answer depend on
+				// the order plants are grown in, and a chunk grows them in a
+				// different order from its neighbour -- measured, that alone
+				// took the chunk audit from 0 cells differing to 10. A rank
+				// fixed before any plant is grown gives the same cell whatever
+				// order it is written in.
+				const canopyWins = cellMetres > widestTrunk;
+				const rankOf = (what) =>
+					what === EMPTY ? 0 : (what === LEAF) === canopyWins ? 2 : 1;
+				// **A canopy is drawn hundreds of times over.** Clusters overlap
+				// by design -- that is what makes a crown rather than a string
+				// of balls -- so over the shipped stand the leaf stamp reaches
+				// **8,311,898** cell-and-layer slots to leave **35,841** leaves,
+				// which is every one of them decided **230 times**. All but the
+				// first are refused by the rank, and refusing them at the top of
+				// the slot walk rather than at the end of it skips the distance,
+				// the square root and the noise lookup that were only ever going
+				// to be thrown away. Which is the same answer either way: a
+				// write that cannot beat what is already in the slot changes
+				// nothing, and the ownership test it skips would have refused
+				// it too.
+				const RANK = new Uint8Array(3);
+				RANK[EMPTY] = rankOf(EMPTY);
+				RANK[WOOD] = rankOf(WOOD);
+				RANK[LEAF] = rankOf(LEAF);
+				const write = (c, slot, what) => {
+					if (slot < 0 || slot >= LAYERS) return;
+					if (holds !== null && holds[c] !== holder) return;
+					const i = c * LAYERS + slot;
+					if (rankOf(what) <= rankOf(target[i])) return;
+					target[i] = what;
+					if (tint !== null) tint[i] = painting;
+				};
+
+				/** One tapered rod of wood, between two points in world space. */
+				const rod = (ax, ay, az, bx, by, bz, ra, rb) => {
+					// **A rod thinner than a cell rasterises to a dotted line,
+					// and a dotted branch is not connected to anything.**
+					// Measured over one tree in a 64 m box: at radius 0.45 of a
+					// cell it comes out as 66 separate pieces with 74.7% of the
+					// wood rooted, and at 0.87 it is one piece and 100%. The
+					// floor is what makes connectivity a property of the
+					// construction rather than something to hope for.
+					const thin = cellMetres * 0.5;
+					ra = Math.max(ra, thin);
+					rb = Math.max(rb, thin);
+					const ux = bx - ax, uy = by - ay, uz = bz - az;
+					const run = Math.sqrt(ux * ux + uy * uy + uz * uz);
+					const wide = Math.max(ra, rb);
+					const steps = Math.max(1, Math.ceil(run / (block * 0.4)));
+					let wasCell = -1;
+					let wasLayer = 0;
+					seenEra++;
+					let seats = 0;
+					// **The walk steps 0.4 of a block, so a cell holds several
+					// of them.** Only the distinct ones are worth keeping, and
+					// they go straight into the queue the flood below reads.
+					let runSeat = -1;
+					for (let s = 0; s <= steps; s++) {
+						const t = s / steps;
+						const px = ax + ux * t, py = ay + uy * t, pz = az + uz * t;
+						const seat = cellOf(px, py, pz);
+						if (seat < 0) continue;
+						const stands = metresOf(px, py, pz);
+						// **The axis cell is always written, whatever the
+						// radius**, so the rod is a walk rather than a string of
+						// discs -- and where a step moves sideways and up at
+						// once, the corner between the two is written too. The
+						// ring is six neighbours and the column is two; a
+						// diagonal is neither, and one missed corner is a branch
+						// in two pieces.
+						const here = layerAt(seat, stands);
+						if (here >= 0 && here < LAYERS) {
+							write(seat, here, WOOD);
+							if (wasCell >= 0 && wasCell !== seat) {
+								// A layer index is counted from the column's own
+								// ground, so carrying one across to another
+								// column means converting it rather than reusing
+								// the number.
+								const bridge =
+									wasLayer + groundLayer[wasCell] - groundLayer[seat];
+								if (bridge !== here) write(seat, bridge, WOOD);
+							}
+							wasCell = seat;
+							wasLayer = here;
+						}
+						// **Noted, not tested.** The test below is against the
+						// whole segment, so its answer does not depend on which
+						// step happened to reach the cell.
+						if (seat !== runSeat) {
+							runSeat = seat;
+							if (seen[seat] !== seenEra) {
+								seen[seat] = seenEra;
+								slackAt[seat] = SLACK;
+								seenList[seats++] = seat;
+							}
+						}
+					}
+					// **How close a column ever comes to the rod, and it has
+					// to be the rod's own length rather than the infinite line
+					// through it.** A trunk points straight up, so the line
+					// through it passes through the planet's centre -- which
+					// every column's line also does, and two lines through one
+					// point are never apart. A line test therefore measures
+					// nought for every column of every trunk and refuses
+					// nothing: measured, it let **76%** of a rod's candidates
+					// through to be walked slot by slot for **6%** of the slots
+					// written. Clamped to the rod's own ends it refuses 96% of
+					// them and the slot walk falls **8x**.
+					//
+					// The squared distance from the column's line to the point
+					// `s` along the rod is a quadratic in `s`, so its smallest
+					// value over `[0, 1]` is one clamped division and one
+					// evaluation, and past the rod's own thickness the column
+					// holds nothing.
+					//
+					// **And projecting is never lengthening**, so where the rod
+					// reaches along the column is bounded by where its two ends
+					// project, widened by the thickness -- an exact bound on the
+					// capsule, and it falls out of the two dot products the test
+					// has already taken.
+					const wide2 = wide * wide;
+					const woodRank = RANK[WOOD];
+					const homeA = ax * ax + ay * ay + az * az;
+					const alongA = ax * ux + ay * uy + az * uz;
+					const run2 = run * run;
+					const overRun = run > 0 ? 1 / run2 : 0;
+					// **The flood is the candidate list.** Every seat goes in,
+					// and a cell that passes hands the test on to its own six
+					// neighbours -- so the walk covers the tube around the rod
+					// and stops where the rod does, rather than covering a
+					// hexagon that was sized before any distance was known. A
+					// failing cell is stepped past `SLACK` times, which costs a
+					// ring and removes the one thing the argument for this rests
+					// on: that the cells within reach of a rod are connected
+					// through cells that are also within reach.
+					let listed = seats;
+					for (let q = 0; q < listed; q++) {
+						const c = seenList[q];
+						const dx0 = dirX[c], dy0 = dirY[c], dz0 = dirZ[c];
+						const endA = ax * dx0 + ay * dy0 + az * dz0;
+						const lean = ux * dx0 + uy * dy0 + uz * dz0;
+						const bend = run2 - lean * lean;
+						const tilt = alongA - endA * lean;
+						let near = bend > 0 ? -tilt / bend : 0;
+						near = Math.max(0, Math.min(1, near));
+						const gap =
+							homeA - endA * endA + 2 * near * tilt + near * near * bend;
+						const held = slackAt[c];
+						if (gap > wide2) {
+							if (held > 1)
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || seen[nb] === seenEra) continue;
+									seen[nb] = seenEra;
+									slackAt[nb] = held - 1;
+									seenList[listed++] = nb;
+								}
+							continue;
+						}
+						for (let d = 0; d < 6; d++) {
+							const nb = ring[c * 6 + d];
+							if (nb < 0 || seen[nb] === seenEra) continue;
+							seen[nb] = seenEra;
+							slackAt[nb] = SLACK;
+							seenList[listed++] = nb;
+						}
+						const endB = endA + lean;
+						const base = radius + top[c];
+						const lo = Math.max(
+							0,
+							SUNK +
+								Math.floor((Math.min(endA, endB) - wide - base) / block),
+						);
+						const hi = Math.min(
+							LAYERS - 1,
+							SUNK +
+								Math.floor((Math.max(endA, endB) + wide - base) / block),
+						);
+						// The true distance from the block's own centre to the
+						// rod's axis, so a rod is a rod and not a staircase of
+						// discs.
+						const seat0 = c * LAYERS;
+						for (let slot = lo; slot <= hi; slot++) {
+							if (RANK[target[seat0 + slot]] >= woodRank) continue;
+							// The same two additions in the same order as every
+							// other stamp: a radius carries the planet's whole
+							// magnitude, so folding it into the band's own base
+							// moves the last bit and with it the odd block on a
+							// boundary.
+							const my = top[c] + (slot - SUNK + 0.5) * block;
+							const reach2 = radius + my;
+							const cx = dx0 * reach2;
+							const cy = dy0 * reach2;
+							const cz = dz0 * reach2;
+							const dx = cx - ax, dy = cy - ay, dz = cz - az;
+							let along = (dx * ux + dy * uy + dz * uz) * overRun;
+							along = Math.max(0, Math.min(1, along));
+							const ex = dx - ux * along;
+							const ey = dy - uy * along;
+							const ez = dz - uz * along;
+							const r = ra + (rb - ra) * along;
+							if (ex * ex + ey * ey + ez * ez <= r * r) write(c, slot, WOOD);
+						}
+					}
+				};
+
+				/**
+				 * One cluster of leaves: a ball, cut by noise.
+				 *
+				 * **A ball is a ball and a canopy is not.** The cut is what
+				 * makes a rim ragged and lets light through, and it is read at
+				 * the cell's own place in the world -- so two clusters that
+				 * overlap agree about the air between them, and so do two
+				 * chunks that both draw one cluster.
+				 *
+				 * **One octave, because this is a cut and not a landscape.** A
+				 * second costs eight more hashed lattice corners for every
+				 * candidate cell of every cluster, and a canopy has hundreds of
+				 * clusters -- it is the largest single bill on the page.
+				 *
+				 * **And one octave with no fold IS the basis, moved.**
+				 * `octaveNoise` at one octave scales the reading by an amplitude
+				 * of `1` and divides by a summed amplitude of `1`, both exact,
+				 * so what comes back is `valueNoise3` at the octave's own
+				 * hashed offset and nothing else. Those three offsets are a
+				 * property of the seed, so they are taken once here -- from
+				 * `offsetsFor`, the engine's own table, rather than from a
+				 * second copy of the rule -- and the cut calls the basis
+				 * directly. Bit for bit the same number, without a map lookup,
+				 * a loop and a divide at every candidate cell of every cluster.
+				 */
+				const leafNoise = (spec) => {
+					const spread = offsetsFor(seed + 71, 1);
+					return {
+						f: 1 / Math.max(0.4, spec.leafRadius * 0.55),
+						ox: spread[0],
+						oy: spread[1],
+						oz: spread[2],
+					};
+				};
+				const cluster = (x, y, z, r, spec, noise) => {
+					if (r <= 0) return;
+					// **Most of a canopy is decided before the noise is read.**
+					// The cut is `1 - away + rough * 0.6 * n` against
+					// `1 - leafFill`, and `n` is one octave of value noise, which
+					// is bounded by `[-1, 1]` by construction -- eight hashed
+					// corners in `[0, 1)` under weights that sum to one, doubled
+					// and shifted. So the noise can only ever move the answer
+					// over a shell `rough * 0.6` wide either side of the fill
+					// line: inside it every reading writes and outside it none
+					// does, whatever the reading is. At the shipped Fill 0.62
+					// and Roughness 0.45 that shell runs from 0.35 of the radius
+					// to 0.89, so the lookup -- eight hashes and a trilinear
+					// blend, the largest single bill on the page -- runs for
+					// **66%** of the ball rather than all of it.
+					// **Not an approximation**: the two sides are proved by the
+					// bound, so every cell gets the answer it would have got.
+					const sway = spec.leafRough > 0 ? spec.leafRough * 0.6 : 0;
+					const sure = spec.leafFill - sway;
+					const never = spec.leafFill + sway;
+					const leafRank = RANK[LEAF];
+					const seat = cellOf(x, y, z);
+					if (seat < 0) return;
+					const stands = metresOf(x, y, z);
+					// **A cluster narrower than a cell still has to land
+					// somewhere.** A rod already has a floor on its radius, so
+					// at a coarse level every twig is drawn as a whole block
+					// while a canopy smaller than one cell passes no distance
+					// test at all and disappears. Measured at level 3, an 8 m
+					// block: 2,941 wood cells against **62** leaf, which is a
+					// forest that reads as bare brown poles from exactly the
+					// distance a forest should read as green. The floor is the
+					// same one, for the same reason.
+					if (r < cellMetres * 0.6) {
+						write(seat, layerAt(seat, stands), LEAF);
+						return;
+					}
+					// **A column either meets the ball or it does not, and that
+					// is three multiplies.** A cell's blocks all stand on one
+					// ray out from the planet's centre, so how close that ray
+					// ever comes to the ball's centre settles the whole column
+					// at once: past the radius nothing on it can be inside.
+					// What is left is a band along the ray, `hit` either side of
+					// the nearest point, which is tighter than a band of heights
+					// by exactly the amount the ray leans.
+					//
+					// **And that test is what grows the candidate list**, the
+					// same way a rod's does. A hexagon disc around the ball
+					// names its corners as candidates and has no way not to:
+					// the ring count is chosen before any distance is worked
+					// out. Flooding from the cell the cluster sits in, and
+					// handing the test on from each cell that passes to its own
+					// six neighbours, covers the ball and stops at it --
+					// **6,695,127 candidates over the shipped stand against
+					// 2,154,460 that could hold a leaf**. A failing cell is
+					// stepped past `SLACK` times, which costs a ring and buys
+					// the argument this rests on: that the columns meeting a
+					// ball are connected through columns that also meet it.
+					const far2 = x * x + y * y + z * z;
+					seenEra++;
+					seen[seat] = seenEra;
+					slackAt[seat] = SLACK;
+					seenList[0] = seat;
+					let listed = 1;
+					for (let q = 0; q < listed; q++) {
+						const c = seenList[q];
+						const along = dirX[c] * x + dirY[c] * y + dirZ[c] * z;
+						const room = r * r - (far2 - along * along);
+						const held = slackAt[c];
+						if (room <= 0) {
+							if (held > 1)
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || seen[nb] === seenEra) continue;
+									seen[nb] = seenEra;
+									slackAt[nb] = held - 1;
+									seenList[listed++] = nb;
+								}
+							continue;
+						}
+						for (let d = 0; d < 6; d++) {
+							const nb = ring[c * 6 + d];
+							if (nb < 0 || seen[nb] === seenEra) continue;
+							seen[nb] = seenEra;
+							slackAt[nb] = SLACK;
+							seenList[listed++] = nb;
+						}
+						// **Where the ball crosses this column, exactly**: the
+						// two roots of `|u d - P| = r`. Rounding a metre to a
+						// slot already keeps a block of slack at each end, which
+						// is the whole of what floating point could cost here,
+						// so a second block on top of it was two slots a column
+						// tested for nothing.
+						const hit = Math.sqrt(room);
+						const lo = Math.max(
+							0,
+							SUNK + Math.floor((along - hit - radius - top[c]) / block),
+						);
+						const hi = Math.min(
+							LAYERS - 1,
+							SUNK + Math.floor((along + hit - radius - top[c]) / block),
+						);
+						const seat0 = c * LAYERS;
+						for (let slot = lo; slot <= hi; slot++) {
+							if (RANK[target[seat0 + slot]] >= leafRank) continue;
+							const my = top[c] + (slot - SUNK + 0.5) * block;
+							const reach2 = radius + my;
+							const cx = dirX[c] * reach2;
+							const cy = dirY[c] * reach2;
+							const cz = dirZ[c] * reach2;
+							const dx = cx - x, dy = cy - y, dz = cz - z;
+							const off2 = dx * dx + dy * dy + dz * dz;
+							if (off2 > r * r) continue;
+							const away = Math.sqrt(off2) / r;
+							if (away >= never) continue;
+							if (away >= sure) {
+								const cut =
+									1 -
+									away +
+									sway *
+										valueNoise3(
+											cx * noise.f + noise.ox,
+											cy * noise.f + noise.oy,
+											cz * noise.f + noise.oz,
+											seed + 71,
+										);
+								if (!(cut > 1 - spec.leafFill)) continue;
+							}
+							write(c, slot, LEAF);
+						}
+					}
+				};
+
+				let trees = 0;
+				let rejected = 0;
+				let tallest = 0;
+				let shortest = Infinity;
+				let rootsTested = 0;
+				let rootsOwned = 0;
+				let chunkCount = 1;
+				// **How far the widest plant actually reached**, measured rather
+				// than assumed. It is what the reach past a chunk's rim has to
+				// cover: anything wider and a neighbour never sees the root, so
+				// it writes nothing where the canopy falls and the tree comes
+				// apart at the boundary.
+				let widest = 0;
+
+				/**
+				 * Does one cell hold a plant, and if so which one and how big?
+				 *
+				 * **Every answer here is a hash of the cell's own address and
+				 * the seed.** That is the whole requirement: two chunks that
+				 * both consider this root get the same plant, because neither
+				 * of them is consulted.
+				 */
+				const plantAt = (r) => {
+					const seat = rootSeat[r];
+					if (seat < 0) return null;
+					const cell = roots[r];
+					if (rootHeight[r] <= TERRAIN.seaLevel) return null;
+					// **The twelve pentagons are protected columns**, so nothing
+					// is planted on one and no branch has to ask for a fifth
+					// direction. A lattice point is one of the twelve exactly
+					// when it is a corner of its own face triangle, which is
+					// three integer comparisons rather than a polygon.
+					if (
+						(cell.i === 0 && cell.j === 0) ||
+						(cell.i === rootN && cell.j === 0) ||
+						(cell.i === 0 && cell.j === rootN)
+					)
+						return "no";
+					// **Every layer is offered the cell in turn, and the first
+					// that wants it takes it.** A layer's chance is its own
+					// field read through its own curve, times its own density,
+					// and the roll against it is a hash of the cell's address
+					// and the layer's own salt -- so two layers never correlate
+					// and neither one is consulted about the other.
+					for (let n = 0; n < live.length; n++) {
+						const layer = live[n];
+						const share = layerShareAt(
+							layer,
+							rootDir[r * 3],
+							rootDir[r * 3 + 1],
+							rootDir[r * 3 + 2],
+							seed,
+							liveNoise[n],
+						);
+						const chance = (share * layer.values.density) / 100;
+						if (chance <= 0) continue;
+						if (
+							hash3(cell.i, cell.j, cell.face, seed + saltOf(layer)) < chance
+						)
+							return layer;
+					}
+					return null;
+				};
+
+				// **A plant shorter than one block cannot be drawn, so it is not
+				// grown.** Left in, a 0.9 m heather becomes a whole 8 m block of
+				// wood at level 3 -- bigger than it is at level 0 and standing
+				// where nothing should be. Skipping it also takes its whole
+				// skeleton off the bill, which is the only part of the plant
+				// cost that falls with distance.
+				const tooSmall = (spec, scale) => spec.height * scale < block;
+
+				/** Grow whatever stands on one cell, into whatever sink is set. */
+				const raise = (r, layer) => {
+					const seat = rootSeat[r];
+					const cell = roots[r];
+					const roll = hash3(cell.j, cell.face, cell.i, seed + 55);
+					const spec = layer.values;
+					painting = live.indexOf(layer) + 1;
+					const scale =
+						1 +
+						spec.sizeSpread *
+							(2 * hash3(cell.face, cell.i, cell.j, seed + 77) - 1);
+					if (tooSmall(spec, scale)) return 0;
+					// **The plant's own frame, taken at its own root.** Up is
+					// `normalize(position)` and there is no global north, so
+					// every plant stands in a frame of its own -- which is the
+					// second half of what makes it a pure function of its
+					// address.
+					// **The plant stands on the ground as it is DRAWN**, so its
+					// foot moves to the layer the coarse chunk put the surface
+					// on. Its direction is its own fine lattice point, which
+					// never moves.
+					const ux = rootDir[r * 3], uy = rootDir[r * 3 + 1], uz = rootDir[r * 3 + 2];
+					const foot = radius + top[seat];
+					const base = [ux * foot, uy * foot, uz * foot];
+					const stance = frameOf([ux, uy, uz]);
+					const out = { rods: [], clusters: [] };
+					growPlant(base, stance, spec, scale, seed + Math.floor(roll * 100000), out);
+					// **Sideways, not away.** Which chunks a plant reaches into
+					// is a question about the ground it stands over, and a
+					// straight distance from the foot is mostly the trunk's own
+					// height -- a 85 m redwood reads 81 m by that measure and
+					// covers twenty. The radial part comes out along the root's
+					// own up.
+					const far = (x, y, z, pad) => {
+						const dx = x - base[0], dy = y - base[1], dz = z - base[2];
+						const along =
+							dx * stance.up[0] + dy * stance.up[1] + dz * stance.up[2];
+						const ex = dx - stance.up[0] * along;
+						const ey = dy - stance.up[1] * along;
+						const ez = dz - stance.up[2] * along;
+						const away = Math.sqrt(ex * ex + ey * ey + ez * ez) + pad;
+						if (away > widest) widest = away;
+					};
+					for (const r of out.rods) {
+						rod(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
+						far(r[3], r[4], r[5], Math.max(r[6], r[7]));
+					}
+					const noise = leafNoise(spec);
+					for (const b of out.clusters) {
+						cluster(b[0], b[1], b[2], b[3], spec, noise);
+						far(b[0], b[1], b[2], b[3]);
+					}
+					const tall = spec.height * scale;
+					if (tall > tallest) tallest = tall;
+					if (tall < shortest) shortest = tall;
+					return tall;
+				};
+
+				{
+					// Which roots stand on each drawn cell. At the finest level
+					// that is one apiece; four levels out it is 256, and the
+					// list is the same length either way.
+					const under = new Array(count);
+					for (let r = 0; r < roots.length; r++) {
+						const seat = rootSeat[r];
+						if (seat < 0) continue;
+						(under[seat] ??= []).push(r);
+					}
+
+					// **Cut into chunks, and every chunk generates alone.**
+					// A chunk is the triangle a cell's scaled barycentric
+					// weights floor into -- the same descent `coarseCorners`
+					// makes, one level of the same hierarchy -- so this is the
+					// engine's own cut and not a grid laid over it.
+					const side = CHUNK_CELLS;
+					const cn = 2 ** Math.max(0, Math.round(Math.log2(n / side)));
+					const scale = n / cn;
+					const chunkOf = (c) => {
+						const cell = list[c];
+						const u = (n - cell.i - cell.j) / scale;
+						const v = cell.i / scale;
+						const w = cell.j / scale;
+						const fu = Math.floor(u), fv = Math.floor(v), fw = Math.floor(w);
+						const over = cn - (fu + fv + fw);
+						return ((cell.face * (cn + 1) + fv) * (cn + 1) + fw) * 2 + (over >= 2 ? 1 : 0);
+					};
+					const held = new Map();
+					const keyAt = new Float64Array(count);
+					for (let c = 0; c < count; c++) {
+						const key = chunkOf(c);
+						keyAt[c] = key;
+						let own = held.get(key);
+						if (own === undefined) {
+							own = [];
+							held.set(key, own);
+						}
+						own.push(c);
+					}
+					chunkCount = held.size;
+
+					// **How far past its own rim a chunk has to look**, in
+					// hops, which is the number F-086 is about. Too small and
+					// the audit below stops reading zero: a tree rooted just
+					// outside is grown by its owner and not by the neighbour
+					// whose cells its canopy reaches.
+					const hops = Math.max(0, Math.ceil(CHUNK_REACH / cellMetres));
+					const mine = new Int32Array(count).fill(-1);
+					const near = new Int32Array(count).fill(-1);
+					const queue = new Int32Array(count);
+					let round = 0;
+					for (const [key, own] of held) {
+						round++;
+						// Its own cells, then everything within reach of them.
+						let used = 0;
+						for (const c of own) {
+							mine[c] = round;
+							near[c] = round;
+							queue[used++] = c;
+						}
+						let read = 0;
+						for (let h = 0; h < hops; h++) {
+							const stop = used;
+							for (let q = read; q < stop; q++) {
+								const c = queue[q];
+								for (let d = 0; d < 6; d++) {
+									const nb = ring[c * 6 + d];
+									if (nb < 0 || near[nb] === round) continue;
+									near[nb] = round;
+									queue[used++] = nb;
+								}
+							}
+							read = stop;
+						}
+						holds = mine;
+						holder = round;
+						for (let q = 0; q < used; q++) {
+							const c = queue[q];
+							const here = under[c];
+							if (here === undefined) continue;
+							const owned = mine[c] === round;
+							if (owned) rootsOwned += here.length;
+							rootsTested += here.length;
+							for (const r of here) {
+								const answer = plantAt(r);
+								if (answer === null) continue;
+								if (answer === "no") {
+									if (owned) rejected++;
+									continue;
+								}
+								raise(r, answer);
+								if (owned) {
+									answer.grown++;
+									trees++;
+								}
+							}
+						}
+					}
+					holds = null;
+
+				}
+				if (shortest === Infinity) shortest = 0;
+
+				// **The measurement the whole approach turns on, run live.**
+				// Wood that is not connected to the ground is debris hanging in
+				// the air. A skeleton is one piece standing on the ground
+				// because it was grown that way; a threshold on noise is
+				// hundreds of pieces with almost none of them touching down,
+				// and no filter can repair that here -- a flood fill is a global
+				// query, and a chunk has to decide its own contents alone.
+				let woodCells = 0;
+				let leafCells = 0;
+				for (let i = 0; i < veg.length; i++) {
+					if (veg[i] === WOOD) woodCells++;
+					else if (veg[i] === LEAF) leafCells++;
+				}
+				let pieces = 0;
+				let rooted = 0;
+				if (woodCells > 0) {
+					const seen = new Uint8Array(veg.length);
+					const stack = new Int32Array(Math.min(veg.length, 1 << 22));
+					for (let s = 0; s < veg.length; s++) {
+						if (veg[s] !== WOOD || seen[s]) continue;
+						pieces++;
+						let deep = 0;
+						let size = 0;
+						let down = false;
+						stack[deep++] = s;
+						seen[s] = 1;
+						while (deep > 0) {
+							const p = stack[--deep];
+							size++;
+							const c = (p / LAYERS) | 0;
+							const a = p - c * LAYERS;
+							if (a === SUNK) down = true;
+							const push = (q) => {
+								if (q < 0 || q >= veg.length) return;
+								if (veg[q] !== WOOD || seen[q]) return;
+								if (deep >= stack.length) return;
+								seen[q] = 1;
+								stack[deep++] = q;
+							};
+							if (a + 1 < LAYERS) push(p + 1);
+							if (a > 0) push(p - 1);
+							for (let d = 0; d < 6; d++) {
+								const nb = ring[c * 6 + d];
+								if (nb < 0) continue;
+								const a2 = a + groundLayer[c] - groundLayer[nb];
+								if (a2 < 0 || a2 >= LAYERS) continue;
+								push(nb * LAYERS + a2);
+							}
+						}
+						if (down) rooted += size;
+					}
+					rooted /= woodCells;
+				}
+
+				// **Collision is not a second system.** A plant is blocks, so
+				// what a player walks into is the block test the world already
+				// runs -- and whether a leaf stops them is a property of the
+				// block type, the way water's is. This counts what that comes
+				// to: how much of the ground you could still step onto.
+				const knee = Math.max(1, Math.round(1 / block));
+				let landCells = 0;
+				let blocked = 0;
+				for (let c = 0; c < count; c++) {
+					if (height[c] <= TERRAIN.seaLevel) continue;
+					landCells++;
+					for (let L = 0; L < knee; L++) {
+						const what = veg[c * LAYERS + SUNK + L];
+						if (what === WOOD || (what === LEAF && knobs.leavesCollide)) {
+							blocked++;
+							break;
+						}
+					}
+				}
+
+				field = {
+					k, seed, n, m, list, at, keyOf, count, height, degree, corner,
+					ring, centre, frame, localX, localZ, groundLayer, top, veg, owner,
+					dirX, dirY, dirZ, chunkCount, rootsTested,
+					rootsOwned, widest, lod, block, roots: roots.length,
+					LAYERS, datum, lowest, highest, cellMetres,
+					// **The colour of every layer that grew, by the number the
+					// owner array holds.** A mesh is built after the fact and a
+					// layer may have been deleted by then, so the palette is
+					// taken with the rest of the field rather than read back off
+					// the panel.
+					paints: live.map((layer) => ({ wood: layer.wood, leaf: layer.leaf })),
+					layerCounts: live.map((layer) => ({ id: layer.id, grown: layer.grown })),
+					span: drawn * cellMetres,
+					trees, rejected, tallest, shortest, woodCells, leafCells,
+					pieces, rooted,
+					walkable: landCells ? 1 - blocked / landCells : 1,
+					draft: cells !== knobs.cells,
+				};
+			}
+
+			// ---------------------------------------------------------------
+			// The patch, as hexagon columns.
+			// ---------------------------------------------------------------
+
+			const view = document.getElementById("view");
+			const gl = view.getContext("webgl2", { antialias: true });
+
+			const VERTEX_SOURCE = `#version 300 es
+			precision highp float;
+			layout(location = 0) in vec3 position;
+			layout(location = 1) in vec3 tint;
+			layout(location = 2) in vec3 normal;
+			uniform mat4 viewProj;
+			out vec3 vNormal;
+			out vec3 vTint;
+			void main() {
+				vNormal = normal;
+				vTint = tint;
+				gl_Position = viewProj * vec4(position, 1.0);
+			}`;
+
+			const FRAGMENT_SOURCE = `#version 300 es
+			precision highp float;
+			in vec3 vNormal;
+			in vec3 vTint;
+			uniform vec3 sun;
+			uniform int water;
+			out vec4 color;
+			void main() {
+				// **The normal is stored, and it is stored as three bytes.**
+				// Taking it from the change of position across a pixel averages
+				// a cap and a wall into a normal belonging to neither wherever a
+				// block is a few pixels wide, and a canopy is nothing but such
+				// edges. A face normal quantised to one part in 127 is far finer
+				// than any shading here can show.
+				vec3 n = normalize(vNormal);
+				if (!gl_FrontFacing) n = -n;
+				float lit = 0.32 + 0.68 * max(0.0, dot(n, normalize(sun)));
+				if (water == 1) {
+					color = vec4(pow(vec3(0.12, 0.32, 0.55) * lit, vec3(1.0 / 2.2)), 0.7);
+					return;
+				}
+				color = vec4(pow(vTint * lit, vec3(1.0 / 2.2)), 1.0);
+			}`;
+
+			function compile(kind, source) {
+				const shader = gl.createShader(kind);
+				gl.shaderSource(shader, source);
+				gl.compileShader(shader);
+				if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+					throw new Error(gl.getShaderInfoLog(shader) ?? "shader");
+				return shader;
+			}
+
+			const program = gl.createProgram();
+			gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX_SOURCE));
+			gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT_SOURCE));
+			gl.linkProgram(program);
+			if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+				throw new Error(gl.getProgramInfoLog(program) ?? "link");
+			const uViewProj = gl.getUniformLocation(program, "viewProj");
+			const uSun = gl.getUniformLocation(program, "sun");
+			const uWater = gl.getUniformLocation(program, "water");
+
+			const vao = gl.createVertexArray();
+			gl.bindVertexArray(vao);
+			const positionBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+			gl.enableVertexAttribArray(0);
+			gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+			const tintBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, tintBuffer);
+			gl.enableVertexAttribArray(1);
+			gl.vertexAttribPointer(1, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+			const normalBuffer = gl.createBuffer();
+			gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+			gl.enableVertexAttribArray(2);
+			gl.vertexAttribPointer(2, 3, gl.BYTE, true, 0, 0);
+
+			let groundCount = 0;
+			let plantFrom = 0;
+			let plantCount = 0;
+			let waterFrom = 0;
+			let waterCount = 0;
+			let bounds = { x: 0, y: 0, z: 0, reach: 1 };
+			let faces = { ground: 0, wood: 0, leaf: 0 };
+
+			/** The band a height falls in, as the engine's own colour. */
+			function groundTint(metres) {
+				const over = metres - TERRAIN.seaLevel;
+				if (over <= 0) return BAND_COLORS[0];
+				if (over < GROUND_LINES.rock) return BAND_COLORS[1];
+				if (over < GROUND_LINES.snow) return BAND_COLORS[2];
+				return BAND_COLORS[3];
+			}
+
+			function buildMesh() {
+				if (!field) return;
+				const {
+					k, count, degree, corner, ring, centre, frame, top, veg, owner,
+					LAYERS, height, groundLayer,
+				} = field;
+				const radius = k.radius;
+				const block = field.block;
+
+				let room = count * 24 * 3;
+				let position = new Float32Array(room * 3);
+				let tint = new Uint8Array(room * 3);
+				let normal = new Int8Array(room * 3);
+				let vertices = 0;
+				let loX = Infinity, hiX = -Infinity;
+				let loY = Infinity, hiY = -Infinity;
+				let loZ = Infinity, hiZ = -Infinity;
+				const roomFor = () => {
+					if (vertices + 3 <= room) return;
+					room = Math.max(room * 2, vertices + 3);
+					const a = new Float32Array(room * 3); a.set(position); position = a;
+					const b = new Uint8Array(room * 3); b.set(tint); tint = b;
+					const c = new Int8Array(room * 3); c.set(normal); normal = c;
+				};
+
+				const ringX = new Float64Array(6);
+				const ringY = new Float64Array(6);
+				const ringZ = new Float64Array(6);
+				/**
+				 * A direction and a height, as metres in the patch's own frame.
+				 *
+				 * **The third axis is south, and it has to be.** East, up and
+				 * north in that order is a **left-handed** triple -- measured,
+				 * `cross(east, up) . north` is `-1` -- and handing a left-handed
+				 * basis to a right-handed renderer draws the mirror image of the
+				 * ground. From overhead the frame's east then lands on the right
+				 * of the screen where the map puts it and its north lands at the
+				 * **bottom**, so the view is the map flipped top to bottom.
+				 * Negating one axis rights it, and negating this one is what
+				 * makes the default view agree with the map: at yaw zero the
+				 * camera stands south of the patch looking north, so north is
+				 * away from the eye and east is on the right, exactly as the
+				 * picture draws them.
+				 */
+				const localP = new Float64Array(3);
+				const local = (dx, dy, dz, metres) => {
+					const s = radius + metres;
+					const rx = dx * s - centre[0] * radius;
+					const ry = dy * s - centre[1] * radius;
+					const rz = dz * s - centre[2] * radius;
+					localP[0] = rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
+					localP[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
+					localP[2] = -(
+						rx * frame.north[0] +
+						ry * frame.north[1] +
+						rz * frame.north[2]
+					);
+					return localP;
+				};
+
+				/** The colour every vertex of the next triangle is written in. */
+				let paint = [0, 0, 0];
+				const triangle = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+					const ux = bx - ax, uy = by - ay, uz = bz - az;
+					const vx = cx - ax, vy = cy - ay, vz = cz - az;
+					const nx = uy * vz - uz * vy;
+					const ny = uz * vx - ux * vz;
+					const nz = ux * vy - uy * vx;
+					// `sqrt(x*x + y*y + z*z)`, never `Math.hypot`, which is a
+					// library routine rather than an IEEE operation.
+					const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+					const n8 = [
+						Math.round((nx / len) * 127),
+						Math.round((ny / len) * 127),
+						Math.round((nz / len) * 127),
+					];
+					roomFor();
+					const at = vertices * 3;
+					for (let v = 0; v < 3; v++)
+						for (let x = 0; x < 3; x++) {
+							normal[at + v * 3 + x] = n8[x];
+							tint[at + v * 3 + x] = Math.max(
+								0,
+								Math.min(255, Math.round(paint[x] * 255)),
+							);
+						}
+					position[at] = ax; position[at + 1] = ay; position[at + 2] = az;
+					position[at + 3] = bx; position[at + 4] = by; position[at + 5] = bz;
+					position[at + 6] = cx; position[at + 7] = cy; position[at + 8] = cz;
+					vertices += 3;
+					if (ax < loX) loX = ax; if (ax > hiX) hiX = ax;
+					if (bx < loX) loX = bx; if (bx > hiX) hiX = bx;
+					if (cx < loX) loX = cx; if (cx > hiX) hiX = cx;
+					if (ay < loY) loY = ay; if (ay > hiY) hiY = ay;
+					if (by < loY) loY = by; if (by > hiY) hiY = by;
+					if (cy < loY) loY = cy; if (cy > hiY) hiY = cy;
+					if (az < loZ) loZ = az; if (az > hiZ) hiZ = az;
+					if (bz < loZ) loZ = bz; if (bz > hiZ) hiZ = bz;
+					if (cz < loZ) loZ = cz; if (cz > hiZ) hiZ = cz;
+				};
+
+				const cap = (c, metres) => {
+					const deg = degree[c];
+					let mx = 0, my = 0, mz = 0;
+					for (let v = 0; v < deg; v++) {
+						const p = local(
+							corner[c * 18 + v * 3],
+							corner[c * 18 + v * 3 + 1],
+							corner[c * 18 + v * 3 + 2],
+							metres,
+						);
+						ringX[v] = p[0]; ringY[v] = p[1]; ringZ[v] = p[2];
+						mx += p[0] / deg; my += p[1] / deg; mz += p[2] / deg;
+					}
+					for (let v = 0; v < deg; v++) {
+						const b = (v + 1) % deg;
+						triangle(mx, my, mz, ringX[v], ringY[v], ringZ[v], ringX[b], ringY[b], ringZ[b]);
+					}
+				};
+
+				/** One side of a cell, between two heights. */
+				const side = (c, edge, high, low) => {
+					const deg = degree[c];
+					const a = ((edge - 1 + deg) % deg) * 3 + c * 18;
+					const b = edge * 3 + c * 18;
+					const t1 = local(corner[a], corner[a + 1], corner[a + 2], high);
+					const ax = t1[0], ay = t1[1], az = t1[2];
+					const t2 = local(corner[b], corner[b + 1], corner[b + 2], high);
+					const bx = t2[0], by = t2[1], bz = t2[2];
+					const t3 = local(corner[b], corner[b + 1], corner[b + 2], low);
+					const cx = t3[0], cy = t3[1], cz = t3[2];
+					const t4 = local(corner[a], corner[a + 1], corner[a + 2], low);
+					triangle(ax, ay, az, bx, by, bz, cx, cy, cz);
+					triangle(ax, ay, az, cx, cy, cz, t4[0], t4[1], t4[2]);
+				};
+
+				// ---- the ground ----
+				const lip = field.span * 0.05;
+				for (let c = 0; c < count; c++) {
+					paint = groundTint(height[c]);
+					cap(c, top[c]);
+					const deg = degree[c];
+					for (let e = 0; e < deg; e++) {
+						const nb = ring[c * 6 + e];
+						const rim = nb < 0;
+						const below = rim ? top[c] - lip : top[nb];
+						if (below >= top[c] && !(rim && height[c] < TERRAIN.seaLevel)) continue;
+						side(c, e, rim && height[c] < TERRAIN.seaLevel ? TERRAIN.seaLevel : top[c], below);
+					}
+				}
+				faces.ground = vertices / 3;
+				plantFrom = vertices;
+
+				// ---- everything standing on it ----
+				let woodFaces = 0;
+				for (let c = 0; c < count; c++) {
+					const deg = degree[c];
+					const base = c * LAYERS;
+					for (let a = 0; a < LAYERS; a++) {
+						const what = veg[base + a];
+						if (what === EMPTY) continue;
+						const from = top[c] + (a - SUNK) * block;
+						const to = from + block;
+						const kind = owner[base + a];
+						const spec = kind > 0 ? field.paints[kind - 1] : null;
+						// **A canopy is darker than the grass under it, and it
+						// has to be or you cannot see it.** The ground here is
+						// the engine's own grass, `0.26, 0.44, 0.19`, and a leaf
+						// green sits within a few hundredths of it -- side by
+						// side the two read as one surface and a tree disappears
+						// into the hillside. Leaves are in their own shade
+						// anyway: a cluster is a shell, and almost every cell of
+						// it has other leaves over it.
+						const shade = what === LEAF ? 0.66 : 1;
+						const raw = spec
+							? what === WOOD
+								? spec.wood
+								: spec.leaf
+							: [0.36, 0.26, 0.18];
+						// A speckle off the cell's own address, so a canopy is
+						// not one flat colour and nothing has to be stored.
+						const grain =
+							0.86 +
+							0.28 * hash3(c, a, what, field.seed + 3);
+						paint = [
+							raw[0] * grain * shade,
+							raw[1] * grain * shade,
+							raw[2] * grain * shade,
+						];
+						const before = vertices;
+						if (a + 1 >= LAYERS || veg[base + a + 1] === EMPTY) cap(c, to);
+						if (a > SUNK && veg[base + a - 1] === EMPTY) cap(c, from);
+						for (let e = 0; e < deg; e++) {
+							const nb = ring[c * 6 + e];
+							if (nb < 0) {
+								side(c, e, to, from);
+								continue;
+							}
+							const a2 = a + groundLayer[c] - groundLayer[nb];
+							// Under the neighbour's own surface is rock, which
+							// the ground pass already drew.
+							if (a2 < SUNK) continue;
+							if (a2 < LAYERS && veg[nb * LAYERS + a2] !== EMPTY) continue;
+							side(c, e, to, from);
+						}
+						if (what === WOOD) woodFaces += (vertices - before) / 6;
+					}
+				}
+				plantCount = vertices - plantFrom;
+				faces.wood = woodFaces;
+				faces.leaf = plantCount / 6 - woodFaces;
+
+				// ---- the sea, last, so it blends over what is behind it ----
+				waterFrom = vertices;
+				paint = SEA_COLOR;
+				const sea = field.datum + Math.ceil((TERRAIN.seaLevel - field.datum) / block) * block;
+				for (let c = 0; c < count; c++) {
+					if (height[c] >= TERRAIN.seaLevel) continue;
+					cap(c, sea);
+					const deg = degree[c];
+					for (let e = 0; e < deg; e++)
+						if (ring[c * 6 + e] < 0) side(c, e, sea, top[c]);
+				}
+				waterCount = vertices - waterFrom;
+
+				groundCount = faces.ground * 3;
+				const brow = hiY;
+				bounds = {
+					// **The highest ground drawn, so an eye framing one plant
+					// does not end up inside the hill behind it.** A plant is
+					// ten metres and the patch it stands in is a hundred, so the
+					// camera pulled in close enough to see the plant sits well
+					// below the skyline.
+					floor: brow,
+					x: (loX + hiX) / 2,
+					y: (loY + hiY) / 2,
+					z: (loZ + hiZ) / 2,
+					reach: Math.sqrt(
+						(hiX - loX) ** 2 + (hiY - loY) ** 2 + (hiZ - loZ) ** 2,
+					) / 2 || field.span,
+				};
+
+				gl.bindVertexArray(vao);
+				for (const [buffer, data, wide] of [
+					[positionBuffer, position, 3],
+					[tintBuffer, tint, 3],
+					[normalBuffer, normal, 3],
+				]) {
+					gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+					gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, vertices * wide), gl.DYNAMIC_DRAW);
+				}
+				field.vertices = vertices;
+			}
+
+			function multiply(a, b) {
+				const out = new Float32Array(16);
+				for (let c = 0; c < 4; c++)
+					for (let r = 0; r < 4; r++) {
+						let s = 0;
+						for (let i = 0; i < 4; i++) s += a[i * 4 + r] * b[c * 4 + i];
+						out[c * 4 + r] = s;
+					}
+				return out;
+			}
+
+			function perspective(fov, aspect, near, far) {
+				const f = 1 / Math.tan(fov / 2);
+				const out = new Float32Array(16);
+				out[0] = f / aspect;
+				out[5] = f;
+				out[10] = (far + near) / (near - far);
+				out[11] = -1;
+				out[14] = (2 * far * near) / (near - far);
+				return out;
+			}
+
+			function lookAt(eye, to, upHint) {
+				const f = [to[0] - eye[0], to[1] - eye[1], to[2] - eye[2]];
+				const fl = Math.sqrt(f[0] ** 2 + f[1] ** 2 + f[2] ** 2) || 1;
+				const z = f.map((v) => v / fl);
+				let x = cross3(z, upHint);
+				const xl = Math.sqrt(x[0] ** 2 + x[1] ** 2 + x[2] ** 2) || 1;
+				x = x.map((v) => v / xl);
+				const y = cross3(x, z);
+				const out = new Float32Array(16);
+				out[0] = x[0]; out[4] = x[1]; out[8] = x[2];
+				out[1] = y[0]; out[5] = y[1]; out[9] = y[2];
+				out[2] = -z[0]; out[6] = -z[1]; out[10] = -z[2];
+				out[12] = -(x[0] * eye[0] + x[1] * eye[1] + x[2] * eye[2]);
+				out[13] = -(y[0] * eye[0] + y[1] * eye[1] + y[2] * eye[2]);
+				out[14] = z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2];
+				out[15] = 1;
+				return out;
+			}
+
+			const camera = { yaw: -0.7, pitch: 0.35, distance: 1.05, lift: 0 };
+
+			function render() {
+				const wide = view.clientWidth;
+				const tall = view.clientHeight;
+				const dpr = Math.min(2, window.devicePixelRatio || 1);
+				view.width = Math.max(1, Math.round(wide * dpr));
+				view.height = Math.max(1, Math.round(tall * dpr));
+				gl.viewport(0, 0, view.width, view.height);
+				gl.clearColor(0.027, 0.039, 0.055, 1);
+				gl.enable(gl.DEPTH_TEST);
+				gl.disable(gl.CULL_FACE);
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+				if (!field) return;
+				const reach = bounds.reach;
+				const away = reach * 2.4 * camera.distance;
+				const eye = [
+					bounds.x + Math.cos(camera.pitch) * Math.sin(camera.yaw) * away,
+					Math.max(
+						bounds.y + Math.sin(camera.pitch) * away + camera.lift * reach,
+						bounds.floor + reach * 0.5,
+					),
+					bounds.z + Math.cos(camera.pitch) * Math.cos(camera.yaw) * away,
+				];
+				const proj = perspective(
+					0.9,
+					view.width / Math.max(1, view.height),
+					Math.max(0.05, reach * 0.005),
+					away + reach * 6,
+				);
+				const viewProj = multiply(
+					proj,
+					lookAt(eye, [bounds.x, bounds.y, bounds.z], [0, 1, 0]),
+				);
+				gl.useProgram(program);
+				gl.bindVertexArray(vao);
+				gl.uniformMatrix4fv(uViewProj, false, viewProj);
+				gl.uniform3f(uSun, 0.42, 0.78, 0.46);
+				gl.uniform1i(uWater, 0);
+				gl.disable(gl.BLEND);
+				gl.depthMask(true);
+				gl.drawArrays(gl.TRIANGLES, 0, groundCount + plantCount);
+				if (waterCount > 0) {
+					gl.uniform1i(uWater, 1);
+					gl.enable(gl.BLEND);
+					gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+					gl.depthMask(false);
+					gl.drawArrays(gl.TRIANGLES, waterFrom, waterCount);
+					gl.depthMask(true);
+					gl.disable(gl.BLEND);
+				}
+			}
+
+			// ---------------------------------------------------------------
+			// The pictures.
+			// ---------------------------------------------------------------
+
+			/**
+			 * Every picture on the panel: the ground, and one per layer.
+			 *
+			 * A shot is a canvas and what to paint into it. The ground shot is
+			 * built once with the World section; a layer's is built and thrown
+			 * away with its card, so the list is rebuilt whenever the cards
+			 * are.
+			 */
+			const SHOTS = [];
+
+			/** The ground's own colour at one height, banded the way the engine bands. */
+			function groundColor(metres) {
+				if (metres <= TERRAIN.seaLevel) {
+					// How far a look reaches into the water, so a shelf reads as
+					// shallow and a trench as deep.
+					const deep = Math.min(1, (TERRAIN.seaLevel - metres) / 45);
+					return SEA_COLOR.map((c, n) => c * (1 - 0.55 * deep) + 0.03 * n * deep);
+				}
+				const band =
+					metres < GROUND_LINES.rock ? 1 : metres < GROUND_LINES.snow ? 2 : 3;
+				// A contour every hundred metres, so a slope reads as a slope
+				// rather than as one flat sheet of the block that stands on it.
+				const into = ((metres / 100) % 1) * 100;
+				const edge = into < 6 ? 0.78 : 1;
+				return BAND_COLORS[band].map((c) => c * edge);
+			}
+
+			/**
+			 * The direction a pixel of a picture is looking at.
+			 *
+			 * Over the planet it is longitude across and latitude down, the one
+			 * projection where a direction is two cosines and no case analysis.
+			 * Over the patch it is the exponential map out of the patch's own
+			 * frame, so metres out from the middle become radians of arc and the
+			 * picture keeps its scale to the corners.
+			 */
+			function pictureDirection(q, r, wide, tall, frame, half, radius) {
+				if (!frame) {
+					const lat = (0.5 - (r + 0.5) / tall) * Math.PI;
+					const lon = ((q + 0.5) / wide) * 2 * Math.PI - Math.PI;
+					const ring = Math.cos(lat);
+					return [ring * Math.cos(lon), Math.sin(lat), ring * Math.sin(lon)];
+				}
+				const u = (((q + 0.5) / wide) * 2 - 1) * (half / radius);
+				const v = (1 - ((r + 0.5) / tall) * 2) * (half / radius);
+				const a = Math.sqrt(u * u + v * v);
+				if (a < 1e-12) return frame.up;
+				const c = Math.cos(a);
+				const sn = Math.sin(a) / a;
+				return normalize3([
+					frame.up[0] * c + (frame.east[0] * u + frame.north[0] * v) * sn,
+					frame.up[1] * c + (frame.east[1] * u + frame.north[1] * v) * sn,
+					frame.up[2] * c + (frame.east[2] * u + frame.north[2] * v) * sn,
+				]);
+			}
+
+			/**
+			 * Paint some or all of the pictures.
+			 *
+			 * **One sampling pass, however many are wanted.** Every picture is a
+			 * function of the same direction, so drawing the ground and four
+			 * layers costs one walk over the pixels plus the writing. `only`
+			 * narrows it to a single picture at a size of its own, which is what
+			 * the enlarged view asks for.
+			 */
+			function paintShots(shots, wide, tall, canvas = null) {
+				if (!field || shots.length === 0) return;
+				const planet = knobs.show === "planet";
+				const k = field.k;
+				const ground = terrainSettings(k.radius);
+				const noiseOf = shots.map((shot) =>
+					shot.layer ? layerSettings(shot.layer, k.radius) : null,
+				);
+				const raw = knobs.layerPicture === "noise";
+				const g0 = canvas ? bigCtx : shots[0].ctx;
+				const images = shots.map(() => g0.createImageData(wide, tall));
+				const frame = planet ? null : field.frame;
+				const half = field.span / 2;
+				for (let r = 0; r < tall; r++)
+					for (let q = 0; q < wide; q++) {
+						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
+						const at = (r * wide + q) * 4;
+						for (let n = 0; n < shots.length; n++) {
+							const shot = shots[n];
+							let c;
+							if (!shot.layer) {
+								c = groundColor(mapHeightAt(p, field.seed, ground));
+							} else if (raw) {
+								// **The reading itself, in grey.** A curve is
+								// drawn against a field and cannot be drawn
+								// against a picture the curve has already been
+								// applied to: past the ends of a curve every
+								// value is one colour, which is exactly where a
+								// reader needs to see whether there is anything
+								// out there. No sea mask, because the field has a
+								// value everywhere and mixing two signals into
+								// one grey ramp would make neither readable.
+								const said = octaveNoise(
+									p[0], p[1], p[2],
+									field.seed + saltOf(shot.layer),
+									noiseOf[n],
+								);
+								const lit = 0.5 + said * 0.5;
+								c = [lit, lit, lit];
+							} else {
+								// **What it would plant**, which is the field read
+								// through the curve: black where nothing grows and
+								// the layer's own leaf colour where it is
+								// densest, with the sea left black because
+								// nothing grows in it.
+								const share = layerShareAt(
+									shot.layer,
+									p[0], p[1], p[2],
+									field.seed,
+									noiseOf[n],
+								);
+								const dry =
+									mapHeightAt(p, field.seed, ground) <= TERRAIN.seaLevel;
+								const lit = dry ? 0 : share;
+								c = shot.layer.leaf.map((v) => 0.045 + v * lit * 1.6);
+							}
+							const px = images[n].data;
+							px[at] = Math.min(255, c[0] * 255);
+							px[at + 1] = Math.min(255, c[1] * 255);
+							px[at + 2] = Math.min(255, c[2] * 255);
+							px[at + 3] = 255;
+						}
+					}
+				for (let n = 0; n < shots.length; n++) {
+					const g = canvas ? bigCtx : shots[n].ctx;
+					g.putImageData(images[n], 0, 0);
+					if (planet) outlinePatch(g, wide, tall);
+				}
+			}
+
+			/** Where the patch is standing, drawn on a picture of the planet. */
+			function outlinePatch(g, wide, tall) {
+				const k = field.k;
+				const lat = (knobs.latitude * Math.PI) / 180;
+				const across = field.span / k.radius / Math.max(0.15, Math.cos(lat));
+				const down = field.span / k.radius;
+				const box = {
+					x:
+						((knobs.longitude + 180) / 360) * wide -
+						(across / (4 * Math.PI)) * wide,
+					y: (0.5 - knobs.latitude / 180) * tall - (down / (2 * Math.PI)) * tall,
+					w: Math.max(3, (across / (2 * Math.PI)) * wide),
+					h: Math.max(3, (down / Math.PI) * tall),
+				};
+				g.strokeStyle = "rgba(255, 90, 90, 0.95)";
+				g.lineWidth = 1;
+				g.strokeRect(box.x - 0.5, box.y - 0.5, box.w + 1, box.h + 1);
+			}
+
+			function drawPictures() {
+				if (!field) return;
+				const ready = SHOTS.filter((shot) => shot.ctx);
+				if (ready.length === 0) return;
+				for (const shot of ready)
+					if (shot.badge)
+						shot.badge.textContent = `${shot.layer.species} · ${knobs.layerPicture}`;
+				// Half the samples while a knob is moving, for the same reason
+				// the patch draws fewer cells: a picture that arrives after the
+				// finger has stopped is not a picture of the knob.
+				const wide = field.draft ? 156 : 312;
+				paintShots(ready, wide, knobs.show === "planet" ? wide / 2 : wide);
+				if (!field.draft && !big.hidden && bigShown) drawBig(bigShown);
+			}
+
+			// ---------------------------------------------------------------
+			// The enlarged picture.
+			// ---------------------------------------------------------------
+
+			const big = document.getElementById("big");
+			const bigCanvas = document.getElementById("bigShot");
+			const bigCtx = bigCanvas.getContext("2d");
+			const bigName = document.getElementById("bigName");
+			let bigShown = null;
+
+			/**
+			 * One picture, large.
+			 *
+			 * **A field at panel width says where its features are; at this size
+			 * it says what they look like.** Whether a stand of pine reads as a
+			 * belt along a coast or as noise is a question 312 pixels cannot
+			 * answer.
+			 */
+			function drawBig(shot) {
+				if (!field) return;
+				bigShown = shot;
+				const planet = knobs.show === "planet";
+				const wide = planet ? 1024 : 720;
+				const tall = planet ? wide / 2 : wide;
+				bigCanvas.width = wide;
+				bigCanvas.height = tall;
+				bigName.textContent = `${shot.name}${
+					shot.layer ? ` · ${knobs.layerPicture}` : ""
+				} · ${
+					planet
+						? "the whole planet"
+						: `${Math.round(field.span).toLocaleString()} m of ground`
+				}`;
+				big.hidden = false;
+				paintShots([shot], wide, tall, bigCanvas);
+			}
+
+			function closeBig() {
+				big.hidden = true;
+				bigShown = null;
+			}
+			big.addEventListener("click", closeBig);
+			window.addEventListener("keydown", (e) => {
+				if (e.key === "Escape") {
+					closeBig();
+					pick.hidden = true;
+				}
+			});
+
+			/**
+			 * **A latitude and a longitude are a place, and two sliders are not
+			 * a way to look for one.** Clicking a picture of the planet puts the
+			 * patch where the finger went: the projection is longitude across
+			 * and latitude down, so it inverts to two divisions. Over the patch
+			 * there is nowhere to jump to, so a click enlarges instead.
+			 */
+			function watchShot(shot) {
+				shot.canvas.addEventListener("click", (e) => {
+					if (knobs.show !== "planet") return drawBig(shot);
+					const box = shot.canvas.getBoundingClientRect();
+					const across = (e.clientX - box.left) / box.width;
+					const down = (e.clientY - box.top) / box.height;
+					const row = ROWS.get("latitude");
+					knobs.longitude = Math.round(across * 360 - 180);
+					knobs.latitude = Math.max(
+						row.low,
+						Math.min(row.high, Math.round((0.5 - down) * 180)),
+					);
+					askForRedraw(false);
+				});
+				// Over the planet a click already means "go there", so the large
+				// view is on a second button rather than fighting it.
+				shot.canvas.addEventListener("contextmenu", (e) => {
+					e.preventDefault();
+					drawBig(shot);
+				});
+				shot.canvas.title =
+					"click to enlarge, or to move the patch while the pictures show " +
+					"the planet (right-click always enlarges)";
+			}
+
+			// ---------------------------------------------------------------
+			// The curve.
+			// ---------------------------------------------------------------
+
+			/**
+			 * A draggable curve over one layer's own points.
+			 *
+			 * The points come from a getter rather than a key, because a layer
+			 * is a thing that can be deleted while its canvas is still on
+			 * screen -- a key into a global draft could not say which layer.
+			 */
+			function makeCurve(canvas, layer, onChange) {
+				const g = canvas.getContext("2d");
+				const pad = 6;
+				const toX = (v) => pad + ((v + 1) / 2) * (canvas.width - pad * 2);
+				const toY = (v) => canvas.height - pad - v * (canvas.height - pad * 2);
+				const fromX = (px) => ((px - pad) / (canvas.width - pad * 2)) * 2 - 1;
+				const fromY = (py) =>
+					(canvas.height - pad - py) / (canvas.height - pad * 2);
+
+				function draw() {
+					const points = layer.curve;
+					g.fillStyle = "#0b0e13";
+					g.fillRect(0, 0, canvas.width, canvas.height);
+					// **The bars are what makes x mean anything.** A field's
+					// range is -1 to +1 and it reaches nowhere near either end,
+					// so where the bars pile up is the part of the curve that
+					// governs most of the land -- and a stretch of curve with no
+					// bars under it is a rule for ground nobody will ever stand
+					// on. Behind the curve rather than under it, so the two
+					// share an x axis exactly and a reader never has to line up
+					// two pictures by eye.
+					const tally = layer.tally;
+					if (tally && tally.tallest > 0) {
+						g.fillStyle = "rgba(255, 255, 255, 0.13)";
+						const wide = (canvas.width - pad * 2) / TALLY_BINS;
+						for (let n = 0; n < TALLY_BINS; n++) {
+							const tall =
+								(tally.counts[n] / tally.tallest) * (canvas.height - pad * 2);
+							if (tall <= 0) continue;
+							g.fillRect(
+								pad + n * wide,
+								canvas.height - pad - tall,
+								Math.max(1, wide - 0.5),
+								tall,
+							);
+						}
+					}
+					g.strokeStyle = "#232b36";
+					g.beginPath();
+					g.moveTo(toX(0), pad);
+					g.lineTo(toX(0), canvas.height - pad);
+					g.stroke();
+					g.strokeStyle = inkOf(layer.leaf);
+					g.lineWidth = 1.5;
+					g.beginPath();
+					for (let px = pad; px <= canvas.width - pad; px++) {
+						const y = toY(splineAt(points, fromX(px)));
+						if (px === pad) g.moveTo(px, y);
+						else g.lineTo(px, y);
+					}
+					g.stroke();
+					g.fillStyle = "#e8ecf2";
+					for (const [x, y] of points) {
+						g.beginPath();
+						g.arc(toX(x), toY(y), 3, 0, Math.PI * 2);
+						g.fill();
+					}
+				}
+
+				let dragging = -1;
+				const spot = (e) => {
+					const box = canvas.getBoundingClientRect();
+					return [
+						((e.clientX - box.left) / box.width) * canvas.width,
+						((e.clientY - box.top) / box.height) * canvas.height,
+					];
+				};
+				const nearest = (px, py) => {
+					const points = layer.curve;
+					let best = -1;
+					let far = 12;
+					for (let n = 0; n < points.length; n++) {
+						const dx = toX(points[n][0]) - px;
+						const dy = toY(points[n][1]) - py;
+						const d = Math.sqrt(dx * dx + dy * dy);
+						if (d < far) {
+							far = d;
+							best = n;
+						}
+					}
+					return best;
+				};
+				canvas.addEventListener("pointerdown", (e) => {
+					e.preventDefault();
+					const [px, py] = spot(e);
+					const at = nearest(px, py);
+					const points = layer.curve;
+					if (at >= 0 && e.shiftKey) {
+						// Never below two, or the curve stops being a curve.
+						if (points.length > 2 && at > 0 && at < points.length - 1) {
+							points.splice(at, 1);
+							draw();
+							onChange();
+						}
+						return;
+					}
+					if (at >= 0) {
+						dragging = at;
+					} else {
+						const x = Math.max(-1, Math.min(1, fromX(px)));
+						const y = Math.max(0, Math.min(1, fromY(py)));
+						points.push([x, y]);
+						points.sort((a, b) => a[0] - b[0]);
+						dragging = points.findIndex((p) => p[0] === x && p[1] === y);
+						draw();
+						onChange();
+					}
+					canvas.setPointerCapture(e.pointerId);
+				});
+				canvas.addEventListener("pointermove", (e) => {
+					if (dragging < 0) return;
+					const points = layer.curve;
+					const [px, py] = spot(e);
+					const first = dragging === 0;
+					const last = dragging === points.length - 1;
+					// The ends hold their x, so the curve always covers the whole
+					// range and nothing has to guess what happens past it.
+					if (!first && !last)
+						points[dragging][0] = Math.max(
+							points[dragging - 1][0] + 0.01,
+							Math.min(points[dragging + 1][0] - 0.01, fromX(px)),
+						);
+					points[dragging][1] = Math.max(0, Math.min(1, fromY(py)));
+					draw();
+					onChange();
+				});
+				const drop = () => {
+					dragging = -1;
+				};
+				canvas.addEventListener("pointerup", drop);
+				canvas.addEventListener("pointercancel", drop);
+				return draw;
+			}
+
+			// ---------------------------------------------------------------
+			// The panel.
+			// ---------------------------------------------------------------
+
+			/**
+			 * The whole draft as a query string.
+			 *
+			 * **A layer travels as one parameter.** Named `v1`, `v2` and so on,
+			 * holding the species, then every row that has moved off its
+			 * default, then the curve -- so a link carries a stand of three
+			 * species and a reader can still see which is which.
+			 */
+			function toParams() {
+				const p = new URLSearchParams();
+				for (const [key, row] of ROWS) {
+					if (row.type === "picture") continue;
+					if (row.type === "check") {
+						if (knobs[key] !== row.value) p.set(key, knobs[key] ? "1" : "0");
+						continue;
+					}
+					if (knobs[key] !== row.value) p.set(key, String(knobs[key]));
+				}
+				// **How many layers there are is written even when there are
+				// none.** Without it a link that says nothing about layers and
+				// a link that says *there are no layers* are the same string,
+				// so deleting the last one and reloading brings both openers
+				// back -- an edit the page forgets is worse than one it
+				// refuses.
+				p.set("nv", String(layers.length));
+				layers.forEach((layer, n) => {
+					const parts = [layer.species];
+					if (!layer.on) parts.push("off");
+					const preset = PRESETS[layer.species] ?? CUSTOM;
+					for (const [key, row] of LAYER_ROWS) {
+						if (row.type === "spline" || row.type === "picture") continue;
+						const start = SHAPE_KEYS.includes(key)
+							? preset[key]
+							: key === "useLeaves"
+								? preset.leaves
+								: row.value;
+						if (layer.values[key] === start) continue;
+						parts.push(
+							`${key}=${
+								typeof layer.values[key] === "boolean"
+									? layer.values[key] ? 1 : 0
+									: layer.values[key]
+							}`,
+						);
+					}
+					parts.push(`curve=${splineToText(layer.curve)}`);
+					p.set(`v${n + 1}`, parts.join("|"));
+				});
+				return p;
+			}
+
+			function fromParams(params) {
+				for (const [key, row] of ROWS) {
+					const raw = params.get(key);
+					if (raw === null) continue;
+					if (row.type === "check") knobs[key] = raw === "1";
+					else if (row.type === "text" || row.type === "select") knobs[key] = raw;
+					else if (Number.isFinite(Number(raw))) knobs[key] = Number(raw);
+				}
+				const said = params.get("nv");
+				const wanted = said === null ? -1 : Number(said);
+				const found = [];
+				for (let n = 1; ; n++) {
+					const raw = params.get(`v${n}`);
+					if (raw === null) break;
+					const parts = raw.split("|");
+					const layer = makeLayer(
+						PRESETS[parts[0]] ? parts[0] : "Custom",
+					);
+					for (const part of parts.slice(1)) {
+						if (part === "off") {
+							layer.on = false;
+							continue;
+						}
+						const cut = part.indexOf("=");
+						if (cut < 0) continue;
+						const key = part.slice(0, cut);
+						const text = part.slice(cut + 1);
+						if (key === "curve") {
+							const points = splineFromText(text);
+							if (points) layer.curve = points;
+							continue;
+						}
+						const row = LAYER_ROWS.get(key);
+						if (!row) continue;
+						if (row.switch) layer.values[key] = text === "1";
+						else if (Number.isFinite(Number(text)))
+							// **A link could otherwise build what a slider cannot
+							// reach.** The world rows have `settle` for this; a
+							// layer's ends do not move with the draft, so
+							// clamping them here is the whole of it.
+							layer.values[key] = Math.max(
+								row.low,
+								Math.min(row.high, Number(text)),
+							);
+					}
+					found.push(layer);
+				}
+				if (wanted >= 0 || found.length) {
+					layers.length = 0;
+					layers.push(...found);
+				}
+				// **A link could otherwise build what a slider cannot reach**, so
+				// the draft settles here as well as after every move.
+				settle();
+			}
+
+			function writeUrl() {
+				const p = toParams();
+				const url = p.toString()
+					? location.pathname + "?" + p.toString()
+					: location.pathname;
+				history.replaceState(null, "", url);
+			}
+
+			/** One slider, checkbox, dropdown or text field, over any draft. */
+			function makeRow(row, read, write, host, context) {
+				const wrap = document.createElement("div");
+				const label = document.createElement("label");
+				label.textContent = row.label;
+				let input;
+				wrap.className = "knob";
+				if (row.type === "select") {
+					input = document.createElement("select");
+					for (const option of row.options) {
+						const o = document.createElement("option");
+						o.value = option;
+						o.textContent = option;
+						input.append(o);
+					}
+					input.value = read();
+				} else if (row.type === "text") {
+					input = document.createElement("input");
+					input.type = "text";
+					input.value = read();
+				} else if (row.type === "check") {
+					wrap.className = "knob check";
+					input = document.createElement("input");
+					input.type = "checkbox";
+					input.checked = read();
+				} else {
+					input = document.createElement("input");
+					input.type = "range";
+					input.min = row.low;
+					input.max = row.high;
+					input.step = row.step;
+					input.value = read();
+				}
+				const readout = document.createElement("output");
+				if (row.type === "check") wrap.append(input, label);
+				else wrap.append(label, readout, input);
+				let note = null;
+				if (row.note) {
+					note = document.createElement("p");
+					note.className = "knob-note";
+					wrap.append(note);
+				}
+				host.append(wrap);
+				input.addEventListener("input", () => {
+					if (row.type === "check") write(input.checked);
+					else if (row.type === "select" || row.type === "text")
+						write(input.value);
+					else write(Number(input.value));
+					askForRedraw();
+				});
+				return { row, wrap, input, readout, note, read, context };
+			}
+
+			function buildPanel() {
+				const hostWorld = document.getElementById("knobsWorld");
+				const hostPlants = document.getElementById("knobsPlants");
+				for (const group of KNOBS) {
+					const set = document.createElement("details");
+					set.className = "group" + (group.tint ? " " + group.tint : "");
+					set.open = group.open !== false;
+					const legend = document.createElement("summary");
+					legend.textContent = group.group;
+					set.append(legend);
+					for (const row of group.rows) {
+						if (row.type === "picture") {
+							const wrap = document.createElement("div");
+							wrap.className = "knob pictured";
+							const holder = document.createElement("div");
+							holder.className = "shot out";
+							const shot = {
+								key: row.key,
+								name: "Ground",
+								layer: null,
+								canvas: document.createElement("canvas"),
+							};
+							shot.ctx = shot.canvas.getContext("2d");
+							const name = document.createElement("b");
+							name.textContent = shot.name;
+							holder.append(shot.canvas, name);
+							wrap.append(holder);
+							set.append(wrap);
+							SHOTS.push(shot);
+							watchShot(shot);
+							continue;
+						}
+						const made = makeRow(
+							row,
+							() => knobs[row.key],
+							(value) => {
+								knobs[row.key] = value;
+							},
+							set,
+							null,
+						);
+						rows.set(row.key, made);
+					}
+					(group.panel === "plants" ? hostPlants : hostWorld).append(set);
+				}
+				buildLayers();
+			}
+
+			/** Every row of every layer card, rebuilt whenever the cards are. */
+			const layerRowsShown = [];
+
+			/**
+			 * The layer cards, from scratch.
+			 *
+			 * **Rebuilt whole rather than patched.** A card holds a canvas, a
+			 * curve editor with a pointer capture on it and four sections; the
+			 * list changes only when a person adds or drops a layer, which is
+			 * rare and never inside a frame, so there is nothing to be gained
+			 * by working out which card moved.
+			 */
+			function buildLayers() {
+				const host = document.getElementById("layers");
+				host.textContent = "";
+				layerRowsShown.length = 0;
+				// The ground shot stays; every layer's goes with its card.
+				for (let n = SHOTS.length - 1; n >= 0; n--)
+					if (SHOTS[n].layer) SHOTS.splice(n, 1);
+				for (const layer of layers) {
+					const card = document.createElement("details");
+					card.className = "layer";
+					card.open = layer.open;
+					card.addEventListener("toggle", () => {
+						layer.open = card.open;
+					});
+					const head = document.createElement("summary");
+					const chip = document.createElement("span");
+					chip.className = "chip";
+					// The card wears the leaf over the wood, which is what a
+					// plant shows most of.
+					chip.style.background = inkOf(layer.leaf);
+					chip.style.boxShadow = `inset 0 0 0 2px ${inkOf(layer.wood)}`;
+					const title = document.createElement("span");
+					title.textContent = layer.species;
+					const grown = document.createElement("span");
+					grown.className = "grown";
+					const off = document.createElement("input");
+					off.type = "checkbox";
+					off.className = "switch";
+					off.checked = layer.on;
+					off.title = "grow this layer";
+					off.addEventListener("click", (e) => e.stopPropagation());
+					off.addEventListener("input", () => {
+						layer.on = off.checked;
+						card.classList.toggle("off", !layer.on);
+						askForRedraw(false);
+					});
+					const drop = document.createElement("button");
+					drop.type = "button";
+					drop.className = "drop";
+					drop.textContent = "✕";
+					drop.title = "remove this layer";
+					drop.addEventListener("click", (e) => {
+						e.stopPropagation();
+						e.preventDefault();
+						layers.splice(layers.indexOf(layer), 1);
+						buildLayers();
+						askForRedraw(false);
+					});
+					head.append(off, chip, title, grown, drop);
+					card.classList.toggle("off", !layer.on);
+					card.append(head);
+					const body = document.createElement("div");
+					body.className = "body";
+					card.append(body);
+
+					// **The species dropdown is a template, not an identity.**
+					// Picking one writes its numbers into the rows below and
+					// they stay editable, so two layers of `Oak` that have been
+					// dragged apart are two different trees.
+					const speciesRow = makeRow(
+						{
+							key: "species",
+							label: "Species",
+							type: "select",
+							options: PRESET_NAMES,
+							note: () =>
+								"a template for the rows below · they stay editable, so " +
+								"two layers of one species can be two different plants",
+						},
+						() => layer.species,
+						(value) => {
+							applySpecies(layer, value);
+							buildLayers();
+						},
+						body,
+						layer,
+					);
+					layerRowsShown.push(speciesRow);
+
+					for (const part of LAYER_SECTIONS) {
+						const set = document.createElement("details");
+						set.className = "sub";
+						set.open = part.open !== false;
+						const legend = document.createElement("summary");
+						legend.append(document.createTextNode(part.name));
+						set.append(legend);
+						for (const row of part.rows) {
+							if (row.switch) {
+								const box = document.createElement("input");
+								box.type = "checkbox";
+								box.className = "switch";
+								box.checked = layer.values[row.key];
+								box.title = row.title ?? "";
+								box.addEventListener("click", (e) => e.stopPropagation());
+								box.addEventListener("input", () => {
+									layer.values[row.key] = box.checked;
+									askForRedraw(false);
+								});
+								legend.prepend(box);
+								layerRowsShown.push({
+									row, wrap: set, input: box, context: layer, switchOf: true,
+								});
+								continue;
+							}
+							if (row.type === "picture") {
+								const wrap = document.createElement("div");
+								wrap.className = "knob pictured";
+								const holder = document.createElement("div");
+								holder.className = "shot leaf";
+								const shot = {
+									key: `layer${layer.id}`,
+									name: layer.species,
+									layer,
+									canvas: document.createElement("canvas"),
+								};
+								shot.ctx = shot.canvas.getContext("2d");
+								const name = document.createElement("b");
+								name.textContent = layer.species;
+								name.style.background = inkOf(layer.leaf);
+								shot.badge = name;
+								holder.append(shot.canvas, name);
+								wrap.append(holder);
+								set.append(wrap);
+								SHOTS.push(shot);
+								watchShot(shot);
+								continue;
+							}
+							if (row.type === "spline") {
+								const wrap = document.createElement("div");
+								wrap.className = "knob curved";
+								const label = document.createElement("label");
+								label.textContent = row.label;
+								const canvas = document.createElement("canvas");
+								canvas.width = 300;
+								canvas.height = 96;
+								canvas.className = "curve";
+								const axis = document.createElement("div");
+								axis.className = "axis";
+								const line = document.createElement("div");
+								line.textContent =
+									"x: the layer's own noise, −1 to +1 · " +
+									"y: how much of Density this place takes";
+								const bars = document.createElement("div");
+								axis.append(line, bars);
+								const help = document.createElement("p");
+								help.className = "curve-help";
+								help.textContent =
+									"drag a point · click the curve to add one · " +
+									"shift-click a point to remove it";
+								wrap.append(label, canvas, axis, help);
+								set.append(wrap);
+								const redraw = makeCurve(canvas, layer, () => askForRedraw());
+								layerRowsShown.push({ row, wrap, redraw, bars, context: layer });
+								continue;
+							}
+							layerRowsShown.push(
+								makeRow(
+									row,
+									() => layer.values[row.key],
+									(value) => {
+										layer.values[row.key] = value;
+									},
+									set,
+									layer,
+								),
+							);
+						}
+						body.append(set);
+						layer.sections ??= {};
+						if (part.on) layer.sections[part.on] = set;
+					}
+					layer.head = { grown, card };
+					host.append(card);
+				}
+			}
+
+			// ---------------------------------------------------------------
+			// Adding a layer.
+			// ---------------------------------------------------------------
+
+			const pick = document.getElementById("pick");
+			const pickList = document.getElementById("pickList");
+			for (const name of PRESET_NAMES) {
+				const button = document.createElement("button");
+				button.type = "button";
+				const chip = document.createElement("span");
+				chip.className = "chip";
+				chip.style.background = inkOf(PRESETS[name].leaf);
+				chip.style.boxShadow = `inset 0 0 0 2px ${inkOf(PRESETS[name].wood)}`;
+				button.append(chip, document.createTextNode(name));
+				button.addEventListener("click", () => {
+					pick.hidden = true;
+					layers.push(makeLayer(name));
+					buildLayers();
+					askForRedraw(false);
+				});
+				pickList.append(button);
+			}
+			pick.addEventListener("click", (e) => {
+				if (e.target === pick) pick.hidden = true;
+			});
+			document.getElementById("addLayer").addEventListener("click", () => {
+				pick.hidden = false;
+			});
+
+			// ---------------------------------------------------------------
+			// Keeping the panel in step.
+			// ---------------------------------------------------------------
+
+			/** One built row brought back in line with the draft it edits. */
+			function freshen(made) {
+				const { row, wrap, readout, input, note, context, redraw } = made;
+				if (made.switchOf) {
+					input.checked = context.values[row.key];
+					input.disabled = row.disabledWhen ? row.disabledWhen(context) : false;
+					wrap.classList.toggle(
+						"off",
+						!context.values[row.key] || input.disabled,
+					);
+					return;
+				}
+				if (redraw) {
+					redraw();
+					// **An unlabelled histogram is a shape, not a
+					// measurement.** How much land it counts is what says
+					// whether a hump at the left is a continent's worth of
+					// ground or a rounding error.
+					const tally = context.tally;
+					made.bars.textContent = tally
+						? `bars: how much of the planet's ${tally.land.toLocaleString()} ` +
+							`land cells read each value`
+						: "bars: the layer is off, so nothing is counted";
+					return;
+				}
+				// **A row with no meaning comes off the panel, it is not greyed
+				// out** -- a disabled row is a question the reader has to answer
+				// before dismissing.
+				if (row.shownWhen) wrap.hidden = !row.shownWhen(context);
+				if (row.type === "check") {
+					input.checked = made.read();
+					readout.textContent = "";
+				} else if (row.type === "select" || row.type === "text") {
+					input.value = made.read();
+					readout.textContent = "";
+				} else {
+					const live = liveRange(row);
+					input.min = live.low;
+					input.max = live.high;
+					input.value = made.read();
+					readout.textContent =
+						Number(made.read()).toFixed(row.digits ?? 2) +
+						(row.unit ? " " + row.unit : "");
+				}
+				if (note) note.innerHTML = row.note(context);
+			}
+
+			function refreshPanel() {
+				for (const made of rows.values()) freshen(made);
+				for (const made of layerRowsShown) freshen(made);
+				for (const layer of layers)
+					if (layer.head)
+						layer.head.grown.textContent = layer.grown
+							? `${layer.grown.toLocaleString()} plants`
+							: "none";
+				drawPictures();
+				if (!field) return;
+				const solid =
+					field.woodCells + (knobs.leavesCollide ? field.leafCells : 0);
+				document.getElementById("recipe").innerHTML =
+					`<i class="c">${field.trees.toLocaleString()}</i> plants · ` +
+					`<i class="c">${field.woodCells.toLocaleString()}</i> wood + ` +
+					`<i class="e">${field.leafCells.toLocaleString()}</i> leaf cells · ` +
+					`<i class="p">${field.pieces.toLocaleString()}</i> pieces, ` +
+					`<i class="p">${(100 * field.rooted).toFixed(1)}%</i> rooted`;
+				document.getElementById("facts").innerHTML =
+					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
+					`<b>${field.count.toLocaleString()}</b> hexagons · ` +
+					`ground <b>${Math.round(field.lowest)}</b> to ` +
+					`<b>${Math.round(field.highest)} m</b> · ` +
+					`<b>${solid.toLocaleString()}</b> cells you would walk into · ` +
+					`<b>${field.chunkCount.toLocaleString()}</b> chunks · ` +
+					`<b>${Math.round(cost)} ms</b>`;
+			}
+
+			// ---------------------------------------------------------------
+			// Boot.
+			// ---------------------------------------------------------------
+
+			let pending = false;
+			let settleTimer = 0;
+			function askForRedraw(draft = true) {
+				clearTimeout(settleTimer);
+				if (draft) settleTimer = setTimeout(() => askForRedraw(false), 220);
+				if (pending) return;
+				pending = true;
+				requestAnimationFrame(() => {
+					pending = false;
+					const started = performance.now();
+					settle();
+					generate(draft ? Math.max(24, knobs.cells >> 1) : knobs.cells);
+					buildMesh();
+					cost = performance.now() - started;
+					refreshPanel();
+					if (!draft) writeUrl();
+					render();
+				});
+			}
+
+			// The knobs open and shut on a phone; on a desktop the buttons are
+			// not on the page at all and this never runs. Two drawers, two
+			// buttons, each answering for its own -- opening one never closes
+			// the other.
+			const drawer = (buttonId, bodyClass, label) => {
+				const button = document.getElementById(buttonId);
+				button.addEventListener("click", () => {
+					const open = document.body.classList.toggle(bodyClass);
+					button.setAttribute("aria-expanded", String(open));
+					button.textContent = open ? "Close" : label;
+				});
+			};
+			drawer("toggleWorld", "knobs", "World");
+			drawer("togglePlants", "plants", "Plants");
+
+			let dragging = null;
+			view.addEventListener("pointerdown", (e) => {
+				dragging = { x: e.clientX, y: e.clientY, shift: e.shiftKey };
+				view.setPointerCapture(e.pointerId);
+			});
+			view.addEventListener("pointermove", (e) => {
+				if (!dragging) return;
+				const dx = e.clientX - dragging.x;
+				const dy = e.clientY - dragging.y;
+				dragging.x = e.clientX;
+				dragging.y = e.clientY;
+				if (dragging.shift) camera.lift += dy * 0.002;
+				else {
+					camera.yaw -= dx * 0.006;
+					camera.pitch = Math.max(-0.2, Math.min(1.5, camera.pitch + dy * 0.005));
+				}
+				render();
+			});
+			const stop = () => {
+				dragging = null;
+			};
+			view.addEventListener("pointerup", stop);
+			view.addEventListener("pointercancel", stop);
+			view.addEventListener(
+				"wheel",
+				(e) => {
+					e.preventDefault();
+					camera.distance = Math.max(
+						0.05,
+						Math.min(6, camera.distance * Math.exp(e.deltaY * 0.001)),
+					);
+					render();
+				},
+				{ passive: false },
+			);
+			window.addEventListener("resize", render);
+
+			/**
+			 * What a page with no link in it opens with.
+			 *
+			 * **Two layers, because one proves nothing.** A single layer is a
+			 * density with a curve on it and could as well have been a slider;
+			 * two say what the arrangement is for -- a pine belt and an oak
+			 * wood, each with its own field, its own curve and its own shape,
+			 * meeting wherever their curves both allow. The curves are drawn to
+			 * put them in different places rather than left flat, or the opening
+			 * view is two species evenly mixed over the whole planet, which is
+			 * the one picture that makes layers look like a longer way of
+			 * writing `Mixed stand`.
+			 */
+			function openingLayers() {
+				const pine = makeLayer("Pine");
+				pine.values.density = 2.5;
+				pine.values.feature = 260;
+				pine.values.featureScale = 5;
+				// High ground and the far side of the field: a belt rather than
+				// a scatter.
+				pine.curve = [
+					[-1, 0],
+					[-0.05, 0],
+					[0.35, 1],
+					[1, 1],
+				];
+				const oak = makeLayer("Oak");
+				oak.values.density = 1.6;
+				oak.values.feature = 380;
+				oak.values.featureScale = 4;
+				oak.curve = [
+					[-1, 1],
+					[-0.2, 0.85],
+					[0.2, 0],
+					[1, 0],
+				];
+				layers.push(pine, oak);
+			}
+			openingLayers();
+			fromParams(new URLSearchParams(location.search));
+			buildPanel();
+			const booted = performance.now();
+			settle();
+			generate();
+			buildMesh();
+			cost = performance.now() - booted;
+			refreshPanel();
+			render();
+		</script>
+	</body>
+</html>

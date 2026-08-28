@@ -51,6 +51,8 @@ beforeAll(() => {
 		level: 6,
 		cellMetres: 100,
 		relief: 100,
+		peakRelief: 40,
+		seaDepth: 100,
 	});
 	shape = new WorldShape(1700, DEPTH, 150, maxCrustDepth(DEPTH));
 	terrain = new TerrainGenerator(map.seed, shape, map);
@@ -556,6 +558,8 @@ describe("merging at a level seam", () => {
 			level: 6,
 			cellMetres: 100,
 			relief: 200,
+			peakRelief: 40,
+			seaDepth: 100,
 		});
 		const steep = new WorldShape(1700, DEPTH, 260, maxCrustDepth(DEPTH));
 		const gen = new TerrainGenerator(rough.seed, steep, rough);
@@ -1327,8 +1331,7 @@ describe("sky exposure", () => {
 		});
 
 		const palette = Object.values(BLOCK_COLORS) as readonly (
-			| readonly [number, number, number]
-			| undefined
+			readonly [number, number, number] | undefined
 		)[];
 		const skyOf = (r: number, g: number, b: number): number | null => {
 			for (const c of palette) {

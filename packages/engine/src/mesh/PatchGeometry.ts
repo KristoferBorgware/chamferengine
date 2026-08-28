@@ -19,7 +19,7 @@
  * picture would cost a rebuild of the thing the picture is of.
  */
 export interface PatchGeometry {
-	/** Position, normal, metres, raw and the two layers per vertex: 10 floats. */
+	/** Position, normal, metres, raw and the four layers per vertex. */
 	readonly vertices: Float32Array<ArrayBuffer>;
 
 	/** Triangles, three indices each. */
@@ -48,5 +48,17 @@ export interface PatchGeometry {
 	readonly landShare: number;
 }
 
-/** Floats per vertex: position, normal, metres, raw, terrain, mountain. */
-export const PATCH_STRIDE = 10;
+/**
+ * Floats per vertex: position, normal, metres, raw, and one per layer.
+ *
+ * **Four layers, because a layer with no channel of its own is a layer whose
+ * curve cannot be looked at.** Three of them shape the surface; the fourth is
+ * the carve, which is a 3D field and so has no one value at a place -- what
+ * rides here is what it read at the block this face belongs to.
+ *
+ * Plus one: the cell's own speckle, which is a fact about the cell rather than
+ * about the ground, and the one thing on a preview that says where one hexagon
+ * ends and the next begins where both are the same material and the same
+ * height.
+ */
+export const PATCH_STRIDE = 13;

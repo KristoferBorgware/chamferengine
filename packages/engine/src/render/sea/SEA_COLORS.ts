@@ -8,7 +8,7 @@
  * entered and `deep` is what it never leaves.
  *
  * Here rather than beside the renderer that draws the shell, because two places
- * draw this sea -- the world and the terrain bench's flat pictures -- and a
+ * draw this sea -- the world and the landscape bench's flat pictures -- and a
  * blue chosen twice is two blues.
  */
 export const SEA_COLORS: {

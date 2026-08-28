@@ -29,15 +29,38 @@ export function bandOf(metres: number): number {
 	return 3;
 }
 
+/**
+ * How many steps a noise picture is cut into.
+ *
+ * **A smooth ramp of grey says where a field is high and never says how fast.**
+ * A layer's picture is read to judge its shapes -- how wide they are, how
+ * steeply one runs into the next -- and that is a question about the gradient,
+ * which a continuous ramp shows nowhere. Cut into steps it is a contour map.
+ */
+const PICTURE_BANDS = 9;
+
+/**
+ * One noise reading as a step of grey, with a dark line at each step's edge.
+ *
+ * The reading runs `-1` to `1`, which is the whole range an octave stack fills.
+ * The line is what makes the steps read as contours rather than as posterising.
+ */
+function bandGrey(reading: number): number {
+	const t = Math.max(0, Math.min(0.9999, (reading + 1) / 2));
+	const step = Math.floor(t * PICTURE_BANDS);
+	const grey = 0.06 + (step / (PICTURE_BANDS - 1)) * 0.92;
+	const into = t * PICTURE_BANDS - step;
+	return grey * (into < 0.06 ? 0.45 : 1);
+}
+
 /** What one pixel of a picture is drawn from. */
 export interface PatchPixel {
 	readonly metres: number;
 	readonly raw: number;
+
+	/** The layer's own noise reading, `-1` to `1`, before any curve. */
 	readonly layer: number;
 
-	/** Metres erosion moved the ground here, and what the picture saturates at. */
-	readonly cut: number;
-	readonly cutScale: number;
 	readonly rawLow: number;
 	readonly rawHigh: number;
 
@@ -59,29 +82,16 @@ export function paintPatch(
 	at: number,
 	pixel: PatchPixel,
 ): void {
-	if (pixel.picture === "erosion") {
-		// **What the water did, on its own.** Cut is red and fill is blue, both
-		// against how many metres moved rather than against the height they
-		// moved from, so a valley floor a metre lower reads the same wherever
-		// it stands. Ground nothing touched is the grey in the middle. The
-		// scale is what the run reached, because how far erosion moves the
-		// ground depends on the relief, the cell and the strength.
-		const t = Math.max(
-			-1,
-			Math.min(1, pixel.cut / Math.max(0.01, pixel.cutScale)),
-		);
-		const grey = 0.18;
-		px[at] = 255 * Math.pow(grey + Math.max(0, -t) * 0.75, 1 / 2.2);
-		px[at + 1] = 255 * Math.pow(grey, 1 / 2.2);
-		px[at + 2] = 255 * Math.pow(grey + Math.max(0, t) * 0.75, 1 / 2.2);
-		px[at + 3] = 255;
-		return;
-	}
-	if (pixel.picture === "terrain" || pixel.picture === "mountain") {
-		const t = Math.max(0, Math.min(1, pixel.layer));
-		px[at] = 255 * Math.pow(0.04 + 0.56 * t, 1 / 2.2);
-		px[at + 1] = 255 * Math.pow(0.05 + 0.8 * t, 1 / 2.2);
-		px[at + 2] = 255 * Math.pow(0.09 + 0.91 * t, 1 / 2.2);
+	if (
+		pixel.picture === "continent" ||
+		pixel.picture === "erosion" ||
+		pixel.picture === "peaks" ||
+		pixel.picture === "carve"
+	) {
+		const v = 255 * bandGrey(pixel.layer);
+		px[at] = v;
+		px[at + 1] = v;
+		px[at + 2] = v;
 		px[at + 3] = 255;
 		return;
 	}
@@ -116,10 +126,11 @@ export function paintPatch(
 	}
 
 	const band = BAND_COLORS[bandOf(pixel.metres)]!;
-	// Land shades by how far it stands above the band it started in, so a band
-	// is one material and still has shape in it. Sea is the floor seen through
+	// **A band is one material and one colour.** Sea is the floor seen through
 	// water, so it shades by how much water is over it -- which is why a beach
-	// shows sand and a deep does not.
+	// shows sand and a deep does not; land does not shade at all, because every
+	// pixel of this picture is a block and a colour mixed from two stops is a
+	// material nothing builds.
 	const color: [number, number, number] = [0, 0, 0];
 	let shade: number;
 	if (pixel.metres <= 0) {
@@ -137,14 +148,15 @@ export function paintPatch(
 		shade = 1;
 	} else {
 		for (let ch = 0; ch < 3; ch++) color[ch] = band[ch]!;
-		shade = 0.72 + 0.28 * Math.min(1, (pixel.metres % 100) / 100);
-		// A ring every hundred metres, on the same grid the two material lines
-		// sit on and the same one the patch draws. A flat picture has no
-		// shading at all, so this is the whole of what says how steep anything
-		// is. **Land only**: the sea is a surface at one radius, so a contour
-		// on it would be a ring drawn on water that is everywhere level.
-		const into = pixel.metres % 100;
-		if (into < 4) shade *= 0.6;
+		// **A line at every hundred metres, and flat between them.** A ramp
+		// across each band was tried and it is the wrong picture: it draws a
+		// gradient inside a material, so a hillside of one block reads as a
+		// soft wash and the picture stops naming what the world builds there.
+		// The line is what says how steep the ground is -- close together on a
+		// cliff, far apart on a plain -- and it costs the band nothing.
+		// **Land only**: the sea stands at one radius, so a contour on it would
+		// be a ring drawn on water that is everywhere level.
+		shade = pixel.metres % 100 < 6 ? 0.78 : 1;
 	}
 	px[at] = 255 * Math.pow(Math.min(1, color[0] * shade), 1 / 2.2);
 	px[at + 1] = 255 * Math.pow(Math.min(1, color[1] * shade), 1 / 2.2);

@@ -6,6 +6,7 @@ import {
 	COARSE_MAP_DEFAULTS,
 	buildCoarseMap,
 	isSolid,
+	maxElevationFor,
 	isTranslucent,
 	seedFromString,
 } from "chamfer/generation";
@@ -16,8 +17,27 @@ import { Vec3 } from "chamfer/math";
 const COARSE_LEVEL = 6;
 const DEPTH = 9;
 
-/** Metres from sea level to the tallest ground, matched to the shape below. */
+/** Metres from sea level to the tallest ground the level alone can reach. */
 const RELIEF = 100;
+
+/**
+ * How tall a peak on top of that may be.
+ *
+ * **A crust is sized by the sum, never by Relief alone.** The height is no
+ * longer fitted to its own peak, so Relief bounds the level and this bounds
+ * what a full peak adds -- a shape sized by the first alone has ground standing
+ * out of its own crust.
+ */
+const PEAK = 40;
+
+/**
+ * How deep the sea floor runs, matched to the crust the shape below has.
+ *
+ * The floor is `seaDepth + peakRelief` at its deepest, and a crust that does
+ * not reach it has ocean bed below its own bottom -- where `blockAt` reads air,
+ * because there is no block there to read.
+ */
+const SEA_DEPTH = 120;
 
 let map: CoarseMap;
 let shape: WorldShape;
@@ -28,8 +48,15 @@ beforeAll(() => {
 		level: COARSE_LEVEL,
 		cellMetres: 100,
 		relief: RELIEF,
+		peakRelief: PEAK,
+		seaDepth: SEA_DEPTH,
 	});
-	shape = new WorldShape(1700, DEPTH, RELIEF, maxCrustDepth(DEPTH));
+	shape = new WorldShape(
+		1700,
+		DEPTH,
+		maxElevationFor({ relief: RELIEF, peakRelief: PEAK }),
+		maxCrustDepth(DEPTH),
+	);
 	gen = new TerrainGenerator(map.seed, shape, map, {
 		rockLine: 28,
 		snowLine: 45,
@@ -98,15 +125,13 @@ describe("the height field", () => {
 			total++;
 			if (column.waterRadius === column.groundRadius) dry++;
 		}
-		// The map is built at the default land fraction and the terrain follows
-		// it: the fine detail moves the ground, never the decision about
-		// whether there is water here.
-		expect(dry / total).toBeGreaterThan(
-			COARSE_MAP_DEFAULTS.landFraction - 0.05,
-		);
-		expect(dry / total).toBeLessThan(
-			COARSE_MAP_DEFAULTS.landFraction + 0.05,
-		);
+		// **The land share is a measurement, not a knob.** The coast is where
+		// the continentalness curve crosses its own middle, so what this
+		// guarantees is that the terrain follows the map rather than deciding
+		// for itself: both are asked, and both give the same answer.
+		let mapDry = 0;
+		for (const h of map.height) if (h > 0) mapDry++;
+		expect(dry / total).toBeCloseTo(mapDry / map.count, 1);
 	});
 });
 
@@ -370,5 +395,60 @@ describe("the density term", () => {
 				expect(
 					withCaves.blockAt(column, column.groundLayer + n),
 				).not.toBe(BlockType.AIR);
+	});
+});
+
+describe("the carve, written into a column", () => {
+	/**
+	 * **`blockAt` is the truth and `fillColumn` is what a chunk build calls.**
+	 * The column writer evaluates a band under the ground and fills the crust
+	 * below it with stone, which is what keeps a chunk at about ten evaluations
+	 * a column however deep the crust runs -- and it is only sound while
+	 * nothing can open air below that band. The carve can, down to its own
+	 * reach, so the band has to reach as far.
+	 *
+	 * Measured on the shipped world before this held (`probe-carve-depth.ts`):
+	 * over 1,283 land columns, 47,971 carved blocks were written back to stone
+	 * and 11 columns kept rock over air, against 299 with the band right. That
+	 * is a layer that can only nibble the top of a column, which reads as
+	 * terrain whose height moved rather than terrain with a hole in it.
+	 */
+	it("writes every block the carve opened, however deep it opened it", () => {
+		const carved = new TerrainGenerator(map.seed, shape, map, {
+			rockLine: 28,
+			snowLine: 45,
+			carveLayer: true,
+		});
+		const layers = shape.crustDepth;
+		const into = new Uint16Array(layers);
+		let checked = 0;
+		let disagreed = 0;
+		for (const column of columns(32)) {
+			if (column.elevation <= 0) continue;
+			checked++;
+			carved.fillColumn(column, into, 0, layers);
+			// The floor is bedrock whatever the terrain says, so it is the one
+			// layer the writer is meant to differ on.
+			for (let layer = column.groundLayer; layer < layers - 1; layer++)
+				if (
+					(carved.blockAt(column, layer) !== BlockType.AIR) !==
+					(into[layer] !== BlockType.AIR)
+				)
+					disagreed++;
+		}
+		expect(checked).toBeGreaterThan(0);
+		expect(disagreed).toBe(0);
+	});
+
+	/** With the layer off the fill is the shortcut it always was. */
+	it("keeps the soil band when nothing can open air below it", () => {
+		const layers = shape.crustDepth;
+		const into = new Uint16Array(layers);
+		for (const column of columns(32)) {
+			if (column.elevation <= 0) continue;
+			gen.fillColumn(column, into, 0, layers);
+			for (let layer = column.groundLayer; layer < layers - 1; layer++)
+				expect(into[layer]).not.toBe(BlockType.AIR);
+		}
 	});
 });
