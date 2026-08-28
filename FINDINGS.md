@@ -183,11 +183,11 @@ on the first frame instead of drawing something.
 
 ---
 
-### F-107 — Growing a chunk's plants costs about as much again as its ground
+### F-107 — Growing a chunk's plants costs three times what generating its ground does
 
 **Kind:** performance
 **Milestone:** 0.5.0
-**Priority:** medium
+**Priority:** high
 **Effort:** medium
 **Found:** 2026-08-28, growing the world's own plants in its own chunks
 **Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
@@ -195,29 +195,43 @@ on the first frame instead of drawing something.
 
 **What happens.** A chunk grows every plant within `24 m` of its rim and writes
 only what it owns, which is what makes two chunks agree about a tree that
-straddles them. Measured on the shipped world -- depth 13, 1 m blocks, chunks
-64 m across, two layers (`tools/trial-plant-chunk.ts`):
+straddles them. Measured on the shipped world -- depth 13, 1 m blocks, 64 m
+chunks, the two default layers -- over **12 chunks drawn at random over the
+sphere and kept only where 95% or more of their columns stand above the
+water**, at the finest level, best of three passes
+(`tools/trial-plant-cost.ts`):
 
-| level | slots | ground | plants | plants ÷ ground |
-|---|---|---|---|---|
-| lod 0 | 2,145 | 645 ms | **884 ms** | 1.4x |
-| lod 2 | 153 | 16 ms | 112 ms | 7.1x |
-| lod 4 | 15 | 0.4 ms | 32 ms | 91.7x |
+| | ms |
+|---|---|
+| generate the ground | 2,715 total, ~165 a chunk |
+| mesh it, no trees | ~57 a chunk |
+| **grow the plants** | **6,021 total, x3.0 the ground's own generate** |
+| mesh it again, with trees | ~85 a chunk |
+
+**The whole job goes from 2,715 ms to 8,970 ms: +230%.** The middle chunk is
+**+210%** and the range is **+15% to +572%**, tracking how many plants the
+noise put there -- 0 to 82 over these twelve. **96% of what the trees add is
+the growing**, not the meshing: the mesh carries 140% to 445% more faces and
+still costs only 4% of the difference.
+
+**A chunk that grows nothing still pays 36 ms, +16%.** The root walk runs
+whether or not it finds a plant, so ground the curve rules out is not free.
 
 These are software-adapter timings and move run to run; read the ratios.
 
-**Why it matters.** The absolute figure falls with distance -- a chunk covers
-the same triangle at every level, so the roots are the same set and the stamps
-land in a coarser lattice -- but at full detail it doubles what a chunk costs,
-and full detail is where the player is standing. The pool absorbs it the way it
-absorbs the ground, so it reads as chunks arriving later rather than as a
-stutter.
+**Why it matters.** At full detail the trees cost more than three times what
+the ground does, and full detail is where the player is standing. The pool
+absorbs it the way it absorbs the ground, so it reads as chunks arriving later
+rather than as a stutter. It is also the reason for the tree line (F-109): the
+same walk quadruples per level of detail.
 
 **What would make it smaller.** F-103 is most of it: the rod walk asks
 `directionToCell` at every step and that call allocates seven objects for an
 answer that is three integers. After that the leaf stamp is the largest single
 term, and the lab took one stand from 4,990 ms to 1,595 ms without changing any
-of the shapes it drew.
+of the shapes it drew. The +16% floor is separate and cheaper to close: a
+plant is decided by a hash of its root cell, so a whole triangle of roots can
+be refused before any of them is turned into a position.
 
 ### F-106 — A plant is grown twice for a cell that two chunks both hold
 
