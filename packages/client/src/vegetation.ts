@@ -170,7 +170,7 @@ collideBox.oninput = () => {
 		...settings.knobs,
 		leavesCollide: collideBox.checked,
 	});
-	moved(settings);
+	request(true);
 };
 
 const plants = new PlantPanel(layers, (settled) => changed(settled), {
@@ -225,7 +225,6 @@ const worker = new Worker(new URL("./vegetationWorker.ts", import.meta.url), {
 
 let token = 0;
 let busy = false;
-let pending = false;
 let says = "";
 let asked = "";
 let askedBlocks = 0;
@@ -262,45 +261,55 @@ const look = {
 };
 
 /**
- * A world knob moved.
+ * Something moved: a world knob, a plant knob, or a curve being dragged.
  *
  * **A picture is never a build.** Choosing what to look at is a choice made
  * while looking at the last thing, so it happens on this thread and in this
  * frame -- even mid-build, which is when a reader is most likely to reach for
  * it.
+ *
+ * **One build in flight, and the newest values always next.** A slider dragged
+ * across its range fires on every step and a stand is seconds, so acting on
+ * each one queues them faster than any of them finishes. A change during a
+ * build is remembered rather than queued, and the build that lands starts it.
+ *
+ * **A drag asks for half the patch and a settled value asks for all of it.**
+ * The ground follows the pointer at a quarter of the columns, and the width
+ * the panel says is what gets built once the hand stops -- which is why the
+ * settle timer is what upgrades a draft and nothing else does. Anything that
+ * is not a drag -- a layer added, a species picked, a switch turned -- arrives
+ * settled.
  */
-function moved(draft: PlanetSettings): void {
-	settings = draft;
-	collideBox.checked = draft.knobs.leavesCollide;
+let settleTimer = 0;
+let pending = false;
+let pendingSettled = false;
+function request(settled: boolean): void {
 	writeUrl();
-	if (buildKey(draft.knobs) === asked) {
+	clearTimeout(settleTimer);
+	if (!settled) settleTimer = window.setTimeout(() => request(true), 240);
+	const blocks = widthFor(settled);
+	if (buildKey(settings.knobs) === asked && blocks === askedBlocks) {
 		show();
 		return;
 	}
 	if (busy) {
 		pending = true;
-		return;
-	}
-	ask(true);
-}
-
-/**
- * A plant knob moved.
- *
- * A drag asks for half the patch, so the ground follows the pointer; letting go
- * asks for the width the panel says. Anything that is not a drag -- a layer
- * added, a species picked, a switch turned -- is settled from the start.
- */
-let settleTimer = 0;
-function changed(settled: boolean): void {
-	writeUrl();
-	clearTimeout(settleTimer);
-	if (!settled) settleTimer = window.setTimeout(() => changed(true), 240);
-	if (busy) {
-		pending = true;
+		pendingSettled = pendingSettled || settled;
 		return;
 	}
 	ask(settled);
+}
+
+/** A world knob moved, which is the same question with a new draft. */
+function moved(draft: PlanetSettings): void {
+	settings = draft;
+	collideBox.checked = draft.knobs.leavesCollide;
+	request(false);
+}
+
+/** A plant knob moved. */
+function changed(settled: boolean): void {
+	request(settled);
 }
 
 /**
@@ -318,14 +327,20 @@ function buildKey(knobs: PlanetKnobs): string {
 	return JSON.stringify([out, plants.layers]);
 }
 
+/** How wide a patch to ask for: half of it while a hand is still moving. */
+function widthFor(settled: boolean): number {
+	return settled
+		? settings.knobs.patchBlocks
+		: Math.max(24, settings.knobs.patchBlocks >> 1);
+}
+
 function ask(settled: boolean): void {
 	busy = true;
 	pending = false;
+	pendingSettled = false;
 	says = "";
 	asked = buildKey(settings.knobs);
-	askedBlocks = settled
-		? settings.knobs.patchBlocks
-		: Math.max(24, settings.knobs.patchBlocks >> 1);
+	askedBlocks = widthFor(settled);
 	worker.postMessage({
 		kind: "build",
 		token: ++token,
@@ -398,8 +413,7 @@ worker.onmessage = (event: MessageEvent<VegetationReply>) => {
 		grown: new Map(reply.facts.grown.map((one) => [one.id, one.count])),
 	});
 	show();
-	if (pending) ask(true);
-	else if (askedBlocks !== settings.knobs.patchBlocks) ask(true);
+	if (pending) ask(pendingSettled);
 };
 
 /** Draw everything this thread owns, from what the last build handed over. */
