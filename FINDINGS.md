@@ -184,62 +184,6 @@ same: keep the cells it grew that landed on the ring rather than dropping them,
 and hand them to the sampler as an overlay. It costs nothing to grow, because
 those plants were grown anyway (F-106); what is added is the write.
 
-### F-109 — Trees stop at a line two levels out, and the line is visible
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** large
-**Found:** 2026-08-28, growing the world's own plants in its own chunks
-**Where:** `packages/engine/src/generation/chunk/plantChunk.ts` (`PLANT_LEVELS`)
-
-**What happens.** Roots are chosen at the world's own lattice whatever level a
-chunk is drawn at, because a coarse chunk hashing its own cells would pick a
-different forest at every level and a tree would come and go as the player
-walked. A chunk covers four times the ground at each level, so the roots it
-walks quadruple with it: measured on the shipped world -- depth 13, 1 m blocks,
-64 m chunks, two layers -- one chunk grows 35 plants in 760 ms at the finest
-level, 89 in 448 ms at one, 379 in 935 ms at two and 2,272 in 2,440 ms at
-three. At the sixth, which the selection reaches, the browser runs out of
-memory before a chunk finishes. `PLANT_LEVELS = 2` caps it, and the forest
-therefore ends at the boundary between the second and third level of detail.
-
-**Where that boundary is.** A chunk splits while it is nearer than `detail`
-times its own width, so a chunk drawn one level coarse than finest sits between
-`detail x 2w` and `detail x 4w` of the eye. On the shipped world -- 64 m
-chunks, `detail` 1.5 -- the forest ends at **384 m**. It is a distance from the
-camera, so it travels with the player and trees appear out of nothing as they
-walk toward them.
-
-**Why it matters.** It is a tree line drawn by the renderer rather than by the
-world, and it is an edge rather than a fade. Nothing else in the engine has one
-at a level boundary: the apron exists precisely so a level change is invisible.
-Two frames of one vantage attribute it -- `?seed=chamfer` from 734 m up draws a
-forest in the near band and bare hillside past it, and `&chunkCells=32`, a knob
-that **moves no block**, halves the line to 192 m and leaves the same terrain
-with **no tree anywhere in view**.
-
-**What saves it on the ground.** A walking player rarely sees it. The horizon
-at 1.7 m eye on this 6,801 m planet is `sqrt(2Rh)` = **152 m**, well inside the
-line, so on level ground the bare band is over the edge of the world. What
-shows is anything standing above the horizon further off -- a hillside or a
-range, which is exactly where a forest is read at a glance.
-
-**Stamping pre-grown plants does not lift it.** `3acb167` took the plant pass
-from `6,021 ms` to `566 ms` over twelve chunks, and none of that is the root
-walk: the walk enumerates the candidate cells and hashes each one, which
-happens before any plant is grown. What ran the browser out of memory at lod 6
-is `8,392,705` lattice points held in a `Set` and three arrays, and that is
-exactly as true now.
-
-**What would fix it.** Two candidates, and nobody has measured either. A coarse
-chunk could grow **fewer** plants rather than all of them -- taking one root in
-`4^lod` by a rule that depends only on the root, so the survivors are the same
-set every chunk agrees on and the forest thins with distance instead of
-stopping. Or the far levels could draw a plant as a **billboard** off the same
-root hash, which is what the cloud deck already does for a puff. The first
-keeps trees as blocks and is the smaller change; the second is the one that
-looks right at a kilometre.
 ### F-108 — A patch vertex is laid out in four places and only three of them are checked
 
 **Kind:** risk
@@ -5275,3 +5219,87 @@ levels and re-mesh the rim when a neighbour changes level — a residency and
 worker-protocol change, not a mesher formula.
 
 ---
+
+### F-109 — Trees stop at a line two levels out, and the line is visible
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Closed:** 2026-08-28, fixed by the first of the two candidates below. **A
+coarse chunk's lattice point IS a fine one** -- `(i, j)` at its own depth is
+`(i << lod, j << lod)` at the world's, the same direction to the bit -- so the
+roots it offers are the fine roots whose coordinates are both multiples of
+`2^lod`. That is a subset chosen by the root alone, which every level agrees
+on, and it needs **no walk of its own** because the chunk has already walked
+it: the `8,392,705` lattice points that ran the browser out of memory are not
+enumerated at all. One root in `4^lod` is offered, so the forest thins with
+distance instead of stopping, and a tree appears as the player walks in and
+never moves or vanishes. `PLANT_LEVELS` is gone; **what ends the forest is a
+tree shorter than a block** -- at 32 m blocks a 22 m pine has nowhere to stand
+-- which is checked before a template set is built rather than after.
+
+Growing a chunk's plants now costs `600 / 191 / 107 / 59 / 25 / 0 ms` at levels
+0 to 5 against `915 / 517 / 990 / 2,385` for the first four before. Photographed
+from the vantage this entry names, the share of lit ground that is leaf runs
+**6.0% to 17.2%**, and across the four bands of the view from far to near it
+goes from `0.0% / 0.0% / 5.2% / 19.2%` -- a wedge that stops -- to
+`17.4% / 19.2% / 18.3% / 14.2%`.
+
+**Two other things had to be true first.** The world's mesher built a
+`PlantTemplateStore` per level and **never passed it** to `plantChunk`, so
+every chunk of every world outside the vegetation bench grew its plants the
+slow way. And the stamp stepped its template from the **root's** name rather
+than the drawn cell's; at a coarse level those are two different numbers for
+one point, so every cell of every plant landed outside the patch and a coarse
+chunk counted its plants and wrote not one block of them.
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts` (`PLANT_LEVELS`)
+
+**What happens.** Roots are chosen at the world's own lattice whatever level a
+chunk is drawn at, because a coarse chunk hashing its own cells would pick a
+different forest at every level and a tree would come and go as the player
+walked. A chunk covers four times the ground at each level, so the roots it
+walks quadruple with it: measured on the shipped world -- depth 13, 1 m blocks,
+64 m chunks, two layers -- one chunk grows 35 plants in 760 ms at the finest
+level, 89 in 448 ms at one, 379 in 935 ms at two and 2,272 in 2,440 ms at
+three. At the sixth, which the selection reaches, the browser runs out of
+memory before a chunk finishes. `PLANT_LEVELS = 2` caps it, and the forest
+therefore ends at the boundary between the second and third level of detail.
+
+**Where that boundary is.** A chunk splits while it is nearer than `detail`
+times its own width, so a chunk drawn one level coarse than finest sits between
+`detail x 2w` and `detail x 4w` of the eye. On the shipped world -- 64 m
+chunks, `detail` 1.5 -- the forest ends at **384 m**. It is a distance from the
+camera, so it travels with the player and trees appear out of nothing as they
+walk toward them.
+
+**Why it matters.** It is a tree line drawn by the renderer rather than by the
+world, and it is an edge rather than a fade. Nothing else in the engine has one
+at a level boundary: the apron exists precisely so a level change is invisible.
+Two frames of one vantage attribute it -- `?seed=chamfer` from 734 m up draws a
+forest in the near band and bare hillside past it, and `&chunkCells=32`, a knob
+that **moves no block**, halves the line to 192 m and leaves the same terrain
+with **no tree anywhere in view**.
+
+**What saves it on the ground.** A walking player rarely sees it. The horizon
+at 1.7 m eye on this 6,801 m planet is `sqrt(2Rh)` = **152 m**, well inside the
+line, so on level ground the bare band is over the edge of the world. What
+shows is anything standing above the horizon further off -- a hillside or a
+range, which is exactly where a forest is read at a glance.
+
+**Stamping pre-grown plants does not lift it.** `3acb167` took the plant pass
+from `6,021 ms` to `566 ms` over twelve chunks, and none of that is the root
+walk: the walk enumerates the candidate cells and hashes each one, which
+happens before any plant is grown. What ran the browser out of memory at lod 6
+is `8,392,705` lattice points held in a `Set` and three arrays, and that is
+exactly as true now.
+
+**What would fix it.** Two candidates, and nobody has measured either. A coarse
+chunk could grow **fewer** plants rather than all of them -- taking one root in
+`4^lod` by a rule that depends only on the root, so the survivors are the same
+set every chunk agrees on and the forest thins with distance instead of
+stopping. Or the far levels could draw a plant as a **billboard** off the same
+root hash, which is what the cloud deck already does for a puff. The first
+keeps trees as blocks and is the smaller change; the second is the one that
+looks right at a kilometre.

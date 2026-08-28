@@ -10,7 +10,6 @@
 // Wall-clock on a software machine; read the ratios.
 import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
 import {
-	PLANT_LEVELS,
 	PLANT_VARIANTS,
 	PlantTemplateStore,
 } from "chamfer/generation";
@@ -41,7 +40,10 @@ console.log(
 
 let whole = 0;
 let bytes = 0;
-for (let lod = 0; lod < PLANT_LEVELS; lod++) {
+// Every level a plant of this world can stand at: the forest ends where the
+// tallest species is shorter than a block, not at a count of levels.
+const LEVELS = 5;
+for (let lod = 0; lod < LEVELS; lod++) {
 	const level = settings.depth - lod;
 	const block = settings.knobs.blockSize * 2 ** lod;
 	const store = new PlantTemplateStore(

@@ -31,28 +31,6 @@ import { layoutFits, plantPatchLayout } from "./plantPatchLayout.js";
  */
 export const PLANT_REACH = 24;
 
-/**
- * How many levels of detail grow plants at all.
- *
- * **A chunk covers four times the ground at each level and holds the same
- * slots**, so the terrain gets cheaper with distance and the planting does the
- * opposite: the roots are chosen at the world's own lattice whatever is drawn,
- * because a coarse chunk hashing its own cells would pick a different forest at
- * every level and a tree would come and go as the player walked. Measured on
- * the shipped world -- depth 13, 1 m blocks, 64 m chunks, two layers -- one
- * chunk grows 35 plants in 760 ms at the finest level, 89 in 448 ms one level
- * out, 379 in 935 ms at two, and 2,272 in 2,440 ms at three. At six, which the
- * selection reaches, it is sixty-four times that again and the browser runs out
- * of memory before it finishes.
- *
- * **Two levels, because the third has nothing to draw with.** A block is 1 m at
- * the finest level and 2 m at the next, so a 22 m pine is 22 and 11 blocks
- * tall; at 4 m it is five blocks and one wide, and at 8 m a forest comes out as
- * bare poles at exactly the distance it should read as green. What that costs
- * is a line at the edge of the second level where the trees stop.
- */
-export const PLANT_LEVELS = 2;
-
 /** How many plants a chunk grew, and every cell they left in it. */
 export interface PlantedChunk {
 	readonly plants: number;
@@ -104,10 +82,22 @@ export function plantChunk(
 	rootDepth: number = shape.subdivisionDepth,
 	templates: PlantTemplateStore | null = null,
 ): PlantedChunk | null {
-	if (layers.every((layer) => !layer.on)) return null;
+	// **A species whose tallest plant is shorter than a block grows nothing**,
+	// and it is cheaper to know that than to find out: a template set is 32
+	// plants grown properly, and a coarse level would build them all to stamp
+	// none. `growStand` already refuses the individual plant on the same test.
+	// This is what ends the forest -- at a block of 32 m a 22 m pine has
+	// nowhere to stand -- rather than a count of levels.
+	const live = layers.filter(
+		(layer) =>
+			layer.on &&
+			layer.shape.height * (1 + layer.shape.sizeSpread) >=
+				shape.blockSize,
+	);
+	if (live.length === 0) return null;
+	layers = live;
 	const depth = shape.subdivisionDepth;
 	const n = shape.n;
-	const fine = 1 << rootDepth;
 	const m = chunk.m;
 	const block = shape.blockSize;
 	// **Measured off the plants that grow here**, or the constant's guess when
@@ -281,77 +271,6 @@ export function plantChunk(
 		rootHeight[c] = column.groundRadius - shape.seaLevelRadius;
 	}
 
-	/**
-	 * Every cell a plant may root in, at the world's own depth.
-	 *
-	 * The chunk's triangle at that depth, plus the same reach in its own
-	 * cells -- so a coarse chunk considers exactly the plants a fine one there
-	 * would, and grows the same forest.
-	 */
-	function fineRoots(): {
-		count: number;
-		level: number;
-		face: Int32Array;
-		i: Int32Array;
-		j: Int32Array;
-		directions: Float64Array;
-	} {
-		const side = m << (rootDepth - depth);
-		// The reach is metres, so it is a different number of cells at each
-		// level -- and these cells are the world's own, not the drawn ones.
-		const fineBlock = block / (1 << (rootDepth - depth));
-		const fineHops = Math.max(1, Math.ceil(reach / fineBlock));
-		const key = (f: number, i: number, j: number): number =>
-			(f * (fine + 1) + i) * (fine + 1) + j;
-		const held = new Set<number>();
-		const rf: number[] = [];
-		const ri: number[] = [];
-		const rj: number[] = [];
-		const push = (one: { face: number; i: number; j: number }): number => {
-			const cell = canonicalCell(one.face, fine, one.i, one.j);
-			const at = key(cell.face, cell.i, cell.j);
-			if (held.has(at)) return -1;
-			held.add(at);
-			rf.push(cell.face);
-			ri.push(cell.i);
-			rj.push(cell.j);
-			return rf.length - 1;
-		};
-		let edge: number[] = [];
-		for (let q = 0; q <= side; q++)
-			for (let r = 0; q + r <= side; r++) {
-				const [i, j] = joinPath(chunk.address.path, q, r, rootDepth);
-				const at = push({ face: chunk.address.face, i, j });
-				if (at >= 0) edge.push(at);
-			}
-		for (let hop = 0; hop < fineHops && edge.length > 0; hop++) {
-			const next: number[] = [];
-			for (const c of edge)
-				for (let d = 0; d < 6; d++) {
-					const nb = neighbour(rf[c]!, fine, ri[c]!, rj[c]!, d);
-					if (!nb) continue;
-					const at = push(nb);
-					if (at >= 0) next.push(at);
-				}
-			edge = next;
-		}
-		const where = new Float64Array(rf.length * 3);
-		for (let c = 0; c < rf.length; c++) {
-			const p = latticePosition(rf[c]!, fine, ri[c]!, rj[c]!);
-			where[c * 3] = p.x;
-			where[c * 3 + 1] = p.y;
-			where[c * 3 + 2] = p.z;
-		}
-		return {
-			count: rf.length,
-			level: rootDepth,
-			face: Int32Array.from(rf),
-			i: Int32Array.from(ri),
-			j: Int32Array.from(rj),
-			directions: where,
-		};
-	}
-
 	const patch: StandPatch = {
 		count,
 		level: depth,
@@ -362,32 +281,38 @@ export function plantChunk(
 		ring,
 	};
 
-	// **The planting lattice is the finest one at every level.** A root is a
-	// cell, and a coarse chunk's cells are not a fine chunk's cells -- hashing
-	// its own would choose a different forest at every level, so a tree would
-	// come and go as the player walked. This walk is therefore the same size
-	// however coarsely the chunk is drawn, which makes it the one part of a
-	// chunk whose cost does not fall with distance.
-	const roots =
-		rootDepth === depth
-			? {
-					count,
-					level: depth,
-					face: patch.face,
-					i: patch.i,
-					j: patch.j,
-					directions,
-				}
-			: fineRoots();
+	// **The planting lattice is the finest one at every level, and a coarse
+	// chunk considers the part of it that is its own.** A root is a cell, and a
+	// coarse chunk's cells are not a fine chunk's cells -- hashing its own
+	// would choose a different forest at every level, so a tree would come and
+	// go as the player walked. But **a coarse chunk's lattice point IS a fine
+	// one**: `(i, j)` at this depth is `(i << lift, j << lift)` at the world's,
+	// the same direction to the bit. So the roots this chunk offers are the
+	// fine roots whose coordinates are both multiples of `2^lift` -- a subset
+	// chosen by the root alone, which every level agrees on, and which needs no
+	// walk of its own because the chunk has already walked it.
+	//
+	// **What that costs is density, and what it buys is that the forest thins
+	// rather than stopping.** One root in `4^lift` is offered, so a level out
+	// draws a quarter of the trees and two levels a sixteenth, in exactly the
+	// places the finest level puts them -- a tree appears as the player walks
+	// in and never moves or vanishes. Enumerating all of them instead is what
+	// `PLANT_LEVELS` used to cap: `8,392,705` lattice points in a set and three
+	// arrays at six levels out, which the browser did not survive.
+	const lift = rootDepth - depth;
+	const roots = {
+		count,
+		level: rootDepth,
+		face: patch.face,
+		i: lift === 0 ? patch.i : patch.i.map((v) => v << lift),
+		j: lift === 0 ? patch.j : patch.j.map((v) => v << lift),
+		directions,
+	};
 
-	// **The ground at a root's own point**, not at the column it is drawn on: a
-	// coarse level resamples the surface, so a shore read off the drawn cell
-	// moves a metre or two every level and plants at the waterline come and go
-	// with it.
-	const heights =
-		roots.count === count && rootDepth === depth
-			? rootHeight
-			: rootHeightsOf(roots);
+	// **The map's own height at the root.** The root is the drawn column's own
+	// lattice point at a finer name for it, and a point's height does not
+	// depend on who asks, so this is the height the finest level reads there.
+	const heights = rootHeight;
 
 	// **Only a ring column a plant stands in has to be walked for.** Everything
 	// the chunk holds was answered by its own build, and a ring column is only
@@ -422,25 +347,6 @@ export function plantChunk(
 			templates,
 		},
 	);
-
-	// The map at each root's own lattice point, when those are not the drawn
-	// columns.
-	function rootHeightsOf(of: {
-		count: number;
-		face: Int32Array;
-		i: Int32Array;
-		j: Int32Array;
-	}): Float64Array {
-		const out = new Float64Array(of.count);
-		for (let c = 0; c < of.count; c++)
-			out[c] = terrain.map.heightAt(
-				of.face[c]!,
-				of.i[c]!,
-				of.j[c]!,
-				rootDepth,
-			);
-		return out;
-	}
 
 	// **Written into the layers the chunk already has**, so a plant is a block
 	// like the ground under it. A stand counts slots upward from a column's own

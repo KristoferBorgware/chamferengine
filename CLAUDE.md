@@ -448,6 +448,34 @@ Violating any of these breaks the design. They are not tunable.
   Run-length merging down a column is exact and free; only the rectangle-growing
   half of greedy meshing has no hex equivalent. Cap merging is bounded by
   curvature (37 m at 0.1 m sag), not by the algorithm.
+- **A COARSE CHUNK'S LATTICE POINT IS A FINE ONE, SO THE FOREST THINS RATHER
+  THAN STOPPING** (`plantChunk`, `growStand.stamp`, F-109 closed). A root is a
+  cell of the world's **finest** lattice whatever level a chunk is drawn at --
+  a coarse chunk hashing its own cells would pick a different forest at every
+  level and a tree would come and go as the player walked. Enumerating all of
+  them is what capped planting at two levels: `8,392,705` lattice points in a
+  set and three arrays six levels out, which the browser did not survive, and a
+  **tree line at 384 m that travelled with the player**. But `(i, j)` at a
+  chunk's own depth **is** `(i << lod, j << lod)` at the world's -- the same
+  direction to the bit -- so the roots a chunk offers are the fine roots whose
+  coordinates are both multiples of `2^lod`. A subset chosen by the root alone,
+  which every level agrees on, and **no walk of its own**: the chunk has
+  already walked it. One root in `4^lod`, so a tree appears as the player walks
+  in and never moves or vanishes. Growing a chunk's plants costs
+  `600 / 191 / 107 / 59 / 25 / 0 ms` at levels 0 to 5 against
+  `915 / 517 / 990 / 2,385` for the first four before, and the share of lit
+  ground that is leaf goes from `6.0%` to `17.2%` -- across the view from far to
+  near, from `0.0% / 0.0% / 5.2% / 19.2%` to `17.4% / 19.2% / 18.3% / 14.2%`.
+  **What ends the forest is a tree shorter than a block**, checked before a
+  template set is built rather than after: at 32 m blocks a 22 m pine has
+  nowhere to stand. **A template is stepped from the DRAWN cell, never the
+  root** -- its offsets are cells of the lattice the chunk is drawn on, and at a
+  coarse level the root's name is a different number for the same point, so
+  every cell of every plant landed outside the patch and a coarse chunk counted
+  its plants and wrote not one block of them. **And a store nobody is handed is
+  a store nobody uses**: the world's mesher built a `PlantTemplateStore` per
+  level and never passed it, so every chunk outside the vegetation bench grew
+  its plants the slow way.
 - **A CHUNK KEY MEANS A DIFFERENT TRIANGLE AT EVERY LEVEL** (`rowsUnder`,
   `coarseChunkKey`, `plans/v0.4.1.md` I-12). A key is
   `face x 4^chunkLevel + path`, and the delta store is filed at **one** level --

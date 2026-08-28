@@ -754,10 +754,21 @@ export function growStand(
 		// template's is counted from the root's, so the two differ by the step
 		// between those grounds -- which `groundLayer` already holds, negated.
 		const rootGround = groundOf(c);
+		// **The template is stepped from the DRAWN cell, not the root.** Its
+		// offsets are cells of the lattice the chunk is drawn on, and a root is
+		// named on the world's finest one -- the same point under two names,
+		// and at a coarse level two different numbers. Stepping from the root's
+		// name landed every cell of every plant outside the patch, so a coarse
+		// chunk counted its plants and wrote not one block of them. Which
+		// plant and which way round stay hashes of the root, because those must
+		// not change with the level.
+		const atFace = patch.face[c]!;
+		const atI = patch.i[c]!;
+		const atJ = patch.j[c]!;
 		const step: [number, number] = [0, 0];
 		for (let k = 0; k < template.count; k++) {
 			orientTemplate(template.di[k]!, template.dj[k]!, turn, step);
-			const cell = cellOffset(face, n, i, j, step[0], step[1]);
+			const cell = cellOffset(atFace, n, atI, atJ, step[0], step[1]);
 			const named = canonicalCell(cell.face, n, cell.i, cell.j);
 			const at = seat.get(keyOf(named.face, named.i, named.j));
 			if (at === undefined) continue;

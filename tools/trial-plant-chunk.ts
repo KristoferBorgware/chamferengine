@@ -5,8 +5,9 @@
 // **A plant is grown from the address and the seed, into the chunk's own
 // blocks.** A chunk grows every plant within reach of its rim, which is more
 // ground than it owns, and the roots are chosen at the finest lattice whatever
-// level the chunk is drawn at -- so the walk does not get cheaper with
-// distance the way the terrain does. This is what both come to.
+// level the chunk is drawn at -- a coarse chunk offering the part of that
+// lattice which is its own, so one root in `4^lod`. This is what both come to,
+// and the count of plants beside it is what that thinning costs.
 //
 // Wall-clock, and it moves run to run. Read the ratio.
 import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
@@ -15,6 +16,7 @@ import {
 	TerrainGenerator,
 	buildCoarseMap,
 	generateChunk,
+	PlantTemplateStore,
 	plantChunk,
 	seedFromString,
 } from "chamfer/generation";
@@ -58,7 +60,7 @@ console.log(
 );
 console.log(`${layers.length} layers: ${layers.map((l) => l.species).join(", ")}`);
 
-for (const lod of [0, 1, 2, 3]) {
+for (const lod of [0, 1, 2, 3, 4, 5, 6]) {
 	const level = shape.atLod(lod);
 	// **A coarse chunk drops its chunk level as well as its depth**, so every
 	// chunk holds the same slots however far off it is -- which is what makes
@@ -93,6 +95,12 @@ for (const lod of [0, 1, 2, 3]) {
 		layers,
 		seed,
 		settings.depth,
+		new PlantTemplateStore(
+			seed,
+			level.subdivisionDepth,
+			level.blockSize,
+			level.seaLevelRadius,
+		),
 	);
 	const plantMs = performance.now() - at;
 

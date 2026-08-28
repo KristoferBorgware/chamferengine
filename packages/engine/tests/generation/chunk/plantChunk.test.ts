@@ -5,6 +5,7 @@ import {
 	COARSE_MAP_DEFAULTS,
 	ChunkAddress,
 	PLANT_SPECIES,
+	PlantTemplateStore,
 	TERRAIN_DEFAULTS,
 	TerrainGenerator,
 	buildCoarseMap,
@@ -16,7 +17,12 @@ import {
 	seedFromString,
 } from "chamfer/generation";
 import { WorldShape } from "chamfer/world";
-import { canonicalCell, directionToCell, splitPath } from "chamfer/addressing";
+import {
+	canonicalCell,
+	directionToCell,
+	joinPath,
+	splitPath,
+} from "chamfer/addressing";
 import { positionOf } from "chamfer/coordinates";
 
 const SEED = seedFromString("chamfer");
@@ -152,5 +158,106 @@ describe("plantChunk", () => {
 			),
 		).toBeNull();
 		expect([...chunk.blocks]).toEqual(before);
+	});
+});
+
+/**
+ * The same forest, drawn a level coarse.
+ *
+ * A root is a cell of the world's finest lattice whatever level a chunk is
+ * drawn at, and a coarse chunk offers the part of that lattice which is its
+ * own -- one point in four. So the trees it grows are a **subset** of the ones
+ * the finest level grows, standing in the same places: a tree appears as a
+ * player walks in and never moves or vanishes.
+ */
+describe("a chunk drawn a level coarse", () => {
+	const LAYERS = [layerOf(1, "Pine", 40)];
+
+	/** Every cell a trunk stands on, named at the world's finest lattice. */
+	function feet(lod: number, key: number): Set<number> {
+		const { shape, terrain, address } = world();
+		void address;
+		const level = shape.atLod(lod);
+		const coarse = new TerrainGenerator(
+			SEED,
+			level,
+			terrain.map,
+			TERRAIN_DEFAULTS,
+		);
+		const cut = CHUNK_LEVEL - lod;
+		const chunk = generateChunk(
+			coarse,
+			ChunkAddress.fromKey(key, cut),
+			cut,
+			level.crustDepth,
+		);
+		// The surface each column tops at, before a canopy widens its band.
+		const surface = Int32Array.from(chunk.band);
+		// **The templates the engine itself uses**, because the bug this
+		// catches is in the stamp and not in the walk.
+		plantChunk(
+			chunk,
+			coarse,
+			level,
+			LAYERS,
+			SEED,
+			DEPTH,
+			new PlantTemplateStore(
+				SEED,
+				level.subdivisionDepth,
+				level.blockSize,
+				level.seaLevelRadius,
+			),
+		);
+		const out = new Set<number>();
+		const m = chunk.m;
+		const layers = chunk.layerCount;
+		for (let q = 0; q <= m; q++)
+			for (let r = 0; q + r <= m; r++) {
+				const slot = rankOf(q, r, m);
+				const top = surface[slot * 2]!;
+				const foot = chunk.blocks[slot * layers + top - 1] ?? 0;
+				if (!isPlantWood(foot)) continue;
+				const [i, j] = joinPath(
+					ChunkAddress.fromKey(key, cut).path,
+					q,
+					r,
+					DEPTH - lod,
+				);
+				out.add((i << lod) * 262144 + (j << lod));
+			}
+		return out;
+	}
+
+	/** `rank(q, r, m)` -- a slot's index inside a triangle of side `m`. */
+	function rankOf(q: number, r: number, m: number): number {
+		return q + (r * (2 * m + 3 - r)) / 2;
+	}
+
+	it("grows plants and writes their cells", () => {
+		const { address } = world();
+		const key = Math.floor(address.key / 4);
+		expect(feet(1, key).size).toBeGreaterThan(0);
+	});
+
+	// **The bug this catches drew nothing and reported success.** A template's
+	// offsets are cells of the lattice the chunk is drawn on and a root is
+	// named on the world's finest one; stepping the template from the root's
+	// name put every cell of every plant outside the patch, so a coarse chunk
+	// counted its plants and wrote not one block of them.
+	it("puts its trees where the finest level puts them", () => {
+		const { address } = world();
+		const parent = Math.floor(address.key / 4);
+		const coarse = feet(1, parent);
+		const fine = new Set<number>();
+		for (let child = 0; child < 4; child++)
+			for (const one of feet(0, parent * 4 + child)) fine.add(one);
+		const missing = [...coarse].filter((one) => !fine.has(one));
+		expect(
+			`${missing.length} of ${coarse.size} not at the finest level`,
+		).toBe(`0 of ${coarse.size} not at the finest level`);
+		// And it really is a subset rather than the whole forest: a level out
+		// offers one root in four.
+		expect(coarse.size).toBeLessThan(fine.size);
 	});
 });
