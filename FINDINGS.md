@@ -217,6 +217,20 @@ still costs only 4% of the difference.
 **A chunk that grows nothing still pays 36 ms, +16%.** The root walk runs
 whether or not it finds a plant, so ground the curve rules out is not free.
 
+**Where the growing goes**, per plant (`tools/trial-plant-split.ts`, against
+the 13-21 ms a plant costs in the table above):
+
+| | Pine | Oak | share |
+|---|---|---|---|
+| the skeleton walk (`growPlant`) | 0.53 ms | 0.74 ms | **~4%** |
+| the address lookups it then does | 0.89 ms | 1.34 ms | **~7%** |
+| the rod and cluster floods, and the writes | the rest | the rest | **~89%** |
+
+A pine is 395 rods and 288 leaf clusters, and asks `directionToCell` 1,261
+times; an oak is 561 and 378, and asks 1,905 times. **Nearly all of the cost is
+rasterising the skeleton into cells**, not building it and not looking the
+cells up.
+
 These are software-adapter timings and move run to run; read the ratios.
 
 **Why it matters.** At full detail the trees cost more than three times what
@@ -331,12 +345,17 @@ for the direction, `barycentricOf` allocates four more for its cross products,
 and `hexRound` returns a fresh array. Seven allocations for an answer that is
 three integers, several hundred thousand times per stand.
 
-**Why it matters.** The stand is the whole of what the bench builds, and the
-lookup is the innermost thing in it: a shipped patch is `2,500 ms` in the
-worker, and the pipeline the rod walk runs at every step is the named lead in
-the profile. `faceOf` searching all twenty face centroids at every step is the
-other half of the same call, where the shadow march already rechecks the face
-it was last in -- three dot products against twenty.
+**Why it matters, and by how much.** The stand is the whole of what the bench
+builds, and the lookup is the innermost thing in it: a shipped patch is
+`2,500 ms` in the worker, and the pipeline the rod walk runs at every step is
+the named lead in that profile. **Counted on the world's own chunk path it is
+smaller than that reading suggests** -- a pine asks 1,261 times and an oak
+1,905, at `0.70 us` a call, which is `0.89` and `1.34 ms` against the `13-21 ms`
+a plant costs in a chunk: **about 7%** (`tools/trial-plant-split.ts`, F-107).
+Worth doing, and not the thing to do first. `faceOf` searching all twenty face
+centroids at every step is the other half of the same call, where the shadow
+march already rechecks the face it was last in -- three dot products against
+twenty.
 
 **Why it is not fixed here.** A second copy of position-to-cell taking bare
 numbers is exactly the drift this project keeps out of the codebase, so the
