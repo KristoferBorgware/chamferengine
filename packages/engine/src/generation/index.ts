@@ -116,6 +116,7 @@ export { ChunkColumnSampler } from "./chunk/ChunkColumnSampler.js";
 export {
 	CARVE_REACH,
 	WATERLINE_REACH,
+	CARVE_SQUASH,
 	carveDepth,
 	carveIsRock,
 	carveSeed,
