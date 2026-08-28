@@ -85,11 +85,14 @@ export interface PatchLook {
 	readonly topLight: number;
 
 	/**
-	 * How much of its light a shadow takes, `0` to `1`.
+	 * How much of its light a shadow takes. `1` is all of it.
 	 *
 	 * **Not a darkness in metres.** A shadow removes a light, so how dark it
 	 * looks depends on what share that light had -- this is only how much of it
-	 * goes, and the shares above decide the rest.
+	 * goes, and the shares above decide the rest. Past `1` it goes on taking
+	 * from the other lights too, which is no longer a light being blocked and
+	 * is what a rig balanced for a readable preview needs before a shadow
+	 * reads at all.
 	 */
 	readonly shadowStrength: number;
 

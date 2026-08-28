@@ -89,12 +89,17 @@ struct View {
 	 * light away, so the deepest it can ever go is that light's share of the
 	 * total -- with the overhead light at 1.35 against the key's 1, the key is
 	 * a fifth of a lit face and no shadow of it can take more than a fifth.
-	 * That is why there is no darkness knob: the balance already is one.
+	 * So a shadow that reads too faint is as often a key carrying too
+	 * little as a shadow strength set too low.
 	 */
 	shares   : vec4f,
 	/**
-	 * x: how much of its light a shadow takes. y: a texel on the ground, in
-	 * metres, which is how far a sample is pushed along its own normal.
+	 * x: how much of its light a shadow takes, and never a darkness in metres.
+	 *
+	 * Past 1 it extrapolates, so a shadow eats into the other lights as well
+	 * -- which is the only way a rig with a weak key draws one worth looking
+	 * at. How far a sample is pushed and what a texel is worth are per map and
+	 * live on fit, because the cascades do not agree about either.
 	 */
 	shadowing : vec4f,
 	/** Per map: what a texel is worth on the ground, and its own depth bias. */
@@ -150,7 +155,7 @@ fn sampled(
 	// **Inside by a texel, not merely inside.** The blur reads a ring around
 	// the point, and at the very edge some of that ring is off the map -- which
 	// draws the rim column across everything just beyond it.
-	let edge = view.shadowing.z;
+	let edge = view.shadow.z;
 	if (uv.x < edge || uv.x > 1.0 - edge || uv.y < edge || uv.y > 1.0 - edge) {
 		return -1.0;
 	}
@@ -160,7 +165,7 @@ fn sampled(
 	var sum = 0.0;
 	for (var y = -1; y <= 1; y++) {
 		for (var x = -1; x <= 1; x++) {
-			let tap = uv + vec2f(f32(x), f32(y)) * view.shadowing.z;
+			let tap = uv + vec2f(f32(x), f32(y)) * view.shadow.z;
 			sum = sum + textureSampleCompareLevel(depth, depthCompare, tap, at);
 		}
 	}
@@ -201,7 +206,11 @@ fn reaches(
 	// **How much of its light a shadow takes** -- at 1 the light is gone where
 	// the map says so. There is no darkness in metres to set: a shadow removes
 	// a light, and how dark that is depends on what share that light had.
-	return mix(1.0, open, view.shadowing.x);
+	//
+	// Past 1 this extrapolates, which is what lets a shadow eat into the other
+	// lights as well and is the only way a rig with a weak key draws a shadow
+	// worth looking at. A light cannot be less than none, so it floors at 0.
+	return max(0.0, mix(1.0, open, view.shadowing.x));
 }
 
 struct VertexOut {

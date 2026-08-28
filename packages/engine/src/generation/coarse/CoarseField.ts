@@ -2,24 +2,19 @@ import type { CoarseMap } from "./CoarseMap.js";
 import type { CoarseStage } from "./CoarseStage.js";
 
 /**
- * How a value in one of a coarse map's fields is turned into a color.
+ * The two ends of the range a picture of a field is drawn against.
  *
- * `low` and `high` are the two ends of the ramp. `stops` are the colors it
- * passes through, as `[r, g, b]` in `0` to `1`, evenly spaced between them.
- *
- * `hard` decides what sits between two stops. Without it a value is mixed from
- * the two it falls between, which reads elevation well and blurs every edge.
- * With it each stop owns an equal band and there is no mixing at all -- for a
- * picture whose colors are materials rather than heights, where a blend is a
- * color the world cannot build. A hard ramp cuts `low` to `high` into
- * `stops.length` bands, and everything under the first or over the last takes
- * the end band.
+ * **It carried a colour list and no longer does.** A picture used to name the
+ * colours it passed through and whether it mixed between them, and the two
+ * material lines were therefore stated twice: once here as evenly spaced
+ * stops, and once in `GROUND_LINES` where the world reads them. Every picture
+ * of a map is now painted by the client's one painter, which asks
+ * `GROUND_LINES` -- so what is left here is the range, which is a property of
+ * the field rather than of the world.
  */
 export interface CoarseRamp {
 	readonly low: number;
 	readonly high: number;
-	readonly stops: readonly (readonly [number, number, number])[];
-	readonly hard?: boolean;
 }
 
 /**

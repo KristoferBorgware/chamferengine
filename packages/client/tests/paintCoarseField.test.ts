@@ -65,14 +65,13 @@ describe("paintCoarseField", () => {
 						(px[at * 4 + 1]! << 8) |
 						px[at * 4 + 2]!,
 				);
-			// A banded ramp draws as many colors as the world has blocks in
-			// reach, and a world whose ground stops short of the rock line has
-			// two: land and sea. A blended one has a color per shade of height,
-			// so it is held to a picture rather than to a pair.
+			// Land, sea, the depth of the water and a contour line every
+			// hundred metres: a picture of a planet is never a handful of
+			// colours, whichever of the two it is.
 			expect(
 				seen.size,
 				`${which.id} drew one color`,
-			).toBeGreaterThanOrEqual(which.ramp.hard ? 2 : 20);
+			).toBeGreaterThanOrEqual(20);
 		}
 	});
 

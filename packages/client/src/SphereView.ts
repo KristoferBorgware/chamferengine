@@ -1,8 +1,7 @@
 import type { CoarseField, CoarseMap } from "chamfer/generation";
-import { coarseFieldOf } from "chamfer/generation";
-import { positionToCell } from "chamfer/addressing";
+import { coarseFieldOf, makeBlend, readBlend } from "chamfer/generation";
 import { Vec3 } from "chamfer/math";
-import { rampColor } from "./rampColor.js";
+import { paintPatch } from "./paintPatch.js";
 
 /** Icosahedron corners, the same twelve the engine builds every world from. */
 const T = (1 + Math.sqrt(5)) / 2;
@@ -328,7 +327,10 @@ export class SphereView {
 		if (!this.map || !this.field) return;
 
 		const values = coarseFieldOf(this.map, this.field);
-		const n = 1 << this.map.level;
+		const blend = makeBlend();
+		// One pixel's worth of scratch, reused: the painter writes four bytes
+		// and the ball wants three of them.
+		const pixel = new Uint8ClampedArray(4);
 		const cy = Math.cos(this.yaw),
 			sy = Math.sin(this.yaw);
 		const cp = Math.cos(this.pitch),
@@ -358,10 +360,27 @@ export class SphereView {
 			const [, , mzz] = turn(mx, my, mz);
 			if (mzz > 0) continue; // the far side
 
-			const cell = positionToCell(new Vec3(mx, my, mz), n);
-			const value =
-				values[this.map.index.indexOf(cell.face, cell.i, cell.j)] ?? 0;
-			const [r, g, b] = rampColor(value, this.field);
+			// **The same reading and the same painter as the flat map.** The
+			// two sit a centimetre apart in one fold, so a difference between
+			// them reads as a difference in the planet rather than in the
+			// drawing -- and it was one: a flat single blue for every depth of
+			// ocean here against a shore-to-deep gradient there. The blend of
+			// the three cells around the direction is what the terrain itself
+			// reads, and `paintPatch` is the one place a height becomes a
+			// colour.
+			this.map.index.blendInto(new Vec3(mx, my, mz), blend);
+			const metres = readBlend(values, blend);
+			paintPatch(pixel, 0, {
+				metres,
+				raw: metres,
+				layer: 0,
+				rawLow: this.field.ramp.low,
+				rawHigh: this.field.ramp.high,
+				low: this.field.ramp.low,
+				high: this.field.ramp.high,
+				picture: this.field.id === "ground" ? "ground" : "height",
+			});
+			const [r, g, b] = [pixel[0]!, pixel[1]!, pixel[2]!];
 
 			// A little shading, so the ball reads as one and not as a disc.
 			const shade = 0.55 + 0.45 * Math.min(1, -mzz);

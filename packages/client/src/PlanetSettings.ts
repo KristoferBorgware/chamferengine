@@ -1435,7 +1435,12 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	keyLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	fillLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	topLight: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
-	shadowStrength: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "x" },
+	// **Past 1 it is no longer physical, and that is the point.** At 1 a
+	// shadow takes the whole of its light and the deepest it can go is that
+	// light's share of the total -- which on a rig balanced for a readable
+	// preview is a fifth of a lit face. Past 1 it goes on taking from the
+	// other two, which is a picture of the shape rather than of the light.
+	shadowStrength: { low: 0, high: 5, step: 0.05, rebuilds: false, unit: "x" },
 	keyShadow: { ...TOGGLE, rebuilds: false },
 	fillShadow: { ...TOGGLE, rebuilds: false },
 	showLights: { ...TOGGLE, rebuilds: false },

@@ -414,6 +414,18 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **The one thing that says where one hexagon ends.** A slope
+				// of one material at one height is a single sheet of colour
+				// however it is lit, and the lattice the world is built on is
+				// invisible in it -- which is the hardest thing to read on a
+				// preview whose whole subject is that lattice. The world's own
+				// drift, at the bench's own amount, because a bench is looked
+				// at from further off than a player stands.
+				key: "patchSpeckle",
+				label: "Speckle",
+				digits: 2,
+			},
+			{
 				// **What stands around a corner is not on the face at all**, so
 				// no light can find it: a crevice has no bottom and a notch
 				// reads as flat ground until this says otherwise. Baked into the

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	BLOCK_COLORS,
-	BlockType,
 	COARSE_FIELDS,
 	COARSE_STAGES,
 	CoarseMap,
@@ -50,18 +48,9 @@ describe("COARSE_FIELDS", () => {
 		}
 	});
 
-	it("gives every ramp two stops or more and a range that is not empty", () => {
-		for (const field of COARSE_FIELDS) {
-			expect(field.ramp.stops.length, field.key).toBeGreaterThanOrEqual(
-				2,
-			);
+	it("gives every picture a range that is not empty", () => {
+		for (const field of COARSE_FIELDS)
 			expect(field.ramp.high, field.key).toBeGreaterThan(field.ramp.low);
-			for (const stop of field.ramp.stops)
-				for (const channel of stop) {
-					expect(channel, field.key).toBeGreaterThanOrEqual(0);
-					expect(channel, field.key).toBeLessThanOrEqual(1);
-				}
-		}
 	});
 
 	it("names a step of the build it stops at", () => {
@@ -71,48 +60,38 @@ describe("COARSE_FIELDS", () => {
 			expect(COARSE_STAGES, field.id).toContain(field.stage);
 	});
 
-	it("puts sea level where a ramp changes color, not part way through one", () => {
-		// The waterline is the one place a reader has to be able to trust, and
-		// a ramp that runs a colour across it draws the last few metres of
-		// water as beach. A blended ramp lands it on a stop, which needs an odd
-		// count over a symmetric range; a banded one lands it on a band edge.
-		for (const field of COARSE_FIELDS) {
-			const { low, high, stops, hard } = field.ramp;
-			if (!hard) {
-				expect(low, field.id).toBe(-high);
-				expect(stops.length % 2, field.id).toBe(1);
-				continue;
+	it("holds every material line inside the range it draws against", () => {
+		// **The colours are not here any more and the range still is.** Which
+		// block stands at a height is `GROUND_LINES` and the client's one
+		// painter reads it there, so a colour cannot drift away from the world
+		// by being written down twice. What a picture still owns is the two
+		// ends it is stretched between, and a line outside them is a material
+		// the picture cannot show: the grey pictures would saturate before
+		// reaching it, and nothing would say so.
+		for (const field of COARSE_FIELDS)
+			for (const line of [0, GROUND_LINES.rock, GROUND_LINES.snow]) {
+				expect(line, `${field.id} at ${line} m`).toBeGreaterThanOrEqual(
+					field.ramp.low,
+				);
+				expect(line, `${field.id} at ${line} m`).toBeLessThanOrEqual(
+					field.ramp.high,
+				);
 			}
-			const width = (high - low) / stops.length;
-			expect(-low / width, field.id).toBe(Math.round(-low / width));
-		}
 	});
 
-	it("bands the ground picture on the elevations the world builds to", () => {
-		// The map and the world are two drawings of one thing, and colour is
-		// what both of them draw. They agree only if the band edges are the
-		// same numbers the materials are chosen by, so a colour moved on one
-		// side without the other is caught here rather than by standing on
-		// white ground beside a green pixel.
-		const ground = COARSE_FIELDS.find((f) => f.id === "ground")!;
-		const { low, high, stops } = ground.ramp;
-		expect(ground.ramp.hard).toBe(true);
-		const width = (high - low) / stops.length;
-		const bandOf = (metres: number): number => (metres - low) / width;
-		for (const line of [0, GROUND_LINES.rock, GROUND_LINES.snow])
-			expect(bandOf(line), `${line} m`).toBe(Math.round(bandOf(line)));
-
-		// And the colour of each land band is the block that band builds.
-		expect(stops[bandOf(GROUND_LINES.rock) - 1]).toEqual(
-			BLOCK_COLORS[BlockType.GRASS],
-		);
-		expect(stops[bandOf(GROUND_LINES.rock)]).toEqual(
-			BLOCK_COLORS[BlockType.STONE],
-		);
-		expect(stops[bandOf(GROUND_LINES.snow)]).toEqual(
-			BLOCK_COLORS[BlockType.SNOW],
-		);
-		expect(bandOf(GROUND_LINES.snow)).toBe(stops.length - 1);
+	it("keeps sea level and both material lines on one grid", () => {
+		// The waterline is the one place a reader has to be able to trust. It
+		// and the two material lines land on a 100 m grid, and each picture's
+		// own ends land on the same grid, so no end cuts a band in half.
+		for (const field of COARSE_FIELDS)
+			for (const metres of [
+				field.ramp.low,
+				field.ramp.high,
+				0,
+				GROUND_LINES.rock,
+				GROUND_LINES.snow,
+			])
+				expect(Math.abs(metres % 100), `${field.id} at ${metres} m`).toBe(0);
 	});
 
 	it("names each picture once", () => {
