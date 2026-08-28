@@ -658,11 +658,20 @@ export function growStand(
 		// layer.
 		for (let l = 0; l < live.length; l++) {
 			const layer = live[l]!;
+			// **The roll is asked first, because it can refuse on its own.** A
+			// layer's chance is its density scaled by a curve reading in
+			// `[0, 1]`, so it can never exceed the density -- and a roll over
+			// that is refused whatever the noise would have said. It is the
+			// same value tested against the same bound, so nothing about which
+			// cells are planted changes; what changes is that an octave stack
+			// and a spline are not read for a cell that was never going to
+			// take one. At the shipped densities that is **98.0%** of asks,
+			// and deciding a chunk's plants falls from `11.3 ms` to `1.7 ms`
+			// (`tools/trial-root-walk.ts`).
+			const roll = hash3(i, j, face, (seed + plantSalt(layer.id)) | 0);
+			if (!(roll < layer.density / 100)) continue;
 			const share = plantDensityAt(layer, x, y, z, seed, noise[l]!);
-			const chance = (share * layer.density) / 100;
-			if (chance <= 0) continue;
-			if (hash3(i, j, face, (seed + plantSalt(layer.id)) | 0) < chance)
-				return l;
+			if (roll < (share * layer.density) / 100) return l;
 		}
 		return -1;
 	};

@@ -47,6 +47,29 @@ export class PlantTemplateStore {
 	}
 
 	/**
+	 * How far past its own rim a chunk has to look, for these layers.
+	 *
+	 * **A template knows exactly how wide the plant it draws is**, so the reach
+	 * is measured rather than assumed. Assuming it is both wasteful and unsafe:
+	 * the shipped forest of pines and oaks reaches `17.2 m` against the `24 m`
+	 * the constant claims, and a world of redwoods reaches far past it -- and a
+	 * reach that is too small does not draw a smaller tree, it draws one that
+	 * comes apart along every chunk boundary it crosses.
+	 *
+	 * One block of slack, so a cell sitting exactly on the edge of the widest
+	 * canopy is inside the ring rather than on it.
+	 */
+	reachFor(layers: readonly PlantLayer[]): number {
+		let far = 0;
+		for (const layer of layers) {
+			if (!layer.on) continue;
+			for (const one of this.forLayer(layer))
+				if (one.reach > far) far = one.reach;
+		}
+		return far + this.blockMetres;
+	}
+
+	/**
 	 * This layer's plants, grown the first time they are asked for.
 	 *
 	 * Lazily, because a world may carry a species it never plants -- the curve

@@ -13,14 +13,20 @@ import { neighbour } from "../../addressing/neighbours/neighbour.js";
 import { rank } from "../../addressing/lattice/rank.js";
 
 /**
- * How far past its own rim a chunk grows plants, in metres.
+ * How far past its own rim a chunk grows plants, in metres, when nothing knows.
  *
  * **A plant whose canopy crosses a boundary is grown twice, identically, by two
  * chunks that never speak.** That is what makes vegetation terrain rather than
- * something placed on it, and it holds only while this covers the widest canopy
- * any species reaches: measured on a stand of the shipped species, the widest
- * plant reaches about 20 m sideways from its own trunk, and at 24 m the same
- * ground cut into chunks and generated whole comes out 0 cells different.
+ * something placed on it, and it holds only while the reach covers the widest
+ * canopy any species draws. This figure was measured on a stand of the shipped
+ * species -- the same ground cut into chunks and generated whole comes out 0
+ * cells different -- and it is a guess about every other world.
+ *
+ * **The templates know better and are asked instead**
+ * ({@link PlantTemplateStore.reachFor}): a pre-grown plant carries how far it
+ * reaches, so the ring is the width of the forest that actually grows there.
+ * The shipped pines and oaks reach `17.2 m`; a redwood reaches far past this.
+ * This is what is left for a caller that hands over no templates.
  */
 export const PLANT_REACH = 24;
 
@@ -103,7 +109,13 @@ export function plantChunk(
 	const fine = 1 << rootDepth;
 	const m = chunk.m;
 	const block = shape.blockSize;
-	const hops = Math.max(1, Math.ceil(PLANT_REACH / block));
+	// **Measured off the plants that grow here**, or the constant's guess when
+	// there are none to ask. A ring is most of what a chunk walks -- 6,408
+	// columns against the 2,145 it holds, at 24 hops -- so the difference
+	// between a guess and a measurement is most of what deciding a chunk's
+	// plants costs.
+	const reach = templates ? templates.reachFor(layers) : PLANT_REACH;
+	const hops = Math.max(1, Math.ceil(reach / block));
 
 	// The chunk's own lattice points, then everything within reach of them.
 	// **Canonicalised as they are keyed**, because a cell on a face edge has
@@ -228,7 +240,7 @@ export function plantChunk(
 		// The reach is metres, so it is a different number of cells at each
 		// level -- and these cells are the world's own, not the drawn ones.
 		const fineBlock = block / (1 << (rootDepth - depth));
-		const fineHops = Math.max(1, Math.ceil(PLANT_REACH / fineBlock));
+		const fineHops = Math.max(1, Math.ceil(reach / fineBlock));
 		const key = (f: number, i: number, j: number): number =>
 			(f * (fine + 1) + i) * (fine + 1) + j;
 		const held = new Set<number>();
@@ -344,7 +356,7 @@ export function plantChunk(
 			blockMetres: block,
 			rootLevel: rootDepth,
 			chunkCells: m,
-			chunkReach: PLANT_REACH,
+			chunkReach: reach,
 			seaLevel: 0,
 			owned,
 			templates,
