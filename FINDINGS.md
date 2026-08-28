@@ -10,6 +10,40 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-113 — A chunk near a face edge walks its own planting patch
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-28, taking the root walk apart
+**Where:** `packages/engine/src/generation/chunk/plantPatchLayout.ts`,
+`packages/engine/src/generation/chunk/plantChunk.ts`
+
+**What happens.** A chunk's planting patch -- its own triangle plus every cell
+within the plants' reach of the rim -- is the same shape for every chunk of a
+level and an orientation, so it is worked out once and each chunk adds its own
+origin to it. That holds only while the patch stays clear of a face edge: a
+cell on one has more than one name and its six neighbours reach onto another
+face, both of which the flat table gets wrong. `layoutFits` refuses those, and
+they fall back to walking the lattice a cell at a time.
+
+**Why it matters.** Hardly at all today, and it is the sort of thing that turns
+into a puzzle later. At the shipped cut a face holds `16,384` chunks and `381`
+of them touch its boundary, so about **2.3%** of chunks take a path that costs
+`13 ms` where the others cost about `1 ms`. It is invisible on average and
+would read as a hitch if a player walked along a face edge with a fine enough
+world -- the twenty of them run right across the planet and nothing else in the
+engine treats them as special.
+
+**What would fix it.** The same table plus the crossing rule per column:
+`cellOffset` carries a step onto the next face for three additions, so the
+positions are as cheap there as anywhere. What does not carry is the ring,
+because the six neighbours of a cell on a face edge are not the six the flat
+table names -- that would need a second table per edge-crossing case, or the
+ring rebuilt by walking for the boundary columns alone rather than for the
+whole patch.
+
 ### F-112 — A template is a shape in cells, so one tree is wider at a face centre than at a corner
 
 **Kind:** risk
