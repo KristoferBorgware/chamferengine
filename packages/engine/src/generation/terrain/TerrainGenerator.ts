@@ -5,6 +5,7 @@ import type { TerrainOptions } from "./TerrainOptions.js";
 import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import type { Vec3 } from "../../math/Vec3.js";
 import type { WorldShape } from "../../world/WorldShape.js";
+import { NoiseCorners } from "../noise/NoiseCorners.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
 import { carveDepth, carveIsRock, carveSeed } from "./carveDensity.js";
@@ -47,6 +48,19 @@ export class TerrainGenerator {
 	 * before it was hoisted.
 	 */
 	private readonly carveNoise: NoiseSettings;
+
+	/**
+	 * The cliffs layer's last lattice cell, one slot per octave.
+	 *
+	 * **A column is a line through the field**, and the layer reads it once a
+	 * block: over its reach the sample point crosses `4` cells of its widest
+	 * octave while taking `120` readings. Held here because `fillColumn` walks
+	 * a column in order, so the readings arrive in exactly the order that makes
+	 * a cache of one cell worth having. It changes no answer -- the cell and
+	 * the seed are both checked -- so a caller reading blocks in any other
+	 * order simply misses.
+	 */
+	private readonly carveCorners: NoiseCorners;
 	private readonly carveSeed: number;
 
 	constructor(
@@ -61,6 +75,9 @@ export class TerrainGenerator {
 		this.settings = { ...TERRAIN_DEFAULTS, ...options };
 		// The planet's own radius, which is what makes the layer's width a
 		// number in metres rather than a count of features round a sphere.
+		this.carveCorners = new NoiseCorners(
+			Math.max(1, this.settings.carve.octaves),
+		);
 		this.carveNoise = layerNoiseSettings(
 			this.settings.carve,
 			shape.seaLevelRadius,
@@ -159,6 +176,9 @@ export class TerrainGenerator {
 				this.settings.carve,
 				this.carveNoise,
 				this.settings.carveHold,
+				undefined,
+				undefined,
+				this.carveCorners,
 			)
 		)
 			return BlockType.AIR;

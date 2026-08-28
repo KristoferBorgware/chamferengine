@@ -1,3 +1,4 @@
+import type { NoiseCorners } from "./NoiseCorners.js";
 import type { NoiseSettings } from "./NoiseSettings.js";
 import { octaveOffsets } from "./octaveOffsets.js";
 import { valueNoise3 } from "./valueNoise3.js";
@@ -55,6 +56,7 @@ export function octaveNoise(
 	z: number,
 	seed: number,
 	settings: NoiseSettings,
+	corners: NoiseCorners | null = null,
 ): number {
 	let sum = 0;
 	let amplitude = 1;
@@ -67,7 +69,14 @@ export function octaveNoise(
 		const ox = spread[o * 3]! + settings.offsetX;
 		const oy = spread[o * 3 + 1]! + settings.offsetY;
 		const oz = spread[o * 3 + 2]!;
-		const n = valueNoise3(x * f + ox, y * f + oy, z * f + oz, seed);
+		const n = valueNoise3(
+			x * f + ox,
+			y * f + oy,
+			z * f + oz,
+			seed,
+			corners && o < corners.slots ? corners : null,
+			o,
+		);
 		let signal = n;
 		if (ridge > 0) {
 			// **The fold's crest moves; the two shapes are never mixed.**

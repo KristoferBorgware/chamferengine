@@ -10,6 +10,42 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-114 — Two thirds of a noise reading is the weighted sum, and it is written the long way
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, taking the cliffs layer's cost apart
+**Where:** `packages/engine/src/generation/noise/valueNoise3.ts`
+
+**What happens.** A reading hashes eight lattice corners and then blends them by
+the faded position inside the cell. The blend is written as eight terms, each
+one three multiplies and an add -- **24 multiplies** for what trilinear
+interpolation does in **seven lerps**. Measured by holding the corners still so
+only the blend runs (`NoiseCorners`), a reading costs `144.5 ns` hashing every
+time and `90.0 ns` with the corners remembered: **the hashing is 38% of it and
+the blend is the other 62%**.
+
+**Why it matters.** The cliffs layer is `82%` of what a chunk of ground costs
+and it is nothing but readings -- `120` a column, three octaves each. Caching
+the corners took a chunk from `196 ms` to `145 ms`; what is left is mostly this
+blend, and the same seven-lerp form every other implementation of value noise
+uses would cut a good part of it.
+
+**Why it is not done here.** **It is different arithmetic, so it is a different
+world.** Eight weighted terms and seven nested lerps agree to about a
+last-bit and not to the bit, so every height, every cliff and every cave moves
+a little -- which is a terrain change and the owner's call, not a free
+optimisation. It is bit-identical across machines either way (doc 23), so
+nothing about determinism argues against it; what argues against it is that
+worlds already built would not come back the same.
+
+**What would fix it.** Write the blend as three fades and seven lerps, take one
+frame of the same seed before and after, and decide whether the ground moved
+anywhere a person would notice. If it is adopted it should go in with any other
+world-moving change rather than on its own.
+
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance

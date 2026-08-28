@@ -3,6 +3,7 @@ export { fade } from "./noise/fade.js";
 export { valueNoise3 } from "./noise/valueNoise3.js";
 export type { NoiseSettings } from "./noise/NoiseSettings.js";
 export { fbm } from "./noise/fbm.js";
+export { NoiseCorners } from "./noise/NoiseCorners.js";
 export { octaveNoise } from "./noise/octaveNoise.js";
 export { octaveOffsets } from "./noise/octaveOffsets.js";
 export { seedFromString } from "./seedFromString.js";

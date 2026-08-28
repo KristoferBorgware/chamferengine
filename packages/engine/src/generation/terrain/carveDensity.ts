@@ -1,3 +1,4 @@
+import type { NoiseCorners } from "../noise/NoiseCorners.js";
 import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import type { TerrainLayer } from "../coarse/TerrainLayer.js";
 import { CARVE_SEED_OFFSET } from "../coarse/layeredHeight.js";
@@ -135,7 +136,15 @@ export function carveDepth(
  * - **The waterline.** `1` at and below sea level, fading back over `hold`
  *   metres above it, so a cliff cut into a headland stops at the water instead
  *   of running on down and filling. Raise it and the layer keeps off the low
- *   ground and works only on what stands well above the sea.
+ *   ground and works only on what stands well above the sea. At and below it
+ *   the answer is rock before the field is read at all.
+ *
+ * **`corners` is a cache and never an answer.** Every block of a column stands
+ * on one ray, so the sample point walks a straight line through the field and
+ * spends dozens of readings inside each of its lattice cells. Handing in a
+ * {@link NoiseCorners} keeps that cell's eight hashes between readings; the
+ * cache checks the cell and the seed, so what comes back is what would have
+ * come back without it.
  *
  * **The curve is a transform of the reading and its middle is the line between
  * air and rock.** A straight line hands the field through unchanged; anything
@@ -161,15 +170,30 @@ export function carveIsRock(
 	hold: number = WATERLINE_REACH * Math.max(1, layer.metres),
 	deep: number = carveDepth(layer),
 	squash: number = CARVE_SQUASH,
+	corners: NoiseCorners | null = null,
 ): boolean {
 	if (depthBelow >= deep) return true;
 	// Metres above sea level at this block, which is what both added terms are
 	// measured against.
 	const up = elevation - depthBelow;
+	// **At and below the waterline the hold is a whole `1`, and a whole `1`
+	// makes the density `1` whatever the field says** -- so the field was read
+	// and thrown away for every block down there. The reach runs `120 m` under
+	// the ground, so on any column standing lower than that a real share of
+	// what is walked is under the sea. One comparison against a stack of
+	// octaves.
+	if (up <= 0) return true;
 	// **Faster down than across**, so a shape is shorter than it is wide and the
 	// density can change its mind inside a hillside. See {@link CARVE_SQUASH}.
 	const out = 1 + (up * squash) / radius;
-	const read = octaveNoise(x * out, y * out, z * out, seed, settings);
+	const read = octaveNoise(
+		x * out,
+		y * out,
+		z * out,
+		seed,
+		settings,
+		corners,
+	);
 	const said = splineAt(layer.curve, read) * 2 - 1;
 	const held = Math.max(0, Math.min(1, 1 - up / Math.max(1e-6, hold)));
 	const density = said + (1 - said) * held;
