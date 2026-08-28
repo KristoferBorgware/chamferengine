@@ -2365,6 +2365,20 @@
 										"set writes its dots and they stay draggable",
 						},
 						{
+							key: "counted",
+							label: "Count the shares over",
+							type: "select",
+							options: ["the planet", "the patch"],
+							value: "the planet",
+							note: () =>
+								knobs.counted === "the patch"
+									? "every share on this panel is of the ground in view — what " +
+										"the camera is standing in, which is one place and not a " +
+										"world"
+									: "every share on this panel is of the whole planet's land, " +
+										"which is what says whether a biome is worth keeping at all",
+						},
+						{
 							key: "chartDots",
 							label: "Show on it",
 							type: "select",
@@ -2649,6 +2663,7 @@
 						row.type === "picture" ||
 						key === "paint" ||
 						key === "chartDots" ||
+						key === "counted" ||
 						key === "preset" ||
 						key === "shoreHeight"
 					)
@@ -2963,7 +2978,15 @@
 				regroup();
 				const { count, height, climT, climH, level, cut, swing, biome, form } =
 					field;
+				// **The same three counts the planet is measured by, over the
+				// patch instead.** A place is not a planet: a patch can hold
+				// nine of thirty-three biomes and none of the ones a dot was
+				// dragged for, and the share that says whether a dot is worth
+				// keeping is a different number from the share that says what
+				// is under the camera.
 				const counts = new Int32Array(biomes.length);
+				const byForm = new Float64Array(LANDFORMS.length);
+				const inCell = new Float64Array(grid.length);
 				let land = 0;
 				for (let c = 0; c < count; c++) {
 					const kind = landformAt(level[c], cut[c], swing[c], height[c]);
@@ -2972,14 +2995,64 @@
 						biome[c] = -1;
 						continue;
 					}
+					byForm[kind]++;
+					if (kind !== SHORE)
+						inCell[
+							gridAt(
+								bucket(level[c], CONT_EDGES),
+								bucket(cut[c], ERO_EDGES),
+								bucket(swing[c], PV_EDGES),
+							)
+						]++;
 					const which = biomeOf(climT[c], climH[c], kind);
 					biome[c] = which;
 					if (which >= 0) counts[which]++;
 					land++;
 				}
+				const over = Math.max(1, land);
 				field.counts = counts;
 				field.land = land;
+				field.patchShare = Array.from(counts, (v) => v / over);
+				field.patchByForm = Array.from(byForm, (v) => v / over);
+				field.patchInCell = Array.from(inCell, (v) => v / over);
 				field.here = land > 0 ? counts.indexOf(Math.max(...counts)) : -1;
+				let seen = 0;
+				for (const v of counts) if (v > 0) seen++;
+				field.seen = seen;
+			}
+
+			/**
+			 * Which set of shares the panel is showing, and what to call it.
+			 *
+			 * **One switch over every figure**, because a percentage next to a
+			 * name is worthless if the reader has to remember which of two
+			 * things each one counts. The tabs, the list, the grid and the line
+			 * under the diagram all read this.
+			 */
+			/**
+			 * A share as text, with nothing written as a dash.
+			 *
+			 * **None and nearly none are different answers**, and one decimal
+			 * cannot tell them apart: a single hexagon of an 1,800 cell patch is
+			 * 0.1%, so anything rounding to 0.0% would read as absent when it is
+			 * merely small. A dash means the ground is not there at all.
+			 */
+			function asShare(v) {
+				if (v === undefined || v === null) return "";
+				if (v === 0) return "—";
+				return (v * 100).toFixed(1) + "%";
+			}
+
+			function counted() {
+				const patch = knobs.counted === "the patch";
+				if (!field) return { share: null, byForm: null, inCell: null, patch };
+				return {
+					patch,
+					share: patch ? field.patchShare : field.worldShare,
+					byForm: patch ? field.patchByForm : field.byForm,
+					inCell: patch ? field.patchInCell : field.inCell,
+					of: patch ? "the patch's land" : "the planet's land",
+				};
 			}
 
 			// ---------------------------------------------------------------
@@ -3574,13 +3647,14 @@
 						`built on it — add one, or move one here`;
 					return;
 				}
-				const share = field && field.worldShare ? field.worldShare[picked] : 0;
+				const read = counted();
+				const share = read.share ? read.share[picked] : 0;
 				const says = document.createElement("span");
 				says.innerHTML =
 					`<b>${b.name}</b> at temperature <b>${b.t.toFixed(
 						2,
 					)}</b>, humidity <b>${b.h.toFixed(2)}</b> — ` +
-					`<b>${(share * 100).toFixed(1)}%</b> of the planet's land · stands on `;
+					`<b>${asShare(share)}</b> of ${read.of} · stands on `;
 				const pickForm = document.createElement("select");
 				for (const [value, label] of [
 					[ANY, "any ground"],
@@ -4173,9 +4247,17 @@
 								writeUrl();
 								return;
 							}
-							if (row.key === "paint" || row.key === "chartDots") {
+							if (row.key === "paint") {
 								askForRecolor();
 								writeUrl();
+								return;
+							}
+							// **Which numbers are shown changes no number.**
+							// Neither of these touches a field, a mesh or a
+							// picture, so redrawing the world for them would be
+							// a rebuild to change a caption.
+							if (row.key === "counted" || row.key === "chartDots") {
+								refreshReadouts();
 								return;
 							}
 							askForRedraw();
@@ -4215,17 +4297,24 @@
 				}
 				if (!field) return;
 				const here = field.here >= 0 ? biomes[field.here] : null;
+				const read = counted();
 				let widest = 0;
 				for (let n = 1; n < LANDFORMS.length; n++)
-					if (field.byForm[n] > field.byForm[widest]) widest = n;
+					if (read.byForm[n] > read.byForm[widest]) widest = n;
+				const land = read.patch
+					? field.land / Math.max(1, field.count)
+					: field.landShare;
 				document.getElementById("recipe").innerHTML =
 					`<i class="b">${biomes.length}</i> biomes over ` +
 					`<i class="b">${LANDFORMS.length}</i> landforms · ` +
-					`<i class="b">${(field.landShare * 100).toFixed(1)}%</i> of the ` +
-					`planet is land, most of it <i class="w">${LANDFORMS[widest].name}</i> · ` +
-					`<i class="b">${field.reached}</i> biomes are ever built` +
+					`<i class="b">${(land * 100).toFixed(1)}%</i> of ` +
+					`${read.patch ? "the patch" : "the planet"} is land, most of it ` +
+					`<i class="w">${LANDFORMS[widest].name}</i> · ` +
+					(read.patch
+						? `<i class="b">${field.seen}</i> of them are in view`
+						: `<i class="b">${field.reached}</i> of them are built somewhere`) +
 					(here
-						? ` · here it is mostly <i class="h">${here.name}</i>`
+						? ` · mostly <i class="h">${here.name}</i>`
 						: " · the patch is all sea");
 				document.getElementById("facts").innerHTML =
 					`patch <b>${Math.round(field.span).toLocaleString()} m</b> across, ` +
@@ -4233,6 +4322,17 @@
 					`ground <b>${Math.round(field.lowest)}</b> to ` +
 					`<b>${Math.round(field.highest)} m</b> · ` +
 					`<b>${Math.round(cost)} ms</b>`;
+			}
+
+			/** Every figure on the panel, redrawn from readings already taken. */
+			function refreshReadouts() {
+				refreshPanel();
+				refreshTabs();
+				refreshList();
+				refreshGrid();
+				drawChart();
+				sayChart();
+				writeUrl();
 			}
 
 			// ---------------------------------------------------------------
@@ -4250,7 +4350,7 @@
 			 */
 			function refreshList() {
 				list.textContent = "";
-				const share = field && field.worldShare ? field.worldShare : null;
+				const share = counted().share;
 				for (const n of allowed[shown] ?? []) {
 					const b = biomes[n];
 					const row = document.createElement("div");
@@ -4274,7 +4374,7 @@
 					name.addEventListener("change", writeUrl);
 					const says = document.createElement("span");
 					says.className = "share";
-					says.textContent = share ? (share[n] * 100).toFixed(1) + "%" : "";
+					says.textContent = share ? asShare(share[n]) : "";
 					const drop = document.createElement("button");
 					drop.className = "drop";
 					drop.type = "button";
@@ -4339,8 +4439,8 @@
 					const swatch = document.createElement("span");
 					swatch.className = "swatch";
 					swatch.style.background = "#" + form.hex;
-					const share =
-						field && field.byForm ? (field.byForm[n] * 100).toFixed(1) + "%" : "";
+					const read = counted();
+					const share = read.byForm ? asShare(read.byForm[n]) : "";
 					button.append(swatch, document.createTextNode(form.name + " " + share));
 					button.title =
 						set.length === 0
@@ -4418,10 +4518,8 @@
 						button.type = "button";
 						button.style.background = "#" + form.hex;
 						button.className = at === cellPicked ? "picked" : "";
-						const share =
-							field && field.inCell
-								? (field.inCell[at] * 100).toFixed(1) + "%"
-								: "";
+						const read = counted();
+						const share = read.inCell ? asShare(read.inCell[at]) : "";
 						button.innerHTML = form.short + "<small>" + share + "</small>";
 						button.title = `${CONT_NAMES[sheetShown]}, ${
 							["sharpest", "sharp", "middling", "worn", "worn flat"][e]

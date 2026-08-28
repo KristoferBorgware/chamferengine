@@ -2276,6 +2276,7 @@ spaced stops over -100 m to 500 m and once in `GROUND_LINES`, and the tests
 that held the two together are gone because there is nothing left to hold
 apart. `CoarseRamp` is a low and a high, which is what the grey pictures are
 stretched between and is a property of the field rather than of the world.
+
 ### F-096 — The multi-noise and vegetation labs draw the patch as a mirror of their own map
 
 **Kind:** bug
@@ -2285,6 +2286,12 @@ stretched between and is a property of the field rather than of the world.
 **Found:** 2026-08-28, tracking down why the biomes lab's patch disagreed with
 the picture of the same ground
 **Where:** `demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+**Closed:** 2026-08-28, fixed in `3dc17a1` — both labs write the negated north
+component into the renderer's third axis, so it is south and the triple is
+right-handed. Measured after, on the multi-noise lab from overhead at yaw zero:
+the frame's east lands at screen **+0.249**, the right, and its north at
+**+0.439**, the top, where the map draws them — against **+0.250** and
+**−0.314** before.
 
 **What happens.** Both labs build a patch-local frame as `east`, `up`, `north`
 and hand the renderer `[east, up, north]` as `[x, y, z]`. That triple is
@@ -2308,13 +2315,6 @@ is right-handed. That also makes yaw zero the view from the south looking north,
 which is the orientation the map already draws — north away from the eye, east
 on the right. `demos/biomes-lab.html` carries the fix and the comment that
 explains it.
-
-**Closed** 2026-08-28. Both labs write the negated north component into the
-renderer's third axis, so it is south and the triple is right-handed. Measured
-after, on the multi-noise lab from overhead at yaw zero: the frame's east lands
-at screen **+0.249**, the right, and its north at **+0.439**, the top, where the
-map draws them — against **+0.250** and **−0.314** before. `demos/biomes-lab.html`
-carries the same line and the comment that explains it.
 
 ### F-087 — Under a fold of 0.72 the range was in the field's negative half, so a ridged layer's peaks were its low values
 

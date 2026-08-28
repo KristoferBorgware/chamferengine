@@ -127,6 +127,24 @@ describe("the biomes lab's copy of the engine", () => {
 		);
 	});
 
+	it("can count every share over the patch as well as the planet", () => {
+		// A place is not a planet: the shipped opening patch is 27.1% Peaks
+		// where the planet is 9.9%, and holds 17 of the 33 biomes. One switch
+		// moves the tabs, the list, the grid and the line under the diagram
+		// together, because a percentage next to a name is worthless if the
+		// reader has to remember which of two things each one counts.
+		expect(lab).toContain("function counted() {");
+		expect(lab).toContain("field.patchShare = Array.from(counts,");
+		expect(lab).toContain("field.patchByForm = Array.from(byForm,");
+		expect(lab).toContain("field.patchInCell = Array.from(inCell,");
+	});
+
+	it("writes nothing as a dash rather than as a rounded zero", () => {
+		// One hexagon of an 1,800 cell patch is 0.1%, so anything rounding to
+		// 0.0% at one decimal would read as absent when it is merely small.
+		expect(lab).toContain('if (v === 0) return "—";');
+	});
+
 	it("walks the patch on the engine's own lattice", () => {
 		// The cells come from `directionToCell`, the ring from `neighbour`, and
 		// the hexagons from `cellCorners` -- so a patch reaching a face edge
