@@ -261,34 +261,6 @@ on the first frame instead of drawing something.
 
 ---
 
-### F-106 — A plant is grown twice for a cell that two chunks both hold
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-28, growing the world's own plants in its own chunks
-**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`
-
-**What happens.** A chunk grows every plant rooted within reach of its rim and
-drops what falls outside its own triangle. That is the rule that makes two
-chunks agree without speaking, and it is also work done twice: at the shipped
-64 m chunk with a 24 m reach, the ring past the rim holds about as many cells
-as the triangle does, so a plant near a boundary is grown by two chunks and a
-plant near a corner by three.
-
-**Why it is not a bug.** The alternative is a chunk asking its neighbour what
-it grew, and a chunk that reads its neighbour is not terrain -- the mesher, the
-apron and every level of detail rest on a chunk being a pure function of its
-address. The lab measured the same trade on a patch and found the cut costs
-nothing measurable, because what a chunk refuses to write pays for what it
-grows twice.
-
-**What would shrink it.** A cheaper refusal: a plant is decided by a hash of
-its root cell, so a chunk could reject a root whose species cannot reach it
-before growing the skeleton at all -- the widest reach is a property of the
-species and the size hash, both known before the first rod.
-
 ### F-105 — Nothing checks that two chunks of the world grow one tree the same way
 
 **Kind:** risk
@@ -2588,6 +2560,40 @@ from the world again.
 
 
 ## Closed
+
+### F-106 — A plant is grown twice for a cell that two chunks both hold
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Closed:** 2026-08-28, declined -- `3acb167` and `a7065c1` took the cost out
+from under it. What a boundary plant is now grown twice for is a stamp of a
+pre-grown cell list, and the whole plant pass over twelve land chunks is
+`227 ms` against the `6,021 ms` this entry was written about. The rule it
+describes is unchanged and is still what makes two chunks agree without
+speaking; there is no longer a bill worth naming.
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`
+
+**What happens.** A chunk grows every plant rooted within reach of its rim and
+drops what falls outside its own triangle. That is the rule that makes two
+chunks agree without speaking, and it is also work done twice: at the shipped
+64 m chunk with a 24 m reach, the ring past the rim holds about as many cells
+as the triangle does, so a plant near a boundary is grown by two chunks and a
+plant near a corner by three.
+
+**Why it is not a bug.** The alternative is a chunk asking its neighbour what
+it grew, and a chunk that reads its neighbour is not terrain -- the mesher, the
+apron and every level of detail rest on a chunk being a pure function of its
+address. The lab measured the same trade on a patch and found the cut costs
+nothing measurable, because what a chunk refuses to write pays for what it
+grows twice.
+
+**What would shrink it.** A cheaper refusal: a plant is decided by a hash of
+its root cell, so a chunk could reject a root whose species cannot reach it
+before growing the skeleton at all -- the widest reach is a property of the
+species and the size hash, both known before the first rod.
 
 ### F-107 — Growing a chunk's plants costs three times what generating its ground does
 
