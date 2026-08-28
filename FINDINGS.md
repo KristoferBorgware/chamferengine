@@ -533,6 +533,14 @@ chunk cannot know -- a list position, a neighbour's answer, the patch's own
 frame -- and two chunks would disagree about a tree on their boundary. The rank
 rule alone once took the audit from 0 to 10 differing cells, and it was one line.
 
+**What the risk it names now costs, 2026-08-28.** The **engine's** own path is
+covered: `plantNeighbours.test.ts` grows the two chunks either side of a shared
+edge and compares every cell they both wrote, and it catches a rule reading
+something a chunk cannot know -- swapping the cell address for the patch-local
+index makes it report one chunk's wood against the other's leaf. What is still
+missing is the lab's, which is where the shapes are tuned and where a rule is
+most likely to be tried out first.
+
 **What it would take.** The pass itself is thirty lines and it still exists in
 git; what it needs is somewhere to live now that its section is gone. The
 honest place is the readout in the left panel, as a fact rather than a knob --
