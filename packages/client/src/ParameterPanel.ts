@@ -688,14 +688,6 @@ const GROUPS: Group[] = [
 		cave: "right",
 		knobs: [
 			{
-				// **The other layer that takes blocks out of a column**, and
-				// the one row of the landscape bench's own work that belongs
-				// here: what it leaves standing is what a cave is cut into.
-				key: "carveLayer",
-				label: "Cliffs & overhangs",
-				says: "The layer that cuts cliffs, overhangs and arches into the ground the map placed. It and the caves cut one planet, so some overlap is the point rather than a confusion -- and its density gains a full 1 over its own reach, so it has stopped altogether well below where it works. What each of the two took is counted apart. Its own rows are on the landscape bench.",
-			},
-			{
 				key: "caves",
 				label: "On",
 				says: "Off, no world holds a single cave. The carve that cuts cliffs and overhangs is a different layer and keeps working either way.",
