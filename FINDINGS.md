@@ -10,6 +10,91 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-110 — A chunk's apron draws no trees, so a canopy is walled off at every chunk edge
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts`,
+`packages/engine/src/generation/chunk/ChunkColumnSampler.ts`
+
+**What happens.** `plantChunk` writes only into the slots the chunk holds --
+that is the rule that stops two chunks writing the same cell twice. Everything
+past the rim is served by `ChunkColumnSampler`, which **regenerates** those
+columns from the generator, and the generator does not know about plants: a
+tree is a walk over every root within reach of the rim, never a property of one
+column. So a rim cell asking its ring whether to draw a side face is told air
+wherever the neighbour's answer is a trunk or a leaf, and emits a wall the
+neighbour -- which holds both cells and sees both solid -- emits nothing to
+match. And the apron, which draws that ring outright one cell past the rim,
+draws it with no plants in it at all.
+
+**Why it matters.** Mostly it does not show, which is why it is filed rather
+than fixed: the neighbouring chunk holds the cell the apron got wrong and draws
+it correctly, and the spurious wall stands **inside** a canopy, where opaque
+leaves hide it. What it costs is faces nobody sees and one more place where two
+chunks disagree about a cell they both hold -- the exact class of bug the delta
+store's history is made of, and the reason `ChunkColumnSampler`'s own comment
+is three paragraphs long.
+
+**What would fix it.** The sampler is already the one thing that reconciles a
+chunk's own cells with the ones it regenerates -- `applyDeltas` hands it what
+fell outside the triangle for exactly this reason. `plantChunk` can do the
+same: keep the cells it grew that landed on the ring rather than dropping them,
+and hand them to the sampler as an overlay. It costs nothing to grow, because
+those plants were grown anyway (F-106); what is added is the write.
+
+### F-109 — Trees stop at a line two levels out, and the line is visible
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-28, growing the world's own plants in its own chunks
+**Where:** `packages/engine/src/generation/chunk/plantChunk.ts` (`PLANT_LEVELS`)
+
+**What happens.** Roots are chosen at the world's own lattice whatever level a
+chunk is drawn at, because a coarse chunk hashing its own cells would pick a
+different forest at every level and a tree would come and go as the player
+walked. A chunk covers four times the ground at each level, so the roots it
+walks quadruple with it: measured on the shipped world -- depth 13, 1 m blocks,
+64 m chunks, two layers -- one chunk grows 35 plants in 760 ms at the finest
+level, 89 in 448 ms at one, 379 in 935 ms at two and 2,272 in 2,440 ms at
+three. At the sixth, which the selection reaches, the browser runs out of
+memory before a chunk finishes. `PLANT_LEVELS = 2` caps it, and the forest
+therefore ends at the boundary between the second and third level of detail.
+
+**Where that boundary is.** A chunk splits while it is nearer than `detail`
+times its own width, so a chunk drawn one level coarse than finest sits between
+`detail x 2w` and `detail x 4w` of the eye. On the shipped world -- 64 m
+chunks, `detail` 1.5 -- the forest ends at **384 m**. It is a distance from the
+camera, so it travels with the player and trees appear out of nothing as they
+walk toward them.
+
+**Why it matters.** It is a tree line drawn by the renderer rather than by the
+world, and it is an edge rather than a fade. Nothing else in the engine has one
+at a level boundary: the apron exists precisely so a level change is invisible.
+Two frames of one vantage attribute it -- `?seed=chamfer` from 734 m up draws a
+forest in the near band and bare hillside past it, and `&chunkCells=32`, a knob
+that **moves no block**, halves the line to 192 m and leaves the same terrain
+with **no tree anywhere in view**.
+
+**What saves it on the ground.** A walking player rarely sees it. The horizon
+at 1.7 m eye on this 6,801 m planet is `sqrt(2Rh)` = **152 m**, well inside the
+line, so on level ground the bare band is over the edge of the world. What
+shows is anything standing above the horizon further off -- a hillside or a
+range, which is exactly where a forest is read at a glance.
+
+**What would fix it.** Two candidates, and nobody has measured either. A coarse
+chunk could grow **fewer** plants rather than all of them -- taking one root in
+`4^lod` by a rule that depends only on the root, so the survivors are the same
+set every chunk agrees on and the forest thins with distance instead of
+stopping. Or the far levels could draw a plant as a **billboard** off the same
+root hash, which is what the cloud deck already does for a puff. The first
+keeps trees as blocks and is the smaller change; the second is the one that
+looks right at a kilometre.
 ### F-108 — A patch vertex is laid out in four places and only three of them are checked
 
 **Kind:** risk
