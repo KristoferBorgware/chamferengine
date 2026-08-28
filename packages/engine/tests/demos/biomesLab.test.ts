@@ -114,6 +114,19 @@ describe("the biomes lab's copy of the engine", () => {
 		expect(lab).toContain("const FIT_TAIL = 0.02;");
 	});
 
+	it("hands the renderer a right-handed frame, so the patch is not a mirror", () => {
+		// **East, up and north in that order is left-handed** -- measured,
+		// `cross(east, up) . north` is exactly -1 -- and a left-handed basis
+		// given to a right-handed renderer draws the mirror image. Projected
+		// from overhead the frame's east landed at screen +0.104, the right,
+		// where the map puts it, and its north at -0.185, the bottom, where the
+		// map puts the top. Taking south as the third axis rights it.
+		expect(lab).toContain("localP[2] = -(");
+		expect(lab).not.toContain(
+			"localP[2] = rx * frame.north[0] + ry * frame.north[1] + rz * frame.north[2];",
+		);
+	});
+
 	it("walks the patch on the engine's own lattice", () => {
 		// The cells come from `directionToCell`, the ring from `neighbour`, and
 		// the hexagons from `cellCorners` -- so a patch reaching a face edge
