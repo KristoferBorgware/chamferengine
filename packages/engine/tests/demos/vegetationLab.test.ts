@@ -47,6 +47,19 @@ describe("the vegetation lab's copy of the engine", () => {
 			expect(block(vegetation, begin, end)).toBe(block(multi, begin, end));
 		});
 
+	it("hands the renderer a right-handed frame, so the patch is not a mirror", () => {
+		// **East, up and north in that order is left-handed** -- measured,
+		// `cross(east, up) . north` is exactly -1 -- and a left-handed basis
+		// given to a right-handed renderer draws the mirror image. From
+		// overhead the frame's east then lands on the right of the screen where
+		// the map puts it and its north lands at the bottom, so the view is the
+		// map flipped top to bottom. The third axis is south instead.
+		expect(vegetation).toContain("[2] = -(");
+		expect(vegetation).not.toMatch(
+			/\[2\] =\s*\n?\s*rx \* frame\.north\[0\]/,
+		);
+	});
+
 	it("grows its plants from a hashed cell rather than a stored model", () => {
 		// The whole claim of the page: nothing is authored and nothing is
 		// placed, so a stand comes back from the seed alone. A table of

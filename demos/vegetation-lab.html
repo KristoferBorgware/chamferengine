@@ -3756,6 +3756,22 @@
 				const ringX = new Float64Array(6);
 				const ringY = new Float64Array(6);
 				const ringZ = new Float64Array(6);
+				/**
+				 * A direction and a height, as metres in the patch's own frame.
+				 *
+				 * **The third axis is south, and it has to be.** East, up and
+				 * north in that order is a **left-handed** triple -- measured,
+				 * `cross(east, up) . north` is `-1` -- and handing a left-handed
+				 * basis to a right-handed renderer draws the mirror image of the
+				 * ground. From overhead the frame's east then lands on the right
+				 * of the screen where the map puts it and its north lands at the
+				 * **bottom**, so the view is the map flipped top to bottom.
+				 * Negating one axis rights it, and negating this one is what
+				 * makes the default view agree with the map: at yaw zero the
+				 * camera stands south of the patch looking north, so north is
+				 * away from the eye and east is on the right, exactly as the
+				 * picture draws them.
+				 */
 				const localP = new Float64Array(3);
 				const local = (dx, dy, dz, metres) => {
 					const s = radius + metres;
@@ -3764,7 +3780,11 @@
 					const rz = dz * s - centre[2] * radius;
 					localP[0] = rx * frame.east[0] + ry * frame.east[1] + rz * frame.east[2];
 					localP[1] = rx * frame.up[0] + ry * frame.up[1] + rz * frame.up[2];
-					localP[2] = rx * frame.north[0] + ry * frame.north[1] + rz * frame.north[2];
+					localP[2] = -(
+						rx * frame.north[0] +
+						ry * frame.north[1] +
+						rz * frame.north[2]
+					);
 					return localP;
 				};
 

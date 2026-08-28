@@ -135,6 +135,22 @@ function settings(over: Partial<NoiseSettings> = {}): NoiseSettings {
 	};
 }
 
+describe("the multi-noise lab's patch", () => {
+	it("is handed a right-handed frame, so it is not a mirror of its own map", () => {
+		// **East, up and north in that order is left-handed** -- measured,
+		// `cross(east, up) . north` is exactly -1 -- and a left-handed basis
+		// given to a right-handed renderer draws the mirror image. From
+		// overhead the frame's east then lands on the right of the screen where
+		// the map puts it and its north lands at the bottom, so the view is the
+		// map flipped top to bottom. The renderer's third axis is south
+		// instead: measured after, east lands at +0.249 and north at +0.439,
+		// against +0.250 and -0.314 before.
+		const page = readFileSync(HTML, "utf8");
+		expect(page).toContain("localX[2] = -(");
+		expect(page).not.toMatch(/localX\[2\] =\s*\n?\s*rx \* frame\.north\[0\]/);
+	});
+});
+
 describe("the multi-noise lab's copy of the engine's noise", () => {
 	it("hashes the same integers to the same values", () => {
 		for (let n = -50; n < 50; n++)

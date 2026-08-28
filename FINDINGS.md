@@ -10,38 +10,44 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-096 — The multi-noise and vegetation labs draw the patch as a mirror of their own map
+### F-097 — A patch picture and the planet picture disagree about which way longitude runs
 
 **Kind:** bug
 **Milestone:** 0.5.0
 **Priority:** medium
-**Effort:** small
-**Found:** 2026-08-28, tracking down why the biomes lab's patch disagreed with
-the picture of the same ground
-**Where:** `demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+**Effort:** medium
+**Found:** 2026-08-28, checking the biomes lab's patch against its own map after
+righting the renderer's frame
+**Where:** `demos/biomes-lab.html`, `demos/multi-noise-lab.html`,
+`demos/vegetation-lab.html`
 
-**What happens.** Both labs build a patch-local frame as `east`, `up`, `north`
-and hand the renderer `[east, up, north]` as `[x, y, z]`. That triple is
-**left-handed** — measured in the biomes lab before the fix,
-`cross(east, up) · north` is exactly **−1** — and a left-handed basis given to a
-right-handed renderer draws the mirror image. Projected from overhead at yaw
-zero, the frame's east lands at screen **+0.104** (the right, where the picture
-puts it) and its north lands at **−0.185**, the bottom, where the picture puts
-the top. So the view is the map flipped top to bottom, which is a reflection
-rather than a turn: no camera angle recovers it.
+**What happens.** Every lab's `frameOf` builds `east` as `cross(pole, up)`, and
+that is a proper right-handed compass frame: `cross(east, north)` is `up`,
+measured. But `directionOf(latitude, longitude)` builds a place as
+`[cos φ cos λ, sin φ, cos φ sin λ]`, and the derivative of that along longitude
+is the **opposite** vector: `frame.east · ∂p/∂λ` is exactly **−1**, while
+`frame.north · ∂p/∂φ` is **+1**. The planet picture draws longitude increasing
+to the right, so it and the patch picture — which draws `frame.east` to the
+right — are left-right mirrors of one another. The patch's own outline is drawn
+on the planet picture from latitude and longitude, so it sits in the right
+place and shows the wrong hand.
 
-**Why it matters.** Both labs draw the same ground twice, once as a picture of
-the patch from above and once as hexagon columns, and the two are meant to be
-read against each other. They disagree about which side of a hill a cliff is on.
-It is invisible on a symmetric landscape and obvious on a coastline, which is
-where a person looks.
+**Why it matters.** The two pictures are meant to be read together: one says
+where on the planet the patch is and the other says what is in it. A coast that
+runs down the left of one runs down the right of the other. It is invisible on
+open ground and plain on a shoreline, which is what a person navigates by.
 
-**What would fix it.** One line in each: `local()` writes the negated north
-component into `localP[2]`, so the renderer's third axis is south and the triple
-is right-handed. That also makes yaw zero the view from the south looking north,
-which is the orientation the map already draws — north away from the eye, east
-on the right. `demos/biomes-lab.html` carries the fix and the comment that
-explains it.
+**What would fix it, and why it is not one line.** A map with north up and
+longitude increasing to the right, rendered in 3D by a right-handed renderer, needs the
+renderer's third axis to be south — and that forces `cross(east, up)` to be
+north, which is the opposite of what a right-handed compass frame gives. The
+lab's own parameterization is the loose end: `[cos φ cos λ, sin φ, cos φ sin λ]`
+is the standard one with **y and z swapped**, which is a reflection, so its
+longitude runs the other way round the pole. Fixing it means changing where
+every latitude and longitude lands, across every lab and every saved link at
+once — which is the same change F-091 describes for the polar axis, and wants
+doing with it rather than twice.
+
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
 **Kind:** doc
@@ -2270,6 +2276,45 @@ spaced stops over -100 m to 500 m and once in `GROUND_LINES`, and the tests
 that held the two together are gone because there is nothing left to hold
 apart. `CoarseRamp` is a low and a high, which is what the grey pictures are
 stretched between and is a property of the field rather than of the world.
+### F-096 — The multi-noise and vegetation labs draw the patch as a mirror of their own map
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-28, tracking down why the biomes lab's patch disagreed with
+the picture of the same ground
+**Where:** `demos/multi-noise-lab.html`, `demos/vegetation-lab.html`
+
+**What happens.** Both labs build a patch-local frame as `east`, `up`, `north`
+and hand the renderer `[east, up, north]` as `[x, y, z]`. That triple is
+**left-handed** — measured in the biomes lab before the fix,
+`cross(east, up) · north` is exactly **−1** — and a left-handed basis given to a
+right-handed renderer draws the mirror image. Projected from overhead at yaw
+zero, the frame's east lands at screen **+0.104** (the right, where the picture
+puts it) and its north lands at **−0.185**, the bottom, where the picture puts
+the top. So the view is the map flipped top to bottom, which is a reflection
+rather than a turn: no camera angle recovers it.
+
+**Why it matters.** Both labs draw the same ground twice, once as a picture of
+the patch from above and once as hexagon columns, and the two are meant to be
+read against each other. They disagree about which side of a hill a cliff is on.
+It is invisible on a symmetric landscape and obvious on a coastline, which is
+where a person looks.
+
+**What would fix it.** One line in each: `local()` writes the negated north
+component into `localP[2]`, so the renderer's third axis is south and the triple
+is right-handed. That also makes yaw zero the view from the south looking north,
+which is the orientation the map already draws — north away from the eye, east
+on the right. `demos/biomes-lab.html` carries the fix and the comment that
+explains it.
+
+**Closed** 2026-08-28. Both labs write the negated north component into the
+renderer's third axis, so it is south and the triple is right-handed. Measured
+after, on the multi-noise lab from overhead at yaw zero: the frame's east lands
+at screen **+0.249**, the right, and its north at **+0.439**, the top, where the
+map draws them — against **+0.250** and **−0.314** before. `demos/biomes-lab.html`
+carries the same line and the comment that explains it.
 
 ### F-087 — Under a fold of 0.72 the range was in the field's negative half, so a ridged layer's peaks were its low values
 
