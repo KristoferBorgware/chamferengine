@@ -29,4 +29,15 @@ export interface TerrainColumn {
 
 	/** Metres of ground above sea level, negative under the ocean. */
 	readonly elevation: number;
+
+	/**
+	 * Metres of rock this column keeps over the roof of a cave.
+	 *
+	 * **A fact about the column, so it is read here rather than per layer.**
+	 * The ceiling wanders over the ground -- it is what gives a cave a way to
+	 * the surface -- and every layer of one column sits under the same amount
+	 * of it, so reading it per block would be two noise lookups a block for an
+	 * answer that never changes down the column.
+	 */
+	readonly caveCeiling: number;
 }

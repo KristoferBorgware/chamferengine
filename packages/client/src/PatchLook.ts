@@ -58,3 +58,33 @@ export const PATCH_MAPS: readonly PatchMap[] = ["patch", "planet"] as const;
 export type PatchAlong = "x" | "z";
 
 export const PATCH_ALONGS: readonly PatchAlong[] = ["x", "z"] as const;
+
+/**
+ * What the cave bench draws as the solid: the rock, or the caves themselves.
+ *
+ * **Turning the world inside out is the only view that shows a network from
+ * outside it.** A cave is a hole, and a picture of the rock around a hole says
+ * where the rock is; drawing the void as though it were stone says what shape
+ * the passages are and where they join.
+ */
+export type CaveDraw = "rock" | "void";
+
+export const CAVE_DRAWS: readonly CaveDraw[] = ["rock", "void"] as const;
+
+/**
+ * What the cave bench's plan picture shows.
+ *
+ * The field itself, the two edges of the band contoured over a square sample
+ * grid, the hexagons the world is built out of, or the field with the hexagons
+ * over it. **A sheet has no plan of its own** -- what it carves six metres down
+ * is a different picture from what it carves twenty metres down -- so every one
+ * of these is drawn at one named depth.
+ */
+export type CavePlan = "field" | "contour" | "hexes" | "both";
+
+export const CAVE_PLANS: readonly CavePlan[] = [
+	"field",
+	"contour",
+	"hexes",
+	"both",
+] as const;

@@ -30,6 +30,10 @@
 
 	/* What is worth stopping for, and what is wrong. */
 	--warn: #ffb454;
+	/* The lattice contour on the cave bench's plan, and the one line of the
+	   readout that carries a caution. Warmer than `--warn`, which is a
+	   refusal: this one is a second reading drawn beside the first. */
+	--warm: #ffb56b;
 	--bad: var(--bad);
 	--good: #7bcf8a;
 }
@@ -912,4 +916,105 @@ body.bench .knobs-head {
 	height: auto;
 	border-radius: 6px;
 	image-rendering: pixelated;
+}
+
+/*
+ * The cave bench.
+ *
+ * **The plan is over the knobs that decide it.** A sheet has no plan of its own
+ * -- what it carves six metres down is a different picture from what it carves
+ * twenty metres down -- so the picture is one named slice, and it stands fixed
+ * at the top of the right panel while the rows under it scroll. Every other
+ * bench rule is the landscape bench's, unchanged; what is here is the plan, the
+ * readout beside it, and the line under a row whose label cannot carry its own
+ * meaning.
+ */
+.cave-title {
+	font-size: 14px;
+	font-weight: 650;
+	letter-spacing: 0.2px;
+	margin: 0 0 2px;
+}
+
+.cave-sub {
+	color: var(--dim);
+	font-size: 11.5px;
+	line-height: 1.45;
+	margin: 0 0 10px;
+}
+
+.cave-sub b {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+/* Not pixelated: the raster is 200 samples of a smooth field drawn at panel
+   width, and a contour drawn over hard squares reads as a staircase beside a
+   curve. */
+.cave-plan {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--edge);
+	border-radius: 4px;
+	background: var(--sunk);
+}
+
+.cave-plan-says {
+	color: var(--dim);
+	font-size: 11px;
+	line-height: 1.45;
+	margin: 6px 0 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.cave-facts {
+	margin-top: 8px;
+}
+
+/* One line of the readout that is a caution rather than a refusal: a median
+   passage one cell wide, or a world with no way into its own caves. */
+.bench-warm {
+	color: var(--warm);
+}
+
+.bench-warm b {
+	color: var(--warm);
+}
+
+/*
+ * What a knob decides, under its own row.
+ *
+ * **For the row whose label cannot carry its own meaning.** A band width that
+ * fattens every passage rather than opening more of them, a rarity that cannot
+ * be a constant -- for those the reader has nowhere else to find out, and a
+ * hover is not something a panel says it has.
+ */
+.knob-says {
+	color: var(--dim);
+	font-size: 10.5px;
+	line-height: 1.45;
+	margin: 3px 0 0;
+}
+
+.knob.off .knob-says {
+	opacity: 0.45;
+}
+
+/* The note that closes the cave bench's own panel. */
+.cave-note {
+	color: var(--dim);
+	font-size: 11px;
+	line-height: 1.45;
+	margin: 14px 0 4px;
+	padding-top: 10px;
+	border-top: 1px solid var(--edge);
+}
+
+/* **The reading, in the live colour.** The lab this bench is a bench of puts
+   every value in it, and a column of blue numbers down the panel is what says
+   at a glance which of them a hand has moved. */
+body.cave .knob label b {
+	color: var(--live);
+	font-weight: 600;
 }

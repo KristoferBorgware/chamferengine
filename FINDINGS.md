@@ -10,6 +10,101 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-100 — The cave lab's rarity means something else on a planet, and the lab still ships the patch's own figure
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, translating the lab's ceiling trial onto the sphere
+**Where:** `demos/cave-lab.html`, the `mouthRare` row and `sheetCeilingAt`
+
+**What happens.** **Only where the field clears** is a rarity, and a rarity is
+a share of a field's own range -- which a patch a hundred metres across never
+sees. The lab says so in its own comment: at a `60 m` feature over `95 m` of
+ground the median reading is `0.461`, so `0.7` there is a little over the
+middle of what that patch holds rather than the top of what the field can
+reach. Over the whole sphere the same number is the far tail. Measured at the
+lab's own `6 m` ceiling and `10 m` dip, the share of a planet whose ceiling
+reaches within half a block of the surface runs `1.153%` at `0.2`, `0.346%` at
+`0.4`, `0.170%` at `0.5` and **`0.020%` at `0.7`** -- against the `0.19%` of
+ground the lab's own trial opened.
+
+**Why it matters.** The lab is where the ceiling rule was chosen and its trial
+table -- ceiling dips of `5`, `10` and `15 m` giving `0`, `12` and `346`
+mouths -- is the measurement anyone tuning this reaches for. Those counts are a
+property of that patch and not of the rule: the engine ships `0.5`, which is
+the figure that reproduces the lab's mouth rate on a planet, and a reader
+comparing the two pages finds them a factor of eight apart with nothing saying
+why.
+
+**What would fix it.** The lab's row moves to `0.5` and its note names the
+share of a planet each setting opens rather than the share of one patch. The
+rule itself is unchanged and no world moves -- what changes is which number the
+page is a demonstration of.
+
+### F-098 — The landscape bench aims its camera at sea level, not at the ground it drew
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, building the cave bench against the same renderer
+**Where:** `packages/client/src/landscape.ts`, the `render` function
+
+**What happens.** A column patch is laid out in metres from the sea-level
+sphere at its own middle, so a patch standing on ground `200 m` above the water
+has all of its geometry `200 m` up the `y` axis. The camera looks at
+`[0, 0, 0]` regardless, which is the water rather than the ground -- so the
+patch sits above the middle of the window by however high its ground stands,
+and the near shadow cascade, which is a box round what the camera is looking
+at, is fitted to empty space under it.
+
+**Why it matters.** On the landscape bench it reads as a patch pushed toward
+the top of the window rather than as a fault, because the patch is a kilometre
+across and two hundred metres is a fifth of that. It is fatal at a smaller
+span: the cave bench draws a patch `142 m` across, and at the same offset the
+whole block is off screen -- an empty window on a page whose subject is inside
+it. The cave bench aims at the middle of the box the mesh reports instead
+(`ColumnMesh.bounds`), which is the fix and costs nothing.
+
+**Why it is not fixed in the same turn.** Moving the landscape bench's camera
+moves every frame anybody has taken of it, and the two shadow cascades are
+fitted from the same numbers -- so it wants a frame taken before and after
+rather than a line changed on the way past.
+
+### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, reading a cave's cross-section on the cave bench
+**Where:** `packages/engine/src/render/patch/PATCH_SHADER.ts`, the ground
+picture; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, the
+material rule
+
+**What happens.** The patch shader picks a block colour from the vertex's
+height above the sea and nothing else: sand under the water, grass to the rock
+line, stone to the snow line, snow over it. The world's own rule reads **two**
+numbers -- that elevation *and* how far under its own surface the block sits --
+so the top four blocks of a column are soil and everything below them is stone.
+Drawn by elevation alone, a patch whose ground stands at `150 m` is grass from
+the surface to the bottom of the crust.
+
+**Why it matters.** It is invisible on the landscape bench, whose subject is a
+surface and whose cut face is a rim nobody reads. It is the whole picture on
+the cave bench: a cave is looked at through a cross-section, and there the
+ceiling, the floor, the wall and the meadow forty blocks above are one flat
+green. What makes a passage legible today is the corner shading and the face
+normals alone, which is a lot to ask of them.
+
+**What would fix it.** The vertex already carries its own metres and the mesh
+knows the column's surface, so the depth below it is a subtraction -- one more
+channel on the vertex, or the difference between two numbers already there, and
+the shader's four bands become the registry's own five. `PATCH_STRIDE` is 13 and
+would go to 14.
+
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
 **Kind:** doc
@@ -266,13 +361,21 @@ against measurements taken of something else, and the face and column counts
 that F-025 and doc 14 rest on — `1,074` cave mouths, `13–32%` of columns with
 more than one span — are counts of the density field's caves, not of these.
 
-**What would fix it.** Decide which form ships, then make one of the two match
-the other. If the band stays, `volume.js` gains a section measuring it — face
-cost, multi-span share, mouth count — and the gradient sentence comes off
-`caveDensity`'s comment. If the density field is wanted instead, the band goes
-and the function becomes the expression doc 08 already draws. Either way it is
-one function and one verification section; what it must not stay is two forms
-under one name.
+**What has moved.** The band is the form that ships, and it is now measured:
+the cave bench (`packages/client/caves.html`) walks a patch of the real engine
+and reports face cost, multi-span share, mouth count, passage width and how
+many separate systems the void breaks into. The gradient sentence is off
+`caveDensity`'s comment, which now says what the band does and names the bias
+term it has not got.
+
+**What is left.** `verification/volume.js` section 3 still measures the
+**density** form, so every cave number quoted in `docs/REFERENCE.md` and doc 14
+-- `1,074` cave mouths, `13–32%` of columns with more than one span, the `11x`
+face bill -- is a count of caves the engine does not carve. Those are the
+figures F-025 rests on. What it wants is a section of that script measuring the
+band, at the numbers the bench now reports, and the doc 14 table rewritten from
+it. It is a verification script and a document rather than a function, which is
+why it did not go with the rest.
 
 ---
 
