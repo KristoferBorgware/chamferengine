@@ -731,9 +731,34 @@ Violating any of these breaks the design. They are not tunable.
   curtain hangs downward and a cave mouth is a horizontal hole. Depth is not the
   axis. The finer chunk must **own the seam**: emit a face wherever its solidity
   differs from the coarse neighbour's, both directions, costing 2.99 faces and
-  one height-field evaluation per rim column. Not built — F-025. What covers the
+  one height-field evaluation per rim column. What covers the
   frames while a neighbour changes level is the **residency loop**, which keeps a
   retiring chunk drawing until its replacements are uploaded, not geometry.
+- **A FACE ON YOUR OWN ROCK NEEDS NO PERMISSION; A FACE ON THEIRS IS A GUESS**
+  (`meshApronCell`'s seam walk, `SEAM_PUSH`, doc 14, F-025 closed, F-116 open).
+  The curtain closes every disagreement above its own foot whatever the two
+  columns hold; below it nothing was drawn at all, and below it is where a
+  hollow column disagrees. **Seam ownership is two rules, not one.** A face on
+  **this chunk's own rock** at the ring's outer edge is safe with no knowledge
+  of the neighbour's level: where the chunk over there has rock the face is
+  inside it and nothing can see it, where it does not the face is what was
+  missing. A face on **their rock facing this chunk's void** is the cave mouth
+  and cannot be guessed — gating it on this chunk's own reading of the coarse
+  ground was measured and **refused**: at the joins where the neighbour is at
+  this level that gate fires **63,690** times and **25,556** of those walls
+  stand in the neighbour's open air, a wall across an open passage two joins in
+  five. Gated on the cell just past the ring, read at this chunk's own level,
+  every one is a quad a same-level neighbour draws itself — a duplicate rather
+  than a guess — and `SEAM_PUSH`, a centimetre outward, puts this copy behind
+  theirs. Measured on the real engine with caves and cliffs on
+  (`tools/probe-seam-cave.ts`): **814 of 7,028** outer edges at a level join had
+  something open, **362** do. It costs **6.3%** more faces with no caves and
+  **22.1%** with them, and the opening frame is bit-identical either way. The
+  buried half is gated on the neighbourhood being hollow at all — a column with
+  nothing but rock under its surface has a coarse reading that is rock too, and
+  without that gate the same closure costs **22%** on a caveless world for
+  nothing. **What is left needs the neighbour's level**: the mouth whose
+  passage runs out of the chunk's reach, F-116.
 - LOD is **resampling, not decimation** — Goldberg levels do not nest, so a
   coarse mesh re-evaluates the terrain function rather than dropping cells. LOD
   seams come from terrain sampled at two spacings, not from geometry; an apron

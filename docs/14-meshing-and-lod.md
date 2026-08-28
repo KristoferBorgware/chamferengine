@@ -662,6 +662,43 @@ level. The apron needs no such knowledge and closes the most visible failure,
 the surface slit. One is correctness, the other is what holds while a level
 changes.
 
+### What the engine builds, and the one thing it refuses to guess
+
+The lab above models the coarse side as the height-field term alone, which is
+the rule this document declines for far chunks; the engine runs the **whole**
+generator at every level, so the chunk over there has caves of its own, sampled
+at twice the spacing. Measured against that, seam ownership splits into two
+rules that are **not the same rule**, and only one of them can be built without
+being told the neighbour's level.
+
+A face on **the fine chunk's own rock** is safe with no such knowledge at all.
+Where the chunk over there has rock the face is inside it and nothing can see
+it; where it does not, the face is exactly what was missing. So the apron's
+outer edge emits one for every solid layer it has, and the buried copies decide
+nothing.
+
+A face on **the neighbour's rock, facing the fine chunk's own void**, is the
+cave mouth, and it cannot be guessed. Deciding it on the fine chunk's own
+reading of the coarse ground over there was measured and refused: at the joins
+where the neighbour is at the fine chunk's own level, that gate fires **63,690**
+times and **25,556** of those walls stand in the neighbour's open air — a wall
+across an open passage two joins in five. Decided instead on the cell just past
+the ring, read at the fine chunk's own level, every one of them is a quad a
+same-level neighbour draws itself: a duplicate rather than a guess, and a
+centimetre's push outward puts this copy behind theirs wherever theirs exists.
+
+> **[measured]** `tools/probe-seam-cave.ts`, over the level joins a real
+> selection makes at three altitudes with caves and cliffs on. **814 of 7,028**
+> outer edges had at least one boundary with nothing drawn across it; **362**
+> do. It costs **6.3%** more faces on a world with no caves and **22.1%** with
+> them, and the frame from the opening vantage is bit-identical either way —
+> 605,942 pixels, mean absolute move `0.00`.
+
+What is left is the mouth whose passage runs out of the chunk's reach: the cell
+past the ring is air as well, and only the coarse reading over there is rock.
+That one needs the neighbour's level, which is the change this section opened
+with and the engine still does not make.
+
 **What covers the frames during a level change is the residency loop, not
 geometry.** A chunk leaving the selection is not dropped when its replacement is
 still being built: it keeps drawing until every wanted chunk covering its

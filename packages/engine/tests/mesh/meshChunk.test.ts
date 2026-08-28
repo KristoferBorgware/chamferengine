@@ -1404,3 +1404,177 @@ describe("sky exposure", () => {
 		}
 	});
 });
+
+describe("a hollow column at the ring's outer edge", () => {
+	// The ring a chunk draws past its own rim ends somewhere, and what is over
+	// that last edge belongs to a chunk which may be drawn a level coarser and
+	// so draw nothing at this resolution at all. A wall belongs to its more
+	// opaque side, so where the rock is on the far side nobody emitted one:
+	// the boundary stood open and a look along a cave went into the planet and
+	// out the far side of it. The chunk closes it from this side now, and this
+	// is the invariant that says so -- stated on the two columns THIS chunk
+	// reads, which is what it can actually guarantee.
+	const hollow = () => {
+		const world = new WorldShape(1700, DEPTH, 150, LAYERS);
+		const caves = new TerrainGenerator(map.seed, world, map, {
+			caves: true,
+			caveVary: 10,
+			caveRare: 0.5,
+			caveDepth: 40,
+		});
+		const chunk = generateChunk(
+			caves,
+			ChunkAddress.fromKey(11, CHUNK_LEVEL),
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const built = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, caves),
+			world,
+			map.seed,
+			{ apron: true, surfaceGrid: world.blockSize },
+		);
+		return { world, caves, chunk, built };
+	};
+
+	it("walls every boundary its own two columns disagree about", () => {
+		const { world, caves, chunk, built } = hollow();
+		const sampler = new ChunkColumnSampler(chunk, caves);
+		const n = 1 << DEPTH;
+
+		// Triangles filed by the layers they span, so a segment at one layer
+		// is tested against the handful of faces that can reach it rather
+		// than the whole mesh.
+		const byLayer = new Map<number, number[]>();
+		const corner = (part: Geometry, index: number) =>
+			new Vec3(
+				part.vertices[index * 6]! + built.origin.x,
+				part.vertices[index * 6 + 1]! + built.origin.y,
+				part.vertices[index * 6 + 2]! + built.origin.z,
+			);
+		const tris: Vec3[][] = [];
+		for (const part of [built.opaque, built.translucent])
+			for (let t = 0; t + 2 < part.indices.length; t += 3) {
+				const face = [0, 1, 2].map((c) =>
+					corner(part, part.indices[t + c]!),
+				);
+				const radii = face.map((p) => p.length());
+				const from = world.layerOfRadius(Math.max(...radii)) - 1;
+				const to = world.layerOfRadius(Math.min(...radii)) + 1;
+				const index = tris.length;
+				tris.push(face);
+				for (let layer = from; layer <= to; layer++) {
+					const had = byLayer.get(layer);
+					if (had) had.push(index);
+					else byLayer.set(layer, [index]);
+				}
+			}
+
+		// Moller-Trumbore, over one layer's own faces.
+		const blocked = (o: Vec3, d: Vec3, layer: number, limit: number) => {
+			for (const index of byLayer.get(layer) ?? []) {
+				const [a, b, c] = tris[index]!;
+				const e1 = b!.sub(a!);
+				const e2 = c!.sub(a!);
+				const p = d.cross(e2);
+				const det = e1.dot(p);
+				if (Math.abs(det) < 1e-12) continue;
+				const inv = 1 / det;
+				const tv = o.sub(a!);
+				const u = tv.dot(p) * inv;
+				if (u < 0 || u > 1) continue;
+				const q = tv.cross(e1);
+				const v = d.dot(q) * inv;
+				if (v < 0 || u + v > 1) continue;
+				const hit = e2.dot(q) * inv;
+				if (hit > 0 && hit < limit) return true;
+			}
+			return false;
+		};
+
+		let disagreed = 0;
+		let open = 0;
+		let first = "";
+		for (const cell of apronOf(chunk, DEPTH)) {
+			const corners = cellCorners(cell.face, n, cell.i, cell.j);
+			const degree = corners.length;
+			const own = sampler.columnAt(cell.face, cell.i, cell.j);
+			for (let k = 0; k < degree; k++) {
+				const nb = neighbour(cell.face, n, cell.i, cell.j, k);
+				if (!nb) continue;
+				const canon = canonicalCell(nb.face, n, nb.i, nb.j);
+				if (drawsHere(chunk, DEPTH, canon)) continue;
+				const other = sampler.columnAt(canon.face, canon.i, canon.j);
+				const across = latticePosition(canon.face, n, canon.i, canon.j)
+					.sub(latticePosition(cell.face, n, cell.i, cell.j))
+					.normalize();
+				const middle = corners[(k + degree - 1) % degree]!.add(
+					corners[k]!,
+				).normalize();
+				for (let layer = 0; layer < LAYERS; layer++) {
+					const here = opacityOf(own.blocks[layer] ?? 0);
+					const there = opacityOf(other.blocks[layer] ?? 0);
+					if (there <= here) continue;
+					disagreed++;
+					const mid = middle.scale(
+						world.radiusOfLayer(layer) - world.blockSize / 2,
+					);
+					const from = mid.sub(across.scale(world.blockSize));
+					if (
+						!blocked(from, across, layer, 2 * world.blockSize) &&
+						!blocked(from, across, layer - 1, 2 * world.blockSize)
+					) {
+						open++;
+						if (!first)
+							first = `${cell.i},${cell.j} edge ${k} layer ${layer}`;
+					}
+				}
+			}
+		}
+		expect(disagreed).toBeGreaterThan(0);
+		expect(`${open} open, first at ${first || "none"}`).toBe(
+			"0 open, first at none",
+		);
+	});
+});
+
+/** The ring of cells one step past a chunk's own triangle. */
+function apronOf(chunk: Chunk, depth: number) {
+	const n = 1 << depth;
+	const out = new Map<number, { face: number; i: number; j: number }>();
+	for (let q = 0; q <= chunk.m; q++)
+		for (let r = 0; q + r <= chunk.m; r++) {
+			const [i, j] = joinPath(chunk.address.path, q, r, depth);
+			const cell = { face: chunk.address.face, i, j };
+			if (!drawsHere(chunk, depth, cell)) continue;
+			const degree = cellCorners(cell.face, n, i, j).length;
+			for (let k = 0; k < degree; k++) {
+				const nb = neighbour(cell.face, n, i, j, k);
+				if (!nb) continue;
+				const canon = canonicalCell(nb.face, n, nb.i, nb.j);
+				if (drawsHere(chunk, depth, canon)) continue;
+				out.set(
+					(canon.face * 262144 + canon.i) * 262144 + canon.j,
+					canon,
+				);
+			}
+		}
+	return out.values();
+}
+
+/** Whether a chunk owns a cell: the border rule and the canonical face. */
+function drawsHere(
+	chunk: Chunk,
+	depth: number,
+	cell: { face: number; i: number; j: number },
+): boolean {
+	const n = 1 << depth;
+	if (canonicalCell(cell.face, n, cell.i, cell.j).face !== cell.face)
+		return false;
+	if (cell.face !== chunk.address.face) return false;
+	const split = splitPath(cell.i, cell.j, depth, chunk.chunkLevel);
+	for (let level = 0; level < chunk.address.path.length; level++)
+		if (split.path[level] !== chunk.address.path[level]) return false;
+	return true;
+}

@@ -1258,47 +1258,6 @@ The product stays under `2^53` with room to spare: 20 faces times `2^36` is
 
 ---
 
-### F-025 — A cave mouth crossing a level join is still an open hole
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** large
-**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
-**Where:** `packages/engine/src/mesh/meshChunk.ts` and
-`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
-ownership, priced by `verification/seam.js`
-
-**What happens.** The skirts now reach the lowest surface a neighbouring
-level might put beside a rim column, which closes the join's surface slit at
-any relief. A skirt is still a wall hanging from the surface: a cave mouth
-that crosses the join sits deeper than any skirt hangs, and `seam.js`
-measured that 13 to 32% of columns have more than one span once caves are
-on. The full design — the finer chunk emits a face wherever its solidity
-differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
-is not built.
-
-**Why it matters.** Nobody today: caves are off by default and off under
-v0.1.2's pause, so no shipped world has a multi-span column. The first
-release that turns caves on gets sky-through-the-planet back, at exactly the
-joins v0.1.2 closed for the surface.
-
-**And it is worse than this entry was filed against, 2026-08-28.** The
-`13-32%` above is the density term doc 08 argues, which the engine does not
-run; measured on the band it does run (`volume.js` 3b, F-078), **81%** of
-columns hold more than one slab. So this is not a hole at the joins of the
-minority of columns that happen to have a cave in them -- it is a hole at very
-nearly every join, the moment caves go on.
-
-**What would fix it.** Seam-owned faces need to know the neighbour's level,
-which the mesher deliberately does not: a blind guess emits walls above a
-same-level neighbour's ground, standing into the air. The selection knows
-every chunk's level, so the road is to tell the mesher its neighbours'
-levels and re-mesh the rim when a neighbour changes level — a residency and
-worker-protocol change, not a mesher formula.
-
----
-
 ### F-027 — The container can present WebGPU after all, and nothing takes a frame
 
 **Kind:** gap
@@ -2511,8 +2470,43 @@ from the world again.
 
 ---
 
----
+### F-116 — The last twentieth of a level join needs the neighbour's own level
 
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** large
+**Found:** 2026-08-28, closing F-025 by measuring what a chunk can close alone
+**Where:** `packages/engine/src/mesh/meshChunk.ts`, the seam walk at the end of
+`meshApronCell`; measured by `tools/probe-seam-cave.ts`
+
+**What happens.** F-025's fix closes a level join from the fine side using the
+two columns that chunk already reads. Where the cell just past its ring holds
+rock, the wall that rock owes is drawn and the mouth is shut. Where that cell
+is **air as well** and only the coarse reading over there is rock, nothing is
+drawn: the passage runs out of the chunk's reach with the coarse chunk's solid
+ground on the other side of it, and the boundary plane stands open. Measured
+with caves and cliffs on over three altitudes, **362 of 7,028** outer edges at
+a level join still have at least one such boundary -- **5.2%**, against 11.6%
+before the fix -- and **382** of the 423 open boundaries are of exactly this
+shape: 379 of them have no rock in this chunk's own reading of the cell beyond.
+
+**Why it matters.** It is the same symptom F-025 named, at a fifth of the rate:
+stand in a cave that crosses a chunk boundary at a level join and a slit of sky
+shows through the planet. Nobody today, because caves ship off.
+
+**What would fix it, and why it was not done.** The coarse reading is
+available -- the chunk can evaluate what any level would draw -- and it is
+**not safe to act on**. A chunk is not told whether the neighbour is at its own
+level or a level coarser, and gating on the coarse reading fires at both:
+measured, at the joins where the neighbour is at this chunk's own level it
+emits **63,690** walls and **25,556** of them stand in the neighbour's open
+air, a wall across an open passage two joins in five. So this needs the thing
+F-025's own entry named and the fix avoided -- the selection telling the mesher
+its neighbours' levels, and the rim re-meshed when one changes -- which is a
+residency and worker-protocol change rather than a mesher formula.
+
+---
 
 ## Closed
 
@@ -5222,3 +5216,62 @@ itself is never scaled, so the stars, the moon and the sun disc stay dimmed
 by the air they are really seen through, and the planet's limb from outside
 shows no step where the two meet.
 
+### F-025 — A cave mouth crossing a level join is still an open hole
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-17, deepening v0.1.2's skirts to the seam floor
+**Closed:** 2026-08-28, fixed. The apron now closes its own outer edge, from
+the two columns it already reads and with no word from anybody about the
+neighbour's level. Measured on the real engine over the level joins a real
+selection makes, caves and cliffs on (`tools/probe-seam-cave.ts`): **814 of
+7,028** outer edges had at least one boundary with nothing drawn across it,
+and **362** do. Under the curtain's foot two rules, and they are not the same
+rule -- a face on **this chunk's own rock** is safe with no thought about
+levels at all, because where the chunk over there has rock the face is inside
+it and where it does not the face is what was missing; a face on **their rock**
+facing this chunk's void is the cave mouth and cannot be guessed. Gating that
+second one on this chunk's own reading of the coarse ground was measured and
+refused: at the joins where the neighbour is at this chunk's own level it fires
+**63,690** times and **25,556** of those walls stand in the neighbour's open
+air. Gated on the cell beyond's own fine column instead, every one of them is a
+quad a same-level neighbour draws itself, so it is a duplicate rather than a
+guess, and a centimetre's push puts this copy behind theirs. It costs **6.3%**
+more faces on a world with no caves and **22.1%** with them, and the frame from
+the opening vantage is **bit-identical** either way -- 605,942 pixels, mean
+absolute move `0.00`. What is left is F-116.
+**Where:** `packages/engine/src/mesh/meshChunk.ts` and
+`packages/engine/src/mesh/seamFloor.ts`; the design is doc 14's seam
+ownership, priced by `verification/seam.js`
+
+**What happens.** The skirts now reach the lowest surface a neighbouring
+level might put beside a rim column, which closes the join's surface slit at
+any relief. A skirt is still a wall hanging from the surface: a cave mouth
+that crosses the join sits deeper than any skirt hangs, and `seam.js`
+measured that 13 to 32% of columns have more than one span once caves are
+on. The full design — the finer chunk emits a face wherever its solidity
+differs from the coarse neighbour's, which `seam.js` measured at 0 holes —
+is not built.
+
+**Why it matters.** Nobody today: caves are off by default and off under
+v0.1.2's pause, so no shipped world has a multi-span column. The first
+release that turns caves on gets sky-through-the-planet back, at exactly the
+joins v0.1.2 closed for the surface.
+
+**And it is worse than this entry was filed against, 2026-08-28.** The
+`13-32%` above is the density term doc 08 argues, which the engine does not
+run; measured on the band it does run (`volume.js` 3b, F-078), **81%** of
+columns hold more than one slab. So this is not a hole at the joins of the
+minority of columns that happen to have a cave in them -- it is a hole at very
+nearly every join, the moment caves go on.
+
+**What would fix it.** Seam-owned faces need to know the neighbour's level,
+which the mesher deliberately does not: a blind guess emits walls above a
+same-level neighbour's ground, standing into the air. The selection knows
+every chunk's level, so the road is to tell the mesher its neighbours'
+levels and re-mesh the rim when a neighbour changes level — a residency and
+worker-protocol change, not a mesher formula.
+
+---

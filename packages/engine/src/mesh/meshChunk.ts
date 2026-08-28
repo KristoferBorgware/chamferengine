@@ -108,6 +108,22 @@ function skyAt(on: boolean, layer: number, around: readonly number[]): number {
 const APRON_DROP = 0.01;
 
 /**
+ * How far into the territory beyond a chunk's own ring a copied wall is
+ * pushed, in metres.
+ *
+ * Under the seam's curtain this chunk draws the walls the cell beyond its ring
+ * owes -- the rock facing a cave it has opened -- because the chunk over there
+ * may be a level coarser and draw nothing at this resolution at all. Where it
+ * is at this level it draws those very quads itself, from a ring this chunk
+ * cannot reach and so with corner shading this chunk cannot reproduce; two
+ * coplanar copies in two shadings sparkle along the boundary. A centimetre
+ * further out puts this copy behind theirs wherever theirs exists, and a
+ * centimetre inside the neighbouring column's rock is invisible wherever it
+ * does not.
+ */
+const SEAM_PUSH = 0.01;
+
+/**
  * How far a side face reaches past each of its own two corners, in metres.
  *
  * The vertical line where two walls meet holds vertices from both, and the two
@@ -1011,11 +1027,57 @@ function meshApronCell(
 	// low, so this starts a centimetre under the neighbour's cap instead of in
 	// it. Where it is not needed it hangs inside the neighbouring column's own
 	// rock, and the terrain shell is closed, so nothing can see it.
-	if (groundCap >= 0 && groundTop > 0 && opacityOf(at(own, groundCap)) === 2)
-		for (let k = 0; k < degree; k++) {
-			const beyond = ringCells[k];
-			const other = ring[k];
-			if (!beyond || !other || drawnHere(beyond)) continue;
+	//
+	// **Under the curtain's foot the boundary itself is closed, both ways.**
+	// The curtain is a solid wall and closes every disagreement above its own
+	// foot whatever the two columns hold; below it nothing was drawn at all,
+	// and below it is where a hollow column disagrees. Two cases, and they are
+	// not the same rule:
+	//
+	// A face on THIS chunk's own rock is safe to emit with no thought about
+	// levels at all -- where the chunk over there has rock the face is inside
+	// it and cannot be seen, and where it does not the face is exactly what
+	// was missing. So the outward run condition drops from *the cell beyond is
+	// more open* to *this cell is solid*, and the buried copies cost faces and
+	// decide nothing.
+	//
+	// A face on THEIR rock, facing into this chunk's own void, is the cave
+	// mouth -- and it is **not** safe to guess. Gating it on this chunk's own
+	// reading of the coarse ground over there was measured
+	// (`tools/probe-seam-cave.ts`): at the joins where the neighbour is at
+	// this chunk's own level, that gate fires 63,690 times and **25,556** of
+	// those walls stand in the neighbour's open air, a wall across an open
+	// passage two joins in five. Gated instead on the cell beyond's own fine
+	// column, every one of them is a quad the neighbour at this level draws
+	// itself, so it is a duplicate rather than a guess -- and {@link
+	// SEAM_PUSH} puts this copy behind theirs.
+	// Whether anything around this cell is hollow under its own ground at all.
+	// A column with nothing but rock below its surface has a coarse reading
+	// that is rock as well -- the two run one field at two spacings -- so the
+	// buried faces below cost a fifth of a chunk's whole face bill and close
+	// nothing. Measured over the level joins a real selection makes, gating
+	// them on this leaves 5.2% of outer edges holed against 4.8% ungated, and
+	// takes the bill from 22% more faces to 8%.
+	const hollowHere = groundCap >= 0 && own.last > groundCap;
+
+	for (let k = 0; k < degree; k++) {
+		const beyond = ringCells[k];
+		const other = ring[k];
+		if (!beyond || !other || drawnHere(beyond)) continue;
+		const hollow =
+			hollowHere ||
+			(other.groundRadius > 0 &&
+				other.last > shape.layerOfSurface(other.groundRadius));
+
+		// Above this radius the boundary is already closed. The curtain when
+		// there is one, and nothing at all when this cell has no ground --
+		// deep water, where the whole column is open to the sea.
+		let sealed = Infinity;
+		if (
+			groundCap >= 0 &&
+			groundTop > 0 &&
+			opacityOf(at(own, groundCap)) === 2
+		) {
 			const otherTop =
 				other.groundRadius > 0
 					? snappedSurface(
@@ -1027,29 +1089,175 @@ function meshApronCell(
 			const top =
 				otherTop > 0 ? Math.min(groundTop, otherTop) : groundTop;
 			const foot = seamFloor(beyond);
-			if (foot <= 0 || foot >= top - 1e-9) continue;
-			const block = at(own, groundCap);
-			paint(block, face, i, j);
-			debugTint(COLOR, tint, mix);
-			emitSide(
-				opaque,
-				corners,
-				degree,
-				k,
-				top - drop,
-				foot - drop,
-				origin,
-				ring,
-				groundCap,
-				groundCap,
-				true,
-				true,
-				light,
-				skyAt(exposed, groundCap, around),
-				skyAt(exposed, groundCap, around),
-			);
-			tally.faces++;
+			if (foot > 0 && foot < top - 1e-9) {
+				const block = at(own, groundCap);
+				paint(block, face, i, j);
+				debugTint(COLOR, tint, mix);
+				emitSide(
+					opaque,
+					corners,
+					degree,
+					k,
+					top - drop,
+					foot - drop,
+					origin,
+					ring,
+					groundCap,
+					groundCap,
+					true,
+					true,
+					light,
+					skyAt(exposed, groundCap, around),
+					skyAt(exposed, groundCap, around),
+				);
+				tally.faces++;
+				sealed = foot - drop;
+			}
 		}
+
+		// The corners pushed a centimetre into the territory over there, for
+		// the copies of the neighbour's own walls. Taken at one radius for the
+		// whole edge: the push is a centimetre against a planet, and which
+		// centimetre it is decides nothing.
+		let pushed: Vec3[] | null = null;
+		const pushedCorners = (): Vec3[] => {
+			if (pushed) return pushed;
+			let cx = 0;
+			let cy = 0;
+			let cz = 0;
+			for (const c of corners) {
+				cx += c.x;
+				cy += c.y;
+				cz += c.z;
+			}
+			const centre = new Vec3(cx, cy, cz).normalize();
+			const leftCorner = corners[(k + degree - 1) % degree]!;
+			const rightCorner = corners[k]!;
+			const across = leftCorner
+				.add(rightCorner)
+				.normalize()
+				.sub(centre)
+				.normalize()
+				.scale(SEAM_PUSH / shape.radiusOfLayer(from));
+			pushed = corners.slice();
+			pushed[(k + degree - 1) % degree] = leftCorner.add(across);
+			pushed[k] = rightCorner.add(across);
+			return pushed;
+		};
+
+		// The ring stood on its head, for a face whose solid side is the cell
+		// beyond: the cell across that wall is this one, and the two cells
+		// round its corners are the same two either way.
+		let mirror: (Column | null)[] | null = null;
+
+		let layer =
+			sealed === Infinity
+				? from
+				: Math.max(from, shape.layerOfRadius(sealed));
+		while (layer <= to) {
+			const block = at(own, layer);
+			const here = opacityOf(block);
+			const theirs = opacityOf(at(other, layer));
+			if (here > theirs || (here === 0 && theirs === 0)) {
+				// More opaque here: the run loop above already drew it.
+				layer++;
+				continue;
+			}
+			if (here === theirs) {
+				// **Only under this cell's own cap.** A face on solid rock is
+				// never wrong, but it is only ever needed where the chunk over
+				// there is hollow, and nothing is hollow above the ground. On
+				// a world with no caves at all the band stops at the ground
+				// cap and this fires for no layer of no column -- which is
+				// what keeps a flat shell meshing to caps and nothing else.
+				if (
+					here !== 2 ||
+					!hollow ||
+					groundCap < 0 ||
+					layer <= groundCap
+				) {
+					layer++;
+					continue;
+				}
+				let end = layer;
+				while (
+					end + 1 <= to &&
+					at(own, end + 1) === block &&
+					opacityOf(at(other, end + 1)) === here
+				)
+					end++;
+				const top = Math.min(capRadius(layer), sealed);
+				const bottom = shape.radiusOfLayer(end + 1);
+				if (top > bottom + 1e-9) {
+					paint(block, face, i, j);
+					debugTint(COLOR, tint, mix);
+					emitSide(
+						opaque,
+						corners,
+						degree,
+						k,
+						top,
+						bottom,
+						origin,
+						ring,
+						layer,
+						end,
+						opacityOf(at(own, layer - 1)) === 0,
+						opacityOf(at(own, end + 1)) === 0,
+						light,
+						skyAt(exposed, layer, around),
+						skyAt(exposed, end, around),
+					);
+					tally.faces++;
+					tally.merged += end - layer;
+				}
+				layer = end + 1;
+				continue;
+			}
+
+			// Their rock against this chunk's void: the wall they owe.
+			const theirBlock = at(other, layer);
+			let end = layer;
+			while (
+				end + 1 <= to &&
+				at(other, end + 1) === theirBlock &&
+				opacityOf(at(own, end + 1)) < theirs
+			)
+				end++;
+			const top = Math.min(shape.radiusOfLayer(layer), sealed);
+			const bottom = shape.radiusOfLayer(end + 1);
+			if (top > bottom + 1e-9) {
+				if (!mirror) mirror = ring.slice();
+				const was = mirror[k]!;
+				mirror[k] = own;
+				const named = canonicalCell(beyond.face, n, beyond.i, beyond.j);
+				paint(theirBlock, named.face, named.i, named.j);
+				debugTint(COLOR, tint, mix);
+				emitSide(
+					theirs === 1 ? translucent : opaque,
+					pushedCorners(),
+					degree,
+					k,
+					top,
+					bottom,
+					origin,
+					mirror,
+					layer,
+					end,
+					opacityOf(at(other, layer - 1)) === 0,
+					opacityOf(at(other, end + 1)) === 0,
+					light,
+					skyAt(exposed, layer, around),
+					skyAt(exposed, end, around),
+					true,
+				);
+				mirror[k] = was;
+				tally.faces++;
+				tally.merged += end - layer;
+			}
+			layer = end + 1;
+		}
+	}
 
 	tally.apron++;
 }
@@ -1114,9 +1322,15 @@ function emitSide(
 	light: readonly number[],
 	topSky: number,
 	bottomSky: number,
+	inward = false,
 ): void {
-	const leftCorner = corners[(k + degree - 1) % degree]!;
-	const rightCorner = corners[k]!;
+	// The same quad wound the other way round, for the face the cell ACROSS
+	// this edge owes. A wall belongs to its more opaque side, so this is only
+	// ever the seam's own copy of a neighbour's wall: the two corners are the
+	// two ends of one shared edge whichever cell names them, and swapping them
+	// swaps the winding, which is what decides the side it is visible from.
+	const leftCorner = corners[(k + (inward ? 0 : degree - 1)) % degree]!;
+	const rightCorner = corners[(k + (inward ? degree - 1 : 0)) % degree]!;
 
 	// The face runs past its own ends as well as past its corners, wherever no
 	// other face of the same wall continues there -- the junction with a cap is
@@ -1148,8 +1362,8 @@ function emitSide(
 	// Two occluders per vertex, as everywhere else: the cell beyond the wall at
 	// the layer above or below, and the cell round the corner at this layer.
 	const beyond = ring[k]!;
-	const leftSide = ring[(k + degree - 1) % degree];
-	const rightSide = ring[(k + 1) % degree];
+	const leftSide = ring[(k + (inward ? 1 : degree - 1)) % degree];
+	const rightSide = ring[(k + (inward ? degree - 1 : 1)) % degree];
 	const above = opacityOf(at(beyond, topLayer - 1)) === 2 ? 1 : 0;
 	const under = opacityOf(at(beyond, bottomLayer + 1)) === 2 ? 1 : 0;
 	const byLeft = leftSide && opacityOf(at(leftSide, topLayer)) === 2 ? 1 : 0;

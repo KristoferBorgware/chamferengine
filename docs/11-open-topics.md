@@ -467,7 +467,11 @@ measures 1,060 holes left over 385 rim columns with skirts alone. The fix is
 **seam ownership** — the finer chunk emits a face wherever its solidity differs
 from the coarse neighbour's, in both directions — which leaves **zero**, for 2.99
 faces per rim column. Keep the skirt too, as cover for the frames after a
-neighbour changes level.
+neighbour changes level. The engine builds the half of that rule which needs no
+word about the neighbour's level, and measured on the real thing it takes the
+outer edges with something open from **11.6% to 5.2%**; the other half is
+refused because guessing it walls an open passage two joins in five
+([doc 14](14-meshing-and-lod.md)).
 
 The reason it lands so cheaply is the horizon from
 [doc 13](13-gravity-and-orientation.md): a standing player sees about **21,000
