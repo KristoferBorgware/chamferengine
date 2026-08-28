@@ -918,6 +918,496 @@ body.bench .knobs-head {
 	image-rendering: pixelated;
 }
 
+/* ---------------------------------------------------------------------------
+ * The vegetation bench's second panel: the plants.
+ *
+ * **A plant and the ground it stands on are different questions**, so they get
+ * a side of the window each. The world is on the left with the picture and the
+ * readout; every kind of plant is a card here, on the right.
+ *
+ * The three colours below are the only ones this file adds: a plant is drawn in
+ * wood and leaf, and a card, a chip, a curve and a badge all read the layer's
+ * own two rather than one panel colour.
+ * ------------------------------------------------------------------------- */
+
+:root {
+	--wood: #c9975b;
+	--leaf: #8ce99a;
+	--plan: #ff9db1;
+}
+
+.plants {
+	position: fixed;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	width: min(340px, 92vw);
+	display: flex;
+	flex-direction: column;
+	background: rgba(18, 22, 29, 0.94);
+	backdrop-filter: blur(6px);
+	border-left: 1px solid var(--edge);
+	z-index: 20;
+}
+
+/* The head is fixed and only the cards scroll: reaching for a knob must not
+   carry the thing being judged off the top of the panel. */
+.plants-head {
+	flex: 0 0 auto;
+	padding: 10px 14px 8px;
+	border-bottom: 1px solid var(--edge);
+}
+
+.plants-head h1 {
+	font-size: 14px;
+	margin: 0;
+	letter-spacing: 0.01em;
+}
+
+.plants-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 10px 14px 24px;
+}
+
+.plants-top {
+	margin-bottom: 12px;
+}
+
+.plants .knob {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 2px 8px;
+	margin: 7px 0;
+}
+
+.plants .knob label {
+	display: block;
+	font-size: 12px;
+	color: var(--ink);
+}
+
+.plants .knob output {
+	font-variant-numeric: tabular-nums;
+	color: var(--live);
+	font-size: 11.5px;
+}
+
+.plants .knob-note {
+	grid-column: 1 / -1;
+	font-size: 10.5px;
+	color: var(--dim);
+	margin: 1px 0 0;
+	line-height: 1.4;
+}
+
+.plants .knob-note b {
+	color: var(--live);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.plants .knob input[type="range"],
+.plants .knob select {
+	grid-column: 1 / -1;
+	width: 100%;
+	accent-color: var(--live);
+}
+
+.plants .knob select {
+	background: #0b0e13;
+	color: var(--ink);
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	padding: 3px 5px;
+	font: inherit;
+}
+
+.plants .knob.check {
+	grid-template-columns: auto 1fr;
+}
+
+.plants .knob.check input {
+	grid-column: auto;
+	width: auto;
+	margin: 0;
+}
+
+.plants .knob.curved,
+.plants .knob.pictured {
+	grid-template-columns: 1fr;
+}
+
+.plants .knob.pictured {
+	margin: 9px 0 4px;
+}
+
+/* A picture sits where the thing it shows is tuned. */
+.plants .shot {
+	position: relative;
+	line-height: 0;
+}
+
+.plants .shot canvas {
+	width: 100%;
+	height: auto;
+	display: block;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	background: #0b0e13;
+	cursor: crosshair;
+	margin: 0;
+}
+
+.plants .shot b {
+	position: absolute;
+	left: 4px;
+	top: 4px;
+	font:
+		600 9.5px/1.4 system-ui,
+		sans-serif;
+	letter-spacing: 0.02em;
+	padding: 1px 4px;
+	border-radius: 2px;
+	color: #12161d;
+	background: var(--leaf);
+	pointer-events: none;
+}
+
+.plants .curve {
+	width: 100%;
+	height: auto;
+	display: block;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	touch-action: none;
+	cursor: crosshair;
+	margin: 0;
+}
+
+.plants .curve-help {
+	font-size: 10px;
+	color: var(--dim);
+	margin: 2px 0 0;
+	line-height: 1.35;
+}
+
+.plants .axis {
+	font-size: 9.5px;
+	line-height: 1.4;
+	color: var(--dim);
+	margin: 2px 0 0;
+	font-variant-numeric: tabular-nums;
+}
+
+/* A layer is a card, not another fold in a long list: it holds four sections of
+   its own, so it needs an edge a reader can see the whole of. */
+.layer {
+	border: 1px solid var(--edge);
+	border-radius: 5px;
+	margin: 0 0 10px;
+	background: #0e1219;
+}
+
+.layer > summary {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 9px;
+	cursor: pointer;
+	list-style: none;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	border-bottom: 1px solid transparent;
+}
+
+.layer[open] > summary {
+	border-bottom-color: var(--edge);
+}
+
+.layer > summary::-webkit-details-marker {
+	display: none;
+}
+
+.layer > summary::before {
+	content: "▸";
+	color: var(--dim);
+	font-size: 10px;
+}
+
+.layer[open] > summary::before {
+	content: "▾";
+}
+
+.layer > summary .grown {
+	margin-left: auto;
+	font-weight: 400;
+	font-size: 11px;
+	color: var(--dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.layer.off > summary {
+	color: var(--dim);
+}
+
+.layer.off > .body {
+	opacity: 0.4;
+}
+
+.layer > .body {
+	padding: 2px 9px 9px;
+}
+
+/* The swatch is the layer's own wood and leaf, which is what makes a card and
+   the tree it grew the same thing on screen. */
+.plants .chip {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	flex: none;
+}
+
+.layer .drop {
+	border: 0;
+	background: none;
+	color: var(--dim);
+	cursor: pointer;
+	font: inherit;
+	padding: 0 2px;
+	line-height: 1;
+}
+
+.layer .drop:hover {
+	color: var(--plan);
+}
+
+.plants .switch {
+	accent-color: var(--live);
+	margin: 0 5px 0 0;
+	vertical-align: -1px;
+	width: 14px;
+	height: 14px;
+}
+
+/* A section inside a layer, one step quieter than the card. */
+.plants .sub {
+	margin: 8px 0 0;
+	border-top: 1px solid var(--edge);
+}
+
+.plants .sub > summary {
+	padding: 6px 0 4px;
+	cursor: pointer;
+	list-style: none;
+	font-size: 11.5px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--dim);
+}
+
+.plants .sub > summary::-webkit-details-marker {
+	display: none;
+}
+
+.plants .sub > summary::before {
+	content: "▸ ";
+	font-size: 9px;
+}
+
+.plants .sub[open] > summary::before {
+	content: "▾ ";
+}
+
+.plants .sub.off > *:not(summary) {
+	opacity: 0.4;
+}
+
+.plants-add {
+	width: 100%;
+	border: 1px dashed var(--edge);
+	border-radius: 5px;
+	background: none;
+	color: var(--live);
+	font: inherit;
+	padding: 8px;
+	cursor: pointer;
+}
+
+.plants-add:hover {
+	border-color: var(--live);
+	background: rgba(111, 208, 255, 0.06);
+}
+
+/* Picking a species is picking a starting point, so it is a grid of named
+   things rather than a dropdown -- the list is what the choice is, and a shut
+   menu hides it. */
+.plants-pick {
+	position: fixed;
+	inset: 0;
+	z-index: 31;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(4, 6, 9, 0.88);
+	backdrop-filter: blur(3px);
+}
+
+.plants-pick[hidden] {
+	display: none;
+}
+
+.plants-pick > div {
+	background: var(--panel);
+	border: 1px solid var(--edge);
+	border-radius: 6px;
+	padding: 16px;
+	max-width: 460px;
+	width: calc(100vw - 32px);
+}
+
+.plants-pick h2 {
+	margin: 0 0 4px;
+	font-size: 14px;
+	letter-spacing: 0.03em;
+}
+
+.plants-pick p {
+	margin: 0 0 12px;
+	font-size: 11.5px;
+	color: var(--dim);
+	line-height: 1.4;
+}
+
+.plants-pick-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+	gap: 6px;
+}
+
+.plants-pick-list button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--edge);
+	border-radius: 4px;
+	background: #0e1219;
+	color: var(--ink);
+	font: inherit;
+	padding: 7px 8px;
+	cursor: pointer;
+	text-align: left;
+}
+
+.plants-pick-list button:hover {
+	border-color: var(--live);
+}
+
+.plants-pick-list .chip {
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+	flex: none;
+}
+
+/* The enlarged picture. A field at panel width says where its shapes are; at
+   this size it says what they look like. */
+/* Over both panels: an overlay half the window can be read through is an
+   overlay that has not opened. */
+.plants-big {
+	position: fixed;
+	inset: 0;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(4, 6, 9, 0.88);
+	backdrop-filter: blur(3px);
+	cursor: zoom-out;
+}
+
+.plants-big[hidden] {
+	display: none;
+}
+
+.plants-big figure {
+	margin: 0;
+	max-width: 94vw;
+	max-height: 94vh;
+}
+
+.plants-big canvas {
+	display: block;
+	max-width: 94vw;
+	max-height: 86vh;
+	border: 1px solid var(--edge);
+	border-radius: 4px;
+	image-rendering: pixelated;
+	background: #0b0e13;
+}
+
+.plants-big figcaption {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	margin-top: 8px;
+	font-size: 12px;
+	color: var(--dim);
+}
+
+.plants-big figcaption b {
+	color: var(--ink);
+	font-size: 13px;
+	letter-spacing: 0.02em;
+}
+
+/* What the ground grew, in the two colours a plant is drawn in. */
+.bench-recipe {
+	margin: 6px 0 6px;
+	padding: 5px 6px;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	background: #0b0e13;
+	color: var(--dim);
+	font:
+		10.5px/1.5 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		monospace;
+}
+
+.bench-recipe i {
+	font-style: normal;
+	font-weight: 600;
+}
+
+.bench-recipe .c {
+	color: var(--wood);
+}
+
+.bench-recipe .e {
+	color: var(--leaf);
+}
+
+.bench-recipe .p {
+	color: var(--plan);
+}
+
+/* On the vegetation bench the world panel is the only one on the left, and the
+   plants have the right: neither covers the view. */
+body.veg .bench-hint {
+	left: calc(min(320px, 92vw) + 1rem);
+}
+
+@media (max-width: 900px) {
+	.plants {
+		width: min(300px, 96vw);
+	}
+}
 /*
  * The cave bench.
  *

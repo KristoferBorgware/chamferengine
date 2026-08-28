@@ -10,6 +10,88 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-104 — The vegetation bench draws a plinth taller than the ground it is a bench for
+
+**Kind:** cleanup
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, framing the vegetation bench's opening view
+**Where:** `packages/engine/src/mesh/column/columnPatchMesh.ts`,
+`packages/engine/src/mesh/column/columnSpans.ts`
+
+**What happens.** A column is walked from its surface down by the carve layer's
+own reach, and the mesh draws the whole of it plus a lip. On the landscape
+bench that is a fraction of a 1,100 m patch. The vegetation bench's patch is
+**92 m** across because a plant is metres tall, and the same column runs about
+**120 m** down -- so a picture of a stand of trees is two thirds a cut face of
+bare rock, and the trees are a green strip along the top of it.
+
+**Why it matters.** The plinth is the largest thing on screen on a page whose
+subject is the smallest. It is drawn, lit, shadowed and included in the box the
+shadow maps are fitted to, so it costs texels as well as attention.
+
+**What would fix it.** A floor on `ColumnLook`: how far under the lowest rock a
+column is drawn, defaulting to what it does now. The carve stays exactly as it
+is -- this is only how much of the column the mesh emits, and the walls between
+two columns are already cut off at whatever the lower one reaches.
+
+### F-103 — Every plant cell goes through `directionToCell`, which allocates
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, building the vegetation bench against the engine
+**Where:** `packages/engine/src/generation/plants/growStand.ts`,
+`packages/engine/src/addressing/lookup/`
+
+**What happens.** A rod steps four tenths of a block along its own length and
+asks which column each step landed in; a leaf cluster asks once. Both go
+through `directionToCell`, which takes a `Vec3` -- so every step allocates one
+for the direction, `barycentricOf` allocates four more for its cross products,
+and `hexRound` returns a fresh array. Seven allocations for an answer that is
+three integers, several hundred thousand times per stand.
+
+**Why it matters.** The stand is the whole of what the bench builds, and the
+lookup is the innermost thing in it: a shipped patch is `2,500 ms` in the
+worker, and the pipeline the rod walk runs at every step is the named lead in
+the profile. `faceOf` searching all twenty face centroids at every step is the
+other half of the same call, where the shadow march already rechecks the face
+it was last in -- three dot products against twenty.
+
+**Why it is not fixed here.** A second copy of position-to-cell taking bare
+numbers is exactly the drift this project keeps out of the codebase, so the
+answer is to widen the addressing subsystem's own surface rather than to write
+one beside it. That is a change with readers everywhere and wants measuring on
+its own.
+
+### F-102 — The vegetation lab's "Only at the tips" has never done anything
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-28, porting `demos/vegetation-lab.html` into the engine
+**Where:** `demos/vegetation-lab.html`, `growPlant`
+
+**What happens.** The grower puts a second, smaller leaf cluster half way along
+a low-level limb, in the share of the cluster the tip does not take. The test
+that guards it reads `spec.leaves`, and a layer's values hold `useLeaves` --
+there is no `leaves` key on a layer at all, so the test is `undefined` and the
+mid-limb cluster is never pushed. **Only at the tips** therefore moves nothing
+in the lab at any setting.
+
+**Why it matters.** A knob that does nothing is worse than a missing one: it is
+read, tried, seen to do nothing, and then distrusted along with the rows either
+side of it. The row also has a real effect, so the lab's canopies are thinner
+than its own numbers describe.
+
+**What would fix it.** Drop the stray `spec.leaves` from the condition. The
+engine's own `growPlant` does not carry it, so the bench and the lab now draw
+different canopies at the same numbers -- which is the second reason to close
+this rather than leave the two disagreeing.
+
 ### F-100 — The cave lab's rarity means something else on a planet, and the lab still ships the patch's own figure
 
 **Kind:** risk
@@ -2238,7 +2320,7 @@ from the world again.
 **Priority:** medium
 **Effort:** medium
 **Found:** 2026-08-28, reading a cave's cross-section on the cave bench
-**Closed:** 2026-08-28. `PATCH_STRIDE` is 14 and the extra channel is how far
+**Closed:** 2026-08-28. `PATCH_STRIDE` is 15 and the extra channel is how far
 under its own column's surface a vertex sits -- not under the topmost rock,
 which under an overhang is metres away. The shader runs the world's own rule
 off it: stone below the soil, sand through the whole soil band under water,

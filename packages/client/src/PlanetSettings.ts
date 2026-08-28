@@ -339,6 +339,36 @@ export interface PlanetKnobs {
 	patchDetail: number;
 
 	/**
+	 * How many blocks across the vegetation bench's patch is.
+	 *
+	 * **Blocks, not map cells.** A plant is metres tall and blocks wide, so
+	 * that patch is the block grid at the full subdivision depth with the map
+	 * read underneath it -- the landscape bench's patch is the map's own cells,
+	 * which is a different question and a different number.
+	 */
+	patchBlocks: number;
+
+	/**
+	 * How many levels coarser than the block grid the vegetation patch is drawn.
+	 *
+	 * **A level of detail is a subdivision depth and nothing else.** The same
+	 * ground drawn at a shallower one: levels do not nest, so a coarse mesh
+	 * re-evaluates the terrain rather than dropping cells out of a fine one.
+	 * The planting lattice stays the finest one at every setting, so the same
+	 * ground holds the same plants however coarsely it is drawn.
+	 */
+	patchLod: number;
+
+	/**
+	 * Whether a leaf stops a player the way wood does.
+	 *
+	 * **Collision is not a second system.** A plant is blocks, so what a player
+	 * walks into is the block test the world already runs, and whether a leaf
+	 * counts is a property of the block type the way water's is.
+	 */
+	leavesCollide: boolean;
+
+	/**
 	 * Whether to draw a ball where each of the bench's lights shines from.
 	 *
 	 * **They are directions, not places**, so the balls stand on a dome around
@@ -1125,6 +1155,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	patchLongitude: -20,
 	patchCells: 32,
 	patchDetail: 2,
+	patchBlocks: 96,
+	patchLod: 0,
+	leavesCollide: true,
 	patchOcclusion: 1,
 	patchSpeckle: 0.35,
 	keyShadow: true,
@@ -1628,6 +1661,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		rebuilds: false,
 		unit: "levels under the map",
 	},
+	patchBlocks: {
+		low: 24,
+		high: 256,
+		step: 8,
+		rebuilds: false,
+		unit: "blocks across",
+	},
+	patchLod: { low: 0, high: 5, step: 1, rebuilds: false, unit: "levels" },
+	leavesCollide: { ...TOGGLE, rebuilds: false },
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
@@ -2069,6 +2111,25 @@ export class PlanetSettings {
 	/** How wide one of the bench patch's columns is, in metres. */
 	get patchCellMetres(): number {
 		return (CELL_CONSTANT * this.radius) / 2 ** this.patchLevel;
+	}
+
+	/**
+	 * The lattice the vegetation bench's patch is drawn at.
+	 *
+	 * The block grid, dropped by the level of detail: a plant is metres tall
+	 * and blocks wide, so the ground it stands on is drawn at the grid the
+	 * blocks are on rather than at the map's.
+	 */
+	get plantLevel(): number {
+		return Math.max(
+			2,
+			this.depth - Math.max(0, Math.round(this.knobs.patchLod)),
+		);
+	}
+
+	/** How wide one column of the vegetation patch is, in metres. */
+	get plantCellMetres(): number {
+		return (CELL_CONSTANT * this.radius) / 2 ** this.plantLevel;
 	}
 
 	/**

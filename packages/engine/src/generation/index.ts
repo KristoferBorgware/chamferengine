@@ -4,6 +4,7 @@ export { valueNoise3 } from "./noise/valueNoise3.js";
 export type { NoiseSettings } from "./noise/NoiseSettings.js";
 export { fbm } from "./noise/fbm.js";
 export { octaveNoise } from "./noise/octaveNoise.js";
+export { octaveOffsets } from "./noise/octaveOffsets.js";
 export { seedFromString } from "./seedFromString.js";
 
 export type { CoarseMapOptions } from "./coarse/CoarseMapOptions.js";
@@ -115,3 +116,34 @@ export {
 	carveIsRock,
 	carveSeed,
 } from "./terrain/carveDensity.js";
+
+export type { PlantShape } from "./plants/PlantShape.js";
+export type { PlantSpecies } from "./plants/PLANT_SPECIES.js";
+export { PLANT_SPECIES, PLANT_SPECIES_NAMES } from "./plants/PLANT_SPECIES.js";
+export type { PlantLayer } from "./plants/PlantLayer.js";
+export { plantSalt } from "./plants/plantSalt.js";
+export { plantLayerNoise } from "./plants/plantLayerNoise.js";
+export { plantDensityAt } from "./plants/plantDensityAt.js";
+export type { PlantFrame } from "./plants/PlantFrame.js";
+export { plantFrame } from "./plants/PlantFrame.js";
+export type { PlantSkeleton } from "./plants/PlantSkeleton.js";
+export { emptySkeleton } from "./plants/PlantSkeleton.js";
+export { growPlant } from "./plants/growPlant.js";
+export type { PlantRoots } from "./plants/plantRoots.js";
+export { plantRoots } from "./plants/plantRoots.js";
+export type {
+	Stand,
+	StandGround,
+	StandOptions,
+	StandPatch,
+} from "./plants/growStand.js";
+export {
+	PLANT_EMPTY,
+	PLANT_LEAF,
+	PLANT_WOOD,
+	STAND_SUNK,
+	growStand,
+} from "./plants/growStand.js";
+export type { StandPieces } from "./plants/standPieces.js";
+export { standPieces } from "./plants/standPieces.js";
+export { standWalkable } from "./plants/standWalkable.js";

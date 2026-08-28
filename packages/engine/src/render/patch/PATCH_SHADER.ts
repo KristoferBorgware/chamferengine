@@ -4,6 +4,15 @@ import { SEA_CLARITY, SEA_COLORS } from "../sea/SEA_COLORS.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 import { patchFill } from "./PATCH_LIGHTS.js";
 
+/**
+ * How many colors the plant palette holds: a wood and a leaf per layer.
+ *
+ * A fixed array because a uniform is a fixed size, and eight kinds of plant on
+ * one patch is more than a reader tunes at once. A draw with fewer leaves the
+ * rest black, and nothing indexes them.
+ */
+export const PLANT_COLORS = 16;
+
 /** One linear colour as the constant a shader takes. */
 function wgsl(color: readonly [number, number, number]): string {
 	return `vec3f(${color[0]}, ${color[1]}, ${color[2]})`;
@@ -37,6 +46,9 @@ const STONE = ${wgsl(BLOCK_COLORS[BlockType.STONE]!)};
 const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
 const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
 const SEA_DEEP = ${wgsl(SEA_COLORS.deep)};
+
+/** How many wood and leaf colors the palette holds: two per layer. */
+const PLANT_COLORS = ${PLANT_COLORS};
 
 /** How many steps a picture of one layer's noise is cut into. */
 const PICTURE_BANDS = 9.0;
@@ -109,16 +121,28 @@ struct View {
 	 * x: how deep the soil runs, in metres. y: one block, in metres.
 	 * z: how far the depth fade runs, in metres. w: how dark it gets.
 	 *
-	 * **What a block is made of is a depth question as well as an elevation
-	 * one**, and these are the two lengths that question is asked against: how
-	 * far down the soil reaches, and how thick the one layer of it that is
-	 * grass or snow is. At zero every point is its own surface and the bands
-	 * come out as they did before either existed, which is what a patch drawn
-	 * from the map alone wants.
-	 *
-	 * Last in the struct, so adding them moved no offset above them.
+	 * **What ground is made of is a depth question as well as an elevation
+	 * one**, and the first two are the lengths that question is asked
+	 * against: how far down the soil reaches, and how thick the one layer of
+	 * it that is grass or snow is. At zero every point is its own surface and
+	 * the bands come out as they did before either existed, which is what a
+	 * patch drawn from the map alone wants.
 	 */
-	material : vec4f,
+	crust    : vec4f,
+	/**
+	 * The color of everything standing on the ground, wood then leaf per layer.
+	 *
+	 * **A material rather than a height.** The ground's color is what a
+	 * hillside is made of, which follows from how high it stands and is worked
+	 * out below; a plant's does not follow from anything on the face, so the
+	 * face carries an index and this says what that index is. A vertex color
+	 * would say the same thing at three times the width, on the buffer that is
+	 * rewritten whenever the ground moves.
+	 *
+	 * **Last, because it is the one array**, and anything added after it would
+	 * move with the plant count rather than sitting at an offset of its own.
+	 */
+	plants   : array<vec4f, ${PLANT_COLORS}>,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -256,17 +280,25 @@ struct VertexOut {
 	@location(6)       world  : vec3f,
 
 	/**
+	 * Which palette entry the face is drawn from, zero for the ground itself.
+	 *
+	 * Flat, because it names a material rather than measuring one: interpolated
+	 * across a triangle it would read as a fraction of a palette entry
+	 * somewhere in the middle of every face.
+	 */
+	@location(7) @interpolate(flat) material : u32,
+
+	/**
 	 * How far under its own column's surface this point sits, in metres.
 	 *
-	 * **What a block is made of is a depth question and an elevation
-	 * question, and this is the half a height field never had to ask.** A
-	 * patch of ground drawn from the map alone is all surface, so it leaves
-	 * this at zero and every band comes out the way it always did; a patch
-	 * drawn as columns of blocks has a whole crust under it, and painted by
-	 * elevation alone the floor of a cave is the colour of the meadow forty
-	 * blocks over it.
+	 * **What ground is made of is a depth question and an elevation question,
+	 * and this is the half a height field never had to ask.** A patch drawn
+	 * from the map alone is all surface, so it leaves this at zero and every
+	 * band comes out the way it always did; a patch drawn as columns of blocks
+	 * has a whole crust under it, and painted by elevation alone the floor of
+	 * a cave is the colour of the meadow forty blocks over it.
 	 */
-	@location(7)       depth  : f32,
+	@location(8)       depth  : f32,
 };
 
 @vertex
@@ -280,12 +312,14 @@ fn vertexMain(
 	@location(6) peaks     : f32,
 	@location(7) carve     : f32,
 	@location(8) shade     : f32,
-	@location(9) depth     : f32,
+	@location(9) material  : f32,
+	@location(10) depth    : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
 	out.normal = normal;
 	out.shade = shade;
+	out.material = u32(material + 0.5);
 	out.world = position;
 	out.height = position.y;
 	out.metres = metres;
@@ -439,6 +473,23 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	}
 	let picture = i32(view.mode.x);
 
+	// **What stands on the ground keeps its own color in every picture.** The
+	// pictures are of the ground -- how high it is, what one layer's field
+	// reads there -- and a plant is not that ground; drawn in a picture's own
+	// ramp a canopy reads as a hillside at whatever height its leaves happened
+	// to reach. The shade it carries is its layer's own grain and a leaf's
+	// darkening, both baked by the mesher.
+	//
+	// **Chosen rather than branched on**, and that is a requirement rather
+	// than a preference: which material a face is differs between two
+	// fragments of one quad, so returning early on it leaves the rest of this
+	// function in non-uniform control flow -- and the contour below reads how
+	// fast the height changes across a pixel, which is only defined where the
+	// whole quad is running. A shader that will not compile draws a black
+	// window rather than an error.
+	let plantTint = view.plants[max(in.material, 1u) - 1u].rgb * in.shade;
+	let isPlant = in.material > 0u;
+
 	// **The sea is a sheet over the ground and carries the ground's own
 	// height**, so how much water a look passes through is on the vertex: it
 	// decides which of the two colours the water is, and how much of the floor
@@ -472,7 +523,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			1.0,
 		);
 		return shade(
-			mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t),
+			select(mix(vec3f(0.03, 0.03, 0.04), vec3f(1.0), t), plantTint, isPlant),
 			in.normal,
 			in.world,
 			0.4,
@@ -485,7 +536,11 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 			1.0,
 		);
 		return shade(
-			mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
+			select(
+				mix(vec3f(0.02, 0.04, 0.10), vec3f(1.0, 0.98, 0.90), t),
+				plantTint,
+				isPlant,
+			),
 			in.normal,
 			in.world,
 			0.35,
@@ -501,7 +556,12 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		let grey = 0.06 + (step / (PICTURE_BANDS - 1.0)) * 0.92;
 		let into = t * PICTURE_BANDS - step;
 		let edge = select(1.0, 0.45, into < 0.06);
-		return shade(vec3f(grey * edge), in.normal, in.world, 0.3);
+		return shade(
+			select(vec3f(grey * edge), plantTint, isPlant),
+			in.normal,
+			in.world,
+			0.3,
+		);
 	}
 
 	// **The world's own rule, which reads two numbers and not one.** Soil
@@ -510,8 +570,8 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// line the soil is gone through its whole depth so the stone shows where
 	// the ground is cut into as well as where it is walked on.
 	//
-	let soil = view.material.x;
-	let surface = in.depth <= max(1e-6, view.material.y);
+	let soil = view.crust.x;
+	let surface = in.depth <= max(1e-6, view.crust.y);
 	var tint : vec3f;
 	if (in.depth > soil) {
 		tint = STONE;
@@ -536,13 +596,17 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// over one, so a chamber deep in the crust would be lit exactly like the
 	// meadow on top of it. Legibility furniture of the same kind as the cell
 	// rims, and off at zero to the bit.
-	let under = clamp(in.depth / max(1e-6, view.material.z), 0.0, 1.0);
-	let deep = 1.0 - under * view.material.w;
+	let under = clamp(in.depth / max(1e-6, view.crust.z), 0.0, 1.0);
+	let deep = 1.0 - under * view.crust.w;
 	// **Only the picture of the ground takes either.** The rest are pictures
 	// of a number, and a speckle or a fade there is noise drawn over the
 	// answer.
 	return shade(
-		contoured(tint * in.shade * deep, in.height),
+		select(
+			contoured(tint * in.shade * deep, in.height),
+			plantTint,
+			isPlant,
+		),
 		in.normal,
 		in.world,
 		SUN_SHARE,

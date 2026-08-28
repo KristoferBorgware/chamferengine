@@ -129,6 +129,17 @@ interface Knob {
 
 	/** `"off"` for a row that decides nothing on the cave bench. */
 	readonly cave?: "off";
+
+	/**
+	 * Where this row stands on the vegetation bench.
+	 *
+	 * `"off"` takes it away and `"only"` keeps it nowhere else. **The benches
+	 * cut their patch differently** -- the landscape bench in map cells,
+	 * because the map is the terrain, and this one in blocks, because a plant
+	 * is metres tall and blocks wide -- so the rows that say how wide it is sit
+	 * in one group and answer for one page each.
+	 */
+	readonly veg?: "off" | "only";
 }
 
 /** One titled run of rows. */
@@ -144,9 +155,10 @@ interface Group {
 	 * The bench and the planet share every knob that decides the map, and
 	 * neither has any use for the other's. There is no sky on the bench and no
 	 * preview patch on the planet, so a row for either on the wrong page is a
-	 * row that moves nothing. Groups say `world` unless told otherwise.
+	 * row that moves nothing. Groups say `world` unless told otherwise, and
+	 * `benches` is both benches and not the planet.
 	 */
-	readonly where?: "world" | "bench" | "both" | "cave";
+	readonly where?: "world" | "bench" | "both" | "cave" | "veg";
 
 	/**
 	 * Where this group stands on the cave bench, when that differs.
@@ -164,6 +176,15 @@ interface Group {
 	 * how it is lit, and the caves.
 	 */
 	readonly cave?: "off" | "left" | "right";
+
+	/**
+	 * Whether this group stands on the vegetation bench.
+	 *
+	 * It appears there exactly when it appears on the landscape bench unless
+	 * this says otherwise. That bench builds one panel down the left and keeps
+	 * its right for the plants, so there is no side to name.
+	 */
+	readonly veg?: "off";
 
 	/**
 	 * Which of the bench's two panels the group stands in.
@@ -377,6 +398,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchCells",
 				label: "Cells across",
+				veg: "off",
 				digits: 0,
 			},
 			{
@@ -387,6 +409,27 @@ const GROUPS: Group[] = [
 				// far under the map that is.
 				key: "patchDetail",
 				label: "Block detail",
+				veg: "off",
+				digits: 0,
+			},
+			{
+				// **Blocks, because a plant is measured in metres and built in
+				// blocks.** This patch is the block grid itself with the map
+				// read underneath it, so its width is a count of blocks rather
+				// than of map cells.
+				key: "patchBlocks",
+				label: "Patch",
+				veg: "only",
+				digits: 0,
+			},
+			{
+				// **A level of detail is a subdivision depth and nothing
+				// else.** The same ground drawn at a shallower one, with the
+				// planting lattice left at the finest -- so the hexagons drop
+				// fourfold a level and the plants do not move.
+				key: "patchLod",
+				label: "Level of detail",
+				veg: "only",
 				digits: 0,
 			},
 			{
@@ -422,6 +465,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchAlong",
 				cave: "off",
+				veg: "off",
 				label: "Contour along",
 				choices: [
 					{ value: "x", label: "East" },
@@ -1379,11 +1423,11 @@ export class ParameterPanel {
 	/**
 	 * Which bench this is, when it is one.
 	 *
-	 * The two benches share every knob that decides the world and differ in
+	 * The three benches share every knob that decides the world and differ in
 	 * what they are benches *of*, so the page is a property of the panel rather
 	 * than of any row.
 	 */
-	private readonly page: "world" | "landscape" | "cave";
+	private readonly page: "world" | "landscape" | "cave" | "vegetation";
 
 	/**
 	 * The bench's second panel, down the left of the window.
@@ -1396,6 +1440,14 @@ export class ParameterPanel {
 	 */
 	private leftBody: HTMLElement | null = null;
 
+	/**
+	 * Whether this panel is the only one, standing down the left.
+	 *
+	 * The vegetation bench keeps its right side for the plants, so every group
+	 * lands here and there is no second panel to send half of them to.
+	 */
+	private readonly oneSided: boolean;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
@@ -1406,11 +1458,13 @@ export class ParameterPanel {
 		) => void = () => {},
 		options: {
 			readonly bench?: boolean;
-			readonly page?: "world" | "landscape" | "cave";
+			readonly page?: "world" | "landscape" | "cave" | "vegetation";
+			readonly side?: "left" | "right";
 		} = {},
 	) {
 		this.bench = options.bench ?? false;
 		this.page = options.page ?? (this.bench ? "landscape" : "world");
+		this.oneSided = options.side === "left";
 		// The draft is dragged, and a curve is an array: taken by reference it
 		// would be written back into whoever handed these over.
 		this.draft = copyKnobs(settings.knobs);
@@ -1418,7 +1472,7 @@ export class ParameterPanel {
 		this.onDraft = onDraft;
 		this.onLiveRebuild = onLiveRebuild;
 		this.root = document.createElement("aside");
-		this.root.className = "knobs";
+		this.root.className = this.oneSided ? "knobs knobs-left" : "knobs";
 		this.build();
 		document.body.appendChild(this.root);
 	}
@@ -1513,7 +1567,12 @@ export class ParameterPanel {
 				group.cave !== "off" &&
 				(where === "cave" || where === "bench" || where === "both")
 			);
-		if (where === "cave") return false;
+		if (this.page === "vegetation")
+			return (
+				group.veg !== "off" &&
+				(where === "veg" || where === "bench" || where === "both")
+			);
+		if (where === "cave" || where === "veg") return false;
 		return where === "both" || (where === "bench") === this.bench;
 	}
 
@@ -1528,7 +1587,7 @@ export class ParameterPanel {
 		body.className = "knobs-body";
 		this.root.appendChild(body);
 
-		if (this.bench) {
+		if (this.bench && !this.oneSided) {
 			const aside = document.createElement("aside");
 			aside.className = "knobs knobs-left";
 			const left = document.createElement("div");
@@ -1571,6 +1630,12 @@ export class ParameterPanel {
 
 			for (const knob of group.knobs) {
 				if (this.page === "cave" && knob.cave === "off") continue;
+				if (
+					this.page === "vegetation"
+						? knob.veg === "off"
+						: knob.veg === "only"
+				)
+					continue;
 				const row = this.row(knob);
 				this.rows.push(row);
 				// **Under the row, not in a tooltip.** A knob whose label
@@ -1712,6 +1777,7 @@ export class ParameterPanel {
 		if (!this.bench)
 			for (const [name, page] of [
 				["Landscape bench", "landscape"],
+				["Vegetation bench", "vegetation"],
 				["Cave bench", "caves"],
 			] as const) {
 				const bench = document.createElement("a");
