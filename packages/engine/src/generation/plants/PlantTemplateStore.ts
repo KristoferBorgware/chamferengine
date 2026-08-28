@@ -1,16 +1,26 @@
 import type { PlantLayer } from "./PlantLayer.js";
 import type { PlantTemplate } from "./PlantTemplate.js";
 import { buildPlantTemplate } from "./buildPlantTemplate.js";
+import { plantReferencePatch } from "./plantReferencePatch.js";
 
 /**
  * How many plants of each species are grown properly and then re-used.
  *
  * **Twelve orientations come free** ({@link orientTemplate}), so this is
- * sixteen shapes and one hundred and ninety-two apparent ones. What it costs is
- * building them: about `13 ms` each, once per species per level of detail, in
- * each worker -- against `13-21 ms` for every plant of every chunk forever.
+ * thirty-two shapes and three hundred and eighty-four apparent ones. What it
+ * costs is building them, once per species per level of detail in each worker:
+ * measured on the shipped world, `284 ms` for the pines at full detail and
+ * `79 ms` at the level out from it, against `13-21 ms` for every plant of
+ * every chunk forever.
+ *
+ * **Doubling this is cheaper than it looks, and only in setup.** Nothing a
+ * chunk does depends on how many there are -- a plant picks one and stamps it
+ * -- so the whole price is the build and the `303 KB` a worker then holds. At
+ * sixteen the same world takes `392 ms`; the reference patch every variant of
+ * a species shares is what made the difference, because it used to be rebuilt
+ * for each one.
  */
-export const PLANT_VARIANTS = 16;
+export const PLANT_VARIANTS = 32;
 
 /**
  * Every species' worth of pre-grown plants, built on first use and kept.
@@ -79,13 +89,24 @@ export class PlantTemplateStore {
 	forLayer(layer: PlantLayer): readonly PlantTemplate[] {
 		const held = this.byLayer.get(layer.id);
 		if (held) return held;
+		// **One patch for the whole species.** How far it has to reach is the
+		// tallest this species grows plus a canopy, which bounds the sideways
+		// reach as well because no limb leaves the trunk and travels further
+		// than the trunk is long -- so every variant is grown on this ground.
+		const shape = layer.shape;
+		const far =
+			shape.height * (1 + shape.sizeSpread) + shape.leafRadius * 1.6;
+		const reference = plantReferencePatch(
+			this.level,
+			Math.max(2, Math.ceil(far / this.blockMetres) + 2),
+		);
 		const made: PlantTemplate[] = [];
 		for (let variant = 0; variant < PLANT_VARIANTS; variant++)
 			made.push(
 				buildPlantTemplate(
+					reference,
 					layer,
 					variant,
-					this.level,
 					this.blockMetres,
 					this.radius,
 					this.seed,

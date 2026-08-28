@@ -155,6 +155,8 @@ export {
 	PlantTemplateStore,
 } from "./plants/PlantTemplateStore.js";
 export { buildPlantTemplate } from "./plants/buildPlantTemplate.js";
+export type { PlantReference } from "./plants/plantReferencePatch.js";
+export { plantReferencePatch } from "./plants/plantReferencePatch.js";
 export { orientTemplate } from "./plants/orientTemplate.js";
 export type { StandPieces } from "./plants/standPieces.js";
 export { standPieces } from "./plants/standPieces.js";

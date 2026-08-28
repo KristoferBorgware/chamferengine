@@ -1,12 +1,9 @@
 import type { PlantLayer } from "./PlantLayer.js";
 import type { PlantRoots } from "./plantRoots.js";
 import type { PlantTemplate } from "./PlantTemplate.js";
-import type { StandPatch } from "./growStand.js";
+import type { PlantReference } from "./plantReferencePatch.js";
 import { BlockType } from "../terrain/BlockType.js";
 import { STAND_SUNK, growStand } from "./growStand.js";
-import { canonicalCell } from "../../addressing/neighbours/canonicalCell.js";
-import { latticePosition } from "../../addressing/lattice/latticePosition.js";
-import { neighbour } from "../../addressing/neighbours/neighbour.js";
 
 /** Seed offset between one variant of a species and the next. */
 const VARIANT_STRIDE = 6421;
@@ -20,97 +17,28 @@ const VARIANT_STRIDE = 6421;
  * in the world -- there is no second implementation of a tree to drift from the
  * first, and the bench previews what the world builds because both read this.
  *
- * **Flat ground is the right reference, not a simplification.** A plant is
- * placed by absolute height: the rod stamp converts a slot into each column's
- * own ground as it crosses, so a canopy hanging over a cliff lands at the same
- * radius either way. Giving every column of the reference patch the same ground
- * makes those conversions the identity and changes nothing else.
+ * **The patch it is grown on is handed in**, because every variant of a species
+ * shares one -- rebuilding it each time is `29%` of what a template costs.
  *
  * `variant` moves the seed, and the seed is what the plant's own size and its
  * whole skeleton come off -- so a set of variants is the same distribution of
  * sizes and shapes a stand used to draw one at a time.
  */
 export function buildPlantTemplate(
+	reference: PlantReference,
 	layer: PlantLayer,
 	variant: number,
-	level: number,
 	blockMetres: number,
 	radius: number,
 	seed: number,
 ): PlantTemplate {
-	const n = 2 ** level;
-	const shape = layer.shape;
-	// How far the reference patch has to reach: the tallest this species grows
-	// plus a canopy, which bounds the sideways reach as well because no limb
-	// leaves the trunk and travels further than the trunk is long.
-	const far = shape.height * (1 + shape.sizeSpread) + shape.leafRadius * 1.6;
-	const hops = Math.max(2, Math.ceil(far / blockMetres) + 2);
+	const { patch } = reference;
+	const level = patch.level;
+	const count = patch.count;
+	const i0 = reference.i;
+	const j0 = reference.j;
+	const directions = patch.directions;
 
-	// **The face's own middle**, which is one lattice point away from every
-	// edge that a patch this size could reach, and where the gnomonic stretch
-	// across a face is at its smallest.
-	const i0 = Math.max(1, Math.floor(n / 3));
-	const j0 = Math.max(1, Math.floor(n / 3));
-
-	const keyOf = (f: number, i: number, j: number): number =>
-		(f * (n + 1) + i) * (n + 1) + j;
-	const seen = new Map<number, number>();
-	const face: number[] = [];
-	const iOf: number[] = [];
-	const jOf: number[] = [];
-	const add = (one: { face: number; i: number; j: number }): number => {
-		const cell = canonicalCell(one.face, n, one.i, one.j);
-		const key = keyOf(cell.face, cell.i, cell.j);
-		const held = seen.get(key);
-		if (held !== undefined) return held;
-		const at = face.length;
-		seen.set(key, at);
-		face.push(cell.face);
-		iOf.push(cell.i);
-		jOf.push(cell.j);
-		return at;
-	};
-	add({ face: 0, i: i0, j: j0 });
-	let frontier = [0];
-	for (let hop = 0; hop < hops && frontier.length > 0; hop++) {
-		const next: number[] = [];
-		for (const c of frontier)
-			for (let d = 0; d < 6; d++) {
-				const nb = neighbour(face[c]!, n, iOf[c]!, jOf[c]!, d);
-				if (!nb) continue;
-				const before = face.length;
-				const at = add(nb);
-				if (at >= before) next.push(at);
-			}
-		frontier = next;
-	}
-
-	const count = face.length;
-	const directions = new Float64Array(count * 3);
-	const ring = new Int32Array(count * 6).fill(-1);
-	for (let c = 0; c < count; c++) {
-		const p = latticePosition(face[c]!, n, iOf[c]!, jOf[c]!);
-		directions[c * 3] = p.x;
-		directions[c * 3 + 1] = p.y;
-		directions[c * 3 + 2] = p.z;
-		for (let d = 0; d < 6; d++) {
-			const nb = neighbour(face[c]!, n, iOf[c]!, jOf[c]!, d);
-			if (!nb) continue;
-			const one = canonicalCell(nb.face, n, nb.i, nb.j);
-			const to = seen.get(keyOf(one.face, one.i, one.j));
-			if (to !== undefined) ring[c * 6 + d] = to;
-		}
-	}
-
-	const patch: StandPatch = {
-		count,
-		level,
-		face: Int32Array.from(face),
-		i: Int32Array.from(iOf),
-		j: Int32Array.from(jOf),
-		directions,
-		ring,
-	};
 	const roots: PlantRoots = {
 		count: 1,
 		level,
@@ -148,7 +76,7 @@ export function buildPlantTemplate(
 			radius,
 			blockMetres,
 			rootLevel: level,
-			chunkCells: n,
+			chunkCells: 2 ** level,
 			owned: new Uint8Array(count).fill(1),
 			chunkReach: 0,
 			seaLevel: 0,
@@ -165,8 +93,8 @@ export function buildPlantTemplate(
 		// Every cell of the reference patch is on face 0, so a step is a plain
 		// subtraction; a patch that ever left the face would need the crossing
 		// rule and is what the middle of the face is chosen to avoid.
-		const stepI = iOf[c]! - i0;
-		const stepJ = jOf[c]! - j0;
+		const stepI = patch.i[c]! - i0;
+		const stepJ = patch.j[c]! - j0;
 		for (let s = 0; s < stand.layers; s++) {
 			const what = stand.blocks[c * stand.layers + s]!;
 			if (what === BlockType.AIR) continue;

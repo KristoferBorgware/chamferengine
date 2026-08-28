@@ -8,6 +8,7 @@ import {
 	TerrainGenerator,
 	buildCoarseMap,
 	buildPlantTemplate,
+	plantReferencePatch,
 	isPlantLeaf,
 	isPlantWood,
 	maxElevationFor,
@@ -71,15 +72,26 @@ beforeAll(() => {
 	);
 });
 
+/** The flat ground the two shape tests grow their reference plant on. */
+const reference = () => {
+	const far =
+		layer.shape.height * (1 + layer.shape.sizeSpread) +
+		layer.shape.leafRadius * 1.6;
+	return plantReferencePatch(
+		FINE_DEPTH,
+		Math.max(2, Math.ceil(far / fine.blockSize) + 2),
+	);
+};
+
 const store = (): PlantTemplateStore =>
 	new PlantTemplateStore(map.seed, DEPTH, shape.blockSize, RADIUS);
 
 describe("buildPlantTemplate", () => {
 	it("grows a plant made of that species' own two blocks", () => {
 		const one = buildPlantTemplate(
+			reference(),
 			layer,
 			0,
-			FINE_DEPTH,
 			fine.blockSize,
 			RADIUS,
 			map.seed,
@@ -108,9 +120,9 @@ describe("buildPlantTemplate", () => {
 	// the ground for exactly that.
 	it("reaches its own height above the ground it stands on", () => {
 		const one = buildPlantTemplate(
+			reference(),
 			layer,
 			0,
-			FINE_DEPTH,
 			fine.blockSize,
 			RADIUS,
 			map.seed,
