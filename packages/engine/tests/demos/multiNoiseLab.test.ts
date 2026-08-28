@@ -59,6 +59,15 @@ function block(page: string, begin: string, end: string): string {
 
 type FaceCell = { face: number; i: number; j: number };
 
+/**
+ * A direction, as three components.
+ *
+ * A tuple rather than an array, because `noUncheckedIndexedAccess` makes every
+ * index of an array `number | undefined` and a fixed length is what tells the
+ * compiler these three are there.
+ */
+type Xyz = readonly [number, number, number];
+
 /** The demo's own functions, lifted out of the page and made callable. */
 function demoKernel(): {
 	hash3: typeof hash3;
@@ -100,16 +109,12 @@ function demoKernel(): {
 		j: number,
 	) => [number, number, number][];
 	directionToCell: (x: number, y: number, z: number, n: number) => FaceCell;
-	NORTH_AXIS: [number, number, number];
-	MERIDIAN_X: [number, number, number];
-	MERIDIAN_Y: [number, number, number];
-	VERTICES: [number, number, number][];
-	directionOf: (latitude: number, longitude: number) => [number, number, number];
-	frameOf: (up: [number, number, number]) => {
-		east: [number, number, number];
-		up: [number, number, number];
-		north: [number, number, number];
-	};
+	NORTH_AXIS: Xyz;
+	MERIDIAN_X: Xyz;
+	MERIDIAN_Y: Xyz;
+	VERTICES: readonly Xyz[];
+	directionOf: (latitude: number, longitude: number) => Xyz;
+	frameOf: (up: Xyz) => { east: Xyz; up: Xyz; north: Xyz };
 } {
 	const page = readFileSync(HTML, "utf8");
 	// Both blocks together, because the page runs them together. They are
@@ -149,18 +154,37 @@ function settings(over: Partial<NoiseSettings> = {}): NoiseSettings {
 	};
 }
 
+/** Three components dotted, on tuples so every index is a number. */
+function dot3(a: Xyz, b: Xyz): number {
+	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+/** One icosahedron vertex, by number. */
+function vertex(n: number): Xyz {
+	const v = demo.VERTICES[n];
+	if (!v) throw new Error(`the table has no vertex ${n}`);
+	return v;
+}
+
 /** A latitude and a longitude in degrees, read back off a direction. */
-function placeOf(p: readonly number[]): { lat: number; lon: number } {
-	const dot = (a: readonly number[], b: readonly number[]) =>
-		a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+function placeOf(p: Xyz): { lat: number; lon: number } {
 	return {
 		lat:
-			(Math.asin(Math.max(-1, Math.min(1, dot(p, demo.NORTH_AXIS)))) * 180) /
+			(Math.asin(Math.max(-1, Math.min(1, dot3(p, demo.NORTH_AXIS)))) * 180) /
 			Math.PI,
 		lon:
-			(Math.atan2(dot(p, demo.MERIDIAN_Y), dot(p, demo.MERIDIAN_X)) * 180) /
+			(Math.atan2(dot3(p, demo.MERIDIAN_Y), dot3(p, demo.MERIDIAN_X)) * 180) /
 			Math.PI,
 	};
+}
+
+/** A unit vector from one direction toward another. */
+function toward(from: Xyz, to: Xyz): Xyz {
+	const dx = to[0] - from[0];
+	const dy = to[1] - from[1];
+	const dz = to[2] - from[2];
+	const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+	return [dx / len, dy / len, dz / len];
 }
 
 describe("the lab's latitude and longitude", () => {
@@ -169,12 +193,12 @@ describe("the lab's latitude and longitude", () => {
 		// give one distinct latitude signature, so the choice is made on the
 		// face table instead: this is the only pair whose polar caps are
 		// contiguous runs of face indices.
-		expect(placeOf(demo.VERTICES[0]).lat).toBeCloseTo(90, 9);
-		expect(placeOf(demo.VERTICES[3]).lat).toBeCloseTo(-90, 9);
+		expect(placeOf(vertex(0)).lat).toBeCloseTo(90, 9);
+		expect(placeOf(vertex(3)).lat).toBeCloseTo(-90, 9);
 	});
 
 	it("puts the prime meridian through vertex 11", () => {
-		const at = placeOf(demo.VERTICES[11]);
+		const at = placeOf(vertex(11));
 		expect(at.lon).toBeCloseTo(0, 9);
 		// The northern pentagon ring sits at atan(1/2).
 		expect(at.lat).toBeCloseTo((Math.atan(0.5) * 180) / Math.PI, 9);
@@ -194,25 +218,19 @@ describe("the lab's latitude and longitude", () => {
 		// a map drawn another are mirror images, and the patch then reads
 		// backwards against the picture of where it is.
 		const step = 1e-5;
-		for (const [lat, lon] of [
+		const places: readonly (readonly [number, number])[] = [
 			[0, 0],
 			[23, 57],
 			[-41, -122],
 			[67, 179],
-		]) {
+		];
+		for (const [lat, lon] of places) {
 			const p = demo.directionOf(lat, lon);
 			const frame = demo.frameOf(p);
-			const along = (q: readonly number[]) => {
-				const d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-				const len = Math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2);
-				return [d[0] / len, d[1] / len, d[2] / len];
-			};
-			const east = along(demo.directionOf(lat, lon + step));
-			const north = along(demo.directionOf(lat + step, lon));
-			const dot = (a: readonly number[], b: readonly number[]) =>
-				a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-			expect(dot(frame.east, east)).toBeCloseTo(1, 6);
-			expect(dot(frame.north, north)).toBeCloseTo(1, 6);
+			const east = toward(p, demo.directionOf(lat, lon + step));
+			const north = toward(p, demo.directionOf(lat + step, lon));
+			expect(dot3(frame.east, east)).toBeCloseTo(1, 6);
+			expect(dot3(frame.north, north)).toBeCloseTo(1, 6);
 		}
 	});
 });
