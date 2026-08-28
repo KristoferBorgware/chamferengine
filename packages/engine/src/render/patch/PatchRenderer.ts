@@ -44,6 +44,33 @@ export interface PatchLook {
 	readonly rockLine: number;
 	readonly snowLine: number;
 
+	/**
+	 * How deep the soil runs and how thick one block is, both in metres.
+	 *
+	 * **What a block is made of is a depth question as well as an elevation
+	 * one.** The world covers rock with a few blocks of soil, one of which is
+	 * grass or snow, and shows bare stone under that -- so a patch drawn as
+	 * columns and painted from the height above the sea alone comes out the
+	 * colour of the meadow on top of it all the way to the floor of the crust.
+	 * Both at zero is a patch with no crust under it, which paints exactly as
+	 * it did before either existed.
+	 */
+	readonly soilMetres: number;
+	readonly blockMetres: number;
+
+	/**
+	 * How far the depth fade runs, in metres, and how dark it gets.
+	 *
+	 * **A stand-in for the sky exposure this mesh does not bake.** The world
+	 * writes how much sky every face takes from the ground around it; a column
+	 * patch writes the corner's own occlusion alone, which says what stands
+	 * beside a face and nothing about what is over it -- so without this a
+	 * chamber forty blocks down is lit exactly like the meadow, and a picture
+	 * of a cave has no depth in it. `0` for the flat colour to the bit.
+	 */
+	readonly shadeDepth: number;
+	readonly shadeAmount: number;
+
 	/** What the field reached in this patch, which Raw is drawn against. */
 	readonly rawLow: number;
 	readonly rawHigh: number;
@@ -163,7 +190,10 @@ export interface PatchUpload {
  * A matrix, the light, the mode, the numbers the pictures read, the two
  * matrices the shadows are read from, and how the light is shared out.
  */
-const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 * 4 + 16 + 16 + 16 + 16 * 4;
+const VIEW_BYTES = 64 + 16 + 16 + 16 + 16 + 64 * 4 + 16 + 16 + 16 + 16 * 4 + 16;
+
+/** Where the two crust lengths and the depth fade sit, in floats. */
+const CRUST_AT = 124;
 
 /**
  * How many maps a light is cut into.
@@ -292,6 +322,7 @@ export class PatchRenderer {
 					{ shaderLocation: 7, offset: 44, format: "float32" },
 					{ shaderLocation: 8, offset: 48, format: "float32" },
 					{ shaderLocation: 9, offset: 52, format: "float32" },
+					{ shaderLocation: 10, offset: 56, format: "float32" },
 				],
 			},
 		];
@@ -568,6 +599,15 @@ export class PatchRenderer {
 			20,
 		);
 		this.data.set([look.low, look.high, look.light, 0], 28);
+		this.data.set(
+			[
+				look.soilMetres,
+				look.blockMetres,
+				look.shadeDepth,
+				look.shadeAmount,
+			],
+			CRUST_AT,
+		);
 		this.data.set(
 			[look.rockLine, look.snowLine, look.rawLow, look.rawHigh],
 			24,

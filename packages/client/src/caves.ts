@@ -1,3 +1,4 @@
+import type { BenchSheet } from "./BenchMessage.js";
 import type {
 	CaveCells,
 	CaveFacts,
@@ -6,7 +7,7 @@ import type {
 } from "./CaveMessage.js";
 import type { PatchLook } from "chamfer/render";
 import type { PlanetKnobs } from "./PlanetSettings.js";
-import { GROUND_LINES } from "chamfer/generation";
+import { GROUND_LINES, TERRAIN_DEFAULTS } from "chamfer/generation";
 import {
 	PATCH_FILL_SHARE,
 	PATCH_KEY_SHARE,
@@ -18,7 +19,11 @@ import {
 import { Mat4, Vec3 } from "chamfer/math";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { PlanetSettings } from "./PlanetSettings.js";
+import { BAND_COLORS } from "./paintPatch.js";
+import { SEA_COLORS } from "chamfer/render";
 import { drawCavePlan } from "./drawCavePlan.js";
+import { outlinePatch } from "./outlinePatch.js";
+import { paintSheet } from "./paintSheet.js";
 
 /**
  * The cave bench: one patch of a planet, opened up, and the rule that hollowed
@@ -69,10 +74,16 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * What this page opens on, where that is not what the planet opens on.
+ * What this page opens on when nothing was handed to it.
  *
- * **A bench of the cave rule opens on a world with caves in it**, or its first
- * act is finding the switch. The other three follow from what a cave is:
+ * **The query string is the world, and there is nowhere else one is kept.** A
+ * link carries every knob that differs from the defaults, all three benches and
+ * the planet read the same set through the same `PlanetSettings`, and a world
+ * tuned on any of them arrives at the others already tuned. So a page that
+ * rewrote a knob on arrival would not be choosing its own view -- it would be
+ * changing the world in the reader's hand, and the change would follow them
+ * back out. **These apply to a bare visit only**, where no world was handed
+ * over at all:
  *
  * - **The patch is drawn at the block grid**, five levels under a 32 m map,
  *   because a passage is measured in cells and a cell here has to be a block.
@@ -81,31 +92,33 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
  * - **A few map cells across, not thirty.** The lab this bench is a bench of
  *   measured a patch `95 m` on a side; four map cells at one metre a column is
  *   `128 m`, at the same column count the landscape bench opens with.
- * - **The cliffs layer starts off.** It is a second thing that takes blocks out
- *   of a column, and every number on the readout would be a number about two
- *   layers. Its rows are on the left and it goes back on in one click.
- *
  * - **A place where the ceiling comes down.** A mouth is where the ground
  *   allows one *and* the sheet happens to be there, and at the shipped rarity
  *   the first of those is `0.170%` of the planet -- so most places have no way
- *   into their own caves and a bench that opened on one would look broken. This
- *   is a place on the default seed where it does.
+ *   into their own caves and a bench that opened on one would look broken.
  *
- * A link that names any of them wins, and one written from here carries all
- * six -- so a world handed over is the world that was looked at.
+ * **The cliffs layer is left wherever it was found.** It takes blocks out of a
+ * column too, and some overlap between the two is the point rather than a
+ * confusion: they cut one planet, and its density gains a full `1` over its own
+ * reach so it has stopped altogether well below where it works. What each of
+ * them took is counted apart, so no number on the readout is about two layers.
  */
 const OPENS_ON: Partial<Record<keyof PlanetKnobs, string>> = {
 	caves: "true",
 	patchCells: "4",
 	patchDetail: "5",
-	carveLayer: "false",
 	patchLatitude: "47",
 	patchLongitude: "-41",
 };
 
 const params = new URLSearchParams(location.search);
+// **The one knob a handed-over world does not get to leave off.** This page is
+// a bench of the cave rule, and a page whose subject is switched off is a page
+// whose first act has to be finding the switch -- so the switch comes on, and
+// it is the first row of the first group when it is not wanted.
+const bare = [...params.keys()].length === 0;
 for (const [key, value] of Object.entries(OPENS_ON))
-	if (!params.has(key)) params.set(key, value);
+	if (bare || key === "caves") if (!params.has(key)) params.set(key, value);
 let settings = PlanetSettings.fromParams(params);
 
 /** Which number the shader's picture branch takes. */
@@ -170,13 +183,82 @@ head.appendChild(facts);
 
 panel.mount(head, "right");
 
-// **What the world came out as, on the other side of the window.** The rows
-// that decide the caves are on the right under the plan they draw; what the
-// world itself came to is on the left, so reading an answer never means
-// scrolling past a question.
+// ---------------------------------------------------------------------------
+// The small map, on the left: where this patch is standing, and what else there
+// is to stand on.
+// ---------------------------------------------------------------------------
+
+// **Both benches are benches of one world, so the way to somewhere else is the
+// same on both.** A latitude and a longitude are a place and two sliders are
+// not: finding a range by dragging them is a search with the answer already on
+// screen, so the answer is what you click.
+const left = document.createElement("div");
+left.className = "bench-head";
+
+const mapCanvas = document.createElement("canvas");
+mapCanvas.className = "bench-map";
+left.appendChild(mapCanvas);
+const mapContext = mapCanvas.getContext("2d")!;
+
+/** One linear colour part of the way to another. */
+function mixed(
+	from: readonly number[],
+	to: readonly number[],
+	by: number,
+): number[] {
+	return [0, 1, 2].map((ch) => from[ch]! + (to[ch]! - from[ch]!) * by);
+}
+
+/** A linear colour as the hex a stylesheet takes, through the screen's curve. */
+function screenColor(color: readonly number[]): string {
+	const byte = (v: number): string =>
+		Math.round(255 * Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2))
+			.toString(16)
+			.padStart(2, "0");
+	return `#${byte(color[0]!)}${byte(color[1]!)}${byte(color[2]!)}`;
+}
+
+const legend = document.createElement("div");
+legend.className = "bench-legend";
+// **The swatches are the colours the pictures paint with**, taken from the same
+// list rather than typed as hex beside them.
+legend.innerHTML = [
+	[mixed(BAND_COLORS[0]!, SEA_COLORS.deep, 0.85), "sea over sand"],
+	[BAND_COLORS[1]!, "grass"],
+	[BAND_COLORS[2]!, "rock"],
+	[BAND_COLORS[3]!, "snow"],
+]
+	.map(
+		([color, name]) =>
+			`<span style="background:${screenColor(color as number[])}">${name}</span>`,
+	)
+	.join("");
+left.appendChild(legend);
+
+// **What the world came out as, under the map it came out on.** The rows that
+// decide the caves are on the right under the plan they draw; what the world
+// itself is stays on the left, so reading an answer never means scrolling past
+// a question.
 const world = document.createElement("div");
 world.className = "bench-facts";
-panel.section("General")?.appendChild(world);
+left.appendChild(world);
+
+panel.mount(left, "left");
+
+mapCanvas.addEventListener("click", (event) => {
+	if (settings.knobs.patchMap !== "planet") return;
+	const box = mapCanvas.getBoundingClientRect();
+	const across = (event.clientX - box.left) / box.width;
+	const down = (event.clientY - box.top) / box.height;
+	const range = settings.rangeFor("patchLatitude");
+	panel.set({
+		patchLatitude: Math.max(
+			range.low,
+			Math.min(range.high, Math.round((0.5 - down) * 180)),
+		),
+		patchLongitude: Math.round(across * 360 - 180),
+	});
+});
 
 const note = document.createElement("p");
 note.className = "cave-note";
@@ -220,6 +302,10 @@ let span = 1;
 let plan: CavePlanSheet | null = null;
 let cells: CaveCells | null = null;
 
+/** The last sheet of samples for each picture, which every repaint is drawn from. */
+let patchSheet: BenchSheet | null = null;
+let planetSheet: BenchSheet | null = null;
+
 /**
  * The middle of the block the mesh actually fills, in its own frame.
  *
@@ -239,6 +325,10 @@ const look = {
 	layer: "continent" as PatchLook["layer"],
 	rockLine: GROUND_LINES.rock,
 	snowLine: GROUND_LINES.snow,
+	soilMetres: 0,
+	blockMetres: 1,
+	shadeDepth: 1,
+	shadeAmount: 0,
 	rawLow: -1,
 	rawHigh: 1,
 	low: 0,
@@ -331,6 +421,8 @@ worker.onmessage = (event: MessageEvent<CaveReply>) => {
 	span = Math.max(1, reply.facts.span);
 	if (reply.plan) plan = reply.plan;
 	if (reply.cells) cells = reply.cells;
+	if (reply.patch) patchSheet = reply.patch;
+	if (reply.planet) planetSheet = reply.planet;
 	if (reply.geometry && renderer) {
 		renderer.upload({
 			vertices: reply.geometry.vertices,
@@ -372,7 +464,7 @@ worker.onmessage = (event: MessageEvent<CaveReply>) => {
 	// **A crust in metres is a count of blocks**, and the count is what a walk
 	// costs: one field reading a block, once a column.
 	panel.note(
-		"caveCrust",
+		"caveDepth",
 		`${Math.round(reply.facts.crust / settings.knobs.blockSize)} layers`,
 	);
 	show();
@@ -381,9 +473,41 @@ worker.onmessage = (event: MessageEvent<CaveReply>) => {
 
 /** Draw everything this thread owns, from what the last build handed over. */
 function show(): void {
+	paintMap();
 	paintPlan();
 	say();
 	render();
+}
+
+/**
+ * The small map: whichever sheet is asked for, in whichever picture.
+ *
+ * **The carve is always the patch, whatever the map is showing.** Its shapes
+ * are 120 m and the planet picture is 512 points around a 42,730 m
+ * circumference, so a shape is not two points across and neighbouring points
+ * are unrelated -- an honest sampling of the field and a picture of nothing.
+ */
+function paintMap(): void {
+	const shown =
+		settings.knobs.patchMap === "planet" ? planetSheet : patchSheet;
+	const sheet = settings.knobs.patchPicture === "carve" ? patchSheet : shown;
+	if (!sheet) return;
+	if (mapCanvas.width !== sheet.width || mapCanvas.height !== sheet.height) {
+		mapCanvas.width = sheet.width;
+		mapCanvas.height = sheet.height;
+	}
+	const image = mapContext.createImageData(sheet.width, sheet.height);
+	paintSheet(sheet, settings.knobs.patchPicture, image.data);
+	// Where the patch is standing, on the picture of the whole world -- so a
+	// click has something to aim at and a walk has somewhere to have gone.
+	if (sheet === planetSheet && facts0)
+		outlinePatch(image.data, sheet.width, sheet.height, {
+			latitude: settings.knobs.patchLatitude,
+			longitude: settings.knobs.patchLongitude,
+			span: facts0.span,
+			radius: settings.radius,
+		});
+	mapContext.putImageData(image, 0, 0);
 }
 
 /** The plan above the knobs, in whichever picture is asked for. */
@@ -538,6 +662,13 @@ function render(): void {
 	look.topLight = k.topLight;
 	look.shadowStrength = k.shadowStrength;
 	look.span = span;
+	// **What a block is made of is a depth question as well as an elevation
+	// one**, so the shader is told how deep the soil runs and how thick one
+	// block is -- the world's own two lengths, in metres.
+	look.soilMetres = TERRAIN_DEFAULTS.soilDepth * k.blockSize;
+	look.blockMetres = k.blockSize;
+	look.shadeDepth = facts0 ? facts0.crust : 1;
+	look.shadeAmount = k.patchDepthShade;
 	const from: [number, number, number] = [
 		middle[0] + eye.x,
 		middle[1] + eye.y,

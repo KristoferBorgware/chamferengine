@@ -183,6 +183,41 @@ engine's own `growPlant` does not carry it, so the bench and the lab now draw
 different canopies at the same numbers -- which is the second reason to close
 this rather than leave the two disagreeing.
 
+### F-101 — The cliffs layer walks four hundred and eighty layers of every column, and is most of what a chunk costs
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, measuring what a cave costs a chunk
+**Where:** `packages/engine/src/generation/terrain/carveDensity.ts`,
+`CARVE_REACH`; `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`fillColumn`; measured by `tools/trial-caves.ts`
+
+**What happens.** `fillColumn` evaluates a column down to the deepest layer any
+term can open and fills the crust below it with stone, so each term's reach is
+what it costs. The carve's is `CARVE_REACH` shape widths -- **four** of them,
+at the shipped 120 m shape, which is `480 m` and therefore **480 layers** at a
+1 m block. Measured over six chunks of the shipped world at chunk level 7, a
+chunk takes **157 ms** with the layer off and **699 ms** with it on: it is
+**×4.4** of everything else generation does, and about `78%` of a chunk's whole
+bill.
+
+**Why it matters.** What that depth buys is not visible. The density gains a
+full `1` over the reach, so a reading has to beat `depthBelow / 480` to open
+anything -- past a hundred metres or so it is refusing nearly everything it is
+asked, and the last three hundred layers are evaluated to be told no. The world
+is a metre a block and a player digs tens of metres, not hundreds. Meanwhile
+the number is what makes chunk builds slow enough that the residency loop runs
+a backlog of a hundred and fifty chunks on a normal walk.
+
+**What would fix it.** Measure what depth the layer actually opens anything at
+-- the share of blocks it takes, by depth -- and set the reach from that rather
+than from the shape width. It is one constant and one measurement, and
+`trial-caves.ts` already builds the world it would be measured on. What it must
+not become is a knob: the reach is what makes the depth term a bound rather
+than a suggestion, and a reader given it would be setting a cost.
+
 ### F-100 — The cave lab's rarity means something else on a planet, and the lab still ships the patch's own figure
 
 **Kind:** risk
@@ -245,38 +280,6 @@ it. The cave bench aims at the middle of the box the mesh reports instead
 moves every frame anybody has taken of it, and the two shadow cascades are
 fitted from the same numbers -- so it wants a frame taken before and after
 rather than a line changed on the way past.
-
-### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-28, reading a cave's cross-section on the cave bench
-**Where:** `packages/engine/src/render/patch/PATCH_SHADER.ts`, the ground
-picture; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, the
-material rule
-
-**What happens.** The patch shader picks a block colour from the vertex's
-height above the sea and nothing else: sand under the water, grass to the rock
-line, stone to the snow line, snow over it. The world's own rule reads **two**
-numbers -- that elevation *and* how far under its own surface the block sits --
-so the top four blocks of a column are soil and everything below them is stone.
-Drawn by elevation alone, a patch whose ground stands at `150 m` is grass from
-the surface to the bottom of the crust.
-
-**Why it matters.** It is invisible on the landscape bench, whose subject is a
-surface and whose cut face is a rim nobody reads. It is the whole picture on
-the cave bench: a cave is looked at through a cross-section, and there the
-ceiling, the floor, the wall and the meadow forty blocks above are one flat
-green. What makes a passage legible today is the corner shading and the face
-normals alone, which is a lot to ask of them.
-
-**What would fix it.** The vertex already carries its own metres and the mesh
-knows the column's surface, so the depth below it is a subtraction -- one more
-channel on the vertex, or the difference between two numbers already there, and
-the shader's four bands become the registry's own five. `PATCH_STRIDE` is 14 and
-would go to 15.
 
 ### F-094 — Doc 08 describes a terrain model the engine stopped running
 
@@ -2435,6 +2438,52 @@ from the world again.
 
 
 ## Closed
+
+### F-099 — A cut face is painted by elevation alone, so a cave wall is the colour of the meadow over it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, reading a cave's cross-section on the cave bench
+**Closed:** 2026-08-28. `PATCH_STRIDE` is 15 and the extra channel is how far
+under its own column's surface a vertex sits -- not under the topmost rock,
+which under an overhang is metres away. The shader runs the world's own rule
+off it: stone below the soil, sand through the whole soil band under water,
+snow on the top layer above the snow line, stone above the rock line, dirt
+under that layer and grass on it. A patch drawn from the map alone leaves the
+channel at zero, which is the surface, and paints exactly as it did. On the
+landscape bench the cut face and every carved hillside now show the soil band
+and the stone under it where they were one flat green. **A depth fade came
+with it** (`patchDepthShade`), standing in for the sky exposure this mesh does
+not bake: at full strength it takes the world's mean to `0.922` of what it was
+with a fifth percentile of `0.765` and a ninety-fifth of `1.000` -- it only
+ever darkens, and what it darkens is what is deep.
+**Where:** `packages/engine/src/render/patch/PATCH_SHADER.ts`, the ground
+picture; `packages/engine/src/generation/terrain/TerrainGenerator.ts`, the
+material rule
+
+**What happens.** The patch shader picks a block colour from the vertex's
+height above the sea and nothing else: sand under the water, grass to the rock
+line, stone to the snow line, snow over it. The world's own rule reads **two**
+numbers -- that elevation *and* how far under its own surface the block sits --
+so the top four blocks of a column are soil and everything below them is stone.
+Drawn by elevation alone, a patch whose ground stands at `150 m` is grass from
+the surface to the bottom of the crust.
+
+**Why it matters.** It is invisible on the landscape bench, whose subject is a
+surface and whose cut face is a rim nobody reads. It is the whole picture on
+the cave bench: a cave is looked at through a cross-section, and there the
+ceiling, the floor, the wall and the meadow forty blocks above are one flat
+green. What makes a passage legible today is the corner shading and the face
+normals alone, which is a lot to ask of them.
+
+**What would fix it.** The vertex already carries its own metres and the mesh
+knows the column's surface, so the depth below it is a subtraction -- one more
+channel on the vertex, or the difference between two numbers already there, and
+the shader's four bands become the registry's own five. `PATCH_STRIDE` is 13 and
+would go to 14.
+
 
 ### F-091 — The labs measure latitude from the Y axis, and the engine's pole is a pair of icosahedron vertices
 

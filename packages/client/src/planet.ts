@@ -355,9 +355,41 @@ let onPanelSet: (values: Partial<PlanetKnobs>) => void = () => {};
  * of them doing any work and all of them still holding memory.
  */
 const teardown: (() => void)[] = [];
-window.addEventListener("pagehide", () => {
+
+/**
+ * Whether this page has been given up, so the frame loop stops asking for one.
+ *
+ * **A torn-down world is still a world the browser will ask to draw.** Leaving
+ * the page runs every hand-back above -- the sea's buffers, the worker pools,
+ * the GPU context -- and the frame already queued lands afterwards, writing its
+ * uniforms into buffers that have been destroyed and submitting a command
+ * buffer that names them. The browser reports one warning per buffer per frame
+ * and then stops reporting at all, which is how a page walked away from spills
+ * hundreds of lines about buffers "used in submit while destroyed".
+ *
+ * Read at the top of the loop rather than at the bottom, so the frame in flight
+ * when the page hides is the last one drawn.
+ */
+let given = false;
+window.addEventListener("pagehide", (event) => {
+	// **A page frozen for the back button is coming back with everything it
+	// had.** `pagehide` fires for both, and giving the world up on the frozen
+	// one is what makes walking to a bench and pressing back land on a page
+	// whose every GPU buffer has been destroyed: it draws nothing, and the
+	// browser reports one warning per buffer per frame until it stops
+	// reporting at all. Only a page that is really going gives anything up,
+	// which is what the pool leak above is about -- a rebuild goes through
+	// `location.href` and is never persisted.
+	if (event.persisted) return;
+	given = true;
 	for (const give of teardown) give();
 	teardown.length = 0;
+});
+window.addEventListener("pageshow", (event) => {
+	// **And if one comes back anyway, it is built again rather than resumed.**
+	// A world that has been given up cannot be picked up: the belt to the
+	// braces above, because which pages a browser keeps is its own decision.
+	if (event.persisted && given) location.reload();
 });
 
 if (params.get("panel") === "1") {
@@ -2161,6 +2193,10 @@ async function main(): Promise<void> {
 	let reportedAt = 0;
 	const timer = new FrameTimer();
 	const draw = (now: number) => {
+		// **A page that has been given up draws nothing.** Every buffer this
+		// frame would write to has been destroyed, and the browser reports one
+		// warning per buffer for it.
+		if (given) return;
 		timer.begin(now);
 
 		// Meshes that finished on a worker go to the GPU here, a couple a frame,
@@ -2592,7 +2628,7 @@ async function main(): Promise<void> {
 			]);
 		}
 		timer.end(performance.now());
-		requestAnimationFrame(draw);
+		if (!given) requestAnimationFrame(draw);
 	};
 	requestAnimationFrame(draw);
 }

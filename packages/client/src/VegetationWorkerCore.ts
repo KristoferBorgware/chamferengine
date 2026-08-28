@@ -369,6 +369,10 @@ export class VegetationWorkerCore {
 		const count = layout.count;
 		const at = new Int32Array(count + 1);
 		const height = new Float64Array(count);
+		// **Where the map put the ground, which is not the top of the rock.**
+		// The colours read a block's depth under its own surface, and under an
+		// overhang the two are metres apart.
+		const surface = new Float64Array(count);
 		const raw = new Float32Array(count);
 		const continent = new Float32Array(count);
 		const erosion = new Float32Array(count);
@@ -419,6 +423,7 @@ export class VegetationWorkerCore {
 				for (const y of runs) all.push(y);
 			}
 			height[c] = rock;
+			surface[c] = base;
 			// **The top of the topmost rock, on the block grid the mesh cut
 			// it on.** A plant's foot and every slot above it are counted from
 			// this, so it is taken from the spans rather than worked out a
@@ -433,6 +438,7 @@ export class VegetationWorkerCore {
 				at,
 				spans: Float64Array.from(all),
 				height,
+				surface,
 				raw,
 				continent,
 				erosion,

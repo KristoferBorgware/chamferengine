@@ -165,10 +165,15 @@ interface Group {
 	 *
 	 * A group appears on the cave bench exactly when it appears on the
 	 * landscape bench, on the same side, unless this says otherwise: `"off"`
-	 * takes it away and a side moves it. **The four layer groups move left**,
-	 * because the cave bench's right panel is the caves and nothing else --
-	 * everything about the ground they stand in is what is being looked at
-	 * rather than what is being worked.
+	 * takes it away and a side moves it.
+	 *
+	 * **The rows that shape the ground are off it.** The two benches read and
+	 * write one set of parameters and a link carries every one of them, so a
+	 * terrain layer tuned on the landscape bench arrives here already tuned --
+	 * and a second copy of those rows is a second place to change them, on a
+	 * page whose subject is what is *under* the ground rather than the shape of
+	 * it. What stays is the world as it came out, where the patch is standing,
+	 * how it is lit, and the caves.
 	 */
 	readonly cave?: "off" | "left" | "right";
 
@@ -488,6 +493,18 @@ const GROUPS: Group[] = [
 				digits: 1,
 			},
 			{
+				// **The sky the mesher cannot see, drawn in as a fade.** The
+				// world bakes how much sky each face takes from the ground
+				// around it; a patch mesh bakes only the corner's own
+				// occlusion, which says what stands beside a face and nothing
+				// about what is over it -- so a chamber forty blocks down is
+				// lit exactly like the meadow.
+				key: "patchDepthShade",
+				label: "Depth shading",
+				digits: 2,
+				says: "How much darker the ground gets with depth under its own surface, over the crust the patch drew. It stands in for the sky exposure the world bakes and this mesh does not, which is the only thing that says how far down a passage runs. At zero the floor of a cave is lit the same as the meadow over it.",
+			},
+			{
 				// **The one thing that says where one hexagon ends.** A slope
 				// of one material at one height is a single sheet of colour
 				// however it is lit, and the lattice the world is built on is
@@ -592,7 +609,7 @@ const GROUPS: Group[] = [
 		title: "Continentalness",
 		where: "both",
 		veg: "off",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "cont",
@@ -605,7 +622,7 @@ const GROUPS: Group[] = [
 		title: "Erosion",
 		where: "both",
 		veg: "off",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "ero",
@@ -629,7 +646,7 @@ const GROUPS: Group[] = [
 		title: "Peaks & valleys",
 		where: "both",
 		veg: "off",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "pv",
@@ -639,7 +656,7 @@ const GROUPS: Group[] = [
 		title: "Cliffs & overhangs",
 		where: "both",
 		veg: "off",
-		cave: "left",
+		cave: "off",
 		folded: true,
 		tab: "terrain",
 		tint: "cliff",
@@ -671,6 +688,14 @@ const GROUPS: Group[] = [
 		cave: "right",
 		knobs: [
 			{
+				// **The other layer that takes blocks out of a column**, and
+				// the one row of the landscape bench's own work that belongs
+				// here: what it leaves standing is what a cave is cut into.
+				key: "carveLayer",
+				label: "Cliffs & overhangs",
+				says: "The layer that cuts cliffs, overhangs and arches into the ground the map placed. It and the caves cut one planet, so some overlap is the point rather than a confusion -- and its density gains a full 1 over its own reach, so it has stopped altogether well below where it works. What each of the two took is counted apart. Its own rows are on the landscape bench.",
+			},
+			{
 				key: "caves",
 				label: "On",
 				says: "Off, no world holds a single cave. The carve that cuts cliffs and overhangs is a different layer and keeps working either way.",
@@ -690,11 +715,11 @@ const GROUPS: Group[] = [
 				says: "How much of the field's range is open, either side of zero. It is a passage's width and not how many there are: widening it fattens every passage at once, and squeezed narrow enough to be a corridor the sheet stops being connected at all.",
 			},
 			{
-				key: "caveCrust",
-				label: "Crust walked",
+				key: "caveDepth",
+				label: "Caves reach",
 				digits: 0,
 				enabledWhen: (k) => k.caves,
-				says: "How much crust under the ground this patch is asked for. Not the world's crust: a passage may be at any depth, so the walk is one field reading a block, and what is under this is rock nobody is looking at.",
+				says: "How far under the surface caves go, and what makes them affordable at all. The field is read once a block, because a passage is free to be at any depth and nothing about the ground says where one is -- so without a floor every column is evaluated to the bottom of the crust, which on the shipped world is 1,232 blocks a column against about ten with caves off. Below this the crust is solid. The bench draws exactly it.",
 			},
 		],
 	},
@@ -788,6 +813,7 @@ const GROUPS: Group[] = [
 		title: "Ground",
 		where: "both",
 		veg: "off",
+		cave: "off",
 		side: "left",
 		folded: true,
 		tab: "terrain",
@@ -1587,6 +1613,14 @@ export class ParameterPanel {
 		return where === "both" || (where === "bench") === this.bench;
 	}
 
+	/** Which page this panel is on, as the file it is served from. */
+	private pageFile(): string {
+		if (this.page === "cave") return "caves";
+		if (this.page === "vegetation") return "vegetation";
+		if (this.page === "landscape") return "landscape";
+		return "planet";
+	}
+
 	private build(): void {
 		const head = document.createElement("button");
 		head.className = "knobs-head";
@@ -1782,23 +1816,37 @@ export class ParameterPanel {
 			void navigator.clipboard?.writeText(this.href());
 		};
 		bar.append(...(this.bench ? [] : [this.applyButton]), reset, copy);
-		// **The way to the bench, carrying this world with it.** Choosing
-		// terrain numbers is looking at ground, and the bench is a page where
-		// the ground is the whole window rather than a picture over one.
-		if (!this.bench)
-			for (const [name, page] of [
+		// **The way from any page to any other, carrying this world with it.**
+		//
+		// **The query string is the world**: nothing else stores one, so a link
+		// written the moment it is clicked is the whole of what a page hands
+		// over -- and every page reads the same set with the same
+		// `PlanetSettings`. A layer tuned on the landscape bench arrives at the
+		// cave bench already tuned, caves turned on here are on when the world
+		// is walked, and none of it is copied anywhere or kept in two places.
+		//
+		// A bench names the pages it is not, so the three of them are one step
+		// apart rather than three by way of the planet.
+		for (const [name, page] of (
+			[
+				["The planet", "planet"],
 				["Landscape bench", "landscape"],
 				["Vegetation bench", "vegetation"],
 				["Cave bench", "caves"],
-			] as const) {
-				const bench = document.createElement("a");
-				bench.textContent = name;
-				bench.href = `./${page}.html`;
-				bench.onclick = () => {
-					bench.href = `./${page}.html?${this.settings.toParams().toString()}`;
-				};
-				bar.appendChild(bench);
-			}
+			] as const
+		).filter(([, page]) => page !== this.pageFile())) {
+			const other = document.createElement("a");
+			other.textContent = name;
+			other.href = `./${page}.html`;
+			other.onclick = () => {
+				const params = this.settings.toParams();
+				// The planet opens with its panel shut unless it is asked for,
+				// and a reader arriving from a bench is mid-tune.
+				if (page === "planet") params.set("panel", "1");
+				other.href = `./${page}.html?${params.toString()}`;
+			};
+			bar.appendChild(other);
+		}
 		// **On the bench the two buttons belong with the seed.** Nothing there
 		// waits for a Rebuild, so the bar is not a footer to a page of pending
 		// changes; it is a world's name and the two things done with a world,

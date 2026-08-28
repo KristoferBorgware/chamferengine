@@ -23,29 +23,12 @@ import {
 	octaveNoise,
 	splineAt,
 } from "chamfer/generation";
-import { patchField, patchFrame } from "./patchField.js";
+import { PATCH_SAMPLES, patchField, patchFrame } from "./patchField.js";
+import { patchSheet } from "./patchSheet.js";
+import { planetSheet } from "./planetSheet.js";
 import { makeBlend, readBlend } from "chamfer/generation";
 import { positionOf } from "chamfer/coordinates";
 import { Vec3 } from "chamfer/math";
-
-/** How many pixels across the flat planet is drawn. */
-const PLANET_WIDE = 512;
-
-/**
- * How many points across the patch is sampled for its pictures.
- *
- * **A picture's resolution is its own, not the mesh's.** The patch is cut into
- * columns and how many of those there are is a knob about the *world* -- how
- * finely it is built -- while how finely it is *drawn flat* decides only
- * whether the narrow octaves of a folded field read as a grain or as ridges.
- * Tying the two put a 33-pixel thumbnail under every curve at the default
- * patch.
- *
- * Wide enough that enlarging one to fill the window still shows samples rather
- * than a blur: the thumbnail, the small map and the enlarged picture are all
- * this one rectangle, so it answers to the largest of the three.
- */
-const PATCH_SAMPLES = 385;
 
 /**
  * Everything the bench draws, built where the drawing is not.
@@ -243,7 +226,7 @@ export class BenchWorkerCore {
 		let planet: BenchSheet | null = null;
 		if (planetKey !== this.planetKey) {
 			this.planetKey = planetKey;
-			planet = this.planet();
+			planet = planetSheet(this.world);
 		}
 
 		const sections: BenchSections = {
@@ -280,7 +263,7 @@ export class BenchWorkerCore {
 				stacked: stacks.stacked,
 				deepest: stacks.deepest,
 			},
-			patch: this.patch(field),
+			patch: patchSheet(field),
 			planet,
 			geometry,
 			sections,
@@ -322,6 +305,10 @@ export class BenchWorkerCore {
 		const count = layout.count;
 		const at = new Int32Array(count + 1);
 		const height = new Float64Array(count);
+		// **Where the map put the ground, which is not the top of the rock.**
+		// The colours read a block's depth under its own surface, and under an
+		// overhang the two are metres apart.
+		const surface = new Float64Array(count);
 		const raw = new Float32Array(count);
 		const continent = new Float32Array(count);
 		const erosion = new Float32Array(count);
@@ -352,6 +339,7 @@ export class BenchWorkerCore {
 			peaks[c] = readBlend(this.world.peaks, blend);
 
 			at[c] = all.length;
+			surface[c] = base;
 			let top: number;
 			if (terrain.carveLayer) {
 				columnSpans(
@@ -405,6 +393,7 @@ export class BenchWorkerCore {
 			at,
 			spans: Float64Array.from(all),
 			height,
+			surface,
 			raw,
 			continent,
 			erosion,
@@ -447,106 +436,5 @@ export class BenchWorkerCore {
 			if (reply.geometry.lines) out.push(reply.geometry.lines.buffer);
 		}
 		return out;
-	}
-
-	/**
-	 * The patch, one sample a pixel.
-	 *
-	 * The rows are turned over here rather than where they are painted: north
-	 * is up on a picture and the field is read from the south edge outward, and
-	 * a picture that is drawn six ways should be flipped once.
-	 */
-	private patch(field: ReturnType<typeof patchField>): BenchSheet {
-		const n = field.across - 1;
-		const sheet = this.sheet(n, n);
-		for (let r = 0; r < n; r++)
-			for (let q = 0; q < n; q++) {
-				const from = r * field.across + q;
-				const to = (n - 1 - r) * n + q;
-				sheet.metres[to] = field.height[from]!;
-				sheet.raw[to] = field.raw[from]!;
-				sheet.continent[to] = field.continent[from]!;
-				sheet.erosion[to] = field.erosion[from]!;
-				sheet.peaks[to] = field.peaks[from]!;
-				sheet.carve[to] = field.carve[from]!;
-			}
-		return {
-			...sheet,
-			rawLow: field.rawLow,
-			rawHigh: field.rawHigh,
-			low: field.lowest,
-			high: field.highest,
-		};
-	}
-
-	/**
-	 * The whole planet, longitude across and latitude down.
-	 *
-	 * The one projection where a pixel's direction is a latitude and a longitude
-	 * and no case analysis. It stretches the poles, and it is a picture of where
-	 * things are rather than a map anything is measured off.
-	 */
-	private planet(): BenchSheet {
-		const grid = this.world.cells!;
-		const layers = this.world.stacks!;
-		// **No carve here, and it is not an omission.** Its shapes are 120 m and
-		// this picture is 512 points around a 42,730 m circumference -- one
-		// point every 83 m, so a shape is not two points across and
-		// neighbouring points are unrelated. What that draws is television
-		// static: an honest sampling of the field and a picture of nothing. The
-		// carve's picture is always the patch, where the same shape is forty
-		// points across.
-		const wide = PLANET_WIDE;
-		const tall = wide / 2;
-		const sheet = this.sheet(wide, tall);
-		let rawLow = Infinity;
-		let rawHigh = -Infinity;
-		for (const v of this.world.raw) {
-			if (v < rawLow) rawLow = v;
-			if (v > rawHigh) rawHigh = v;
-		}
-		// One lookup a pixel, five fields read off it.
-		const blend = makeBlend();
-		for (let r = 0; r < tall; r++) {
-			const latitude = (0.5 - (r + 0.5) / tall) * 180;
-			for (let q = 0; q < wide; q++) {
-				const longitude = ((q + 0.5) / wide) * 360 - 180;
-				const dir = positionOf({ latitude, longitude, altitude: 0 }, 1);
-				const at = r * wide + q;
-				grid.blendInto(dir, blend);
-				sheet.metres[at] = readBlend(this.world.height, blend);
-				sheet.raw[at] = readBlend(this.world.raw, blend);
-				sheet.continent[at] = readBlend(layers.continent, blend);
-				sheet.erosion[at] = readBlend(layers.erosion, blend);
-				sheet.peaks[at] = readBlend(layers.peaks, blend);
-			}
-		}
-		return {
-			...sheet,
-			rawLow,
-			rawHigh,
-			// The whole planet's own range, because this picture is of the
-			// whole planet: a patch's ends would blow out everything taller.
-			low: this.world.floor,
-			high: this.world.summit,
-		};
-	}
-
-	/** Five empty fields of one size, which is what every picture is drawn from. */
-	private sheet(
-		width: number,
-		height: number,
-	): Omit<BenchSheet, "rawLow" | "rawHigh" | "low" | "high"> {
-		const count = width * height;
-		return {
-			width,
-			height,
-			metres: new Float32Array(count),
-			raw: new Float32Array(count),
-			continent: new Float32Array(count),
-			erosion: new Float32Array(count),
-			peaks: new Float32Array(count),
-			carve: new Float32Array(count),
-		};
 	}
 }

@@ -50,7 +50,8 @@ export interface PatchGeometry {
 
 /**
  * Floats per vertex: position, normal, metres, raw, one per layer, the cell's
- * own speckle, and which material the face is.
+ * own speckle, which material the face is, and how far under its own surface
+ * the point sits.
  *
  * **Four layers, because a layer with no channel of its own is a layer whose
  * curve cannot be looked at.** Three of them shape the surface; the fourth is
@@ -66,5 +67,13 @@ export interface PatchGeometry {
  * from the metres already here; a plant standing on it does not, so the face
  * carries an index into the palette of woods and leaves the draw was given.
  * Zero is the ground and every other face writes it.
+ *
+ * **And the depth, because ground is made of what its depth says.** The world
+ * covers rock with a few blocks of soil and shows bare stone under that, so a
+ * colour picked from the height above the sea alone paints a whole crust the
+ * colour of the meadow on top of it -- which is invisible on a preview of a
+ * surface and is the entire picture on a preview of a cave. A patch drawn from
+ * the map alone leaves it at zero, which is the surface, and comes out exactly
+ * as it did before.
  */
-export const PATCH_STRIDE = 14;
+export const PATCH_STRIDE = 15;

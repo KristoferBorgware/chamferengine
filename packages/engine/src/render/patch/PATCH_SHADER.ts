@@ -47,6 +47,7 @@ export const PATCH_SHADER = /* wgsl */ `
 /** The world's own materials, and its water. */
 const SAND = ${wgsl(BLOCK_COLORS[BlockType.SAND]!)};
 const GRASS = ${wgsl(BLOCK_COLORS[BlockType.GRASS]!)};
+const DIRT = ${wgsl(BLOCK_COLORS[BlockType.DIRT]!)};
 const STONE = ${wgsl(BLOCK_COLORS[BlockType.STONE]!)};
 const SNOW = ${wgsl(BLOCK_COLORS[BlockType.SNOW]!)};
 const SEA_SHALLOW = ${wgsl(SEA_COLORS.shallow)};
@@ -131,6 +132,18 @@ struct View {
 	shadowing : vec4f,
 	/** Per map: what a texel is worth on the ground, and its own depth bias. */
 	fit      : array<vec4f, 4>,
+	/**
+	 * x: how deep the soil runs, in metres. y: one block, in metres.
+	 * z: how far the depth fade runs, in metres. w: how dark it gets.
+	 *
+	 * **What ground is made of is a depth question as well as an elevation
+	 * one**, and the first two are the lengths that question is asked
+	 * against: how far down the soil reaches, and how thick the one layer of
+	 * it that is grass or snow is. At zero every point is its own surface and
+	 * the bands come out as they did before either existed, which is what a
+	 * patch drawn from the map alone wants.
+	 */
+	crust    : vec4f,
 };
 @group(0) @binding(0) var<uniform> view : View;
 
@@ -275,6 +288,18 @@ struct VertexOut {
 	 * somewhere in the middle of every face.
 	 */
 	@location(7) @interpolate(flat) material : u32,
+
+	/**
+	 * How far under its own column's surface this point sits, in metres.
+	 *
+	 * **What ground is made of is a depth question and an elevation question,
+	 * and this is the half a height field never had to ask.** A patch drawn
+	 * from the map alone is all surface, so it leaves this at zero and every
+	 * band comes out the way it always did; a patch drawn as columns of blocks
+	 * has a whole crust under it, and painted by elevation alone the floor of
+	 * a cave is the colour of the meadow forty blocks over it.
+	 */
+	@location(8)       depth  : f32,
 };
 
 @vertex
@@ -289,6 +314,7 @@ fn vertexMain(
 	@location(7) carve     : f32,
 	@location(8) shade     : f32,
 	@location(9) material  : f32,
+	@location(10) depth    : f32,
 ) -> VertexOut {
 	var out : VertexOut;
 	out.clip = view.viewProj * vec4f(position, 1.0);
@@ -298,6 +324,7 @@ fn vertexMain(
 	out.world = position;
 	out.height = position.y;
 	out.metres = metres;
+	out.depth = depth;
 	out.raw = raw;
 	// **Every layer is on the vertex and the uniform picks one**, so choosing a
 	// picture of one of them costs a frame rather than a rebuilt mesh. Three
@@ -542,24 +569,49 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 		);
 	}
 
+	// **The world's own rule, which reads two numbers and not one.** Soil
+	// covers rock to a fixed depth and stone is what is under it; the top layer
+	// of that soil is grass, or snow above the snow line, and above the rock
+	// line the soil is gone through its whole depth so the stone shows where
+	// the ground is cut into as well as where it is walked on.
+	//
+	let soil = view.crust.x;
+	let surface = in.depth <= max(1e-6, view.crust.y);
 	var tint : vec3f;
-	if (in.metres <= 0.0) {
+	if (in.depth > soil) {
+		tint = STONE;
+	} else if (in.metres <= 0.0) {
 		// **Bare sand under the water, and the water itself is geometry.** The
 		// ocean is a surface at one radius and holds no blocks, so the floor is
 		// bare; the sheet drawn over it is what tints it, and tinting the floor
-		// here as well would put two depths of water on one pixel.
+		// here as well would put two depths of water on one pixel. Sand runs
+		// through the whole soil band, the way the world writes it.
 		tint = SAND;
-	} else if (in.metres < view.lines.x) {
-		tint = GRASS;
-	} else if (in.metres < view.lines.y) {
-		tint = STONE;
-	} else {
+	} else if (surface && in.metres > view.lines.y) {
 		tint = SNOW;
+	} else if (in.metres > view.lines.x) {
+		tint = STONE;
+	} else if (!surface) {
+		tint = DIRT;
+	} else {
+		tint = GRASS;
 	}
-	// **Only the picture of the ground takes it.** The rest are pictures of a
-	// number, and a speckle there is noise drawn over the answer.
+	// **The sky this mesh cannot see, drawn in as a fade.** The corner shading
+	// on the vertex says what stands beside a face; nothing on it says what is
+	// over one, so a chamber deep in the crust would be lit exactly like the
+	// meadow on top of it. Legibility furniture of the same kind as the cell
+	// rims, and off at zero to the bit.
+	let under = clamp(in.depth / max(1e-6, view.crust.z), 0.0, 1.0);
+	let deep = 1.0 - under * view.crust.w;
+	// **Only the picture of the ground takes either.** The rest are pictures
+	// of a number, and a speckle or a fade there is noise drawn over the
+	// answer.
 	return shade(
-		select(contoured(tint * in.shade, in.height), plantTint, isPlant),
+		select(
+			contoured(tint * in.shade * deep, in.height),
+			plantTint,
+			isPlant,
+		),
 		in.normal,
 		in.world,
 		SUN_SHARE,

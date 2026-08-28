@@ -11,6 +11,22 @@ export interface PatchFrame {
 	readonly north: Vec3;
 }
 
+/**
+ * How many points across the patch is sampled for its pictures.
+ *
+ * **A picture's resolution is its own, not the mesh's.** The patch is cut into
+ * columns and how many of those there are is a knob about the *world* -- how
+ * finely it is built -- while how finely it is *drawn flat* decides only
+ * whether the narrow octaves of a folded field read as a grain or as ridges.
+ * Tying the two put a 33-pixel thumbnail under every curve at the default
+ * patch.
+ *
+ * Wide enough that enlarging one to fill the window still shows samples rather
+ * than a blur: the thumbnail, the small map and the enlarged picture are all
+ * this one rectangle, so it answers to the largest of the three.
+ */
+export const PATCH_SAMPLES = 385;
+
 /** One patch of the map, sampled onto a square grid. */
 export interface PatchField {
 	/** Points across, one more than the number of cells. */

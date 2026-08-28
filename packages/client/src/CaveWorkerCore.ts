@@ -1,3 +1,4 @@
+import type { BenchSheet } from "./BenchMessage.js";
 import type {
 	CaveCells,
 	CaveGeometry,
@@ -19,7 +20,10 @@ import { caveVolume } from "./caveVolume.js";
 import { columnPatchLayout, columnPatchMesh } from "chamfer/mesh";
 import { caveField } from "chamfer/generation";
 import { cutPatch } from "./cutPatch.js";
-import { patchFrame } from "./patchField.js";
+import { PATCH_SAMPLES, patchField, patchFrame } from "./patchField.js";
+import { patchSheet } from "./patchSheet.js";
+import { planetSheet } from "./planetSheet.js";
+import { carveSeed, layerNoiseSettings } from "chamfer/generation";
 import { measureCaves } from "./measureCaves.js";
 
 /**
@@ -75,6 +79,16 @@ export class CaveWorkerCore {
 
 	private planKey = "";
 
+	/**
+	 * Which world the last flat pictures were of, so an unmoved one is not
+	 * resent.
+	 *
+	 * **A sent buffer is gone from here**, so what stands in for sending one
+	 * again is sending nothing and letting the page keep the last.
+	 */
+	private sheetKey = "";
+	private planetKey = "";
+
 	*steps(request: CaveRequest): Generator<CaveStep | CaveReady> {
 		const settings = new PlanetSettings(request.knobs);
 		for (const progress of this.world.build(settings))
@@ -128,7 +142,7 @@ export class CaveWorkerCore {
 		// a block no shader can put back, so anything that moves one is a walk.
 		const volumeKey = `${this.world.ms}/${JSON.stringify(
 			settings.terrainOptions(),
-		)}/${k.blockSize}/${k.caveCrust}`;
+		)}/${k.blockSize}/${k.caveDepth}`;
 		if (volumeKey !== this.volumeKey || !this.volume) {
 			this.volumeKey = volumeKey;
 			this.meshKey = "";
@@ -214,6 +228,51 @@ export class CaveWorkerCore {
 			planCells = this.planCells(layout, cells, volume, settings);
 		}
 
+		// **The small map is how a reader stands somewhere else**, and it
+		// answers to the world rather than to the caves: the planet moves when
+		// the map does and the patch when it walks across it, so a cave knob
+		// sends neither.
+		const sheetKey = `${this.world.ms}/${k.patchLatitude}/${k.patchLongitude}/${k.patchCells}/${JSON.stringify(settings.terrainOptions())}`;
+		let patch: BenchSheet | null = null;
+		let planet: BenchSheet | null = null;
+		if (sheetKey !== this.sheetKey) {
+			this.sheetKey = sheetKey;
+			const carve = settings.layerFor("carve");
+			patch = patchSheet(
+				patchField(
+					grid,
+					{
+						height: this.world.height,
+						raw: this.world.raw,
+						continent: this.world.stacks!.continent,
+						erosion: this.world.stacks!.erosion,
+						peaks: this.world.stacks!.peaks,
+					},
+					{
+						frame: patchFrame(k.patchLatitude, k.patchLongitude),
+						span: k.patchCells * settings.coarseCell,
+						across: PATCH_SAMPLES,
+						radius: settings.radius,
+						carve: settings.terrainOptions().carveLayer
+							? {
+									layer: carve,
+									noise: layerNoiseSettings(
+										carve,
+										settings.radius,
+									),
+									seed: carveSeed(settings.seedNumber),
+								}
+							: null,
+					},
+				),
+			);
+		}
+		const planetKey = String(this.world.ms);
+		if (planetKey !== this.planetKey) {
+			this.planetKey = planetKey;
+			planet = planetSheet(this.world);
+		}
+
 		yield {
 			kind: "ready",
 			token: request.token,
@@ -250,6 +309,8 @@ export class CaveWorkerCore {
 			geometry,
 			plan,
 			cells: planCells,
+			patch,
+			planet,
 		};
 	}
 
@@ -262,6 +323,16 @@ export class CaveWorkerCore {
 		}
 		if (reply.plan)
 			out.push(reply.plan.value.buffer, reply.plan.band.buffer);
+		for (const sheet of [reply.patch, reply.planet])
+			if (sheet)
+				out.push(
+					sheet.metres.buffer,
+					sheet.raw.buffer,
+					sheet.continent.buffer,
+					sheet.erosion.buffer,
+					sheet.peaks.buffer,
+					sheet.carve.buffer,
+				);
 		if (reply.cells)
 			out.push(
 				reply.cells.at.buffer,
@@ -305,6 +376,7 @@ export class CaveWorkerCore {
 		const at = new Int32Array(kept + 1);
 		const runs: number[] = [];
 		const height = new Float64Array(kept);
+		const surface = new Float64Array(kept);
 		const raw = new Float32Array(kept);
 		const continent = new Float32Array(kept);
 		const erosion = new Float32Array(kept);
@@ -316,6 +388,7 @@ export class CaveWorkerCore {
 			for (let pair = ground.at[c]!; pair < ground.at[c + 1]!; pair++)
 				runs.push(ground.spans[pair]!);
 			height[n] = ground.height[c]!;
+			surface[n] = ground.surface[c]!;
 			raw[n] = ground.raw[c]!;
 			continent[n] = ground.continent[c]!;
 			erosion[n] = ground.erosion[c]!;
@@ -327,6 +400,7 @@ export class CaveWorkerCore {
 			at,
 			spans: Float64Array.from(runs),
 			height,
+			surface,
 			raw,
 			continent,
 			erosion,

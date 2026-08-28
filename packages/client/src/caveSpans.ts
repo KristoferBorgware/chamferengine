@@ -66,6 +66,7 @@ export function caveSpans(volume: CaveVolume, draw: CaveDraw): ColumnGround {
 		at,
 		spans: Float64Array.from(all),
 		height,
+		surface: volume.surface,
 		raw: volume.raw as Float32Array,
 		continent: volume.continent as Float32Array,
 		erosion: volume.erosion as Float32Array,

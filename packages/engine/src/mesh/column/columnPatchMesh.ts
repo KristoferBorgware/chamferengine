@@ -24,6 +24,18 @@ export interface ColumnGround {
 	/** Per column, the top of its topmost rock, which the colours read. */
 	readonly height: Float64Array;
 
+	/**
+	 * Per column, where the ground was before anything was taken out of it.
+	 *
+	 * **Not {@link height}, and the difference is the whole point of it.** The
+	 * top of the topmost rock is where the ground *is*; this is where the map
+	 * put it, which is what every block in the column measures its own depth
+	 * from -- so the roof of a cave forty blocks down is forty blocks of soil
+	 * and stone under the surface even where the carve has taken the surface
+	 * away above it.
+	 */
+	readonly surface: Float64Array;
+
 	/** Per column, what the four layer curves returned. */
 	readonly raw: Float32Array;
 	readonly continent: Float32Array;
@@ -210,7 +222,17 @@ export function columnPatchMesh(
 		i: iOf,
 		j: jOf,
 	} = patch;
-	const { at, spans, height, raw, continent, erosion, peaks, carve } = ground;
+	const {
+		at,
+		spans,
+		height,
+		surface,
+		raw,
+		continent,
+		erosion,
+		peaks,
+		carve,
+	} = ground;
 	const { radius, seaLevel, seed, speckle, blockMetres, occlusion } = look;
 	const frame = columnFrame(centre);
 
@@ -246,6 +268,8 @@ export function columnPatchMesh(
 	let cPeaks = 0;
 	let cCarve = 0;
 	let cShade = 1;
+	/** Where the map put this column's ground, which every depth is measured from. */
+	let cSurface = 0;
 	/** Which palette entry the face is drawn from, `0` for the ground itself. */
 	let cMaterial = 0;
 	/**
@@ -337,6 +361,10 @@ export function columnPatchMesh(
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sA;
 		vertices[to + 13] = cMaterial;
+		// **How far under its own surface, not under the highest rock.** The
+		// sea is a sheet at one radius over ground that is somewhere else, so
+		// it has no depth of its own and takes none.
+		vertices[to + 14] = waterFloor === waterFloor ? 0 : cSurface - ma;
 		to += PATCH_STRIDE;
 		vertices[to] = bx;
 		vertices[to + 1] = by;
@@ -352,6 +380,7 @@ export function columnPatchMesh(
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sB;
 		vertices[to + 13] = cMaterial;
+		vertices[to + 14] = waterFloor === waterFloor ? 0 : cSurface - mb;
 		to += PATCH_STRIDE;
 		vertices[to] = cx;
 		vertices[to + 1] = cy;
@@ -367,6 +396,7 @@ export function columnPatchMesh(
 		vertices[to + 11] = cCarve;
 		vertices[to + 12] = cShade * sC;
 		vertices[to + 13] = cMaterial;
+		vertices[to + 14] = waterFloor === waterFloor ? 0 : cSurface - mc;
 		written += 3;
 		// **What the camera has to frame is the shape, and only the shape knows
 		// what that is.** A patch's width says nothing once it is a fair share
@@ -646,6 +676,7 @@ export function columnPatchMesh(
 		cEro = erosion[c]!;
 		cPeaks = peaks[c]!;
 		cCarve = carve[c]!;
+		cSurface = surface[c]!;
 		// **A fact about the cell, not about the ground under it**, so it is
 		// read from the address the same way the world's own mesher reads it --
 		// which is what makes a preview of a hillside the hillside the world
