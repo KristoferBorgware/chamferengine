@@ -1215,7 +1215,18 @@ outside it is a biome that will never be built.
 
 **The share beside each name is read back, not set.** A dot is placed in the
 climate square and how much ground that comes to depends on where the two fields
-actually go, counted over the planet's own cells at level 5. **Show on it** puts
+actually go, counted over the planet's own cells at level 5.
+
+**Count the shares over** switches every figure on the panel between the planet
+and the patch in view — the landform tabs, the list, the grid and the line under
+the diagram, all at once, because a percentage next to a name is worthless if
+the reader has to remember which of two things each one counts. **A place is not
+a planet**, and the difference is the point: at the shipped opening the planet is
+**38.2% Lowlands and 9.9% Peaks**, while the patch the camera is standing in is
+**27.1% Peaks and 19.6% Lowlands**, holds **17 of the 33** biomes, and of the
+five that peaks can build has only two. Nothing at all reads as a **dash** rather
+than `0.0%`: one hexagon of an 1,800 cell patch is 0.1%, so a rounded zero would
+say absent when it means small. **Show on it** puts
 that same reading on the diagram as a cloud of dots — the patch, which is one
 place, or the planet, where a region with no dots over it is a biome this world
 never builds.
