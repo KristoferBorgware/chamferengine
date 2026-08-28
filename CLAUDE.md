@@ -460,12 +460,23 @@ Violating any of these breaks the design. They are not tunable.
   direction to the bit -- so the roots a chunk offers are the fine roots whose
   coordinates are both multiples of `2^lod`. A subset chosen by the root alone,
   which every level agrees on, and **no walk of its own**: the chunk has
-  already walked it. One root in `4^lod`, so a tree appears as the player walks
-  in and never moves or vanishes. Growing a chunk's plants costs
-  `600 / 191 / 107 / 59 / 25 / 0 ms` at levels 0 to 5 against
-  `915 / 517 / 990 / 2,385` for the first four before, and the share of lit
-  ground that is leaf goes from `6.0%` to `17.2%` -- across the view from far to
-  near, from `0.0% / 0.0% / 5.2% / 19.2%` to `17.4% / 19.2% / 18.3% / 14.2%`.
+  already walked it. **A column asks its whole block of `4^lod` roots and grows
+  the first that wants a plant** -- one trunk to a column is the physical cap,
+  so the count per unit ground is the finest level's until the block saturates.
+  Offering the column's own root alone was built first and thins the forest by
+  exactly `4^lod`: over one 512 m triangle it draws `24% / 7% / 1%` of the
+  finest level's trees one, two and three levels out, against
+  `97% / 87% / 57%` for the block, and canopy over that ground runs
+  `83.2% / 76.5% / 78.4% / 82.2%` across the four levels. **A tree appears as
+  the player walks in and never moves or vanishes**, because the blocks nest: a
+  column has a trunk exactly when a root in its own block has one, so a block
+  splitting into four keeps the tree it had and may add three. Growing a
+  chunk's plants costs `633 / 201 / 114 / 160 / 34 / 0 ms` at levels 0 to 5
+  against `915 / 517 / 990 / 2,385` for the first four before, and the share of
+  lit ground that is leaf goes from `6.0%` to `65.1%` -- across the view from
+  far to near, from `0.0% / 0.0% / 5.2% / 19.2%` to
+  `49.5% / 62.5% / 77.4% / 72.8%`, where the same view with its near field
+  forced to the finest level reads `72.2% / 70.2%` in those two bands.
   **What ends the forest is a tree shorter than a block**, checked before a
   template set is built rather than after: at 32 m blocks a 22 m pine has
   nowhere to stand. **A template is stepped from the DRAWN cell, never the
