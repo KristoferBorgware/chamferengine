@@ -1139,15 +1139,54 @@ The three terrain layers decide the landform first, and each landform carries
 its own partition of the same square. A desert filed under the lowlands is not
 in the peaks' diagram at all.
 
+**A biome is a region, and that took three measured changes.** Read the way it
+was first built, the map changed **every 141 m of walking** — 22.7% of all
+neighbouring cell pairs were a border, with 8 biomes in 44 regions inside one
+1,536 m patch. The cause was not what it looked like: regions under five cells
+were only **3.4%** of the land area, so the biomes were never small. The
+*borders* were everywhere, and **85% of them came from the landform** —
+peaks-and-valleys alone flipped its bucket on **30.9%** of neighbouring pairs,
+against erosion's 1.6% and continentalness's **0%**.
+
+**That is a scale mismatch, not a noise problem.** The terrain's relief stack
+runs down to a **75 m** octave — 2.3 map cells — because its job is to carve one
+gully. Asking it *what kind of place is this* at that size asks a per-gully
+question and gets a per-gully answer. So the landform reads **its own copy of
+the same field at one octave**, 600 m, while the ground keeps all four and no
+hill moves; **Relief detail** turns it back up to compare. That alone took the
+map to a border every **208 m**.
+
+Two more followed. The grid went from five erosion rows by five relief columns
+by three continentalness sheets to **three by three by two** — every edge
+between two bands is a place the landform can flip, so twelve internal edges
+became four, and the map reached a border every **264 m** with all 18 cells
+still carrying land. Then the table dropped from 33 biomes to **21**, and — this
+is the part that mattered — **each landform's dots were placed inside that
+ground's own measured climate** rather than spread evenly over a square most of
+it never reaches. Peaks run **0.00 to 0.49** in temperature because ground cools
+as it rises, so two of three hand-placed peak dots had been sitting outside the
+cloud entirely, splitting it between the one that was left. Placing all 21 by
+measurement: a border every **320 m**, **88%** of the land in three regions, and
+all 21 built somewhere.
+
+**Three things measured and not done**, because a lab should say what it
+rejected: a majority vote over the six neighbours took 44 regions to 42, since
+the specks sit where three biomes meet rather than alone in a field; reading the
+landform on a 512 m lattice halved the border rate and left **46%** of regions
+single-cell, because coarsening an input does not fix a thresholding problem;
+and turning the biome noise off moved a border from 141 m to 152 m, so the
+craziness knob was never the cause.
+
 **Six landforms, and a grid that says which is which.** The three curves'
 answers — how high the continent stands, how much erosion takes away, how far
 the relief swings — are cut into indices, and a grid gives every combination a
 landform: **sharp and high is a peak, worn and high is a plateau**, and low
-relief is a valley wherever it is. Three sheets, one per continentalness band,
-five erosion rows and five peaks-and-valleys columns, with the measured share of
-the planet's land written on every cell so a combination nothing falls in is
+relief is low ground wherever it is. Two sheets, one per continentalness band,
+three erosion rows and three peaks-and-valleys columns, with the measured share
+of the planet's land written on every cell so a combination nothing falls in is
 visible rather than argued about. On the shipped world that comes to **Lowlands
-38.2%, Valleys 21.8%, Slopes 19.8%, Peaks 9.9%, Plateau 8.7%, Shore 1.8%**.
+44.2%, Slopes 22.6%, Valleys 16.2%, Plateau 10.2%, Peaks 5.2%, Shore 1.8%**, and
+no cell of the grid is empty.
 
 **The shore is a height, not a cell of the grid.** Sea level here is a radius
 and every height is measured from it, so *the ground has barely come out of the
@@ -1233,8 +1272,8 @@ that same reading on the diagram as a cloud of dots — the patch, which is one
 place, or the planet, where a region with no dots over it is a biome this world
 never builds.
 
-**Start from** carries two sets. The plain one is 33 names spread over the six
-landforms. The other is **Holdridge's life zones**, a real classification of
+**Start from** carries two sets. The plain one is 21 names over the six
+landforms, each placed inside its own ground's climate. The other is **Holdridge's life zones**, a real classification of
 exactly this shape — a name for every pair of temperature and rainfall, so it
 drops onto a set of dots without being reshaped. It says nothing about
 landforms, and that is what `any` is for: every zone is allowed on every kind of

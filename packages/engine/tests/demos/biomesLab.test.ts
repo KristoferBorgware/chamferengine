@@ -100,6 +100,21 @@ describe("the biomes lab's copy of the engine", () => {
 		expect(lab).toContain("splineAt(TERRAIN.pv.spline, said[2])");
 	});
 
+	it("reads the relief for the landform apart from the relief for the ground", () => {
+		// **A scale mismatch was most of what made the biomes look random.**
+		// The terrain's own relief stack runs to a 75 m octave because its job
+		// is to carve one gully; asking it what kind of place this is at that
+		// size asks a per-gully question. Measured on the shipped patch, the
+		// peaks-and-valleys bucket flipped between neighbouring cells on 30.9%
+		// of pairs against continentalness's 0%, and the whole biome map
+		// changed every 141 m of walking. Same field and same curve, read at
+		// one octave for the landform and four for the ground: every 320 m.
+		expect(lab).toContain("function formSwingAt(x, y, z, seed, s) {");
+		expect(lab).toContain("out.formPv = stackOf(");
+		// the ground still reads its own
+		expect(lab).toContain("const swing = splineAt(TERRAIN.pv.spline, said[2]) * 2 - 1;");
+	});
+
 	it("keeps the shore a height rather than a cell of the grid", () => {
 		// Sea level is a radius and every height is measured from it, so *the
 		// ground has barely come out of the water* is one comparison -- and it
