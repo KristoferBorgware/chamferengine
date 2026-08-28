@@ -711,11 +711,11 @@ const GROUPS: Group[] = [
 				says: "How much of the field's range is open, either side of zero. It is a passage's width and not how many there are: widening it fattens every passage at once, and squeezed narrow enough to be a corridor the sheet stops being connected at all.",
 			},
 			{
-				key: "caveCrust",
-				label: "Crust walked",
+				key: "caveDepth",
+				label: "Caves reach",
 				digits: 0,
 				enabledWhen: (k) => k.caves,
-				says: "How much crust under the ground this patch is asked for. Not the world's crust: a passage may be at any depth, so the walk is one field reading a block, and what is under this is rock nobody is looking at.",
+				says: "How far under the surface caves go, and what makes them affordable at all. The field is read once a block, because a passage is free to be at any depth and nothing about the ground says where one is -- so without a floor every column is evaluated to the bottom of the crust, which on the shipped world is 1,232 blocks a column against about ten with caves off. Below this the crust is solid. The bench draws exactly it.",
 			},
 		],
 	},
@@ -1576,6 +1576,14 @@ export class ParameterPanel {
 		return where === "both" || (where === "bench") === this.bench;
 	}
 
+	/** Which page this panel is on, as the file it is served from. */
+	private pageFile(): string {
+		if (this.page === "cave") return "caves";
+		if (this.page === "vegetation") return "vegetation";
+		if (this.page === "landscape") return "landscape";
+		return "planet";
+	}
+
 	private build(): void {
 		const head = document.createElement("button");
 		head.className = "knobs-head";
@@ -1771,23 +1779,37 @@ export class ParameterPanel {
 			void navigator.clipboard?.writeText(this.href());
 		};
 		bar.append(...(this.bench ? [] : [this.applyButton]), reset, copy);
-		// **The way to the bench, carrying this world with it.** Choosing
-		// terrain numbers is looking at ground, and the bench is a page where
-		// the ground is the whole window rather than a picture over one.
-		if (!this.bench)
-			for (const [name, page] of [
+		// **The way from any page to any other, carrying this world with it.**
+		//
+		// **The query string is the world**: nothing else stores one, so a link
+		// written the moment it is clicked is the whole of what a page hands
+		// over -- and every page reads the same set with the same
+		// `PlanetSettings`. A layer tuned on the landscape bench arrives at the
+		// cave bench already tuned, caves turned on here are on when the world
+		// is walked, and none of it is copied anywhere or kept in two places.
+		//
+		// A bench names the pages it is not, so the three of them are one step
+		// apart rather than three by way of the planet.
+		for (const [name, page] of (
+			[
+				["The planet", "planet"],
 				["Landscape bench", "landscape"],
 				["Vegetation bench", "vegetation"],
 				["Cave bench", "caves"],
-			] as const) {
-				const bench = document.createElement("a");
-				bench.textContent = name;
-				bench.href = `./${page}.html`;
-				bench.onclick = () => {
-					bench.href = `./${page}.html?${this.settings.toParams().toString()}`;
-				};
-				bar.appendChild(bench);
-			}
+			] as const
+		).filter(([, page]) => page !== this.pageFile())) {
+			const other = document.createElement("a");
+			other.textContent = name;
+			other.href = `./${page}.html`;
+			other.onclick = () => {
+				const params = this.settings.toParams();
+				// The planet opens with its panel shut unless it is asked for,
+				// and a reader arriving from a bench is mid-tune.
+				if (page === "planet") params.set("panel", "1");
+				other.href = `./${page}.html?${params.toString()}`;
+			};
+			bar.appendChild(other);
+		}
 		// **On the bench the two buttons belong with the seed.** Nothing there
 		// waits for a Rebuild, so the bar is not a footer to a page of pending
 		// changes; it is a world's name and the two things done with a world,

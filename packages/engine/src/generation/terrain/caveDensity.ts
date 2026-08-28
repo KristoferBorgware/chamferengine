@@ -27,6 +27,15 @@ import { caveField } from "./caveField.js";
  * ground under a player's feet. The caller decides that number per column --
  * see {@link caveCeilingAt} -- because a ceiling the same everywhere either
  * never breaks the ground or breaks it everywhere.
+ *
+ * **And nothing opens below `reach`, which is what makes caves affordable at
+ * all.** The field is read once a *block* rather than once a column: a passage
+ * is free to be at any depth, so there is nothing to work out from the ground
+ * and nothing a fill can stand in for. Without a floor a column has to be
+ * evaluated to the bottom of the crust -- `1,232` blocks on the shipped world
+ * against about ten with caves off, which is the difference between a world
+ * that builds and one that does not. It is the same shape of bound the carve
+ * carries in `CARVE_REACH`, stated in metres for the same reason.
  */
 export function caveDensity(
 	x: number,
@@ -38,8 +47,9 @@ export function caveDensity(
 	scale: number,
 	threshold: number,
 	ceiling: number,
+	reach: number,
 ): boolean {
-	if (depthBelowSurface < ceiling) return false;
+	if (depthBelowSurface < ceiling || depthBelowSurface > reach) return false;
 	const n = caveField(x, y, z, radius, seed, scale);
 	return n > -threshold && n < threshold;
 }

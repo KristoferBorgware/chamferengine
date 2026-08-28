@@ -179,6 +179,7 @@ export class TerrainGenerator {
 				this.settings.caveScale,
 				this.settings.caveThreshold,
 				column.caveCeiling,
+				this.settings.caveDepth,
 			);
 			// A cave below the water table stays dry. Water is written by the
 			// generator and never flows, so a passage under a lake is a passage,
@@ -198,10 +199,16 @@ export class TerrainGenerator {
 	 * per column and fills the rest.
 	 *
 	 * **Every layer a term can open has to be evaluated, and the fill starts
-	 * under the deepest of them.** Caves can open a passage at any depth, so
-	 * with caves on the whole crust is walked. The carve stops at its own
-	 * reach, which is a depth in metres and therefore a layer count -- so the
-	 * band extends to that and the fill keeps the crust below it.
+	 * under the deepest of them.** Each of the three states its own reach in
+	 * metres, so each is a layer count: the soil's depth, the carve's, and the
+	 * caves'. The fill keeps the crust below the deepest of them.
+	 *
+	 * **Caves used to be walked to the bottom of the crust**, on the reasoning
+	 * that a passage is free to be at any depth. It is, and the answer is to
+	 * bound how deep rather than to ask everywhere: at `1,232` layers against
+	 * about ten, turning them on cost the generator more than a hundred times
+	 * what it cost with them off, and a world with caves in it simply did not
+	 * finish building.
 	 *
 	 * **Getting this wrong reads as the layer doing nothing.** `blockAt`
 	 * answered honestly the whole time and `fillColumn` is what a chunk build
@@ -222,19 +229,21 @@ export class TerrainGenerator {
 		const carved = this.settings.carveLayer
 			? Math.ceil(carveDepth(this.settings.carve) / this.shape.blockSize)
 			: 0;
-		const rock = this.settings.caves
-			? layers
-			: Math.min(
-					layers,
+		const hollowed = this.settings.caves
+			? Math.ceil(this.settings.caveDepth / this.shape.blockSize)
+			: 0;
+		const rock = Math.min(
+			layers,
+			Math.max(
+				0,
+				column.groundLayer +
 					Math.max(
-						0,
-						column.groundLayer +
-							Math.max(
-								Math.ceil(this.settings.soilDepth),
-								carved,
-							),
+						Math.ceil(this.settings.soilDepth),
+						carved,
+						hollowed,
 					),
-				);
+			),
+		);
 
 		let first = layers;
 		let last = -1;

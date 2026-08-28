@@ -553,14 +553,21 @@ export interface PlanetKnobs {
 	caveMouthScale: number;
 
 	/**
-	 * Metres of crust the cave bench walks and draws under the ground.
+	 * How far under the surface caves reach, in metres.
 	 *
-	 * **Not the world's crust.** A world runs a thousand layers down and a
-	 * passage may be at any depth, so the walk is one field reading a block;
-	 * this is how much of that a patch is asked for at once. What is under it
-	 * is rock nobody is looking at.
+	 * **What makes caves affordable at all.** The cave field is read once a
+	 * *block*, because a passage is free to be at any depth and nothing about
+	 * the ground says where one is -- so without a floor every column has to be
+	 * evaluated to the bottom of the crust. On the shipped world that is
+	 * `1,232` blocks a column against about ten with caves off, and a world
+	 * with caves in it does not finish building. Below this the crust is solid
+	 * and the generator fills it rather than asking.
+	 *
+	 * A world knob rather than a bench one, and the cave bench draws exactly
+	 * it: what is under is rock nobody is looking at because there is nothing
+	 * down there to look at.
 	 */
-	caveCrust: number;
+	caveDepth: number;
 
 	/** Whether the cave bench draws the rock or the caves themselves. */
 	caveDraw: CaveDraw;
@@ -1185,7 +1192,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	caveVary: 10,
 	caveRare: 0.5,
 	caveMouthScale: 60,
-	caveCrust: 28,
+	caveDepth: 28,
 	caveDraw: "rock",
 	cavePlan: "both",
 	caveSlice: 12,
@@ -1374,6 +1381,19 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"carveLacunarity",
 	"carveCurve",
 	"carveHold",
+	// **And the caves, for the same reason.** They take blocks out of a column
+	// the carve left standing, so a world with them turned on is a different
+	// world -- which is what {@link WORLD_SHAPE_KNOBS} spreads this set to
+	// say, and what keeps a player's own blocks filed under the world they
+	// were put in.
+	"caves",
+	"caveScale",
+	"caveThreshold",
+	"caveCeiling",
+	"caveVary",
+	"caveRare",
+	"caveMouthScale",
+	"caveDepth",
 	"erosionBite",
 	"seaLevel",
 	"relief",
@@ -1601,7 +1621,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	caveVary: { low: 0, high: 120, step: 5, rebuilds: true, unit: "m" },
 	caveRare: { low: 0, high: 0.95, step: 0.01, rebuilds: true, unit: "" },
 	caveMouthScale: { low: 15, high: 200, step: 5, rebuilds: true, unit: "m" },
-	caveCrust: { low: 8, high: 400, step: 4, rebuilds: true, unit: "m" },
+	caveDepth: { low: 8, high: 512, step: 4, rebuilds: true, unit: "m" },
 	caveSlice: { low: 1, high: 200, step: 1, rebuilds: true, unit: "m" },
 	// The cut and the two pictures move no block, so neither costs a walk.
 	caveLattice: { ...TOGGLE, rebuilds: false },
@@ -2299,6 +2319,7 @@ export class PlanetSettings {
 			caveVary: this.knobs.caveVary,
 			caveRare: this.knobs.caveRare,
 			caveMouthScale: this.knobs.caveMouthScale,
+			caveDepth: this.knobs.caveDepth,
 		};
 	}
 

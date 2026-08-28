@@ -92,6 +92,41 @@ engine's own `growPlant` does not carry it, so the bench and the lab now draw
 different canopies at the same numbers -- which is the second reason to close
 this rather than leave the two disagreeing.
 
+### F-101 — The cliffs layer walks four hundred and eighty layers of every column, and is most of what a chunk costs
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-28, measuring what a cave costs a chunk
+**Where:** `packages/engine/src/generation/terrain/carveDensity.ts`,
+`CARVE_REACH`; `packages/engine/src/generation/terrain/TerrainGenerator.ts`,
+`fillColumn`; measured by `tools/trial-caves.ts`
+
+**What happens.** `fillColumn` evaluates a column down to the deepest layer any
+term can open and fills the crust below it with stone, so each term's reach is
+what it costs. The carve's is `CARVE_REACH` shape widths -- **four** of them,
+at the shipped 120 m shape, which is `480 m` and therefore **480 layers** at a
+1 m block. Measured over six chunks of the shipped world at chunk level 7, a
+chunk takes **157 ms** with the layer off and **699 ms** with it on: it is
+**×4.4** of everything else generation does, and about `78%` of a chunk's whole
+bill.
+
+**Why it matters.** What that depth buys is not visible. The density gains a
+full `1` over the reach, so a reading has to beat `depthBelow / 480` to open
+anything -- past a hundred metres or so it is refusing nearly everything it is
+asked, and the last three hundred layers are evaluated to be told no. The world
+is a metre a block and a player digs tens of metres, not hundreds. Meanwhile
+the number is what makes chunk builds slow enough that the residency loop runs
+a backlog of a hundred and fifty chunks on a normal walk.
+
+**What would fix it.** Measure what depth the layer actually opens anything at
+-- the share of blocks it takes, by depth -- and set the reach from that rather
+than from the shape width. It is one constant and one measurement, and
+`trial-caves.ts` already builds the world it would be measured on. What it must
+not become is a knob: the reach is what makes the depth term a bound rather
+than a suggestion, and a reader given it would be setting a cost.
+
 ### F-100 — The cave lab's rarity means something else on a planet, and the lab still ships the patch's own figure
 
 **Kind:** risk

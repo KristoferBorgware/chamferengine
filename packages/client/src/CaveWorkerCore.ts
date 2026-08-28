@@ -142,7 +142,7 @@ export class CaveWorkerCore {
 		// a block no shader can put back, so anything that moves one is a walk.
 		const volumeKey = `${this.world.ms}/${JSON.stringify(
 			settings.terrainOptions(),
-		)}/${k.blockSize}/${k.caveCrust}`;
+		)}/${k.blockSize}/${k.caveDepth}`;
 		if (volumeKey !== this.volumeKey || !this.volume) {
 			this.volumeKey = volumeKey;
 			this.meshKey = "";

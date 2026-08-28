@@ -107,6 +107,23 @@ export interface TerrainOptions {
 
 	/** Metres over which the ceiling changes, which is how wide a dip is. */
 	readonly caveMouthScale?: number;
+
+	/**
+	 * How far under the surface caves reach, in metres.
+	 *
+	 * **What makes caves affordable at all.** The cave field is read once a
+	 * *block*, because a passage is free to be at any depth and there is
+	 * nothing about the ground that says where one is -- so without a floor
+	 * every column has to be evaluated to the bottom of the crust. On the
+	 * shipped world that is `1,232` blocks a column against about ten with
+	 * caves off; at the default it is twenty-eight. Below it the crust is
+	 * solid and the generator fills it rather than asking.
+	 *
+	 * The same shape of bound the carve carries in `CARVE_REACH`, and stated
+	 * in metres for the same reason: it is a depth in the world rather than a
+	 * count of blocks, so changing the block size does not move it.
+	 */
+	readonly caveDepth?: number;
 }
 
 export const TERRAIN_DEFAULTS = {
@@ -123,4 +140,5 @@ export const TERRAIN_DEFAULTS = {
 	caveVary: 0,
 	caveRare: 0.5,
 	caveMouthScale: 60,
+	caveDepth: 28,
 } as const satisfies Required<TerrainOptions>;

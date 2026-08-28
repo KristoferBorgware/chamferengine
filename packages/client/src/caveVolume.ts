@@ -121,6 +121,7 @@ export function caveVolume(
 	const cavesOn = terrain.caves === true;
 	const caveScale = terrain.caveScale ?? 24;
 	const caveThreshold = terrain.caveThreshold ?? 0.12;
+	const reach = terrain.caveDepth ?? 28;
 
 	// **Every column is walked the same number of layers**, so the array is
 	// rectangular and a block's index is arithmetic. The top of each column's
@@ -130,7 +131,7 @@ export function caveVolume(
 	// rounding.
 	const layers = Math.max(
 		2,
-		Math.min(MAX_CAVE_LAYERS, Math.ceil(settings.knobs.caveCrust / block)),
+		Math.min(MAX_CAVE_LAYERS, Math.ceil(reach / block)),
 	);
 
 	const count = patch.count;
@@ -228,6 +229,7 @@ export function caveVolume(
 						caveScale,
 						caveThreshold,
 						ceiling,
+						reach,
 					)
 				) {
 					kind[base + L] = VOID;

@@ -74,10 +74,16 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * What this page opens on, where that is not what the planet opens on.
+ * What this page opens on when nothing was handed to it.
  *
- * **A bench of the cave rule opens on a world with caves in it**, or its first
- * act is finding the switch. The other three follow from what a cave is:
+ * **The query string is the world, and there is nowhere else one is kept.** A
+ * link carries every knob that differs from the defaults, all three benches and
+ * the planet read the same set through the same `PlanetSettings`, and a world
+ * tuned on any of them arrives at the others already tuned. So a page that
+ * rewrote a knob on arrival would not be choosing its own view -- it would be
+ * changing the world in the reader's hand, and the change would follow them
+ * back out. **These apply to a bare visit only**, where no world was handed
+ * over at all:
  *
  * - **The patch is drawn at the block grid**, five levels under a 32 m map,
  *   because a passage is measured in cells and a cell here has to be a block.
@@ -89,18 +95,13 @@ const VIEW_KNOBS: ReadonlySet<string> = new Set([
  * - **A place where the ceiling comes down.** A mouth is where the ground
  *   allows one *and* the sheet happens to be there, and at the shipped rarity
  *   the first of those is `0.170%` of the planet -- so most places have no way
- *   into their own caves and a bench that opened on one would look broken. This
- *   is a place on the default seed where it does.
+ *   into their own caves and a bench that opened on one would look broken.
  *
- * **The cliffs layer is left on.** It takes blocks out of a column too, and
- * some overlap between the two is the point rather than a confusion: they cut
- * one planet, and the cliffs layer's density gains a full `1` over its own
- * reach so it has stopped altogether well above where a cave runs. What each of
- * them took is counted apart, so no number on the readout is a number about two
- * layers.
- *
- * A link that names any of them wins, and one written from here carries all
- * five -- so a world handed over is the world that was looked at.
+ * **The cliffs layer is left wherever it was found.** It takes blocks out of a
+ * column too, and some overlap between the two is the point rather than a
+ * confusion: they cut one planet, and its density gains a full `1` over its own
+ * reach so it has stopped altogether well below where it works. What each of
+ * them took is counted apart, so no number on the readout is about two layers.
  */
 const OPENS_ON: Partial<Record<keyof PlanetKnobs, string>> = {
 	caves: "true",
@@ -111,8 +112,13 @@ const OPENS_ON: Partial<Record<keyof PlanetKnobs, string>> = {
 };
 
 const params = new URLSearchParams(location.search);
+// **The one knob a handed-over world does not get to leave off.** This page is
+// a bench of the cave rule, and a page whose subject is switched off is a page
+// whose first act has to be finding the switch -- so the switch comes on, and
+// it is the first row of the first group when it is not wanted.
+const bare = [...params.keys()].length === 0;
 for (const [key, value] of Object.entries(OPENS_ON))
-	if (!params.has(key)) params.set(key, value);
+	if (bare || key === "caves") if (!params.has(key)) params.set(key, value);
 let settings = PlanetSettings.fromParams(params);
 
 /** Which number the shader's picture branch takes. */
@@ -460,7 +466,7 @@ worker.onmessage = (event: MessageEvent<CaveReply>) => {
 	// **A crust in metres is a count of blocks**, and the count is what a walk
 	// costs: one field reading a block, once a column.
 	panel.note(
-		"caveCrust",
+		"caveDepth",
 		`${Math.round(reply.facts.crust / settings.knobs.blockSize)} layers`,
 	);
 	show();
