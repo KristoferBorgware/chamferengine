@@ -15,6 +15,7 @@ import { Vec3 } from "chamfer/math";
 import {
 	CARVE_LAYER_DEFAULT,
 	carveSeed,
+	PlantTemplateStore,
 	growStand,
 	layerNoiseSettings,
 	makeBlend,
@@ -98,6 +99,16 @@ export class VegetationWorkerCore {
 
 	/** Which world the last sent planet sheet was of, so an unmoved one is not resent. */
 	private planetKey = "";
+
+	/**
+	 * The pre-grown plants this patch is stamped from, and what they are of.
+	 *
+	 * A shape knob makes different plants, so the set is thrown away and made
+	 * again whenever one moves -- which is most drags on the right panel, and
+	 * still cheaper than growing every plant of the patch where it stands.
+	 */
+	private templates: PlantTemplateStore | null = null;
+	private templateMark = "";
 
 	/**
 	 * The layer pictures, held between builds.
@@ -210,6 +221,24 @@ export class VegetationWorkerCore {
 
 		const layers: PlantLayer[] = request.layers.map(plantLayerOf);
 		const live = layers.filter((layer) => layer.on);
+		// **The bench previews what the world builds**, so it stamps the same
+		// pre-grown plants the chunk pass does rather than growing each one
+		// where it stands. Kept between requests and thrown away when a shape
+		// knob moves, which is what the signature is for.
+		const mark = JSON.stringify([
+			layout.level,
+			block,
+			live.map((one) => [one.id, one.species, one.shape]),
+		]);
+		if (mark !== this.templateMark) {
+			this.templates = new PlantTemplateStore(
+				seed,
+				layout.level,
+				block,
+				radius,
+			);
+			this.templateMark = mark;
+		}
 		const stand = growStand(
 			layout,
 			{ top: ground.top, groundLayer: ground.groundLayer },
@@ -224,6 +253,7 @@ export class VegetationWorkerCore {
 				chunkCells: CHUNK_CELLS,
 				chunkReach: CHUNK_REACH,
 				seaLevel: 0,
+				templates: this.templates,
 			},
 		);
 

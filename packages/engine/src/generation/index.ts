@@ -147,6 +147,13 @@ export type {
 	StandPatch,
 } from "./plants/growStand.js";
 export { STAND_SUNK, growStand } from "./plants/growStand.js";
+export type { PlantTemplate } from "./plants/PlantTemplate.js";
+export {
+	PLANT_VARIANTS,
+	PlantTemplateStore,
+} from "./plants/PlantTemplateStore.js";
+export { buildPlantTemplate } from "./plants/buildPlantTemplate.js";
+export { orientTemplate } from "./plants/orientTemplate.js";
 export type { StandPieces } from "./plants/standPieces.js";
 export { standPieces } from "./plants/standPieces.js";
 export { standWalkable } from "./plants/standWalkable.js";

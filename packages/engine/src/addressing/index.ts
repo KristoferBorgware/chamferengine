@@ -17,6 +17,7 @@ export {
 export type { EdgeLink } from "./solid/faceAdjacency.js";
 export { FACE_ADJACENCY } from "./solid/faceAdjacency.js";
 
+export { cellOffset } from "./lattice/cellOffset.js";
 export { latticeWeights } from "./lattice/latticeWeights.js";
 export { latticePosition } from "./lattice/latticePosition.js";
 export { cellKey } from "./lattice/cellKey.js";

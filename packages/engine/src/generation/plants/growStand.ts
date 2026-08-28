@@ -1,4 +1,5 @@
 import type { PlantLayer } from "./PlantLayer.js";
+import type { PlantTemplateStore } from "./PlantTemplateStore.js";
 import type { PlantRoots } from "./plantRoots.js";
 import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import { Vec3 } from "../../math/Vec3.js";
@@ -13,6 +14,8 @@ import { plantDensityAt } from "./plantDensityAt.js";
 import { plantFrame } from "./PlantFrame.js";
 import { plantLayerNoise } from "./plantLayerNoise.js";
 import { plantSalt } from "./plantSalt.js";
+import { cellOffset } from "../../addressing/lattice/cellOffset.js";
+import { orientTemplate } from "./orientTemplate.js";
 import { valueNoise3 } from "../noise/valueNoise3.js";
 import { BLOCK_NAMES, BlockType } from "../terrain/BlockType.js";
 import { plantBlocksOf } from "./PLANT_BLOCKS.js";
@@ -38,6 +41,13 @@ const LEAF_SEED_OFFSET = 71;
 /** Seed offsets for a plant's own size and its own bend. */
 const SIZE_SEED_OFFSET = 77;
 const ROLL_SEED_OFFSET = 55;
+
+/** Seed offsets for which pre-grown plant stands here, and which way round. */
+const VARIANT_SEED_OFFSET = 91;
+const TURN_SEED_OFFSET = 113;
+
+/** How many ways round a template may be laid: six turns, each mirrored. */
+const TURNS = 12;
 
 /**
  * The drawn lattice a stand is written into.
@@ -107,6 +117,18 @@ export interface StandOptions {
 
 	/** Ground at or under this is water, and nothing is planted in it. */
 	readonly seaLevel: number;
+
+	/**
+	 * The pre-grown plants to stamp, or nothing to grow each one where it
+	 * stands.
+	 *
+	 * **Rasterising a plant is nine tenths of what one costs**, so a stand
+	 * stamps a cell list it has already paid for rather than flooding the
+	 * lattice around every rod and every leaf ball again. Passing nothing
+	 * takes the slow path, which is what {@link buildPlantTemplate} is: the
+	 * templates have to come from somewhere, and they come from this.
+	 */
+	readonly templates?: PlantTemplateStore | null;
 }
 
 /** A stand of plants, as slots over the patch, and what grew. */
@@ -184,6 +206,7 @@ export function growStand(
 		chunkReach,
 		seaLevel,
 	} = options;
+	const templates = options.templates ?? null;
 	const { count, ring, directions } = patch;
 	const { top, groundLayer } = ground;
 	const n = 2 ** patch.level;
@@ -661,8 +684,78 @@ export function growStand(
 
 	const skeleton = emptySkeleton();
 
+	/**
+	 * Lay one pre-grown plant down at a root, in one of its twelve turns.
+	 *
+	 * **All of the work is already done**, so this is an integer add and a rank
+	 * compare per cell: no flood, no distance test, no noise and no address
+	 * lookup beyond the one {@link cellOffset} does to carry a step across a
+	 * face edge. Which plant and which way round are hashes of the root's own
+	 * cell, so two chunks that both hold it lay down the same one.
+	 *
+	 * **A layer offset is absolute**, because layers count downward from the
+	 * crust top and that is one radius for the whole planet. The column a cell
+	 * lands in counts its own slots from its own ground, so the conversion is
+	 * the difference between the two grounds -- and nothing else here has to
+	 * know what the terrain is doing.
+	 */
+	const stamp = (
+		r: number,
+		layerAt: number,
+		store: PlantTemplateStore,
+	): number => {
+		const c = rootSeat[r]!;
+		const face = roots.face[r]!;
+		const i = roots.i[r]!;
+		const j = roots.j[r]!;
+		const kept = store.forLayer(live[layerAt]!);
+		if (kept.length === 0) return 0;
+		const pick = Math.min(
+			kept.length - 1,
+			Math.floor(
+				hash3(face, i, j, (seed + VARIANT_SEED_OFFSET) | 0) *
+					kept.length,
+			),
+		);
+		const template = kept[pick]!;
+		const turn = Math.min(
+			TURNS - 1,
+			Math.floor(
+				hash3(j, i, face, (seed + TURN_SEED_OFFSET) | 0) * TURNS,
+			),
+		);
+		woodBlock = wood[layerAt]!;
+		leafBlock = leafOf[layerAt]!;
+		// A cell's slot is counted from its own column's ground, and a
+		// template's is counted from the root's, so the two differ by the step
+		// between those grounds -- which `groundLayer` already holds, negated.
+		const rootGround = groundLayer[c]!;
+		const step: [number, number] = [0, 0];
+		for (let k = 0; k < template.count; k++) {
+			orientTemplate(template.di[k]!, template.dj[k]!, turn, step);
+			const cell = cellOffset(face, n, i, j, step[0], step[1]);
+			const named = canonicalCell(cell.face, n, cell.i, cell.j);
+			const at = seat.get(keyOf(named.face, named.i, named.j));
+			if (at === undefined) continue;
+			// `s = SUNK - 1 - dLayer` on the root's own column, moved by
+			// however much lower or higher this column's ground stands.
+			const slot =
+				STAND_SUNK -
+				1 -
+				template.dLayer[k]! +
+				rootGround -
+				groundLayer[at]!;
+			write(at, slot, template.block[k]!);
+		}
+		if (template.reach > widest) widest = template.reach;
+		if (template.height > tallest) tallest = template.height;
+		if (template.height < shortest) shortest = template.height;
+		return template.height;
+	};
+
 	/** Grow whatever stands on one root, into whichever chunk is being held. */
 	const raise = (r: number, layer: number): number => {
+		if (templates) return stamp(r, layer, templates);
 		const c = rootSeat[r]!;
 		const face = roots.face[r]!;
 		const i = roots.i[r]!;

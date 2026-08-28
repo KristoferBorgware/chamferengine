@@ -1,5 +1,6 @@
 import type { Chunk } from "./Chunk.js";
 import type { PlantLayer } from "../plants/PlantLayer.js";
+import type { PlantTemplateStore } from "../plants/PlantTemplateStore.js";
 import type { StandPatch } from "../plants/growStand.js";
 import type { TerrainGenerator } from "../terrain/TerrainGenerator.js";
 import type { WorldShape } from "../../world/WorldShape.js";
@@ -22,6 +23,18 @@ import { rank } from "../../addressing/lattice/rank.js";
  * ground cut into chunks and generated whole comes out 0 cells different.
  */
 export const PLANT_REACH = 24;
+
+/**
+ * How many layers under the height field a plant will look for its footing.
+ *
+ * The carve and the caves both hollow the top of a column after the surface is
+ * decided, so the block a plant stands on is at or a little under where the
+ * height field put the ground. Deeper than this and the column has been cut
+ * away rather than lowered -- a cave mouth or the foot of a sheer face -- and
+ * nothing is planted at all, because a tree at the bottom of a shaft is worse
+ * than no tree.
+ */
+export const PLANT_DROP = 3;
 
 /**
  * How many levels of detail grow plants at all.
@@ -94,6 +107,7 @@ export function plantChunk(
 	layers: readonly PlantLayer[],
 	seed: number,
 	rootDepth: number = shape.subdivisionDepth,
+	templates: PlantTemplateStore | null = null,
 ): PlantedChunk | null {
 	if (layers.every((layer) => !layer.on)) return null;
 	const depth = shape.subdivisionDepth;
@@ -156,6 +170,36 @@ export function plantChunk(
 		frontier = next;
 	}
 
+	/**
+	 * The topmost layer of a column that actually holds a block, or `-1`.
+	 *
+	 * **The height field is where the ground would be, not where it is.** The
+	 * carve cuts cliffs and overhangs into the top of a column and the caves
+	 * hollow it, both after the surface is decided -- so a plant whose foot is
+	 * placed at `layerOfSurface` can stand on nothing at all, which is a tree
+	 * floating over a cliff edge or over a cave mouth. Walking down from there
+	 * finds the block it should stand on, at `blockAt` a step and almost always
+	 * none: the surface layer itself is solid over the whole of an uncarved
+	 * world.
+	 *
+	 * **Bounded, because a hole is not a lower ground.** Past
+	 * {@link PLANT_DROP} layers the column has been cut away rather than
+	 * lowered -- a cave mouth, a sheer face, an overhang with air under it --
+	 * and the answer is that nothing grows there rather than something growing
+	 * at the bottom of it.
+	 */
+	function solidTop(
+		column: ReturnType<TerrainGenerator["columnAt"]>,
+	): number {
+		const from = shape.layerOfSurface(column.groundRadius);
+		for (let step = 0; step <= PLANT_DROP; step++) {
+			const layer = from + step;
+			if (layer >= shape.crustDepth) return -1;
+			if (terrain.blockAt(column, layer) !== BlockType.AIR) return layer;
+		}
+		return -1;
+	}
+
 	const count = face.length;
 	const directions = new Float64Array(count * 3);
 	const ring = new Int32Array(count * 6).fill(-1);
@@ -181,15 +225,23 @@ export function plantChunk(
 		// downward from the crust top, and a stand counts upward from the
 		// ground, so the two meet at the radius of the surface layer's top.
 		const column = terrain.columnAt(face[c]!, iOf[c]!, jOf[c]!);
-		const surface = shape.layerOfSurface(column.groundRadius);
+		const solid = solidTop(column);
+		// **A column with nothing at its top still needs a ground to measure
+		// from**, because a neighbour's canopy is written into it and every
+		// slot is counted from this column's own surface. It is the height
+		// field's answer, and `rootHeight` below is what refuses the plant.
+		const surface =
+			solid >= 0 ? solid : shape.layerOfSurface(column.groundRadius);
 		// A chunk counts layers downward from the crust top and a stand counts
 		// slots upward from the ground, so one is the other negated.
 		groundLayer[c] = -surface;
 		top[c] = shape.radiusOfLayer(surface) - shape.seaLevelRadius;
 		// **The map's own height at the root**, which is what says whether a
 		// plant may stand here at all -- the layer the surface rounded to is a
-		// block either way of it.
-		rootHeight[c] = column.groundRadius - shape.seaLevelRadius;
+		// block either way of it. A column the carve or a cave hollowed out
+		// from under its own surface reads `-1` and is never planted.
+		rootHeight[c] =
+			solid < 0 ? -1 : column.groundRadius - shape.seaLevelRadius;
 	}
 
 	/**
@@ -315,6 +367,7 @@ export function plantChunk(
 			chunkReach: PLANT_REACH,
 			seaLevel: 0,
 			owned,
+			templates,
 		},
 	);
 

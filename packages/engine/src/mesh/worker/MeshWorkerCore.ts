@@ -20,6 +20,7 @@ import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
 import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
 import { generateChunk } from "../../generation/chunk/generateChunk.js";
 import { PLANT_LEVELS, plantChunk } from "../../generation/chunk/plantChunk.js";
+import { PlantTemplateStore } from "../../generation/plants/PlantTemplateStore.js";
 
 /**
  * The working half of a mesh worker, with no reference to `Worker`, `self` or
@@ -55,6 +56,16 @@ export class MeshWorkerCore {
 	 * fewer of them.
 	 */
 	private readonly byLod = new Map<number, TerrainGenerator>();
+
+	/**
+	 * One set of pre-grown plants per level of detail, built on first use.
+	 *
+	 * **Rasterising a plant is nine tenths of what one costs**, so every level
+	 * grows a handful properly and stamps the rest. A set is a pure function of
+	 * the seed, the species and the level, so every worker builds the same one
+	 * without a byte crossing between them.
+	 */
+	private readonly templatesByLod = new Map<number, PlantTemplateStore>();
 
 	/**
 	 * Every kind of plant this world grows.
@@ -243,6 +254,21 @@ export class MeshWorkerCore {
 			result.translucent.vertices.buffer,
 			result.translucent.indices.buffer,
 		];
+	}
+
+	/** The pre-grown plants for one level, made when that level is first drawn. */
+	private templates(lod: number): PlantTemplateStore {
+		const already = this.templatesByLod.get(lod);
+		if (already) return already;
+		const level = this.shape.atLod(lod);
+		const made = new PlantTemplateStore(
+			this.seed,
+			level.subdivisionDepth,
+			level.blockSize,
+			level.seaLevelRadius,
+		);
+		this.templatesByLod.set(lod, made);
+		return made;
 	}
 
 	private generator(lod: number): TerrainGenerator {

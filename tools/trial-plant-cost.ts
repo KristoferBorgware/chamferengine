@@ -20,6 +20,7 @@ import {
 	ChunkColumnSampler,
 	TerrainGenerator,
 	buildCoarseMap,
+	PlantTemplateStore,
 	generateChunk,
 	plantChunk,
 	seedFromString,
@@ -42,6 +43,15 @@ const terrain = new TerrainGenerator(seed, shape, map, settings.terrainOptions()
 const layers = settings.plantLayers.map(plantLayerOf);
 const chunkLevel = settings.chunkLevel;
 const n = 2 ** settings.depth;
+
+// **Built once, like the coarse map.** Every worker makes its own from the
+// seed and the species, so this stands in for one worker's whole life.
+const templates = new PlantTemplateStore(
+	seed,
+	settings.depth,
+	settings.knobs.blockSize,
+	shape.seaLevelRadius,
+);
 
 const meshOptions = {
 	apron: settings.knobs.apron,
@@ -105,12 +115,20 @@ function best(run: () => void): number {
 	return least;
 }
 
-// Warm up: the first chunk through pays for every function being compiled.
+// Warm up: the first chunk through pays for every function being compiled,
+// and the first plant of each species pays for the whole template set.
 {
 	const warm = build(anyChunk());
-	plantChunk(warm, terrain, shape, layers, seed, settings.depth);
+	const at = performance.now();
+	for (const layer of layers) if (layer.on) templates.forLayer(layer);
+	const built = performance.now() - at;
+	plantChunk(warm, terrain, shape, layers, seed, settings.depth, templates);
 	mesh(warm);
 	state = 20260828;
+	console.log(
+		`templates: ${built.toFixed(0)} ms once for every species, ` +
+			`against every plant of every chunk forever`,
+	);
 }
 
 console.log(
@@ -161,7 +179,15 @@ for (let tries = 0; tries < 4000 && found < WANT; tries++) {
 		const one = build(address);
 		groundMs = Math.min(groundMs, performance.now() - at);
 		at = performance.now();
-		const got = plantChunk(one, terrain, shape, layers, seed, settings.depth);
+		const got = plantChunk(
+			one,
+			terrain,
+			shape,
+			layers,
+			seed,
+			settings.depth,
+			templates,
+		);
 		grow = Math.min(grow, performance.now() - at);
 		plants = got?.plants ?? 0;
 		wood = got?.wood ?? 0;
@@ -172,7 +198,7 @@ for (let tries = 0; tries < 4000 && found < WANT; tries++) {
 	const plainFaces = mesh(plain).tally.faces;
 
 	const grown = build(address);
-	plantChunk(grown, terrain, shape, layers, seed, settings.depth);
+	plantChunk(grown, terrain, shape, layers, seed, settings.depth, templates);
 	const grownMs = best(() => void mesh(grown));
 	const grownFaces = mesh(grown).tally.faces;
 
