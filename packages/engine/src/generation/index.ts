@@ -196,3 +196,4 @@ export { allowedBiomes } from "./biomes/allowedBiomes.js";
 export { biomeOf } from "./biomes/biomeOf.js";
 export type { BiomeSample } from "./biomes/BiomeField.js";
 export { BiomeField, makeBiomeSample } from "./biomes/BiomeField.js";
+export { biomeWorldFor } from "./biomes/biomeWorldFor.js";

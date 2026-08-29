@@ -5,6 +5,10 @@ import type { GridParts } from "../GridPaint.js";
 import type { MeshTally } from "../meshChunk.js";
 import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
 import type { TerrainOptions } from "../../generation/terrain/TerrainOptions.js";
+import type { BiomeDef } from "../../generation/biomes/BiomeDef.js";
+import type { BiomeSettings } from "../../generation/biomes/BiomeSettings.js";
+import type { LandformGrid } from "../../generation/biomes/LandformGrid.js";
+import type { TerrainLayer } from "../../generation/coarse/TerrainLayer.js";
 
 /**
  * What a worker is told once, before any chunk is asked for.
@@ -54,6 +58,28 @@ export interface MeshWorkerSetup {
 	 * plants and costs one comparison.
 	 */
 	readonly plants?: readonly PlantLayer[];
+
+	/**
+	 * The biome table that names this world's ground, or absent for the
+	 * elevation bands alone.
+	 *
+	 * **The table travels; the field is built here.** A `BiomeField` holds
+	 * live caches keyed to one world, so a structured clone would carry them
+	 * for nothing -- the plain data underneath does not, the same way
+	 * {@link plants} sends layers rather than a grown forest. `continent`,
+	 * `erosion` and `peaks` ride along beside the table because the landform
+	 * reading needs the raw curves, not the map's already-blended height.
+	 */
+	readonly biomes?:
+		| {
+				readonly biomes: readonly BiomeDef[];
+				readonly grid: LandformGrid;
+				readonly settings?: BiomeSettings;
+				readonly continent: TerrainLayer;
+				readonly erosion: TerrainLayer;
+				readonly peaks: TerrainLayer;
+		  }
+		| undefined;
 }
 
 /**

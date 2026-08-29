@@ -15,6 +15,8 @@ import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
 import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
+import { BiomeField } from "../../generation/biomes/BiomeField.js";
+import { biomeWorldFor } from "../../generation/biomes/biomeWorldFor.js";
 import { buildChunkMesh } from "../buildChunkMesh.js";
 import { applyDeltas } from "../../generation/chunk/applyDeltas.js";
 import type { PlantLayer } from "../../generation/plants/PlantLayer.js";
@@ -79,6 +81,18 @@ export class MeshWorkerCore {
 	private readonly grid: GridParts | null;
 	private readonly flat: Column | null;
 
+	/**
+	 * The world's biome table, read once for its whole life.
+	 *
+	 * **Shared across every LOD, built at the finest.** A biome names a place
+	 * rather than a mesh resolution -- the same identity a region or a
+	 * climate reading already carries -- so one field built against the
+	 * worker's own base shape answers for every level a chunk is drawn at,
+	 * and building it again per level would only repeat its own land-wide
+	 * fit measurement for no different answer.
+	 */
+	private readonly biomeField: BiomeField | null;
+
 	constructor(setup: MeshWorkerSetup) {
 		this.map = CoarseMap.fromSnapshot(setup.map);
 		this.shape = new WorldShape(
@@ -96,6 +110,21 @@ export class MeshWorkerCore {
 		this.options = setup.terrain;
 		this.plants = setup.plants ?? [];
 		this.grid = setup.grid ?? null;
+		this.biomeField = setup.biomes
+			? new BiomeField(
+					biomeWorldFor(
+						this.seed,
+						this.shape,
+						this.map,
+						setup.biomes.continent,
+						setup.biomes.erosion,
+						setup.biomes.peaks,
+					),
+					setup.biomes.biomes,
+					setup.biomes.grid,
+					setup.biomes.settings,
+				)
+			: null;
 		// Two solid layers, so the top cap is the only face a cell has: the
 		// layer under the surface is solid too, and a bottom face is only
 		// emitted over air. Every column of every chunk is this one object --
@@ -285,6 +314,7 @@ export class MeshWorkerCore {
 			this.shape.atLod(lod),
 			this.map,
 			this.options,
+			this.biomeField,
 		);
 		this.byLod.set(lod, made);
 		return made;

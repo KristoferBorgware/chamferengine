@@ -9,6 +9,14 @@ import {
 	maxElevationFor,
 	isTranslucent,
 	seedFromString,
+	BiomeField,
+	DEFAULT_BIOMES,
+	DEFAULT_LANDFORM_GRID,
+	biomeWorldFor,
+	makeBiomeSample,
+	CONTINENT_LAYER_DEFAULT,
+	EROSION_LAYER_DEFAULT,
+	PEAKS_LAYER_DEFAULT,
 } from "chamfer/generation";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import { Vec3 } from "chamfer/math";
@@ -449,6 +457,88 @@ describe("the carve, written into a column", () => {
 			gen.fillColumn(column, into, 0, layers);
 			for (let layer = column.groundLayer; layer < layers - 1; layer++)
 				expect(into[layer]).not.toBe(BlockType.AIR);
+		}
+	});
+});
+
+describe("with a biome table", () => {
+	let field: BiomeField;
+	let biomeGen: TerrainGenerator;
+
+	beforeAll(() => {
+		field = new BiomeField(
+			biomeWorldFor(
+				map.seed,
+				shape,
+				map,
+				CONTINENT_LAYER_DEFAULT,
+				EROSION_LAYER_DEFAULT,
+				PEAKS_LAYER_DEFAULT,
+			),
+			DEFAULT_BIOMES,
+			DEFAULT_LANDFORM_GRID,
+		);
+		biomeGen = new TerrainGenerator(
+			map.seed,
+			shape,
+			map,
+			{ rockLine: 28, snowLine: 45 },
+			field,
+		);
+	});
+
+	it("names dry ground with the biome's own block, not the elevation bands", () => {
+		const scratch = makeBiomeSample();
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius > column.groundRadius) continue;
+			const top = biomeGen.blockAt(column, column.groundLayer);
+			const want = field.blockAt(column.x, column.y, column.z, scratch);
+			expect(want).toBeGreaterThanOrEqual(0);
+			expect(top).toBe(want);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("still lays sand under water, which the biome model has no ground to name", () => {
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius <= column.groundRadius) continue;
+			expect(biomeGen.blockAt(column, column.groundLayer)).toBe(
+				BlockType.SAND,
+			);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("leaves everything under the surface to the elevation bands", () => {
+		// The biome model has no underlay of its own yet, so the soil and the
+		// rock below the top layer are unchanged by wiring one in.
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius > column.groundRadius) continue;
+			expect(biomeGen.blockAt(column, column.groundLayer + 10)).toBe(
+				BlockType.STONE,
+			);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("changes nothing for a generator built without one", () => {
+		// `gen`, from the outer `beforeAll`, carries no biome field -- the
+		// same seed and map through the plain constructor still answers with
+		// the elevation bands alone.
+		for (const column of columns(32)) {
+			const top = gen.blockAt(column, column.groundLayer);
+			expect([
+				BlockType.SAND,
+				BlockType.GRASS,
+				BlockType.STONE,
+				BlockType.SNOW,
+			]).toContain(top);
 		}
 	});
 });
