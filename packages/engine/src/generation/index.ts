@@ -139,6 +139,7 @@ export {
 export { plantSalt } from "./plants/plantSalt.js";
 export { plantLayerNoise } from "./plants/plantLayerNoise.js";
 export { plantDensityAt } from "./plants/plantDensityAt.js";
+export { plantBiomeMasks } from "./plants/plantBiomeMasks.js";
 export type { PlantFrame } from "./plants/PlantFrame.js";
 export { plantFrame } from "./plants/PlantFrame.js";
 export type { PlantSkeleton } from "./plants/PlantSkeleton.js";

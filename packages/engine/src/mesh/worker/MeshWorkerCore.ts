@@ -185,6 +185,7 @@ export class MeshWorkerCore {
 						this.seed,
 						this.shape.subdivisionDepth,
 						this.templates(job.lod),
+						this.biomeField,
 					)
 				: null;
 		// What lands in the triangle is written into the chunk; what lands on
