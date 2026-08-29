@@ -4,7 +4,7 @@
  * Two shaders read the sun's own view of what stands near the camera, so it
  * lives here rather than twice. It declares its own bind group and takes the
  * sun as an argument, so it depends on nothing an including shader has to
- * provide beyond binding group 2 to a {@link SunViews}.
+ * provide beyond binding group 2 to a {@link LightViews}.
  *
  * **The coarse-map march that used to live here is gone.** It walked toward
  * the sun over the 32 m height map and cost more than it gave once the

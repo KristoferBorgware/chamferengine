@@ -1,3 +1,4 @@
+import { BLOCK_LIGHT_WGSL } from "../light/BLOCK_LIGHT_WGSL.js";
 import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 
@@ -29,9 +30,13 @@ import { SUN_SHARE } from "../../light/SUN_SHARE.js";
  * is doing, which is the color of everything the sun does not reach
  * directly, and `sky.w` is what that ambient light is worth.
  * \`moon.xyz\` points at the moon and \`moon.w\` is what it is worth.
+ *
+ * A light standing in the world is the one term that is not in this uniform:
+ * it is a cube of levels around wherever it stands, read through group 2.
  */
 export const TERRAIN_SHADER = /* wgsl */ `
 ${SHADOW_WGSL}
+${BLOCK_LIGHT_WGSL}
 
 /**
  * How much of the light comes from the sun rather than from the sky.
@@ -78,12 +83,14 @@ struct VertexOut {
 	@location(1)       local : vec3f,
 	@location(2)       up    : vec3f,
 	@location(3)       depth : f32,
+	@location(4)       sky   : f32,
 };
 
 @vertex
 fn vertexMain(
 	@location(0) position : vec3f,
 	@location(1) color    : vec3f,
+	@location(2) sky      : f32,
 ) -> VertexOut {
 	let world = position + chunk.origin.xyz;
 	var out : VertexOut;
@@ -100,6 +107,11 @@ fn vertexMain(
 	out.local = position;
 	out.up = normalize(world);
 	out.depth = length(world - frame.eye.xyz);
+	// How much sky the cell stands under, measured by the mesher from the
+	// ground around it. Under full light every face takes the open-sky
+	// reading instead, which is what stops a cave being held at the 12% a
+	// cell shut in on every side is given.
+	out.sky = mix(sky, 1.0, frame.sun.w);
 	return out;
 }
 
@@ -198,6 +210,7 @@ fn lightOn(
 	away : f32,
 	ambient : f32,
 	direct : f32,
+	sky : f32,
 ) -> vec3f {
 	let day = frame.night.x;
 	var lambert = max(dot(normal, frame.sun.xyz), 0.0);
@@ -251,7 +264,17 @@ fn lightOn(
 	// a moonlit face reads against an unlit one instead of both bottoming out
 	// at the same number.
 	let night = vec3f(frame.night.y * openness);
-	return max(night, fromSky) + fromSun + fromMoon;
+	// **A light standing in the world owes nothing to the day.** The sun, the
+	// sky and the moon are all gated by whether the sun is over this place's
+	// horizon; a lamp underground is not, and it adds on top of the floor the
+	// same way the moon does rather than having to beat it.
+	let lamp = blockLight(world, normal);
+	// **The sky's own reach is what \`sky\` scales, and a lamp is outside it.**
+	// The sun, the sky and the moon all arrive from over the ground around
+	// this cell, so how much of that a cell can see reduces all three; a
+	// source standing in the world owes nothing to it, and a cave shut in on
+	// every side is exactly where the two have to part.
+	return (max(night, fromSky) + fromSun + fromMoon) * sky + lamp;
 }
 
 @fragment
@@ -268,7 +291,8 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// moves.
 	let direct = SUN_SHARE;
 	let lit =
-		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
+		in.color *
+		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
@@ -287,7 +311,8 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
 	let lit =
-		in.color * lightOn(normal, up, world, in.depth, 1.0 - direct, direct);
+		in.color *
+		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
 }

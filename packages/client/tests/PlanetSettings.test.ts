@@ -600,14 +600,9 @@ describe("what a live rebuild can show", () => {
 	 * nothing on screen moves until every chunk is meshed again -- and none of
 	 * which moves a block.
 	 */
-	const BAKED = [
-		"speckle",
-		"ambientOcclusion",
-		"skyExposure",
-		"fullbright",
-	] as const;
+	const BAKED = ["speckle", "ambientOcclusion", "skyExposure"] as const;
 
-	it("names the same four the client routes on", () => {
+	it("names the same three the client routes on", () => {
 		// `BAKED_KNOBS` is what decides a knob takes the cheap path -- the
 		// meshes again and not the map. A key listed here and missing there
 		// would quietly go on rebuilding the coarse map it cannot move.
@@ -650,14 +645,23 @@ describe("what a live rebuild can show", () => {
 		for (const key of BAKED) expect(KNOB_RANGES[key]!.rebuilds).toBe(true);
 	});
 
-	it("puts full light through a rebuild, and keeps it out of the world", () => {
-		// It is half a shader flag and half a mesher one: the sky exposure and
-		// the corner shading are multiplied into the vertex colours, and no
-		// light computed afterwards can divide them back out. So it needs the
-		// chunks built again -- and it still moves no block.
-		expect(REMESH_KNOBS.has("fullbright")).toBe(true);
+	it("takes full light on the next frame and rebuilds nothing", () => {
+		// How much sky a cell stands under is a number of its own on every
+		// vertex rather than a factor in the colour, so the shader takes it
+		// away itself. It moves no block either way.
+		expect(REMESH_KNOBS.has("fullbright")).toBe(false);
 		expect(WORLD_SHAPE_KNOBS.has("fullbright")).toBe(false);
-		expect(KNOB_RANGES["fullbright"]!.rebuilds).toBe(true);
+		expect(KNOB_RANGES["fullbright"]!.rebuilds).toBe(false);
+	});
+
+	it("keeps a carried light out of the mesh and out of the world", () => {
+		// It is a cube of levels the frame carries, filled from where the
+		// player stands, so nothing about it reaches a vertex.
+		for (const key of ["torchOn", "torchRange", "torchStrength"] as const) {
+			expect(REMESH_KNOBS.has(key)).toBe(false);
+			expect(WORLD_SHAPE_KNOBS.has(key)).toBe(false);
+			expect(KNOB_RANGES[key]!.rebuilds).toBe(false);
+		}
 	});
 
 	it("gives one world one name however they are turned", () => {

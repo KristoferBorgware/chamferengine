@@ -10,6 +10,73 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-120 — A light standing at a pentagon reads its own chart twice over
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-29, building the carried light
+**Where:** `packages/engine/src/light/fillBlockLight.ts`,
+`packages/engine/src/render/light/BLOCK_LIGHT_WGSL.ts`
+
+**What happens.** A light's reach travels to the shader as a cube of levels
+named by how far each cell is from the source along the source's own face
+coordinates, extended past that face's edges. That chart is exact everywhere
+the sphere is flat enough to be a plane, and the twelve icosahedron vertices
+are where it is not: the sphere is one direction short there, so the flat chart
+wraps onto itself. Measured at 15 steps (`tools/trial-torch.ts`), a source
+mid-face, near a face edge and exactly on one all name **721 distinct cells for
+721 chart entries and round-trip 100%**; a source at a pentagon names **616
+cells for the same 721 entries and round-trips 23.2%**.
+
+**Why it matters.** Barely, and it is exactly the sort of thing that reads as a
+mystery when somebody finally stands there. Nothing is lit that should not be
+-- entries that collide take the brighter of the two -- but the disc a light
+throws at a pentagon is subtly the wrong shape, and a wall a few cells past the
+pentagon can take the level of a different wall. A light within 16 steps of one
+of the twelve stands on **9,804 of 41,943,042 columns, 0.0234%** of the shipped
+planet, and those twelve columns are protected from placement anyway.
+
+**What would fix it.** Fill on the real cell graph through `neighbour`, which
+has the pentagon's five-long ring already, and write each cell it reaches into
+the chart at the coordinate `latticeCell` folds it back to. The collisions stay
+-- two real cells still share one entry, because the chart has six directions
+where the sphere has five -- so the entry taken has to be the brighter, and the
+shader still reads whichever of the two its own solve lands on. Closing it
+properly means a chart the pentagon fits, which is a different addressing
+question and not a light one.
+
+### F-121 — A carried light asks the world for a column once per cell it reaches
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-29, building the carried light
+**Where:** `packages/client/src/planet.ts` (`carryLight`),
+`packages/client/src/worldBlocks.ts`
+
+**What happens.** The fill asks `blockAt` whether each cell it reaches is
+solid, and `blockAt` reads the delta store, then the plants, then
+`terrain.columnAt(face, i, j)` -- which generates the whole column from the
+seed. A column is asked for once per **cell**, so a light of range 8 reaching
+1,241 cells asks about the same 217 columns five or six times over, and range
+16 reaching 9,009 cells asks about 817 columns eleven times over.
+
+**Why it matters.** The fill itself is `0.14 ms` at range 8 and `0.84 ms` at
+range 16 over the same cells with nothing solid (`tools/trial-torch.ts`), so
+whatever the generator costs is the whole of the bill, and it lands on the
+frame the player steps off a cell rather than being spread. It is the reason
+the range knob is worth having at all.
+
+**What would fix it.** A memo of the generated column inside `worldBlocks`,
+keyed by face and offset and dropped whenever the generator it was built
+against is replaced. Terrain is a pure function of the address, so the memo can
+never go stale against an edit -- the store and the plants are already read
+ahead of it. The ray walk asks the same question the same way and would take
+the same memo.
+
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance

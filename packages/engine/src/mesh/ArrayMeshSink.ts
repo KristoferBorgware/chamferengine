@@ -1,6 +1,7 @@
 import type { Box } from "../math/Box.js";
 import type { Geometry } from "./Geometry.js";
 import type { MeshSink } from "./MeshSink.js";
+import { CHUNK_VERTEX_FLOATS } from "./CHUNK_VERTEX_FLOATS.js";
 
 /** The world axes, which is what a caller naming none gets. */
 const WORLD_AXES: Box["axes"] = [
@@ -37,7 +38,7 @@ export class ArrayMeshSink implements MeshSink {
 	private readonly high = [-Infinity, -Infinity, -Infinity];
 
 	constructor(vertexCapacity = 4096, axes: Box["axes"] = WORLD_AXES) {
-		this.positions = new Float32Array(vertexCapacity * 6);
+		this.positions = new Float32Array(vertexCapacity * CHUNK_VERTEX_FLOATS);
 		this.indices = new Uint32Array(vertexCapacity * 3);
 		this.axes = axes;
 	}
@@ -57,8 +58,12 @@ export class ArrayMeshSink implements MeshSink {
 		r: number,
 		g: number,
 		b: number,
+		sky: number,
 	): number {
-		if ((this.vertexCount + 1) * 6 > this.positions.length)
+		if (
+			(this.vertexCount + 1) * CHUNK_VERTEX_FLOATS >
+			this.positions.length
+		)
 			this.positions = grow(this.positions, Float32Array);
 		for (let n = 0; n < 3; n++) {
 			const axis = this.axes[n]!;
@@ -67,13 +72,14 @@ export class ArrayMeshSink implements MeshSink {
 			if (along > this.high[n]!) this.high[n] = along;
 		}
 
-		const at = this.vertexCount * 6;
+		const at = this.vertexCount * CHUNK_VERTEX_FLOATS;
 		this.positions[at] = x;
 		this.positions[at + 1] = y;
 		this.positions[at + 2] = z;
 		this.positions[at + 3] = r;
 		this.positions[at + 4] = g;
 		this.positions[at + 5] = b;
+		this.positions[at + 6] = sky;
 		return this.vertexCount++;
 	}
 
@@ -122,7 +128,10 @@ export class ArrayMeshSink implements MeshSink {
 	/** The finished geometry, trimmed to what was written. */
 	build(cellCount: number): Geometry {
 		return {
-			vertices: this.positions.slice(0, this.vertexCount * 6),
+			vertices: this.positions.slice(
+				0,
+				this.vertexCount * CHUNK_VERTEX_FLOATS,
+			),
 			indices: this.indices.slice(0, this.indexCount),
 			cellCount,
 			triangleCount: this.indexCount / 3,
