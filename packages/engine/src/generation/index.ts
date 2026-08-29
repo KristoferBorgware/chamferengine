@@ -165,3 +165,34 @@ export { orientTemplate } from "./plants/orientTemplate.js";
 export type { StandPieces } from "./plants/standPieces.js";
 export { standPieces } from "./plants/standPieces.js";
 export { standWalkable } from "./plants/standWalkable.js";
+
+export type { Landform } from "./biomes/Landform.js";
+export { ANY_LANDFORM, LANDFORMS, SHORE } from "./biomes/Landform.js";
+export type { LandformGrid } from "./biomes/LandformGrid.js";
+export {
+	CONT_BANDS,
+	CONT_EDGES,
+	CONT_NAMES,
+	DEFAULT_LANDFORM_GRID,
+	ERO_BANDS,
+	ERO_EDGES,
+	ERO_NAMES,
+	PV_BANDS,
+	PV_EDGES,
+	PV_NAMES,
+} from "./biomes/LandformGrid.js";
+export { bucket } from "./biomes/bucket.js";
+export { gridAt } from "./biomes/gridAt.js";
+export { SHORE_ROOM, landformAt } from "./biomes/landformAt.js";
+export type { BiomeDef } from "./biomes/BiomeDef.js";
+export { BIOME_PRESETS, DEFAULT_BIOMES } from "./biomes/BIOME_PRESETS.js";
+export { BIOME_GROUNDS } from "./biomes/BIOME_GROUNDS.js";
+export type { BiomeSettings } from "./biomes/BiomeSettings.js";
+export { BIOME_DEFAULTS } from "./biomes/BiomeSettings.js";
+export type { BiomeWorld } from "./biomes/BiomeWorld.js";
+export type { ClimateFit } from "./biomes/ClimateFit.js";
+export { UNFITTED } from "./biomes/ClimateFit.js";
+export { allowedBiomes } from "./biomes/allowedBiomes.js";
+export { biomeOf } from "./biomes/biomeOf.js";
+export type { BiomeSample } from "./biomes/BiomeField.js";
+export { BiomeField, makeBiomeSample } from "./biomes/BiomeField.js";

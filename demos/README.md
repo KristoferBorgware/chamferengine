@@ -1123,7 +1123,10 @@ view and never cover it.
 
 ### [`biomes-lab.html`](biomes-lab.html)
 **Two climate fields over the planet, and a diagram that turns a pair of them
-into a name.** The left panel is the world — the terrain, the temperature and
+into a name.** The model this page prototypes is the engine's
+`chamfer/generation` biome subsystem, and the client's biome bench is the same
+tool built on the engine itself; this page stays as the standalone argument for
+each number. The left panel is the world — the terrain, the temperature and
 humidity read off it, and the finished map. The right panel is the diagram:
 humidity across, temperature up, one dot per biome, and every point of the
 square belonging to whichever dot is nearest. Drag a dot and the planet

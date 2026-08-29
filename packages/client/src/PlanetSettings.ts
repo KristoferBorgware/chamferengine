@@ -7,6 +7,8 @@ import type {
 	PatchSurface,
 } from "./PatchLook.js";
 import type { PlantLayerDraft } from "./PlantDraft.js";
+import type { BiomeTableDraft } from "./BiomeDraft.js";
+import { biomeTableFromText } from "./BiomeDraft.js";
 import { PLANT_LAYERS_DEFAULT, plantLayersFromText } from "./PlantDraft.js";
 import {
 	CAVE_DRAWS,
@@ -20,6 +22,7 @@ import type {
 	CoarseMapOptions,
 	TerrainLayer,
 	TerrainOptions,
+	BiomeSettings,
 } from "chamfer/generation";
 import { MAX_CAVE_BLOCKS } from "./CaveBlock.js";
 import {
@@ -395,6 +398,53 @@ export interface PlanetKnobs {
 	 * the bare planet, and every layer stays in the link.
 	 */
 	vegetation: boolean;
+
+	/**
+	 * The biome table: which preset it started from and every dot of it now,
+	 * as one string. {@link biomeTableFromText} is what reads it.
+	 */
+	biomes: string;
+
+	/** How much latitude decides temperature: +1 on the equator, -1 at a pole. */
+	tempEquator: number;
+
+	/** Units of temperature the ground loses per kilometre it stands up. */
+	tempLapse: number;
+
+	/** How much a noise field moves the temperature off its latitude. */
+	tempNoise: number;
+	tempFeature: number;
+	tempOctaves: number;
+
+	/** How much distance from the coast dries the air, off the continent field. */
+	humOcean: number;
+	humNoise: number;
+	humFeature: number;
+	humOctaves: number;
+
+	/** Whether the biome lookup is pushed off the climate it was handed. */
+	biomeWarp: boolean;
+	warpStrength: number;
+	warpFeature: number;
+	warpOctaves: number;
+
+	/** Whether the climate square is stretched onto the land the planet has. */
+	biomeFit: boolean;
+
+	/** Whether biomes belong to regions, each reading one climate across it. */
+	biomeRegions: boolean;
+	regionSpan: number;
+	regionClimate: number;
+	regionWarp: number;
+
+	/** Metres above the sea under which land can be shore. */
+	shoreHeight: number;
+
+	/** Metres to the six points the shore rule asks for room. */
+	shoreReach: number;
+
+	/** Octaves the landform reads the relief at: one is the width of a place. */
+	formDetail: number;
 
 	/**
 	 * Whether to draw a ball where each of the bench's lights shines from.
@@ -1195,6 +1245,28 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	leavesCollide: true,
 	plants: PLANT_LAYERS_DEFAULT,
 	vegetation: true,
+	biomes: "plain",
+	tempEquator: 0.7,
+	tempLapse: 0.9,
+	tempNoise: 0.35,
+	tempFeature: 3000,
+	tempOctaves: 3,
+	humOcean: 0.6,
+	humNoise: 0.5,
+	humFeature: 2200,
+	humOctaves: 3,
+	biomeWarp: true,
+	warpStrength: 0.12,
+	warpFeature: 700,
+	warpOctaves: 3,
+	biomeFit: true,
+	biomeRegions: true,
+	regionSpan: 1600,
+	regionClimate: 1,
+	regionWarp: 400,
+	shoreHeight: 12,
+	shoreReach: 32,
+	formDetail: 1,
 	patchOcclusion: 1,
 	patchSpeckle: 0.35,
 	keyShadow: true,
@@ -1722,6 +1794,28 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	leavesCollide: { ...TOGGLE, rebuilds: false },
 	plants: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	vegetation: { ...TOGGLE, rebuilds: true },
+	biomes: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
+	tempEquator: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	tempLapse: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "per km" },
+	tempNoise: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	tempFeature: { low: 200, high: 8000, step: 100, rebuilds: false, unit: "m" },
+	tempOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
+	humOcean: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	humNoise: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	humFeature: { low: 200, high: 8000, step: 100, rebuilds: false, unit: "m" },
+	humOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
+	biomeWarp: { ...TOGGLE, rebuilds: false },
+	warpStrength: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
+	warpFeature: { low: 100, high: 2000, step: 20, rebuilds: false, unit: "m" },
+	warpOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
+	biomeFit: { ...TOGGLE, rebuilds: false },
+	biomeRegions: { ...TOGGLE, rebuilds: false },
+	regionSpan: { low: 200, high: 8000, step: 100, rebuilds: false, unit: "m across" },
+	regionClimate: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	regionWarp: { low: 0, high: 1200, step: 20, rebuilds: false, unit: "m" },
+	shoreHeight: { low: 0, high: 120, step: 2, rebuilds: false, unit: "m above the sea" },
+	shoreReach: { low: 8, high: 200, step: 4, rebuilds: false, unit: "m" },
+	formDetail: { low: 1, high: 4, step: 1, rebuilds: false, unit: "octaves" },
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchMap: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
@@ -2197,6 +2291,39 @@ export class PlanetSettings {
 	 */
 	get plantLayers(): PlantLayerDraft[] {
 		return plantLayersFromText(this.knobs.plants);
+	}
+
+	/** The biome table this world names its ground with, decoded the same way. */
+	get biomeTable(): BiomeTableDraft {
+		return biomeTableFromText(this.knobs.biomes);
+	}
+
+	/** The biome model's knobs, as the engine takes them. */
+	biomeOptions(): BiomeSettings {
+		const k = this.knobs;
+		return {
+			tempEquator: k.tempEquator,
+			tempLapse: k.tempLapse,
+			tempNoise: k.tempNoise,
+			tempFeature: k.tempFeature,
+			tempOctaves: k.tempOctaves,
+			humOcean: k.humOcean,
+			humNoise: k.humNoise,
+			humFeature: k.humFeature,
+			humOctaves: k.humOctaves,
+			warp: k.biomeWarp,
+			warpStrength: k.warpStrength,
+			warpFeature: k.warpFeature,
+			warpOctaves: k.warpOctaves,
+			fit: k.biomeFit,
+			regions: k.biomeRegions,
+			regionSpan: k.regionSpan,
+			regionClimate: k.regionClimate,
+			regionWarp: k.regionWarp,
+			shoreHeight: k.shoreHeight,
+			shoreReach: k.shoreReach,
+			formDetail: k.formDetail,
+		};
 	}
 
 	/** How wide one column of the vegetation patch is, in metres. */
@@ -2740,6 +2867,7 @@ export class PlanetSettings {
 			// a list: what the world is called, and what grows on it.
 			if (key === "seed") knobs.seed = raw;
 			else if (key === "plants") knobs.plants = raw;
+			else if (key === "biomes") knobs.biomes = raw;
 			// The knobs that name one of a fixed set. A link can say anything,
 			// so what it says has to be on the list or the world keeps the
 			// value it had.

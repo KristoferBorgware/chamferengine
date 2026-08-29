@@ -5,3 +5,5 @@ export type { Landmark } from "./Landmark.js";
 export { landmarks } from "./landmarks.js";
 export { shareCode, shareCodeLength } from "./shareCode.js";
 export { placeFromShareCode } from "./placeFromShareCode.js";
+export type { LocalFrame } from "./frameOf.js";
+export { frameOf } from "./frameOf.js";

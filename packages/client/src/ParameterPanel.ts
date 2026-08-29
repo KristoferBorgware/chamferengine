@@ -140,6 +140,9 @@ interface Knob {
 	 * in one group and answer for one page each.
 	 */
 	readonly veg?: "off" | "only";
+
+	/** `"off"` for a row that decides nothing on the biome bench. */
+	readonly biome?: "off";
 }
 
 /** One titled run of rows. */
@@ -158,7 +161,7 @@ interface Group {
 	 * row that moves nothing. Groups say `world` unless told otherwise, and
 	 * `benches` is both benches and not the planet.
 	 */
-	readonly where?: "world" | "bench" | "both" | "cave" | "veg";
+	readonly where?: "world" | "bench" | "both" | "cave" | "veg" | "biome";
 
 	/**
 	 * Where this group stands on the cave bench, when that differs.
@@ -185,6 +188,15 @@ interface Group {
 	 * its right for the plants, so there is no side to name.
 	 */
 	readonly veg?: "off";
+
+	/**
+	 * Whether this group stands on the biome bench.
+	 *
+	 * The same rule as the vegetation bench: the world's shape arrives already
+	 * tuned through the link, so the layer groups stay on the landscape bench
+	 * and this page holds the climate, the landform cut and the regions.
+	 */
+	readonly biome?: "off";
 
 	/**
 	 * Which of the bench's two panels the group stands in.
@@ -410,6 +422,7 @@ const GROUPS: Group[] = [
 				key: "patchDetail",
 				label: "Block detail",
 				veg: "off",
+				biome: "off",
 				digits: 0,
 			},
 			{
@@ -443,6 +456,7 @@ const GROUPS: Group[] = [
 			{
 				key: "patchPicture",
 				label: "Picture",
+				biome: "off",
 				choices: [
 					{ value: "ground", label: "Ground" },
 					{ value: "height", label: "Height" },
@@ -466,6 +480,7 @@ const GROUPS: Group[] = [
 				key: "patchAlong",
 				cave: "off",
 				veg: "off",
+				biome: "off",
 				label: "Contour along",
 				choices: [
 					{ value: "x", label: "East" },
@@ -676,6 +691,93 @@ const GROUPS: Group[] = [
 				digits: 0,
 				enabledWhen: (k) => !k.plain && k.carveLayer,
 			},
+		],
+	},
+	{
+		// **The terrain names the ground before the climate names the type**,
+		// and these rows are how it is read: the relief at the width of a
+		// place rather than of a gully, and the shore as a height with room to
+		// be a beach.
+		title: "The landform",
+		where: "biome",
+		knobs: [
+			{
+				key: "formDetail",
+				label: "Relief detail",
+				digits: 0,
+				says: "octaves the landform reads the relief at; the ground keeps its own, so no hill moves",
+			},
+			{
+				key: "shoreHeight",
+				label: "Shore reaches",
+				digits: 0,
+			},
+			{
+				key: "shoreReach",
+				label: "Shore needs room for",
+				digits: 0,
+				says: "low ground is a beach only where two of six points this far out are low land too",
+			},
+		],
+	},
+	{
+		title: "The climate",
+		where: "biome",
+		knobs: [
+			{
+				key: "biomeFit",
+				label: "Fit the square to the land",
+				says: "stretches the diagram onto the land's own 2nd to 98th percentiles, so every corner is weather that exists somewhere",
+			},
+			{ key: "tempEquator", label: "Equator to pole", digits: 2 },
+			{
+				key: "tempLapse",
+				label: "Altitude cools",
+				digits: 2,
+				says: "what puts snow on a mountain standing in a warm band",
+			},
+			{ key: "tempNoise", label: "Temperature noise", digits: 2 },
+			{ key: "tempFeature", label: "Temperature feature", digits: 0 },
+			{ key: "tempOctaves", label: "Temperature octaves", digits: 0 },
+			{
+				key: "humOcean",
+				label: "Inland dries",
+				digits: 2,
+				says: "humidity reads the continent field, because that is already the distance from the coast",
+			},
+			{ key: "humNoise", label: "Humidity noise", digits: 2 },
+			{ key: "humFeature", label: "Humidity feature", digits: 0 },
+			{ key: "humOctaves", label: "Humidity octaves", digits: 0 },
+		],
+	},
+	{
+		title: "The push",
+		where: "biome",
+		folded: true,
+		knobs: [
+			{
+				key: "biomeWarp",
+				label: "On",
+				says: "pushes the lookup off the climate it was handed, so no border is the contour of a smooth field",
+			},
+			{ key: "warpStrength", label: "Strength", digits: 2 },
+			{ key: "warpFeature", label: "Feature", digits: 0 },
+			{ key: "warpOctaves", label: "Octaves", digits: 0 },
+		],
+	},
+	{
+		title: "The regions",
+		where: "biome",
+		folded: true,
+		knobs: [
+			{
+				key: "biomeRegions",
+				label: "On",
+				says: "a region reads one climate across its whole area, so the map comes out as blocks with clean edges instead of ribbons",
+			},
+			{ key: "regionSpan", label: "Region", digits: 0 },
+			{ key: "regionClimate", label: "The region decides", digits: 2 },
+			{ key: "regionWarp", label: "Bend the edges", digits: 0 },
 		],
 	},
 	{
@@ -1444,7 +1546,12 @@ export class ParameterPanel {
 	 * what they are benches *of*, so the page is a property of the panel rather
 	 * than of any row.
 	 */
-	private readonly page: "world" | "landscape" | "cave" | "vegetation";
+	private readonly page:
+		| "world"
+		| "landscape"
+		| "cave"
+		| "vegetation"
+		| "biomes";
 
 	/**
 	 * The bench's second panel, down the left of the window.
@@ -1475,7 +1582,12 @@ export class ParameterPanel {
 		) => void = () => {},
 		options: {
 			readonly bench?: boolean;
-			readonly page?: "world" | "landscape" | "cave" | "vegetation";
+			readonly page?:
+				| "world"
+				| "landscape"
+				| "cave"
+				| "vegetation"
+				| "biomes";
 			readonly side?: "left" | "right";
 		} = {},
 	) {
@@ -1601,7 +1713,13 @@ export class ParameterPanel {
 				group.veg !== "off" &&
 				(where === "veg" || where === "bench" || where === "both")
 			);
-		if (where === "cave" || where === "veg") return false;
+		if (this.page === "biomes")
+			return (
+				group.biome !== "off" &&
+				(where === "biome" || where === "bench" || where === "both")
+			);
+		if (where === "cave" || where === "veg" || where === "biome")
+			return false;
 		return where === "both" || (where === "bench") === this.bench;
 	}
 
@@ -1610,6 +1728,7 @@ export class ParameterPanel {
 		if (this.page === "cave") return "caves";
 		if (this.page === "vegetation") return "vegetation";
 		if (this.page === "landscape") return "landscape";
+		if (this.page === "biomes") return "biomes";
 		return "planet";
 	}
 
@@ -1667,6 +1786,7 @@ export class ParameterPanel {
 
 			for (const knob of group.knobs) {
 				if (this.page === "cave" && knob.cave === "off") continue;
+				if (this.page === "biomes" && knob.biome === "off") continue;
 				if (
 					this.page === "vegetation"
 						? knob.veg === "off"
@@ -1824,6 +1944,7 @@ export class ParameterPanel {
 				["The planet", "planet"],
 				["Landscape bench", "landscape"],
 				["Vegetation bench", "vegetation"],
+				["Biome bench", "biomes"],
 				["Cave bench", "caves"],
 			] as const
 		).filter(([, page]) => page !== this.pageFile())) {

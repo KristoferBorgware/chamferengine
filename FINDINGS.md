@@ -2538,6 +2538,38 @@ into air, deliberately (`writes nothing over the ground it stands on`), so
 either that rule gains a stated exception for a cover mark or the mesher is
 handed a per-column mask beside the blocks.
 
+### F-118 — The biomes lab and the engine's biome model are two copies with no test between them
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-29, porting the biome model into the engine
+**Where:** `demos/biomes-lab.html`, `packages/engine/src/generation/biomes/`,
+`packages/engine/tests/demos/biomesLab.test.ts`
+
+**What happens.** The biome model now exists twice: the lab's standalone
+JavaScript, and the engine's TypeScript under `generation/biomes/`. The lab's
+marked shared blocks -- the noise kernel, the coarse grid, the coordinates --
+are digest-tested against the engine, but the biome model itself is not: the
+lab's `climateAt`, `landformAt`, `fitTo`, `regionsFor` and the preset tables
+have no test tying them to `BiomeField`, `landformAt` and `BIOME_PRESETS`.
+The engine port also deliberately differs in two places: heights come off the
+coarse map rather than straight from the layers, and `heightFrom` subtracts
+the sea level where the lab carries the datum in the number.
+
+**Why it matters.** Either copy can be tuned without the other noticing, and
+the lab is the page that argues the model's numbers -- a reader checking a
+constant against the lab could be checking last month's model. The same drift
+is what the marked-block digests exist to prevent for the kernel.
+
+**What would fix it.** One test that runs a few hundred sample points through
+both: extract the lab's biome functions the way `biomesLab.test.ts` already
+extracts its blocks, evaluate both models on the same seed, and compare the
+biome index per point, allowing the map-resolution difference on `metres`.
+Or retire the lab's own copy and drive the page from the engine bundle, which
+is what the bench now is.
+
 ---
 
 ## Closed

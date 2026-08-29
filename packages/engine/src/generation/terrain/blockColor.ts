@@ -1,6 +1,7 @@
 import { BlockType } from "./BlockType.js";
 import { PLANT_BLOCKS } from "../plants/PLANT_BLOCKS.js";
 import { PLANT_SPECIES } from "../plants/PLANT_SPECIES.js";
+import { BIOME_GROUNDS } from "../biomes/BIOME_GROUNDS.js";
 import { hash3 } from "../noise/hash3.js";
 
 /** Offset from the world seed, so the speckle does not follow the terrain. */
@@ -60,6 +61,10 @@ export const BLOCK_COLORS: Readonly<
 			[blocks.leaf, PLANT_SPECIES[species]!.leaf],
 		]),
 	),
+	// **A biome ground's color is the biome's own**, written in from the one
+	// table that defines it: the dot on the climate diagram and the ground the
+	// biome builds are one hex value.
+	...BIOME_GROUNDS,
 };
 
 /**

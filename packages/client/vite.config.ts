@@ -20,6 +20,7 @@ export default defineConfig({
 				planet: entry("planet"),
 				landscape: entry("landscape"),
 				vegetation: entry("vegetation"),
+				biomes: entry("biomes"),
 				caves: entry("caves"),
 			},
 		},

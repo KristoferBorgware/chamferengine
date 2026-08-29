@@ -50,6 +50,18 @@ export interface ColumnGround {
 	 * against the shape it cut.
 	 */
 	readonly carve: Float32Array;
+
+	/**
+	 * Per column, the block its ground is drawn as, or nothing to paint by
+	 * elevation bands.
+	 *
+	 * **The face carries the block itself**: the shader holds the registry's
+	 * own colors, so a bench that knows what a column is made of -- the biome
+	 * bench, whose whole subject is which ground stands where -- writes the
+	 * block here and the column's caps and walls take that color, speckle and
+	 * occlusion included. Zero paints a column by the elevation bands.
+	 */
+	readonly material?: Uint16Array;
 }
 
 /**
@@ -232,6 +244,7 @@ export function columnPatchMesh(
 		erosion,
 		peaks,
 		carve,
+		material,
 	} = ground;
 	const { radius, seaLevel, seed, speckle, blockMetres, occlusion } = look;
 	const frame = columnFrame(centre);
@@ -677,6 +690,7 @@ export function columnPatchMesh(
 		cPeaks = peaks[c]!;
 		cCarve = carve[c]!;
 		cSurface = surface[c]!;
+		cMaterial = material ? material[c]! : 0;
 		// **A fact about the cell, not about the ground under it**, so it is
 		// read from the address the same way the world's own mesher reads it --
 		// which is what makes a preview of a hillside the hillside the world
@@ -798,6 +812,7 @@ export function columnPatchMesh(
 
 	// The sea, last, so it is one run of triangles the caller can blend after
 	// every opaque one has been drawn.
+	cMaterial = 0;
 	for (let c = 0; c < count; c++) {
 		const h = height[c]!;
 		if (h >= seaLevel) continue;
