@@ -80,6 +80,16 @@ export class BiomePanel {
 	 */
 	cloud: BiomeCloudSource = "patch";
 
+	/**
+	 * The finished map, and the selector that picks its reading.
+	 *
+	 * **Built here and mounted by the page, not appended to this panel's own
+	 * scroller.** The lab keeps the map in the world panel's head, beside the
+	 * facts a build measured -- it is what the diagram is being judged
+	 * against, not one more row of the table that reads it.
+	 */
+	readonly preview: HTMLElement;
+
 	/** The landform whose diagram is shown, as an index into `LANDFORMS`. */
 	shown = 2;
 
@@ -166,7 +176,11 @@ export class BiomePanel {
 		presetRow.append(presetLabel, this.presetPick);
 		scroller.append(presetRow);
 
-		// One picture of the planet, in whichever reading is asked for.
+		// The finished map and its selector, built for the page to mount
+		// wherever the world's own picture belongs -- the world panel's head,
+		// not this panel's scroller.
+		this.preview = document.createElement("div");
+		this.preview.className = "biomes-preview";
 		const pictureRow = document.createElement("div");
 		pictureRow.className = "knob";
 		const pictureLabel = document.createElement("label");
@@ -185,7 +199,11 @@ export class BiomePanel {
 			this.onPicture();
 		};
 		pictureRow.append(pictureLabel, pick);
-		scroller.append(pictureRow);
+		this.preview.append(pictureRow);
+		this.shot = document.createElement("canvas");
+		this.shot.className = "biomes-shot";
+		this.shotInk = this.shot.getContext("2d")!;
+		this.preview.append(this.shot);
 
 		// **Which climate the diagram's cloud is drawn from, not what colours
 		// the square.** A cell with no dots over it is a biome the shown
@@ -210,11 +228,6 @@ export class BiomePanel {
 		};
 		cloudRow.append(cloudLabel, cloudPick);
 		scroller.append(cloudRow);
-
-		this.shot = document.createElement("canvas");
-		this.shot.className = "biomes-shot";
-		this.shotInk = this.shot.getContext("2d")!;
-		scroller.append(this.shot);
 
 		this.chipRow = document.createElement("div");
 		this.chipRow.className = "biomes-chips";

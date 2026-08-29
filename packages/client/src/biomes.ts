@@ -79,7 +79,6 @@ facts.className = "bench-facts";
 const recipe = document.createElement("div");
 recipe.className = "bench-recipe";
 const general = panel.section("General");
-general?.append(recipe, facts);
 
 // ---------------------------------------------------------------------------
 // The right panel: the biomes.
@@ -95,6 +94,12 @@ const biomes = new BiomePanel(table, (settled) => request(settled), {
 biomes.setPush(
 	settings.knobs.biomeWarp ? settings.knobs.warpStrength : 0,
 );
+
+// **The finished map goes with the world, not with the table that reads
+// it.** The lab keeps its picture in the world panel's head, above the
+// facts a build measured -- what the diagram is being judged against, not
+// one more row of the biomes it names.
+general?.append(biomes.preview, recipe, facts);
 
 /**
  * Write the world back into the address bar, and into the way out of here.
