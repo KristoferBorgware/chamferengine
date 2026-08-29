@@ -60,6 +60,24 @@ export interface BiomeSheet {
 	readonly metres: Float32Array<ArrayBuffer>;
 }
 
+/**
+ * The climate the diagram's cloud draws, one entry per hexagon of a
+ * rectangle.
+ *
+ * **A patch and the planet are different questions asked of the same
+ * cloud.** The planet's is {@link BiomeSheet}, a picture; this is the same
+ * three fields read over the patch alone, small enough to send whole and
+ * redrawn with no subsampling -- the diagram saying which part of itself the
+ * camera is standing in, rather than what the whole world reaches.
+ */
+export interface BiomeCloud {
+	readonly t: Float32Array<ArrayBuffer>;
+	readonly h: Float32Array<ArrayBuffer>;
+
+	/** The landform index, `-1` over the sea. */
+	readonly landform: Int8Array<ArrayBuffer>;
+}
+
 /** Everything a finished build hands back that is a number rather than a buffer. */
 export interface BiomesFacts {
 	/** Cells on the map, and columns the patch drew. */
@@ -125,6 +143,9 @@ export interface BiomesReady {
 
 	/** The planet's readings, when they moved since the last build. */
 	readonly planet: BiomeSheet | null;
+
+	/** The patch's own climate, one hexagon at a time. */
+	readonly patch: BiomeCloud;
 
 	readonly geometry: BiomesGeometry | null;
 }

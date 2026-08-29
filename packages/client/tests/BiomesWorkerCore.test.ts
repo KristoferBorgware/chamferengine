@@ -45,6 +45,33 @@ describe("BiomesWorkerCore", () => {
 		expect(facts.fit.fitted).toBe(true);
 	});
 
+	it("sends a patch cloud sized to the patch, with land marked by landform", () => {
+		const core = new BiomesWorkerCore();
+		const ready = build(core, 1);
+		const patch = ready.patch;
+		expect(patch.t.length).toBe(ready.facts.cellsDrawn);
+		expect(patch.h.length).toBe(ready.facts.cellsDrawn);
+		expect(patch.landform.length).toBe(ready.facts.cellsDrawn);
+		let land = 0;
+		let sea = 0;
+		for (let n = 0; n < patch.landform.length; n++) {
+			if (patch.landform[n]! < 0) {
+				sea++;
+				continue;
+			}
+			land++;
+			expect(patch.landform[n]!).toBeLessThan(LANDFORMS.length);
+			// A resolved climate stays inside the fitted square.
+			expect(patch.t[n]!).toBeGreaterThanOrEqual(0);
+			expect(patch.t[n]!).toBeLessThanOrEqual(1);
+			expect(patch.h[n]!).toBeGreaterThanOrEqual(0);
+			expect(patch.h[n]!).toBeLessThanOrEqual(1);
+		}
+		// The default patch sits on a coastline, so both are on it.
+		expect(land).toBeGreaterThan(0);
+		expect(sea).toBeGreaterThan(0);
+	});
+
 	it("reads the whole planet into the sheet, sea and land alike", () => {
 		const core = new BiomesWorkerCore();
 		const ready = build(core, 1);

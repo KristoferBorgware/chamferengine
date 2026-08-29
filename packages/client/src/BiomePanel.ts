@@ -1,4 +1,4 @@
-import type { BiomeSheet, BiomesFacts } from "./BiomesMessage.js";
+import type { BiomeCloud, BiomeSheet, BiomesFacts } from "./BiomesMessage.js";
 import type { BiomeTableDraft } from "./BiomeDraft.js";
 import {
 	ANY_LANDFORM,
@@ -34,6 +34,15 @@ const PICTURES: readonly { value: BiomePicture; label: string }[] = [
 	{ value: "regions", label: "Regions" },
 ];
 
+/** What the diagram's cloud is drawn from. */
+export type BiomeCloudSource = "nothing" | "patch" | "planet";
+
+const CLOUDS: readonly { value: BiomeCloudSource; label: string }[] = [
+	{ value: "nothing", label: "nothing" },
+	{ value: "patch", label: "the patch" },
+	{ value: "planet", label: "the planet" },
+];
+
 /** The sea on every picture, as CSS and as bytes. */
 const SEA_INK = [24, 44, 74] as const;
 
@@ -58,6 +67,18 @@ function bytesOf(hex: string): [number, number, number] {
 export class BiomePanel {
 	readonly table: BiomeTableDraft;
 	picture: BiomePicture;
+
+	/**
+	 * What the diagram's cloud is drawn from.
+	 *
+	 * **`patch`, because that is the lab's own default.** A region of the
+	 * square with no dots over it might be a biome the whole planet never
+	 * builds, or it might just be nowhere near the camera; `planet` answers
+	 * the first question and `patch` the second, and only one can be the
+	 * default. The patch is also the cheaper of the two, sent whole with no
+	 * subsampling however the planet reading is built.
+	 */
+	cloud: BiomeCloudSource = "patch";
 
 	/** The landform whose diagram is shown, as an index into `LANDFORMS`. */
 	shown = 2;
@@ -89,17 +110,23 @@ export class BiomePanel {
 
 	private facts: BiomesFacts | null = null;
 	private sheet: BiomeSheet | null = null;
+	private patchCloud: BiomeCloud | null = null;
 	private dragging = false;
 
 	constructor(
 		table: BiomeTableDraft,
 		onChange: (settled: boolean) => void,
-		options: { picture?: BiomePicture; onPicture?: () => void } = {},
+		options: {
+			picture?: BiomePicture;
+			cloud?: BiomeCloudSource;
+			onPicture?: () => void;
+		} = {},
 	) {
 		this.table = table;
 		this.onChange = onChange;
 		this.onPicture = options.onPicture ?? ((): void => {});
 		this.picture = options.picture ?? "biomes";
+		this.cloud = options.cloud ?? "patch";
 
 		this.root = document.createElement("aside");
 		this.root.className = "plants biomes-panel";
@@ -160,6 +187,30 @@ export class BiomePanel {
 		pictureRow.append(pictureLabel, pick);
 		scroller.append(pictureRow);
 
+		// **Which climate the diagram's cloud is drawn from, not what colours
+		// the square.** A cell with no dots over it is a biome the shown
+		// ground never reaches on the patch or on the planet, and those are
+		// different questions -- so this stands apart from the picture above.
+		const cloudRow = document.createElement("div");
+		cloudRow.className = "knob";
+		const cloudLabel = document.createElement("label");
+		cloudLabel.textContent = "Show on it";
+		const cloudPick = document.createElement("select");
+		for (const { value, label } of CLOUDS) {
+			const option = document.createElement("option");
+			option.value = value;
+			option.textContent = label;
+			cloudPick.append(option);
+		}
+		cloudPick.value = this.cloud;
+		cloudPick.oninput = () => {
+			this.cloud = cloudPick.value as BiomeCloudSource;
+			this.paintChart();
+			this.onPicture();
+		};
+		cloudRow.append(cloudLabel, cloudPick);
+		scroller.append(cloudRow);
+
 		this.shot = document.createElement("canvas");
 		this.shot.className = "biomes-shot";
 		this.shotInk = this.shot.getContext("2d")!;
@@ -218,9 +269,14 @@ export class BiomePanel {
 	}
 
 	/** Everything the last build measured, painted into the panel. */
-	show(facts: BiomesFacts, sheet: BiomeSheet | null): void {
+	show(
+		facts: BiomesFacts,
+		sheet: BiomeSheet | null,
+		patch: BiomeCloud,
+	): void {
 		this.facts = facts;
 		if (sheet) this.sheet = sheet;
+		this.patchCloud = patch;
 		this.build();
 		this.paintSheet();
 	}
@@ -298,14 +354,33 @@ export class BiomePanel {
 		ink.clearRect(0, 0, CHART, CHART);
 		ink.drawImage(off, 0, 0, CHART, CHART);
 
-		// **The cloud: where this landform's ground actually lands in the
-		// square.** The diagram's cell areas say nothing about the planet --
-		// land clusters in the middle of the square and thins toward its
-		// corners, so a big cell can be a rare biome. The cloud is what makes
-		// the balance readable, and it is also where the regions show: at full
-		// pull every region is one climate, so the cloud collapses from a
-		// smear into a scatter of single points, one per region.
-		if (this.sheet) {
+		// **The cloud: what the shown ground's climate actually is, over
+		// whichever rectangle is asked for.** The diagram's cell areas say
+		// nothing about either -- land clusters in the middle of the square
+		// and thins toward its corners, so a big cell can be a rare biome.
+		// It is also where the regions show: at full pull every region is one
+		// climate, so the cloud collapses from a smear into a scatter of
+		// single points, one per region.
+		//
+		// **The patch and the planet are different questions.** One dot a
+		// hexagon in view says which part of itself the camera is standing
+		// in; one dot a cell of the planet says whether the shown ground
+		// builds this biome anywhere at all. Only one can be the default, and
+		// it is the patch -- the planet's cloud is a heavier reading nobody
+		// asked for until they ask for it.
+		if (this.cloud === "patch" && this.patchCloud) {
+			const cloud = this.patchCloud;
+			ink.fillStyle = "rgba(10, 12, 16, 0.42)";
+			for (let n = 0; n < cloud.landform.length; n++) {
+				if (cloud.landform[n] !== this.shown) continue;
+				ink.fillRect(
+					cloud.h[n]! * CHART - 0.5,
+					(1 - cloud.t[n]!) * CHART - 0.5,
+					1.6,
+					1.6,
+				);
+			}
+		} else if (this.cloud === "planet" && this.sheet) {
 			const sheet = this.sheet;
 			ink.fillStyle = "rgba(10, 12, 16, 0.4)";
 			const tall = sheet.height;

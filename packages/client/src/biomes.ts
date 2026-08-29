@@ -1,7 +1,7 @@
 import type { BiomesFacts, BiomesReply } from "./BiomesMessage.js";
 import type { PatchLook } from "chamfer/render";
 import type { PlanetKnobs } from "./PlanetSettings.js";
-import type { BiomePicture } from "./BiomePanel.js";
+import type { BiomeCloudSource, BiomePicture } from "./BiomePanel.js";
 import { GROUND_LINES, TERRAIN_DEFAULTS } from "chamfer/generation";
 import {
 	PATCH_FILL_SHARE,
@@ -88,6 +88,8 @@ general?.append(recipe, facts);
 const biomes = new BiomePanel(table, (settled) => request(settled), {
 	picture: (new URLSearchParams(location.search).get("biomePicture") ??
 		"biomes") as BiomePicture,
+	cloud: (new URLSearchParams(location.search).get("biomeCloud") ??
+		"patch") as BiomeCloudSource,
 	onPicture: () => writeUrl(),
 });
 biomes.setPush(
@@ -110,6 +112,7 @@ function writeUrl(): void {
 	const params = settings.toParams();
 	if (biomes.picture !== "biomes")
 		params.set("biomePicture", biomes.picture);
+	if (biomes.cloud !== "patch") params.set("biomeCloud", biomes.cloud);
 	history.replaceState(null, "", `?${params.toString()}`);
 	const planetParams = settings.toParams();
 	planetParams.set("panel", "1");
@@ -281,7 +284,7 @@ worker.onmessage = (event: MessageEvent<BiomesReply>) => {
 					`humidity ${reply.facts.fit.hSpan.toFixed(2)} of the raw range`
 			: "off: the readings go in as they come and bunch in the middle",
 	);
-	biomes.show(reply.facts, reply.planet);
+	biomes.show(reply.facts, reply.planet, reply.patch);
 	show();
 	if (pending) ask(pendingSettled);
 };

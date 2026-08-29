@@ -1,4 +1,5 @@
 import type {
+	BiomeCloud,
 	BiomeSheet,
 	BiomesGeometry,
 	BiomesReady,
@@ -277,6 +278,15 @@ export class BiomesWorkerCore {
 			ground.material[c] =
 				columnBiome[c]! < 0 ? 0 : table.biomes[columnBiome[c]!]!.block;
 
+		// **The patch's own cloud, sent whole.** A patch is a few thousand
+		// hexagons at most, so there is nothing to subsample -- every column
+		// draws its own point, the way the lab draws one dot a hexagon.
+		const patch: BiomeCloud = {
+			t: this.columns!.t.slice(),
+			h: this.columns!.h.slice(),
+			landform: columnForm.slice() as Int8Array<ArrayBuffer>,
+		};
+
 		const mesh = columnPatchMesh(layout, ground, {
 			radius,
 			seaLevel: 0,
@@ -387,6 +397,7 @@ export class BiomesWorkerCore {
 				regionMetres: field.regionMetres,
 			},
 			planet,
+			patch,
 			geometry,
 		};
 	}
@@ -408,6 +419,11 @@ export class BiomesWorkerCore {
 				ready.planet.region.buffer,
 				ready.planet.metres.buffer,
 			);
+		out.push(
+			ready.patch.t.buffer,
+			ready.patch.h.buffer,
+			ready.patch.landform.buffer,
+		);
 		return out;
 	}
 
