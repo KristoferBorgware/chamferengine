@@ -129,10 +129,12 @@ describe("the biomes lab's copy of the engine", () => {
 		// octaves, so on a steep coast one cell lands in the shore band with
 		// the sea on one side and an eighty-metre hillside on the other, and
 		// the coast draws as a dotted line of pale cells rather than a beach.
-		// Measured over the opening patch, 12 of its 13 single-cell biomes
+		// Measured over the opening patch, all 7 of its single-cell biomes
 		// were exactly that, and requiring two of six points a map cell out to
-		// be low land as well takes its runs of one biome from 24 to 15 and
-		// the area in runs under eight cells from 3.3% to 1.6%.
+		// be low land as well takes its runs of one biome from 22 to 14 and
+		// the area in runs under eight cells from 3.2% to 1.3%. With the
+		// regions switched off, which isolates the rule from them, 12 of 13
+		// were a beach and the runs go 24 to 15.
 		//
 		// **The step is metres, never a neighbouring cell**, or the rule
 		// answers a different question at every level of detail and a coarse

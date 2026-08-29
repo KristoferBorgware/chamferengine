@@ -1196,16 +1196,24 @@ which is a beach rather than a region.
 
 **Low is necessary and not sufficient, and that was the last of the speckle.**
 What was left after the three changes above was not small biomes but scattered
-single cells: **13** of the opening patch's 24 runs of one biome were one cell,
-and **12 of the 13 were Shore**. The height field runs four octaves, so on a
-steep coast one cell lands in the shore band with the sea on one side and an
-eighty-metre hillside on the other — and the coast then draws as a dotted line
-of pale cells rather than as a beach. A beach is a *strip*, so low ground is
-Shore only where **2 of 6** points **Shore needs room for** metres out are low
-land as well. Runs of one biome fall from **24 to 15**, single-cell runs from
-**13 to 6**, the area in runs under eight cells from **3.3% to 1.6%**, and a
-border moves from every **320 m to every 363 m**. Beaches survive: **1.2%** of
-the planet's land against 3.2% before, and none of the six specks left is one.
+single cells — and on the shipped planet **every one of them was Shore**: 7 of
+the opening patch's 22 runs of one biome were a single cell, and all 7 were a
+beach. The height field runs four octaves, so on a steep coast one cell lands in
+the shore band with the sea on one side and an eighty-metre hillside on the
+other, and the coast then draws as a dotted line of pale cells rather than as a
+beach. A beach is a *strip*, so low ground is Shore only where **2 of 6** points
+**Shore needs room for** metres out are low land as well. Runs of one biome fall
+from **22 to 14**, single-cell runs from **7 to 3**, the area in runs under
+eight cells from **3.2% to 1.3%**, and a border moves from every **289 m to
+every 326 m**. Beaches survive: **1.2%** of the planet's land against 3.2%
+before. With the regions switched off, which isolates the rule from them, the
+same numbers are 24 runs to 15, **13** single cells to 6, and 3.3% to 1.6%.
+
+**Three of the six specks left are still a beach**, so this thins the dotted
+line rather than ending it. What replaces the rest is a smaller residue of the
+same kind: a cell that was Shore falls through to whatever the grid says, and
+where its neighbours say something else it is a lone Slopes or Lowlands cell
+instead. Six of 1,032 land cells.
 
 **The step is a distance in metres, never a neighbouring cell.** Asking the
 cells next door answers a different question at every level of detail, so a
@@ -1217,18 +1225,25 @@ paying and then stops paying for itself: **48 m** gives 14 runs and 1.0% of land
 as beach, **64 m** gives 13 and **0.8%**, and by 96 m the beaches are the thing
 being removed.
 
-**Regions were built, measured, and switched off.** A region is a seed on the
-engine's own lattice with a jitter and a climate of its own, so a whole area
-carries one biome and changes at its edge — and the whole area is found from two
-rings of lattice cells, a fixed nineteen candidates, so it is as chunk-local as
-everything else here. It does not do what it was built for: a region is a
-*second* source of edges laid over the landform's own, and nothing takes the
-first away. Measured over the opening patch it moves a border from every
-**363 m to every 326 m** and the biomes standing within 320 m of a place from
-**3.28 to 3.54**. It does tidy specks — six runs of one cell down to three — and
-the shore rule tidies more of them for nothing. The switch, the four knobs and
-the **Regions** picture stay, because the picture is the clearest statement of
-what a region is; the switch ships off.
+**A region is the unit of climate, and the two measurements of it disagree.** A
+region is a seed on the engine's own lattice with a jitter and a climate of its
+own, so a whole area carries one biome and changes at its edge — and the whole
+area is found from two rings of lattice cells, a fixed nineteen candidates, so
+it is as chunk-local as everything else here. Counting how often a walk crosses
+a boundary, it **loses**: switching it off moves a border from every 326 m to
+every **363 m**, and the biomes standing within 320 m of a place from 3.54 to
+**3.28**. Looking at the planet map, it **wins**, and not narrowly.
+
+**Read per cell, a line in the diagram is a contour on the ground.** Two dots
+sitting close together in the square draw a thin winding ribbon of one biome
+inside another wherever the climate grazes past them — an ice cap broken into a
+spatter of white lobes, badlands threading through a desert, isolated blobs
+everywhere. A region reads one climate across a whole area, so a ribbon cannot
+form inside one, and the areas come out as blocks with clean edges. **Crossing
+rate says how often a boundary arrives and nothing about the shape of what it
+separates**, and the shape is what a person actually sees. It ships **on**, at
+418 ms for the opening against 312 ms. Turn it off beside the Biomes picture to
+see the lace it removes.
 
 **Temperature is three terms and none of them is a biome.** Latitude is one dot
 product against the axis — **the engine's own**, through icosahedron vertices 0

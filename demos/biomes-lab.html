@@ -2486,21 +2486,27 @@
 							label: "on",
 							type: "check",
 							summary: true,
-							// **Off, because it was built to make biomes bigger
-							// and it makes them smaller.** A region is a second
-							// source of edges laid over the landform's own, and
-							// nothing takes the first away: measured over the
-							// opening patch it moves a biome boundary from every
-							// **363 m to every 326 m** and the biomes standing
-							// within 320 m of a place from **3.28 to 3.54**. It
-							// tidies specks -- six runs of one cell down to
-							// three -- and the shore rule tidies more of them
-							// for nothing. Kept and switched off rather than
-							// removed: the picture it draws is the clearest
-							// statement of what it does, and the answer may
-							// change once a region carries something other than
-							// a climate.
-							value: false,
+							// **On, and the two measurements of it disagree.**
+							// Counting how often a walk crosses a boundary, a
+							// region loses: over the opening patch it moves one
+							// from every **326 m to every 363 m** when it is
+							// switched off, and the biomes standing within 320 m
+							// of a place from 3.54 to 3.28. Looking at the
+							// planet map, it wins, and not narrowly. Read per
+							// cell, a line in the diagram is a **contour** on
+							// the ground, so two dots sitting close together
+							// draw a thin ribbon of one biome inside another
+							// wherever the climate grazes past them -- an ice
+							// cap broken into a spatter of lobes, badlands
+							// threading through a desert. A region reads one
+							// climate across a whole area, so a ribbon cannot
+							// form inside one, and the areas come out as blocks
+							// with clean edges. Crossing rate says how **often**
+							// a boundary arrives and says nothing about the
+							// **shape** of what it separates; the shape is what
+							// a person sees. It costs 418 ms at the opening
+							// against 312 ms.
+							value: true,
 							title: "biomes belong to a region",
 						},
 						{ key: "regionPicture", label: "", type: "picture", shot: "region", value: 0 },

@@ -2480,9 +2480,10 @@ so it would call a place a peak where the ground is flat.
 This terrain has no feature wider than about **1,500 m**, so a landform region
 is that wide at best, and a biome cannot be wider than the landform it stands
 in. Everything measured so far agrees: smoothing the relief field over one ring
-and over four changes the map **not at all** -- 24 runs of one biome before and
-24 after, the same 54.2% of them single cells -- because the field is one octave
-at 600 m read at 32 m spacing and is already smooth. What moved the number was
+and over four changes the map **not at all** -- with the regions off, to isolate
+the landform, 24 runs of one biome before and 24 after, the same 54.2% of them
+single cells -- because the field is one octave at 600 m read at 32 m spacing
+and is already smooth. What moved the number was
 always something else: the grid's own band edges, where the diagram's dots sit,
 and the shore rule.
 
