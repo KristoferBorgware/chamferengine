@@ -478,9 +478,10 @@ export class TerrainGenerator {
 	 *
 	 * **A biome table, when there is one, names the surface before any of
 	 * that is asked.** The terrain still decides everything under the top
-	 * layer -- the biome model has no underlay of its own yet -- and it is
+	 * layer, except a biome that named its own underlay -- and the surface is
 	 * read once a column, at the surface layer alone, the one place `surface`
-	 * is ever true.
+	 * is ever true; the underlay reads back what that same call already
+	 * found rather than asking the table again.
 	 */
 	private material(column: TerrainColumn, depthBelow: number): BlockType {
 		const soil = this.settings.soilDepth * this.shape.blockSize;
@@ -502,7 +503,18 @@ export class TerrainGenerator {
 		if (surface && column.elevation > this.settings.snowLine)
 			return BlockType.SNOW;
 		if (column.elevation > this.settings.rockLine) return BlockType.STONE;
-		if (!surface) return BlockType.DIRT;
+		if (!surface) {
+			// The surface call above, earlier in this same column, is what
+			// left a biome here to read back -- underwater and above the
+			// rock line both return before reaching this line, so nothing
+			// here asks the table for a biome the surface never found one.
+			if (this.biomes && this.biomeSample.biome >= 0) {
+				const underlay =
+					this.biomes.biomes[this.biomeSample.biome]!.underlay;
+				if (underlay !== undefined) return underlay as BlockType;
+			}
+			return BlockType.DIRT;
+		}
 		return BlockType.GRASS;
 	}
 }

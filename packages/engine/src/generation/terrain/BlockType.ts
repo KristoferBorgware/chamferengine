@@ -103,6 +103,13 @@ export const BlockType = {
 	HOLDRIDGE_TROPICAL_DRY_FOREST_GROUND: 75,
 	HOLDRIDGE_TROPICAL_WET_FOREST_GROUND: 76,
 	HOLDRIDGE_TROPICAL_RAIN_FOREST_GROUND: 77,
+
+	// **A biome may name what lies under its own surface, too.** Most stay with
+	// plain dirt; a biome whose ground reads as one thing and cuts as another
+	// -- a mesa's red rock under its own crust, a dune's sandstone under its
+	// own grains -- gets a block of its own instead.
+	TERRACOTTA: 78,
+	SANDSTONE: 79,
 } as const;
 
 /**
@@ -192,6 +199,8 @@ export const BLOCK_NAMES: readonly string[] = [
 	"chamfer:holdridge_tropical_dry_forest_ground",
 	"chamfer:holdridge_tropical_wet_forest_ground",
 	"chamfer:holdridge_tropical_rain_forest_ground",
+	"chamfer:terracotta",
+	"chamfer:sandstone",
 ];
 
 export type BlockType = (typeof BlockType)[keyof typeof BlockType];
