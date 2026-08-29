@@ -80,6 +80,23 @@ export class PlantTemplateStore {
 	}
 
 	/**
+	 * Whether this grid can draw this species at all, as blocks.
+	 *
+	 * **Under half a block a plant is not a shape.** Its skeleton has nothing
+	 * to rasterise into, so every variant comes back empty, and building
+	 * thirty-two of them to find that out is the whole cost of a level that
+	 * draws none of them. Half a block is the smallest thing the grid can say:
+	 * `growStand` floors a plant between there and a whole block at one block,
+	 * and hands what is under it to the ground as a colour instead.
+	 */
+	draws(layer: PlantLayer): boolean {
+		return (
+			layer.shape.height * (1 + layer.shape.sizeSpread) >=
+			this.blockMetres / 2
+		);
+	}
+
+	/**
 	 * This layer's plants, grown the first time they are asked for.
 	 *
 	 * Lazily, because a world may carry a species it never plants -- the curve
@@ -89,6 +106,10 @@ export class PlantTemplateStore {
 	forLayer(layer: PlantLayer): readonly PlantTemplate[] {
 		const held = this.byLayer.get(layer.id);
 		if (held) return held;
+		if (!this.draws(layer)) {
+			this.byLayer.set(layer.id, []);
+			return [];
+		}
 		// **One patch for the whole species.** How far it has to reach is the
 		// tallest this species grows plus a canopy, which bounds the sideways
 		// reach as well because no limb leaves the trunk and travels further

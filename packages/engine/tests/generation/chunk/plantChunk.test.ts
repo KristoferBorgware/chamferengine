@@ -266,6 +266,53 @@ describe("a chunk drawn a level coarse", () => {
 	// name put every cell of every plant outside the patch, so a coarse chunk
 	// counted its plants and wrote not one block of them.
 	//
+	/**
+	 * **Under half a block a plant is the colour of the ground, not a block.**
+	 * A 30.8 m pine at a 64 m block has nothing to be made of, and what can be
+	 * seen of a forest from the distance that block is drawn at is that the
+	 * ground under it is green. So the plant pass hands the mesher the columns
+	 * it could not build on and writes no block at all -- which is what keeps
+	 * a canopy at a distance from moving anything a player stands on, breaks
+	 * or collides with.
+	 */
+	it("hands over a canopy colour where it cannot build a plant", () => {
+		const { shape, terrain, address } = world();
+		// Four levels out is a 64 m block against a 30.8 m tallest pine.
+		const level = shape.atLod(4);
+		const coarse = new TerrainGenerator(
+			SEED,
+			level,
+			terrain.map,
+			TERRAIN_DEFAULTS,
+		);
+		const chunk = generateChunk(
+			coarse,
+			new ChunkAddress(address.face, []),
+			CHUNK_LEVEL - 4,
+			level.crustDepth,
+		);
+		const before = Uint16Array.from(chunk.blocks);
+		const grown = plantChunk(
+			chunk,
+			coarse,
+			level,
+			LAYERS,
+			SEED,
+			DEPTH,
+			new PlantTemplateStore(
+				SEED,
+				level.subdivisionDepth,
+				level.blockSize,
+				level.seaLevelRadius,
+			),
+		);
+		expect(grown).not.toBeNull();
+		expect(grown!.cover.size).toBeGreaterThan(0);
+		// Not one block, anywhere: the canopy is a colour and nothing else.
+		expect(grown!.where.length).toBe(0);
+		expect(chunk.blocks).toEqual(before);
+	});
+
 	// **A column has a trunk exactly when a root in its own block has one.** A
 	// drawn cell a level out covers four of the world's own cells, and the
 	// column asks all four and grows the first that wants a plant -- so the

@@ -275,6 +275,18 @@ export function meshChunk(
 					settings.speckle,
 				);
 
+	/**
+	 * The canopy colour a cell's ground cap takes, or `0` for its own.
+	 *
+	 * **A plant under half a block is not a shape, it is the colour of the
+	 * ground it stands on.** The plant pass hands over the columns whose grid
+	 * was too coarse to build on; nothing was written into the blocks, so this
+	 * is the only place that canopy exists.
+	 */
+	const coverAt = settings.cover;
+	const canopyOf = (cell: Cell): number =>
+		coverAt ? (coverAt.get(nameOf(cell)) ?? 0) : 0;
+
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const ringCells: (Cell | null)[] = new Array<Cell | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
@@ -417,6 +429,7 @@ export function meshChunk(
 				mix,
 				light,
 				exposed,
+				canopyOf({ face, i, j }),
 			);
 		}
 
@@ -493,6 +506,7 @@ export function meshChunk(
 			seamFloor,
 			light,
 			exposed,
+			canopyOf(cell),
 		);
 	}
 	return tally;
@@ -567,6 +581,7 @@ function meshCell(
 	mix: number,
 	light: readonly number[],
 	exposed: boolean,
+	canopy: number,
 ): void {
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
@@ -629,6 +644,13 @@ function meshCell(
 		debugTint(COLOR, tint, mix);
 
 		if (opacityOf(at(own, layer - 1)) < here) {
+			// **Only the cap, and only the ground's own.** A cliff face under
+			// a forest is still rock, and so is the underside of a ledge.
+			const covered = canopy !== 0 && layer === groundCap;
+			if (covered) {
+				paint(canopy, face, i, j);
+				debugTint(COLOR, tint, mix);
+			}
 			emitCap(
 				sink,
 				corners,
@@ -642,6 +664,10 @@ function meshCell(
 				skyAt(exposed, layer, around),
 			);
 			tally.faces++;
+			if (covered) {
+				paint(block, face, i, j);
+				debugTint(COLOR, tint, mix);
+			}
 		}
 		const below = layer + 1 >= layers ? 0 : opacityOf(at(own, layer + 1));
 		if (below < here) {
@@ -818,6 +844,7 @@ function meshApronCell(
 	seamFloor: (cell: Cell) => number,
 	light: readonly number[],
 	exposed: boolean,
+	canopy: number,
 ): void {
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
@@ -876,7 +903,9 @@ function meshApronCell(
 		const here = opacityOf(block);
 		if (here === 0) continue;
 		if (opacityOf(at(own, layer - 1)) >= here) continue;
-		paint(block, face, i, j);
+		// A plant too small for this grid to build is the colour of the
+		// ground it stands on, and the apron draws that ground too.
+		paint(canopy !== 0 && layer === groundCap ? canopy : block, face, i, j);
 		debugTint(COLOR, tint, mix);
 		emitCap(
 			here === 1 ? translucent : opaque,
