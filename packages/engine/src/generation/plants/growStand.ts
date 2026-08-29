@@ -9,6 +9,7 @@ import { canonicalCell } from "../../addressing/neighbours/canonicalCell.js";
 import { growPlant } from "./growPlant.js";
 import { hash3 } from "../noise/hash3.js";
 import { hexRound } from "../../addressing/lattice/hexRound.js";
+import { latticePosition } from "../../addressing/lattice/latticePosition.js";
 import { octaveOffsets } from "../noise/octaveOffsets.js";
 import { plantDensityAt } from "./plantDensityAt.js";
 import { plantFrame } from "./PlantFrame.js";
@@ -129,6 +130,29 @@ export interface StandOptions {
 	/** How far past its own rim a chunk grows plants, in metres. */
 	readonly chunkReach: number;
 
+	/**
+	 * How many root cells across one drawn column stands for.
+	 *
+	 * **A drawn cell at a coarse level covers `4^lod` cells of the world's own
+	 * lattice, and a forest is as dense as that lattice says.** Offering the
+	 * column's own point alone asks one root in `4^lod` and draws a forest that
+	 * thin -- right where the trees are, and a sixteenth of the trees two
+	 * levels out. So a column asks the whole block of root cells it covers and
+	 * grows the **first** that wants a plant: a column can only hold one trunk
+	 * anyway, so that is the physical cap rather than a rule, and it is what
+	 * makes the count per unit ground the finest level's count until the block
+	 * saturates.
+	 *
+	 * **The blocks nest, so the forest only ever gets denser as it is
+	 * approached.** A block of `2^lod` a side splits into four of `2^(lod-1)`,
+	 * each asking its own quarter, so a tree a coarse column drew is still
+	 * drawn by whichever quarter holds it and the others may add one. Nothing
+	 * a player is walking toward vanishes.
+	 *
+	 * `1` at the finest level, where a column is a root.
+	 */
+	readonly rootSpread?: number;
+
 	/** Ground at or under this is water, and nothing is planted in it. */
 	readonly seaLevel: number;
 
@@ -220,6 +244,7 @@ export function growStand(
 		chunkReach,
 		seaLevel,
 	} = options;
+	const spread = Math.max(1, options.rootSpread ?? 1);
 	const templates = options.templates ?? null;
 	const { count, ring, directions } = patch;
 	const { top, groundLayer } = ground;
@@ -633,47 +658,115 @@ export function growStand(
 	 * Returns the index into {@link live}, `-1` for nothing and `-2` for a cell
 	 * nothing may ever be planted on.
 	 */
+	// The root that took the last plant: its own cell on the world's lattice,
+	// its direction, and the column it stands on here. At the finest level
+	// that is the column's own point; a level out it is one of the `4^lod`
+	// the column covers, and everything about the plant -- which species,
+	// which variant, which way round, where it stands -- is a fact about it
+	// rather than about the column.
+	let wonFace = 0;
+	let wonI = 0;
+	let wonJ = 0;
+	let wonX = 0;
+	let wonY = 0;
+	let wonZ = 0;
+	let wonSeat = -1;
+
 	const plantAt = (r: number): number => {
 		if (rootHeight[r]! <= seaLevel) return -1;
 		const face = roots.face[r]!;
-		const i = roots.i[r]!;
-		const j = roots.j[r]!;
-		// **The twelve pentagons are protected columns**, so nothing is planted
-		// on one and no branch has to ask for a fifth direction. A lattice
-		// point is one of the twelve exactly when it is a corner of its own
-		// face triangle, which is three integer comparisons.
-		if (
-			(i === 0 && j === 0) ||
-			(i === rootN && j === 0) ||
-			(i === 0 && j === rootN)
-		)
-			return -2;
-		const x = roots.directions[r * 3]!;
-		const y = roots.directions[r * 3 + 1]!;
-		const z = roots.directions[r * 3 + 2]!;
-		// **Every layer is offered the cell in turn and the first that wants it
-		// takes it**, which makes a layer's density its share of what is left
-		// rather than of the ground. Any other rule needs the layers to know
-		// about each other, and a layer that reads its neighbour is not a
-		// layer.
-		for (let l = 0; l < live.length; l++) {
-			const layer = live[l]!;
-			// **The roll is asked first, because it can refuse on its own.** A
-			// layer's chance is its density scaled by a curve reading in
-			// `[0, 1]`, so it can never exceed the density -- and a roll over
-			// that is refused whatever the noise would have said. It is the
-			// same value tested against the same bound, so nothing about which
-			// cells are planted changes; what changes is that an octave stack
-			// and a spline are not read for a cell that was never going to
-			// take one. At the shipped densities that is **98.0%** of asks,
-			// and deciding a chunk's plants falls from `11.3 ms` to `1.7 ms`
-			// (`tools/trial-root-walk.ts`).
-			const roll = hash3(i, j, face, (seed + plantSalt(layer.id)) | 0);
-			if (!(roll < layer.density / 100)) continue;
-			const share = plantDensityAt(layer, x, y, z, seed, noise[l]!);
-			if (roll < (share * layer.density) / 100) return l;
-		}
-		return -1;
+		const fromI = roots.i[r]!;
+		const fromJ = roots.j[r]!;
+		let refusal = -1;
+		// **The whole block of root cells this column covers, in order, and
+		// the first that wants a plant takes it.** One column holds one trunk,
+		// so stopping at the first is the physical cap; asking only the
+		// column's own point instead is what made a coarse forest a sixteenth
+		// as dense as the one it is a picture of.
+		for (let v = 0; v < spread; v++)
+			for (let u = 0; u < spread; u++) {
+				const i = fromI + u;
+				const j = fromJ + v;
+				if (i + j > rootN) continue;
+				// **The twelve pentagons are protected columns**, so nothing
+				// is planted on one and no branch has to ask for a fifth
+				// direction. A lattice point is one of the twelve exactly when
+				// it is a corner of its own face triangle, which is three
+				// integer comparisons.
+				if (
+					(i === 0 && j === 0) ||
+					(i === rootN && j === 0) ||
+					(i === 0 && j === rootN)
+				) {
+					refusal = -2;
+					continue;
+				}
+				// **Every layer is offered the cell in turn and the first that
+				// wants it takes it**, which makes a layer's density its share
+				// of what is left rather than of the ground. Any other rule
+				// needs the layers to know about each other, and a layer that
+				// reads its neighbour is not a layer.
+				for (let l = 0; l < live.length; l++) {
+					const layer = live[l]!;
+					// **The roll is asked first, because it can refuse on its
+					// own.** A layer's chance is its density scaled by a curve
+					// reading in `[0, 1]`, so it can never exceed the density
+					// -- and a roll over that is refused whatever the noise
+					// would have said. It is the same value tested against the
+					// same bound, so nothing about which cells are planted
+					// changes; what changes is that an octave stack and a
+					// spline are not read for a cell that was never going to
+					// take one. At the shipped densities that is **98.0%** of
+					// asks, and deciding a chunk's plants falls from `11.3 ms`
+					// to `1.7 ms` (`tools/trial-root-walk.ts`).
+					const roll = hash3(
+						i,
+						j,
+						face,
+						(seed + plantSalt(layer.id)) | 0,
+					);
+					if (!(roll < layer.density / 100)) continue;
+					// **The noise is read at the candidate's own point**, not
+					// at the column's. It is the same question the finest
+					// level asks about that cell, so the answer is the same
+					// number and the coarse forest is a subset of the fine one
+					// rather than a nearby one.
+					const p =
+						spread === 1
+							? null
+							: latticePosition(face, rootN, i, j);
+					const x = p ? p.x : roots.directions[r * 3]!;
+					const y = p ? p.y : roots.directions[r * 3 + 1]!;
+					const z = p ? p.z : roots.directions[r * 3 + 2]!;
+					const share = plantDensityAt(
+						layer,
+						x,
+						y,
+						z,
+						seed,
+						noise[l]!,
+					);
+					if (!(roll < (share * layer.density) / 100)) continue;
+					// **The tree stands on the column that asked**, which is
+					// the one whose block this root is in. Seating it by where
+					// the root itself falls would move it to a neighbouring
+					// column, which may already hold a trunk of its own -- and
+					// it is what makes the two directions of the nesting rule
+					// exact: a column has a trunk if and only if a root in its
+					// own block has one, at every level.
+					const at = rootSeat[r]!;
+					if (at < 0) continue;
+					wonFace = face;
+					wonI = i;
+					wonJ = j;
+					wonX = x;
+					wonY = y;
+					wonZ = z;
+					wonSeat = at;
+					return l;
+				}
+			}
+		return refusal;
 	};
 
 	// Which column of the patch each root stands on. **Scale the barycentric
@@ -723,15 +816,11 @@ export function growStand(
 	 * the difference between the two grounds -- and nothing else here has to
 	 * know what the terrain is doing.
 	 */
-	const stamp = (
-		r: number,
-		layerAt: number,
-		store: PlantTemplateStore,
-	): number => {
-		const c = rootSeat[r]!;
-		const face = roots.face[r]!;
-		const i = roots.i[r]!;
-		const j = roots.j[r]!;
+	const stamp = (layerAt: number, store: PlantTemplateStore): number => {
+		const c = wonSeat;
+		const face = wonFace;
+		const i = wonI;
+		const j = wonJ;
 		const kept = store.forLayer(live[layerAt]!);
 		if (kept.length === 0) return 0;
 		const pick = Math.min(
@@ -789,12 +878,12 @@ export function growStand(
 	};
 
 	/** Grow whatever stands on one root, into whichever chunk is being held. */
-	const raise = (r: number, layer: number): number => {
-		if (templates) return stamp(r, layer, templates);
-		const c = rootSeat[r]!;
-		const face = roots.face[r]!;
-		const i = roots.i[r]!;
-		const j = roots.j[r]!;
+	const raise = (layer: number): number => {
+		if (templates) return stamp(layer, templates);
+		const c = wonSeat;
+		const face = wonFace;
+		const i = wonI;
+		const j = wonJ;
 		const shape = live[layer]!.shape;
 		woodBlock = wood[layer]!;
 		leafBlock = leafOf[layer]!;
@@ -814,9 +903,9 @@ export function growStand(
 		// pure function of its address. It stands on the ground as it is drawn,
 		// so its foot moves to the layer a coarse chunk put the surface on,
 		// while its direction is its own fine lattice point and never moves.
-		const ux = roots.directions[r * 3]!;
-		const uy = roots.directions[r * 3 + 1]!;
-		const uz = roots.directions[r * 3 + 2]!;
+		const ux = wonX;
+		const uy = wonY;
+		const uz = wonZ;
 		groundOf(c);
 		const foot = radius + top[c]!;
 		const base: [number, number, number] = [
@@ -945,7 +1034,7 @@ export function growStand(
 					if (owned) refused++;
 					continue;
 				}
-				raise(r, answer);
+				raise(answer);
 				if (owned) {
 					grown[answer]!++;
 					plants++;

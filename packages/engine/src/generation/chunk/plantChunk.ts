@@ -345,6 +345,13 @@ export function plantChunk(
 			seaLevel: 0,
 			owned,
 			templates,
+			// **One drawn column stands for the block of root cells it
+			// covers.** A cell at this level is `2^lift` of the world's own
+			// across, so the column asks all `4^lift` of them and grows the
+			// first that wants a plant -- which is what keeps the forest as
+			// dense as the finest level's, rather than a quarter of it a level
+			// out and a sixteenth two.
+			rootSpread: 1 << lift,
 		},
 	);
 

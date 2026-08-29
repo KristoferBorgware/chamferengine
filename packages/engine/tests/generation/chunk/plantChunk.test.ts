@@ -171,10 +171,28 @@ describe("plantChunk", () => {
  * player walks in and never moves or vanishes.
  */
 describe("a chunk drawn a level coarse", () => {
-	const LAYERS = [layerOf(1, "Pine", 40)];
+	// Thinner than the tests above, so a block of four roots rarely holds two
+	// and the count is about the rule rather than about saturation.
+	const LAYERS = [layerOf(1, "Pine", 10)];
 
-	/** Every cell a trunk stands on, named at the world's finest lattice. */
-	function feet(lod: number, key: number): Set<number> {
+	/**
+	 * Every cell a trunk stands on, named at the world's finest lattice, and
+	 * the columns that were looked at.
+	 *
+	 * **Two cells in from the triangle's own edge.** A chunk grows every plant
+	 * within reach of its rim and writes only its own cells, so a tree rooted
+	 * in the ring belongs to the neighbour and is not in this chunk's slots at
+	 * all. The rim is a third of a sixteen-cell triangle, and comparing two
+	 * levels across it compares two different rings.
+	 */
+	function feet(
+		lod: number,
+		key: number,
+		margin: number,
+	): {
+		trunks: Set<number>;
+		columns: Set<number>;
+	} {
 		const { shape, terrain, address } = world();
 		void address;
 		const level = shape.atLod(lod);
@@ -209,24 +227,26 @@ describe("a chunk drawn a level coarse", () => {
 				level.seaLevelRadius,
 			),
 		);
-		const out = new Set<number>();
+		const trunks = new Set<number>();
+		const columns = new Set<number>();
 		const m = chunk.m;
 		const layers = chunk.layerCount;
-		for (let q = 0; q <= m; q++)
-			for (let r = 0; q + r <= m; r++) {
+		for (let q = margin; q <= m - margin; q++)
+			for (let r = margin; q + r <= m - margin; r++) {
 				const slot = rankOf(q, r, m);
-				const top = surface[slot * 2]!;
-				const foot = chunk.blocks[slot * layers + top - 1] ?? 0;
-				if (!isPlantWood(foot)) continue;
 				const [i, j] = joinPath(
 					ChunkAddress.fromKey(key, cut).path,
 					q,
 					r,
 					DEPTH - lod,
 				);
-				out.add((i << lod) * 262144 + (j << lod));
+				const name = (i << lod) * 262144 + (j << lod);
+				columns.add(name);
+				const top = surface[slot * 2]!;
+				const foot = chunk.blocks[slot * layers + top - 1] ?? 0;
+				if (isPlantWood(foot)) trunks.add(name);
 			}
-		return out;
+		return { trunks, columns };
 	}
 
 	/** `rank(q, r, m)` -- a slot's index inside a triangle of side `m`. */
@@ -237,7 +257,7 @@ describe("a chunk drawn a level coarse", () => {
 	it("grows plants and writes their cells", () => {
 		const { address } = world();
 		const key = Math.floor(address.key / 4);
-		expect(feet(1, key).size).toBeGreaterThan(0);
+		expect(feet(1, key, 2).trunks.size).toBeGreaterThan(0);
 	});
 
 	// **The bug this catches drew nothing and reported success.** A template's
@@ -245,19 +265,53 @@ describe("a chunk drawn a level coarse", () => {
 	// named on the world's finest one; stepping the template from the root's
 	// name put every cell of every plant outside the patch, so a coarse chunk
 	// counted its plants and wrote not one block of them.
-	it("puts its trees where the finest level puts them", () => {
+	//
+	// **A column has a trunk exactly when a root in its own block has one.** A
+	// drawn cell a level out covers four of the world's own cells, and the
+	// column asks all four and grows the first that wants a plant -- so the
+	// two directions below are the whole rule, and the blocks nest, which is
+	// what makes a forest only ever get denser as it is walked toward.
+	it("has a trunk exactly where the finest level has one in its block", () => {
 		const { address } = world();
 		const parent = Math.floor(address.key / 4);
-		const coarse = feet(1, parent);
+		// Two cells in on the coarse chunk, whose rim is nobody's; the four
+		// fine chunks whole, because they tile that triangle exactly and each
+		// one's rim is another one's ground.
+		const coarse = feet(1, parent, 2);
 		const fine = new Set<number>();
 		for (let child = 0; child < 4; child++)
-			for (const one of feet(0, parent * 4 + child)) fine.add(one);
-		const missing = [...coarse].filter((one) => !fine.has(one));
+			for (const one of feet(0, parent * 4 + child, 0).trunks)
+				fine.add(one);
+
+		// The coarse column a fine cell belongs to, in the same names: its
+		// block is the pair of coordinates with the low bit dropped.
+		const block = (one: number) =>
+			(Math.floor(one / 262144) & ~1) * 262144 + ((one % 262144) & ~1);
+		// Only where both levels were looked at: a fine chunk's own rim is
+		// inside the coarse triangle, but the coarse chunk's rim is not
+		// inside any of them.
+		const here = [...fine].filter((one) => coarse.columns.has(block(one)));
+		// Nothing vanishes as it is approached: every tree the finest level
+		// grows has one at the coarse column covering its own root.
+		const gone = here.filter((one) => !coarse.trunks.has(block(one)));
+		// Nothing is invented either: a coarse trunk has a fine one under it.
+		const under = new Set(here.map(block));
+		const spare = [...coarse.trunks].filter((one) => !under.has(one));
 		expect(
-			`${missing.length} of ${coarse.size} not at the finest level`,
-		).toBe(`0 of ${coarse.size} not at the finest level`);
-		// And it really is a subset rather than the whole forest: a level out
-		// offers one root in four.
-		expect(coarse.size).toBeLessThan(fine.size);
+			`${gone.length} gone, ${spare.length} invented, ` +
+				`of ${here.length} fine and ${coarse.trunks.size} coarse`,
+		).toBe(
+			`0 gone, 0 invented, ` +
+				`of ${here.length} fine and ${coarse.trunks.size} coarse`,
+		);
+
+		// And the count holds up rather than falling with the level: four
+		// roots a column, one trunk a column, so the only loss is a block
+		// holding more than one tree.
+		// **And the count holds up rather than falling with the level.** Four
+		// roots to a column and one trunk to a column, so the only loss is a
+		// block that held more than one tree: `22` against `28` here, where
+		// offering the column's own root alone gives `9`.
+		expect(coarse.trunks.size).toBeGreaterThan(here.length * 0.6);
 	});
 });

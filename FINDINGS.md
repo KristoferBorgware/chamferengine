@@ -5280,18 +5280,27 @@ roots it offers are the fine roots whose coordinates are both multiples of
 `2^lod`. That is a subset chosen by the root alone, which every level agrees
 on, and it needs **no walk of its own** because the chunk has already walked
 it: the `8,392,705` lattice points that ran the browser out of memory are not
-enumerated at all. One root in `4^lod` is offered, so the forest thins with
-distance instead of stopping, and a tree appears as the player walks in and
-never moves or vanishes. `PLANT_LEVELS` is gone; **what ends the forest is a
-tree shorter than a block** -- at 32 m blocks a 22 m pine has nowhere to stand
--- which is checked before a template set is built rather than after.
+enumerated at all. **A column asks its whole block of `4^lod`
+roots and grows the first that wants a plant**, which is the one trunk a column
+can hold -- so the count per unit ground is the finest level's until the block
+saturates, rather than a quarter of it a level out. Offering the column's own
+root alone was built first and is wrong by exactly that factor: over one 512 m
+triangle of ground (`tools/trial-plant-density.ts`) it draws `24% / 7% / 1%` of
+the finest level's trees at one, two and three levels out, against
+`97% / 87% / 57%` for the block. Canopy over the same ground runs
+`83.2% / 76.5% / 78.4% / 82.2%` across those four levels. `PLANT_LEVELS` is
+gone; **what ends the forest is a tree shorter than a block** -- at 32 m blocks
+a 22 m pine has nowhere to stand -- which is checked before a template set is
+built rather than after.
 
-Growing a chunk's plants now costs `600 / 191 / 107 / 59 / 25 / 0 ms` at levels
-0 to 5 against `915 / 517 / 990 / 2,385` for the first four before. Photographed
-from the vantage this entry names, the share of lit ground that is leaf runs
-**6.0% to 17.2%**, and across the four bands of the view from far to near it
-goes from `0.0% / 0.0% / 5.2% / 19.2%` -- a wedge that stops -- to
-`17.4% / 19.2% / 18.3% / 14.2%`.
+Growing a chunk's plants now costs `633 / 201 / 114 / 160 / 34 / 0 ms` at
+levels 0 to 5 against `915 / 517 / 990 / 2,385` for the first four before.
+Photographed from the vantage this entry names, the share of lit ground that is
+leaf runs **6.0% to 65.1%**, and across the four bands of the view from far to
+near it goes from `0.0% / 0.0% / 5.2% / 19.2%` -- a wedge that stops -- to
+`49.5% / 62.5% / 77.4% / 72.8%`. The same view with the near field forced to the
+finest level reads `72.2% / 70.2%` in those two bands, so the near field is
+matched; one root a column reads `18.3% / 14.2%` there, a fifth of the forest.
 
 **Two other things had to be true first.** The world's mesher built a
 `PlantTemplateStore` per level and **never passed it** to `plantChunk`, so
