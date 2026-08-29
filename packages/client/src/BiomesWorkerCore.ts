@@ -272,7 +272,13 @@ export class BiomesWorkerCore {
 		// drag edits and everything above is held.
 		const columnForm = new Int8Array(layout.count);
 		const columnBiome = new Int16Array(layout.count);
-		this.resolveHeld(this.columns!, table, allowed, columnForm, columnBiome);
+		this.resolveHeld(
+			this.columns!,
+			table,
+			allowed,
+			columnForm,
+			columnBiome,
+		);
 		const ground = this.columnGround!;
 		for (let c = 0; c < layout.count; c++)
 			ground.material[c] =
@@ -324,12 +330,21 @@ export class BiomesWorkerCore {
 		}
 		const patchShares = new Array<number>(table.biomes.length).fill(0);
 		const formPatch = new Array<number>(LANDFORMS.length).fill(0);
+		const gridPatch = new Array<number>(table.grid.length).fill(0);
 		let patchLand = 0;
+		const columns = this.columns!;
 		for (let c = 0; c < layout.count; c++) {
 			if (columnForm[c]! < 0) continue;
 			patchLand++;
 			formPatch[columnForm[c]!]!++;
 			if (columnBiome[c]! >= 0) patchShares[columnBiome[c]!]!++;
+			gridPatch[
+				gridAt(
+					bucket(columns.level[c]!, CONT_EDGES),
+					bucket(columns.cut[c]!, ERO_EDGES),
+					bucket(columns.swing[c]!, PV_EDGES),
+				)
+			]!++;
 		}
 		const over = (counts: number[], total: number): number[] =>
 			counts.map((count) => (total > 0 ? count / total : 0));
@@ -390,6 +405,7 @@ export class BiomesWorkerCore {
 				formPlanet: over(formPlanet, landCells),
 				formPatch: over(formPatch, patchLand),
 				gridShares: over(gridShares, landCells),
+				gridPatch: over(gridPatch, patchLand),
 				built: planetShares.filter((share) => share > 0).length,
 				patchBiomes: patchShares.filter((share) => share > 0).length,
 				fit: field.fit,
@@ -463,7 +479,12 @@ export class BiomesWorkerCore {
 			biome[n] =
 				at < 0
 					? -1
-					: biomeOf(held.t[n]!, held.h[n]!, allowed[at], table.biomes);
+					: biomeOf(
+							held.t[n]!,
+							held.h[n]!,
+							allowed[at],
+							table.biomes,
+						);
 		}
 	}
 

@@ -218,6 +218,8 @@ body {
 }
 
 .knobs h2 {
+	display: flex;
+	align-items: center;
 	font-size: 10.5px;
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
@@ -555,6 +557,7 @@ body {
 /* A group is a fold. Only the first is open, so the rows that decide where the
    land is are the ones in view. */
 .knobs-fold {
+	flex: 1 1 auto;
 	width: 100%;
 	padding: 0;
 	background: none;
@@ -689,10 +692,10 @@ body.bench .knobs {
    because what it says is always the same question -- on or off -- and
    never which section it is in; the heading's own tint already says that. */
 .knobs h2 input[type="checkbox"] {
+	flex: 0 0 auto;
 	width: 13px;
 	height: 13px;
 	margin: 0 6px 0 0;
-	vertical-align: -2px;
 	accent-color: var(--live);
 }
 
@@ -1684,33 +1687,98 @@ body.cave .knob label b {
 	color: #ff8f8f;
 }
 
-.biomes-grid-title {
-	font-size: 13px;
-	margin: 16px 0 2px;
-}
-
-.biomes-grid {
-	display: grid;
-	gap: 3px;
-	margin: 4px 0 8px;
-}
-
-.biomes-cell {
+.biomes-grid-tabs {
 	display: flex;
-	flex-direction: column;
+	flex-wrap: wrap;
+	gap: 3px;
+	margin: 6px 0 0;
+}
+
+.biomes-grid-tabs button {
+	flex: 1 1 auto;
+	padding: 3px 5px;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	background: var(--sunk);
+	color: var(--dim);
+	font:
+		10.5px/1.3 system-ui,
+		sans-serif;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.biomes-grid-tabs button.picked {
+	border-color: var(--live);
+	color: var(--ink);
+	background: rgba(111, 208, 255, 0.1);
+}
+
+.biomes-sheet {
+	display: grid;
+	grid-template-columns: 16px repeat(var(--columns, 3), 1fr);
+	gap: 2px;
+	margin: 4px 0 0;
+}
+
+.biomes-sheet button {
+	padding: 6px 0 4px;
+	border: 1px solid var(--edge);
+	border-radius: 2px;
+	color: #12161d;
+	font:
+		600 9px/1.2 system-ui,
+		sans-serif;
+	cursor: pointer;
+	overflow: hidden;
+}
+
+.biomes-sheet button.picked {
+	outline: 2px solid var(--live);
+	outline-offset: -2px;
+}
+
+.biomes-sheet button small {
+	display: block;
+	font-weight: 400;
+	font-size: 8px;
+	opacity: 0.75;
+}
+
+.biomes-sheet .edge {
+	font-size: 8px;
+	color: var(--dim);
+	display: flex;
 	align-items: center;
-	gap: 1px;
-	font: inherit;
-	font-size: 10px;
+	justify-content: center;
+	writing-mode: vertical-rl;
+	transform: rotate(180deg);
+}
+
+.biomes-sheet .corner {
+	font-size: 8px;
+	color: var(--dim);
+}
+
+.biomes-sheet-foot {
+	display: flex;
+	justify-content: space-between;
+	font-size: 8.5px;
+	color: var(--dim);
+	margin: 2px 0 8px 18px;
+}
+
+/* The one select that lives inline in a sentence rather than in its own
+   row -- "stands on", under the diagram. */
+.biomes-panel .knob-note select {
+	display: inline;
+	width: auto;
+	margin-left: 2px;
+	background: #0b0e13;
 	color: var(--ink);
 	border: 1px solid var(--edge);
-	border-radius: 4px;
-	padding: 4px 2px;
-	cursor: pointer;
-}
-
-.biomes-cell i {
-	font-style: normal;
-	color: var(--dim);
-	font-size: 9.5px;
+	border-radius: 3px;
+	padding: 1px 4px;
+	font: inherit;
+	font-size: 11px;
 }

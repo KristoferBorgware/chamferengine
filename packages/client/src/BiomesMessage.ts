@@ -108,8 +108,9 @@ export interface BiomesFacts {
 	readonly formPlanet: readonly number[];
 	readonly formPatch: readonly number[];
 
-	/** Per landform-grid cell, its share of the planet's land. */
+	/** Per landform-grid cell, its share of the planet's land and the patch's. */
 	readonly gridShares: readonly number[];
+	readonly gridPatch: readonly number[];
 
 	/** How many biomes the planet builds anywhere, and the patch holds. */
 	readonly built: number;

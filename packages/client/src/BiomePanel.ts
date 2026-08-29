@@ -16,27 +16,31 @@ import {
 	hash3,
 } from "chamfer/generation";
 import { biomeTableOf } from "./BiomeDraft.js";
+import { paintPatch } from "./paintPatch.js";
 
-/** What the panel's one picture shows. */
+/** What one of the panel's pictures shows. */
 export type BiomePicture =
-	"biomes" | "landform" | "temperature" | "humidity" | "push" | "regions";
+	| "biomes"
+	| "ground"
+	| "landform"
+	| "temperature"
+	| "humidity"
+	| "push"
+	| "regions";
 
-const PICTURES: readonly { value: BiomePicture; label: string }[] = [
-	{ value: "biomes", label: "Biomes" },
-	{ value: "landform", label: "Landform" },
-	{ value: "regions", label: "Regions" },
-	{ value: "temperature", label: "Temperature" },
-	{ value: "humidity", label: "Humidity" },
-	{ value: "push", label: "Biome noise" },
-];
+/**
+ * Which of a build's two rectangles this panel reads: the whole planet's
+ * land, or the patch in view.
+ *
+ * **One flag for two questions that turn out to be the same question.** The
+ * diagram's cloud and every share on this panel both answer "where", and a
+ * reader picks one place to look at once rather than choosing it twice.
+ */
+export type BiomeSpread = "planet" | "patch";
 
-/** What the diagram's cloud is drawn from. */
-export type BiomeCloudSource = "nothing" | "patch" | "planet";
-
-const CLOUDS: readonly { value: BiomeCloudSource; label: string }[] = [
-	{ value: "nothing", label: "nothing" },
-	{ value: "patch", label: "the patch" },
+const SPREADS: readonly { value: BiomeSpread; label: string }[] = [
 	{ value: "planet", label: "the planet" },
+	{ value: "patch", label: "the patch" },
 ];
 
 /** How many pixels across the diagram is rasterised. */
@@ -142,27 +146,32 @@ function regionColor(key: number): readonly [number, number, number] {
  */
 export class BiomePanel {
 	readonly table: BiomeTableDraft;
-	picture: BiomePicture;
 
 	/**
-	 * What the diagram's cloud is drawn from.
-	 *
-	 * **`patch`, because that is the lab's own default.** A region of the
-	 * square with no dots over it might be a biome the whole planet never
-	 * builds, or it might just be nowhere near the camera; `planet` answers
-	 * the first question and `patch` the second, and only one can be the
-	 * default. The patch is also the cheaper of the two, sent whole with no
-	 * subsampling however the planet reading is built.
+	 * "Biomes spread" -- which of the build's two rectangles this whole panel
+	 * reads: the diagram's cloud of dots, the chip row, the biome list, the
+	 * grid, and the line under the diagram all take this one flag, because a
+	 * share or a dot with no name for which of two places it is worth is
+	 * something a reader has to remember rather than read.
 	 */
-	cloud: BiomeCloudSource = "patch";
+	spread: BiomeSpread = "planet";
+
+	/** The continentalness band {@link buildGrid} is showing. */
+	gridBand = 1;
+
+	/** The grid cell last clicked, for its outline and the select below it. */
+	cellPicked = gridAt(1, 1, 1);
 
 	/**
-	 * The finished map, and the selector that picks its reading.
+	 * The finished biome map, always this one picture.
 	 *
 	 * **Built here and mounted by the page, not appended to this panel's own
 	 * scroller.** The lab keeps the map in the world panel's head, beside the
-	 * facts a build measured -- it is what the diagram is being judged
-	 * against, not one more row of the table that reads it.
+	 * facts a build measured -- it is what every other picture on this panel
+	 * is judged against, not one more row of the table that reads it. Every
+	 * other field gets its own picture where the knobs that tune it are; this
+	 * is the only one with nothing to select, because there is only ever one
+	 * of it.
 	 */
 	readonly preview: HTMLElement;
 
@@ -170,11 +179,12 @@ export class BiomePanel {
 	 * One field's own picture, built for each section that tunes it to mount
 	 * at its own top.
 	 *
-	 * **A click on one of these focuses {@link preview} on the same field.**
-	 * A reader turning the knobs under Temperature should not have to find
-	 * "Temperature" in a menu to see what they moved; the miniature already
-	 * standing there is the shorter path to the same picture.
+	 * **Left-click moves the patch to the place clicked; right-click enlarges
+	 * it.** Every picture here is a picture of the whole planet, so a click
+	 * always names a place rather than a patch to jump to -- the same two
+	 * actions {@link preview} itself answers to.
 	 */
+	readonly miniGround: HTMLElement;
 	readonly miniLandform: HTMLElement;
 	readonly miniRegions: HTMLElement;
 	readonly miniTemperature: HTMLElement;
@@ -197,6 +207,7 @@ export class BiomePanel {
 
 	private readonly onChange: (settled: boolean) => void;
 	private readonly onPicture: () => void;
+	private readonly onMove: (latitude: number, longitude: number) => void;
 
 	private readonly root: HTMLElement;
 	private readonly chipRow: HTMLElement;
@@ -204,11 +215,27 @@ export class BiomePanel {
 	private readonly chartInk: CanvasRenderingContext2D;
 	private readonly says: HTMLElement;
 	private readonly list: HTMLElement;
+	private readonly gridTabs: HTMLElement;
 	private readonly gridHost: HTMLElement;
+	private readonly gridPick: HTMLSelectElement;
 	private readonly shot: HTMLCanvasElement;
 	private readonly shotInk: CanvasRenderingContext2D;
 	private readonly presetPick: HTMLSelectElement;
-	private readonly pictureSelect: HTMLSelectElement;
+
+	/**
+	 * One picture, large.
+	 *
+	 * **A field at panel width says where its features are; at this size it
+	 * says what they look like.** Built once and reused for whichever picture
+	 * was last right-clicked, the same held sheet just painted into a bigger
+	 * canvas -- there is no sharper reading to resample to, so the picture
+	 * a reader gets here is the same pixels, larger.
+	 */
+	private readonly big: HTMLElement;
+	private readonly bigCanvas: HTMLCanvasElement;
+	private readonly bigInk: CanvasRenderingContext2D;
+	private readonly bigName: HTMLElement;
+	private bigShown: BiomePicture | null = null;
 
 	/** Every miniature built, so a rebuild repaints all of them in one pass. */
 	private readonly minis: {
@@ -226,16 +253,16 @@ export class BiomePanel {
 		table: BiomeTableDraft,
 		onChange: (settled: boolean) => void,
 		options: {
-			picture?: BiomePicture;
-			cloud?: BiomeCloudSource;
+			spread?: BiomeSpread;
 			onPicture?: () => void;
+			onMove?: (latitude: number, longitude: number) => void;
 		} = {},
 	) {
 		this.table = table;
 		this.onChange = onChange;
 		this.onPicture = options.onPicture ?? ((): void => {});
-		this.picture = options.picture ?? "biomes";
-		this.cloud = options.cloud ?? "patch";
+		this.onMove = options.onMove ?? ((): void => {});
+		this.spread = options.spread ?? "planet";
 
 		this.root = document.createElement("aside");
 		this.root.className = "plants biomes-panel";
@@ -250,11 +277,9 @@ export class BiomePanel {
 		scroller.className = "plants-body";
 		this.root.append(scroller);
 
-		// The preset the table starts from, above everything it writes over.
-		const presetRow = document.createElement("div");
-		presetRow.className = "knob";
-		const presetLabel = document.createElement("label");
-		presetLabel.textContent = "Preset";
+		// The preset the table starts from, and the two other diagram-wide
+		// knobs -- built here so `this.presetPick` exists for {@link build},
+		// mounted at the bottom once the grid is in place (see below).
 		this.presetPick = document.createElement("select");
 		for (const name of Object.keys(BIOME_PRESETS)) {
 			const option = document.createElement("option");
@@ -272,42 +297,25 @@ export class BiomePanel {
 			this.picked = 0;
 			this.settle();
 		};
-		presetRow.append(presetLabel, this.presetPick);
-		scroller.append(presetRow);
 
-		// The finished map and its selector, built for the page to mount
-		// wherever the world's own picture belongs -- the world panel's head,
-		// not this panel's scroller.
+		// The finished map, built for the page to mount wherever the world's
+		// own picture belongs -- the world panel's head, not this panel's
+		// scroller. Always the biomes reading: every other field has its own
+		// picture below, and this is the one every one of them is judged
+		// against.
 		this.preview = document.createElement("div");
 		this.preview.className = "biomes-preview";
-		const pictureRow = document.createElement("div");
-		pictureRow.className = "knob";
-		const pictureLabel = document.createElement("label");
-		pictureLabel.textContent = "Picture";
-		this.pictureSelect = document.createElement("select");
-		for (const { value, label } of PICTURES) {
-			const option = document.createElement("option");
-			option.value = value;
-			option.textContent = label;
-			this.pictureSelect.append(option);
-		}
-		this.pictureSelect.value = this.picture;
-		this.pictureSelect.oninput = () => {
-			this.picture = this.pictureSelect.value as BiomePicture;
-			this.paintSheet();
-			this.onPicture();
-		};
-		pictureRow.append(pictureLabel, this.pictureSelect);
-		this.preview.append(pictureRow);
 		this.shot = document.createElement("canvas");
 		this.shot.className = "biomes-shot";
 		this.shotInk = this.shot.getContext("2d")!;
+		this.watchShot(this.shot, "biomes", "Biomes");
 		this.preview.append(this.shot);
 
 		// **One picture per section, painted from the same held sheet.** The
 		// lab keeps a field's picture where the knobs that tune it are, so
 		// the thing being judged never scrolls away from the row being
-		// turned; a click on one focuses {@link preview} on the same field.
+		// turned.
+		this.miniGround = this.buildMini("ground", null, "Terrain");
 		this.miniLandform = this.buildMini("landform", null, "Landform");
 		this.miniRegions = this.buildMini("regions", null, "Regions");
 		this.miniTemperature = this.buildMini(
@@ -317,30 +325,6 @@ export class BiomePanel {
 		);
 		this.miniHumidity = this.buildMini("humidity", "wet", "Humidity");
 		this.miniPush = this.buildMini("push", "wild", "Biome noise");
-
-		// **Which climate the diagram's cloud is drawn from, not what colours
-		// the square.** A cell with no dots over it is a biome the shown
-		// ground never reaches on the patch or on the planet, and those are
-		// different questions -- so this stands apart from the picture above.
-		const cloudRow = document.createElement("div");
-		cloudRow.className = "knob";
-		const cloudLabel = document.createElement("label");
-		cloudLabel.textContent = "Show on it";
-		const cloudPick = document.createElement("select");
-		for (const { value, label } of CLOUDS) {
-			const option = document.createElement("option");
-			option.value = value;
-			option.textContent = label;
-			cloudPick.append(option);
-		}
-		cloudPick.value = this.cloud;
-		cloudPick.oninput = () => {
-			this.cloud = cloudPick.value as BiomeCloudSource;
-			this.paintChart();
-			this.onPicture();
-		};
-		cloudRow.append(cloudLabel, cloudPick);
-		scroller.append(cloudRow);
 
 		this.chipRow = document.createElement("div");
 		this.chipRow.className = "biomes-chips";
@@ -372,12 +356,137 @@ export class BiomePanel {
 		add.onclick = () => this.addBiome();
 		scroller.append(add);
 
-		const gridTitle = document.createElement("h1");
-		gridTitle.textContent = "The landform grid";
-		gridTitle.className = "biomes-grid-title";
-		scroller.append(gridTitle);
+		// **Its own fold, because the grid answers a different question than
+		// the list above it.** The list is which biomes exist; the grid is
+		// which of the six landforms every combination of the three terrain
+		// curves comes to, one sheet per continentalness band with the
+		// other two down and across.
+		const gridSection = document.createElement("details");
+		gridSection.className = "sub";
+		gridSection.open = true;
+		const gridSummary = document.createElement("summary");
+		gridSummary.textContent = "The landform grid";
+		gridSection.append(gridSummary);
+		this.gridTabs = document.createElement("div");
+		this.gridTabs.className = "biomes-grid-tabs";
+		gridSection.append(this.gridTabs);
 		this.gridHost = document.createElement("div");
-		scroller.append(this.gridHost);
+		gridSection.append(this.gridHost);
+		const gridFoot = document.createElement("div");
+		gridFoot.className = "biomes-sheet-foot";
+		gridFoot.innerHTML =
+			"<span>valley</span><span>peaks &amp; valleys</span><span>peak</span>";
+		gridSection.append(gridFoot);
+
+		// **Edited here rather than in the grid itself.** A click on a cell
+		// only ever selects it -- the grid draws six colours a reader has to
+		// tell apart on sight, which a click cycling through them would ask
+		// twice over; naming the one just clicked is what a select is for.
+		const gridPickRow = document.createElement("div");
+		gridPickRow.className = "knob";
+		const gridPickLabel = document.createElement("label");
+		gridPickLabel.textContent = "That cell is";
+		this.gridPick = document.createElement("select");
+		for (let n = 0; n < LANDFORMS.length; n++) {
+			const option = document.createElement("option");
+			option.value = String(n);
+			option.textContent = LANDFORMS[n]!.name;
+			this.gridPick.append(option);
+		}
+		this.gridPick.oninput = () => {
+			this.table.grid =
+				this.table.grid.slice(0, this.cellPicked) +
+				this.gridPick.value +
+				this.table.grid.slice(this.cellPicked + 1);
+			this.shown = Number(this.gridPick.value);
+			this.settle();
+		};
+		const gridPickNote = document.createElement("p");
+		gridPickNote.className = "knob-note";
+		gridPickNote.textContent =
+			"the three curves' answers, cut into indices -- Shore is not in " +
+			"the grid, because it is a height rather than a combination of " +
+			"the three";
+		gridPickRow.append(gridPickLabel, this.gridPick, gridPickNote);
+		gridSection.append(gridPickRow);
+		scroller.append(gridSection);
+
+		// **The diagram, at the bottom.** Nothing here is climate: it is
+		// which preset the table started from, and which of the two
+		// rectangles this whole panel reads -- two questions about how the
+		// panel reads a build that already ran, not about the world itself.
+		const diagramSection = document.createElement("details");
+		diagramSection.className = "sub";
+		diagramSection.open = true;
+		const diagramSummary = document.createElement("summary");
+		diagramSummary.textContent = "The diagram";
+		diagramSection.append(diagramSummary);
+
+		const presetRow = document.createElement("div");
+		presetRow.className = "knob";
+		const presetLabel = document.createElement("label");
+		presetLabel.textContent = "Start from";
+		presetRow.append(presetLabel, this.presetPick);
+		diagramSection.append(presetRow);
+
+		// **One flag for the cloud of dots and every count on the panel.**
+		// Both answer "where", and asking a reader to set the same answer
+		// twice under two different names is asking them to keep the two in
+		// sync by hand.
+		const spreadRow = document.createElement("div");
+		spreadRow.className = "knob";
+		const spreadLabel = document.createElement("label");
+		spreadLabel.textContent = "Biomes spread";
+		const spreadPick = document.createElement("select");
+		for (const { value, label } of SPREADS) {
+			const option = document.createElement("option");
+			option.value = value;
+			option.textContent = label;
+			spreadPick.append(option);
+		}
+		spreadPick.value = this.spread;
+		const spreadNote = document.createElement("p");
+		spreadNote.className = "knob-note";
+		const saySpread = (): void => {
+			spreadNote.textContent =
+				this.spread === "patch"
+					? "one dot per hexagon in view, and every share on this panel of the ground in view -- what the camera is standing in, which is one place and not a world"
+					: "one dot per cell of the planet, and every share on this panel of the whole planet's land, which is what says whether a biome is worth keeping at all";
+		};
+		saySpread();
+		spreadPick.oninput = () => {
+			this.spread = spreadPick.value as BiomeSpread;
+			saySpread();
+			this.paintChart();
+			this.build();
+			this.onPicture();
+		};
+		spreadRow.append(spreadLabel, spreadPick, spreadNote);
+		diagramSection.append(spreadRow);
+		scroller.append(diagramSection);
+
+		this.big = document.createElement("div");
+		this.big.className = "plants-big";
+		this.big.hidden = true;
+		const bigFigure = document.createElement("figure");
+		this.bigCanvas = document.createElement("canvas");
+		this.bigInk = this.bigCanvas.getContext("2d")!;
+		const bigCaption = document.createElement("figcaption");
+		this.bigName = document.createElement("b");
+		const bigHint = document.createElement("span");
+		bigHint.textContent = "click anywhere to close";
+		bigCaption.append(this.bigName, bigHint);
+		bigFigure.append(this.bigCanvas, bigCaption);
+		this.big.append(bigFigure);
+		const closeBig = (): void => {
+			this.big.hidden = true;
+			this.bigShown = null;
+		};
+		this.big.onclick = closeBig;
+		window.addEventListener("keydown", (event) => {
+			if (event.key === "Escape") closeBig();
+		});
+		document.body.append(this.big);
 
 		document.body.append(this.root);
 		this.wireChart();
@@ -408,14 +517,60 @@ export class BiomePanel {
 		badge.textContent = label;
 		holder.append(canvas, badge);
 		const ink = canvas.getContext("2d")!;
-		canvas.onclick = () => {
-			this.picture = picture;
-			this.pictureSelect.value = picture;
-			this.paintSheet();
-			this.onPicture();
-		};
+		this.watchShot(canvas, picture, label);
 		this.minis.push({ picture, canvas, ink });
 		return holder;
+	}
+
+	/**
+	 * Wires one picture's clicks: left moves the patch to the place clicked,
+	 * right enlarges it.
+	 *
+	 * **Every picture here is the whole planet**, so a click always names a
+	 * place rather than jumping between two different questions the way the
+	 * lab's own pictures do when one of them shows the patch instead.
+	 */
+	private watchShot(
+		canvas: HTMLCanvasElement,
+		kind: BiomePicture,
+		label: string,
+	): void {
+		canvas.addEventListener("click", (event) => {
+			const box = canvas.getBoundingClientRect();
+			const across = (event.clientX - box.left) / box.width;
+			const down = (event.clientY - box.top) / box.height;
+			const longitude = Math.max(
+				-180,
+				Math.min(180, Math.round(across * 360 - 180)),
+			);
+			const latitude = Math.max(
+				-85,
+				Math.min(85, Math.round((0.5 - down) * 180)),
+			);
+			this.onMove(latitude, longitude);
+		});
+		canvas.addEventListener("contextmenu", (event) => {
+			event.preventDefault();
+			this.showBig(kind, label);
+		});
+		canvas.title =
+			"click to move the patch here, or right-click to enlarge";
+	}
+
+	/**
+	 * One picture, large.
+	 *
+	 * There is no sharper reading to resample to -- the sheet a build sends
+	 * back is one fixed resolution -- so this is the same pixels the small
+	 * picture already holds, painted into a canvas CSS stretches to fill most
+	 * of the window.
+	 */
+	private showBig(kind: BiomePicture, label: string): void {
+		if (!this.sheet) return;
+		this.bigShown = kind;
+		this.bigName.textContent = label;
+		this.big.hidden = false;
+		this.paintKind(this.bigCanvas, this.bigInk, kind);
 	}
 
 	/** The push's reach moved with a knob, so the border bands move with it. */
@@ -522,10 +677,9 @@ export class BiomePanel {
 		// **The patch and the planet are different questions.** One dot a
 		// hexagon in view says which part of itself the camera is standing
 		// in; one dot a cell of the planet says whether the shown ground
-		// builds this biome anywhere at all. Only one can be the default, and
-		// it is the patch -- the planet's cloud is a heavier reading nobody
-		// asked for until they ask for it.
-		if (this.cloud === "patch" && this.patchCloud) {
+		// builds this biome anywhere at all. "Biomes spread" is the one flag
+		// that answers which of the two this whole panel is reading.
+		if (this.spread === "patch" && this.patchCloud) {
 			const cloud = this.patchCloud;
 			ink.fillStyle = "rgba(10, 12, 16, 0.42)";
 			for (let n = 0; n < cloud.landform.length; n++) {
@@ -537,7 +691,7 @@ export class BiomePanel {
 					1.6,
 				);
 			}
-		} else if (this.cloud === "planet" && this.sheet) {
+		} else if (this.spread === "planet" && this.sheet) {
 			const sheet = this.sheet;
 			ink.fillStyle = "rgba(10, 12, 16, 0.4)";
 			const tall = sheet.height;
@@ -677,7 +831,10 @@ export class BiomePanel {
 
 	private buildList(): void {
 		this.list.textContent = "";
-		const shares = this.facts?.planetShares;
+		const shares =
+			this.spread === "patch"
+				? this.facts?.patchShares
+				: this.facts?.planetShares;
 		const allowed = this.allowedNow()[this.shown] ?? [];
 		for (const b of allowed) {
 			const biome = this.table.biomes[b]!;
@@ -712,7 +869,10 @@ export class BiomePanel {
 
 	private buildChips(): void {
 		this.chipRow.textContent = "";
-		const shares = this.facts?.formPlanet;
+		const shares =
+			this.spread === "patch"
+				? this.facts?.formPatch
+				: this.facts?.formPlanet;
 		LANDFORMS.forEach((form, at) => {
 			const chip = document.createElement("button");
 			chip.type = "button";
@@ -735,61 +895,126 @@ export class BiomePanel {
 	}
 
 	private buildGrid(): void {
-		this.gridHost.textContent = "";
-		const shares = this.facts?.gridShares;
+		this.gridTabs.textContent = "";
 		for (let cont = 0; cont < CONT_BANDS; cont++) {
-			const sheetTitle = document.createElement("p");
-			sheetTitle.className = "knob-note";
-			sheetTitle.textContent = CONT_NAMES[cont]!;
-			this.gridHost.append(sheetTitle);
-			const sheet = document.createElement("div");
-			sheet.className = "biomes-grid";
-			sheet.style.gridTemplateColumns = `repeat(${PV_BANDS}, 1fr)`;
-			for (let ero = 0; ero < ERO_BANDS; ero++)
-				for (let pv = 0; pv < PV_BANDS; pv++) {
-					const at = gridAt(cont, ero, pv);
-					const form = Number(this.table.grid[at]);
-					const cell = document.createElement("button");
-					cell.type = "button";
-					cell.className = "biomes-cell";
-					cell.style.background = `#${LANDFORMS[form]!.hex}55`;
-					cell.title = `${ERO_NAMES[ero]} erosion, ${PV_NAMES[pv]} relief`;
-					const of = shares?.[at] ?? 0;
-					cell.innerHTML =
-						`<b>${LANDFORMS[form]!.short}</b>` +
-						`<i>${(of * 100).toFixed(1)}%</i>`;
-					cell.onclick = () => {
-						// A click cycles the cell through the landforms, so
-						// the grid is edited by looking rather than typing.
-						// The shore is a height rule, never a grid cell.
-						const next =
-							form >= LANDFORMS.length - 1 ? 1 : form + 1;
-						this.table.grid =
-							this.table.grid.slice(0, at) +
-							String(next) +
-							this.table.grid.slice(at + 1);
-						this.settle();
-					};
-					sheet.append(cell);
-				}
-			this.gridHost.append(sheet);
+			const button = document.createElement("button");
+			button.type = "button";
+			button.textContent = CONT_NAMES[cont]!;
+			button.className = cont === this.gridBand ? "picked" : "";
+			button.onclick = () => {
+				this.gridBand = cont;
+				this.buildGrid();
+			};
+			this.gridTabs.append(button);
 		}
+
+		this.gridHost.textContent = "";
+		this.gridHost.className = "biomes-sheet";
+		this.gridHost.style.setProperty("--columns", String(PV_BANDS));
+		const corner = document.createElement("div");
+		corner.className = "corner";
+		this.gridHost.append(corner);
+		for (let pv = 0; pv < PV_BANDS; pv++) {
+			const head = document.createElement("div");
+			head.className = "corner";
+			head.textContent = PV_NAMES[pv]!;
+			this.gridHost.append(head);
+		}
+		const shares =
+			this.spread === "patch"
+				? this.facts?.gridPatch
+				: this.facts?.gridShares;
+		for (let ero = 0; ero < ERO_BANDS; ero++) {
+			const edge = document.createElement("div");
+			edge.className = "edge";
+			edge.textContent = ERO_NAMES[ero]!;
+			this.gridHost.append(edge);
+			for (let pv = 0; pv < PV_BANDS; pv++) {
+				const at = gridAt(this.gridBand, ero, pv);
+				const form = Number(this.table.grid[at]);
+				const cell = document.createElement("button");
+				cell.type = "button";
+				// **Plain, not washed with alpha.** The grid names one
+				// landform a cell, and a colour softened toward the panel's
+				// own background reads as a fact half-stated.
+				cell.style.background = `#${LANDFORMS[form]!.hex}`;
+				cell.className = at === this.cellPicked ? "picked" : "";
+				const of = shares?.[at] ?? 0;
+				cell.innerHTML =
+					`${LANDFORMS[form]!.short}` +
+					`<small>${of > 0 ? `${(of * 100).toFixed(1)}%` : "—"}</small>`;
+				cell.title =
+					`${CONT_NAMES[this.gridBand]}, ${ERO_NAMES[ero]} erosion, ` +
+					`${PV_NAMES[pv]} relief → ${LANDFORMS[form]!.name}`;
+				// **A click only selects the cell.** Naming a colour by eye
+				// against five others is not a decision to make blind on
+				// every click; the select below names the one just picked.
+				cell.onclick = () => {
+					this.cellPicked = at;
+					this.shown = form;
+					const allowed = this.allowedNow()[this.shown] ?? [];
+					if (!allowed.includes(this.picked))
+						this.picked = allowed[0] ?? this.picked;
+					this.build();
+				};
+				this.gridHost.append(cell);
+			}
+		}
+
+		this.gridPick.value = this.table.grid[this.cellPicked] ?? "0";
 	}
 
+	/**
+	 * Which biome is being edited, what it comes to, and which ground it may
+	 * stand on.
+	 *
+	 * **Where it stands is edited here rather than in the list**, because
+	 * changing it can move the biome out of the list this panel is showing --
+	 * the control has to outlive the row it would sit in.
+	 */
 	private saySelf(): void {
+		this.says.textContent = "";
 		const biome = this.table.biomes[this.picked];
 		if (!biome) {
-			this.says.textContent = "";
+			const form = LANDFORMS[this.shown];
+			if (form)
+				this.says.innerHTML =
+					`<b>${form.name}</b> has no biome, so nothing can be ` +
+					`built on it — add one, or move one here`;
 			return;
 		}
-		const planet = this.facts?.planetShares[this.picked] ?? 0;
-		const patch = this.facts?.patchShares[this.picked] ?? 0;
-		this.says.innerHTML =
+		const shares =
+			this.spread === "patch"
+				? this.facts?.patchShares
+				: this.facts?.planetShares;
+		const of = shares?.[this.picked] ?? 0;
+		const said = document.createElement("span");
+		said.innerHTML =
 			`<b>${biome.name}</b> at temperature <b>${biome.t.toFixed(2)}</b>, ` +
 			`humidity <b>${biome.h.toFixed(2)}</b> — ` +
-			`<b>${(planet * 100).toFixed(1)}%</b> of the planet's land, ` +
-			`<b>${(patch * 100).toFixed(1)}%</b> of the patch · stands on ` +
-			`<b>${biome.landform === ANY_LANDFORM ? "any ground" : biome.landform}</b>`;
+			`<b>${of > 0 ? `${(of * 100).toFixed(1)}%` : "—"}</b> of ` +
+			`${this.spread === "patch" ? "the patch's land" : "the planet's land"} · stands on `;
+		const pickForm = document.createElement("select");
+		const anyOption = document.createElement("option");
+		anyOption.value = ANY_LANDFORM;
+		anyOption.textContent = "any ground";
+		pickForm.append(anyOption);
+		for (const form of LANDFORMS) {
+			const option = document.createElement("option");
+			option.value = form.key;
+			option.textContent = form.name.toLowerCase();
+			pickForm.append(option);
+		}
+		pickForm.value = biome.landform;
+		pickForm.oninput = () => {
+			biome.landform = pickForm.value;
+			if (biome.landform !== ANY_LANDFORM) {
+				const at = LANDFORMS.findIndex((f) => f.key === biome.landform);
+				if (at >= 0) this.shown = at;
+			}
+			this.settle();
+		};
+		this.says.append(said, pickForm);
 	}
 
 	private build(): void {
@@ -811,9 +1036,13 @@ export class BiomePanel {
 	// -----------------------------------------------------------------------
 
 	private paintSheet(): void {
-		this.paintKind(this.shot, this.shotInk, this.picture);
+		this.paintKind(this.shot, this.shotInk, "biomes");
 		for (const mini of this.minis)
 			this.paintKind(mini.canvas, mini.ink, mini.picture);
+		// The enlarged picture stays live through a rebuild rather than
+		// freezing on whatever it held when it was opened.
+		if (this.bigShown)
+			this.paintKind(this.bigCanvas, this.bigInk, this.bigShown);
 	}
 
 	/**
@@ -843,6 +1072,24 @@ export class BiomePanel {
 		const formInk = LANDFORMS.map((form) => bytesOf(form.hex));
 		for (let n = 0; n < count; n++) {
 			const at = n * 4;
+			// **The one picture that is not a colour by biome or by field.**
+			// The ground arrives already tuned through the link, so this
+			// reads the same block colours the landscape bench itself draws
+			// its Terrain picture in, off nothing but the metres a cell
+			// stands at.
+			if (kind === "ground") {
+				paintPatch(px, at, {
+					metres: sheet.metres[n]!,
+					raw: 0,
+					layer: 0,
+					rawLow: 0,
+					rawHigh: 0,
+					low: 0,
+					high: 0,
+					picture: "ground",
+				});
+				continue;
+			}
 			const sea = sheet.landform[n]! < 0;
 			let c: readonly [number, number, number] = SEA_INK;
 			if (kind === "biomes") {
@@ -870,7 +1117,11 @@ export class BiomePanel {
 						: grey,
 				);
 			} else {
-				c = bytesOfRamp(regionColor(sheet.region[n]!));
+				// **The sea is masked out here rather than left to the region
+				// key.** A region is seeded only on land, but nothing stops a
+				// stale or off-by-default key from reaching a sea cell, and a
+				// hashed colour there would read as a region under water.
+				c = sea ? SEA_INK : bytesOfRamp(regionColor(sheet.region[n]!));
 			}
 			px[at] = c[0];
 			px[at + 1] = c[1];

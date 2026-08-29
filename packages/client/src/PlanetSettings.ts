@@ -1850,7 +1850,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	humOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
 	biomeWarp: { ...TOGGLE, rebuilds: false },
 	warpStrength: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
-	warpFeature: { low: 100, high: 2000, step: 20, rebuilds: false, unit: "m" },
+	warpFeature: { low: 100, high: 4000, step: 50, rebuilds: false, unit: "m" },
 	warpOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
 	biomeFit: { ...TOGGLE, rebuilds: false },
 	biomeRegions: { ...TOGGLE, rebuilds: false },

@@ -1,7 +1,7 @@
 import type { BiomesFacts, BiomesReply } from "./BiomesMessage.js";
 import type { PatchLook } from "chamfer/render";
 import type { PlanetKnobs } from "./PlanetSettings.js";
-import type { BiomeCloudSource, BiomePicture } from "./BiomePanel.js";
+import type { BiomeSpread } from "./BiomePanel.js";
 import { GROUND_LINES, TERRAIN_DEFAULTS } from "chamfer/generation";
 import {
 	PATCH_FILL_SHARE,
@@ -85,11 +85,14 @@ const general = panel.section("General");
 // ---------------------------------------------------------------------------
 
 const biomes = new BiomePanel(table, (settled) => request(settled), {
-	picture: (new URLSearchParams(location.search).get("biomePicture") ??
-		"biomes") as BiomePicture,
-	cloud: (new URLSearchParams(location.search).get("biomeCloud") ??
-		"patch") as BiomeCloudSource,
+	spread: (new URLSearchParams(location.search).get("biomeSpread") ??
+		"planet") as BiomeSpread,
 	onPicture: () => writeUrl(),
+	// **The same knob a slider owns**, so the two rows that hold a place
+	// agree with wherever a click on a picture just sent the patch.
+	onMove: (latitude, longitude) => {
+		panel.set({ patchLatitude: latitude, patchLongitude: longitude });
+	},
 });
 biomes.setPush(settings.knobs.biomeWarp ? settings.knobs.warpStrength : 0);
 
@@ -105,6 +108,15 @@ general?.append(biomes.preview, recipe, facts);
 function mountMini(title: string, mini: HTMLElement): void {
 	const section = panel.section(title);
 	section?.insertBefore(mini, section.children[1] ?? null);
+}
+const terrainSection = panel.section("The terrain");
+if (terrainSection) {
+	terrainSection.append(biomes.miniGround);
+	const terrainNote = document.createElement("p");
+	terrainNote.className = "knob-note";
+	terrainNote.textContent =
+		"the ground is the input here rather than the subject -- it arrives already tuned through the link, and the landscape bench is where its own knobs live. Climate needs a coastline to measure from and a mountain to be cooled by";
+	terrainSection.append(terrainNote);
 }
 mountMini("The landform", biomes.miniLandform);
 mountMini("The regions", biomes.miniRegions);
@@ -126,8 +138,7 @@ function writeUrl(): void {
 	});
 	panel.carry({ biomes: settings.knobs.biomes });
 	const params = settings.toParams();
-	if (biomes.picture !== "biomes") params.set("biomePicture", biomes.picture);
-	if (biomes.cloud !== "patch") params.set("biomeCloud", biomes.cloud);
+	if (biomes.spread !== "planet") params.set("biomeSpread", biomes.spread);
 	history.replaceState(null, "", `?${params.toString()}`);
 	const planetParams = settings.toParams();
 	planetParams.set("panel", "1");
