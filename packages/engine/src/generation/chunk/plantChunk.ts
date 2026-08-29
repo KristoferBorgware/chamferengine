@@ -82,17 +82,19 @@ export function plantChunk(
 	rootDepth: number = shape.subdivisionDepth,
 	templates: PlantTemplateStore | null = null,
 ): PlantedChunk | null {
-	// **A species whose tallest plant is shorter than a block grows nothing**,
+	// **A species whose tallest plant is under half a block grows nothing**,
 	// and it is cheaper to know that than to find out: a template set is 32
-	// plants grown properly, and a coarse level would build them all to stamp
-	// none. `growStand` already refuses the individual plant on the same test.
-	// This is what ends the forest -- at a block of 32 m a 22 m pine has
-	// nowhere to stand -- rather than a count of levels.
+	// plants grown properly, and a level too coarse for the species would
+	// build them all to stamp none. `growStand` refuses the individual plant
+	// on the same test, and floors everything between half a block and a whole
+	// one at one block -- so a species fades out over a level rather than
+	// ending on one, as the plants inside it cross the half-block line at
+	// their own sizes.
 	const live = layers.filter(
 		(layer) =>
 			layer.on &&
 			layer.shape.height * (1 + layer.shape.sizeSpread) >=
-				shape.blockSize,
+				shape.blockSize / 2,
 	);
 	if (live.length === 0) return null;
 	layers = live;
