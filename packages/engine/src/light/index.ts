@@ -6,3 +6,7 @@ export { solarNoonTime } from "./solarNoonTime.js";
 export { terminatorSpeed } from "./terminatorSpeed.js";
 export { daylight } from "./daylight.js";
 export { skyExposure } from "./skyExposure.js";
+export type { BlockLightChart, SolidAt } from "./BlockLightChart.js";
+export { BLOCK_LIGHT_RANGE_MAX } from "./BLOCK_LIGHT_RANGE_MAX.js";
+export { blockLightSide } from "./blockLightSide.js";
+export { fillBlockLight } from "./fillBlockLight.js";

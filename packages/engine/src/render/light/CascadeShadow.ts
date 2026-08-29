@@ -1,3 +1,4 @@
+import { CHUNK_VERTEX_FLOATS } from "../../mesh/CHUNK_VERTEX_FLOATS.js";
 import type { Box } from "../../math/Box.js";
 import type { Frame } from "../Frame.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
@@ -146,7 +147,7 @@ export class CascadeShadow {
 				entryPoint: "vertexMain",
 				buffers: [
 					{
-						arrayStride: 24,
+						arrayStride: CHUNK_VERTEX_FLOATS * 4,
 						attributes: [
 							{
 								shaderLocation: 0,

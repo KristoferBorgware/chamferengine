@@ -8,6 +8,7 @@ export { patchLayout } from "./patchLayout.js";
 export type { PatchFields, PatchFill } from "./patchVertices.js";
 export { patchVertices } from "./patchVertices.js";
 export type { MeshSink } from "./MeshSink.js";
+export { CHUNK_VERTEX_FLOATS } from "./CHUNK_VERTEX_FLOATS.js";
 export type { MeshOptions } from "./MeshOptions.js";
 export { MESH_DEFAULTS } from "./MeshOptions.js";
 export { ArrayMeshSink } from "./ArrayMeshSink.js";

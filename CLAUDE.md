@@ -2079,6 +2079,43 @@ Violating any of these breaks the design. They are not tunable.
   drawn: `worldColor + sky * (1 - alpha)`, premultiplied. Nothing else had to
   change -- every opaque pipeline already writes alpha 1 and writes depth, so
   its pixels never reach this path.
+- **A LIGHT STANDING IN THE WORLD IS THE SECOND CHANNEL, AND IT TRAVELS AS A
+  CUBE ON THE SOURCE'S OWN FACE LATTICE** (`fillBlockLight`,
+  `BLOCK_LIGHT_WGSL`, `BlockLightMap`, doc 16). The player carries a light,
+  because there is no torch item yet. The fill is doc 16's own flood -- full at
+  the cell it stands in, a step of brightness lost per neighbour over the
+  **eight** neighbours, stopping at anything solid -- run again when the player
+  steps off a cell, when a knob moves, or when anybody changes a block. It
+  costs **0.14 ms** over 1,241 cells at range 8 and **0.84 ms** over 9,009 at
+  range 16 with nothing solid (`tools/trial-torch.ts`), and the counts are this
+  document's own `3r^2+3r+1` summed over the layers the range reaches. **A
+  moving light cannot be baked**, so the answer reaches a fragment as a cube of
+  levels indexed by `di`, `dj` and a layer offset in the **source's own face
+  lattice, extended past that face's edges** -- `35^3` bytes at the widest
+  range, one 3x3 solve in the shader and no lookup, because the barycentric
+  weights of a direction on that face give a fractional `(i, j)` directly.
+  **The extension is exact where the sphere is flat and wrong at a pentagon**:
+  over a 15-step disc it names 721 distinct cells for 721 entries and
+  round-trips **100%** mid-face, near a face edge and exactly on one, and names
+  **616 for 721 at 23.2%** at a pentagon, where the sphere is one direction
+  short and a flat chart wraps onto itself -- 0.0234% of the planet's columns,
+  left alone (F-120). **The read is half a block out along the face's own
+  normal**, into the air the light crossed, which is what gives a lit room its
+  shape with no direction in the light at all. **The fill asks `blockAt` per
+  cell and so regenerates one column five to eleven times over** (F-121).
+- **SKY EXPOSURE IS A NUMBER OF ITS OWN ON THE VERTEX, NOT A FACTOR IN ITS
+  COLOUR** (`CHUNK_VERTEX_FLOATS`, `MeshSink.vertex`, `TERRAIN_SHADER`). A
+  shader cannot divide a number back out of a colour it was handed, so with the
+  sky term baked in a lamp would have arrived at the **0.12** a shut-in cell is
+  baked to -- dimmest exactly where it is the only light there is. A vertex is
+  **seven floats** rather than six: position, the block's colour with the
+  corner occlusion in it, and how much sky the cell stands under. The shader
+  multiplies that into the sun, the sky and the moon and **not** into a light
+  standing in the world. **Full light stops being a baked knob** and becomes
+  `mix(sky, 1.0, frame.sun.w)` in the vertex stage -- out of `BAKED_KNOBS` and
+  `REMESH_KNOBS`, `rebuilds: false`, and a frame with the light off is
+  bit-identical to before the split (ratio **1.000**, 0.0% spread over 640,212
+  pixels).
 - **SKY EXPOSURE IS A FACT ABOUT A LAYER, NOT ABOUT A COLUMN** (`skyAt` in
   `meshChunk`, `SKY_FLOOR`, doc 16). The mesher bakes how much sky a cell takes
   from the ground around it, and it read that **once per cell at the column's
@@ -2095,9 +2132,9 @@ Violating any of these breaks the design. They are not tunable.
   -- top vertices at the run's first layer, bottom at its last -- so one merged
   run carries the gradient for nothing, and ground under the open sky does not
   move because a cap on its column's top is read at that same layer. **What an
-  enclosed cell keeps is a decision**: there is no torch in this world, so the
-  curve's floor is the whole of what a cave gets. It is **0.12** against the
-  0.35 it was, and that costs a surface frame's mean **136.0 against 136.1** of
+  enclosed cell keeps is a decision**: it is the whole of what a cave gets from
+  the sky, and a light carried down there is the other channel. It is **0.12**
+  against the 0.35 it was, and that costs a surface frame's mean **136.0 against 136.1** of
   255, a mean per-pixel move of 3.08 -- the floor only reaches a cell shut in
   on every side. **Sky exposure** switches the term off entirely, which is the
   only way to see what you dug. **A baked knob has to be in the panel's remesh
@@ -2113,12 +2150,15 @@ Violating any of these breaks the design. They are not tunable.
   orphaned every block the player had placed. **Needing the same work as a
   terrain knob is not the same thing as being one**, and the three baked
   knobs -- speckle, corner shading, sky exposure -- are the set that says so.
+  **`fullbright` is not among them**: the sky term reaches the shader as its
+  own number, so full light is a switch the frame carries.
   Taking it out re-keys **every** world rather than only the ones with the
   switch turned, so the edits already on disk are orphaned once; nothing is
   deleted, they sit under the old name.
 - **FULL LIGHT TAKES AWAY THE BLOCKING, NOT THE LIGHTING**
-  (`frame.sun.w` in `TERRAIN_SHADER`, `fullbright`, doc 16). There is no torch,
-  so a hole gets the sky's 42% times a wall's own `openness` of 0.71 -- about
+  (`frame.sun.w` in `TERRAIN_SHADER`, `fullbright`, doc 16). With nothing
+  carried down there, a hole gets the sky's 42% times a wall's own `openness`
+  of 0.71 -- about
   **0.30** of open ground, the sun's 58% having been refused by the shadow
   maps -- and the 0.12 an enclosed cell is baked to takes that to **0.036**.
   **Full light means the sun reaches every face as though no block stood in the
@@ -2129,10 +2169,10 @@ Violating any of these breaks the design. They are not tunable.
   no term left that varies by face, a floor, a wall and a ceiling all come out
   at exactly the block they are made of and the room reads as a flat sheet of
   colour with edges; the brightness was never the problem, the blocking was.
-  **A shader flag alone still cannot do the whole of it**: the sky exposure is
-  multiplied into the vertex colours by the mesher and nothing computed
-  afterwards can divide a number back out, so full light stops that one being
-  baked and therefore wants a rebuild. **The corner shading stays baked and
+  **A shader flag is the whole of it**: the sky exposure is a number of its own
+  on every vertex, so the vertex stage takes it away with
+  `mix(sky, 1.0, frame.sun.w)` and no chunk is built again. **The corner
+  shading stays baked and
   stays on** -- it says how much sky a corner sees rather than whether the sun
   arrives, it bottoms out at 0.55 rather than 0.12, and it is what keeps a
   cave's edges legible. Measured on high-relief open ground with the air and

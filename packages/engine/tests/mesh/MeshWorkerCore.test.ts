@@ -19,7 +19,12 @@ import {
 	packBlockState,
 } from "chamfer/edit";
 import { joinPath } from "chamfer/addressing";
-import { InlineMeshSource, MeshWorkerCore, buildChunkMesh } from "chamfer/mesh";
+import {
+	CHUNK_VERTEX_FLOATS,
+	InlineMeshSource,
+	MeshWorkerCore,
+	buildChunkMesh,
+} from "chamfer/mesh";
 import { WorldShape } from "chamfer/world";
 
 const DEPTH = 8;
@@ -100,7 +105,11 @@ describe("the grid: a flat shell in place of the terrain", () => {
 
 		const top = shape.crustTopRadius;
 		// Six floats a vertex: position then color.
-		for (let at = 0; at + 2 < mesh.opaque.vertices.length; at += 6) {
+		for (
+			let at = 0;
+			at + 2 < mesh.opaque.vertices.length;
+			at += CHUNK_VERTEX_FLOATS
+		) {
 			const x = mesh.opaque.vertices[at]! + mesh.origin[0];
 			const y = mesh.opaque.vertices[at + 1]! + mesh.origin[1];
 			const z = mesh.opaque.vertices[at + 2]! + mesh.origin[2];
@@ -325,7 +334,11 @@ describe("retuning the switches baked into a vertex colour", () => {
 	/** The colour half of every vertex, which is where the three land. */
 	function colors(vertices: Float32Array): Float32Array {
 		const out = new Float32Array(vertices.length / 2);
-		for (let v = 0, n = 0; v < vertices.length; v += 6, n += 3) {
+		for (
+			let v = 0, n = 0;
+			v < vertices.length;
+			v += CHUNK_VERTEX_FLOATS, n += 3
+		) {
 			out[n] = vertices[v + 3]!;
 			out[n + 1] = vertices[v + 4]!;
 			out[n + 2] = vertices[v + 5]!;
@@ -369,7 +382,7 @@ describe("retuning the switches baked into a vertex colour", () => {
 		const after = core.run({ ...JOB, id: 2 }).opaque.vertices;
 
 		expect(after.length).toBe(before.length);
-		for (let v = 0; v < before.length; v += 6)
+		for (let v = 0; v < before.length; v += CHUNK_VERTEX_FLOATS)
 			for (let axis = 0; axis < 3; axis++)
 				expect(after[v + axis]).toBe(before[v + axis]);
 		expect(colors(after)).not.toEqual(colors(before));

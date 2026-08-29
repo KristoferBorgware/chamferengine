@@ -36,6 +36,7 @@ import {
 	seedFromString,
 } from "chamfer/generation";
 import { CELL_CONSTANT, WorldShape, maxCrustDepth } from "chamfer/world";
+import { BLOCK_LIGHT_RANGE_MAX } from "chamfer/light";
 import { LAYER_COUNT, wordBits } from "chamfer/addressing";
 import { PLAYER_DEFAULTS } from "chamfer/player";
 import {
@@ -936,9 +937,10 @@ export interface PlanetKnobs {
 	 * standing over them. Baked into the mesh, so it costs nothing to draw
 	 * and needs a rebuild to change.
 	 *
-	 * **There is no torch in this world yet**, so off is the only way to see
-	 * underground: every face then takes the open-sky reading, which is what
-	 * the whole world looked like before this was read per layer.
+	 * It reduces the sun, the sky and the moon and not a light standing in
+	 * the world, so **Carried light** is what a cave is meant to be lit by
+	 * and this is what makes it dark first. Off gives every face the
+	 * open-sky reading.
 	 */
 	skyExposure: boolean;
 
@@ -1097,13 +1099,47 @@ export interface PlanetKnobs {
 	 * other term still does its own work, so a face's angle to the sun decides
 	 * what it takes and a cave keeps its shape instead of going flat.
 	 *
-	 * The sky exposure has to stop being *baked*, because no light a shader
-	 * computes can undo a number already multiplied into the colour it was
-	 * handed -- without that a cave stays at the 12% a shut-in cell is baked
-	 * to, however far the sun is said to reach. That is why it needs a rebuild
-	 * rather than taking effect on the next frame.
+	 * The sky exposure it takes away is a number of its own on every vertex
+	 * rather than a factor in the colour, so this takes effect on the next
+	 * frame and rebuilds nothing.
 	 */
 	fullbright: boolean;
+
+	/**
+	 * Whether the player carries a light.
+	 *
+	 * There is no torch to place yet, so the player is one: a source standing
+	 * in whichever cell they are in, flooding out through the air around them
+	 * and stopping at rock. It owes nothing to the sun, so it is what there is
+	 * to see by inside a cave.
+	 */
+	torchOn: boolean;
+
+	/**
+	 * How many cells the carried light reaches, losing a step of brightness
+	 * per cell.
+	 *
+	 * A hexagonal disc of radius `r` holds `3r^2 + 3r + 1` cells against a
+	 * square grid's `2r^2 + 2r + 1`, and the fill runs in three dimensions, so
+	 * this is the one lever over what the light costs: the work grows as its
+	 * cube. 16 steps reach 7,471 cells where 8 reach 1,241.
+	 *
+	 * At one of the twelve pentagons the same range reaches five sixths as
+	 * many cells, because a ring there holds `5k` where a hexagon's holds
+	 * `6k`. Nothing is dimmer; there is less world within reach.
+	 */
+	torchRange: number;
+
+	/**
+	 * How bright the carried light is at the cell it stands in.
+	 *
+	 * `1` is what open ground takes from the sun and the sky together at
+	 * noon, so a wall a step away reads about as bright as daylight and the
+	 * falloff over the range does the rest. How much sky a cell stands under
+	 * does not reduce it -- that term belongs to the sun, the sky and the
+	 * moon -- so the same strength reads the same in a cave and in the open.
+	 */
+	torchStrength: number;
 
 	/**
 	 * How much light the moon throws on the ground.
@@ -1394,6 +1430,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	skyShading: 1,
 	skyStrength: 1,
 	fullbright: false,
+	torchOn: true,
+	torchRange: 10,
+	torchStrength: 1,
 	moonLight: 0.16,
 	exposure: 1,
 	bloomOn: true,
@@ -1520,16 +1559,15 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
  * every time it is turned. Needing the same work as a terrain knob is not the
  * same thing as being one, and this is the set that says so.
  *
- * **`fullbright` is here and reaches the mesher through `skyExposure`.** The
- * sky term is a number multiplied into a vertex colour, and no shader can
- * divide one back out of what it was handed, so full light has to stop it
- * being baked rather than override it afterwards.
+ * **`fullbright` is not here.** How much sky a cell stands under travels to
+ * the shader as a number of its own rather than as a factor in the vertex
+ * colour, so full light is a switch the frame carries and no chunk is built
+ * again for it.
  */
 export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
-	"fullbright",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -1991,7 +2029,16 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	sunStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	skyShading: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
-	fullbright: { ...TOGGLE, rebuilds: true },
+	fullbright: { ...TOGGLE, rebuilds: false },
+	torchOn: { ...TOGGLE, rebuilds: false },
+	torchRange: {
+		low: 0,
+		high: BLOCK_LIGHT_RANGE_MAX,
+		step: 1,
+		rebuilds: false,
+		unit: "cells",
+	},
+	torchStrength: { low: 0, high: 8, step: 0.1, rebuilds: false, unit: "x" },
 	moonLight: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	exposure: { low: 0.1, high: 8, step: 0.05, rebuilds: false, unit: "x" },
 	bloomOn: { ...TOGGLE, rebuilds: false },
