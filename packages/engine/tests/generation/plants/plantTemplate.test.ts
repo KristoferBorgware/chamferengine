@@ -139,6 +139,71 @@ describe("buildPlantTemplate", () => {
 		expect(sunk).toBeLessThan(one.count / 10);
 	});
 
+	/**
+	 * **Under one block a plant is one block, and under half a block it is
+	 * nothing.** A skeleton has nothing to rasterise into once the grid is
+	 * wider than the tree, so a plant that is not floored simply is not there
+	 * and the forest ends at whatever level that first happens on. What is
+	 * left of a tree seen that far off is one green thing standing on the
+	 * ground. The floor stops at half a block because that is the smallest
+	 * thing the grid can say: a shrub drawn as a whole coarse block would be
+	 * bigger far away than it is underfoot.
+	 */
+	describe("a plant the block grid is wider than", () => {
+		const tallest =
+			layer.shape.height * (1 + layer.shape.sizeSpread) * 0.999;
+
+		/** The same species, grown on a grid of a given block size. */
+		const at = (block: number) => {
+			const far =
+				layer.shape.height * (1 + layer.shape.sizeSpread) +
+				layer.shape.leafRadius * 1.6;
+			const patch = plantReferencePatch(
+				FINE_DEPTH,
+				Math.max(2, Math.ceil(far / block) + 2),
+			);
+			let cells = 0;
+			let leaves = 0;
+			for (let variant = 0; variant < PLANT_VARIANTS; variant++) {
+				const one = buildPlantTemplate(
+					patch,
+					layer,
+					variant,
+					block,
+					RADIUS,
+					map.seed,
+				);
+				cells += one.count;
+				for (let k = 0; k < one.count; k++)
+					if (isPlantLeaf(one.block[k]!)) leaves++;
+			}
+			return { cells, leaves };
+		};
+
+		// **A species fades over a level rather than ending on one.** Its
+		// variants are spread `sizeSpread` either side of its height -- wider
+		// than a factor of two at the shipped `0.4` -- so at a block between
+		// the smallest and twice it, some are floored to one cell and the
+		// rest are under half a block and are not drawn. `27` of the `32`
+		// clear it here, which is the share of the spread above `0.7`.
+		it("is one leaf block where the block is wider than the plant", () => {
+			const got = at(tallest);
+			expect(`${got.cells} cells, ${got.leaves} of them leaf`).toBe(
+				"27 cells, 27 of them leaf",
+			);
+			expect(got.cells).toBeLessThan(PLANT_VARIANTS);
+		});
+
+		it("is nothing where the block is more than twice the plant", () => {
+			expect(at(tallest * 2 + 1).cells).toBe(0);
+		});
+
+		// The whole point: it does not go straight from a tree to nothing.
+		it("still stands where a whole tree no longer fits", () => {
+			expect(at(tallest).cells).toBeGreaterThan(0);
+		});
+	});
+
 	// The variety the world draws is this many shapes by twelve turns, so the
 	// shapes themselves have to differ.
 	it("gives a species a set of different plants", () => {

@@ -477,9 +477,22 @@ Violating any of these breaks the design. They are not tunable.
   far to near, from `0.0% / 0.0% / 5.2% / 19.2%` to
   `49.5% / 62.5% / 77.4% / 72.8%`, where the same view with its near field
   forced to the finest level reads `72.2% / 70.2%` in those two bands.
-  **What ends the forest is a tree shorter than a block**, checked before a
-  template set is built rather than after: at 32 m blocks a 22 m pine has
-  nowhere to stand. **A template is stepped from the DRAWN cell, never the
+  **A PLANT THE GRID IS WIDER THAN IS ONE BLOCK, AND UNDER HALF A BLOCK IT IS
+  NOTHING** (`raise`'s floor in `growStand`, F-117). A skeleton has nothing to
+  rasterise into once the block is wider than the tree -- measured, at a 32 m
+  block every one of the 32 variants of both shipped species came back with
+  **0 cells**, so an unfloored plant simply is not there and the forest ends at
+  whatever level that first happens on. One block is the tree rounded to the
+  grid: a 30.8 m pine at a 32 m block is a 4% overstatement. **The floor stops
+  at half a block**, which is where the rule it replaces was right -- a 2.6 m
+  shrub drawn as a 32 m cube is bigger far away than it is underfoot. A species
+  therefore **fades over a level rather than ending on one**, because its
+  variants are spread wider than a factor of two: at a block just over the
+  tallest, `27` of `32` clear half and five do not. Over one 2,048 m triangle
+  the canopy runs `22.3% / 20.5% / 21.2% / 22.2% / 24.8% / 16.6%` at levels 0
+  to 5, where level 5 drew **nothing at all** before; the ground underfoot is
+  on 32 m blocks to about **7 km** of altitude, and the opening view is
+  unchanged to the pixel because nothing in it is that coarse. **A template is stepped from the DRAWN cell, never the
   root** -- its offsets are cells of the lattice the chunk is drawn on, and at a
   coarse level the root's name is a different number for the same point, so
   every cell of every plant landed outside the patch and a coarse chunk counted
