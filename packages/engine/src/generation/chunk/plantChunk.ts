@@ -55,6 +55,23 @@ export interface PlantedChunk {
 
 	/** What stands in each of those cells. */
 	readonly what: Uint16Array<ArrayBuffer>;
+
+	/**
+	 * The columns a plant too small to draw has left its colour on.
+	 *
+	 * **Under half a block a plant stops being a shape and becomes the colour
+	 * of the ground it stands on.** A pine at a 64 m block has nothing to be
+	 * made of, and what can be seen of a forest from the distance that block
+	 * is drawn at is that the ground is green -- a fact about the surface's
+	 * material rather than about geometry. So this maps a cell to the leaf
+	 * block whose colour its ground cap takes, and the blocks themselves are
+	 * untouched: nothing a player stands on, breaks or collides with moves,
+	 * and nothing is stored.
+	 *
+	 * **The ring past the rim is in it too**, because the neighbouring chunk
+	 * draws those cells as its own apron and has to paint them the same.
+	 */
+	readonly cover: ReadonlyMap<number, number>;
 }
 
 /**
@@ -82,22 +99,7 @@ export function plantChunk(
 	rootDepth: number = shape.subdivisionDepth,
 	templates: PlantTemplateStore | null = null,
 ): PlantedChunk | null {
-	// **A species whose tallest plant is under half a block grows nothing**,
-	// and it is cheaper to know that than to find out: a template set is 32
-	// plants grown properly, and a level too coarse for the species would
-	// build them all to stamp none. `growStand` refuses the individual plant
-	// on the same test, and floors everything between half a block and a whole
-	// one at one block -- so a species fades out over a level rather than
-	// ending on one, as the plants inside it cross the half-block line at
-	// their own sizes.
-	const live = layers.filter(
-		(layer) =>
-			layer.on &&
-			layer.shape.height * (1 + layer.shape.sizeSpread) >=
-				shape.blockSize / 2,
-	);
-	if (live.length === 0) return null;
-	layers = live;
+	if (layers.every((layer) => !layer.on)) return null;
 	const depth = shape.subdivisionDepth;
 	const n = shape.n;
 	const m = chunk.m;
@@ -398,11 +400,22 @@ export function plantChunk(
 		at[n] = where[order[n]!]!;
 		held[n] = what[order[n]!]!;
 	}
+	// The canopy that is a colour rather than a block, over the whole patch:
+	// this chunk's own cells and the ring beyond them, keyed the way the
+	// mesher names a cell.
+	const cover = new Map<number, number>();
+	for (let c = 0; c < count; c++) {
+		const what = stand.cover[c]!;
+		if (what === BlockType.AIR) continue;
+		cover.set((face[c]! * 262144 + iOf[c]!) * 262144 + jOf[c]!, what);
+	}
+
 	return {
 		plants: stand.plants,
 		wood: stand.wood,
 		leaf: stand.leaf,
 		where: at,
 		what: held,
+		cover,
 	};
 }

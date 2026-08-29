@@ -98,7 +98,9 @@ function over(lod: number): { plants: number; cover: number; ms: number } {
 		for (const at2 of grown?.where ?? []) {
 			under.add(Math.floor(at2 / chunk.layerCount));
 		}
-		shaded += under.size;
+		// A column the grid was too coarse to build a plant on is under a
+		// canopy all the same -- the plant is its ground's colour there.
+		shaded += under.size + (grown?.cover.size ?? 0);
 	}
 	return {
 		plants,

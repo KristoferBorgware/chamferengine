@@ -488,11 +488,33 @@ Violating any of these breaks the design. They are not tunable.
   shrub drawn as a 32 m cube is bigger far away than it is underfoot. A species
   therefore **fades over a level rather than ending on one**, because its
   variants are spread wider than a factor of two: at a block just over the
-  tallest, `27` of `32` clear half and five do not. Over one 2,048 m triangle
-  the canopy runs `22.3% / 20.5% / 21.2% / 22.2% / 24.8% / 16.6%` at levels 0
-  to 5, where level 5 drew **nothing at all** before; the ground underfoot is
-  on 32 m blocks to about **7 km** of altitude, and the opening view is
-  unchanged to the pixel because nothing in it is that coarse. **A template is stepped from the DRAWN cell, never the
+  tallest, `27` of `32` clear half and five do not.
+  **AND UNDER HALF A BLOCK IT IS THE COLOUR OF THE GROUND** (`cover` on
+  `Stand`, `MeshOptions.cover`, F-117 closed). What can be seen of a forest
+  once the grid is more than twice as wide as a tree is that the ground is
+  green -- a fact about the surface's material, not about geometry -- so the
+  plant pass hands the mesher the columns it could not build on and their
+  **up-facing ground cap** takes the canopy's colour. Only that cap: a cliff
+  face under a forest is still rock. **No block is written**, so nothing a
+  player stands on, breaks or collides with moves, no face is added and
+  nothing is stored -- and it works at any block size, so **the forest has no
+  last level**. Over one 2,048 m triangle the canopy runs
+  `22.3% / 20.5% / 21.2% / 22.2% / 22.9% / 23.4%` at levels 0 to 5, where
+  level 5 drew **nothing at all** before.
+  **A COLUMN ASKS TWELVE ROOTS A SIDE, AND ASKING MORE MAKES THE PICTURE
+  WORSE** (`ROOT_SCAN`). The block a column covers grows as `4^lod`, so the
+  scan has to be capped or a chunk gets dearer with distance again -- and the
+  cap turns out to be a question about the picture rather than the cost: a
+  column is green or it is not, so every extra root asked is another chance to
+  paint a whole column green for one tree in it. Over one 4,096 m triangle,
+  canopy is `22.9%` at a level whose whole block fits inside the cap, and the
+  coarse levels read `17.0-18.6%` at a sample of 8 a side, **`24.0-25.6%` at
+  12**, `28.0-29.8%` at 16 and `35.0-39.5%` at 32 or 64. **The sample is the
+  block's own corner**, which is what keeps the nesting exact: whatever a
+  column samples, its four children between them sample all of. Growing a
+  chunk's plants runs `730 / 238 / 140 / 85 / 40 / 35 / 38 ms` at levels 0 to
+  6 against the ground's own `111 / 58 / 30 / 28 / 14 / 7 / 4 ms` -- falling
+  with distance and then flat, never climbing. **A template is stepped from the DRAWN cell, never the
   root** -- its offsets are cells of the lattice the chunk is drawn on, and at a
   coarse level the root's name is a different number for the same point, so
   every cell of every plant landed outside the patch and a coarse chunk counted

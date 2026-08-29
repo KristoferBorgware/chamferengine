@@ -195,6 +195,10 @@ export class MeshWorkerCore {
 				speckle: this.speckle,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
+				// The canopy that is a colour rather than a block: what a
+				// plant becomes once this level's grid is more than twice as
+				// wide as it is.
+				cover: grown?.cover ?? null,
 				grid: this.grid
 					? {
 							...this.grid,

@@ -115,6 +115,22 @@ export interface MeshOptions {
 	 * world yet, so that is the only way to see underground.
 	 */
 	readonly skyExposure?: boolean;
+
+	/**
+	 * Per cell, a block whose colour its ground cap takes instead of its own.
+	 *
+	 * **Under half a block a plant stops being a shape and becomes the colour
+	 * of the ground it stands on.** A 30 m pine at a 64 m block has nothing to
+	 * be made of, and what can be seen of a forest from the distance that
+	 * block is drawn at is that the ground under it is green. So the plant
+	 * pass hands over the columns it could not build on, and their up-facing
+	 * ground cap is painted the canopy's colour. Only that cap: a cliff face
+	 * under a forest is still rock, and nothing about the geometry moves.
+	 *
+	 * Keyed the way {@link meshChunk} names a cell, and covering the ring past
+	 * the rim as well as the chunk's own cells, because the apron draws those.
+	 */
+	readonly cover?: ReadonlyMap<number, number> | null;
 }
 
 export const MESH_DEFAULTS = {
@@ -122,6 +138,7 @@ export const MESH_DEFAULTS = {
 	apron: false,
 	surfaceGrid: 0,
 	debugSeams: false,
+	cover: null,
 	speckle: SPECKLE,
 	ambientOcclusion: true,
 	skyExposure: true,

@@ -30,6 +30,9 @@ import { plantBlocksOf } from "./PLANT_BLOCKS.js";
  */
 export const STAND_SUNK = 8;
 
+/** How many root cells across a column samples, however many it covers. */
+const ROOT_SCAN = 12;
+
 /** The most slots a column ever holds, however tall the tallest species is. */
 const MAX_STAND_LAYERS = 320;
 
@@ -210,6 +213,21 @@ export interface Stand {
 	 */
 	readonly widest: number;
 
+	/**
+	 * Per column, the block a plant too small to draw leaves on the ground.
+	 *
+	 * **Under half a block a plant stops being a shape and becomes the colour
+	 * of the ground it stands on.** What can be seen of a forest once the grid
+	 * is that much wider than a tree is that the ground is green -- a fact
+	 * about the surface's material rather than about geometry -- so this says
+	 * which columns are under a canopy and what colour that canopy is, and the
+	 * mesher paints their ground cap with it. Nothing is written into the
+	 * blocks, so nothing a player stands on, breaks or collides with moves.
+	 *
+	 * `0` where nothing covers the column.
+	 */
+	readonly cover: Uint8Array;
+
 	readonly chunks: number;
 	readonly rootsTested: number;
 	readonly rootsOwned: number;
@@ -245,6 +263,30 @@ export function growStand(
 		seaLevel,
 	} = options;
 	const spread = Math.max(1, options.rootSpread ?? 1);
+	// **How much of a column's block of roots is actually asked.**
+	//
+	// A column covers `4^lod` root cells and holds one trunk, so **asking more
+	// of them makes the picture worse, not better**: a column is green or it
+	// is not, so every extra root asked is another chance to paint the whole
+	// column green for the sake of one tree in it. Measured over one 4,096 m
+	// triangle, the share of ground under a canopy runs `22.9%` at a level the
+	// whole block fits inside, and the coarse levels come out
+	// `17.0-18.6%` at a sample of 8 a side, **`24.0-25.6%` at 12**,
+	// `28.0-29.8%` at 16 and `35.0-39.5%` at 32 or 64. Twelve is the one that
+	// tracks the ground the finer levels draw.
+	//
+	// It is also what stops the cost climbing again: without a cap the scan
+	// grows as `4^lod` and a chunk gets dearer with distance, which is the
+	// whole thing the planting rule exists to avoid. Capped, growing a
+	// chunk's plants runs `39 ms` six levels out against `720 ms` at the
+	// finest.
+	//
+	// **The sample is the block's own corner, which is what keeps the nesting
+	// exact.** Whatever a column samples, its four children between them
+	// sample all of -- so a tree a coarse column found is still found by a
+	// child, and the others may add their own. Nothing a player walks toward
+	// vanishes.
+	const scan = Math.min(spread, ROOT_SCAN);
 	const templates = options.templates ?? null;
 	const { count, ring, directions } = patch;
 	const { top, groundLayer } = ground;
@@ -259,6 +301,10 @@ export function growStand(
 		plantLayerNoise(layer, radius),
 	);
 	const grown = new Int32Array(live.length);
+	// Which columns a plant too small to draw has left its colour on. Recorded
+	// whoever owns the column, because the chunk beyond the rim draws these
+	// same cells as its apron and asks the same question about them.
+	const cover = new Uint8Array(count);
 
 	// Where each column of the patch is, by its canonical address, so a point
 	// in space can be turned back into a column of this patch.
@@ -683,8 +729,8 @@ export function growStand(
 		// so stopping at the first is the physical cap; asking only the
 		// column's own point instead is what made a coarse forest a sixteenth
 		// as dense as the one it is a picture of.
-		for (let v = 0; v < spread; v++)
-			for (let u = 0; u < spread; u++) {
+		for (let v = 0; v < scan; v++)
+			for (let u = 0; u < scan; u++) {
 				const i = fromI + u;
 				const j = fromJ + v;
 				if (i + j > rootN) continue;
@@ -822,7 +868,14 @@ export function growStand(
 		const i = wonI;
 		const j = wonJ;
 		const kept = store.forLayer(live[layerAt]!);
-		if (kept.length === 0) return 0;
+		// **A species this grid cannot draw is the colour of the ground.** The
+		// store hands back nothing for one, so there is no set to pick from
+		// and no cell to stamp; what is left of it at that distance is that
+		// the ground under it is green.
+		if (kept.length === 0) {
+			cover[c] = leafOf[layerAt]!;
+			return 0;
+		}
 		const pick = Math.min(
 			kept.length - 1,
 			Math.floor(
@@ -831,6 +884,14 @@ export function growStand(
 			),
 		);
 		const template = kept[pick]!;
+		// The same, for one variant of a species the grid draws the rest of:
+		// the sizes inside a species are spread wider than a factor of two, so
+		// the small end of one falls under half a block before the tall end
+		// does.
+		if (template.count === 0) {
+			cover[c] = leafOf[layerAt]!;
+			return 0;
+		}
 		const turn = Math.min(
 			TURNS - 1,
 			Math.floor(
@@ -908,8 +969,16 @@ export function growStand(
 		// 30.8 m pine at a 32 m block is a 4% overstatement.
 		const tallness = shape.height * scale;
 		if (tallness < block) {
-			if (tallness < block / 2) return 0;
 			leafBlock = leafOf[layer]!;
+			// **Under half a block it is the colour of the ground.** The grid
+			// cannot say anything smaller than half a cell, and a whole block
+			// there would be bigger far away than the plant is underfoot -- a
+			// 2.6 m shrub as a 32 m cube. What is left of it is that the
+			// ground is green, which the mesher paints and no block records.
+			if (tallness < block / 2) {
+				cover[c] = leafBlock;
+				return 0;
+			}
 			groundOf(c);
 			write(c, STAND_SUNK, leafBlock);
 			if (tallness > tallest) tallest = tallness;
@@ -1031,6 +1100,7 @@ export function growStand(
 			tallest,
 			shortest: shortest === Infinity ? 0 : shortest,
 			widest,
+			cover,
 			chunks,
 			rootsTested,
 			rootsOwned,
