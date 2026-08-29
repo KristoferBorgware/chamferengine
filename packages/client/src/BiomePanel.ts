@@ -13,25 +13,21 @@ import {
 	allowedBiomes,
 	biomeOf,
 	gridAt,
+	hash3,
 } from "chamfer/generation";
 import { biomeTableOf } from "./BiomeDraft.js";
 
 /** What the panel's one picture shows. */
 export type BiomePicture =
-	| "biomes"
-	| "landform"
-	| "temperature"
-	| "humidity"
-	| "push"
-	| "regions";
+	"biomes" | "landform" | "temperature" | "humidity" | "push" | "regions";
 
 const PICTURES: readonly { value: BiomePicture; label: string }[] = [
 	{ value: "biomes", label: "Biomes" },
 	{ value: "landform", label: "Landform" },
+	{ value: "regions", label: "Regions" },
 	{ value: "temperature", label: "Temperature" },
 	{ value: "humidity", label: "Humidity" },
-	{ value: "push", label: "The push" },
-	{ value: "regions", label: "Regions" },
+	{ value: "push", label: "Biome noise" },
 ];
 
 /** What the diagram's cloud is drawn from. */
@@ -43,9 +39,6 @@ const CLOUDS: readonly { value: BiomeCloudSource; label: string }[] = [
 	{ value: "planet", label: "the planet" },
 ];
 
-/** The sea on every picture, as CSS and as bytes. */
-const SEA_INK = [24, 44, 74] as const;
-
 /** How many pixels across the diagram is rasterised. */
 const CHART = 300;
 
@@ -53,6 +46,89 @@ const CHART = 300;
 function bytesOf(hex: string): [number, number, number] {
 	const n = parseInt(hex, 16);
 	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** A ramp's `[0, 1]` floats as the bytes a canvas takes. */
+function bytesOfRamp(
+	c: readonly [number, number, number],
+): [number, number, number] {
+	return [
+		Math.round(c[0] * 255),
+		Math.round(c[1] * 255),
+		Math.round(c[2] * 255),
+	];
+}
+
+/**
+ * The sea on every picture: one colour deepening with how much water a look
+ * passes through, because the ocean is a surface and holds no blocks of its
+ * own (doc 25).
+ */
+const SEA_COLOR: readonly [number, number, number] = [0.12, 0.32, 0.55];
+const SEA_INK = bytesOfRamp(SEA_COLOR);
+
+/** How many steps a field picture is cut into. */
+const PICTURE_BANDS = 9;
+
+/** Cold to hot, and dry to wet, as the two ramps the fields read on. */
+const HEAT_RAMP: readonly (readonly [number, number, number])[] = [
+	[0.62, 0.79, 0.92],
+	[0.93, 0.93, 0.88],
+	[0.85, 0.35, 0.26],
+];
+const GREY_RAMP: readonly (readonly [number, number, number])[] = [
+	[0.09, 0.1, 0.12],
+	[0.55, 0.56, 0.6],
+	[0.95, 0.96, 0.98],
+];
+const WET_RAMP: readonly (readonly [number, number, number])[] = [
+	[0.86, 0.78, 0.5],
+	[0.92, 0.92, 0.9],
+	[0.16, 0.4, 0.7],
+];
+
+/**
+ * One reading in `[-1, 1]` as a step along a ramp, with a line at the edge
+ * of each step.
+ *
+ * **Bands, not a wash.** A smooth gradient of a noise field shows its
+ * brightness and hides its shape; cutting it into steps draws the contour
+ * lines, and the contours are what say whether a field is broad and rolling
+ * or narrow and folded.
+ */
+function bandRamp(
+	v: number,
+	ramp: readonly (readonly [number, number, number])[],
+): [number, number, number] {
+	const t = Math.max(0, Math.min(0.9999, (v + 1) / 2));
+	const step = Math.floor(t * PICTURE_BANDS);
+	const along = (step / (PICTURE_BANDS - 1)) * (ramp.length - 1);
+	const lo = Math.min(ramp.length - 1, Math.floor(along));
+	const hi = Math.min(ramp.length - 1, lo + 1);
+	const mix = along - lo;
+	const into = t * PICTURE_BANDS - step;
+	const edge = into < 0.06 ? 0.5 : 1;
+	return [
+		(ramp[lo]![0] + (ramp[hi]![0] - ramp[lo]![0]) * mix) * edge,
+		(ramp[lo]![1] + (ramp[hi]![1] - ramp[lo]![1]) * mix) * edge,
+		(ramp[lo]![2] + (ramp[hi]![2] - ramp[lo]![2]) * mix) * edge,
+	];
+}
+
+/**
+ * A region's own colour, hashed off its seed's cell.
+ *
+ * Nothing about it means anything -- it exists so two regions side by side
+ * can be told apart, which is the only question this picture answers. `-1`
+ * is regions off or the sea, either of which reads as the sea's own colour.
+ */
+function regionColor(key: number): readonly [number, number, number] {
+	if (key < 0) return SEA_COLOR;
+	return [
+		0.3 + 0.6 * hash3(key, 0, 0, 101),
+		0.3 + 0.6 * hash3(0, key, 0, 211),
+		0.3 + 0.6 * hash3(0, 0, key, 331),
+	];
 }
 
 /**
@@ -90,6 +166,21 @@ export class BiomePanel {
 	 */
 	readonly preview: HTMLElement;
 
+	/**
+	 * One field's own picture, built for each section that tunes it to mount
+	 * at its own top.
+	 *
+	 * **A click on one of these focuses {@link preview} on the same field.**
+	 * A reader turning the knobs under Temperature should not have to find
+	 * "Temperature" in a menu to see what they moved; the miniature already
+	 * standing there is the shorter path to the same picture.
+	 */
+	readonly miniLandform: HTMLElement;
+	readonly miniRegions: HTMLElement;
+	readonly miniTemperature: HTMLElement;
+	readonly miniHumidity: HTMLElement;
+	readonly miniPush: HTMLElement;
+
 	/** The landform whose diagram is shown, as an index into `LANDFORMS`. */
 	shown = 2;
 
@@ -117,6 +208,14 @@ export class BiomePanel {
 	private readonly shot: HTMLCanvasElement;
 	private readonly shotInk: CanvasRenderingContext2D;
 	private readonly presetPick: HTMLSelectElement;
+	private readonly pictureSelect: HTMLSelectElement;
+
+	/** Every miniature built, so a rebuild repaints all of them in one pass. */
+	private readonly minis: {
+		readonly picture: BiomePicture;
+		readonly canvas: HTMLCanvasElement;
+		readonly ink: CanvasRenderingContext2D;
+	}[] = [];
 
 	private facts: BiomesFacts | null = null;
 	private sheet: BiomeSheet | null = null;
@@ -185,25 +284,39 @@ export class BiomePanel {
 		pictureRow.className = "knob";
 		const pictureLabel = document.createElement("label");
 		pictureLabel.textContent = "Picture";
-		const pick = document.createElement("select");
+		this.pictureSelect = document.createElement("select");
 		for (const { value, label } of PICTURES) {
 			const option = document.createElement("option");
 			option.value = value;
 			option.textContent = label;
-			pick.append(option);
+			this.pictureSelect.append(option);
 		}
-		pick.value = this.picture;
-		pick.oninput = () => {
-			this.picture = pick.value as BiomePicture;
+		this.pictureSelect.value = this.picture;
+		this.pictureSelect.oninput = () => {
+			this.picture = this.pictureSelect.value as BiomePicture;
 			this.paintSheet();
 			this.onPicture();
 		};
-		pictureRow.append(pictureLabel, pick);
+		pictureRow.append(pictureLabel, this.pictureSelect);
 		this.preview.append(pictureRow);
 		this.shot = document.createElement("canvas");
 		this.shot.className = "biomes-shot";
 		this.shotInk = this.shot.getContext("2d")!;
 		this.preview.append(this.shot);
+
+		// **One picture per section, painted from the same held sheet.** The
+		// lab keeps a field's picture where the knobs that tune it are, so
+		// the thing being judged never scrolls away from the row being
+		// turned; a click on one focuses {@link preview} on the same field.
+		this.miniLandform = this.buildMini("landform", null, "Landform");
+		this.miniRegions = this.buildMini("regions", null, "Regions");
+		this.miniTemperature = this.buildMini(
+			"temperature",
+			"heat",
+			"Temperature",
+		);
+		this.miniHumidity = this.buildMini("humidity", "wet", "Humidity");
+		this.miniPush = this.buildMini("push", "wild", "Biome noise");
 
 		// **Which climate the diagram's cloud is drawn from, not what colours
 		// the square.** A cell with no dots over it is a biome the shown
@@ -241,7 +354,8 @@ export class BiomePanel {
 		scroller.append(this.chart);
 		const axes = document.createElement("div");
 		axes.className = "biomes-axes";
-		axes.innerHTML = "<span>dry</span><span>humidity</span><span>wet</span>";
+		axes.innerHTML =
+			"<span>dry</span><span>humidity</span><span>wet</span>";
 		scroller.append(axes);
 
 		this.says = document.createElement("p");
@@ -272,6 +386,36 @@ export class BiomePanel {
 		const allowed = this.allowedNow()[this.shown] ?? [];
 		if (!allowed.includes(this.picked)) this.picked = allowed[0] ?? 0;
 		this.build();
+	}
+
+	/**
+	 * One field's own miniature, for the page to mount at the top of the
+	 * section that tunes it.
+	 *
+	 * `tint` is the same class the section's own heading carries, so the
+	 * badge over the picture's corner and the heading above it read as one
+	 * colour naming one field.
+	 */
+	private buildMini(
+		picture: BiomePicture,
+		tint: "heat" | "wet" | "wild" | null,
+		label: string,
+	): HTMLElement {
+		const holder = document.createElement("div");
+		holder.className = "knobs-shot" + (tint ? ` ${tint}` : "");
+		const canvas = document.createElement("canvas");
+		const badge = document.createElement("b");
+		badge.textContent = label;
+		holder.append(canvas, badge);
+		const ink = canvas.getContext("2d")!;
+		canvas.onclick = () => {
+			this.picture = picture;
+			this.pictureSelect.value = picture;
+			this.paintSheet();
+			this.onPicture();
+		};
+		this.minis.push({ picture, canvas, ink });
+		return holder;
 	}
 
 	/** The push's reach moved with a knob, so the border bands move with it. */
@@ -498,8 +642,7 @@ export class BiomePanel {
 	// -----------------------------------------------------------------------
 
 	private addBiome(): void {
-		const from =
-			this.table.biomes[this.picked] ??
+		const from = this.table.biomes[this.picked] ??
 			this.table.biomes[0] ?? {
 				name: "Biome",
 				hex: "93a95e",
@@ -539,8 +682,7 @@ export class BiomePanel {
 		for (const b of allowed) {
 			const biome = this.table.biomes[b]!;
 			const row = document.createElement("div");
-			row.className =
-				"biomes-row" + (b === this.picked ? " picked" : "");
+			row.className = "biomes-row" + (b === this.picked ? " picked" : "");
 			const chip = document.createElement("span");
 			chip.className = "chip";
 			chip.style.background = `#${biome.hex}`;
@@ -620,7 +762,8 @@ export class BiomePanel {
 						// A click cycles the cell through the landforms, so
 						// the grid is edited by looking rather than typing.
 						// The shore is a height rule, never a grid cell.
-						const next = form >= LANDFORMS.length - 1 ? 1 : form + 1;
+						const next =
+							form >= LANDFORMS.length - 1 ? 1 : form + 1;
 						this.table.grid =
 							this.table.grid.slice(0, at) +
 							String(next) +
@@ -668,16 +811,29 @@ export class BiomePanel {
 	// -----------------------------------------------------------------------
 
 	private paintSheet(): void {
+		this.paintKind(this.shot, this.shotInk, this.picture);
+		for (const mini of this.minis)
+			this.paintKind(mini.canvas, mini.ink, mini.picture);
+	}
+
+	/**
+	 * One field, painted into one canvas out of the held sheet.
+	 *
+	 * Shared by {@link preview} and every section's own miniature, so a
+	 * reader never sees two different colourings of the same field.
+	 */
+	private paintKind(
+		canvas: HTMLCanvasElement,
+		ink: CanvasRenderingContext2D,
+		kind: BiomePicture,
+	): void {
 		const sheet = this.sheet;
 		if (!sheet) return;
-		if (
-			this.shot.width !== sheet.width ||
-			this.shot.height !== sheet.height
-		) {
-			this.shot.width = sheet.width;
-			this.shot.height = sheet.height;
+		if (canvas.width !== sheet.width || canvas.height !== sheet.height) {
+			canvas.width = sheet.width;
+			canvas.height = sheet.height;
 		}
-		const image = this.shotInk.createImageData(sheet.width, sheet.height);
+		const image = ink.createImageData(sheet.width, sheet.height);
 		const px = image.data;
 		const count = sheet.width * sheet.height;
 		// The biome map colors by block, so a hex is looked up per block once.
@@ -688,61 +844,81 @@ export class BiomePanel {
 		for (let n = 0; n < count; n++) {
 			const at = n * 4;
 			const sea = sheet.landform[n]! < 0;
-			let ink: readonly [number, number, number] = SEA_INK;
-			if (this.picture === "biomes") {
-				if (!sea)
-					ink = byBlock.get(sheet.block[n]!) ?? [255, 0, 255];
-			} else if (this.picture === "landform") {
-				if (!sea) ink = formInk[sheet.landform[n]!]!;
-			} else if (this.picture === "temperature") {
-				const t = sheet.t[n]!;
-				ink = [40 + 215 * t, 60 + 80 * t, 230 - 190 * t];
-				if (sea) ink = ink.map((v) => v * 0.35) as [number, number, number];
-			} else if (this.picture === "humidity") {
-				const h = sheet.h[n]!;
-				ink = [210 - 170 * h, 160 - 30 * h, 60 + 170 * h];
-				if (sea) ink = ink.map((v) => v * 0.35) as [number, number, number];
-			} else if (this.picture === "push") {
+			let c: readonly [number, number, number] = SEA_INK;
+			if (kind === "biomes") {
+				if (!sea) c = byBlock.get(sheet.block[n]!) ?? [255, 0, 255];
+			} else if (kind === "landform") {
+				if (!sea) c = formInk[sheet.landform[n]!]!;
+			} else if (kind === "temperature") {
+				c = bytesOfRamp(bandRamp(2 * sheet.t[n]! - 1, HEAT_RAMP));
+			} else if (kind === "humidity") {
+				c = bytesOfRamp(bandRamp(2 * sheet.h[n]! - 1, WET_RAMP));
+			} else if (kind === "push") {
 				// The temperature push as banded grey, the humidity push as a
-				// contour over it: two washes of color in one picture read as
-				// neither.
-				const bandT = Math.floor(((sheet.pushT[n]! + 1) / 2) * 9) / 9;
-				const grey = 30 + 200 * bandT;
-				const along = ((sheet.pushH[n]! + 1) / 2) * 9;
-				const into = along - Math.floor(along);
-				const edge = into < 0.1 ? 0.5 : 1;
-				ink = [grey * edge, grey * edge, grey * edge * 1.1];
+				// contour over it: two washes of colour in one picture read
+				// as neither.
+				const grey = bandRamp(sheet.pushT[n]!, GREY_RAMP);
+				const along = Math.max(
+					0,
+					Math.min(0.9999, (sheet.pushH[n]! + 1) / 2),
+				);
+				const into =
+					along * PICTURE_BANDS - Math.floor(along * PICTURE_BANDS);
+				c = bytesOfRamp(
+					into < 0.06
+						? [grey[0] * 0.4, grey[1] * 0.45, grey[2] * 0.55]
+						: grey,
+				);
 			} else {
-				if (sheet.region[n]! < 0) ink = sea ? SEA_INK : [60, 60, 66];
-				else {
-					// A region's color is hashed off its key, so it is stable
-					// while a knob moves and no two neighbours agree.
-					const key = sheet.region[n]!;
-					const hue = (key * 2654435761) % 360;
-					const c = 0.5;
-					const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-					const six = Math.floor(hue / 60) % 6;
-					const rgb = [
-						[c, x, 0],
-						[x, c, 0],
-						[0, c, x],
-						[0, x, c],
-						[x, 0, c],
-						[c, 0, x],
-					][six]!;
-					ink = rgb.map((v) => 60 + v * 300) as [
-						number,
-						number,
-						number,
-					];
-					if (sea) ink = ink.map((v) => v * 0.3) as [number, number, number];
-				}
+				c = bytesOfRamp(regionColor(sheet.region[n]!));
 			}
-			px[at] = ink[0];
-			px[at + 1] = ink[1];
-			px[at + 2] = ink[2];
+			px[at] = c[0];
+			px[at + 1] = c[1];
+			px[at + 2] = c[2];
 			px[at + 3] = 255;
 		}
-		this.shotInk.putImageData(image, 0, 0);
+		// **Region borders, not the coastline.** A region's own colour
+		// already sets it apart from the sea; what this picture needs drawn
+		// is where one region gives way to the next.
+		if (kind === "regions")
+			for (let r = 0; r < sheet.height; r++)
+				for (let q = 0; q < sheet.width; q++) {
+					const n = r * sheet.width + q;
+					if (sheet.landform[n]! < 0) continue;
+					const right =
+						q + 1 < sheet.width &&
+						sheet.region[n]! !== sheet.region[n + 1]!;
+					const under =
+						r + 1 < sheet.height &&
+						sheet.region[n]! !== sheet.region[n + sheet.width]!;
+					if (!right && !under) continue;
+					const at = n * 4;
+					px[at] = 12;
+					px[at + 1] = 14;
+					px[at + 2] = 18;
+				}
+		// **The coastline, on every field picture whose own colour would
+		// not otherwise say where the ground ends.** A climate map on its
+		// own is a set of blobs with nothing to place them against; the
+		// line where the ground crosses sea level says which blob is over a
+		// continent and which is over open water.
+		if (kind === "temperature" || kind === "humidity" || kind === "push")
+			for (let r = 0; r < sheet.height; r++)
+				for (let q = 0; q < sheet.width; q++) {
+					const n = r * sheet.width + q;
+					const sea = sheet.landform[n]! < 0;
+					const right =
+						q + 1 < sheet.width &&
+						sea !== sheet.landform[n + 1]! < 0;
+					const under =
+						r + 1 < sheet.height &&
+						sea !== sheet.landform[n + sheet.width]! < 0;
+					if (!right && !under) continue;
+					const at = n * 4;
+					px[at] = 12;
+					px[at + 1] = 14;
+					px[at + 2] = 18;
+				}
+		ink.putImageData(image, 0, 0);
 	}
 }

@@ -91,15 +91,26 @@ const biomes = new BiomePanel(table, (settled) => request(settled), {
 		"patch") as BiomeCloudSource,
 	onPicture: () => writeUrl(),
 });
-biomes.setPush(
-	settings.knobs.biomeWarp ? settings.knobs.warpStrength : 0,
-);
+biomes.setPush(settings.knobs.biomeWarp ? settings.knobs.warpStrength : 0);
 
 // **The finished map goes with the world, not with the table that reads
 // it.** The lab keeps its picture in the world panel's head, above the
 // facts a build measured -- what the diagram is being judged against, not
 // one more row of the biomes it names.
 general?.append(biomes.preview, recipe, facts);
+
+// **Each field's own picture, at the top of the section that tunes it.**
+// The lab keeps a picture where the knobs that read it are, so what a row is
+// doing to the world never scrolls out of view while the row is turned.
+function mountMini(title: string, mini: HTMLElement): void {
+	const section = panel.section(title);
+	section?.insertBefore(mini, section.children[1] ?? null);
+}
+mountMini("The landform", biomes.miniLandform);
+mountMini("The regions", biomes.miniRegions);
+mountMini("Temperature", biomes.miniTemperature);
+mountMini("Humidity", biomes.miniHumidity);
+mountMini("Biome noise", biomes.miniPush);
 
 /**
  * Write the world back into the address bar, and into the way out of here.
@@ -115,8 +126,7 @@ function writeUrl(): void {
 	});
 	panel.carry({ biomes: settings.knobs.biomes });
 	const params = settings.toParams();
-	if (biomes.picture !== "biomes")
-		params.set("biomePicture", biomes.picture);
+	if (biomes.picture !== "biomes") params.set("biomePicture", biomes.picture);
 	if (biomes.cloud !== "patch") params.set("biomeCloud", biomes.cloud);
 	history.replaceState(null, "", `?${params.toString()}`);
 	const planetParams = settings.toParams();
@@ -200,9 +210,7 @@ function request(settled: boolean): void {
 /** A world knob moved, which is the same question with a new draft. */
 function moved(draft: PlanetSettings): void {
 	settings = draft;
-	biomes.setPush(
-		draft.knobs.biomeWarp ? draft.knobs.warpStrength : 0,
-	);
+	biomes.setPush(draft.knobs.biomeWarp ? draft.knobs.warpStrength : 0);
 	request(false);
 }
 

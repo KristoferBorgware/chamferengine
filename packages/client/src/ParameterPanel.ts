@@ -143,6 +143,17 @@ interface Knob {
 
 	/** `"off"` for a row that decides nothing on the biome bench. */
 	readonly biome?: "off";
+
+	/**
+	 * Whether this row's checkbox sits in the section's own header rather
+	 * than as a row inside it.
+	 *
+	 * **For the one switch that governs every row below it.** A reader meets
+	 * it before the rows it turns on and off rather than lost among them, and
+	 * the section's own name carries what it is a switch for -- so it takes
+	 * no label of its own. At most one row a group may ask for this.
+	 */
+	readonly summary?: boolean;
 }
 
 /** One titled run of rows. */
@@ -233,7 +244,7 @@ interface Group {
 	 * at four curves has nothing to tell them apart by -- and the pictures the
 	 * bench draws are named by the same four.
 	 */
-	readonly tint?: "cont" | "ero" | "pv" | "cliff";
+	readonly tint?: "cont" | "ero" | "pv" | "cliff" | "heat" | "wet" | "wild";
 
 	readonly knobs: Knob[];
 }
@@ -725,14 +736,54 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		title: "The regions",
+		where: "biome",
+		knobs: [
+			{
+				key: "biomeRegions",
+				label: "On",
+				summary: true,
+				says: "biomes belong to a region",
+			},
+			{ key: "regionSpan", label: "Region", digits: 0 },
+			{
+				key: "regionClimate",
+				label: "The region decides",
+				digits: 2,
+				given: (s) =>
+					s.knobs.regionClimate >= 1
+						? "the whole region reads one climate, so one kind of ground carries one biome across it"
+						: s.knobs.regionClimate === 0
+							? "off: every cell reads its own climate, and a biome changes wherever the reading crosses a line in the diagram"
+							: `each cell is pulled ${Math.round(s.knobs.regionClimate * 100)}% of the way from its own climate to its region's`,
+			},
+			{
+				key: "regionWarp",
+				label: "Bend the edges",
+				digits: 0,
+				given: (s) =>
+					s.knobs.regionWarp === 0
+						? "off: a region is a straight-edged polygon"
+						: "bends every edge without moving a seed -- the same field the biome noise uses",
+			},
+		],
+	},
+	{
 		title: "The climate",
 		where: "biome",
 		knobs: [
 			{
 				key: "biomeFit",
-				label: "Fit the square to the land",
+				label: "Fit all biomes on the planet",
 				says: "stretches the diagram onto the land's own 2nd to 98th percentiles, so every corner is weather that exists somewhere",
 			},
+		],
+	},
+	{
+		title: "Temperature",
+		where: "biome",
+		tint: "heat",
+		knobs: [
 			{ key: "tempEquator", label: "Equator to pole", digits: 2 },
 			{
 				key: "tempLapse",
@@ -740,48 +791,56 @@ const GROUPS: Group[] = [
 				digits: 2,
 				says: "what puts snow on a mountain standing in a warm band",
 			},
-			{ key: "tempNoise", label: "Temperature noise", digits: 2 },
-			{ key: "tempFeature", label: "Temperature feature", digits: 0 },
-			{ key: "tempOctaves", label: "Temperature octaves", digits: 0 },
 			{
-				key: "humOcean",
-				label: "Inland dries",
+				key: "tempNoise",
+				label: "Wander",
 				digits: 2,
-				says: "humidity reads the continent field, because that is already the distance from the coast",
+				says: "how far a place may drift from what its latitude and its height say",
 			},
-			{ key: "humNoise", label: "Humidity noise", digits: 2 },
-			{ key: "humFeature", label: "Humidity feature", digits: 0 },
-			{ key: "humOctaves", label: "Humidity octaves", digits: 0 },
+			{ key: "tempFeature", label: "Feature", digits: 0 },
+			{ key: "tempOctaves", label: "Octaves", digits: 0 },
 		],
 	},
 	{
-		title: "The push",
+		title: "Humidity",
 		where: "biome",
-		folded: true,
+		tint: "wet",
+		knobs: [
+			{
+				key: "humOcean",
+				label: "The coast wets it",
+				digits: 2,
+				says: "humidity reads the continent field, because that is already the distance from the coast",
+			},
+			{
+				key: "humNoise",
+				label: "Wander",
+				digits: 2,
+				says: "how far a place may drift from what the coast says",
+			},
+			{ key: "humFeature", label: "Feature", digits: 0 },
+			{ key: "humOctaves", label: "Octaves", digits: 0 },
+		],
+	},
+	{
+		title: "Biome noise",
+		where: "biome",
+		tint: "wild",
 		knobs: [
 			{
 				key: "biomeWarp",
 				label: "On",
-				says: "pushes the lookup off the climate it was handed, so no border is the contour of a smooth field",
+				summary: true,
+				says: "ragged borders",
 			},
-			{ key: "warpStrength", label: "Strength", digits: 2 },
+			{
+				key: "warpStrength",
+				label: "Push",
+				digits: 2,
+				says: "before the biome is looked up, the place's weather is nudged off the line the diagram draws, so a border comes out ragged instead of clean",
+			},
 			{ key: "warpFeature", label: "Feature", digits: 0 },
 			{ key: "warpOctaves", label: "Octaves", digits: 0 },
-		],
-	},
-	{
-		title: "The regions",
-		where: "biome",
-		folded: true,
-		knobs: [
-			{
-				key: "biomeRegions",
-				label: "On",
-				says: "a region reads one climate across its whole area, so the map comes out as blocks with clean edges instead of ribbons",
-			},
-			{ key: "regionSpan", label: "Region", digits: 0 },
-			{ key: "regionClimate", label: "The region decides", digits: 2 },
-			{ key: "regionWarp", label: "Bend the edges", digits: 0 },
 		],
 	},
 	{
@@ -1552,11 +1611,7 @@ export class ParameterPanel {
 	 * than of any row.
 	 */
 	private readonly page:
-		| "world"
-		| "landscape"
-		| "cave"
-		| "vegetation"
-		| "biomes";
+		"world" | "landscape" | "cave" | "vegetation" | "biomes";
 
 	/**
 	 * The bench's second panel, down the left of the window.
@@ -1588,11 +1643,7 @@ export class ParameterPanel {
 		options: {
 			readonly bench?: boolean;
 			readonly page?:
-				| "world"
-				| "landscape"
-				| "cave"
-				| "vegetation"
-				| "biomes";
+				"world" | "landscape" | "cave" | "vegetation" | "biomes";
 			readonly side?: "left" | "right";
 		} = {},
 	) {
@@ -1800,6 +1851,18 @@ export class ParameterPanel {
 					continue;
 				const row = this.row(knob);
 				this.rows.push(row);
+				// **The switch that governs a whole section sits in its own
+				// header, not among the rows it governs.** Its wrap is built
+				// and kept -- `write()` still runs over it in `refresh()` --
+				// but never appended, and it takes no label of its own: the
+				// section's title is what it is a switch for. `says`, when
+				// given, is the tooltip a reader gets instead of a line under
+				// a row that no longer exists.
+				if (knob.summary) {
+					row.input.title = knob.says ?? "";
+					head.insertBefore(row.input, toggle);
+					continue;
+				}
 				// **Under the row, not in a tooltip.** A knob whose label
 				// cannot carry its own meaning is a knob a reader has to guess
 				// at, and a hover is not something a panel says it has.

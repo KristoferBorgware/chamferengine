@@ -669,6 +669,81 @@ body.bench .knobs {
 	color: #c9a7ff;
 }
 
+/* The same three colours the biome bench's own pictures are named by --
+   temperature, humidity and the push read as one field each, and a
+   section's heading is the one place a reader is told which. */
+.knobs h2.tint-heat .knobs-fold {
+	color: #ff9d6b;
+}
+
+.knobs h2.tint-wet .knobs-fold {
+	color: #6fe0c0;
+}
+
+.knobs h2.tint-wild .knobs-fold {
+	color: #c79dff;
+}
+
+/* **The switch that governs a whole section, in the header rather than
+   among the rows it turns on and off.** One colour for every one of them,
+   because what it says is always the same question -- on or off -- and
+   never which section it is in; the heading's own tint already says that. */
+.knobs h2 input[type="checkbox"] {
+	width: 13px;
+	height: 13px;
+	margin: 0 6px 0 0;
+	vertical-align: -2px;
+	accent-color: var(--live);
+}
+
+/* **One field's own picture, at the top of the section that tunes it.** The
+   same look as `.biomes-shot` -- pixelated, one edge-coloured border -- with
+   a name badge over the corner, and a click here focuses the bench's one big
+   preview on this field instead of asking a reader to find it in a menu. */
+.knobs-shot {
+	position: relative;
+	line-height: 0;
+	margin: 4px 0 10px;
+}
+
+.knobs-shot canvas {
+	width: 100%;
+	height: auto;
+	display: block;
+	border: 1px solid var(--edge);
+	border-radius: 3px;
+	image-rendering: pixelated;
+	background: var(--panel);
+	cursor: pointer;
+}
+
+.knobs-shot b {
+	position: absolute;
+	left: 4px;
+	top: 4px;
+	font:
+		600 9.5px/1.4 system-ui,
+		sans-serif;
+	letter-spacing: 0.02em;
+	padding: 1px 4px;
+	border-radius: 2px;
+	color: #12161d;
+	background: var(--live);
+	pointer-events: none;
+}
+
+.knobs-shot.heat b {
+	background: #ff9d6b;
+}
+
+.knobs-shot.wet b {
+	background: #6fe0c0;
+}
+
+.knobs-shot.wild b {
+	background: #c79dff;
+}
+
 /* No fold on the bench: the panel is half of what the page is for. */
 body.bench .knobs-head {
 	display: none;
