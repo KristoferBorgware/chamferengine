@@ -709,6 +709,16 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **The ground is the input here, not the subject.** It arrives
+		// already tuned through the link -- the landscape bench is where its
+		// own knobs live -- so nothing here moves it; the picture is only so
+		// a reader can see the coastline the landform reads room from and the
+		// mountain the climate cools against.
+		title: "The terrain",
+		where: "biome",
+		knobs: [],
+	},
+	{
 		// **The terrain names the ground before the climate names the type**,
 		// and these rows are how it is read: the relief at the width of a
 		// place rather than of a gully, and the shore as a height with room to
