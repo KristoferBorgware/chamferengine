@@ -249,6 +249,37 @@ export class BiomePanel {
 		ink.clearRect(0, 0, CHART, CHART);
 		ink.drawImage(off, 0, 0, CHART, CHART);
 
+		// **The cloud: where this landform's ground actually lands in the
+		// square.** The diagram's cell areas say nothing about the planet --
+		// land clusters in the middle of the square and thins toward its
+		// corners, so a big cell can be a rare biome. The cloud is what makes
+		// the balance readable, and it is also where the regions show: at full
+		// pull every region is one climate, so the cloud collapses from a
+		// smear into a scatter of single points, one per region.
+		if (this.sheet) {
+			const sheet = this.sheet;
+			ink.fillStyle = "rgba(10, 12, 16, 0.4)";
+			const tall = sheet.height;
+			for (let r = 0; r < tall; r++) {
+				// The sheet is an equirectangular picture, so a row near a
+				// pole holds far more samples per square metre than the
+				// equator's; keeping cos(latitude) of each row makes the
+				// cloud a picture of ground rather than of the projection.
+				const keep = Math.cos(((r + 0.5) / tall - 0.5) * Math.PI);
+				const step = Math.max(1, Math.round(3 / keep));
+				for (let q = r % step; q < sheet.width; q += step) {
+					const n = r * sheet.width + q;
+					if (sheet.landform[n] !== this.shown) continue;
+					ink.fillRect(
+						sheet.h[n]! * CHART - 0.5,
+						(1 - sheet.t[n]!) * CHART - 0.5,
+						1.6,
+						1.6,
+					);
+				}
+			}
+		}
+
 		for (const b of allowed ?? []) {
 			const biome = biomes[b]!;
 			const x = biome.h * CHART;
