@@ -72,8 +72,10 @@ const SKY_REACH = 6;
 /**
  * What a cell shut in on every side still takes, as a fraction.
  *
- * There is no other light in this world yet -- no torch, no lamp -- so this
- * is the whole of what an enclosed place gets, and 0 would be pitch black.
+ * The whole of what an enclosed place gets from the sky, and 0 would be
+ * pitch black. A light standing in the world reaches it separately: the
+ * shader multiplies this into the sun, the sky and the moon and not into a
+ * lamp, so a cave is dark until something is carried down there.
  */
 const SKY_FLOOR = 0.12;
 
@@ -1314,7 +1316,7 @@ function emitCap(
 	for (let c = 0; c < degree; c++) {
 		const at = upward ? c : degree - 1 - c;
 		const p = corners[at]!;
-		const lit = light[occlude(at)]! * sky;
+		const lit = light[occlude(at)]!;
 		first[c] = sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
@@ -1322,6 +1324,7 @@ function emitCap(
 			COLOR[0]! * lit,
 			COLOR[1]! * lit,
 			COLOR[2]! * lit,
+			sky,
 		);
 	}
 	for (let c = 1; c + 1 < degree; c++)
@@ -1400,7 +1403,7 @@ function emitSide(
 		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
 	const put = (p: Vec3, radius: number, occ: number, sky: number) => {
-		const lit = light[occ]! * sky;
+		const lit = light[occ]!;
 		return sink.vertex(
 			p.x * radius - origin.x,
 			p.y * radius - origin.y,
@@ -1408,6 +1411,7 @@ function emitSide(
 			COLOR[0]! * lit,
 			COLOR[1]! * lit,
 			COLOR[2]! * lit,
+			sky,
 		);
 	};
 

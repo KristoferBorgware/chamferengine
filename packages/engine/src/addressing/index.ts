@@ -34,6 +34,7 @@ export type { FaceCell } from "./neighbours/FaceCell.js";
 export { DIRECTIONS } from "./neighbours/DIRECTIONS.js";
 export { opposite } from "./neighbours/opposite.js";
 export { neighbour } from "./neighbours/neighbour.js";
+export { latticeCell } from "./neighbours/latticeCell.js";
 export { degree } from "./neighbours/degree.js";
 export { pentagonVertex } from "./neighbours/pentagonVertex.js";
 export { pentagonRing } from "./neighbours/pentagonRing.js";

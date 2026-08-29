@@ -282,10 +282,9 @@ carries the gradient down itself for nothing. Ground under the open sky does not
 move: a cap sitting on its column's top is read at that same layer, which is the
 number it always had.
 
-**What an enclosed cell keeps is a decision, not a measurement.** There is no
-torch in this world yet, so the floor of the curve is the whole of what a cave
-gets, and `0` would be pitch black. It is `0.12`, and a floor that low costs
-almost nothing above ground:
+**What an enclosed cell keeps is a decision, not a measurement.** It is the
+whole of what a cave gets from the sky, and `0` would be pitch black. It is
+`0.12`, and a floor that low costs almost nothing above ground:
 
 > **[measured]** One eye-level view of open terrain, `0.35` against `0.12`:
 > mean brightness **136.0 to 136.1** of 255, a mean per-pixel move of **3.08**,
@@ -293,20 +292,23 @@ almost nothing above ground:
 > reaches a cell that is shut in on every side, which is what a cave is and
 > what open ground never is.
 
+It reduces the sun, the sky and the moon and nothing else — a light standing
+in the world is the other channel and is not touched by it, which is what
+leaves a cave dark until something is carried down there and lit when it is.
 **Sky exposure** switches the whole term off, and every face then takes the
-open-sky reading. With nothing to carry underground that is the only way to see
-what you dug. It is baked, so it needs every chunk meshed again — which is what
-puts it in the panel's remesh set beside the terrain knobs, and deliberately
-*not* in the set a world's stored edits are named by, since it moves no block.
+open-sky reading. It is baked, so it needs every chunk meshed again — which is
+what puts it in the panel's remesh set beside the terrain knobs, and
+deliberately *not* in the set a world's stored edits are named by, since it
+moves no block.
 
 ### Full light takes away the blocking, and nothing else
 
-There is no torch, so a hole is lit by whatever reaches it and nothing else —
-and what reaches it is very little. The sun is 58% of the budget and the shadow
-maps correctly refuse to let it down a shaft; what is left is the sky's 42%
-times a wall's own `openness` of about 0.71, so a hole sits near **0.30** of
-open ground before the sky exposure above has said anything. Multiply the 0.12
-an enclosed cell is baked to and it is **0.036** — black, and rightly so.
+With nothing carried down there, a hole is lit by whatever reaches it and
+that is very little. The sun is 58% of the budget and the shadow maps correctly
+refuse to let it down a shaft; what is left is the sky's 42% times a wall's own
+`openness` of about 0.71, so a hole sits near **0.30** of open ground before
+the sky exposure above has said anything. Multiply the 0.12 an enclosed cell
+takes and it is **0.036** — black, and rightly so.
 
 **Full light** is the way to look into one anyway, and what it does is narrow:
 **the sun reaches every face as though no block stood in its way.** The shadow
@@ -322,14 +324,12 @@ varies by face, a floor, a wall and a ceiling all come out at exactly the block
 they are made of, and the room reads as a flat sheet of colour with edges. The
 brightness was never the problem — the blocking was.
 
-The sky exposure has to stop being **baked**, not merely overridden: it is
-multiplied into the vertex colours by the mesher, and no light a shader
-computes afterwards can divide a number back out of what it was handed. A shader-only switch would leave a cave at the 12% it
-was baked to however far the sun was said to reach. That is what makes this
-need a rebuild rather than taking effect on the next frame. The corner shading
-stays baked and stays on: it says how much sky a corner sees rather than
-whether the sun arrives, it bottoms out at 0.55 rather than 0.12, and it is
-what keeps a cave's edges legible.
+**It costs no chunk a rebuild**, because the sky exposure is a number of its
+own on every vertex rather than a factor in the colour: the shader multiplies
+it in, so the shader can leave it out. The corner shading stays baked and stays
+on: it says how much sky a corner sees rather than whether the sun arrives, it
+bottoms out at 0.55 rather than 0.12, and it is what keeps a cave's edges
+legible.
 
 > **[measured]** One view of high-relief open ground, air and clouds off. Full
 > light moves the mean from **74.9 to 76.7** of 255, with the fifth percentile
@@ -426,6 +426,87 @@ air, and air scatters the blue out of it first. That height is measured against
 the place's own up, so the light turns orange as the day runs **and** as a
 player walks around the planet — which on a world you can walk around in 2.12
 hours is the same motion.
+
+### A light standing in the world is the second channel, and it travels as a cube
+
+The sun, the sky and the moon all arrive from above the ground, and all three
+are reduced by how much of the sky a cell can see. A torch is not: it stands in
+the world, and a cave shut in on every side is exactly where the two have to
+part.
+
+**The player carries one**, because there is no torch to place yet. The fill is
+the flood this document opens with — a level at the cell the light stands in,
+one step of brightness lost per neighbour, over the eight neighbours and
+stopping at anything solid — run again whenever the player steps off a cell,
+whenever either knob moves, and whenever anybody changes a block, so a passage
+dug is open to the light on the frame it is dug.
+
+> **[measured]** `tools/trial-torch.ts`, depth 11, nothing solid, which is the
+> worst case the fill can be given.
+>
+> | Range | Cells lit | Fill | Per cell |
+> |---|---|---|---|
+> | 4 | 189 | 0.23 ms | 1.20 µs |
+> | 8 | **1,241** | 0.14 ms | 0.11 µs |
+> | 16 | **9,009** | 0.84 ms | 0.09 µs |
+>
+> The counts are the whole ball and they are the numbers this document's own
+> table gives for a range: `3r²+3r+1` in one layer, summed over the layers the
+> range reaches.
+
+**Getting the answer to a fragment is the part the sphere decides.** A moving
+light cannot be baked into a vertex — every step would rebuild every chunk in
+reach — so the fill lands in a small volume the shader reads, and the question
+is what indexes it. It is **the source's own face lattice, extended past that
+face's edges**: a cell is named by `di`, `dj` and a layer offset from the
+source, `35³` bytes at the widest range, and a fragment finds its own entry
+from one 3×3 solve — the barycentric weights of its direction on the source's
+face give a fractional `(i, j)` directly, and its radius gives the layer.
+
+That works off the face as well as on it because **a lattice point is integer
+weights on global vertex numbers**, so counting past an edge names the cells
+over there rather than running out of world. What is not obvious is that the
+*continuous* chart agrees: face A's gnomonic extension and face B's own chart
+are different projections, and the reflection between them moves a direction
+by up to 6.47°.
+
+> **[measured]** Same script, 15 steps, every cell of the disc taken back to
+> the chart the way a fragment does.
+>
+> | Source stands | Chart entries | Distinct cells | Round trips |
+> |---|---|---|---|
+> | mid-face | 721 | 721 | **100.0%** |
+> | near a face edge | 721 | 721 | **100.0%** |
+> | exactly on a face edge | 721 | 721 | **100.0%** |
+> | at a pentagon | 721 | **616** | **23.2%** |
+>
+> The distortion is far too small to move a cell at any range a light carries.
+> A pentagon is the one place it is not a chart at all: the sphere is a
+> direction short there, so a flat chart wraps onto itself and 105 of its 721
+> entries name a cell another entry already named.
+
+**A pentagon is 0.0234% of the planet and is left as it is.** A light within 16
+steps of one of the twelve stands on 9,804 of 41,943,042 columns, the twelve
+columns are protected from placement anyway, and nothing is lit that should not
+be — the disc is subtly the wrong shape and the level a cell takes may be a
+neighbour's.
+
+**The read is taken half a block out along the face's own normal.** A level
+belongs to a cell of air, not to the rock around it, so a face asks the cell
+the light actually crossed to reach it. That is also what gives a lit room its
+shape with no direction in the light at all: the floor, the wall and the
+ceiling of one cell read three different neighbours. Light is a scalar, and
+this document's whole argument is that it stays one.
+
+**Sky exposure had to stop being baked into the colour for any of this to
+work.** It was multiplied into the vertex colours by the mesher, and a cell
+shut in on every side is baked to `0.12` — so a torch in a cave would have
+arrived at 12% of its own strength, dimmest exactly where it is the only light
+there is. The vertex carries it as a number of its own instead, seven floats
+rather than six, and the shader multiplies it into the sun, the sky and the
+moon and not into the lamp. **Full light falls out of the same split**: taking
+the term away is a switch the frame carries rather than a rebuild of every
+chunk in the world.
 
 ### How hard the sun lands is the other half of a sky's brightness
 
@@ -865,6 +946,22 @@ happened to land in — which is exactly what a sun does as a camera turns.
 - **Light comes from two places and only one has a direction**: the sun, and a
   sky whose share a face takes from `dot(faceNormal, up)`. The two sum to 1, so
   flat ground at noon reads the same at any balance.
+- **A light standing in the world is the second channel**, and it is what a
+  cave is lit by. The player carries one; the fill is this document's own flood
+  over the eight neighbours, and it costs **0.14 ms** at range 8 over 1,241
+  cells and **0.84 ms** at range 16 over 9,009. It reaches a fragment as a cube
+  of levels indexed by **the source's own face lattice, extended past that
+  face's edges** — one 3×3 solve in the shader and no lookup. The extension
+  round-trips **100%** of a 15-step disc mid-face, near an edge and on one, and
+  **23.2%** at a pentagon, where the sphere is a direction short and a flat
+  chart wraps onto itself. That is 0.0234% of the planet's columns and is left
+  alone.
+- **Sky exposure is a number of its own on the vertex, not a factor in its
+  colour.** A shader cannot divide one back out of a colour, so a lamp would
+  otherwise have arrived at the 12% a shut-in cell is baked to — dimmest
+  exactly where it is the only light there is. Seven floats a vertex rather
+  than six, and full light falls out of the same split: taking the term away is
+  a switch the frame carries rather than a rebuild of every chunk.
 - **Full light takes away the blocking and nothing else**: the sun reaches
   every face as though no block stood in its way, while the face's own angle
   to it still decides what it takes, so a cave keeps its shape. Above ground

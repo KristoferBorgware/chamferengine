@@ -1209,6 +1209,32 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				// The player carries the light, because there is no torch to
+				// place yet. It floods out through the air cell by cell and
+				// stops at rock, so it lights what is actually open to it and
+				// nothing through a wall.
+				key: "torchOn",
+				label: "Carried light",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				// Cells, not metres, because a step of the fill is a cell. The
+				// work grows as the cube of this.
+				key: "torchRange",
+				label: "Light range",
+				digits: 0,
+				enabledWhen: (k) => !k.plain && k.torchOn,
+			},
+			{
+				// It reads against a colour the mesher has already dimmed to
+				// 12% for a cell shut in on every side, so the useful
+				// strengths are a few times what open ground would want.
+				key: "torchStrength",
+				label: "Light strength",
+				digits: 1,
+				enabledWhen: (k) => !k.plain && k.torchOn,
+			},
+			{
 				key: "sunStrength",
 				label: "Sunlight",
 				digits: 2,
@@ -1474,9 +1500,9 @@ const GROUPS: Group[] = [
 				label: "Corner shading",
 			},
 			{
-				// **The only light this world has.** Read per layer, so a
-				// hole goes dark as it deepens -- and with no torch to carry
-				// down there, off is the only way to see what you dug.
+				// Read per layer, so a hole goes dark as it deepens. It
+				// reduces the sun, the sky and the moon and not the light
+				// the player carries, which is what a cave is lit by.
 				key: "skyExposure",
 				label: "Sky exposure",
 			},

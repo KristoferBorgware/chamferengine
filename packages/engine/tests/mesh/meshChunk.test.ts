@@ -19,6 +19,7 @@ import {
 import {
 	AMBIENT_OCCLUSION,
 	ArrayMeshSink,
+	CHUNK_VERTEX_FLOATS,
 	buildChunkMesh,
 	meshChunk,
 	opacityOf,
@@ -95,7 +96,7 @@ function* spread(count: number) {
 function* triangles(geometry: Geometry, origin: Vec3) {
 	for (let at = 0; at + 2 < geometry.indices.length; at += 3) {
 		const corner = (which: number) => {
-			const v = geometry.indices[at + which]! * 6;
+			const v = geometry.indices[at + which]! * CHUNK_VERTEX_FLOATS;
 			return new Vec3(
 				geometry.vertices[v]! + origin.x,
 				geometry.vertices[v + 1]! + origin.y,
@@ -162,12 +163,12 @@ describe("opacityOf", () => {
 describe("ArrayMeshSink", () => {
 	it("grows past its starting capacity", () => {
 		const sink = new ArrayMeshSink(2);
-		for (let n = 0; n < 100; n++) sink.vertex(n, n, n, 1, 1, 1);
+		for (let n = 0; n < 100; n++) sink.vertex(n, n, n, 1, 1, 1, 1);
 		for (let n = 0; n + 2 < 100; n += 3) sink.triangle(n, n + 1, n + 2);
 		const geometry = sink.build(1);
 		expect(sink.vertices).toBe(100);
-		expect(geometry.vertices.length).toBe(600);
-		expect(geometry.vertices[99 * 6]).toBe(99);
+		expect(geometry.vertices.length).toBe(100 * CHUNK_VERTEX_FLOATS);
+		expect(geometry.vertices[99 * CHUNK_VERTEX_FLOATS]).toBe(99);
 		expect(geometry.triangleCount).toBe(sink.triangles);
 	});
 });
@@ -183,7 +184,7 @@ describe("meshChunk", () => {
 	it("indexes only vertices it wrote", () => {
 		const { built } = mesh(400);
 		for (const geometry of [built.opaque, built.translucent]) {
-			const count = geometry.vertices.length / 6;
+			const count = geometry.vertices.length / CHUNK_VERTEX_FLOATS;
 			for (const index of geometry.indices)
 				expect(index).toBeLessThan(count);
 		}
@@ -247,7 +248,11 @@ describe("meshChunk", () => {
 	it("keeps every vertex inside the crust", () => {
 		const { built } = mesh(400);
 		for (const geometry of [built.opaque, built.translucent])
-			for (let v = 0; v < geometry.vertices.length; v += 6) {
+			for (
+				let v = 0;
+				v < geometry.vertices.length;
+				v += CHUNK_VERTEX_FLOATS
+			) {
 				const p = new Vec3(
 					geometry.vertices[v]! + built.origin.x,
 					geometry.vertices[v + 1]! + built.origin.y,
@@ -267,7 +272,11 @@ describe("meshChunk", () => {
 		// radius 1,700 m float32 steps by 122 micrometres near zero and by far
 		// more out at the radius itself.
 		const { built } = mesh(400);
-		for (let v = 0; v < built.opaque.vertices.length; v += 6)
+		for (
+			let v = 0;
+			v < built.opaque.vertices.length;
+			v += CHUNK_VERTEX_FLOATS
+		)
 			for (let axis = 0; axis < 3; axis++)
 				expect(Math.abs(built.opaque.vertices[v + axis]!)).toBeLessThan(
 					shape.crustTopRadius,
@@ -389,7 +398,7 @@ describe("merging at a level seam", () => {
 	function crest(built: { origin: Vec3; opaque: Geometry }): number {
 		const v = built.opaque.vertices;
 		let highest = 0;
-		for (let at = 0; at < v.length; at += 6) {
+		for (let at = 0; at < v.length; at += CHUNK_VERTEX_FLOATS) {
 			const x = v[at]! + built.origin.x;
 			const y = v[at + 1]! + built.origin.y;
 			const z = v[at + 2]! + built.origin.z;
@@ -1071,9 +1080,9 @@ describe("a surface exactly on a layer boundary", () => {
 		const origin = built.origin;
 		const radiusOf = (index: number) =>
 			Math.hypot(
-				vertices[index * 6]! + origin.x,
-				vertices[index * 6 + 1]! + origin.y,
-				vertices[index * 6 + 2]! + origin.z,
+				vertices[index * CHUNK_VERTEX_FLOATS]! + origin.x,
+				vertices[index * CHUNK_VERTEX_FLOATS + 1]! + origin.y,
+				vertices[index * CHUNK_VERTEX_FLOATS + 2]! + origin.z,
 			);
 		let walls = 0;
 		for (let t = 0; t + 2 < indices.length; t += 3) {
@@ -1101,7 +1110,11 @@ describe("ambient occlusion", () => {
 	it("darkens some vertices of a real chunk", () => {
 		const { built } = mesh(400);
 		const shades = new Set<number>();
-		for (let v = 3; v < built.opaque.vertices.length; v += 6)
+		for (
+			let v = 3;
+			v < built.opaque.vertices.length;
+			v += CHUNK_VERTEX_FLOATS
+		)
 			shades.add(Math.round(built.opaque.vertices[v]! * 1000));
 		expect(shades.size).toBeGreaterThan(3);
 	});
@@ -1125,7 +1138,8 @@ describe("ambient occlusion", () => {
 		const { vertices, indices } = built.opaque;
 		let checked = 0;
 		for (let t = 0; t + 2 < indices.length; t += 3) {
-			const at = (corner: number) => indices[t + corner]! * 6;
+			const at = (corner: number) =>
+				indices[t + corner]! * CHUNK_VERTEX_FLOATS;
 			const [a, b, c] = [0, 1, 2].map(at);
 			for (let ch = 3; ch < 6; ch++) {
 				expect(vertices[a! + ch]).toBe(vertices[b! + ch]);
@@ -1146,7 +1160,8 @@ describe("ambient occlusion", () => {
 		const { vertices, indices } = built.opaque;
 		let differs = false;
 		for (let t = 0; t + 2 < indices.length && !differs; t += 3) {
-			const at = (corner: number) => indices[t + corner]! * 6;
+			const at = (corner: number) =>
+				indices[t + corner]! * CHUNK_VERTEX_FLOATS;
 			const [a, b, c] = [0, 1, 2].map(at);
 			if (
 				vertices[a! + 3] !== vertices[b! + 3] ||
@@ -1176,7 +1191,11 @@ describe("ambient occlusion", () => {
 		);
 		expect(flat.opaque.indices).toEqual(lit.opaque.indices);
 		expect(flat.opaque.vertices.length).toBe(lit.opaque.vertices.length);
-		for (let v = 0; v < lit.opaque.vertices.length; v += 6)
+		for (
+			let v = 0;
+			v < lit.opaque.vertices.length;
+			v += CHUNK_VERTEX_FLOATS
+		)
 			for (let c = 0; c < 3; c++)
 				expect(flat.opaque.vertices[v + c]).toBeCloseTo(
 					lit.opaque.vertices[v + c]!,
@@ -1260,7 +1279,7 @@ describe("the speckle", () => {
 			);
 			const seen = new Set<number>();
 			const { vertices } = sink.build(0);
-			for (let v = 3; v < vertices.length; v += 6)
+			for (let v = 3; v < vertices.length; v += CHUNK_VERTEX_FLOATS)
 				seen.add(Math.round(vertices[v + 1]! * 100000));
 			return seen.size;
 		};
@@ -1330,27 +1349,26 @@ describe("sky exposure", () => {
 			...options,
 		});
 
+		// Only vertices of a real block, so the grid shell's own colour cannot
+		// be read as a sky factor. The corner shading and the speckle are both
+		// off above, so a block's colour is the registry's to the bit.
 		const palette = Object.values(BLOCK_COLORS) as readonly (
 			readonly [number, number, number] | undefined
 		)[];
-		const skyOf = (r: number, g: number, b: number): number | null => {
-			for (const c of palette) {
-				if (!c || !c[0]) continue;
-				const k = r / c[0];
-				if (
-					Math.abs(g - c[1] * k) < 1e-4 &&
-					Math.abs(b - c[2] * k) < 1e-4
-				)
-					return k;
-			}
-			return null;
-		};
+		const isBlock = (r: number, g: number, b: number): boolean =>
+			palette.some(
+				(c) =>
+					!!c &&
+					Math.abs(r - c[0]) < 1e-4 &&
+					Math.abs(g - c[1]) < 1e-4 &&
+					Math.abs(b - c[2]) < 1e-4,
+			);
 
 		const surface = real.columnAt(0, bi, bj).groundRadius;
 		const o = built.origin;
 		const v = built.opaque.vertices;
 		const found = new Map<number, { lo: number; hi: number }>();
-		for (let at = 0; at < v.length; at += 6) {
+		for (let at = 0; at < v.length; at += CHUNK_VERTEX_FLOATS) {
 			const radius = Math.hypot(
 				v[at]! + o.x,
 				v[at + 1]! + o.y,
@@ -1358,8 +1376,8 @@ describe("sky exposure", () => {
 			);
 			const below = Math.round((surface - radius) / flatShape.blockSize);
 			if (below < 0 || below > dug + 1) continue;
-			const sky = skyOf(v[at + 3]!, v[at + 4]!, v[at + 5]!);
-			if (sky === null) continue;
+			if (!isBlock(v[at + 3]!, v[at + 4]!, v[at + 5]!)) continue;
+			const sky = v[at + 6]!;
 			const cell = found.get(below) ?? { lo: Infinity, hi: -Infinity };
 			cell.lo = Math.min(cell.lo, sky);
 			cell.hi = Math.max(cell.hi, sky);
@@ -1396,8 +1414,9 @@ describe("sky exposure", () => {
 	});
 
 	it("gives every face the open sky when it is switched off", () => {
-		// There is no torch in this world, so off has to be a way to see what
-		// you dug -- every face at the open-sky reading, nothing darkened.
+		// Off has to be a way to look at the ground with nothing carried
+		// down to it -- every face at the open-sky reading, nothing
+		// darkened.
 		for (const band of shaftSky({ skyExposure: false })) {
 			expect(band.lo).toBeCloseTo(1, 5);
 			expect(band.hi).toBeCloseTo(1, 5);
@@ -1449,9 +1468,11 @@ describe("a hollow column at the ring's outer edge", () => {
 		const byLayer = new Map<number, number[]>();
 		const corner = (part: Geometry, index: number) =>
 			new Vec3(
-				part.vertices[index * 6]! + built.origin.x,
-				part.vertices[index * 6 + 1]! + built.origin.y,
-				part.vertices[index * 6 + 2]! + built.origin.z,
+				part.vertices[index * CHUNK_VERTEX_FLOATS]! + built.origin.x,
+				part.vertices[index * CHUNK_VERTEX_FLOATS + 1]! +
+					built.origin.y,
+				part.vertices[index * CHUNK_VERTEX_FLOATS + 2]! +
+					built.origin.z,
 			);
 		const tris: Vec3[][] = [];
 		for (const part of [built.opaque, built.translucent])

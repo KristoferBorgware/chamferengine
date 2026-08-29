@@ -34,7 +34,12 @@ import {
 	worldKey,
 } from "chamfer/edit";
 import type { RayWorld } from "chamfer/addressing";
-import { cellCorners, positionToCell, rayWalk } from "chamfer/addressing";
+import {
+	cellCorners,
+	latticeCell,
+	positionToCell,
+	rayWalk,
+} from "chamfer/addressing";
 import { Player } from "chamfer/player";
 import { clickIntent } from "./clickIntent.js";
 import { worldBlocks } from "./worldBlocks.js";
@@ -46,7 +51,10 @@ import {
 } from "chamfer/coordinates";
 import { NORTH } from "chamfer/addressing";
 import {
+	BLOCK_LIGHT_RANGE_MAX,
+	blockLightSide,
 	daylight,
+	fillBlockLight,
 	solarNoonTime,
 	sunDirection,
 	terminatorSpeed,
@@ -558,7 +566,7 @@ async function main(): Promise<void> {
 				shape.seaSurfaceRadius,
 				DEPTH,
 				seaLook(settings),
-				renderer.sunViews,
+				renderer.lightViews,
 			);
 	if (sea) {
 		sea.visible = settings.knobs.seaDrawn;
@@ -849,14 +857,10 @@ async function main(): Promise<void> {
 	 * never sees one of them -- so a pool already holding the map can be told
 	 * these three and keep everything else it has built.
 	 *
-	 * **Full light has to reach the bake as well as the shader.** The sky
-	 * exposure is multiplied into the vertex colours here, and nothing the
-	 * shader computes afterwards can divide a number back out of what it was
-	 * handed -- so a cave would stay at the 12% a shut-in cell is baked to
-	 * however far the sun was said to reach. The corner shading stays: it is
-	 * how much of the sky a corner sees rather than whether the sun arrives,
-	 * it bottoms out at 0.55 rather than 0.12, and it is what keeps a cave's
-	 * edges readable. It has a switch of its own for anyone who disagrees.
+	 * **Full light is not among them.** How much sky a cell stands under
+	 * arrives at the shader as a number of its own rather than as a factor in
+	 * the vertex colour, so taking it away is a switch the frame carries and
+	 * costs no chunk a rebuild.
 	 */
 	function meshRetune(live: PlanetSettings): MeshRetune {
 		return {
@@ -864,7 +868,7 @@ async function main(): Promise<void> {
 			// Zero is off, and off is the flat colour the registry names.
 			speckle: live.knobs.speckle ? SPECKLE : 0,
 			ambientOcclusion: live.knobs.ambientOcclusion,
-			skyExposure: live.knobs.skyExposure && !live.knobs.fullbright,
+			skyExposure: live.knobs.skyExposure,
 		};
 	}
 
@@ -1440,6 +1444,72 @@ async function main(): Promise<void> {
 		layerOfRadius: (radius) => shape.layerOfRadius(radius),
 		solidAt: (cell) => blockAt(cell) !== BlockType.AIR,
 	};
+
+	/**
+	 * The colour of the light the player carries: a warm white, the colour a
+	 * flame throws rather than the colour of the sky.
+	 */
+	const TORCH_COLOR: [number, number, number] = [1.0, 0.82, 0.56];
+
+	/**
+	 * What the carried light was last filled for, so it is filled again only
+	 * when something it depends on moves.
+	 *
+	 * A step to the next cell, a turn of either knob, and any change to the
+	 * blocks -- a broken wall lets the light through and the fill is what has
+	 * to notice.
+	 */
+	let litFor = "";
+
+	/**
+	 * Flood the carried light out from the cell the player's eye is in.
+	 *
+	 * The fill walks the air cell by cell, losing a step of brightness at each
+	 * and stopping at rock, and lands in a cube of levels named by how far
+	 * each cell is from the source along the source's own face coordinates.
+	 * A coordinate that leaves the face still names exactly one cell, so a
+	 * light near a face edge reaches over it without a case for it.
+	 *
+	 * The blocks are read through `blockAt`, so a passage somebody dug is open
+	 * to the light on the frame they dug it.
+	 */
+	function carryLight(cell: CellRef): void {
+		const knobs = current.knobs;
+		const range =
+			PLAIN || !knobs.torchOn
+				? 0
+				: Math.min(BLOCK_LIGHT_RANGE_MAX, Math.round(knobs.torchRange));
+		const stamp =
+			`${cell.face}/${cell.i}/${cell.j}/${cell.layer}/${range}` +
+			`/${knobs.torchStrength}/${edits.count}/${shape.n}`;
+		if (stamp === litFor) return;
+		litFor = stamp;
+		if (range < 1 || knobs.torchStrength <= 0) {
+			renderer.blockLight.off();
+			return;
+		}
+		const chart = fillBlockLight(
+			cell.face,
+			cell.i,
+			cell.j,
+			cell.layer,
+			range,
+			blockLightSide(BLOCK_LIGHT_RANGE_MAX),
+			(face, i, j, layer) => {
+				const at = latticeCell(face, shape.n, i, j);
+				const block = blockAt({ ...at, layer });
+				// Water passes light and stops nothing walking through it, so
+				// only rock and the blocks a player stacks hold it back.
+				return block !== BlockType.AIR && block !== BlockType.WATER;
+			},
+		);
+		renderer.blockLight.update(
+			chart,
+			shape,
+			TORCH_COLOR,
+			knobs.torchStrength,
+		);
+	}
 
 	/**
 	 * The cell under the crosshair and the one a block would go in.
@@ -2353,6 +2423,13 @@ async function main(): Promise<void> {
 		// sea-level altitude clipped away the ground under the camera's own
 		// feet.
 		const standing = positionToCell(player.position, shape.n);
+		// The eye rather than the feet: a carried light is at the height it is
+		// looked from, and in a passage one block tall that is the difference
+		// between lighting the floor and lighting the room.
+		carryLight({
+			...standing,
+			layer: shape.layerOfRadius(player.eye.length()),
+		});
 		const under = terrain.columnAt(standing.face, standing.i, standing.j);
 		const overGround = Math.max(
 			0,

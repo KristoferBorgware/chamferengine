@@ -111,8 +111,8 @@ export interface MeshOptions {
 	 * which is what makes a shaft's wall, a cave's ceiling and a tunnel go
 	 * dark rather than carrying the daylight of the surface above them.
 	 *
-	 * Off gives every face the open-sky reading. There is no torch in this
-	 * world yet, so that is the only way to see underground.
+	 * Off gives every face the open-sky reading, which is how the ground is
+	 * looked at with nothing carried down to it.
 	 */
 	readonly skyExposure?: boolean;
 

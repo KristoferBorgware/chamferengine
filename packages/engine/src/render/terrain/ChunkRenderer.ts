@@ -2,6 +2,7 @@ import type { Box } from "../../math/Box.js";
 import type { ChunkMesh } from "../../mesh/ChunkMesh.js";
 import type { Frame } from "../Frame.js";
 import type { Geometry } from "../../mesh/Geometry.js";
+import { CHUNK_VERTEX_FLOATS } from "../../mesh/CHUNK_VERTEX_FLOATS.js";
 import type { GpuContext } from "../gpu/GpuContext.js";
 import type { PassLayer } from "../PassLayer.js";
 import { Frustum } from "../../math/Frustum.js";
@@ -13,7 +14,8 @@ import { CascadeShadow } from "../light/CascadeShadow.js";
 import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
-import { SunViews } from "../light/SunViews.js";
+import { BlockLightMap } from "../light/BlockLightMap.js";
+import { LightViews } from "../light/LightViews.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
 
@@ -92,12 +94,21 @@ export class ChunkRenderer implements ShadowCaster {
 	readonly cloudCasters: CloudCaster[] = [];
 
 	/**
-	 * The cascades and the cloud cover as one bind group.
+	 * The cascades, the cloud cover and the light standing in the world, as
+	 * one bind group.
 	 *
-	 * WebGPU guarantees four groups and the world spends all four, so the two
-	 * things the sun looks at share the last one.
+	 * WebGPU guarantees four groups and the world spends all four, so the
+	 * three things a surface has to look up share the last one.
 	 */
-	readonly sunViews: SunViews;
+	readonly lightViews: LightViews;
+
+	/**
+	 * The light a source in the world casts, as a cube of levels around it.
+	 *
+	 * Held here because it is bound with the sun's own views, and filled from
+	 * outside: what stands where is the world's business, not the renderer's.
+	 */
+	readonly blockLight: BlockLightMap;
 
 	/**
 	 * The air, marched over the finished frame.
@@ -208,7 +219,13 @@ export class ChunkRenderer implements ShadowCaster {
 		});
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
 		this.cloudShadow = new CloudShadow(ctx, 1024);
-		this.sunViews = new SunViews(ctx, this.cascades, this.cloudShadow);
+		this.blockLight = new BlockLightMap(ctx);
+		this.lightViews = new LightViews(
+			ctx,
+			this.cascades,
+			this.cloudShadow,
+			this.blockLight,
+		);
 		this.casters.push(this);
 
 		const common = {
@@ -216,7 +233,7 @@ export class ChunkRenderer implements ShadowCaster {
 				bindGroupLayouts: [
 					this.frameLayout,
 					this.chunkLayout,
-					this.sunViews.layout,
+					this.lightViews.layout,
 				],
 			}),
 			vertex: {
@@ -224,7 +241,7 @@ export class ChunkRenderer implements ShadowCaster {
 				entryPoint: "vertexMain",
 				buffers: [
 					{
-						arrayStride: 24,
+						arrayStride: CHUNK_VERTEX_FLOATS * 4,
 						attributes: [
 							{
 								shaderLocation: 0,
@@ -235,6 +252,11 @@ export class ChunkRenderer implements ShadowCaster {
 								shaderLocation: 1,
 								offset: 12,
 								format: "float32x3",
+							},
+							{
+								shaderLocation: 2,
+								offset: 24,
+								format: "float32",
 							},
 						],
 					},
@@ -478,13 +500,13 @@ export class ChunkRenderer implements ShadowCaster {
 		// so a sky drawn with two groups leaves group 2 unset -- and the next
 		// terrain draw is refused, taking the whole command buffer with it.
 		// The water pass sets it again for the same reason.
-		pass.setBindGroup(2, this.sunViews.bindGroup);
+		pass.setBindGroup(2, this.lightViews.bindGroup);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
-		pass.setBindGroup(2, this.sunViews.bindGroup);
+		pass.setBindGroup(2, this.lightViews.bindGroup);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
