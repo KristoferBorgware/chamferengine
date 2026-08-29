@@ -1406,6 +1406,7 @@
 			}
 			// ===== END engine coordinates =====
 
+			// ===== BEGIN engine biome model =====
 			// ---------------------------------------------------------------
 			// The ground the climate is read over.
 			// ---------------------------------------------------------------
@@ -1716,10 +1717,18 @@
 			 * that the two numbers are a property of the whole world rather
 			 * than of the place, so they are found once and then held -- the
 			 * same shape as the relief fit, and the same reason.
+			 *
+			 * `fit` and `push` default to the page's own live state, so every
+			 * call site inside this page is unchanged; a caller outside it --
+			 * the digest test -- passes them straight through instead.
 			 */
-			function squareOf(climate, warp, out) {
-				const fit = world.fit;
-				const push = knobs.useWarp ? knobs.warpStrength : 0;
+			function squareOf(
+				climate,
+				warp,
+				out,
+				fit = world.fit,
+				push = knobs.useWarp ? knobs.warpStrength : 0,
+			) {
 				out[0] = Math.max(
 					0,
 					Math.min(1, (climate[0] - fit.tLo) / fit.tSpan + push * warp[0]),
@@ -1807,7 +1816,7 @@
 			/** Which bucket a value falls in, given the edges between them. */
 			function bucket(v, edges) {
 				let n = 0;
-				while (n < edges.length && v >= edges[n]) n++;
+				while (n < edges.length && v > edges[n]) n++;
 				return n;
 			}
 
@@ -1912,10 +1921,21 @@
 			 * **Low is necessary and not sufficient**, which is what `room`
 			 * carries: the foot of a cliff is low ground with the sea on one
 			 * side and a hillside on the other, and it is not a beach.
+			 *
+			 * `shoreHeight` defaults to the page's own knob, so every call
+			 * site inside this page is unchanged; a caller outside it passes
+			 * one through instead.
 			 */
-			function landformAt(level, cut, swing, metres, room) {
+			function landformAt(
+				level,
+				cut,
+				swing,
+				metres,
+				room,
+				shoreHeight = knobs.shoreHeight,
+			) {
 				if (metres <= TERRAIN.seaLevel) return -1;
-				if (metres <= knobs.shoreHeight && room >= SHORE_ROOM) return SHORE;
+				if (metres <= shoreHeight && room >= SHORE_ROOM) return SHORE;
 				return grid[
 					gridAt(
 						bucket(level, CONT_EDGES),
@@ -2265,14 +2285,19 @@
 			 * A landform with no biome at all has no answer, which is the one
 			 * state the panel refuses to leave: removing the last one is
 			 * declined rather than allowed to draw a hole in the world.
+			 *
+			 * `biomesTable` and `allowedSets` default to the page's own live
+			 * state, so every call site inside this page is unchanged; a
+			 * caller outside it passes its own table and grouping through
+			 * instead.
 			 */
-			function biomeOf(t, h, form) {
-				const set = allowed[form];
+			function biomeOf(t, h, form, biomesTable = biomes, allowedSets = allowed) {
+				const set = allowedSets[form];
 				if (!set || set.length === 0) return -1;
 				let best = set[0];
 				let near = Infinity;
 				for (let n = 0; n < set.length; n++) {
-					const b = biomes[set[n]];
+					const b = biomesTable[set[n]];
 					const dt = t - b.t;
 					const dh = h - b.h;
 					const d = dt * dt + dh * dh;
@@ -2283,6 +2308,7 @@
 				}
 				return best;
 			}
+			// ===== END engine biome model =====
 
 
 			// ---------------------------------------------------------------
@@ -3189,6 +3215,7 @@
 				fit: null,
 			};
 
+			// ===== BEGIN engine biome fit =====
 			/** One share of a sorted list, which is what the square is fitted to. */
 			function percentile(sorted, at) {
 				if (sorted.length === 0) return 0;
@@ -3210,11 +3237,15 @@
 			 * extremes hands the whole middle of the square to the middle of the
 			 * field, and the outer 4% saturating is what makes a desert a region
 			 * rather than a rim.
+			 *
+			 * `fit` defaults to the page's own knob, so the one call site
+			 * inside this page is unchanged; a caller outside it passes one
+			 * through instead.
 			 */
 			const FIT_TAIL = 0.02;
 
-			function fitTo(rawT, rawH, land) {
-				if (!knobs.fit)
+			function fitTo(rawT, rawH, land, fit = knobs.fit) {
+				if (!fit)
 					return { tLo: -1, tSpan: 2, hLo: -1, hSpan: 2, fitted: false };
 				const t = [];
 				const h = [];
@@ -3233,6 +3264,7 @@
 				const hSpan = Math.max(1e-6, percentile(h, 1 - FIT_TAIL) - hLo);
 				return { tLo, tSpan, hLo, hSpan, fitted: true, raw: { tSpan, hSpan } };
 			}
+			// ===== END engine biome fit =====
 
 			function tallyWorld(seed, s, k) {
 				const key = sampleKey();

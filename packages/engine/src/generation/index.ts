@@ -139,6 +139,7 @@ export {
 export { plantSalt } from "./plants/plantSalt.js";
 export { plantLayerNoise } from "./plants/plantLayerNoise.js";
 export { plantDensityAt } from "./plants/plantDensityAt.js";
+export { plantBiomeMasks } from "./plants/plantBiomeMasks.js";
 export type { PlantFrame } from "./plants/PlantFrame.js";
 export { plantFrame } from "./plants/PlantFrame.js";
 export type { PlantSkeleton } from "./plants/PlantSkeleton.js";
@@ -196,3 +197,4 @@ export { allowedBiomes } from "./biomes/allowedBiomes.js";
 export { biomeOf } from "./biomes/biomeOf.js";
 export type { BiomeSample } from "./biomes/BiomeField.js";
 export { BiomeField, makeBiomeSample } from "./biomes/BiomeField.js";
+export { biomeWorldFor } from "./biomes/biomeWorldFor.js";

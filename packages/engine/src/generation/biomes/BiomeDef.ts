@@ -32,4 +32,17 @@ export interface BiomeDef {
 	 * the registry is append-only and written at build time.
 	 */
 	readonly block: number;
+
+	/**
+	 * The block a column of this biome cuts into below its surface, or
+	 * absent for the elevation bands' own dirt.
+	 *
+	 * **Only where the ground under a biome is not generic dirt.** A mesa's
+	 * red rock and a dune's own sandstone are still the ground a moment after
+	 * the top layer, and a biome whose surface names one of those is not
+	 * telling the truth about what a player digs into if the layer under it
+	 * is silently something else. Read once a column, the same read that
+	 * named the surface -- not a second lookup.
+	 */
+	readonly underlay?: number;
 }

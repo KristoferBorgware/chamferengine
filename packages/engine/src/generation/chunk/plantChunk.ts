@@ -1,4 +1,5 @@
 import type { Chunk } from "./Chunk.js";
+import type { BiomeField } from "../biomes/BiomeField.js";
 import type { PlantLayer } from "../plants/PlantLayer.js";
 import type { PlantTemplateStore } from "../plants/PlantTemplateStore.js";
 import type { StandPatch } from "../plants/growStand.js";
@@ -9,7 +10,9 @@ import { canonicalCell } from "../../addressing/neighbours/canonicalCell.js";
 import { growStand } from "../plants/growStand.js";
 import { joinPath } from "../../addressing/lattice/joinPath.js";
 import { latticePosition } from "../../addressing/lattice/latticePosition.js";
+import { makeBiomeSample } from "../biomes/BiomeField.js";
 import { neighbour } from "../../addressing/neighbours/neighbour.js";
+import { plantBiomeMasks } from "../plants/plantBiomeMasks.js";
 import { rank } from "../../addressing/lattice/rank.js";
 import { layoutFits, plantPatchLayout } from "./plantPatchLayout.js";
 
@@ -98,6 +101,7 @@ export function plantChunk(
 	seed: number,
 	rootDepth: number = shape.subdivisionDepth,
 	templates: PlantTemplateStore | null = null,
+	biomes: BiomeField | null = null,
 ): PlantedChunk | null {
 	if (layers.every((layer) => !layer.on)) return null;
 	const depth = shape.subdivisionDepth;
@@ -238,12 +242,20 @@ export function plantChunk(
 	const groundLayer = new Int32Array(count);
 	const owned = new Uint8Array(count);
 	const rootHeight = new Float64Array(count);
+	// **Read once a column here, the same place `top` and `groundLayer`
+	// are**, rather than once a candidate root inside `growStand`: a biome
+	// is a fact about the ground a column stands on, and a column's whole
+	// block of roots asks about the one column they belong to.
+	const biomeAt = biomes ? new Int32Array(count).fill(-1) : null;
+	const biomeSample = biomes ? makeBiomeSample() : null;
 	for (let c = 0; c < count; c++) {
 		owned[c] = slotOf[c]! >= 0 ? 1 : 0;
 		const p = latticePosition(face[c]!, n, iOf[c]!, jOf[c]!);
 		directions[c * 3] = p.x;
 		directions[c * 3 + 1] = p.y;
 		directions[c * 3 + 2] = p.z;
+		if (biomes && biomeAt)
+			biomeAt[c] = biomes.readAt(p.x, p.y, p.z, biomeSample!);
 		// **The ground as this chunk drew it**, so a plant's foot stands on the
 		// block under it rather than a rounding away from one. A layer counts
 		// downward from the crust top, and a stand counts upward from the
@@ -356,6 +368,8 @@ export function plantChunk(
 			// dense as the finest level's, rather than a quarter of it a level
 			// out and a sixteenth two.
 			rootSpread: 1 << lift,
+			biomeAt,
+			biomeMasks: biomes ? plantBiomeMasks(layers, biomes.biomes) : null,
 		},
 	);
 

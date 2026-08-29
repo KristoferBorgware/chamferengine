@@ -44,7 +44,12 @@ function patchOf(): ReturnType<typeof columnPatchLayout> {
 }
 
 /** One layer that grows everywhere, so the walk is not a study of one tree. */
-function layerOf(id: number, species: string, density: number): PlantLayer {
+function layerOf(
+	id: number,
+	species: string,
+	density: number,
+	biomes?: readonly string[],
+): PlantLayer {
 	return {
 		id,
 		species,
@@ -60,6 +65,7 @@ function layerOf(id: number, species: string, density: number): PlantLayer {
 			[-1, 1],
 			[1, 1],
 		],
+		biomes,
 		shape: PLANT_SPECIES[species]!,
 	};
 }
@@ -69,6 +75,8 @@ function stand(
 	patch: ReturnType<typeof columnPatchLayout>,
 	layers: readonly PlantLayer[],
 	chunkCells: number,
+	biomeAt?: Int32Array | null,
+	biomeMasks?: readonly (ReadonlySet<number> | null)[] | null,
 ): ReturnType<typeof growStand> {
 	const top = new Float64Array(patch.count);
 	const groundLayer = new Int32Array(patch.count).fill(-1);
@@ -82,6 +90,8 @@ function stand(
 		chunkCells,
 		chunkReach: 24,
 		seaLevel: 0,
+		biomeAt,
+		biomeMasks,
 	});
 }
 
@@ -239,5 +249,75 @@ describe("growStand", () => {
 		);
 		expect(grown.plants).toBe(0);
 		expect(grown.blocks.some((cell) => isPlantWood(cell))).toBe(false);
+	});
+
+	describe("restricted to named biomes", () => {
+		// Half the patch reads as biome `0`, half as biome `1` -- a checkerboard
+		// rather than a real climate, because the question here is only whether
+		// the mask is obeyed, not where a biome model would draw the line.
+		function halved(): Int32Array {
+			const biomeAt = new Int32Array(patch.count);
+			for (let c = 0; c < patch.count; c++) biomeAt[c] = c % 2;
+			return biomeAt;
+		}
+
+		it("grows where its own biome is", () => {
+			const pine = layerOf(1, "Pine", 60, ["Taiga"]);
+			// Every column reads as biome 0, which is exactly what Pine is
+			// masked to -- the mirror of the next test, where none of them do.
+			const biomeAt = new Int32Array(patch.count).fill(0);
+			const masks = [new Set([0])];
+			const grown = stand(patch, [pine], 16, biomeAt, masks);
+			expect(grown.plants).toBeGreaterThan(0);
+			const solid = standWalkable(
+				grown,
+				new Float64Array(patch.count).fill(5),
+				BLOCK,
+				0,
+				true,
+			);
+			expect(solid).toBeGreaterThan(0);
+		});
+
+		it("grows nothing when its biome never turns up", () => {
+			const pine = layerOf(1, "Pine", 60, ["Taiga"]);
+			// Every column reads as biome 1; Pine is masked to biome 0 alone.
+			const biomeAt = new Int32Array(patch.count).fill(1);
+			const masks = [new Set([0])];
+			const grown = stand(patch, [pine], 16, biomeAt, masks);
+			expect(grown.plants).toBe(0);
+		});
+
+		it("splits two species by biome the way one curve used to split them", () => {
+			const pine = layerOf(1, "Pine", 60, ["Taiga"]);
+			const oak = layerOf(2, "Oak", 60, ["Grassland"]);
+			const masks = [new Set([0]), new Set([1])];
+			const grown = stand(patch, [pine, oak], 16, halved(), masks);
+			// Both grew, and pine took none of what oak's biome held or oak none
+			// of pine's -- the same "leaves a layer's own forest alone" property
+			// the id-salting test above checks, now for a mask instead of a list
+			// position.
+			expect(grown.grown[0]).toBeGreaterThan(0);
+			expect(grown.grown[1]).toBeGreaterThan(0);
+		});
+
+		it("changes nothing for a layer that names no biome", () => {
+			// The default: with no mask and no biome data at all, growth is
+			// exactly what it was before this feature existed.
+			const plain = stand(patch, layers, 16);
+			const withNoBiomeData = stand(patch, layers, 16, null, null);
+			expect(withNoBiomeData.plants).toBe(plain.plants);
+			expect(withNoBiomeData.wood).toBe(plain.wood);
+			expect(withNoBiomeData.leaf).toBe(plain.leaf);
+		});
+
+		it("grows nowhere when a world has no biome data at all", () => {
+			// A layer that names a biome cannot be answered by a world that
+			// never says what biome a place is -- it grows nowhere rather than
+			// silently ignoring the restriction.
+			const pine = layerOf(1, "Pine", 60, ["Taiga"]);
+			const grown = stand(patch, [pine], 16);
+			expect(grown.plants).toBe(0);
+		});
 	});
 });

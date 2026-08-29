@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { PlantLayer } from "chamfer/generation";
 import {
+	ANY_LANDFORM,
 	BlockType,
+	BiomeField,
 	COARSE_MAP_DEFAULTS,
 	ChunkAddress,
+	CONTINENT_LAYER_DEFAULT,
+	EROSION_LAYER_DEFAULT,
+	PEAKS_LAYER_DEFAULT,
 	PLANT_SPECIES,
 	PlantTemplateStore,
 	TERRAIN_DEFAULTS,
 	TerrainGenerator,
+	biomeWorldFor,
 	buildCoarseMap,
 	generateChunk,
 	isPlantLeaf,
@@ -31,7 +37,12 @@ const CHUNK_LEVEL = 4;
 const BLOCK = 4;
 
 /** One layer that grows thickly, so a small chunk holds something. */
-function layerOf(id: number, species: string, density: number): PlantLayer {
+function layerOf(
+	id: number,
+	species: string,
+	density: number,
+	biomes?: readonly string[],
+): PlantLayer {
 	return {
 		id,
 		species,
@@ -47,6 +58,7 @@ function layerOf(id: number, species: string, density: number): PlantLayer {
 			[-1, 1],
 			[1, 1],
 		],
+		biomes,
 		shape: PLANT_SPECIES[species]!,
 	};
 }
@@ -158,6 +170,105 @@ describe("plantChunk", () => {
 			),
 		).toBeNull();
 		expect([...chunk.blocks]).toEqual(before);
+	});
+});
+
+describe("plantChunk with a biome table", () => {
+	// One biome, open to every landform, so any dry column on the test world
+	// reads as it -- the question here is whether `plantChunk` reads the
+	// field and hands the result to `growStand`, not where a real climate
+	// would draw a line.
+	const ONLY_BIOME = "Everywhere";
+
+	function biomeFieldFor(
+		shape: ReturnType<typeof world>["shape"],
+		terrain: ReturnType<typeof world>["terrain"],
+	): BiomeField {
+		return new BiomeField(
+			biomeWorldFor(
+				SEED,
+				shape,
+				terrain.map,
+				CONTINENT_LAYER_DEFAULT,
+				EROSION_LAYER_DEFAULT,
+				PEAKS_LAYER_DEFAULT,
+			),
+			[
+				{
+					name: ONLY_BIOME,
+					hex: "93a95e",
+					t: 0.5,
+					h: 0.5,
+					landform: ANY_LANDFORM,
+					block: BlockType.GRASSLAND_GROUND,
+				},
+			],
+		);
+	}
+
+	it("grows a layer restricted to the world's only biome", () => {
+		const { shape, terrain, address } = world();
+		const chunk = generateChunk(
+			terrain,
+			address,
+			CHUNK_LEVEL,
+			shape.crustDepth,
+		);
+		const grown = plantChunk(
+			chunk,
+			terrain,
+			shape,
+			[layerOf(1, "Pine", 40, [ONLY_BIOME])],
+			SEED,
+			shape.subdivisionDepth,
+			null,
+			biomeFieldFor(shape, terrain),
+		);
+		expect(grown).not.toBeNull();
+		expect(grown!.plants).toBeGreaterThan(0);
+	});
+
+	it("grows nothing for a layer restricted to a biome the table does not have", () => {
+		const { shape, terrain, address } = world();
+		const chunk = generateChunk(
+			terrain,
+			address,
+			CHUNK_LEVEL,
+			shape.crustDepth,
+		);
+		const before = [...chunk.blocks];
+		const grown = plantChunk(
+			chunk,
+			terrain,
+			shape,
+			[layerOf(1, "Pine", 40, ["Nowhere on this table"])],
+			SEED,
+			shape.subdivisionDepth,
+			null,
+			biomeFieldFor(shape, terrain),
+		);
+		expect(grown).not.toBeNull();
+		expect(grown!.plants).toBe(0);
+		expect([...chunk.blocks]).toEqual(before);
+	});
+
+	it("grows nothing for a biome-restricted layer when the chunk carries no biome field", () => {
+		const { shape, terrain, address } = world();
+		const chunk = generateChunk(
+			terrain,
+			address,
+			CHUNK_LEVEL,
+			shape.crustDepth,
+		);
+		const grown = plantChunk(
+			chunk,
+			terrain,
+			shape,
+			[layerOf(1, "Pine", 40, [ONLY_BIOME])],
+			SEED,
+		);
+		expect(grown).not.toBeNull();
+		expect(grown!.plants).toBe(0);
 	});
 });
 

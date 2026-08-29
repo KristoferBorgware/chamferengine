@@ -51,6 +51,8 @@ export const BLOCK_COLORS: Readonly<
 	[BlockType.SNOW]: [0.92, 0.94, 0.97],
 	[BlockType.WATER]: [0.12, 0.32, 0.55],
 	[BlockType.BEDROCK]: [0.17, 0.16, 0.19],
+	[BlockType.TERRACOTTA]: [0.55, 0.27, 0.14],
+	[BlockType.SANDSTONE]: [0.82, 0.72, 0.52],
 	// **A plant's two colours are the species' own**, written in from the one
 	// table that describes it rather than copied out here -- a registry green
 	// a shade off the species green is a picture that answers a slightly

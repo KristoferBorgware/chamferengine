@@ -9,7 +9,17 @@ import {
 	maxElevationFor,
 	isTranslucent,
 	seedFromString,
+	BiomeField,
+	DEFAULT_BIOMES,
+	DEFAULT_LANDFORM_GRID,
+	biomeWorldFor,
+	makeBiomeSample,
+	CONTINENT_LAYER_DEFAULT,
+	EROSION_LAYER_DEFAULT,
+	PEAKS_LAYER_DEFAULT,
+	ANY_LANDFORM,
 } from "chamfer/generation";
+import type { BiomeDef } from "chamfer/generation";
 import { WorldShape, maxCrustDepth } from "chamfer/world";
 import { Vec3 } from "chamfer/math";
 
@@ -449,6 +459,177 @@ describe("the carve, written into a column", () => {
 			gen.fillColumn(column, into, 0, layers);
 			for (let layer = column.groundLayer; layer < layers - 1; layer++)
 				expect(into[layer]).not.toBe(BlockType.AIR);
+		}
+	});
+});
+
+describe("with a biome table", () => {
+	let field: BiomeField;
+	let biomeGen: TerrainGenerator;
+
+	beforeAll(() => {
+		field = new BiomeField(
+			biomeWorldFor(
+				map.seed,
+				shape,
+				map,
+				CONTINENT_LAYER_DEFAULT,
+				EROSION_LAYER_DEFAULT,
+				PEAKS_LAYER_DEFAULT,
+			),
+			DEFAULT_BIOMES,
+			DEFAULT_LANDFORM_GRID,
+		);
+		biomeGen = new TerrainGenerator(
+			map.seed,
+			shape,
+			map,
+			{ rockLine: 28, snowLine: 45 },
+			field,
+		);
+	});
+
+	it("names dry ground with the biome's own block, not the elevation bands", () => {
+		const scratch = makeBiomeSample();
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius > column.groundRadius) continue;
+			const top = biomeGen.blockAt(column, column.groundLayer);
+			const want = field.blockAt(column.x, column.y, column.z, scratch);
+			expect(want).toBeGreaterThanOrEqual(0);
+			expect(top).toBe(want);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("still lays sand under water, which the biome model has no ground to name", () => {
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius <= column.groundRadius) continue;
+			expect(biomeGen.blockAt(column, column.groundLayer)).toBe(
+				BlockType.SAND,
+			);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("leaves the deep crust to the elevation bands, past the soil a biome's underlay reaches", () => {
+		// Ten layers down is past the soil depth on this world, so it is hard
+		// stone regardless of what a biome named for its own underlay.
+		let checked = 0;
+		for (const column of columns(32)) {
+			if (column.waterRadius > column.groundRadius) continue;
+			expect(biomeGen.blockAt(column, column.groundLayer + 10)).toBe(
+				BlockType.STONE,
+			);
+			checked++;
+		}
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	describe("a biome's own underlay", () => {
+		// A dry dot with an underlay and a wet dot without one, both open to
+		// every landform, so nearest-dot splits the whole climate square
+		// between them and both turn up over a spread of columns whatever
+		// this world's own relief happens to reach -- unlike `DEFAULT_BIOMES`,
+		// where Badlands and Desert may or may not be the nearest dot to any
+		// column this small a test world actually builds.
+		const withUnderlay: BiomeDef = {
+			name: "Dry with underlay",
+			hex: "c06a3a",
+			t: 0.2,
+			h: 0.2,
+			landform: ANY_LANDFORM,
+			block: BlockType.BADLANDS_GROUND,
+			underlay: BlockType.SANDSTONE,
+		};
+		const withoutUnderlay: BiomeDef = {
+			name: "Wet without one",
+			hex: "2f9e2f",
+			t: 0.8,
+			h: 0.8,
+			landform: ANY_LANDFORM,
+			block: BlockType.RAINFOREST_GROUND,
+		};
+		let twoBiomeField: BiomeField;
+		let twoBiomeGen: TerrainGenerator;
+
+		beforeAll(() => {
+			twoBiomeField = new BiomeField(
+				biomeWorldFor(
+					map.seed,
+					shape,
+					map,
+					CONTINENT_LAYER_DEFAULT,
+					EROSION_LAYER_DEFAULT,
+					PEAKS_LAYER_DEFAULT,
+				),
+				[withUnderlay, withoutUnderlay],
+				DEFAULT_LANDFORM_GRID,
+			);
+			twoBiomeGen = new TerrainGenerator(
+				map.seed,
+				shape,
+				map,
+				{ rockLine: 28, snowLine: 45 },
+				twoBiomeField,
+			);
+		});
+
+		it("cuts into it just under the surface, and plain dirt where none is named", () => {
+			// One layer down is inside the soil band, the one place a biome's
+			// underlay reads instead of plain dirt -- read back from the same
+			// surface call rather than asking the table a second time.
+			const scratch = makeBiomeSample();
+			let underlaid = 0;
+			let plain = 0;
+			for (const column of columns(32)) {
+				if (column.waterRadius > column.groundRadius) continue;
+				if (column.elevation > 28) continue; // above rockLine
+				const biome = twoBiomeField.readAt(
+					column.x,
+					column.y,
+					column.z,
+					scratch,
+				);
+				if (biome < 0) continue;
+				// The surface layer first, in the same order `fillColumn`
+				// reads a column top to bottom -- it is what leaves a biome
+				// for the next call to read back rather than asking the
+				// table again.
+				twoBiomeGen.blockAt(column, column.groundLayer);
+				const under = twoBiomeGen.blockAt(
+					column,
+					column.groundLayer + 1,
+				);
+				if (biome === 0) {
+					expect(under).toBe(BlockType.SANDSTONE);
+					underlaid++;
+				} else {
+					expect(under).toBe(BlockType.DIRT);
+					plain++;
+				}
+			}
+			// Both cases have to turn up, or this is only checking one of them.
+			expect(underlaid).toBeGreaterThan(0);
+			expect(plain).toBeGreaterThan(0);
+		});
+	});
+
+	it("changes nothing for a generator built without one", () => {
+		// `gen`, from the outer `beforeAll`, carries no biome field -- the
+		// same seed and map through the plain constructor still answers with
+		// the elevation bands alone.
+		for (const column of columns(32)) {
+			const top = gen.blockAt(column, column.groundLayer);
+			expect([
+				BlockType.SAND,
+				BlockType.GRASS,
+				BlockType.STONE,
+				BlockType.SNOW,
+			]).toContain(top);
 		}
 	});
 });

@@ -77,6 +77,41 @@ never go stale against an edit -- the store and the plants are already read
 ahead of it. The ray walk asks the same question the same way and would take
 the same memo.
 
+### F-122 — The vegetation lab has no biome of its own to grow against
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-29, letting a plant layer name the biomes it grows in
+**Where:** `demos/vegetation-lab.html`,
+`packages/engine/tests/demos/vegetationLab.test.ts`,
+`packages/engine/src/generation/plants/growStand.ts`
+
+**What happens.** `growStand` now lets a layer restrict itself to named
+biomes, read once per column alongside `top` and `groundLayer`. The lab is its
+own standalone copy of the same planting algorithm, with no biome model at all
+-- there is no biome field to read a restriction against, so a layer written
+there with `biomes` set has nothing to test it against. `vegetationLab.test.ts`
+only digest-checks three shared building blocks (the noise kernel, the coarse
+grid, world coordinates) against the lab's own JavaScript; it does not check
+the plant-growing logic itself, the way `biomesLab.test.ts` checks biome
+assignment. Nothing catches the two drifting apart on this point.
+
+**Why it matters.** The lab is where a reader tries a layer's numbers before
+trusting them in the engine, per its own stated purpose, and it now silently
+cannot represent the one thing this change added. Someone reading it after
+this lands would have no sign that the feature exists, let alone that the lab
+does not have it.
+
+**What would fix it.** Either give the lab a small biome-membership stand-in
+(even a fixed checkerboard, the way the growStand tests use one) and a layer
+control for it, matching the engine's mechanism closely enough to digest-check
+the planting logic itself rather than only the three shared primitives; or
+note in the lab's own text that biome restriction is engine-only and the lab
+cannot preview it. Either is a small, separate piece of work from wiring the
+mechanism into the engine.
+
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance
@@ -2563,40 +2598,6 @@ biomes span landforms: a table where a name may be filed under `any` costs no
 boundary where two landforms both allow it, and the Holdridge preset already
 works that way, so the two presets can be measured against each other on the
 same planet.
-
----
-
-### F-118 — The biomes lab and the engine's biome model are two copies with no test between them
-
-**Kind:** risk
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-29, porting the biome model into the engine
-**Where:** `demos/biomes-lab.html`, `packages/engine/src/generation/biomes/`,
-`packages/engine/tests/demos/biomesLab.test.ts`
-
-**What happens.** The biome model now exists twice: the lab's standalone
-JavaScript, and the engine's TypeScript under `generation/biomes/`. The lab's
-marked shared blocks -- the noise kernel, the coarse grid, the coordinates --
-are digest-tested against the engine, but the biome model itself is not: the
-lab's `climateAt`, `landformAt`, `fitTo`, `regionsFor` and the preset tables
-have no test tying them to `BiomeField`, `landformAt` and `BIOME_PRESETS`.
-The engine port also deliberately differs in two places: heights come off the
-coarse map rather than straight from the layers, and `heightFrom` subtracts
-the sea level where the lab carries the datum in the number.
-
-**Why it matters.** Either copy can be tuned without the other noticing, and
-the lab is the page that argues the model's numbers -- a reader checking a
-constant against the lab could be checking last month's model. The same drift
-is what the marked-block digests exist to prevent for the kernel.
-
-**What would fix it.** One test that runs a few hundred sample points through
-both: extract the lab's biome functions the way `biomesLab.test.ts` already
-extracts its blocks, evaluate both models on the same seed, and compare the
-biome index per point, allowing the map-resolution difference on `metres`.
-Or retire the lab's own copy and drive the page from the engine bundle, which
-is what the bench now is.
 
 ---
 
@@ -5526,5 +5527,40 @@ one level further out. What it needs is a way for the plant pass to say
 into air, deliberately (`writes nothing over the ground it stands on`), so
 either that rule gains a stated exception for a cover mark or the mesher is
 handed a per-column mask beside the blocks.
+
+---
+
+### F-118 — The biomes lab and the engine's biome model are two copies with no test between them
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-29, porting the biome model into the engine
+**Closed:** 2026-08-29, fixed. `biomesLab.test.ts` gains a second describe
+block that extracts the lab's `heightFrom`, `climateAt`, `squareOf`, `warpAt`,
+`landformAt`, `biomeOf`, `regionsFor` and `fitTo` through two new marked
+blocks (`engine biome model`, `engine biome fit`) and runs 300 points spread
+over the sphere through both the lab's own pipeline and a `BiomeField` built
+from a synthetic `BiomeWorld` whose `heightAt` bypasses the coarse map and
+reads the same raw noise the lab does -- **landform and biome index agree at
+every one of the 300**, and `metres` is not merely close, it is the same
+computation once sea level is at its shared default of zero, which makes the
+lab's kept datum and the engine's dropped one the same arithmetic rather than
+two that happen to agree. Standalone spot checks add `bucket`, `gridAt`,
+`landformAt` and `biomeOf` at the grid's own edges, and `fitTo` against
+`UNFITTED` and against a hand-computed percentile. `squareOf`, `landformAt`,
+`biomeOf` and `fitTo` gained trailing parameters defaulted to the page's own
+`world`/`knobs` state, so every call site inside the page is unchanged and a
+caller outside it -- the test -- passes its own through instead. One real
+drift turned up doing this: the lab's `bucket` used `>=` where the engine's
+own `bucket` uses `>`, disagreeing about which band a value sitting exactly
+on an edge falls in. Fixed to match the engine, with no visible effect on any
+shipped world -- continuous noise lands exactly on an edge with probability
+zero. The fit is compared with fitting switched off on both sides
+deliberately: the lab measures its fit over its own precomputed lattice and
+the engine over a face/i/j lattice at a different level, two samplings never
+meant to agree past the shape of the result, so both are pointed at the same
+fixed `UNFITTED` square instead of at each other's measurement of the land.
 
 ---

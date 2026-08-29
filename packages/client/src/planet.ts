@@ -91,6 +91,7 @@ import type { PlanetKnobs } from "./PlanetSettings.js";
 import type { PlayerBody } from "chamfer/render";
 import { FLAT_COARSE_LEVEL, PlanetSettings } from "./PlanetSettings.js";
 import { behindPlayer } from "./behindPlayer.js";
+import { biomeFieldFor } from "./biomeFieldFor.js";
 
 const params = new URLSearchParams(location.search);
 
@@ -614,6 +615,12 @@ async function main(): Promise<void> {
 	// One generator per level. A chunk one level coarser samples the terrain at
 	// twice the spacing over four times the area, so it holds the same 561 slots
 	// and there are four times fewer of them.
+	//
+	// **One biome field for all of them.** The main thread's own generators
+	// need to name the same ground a worker's chunks do, and a biome is a
+	// place rather than a mesh resolution -- built once here, the way it is
+	// built once per worker.
+	let biomeField = biomeFieldFor(seed, shape, map, settings);
 	const byLod: TerrainGenerator[] = [];
 	for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 		byLod.push(
@@ -622,6 +629,7 @@ async function main(): Promise<void> {
 				shape.atLod(lod),
 				map,
 				settings.terrainOptions(),
+				biomeField,
 			),
 		);
 	let terrain = byLod[0]!;
@@ -908,6 +916,19 @@ async function main(): Promise<void> {
 			plants: live.knobs.vegetation
 				? live.plantLayers.map(plantLayerOf)
 				: [],
+			// **The world's own ground names, the same way.** A plain planet
+			// has no coarse map for a landform to read, so it has no biomes
+			// either.
+			biomes: live.coarseMapRuns
+				? {
+						biomes: live.biomeTable.biomes,
+						grid: live.biomeTable.grid,
+						settings: live.biomeOptions(),
+						continent: live.layerFor("continent"),
+						erosion: live.layerFor("erosion"),
+						peaks: live.layerFor("peaks"),
+					}
+				: undefined,
 		};
 	}
 
@@ -1761,6 +1782,7 @@ async function main(): Promise<void> {
 			: flatCoarseMap(nextSeed, FLAT_COARSE_LEVEL);
 		shape = live.shapeFor(map);
 		peaks = new ChunkPeaks(map, live.knobs.blockSize, CHUNK_LEVEL);
+		biomeField = biomeFieldFor(nextSeed, shape, map, live);
 		byLod.length = 0;
 		for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 			byLod.push(
@@ -1769,6 +1791,7 @@ async function main(): Promise<void> {
 					shape.atLod(lod),
 					map,
 					live.terrainOptions(),
+					biomeField,
 				),
 			);
 		terrain = byLod[0]!;

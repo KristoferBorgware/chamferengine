@@ -160,6 +160,29 @@ export interface StandOptions {
 	readonly seaLevel: number;
 
 	/**
+	 * Per column of the patch, which biome it belongs to, or absent for a
+	 * world with no biome table.
+	 *
+	 * **One read per column, not one per candidate root.** A column asks a
+	 * whole block of root cells for its one trunk, and a biome is a fact
+	 * about the column those roots stand on -- the same fact `top` and
+	 * `groundLayer` already are -- so it is read once, alongside them,
+	 * rather than for every candidate a column's block offers. `-1` is no
+	 * biome at this column, which a layer restricted to named biomes never
+	 * matches.
+	 */
+	readonly biomeAt?: Int32Array | null | undefined;
+
+	/**
+	 * Per layer, in the same order as the `layers` this stand was handed,
+	 * the biome indices that layer is restricted to -- or absent for a
+	 * layer open to every biome. Resolved once, against whichever table
+	 * named `biomeAt`'s indices, by {@link plantBiomeMasks}.
+	 */
+	readonly biomeMasks?:
+		readonly (ReadonlySet<number> | null)[] | null | undefined;
+
+	/**
 	 * The pre-grown plants to stamp, or nothing to grow each one where it
 	 * stands.
 	 *
@@ -262,6 +285,7 @@ export function growStand(
 		chunkReach,
 		seaLevel,
 	} = options;
+	const biomeAt = options.biomeAt ?? null;
 	const spread = Math.max(1, options.rootSpread ?? 1);
 	// **How much of a column's block of roots is actually asked.**
 	//
@@ -295,8 +319,33 @@ export function growStand(
 	const rootN = 2 ** rootLevel;
 
 	// **A layer that is off is not in the list at all**, so turning one off
-	// costs nothing and the tie-break order is over the ones left.
-	const live = layers.filter((layer) => layer.on);
+	// costs nothing and the tie-break order is over the ones left. The mask
+	// travels alongside it, index for index, so a layer's restriction stays
+	// matched to it whichever other layers are off.
+	const live: PlantLayer[] = [];
+	const liveMasks: (ReadonlySet<number> | null)[] = [];
+	const givenMasks = options.biomeMasks ?? null;
+	for (let at = 0; at < layers.length; at++) {
+		const layer = layers[at]!;
+		if (!layer.on) continue;
+		live.push(layer);
+		const given = givenMasks ? givenMasks[at] : undefined;
+		liveMasks.push(
+			given !== undefined
+				? given
+				: // **A layer that names biomes and gets no mask for it is not
+					// unrestricted -- it is answered by a world that never said
+					// what biome anywhere is.** Falling back to "grows
+					// everywhere" would make the restriction silently do
+					// nothing the one time a caller forgot to resolve it; an
+					// empty set never matches, so the layer grows nowhere
+					// instead, which is the wrong forest rather than the
+					// invisible feature.
+					layer.biomes && layer.biomes.length > 0
+					? new Set<number>()
+					: null,
+		);
+	}
 	const noise: NoiseSettings[] = live.map((layer) =>
 		plantLayerNoise(layer, radius),
 	);
@@ -720,6 +769,14 @@ export function growStand(
 
 	const plantAt = (r: number): number => {
 		if (rootHeight[r]! <= seaLevel) return -1;
+		// **One read, off the root's own column, not off the candidate cell
+		// a layer is being asked about.** A biome is a fact about the ground
+		// the same way `top` and `groundLayer` are, and `biomeAt` already
+		// holds it -- read here once a root rather than once a candidate, so
+		// a column's whole block of roots answers with the one biome the
+		// column itself was read against.
+		const seatHere = rootSeat[r]!;
+		const columnBiome = biomeAt && seatHere >= 0 ? biomeAt[seatHere]! : -1;
 		const face = roots.face[r]!;
 		const fromI = roots.i[r]!;
 		const fromJ = roots.j[r]!;
@@ -754,6 +811,14 @@ export function growStand(
 				// reads its neighbour is not a layer.
 				for (let l = 0; l < live.length; l++) {
 					const layer = live[l]!;
+					// **Asked before the roll, because it needs no hash at
+					// all.** A layer restricted to named biomes is a set
+					// membership test against a fact already in hand, so a
+					// candidate the biome model never offered this species is
+					// refused for nothing rather than for the price of a
+					// hash.
+					const mask = liveMasks[l];
+					if (mask && !mask.has(columnBiome)) continue;
 					// **The roll is asked first, because it can refuse on its
 					// own.** A layer's chance is its density scaled by a curve
 					// reading in `[0, 1]`, so it can never exceed the density

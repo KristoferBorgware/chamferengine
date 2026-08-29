@@ -100,6 +100,17 @@ export interface PlantLayerDraft {
 	values: Record<PlantNumberKey, number>;
 
 	curve: [number, number][];
+
+	/**
+	 * The biomes this layer may stand in, by name, or empty for every biome
+	 * a world has.
+	 *
+	 * **Where used to be a curve alone.** A biome already names a place, so
+	 * restricting a layer to `["Taiga", "Tundra"]` grows it exactly where the
+	 * biome model put those, and the curve is left to shape how dense the
+	 * layer is within them rather than to draw the border itself.
+	 */
+	biomes: string[];
 }
 
 /**
@@ -139,6 +150,7 @@ export function makePlantLayer(species: string, id: number): PlantLayerDraft {
 			[-1, 1],
 			[1, 1],
 		],
+		biomes: [],
 	};
 	applySpecies(layer, species);
 	return layer;
@@ -170,6 +182,7 @@ export function plantLayerOf(layer: PlantLayerDraft): PlantLayer {
 		lacunarity: v.lacunarity,
 		fold: v.fold,
 		curve: layer.curve.map(([x, y]) => [x, y] as [number, number]),
+		biomes: layer.biomes.length > 0 ? [...layer.biomes] : undefined,
 		shape: {
 			height: v.height,
 			trunk: v.trunk,
@@ -201,6 +214,7 @@ export function copyPlantLayer(layer: PlantLayerDraft): PlantLayerDraft {
 		...layer,
 		values: { ...layer.values },
 		curve: layer.curve.map(([x, y]) => [x, y] as [number, number]),
+		biomes: [...layer.biomes],
 	};
 }
 
@@ -232,6 +246,8 @@ export function plantLayersToText(layers: readonly PlantLayerDraft[]): string {
 			for (const key of Object.keys(layer.values) as PlantNumberKey[])
 				if (layer.values[key] !== fresh.values[key])
 					parts.push(`${key}=${+layer.values[key].toFixed(4)}`);
+			if (layer.biomes.length > 0)
+				parts.push(`biomes=${layer.biomes.join(",")}`);
 			parts.push(
 				"curve=" +
 					layer.curve
@@ -284,6 +300,13 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
 			}
 			if (key === "leaves") {
 				layer.leaves = value === "1";
+				continue;
+			}
+			if (key === "biomes") {
+				layer.biomes = value
+					.split(",")
+					.map((name) => name.trim())
+					.filter((name) => name.length > 0);
 				continue;
 			}
 			const number = Number(value);

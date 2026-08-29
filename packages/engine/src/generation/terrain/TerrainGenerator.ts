@@ -5,6 +5,8 @@ import type { TerrainOptions } from "./TerrainOptions.js";
 import type { NoiseSettings } from "../noise/NoiseSettings.js";
 import type { Vec3 } from "../../math/Vec3.js";
 import type { WorldShape } from "../../world/WorldShape.js";
+import type { BiomeField, BiomeSample } from "../biomes/BiomeField.js";
+import { makeBiomeSample } from "../biomes/BiomeField.js";
 import { NoiseCorners } from "../noise/NoiseCorners.js";
 import { BlockType } from "./BlockType.js";
 import { TERRAIN_DEFAULTS } from "./TerrainOptions.js";
@@ -81,16 +83,30 @@ export class TerrainGenerator {
 	private readonly carveStride: number;
 	private readonly carveSeed: number;
 
+	/**
+	 * What names the surface, when there is one.
+	 *
+	 * `null` is a world with no biome table -- the elevation bands below are
+	 * the whole of the answer, the way they always were.
+	 */
+	private readonly biomes: BiomeField | null;
+
+	/** One scratch record, reused for every column's single biome read. */
+	private readonly biomeSample: BiomeSample;
+
 	constructor(
 		seed: number,
 		shape: WorldShape,
 		map: CoarseMap,
 		options: TerrainOptions = {},
+		biomes: BiomeField | null = null,
 	) {
 		this.seed = seed;
 		this.shape = shape;
 		this.map = map;
 		this.settings = { ...TERRAIN_DEFAULTS, ...options };
+		this.biomes = biomes;
+		this.biomeSample = makeBiomeSample();
 		// The planet's own radius, which is what makes the layer's width a
 		// number in metres rather than a count of features round a sphere.
 		this.carveCorners = new NoiseCorners(
@@ -459,6 +475,13 @@ export class TerrainGenerator {
 	 * block's, so its rock came out in patches the size of map cells instead
 	 * of as a cliff face. An elevation needs no field: the column already
 	 * knows how high it is.
+	 *
+	 * **A biome table, when there is one, names the surface before any of
+	 * that is asked.** The terrain still decides everything under the top
+	 * layer, except a biome that named its own underlay -- and the surface is
+	 * read once a column, at the surface layer alone, the one place `surface`
+	 * is ever true; the underlay reads back what that same call already
+	 * found rather than asking the table again.
 	 */
 	private material(column: TerrainColumn, depthBelow: number): BlockType {
 		const soil = this.settings.soilDepth * this.shape.blockSize;
@@ -468,10 +491,30 @@ export class TerrainGenerator {
 		if (column.waterRadius > column.groundRadius) return BlockType.SAND;
 
 		const surface = depthBelow <= this.shape.blockSize;
+		if (surface && this.biomes) {
+			const block = this.biomes.blockAt(
+				column.x,
+				column.y,
+				column.z,
+				this.biomeSample,
+			);
+			if (block >= 0) return block as BlockType;
+		}
 		if (surface && column.elevation > this.settings.snowLine)
 			return BlockType.SNOW;
 		if (column.elevation > this.settings.rockLine) return BlockType.STONE;
-		if (!surface) return BlockType.DIRT;
+		if (!surface) {
+			// The surface call above, earlier in this same column, is what
+			// left a biome here to read back -- underwater and above the
+			// rock line both return before reaching this line, so nothing
+			// here asks the table for a biome the surface never found one.
+			if (this.biomes && this.biomeSample.biome >= 0) {
+				const underlay =
+					this.biomes.biomes[this.biomeSample.biome]!.underlay;
+				if (underlay !== undefined) return underlay as BlockType;
+			}
+			return BlockType.DIRT;
+		}
 		return BlockType.GRASS;
 	}
 }

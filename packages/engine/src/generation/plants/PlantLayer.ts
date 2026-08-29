@@ -56,6 +56,21 @@ export interface PlantLayer {
 	 */
 	readonly curve: readonly (readonly [number, number])[];
 
+	/**
+	 * The biomes this layer may stand in, by name, or absent for every biome
+	 * a world has.
+	 *
+	 * **Where used to be a curve over one noise field**; a biome already
+	 * names a place -- climate, landform, both -- so a layer restricted to
+	 * `["Taiga", "Tundra"]` grows exactly where the biome model already
+	 * decided pine belongs, rather than fighting a second field over the
+	 * same question. `curve` still shapes how dense the layer is *within*
+	 * the biomes it allows; it no longer decides which those are. A world
+	 * with no biome table cannot answer "which biome is this", so a layer
+	 * naming any grows nowhere rather than silently ignoring the restriction.
+	 */
+	readonly biomes?: readonly string[] | undefined;
+
 	/** The plant this layer grows. */
 	readonly shape: PlantShape;
 }
