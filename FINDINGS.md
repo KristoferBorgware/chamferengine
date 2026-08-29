@@ -2452,6 +2452,47 @@ residency and worker-protocol change rather than a mesher formula.
 
 ---
 
+### F-117 — Under half a block a plant is nothing, where it should be the colour of the ground
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-29, flooring a coarse plant at one block so the forest stops
+disappearing
+**Where:** `packages/engine/src/generation/plants/growStand.ts` (`raise`'s
+floor) and `packages/engine/src/generation/chunk/plantChunk.ts` (the layer
+filter)
+
+**What happens.** A plant between half a block and a whole one is drawn as one
+leaf block, which is the tree rounded to the grid. Under half a block it is
+drawn as nothing, because a whole block there would be bigger far away than the
+plant is underfoot -- a 2.6 m shrub as a 32 m cube. So the forest ends at the
+level where the tallest species first falls under half a block: on the shipped
+world the pine tops out at `30.8 m` against the `32 m` that a 64 m block asks
+for, and the ground underfoot is on 64 m blocks above about **7 km** of
+altitude.
+
+**Why it matters.** Nobody walking, and nobody flying under 7 km. From higher
+the planet stops being green as it is climbed away from, which is the same
+discontinuity F-109 named at 384 m, moved out by a factor of eighteen. A 30 m
+tree at the 8 to 9 km the ground then sits at still subtends about **four
+pixels** at 1280 across, so it is not below what can be seen -- it is below
+what a block can be.
+
+**What would fix it.** Below half a block a plant is not a shape at all, it is
+the colour of the ground: what can be seen of a forest from 8 km is that the
+ground is green. So the ground cap takes the canopy's colour on a column whose
+block of roots holds a plant, and no geometry is drawn -- the cap is already
+drawn, so it costs nothing, and it works at any block size rather than ending
+one level further out. What it needs is a way for the plant pass to say
+*this column is forested* without writing a block: `plantChunk` writes only
+into air, deliberately (`writes nothing over the ground it stands on`), so
+either that rule gains a stated exception for a cover mark or the mesher is
+handed a per-column mask beside the blocks.
+
+---
+
 ## Closed
 
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
@@ -5243,9 +5284,12 @@ triangle of ground (`tools/trial-plant-density.ts`) it draws `24% / 7% / 1%` of
 the finest level's trees at one, two and three levels out, against
 `97% / 87% / 57%` for the block. Canopy over the same ground runs
 `83.2% / 76.5% / 78.4% / 82.2%` across those four levels. `PLANT_LEVELS` is
-gone; **what ends the forest is a tree shorter than a block** -- at 32 m blocks
-a 22 m pine has nowhere to stand -- which is checked before a template set is
-built rather than after.
+gone; **what ends the forest is a tree shorter than half a block** -- a plant
+between half a block and a whole one is floored at one leaf block, which is the
+tree rounded to the grid, and under half a block it is smaller than the
+smallest thing that grid can say. The forest therefore reaches a **32 m** block,
+which the ground underfoot holds to about **7 km** of altitude; what is left
+above that is F-117.
 
 Growing a chunk's plants now costs `633 / 201 / 114 / 160 / 34 / 0 ms` at
 levels 0 to 5 against `915 / 517 / 990 / 2,385` for the first four before.

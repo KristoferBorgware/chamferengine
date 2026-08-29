@@ -48,8 +48,8 @@ const cell = canonicalCell(found.face, shape.n, found.i, found.j);
 const split = splitPath(cell.i, cell.j, settings.depth, chunkLevel);
 const here = new ChunkAddress(cell.face, split.path).key;
 
-/** One triangle of ground, three levels up from the finest chunk. */
-const TOP = 3;
+/** One triangle of ground, five levels up from the finest chunk. */
+const TOP = 5;
 const root = Math.floor(here / 4 ** TOP);
 
 function over(lod: number): { plants: number; cover: number; ms: number } {

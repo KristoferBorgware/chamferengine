@@ -891,11 +891,31 @@ export function growStand(
 			1 +
 			shape.sizeSpread *
 				(2 * hash3(face, i, j, (seed + SIZE_SEED_OFFSET) | 0) - 1);
-		// **A plant shorter than one block is not grown at all.** Left in, its
-		// rod's own minimum radius draws it as a whole block -- bigger at a
-		// coarse level than it is at a fine one, standing where nothing should
-		// be. Skipping it takes its whole skeleton off the bill as well.
-		if (shape.height * scale < block) return 0;
+		// **Under one block a plant stops being a shape and becomes one
+		// block.** Its skeleton has nothing to rasterise into -- measured, at
+		// a 32 m block every one of the 32 variants of both shipped species
+		// came back with **0 cells** -- so a plant that is not floored simply
+		// is not there, and the forest ends at whatever level that first
+		// happens on. What is left of a tree at that distance is one green
+		// thing standing on the ground, which is exactly one block.
+		//
+		// **The floor is half a block, and that is where the old rule was
+		// right.** A 2.6 m shrub drawn as a 32 m cube is bigger at a coarse
+		// level than it is at a fine one, standing where nothing should be.
+		// Half a block is the grid's own resolution: under it the plant is
+		// smaller than the smallest thing this level can say, and it is not
+		// drawn. Over it, one block is the plant rounded to the grid -- a
+		// 30.8 m pine at a 32 m block is a 4% overstatement.
+		const tallness = shape.height * scale;
+		if (tallness < block) {
+			if (tallness < block / 2) return 0;
+			leafBlock = leafOf[layer]!;
+			groundOf(c);
+			write(c, STAND_SUNK, leafBlock);
+			if (tallness > tallest) tallest = tallness;
+			if (tallness < shortest) shortest = tallness;
+			return tallness;
+		}
 		const roll = hash3(j, face, i, (seed + ROLL_SEED_OFFSET) | 0);
 		// **The plant's own frame, taken at its own root.** Up is
 		// `normalize(position)` and there is no global north, so every plant
