@@ -60,6 +60,19 @@ console.log(
 );
 console.log(`${layers.length} layers: ${layers.map((l) => l.species).join(", ")}`);
 
+/** The share of a chunk's own columns standing under a canopy of any kind. */
+function canopy(
+	grown: { where: Uint32Array; cover: ReadonlyMap<number, number> },
+	chunk: { layerCount: number; slots: number },
+): string {
+	const under = new Set<number>();
+	for (const at of grown.where) under.add(Math.floor(at / chunk.layerCount));
+	return (
+		(100 * (under.size + grown.cover.size)) /
+		chunk.slots
+	).toFixed(1);
+}
+
 for (const lod of [0, 1, 2, 3, 4, 5, 6]) {
 	const level = shape.atLod(lod);
 	// **A coarse chunk drops its chunk level as well as its depth**, so every
@@ -110,7 +123,10 @@ for (const lod of [0, 1, 2, 3, 4, 5, 6]) {
 		"the plants",
 		plantMs,
 		grown
-			? `${grown.plants} plants, ${grown.wood.toLocaleString("en-US")} wood + ${grown.leaf.toLocaleString("en-US")} leaf`
+			? `${grown.plants} plants, ${canopy(grown, chunk)}% canopy` +
+				(grown.cover.size
+					? ` (${grown.cover.size.toLocaleString("en-US")} of it colour)`
+					: "")
 			: "no layers on",
 	);
 	line("plants against ground", plantMs, `x${(plantMs / groundMs).toFixed(1)}`);
