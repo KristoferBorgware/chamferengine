@@ -1,7 +1,7 @@
 import type { BiomesFacts, BiomesReply } from "./BiomesMessage.js";
 import type { PatchLook } from "chamfer/render";
 import type { PlanetKnobs } from "./PlanetSettings.js";
-import type { BiomeCloudSource, BiomeCounted } from "./BiomePanel.js";
+import type { BiomeSpread } from "./BiomePanel.js";
 import { GROUND_LINES, TERRAIN_DEFAULTS } from "chamfer/generation";
 import {
 	PATCH_FILL_SHARE,
@@ -85,10 +85,8 @@ const general = panel.section("General");
 // ---------------------------------------------------------------------------
 
 const biomes = new BiomePanel(table, (settled) => request(settled), {
-	cloud: (new URLSearchParams(location.search).get("biomeCloud") ??
-		"patch") as BiomeCloudSource,
-	counted: (new URLSearchParams(location.search).get("biomeCounted") ??
-		"planet") as BiomeCounted,
+	spread: (new URLSearchParams(location.search).get("biomeSpread") ??
+		"planet") as BiomeSpread,
 	onPicture: () => writeUrl(),
 	// **The same knob a slider owns**, so the two rows that hold a place
 	// agree with wherever a click on a picture just sent the patch.
@@ -140,8 +138,7 @@ function writeUrl(): void {
 	});
 	panel.carry({ biomes: settings.knobs.biomes });
 	const params = settings.toParams();
-	if (biomes.cloud !== "patch") params.set("biomeCloud", biomes.cloud);
-	if (biomes.counted !== "planet") params.set("biomeCounted", biomes.counted);
+	if (biomes.spread !== "planet") params.set("biomeSpread", biomes.spread);
 	history.replaceState(null, "", `?${params.toString()}`);
 	const planetParams = settings.toParams();
 	planetParams.set("panel", "1");

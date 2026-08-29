@@ -28,19 +28,17 @@ export type BiomePicture =
 	| "push"
 	| "regions";
 
-/** What the diagram's cloud is drawn from. */
-export type BiomeCloudSource = "nothing" | "patch" | "planet";
+/**
+ * Which of a build's two rectangles this panel reads: the whole planet's
+ * land, or the patch in view.
+ *
+ * **One flag for two questions that turn out to be the same question.** The
+ * diagram's cloud and every share on this panel both answer "where", and a
+ * reader picks one place to look at once rather than choosing it twice.
+ */
+export type BiomeSpread = "planet" | "patch";
 
-const CLOUDS: readonly { value: BiomeCloudSource; label: string }[] = [
-	{ value: "nothing", label: "nothing" },
-	{ value: "patch", label: "the patch" },
-	{ value: "planet", label: "the planet" },
-];
-
-/** Which of a build's two share readings every count on this panel reads. */
-export type BiomeCounted = "planet" | "patch";
-
-const COUNTED: readonly { value: BiomeCounted; label: string }[] = [
+const SPREADS: readonly { value: BiomeSpread; label: string }[] = [
 	{ value: "planet", label: "the planet" },
 	{ value: "patch", label: "the patch" },
 ];
@@ -150,24 +148,13 @@ export class BiomePanel {
 	readonly table: BiomeTableDraft;
 
 	/**
-	 * What the diagram's cloud is drawn from.
-	 *
-	 * **`patch`, because that is the lab's own default.** A region of the
-	 * square with no dots over it might be a biome the whole planet never
-	 * builds, or it might just be nowhere near the camera; `planet` answers
-	 * the first question and `patch` the second, and only one can be the
-	 * default. The patch is also the cheaper of the two, sent whole with no
-	 * subsampling however the planet reading is built.
+	 * "Biomes spread" -- which of the build's two rectangles this whole panel
+	 * reads: the diagram's cloud of dots, the chip row, the biome list, the
+	 * grid, and the line under the diagram all take this one flag, because a
+	 * share or a dot with no name for which of two places it is worth is
+	 * something a reader has to remember rather than read.
 	 */
-	cloud: BiomeCloudSource = "patch";
-
-	/**
-	 * Which of a build's two share readings every count on this panel takes
-	 * -- the chip row, the biome list, the grid, and the line under the
-	 * diagram all read this one flag, because a share with no name for which
-	 * of two things it counts is worthless if the reader has to remember.
-	 */
-	counted: BiomeCounted = "planet";
+	spread: BiomeSpread = "planet";
 
 	/** The continentalness band {@link buildGrid} is showing. */
 	gridBand = 1;
@@ -266,8 +253,7 @@ export class BiomePanel {
 		table: BiomeTableDraft,
 		onChange: (settled: boolean) => void,
 		options: {
-			cloud?: BiomeCloudSource;
-			counted?: BiomeCounted;
+			spread?: BiomeSpread;
 			onPicture?: () => void;
 			onMove?: (latitude: number, longitude: number) => void;
 		} = {},
@@ -276,8 +262,7 @@ export class BiomePanel {
 		this.onChange = onChange;
 		this.onPicture = options.onPicture ?? ((): void => {});
 		this.onMove = options.onMove ?? ((): void => {});
-		this.cloud = options.cloud ?? "patch";
-		this.counted = options.counted ?? "planet";
+		this.spread = options.spread ?? "planet";
 
 		this.root = document.createElement("aside");
 		this.root.className = "plants biomes-panel";
@@ -427,10 +412,9 @@ export class BiomePanel {
 		scroller.append(gridSection);
 
 		// **The diagram, at the bottom.** Nothing here is climate: it is
-		// which preset the table started from, which of the two rectangles
-		// every share on this panel counts, and what the diagram's own cloud
-		// is drawn from -- three questions about how the panel reads a build
-		// that already ran, not about the world itself.
+		// which preset the table started from, and which of the two
+		// rectangles this whole panel reads -- two questions about how the
+		// panel reads a build that already ran, not about the world itself.
 		const diagramSection = document.createElement("details");
 		diagramSection.className = "sub";
 		diagramSection.open = true;
@@ -445,54 +429,40 @@ export class BiomePanel {
 		presetRow.append(presetLabel, this.presetPick);
 		diagramSection.append(presetRow);
 
-		const countedRow = document.createElement("div");
-		countedRow.className = "knob";
-		const countedLabel = document.createElement("label");
-		countedLabel.textContent = "Count the shares over";
-		const countedPick = document.createElement("select");
-		for (const { value, label } of COUNTED) {
+		// **One flag for the cloud of dots and every count on the panel.**
+		// Both answer "where", and asking a reader to set the same answer
+		// twice under two different names is asking them to keep the two in
+		// sync by hand.
+		const spreadRow = document.createElement("div");
+		spreadRow.className = "knob";
+		const spreadLabel = document.createElement("label");
+		spreadLabel.textContent = "Biomes spread";
+		const spreadPick = document.createElement("select");
+		for (const { value, label } of SPREADS) {
 			const option = document.createElement("option");
 			option.value = value;
 			option.textContent = label;
-			countedPick.append(option);
+			spreadPick.append(option);
 		}
-		countedPick.value = this.counted;
-		const countedNote = document.createElement("p");
-		countedNote.className = "knob-note";
-		const sayCounted = (): void => {
-			countedNote.textContent =
-				this.counted === "patch"
-					? "every share on this panel is of the ground in view -- what the camera is standing in, which is one place and not a world"
-					: "every share on this panel is of the whole planet's land, which is what says whether a biome is worth keeping at all";
+		spreadPick.value = this.spread;
+		const spreadNote = document.createElement("p");
+		spreadNote.className = "knob-note";
+		const saySpread = (): void => {
+			spreadNote.textContent =
+				this.spread === "patch"
+					? "one dot per hexagon in view, and every share on this panel of the ground in view -- what the camera is standing in, which is one place and not a world"
+					: "one dot per cell of the planet, and every share on this panel of the whole planet's land, which is what says whether a biome is worth keeping at all";
 		};
-		sayCounted();
-		countedPick.oninput = () => {
-			this.counted = countedPick.value as BiomeCounted;
-			sayCounted();
-			this.build();
-		};
-		countedRow.append(countedLabel, countedPick, countedNote);
-		diagramSection.append(countedRow);
-
-		const cloudRow = document.createElement("div");
-		cloudRow.className = "knob";
-		const cloudLabel = document.createElement("label");
-		cloudLabel.textContent = "Show on it";
-		const cloudPick = document.createElement("select");
-		for (const { value, label } of CLOUDS) {
-			const option = document.createElement("option");
-			option.value = value;
-			option.textContent = label;
-			cloudPick.append(option);
-		}
-		cloudPick.value = this.cloud;
-		cloudPick.oninput = () => {
-			this.cloud = cloudPick.value as BiomeCloudSource;
+		saySpread();
+		spreadPick.oninput = () => {
+			this.spread = spreadPick.value as BiomeSpread;
+			saySpread();
 			this.paintChart();
+			this.build();
 			this.onPicture();
 		};
-		cloudRow.append(cloudLabel, cloudPick);
-		diagramSection.append(cloudRow);
+		spreadRow.append(spreadLabel, spreadPick, spreadNote);
+		diagramSection.append(spreadRow);
 		scroller.append(diagramSection);
 
 		this.big = document.createElement("div");
@@ -707,10 +677,9 @@ export class BiomePanel {
 		// **The patch and the planet are different questions.** One dot a
 		// hexagon in view says which part of itself the camera is standing
 		// in; one dot a cell of the planet says whether the shown ground
-		// builds this biome anywhere at all. Only one can be the default, and
-		// it is the patch -- the planet's cloud is a heavier reading nobody
-		// asked for until they ask for it.
-		if (this.cloud === "patch" && this.patchCloud) {
+		// builds this biome anywhere at all. "Biomes spread" is the one flag
+		// that answers which of the two this whole panel is reading.
+		if (this.spread === "patch" && this.patchCloud) {
 			const cloud = this.patchCloud;
 			ink.fillStyle = "rgba(10, 12, 16, 0.42)";
 			for (let n = 0; n < cloud.landform.length; n++) {
@@ -722,7 +691,7 @@ export class BiomePanel {
 					1.6,
 				);
 			}
-		} else if (this.cloud === "planet" && this.sheet) {
+		} else if (this.spread === "planet" && this.sheet) {
 			const sheet = this.sheet;
 			ink.fillStyle = "rgba(10, 12, 16, 0.4)";
 			const tall = sheet.height;
@@ -863,7 +832,7 @@ export class BiomePanel {
 	private buildList(): void {
 		this.list.textContent = "";
 		const shares =
-			this.counted === "patch"
+			this.spread === "patch"
 				? this.facts?.patchShares
 				: this.facts?.planetShares;
 		const allowed = this.allowedNow()[this.shown] ?? [];
@@ -901,7 +870,7 @@ export class BiomePanel {
 	private buildChips(): void {
 		this.chipRow.textContent = "";
 		const shares =
-			this.counted === "patch"
+			this.spread === "patch"
 				? this.facts?.formPatch
 				: this.facts?.formPlanet;
 		LANDFORMS.forEach((form, at) => {
@@ -952,7 +921,7 @@ export class BiomePanel {
 			this.gridHost.append(head);
 		}
 		const shares =
-			this.counted === "patch"
+			this.spread === "patch"
 				? this.facts?.gridPatch
 				: this.facts?.gridShares;
 		for (let ero = 0; ero < ERO_BANDS; ero++) {
@@ -1015,7 +984,7 @@ export class BiomePanel {
 			return;
 		}
 		const shares =
-			this.counted === "patch"
+			this.spread === "patch"
 				? this.facts?.patchShares
 				: this.facts?.planetShares;
 		const of = shares?.[this.picked] ?? 0;
@@ -1024,7 +993,7 @@ export class BiomePanel {
 			`<b>${biome.name}</b> at temperature <b>${biome.t.toFixed(2)}</b>, ` +
 			`humidity <b>${biome.h.toFixed(2)}</b> — ` +
 			`<b>${of > 0 ? `${(of * 100).toFixed(1)}%` : "—"}</b> of ` +
-			`${this.counted === "patch" ? "the patch's land" : "the planet's land"} · stands on `;
+			`${this.spread === "patch" ? "the patch's land" : "the planet's land"} · stands on `;
 		const pickForm = document.createElement("select");
 		const anyOption = document.createElement("option");
 		anyOption.value = ANY_LANDFORM;
