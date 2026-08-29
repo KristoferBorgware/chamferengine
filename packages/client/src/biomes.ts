@@ -90,6 +90,9 @@ const biomes = new BiomePanel(table, (settled) => request(settled), {
 		"biomes") as BiomePicture,
 	onPicture: () => writeUrl(),
 });
+biomes.setPush(
+	settings.knobs.biomeWarp ? settings.knobs.warpStrength : 0,
+);
 
 /**
  * Write the world back into the address bar, and into the way out of here.
@@ -189,6 +192,9 @@ function request(settled: boolean): void {
 /** A world knob moved, which is the same question with a new draft. */
 function moved(draft: PlanetSettings): void {
 	settings = draft;
+	biomes.setPush(
+		draft.knobs.biomeWarp ? draft.knobs.warpStrength : 0,
+	);
 	request(false);
 }
 

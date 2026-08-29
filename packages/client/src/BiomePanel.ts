@@ -65,6 +65,14 @@ export class BiomePanel {
 	/** The biome being edited, as an index into the table. */
 	picked = 0;
 
+	/**
+	 * How far the push can carry the lookup, in the square's own units.
+	 *
+	 * A fact about the world's knobs rather than the table, so the page hands
+	 * it in through {@link setPush} whenever the knob moves.
+	 */
+	private pushReach = 0;
+
 	private readonly onChange: (settled: boolean) => void;
 	private readonly onPicture: () => void;
 
@@ -202,6 +210,13 @@ export class BiomePanel {
 		this.build();
 	}
 
+	/** The push's reach moved with a knob, so the border bands move with it. */
+	setPush(reach: number): void {
+		if (reach === this.pushReach) return;
+		this.pushReach = reach;
+		this.paintChart();
+	}
+
 	/** Everything the last build measured, painted into the panel. */
 	show(facts: BiomesFacts, sheet: BiomeSheet | null): void {
 		this.facts = facts;
@@ -221,22 +236,56 @@ export class BiomePanel {
 	private paintChart(): void {
 		const ink = this.chartInk;
 		const biomes = this.table.biomes;
-		const allowed = this.allowedNow()[this.shown];
-		const cells = 100;
+		const allowed = this.allowedNow()[this.shown] ?? [];
+		const cells = 150;
 		const image = ink.createImageData(cells, cells);
 		const px = image.data;
 		for (let r = 0; r < cells; r++)
 			for (let q = 0; q < cells; q++) {
 				const h = (q + 0.5) / cells;
 				const t = 1 - (r + 0.5) / cells;
-				const winner = biomeOf(t, h, allowed, biomes);
+				// The nearest dot and the second nearest, because the border
+				// band is drawn from the gap between them.
+				let first = allowed[0] ?? -1;
+				let other = first;
+				let near = Infinity;
+				let second = Infinity;
+				for (let i = 0; i < allowed.length; i++) {
+					const b = allowed[i]!;
+					const dt = t - biomes[b]!.t;
+					const dh = h - biomes[b]!.h;
+					const d = dt * dt + dh * dh;
+					if (d < near) {
+						second = near;
+						other = first;
+						near = d;
+						first = b;
+					} else if (d < second) {
+						second = d;
+						other = b;
+					}
+				}
 				const at = (r * cells + q) * 4;
-				const [red, green, blue] =
-					winner < 0 ? [30, 34, 42] : bytesOf(biomes[winner]!.hex);
-				const dim = winner === this.picked ? 1 : 0.62;
-				px[at] = red * dim;
-				px[at + 1] = green * dim;
-				px[at + 2] = blue * dim;
+				if (first < 0) {
+					px[at] = 24;
+					px[at + 1] = 26;
+					px[at + 2] = 32;
+					px[at + 3] = 255;
+					continue;
+				}
+				// **The push is drawn as a woven band along every border.**
+				// Half the gap between the two nearest dots is how far this
+				// point stands from the line between them; anywhere the push
+				// can carry the lookup across that line is dithered between
+				// the two answers, so the picture says where a border is firm
+				// and where the noise decides.
+				const gap = (Math.sqrt(second) - Math.sqrt(near)) / 2;
+				const which =
+					gap < this.pushReach && (q + r) % 2 === 1 ? other : first;
+				const [red, green, blue] = bytesOf(biomes[which]!.hex);
+				px[at] = red;
+				px[at + 1] = green;
+				px[at + 2] = blue;
 				px[at + 3] = 255;
 			}
 		// Drawn small and scaled up, because a Voronoi region is flat color
