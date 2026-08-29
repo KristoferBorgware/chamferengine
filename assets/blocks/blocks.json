@@ -1,0 +1,453 @@
+{
+	"size": 32,
+	"variants": 1,
+	"tintScale": 2,
+	"tinted": [
+		"ground_top",
+		"ground_overlay",
+		"wood",
+		"leaf"
+	],
+	"blocks": {
+		"STONE": {
+			"top": "stone",
+			"side": "stone",
+			"bottom": "stone"
+		},
+		"DIRT": {
+			"top": "dirt",
+			"side": "dirt",
+			"bottom": "dirt"
+		},
+		"GRASS": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"SAND": {
+			"top": "sand",
+			"side": "sand",
+			"bottom": "sand"
+		},
+		"SNOW": {
+			"top": "snow",
+			"side": "snow",
+			"bottom": "snow"
+		},
+		"WATER": {
+			"top": "water",
+			"side": "water",
+			"bottom": "water"
+		},
+		"BEDROCK": {
+			"top": "bedrock",
+			"side": "bedrock",
+			"bottom": "bedrock"
+		},
+		"CUSTOM_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"CUSTOM_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"PINE_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"PINE_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"SPRUCE_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"SPRUCE_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"OAK_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"OAK_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"BIRCH_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"BIRCH_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"WILLOW_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"WILLOW_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"PALM_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"PALM_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"BAOBAB_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"BAOBAB_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"REDWOOD_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"REDWOOD_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"BUSH_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"BUSH_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"HEATHER_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"HEATHER_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"DEADWOOD_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"DEADWOOD_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"CACTUS_WOOD": {
+			"top": "wood",
+			"side": "wood",
+			"bottom": "wood"
+		},
+		"CACTUS_LEAF": {
+			"top": "leaf",
+			"side": "leaf",
+			"bottom": "leaf"
+		},
+		"ICY_SHORE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"STONY_SHORE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"BEACH_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"FROZEN_VALLEY_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"SWAMP_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"DRY_BASIN_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"TUNDRA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"TAIGA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"STEPPE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"GRASSLAND_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"DESERT_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"RAINFOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"SNOWY_SLOPES_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"GROVE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"DRY_SLOPE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"FROZEN_PLATEAU_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HIGHLAND_STEPPE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"BADLANDS_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"JAGGED_PEAKS_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"STONY_PEAKS_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"ALPINE_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_POLAR_DESERT_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_DRY_TUNDRA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_MOIST_TUNDRA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_WET_TUNDRA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_RAIN_TUNDRA_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_BOREAL_DESERT_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_DRY_SCRUB_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_BOREAL_MOIST_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_BOREAL_WET_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_BOREAL_RAIN_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_DESERT_SCRUB_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_STEPPE_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_MOIST_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_WET_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_TEMPERATE_RAIN_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_SUBTROPICAL_DESERT_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_THORN_WOODLAND_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_DRY_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_SUBTROPICAL_MOIST_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_TROPICAL_DESERT_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_TROPICAL_DRY_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_TROPICAL_WET_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"HOLDRIDGE_TROPICAL_RAIN_FOREST_GROUND": {
+			"top": "ground_top",
+			"side": "ground_side",
+			"bottom": "dirt",
+			"overlay": "ground_overlay"
+		},
+		"TERRACOTTA": {
+			"top": "stone",
+			"side": "stone",
+			"bottom": "stone"
+		},
+		"SANDSTONE": {
+			"top": "stone",
+			"side": "stone",
+			"bottom": "stone"
+		}
+	}
+}
