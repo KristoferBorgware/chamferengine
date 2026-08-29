@@ -1841,8 +1841,66 @@
 			}
 
 			/**
+			 * How many of the six points one step out from a place are low
+			 * land, which is how much room a beach has.
+			 *
+			 * **A beach is a strip of low ground, not a cell that happens to be
+			 * low.** The height field runs four octaves, so on a steep coast a
+			 * single cell lands in the shore band with an eighty-metre
+			 * hillside on one side and the sea on the other -- and the shore
+			 * then draws as a dotted line of isolated pale cells along the
+			 * coast rather than as a beach. Measured over the opening patch,
+			 * **12 of the 13** single-cell biomes on it were exactly that.
+			 *
+			 * **The step is a distance in metres, never a neighbouring cell.**
+			 * A rule reading the cells next door answers a different question
+			 * at every level of detail, so a coarse chunk and a fine one would
+			 * disagree about where the beach is -- which is doc 14's own rule,
+			 * that a point's ground does not depend on who asked. Six points at
+			 * a fixed radius ask the same question at every level, and the
+			 * radius is bounded, so a chunk still finds its own answer from its
+			 * own address with no flood fill.
+			 */
+			const ROOM_SCRATCH = [0, 0, 0];
+
+			function roomAt(x, y, z, seed, s, k, metres) {
+				// Only the shore band asks, and only the shore band pays: six
+				// more field reads on the few per cent of ground that is low.
+				if (metres > k.shoreHeight || metres <= TERRAIN.seaLevel) return 0;
+				const f = frameOf([x, y, z]);
+				const step = k.shoreReach / k.radius;
+				let room = 0;
+				for (let n = 0; n < 6; n++) {
+					const a = (n / 6) * Math.PI * 2;
+					const u = Math.cos(a) * step;
+					const v = Math.sin(a) * step;
+					const p = normalize3([
+						x + f.east[0] * u + f.north[0] * v,
+						y + f.east[1] * u + f.north[1] * v,
+						z + f.east[2] * u + f.north[2] * v,
+					]);
+					fieldsAt(p[0], p[1], p[2], seed, s, ROOM_SCRATCH);
+					const h = heightFrom(ROOM_SCRATCH);
+					if (h > TERRAIN.seaLevel && h <= k.shoreHeight) room++;
+				}
+				return room;
+			}
+
+			/**
+			 * How many of those six a beach needs before it counts as one.
+			 *
+			 * Measured over the opening patch: at **two** the shore stops
+			 * speckling altogether -- twenty-four runs of one biome fall to
+			 * twelve, thirteen single-cell runs to three, and none of the three
+			 * left is a shore. One leaves eight, three starts eating the
+			 * beaches that are real (0.6% of land against 1.2%).
+			 */
+			const SHORE_ROOM = 2;
+
+			/**
 			 * The landform at one place: `-1` in the sea, `SHORE` on the first
-			 * few metres of land, and whatever the grid says everywhere else.
+			 * few metres of land that have room to be a beach, and whatever the
+			 * grid says everywhere else.
 			 *
 			 * **The shore is a height, not a bucket of continentalness.** Sea
 			 * level here is a radius and every height is measured from it, so
@@ -1850,10 +1908,14 @@
 			 * and it cannot be true on a mountain however close to the coast it
 			 * stands. On the shipped world **1.1%** of land is under 8 m and
 			 * **3.4%** under 20 m, which is a beach rather than a region.
+			 *
+			 * **Low is necessary and not sufficient**, which is what `room`
+			 * carries: the foot of a cliff is low ground with the sea on one
+			 * side and a hillside on the other, and it is not a beach.
 			 */
-			function landformAt(level, cut, swing, metres) {
+			function landformAt(level, cut, swing, metres, room) {
 				if (metres <= TERRAIN.seaLevel) return -1;
-				if (metres <= knobs.shoreHeight) return SHORE;
+				if (metres <= knobs.shoreHeight && room >= SHORE_ROOM) return SHORE;
 				return grid[
 					gridAt(
 						bucket(level, CONT_EDGES),
@@ -1861,6 +1923,193 @@
 						bucket(swing, PV_EDGES),
 					)
 				];
+			}
+
+
+			/**
+			 * The planet's regions, built once per rebuild.
+			 *
+			 * Held rather than rebuilt three times, because the tally, the patch
+			 * and the pictures all ask the same seeds the same questions.
+			 */
+			const regionHold = { key: null, at: null };
+
+			function regionsNow(k, seed, s) {
+				const key = sampleKey();
+				if (regionHold.key !== key) {
+					regionHold.key = key;
+					regionHold.at = regionsFor(k, seed, s);
+				}
+				return regionHold.at;
+			}
+
+			/**
+			 * One cell's climate, pulled toward its region's.
+			 *
+			 * At `0` a cell reads its own weather and the diagram is asked per
+			 * cell; at `1` every cell of a region is asked the same question, so
+			 * one kind of ground carries one biome across the whole region and
+			 * changes at its edge. In between the region sets the character and
+			 * the cell still varies inside it.
+			 */
+			function withRegion(square, region, k, out) {
+				const pull = region ? k.regionClimate : 0;
+				out[0] = square[0] + (region ? region.t - square[0] : 0) * pull;
+				out[1] = square[1] + (region ? region.h - square[1] : 0) * pull;
+			}
+
+			// ---------------------------------------------------------------
+			// The regions.
+			// ---------------------------------------------------------------
+
+			/**
+			 * How far a seed may wander inside its own lattice cell, as a share
+			 * of the cell.
+			 *
+			 * **Seeds on a bare lattice draw a honeycomb**, and a planet cut
+			 * into regular hexagons reads as a board game. Jittered by their own
+			 * address they draw a Voronoi diagram of scattered points instead,
+			 * which has the same average size and none of the regularity.
+			 */
+			const REGION_JITTER = 0.45;
+
+			/**
+			 * How far out to look for the nearest seed, in rings of lattice
+			 * cells.
+			 *
+			 * **This is what keeps a region a local question.** A seed may sit
+			 * up to `REGION_JITTER` of a cell from its own lattice point, so the
+			 * nearest one to a place is within two rings of that place's own
+			 * cell and cannot be further. Two rings is nineteen candidates, a
+			 * fixed number known before the walk starts -- so a chunk finds its
+			 * regions from its own address, with no flood fill and no reading of
+			 * ground it does not hold.
+			 */
+			const REGION_RINGS = 2;
+
+			/** A seed's own place, jittered off its lattice point. */
+			function seedDirection(face, n, i, j, seed) {
+				const p = latticePosition(face, n, i, j);
+				const f = frameOf(p);
+				// The cell's angular width, which is `K / n` at every radius.
+				const reach = (REGION_JITTER * CELL_CONSTANT) / n;
+				const a = (hash3(i, j, face, seed + 991) * 2 - 1) * reach;
+				const b = (hash3(j, face, i, seed + 997) * 2 - 1) * reach;
+				return normalize3([
+					p[0] + f.east[0] * a + f.north[0] * b,
+					p[1] + f.east[1] * a + f.north[1] * b,
+					p[2] + f.east[2] * a + f.north[2] * b,
+				]);
+			}
+
+			/**
+			 * Which region a direction belongs to: the nearest seed, and its
+			 * own climate.
+			 *
+			 * **The region is the unit of climate, and the cell is the unit of
+			 * ground.** A biome that changes whenever the temperature wobbles
+			 * across a line in the diagram is a biome nobody can name; one that
+			 * holds over a whole region and changes at its edge is a place. So
+			 * the landform is still read per cell -- a mountain inside a region
+			 * is still a mountain -- and what grows on that mountain is read
+			 * once for the whole region.
+			 *
+			 * Everything a region carries is held against its own cell key, so
+			 * the climate at a seed is evaluated once however many cells look it
+			 * up.
+			 */
+			function regionsFor(k, seed, s) {
+				const n = 2 ** k.regionLevel;
+				const seeds = new Map();
+				const around = new Map();
+				const said = [0, 0, 0];
+				const climate = [0, 0];
+				const warp = [0, 0];
+				const square = [0, 0];
+				const held = (face, i, j) => {
+					const key = (face * (n + 1) + i) * (n + 1) + j;
+					let at = seeds.get(key);
+					if (at !== undefined) return at;
+					const p = seedDirection(face, n, i, j, seed);
+					// The seed's own climate, which is what the whole region
+					// takes: one reading, not an average of a region's worth.
+					fieldsAt(p[0], p[1], p[2], seed, s, said);
+					const metres = heightFrom(said);
+					climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
+					warpAt(p[0], p[1], p[2], seed, s, warp);
+					squareOf(climate, warp, square);
+					at = { key, p, t: square[0], h: square[1] };
+					seeds.set(key, at);
+					return at;
+				};
+				return {
+					n,
+					held,
+					/** The region a direction is in, warped so the edge is not a straight line. */
+					at(x, y, z) {
+						// **The edge of a region is bent by the same field that
+						// frays a biome border.** A Voronoi cell is a polygon,
+						// and a planet cut into polygons reads as one; pushing
+						// the question somewhere else before it is asked bends
+						// every edge without moving a seed.
+						let px = x;
+						let py = y;
+						let pz = z;
+						if (k.regionWarp > 0) {
+							warpAt(x, y, z, seed, s, warp);
+							const f = frameOf([x, y, z]);
+							const reach = k.regionWarp / k.radius;
+							px += (f.east[0] * warp[0] + f.north[0] * warp[1]) * reach;
+							py += (f.east[1] * warp[0] + f.north[1] * warp[1]) * reach;
+							pz += (f.east[2] * warp[0] + f.north[2] * warp[1]) * reach;
+							const len = Math.sqrt(px * px + py * py + pz * pz);
+							px /= len;
+							py /= len;
+							pz /= len;
+						}
+						const found = directionToCell(px, py, pz, n);
+						const home = canonicalCell(found.face, n, found.i, found.j);
+						// **Every point of one lattice cell has the same
+						// candidates**, so the ring walk runs once per cell
+						// rather than once per point. A patch of a few thousand
+						// hexagons covers a handful of region cells.
+						const key = (home.face * (n + 1) + home.i) * (n + 1) + home.j;
+						let near = around.get(key);
+						if (near === undefined) {
+							const seen = new Set([key]);
+							near = [held(home.face, home.i, home.j)];
+							let ring = [home];
+							for (let r = 0; r < REGION_RINGS; r++) {
+								const next = [];
+								for (const cell of ring)
+									for (let d = 0; d < 6; d++) {
+										const nb = neighbour(cell.face, n, cell.i, cell.j, d);
+										if (!nb) continue;
+										const at2 = canonicalCell(nb.face, n, nb.i, nb.j);
+										const key2 =
+											(at2.face * (n + 1) + at2.i) * (n + 1) + at2.j;
+										if (seen.has(key2)) continue;
+										seen.add(key2);
+										near.push(held(at2.face, at2.i, at2.j));
+										next.push(at2);
+									}
+								ring = next;
+							}
+							around.set(key, near);
+						}
+						let best = near[0];
+						let far = -Infinity;
+						for (let c = 0; c < near.length; c++) {
+							const at2 = near[c];
+							const d = at2.p[0] * px + at2.p[1] * py + at2.p[2] * pz;
+							if (d > far) {
+								far = d;
+								best = at2;
+							}
+						}
+						return best;
+					},
+				};
 			}
 
 			// ---------------------------------------------------------------
@@ -2201,12 +2450,115 @@
 							unit: "m above the sea",
 							note: () =>
 								field && field.byForm
-									? `land under this is Shore whatever the grid says, ` +
-										`because sea level is a radius and a height is measured ` +
-										`from it — <b>${(field.byForm[0] * 100).toFixed(
+									? `land under this is Shore if it also has room to be a ` +
+										`beach, because sea level is a radius and a height is ` +
+										`measured from it — <b>${(field.byForm[0] * 100).toFixed(
 											1,
 										)}%</b> of the planet's land`
 									: "",
+						},
+						{
+							key: "shoreReach",
+							label: "Shore needs room for",
+							low: 8,
+							high: 200,
+							step: 4,
+							value: 32,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								`a beach is a strip of low ground, so ground under the ` +
+								`shore height is Shore only where <b>${SHORE_ROOM}</b> of the ` +
+								`six points this far out are low land as well. Without it ` +
+								`the foot of a cliff is a beach, and the coast draws as a ` +
+								`dotted line: <b>12</b> of the opening patch's <b>13</b> ` +
+								`single-cell biomes were that, and the rule takes its runs ` +
+								`of one biome from <b>24 to 12</b>`,
+						},
+					],
+				},
+				{
+					group: "The regions",
+					open: true,
+					rows: [
+						{
+							key: "useRegions",
+							label: "on",
+							type: "check",
+							summary: true,
+							// **Off, because it was built to make biomes bigger
+							// and it makes them smaller.** A region is a second
+							// source of edges laid over the landform's own, and
+							// nothing takes the first away: measured over the
+							// opening patch it moves a biome boundary from every
+							// **363 m to every 326 m** and the biomes standing
+							// within 320 m of a place from **3.28 to 3.54**. It
+							// tidies specks -- six runs of one cell down to
+							// three -- and the shore rule tidies more of them
+							// for nothing. Kept and switched off rather than
+							// removed: the picture it draws is the clearest
+							// statement of what it does, and the answer may
+							// change once a region carries something other than
+							// a climate.
+							value: false,
+							title: "biomes belong to a region",
+						},
+						{ key: "regionPicture", label: "", type: "picture", shot: "region", value: 0 },
+						{
+							key: "regionSpan",
+							label: "Region",
+							low: 200,
+							high: 8000,
+							step: 100,
+							value: 1600,
+							digits: 0,
+							unit: "m across",
+							note: () =>
+								field
+									? `seeds on the engine's own lattice at level <b>${
+											field.k.regionLevel
+										}</b>, jittered inside their cells, so a region is ` +
+										`<b>${Math.round(field.k.regionMetres).toLocaleString()} m</b> ` +
+										`across on average and <b>${(
+											10 * 4 ** field.k.regionLevel + 2
+										).toLocaleString()}</b> of them cover the planet`
+									: "",
+						},
+						{
+							key: "regionClimate",
+							label: "The region decides",
+							low: 0,
+							high: 1,
+							step: 0.05,
+							value: 1,
+							digits: 2,
+							note: () =>
+								knobs.regionClimate >= 1
+									? "the whole region reads one climate, so one kind of ground " +
+										"carries one biome across it and changes at its edge"
+									: knobs.regionClimate === 0
+										? "off: every cell reads its own climate, and a biome " +
+											"changes wherever the reading crosses a line in the diagram"
+										: `each cell is pulled <b>${Math.round(
+												knobs.regionClimate * 100,
+											)}%</b> of the way from its own climate to its region's`,
+						},
+						{
+							key: "regionWarp",
+							label: "Bend the edges",
+							low: 0,
+							high: 1200,
+							step: 20,
+							value: 400,
+							digits: 0,
+							unit: "m",
+							note: () =>
+								knobs.regionWarp === 0
+									? "off: a region is a straight-edged polygon, and a planet cut " +
+										"into polygons reads as one"
+									: "the question is asked somewhere else before it is answered, " +
+										"which bends every edge without moving a seed — the same " +
+										"field the biome noise uses",
 						},
 					],
 				},
@@ -2480,7 +2832,7 @@
 							key: "paint",
 							label: "The patch is coloured by",
 							type: "select",
-							options: ["biome", "landform", "ground"],
+							options: ["biome", "landform", "region", "ground"],
 							value: "biome",
 							note: () =>
 								knobs.paint === "biome"
@@ -2578,6 +2930,18 @@
 					),
 				);
 				k.mapMetres = (CELL_CONSTANT * k.radius) / 2 ** k.level;
+				// Regions sit on the same lattice as everything else, at
+				// whatever level comes nearest the width asked for.
+				k.regionLevel = Math.max(
+					0,
+					Math.min(
+						k.level,
+						Math.round(
+							Math.log2((CELL_CONSTANT * k.radius) / knobs.regionSpan),
+						),
+					),
+				);
+				k.regionMetres = (CELL_CONSTANT * k.radius) / 2 ** k.regionLevel;
 				k.blockMetres =
 					(CELL_CONSTANT * k.radius) / 2 ** knobs.subdivisionDepth;
 				return k;
@@ -2773,6 +3137,13 @@
 			 * finished pair of numbers is given. So the readings are held, and
 			 * dragging a biome across the square recolours a planet already
 			 * sampled instead of sampling it again.
+			 *
+			 * **Shore reaches is in here and the rest of the landform grid is
+			 * not.** Every other part of the grid is read off curve answers
+			 * already held, so editing it recolours; the shore height is now
+			 * also the height the six points around a place are tested
+			 * against, so moving it asks the ground a question it has not been
+			 * asked yet.
 			 */
 			function sampleKey() {
 				const out = [];
@@ -2783,8 +3154,7 @@
 						key === "paint" ||
 						key === "chartDots" ||
 						key === "counted" ||
-						key === "preset" ||
-						key === "shoreHeight"
+						key === "preset"
 					)
 						continue;
 					out.push(key + "=" + knobs[key]);
@@ -2805,6 +3175,7 @@
 				t: null,
 				h: null,
 				land: null,
+				place: null,
 				metres: null,
 				level: null,
 				cut: null,
@@ -2876,10 +3247,12 @@
 				const level = new Float32Array(count);
 				const cut = new Float32Array(count);
 				const swing = new Float32Array(count);
+				const room = new Uint8Array(count);
 				for (let n = 0; n < count; n++) {
 					const p = WORLD[n];
 					fieldsAt(p[0], p[1], p[2], seed, s, said);
 					const metres = heightFrom(said);
+					room[n] = roomAt(p[0], p[1], p[2], seed, s, k, metres);
 					climateAt(p[0], p[1], p[2], said, metres, seed, s, k, climate);
 					warpAt(p[0], p[1], p[2], seed, s, warp);
 					rawT[n] = climate[0];
@@ -2893,15 +3266,22 @@
 					land[n] = metres > TERRAIN.seaLevel ? 1 : 0;
 				}
 				world.fit = fitTo(rawT, rawH, land);
+				const regions = k.useRegions ? regionsNow(k, seed, s) : null;
+				const place = new Float64Array(count);
 				for (let n = 0; n < count; n++) {
 					climate[0] = rawT[n];
 					climate[1] = rawH[n];
 					warp[0] = pushT[n];
 					warp[1] = pushH[n];
 					squareOf(climate, warp, square);
+					const p = WORLD[n];
+					const region = regions ? regions.at(p[0], p[1], p[2]) : null;
+					withRegion(square, region, k, square);
+					place[n] = region ? region.key : -1;
 					t[n] = square[0];
 					h[n] = square[1];
 				}
+				world.place = place;
 				world.key = key;
 				world.t = t;
 				world.h = h;
@@ -2910,6 +3290,7 @@
 				world.level = level;
 				world.cut = cut;
 				world.swing = swing;
+				world.room = room;
 			}
 
 			/**
@@ -2933,6 +3314,7 @@
 						world.cut[n],
 						world.swing[n],
 						world.metres[n],
+						world.room[n],
 					);
 					byForm[form]++;
 					if (form !== SHORE)
@@ -3017,6 +3399,9 @@
 				const level = new Float32Array(count);
 				const cut = new Float32Array(count);
 				const swing = new Float32Array(count);
+				const room = new Uint8Array(count);
+				const place = new Float64Array(count);
+				const regions = k.useRegions ? regionsNow(k, seed, s) : null;
 				const degree = new Uint8Array(count);
 				const corner = new Float64Array(count * 18);
 				const ring = new Int32Array(count * 6).fill(-1);
@@ -3037,7 +3422,11 @@
 					level[c] = splineAt(TERRAIN.cont.spline, said[0]);
 					cut[c] = splineAt(TERRAIN.ero.spline, said[1]);
 					swing[c] = formSwingAt(p[0], p[1], p[2], seed, s);
+					room[c] = roomAt(p[0], p[1], p[2], seed, s, k, metres);
 					squareOf(climate, warp, square);
+					const region = regions ? regions.at(p[0], p[1], p[2]) : null;
+					withRegion(square, region, k, square);
+					place[c] = region ? region.key : -1;
 					climT[c] = square[0];
 					climH[c] = square[1];
 					if (metres < lowest) lowest = metres;
@@ -3073,6 +3462,8 @@
 					level,
 					cut,
 					swing,
+					room,
+					place,
 					biome: new Int16Array(count),
 					form: new Int8Array(count),
 					lowest,
@@ -3095,8 +3486,18 @@
 			function assign() {
 				if (!field) return;
 				regroup();
-				const { count, height, climT, climH, level, cut, swing, biome, form } =
-					field;
+				const {
+					count,
+					height,
+					climT,
+					climH,
+					level,
+					cut,
+					swing,
+					room,
+					biome,
+					form,
+				} = field;
 				// **The same three counts the planet is measured by, over the
 				// patch instead.** A place is not a planet: a patch can hold
 				// nine of thirty-three biomes and none of the ones a dot was
@@ -3108,7 +3509,13 @@
 				const inCell = new Float64Array(grid.length);
 				let land = 0;
 				for (let c = 0; c < count; c++) {
-					const kind = landformAt(level[c], cut[c], swing[c], height[c]);
+					const kind = landformAt(
+						level[c],
+						cut[c],
+						swing[c],
+						height[c],
+						room[c],
+					);
 					form[c] = kind;
 					if (kind < 0) {
 						biome[c] = -1;
@@ -3189,6 +3596,7 @@
 				{ key: "biome", id: "shotBiome", name: "Biomes" },
 				{ key: "ground", id: "shotGround", name: "Terrain" },
 				{ key: "form", id: "shotForm", name: "Landform" },
+				{ key: "region", id: "shotRegion", name: "Regions" },
 				{ key: "temp", id: "shotTemp", name: "Temperature" },
 				{ key: "hum", id: "shotHum", name: "Humidity" },
 				{ key: "warp", id: "shotWarp", name: "Biome noise" },
@@ -3237,6 +3645,22 @@
 					(ramp[lo][0] + (ramp[hi][0] - ramp[lo][0]) * mix) * edge,
 					(ramp[lo][1] + (ramp[hi][1] - ramp[lo][1]) * mix) * edge,
 					(ramp[lo][2] + (ramp[hi][2] - ramp[lo][2]) * mix) * edge,
+				];
+			}
+
+			/**
+			 * A region's own colour, hashed off its seed's cell.
+			 *
+			 * Nothing about it means anything -- it exists so two regions side
+			 * by side can be told apart, which is the only question this picture
+			 * answers.
+			 */
+			function regionColor(key) {
+				if (key < 0) return SEA_COLOR;
+				return [
+					0.3 + 0.6 * hash3(key, 0, 0, 101),
+					0.3 + 0.6 * hash3(0, key, 0, 211),
+					0.3 + 0.6 * hash3(0, 0, key, 331),
 				];
 			}
 
@@ -3325,6 +3749,9 @@
 				const level = new Float32Array(room);
 				const cut = new Float32Array(room);
 				const swing = new Float32Array(room);
+				const roomFor = new Uint8Array(room);
+				const place = new Float64Array(room);
+				const regions = k.useRegions ? regionsNow(k, seed, s) : null;
 				for (let r = 0; r < tall; r++)
 					for (let q = 0; q < wide; q++) {
 						const p = pictureDirection(q, r, wide, tall, frame, half, k.radius);
@@ -3334,14 +3761,18 @@
 						warpAt(p[0], p[1], p[2], seed, s, warp);
 						const at = r * wide + q;
 						squareOf(climate, warp, square);
-						t[at] = square[0];
-						h[at] = square[1];
 						pushT[at] = warp[0];
 						pushH[at] = warp[1];
 						metresAt[at] = metres;
 						level[at] = splineAt(TERRAIN.cont.spline, said[0]);
 						cut[at] = splineAt(TERRAIN.ero.spline, said[1]);
 						swing[at] = formSwingAt(p[0], p[1], p[2], seed, s);
+						roomFor[at] = roomAt(p[0], p[1], p[2], seed, s, k, metres);
+						const region = regions ? regions.at(p[0], p[1], p[2]) : null;
+						place[at] = region ? region.key : -1;
+						withRegion(square, region, k, square);
+						t[at] = square[0];
+						h[at] = square[1];
 						land[at] = metres > TERRAIN.seaLevel ? 1 : 0;
 						const c = groundColor(metres);
 						ground[at * 3] = c[0];
@@ -3361,6 +3792,8 @@
 				sampled.level = level;
 				sampled.cut = cut;
 				sampled.swing = swing;
+				sampled.room = roomFor;
+				sampled.place = place;
 			}
 
 			/**
@@ -3381,8 +3814,20 @@
 				}
 				const image = ctx.createImageData(wide, tall);
 				const px = image.data;
-				const { t, h, pushT, pushH, ground, land, metres, level, cut, swing } =
-					sampled;
+				const {
+					t,
+					h,
+					pushT,
+					pushH,
+					ground,
+					land,
+					metres,
+					level,
+					cut,
+					swing,
+					room,
+					place,
+				} = sampled;
 				for (let n = 0; n < wide * tall; n++) {
 					let c;
 					if (shot.key === "ground") {
@@ -3405,14 +3850,28 @@
 						const along = Math.max(0, Math.min(0.9999, (pushH[n] + 1) / 2));
 						const into = along * PICTURE_BANDS - Math.floor(along * PICTURE_BANDS);
 						if (into < 0.06) c = [c[0] * 0.4, c[1] * 0.45, c[2] * 0.55];
+					} else if (shot.key === "region") {
+						c = land[n] === 0 ? SEA_COLOR : regionColor(place[n]);
 					} else if (shot.key === "form") {
-						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						const form = landformAt(
+							level[n],
+							cut[n],
+							swing[n],
+							metres[n],
+							room[n],
+						);
 						c =
 							form < 0
 								? SEA_COLOR
 								: rgbOf(LANDFORMS[form].hex);
 					} else {
-						const form = landformAt(level[n], cut[n], swing[n], metres[n]);
+						const form = landformAt(
+							level[n],
+							cut[n],
+							swing[n],
+							metres[n],
+							room[n],
+						);
 						const which = form < 0 ? -1 : biomeOf(t[n], h[n], form);
 						c =
 							which < 0
@@ -3425,7 +3884,25 @@
 					px[at + 2] = c[2] * 255;
 					px[at + 3] = 255;
 				}
-				if (shot.key !== "ground" && shot.key !== "biome" && shot.key !== "form")
+				if (shot.key === "region")
+					for (let r = 0; r < tall; r++)
+						for (let q = 0; q < wide; q++) {
+							const n = r * wide + q;
+							if (land[n] === 0) continue;
+							const right = q + 1 < wide && place[n] !== place[n + 1];
+							const under = r + 1 < tall && place[n] !== place[n + wide];
+							if (!right && !under) continue;
+							const at = n * 4;
+							px[at] = 12;
+							px[at + 1] = 14;
+							px[at + 2] = 18;
+						}
+				if (
+					shot.key !== "ground" &&
+					shot.key !== "biome" &&
+					shot.key !== "form" &&
+					shot.key !== "region"
+				)
 					for (let r = 0; r < tall; r++)
 						for (let q = 0; q < wide; q++) {
 							const n = r * wide + q;
@@ -3681,6 +4158,7 @@
 									world.cut[n],
 									world.swing[n],
 									world.metres[n],
+									world.room[n],
 								)
 							: cloud.form[n];
 						if (form !== shown) continue;
@@ -3951,6 +4429,7 @@
 			function cellTint(c) {
 				const metres = field.height[c];
 				if (metres <= TERRAIN.seaLevel) return BAND_COLORS[0];
+				if (knobs.paint === "region") return regionColor(field.place[c]);
 				if (knobs.paint === "landform")
 					return field.form[c] < 0
 						? BAND_COLORS[0]

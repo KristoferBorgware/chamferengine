@@ -2450,6 +2450,52 @@ F-025's own entry named and the fix avoided -- the selection telling the mesher
 its neighbours' levels, and the rim re-meshed when one changes -- which is a
 residency and worker-protocol change rather than a mesher formula.
 
+### F-117 — A biome cannot be much wider than the terrain's widest layer
+
+**Kind:** question
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-29, chasing the last of the speckle in the biomes lab
+**Where:** `demos/biomes-lab.html` (`TERRAIN`, `landformAt`), measured over the
+lab's opening patch
+
+**What happens.** The biomes lab names the ground first and the climate second,
+so a biome boundary is a landform boundary wherever two landforms hold disjoint
+sets of biomes -- which the shipped table's twenty-one do, every one filed under
+exactly one landform. That makes the biome map's coarseness the landform map's
+coarseness, and the landform's coarseness the coarseness of the three terrain
+layers under it. Measured over the opening patch, of every pair of neighbouring
+land cells the relief bucket differs on **10.2%**, erosion on **0.9%** and
+continentalness on **0%**; the landform on **8.1%** and the finished biome on
+**8.8%**. Nearly all of what is left is the relief.
+
+**And the relief is already as coarse as it goes.** The landform reads its own
+copy of that field at **one octave**, which is the terrain's widest -- **600 m**
+against erosion's 938 m and continentalness's 1,500 m. Reading it wider is not
+available: a coarser octave is a different pattern rather than a smoother one,
+so it would call a place a peak where the ground is flat.
+
+**Why it matters.** It bounds what any amount of tuning inside the lab can buy.
+This terrain has no feature wider than about **1,500 m**, so a landform region
+is that wide at best, and a biome cannot be wider than the landform it stands
+in. Everything measured so far agrees: smoothing the relief field over one ring
+and over four changes the map **not at all** -- 24 runs of one biome before and
+24 after, the same 54.2% of them single cells -- because the field is one octave
+at 600 m read at 32 m spacing and is already smooth. What moved the number was
+always something else: the grid's own band edges, where the diagram's dots sit,
+and the shore rule.
+
+**What would answer it.** Two candidates and nobody has measured either. Give
+the landform a **fourth input** wider than any of the three -- one more noise
+layer at three or four kilometres, read for nothing but *which region of the
+planet is this* -- which is the regions idea with a field in place of a Voronoi
+seed, and unlike the seeds it would replace an edge rather than add one. Or let
+biomes span landforms: a table where a name may be filed under `any` costs no
+boundary where two landforms both allow it, and the Holdridge preset already
+works that way, so the two presets can be measured against each other on the
+same planet.
+
 ---
 
 ## Closed

@@ -1185,7 +1185,7 @@ relief is low ground wherever it is. Two sheets, one per continentalness band,
 three erosion rows and three peaks-and-valleys columns, with the measured share
 of the planet's land written on every cell so a combination nothing falls in is
 visible rather than argued about. On the shipped world that comes to **Lowlands
-44.2%, Slopes 22.6%, Valleys 16.2%, Plateau 10.2%, Peaks 5.2%, Shore 1.8%**, and
+44.3%, Slopes 22.9%, Valleys 16.3%, Plateau 10.2%, Peaks 5.2%, Shore 1.2%**, and
 no cell of the grid is empty.
 
 **The shore is a height, not a cell of the grid.** Sea level here is a radius
@@ -1193,6 +1193,42 @@ and every height is measured from it, so *the ground has barely come out of the
 water* is one comparison — and it cannot be true on a mountain however close to
 the coast it stands. **1.1%** of land is under 8 m and **3.4%** under 20 m,
 which is a beach rather than a region.
+
+**Low is necessary and not sufficient, and that was the last of the speckle.**
+What was left after the three changes above was not small biomes but scattered
+single cells: **13** of the opening patch's 24 runs of one biome were one cell,
+and **12 of the 13 were Shore**. The height field runs four octaves, so on a
+steep coast one cell lands in the shore band with the sea on one side and an
+eighty-metre hillside on the other — and the coast then draws as a dotted line
+of pale cells rather than as a beach. A beach is a *strip*, so low ground is
+Shore only where **2 of 6** points **Shore needs room for** metres out are low
+land as well. Runs of one biome fall from **24 to 15**, single-cell runs from
+**13 to 6**, the area in runs under eight cells from **3.3% to 1.6%**, and a
+border moves from every **320 m to every 363 m**. Beaches survive: **1.2%** of
+the planet's land against 3.2% before, and none of the six specks left is one.
+
+**The step is a distance in metres, never a neighbouring cell.** Asking the
+cells next door answers a different question at every level of detail, so a
+coarse chunk and a fine one would disagree about where the beach is — doc 14's
+own rule, that a point's ground does not depend on who asked. Six points at a
+fixed radius ask the same question at every level, and the radius is bounded, so
+a chunk still answers from its own address with no flood fill. Widening it keeps
+paying and then stops paying for itself: **48 m** gives 14 runs and 1.0% of land
+as beach, **64 m** gives 13 and **0.8%**, and by 96 m the beaches are the thing
+being removed.
+
+**Regions were built, measured, and switched off.** A region is a seed on the
+engine's own lattice with a jitter and a climate of its own, so a whole area
+carries one biome and changes at its edge — and the whole area is found from two
+rings of lattice cells, a fixed nineteen candidates, so it is as chunk-local as
+everything else here. It does not do what it was built for: a region is a
+*second* source of edges laid over the landform's own, and nothing takes the
+first away. Measured over the opening patch it moves a border from every
+**363 m to every 326 m** and the biomes standing within 320 m of a place from
+**3.28 to 3.54**. It does tidy specks — six runs of one cell down to three — and
+the shore rule tidies more of them for nothing. The switch, the four knobs and
+the **Regions** picture stay, because the picture is the clearest statement of
+what a region is; the switch ships off.
 
 **Temperature is three terms and none of them is a biome.** Latitude is one dot
 product against the axis — **the engine's own**, through icosahedron vertices 0

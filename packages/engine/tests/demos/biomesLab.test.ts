@@ -86,7 +86,7 @@ describe("the biomes lab's copy of the engine", () => {
 		// ground came out Desert and 52.1% came out some dry lowland type. The
 		// three terrain layers name the ground first, and the diagram then
 		// only chooses which kind of that ground this one is.
-		expect(lab).toContain("function landformAt(level, cut, swing, metres) {");
+		expect(lab).toContain("function landformAt(level, cut, swing, metres, room) {");
 		expect(lab).toContain("const set = allowed[form];");
 	});
 
@@ -119,7 +119,32 @@ describe("the biomes lab's copy of the engine", () => {
 		// Sea level is a radius and every height is measured from it, so *the
 		// ground has barely come out of the water* is one comparison -- and it
 		// cannot be true on a mountain however close to the coast it stands.
-		expect(lab).toContain("if (metres <= knobs.shoreHeight) return SHORE;");
+		expect(lab).toContain(
+			"if (metres <= knobs.shoreHeight && room >= SHORE_ROOM) return SHORE;",
+		);
+	});
+
+	it("asks for a beach's room at a distance in metres, never in cells", () => {
+		// **Low is necessary and not sufficient.** The height field runs four
+		// octaves, so on a steep coast one cell lands in the shore band with
+		// the sea on one side and an eighty-metre hillside on the other, and
+		// the coast draws as a dotted line of pale cells rather than a beach.
+		// Measured over the opening patch, 12 of its 13 single-cell biomes
+		// were exactly that, and requiring two of six points a map cell out to
+		// be low land as well takes its runs of one biome from 24 to 15 and
+		// the area in runs under eight cells from 3.3% to 1.6%.
+		//
+		// **The step is metres, never a neighbouring cell**, or the rule
+		// answers a different question at every level of detail and a coarse
+		// chunk and a fine one disagree about where the beach is -- doc 14's
+		// own rule, that a point's ground does not depend on who asked. The
+		// reach is bounded, so a chunk still answers from its own address with
+		// no flood fill.
+		expect(lab).toContain("function roomAt(x, y, z, seed, s, k, metres) {");
+		expect(lab).toContain("const step = k.shoreReach / k.radius;");
+		expect(lab).toContain("const SHORE_ROOM = 2;");
+		// nothing walks a ring of cells to decide it
+		expect(lab).not.toMatch(/roomAt[\s\S]{0,900}field\.ring/);
 	});
 
 	it("fits the diagram to the land the planet actually has", () => {
