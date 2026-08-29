@@ -912,6 +912,7 @@ const GROUPS: Group[] = [
 		where: "both",
 		veg: "off",
 		cave: "off",
+		biome: "off",
 		side: "left",
 		folded: true,
 		tab: "terrain",
