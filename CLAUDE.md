@@ -2319,6 +2319,32 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A CANOPY IS NOT A CLIFF, AND SKY EXPOSURE MUST ASK THE TERRAIN RATHER THAN
+  THE BAND** (`skyTopOf` in `meshChunk`, F-133 closed). `skyExposure` asks each
+  of a cell's six neighbours how much taller its ground stands and darkens the
+  cell in proportion, saturating at `SKY_REACH` 6 layers down to `SKY_FLOOR`
+  `0.12` -- the value meant for a cell sealed on every side inside a cave. The
+  number it asked for was the neighbour's **band top**, and `plantChunk`
+  **raises that to the top of whatever it grew**, deliberately, because the
+  band is what the mesher walks to draw a canopy. **So a thirty-block tree read
+  as a thirty-block cliff on all six sides.** Measured over 7,812 ground cells
+  of four forested chunks: from the band the mean exposure is `0.911`, the 5th
+  percentile `0.120` and **`5.2%` of cells sit at the cave floor**; from the
+  terrain's own surface it is `0.975`, `0.927` and **`0.0%`**. The shader
+  multiplies the sun, the sky, the moon and the night floor by that number, so
+  a cell under a canopy took **`12%`** of all natural light and the cell it
+  touches took **`100%`** -- after dark, black against lit on two cells that
+  share an edge, which draws as hard-edged black patches with stair-stepped
+  hexagonal borders across a forest floor and wholly black trunks beside
+  identical lit ones. **`groundRadius` is the right number because no plant
+  moves it**, and an edit that does move the ground has its radius cleared by
+  `applyDeltas`, so a player's tower still blocks the sky and only vegetation
+  stops doing so. Fixing it also took the wall crease over 5% from `2.5%` to
+  `0.8%` on solid blocks and `1.3%` to `0.2%` on leaves: an `8x` step between
+  touching cells is more than any triangulation carries gracefully, so **the
+  cause of F-132's symptom was mostly this**. What it gives up is a forest
+  floor being dimmer than open ground, which belongs in a canopy term of its
+  own rather than falling out of a heuristic written for valleys.
 - **A QUAD'S TWO TRIANGLES CANNOT CARRY A SHADING THAT IS A PRODUCT**
   (`emitSide`, `emitCap`, F-132 closed). A vertex carries the block's colour
   with the corner occlusion multiplied in and, **separately**, how much sky its

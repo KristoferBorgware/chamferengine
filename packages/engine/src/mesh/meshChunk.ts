@@ -159,6 +159,31 @@ const SKY_FLOOR = 0.12;
  * under the ground beside it or standing clear of it -- so a cliff face stays
  * bright as it should while a cave a metre away goes dark.
  */
+/**
+ * The layer sky exposure measures a neighbour's height from.
+ *
+ * **The band's top is not the ground.** `plantChunk` raises a column's `first`
+ * to the top of whatever it grew there, because that is what the mesher has to
+ * walk to draw a canopy -- and {@link skyExposure} reads the same number as
+ * "how much taller than me is the ground next door". So a tree thirty blocks
+ * tall reads as a cliff thirty blocks tall on every side: the ground under a
+ * canopy and the trunk standing in it take {@link SKY_FLOOR}, the value meant
+ * for a cell sealed on every side inside a cave, while the cell a step outside
+ * the canopy takes all of the sky. At night that is the difference between
+ * black and lit, on two cells that touch.
+ *
+ * `groundRadius` is where the terrain generator put the surface, and **no
+ * plant moves it** -- which is what makes it the right number here. An edit
+ * does move it, and `applyDeltas` clears the radius when it does, so a
+ * player's tower falls back to the band and blocks the sky the way a tower
+ * should. Zero means nobody recorded one, and the band is all there is.
+ */
+function skyTopOf(column: Column, shape: WorldShape): number {
+	return column.groundRadius > 0
+		? shape.layerOfSurface(column.groundRadius)
+		: column.first;
+}
+
 function skyAt(on: boolean, layer: number, around: readonly number[]): number {
 	return on ? skyExposure(layer, around, SKY_REACH, SKY_FLOOR) : 1;
 }
@@ -768,7 +793,7 @@ function meshCell(
 	const around: number[] = [];
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
-		if (other) around.push(other.first);
+		if (other) around.push(skyTopOf(other, shape));
 	}
 
 	// Caps first: a top or a bottom face covers one layer and never merges with
@@ -1046,7 +1071,7 @@ function meshApronCell(
 	const around: number[] = [];
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
-		if (other) around.push(other.first);
+		if (other) around.push(skyTopOf(other, shape));
 	}
 
 	// The caps, to be looked down at.

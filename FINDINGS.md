@@ -6141,3 +6141,53 @@ drawn the worst way round. Rooting a cap at its **brightest** corner was tried
 and is **worse than leaving it alone** (`1.38%` against `1.27%`), because the
 brightest diagonal overshoots the average as far as the darkest undershoots it;
 rooting at the diagonal nearest the average gives **0.98%**.
+
+### F-133 — A canopy reads as a cliff of its own height, so the ground under a tree is lit like a cave
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** small
+**Found:** 2026-08-30, chasing black patches and black trunks a player reported
+under trees at night
+**Closed:** 2026-08-30, fixed. Sky exposure reads a neighbour's height from
+`groundRadius`, where the terrain generator put the surface, rather than from
+the column's band top, which a plant raises. An edit does move the ground and
+`applyDeltas` clears the radius when it does, so a player's tower still blocks
+the sky and only vegetation stops doing so.
+**Where:** `packages/engine/src/mesh/meshChunk.ts` (`skyTopOf`),
+`packages/engine/src/generation/chunk/plantChunk.ts` (the band raise),
+`packages/engine/src/light/skyExposure.ts`, `tools/trial-canopy-sky.ts`
+
+**What happens.** `skyExposure` asks each of a cell's six neighbours how much
+taller its ground stands and darkens the cell in proportion, saturating at
+`SKY_REACH` = 6 layers down to `SKY_FLOOR` = `0.12` -- the value meant for a
+cell sealed on every side inside a cave. The number it asks for is the
+neighbour column's band top, and `plantChunk` **raises that to the top of
+whatever it grew**, deliberately, because the band is what the mesher walks to
+draw a canopy. A tree thirty blocks tall therefore reads as a cliff thirty
+blocks tall on all six sides.
+
+Measured over 7,812 ground cells of four forested chunks of the shipped world:
+from the band's top the mean exposure is `0.911`, the 5th percentile is
+`0.120`, and **`5.2%` of cells sit at the cave floor**; from the terrain's own
+surface the mean is `0.975`, the 5th percentile `0.927`, and **`0.0%`** are
+floored.
+
+**Why it matters.** The shader multiplies the sun, the sky, the moon and the
+night floor by that number, so a cell under a canopy took `12%` of all natural
+light while the cell it touches took `100%`. After dark that is the difference
+between black and lit on two neighbouring cells, which is what draws the
+hard-edged black patches with stair-stepped hexagonal borders across a forest
+floor, and the wholly black trunks standing beside identical lit ones. It is
+also the source of the corner-to-corner variation F-132 re-pairs the triangles
+of: an `8x` step between touching cells is far more than any triangulation can
+carry gracefully. **Full light is the only switch that hides it**, because it
+replaces every vertex's sky with 1.
+
+**What would fix it.** Ask the terrain rather than the band. `groundRadius`
+records where the generator put the surface and no plant moves it, and
+`shape.layerOfSurface` converts it to the layer `skyExposure` wants. What it
+gives up is a forest floor being dimmer than open ground, which is a look worth
+having and belongs in a canopy term of its own rather than falling out of a
+heuristic written for valleys and cliffs.
