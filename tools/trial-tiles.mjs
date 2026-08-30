@@ -7,8 +7,8 @@
 // texture somebody has painted over is what gets drawn. Two pictures:
 //
 //   `tiles.png`  every image, two by two, so the wrap is visible.
-//   `ground.png` a patch of the real hexagonal grid at the metres-per-pixel a
-//                1080p screen gives at 2, 5 and 15 m, so a tile size can be
+//   `ground.png` a patch of the real hexagonal grid at the pixels-per-metre a
+//                1080p screen gives at 5, 12 and 30 m, so a tile size can be
 //                judged at the size it will actually be seen.
 //
 // It also prints how much the ground repeats at one cell, which is the thing
