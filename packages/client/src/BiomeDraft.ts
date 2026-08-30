@@ -14,6 +14,9 @@ export interface BiomeDraftDef {
 	h: number;
 	landform: string;
 	block: number;
+
+	/** What this biome cuts into below its surface, or absent for plain dirt. */
+	underlay?: number | undefined;
 }
 
 /** The biome table a world carries: which preset it started from, and where it is now. */
@@ -51,7 +54,8 @@ function untouched(draft: BiomeTableDraft): boolean {
 			biome.t === fresh.t &&
 			biome.h === fresh.h &&
 			biome.landform === fresh.landform &&
-			biome.block === fresh.block
+			biome.block === fresh.block &&
+			biome.underlay === fresh.underlay
 		);
 	});
 }
@@ -64,8 +68,10 @@ function untouched(draft: BiomeTableDraft): boolean {
  * bench lands on any other with the same planet and the same biomes. A table
  * still equal to its preset travels as the preset's name alone.
  *
- * A biome reads `name~hex~t~h~landform~block`, biomes are separated by `;`,
- * and the first field names the preset with the grid beside it.
+ * A biome reads `name~hex~t~h~landform~block~underlay`, biomes are separated
+ * by `;`, and the first field names the preset with the grid beside it. The
+ * underlay field is empty for plain dirt, not the string `undefined` --
+ * empty is what an older link before this field existed also reads as.
  */
 export function biomeTableToText(draft: BiomeTableDraft): string {
 	if (untouched(draft)) return draft.preset;
@@ -73,7 +79,8 @@ export function biomeTableToText(draft: BiomeTableDraft): string {
 		(biome) =>
 			`${biome.name.replace(/[~;|]/g, " ")}~${biome.hex}~` +
 			`${+biome.t.toFixed(3)}~${+biome.h.toFixed(3)}~` +
-			`${biome.landform}~${biome.block}`,
+			`${biome.landform}~${biome.block}~` +
+			`${biome.underlay ?? ""}`,
 	);
 	return [`${draft.preset}|${draft.grid}`, ...rows].join(";");
 }
@@ -89,17 +96,20 @@ export function biomeTableFromText(text: string): BiomeTableDraft {
 		grid.length === DEFAULT_LANDFORM_GRID.length &&
 		[...grid].every((digit) => {
 			const form = Number(digit);
-			return Number.isInteger(form) && form >= 0 && form < LANDFORMS.length;
+			return (
+				Number.isInteger(form) && form >= 0 && form < LANDFORMS.length
+			);
 		})
 	)
 		out.grid = grid;
 	const biomes: BiomeDraftDef[] = [];
 	for (const row of parts.slice(1)) {
-		const [name, hex, t, h, landform, block] = row.split("~");
+		const [name, hex, t, h, landform, block, underlay] = row.split("~");
 		if (!name || !hex || !/^[0-9a-f]{6}$/i.test(hex)) continue;
 		const tAt = Number(t);
 		const hAt = Number(h);
 		const blockAt = Number(block);
+		const underlayAt = Number(underlay);
 		if (!Number.isFinite(tAt) || !Number.isFinite(hAt)) continue;
 		const filed =
 			landform === ANY_LANDFORM ||
@@ -113,6 +123,10 @@ export function biomeTableFromText(text: string): BiomeTableDraft {
 			h: Math.max(0, Math.min(1, hAt)),
 			landform: filed,
 			block: Number.isInteger(blockAt) && blockAt > 0 ? blockAt : 3,
+			underlay:
+				underlay && Number.isInteger(underlayAt) && underlayAt > 0
+					? underlayAt
+					: undefined,
 		});
 	}
 	if (biomes.length > 0) out.biomes = biomes;

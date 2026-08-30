@@ -3,6 +3,7 @@ import type { BiomeTableDraft } from "./BiomeDraft.js";
 import {
 	ANY_LANDFORM,
 	BIOME_PRESETS,
+	BlockType,
 	CONT_BANDS,
 	CONT_NAMES,
 	ERO_BANDS,
@@ -61,6 +62,73 @@ function bytesOfRamp(
 		Math.round(c[1] * 255),
 		Math.round(c[2] * 255),
 	];
+}
+
+/** One entry a `<select>` groups under an `<optgroup>`. */
+interface GroupedOption {
+	readonly group: string;
+	readonly value: number;
+	readonly label: string;
+}
+
+/**
+ * Every biome's own ground, grouped by the preset it came from.
+ *
+ * **The label a biome already carries, not one built from its block's own
+ * name.** Two presets both name a block "Steppe ground" for reasons that have
+ * nothing to do with each other, so the group is what disambiguates rather
+ * than a prefix stitched onto every label.
+ */
+function groundOptions(): readonly GroupedOption[] {
+	const out: GroupedOption[] = [];
+	for (const [preset, set] of Object.entries(BIOME_PRESETS))
+		for (const biome of set)
+			out.push({
+				group:
+					preset === "holdridge" ? "Holdridge life zones" : "Plain",
+				value: biome.block,
+				label: biome.name,
+			});
+	return out;
+}
+
+/**
+ * The materials a biome may cut into below its own surface.
+ *
+ * **A short, curated list rather than every block there is** — most biomes
+ * want plain dirt, and the rest want one of a handful of raw materials rather
+ * than another biome's own dedicated ground.
+ */
+const UNDERLAY_OPTIONS: readonly { value: number; label: string }[] = [
+	{ value: BlockType.STONE, label: "Stone" },
+	{ value: BlockType.SAND, label: "Sand" },
+	{ value: BlockType.SANDSTONE, label: "Sandstone" },
+	{ value: BlockType.TERRACOTTA, label: "Terracotta" },
+	{ value: BlockType.SNOW, label: "Snow" },
+];
+
+/** A `<select>` grouped under an `<optgroup>` per {@link GroupedOption.group}. */
+function selectOfGrouped(
+	options: readonly GroupedOption[],
+	value: number,
+): HTMLSelectElement {
+	const pick = document.createElement("select");
+	const groups = new Map<string, HTMLOptGroupElement>();
+	for (const opt of options) {
+		let group = groups.get(opt.group);
+		if (!group) {
+			group = document.createElement("optgroup");
+			group.label = opt.group;
+			groups.set(opt.group, group);
+			pick.append(group);
+		}
+		const option = document.createElement("option");
+		option.value = String(opt.value);
+		option.textContent = opt.label;
+		group.append(option);
+	}
+	pick.value = String(value);
+	return pick;
 }
 
 /**
@@ -1014,7 +1082,44 @@ export class BiomePanel {
 			}
 			this.settle();
 		};
-		this.says.append(said, pickForm);
+
+		const builtFrom = document.createTextNode(" · built from ");
+		const pickBlock = selectOfGrouped(groundOptions(), biome.block);
+		pickBlock.oninput = () => {
+			biome.block = Number(pickBlock.value);
+			this.settle();
+		};
+
+		const cutInto = document.createTextNode(", cuts into ");
+		const pickUnderlay = document.createElement("select");
+		const dirtOption = document.createElement("option");
+		dirtOption.value = "";
+		dirtOption.textContent = "dirt";
+		pickUnderlay.append(dirtOption);
+		for (const opt of UNDERLAY_OPTIONS) {
+			const option = document.createElement("option");
+			option.value = String(opt.value);
+			option.textContent = opt.label.toLowerCase();
+			pickUnderlay.append(option);
+		}
+		pickUnderlay.value =
+			biome.underlay !== undefined ? String(biome.underlay) : "";
+		pickUnderlay.oninput = () => {
+			biome.underlay =
+				pickUnderlay.value === ""
+					? undefined
+					: Number(pickUnderlay.value);
+			this.settle();
+		};
+
+		this.says.append(
+			said,
+			pickForm,
+			builtFrom,
+			pickBlock,
+			cutInto,
+			pickUnderlay,
+		);
 	}
 
 	private build(): void {

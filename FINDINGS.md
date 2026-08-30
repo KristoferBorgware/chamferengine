@@ -77,41 +77,6 @@ never go stale against an edit -- the store and the plants are already read
 ahead of it. The ray walk asks the same question the same way and would take
 the same memo.
 
-### F-122 — The vegetation lab has no biome of its own to grow against
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** medium
-**Found:** 2026-08-29, letting a plant layer name the biomes it grows in
-**Where:** `demos/vegetation-lab.html`,
-`packages/engine/tests/demos/vegetationLab.test.ts`,
-`packages/engine/src/generation/plants/growStand.ts`
-
-**What happens.** `growStand` now lets a layer restrict itself to named
-biomes, read once per column alongside `top` and `groundLayer`. The lab is its
-own standalone copy of the same planting algorithm, with no biome model at all
--- there is no biome field to read a restriction against, so a layer written
-there with `biomes` set has nothing to test it against. `vegetationLab.test.ts`
-only digest-checks three shared building blocks (the noise kernel, the coarse
-grid, world coordinates) against the lab's own JavaScript; it does not check
-the plant-growing logic itself, the way `biomesLab.test.ts` checks biome
-assignment. Nothing catches the two drifting apart on this point.
-
-**Why it matters.** The lab is where a reader tries a layer's numbers before
-trusting them in the engine, per its own stated purpose, and it now silently
-cannot represent the one thing this change added. Someone reading it after
-this lands would have no sign that the feature exists, let alone that the lab
-does not have it.
-
-**What would fix it.** Either give the lab a small biome-membership stand-in
-(even a fixed checkerboard, the way the growStand tests use one) and a layer
-control for it, matching the engine's mechanism closely enough to digest-check
-the planting logic itself rather than only the three shared primitives; or
-note in the lab's own text that biome restriction is engine-only and the lab
-cannot preview it. Either is a small, separate piece of work from wiring the
-mechanism into the engine.
-
 ### F-113 — A chunk near a face edge walks its own planting patch
 
 **Kind:** performance
@@ -5562,5 +5527,46 @@ deliberately: the lab measures its fit over its own precomputed lattice and
 the engine over a face/i/j lattice at a different level, two samplings never
 meant to agree past the shape of the result, so both are pointed at the same
 fixed `UNFITTED` square instead of at each other's measurement of the land.
+
+---
+
+### F-122 — The vegetation lab has no biome of its own to grow against
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-29, letting a plant layer name the biomes it grows in
+**Closed:** 2026-08-30, declined -- the standalone labs (multi-noise, biomes,
+vegetation, caves) are deprecated now that the client benches cover the same
+ground, live, against the real engine rather than a copy of it. Building a
+biome stand-in into a lab that is being retired spends effort on the side of
+the line that is going away; `demos/vegetation-lab.html` and its digest test
+are left as they are rather than extended.
+
+**Where:** `demos/vegetation-lab.html`,
+`packages/engine/tests/demos/vegetationLab.test.ts`,
+`packages/engine/src/generation/plants/growStand.ts`
+
+**What happens.** `growStand` now lets a layer restrict itself to named
+biomes, read once per column alongside `top` and `groundLayer`. The lab is its
+own standalone copy of the same planting algorithm, with no biome model at all
+-- there is no biome field to read a restriction against, so a layer written
+there with `biomes` set has nothing to test it against. `vegetationLab.test.ts`
+only digest-checks three shared building blocks (the noise kernel, the coarse
+grid, world coordinates) against the lab's own JavaScript; it does not check
+the plant-growing logic itself, the way `biomesLab.test.ts` checks biome
+assignment. Nothing catches the two drifting apart on this point.
+
+**Why it matters.** Little, given the closing reason above -- recorded so the
+gap is not rediscovered as new before someone remembers the lab is retired.
+
+**What would fix it.** Not this. If the labs outlive their deprecation for some
+reason, either give the lab a small biome-membership stand-in (even a fixed
+checkerboard, the way the growStand tests use one) and a layer control for it,
+matching the engine's mechanism closely enough to digest-check the planting
+logic itself rather than only the three shared primitives; or note in the
+lab's own text that biome restriction is engine-only and the lab cannot
+preview it.
 
 ---

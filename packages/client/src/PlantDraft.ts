@@ -327,7 +327,15 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
  * its own curve and its own shape, meeting wherever both curves allow. The
  * curves are drawn to put them in different places rather than left flat, or
  * the opening view is two species evenly mixed over the whole planet.
+ *
+ * **Each is also restricted to the biomes real pine and oak actually stand
+ * in** -- Taiga and Alpine forest for Pine, Grove and Grassland for Oak, all
+ * four from the default biome table. The curve still shapes density inside
+ * those biomes; the restriction is what keeps a pine out of a desert
+ * regardless of what the curve alone would have allowed there. A world with
+ * no biome table at all (the "Plain planet" mode, or a custom table missing
+ * these names) grows neither layer anywhere -- see {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
-	"Pine|density=2.5|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1;" +
-	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0";
+	"Pine|density=2.5|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1|biomes=Taiga,Alpine forest;" +
+	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland";

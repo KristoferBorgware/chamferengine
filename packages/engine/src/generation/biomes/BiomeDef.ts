@@ -44,5 +44,5 @@ export interface BiomeDef {
 	 * is silently something else. Read once a column, the same read that
 	 * named the surface -- not a second lookup.
 	 */
-	readonly underlay?: number;
+	readonly underlay?: number | undefined;
 }

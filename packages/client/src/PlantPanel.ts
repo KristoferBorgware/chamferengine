@@ -330,6 +330,10 @@ export class PlantPanel {
 				set.append(this.curveOf(layer, row));
 				continue;
 			}
+			if (row.kind === "biomes") {
+				set.append(this.biomesOf(layer, row));
+				continue;
+			}
 			set.append(this.slider(layer, row));
 		}
 		return set;
@@ -361,6 +365,73 @@ export class PlantPanel {
 			shot: canvas,
 			badge,
 		});
+		return wrap;
+	}
+
+	/**
+	 * Which biomes this layer is restricted to, typed by name rather than
+	 * chosen from a list.
+	 *
+	 * **The bench has no biome table of its own to offer.** It grows plants
+	 * over their own noise field, independent of the terrain and biome
+	 * generators the walkable world runs -- so a name typed here is taken on
+	 * trust, the same way a hand-edited link already is, rather than checked
+	 * against a live list. {@link PlantLayer.biomes} spells out what an
+	 * unmatched name does once the layer reaches a world that does have one:
+	 * grows nowhere, rather than falling back to unrestricted.
+	 */
+	private biomesOf(layer: PlantLayerDraft, row: PlantRow): HTMLElement {
+		const wrap = document.createElement("div");
+		wrap.className = "knob biomed";
+		const label = document.createElement("label");
+		label.textContent = row.label ?? "Biomes";
+		const tags = document.createElement("div");
+		tags.className = "biome-tags";
+		const input = document.createElement("input");
+		input.type = "text";
+		input.placeholder = "any biome";
+
+		const redraw = (): void => {
+			tags.textContent = "";
+			for (const name of layer.biomes) {
+				const tag = document.createElement("span");
+				tag.className = "biome-tag";
+				tag.append(document.createTextNode(name));
+				const drop = document.createElement("button");
+				drop.type = "button";
+				drop.className = "drop";
+				drop.textContent = "×";
+				drop.title = "remove";
+				drop.onclick = () => {
+					layer.biomes = layer.biomes.filter((n) => n !== name);
+					redraw();
+					this.onChange(true);
+				};
+				tag.append(drop);
+				tags.append(tag);
+			}
+		};
+		const commit = (): void => {
+			const name = input.value.trim();
+			input.value = "";
+			if (name === "" || layer.biomes.includes(name)) return;
+			layer.biomes = [...layer.biomes, name];
+			redraw();
+			this.onChange(true);
+		};
+		input.onkeydown = (event) => {
+			if (event.key !== "Enter" && event.key !== ",") return;
+			event.preventDefault();
+			commit();
+		};
+		input.onblur = commit;
+		redraw();
+
+		const note = document.createElement("p");
+		note.className = "knob-note";
+		if (row.note) note.innerHTML = row.note(layer);
+		wrap.append(label, tags, input, note);
+		this.built.push({ row, layer, wrap, input, note, redraw });
 		return wrap;
 	}
 
