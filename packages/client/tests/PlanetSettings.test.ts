@@ -695,3 +695,38 @@ describe("what a live rebuild can show", () => {
 		expect(JSON.stringify(moved.worldShape())).not.toBe(named);
 	});
 });
+
+describe("the biome model's fit", () => {
+	it("stretches only for plain, whatever the knob says", () => {
+		for (const biomeFit of [true, false]) {
+			expect(
+				new PlanetSettings({ biomes: "plain", biomeFit }).biomeOptions()
+					.fit,
+			).toBe(biomeFit);
+			expect(
+				new PlanetSettings({
+					biomes: "holdridge",
+					biomeFit,
+				}).biomeOptions().fit,
+			).toBe(false);
+			expect(
+				new PlanetSettings({
+					biomes: "elevation",
+					biomeFit,
+				}).biomeOptions().fit,
+			).toBe(false);
+		}
+	});
+
+	it("reads humLapse from the table, never from a knob of its own", () => {
+		expect(
+			new PlanetSettings({ biomes: "plain" }).biomeOptions().humLapse,
+		).toBe(0);
+		expect(
+			new PlanetSettings({ biomes: "holdridge" }).biomeOptions().humLapse,
+		).toBe(0);
+		expect(
+			new PlanetSettings({ biomes: "elevation" }).biomeOptions().humLapse,
+		).toBeGreaterThan(0);
+	});
+});

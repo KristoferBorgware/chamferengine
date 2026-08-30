@@ -2406,6 +2406,17 @@ export class PlanetSettings {
 	 * rather than a setting shared by every table -- so it lives on
 	 * {@link biomeTable} and travels inside `biomes=` rather than as a knob
 	 * of its own.
+	 *
+	 * **`fit` is forced off for every table but `plain`.** `plain`'s own
+	 * dots are placed assuming the per-planet stretch -- its own comment
+	 * says so -- but a table naming a real classification, Holdridge's or
+	 * any other, promises the same absolute reading the same name. Measured
+	 * directly: fitted, two planets built from different seeds name the
+	 * same raw climate reading two different Holdridge zones on a third of
+	 * a small sample; unfitted, the same reading names the same zone on
+	 * every planet by construction, because the map from a raw reading to
+	 * the 0-to-1 square no longer depends on what land this planet grew.
+	 * The `biomeFit` knob still reaches `plain`.
 	 */
 	biomeOptions(): BiomeSettings {
 		const k = this.knobs;
@@ -2424,7 +2435,7 @@ export class PlanetSettings {
 			warpStrength: k.warpStrength,
 			warpFeature: k.warpFeature,
 			warpOctaves: k.warpOctaves,
-			fit: k.biomeFit,
+			fit: this.biomeTable.preset === "plain" && k.biomeFit,
 			regions: k.biomeRegions,
 			regionSpan: k.regionSpan,
 			regionClimate: k.regionClimate,

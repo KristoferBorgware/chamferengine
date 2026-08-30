@@ -19,6 +19,7 @@ import {
 	splineAt,
 } from "chamfer/generation";
 import { PLAYER_DEFAULTS } from "chamfer/player";
+import { biomeTableFromText } from "./BiomeDraft.js";
 
 /** Each layer's own seed offset, so the four are four fields. */
 const LAYER_SEED_OFFSETS: Record<LayerName, number> = {
@@ -786,6 +787,12 @@ const GROUPS: Group[] = [
 				key: "biomeFit",
 				label: "Fit all biomes on the planet",
 				says: "stretches the diagram onto the land's own 2nd to 98th percentiles, so every corner is weather that exists somewhere",
+				// **Only `plain`'s own dots are placed assuming the stretch.**
+				// A table naming a real classification promises the same
+				// reading the same name on every planet, which the stretch
+				// itself would break.
+				enabledWhen: (k) =>
+					biomeTableFromText(k.biomes).preset === "plain",
 			},
 		],
 	},

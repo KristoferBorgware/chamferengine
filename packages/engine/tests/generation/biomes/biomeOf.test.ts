@@ -56,27 +56,51 @@ describe("biomeOf", () => {
 
 describe("the presets", () => {
 	it("give every landform at least one biome in the shipped set", () => {
-		const allowed = allowedBiomes(DEFAULT_BIOMES);
-		for (let form = 0; form < LANDFORMS.length; form++)
-			expect(allowed[form]!.length).toBeGreaterThan(0);
+		for (const preset of ["plain", "holdridge"]) {
+			const allowed = allowedBiomes(BIOME_PRESETS[preset]!);
+			for (let form = 0; form < LANDFORMS.length; form++)
+				expect(allowed[form]!.length).toBeGreaterThan(0);
+		}
 	});
 
-	it("file every Holdridge zone under any landform", () => {
+	it("file every Holdridge zone under a real landform, and elevation's own copy under any", () => {
 		for (const biome of BIOME_PRESETS["holdridge"]!)
+			expect(LANDFORMS.some((f) => f.key === biome.landform)).toBe(true);
+		for (const biome of BIOME_PRESETS["elevation"]!)
 			expect(biome.landform).toBe(ANY_LANDFORM);
 	});
 
-	it("give every biome its own block, registered and colored", () => {
-		const seen = new Set<number>();
-		// Deduplicated by array identity, not by preset key: `elevation`
-		// reads `holdridge`'s own dots, so the two share every block on
-		// purpose and would otherwise fail this on the first repeat.
-		for (const set of new Set(Object.values(BIOME_PRESETS)))
+	it("keeps a hot desert off a summit under Holdridge too", () => {
+		const holdridge = BIOME_PRESETS["holdridge"]!;
+		const allowed = allowedBiomes(holdridge);
+		const peaks = LANDFORMS.findIndex((f) => f.key === "peaks");
+		for (const name of ["Subtropical desert", "Tropical desert"]) {
+			const desert = holdridge.findIndex((b) => b.name === name);
+			expect(
+				biomeOf(
+					holdridge[desert]!.t,
+					holdridge[desert]!.h,
+					allowed[peaks],
+					holdridge,
+				),
+			).not.toBe(desert);
+		}
+	});
+
+	it("gives every biome its own block, and never renames one shared on purpose", () => {
+		const nameOf = new Map<number, string>();
+		for (const set of Object.values(BIOME_PRESETS))
 			for (const biome of set) {
-				// Unique across every distinct set: a world painted by one and
-				// reopened under another must not rename its ground.
-				expect(seen.has(biome.block)).toBe(false);
-				seen.add(biome.block);
+				const already = nameOf.get(biome.block);
+				if (already !== undefined) {
+					// `elevation` reads `holdridge`'s own dots, so the two
+					// share every block on purpose -- the same ground, gated
+					// by landform or not. Anything else repeating a block
+					// would be renaming a world's own ground on reopening.
+					expect(biome.name).toBe(already);
+					continue;
+				}
+				nameOf.set(biome.block, biome.name);
 				expect(BLOCK_NAMES[biome.block]).toMatch(/^chamfer:.*_ground$/);
 				expect(BIOME_GROUNDS[biome.block]).toBeDefined();
 			}
