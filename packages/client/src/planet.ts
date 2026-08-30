@@ -1061,7 +1061,7 @@ async function main(): Promise<void> {
 	let lastWantedOnFace: (number[] | undefined)[] = [];
 
 	/**
-	 * Chunks the selection no longer wants but which are still drawn.
+	 * Chunks still drawn that this file is not counting on any more.
 	 *
 	 * A chunk that leaves the selection is not dropped on the spot: its
 	 * replacement at another level is usually still on a worker, and dropping
@@ -1069,6 +1069,14 @@ async function main(): Promise<void> {
 	 * for as long as the replacement takes to build. A retiring chunk keeps
 	 * drawing until every wanted chunk overlapping its triangle has been
 	 * uploaded, so the ground under it is never bare.
+	 *
+	 * **A chunk an edit invalidated is in here too**, and it is the one kind
+	 * that is not in {@link drawn} beside it: the mesh from before the break
+	 * goes on drawing while its rebuild runs, but this file has stopped
+	 * counting it, so `refresh` asks for it again. **The rule this set exists
+	 * to keep is that everything the renderer holds is in `drawn` or in
+	 * here** -- a mesh with an owner in neither is one nothing can ever drop,
+	 * and it stayed on the GPU and on the screen for the life of the page.
 	 */
 	const retiring = new Set<number>();
 
@@ -1433,7 +1441,14 @@ async function main(): Promise<void> {
 		// Chunks that left the selection retire rather than dropping: they
 		// keep drawing until their ground is covered again.
 		for (const id of [...drawn]) if (!keep.has(id)) retiring.add(id);
-		for (const id of [...retiring]) if (keep.has(id)) retiring.delete(id);
+		// **Wanted again and drawn again are different things.** A chunk an
+		// edit invalidated is retiring and is not in `drawn` -- it is still on
+		// the GPU, showing the ground as it was, until its rebuild arrives.
+		// Un-retiring it because the selection asks for it again would leave
+		// it in neither set, which is how a mesh comes to be drawn that
+		// nothing can ever drop.
+		for (const id of [...retiring])
+			if (keep.has(id) && drawn.has(id)) retiring.delete(id);
 
 		// Work that is no longer wanted is called off rather than left to
 		// finish. A queued chunk is dropped outright and one already on a
@@ -1685,7 +1700,15 @@ async function main(): Promise<void> {
 		for (let level = CHUNK_LEVEL; level >= 0; level--) {
 			const at = coarseChunkKey(key, CHUNK_LEVEL, level);
 			const id = selectionId(level, at);
-			drawn.delete(id);
+			// **It leaves `drawn` and it does not leave the GPU**, which is
+			// the point: the mesh from before the break keeps drawing until
+			// its replacement lands, or a break flashes a hole in the ground.
+			// So it retires, because {@link retiring} is what owns a mesh
+			// still drawing that nothing wants any more -- and without an
+			// owner nothing would ever drop it. Ground the player then walks
+			// away from is never asked for again, so it stayed resident and
+			// on screen for the life of the page.
+			if (drawn.delete(id)) retiring.add(id);
 			building.delete(id);
 			source.invalidate(level, at);
 		}
@@ -2386,6 +2409,12 @@ async function main(): Promise<void> {
 			// buffer and a draw until the next selection notices.
 			if (!keep.has(mesh.key)) continue;
 			drawn.add(mesh.key);
+			// **And it is not retiring any more**, whatever it was before:
+			// this mesh is the current one, and `dropReplaced` drops a
+			// retiring chunk once the chunks covering its ground are drawn --
+			// which, for a chunk covering its own ground, would be this very
+			// upload.
+			retiring.delete(mesh.key);
 			// **Only a chunk at the world's own cut answers a collision.** A
 			// coarse one names a different triangle and holds a different
 			// lattice, and nobody stands near enough to one to touch it.

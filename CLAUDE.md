@@ -600,7 +600,7 @@ Violating any of these breaks the design. They are not tunable.
   inside the block**. Clear both radii whenever the column's top moves -- in the
   held column and in the generated one alike, or the two disagree.
 - **A PAGE THAT LEAVES IS NOT A PAGE WHOSE MEMORY HAS GONE** (`giveUp`,
-  `teardown`, `ParameterPanel.rebuild`, F-129 open). **Rebuild** reaches the
+  `teardown`, `ParameterPanel.rebuild`, F-129). **Rebuild** reaches the
   next world through `location.href`, which is an ordinary navigation the
   browser is free to **freeze the old page for** -- and a frozen page keeps
   every worker thread and every byte of GPU memory its chunks are in. Traced
@@ -617,6 +617,21 @@ Violating any of these breaks the design. They are not tunable.
   browser then decides cannot keep it. A rebuild is also `renderer.clear()`
   rather than a walk of `drawn` and `retiring`: those two sets are what this
   file knows about, and the renderer is what actually holds the memory.
+  **THE RULE THE TWO SETS KEEP IS THAT THE RENDERER HOLDS NOTHING OUTSIDE
+  THEM** (`dropChunk`, `retiring`, F-129 closed). A chunk an edit invalidates
+  leaves `drawn` and does **not** leave the GPU -- the mesh from before the
+  break goes on drawing until its rebuild lands, or a break flashes a hole in
+  the ground -- and it went into neither set, so nothing was left to drop it:
+  ground the player then walked away from stayed resident and on screen for
+  the life of the page. It retires instead. Two rules move with that: an
+  arrival leaves `retiring` as it joins `drawn`, or `dropReplaced` drops the
+  mesh just uploaded, that chunk being the one covering its own ground; and a
+  retiring chunk is un-retired when it is **drawn** again rather than merely
+  wanted again. **The check is an enumeration, not a probe** -- six breaks and
+  a walk away read `316 / 319 / 320 / 320 / 320 / 320 / 320` resident with the
+  fix against `314 / 318 / 319 / 319 / 319 / 319 / 319` without it, the same
+  shape, because a player standing beside the ground they broke has it
+  re-selected and uploaded over either way.
 - **A LIVE REBUILD REPLACES THE WHOLE WORLD, AND EVERYTHING HOLDING A PIECE OF
   IT MUST FOLLOW** (`flushTerrain`, `worldBlocks`, `Player.shape`). Moving a
   terrain knob makes a new map, shape, generator and worker pool. The delta hook
