@@ -39,24 +39,24 @@ two decisions rather than one: a leaf must stop occluding, and the shadow pass
 has to alpha-test too or a tree throws a solid cube's shadow.
 
 > **[measured]** `tools/trial-leaf-cutout.ts`, four chunks in biomes the
-> shipped layers plant in: 90 plants, 37,791 leaf cells, every one of their
+> shipped layers plant in: 146 plants, 19,835 leaf cells, every one of their
 > eight neighbours counted.
 >
 > | A leaf face | | |
 > |---|---|---|
-> | against air, drawn today | 54,614 | **20.0%** |
-> | against another leaf, culled | 189,953 | **69.5%** |
-> | against wood or ground, culled | 28,761 | 10.5% |
+> | against air, drawn today | 34,032 | **23.5%** |
+> | against another leaf, culled | 95,340 | **65.8%** |
+> | against wood or ground, culled | 15,548 | 10.7% |
 >
-> A canopy that stops occluding draws **5.00x** the leaf faces it draws now,
-> and **13,521 of the 37,791 leaf cells have no face at all today** -- a third
-> of a canopy is geometry that does not exist, and that is what a hole in the
+> A canopy that stops occluding draws **4.26x** the leaf faces it draws now,
+> and **5,938 of the 19,835 leaf cells have no face at all today** -- 30% of a
+> canopy is geometry that does not exist, and that is what a hole in the
 > texture would look into.
 
 **What would fix it.** A third opacity level for a cutout material, and a
 second condition beside the comparison: draw a face when the neighbour is less
 opaque **or** when either side is a cutout. That is Minecraft's fancy leaves,
-and at 5x the leaf faces it is worth a switch rather than a decision. The mip
+and at 4.26x the leaf faces it is worth a switch rather than a decision. The mip
 chain needs care as well: averaging alpha down a chain dissolves distant
 leaves, so the levels want their coverage rescaled at bake time.
 
@@ -2625,9 +2625,10 @@ same planet.
 **Priority:** medium
 **Effort:** small
 **Found:** 2026-08-30, trying to count the faces a canopy hides
-**Closed:** 2026-08-30, fixed in `buildPlantTemplate`. The layer it grows its
-reference plant with clears `biomes` the same way it already clears `density`
-and `curve`.
+**Closed:** 2026-08-30 on `master` by "Give ten more species a biome to grow
+in, and fix the bug that hid them", found independently here the same day. The
+layer `buildPlantTemplate` grows its reference plant with clears `biomes` the
+same way it already clears `density` and `curve`.
 
 **What happened.** A plant layer names the biomes it grows in, and a layer that
 names biomes with no resolved mask grows **nowhere** -- deliberately, so a
