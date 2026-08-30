@@ -10,6 +10,88 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-131 — Holdridge's climate square is fit to each planet's own land, not held fixed
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-30, checking whether Holdridge and Plain read the terrain the same way
+**Where:** `packages/engine/src/generation/biomes/BiomeField.ts` (`measureFit`,
+`squareOf`), `packages/client/src/PlanetSettings.ts` (`biomeOptions`),
+`BIOME_PRESETS.ts`'s own `holdridge` comment
+
+**What happens.** `BiomeField` reads one `BiomeSettings.fit` flag, true by
+default and set from the same `biomeFit` knob for every table. When it is on,
+`measureFit` samples the planet's own generated land at level 5, takes the
+2nd and 98th percentile of temperature and humidity, and stretches every
+later reading onto that range before the nearest-dot lookup runs. `plain`'s
+own comment is built around this -- "each landform's dots sit inside that
+ground's own measured climate" -- but `holdridge`'s says the opposite: it
+calls itself "a real classification ... with a name for every pair," which
+only holds if a given absolute temperature and humidity always lands on the
+same dot. Nothing in `BiomeField` or `biomeOptions()` treats the two tables
+differently, so Holdridge's square is stretched exactly like Plain's.
+
+**Why it matters.** Two planets with the same seed formula but different
+relief or map knobs measure a different 2nd-98th percentile range, so the
+same physical climate reading is not guaranteed to name the same Holdridge
+zone on both. Nobody has measured how far this drifts in practice -- it
+could be small enough that the ordering never flips a name, or it could
+visibly reshuffle zones between two otherwise-similar worlds. Either way the
+"real classification" framing in the preset's own comment is not currently
+true by construction.
+
+**What would fix it.** Measure it first: build the same seed at a few
+radii and relief settings and see how far a fixed (t, h) point's chosen
+Holdridge zone actually moves. If it moves enough to matter, the fix is a
+per-table override -- `fit: false`, or a Holdridge-specific fixed square --
+when the live table's preset is `"holdridge"`, decided in `biomeOptions()`
+rather than in the shared engine class.
+
+### F-130 — The shore and landform-grid knobs do nothing under the shipped Holdridge preset
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, checking whether Holdridge and Plain read the terrain the same way
+**Where:** `packages/engine/src/generation/biomes/BIOME_PRESETS.ts` (every
+`holdridge` entry), `allowedBiomes.ts`, `packages/client/src/BiomePanel.ts`
+("The landform grid"), `packages/client/src/ParameterPanel.ts` ("The
+landform" knob group)
+
+**What happens.** `allowedBiomes()` builds one candidate list per landform
+(shore, valleys, lowlands, slopes, plateau, peaks) by keeping a biome when
+its own `landform` field matches, or when it is `ANY_LANDFORM`. Every one of
+the 23 `holdridge` biomes carries `ANY_LANDFORM`, so all six lists come out
+identical. `BiomeField.resolve` only ever uses `landform` to index into that
+list (`biomeOf(t, h, this.allowed[landform], biomes)`), so the landform a
+cell reads as can never change which Holdridge biome gets picked.
+
+> **[measured]** `allowedBiomes(BIOME_PRESETS.holdridge)` returns the same 23
+> indices, in the same order, for all six landforms including shore.
+> `allowedBiomes(BIOME_PRESETS.plain)` returns six different lists, 3/3/6/3/3/3.
+
+That makes `shoreHeight`, `shoreReach`, `formDetail`, and the whole
+landform-grid editor in `BiomePanel.ts` inert for the shipped table: turning
+"Shore reaches" from 12 m to 400 m, or repainting every cell of the grid,
+changes nothing a Holdridge world builds.
+
+**Why it matters.** None of the four controls say this. `ParameterPanel.ts`'s
+"The landform" section has no `enabledWhen`, so "Shore reaches" and "Relief
+detail" render fully live next to a picture that never moves. A player who
+switches to Holdridge, then tunes the coastline to get a beach, will
+conclude the knob is broken rather than that it was never wired to this
+table.
+
+**What would fix it.** Cheapest: gate the section, or add one note, on
+whether every biome in the live table is still `ANY_LANDFORM` -- the same
+test `untouched()` in `BiomeDraft.ts` could expose. Larger: give the
+Holdridge biomes real landform restrictions of their own -- real Holdridge
+has no shore concept, so a world using it still could, and this would be
+inventing rather than porting, so it needs a decision first.
+
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
