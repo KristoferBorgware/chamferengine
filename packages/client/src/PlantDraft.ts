@@ -341,36 +341,41 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
  * them; a desert or tundra species is lower still; Heather is a spreading
  * ground shrub, so it stays the one that reads busiest at over 1.
  *
- * Two species carry hand-drawn curves from when this default held only them
- * (Pine, Oak); the other ten are flat, because the biome list is already
- * doing the work of saying *where*, and a curve on top of that is a second
- * answer to the same question rather than a different one. **Flat means
- * uniform, never means maximum** -- a flat line pinned to the top of the
- * chart reads as "every one of these places gets the densest this layer can
- * ask for", which is a stronger claim than "moderate but even", so the ten
- * flat curves sit at `0.5` rather than `1`, and Pine's own plateau (the
- * stretch its hand-drawn curve is flat over) is lowered to match. Oak's
- * curve already falls away rather than sitting at the ceiling and is left
- * as drawn. Several biomes carry two species deliberately -- Tundra's birch
- * and heather, Steppe's baobab and bush, Dry basin's baobab and deadwood,
- * Badlands' deadwood and cactus -- because that pairing is what the mix
- * actually looks like on the ground: scattered giants over scrub, not one
- * species owning a biome.
+ * **Every curve is a low hill, not a flat line, and sits at roughly half of
+ * the previous 0.5.** A flat line, even a low one, answers only "how much";
+ * it throws away the other question a curve can answer, which is "where
+ * within the range this layer's own noise reads best" -- so a flat curve on
+ * top of a biome mask is a second answer to the question the mask already
+ * settled. Each of the ten that used to be flat now carries five points
+ * rising from near `0` at one edge of its noise reading, cresting somewhere
+ * inside its range, and falling away toward the other edge, so a stand
+ * thins toward clearings at the margins of its own biome rather than
+ * snapping uniformly on and off. Peaks run `0.1` to `0.3` by species --
+ * Heather crests highest, because it is a spreading ground shrub meant to
+ * read as near-continuous cover; Cactus and Baobab crest lowest, because a
+ * desert stand and a scattered savanna giant are sparse by nature and a
+ * hill barely off the floor is the point, not a shortfall. Pine and Oak
+ * keep the hand-drawn shapes from when this default held only them, each
+ * lowered by the same half rather than redrawn. Several biomes carry two
+ * species deliberately -- Tundra's birch and heather, Steppe's baobab and
+ * bush, Dry basin's baobab and deadwood, Badlands' deadwood and cactus --
+ * because that pairing is what the mix actually looks like on the ground:
+ * scattered giants over scrub, not one species owning a biome.
  *
  * A world with no biome table at all (the "Plain planet" mode, or a custom
  * table missing these names) grows nothing from any of these twelve -- see
  * {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
-	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.5,1:0.5|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
-	"Spruce|density=0.9|feature=220|curve=-1:0.5,1:0.5|biomes=Taiga,Snowy slopes,Boreal wet forest,Boreal rain forest;" +
-	"Birch|density=0.3|feature=300|curve=-1:0.5,1:0.5|biomes=Tundra,Frozen valley,Moist tundra,Wet tundra;" +
-	"Heather|density=1.2|feature=140|curve=-1:0.5,1:0.5|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
-	"Oak|density=0.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland,Moist forest,Wet forest;" +
-	"Willow|density=0.6|feature=200|curve=-1:0.5,1:0.5|biomes=Swamp,Wet forest;" +
-	"Baobab|density=0.1|feature=500|curve=-1:0.5,1:0.5|biomes=Steppe,Highland steppe,Dry basin,Dry forest,Thorn woodland;" +
-	"Bush|density=1|feature=180|curve=-1:0.5,1:0.5|biomes=Steppe,Dry slope,Desert scrub,Dry scrub;" +
-	"Redwood|density=0.8|feature=280|curve=-1:0.5,1:0.5|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
-	"Palm|density=0.3|feature=150|curve=-1:0.5,1:0.5|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
-	"Deadwood|density=0.2|feature=260|curve=-1:0.5,1:0.5|biomes=Badlands,Dry basin,Subtropical desert,Tropical desert;" +
-	"Cactus|density=0.4|feature=200|curve=-1:0.5,1:0.5|biomes=Desert,Badlands,Dry slope,Tropical desert,Desert scrub";
+	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.22,0.65:0.28,1:0.18|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
+	"Spruce|density=0.9|feature=220|curve=-1:0.05,-0.4:0.15,0.2:0.28,0.7:0.15,1:0.05|biomes=Taiga,Snowy slopes,Boreal wet forest,Boreal rain forest;" +
+	"Birch|density=0.3|feature=300|curve=-1:0.03,-0.5:0.12,0:0.22,0.5:0.1,1:0.03|biomes=Tundra,Frozen valley,Moist tundra,Wet tundra;" +
+	"Heather|density=1.2|feature=140|curve=-1:0.08,-0.3:0.2,0.2:0.3,0.6:0.18,1:0.06|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
+	"Oak|density=0.6|feature=380|curve=-1:0.5,-0.2:0.425,0.2:0,1:0|biomes=Grove,Grassland,Moist forest,Wet forest;" +
+	"Willow|density=0.6|feature=200|curve=-1:0.05,-0.4:0.15,0.1:0.25,0.6:0.14,1:0.04|biomes=Swamp,Wet forest;" +
+	"Baobab|density=0.1|feature=500|curve=-1:0.05,-0.3:0.18,0.3:0.26,0.7:0.12,1:0.03|biomes=Steppe,Highland steppe,Dry basin,Dry forest,Thorn woodland;" +
+	"Bush|density=1|feature=180|curve=-1:0.06,-0.4:0.16,0.1:0.27,0.5:0.16,1:0.05|biomes=Steppe,Dry slope,Desert scrub,Dry scrub;" +
+	"Redwood|density=0.8|feature=280|curve=-1:0.04,-0.4:0.14,0.2:0.28,0.6:0.16,1:0.05|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
+	"Palm|density=0.3|feature=150|curve=-1:0.03,-0.3:0.12,0.2:0.22,0.6:0.11,1:0.03|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
+	"Deadwood|density=0.2|feature=260|curve=-1:0.03,-0.4:0.14,0.1:0.24,0.5:0.12,1:0.03|biomes=Badlands,Dry basin,Subtropical desert,Tropical desert;" +
+	"Cactus|density=0.4|feature=200|curve=-1:0.02,-0.3:0.1,0.3:0.24,0.7:0.1,1:0.02|biomes=Desert,Badlands,Dry slope,Tropical desert,Desert scrub";
