@@ -10,6 +10,72 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, seeding the block textures
+**Where:** `packages/engine/src/mesh/opacityOf.ts`,
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** `opacityOf` answers 2 for everything that is not air or
+water, leaves included, and a face is drawn between two cells only when the
+first is more opaque than the second. So a leaf against a leaf draws nothing
+and a leaf against its own trunk draws nothing: a canopy is a hollow shell with
+no geometry inside it and no face where it meets the wood.
+
+That is right while a leaf is a solid green cube, which is what one is today.
+It stops being right the moment the leaf texture is alpha-tested: a look
+through a hole in the outer face reaches cells whose faces were never emitted,
+and what shows there is the sky behind the tree. Looking at a trunk through a
+hole shows the sky through the trunk as well.
+
+**Why it matters.** The leaf pictures already carry the holes -- the darkest
+level of the recipe is alpha 0, about a fifth of the tile -- so this is what
+stands between the textures on disk and leaves that read as leaves. It is also
+two decisions rather than one: a leaf must stop occluding, and the shadow pass
+has to alpha-test too or a tree throws a solid cube's shadow.
+
+**What would fix it.** A third opacity level for a cutout material, and a
+second condition beside the comparison: draw a face when the neighbour is less
+opaque **or** when either side is a cutout. That is Minecraft's fancy leaves,
+and it costs every hidden face in every canopy -- unmeasured here, because
+F-124 stops a trial from growing a tree to count. The mip chain needs care as
+well: averaging alpha down a chain dissolves distant leaves, so the levels want
+their coverage rescaled at bake time.
+
+### F-124 — Plants cannot be grown outside the worker, and the plant trial measures nothing
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, trying to count the faces a canopy hides
+**Where:** `tools/trial-plant-chunk.ts`,
+`packages/engine/src/generation/chunk/plantChunk.ts`
+
+**What happens.** `tools/trial-plant-chunk.ts` reports **0 plants and 0.0%
+canopy at every level of detail**, and prints the cost of growing them as
+though that were a measurement. Trees plainly do grow -- the client draws them,
+and a frame taken from under one is how the carried light was judged.
+
+A plant layer now names the biomes it grows in, and `plantChunk` builds the
+masks from the `BiomeField` it is handed. The trial hands it `null`, so no
+layer matches anything. Passing a field built by `biomeFieldFor` is not enough
+either: over 900 chunks spread across the planet, not one grew a leaf.
+
+**Why it matters.** Two things are unmeasurable until it is understood. The
+trial's own subject -- what a chunk's plants cost against its ground -- is
+being reported as a timing of doing nothing, and it reads as a real number.
+And anything wanting a canopy to count, F-123 included, has no way to make one.
+
+**What would fix it.** Find what the chunk worker does that these two do not,
+which is one read of the worker's setup path against `plantChunk`'s arguments.
+Then either the trial gains the missing step, or `plantChunk` refuses a layer
+set it cannot satisfy instead of quietly growing nothing.
+
 ### F-120 — A light standing at a pentagon reads its own chart twice over
 
 **Kind:** bug
