@@ -87,7 +87,7 @@ export class BlockTextures {
 	constructor(
 		ctx: GpuContext,
 		atlas: BlockAtlas,
-		levels: readonly Uint8Array[],
+		levels: readonly Uint8Array<ArrayBuffer>[],
 	) {
 		this.atlas = atlas;
 		this.table = Int32Array.from(atlas.table);
@@ -159,7 +159,7 @@ export class BlockTextures {
 	 */
 	static async load(base: string): Promise<{
 		atlas: BlockAtlas;
-		levels: Uint8Array[];
+		levels: Uint8Array<ArrayBuffer>[];
 	}> {
 		const atlas = (await (
 			await fetch(`${base}blocks.json`)
@@ -168,7 +168,7 @@ export class BlockTextures {
 		// through the same code as a straight copy.
 		const columns = Math.max(1, atlas.columns ?? 1);
 		const rows = Math.ceil(atlas.layers.length / columns);
-		const levels: Uint8Array[] = [];
+		const levels: Uint8Array<ArrayBuffer>[] = [];
 		for (let level = 0; level < atlas.levels; level++) {
 			const wide = atlas.size >> level;
 			const blob = await (
@@ -202,7 +202,7 @@ export function unpackGrid(
 	wide: number,
 	columns: number,
 	layers: number,
-): Uint8Array {
+): Uint8Array<ArrayBuffer> {
 	const out = new Uint8Array(layers * wide * wide * 4);
 	const pitch = columns * wide * 4;
 	for (let at = 0; at < layers; at++) {
