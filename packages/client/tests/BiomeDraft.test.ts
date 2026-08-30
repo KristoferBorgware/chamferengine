@@ -13,12 +13,21 @@ describe("the biome table in a query string", () => {
 		expect(biomeTableToText(biomeTableOf("elevation"))).toBe("elevation");
 	});
 
-	it("reads holdridge's own dots under the elevation preset, dried by default", () => {
+	it("opens elevation as holdridge's zones plus the substrate, dried by default", () => {
 		const elevation = biomeTableOf("elevation");
 		expect(elevation.humLapse).toBeGreaterThan(0);
-		expect(elevation.biomes.map((b) => b.name)).toEqual(
-			biomeTableOf("holdridge").biomes.map((b) => b.name),
-		);
+		// Every life zone is carried over in order, and what follows them is
+		// the substrate the merge brought across from `plain`.
+		const zones = biomeTableOf("holdridge").biomes.map((b) => b.name);
+		const names = elevation.biomes.map((b) => b.name);
+		expect(names.slice(0, zones.length)).toEqual(zones);
+		expect(names.slice(zones.length)).toEqual([
+			"Icy shore",
+			"Stony shore",
+			"Beach",
+			"Badlands",
+			"Stony peaks",
+		]);
 		// plain and holdridge open with no elevation pull, so a link naming
 		// either travels exactly as it did before this field existed.
 		expect(biomeTableOf("plain").humLapse).toBe(0);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeCell, encodeCell, wordBits } from "chamfer/addressing";
 import {
 	BlockType,
+	FIXED_FIT,
 	TerrainGenerator,
 	flatCoarseMap,
 	seedFromString,
@@ -697,24 +698,27 @@ describe("what a live rebuild can show", () => {
 });
 
 describe("the biome model's fit", () => {
-	it("stretches only for plain, whatever the knob says", () => {
+	// **Only `plain` measures its own planet.** Its dots were placed
+	// assuming that stretch; the two Holdridge tables name a real
+	// classification, so they read one constant span instead -- which is
+	// what makes the same reading name the same zone on every world while
+	// still reaching the whole chart.
+	it("measures a span only for plain, and names a constant one otherwise", () => {
 		for (const biomeFit of [true, false]) {
-			expect(
-				new PlanetSettings({ biomes: "plain", biomeFit }).biomeOptions()
-					.fit,
-			).toBe(biomeFit);
-			expect(
-				new PlanetSettings({
-					biomes: "holdridge",
+			const plain = new PlanetSettings({
+				biomes: "plain",
+				biomeFit,
+			}).biomeOptions();
+			expect(plain.climateFit ?? null).toBe(null);
+			expect(plain.fit).toBe(biomeFit);
+
+			for (const biomes of ["holdridge", "elevation"]) {
+				const held = new PlanetSettings({
+					biomes,
 					biomeFit,
-				}).biomeOptions().fit,
-			).toBe(false);
-			expect(
-				new PlanetSettings({
-					biomes: "elevation",
-					biomeFit,
-				}).biomeOptions().fit,
-			).toBe(false);
+				}).biomeOptions();
+				expect([biomes, held.climateFit]).toEqual([biomes, FIXED_FIT]);
+			}
 		}
 	});
 

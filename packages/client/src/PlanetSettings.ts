@@ -30,6 +30,7 @@ import {
 	CONTINENT_LAYER_DEFAULT,
 	CoarseMap,
 	EROSION_LAYER_DEFAULT,
+	FIXED_FIT,
 	GROUND_LINES,
 	PEAKS_LAYER_DEFAULT,
 	maxElevationFor,
@@ -2407,15 +2408,17 @@ export class PlanetSettings {
 	 * {@link biomeTable} and travels inside `biomes=` rather than as a knob
 	 * of its own.
 	 *
-	 * **`fit` is forced off for every table but `plain`.** `plain`'s own
-	 * dots are placed assuming the per-planet stretch -- its own comment
-	 * says so -- but a table naming a real classification, Holdridge's or
-	 * any other, promises the same absolute reading the same name. Measured
-	 * directly: fitted, two planets built from different seeds name the
-	 * same raw climate reading two different Holdridge zones on a third of
-	 * a small sample; unfitted, the same reading names the same zone on
-	 * every planet by construction, because the map from a raw reading to
-	 * the 0-to-1 square no longer depends on what land this planet grew.
+	 * **Every table but `plain` reads its climate through one constant
+	 * span.** `plain`'s own dots are placed assuming the per-planet stretch
+	 * -- its own comment says so -- but a table naming a real
+	 * classification promises the same absolute reading the same name, and
+	 * a stretch measured from this planet's land cannot keep that: fitted,
+	 * two planets built from different seeds named the same raw reading two
+	 * different Holdridge zones on a third of a small sample. Mapping the
+	 * raw range straight through keeps the promise and empties the table --
+	 * humidity then spans `0.05` to `0.60` of the square and the eight
+	 * zones above it are unreachable. {@link FIXED_FIT} is the span 24
+	 * worlds measured on average, held as a constant, which keeps both.
 	 * The `biomeFit` knob still reaches `plain`.
 	 */
 	biomeOptions(): BiomeSettings {
@@ -2435,7 +2438,8 @@ export class PlanetSettings {
 			warpStrength: k.warpStrength,
 			warpFeature: k.warpFeature,
 			warpOctaves: k.warpOctaves,
-			fit: this.biomeTable.preset === "plain" && k.biomeFit,
+			fit: k.biomeFit,
+			climateFit: this.biomeTable.preset === "plain" ? null : FIXED_FIT,
 			regions: k.biomeRegions,
 			regionSpan: k.regionSpan,
 			regionClimate: k.regionClimate,

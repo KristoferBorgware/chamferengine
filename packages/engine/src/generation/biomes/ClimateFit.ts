@@ -23,3 +23,32 @@ export const UNFITTED: ClimateFit = {
 	hSpan: 2,
 	fitted: false,
 };
+
+/**
+ * One fit for every planet, measured once and held as constants.
+ *
+ * **A table naming a real classification needs both halves of a promise a
+ * measured fit cannot keep at once**: the same reading names the same zone
+ * on every world, and the whole square is ground somewhere. Measuring each
+ * planet's own land keeps the second and breaks the first -- two worlds
+ * measure two spans, so one reading lands on two dots. Mapping the raw
+ * range straight through keeps the first and breaks the second: the climate
+ * terms are noise stacks summed and divided, so their readings cluster in
+ * the middle and never reach a corner. Measured over 24 worlds, eight seeds
+ * at three reliefs, humidity spanned `0.05` to `0.60` of the square and
+ * every zone above it was unreachable -- eight of Holdridge's twenty-three,
+ * the whole wet half of its chart.
+ *
+ * These are the mean of those 24 worlds' own measured spans. Each world's
+ * fit sits within about a sixth of the mean (`tSpan` 1.41 to 1.68, `hSpan`
+ * 0.77 to 1.03), so one constant is close to what any of them would have
+ * measured, and being a constant it maps a reading the same way on all of
+ * them.
+ */
+export const FIXED_FIT: ClimateFit = {
+	tLo: -0.91,
+	tSpan: 1.52,
+	hLo: -0.54,
+	hSpan: 0.87,
+	fitted: true,
+};
