@@ -36,4 +36,37 @@ fn onPicture(uv : vec2f, place : vec4f) -> vec2f {
 fn layerOf(place : vec4f) -> i32 {
 	return i32(place.x);
 }
+
+/**
+ * A picture sampled with the gradients of its own **unwrapped** coordinate.
+ *
+ * **A wall merged down a column runs its coordinate past one and lets the
+ * sampler tile.** That is free while a picture owns a whole layer, because the
+ * sampler's own repeat does it. Once several pictures share a layer the repeat
+ * has to be arithmetic -- and the derivative of a wrapped coordinate **spikes
+ * at every wrap**, because it jumps from just under one back to zero between
+ * two neighbouring pixels. A sampler choosing its own mip from that reads the
+ * jump as a huge rate of change and picks the coarsest level it has, so a
+ * merged wall grows a blurred dark line along every block boundary.
+ *
+ * Gradients taken before the wrap say what the rate actually is, so the mip is
+ * the one the surface deserves. **Exact today and needed later**: the transform
+ * is the identity, so these are the same numbers the sampler would have worked
+ * out for itself.
+ */
+fn samplePicture(
+	pictures : texture_2d_array<f32>,
+	how : sampler,
+	uv : vec2f,
+	place : vec4f,
+) -> vec4f {
+	return textureSampleGrad(
+		pictures,
+		how,
+		onPicture(uv, place),
+		layerOf(place),
+		dpdx(uv) * place.w,
+		dpdy(uv) * place.w,
+	);
+}
 `;

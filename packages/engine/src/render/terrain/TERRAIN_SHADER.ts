@@ -336,8 +336,7 @@ fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// the same path. The index is clamped for the same reason: the read
 	// happens whether or not its answer is wanted.
 	let place = placeOf(layer);
-	let picked = textureSample(
-		blockMap, blockSample, onPicture(uv, place), layerOf(place));
+	let picked = samplePicture(blockMap, blockSample, uv, place);
 	// The band over the brink, composited by its own alpha. A block carrying
 	// \`-1\` for it takes none of the sample, which happens either way.
 	//
@@ -346,8 +345,7 @@ fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// clamp has to reach the picture's own edge and not the layer's, which is
 	// the one thing about the band a packing has to solve.
 	let overPlace = placeOf(band);
-	let over = textureSample(
-		blockMap, bandSample, onPicture(uv, overPlace), layerOf(overPlace));
+	let over = samplePicture(blockMap, bandSample, uv, overPlace);
 	let cover = select(0.0, over.a, band >= 0);
 	let color = mix(picked.rgb, over.rgb, cover);
 	return select(vec4f(1.0), vec4f(color, picked.a), layer >= 0);
