@@ -1676,6 +1676,9 @@ export class ParameterPanel {
 	 */
 	private readonly oneSided: boolean;
 
+	/** Handed the world back before {@link rebuild} leaves the page. */
+	private readonly onGiveUp: () => void;
+
 	constructor(
 		settings: PlanetSettings,
 		onLive: (settings: PlanetSettings) => void,
@@ -1689,11 +1692,25 @@ export class ParameterPanel {
 			readonly page?:
 				"world" | "landscape" | "cave" | "vegetation" | "biomes";
 			readonly side?: "left" | "right";
+
+			/**
+			 * Hand the world back, just before **Rebuild** navigates away.
+			 *
+			 * **A page the browser keeps is a page that holds everything it
+			 * had.** Rebuild reaches the next world through `location.href`,
+			 * an ordinary navigation the browser may freeze the old page for
+			 * -- and a frozen page keeps its worker threads and every byte of
+			 * GPU memory its chunks are in. Two rebuilds and three worlds are
+			 * resident at once. Giving this world up here happens before the
+			 * browser has decided anything, so it cannot be kept either way.
+			 */
+			readonly onGiveUp?: () => void;
 		} = {},
 	) {
 		this.bench = options.bench ?? false;
 		this.page = options.page ?? (this.bench ? "landscape" : "world");
 		this.oneSided = options.side === "left";
+		this.onGiveUp = options.onGiveUp ?? (() => {});
 		// The draft is dragged, and a curve is an array: taken by reference it
 		// would be written back into whoever handed these over.
 		this.draft = copyKnobs(settings.knobs);
@@ -2518,6 +2535,10 @@ export class ParameterPanel {
 
 	private rebuild(): void {
 		if (this.settings.problems().length > 0) return;
+		// **Before the navigation, not after it.** See `onGiveUp`: what the
+		// browser does with this page once it has left is its own decision,
+		// and a frozen one holds every worker and every chunk buffer it had.
+		this.onGiveUp();
 		location.href = this.href();
 	}
 

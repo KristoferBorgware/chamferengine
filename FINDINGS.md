@@ -2718,6 +2718,42 @@ same planet.
 
 ---
 
+### F-129 — A chunk an edit invalidates leaves `drawn` and stays on the GPU
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, tracing a session that had lost its frame rate after a
+rebuild
+**Where:** `packages/client/src/planet.ts` (`dropChunk`),
+`packages/engine/src/render/terrain/ChunkRenderer.ts` (`render`)
+
+**What happens.** `dropChunk` deletes a chunk from `drawn` and `building` and
+invalidates it on the pool, and does **not** take it off the GPU. That is
+deliberate as far as it goes -- the old mesh keeps drawing until its
+replacement lands, which is what stops a break flashing a hole in the ground.
+But the renderer draws every **resident** chunk in the frustum, not every
+`drawn` one, and the two sets have now come apart: nothing left holding the key
+will ever drop it. A chunk the player then walks away from is not in `keep`, so
+it is never rebuilt and never uploaded over, and it stays on the GPU **and on
+the screen** for the life of the page.
+
+**Why it matters.** Every edit near the edge of what is kept leaks a chunk's
+vertices and indices -- a forested one is about `4 MB`. The rebuild path no
+longer carries it forward (`dropEveryChunk` clears the renderer outright now
+rather than walking `drawn` and `retiring`), so it is bounded by how long a
+session runs between rebuilds rather than unbounded. It is still a stale mesh
+drawn over ground somebody has dug.
+
+**What would fix it.** Put the chunk in `retiring` rather than dropping it from
+`drawn` alone: that is the set built for exactly this -- a mesh that keeps
+drawing until its replacement is up -- and `dropReplaced` and the trim beside
+it already take chunks off the GPU when they are done with them. `drawn.delete`
+with no owner afterwards is the bug.
+
+---
+
 ## Closed
 
 ### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
