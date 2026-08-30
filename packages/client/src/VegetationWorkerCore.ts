@@ -8,18 +8,21 @@ import type {
 	VegetationStep,
 } from "./VegetationMessage.js";
 import type { Carved, ColumnPatch } from "chamfer/mesh";
-import type { PlantLayer, Stand } from "chamfer/generation";
+import type { BiomeWorld, PlantLayer, Stand } from "chamfer/generation";
 import { BenchWorld } from "./BenchWorld.js";
 import { PlanetSettings } from "./PlanetSettings.js";
 import { Vec3 } from "chamfer/math";
 import {
+	BiomeField,
 	CARVE_LAYER_DEFAULT,
 	carveSeed,
 	PlantTemplateStore,
 	growStand,
 	layerNoiseSettings,
+	makeBiomeSample,
 	makeBlend,
 	octaveNoise,
+	plantBiomeMasks,
 	plantLayerNoise,
 	plantRoots,
 	plantSalt,
@@ -101,6 +104,21 @@ export class VegetationWorkerCore {
 	private planetKey = "";
 
 	/**
+	 * The climate model a biome-restricted layer is checked against, and what
+	 * it was last built from.
+	 *
+	 * **The bench previews what the world builds, biome restriction
+	 * included.** A layer's own `.biomes` names a real biome the same way a
+	 * world does, so the patch it grows against has to answer the same
+	 * question the walkable world's `BiomeField` does -- built here the way
+	 * `BiomesWorkerCore` already builds one, and kept across a build that
+	 * only moved the patch or dragged a plant knob, since neither changes
+	 * what the climate model itself says.
+	 */
+	private biomeField: BiomeField | null = null;
+	private biomeFieldKey = "";
+
+	/**
 	 * The pre-grown plants this patch is stamped from, and what they are of.
 	 *
 	 * A shape knob makes different plants, so the set is thrown away and made
@@ -154,6 +172,43 @@ export class VegetationWorkerCore {
 		const level = settings.plantLevel;
 		const block = settings.plantCellMetres;
 		const frame = patchFrame(k.patchLatitude, k.patchLongitude);
+
+		const table = settings.biomeTable;
+		const biomeFieldKey = settings.coarseMapRuns
+			? JSON.stringify([
+					this.world.ms,
+					table.preset,
+					table.biomes,
+					table.grid,
+					settings.biomeOptions(),
+				])
+			: "";
+		if (biomeFieldKey !== this.biomeFieldKey) {
+			this.biomeFieldKey = biomeFieldKey;
+			const heightBlend = makeBlend();
+			this.biomeField = settings.coarseMapRuns
+				? new BiomeField(
+						{
+							seed,
+							radius,
+							continent: settings.layerFor("continent"),
+							erosion: settings.layerFor("erosion"),
+							peaks: settings.layerFor("peaks"),
+							heightAt: (x, y, z) => {
+								grid.blendInto(new Vec3(x, y, z), heightBlend);
+								return readBlend(
+									this.world.height,
+									heightBlend,
+								);
+							},
+						} satisfies BiomeWorld,
+						table.biomes,
+						table.grid,
+						settings.biomeOptions(),
+					)
+				: null;
+		}
+		const biomeField = this.biomeField;
 
 		// **The patch is laid out when it moves and filled when the ground
 		// does.** Where it stands and how finely it is cut decide which columns
@@ -221,6 +276,23 @@ export class VegetationWorkerCore {
 
 		const layers: PlantLayer[] = request.layers.map(plantLayerOf);
 		const live = layers.filter((layer) => layer.on);
+
+		// **Read once a patch column, the same place `top` and `groundLayer`
+		// are**, rather than once a candidate root inside `growStand` -- the
+		// same reason `plantChunk` reads it here and not deeper in.
+		const biomeAt = biomeField
+			? new Int32Array(layout.count).fill(-1)
+			: null;
+		if (biomeField && biomeAt) {
+			const sample = makeBiomeSample();
+			for (let c = 0; c < layout.count; c++)
+				biomeAt[c] = biomeField.readAt(
+					layout.directions[c * 3]!,
+					layout.directions[c * 3 + 1]!,
+					layout.directions[c * 3 + 2]!,
+					sample,
+				);
+		}
 		// **The bench previews what the world builds**, so it stamps the same
 		// pre-grown plants the chunk pass does rather than growing each one
 		// where it stands. Kept between requests and thrown away when a shape
@@ -254,6 +326,10 @@ export class VegetationWorkerCore {
 				chunkReach: CHUNK_REACH,
 				seaLevel: 0,
 				templates: this.templates,
+				biomeAt,
+				biomeMasks: biomeField
+					? plantBiomeMasks(layers, table.biomes)
+					: null,
 			},
 		);
 

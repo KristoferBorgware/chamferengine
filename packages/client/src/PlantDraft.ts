@@ -321,21 +321,34 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
 /**
  * What a world with nothing said about its plants grows.
  *
- * **Two layers, because one proves nothing.** A single layer is a density with
- * a curve on it and could as well have been a slider; two say what the
- * arrangement is for -- a pine belt and an oak wood, each with its own field,
- * its own curve and its own shape, meeting wherever both curves allow. The
- * curves are drawn to put them in different places rather than left flat, or
- * the opening view is two species evenly mixed over the whole planet.
+ * **Twelve layers, one per species, each restricted to the biomes it
+ * actually stands in** -- eighteen of the default table's twenty-one biomes
+ * end up with something growing in them. The three left bare on purpose are
+ * Icy shore, Stony shore and Frozen plateau: real shoreline and high rock,
+ * not a gap. Two species carry hand-drawn curves from when this default held
+ * only them (Pine, Oak); the other ten are flat -- uniform density across
+ * whichever biomes they are allowed in -- because the biome list is already
+ * doing the work of saying *where*, and a curve on top of that is a second
+ * answer to the same question rather than a different one. Several biomes
+ * carry two species deliberately -- Tundra's birch and heather, Steppe's
+ * baobab and bush, Dry basin's baobab and deadwood, Badlands' deadwood and
+ * cactus -- because that pairing is what the mix actually looks like on the
+ * ground: scattered giants over scrub, not one species owning a biome.
  *
- * **Each is also restricted to the biomes real pine and oak actually stand
- * in** -- Taiga and Alpine forest for Pine, Grove and Grassland for Oak, all
- * four from the default biome table. The curve still shapes density inside
- * those biomes; the restriction is what keeps a pine out of a desert
- * regardless of what the curve alone would have allowed there. A world with
- * no biome table at all (the "Plain planet" mode, or a custom table missing
- * these names) grows neither layer anywhere -- see {@link PlantLayer.biomes}.
+ * A world with no biome table at all (the "Plain planet" mode, or a custom
+ * table missing these names) grows nothing from any of these twelve -- see
+ * {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
 	"Pine|density=2.5|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1|biomes=Taiga,Alpine forest;" +
-	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland";
+	"Spruce|density=2.2|feature=220|biomes=Taiga,Snowy slopes;" +
+	"Birch|density=0.8|feature=300|biomes=Tundra,Frozen valley;" +
+	"Heather|density=3|feature=140|biomes=Tundra,Stony peaks,Jagged peaks;" +
+	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland;" +
+	"Willow|density=1.4|feature=200|biomes=Swamp;" +
+	"Baobab|density=0.3|feature=500|biomes=Steppe,Highland steppe,Dry basin;" +
+	"Bush|density=2.5|feature=180|biomes=Steppe,Dry slope;" +
+	"Redwood|density=2|feature=280|biomes=Rainforest;" +
+	"Palm|density=0.7|feature=150|biomes=Beach;" +
+	"Deadwood|density=0.4|feature=260|biomes=Badlands,Dry basin;" +
+	"Cactus|density=1|feature=200|biomes=Desert,Badlands,Dry slope";

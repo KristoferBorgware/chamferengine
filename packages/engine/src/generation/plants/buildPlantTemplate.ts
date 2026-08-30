@@ -54,6 +54,14 @@ export function buildPlantTemplate(
 	// **A layer that always plants**, so the one root on the patch takes it:
 	// the curve is flat at one and the density is the whole of what the curve
 	// can ask for, which makes the chance exactly one and the hash irrelevant.
+	// **And a layer with nowhere it may not stand** -- this patch is a private,
+	// synthetic scrap of flat ground with no biome reading of its own, so a
+	// species restricted to named biomes must not carry the restriction in
+	// here: `growStand` is called below with no `biomeMasks` at all, and its
+	// own rule for that case is "grows nowhere", which would make every
+	// variant of a biome-restricted species come back empty -- counted as
+	// planted by the caller, since the count and the template are two
+	// different things, but drawing nothing.
 	const always: PlantLayer = {
 		...layer,
 		density: 100,
@@ -61,6 +69,7 @@ export function buildPlantTemplate(
 			[-1, 1],
 			[1, 1],
 		],
+		biomes: undefined,
 	};
 	const stand = growStand(
 		patch,
