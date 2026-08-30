@@ -122,6 +122,21 @@ export interface VegetationFacts {
 
 	/** Per layer id, how many plants it grew. */
 	readonly grown: readonly { readonly id: number; readonly count: number }[];
+
+	/**
+	 * The biomes an actual column of this patch reads as, by name -- never the
+	 * whole table, only what is standing in view.
+	 *
+	 * **What a layer's `.biomes` is checked against.** A layer restricted to a
+	 * name absent from this list grows nothing here even though its own field
+	 * and curve might otherwise ask for it, and the panel is what says so
+	 * rather than leaving a reader to guess from an empty patch why one
+	 * species never turns up. Empty for a world with no biome table at all
+	 * (`Plain planet`, or a link missing one), which every restricted layer
+	 * then fails to match -- correctly, since nothing here says what biome
+	 * anywhere is.
+	 */
+	readonly presentBiomes: readonly string[];
 }
 
 /** The patch and its plants as the renderer takes them. */

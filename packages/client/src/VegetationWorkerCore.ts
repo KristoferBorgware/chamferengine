@@ -283,15 +283,27 @@ export class VegetationWorkerCore {
 		const biomeAt = biomeField
 			? new Int32Array(layout.count).fill(-1)
 			: null;
+		// **What the panel checks a layer's own `.biomes` against.** Named
+		// rather than counted or shared as indices, because the panel has no
+		// table of its own to resolve an index against -- a name is the one
+		// thing both sides already agree on.
+		const presentBiomes: string[] = [];
 		if (biomeField && biomeAt) {
+			const seen = new Set<number>();
 			const sample = makeBiomeSample();
-			for (let c = 0; c < layout.count; c++)
-				biomeAt[c] = biomeField.readAt(
+			for (let c = 0; c < layout.count; c++) {
+				const at = biomeField.readAt(
 					layout.directions[c * 3]!,
 					layout.directions[c * 3 + 1]!,
 					layout.directions[c * 3 + 2]!,
 					sample,
 				);
+				biomeAt[c] = at;
+				if (at >= 0 && !seen.has(at)) {
+					seen.add(at);
+					presentBiomes.push(biomeField.biomes[at]!.name);
+				}
+			}
 		}
 		// **The bench previews what the world builds**, so it stamps the same
 		// pre-grown plants the chunk pass does rather than growing each one
@@ -438,6 +450,7 @@ export class VegetationWorkerCore {
 					id: layer.id,
 					count: stand.grown[at] ?? 0,
 				})),
+				presentBiomes,
 			},
 			patch: this.patchSheet(field),
 			planet,
