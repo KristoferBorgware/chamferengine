@@ -141,6 +141,7 @@ export class ChunkRenderer implements ShadowCaster {
 					textures.view,
 					textures.sampler,
 					textures.bandSampler,
+					textures.places,
 				)
 			: null;
 	}
@@ -149,6 +150,7 @@ export class ChunkRenderer implements ShadowCaster {
 		view: GPUTextureView,
 		sampler: GPUSampler,
 		band: GPUSampler,
+		places: GPUBuffer,
 	): GPUBindGroup {
 		return this.ctx.device.createBindGroup({
 			layout: this.blockLayout,
@@ -156,6 +158,7 @@ export class ChunkRenderer implements ShadowCaster {
 				{ binding: 0, resource: view },
 				{ binding: 1, resource: sampler },
 				{ binding: 2, resource: band },
+				{ binding: 3, resource: { buffer: places } },
 			],
 		});
 	}
@@ -290,6 +293,15 @@ export class ChunkRenderer implements ShadowCaster {
 					visibility: GPUShaderStage.FRAGMENT,
 					sampler: { type: "filtering" },
 				},
+				// **Where each picture is on that array.** One entry a
+				// picture, read by the world pass and by the sun's own pass
+				// from this one layout, so the two can never disagree about
+				// which texels a picture occupies.
+				{
+					binding: 3,
+					visibility: GPUShaderStage.FRAGMENT,
+					buffer: { type: "read-only-storage" },
+				},
 			],
 		});
 		// **Before the cascades, which need it.** A leaf shadows through the
@@ -313,6 +325,12 @@ export class ChunkRenderer implements ShadowCaster {
 				.createView({ dimension: "2d-array" }),
 			device.createSampler(),
 			device.createSampler(),
+			// One place, never read: every vertex carries a layer of `-1`
+			// until a bake arrives, and a group left unset is refused.
+			device.createBuffer({
+				size: 16,
+				usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+			}),
 		);
 		this.lightViews = new LightViews(
 			ctx,

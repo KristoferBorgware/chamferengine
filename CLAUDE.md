@@ -2319,6 +2319,25 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A VERTEX NAMES A PICTURE, NOT A LAYER** (`PICTURE_WGSL`, `BlockTextures.places`).
+  Those are the same number while every picture has a layer to itself, and they
+  stop being the same the moment several share one -- which is what a device
+  whose array-layer limit is under the size of the set needs. The shader asks
+  **where is picture P** and gets back `(layer, offsetU, offsetV, scale)` from
+  a table, rather than treating the number on the vertex as a layer index. So
+  packing several pictures onto a layer becomes a table the client fills
+  differently: **no new pipeline, no new bind group, no extra draw call, and
+  nothing the mesher or the vertex format knows about.** The table is the
+  identity today -- picture `n` is layer `n`, offset zero, scale one -- so the
+  arithmetic is `uv * 1 + 0` and the frame does not move. **The world pass and
+  the sun's own pass read the same table from the same bind group layout**, for
+  the reason they already share `ALPHA_CUT`: a leaf lit through a hole its
+  shadow does not have is what happens when the two disagree about which texels
+  a picture occupies. They bind it at different group indices, which is the only
+  thing that varies, so the source is written once and takes the index as an
+  argument. **The band's clamping sampler is the one thing a packing still has
+  to solve** -- it must clamp to the picture's own edge rather than the layer's,
+  or a wall merged down a column grows a second brink.
 - **THE FILE'S SHAPE AND THE TEXTURE'S SHAPE WERE NEVER REQUIRED TO MATCH**
   (`toGrid` in `bake-textures`, `unpackGrid`, F-134 closed). A bake writes one
   PNG a mip level and the client decodes it through an `OffscreenCanvas`. The

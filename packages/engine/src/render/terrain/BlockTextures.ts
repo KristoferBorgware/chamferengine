@@ -55,6 +55,18 @@ export const SLOT_OVERLAY = 3;
 export class BlockTextures {
 	readonly atlas: BlockAtlas;
 	readonly texture: GPUTexture;
+
+	/**
+	 * Where each picture is, as `(layer, offsetU, offsetV, scale)` apiece.
+	 *
+	 * **The identity today** -- picture `n` is layer `n` at offset zero and
+	 * scale one -- because every picture has a layer to itself. It is the one
+	 * place that changes when a device cannot give the set a layer each and
+	 * several have to share one, and filling it differently is the whole of
+	 * that change: no new pipeline, no new bind group, no new draw call, and
+	 * nothing the mesher or the vertex format knows about.
+	 */
+	readonly places: GPUBuffer;
 	readonly view: GPUTextureView;
 	readonly sampler: GPUSampler;
 
@@ -99,6 +111,16 @@ export class BlockTextures {
 				[wide, wide, atlas.layers.length],
 			);
 		});
+		const places = new Float32Array(atlas.layers.length * 4);
+		for (let at = 0; at < atlas.layers.length; at++) {
+			places[at * 4] = at;
+			places[at * 4 + 3] = 1;
+		}
+		this.places = device.createBuffer({
+			size: Math.max(16, places.byteLength),
+			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+		});
+		device.queue.writeBuffer(this.places, 0, places);
 		this.view = this.texture.createView({ dimension: "2d-array" });
 		this.sampler = device.createSampler({
 			magFilter: "nearest",
