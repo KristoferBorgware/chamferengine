@@ -2319,6 +2319,35 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A QUAD'S TWO TRIANGLES CANNOT CARRY A SHADING THAT IS A PRODUCT**
+  (`emitSide`, `emitCap`, F-130 closed). A vertex carries the block's colour
+  with the corner occlusion multiplied in and, **separately**, how much sky its
+  cell stands under; the fragment multiplies them. Each is interpolated
+  affinely across a triangle and the **product of two affine functions is
+  not** -- it has a cross term -- so four corners generally describe a shading
+  no pair of triangles reproduces, the two disagree along their shared
+  diagonal, and every wall in the world wears a crease corner to corner: one
+  bright wedge and one dark. **The one switch that removes it is Full light**,
+  which replaces every vertex's sky with 1 and collapses the product to a
+  single interpolated number -- which is exactly why it reads as a lighting bug
+  no lighting knob touches. Measured over `38,254` wall quads of six land
+  chunks: **43.8%** creased at all, **2.3%** over 5% of their own brightness,
+  worst **45%**, against **0.0%** over 5% and worst 4% under full light.
+  **The crease is the same size whichever diagonal is drawn** -- it is a
+  property of the four numbers -- and what the diagonal decides is how far a
+  dark corner's shadow travels: joined to the other dark corner it ramps the
+  whole width of the face, joined across to a bright one it stays in the
+  triangle it belongs to. It ran the wrong way on **21.9%** of all quads and
+  **50%** of those creased over 5%; picking the brighter pair is **0.0%**, and
+  costs no vertex and no triangle. **A cap has no crease and still has a
+  root** -- two fan triangles sharing a root-to-rim edge interpolate the same
+  two ends along it, so what an arbitrary root costs is the value in the
+  **middle**: a hexagon's centre sits on the root's own long diagonal and the
+  fan paints it the mean of those two corners while the other four never reach
+  it. **Rooting at the brightest corner was tried and is worse than leaving it
+  alone** -- `1.38%` of the cap's own average against `1.27%` at corner 0,
+  because the brightest diagonal overshoots as far as the darkest undershoots.
+  Rooted at whichever diagonal reads closest to the average it is **0.98%**.
 - **A STEP TOO SMALL TO SEE IS A STEP THAT ALIASES** (`stepBlur` in
   `TERRAIN_SHADER`, F-066). A voxel hillside is a staircase, and at a low sun
   the flat top of a step takes `sin(elevation)` of the direct light while the

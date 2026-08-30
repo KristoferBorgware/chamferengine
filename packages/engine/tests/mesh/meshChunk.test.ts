@@ -1175,9 +1175,16 @@ describe("ambient occlusion", () => {
 		expect(differs).toBe(true);
 	});
 
-	it("changes nothing about the geometry, only the vertex colour", () => {
-		// The same corner and the same triangles either way: turning this off
-		// is a lighting choice, not a different mesh.
+	// **The corners are the same; which two of them the diagonal joins is
+	// not.** A quad's four corners carry the occlusion and the sky, the
+	// fragment multiplies them, and two triangles can only reproduce a
+	// shading that is affine over the quad -- which four corners rarely are.
+	// So the diagonal is chosen to join the two brighter ones, leaving a dark
+	// corner inside its own triangle rather than ramping the whole width of
+	// the face. That choice reads the shading, so turning the shading off
+	// changes it: same vertices, same positions, same count of triangles,
+	// paired differently.
+	it("moves no vertex and adds no triangle, only re-pairs them", () => {
 		const { chunk } = mesh(400);
 		const lit = buildChunkMesh(
 			chunk,
@@ -1192,7 +1199,7 @@ describe("ambient occlusion", () => {
 			map.seed,
 			{ ambientOcclusion: false },
 		);
-		expect(flat.opaque.indices).toEqual(lit.opaque.indices);
+		expect(flat.opaque.indices.length).toBe(lit.opaque.indices.length);
 		expect(flat.opaque.vertices.length).toBe(lit.opaque.vertices.length);
 		for (
 			let v = 0;

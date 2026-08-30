@@ -5967,3 +5967,64 @@ it already take chunks off the GPU when they are done with them. `drawn.delete`
 with no owner afterwards is the bug.
 
 ---
+
+### F-130 — A quad's two triangles cannot carry a shading that is a product
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, chasing a wedge across trunks, leaves and ground that
+only **Full light** removed
+**Closed:** 2026-08-30, fixed. A wall picks the diagonal joining its two
+brighter corners, and a cap roots its fan at whichever long diagonal reads
+closest to the cap's own average. Neither adds a vertex or a triangle -- the
+same buffers, the same counts, the corners paired or the fan started somewhere
+else -- and neither can be had by tuning a knob, because the crease is what the
+two attributes' product does between four corners.
+**Where:** `packages/engine/src/mesh/meshChunk.ts` (`emitSide`, `emitCap`),
+`tools/trial-quad-saddle.ts`
+
+**What happens.** A vertex carries the block's colour with the corner occlusion
+already multiplied in, and **separately** how much sky its cell stands under;
+the fragment multiplies the two. Each is interpolated affinely across a
+triangle, and the **product of two affine functions is not affine** -- it has a
+cross term. So a quad's four corners generally describe a shading no pair of
+triangles can reproduce, the two disagree along their shared diagonal, and the
+wall wears a crease from corner to corner: one bright wedge and one dark one
+across a face whose lighting should be smooth.
+
+The size of that crease is `|f(a) + f(c) - f(b) - f(d)|` over the four corners
+and **is the same whichever diagonal is drawn** -- it is a property of the four
+numbers. What the diagonal decides is which two corners are joined, and that
+decides how far a dark corner's shadow travels: joined to the other dark
+corner, it ramps the whole width of the quad; joined across to a bright one, it
+stays inside the one triangle it belongs to. Measured over `38,254` wall quads
+of six land chunks of the shipped world, **43.8%** are creased at all, **2.3%**
+by more than 5% of their own brightness, worst **45%** -- and the diagonal ran
+between the two **darker** corners on **21.9%** of all quads and **50%** of the
+ones creased over 5%.
+
+A cap is a fan and has no crease at all: two triangles sharing a root-to-rim
+edge interpolate between the same two ends along it. What an arbitrary root
+costs a cap is the value in its **middle** -- a hexagon's centre sits on the
+root's own long diagonal, so the fan paints it the mean of those two corners
+and the other four never reach it. Over `30,664` cap fans the middle landed
+**1.27%** of the cap's own average away from it.
+
+**Why it matters.** It is on every wall of every block in the world, it looks
+exactly like bad geometry, and the one switch that removes it is **Full
+light** -- which replaces every vertex's sky with 1 and so collapses the
+product back to a single interpolated number. Measured, the same quads under
+full light are **0.0%** creased over 5%, worst **4%**. That is why the artifact
+reads as a lighting bug that no lighting knob touches: the sky term is half of
+a product, and turning the other half into a constant is the only thing on the
+panel that makes the shading affine again.
+
+**What would fix it.** Choosing the diagonal and the fan root, which costs no
+vertex and no triangle. It does not remove the crease -- only a per-fragment reconstruction or a fifth
+vertex in the middle of each quad would -- but it stops the crease from being
+drawn the worst way round. Rooting a cap at its **brightest** corner was tried
+and is **worse than leaving it alone** (`1.38%` against `1.27%`), because the
+brightest diagonal overshoots the average as far as the darkest undershoots it;
+rooting at the diagonal nearest the average gives **0.98%**.
