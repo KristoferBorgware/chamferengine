@@ -6,6 +6,7 @@ import {
 	BLOCK_NAMES,
 	DEFAULT_BIOMES,
 	LANDFORMS,
+	SHORE,
 	allowedBiomes,
 	biomeOf,
 } from "chamfer/generation";
@@ -55,36 +56,52 @@ describe("biomeOf", () => {
 });
 
 describe("the presets", () => {
-	it("give every landform at least one biome in the shipped set", () => {
-		for (const preset of ["plain", "holdridge"]) {
+	it("give every landform at least one biome in every shipped set", () => {
+		for (const preset of Object.keys(BIOME_PRESETS)) {
 			const allowed = allowedBiomes(BIOME_PRESETS[preset]!);
 			for (let form = 0; form < LANDFORMS.length; form++)
 				expect(allowed[form]!.length).toBeGreaterThan(0);
 		}
 	});
 
-	it("file every Holdridge zone under a real landform, and elevation's own copy under any", () => {
+	it("files every life zone under no landform, in both Holdridge tables", () => {
 		for (const biome of BIOME_PRESETS["holdridge"]!)
-			expect(LANDFORMS.some((f) => f.key === biome.landform)).toBe(true);
-		for (const biome of BIOME_PRESETS["elevation"]!)
 			expect(biome.landform).toBe(ANY_LANDFORM);
+		// `elevation` is those same zones plus the substrate, and the
+		// substrate is the only part of it filed to real ground.
+		const merged = BIOME_PRESETS["elevation"]!;
+		const zones = merged.filter((b) => b.landform === ANY_LANDFORM);
+		const substrate = merged.filter((b) => b.landform !== ANY_LANDFORM);
+		expect(zones.map((b) => b.name)).toEqual(
+			BIOME_PRESETS["holdridge"]!.map((b) => b.name),
+		);
+		expect(substrate.length).toBeGreaterThan(0);
+		for (const biome of substrate)
+			expect(LANDFORMS.some((f) => f.key === biome.landform)).toBe(true);
 	});
 
-	it("keeps a hot desert off a summit under Holdridge too", () => {
-		const holdridge = BIOME_PRESETS["holdridge"]!;
-		const allowed = allowedBiomes(holdridge);
-		const peaks = LANDFORMS.findIndex((f) => f.key === "peaks");
-		for (const name of ["Subtropical desert", "Tropical desert"]) {
-			const desert = holdridge.findIndex((b) => b.name === name);
-			expect(
-				biomeOf(
-					holdridge[desert]!.t,
-					holdridge[desert]!.h,
-					allowed[peaks],
-					holdridge,
-				),
-			).not.toBe(desert);
+	// **The shore is the one landform a filed biome takes outright.** Every
+	// other keeps its life zones and gains a dot; a coast reads the most
+	// crowded corner of the square, so a beach merely added never wins.
+	it("hands the shore to its own biomes, and shares every other landform", () => {
+		const merged = BIOME_PRESETS["elevation"]!;
+		const allowed = allowedBiomes(merged);
+		const zones = new Set(
+			merged
+				.map((b, i) => [b, i] as const)
+				.filter(([b]) => b.landform === ANY_LANDFORM)
+				.map(([, i]) => i),
+		);
+		for (let form = 0; form < LANDFORMS.length; form++) {
+			const here = allowed[form]!;
+			const fromZones = here.filter((i) => zones.has(i)).length;
+			if (LANDFORMS[form]!.key === "shore") expect(fromZones).toBe(0);
+			else expect(fromZones).toBe(zones.size);
 		}
+		// And a table filing nothing to the shore is untouched by the rule.
+		expect(allowedBiomes(BIOME_PRESETS["holdridge"]!)[SHORE]!.length).toBe(
+			BIOME_PRESETS["holdridge"]!.length,
+		);
 	});
 
 	it("gives every biome its own block, and never renames one shared on purpose", () => {

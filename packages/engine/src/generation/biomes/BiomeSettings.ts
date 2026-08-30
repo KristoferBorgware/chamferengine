@@ -1,3 +1,5 @@
+import type { ClimateFit } from "./ClimateFit.js";
+
 /**
  * The knobs on the biome model, all of them defaulted.
  *
@@ -75,8 +77,24 @@ export interface BiomeSettings {
 	 * quarter of it -- so raw readings cluster in the middle of the square and
 	 * the corners name climates no ground is in. The fit measures the land's
 	 * own 2nd and 98th percentiles and stretches the square onto them.
+	 *
+	 * Read only when {@link climateFit} is absent, which is what names a
+	 * span rather than measuring one.
 	 */
 	readonly fit?: boolean;
+
+	/**
+	 * The spans to read every climate through, in place of measuring this
+	 * planet's own.
+	 *
+	 * **A span that is a constant maps one reading to one dot on every
+	 * world**, which is what a table naming a real classification promises
+	 * and a per-planet measurement cannot keep. {@link FIXED_FIT} is the one
+	 * measured for the shipped climate model; a table whose dots were placed
+	 * against this planet's own land leaves this absent and sets
+	 * {@link fit} instead.
+	 */
+	readonly climateFit?: ClimateFit | null;
 
 	/**
 	 * Whether biomes belong to regions.
@@ -140,6 +158,7 @@ export const BIOME_DEFAULTS = {
 	warpFeature: 700,
 	warpOctaves: 3,
 	fit: true,
+	climateFit: null,
 	regions: true,
 	regionSpan: 1600,
 	regionClimate: 1,

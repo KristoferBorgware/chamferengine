@@ -10,6 +10,51 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-133 — The shipped climate reads cold and dry, so a third of the land is two biomes
+
+**Kind:** tuning
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, measuring which biomes the merged table actually builds
+**Where:** `packages/engine/src/generation/biomes/BiomeField.ts`
+(`climateAt`), `BiomeSettings.ts` (`tempEquator`, `humOcean`, `humNoise`,
+`humLapse`), `ClimateFit.ts` (`FIXED_FIT`)
+
+**What happens.** With the merged table read through `FIXED_FIT`, the
+shares of land the 28 biomes take are very uneven at the cold, dry end.
+Measured over four seeds of the shipped world:
+
+> **[measured]** Dry tundra `19.1%` and Boreal desert `11.9%` -- `31%` of
+> all land between two biomes. The next is Moist tundra at `7.2%`, and the
+> median biome takes `3.3%`. At the other end Boreal rain forest takes
+> `0.05%`, Rain tundra `0.28%` and Tropical rain forest `0.41%`.
+
+The cause is the raw climate's own distribution rather than the table:
+before any fit, humidity spans `0.05` to `0.60` of the square at the 1st
+and 99th percentiles and temperature reaches `0.84`. `FIXED_FIT` stretches
+that onto the whole square so every zone is reachable, but stretching does
+not change the *shape* -- the readings still pile up below the middle of
+both axes, and the cold, dry corner is where the pile sits.
+
+**Why it matters.** Nobody is hurt today: every zone builds, the vegetation
+reaches all of it, and a cold planet is a legitimate planet. It matters
+because it is not a *choice* anyone made -- no knob says "this world is
+cold", the shape simply falls out of a sum of noise stacks -- and because
+it means a player walking a long way meets tundra and cold desert far more
+often than anything else. It also makes the wettest four zones landmarks
+rather than regions, which may or may not be wanted.
+
+**What would fix it.** Two routes, and the first is much cheaper. Either
+**widen the humidity model** so its raw readings span more of their own
+range -- `humOcean` and `humNoise` are the two terms, and the measurement
+to make is the raw spread rather than the finished picture -- or **respace
+the dots** so the crowded corner is cut more finely and the empty corner
+more coarsely, which keeps the climate model untouched and costs only
+constants in `BIOME_PRESETS`. Deciding between them needs a view on
+whether the planet *should* read cold; if it should, the second is right,
+and if the cold is an accident of the noise, the first is.
+
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2754,18 +2799,27 @@ rather than in the shared engine class.
 **Priority:** medium
 **Effort:** small
 **Found:** 2026-08-30, checking whether Holdridge and Plain read the terrain the same way
-**Closed:** 2026-08-30 on `master` by "Give Holdridge real ground to stand
-on, and hold its square fixed," on request -- the shore and landform-grid
-knobs were wanted live for Holdridge itself, noise or not. `holdridge`'s 23
-zones now carry real landforms of their own (temperature tier decides
-which of the six, warm zones split further by humidity so both hot deserts
-land in `lowlands` and nowhere higher), and `elevation` keeps every zone on
-`ANY_LANDFORM` -- a second array derived from the same dots, since its own
-terrain adaptation is `humLapse`, a climate term, and giving it a landform
-gate too would reintroduce the noise it exists to avoid. Measured on the
-shipped default world: Holdridge's own border density rose to 11.62% of
-adjacent land samples disagreeing (against Plain's 13.03%), where
-`elevation` stayed calm at 2.86%.
+**Closed:** 2026-08-30 on `master` by "Merge the two tables into one
+Holdridge, and give the landform its own ground." Closed twice, and the
+first attempt is why the second reads the way it does. Filing all 23 life
+zones under landforms was tried first and reverted: it made every landform
+a small exclusive set, and `lowlands` is `51%` of the land, so one zone
+(Thorn woodland) took `51%` of the planet and the border density rose to
+`11.62%` against Plain's `13.03%` -- the noise Holdridge was chosen to
+avoid, for no gain a reader would name. What shipped instead keeps every
+life zone on `ANY_LANDFORM` and gives the landforms **five biomes of their
+own**, the grounds named by material rather than by plant community:
+Beach, Stony shore, Icy shore, Badlands and Stony peaks. A filed biome
+**joins** its landform's list rather than replacing it, so the borders stay
+where the climate puts them -- `4.87%`, against `3.07%` for Holdridge
+alone and `13.03%` for Plain, and what the extra `1.8` points buy is the
+coastline. The shore is the one exception and takes its own ground
+outright, because a coast reads the most crowded corner of the square and a
+beach merely added won `7.3%` of the shore at its best placement; it is
+`1.14%` of the land, so the cost is bounded and the border it draws is the
+waterline. Measured, the three shore biomes now run `0.4 / 0.4 / 0.4%` of
+the land against Plain's own `0.50 / 0.25 / 0.39%`, and Stony peaks takes
+`46%` of the summits.
 **Where:** `packages/engine/src/generation/biomes/BIOME_PRESETS.ts` (every
 `holdridge` entry), `allowedBiomes.ts`, `packages/client/src/BiomePanel.ts`
 ("The landform grid"), `packages/client/src/ParameterPanel.ts` ("The

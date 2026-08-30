@@ -3,18 +3,13 @@ import { ANY_LANDFORM } from "./Landform.js";
 import { BlockType } from "../terrain/BlockType.js";
 
 /**
- * Holdridge's own dots, each filed under the landform it stands on.
+ * Holdridge's twenty-three life zones, on any ground.
  *
- * **Grouped by temperature, which is already an altitude band** (doc
- * comment below): the four tundra zones and the polar dot are the coldest
- * quarter and go to `peaks`; the boreal zones are the next-coldest and go
- * to `plateau`; the temperate zones sit on `slopes`; and the warm zones
- * split between `lowlands` (the driest of them, Subtropical desert and
- * Tropical desert included) and `valleys` (the wettest). `shore` takes one
- * zone from each of the four warmer temperature tiers, all on the wet side
- * of their tier -- the reading a coastline actually takes at any latitude.
- * Every group keeps at least three zones, so a landform is never one dot
- * repeated over the whole planet.
+ * **A life zone is a climate, so it is filed under no landform.** Holdridge
+ * classifies vegetation by temperature and rainfall and says nothing about
+ * what a place is made of, so every zone is allowed everywhere and one
+ * diagram is read over the whole planet. What that leaves out is
+ * {@link SUBSTRATE}.
  */
 const HOLDRIDGE: readonly BiomeDef[] = [
 	{
@@ -22,7 +17,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "f2f4f6",
 		t: 0.06,
 		h: 0.5,
-		landform: "peaks",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_POLAR_DESERT_GROUND,
 	},
 	{
@@ -30,7 +25,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "8d8f86",
 		t: 0.24,
 		h: 0.25,
-		landform: "peaks",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_DRY_TUNDRA_GROUND,
 	},
 	{
@@ -38,7 +33,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "6f8c86",
 		t: 0.24,
 		h: 0.47,
-		landform: "peaks",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_MOIST_TUNDRA_GROUND,
 	},
 	{
@@ -46,7 +41,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "43809b",
 		t: 0.24,
 		h: 0.65,
-		landform: "shore",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_WET_TUNDRA_GROUND,
 	},
 	{
@@ -54,7 +49,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "2a76c0",
 		t: 0.24,
 		h: 0.85,
-		landform: "peaks",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_RAIN_TUNDRA_GROUND,
 	},
 	{
@@ -62,7 +57,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "b9a878",
 		t: 0.4,
 		h: 0.06,
-		landform: "plateau",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_BOREAL_DESERT_GROUND,
 	},
 	{
@@ -70,7 +65,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "9aa46a",
 		t: 0.4,
 		h: 0.24,
-		landform: "plateau",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_DRY_SCRUB_GROUND,
 	},
 	{
@@ -78,7 +73,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "7fae7a",
 		t: 0.4,
 		h: 0.48,
-		landform: "plateau",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_BOREAL_MOIST_FOREST_GROUND,
 	},
 	{
@@ -86,7 +81,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "57a89a",
 		t: 0.4,
 		h: 0.68,
-		landform: "shore",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_BOREAL_WET_FOREST_GROUND,
 	},
 	{
@@ -94,7 +89,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "35a2b8",
 		t: 0.4,
 		h: 0.88,
-		landform: "plateau",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_BOREAL_RAIN_FOREST_GROUND,
 	},
 	{
@@ -102,7 +97,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "c3c07a",
 		t: 0.58,
 		h: 0.14,
-		landform: "slopes",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_DESERT_SCRUB_GROUND,
 	},
 	{
@@ -110,7 +105,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "b6c46f",
 		t: 0.58,
 		h: 0.34,
-		landform: "slopes",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_STEPPE_GROUND,
 	},
 	{
@@ -118,7 +113,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "86c07a",
 		t: 0.58,
 		h: 0.55,
-		landform: "slopes",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_MOIST_FOREST_GROUND,
 	},
 	{
@@ -126,7 +121,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "5fbf94",
 		t: 0.58,
 		h: 0.75,
-		landform: "slopes",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_WET_FOREST_GROUND,
 	},
 	{
@@ -134,7 +129,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "46c2ae",
 		t: 0.58,
 		h: 0.93,
-		landform: "slopes",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_TEMPERATE_RAIN_FOREST_GROUND,
 	},
 	{
@@ -142,15 +137,16 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "e8dc7a",
 		t: 0.78,
 		h: 0.05,
-		landform: "lowlands",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_SUBTROPICAL_DESERT_GROUND,
+		underlay: BlockType.SANDSTONE,
 	},
 	{
 		name: "Thorn woodland",
 		hex: "cfd96f",
 		t: 0.78,
 		h: 0.25,
-		landform: "lowlands",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_THORN_WOODLAND_GROUND,
 	},
 	{
@@ -158,7 +154,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "a5d772",
 		t: 0.78,
 		h: 0.45,
-		landform: "valleys",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_DRY_FOREST_GROUND,
 	},
 	{
@@ -166,7 +162,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "78d67f",
 		t: 0.78,
 		h: 0.68,
-		landform: "shore",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_SUBTROPICAL_MOIST_FOREST_GROUND,
 	},
 	{
@@ -174,15 +170,16 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "f4ef7a",
 		t: 0.95,
 		h: 0.04,
-		landform: "lowlands",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_TROPICAL_DESERT_GROUND,
+		underlay: BlockType.SANDSTONE,
 	},
 	{
 		name: "Tropical dry forest",
 		hex: "c9ee72",
 		t: 0.95,
 		h: 0.35,
-		landform: "valleys",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_TROPICAL_DRY_FOREST_GROUND,
 	},
 	{
@@ -190,7 +187,7 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "63ec8e",
 		t: 0.95,
 		h: 0.66,
-		landform: "shore",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_TROPICAL_WET_FOREST_GROUND,
 	},
 	{
@@ -198,25 +195,88 @@ const HOLDRIDGE: readonly BiomeDef[] = [
 		hex: "3aecb0",
 		t: 0.95,
 		h: 0.9,
-		landform: "valleys",
+		landform: ANY_LANDFORM,
 		block: BlockType.HOLDRIDGE_TROPICAL_RAIN_FOREST_GROUND,
 	},
 ];
 
 /**
- * Holdridge's own dots again, with every landform restriction lifted.
+ * The five grounds named by what they are made of rather than what grows on
+ * them.
  *
- * **`elevation`'s own terrain adaptation is a climate term, not a second
- * gate** -- `BiomeSettings.humLapse` already dries a summit's own reading,
- * so filing these zones under a landform as well would draw two borders
- * for one piece of ground: the landform grid's, on top of the climate
- * square's own. `ANY_LANDFORM` on every zone keeps `elevation` to the one
- * border, a plain Voronoi diagram over a square a summit reads further into.
+ * **Holdridge cannot say "bare rock", because it is a classification of
+ * vegetation.** Every one of its twenty-three zones names a plant community,
+ * so a place with no plant community -- a strand, a red mesa, a stone summit
+ * -- has no zone to land on and takes whichever life zone the climate reads
+ * there instead. These are the materials that leaves out: **sand**,
+ * **shingle**, **ice**, **red rock** and **grey stone**.
+ *
+ * **Each is filed under the landform it belongs on, which is what makes the
+ * landform grid and the two shore knobs reach this table at all.** How much
+ * plateau and summit a world has is what decides how much Badlands and Stony
+ * peaks it has; `shoreHeight` and `shoreReach` decide how wide the strand
+ * runs.
+ *
+ * **The three placed on the summits and plateaus are dots among the life
+ * zones; the three on the shore replace them** ({@link allowedBiomes}).
+ * Stony peaks reads the cold, dry corner a summit is already in, so as one
+ * more dot it takes **46%** of the peaks and the rest stay tundra. Badlands
+ * has no such corner to itself -- a plateau is dry and Holdridge already
+ * files four deserts there -- so it stays a **0.11%** landmark rather than a
+ * band, and the landform grid is the knob that grows it. The shore is where
+ * an added dot fails outright: a coast reads temperate and damp, the most
+ * crowded part of the square, and a beach merely added won `7.3%` of the
+ * shore at its best placement.
+ *
+ * The three shore dots are spread along the temperature a shore actually
+ * reads -- measured over four seeds, its tenth to ninetieth percentile runs
+ * `0.21` to `0.92` -- so a polar coast comes out ice, a temperate one
+ * shingle, and a warm one sand.
  */
-const HOLDRIDGE_ANY_LANDFORM: readonly BiomeDef[] = HOLDRIDGE.map((biome) => ({
-	...biome,
-	landform: ANY_LANDFORM,
-}));
+const SUBSTRATE: readonly BiomeDef[] = [
+	{
+		name: "Icy shore",
+		hex: "d8e4ec",
+		t: 0.28,
+		h: 0.52,
+		landform: "shore",
+		block: BlockType.ICY_SHORE_GROUND,
+	},
+	{
+		name: "Stony shore",
+		hex: "8e9298",
+		t: 0.52,
+		h: 0.48,
+		landform: "shore",
+		block: BlockType.STONY_SHORE_GROUND,
+	},
+	{
+		name: "Beach",
+		hex: "e6d9a8",
+		t: 0.8,
+		h: 0.62,
+		landform: "shore",
+		block: BlockType.BEACH_GROUND,
+		underlay: BlockType.SANDSTONE,
+	},
+	{
+		name: "Badlands",
+		hex: "c06a3a",
+		t: 0.7,
+		h: 0.16,
+		landform: "plateau",
+		block: BlockType.BADLANDS_GROUND,
+		underlay: BlockType.TERRACOTTA,
+	},
+	{
+		name: "Stony peaks",
+		hex: "8d8f94",
+		t: 0.21,
+		h: 0.18,
+		landform: "peaks",
+		block: BlockType.STONY_PEAKS_GROUND,
+	},
+];
 
 /**
  * The biome sets a world can start from.
@@ -228,32 +288,34 @@ const HOLDRIDGE_ANY_LANDFORM: readonly BiomeDef[] = HOLDRIDGE.map((biome) => ({
  * placed out there would never be built and the ones left would split the
  * cloud between them.
  *
- * **`holdridge` is Holdridge's life zones, filed onto the same six
- * landforms `plain` uses**: a real classification of the world's vegetation
- * by temperature and rainfall, with a name for every pair, restricted the
- * way `plain` restricts its own so a hot desert cannot stand on a peak
- * however the climate noise falls. Its own chart is a triangle, not a
- * square: cold air holds little water, so the cold-and-soaking corner has
- * no zone in it and the polar dot owns that whole end. It is banded by
- * altitude as well as latitude -- the same zones stack up a mountain in the
- * tropics as run toward the pole at sea level, which is what the
- * temperature model's altitude term does, and the landform restriction is a
- * second, independent reason the same stacking holds even where the
- * climate noise alone would not have kept it there. **Read with `fit`
- * off** -- `plain`'s own dots are placed assuming the per-planet stretch,
- * but a real classification promises the same absolute reading the same
- * name on every planet, which the stretch would break.
+ * **`holdridge` is Holdridge's life zones on their own**: a real
+ * classification of the world's vegetation by temperature and rainfall,
+ * with a name for every pair and nothing said about landforms. Its own
+ * chart is a triangle, not a square: cold air holds little water, so the
+ * cold-and-soaking corner has no zone in it and the polar dot owns that
+ * whole end. It is banded by altitude as well as latitude -- the same zones
+ * stack up a mountain in the tropics as run toward the pole at sea level,
+ * which is what the temperature model's altitude term does.
  *
- * **`elevation` is the same zones with every landform restriction lifted,
- * and the air drying as well as cooling as the ground rises.** `holdridge`
- * keeps its terrain adaptation the way `plain` gets it, a second gate on
- * top of the climate square -- measured on the shipped default world,
- * 11.62% of adjacent land samples disagree on the biome name, against
- * `elevation`'s 2.86%, roughly a fourfold difference from the one extra
- * gate. `elevation` reads climate alone -- {@link BiomeSettings.humLapse}
- * is a term of the square itself, so a summit reads colder and drier
- * without a second border being drawn on top
- * of the first.
+ * **`elevation` is the world this project builds: those twenty-three zones,
+ * the three grounds in {@link SUBSTRATE} that Holdridge has no way to name,
+ * and the air drying as well as cooling with height.** Twenty-six between
+ * them. What it does not carry is the eighteen of `plain`'s twenty-one that
+ * a life zone already says -- `plain`'s Taiga is Boreal wet forest, its
+ * Grassland is Wet forest, its Tundra is Dry tundra, and so on down to
+ * Alpine forest -- so those are dropped rather than duplicated under a
+ * second name. Only Beach, Badlands and Stony peaks survive the merge, and
+ * they survive because sand, red rock and grey stone are materials rather
+ * than plant communities. `plain`'s two underlays come across with them,
+ * and Holdridge's own two deserts gain the sandstone they were missing.
+ *
+ * **Both Holdridge tables read one constant span** ({@link FIXED_FIT})
+ * rather than the stretch `plain` measures from each planet's own land:
+ * `plain`'s dots are placed assuming that stretch, but a real
+ * classification promises the same absolute reading the same name
+ * everywhere, and one constant keeps that while still reaching the whole
+ * chart. Measured over four seeds, all twenty-three life zones are built,
+ * against eighteen when the raw range is read straight through.
  */
 export const BIOME_PRESETS: Record<string, readonly BiomeDef[]> = {
 	plain: [
@@ -429,7 +491,7 @@ export const BIOME_PRESETS: Record<string, readonly BiomeDef[]> = {
 		},
 	],
 	holdridge: HOLDRIDGE,
-	elevation: HOLDRIDGE_ANY_LANDFORM,
+	elevation: [...HOLDRIDGE, ...SUBSTRATE],
 };
 
 /** The set a world starts with when nothing chooses one. */

@@ -192,7 +192,7 @@ export type { BiomeSettings } from "./biomes/BiomeSettings.js";
 export { BIOME_DEFAULTS } from "./biomes/BiomeSettings.js";
 export type { BiomeWorld } from "./biomes/BiomeWorld.js";
 export type { ClimateFit } from "./biomes/ClimateFit.js";
-export { UNFITTED } from "./biomes/ClimateFit.js";
+export { FIXED_FIT, UNFITTED } from "./biomes/ClimateFit.js";
 export { allowedBiomes } from "./biomes/allowedBiomes.js";
 export { biomeOf } from "./biomes/biomeOf.js";
 export type { BiomeSample } from "./biomes/BiomeField.js";
