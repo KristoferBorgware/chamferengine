@@ -206,10 +206,7 @@ export class BiomeField {
 		this.settings = s;
 		this.allowed = allowedBiomes(biomes);
 
-		const stack = (
-			feature: number,
-			octaves: number,
-		): NoiseSettings => ({
+		const stack = (feature: number, octaves: number): NoiseSettings => ({
 			frequency: world.radius / Math.max(1, feature),
 			octaves: Math.round(octaves),
 			persistence: 0.5,
@@ -260,7 +257,10 @@ export class BiomeField {
 	 * one dot product against the axis, altitude cools what stands up out of
 	 * the ground -- the term that puts snow on a mountain in a warm band --
 	 * and noise stops the planet reading as a set of stripes. Humidity is the
-	 * continent field, dried inland, plus its own noise.
+	 * continent field, dried inland, plus its own noise, and dried again by
+	 * elevation when `humLapse` is set -- the same shape as temperature's
+	 * own lapse, so a summit reads colder and drier together rather than
+	 * only colder.
 	 */
 	private climateAt(
 		x: number,
@@ -273,16 +273,19 @@ export class BiomeField {
 		const s = this.settings;
 		const seed = this.world.seed;
 		const away = Math.abs(x * NORTH.x + y * NORTH.y + z * NORTH.z);
-		const lapse = metres > 0 ? (s.tempLapse * metres) / LAPSE_METRES : 0;
+		const tempLapse =
+			metres > 0 ? (s.tempLapse * metres) / LAPSE_METRES : 0;
+		const humLapse = metres > 0 ? (s.humLapse * metres) / LAPSE_METRES : 0;
 		out.t =
 			s.tempEquator * (1 - 2 * away) +
 			s.tempNoise *
 				octaveNoise(x, y, z, seed + TEMP_SEED_OFFSET, this.tempNoise) -
-			lapse;
+			tempLapse;
 		out.h =
 			-s.humOcean * rawContinent +
 			s.humNoise *
-				octaveNoise(x, y, z, seed + HUM_SEED_OFFSET, this.humNoise);
+				octaveNoise(x, y, z, seed + HUM_SEED_OFFSET, this.humNoise) -
+			humLapse;
 	}
 
 	/** The two-field push, `-1` to `1` per axis. */
@@ -380,8 +383,10 @@ export class BiomeField {
 		const f = frameOf(p);
 		// The cell's angular width, which is `K / n` at every radius.
 		const reach = (REGION_JITTER * CELL_CONSTANT) / n;
-		const a = (hash3(i, j, face, seed + REGION_A_SEED_OFFSET) * 2 - 1) * reach;
-		const b = (hash3(j, face, i, seed + REGION_B_SEED_OFFSET) * 2 - 1) * reach;
+		const a =
+			(hash3(i, j, face, seed + REGION_A_SEED_OFFSET) * 2 - 1) * reach;
+		const b =
+			(hash3(j, face, i, seed + REGION_B_SEED_OFFSET) * 2 - 1) * reach;
 		return new Vec3(
 			p.x + f.east.x * a + f.north.x * b,
 			p.y + f.east.y * a + f.north.y * b,
@@ -597,7 +602,12 @@ export class BiomeField {
 		out.biome =
 			out.landform < 0
 				? -1
-				: biomeOf(out.t, out.h, this.allowed[out.landform], this.biomes);
+				: biomeOf(
+						out.t,
+						out.h,
+						this.allowed[out.landform],
+						this.biomes,
+					);
 		return out.biome;
 	}
 

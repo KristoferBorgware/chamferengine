@@ -2398,7 +2398,15 @@ export class PlanetSettings {
 		return biomeTableFromText(this.knobs.biomes);
 	}
 
-	/** The biome model's knobs, as the engine takes them. */
+	/**
+	 * The biome model's knobs, as the engine takes them.
+	 *
+	 * **`humLapse` comes from the table, not from `knobs`.** It reads the
+	 * terrain the same way `grid` does -- part of how this table is read
+	 * rather than a setting shared by every table -- so it lives on
+	 * {@link biomeTable} and travels inside `biomes=` rather than as a knob
+	 * of its own.
+	 */
 	biomeOptions(): BiomeSettings {
 		const k = this.knobs;
 		return {
@@ -2411,6 +2419,7 @@ export class PlanetSettings {
 			humNoise: k.humNoise,
 			humFeature: k.humFeature,
 			humOctaves: k.humOctaves,
+			humLapse: this.biomeTable.humLapse,
 			warp: k.biomeWarp,
 			warpStrength: k.warpStrength,
 			warpFeature: k.warpFeature,
