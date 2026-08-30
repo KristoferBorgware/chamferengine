@@ -109,22 +109,30 @@ console.log(
 const lumAt = (v: Float32Array, at: number) => v[at * CHUNK_VERTEX_FLOATS + 4]!;
 const skyAt = (v: Float32Array, at: number) => v[at * CHUNK_VERTEX_FLOATS + 6]!;
 
-let quads = 0;
-let creased = 0;
-let over5 = 0;
-let over10 = 0;
-let worst = 0;
-let sum = 0;
-let flatWorst = 0;
-let flatOver5 = 0;
-let wrongWay = 0;
-let wrongOver5 = 0;
-
-/** Caps: how far the fan's own middle lands from the polygon's average. */
-let fans = 0;
-let fromRootZero = 0;
-let fromBrightest = 0;
-let fromNearest = 0;
+/** One bucket of readings, so the two buffers can be counted apart. */
+function bucket() {
+	return {
+		quads: 0,
+		creased: 0,
+		over5: 0,
+		over10: 0,
+		worst: 0,
+		sum: 0,
+		flatWorst: 0,
+		flatOver5: 0,
+		flatSum: 0,
+		wrongWay: 0,
+		wrongOver5: 0,
+		fans: 0,
+		fanOff: 0,
+		creases: [] as number[],
+		fanOffs: [] as number[],
+		spreads: [] as number[],
+	};
+}
+type Bucket = ReturnType<typeof bucket>;
+const solid = bucket();
+const leaves = bucket();
 
 const uAt = (v: Float32Array, at: number) => v[at * CHUNK_VERTEX_FLOATS + 7]!;
 const vAt = (v: Float32Array, at: number) => v[at * CHUNK_VERTEX_FLOATS + 8]!;
@@ -164,19 +172,24 @@ for (const chunk of built) {
 		new ChunkColumnSampler(chunk, terrain),
 		shape,
 		seed,
-		{ apron: true, surfaceGrid: shape.blockSize },
+		{ apron: true, surfaceGrid: shape.blockSize, cutoutLeaves: true },
 	);
-	for (const part of [mesh.opaque, mesh.cutout]) {
+	for (const [part, into] of [
+		[mesh.opaque, solid],
+		[mesh.cutout, leaves],
+	] as [typeof mesh.opaque, Bucket][]) {
 		const v = part.vertices;
 		const ix = part.indices;
 		// What the fragment actually multiplies: the colour, which carries
 		// the corner occlusion, times the sky the cell stands under.
 		const f = (i: number) => lumAt(v, i) * skyAt(v, i);
+		// The same corners under **Full light**, which replaces every sky
+		// with 1. What is left is the corner occlusion ALONE -- and four
+		// corner values crease whenever they break the parallelogram rule,
+		// whether or not they are a product. This is the half of the crease
+		// no lighting switch can reach.
+		const g = (i: number) => lumAt(v, i);
 
-		// **A wall is two triangles emitted back to back**, sharing the
-		// diagonal. A cap is a fan of three or four sharing a root. Both are
-		// pairs sharing exactly two vertices, so the uv layout tells them
-		// apart.
 		for (let t = 0; t + 5 < ix.length; t += 3) {
 			const one = [ix[t]!, ix[t + 1]!, ix[t + 2]!];
 			const two = [ix[t + 3]!, ix[t + 4]!, ix[t + 5]!];
@@ -188,7 +201,7 @@ for (const chunk of built) {
 			];
 			if (other.length !== 2) continue;
 			if (!isWall(v, [...shared, ...other])) continue;
-			quads++;
+			into.quads++;
 			t += 3;
 			const crease = Math.abs(
 				f(shared[0]!) + f(shared[1]!) - f(other[0]!) - f(other[1]!),
@@ -197,16 +210,13 @@ for (const chunk of built) {
 				(f(shared[0]!) + f(shared[1]!) + f(other[0]!) + f(other[1]!)) /
 				4;
 			const share = mean > 1e-6 ? crease / mean : 0;
-			if (share > 0.01) creased++;
-			if (share > 0.05) over5++;
-			if (share > 0.1) over10++;
-			if (share > worst) worst = share;
-			sum += share;
+			if (share > 0.01) into.creased++;
+			if (share > 0.05) into.over5++;
+			if (share > 0.1) into.over10++;
+			if (share > into.worst) into.worst = share;
+			into.sum += share;
+			into.creases.push(share);
 
-			// The same quad under **Full light**, which replaces every
-			// vertex's sky with 1: the product collapses to one interpolated
-			// number and the crease with it.
-			const g = (i: number) => lumAt(v, i);
 			const flat = Math.abs(
 				g(shared[0]!) + g(shared[1]!) - g(other[0]!) - g(other[1]!),
 			);
@@ -214,32 +224,18 @@ for (const chunk of built) {
 				(g(shared[0]!) + g(shared[1]!) + g(other[0]!) + g(other[1]!)) /
 				4;
 			const flatShare = flatMean > 1e-6 ? flat / flatMean : 0;
-			if (flatShare > 0.05) flatOver5++;
-			if (flatShare > flatWorst) flatWorst = flatShare;
+			if (flatShare > 0.05) into.flatOver5++;
+			if (flatShare > into.flatWorst) into.flatWorst = flatShare;
+			into.flatSum += flatShare;
 
-			// **Which way the diagonal runs is the whole of what can be
-			// chosen.** The crease is the same size either way -- it is a
-			// property of the four corners -- but the diagonal joining the
-			// DARKER pair drags that corner's shadow the full width of the
-			// quad, where the one joining the brighter pair leaves it in the
-			// triangle it belongs to.
 			if (f(shared[0]!) + f(shared[1]!) < f(other[0]!) + f(other[1]!)) {
-				wrongWay++;
-				if (share > 0.05) wrongOver5++;
+				into.wrongWay++;
+				if (share > 0.05) into.wrongOver5++;
 			}
 		}
 
-		// **A fan has no crease -- two triangles sharing a root-to-rim edge
-		// interpolate the same two endpoints along it -- so what an arbitrary
-		// root costs is not a discontinuity but the value in the MIDDLE.**
-		// A hexagon's centre lies on the root's own long diagonal, so the fan
-		// paints it `(f(root) + f(opposite)) / 2` where the polygon's own
-		// average is the mean of all six. Root at an occluded corner and the
-		// whole cap darkens toward it.
-		//
-		// `emitCap` emits `degree - 2` triangles in a row, all carrying the
-		// root and chaining the rim, so a fan is read straight off the index
-		// buffer: root, then one new rim corner per triangle.
+		// Caps: a fan has no crease, and what an arbitrary root costs it is
+		// the value in the middle.
 		for (let t = 0; t + 2 < ix.length; ) {
 			const root = ix[t]!;
 			const ring = [root, ix[t + 1]!, ix[t + 2]!];
@@ -259,56 +255,76 @@ for (const chunk of built) {
 			}
 			t = next;
 			const mean = ring.reduce((s, i) => s + f(i), 0) / degree;
-			// The middle under a candidate root: the midpoint of that
-			// corner's own long diagonal, which for a hexagon is where the
-			// centre falls exactly and for a pentagon is the nearest thing
-			// to it.
-			const middle = (r: number) =>
-				(f(ring[r]!) + f(ring[(r + (degree >> 1)) % degree]!)) / 2;
-			let brightest = 0;
-			for (let c = 1; c < degree; c++)
-				if (f(ring[c]!) > f(ring[brightest]!)) brightest = c;
-			let nearest = 0;
-			for (let c = 1; c < degree; c++)
-				if (Math.abs(middle(c) - mean) < Math.abs(middle(nearest) - mean))
-					nearest = c;
+			const middle =
+				(f(ring[0]!) + f(ring[(degree >> 1) % degree]!)) / 2;
+			into.fans++;
 			const scale = mean > 1e-6 ? mean : 1;
-			fans++;
-			// Ring position 0 IS whatever root the mesher chose, so the
-			// first of the three is what it draws today and the other two
-			// are what the alternative rules would give.
-			fromRootZero += Math.abs(middle(0) - mean) / scale;
-			fromBrightest += Math.abs(middle(brightest) - mean) / scale;
-			fromNearest += Math.abs(middle(nearest) - mean) / scale;
+			const off = Math.abs(middle - mean) / scale;
+			into.fanOff += off;
+			into.fanOffs.push(off);
+			// **How far apart the cap's own corners are** is what decides
+			// whether a fan is visible at all: six equal corners draw the
+			// same picture however they are cut up.
+			let lo = Infinity;
+			let hi = -Infinity;
+			for (const i of ring) {
+				const val = f(i);
+				if (val < lo) lo = val;
+				if (val > hi) hi = val;
+			}
+			into.spreads.push((hi - lo) / scale);
 		}
 	}
 }
 
-const pc = (a: number) => `${((100 * a) / Math.max(1, quads)).toFixed(1)}%`;
-console.log(`\n${quads.toLocaleString("en-US")} wall quads`);
-console.log(
-	"as drawn        " +
-		`${pc(creased)} creased at all, ${pc(over5)} over 5%, ` +
-		`${pc(over10)} over 10%; worst ${(100 * worst).toFixed(0)}%, ` +
-		`mean ${((100 * sum) / Math.max(1, quads)).toFixed(1)}%`,
-);
-console.log(
-	"under full light" +
-		`  ${pc(flatOver5)} over 5%; worst ${(100 * flatWorst).toFixed(0)}%`,
-);
-console.log(
-	`\nthe diagonal joins the darker pair on ${pc(wrongWay)} of all quads, ` +
-		`and on ${((100 * wrongOver5) / Math.max(1, over5)).toFixed(0)}% of the ` +
-		`ones creased over 5% -- which is where a corner's shadow is dragged ` +
-		`across the whole face instead of staying in its own triangle.`,
-);
+/** A percentile of a list, which is where the visible cases live. */
+function at(list: number[], q: number): number {
+	if (list.length === 0) return 0;
+	const sorted = [...list].sort((a, b) => a - b);
+	return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+}
 
-console.log(`\n${fans.toLocaleString("en-US")} cap fans`);
-const fanPc = (a: number) =>
-	`${((100 * a) / Math.max(1, fans)).toFixed(2)}%`;
-console.log(
-	`  the fan paints its own middle ${fanPc(fromRootZero)} of the cap's ` +
-		`average away from that average as drawn, ${fanPc(fromBrightest)} ` +
-		`rooted at the brightest corner, ${fanPc(fromNearest)} rooted at ` +
-		`whichever diagonal reads closest to the average.`,
-);
+function report(name: string, b: Bucket): void {
+	const pc = (a: number) =>
+		`${((100 * a) / Math.max(1, b.quads)).toFixed(1)}%`;
+	console.log("");
+	console.log(`${name}: ${b.quads.toLocaleString("en-US")} wall quads`);
+	console.log(
+		`  as drawn         ${pc(b.creased)} creased at all, ${pc(b.over5)} ` +
+			`over 5%, ${pc(b.over10)} over 10%; worst ` +
+			`${(100 * b.worst).toFixed(0)}%, mean ` +
+			`${((100 * b.sum) / Math.max(1, b.quads)).toFixed(1)}%`,
+	);
+	console.log(
+		`  under full light ${pc(b.flatOver5)} over 5%; worst ` +
+			`${(100 * b.flatWorst).toFixed(0)}%, mean ` +
+			`${((100 * b.flatSum) / Math.max(1, b.quads)).toFixed(1)}%`,
+	);
+	console.log(
+		`  diagonal on the darker pair: ${pc(b.wrongWay)} of all quads, ` +
+			`${((100 * b.wrongOver5) / Math.max(1, b.over5)).toFixed(0)}% of ` +
+			`those creased over 5%`,
+	);
+	const pct = (l: number[], q: number) => `${(100 * at(l, q)).toFixed(0)}%`;
+	console.log(
+		`  wall crease, worst cases: 90th ${pct(b.creases, 0.9)}, 99th ` +
+			`${pct(b.creases, 0.99)}, 99.9th ${pct(b.creases, 0.999)}`,
+	);
+	console.log(
+		`  ${b.fans.toLocaleString("en-US")} cap fans, middle ` +
+			`${((100 * b.fanOff) / Math.max(1, b.fans)).toFixed(2)}% off the ` +
+			`cap's own average`,
+	);
+	console.log(
+		`    middle off by: 90th ${pct(b.fanOffs, 0.9)}, 99th ` +
+			`${pct(b.fanOffs, 0.99)}, worst ${pct(b.fanOffs, 1)}`,
+	);
+	console.log(
+		`    corner spread: 50th ${pct(b.spreads, 0.5)}, 90th ` +
+			`${pct(b.spreads, 0.9)}, 99th ${pct(b.spreads, 0.99)}, worst ` +
+			`${pct(b.spreads, 1)}`,
+	);
+}
+
+report("solid blocks (opaque buffer)", solid);
+report("leaves (cutout buffer)", leaves);
