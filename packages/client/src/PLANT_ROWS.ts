@@ -5,8 +5,8 @@ export interface PlantRow {
 	readonly key: string;
 	readonly label?: string;
 
-	/** A row that is not a slider says which of the four it is. */
-	readonly kind?: "curve" | "picture" | "switch";
+	/** A row that is not a slider says which of the five it is. */
+	readonly kind?: "curve" | "picture" | "switch" | "biomes";
 
 	/** Which boolean of the draft a switch reads, when the row is one. */
 	readonly flag?: "branches" | "leaves";
@@ -93,6 +93,14 @@ export const PLANT_SECTIONS: readonly PlantSection[] = [
 		name: "Where it grows",
 		open: true,
 		rows: [
+			{
+				key: "biomes",
+				kind: "biomes",
+				label: "Biomes",
+				note: () =>
+					"grows only in these, by name -- empty is every biome a " +
+					"world has",
+			},
 			{ key: "curve", kind: "curve", label: "Noise → density" },
 			{ key: "picture", kind: "picture" },
 			slider(

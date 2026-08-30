@@ -16,8 +16,7 @@ describe("the biome table in a query string", () => {
 		const draft = biomeTableOf("plain");
 		draft.biomes[0]!.t = 0.123;
 		draft.biomes[2]!.name = "Warm sand";
-		draft.grid =
-			draft.grid.slice(0, 3) + "4" + draft.grid.slice(4);
+		draft.grid = draft.grid.slice(0, 3) + "4" + draft.grid.slice(4);
 		const back = biomeTableFromText(biomeTableToText(draft));
 		expect(back.grid).toBe(draft.grid);
 		expect(back.biomes.length).toBe(draft.biomes.length);
@@ -34,6 +33,32 @@ describe("the biome table in a query string", () => {
 			expect(back.biomes[n]!.block).toBe(
 				BIOME_PRESETS["plain"]![n]!.block,
 			);
+	});
+
+	// **An underlay is easy to lose the same way the plain block never did**:
+	// it is absent on most rows, so a row format that forgot the field would
+	// still round-trip every other one and hide the loss.
+	it("keeps every preset's underlay through a round trip, present or absent", () => {
+		const draft = biomeTableOf("plain");
+		draft.biomes[0]!.h = 0.5;
+		const back = biomeTableFromText(biomeTableToText(draft));
+		let checked = 0;
+		for (let n = 0; n < back.biomes.length; n++) {
+			expect(back.biomes[n]!.underlay).toBe(
+				BIOME_PRESETS["plain"]![n]!.underlay,
+			);
+			if (BIOME_PRESETS["plain"]![n]!.underlay !== undefined) checked++;
+		}
+		// Desert and Badlands are the two the preset actually sets one on --
+		// if neither ran, the assertions above never exercised the field at all.
+		expect(checked).toBeGreaterThan(0);
+	});
+
+	it("carries a hand-set underlay through a round trip", () => {
+		const draft = biomeTableOf("plain");
+		draft.biomes[0]!.underlay = draft.biomes[0]!.block;
+		const back = biomeTableFromText(biomeTableToText(draft));
+		expect(back.biomes[0]!.underlay).toBe(draft.biomes[0]!.block);
 	});
 
 	it("falls back to the plain preset when a link says nonsense", () => {

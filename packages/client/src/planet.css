@@ -1094,13 +1094,52 @@ body.bench .knobs-head {
 	accent-color: var(--live);
 }
 
-.plants .knob select {
+.plants .knob select,
+.plants .knob input[type="text"] {
 	background: #0b0e13;
 	color: var(--ink);
 	border: 1px solid var(--edge);
 	border-radius: 3px;
 	padding: 3px 5px;
 	font: inherit;
+}
+
+.plants .knob input[type="text"] {
+	grid-column: 1 / -1;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.plants .knob.biomed {
+	grid-template-columns: 1fr;
+}
+
+.biome-tags {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 4px;
+}
+
+.biome-tags:empty {
+	margin-bottom: 0;
+}
+
+.biome-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 11px;
+	color: var(--ink);
+	background: #0b0e13;
+	border: 1px solid var(--edge);
+	border-radius: 10px;
+	padding: 1px 3px 1px 8px;
+}
+
+.biome-tag .drop {
+	font-size: 12px;
 }
 
 .plants .knob.check {
