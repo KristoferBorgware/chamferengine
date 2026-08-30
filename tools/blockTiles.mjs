@@ -92,10 +92,86 @@ export const RECIPES = {
 		const v = step(clumps(x, y, n, s + 9, octaves(n), 0.5), 3);
 		return [0.88 + v * 0.16 + (grain(x, y, s + 61) > 0.94 ? 0.06 : 0), 1];
 	},
-	grass: (x, y, n, s) => [
+
+	// ---- the six kinds of ground a biome stands on -------------------------
+	//
+	// A biome differs from its neighbour in colour, which the registry already
+	// holds, and in what the ground is MADE of, which it does not. These are
+	// that second thing: six patterns, each tinted by whichever biome wears
+	// it, so forty-four grounds are six pictures and not forty-four.
+
+	/** Ordinary grass: fine clumps, nothing bare showing through. */
+	turf: (x, y, n, s) => [
 		0.76 + step(clumps(x, y, n, s + 5, octaves(n), 0.6), 4) * 0.5,
 		1,
 	],
+
+	/** Wet and dense -- darker, tighter, with a few bright growths in it. */
+	moss: (x, y, n, s) => {
+		const v = step(clumps(x, y, n, s + 23, octaves(n), 0.7), 4);
+		return [0.66 + v * 0.5 + (grain(x, y, s + 71) > 0.93 ? 0.14 : 0), 1];
+	},
+
+	/**
+	 * Dry ground with the earth showing through it.
+	 *
+	 * Two fields rather than one: the cover says where anything grows and the
+	 * clumps say what it looks like where it does. A single field quantized
+	 * harder gives a darker grass, not a patchy one.
+	 */
+	scrub: (x, y, n, s) => {
+		const cover = blocky(x, y, Math.max(4, n / 4), n, s + 37);
+		const v = step(clumps(x, y, n, s + 13, octaves(n), 0.6), 4);
+		return [(cover < 0.42 ? 0.66 : 0.84) + v * 0.4, 1];
+	},
+
+	/** Sand: almost no contrast, and a ripple across it rather than clumps. */
+	dune: (x, y, n, s) => {
+		const ripple = clumps(0, y, n, s + 47, [4, 8], 0.5);
+		const v = step(clumps(x, y, n, s + 19, octaves(n), 0.45) * 0.7 + ripple * 0.3, 4);
+		return [0.9 + v * 0.18, 1];
+	},
+
+	/**
+	 * Broken rock: coarse and hard-edged.
+	 *
+	 * The finest octave is left out, so the shades sit in chunks of two and
+	 * three texels rather than grain -- which is what reads as fragments of
+	 * stone instead of as sand.
+	 */
+	scree: (x, y, n, s) => [
+		0.7 + step(clumps(x, y, n, s + 29, octaves(n).slice(0, -1), 0.75), 4) * 0.58,
+		1,
+	],
+
+	/** Snow and ice: flat, three shades, and the odd catch of light. */
+	frost: (x, y, n, s) => {
+		const v = step(clumps(x, y, n, s + 41, octaves(n), 0.5), 3);
+		return [0.9 + v * 0.14 + (grain(x, y, s + 83) > 0.95 ? 0.08 : 0), 1];
+	},
+
+	// ---- the rock a biome cuts into ----------------------------------------
+	//
+	// Bands along one axis rather than clumps, because what makes sandstone
+	// and terracotta read is that they were laid down in layers.
+
+	sandstone: (x, y, n, s) => {
+		const band = clumps(0, y, n, s + 53, [4, 8, n], 0.6);
+		const g = grain(x, y, s + 59) * 0.22;
+		return [0.9 + step(band * 0.8 + g, 4) * 0.2, 1];
+	},
+
+	terracotta: (x, y, n, s) => {
+		const band = clumps(0, y, n, s + 67, [4, 8, n], 0.68);
+		const g = grain(x, y, s + 73) * 0.18;
+		return [0.78 + step(band * 0.82 + g, 5) * 0.44, 1];
+	},
+
+	water: (x, y, n, s) => [
+		0.94 + step(clumps(x, y, n, s + 89, octaves(n), 0.5), 3) * 0.12,
+		1,
+	],
+
 	wood: (x, y, n, s) => {
 		// Grain runs along the trunk, so the field is one-dimensional across
 		// it: every row holds the same stripes, jittered a texel at a time.
@@ -103,6 +179,7 @@ export const RECIPES = {
 		const knot = clumps(x, y, n, s + 31, [4, 8], 0.5);
 		return [0.74 + step(stripe * 0.78 + knot * 0.22, 4) * 0.52, 1];
 	},
+
 	leaf: (x, y, n, s) => {
 		const f = clumps(x, y, n, s + 17, octaves(n), 0.62);
 		// The darkest level is a HOLE rather than a shade, which is what makes
@@ -111,15 +188,21 @@ export const RECIPES = {
 	},
 };
 
-/** Grass over dirt, with the join cut by the same wrapping noise. */
-export function grassSide(x, y, n, s) {
+/**
+ * The band of ground that drapes over the side of a block, and nothing below
+ * it.
+ *
+ * Takes the recipe of whichever ground is on top, so a scrub band is patchy
+ * where a turf band is not. Transparent under its own ragged join, because
+ * what shows there is the dirt the side is already drawn in -- one file
+ * tinted whole would paint a desert's dirt green.
+ */
+export function bandOf(recipe, x, y, n, s) {
 	const scale = n / 16;
 	const cut = Math.round((2.5 + blocky(x, 0, 8, n, s + 41) * 3) * scale);
-	if (y < cut) return ["grass", RECIPES.grass(x, y, n, s)];
-	// A darker line right under the grass, which is what reads as an edge
-	// rather than as two materials meeting.
-	const [shade, alpha] = RECIPES.dirt(x, y - cut, n, s);
-	return ["dirt", [y < cut + scale ? shade * 0.82 : shade, alpha]];
+	if (y >= cut) return [0, 0];
+	const [shade] = recipe(x, y, n, s);
+	return [shade, 1];
 }
 
 // ---- writing a PNG, with no dependency -------------------------------------
@@ -174,6 +257,12 @@ export function writePng(path, width, height, rgba) {
 			chunk("IEND", Buffer.alloc(0)),
 		]),
 	);
+}
+
+/** A byte back to linear light: the exact inverse of {@link srgb}. */
+export function linearOf(byte) {
+	const c = byte / 255;
+	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 /** Linear light to a byte, which is the space a PNG is read back in. */
@@ -254,3 +343,77 @@ export function readPng(path) {
 	}
 	return { width, height, rgba: out };
 }
+
+// ---- a label, because a sheet of a hundred pictures needs one --------------
+
+/**
+ * A three by five pixel face, one glyph a number: bit `y * 3 + x` is lit.
+ *
+ * Lowercase, digits and the three marks a file name uses. Small enough to
+ * write out and large enough to read at one pixel a texel, which is what a
+ * label under a tile has room for.
+ */
+const GLYPHS = {
+	" ": 0,
+	"-": 448,
+	".": 8192,
+	"0": 11114,
+	"1": 29850,
+	"2": 29347,
+	"3": 14499,
+	"4": 18925,
+	"5": 14543,
+	"6": 10958,
+	"7": 4775,
+	"8": 10922,
+	"9": 14762,
+	"_": 28672,
+	"a": 24400,
+	"b": 14168,
+	"c": 25200,
+	"d": 27504,
+	"e": 25552,
+	"f": 9684,
+	"g": 15728,
+	"h": 23241,
+	"i": 29890,
+	"j": 11012,
+	"k": 23273,
+	"l": 29843,
+	"m": 24552,
+	"n": 23384,
+	"o": 11088,
+	"p": 5976,
+	"q": 19824,
+	"r": 4840,
+	"s": 14576,
+	"t": 17594,
+	"u": 27496,
+	"v": 11112,
+	"w": 24552,
+	"x": 21672,
+	"y": 15720,
+	"z": 30008,
+};
+
+/** Draw `text` into RGBA `buf`, top-left at `ox, oy`. Returns its width. */
+export function label(buf, stride, ox, oy, text, rgb = [150, 154, 162]) {
+	let at = ox;
+	for (const ch of text.toLowerCase()) {
+		const bits = GLYPHS[ch] ?? GLYPHS["-"];
+		for (let y = 0; y < 5; y++)
+			for (let x = 0; x < 3; x++) {
+				if (!(bits & (1 << (y * 3 + x)))) continue;
+				const d = ((oy + y) * stride + at + x) * 4;
+				buf[d] = rgb[0];
+				buf[d + 1] = rgb[1];
+				buf[d + 2] = rgb[2];
+				buf[d + 3] = 255;
+			}
+		at += 4;
+	}
+	return at - ox;
+}
+
+/** How wide `text` will be, in pixels. */
+export const labelWidth = (text) => text.length * 4;

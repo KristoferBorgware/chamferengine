@@ -17,8 +17,8 @@
 import { mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BLOCK_COLORS, BlockType } from "chamfer/generation";
-import { RECIPES, grassSide, srgb, writePng } from "./blockTiles.mjs";
+import { BIOME_PRESETS, BLOCK_COLORS, BlockType } from "chamfer/generation";
+import { RECIPES, bandOf, srgb, writePng } from "./blockTiles.mjs";
 
 /**
  * An image the generator can draw, and how a block wears it.
@@ -31,7 +31,9 @@ import { RECIPES, grassSide, srgb, writePng } from "./blockTiles.mjs";
  */
 interface Image {
 	readonly name: string;
-	readonly recipe: keyof typeof RECIPES | "groundOverlay";
+	readonly recipe: keyof typeof RECIPES;
+	/** Drawn as the band that drapes over a side, and clear below it. */
+	readonly band?: boolean;
 	readonly tint: boolean;
 	/** The colour it is drawn in. Grey for a tinted one, so grey x colour is colour. */
 	readonly color: readonly [number, number, number];
@@ -48,27 +50,155 @@ interface Image {
 const NEUTRAL: readonly [number, number, number] = [0.5, 0.5, 0.5];
 const TINT_SCALE = 2;
 
+/**
+ * The six kinds of ground, and whether anything grows on one.
+ *
+ * A vegetated ground drapes a band over the side of its block and shows dirt
+ * below it; a mineral one is the same material all the way down, so a sand
+ * cliff is sand rather than sand over soil.
+ */
+const FAMILIES = {
+	turf: { grows: true },
+	moss: { grows: true },
+	scrub: { grows: true },
+	dune: { grows: false },
+	scree: { grows: false },
+	frost: { grows: false },
+} as const;
+
+type Family = keyof typeof FAMILIES;
+
+/** Linear light back to the sRGB hex the registry and the diagrams use. */
+function hexOf(color: readonly [number, number, number]): string {
+	return color
+		.map((v) =>
+			Math.round(255 * Math.max(0, Math.min(1, v)) ** (1 / 2.2))
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("");
+}
+
+/** Hue in degrees, saturation and lightness, from an sRGB hex. */
+function hsl(hex: string): [number, number, number] {
+	const n = parseInt(hex, 16);
+	const r = ((n >> 16) & 255) / 255;
+	const g = ((n >> 8) & 255) / 255;
+	const b = (n & 255) / 255;
+	const hi = Math.max(r, g, b);
+	const lo = Math.min(r, g, b);
+	const l = (hi + lo) / 2;
+	const d = hi - lo;
+	if (d < 1e-6) return [0, 0, l];
+	const sat = d / (1 - Math.abs(2 * l - 1));
+	let h =
+		hi === r
+			? ((g - b) / d) % 6
+			: hi === g
+				? (b - r) / d + 2
+				: (r - g) / d + 4;
+	return [((h * 60) % 360 + 360) % 360, sat, l];
+}
+
+/**
+ * Which kind of ground a biome stands on, read off the colour it was given.
+ *
+ * **Not off its temperature and humidity.** Those say what grows, not what
+ * the ground is made of: a beach is sand because it is a beach, and its
+ * climate is a warm wet one it shares with a rainforest. The colour is
+ * already somebody's statement of what the place looks like -- a grey is
+ * rock, a pale blue is ice, a saturated yellow is sand -- so it is the one
+ * field that answers the question being asked.
+ *
+ * A default rather than a decision. `blocks.json` is hand-editable, and one
+ * line there moves a biome to another family or gives it a picture of its own.
+ */
+function familyOf(hex: string): Family {
+	const [h, s, l] = hsl(hex);
+	if (s < 0.1) return l > 0.72 ? "frost" : "scree";
+	if (h >= 180) return l > 0.72 ? "frost" : "moss";
+	// Orange and red are clay, whatever else they are.
+	if (h < 30) return "scree";
+	if (h < 65) return l > 0.66 || s > 0.6 ? "dune" : "scrub";
+	return l < 0.42 ? "moss" : s < 0.26 ? "scrub" : "turf";
+}
+
+/** The family each biome's ground is DRAWN LIKE, by block number. */
+const GROUND_FAMILY = new Map<number, Family>(
+	Object.values(BIOME_PRESETS)
+		.flat()
+		.map((biome) => [biome.block, familyOf(biome.hex)]),
+);
+
+/** The block a name refers to. */
+const blockOf = (name: string): number =>
+	(BlockType as Record<string, number>)[name]!;
+
+/** Its registry colour, or stone's where the registry has none. */
+const colorOf = (name: string): readonly [number, number, number] =>
+	BLOCK_COLORS[blockOf(name)] ?? BLOCK_COLORS[BlockType.STONE]!;
+
+/** A block type's own picture, named the way the block is. */
+const fileOf = (name: string): string => name.toLowerCase();
+
+/**
+ * Every picture the generator can draw.
+ *
+ * **One a block type, not one a family.** A tundra and a steppe are different
+ * places and get different pictures; the family only decides which recipe
+ * seeds one, so a beach starts out sandy and a badlands starts out as broken
+ * rock. Nothing is shared and nothing is tinted -- a file carries its own
+ * colours, so what an editor shows is what the world draws.
+ */
 const IMAGES: readonly Image[] = [
-	{ name: "stone", recipe: "stone", tint: false, color: BLOCK_COLORS[BlockType.STONE]! },
-	{ name: "bedrock", recipe: "bedrock", tint: false, color: BLOCK_COLORS[BlockType.BEDROCK]! },
-	{ name: "dirt", recipe: "dirt", tint: false, color: BLOCK_COLORS[BlockType.DIRT]! },
-	{ name: "sand", recipe: "sand", tint: false, color: BLOCK_COLORS[BlockType.SAND]! },
-	{ name: "snow", recipe: "snow", tint: false, color: BLOCK_COLORS[BlockType.SNOW]! },
-	// Water's own surface is a shader-drawn shell; this is what a lake and
-	// a bucket are made of, so it is nearly flat rather than grained.
-	{ name: "water", recipe: "sand", tint: false, color: BLOCK_COLORS[BlockType.WATER]! },
-	// The ground's own three, drawn in grey. Every biome ground and plain
-	// grass wear these and differ only by the colour the registry gives them.
-	{ name: "ground_top", recipe: "grass", tint: true, color: NEUTRAL },
-	// **The side is two files, because one cannot be half tinted.** The body
-	// is dirt in dirt's own colour, the same under every biome; the overlay is
-	// the grass band alone, grey and transparent below its own ragged join, so
-	// the biome's colour reaches the band and leaves the dirt as dirt. One
-	// file tinted whole would paint a desert's dirt green.
-	{ name: "ground_side", recipe: "dirt", tint: false, color: BLOCK_COLORS[BlockType.DIRT]! },
-	{ name: "ground_overlay", recipe: "groundOverlay", tint: true, color: NEUTRAL },
-	{ name: "wood", recipe: "wood", tint: true, color: NEUTRAL },
-	{ name: "leaf", recipe: "leaf", tint: true, color: NEUTRAL },
+	// The plain materials, and the rock a biome cuts into.
+	...(
+		[
+			["stone", "stone"],
+			["bedrock", "bedrock"],
+			["dirt", "dirt"],
+			["sand", "sand"],
+			["snow", "snow"],
+			["sandstone", "sandstone"],
+			["terracotta", "terracotta"],
+			["water", "water"],
+		] as const
+	).map(
+		([name, recipe]): Image => ({
+			name,
+			recipe,
+			tint: false,
+			color: colorOf(name.toUpperCase()),
+		}),
+	),
+	// One a ground, plus the band it drapes over a side where it grows.
+	...Object.keys(BlockType)
+		.filter((n) => n === "GRASS" || n.endsWith("_GROUND"))
+		.flatMap((n): Image[] => {
+			const family = GROUND_FAMILY.get(blockOf(n)) ?? "turf";
+			const base: Image = {
+				name: fileOf(n),
+				recipe: family,
+				tint: false,
+				color: colorOf(n),
+			};
+			if (!FAMILIES[family].grows) return [base];
+			return [
+				base,
+				{ ...base, name: `${fileOf(n)}_overlay`, band: true },
+			];
+		}),
+	// One a species, for the wood and for the leaf.
+	...Object.keys(BlockType)
+		.filter((n) => n.endsWith("_WOOD") || n.endsWith("_LEAF"))
+		.map(
+			(n): Image => ({
+				name: fileOf(n),
+				recipe: n.endsWith("_WOOD") ? "wood" : "leaf",
+				tint: false,
+				color: colorOf(n),
+			}),
+		),
 ];
 
 /**
@@ -91,24 +221,31 @@ const one = (name: string): Slots => ({ top: name, side: name, bottom: name });
 
 /** Which images each block type wears, before anybody edits the manifest. */
 function slotsFor(name: string): Slots {
-	if (name === "GRASS" || name.endsWith("_GROUND"))
+	if (name.endsWith("_WOOD") || name.endsWith("_LEAF"))
+		return one(fileOf(name));
+	if (name === "GRASS" || name.endsWith("_GROUND")) {
+		const family = GROUND_FAMILY.get(blockOf(name)) ?? "turf";
+		// A ground that grows something shows dirt down its side under a band
+		// of itself; one that does not is the same material all the way.
+		if (!FAMILIES[family].grows) return one(fileOf(name));
 		return {
-			top: "ground_top",
-			side: "ground_side",
+			top: fileOf(name),
+			side: "dirt",
 			bottom: "dirt",
-			overlay: "ground_overlay",
+			overlay: `${fileOf(name)}_overlay`,
 		};
-	if (name.endsWith("_WOOD")) return one("wood");
-	if (name.endsWith("_LEAF")) return one("leaf");
-	const known: Record<string, string> = {
-		STONE: "stone",
-		DIRT: "dirt",
-		SAND: "sand",
-		SNOW: "snow",
-		WATER: "water",
-		BEDROCK: "bedrock",
-	};
-	return one(known[name] ?? "stone");
+	}
+	const known = new Set([
+		"STONE",
+		"DIRT",
+		"SAND",
+		"SNOW",
+		"WATER",
+		"BEDROCK",
+		"SANDSTONE",
+		"TERRACOTTA",
+	]);
+	return one(known.has(name) ? fileOf(name) : "stone");
 }
 
 // ---- the arguments ---------------------------------------------------------
@@ -154,14 +291,15 @@ function draw(image: Image, n: number, variant: number): Buffer {
 		for (let x = 0; x < n; x++) {
 			let shade: number;
 			let alpha: number;
-			let color = image.color;
-			if (image.recipe === "groundOverlay") {
-				// The grass band alone: opaque down to its own ragged join and
-				// nothing below it, so what shows under is the dirt the side
-				// is already drawn in.
-				const [which, pair] = grassSide(x, y, n, seed);
-				[shade] = pair as [number, number];
-				alpha = which === "grass" ? 1 : 0;
+			const color = image.color;
+			if (image.band) {
+				[shade, alpha] = bandOf(
+					RECIPES[image.recipe],
+					x,
+					y,
+					n,
+					seed,
+				);
 			} else {
 				[shade, alpha] = RECIPES[image.recipe](x, y, n, seed);
 			}
@@ -204,8 +342,10 @@ for (const name of Object.keys(BlockType)) {
 const manifest = {
 	size,
 	variants,
-	// A tinted image is grey and is read as `tintScale * texel * the block's
-	// own registry colour`; an untinted one carries its colours already.
+	// **Nothing is tinted.** A picture carries its own colours, so an editor
+	// shows what the world draws. The mechanism stays for anyone who wants
+	// several blocks to share one grey picture again: name it here and a
+	// reader multiplies it by the block's own registry colour.
 	tintScale: TINT_SCALE,
 	tinted: IMAGES.filter((i) => i.tint).map((i) => i.name),
 	blocks: slots,

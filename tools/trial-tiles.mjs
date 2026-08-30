@@ -16,7 +16,15 @@
 // turn makes better.
 import { readFileSync, readdirSync, mkdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { hash2, readPng, writePng } from "./blockTiles.mjs";
+import {
+	hash2,
+	label,
+	labelWidth,
+	linearOf,
+	readPng,
+	srgb,
+	writePng,
+} from "./blockTiles.mjs";
 
 const args = process.argv.slice(2);
 const OUT = args[0] ?? ".";
@@ -43,13 +51,17 @@ function load(dir) {
 }
 const SETS = DIRS.map(load);
 
-/** The registry colour a tinted image is read through, as bytes. */
-const TINTS = {
-	ground_top: [66, 112, 48],
-	ground_overlay: [66, 112, 48],
-	wood: [115, 79, 48],
-	leaf: [51, 97, 41],
-};
+/**
+ * The colour a tinted image is read through, from the manifest the generator
+ * wrote. One of however many biomes wear the picture -- enough to show what
+ * the grey becomes, and not a second copy of the registry kept here.
+ */
+function tintFor(set, name) {
+	const hex = set.manifest.tints?.[name];
+	if (!hex) return [255, 255, 255];
+	const n = parseInt(hex, 16);
+	return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 /**
  * One texel of an image, tinted if the manifest says the image is grey.
@@ -63,15 +75,33 @@ function texel(set, name, x, y, tint, variant = 0) {
 	const img = all[variant % all.length];
 	const n = img.width;
 	const at = ((((y % n) + n) % n) * n + (((x % n) + n) % n)) * 4;
-	const grey = set.manifest.tinted.includes(name);
-	const scale = grey ? (set.manifest.tintScale ?? 2) : 1;
-	const c = grey ? (tint ?? TINTS[name] ?? [255, 255, 255]) : [255, 255, 255];
-	return [
-		Math.min(255, (img.rgba[at] * scale * c[0]) / 255),
-		Math.min(255, (img.rgba[at + 1] * scale * c[1]) / 255),
-		Math.min(255, (img.rgba[at + 2] * scale * c[2]) / 255),
+	const rgba = [
+		img.rgba[at],
+		img.rgba[at + 1],
+		img.rgba[at + 2],
 		img.rgba[at + 3],
 	];
+	if (!set.manifest.tinted.includes(name)) return rgba;
+	// **In linear light, not in bytes.** A byte is sRGB-encoded, so
+	// multiplying two of them is not multiplying two quantities of light: a
+	// grey of 188 against a near-white tint came to 363 and clipped, which
+	// drew every icy ground as flat white. This is also what the shader will
+	// do, because a sampler on an sRGB texture hands it linear light.
+	const scale = set.manifest.tintScale ?? 2;
+	const c = (tint ?? tintFor(set, name)).map(linearOf);
+	return [
+		srgb(linearOf(rgba[0]) * scale * c[0]),
+		srgb(linearOf(rgba[1]) * scale * c[1]),
+		srgb(linearOf(rgba[2]) * scale * c[2]),
+		rgba[3],
+	];
+}
+
+/** One texel exactly as the file holds it, with no tint and no scale. */
+function rawTexel(img, x, y) {
+	const n = img.width;
+	const at = ((((y % n) + n) % n) * n + (((x % n) + n) % n)) * 4;
+	return [img.rgba[at], img.rgba[at + 1], img.rgba[at + 2], img.rgba[at + 3]];
 }
 
 const PAD = 8;
@@ -87,50 +117,75 @@ function sheetOf(width, height) {
 	return buf;
 }
 
-// ---- every image, magnified -------------------------------------------------
+// ---- every image, in a grid with its name under it -------------------------
+//
+// A hundred and ten pictures, so a row is no use and a name is not optional.
+// An overlay is drawn over the dirt it drapes on, because that is the only
+// place it means anything; everything else sits on a checkerboard, which is
+// what makes a leaf's holes read as holes.
 {
 	const NAMES = [...SETS[0].images.keys()].sort();
-	const CELL = 112;
-	const W = NAMES.length * (CELL + PAD) + PAD;
-	const H = SETS.length * (CELL + PAD) + PAD;
+	const TILE = 96;
+	const TEXT = 14;
+	const COLS = 10;
+	const CHECK = [
+		[46, 48, 54],
+		[62, 64, 72],
+	];
+	const rows = Math.ceil(NAMES.length / COLS) * SETS.length;
+	const W = COLS * (TILE + PAD) + PAD;
+	const H = rows * (TILE + TEXT + PAD) + PAD;
 	const sheet = sheetOf(W, H);
-	SETS.forEach((set, row) => {
-		NAMES.forEach((name, col) => {
+	SETS.forEach((set, which) => {
+		const base = which * Math.ceil(NAMES.length / COLS);
+		NAMES.forEach((name, index) => {
 			if (!set.images.has(name)) return;
-			const n = set.images.get(name)[0].width;
-			const ox = PAD + col * (CELL + PAD);
-			const oy = PAD + row * (CELL + PAD);
-			const scale = CELL / (n * 2);
-			for (let y = 0; y < CELL; y++)
-				for (let x = 0; x < CELL; x++) {
+			const img = set.images.get(name)[0];
+			const n = img.width;
+			const ox = PAD + (index % COLS) * (TILE + PAD);
+			const oy = PAD + (base + Math.floor(index / COLS)) * (TILE + TEXT + PAD);
+			const scale = TILE / (n * 2);
+			// An overlay means nothing on its own: what it is, is a band over
+			// the side of a block, and the side is dirt.
+			const over = name.endsWith("_overlay") && set.images.has("dirt");
+			for (let y = 0; y < TILE; y++)
+				for (let x = 0; x < TILE; x++) {
 					const tx = Math.floor(x / scale);
 					const ty = Math.floor(y / scale);
-					const p = texel(set, name, tx, ty);
+					const under = CHECK[((x >> 3) + (y >> 3)) % 2];
 					const d = ((oy + y) * W + ox + x) * 4;
+					const p = over ? texel(set, "dirt", tx, ty) : texel(set, name, tx, ty);
 					const a = p[3] / 255;
 					for (let c = 0; c < 3; c++)
-						sheet[d + c] = Math.round(p[c] * a + BACK[c] * (1 - a));
-					// A ground side is the dirt with the grass band composited
-					// over it, which is what two files buy: the band takes the
-					// biome's colour and the dirt stays dirt.
-					if (name === "ground_side" && set.images.has("ground_overlay")) {
-						const o = texel(set, "ground_overlay", tx, ty);
-						const oa = o[3] / 255;
+						sheet[d + c] = Math.round(p[c] * a + under[c] * (1 - a));
+					if (over) {
+						const band = texel(set, name, tx, ty);
+						const ba = band[3] / 255;
 						for (let c = 0; c < 3; c++)
 							sheet[d + c] = Math.round(
-								o[c] * oa + sheet[d + c] * (1 - oa),
+								band[c] * ba + sheet[d + c] * (1 - ba),
 							);
 					}
 					sheet[d + 3] = 255;
 				}
+			// Two lines of it, because a Holdridge zone's own name is longer
+			// than a tile is wide.
+			const fits = Math.floor(TILE / 4);
+			for (let line = 0; line * fits < name.length && line < 2; line++)
+				label(
+					sheet,
+					W,
+					ox,
+					oy + TILE + 2 + line * 6,
+					name.slice(line * fits, (line + 1) * fits),
+				);
+			void labelWidth;
 		});
 	});
 	writePng(join(OUT, "tiles.png"), W, H, sheet);
-	console.log(`tiles.png   ${NAMES.join(", ")}`);
-	SETS.forEach((set, row) =>
-		console.log(
-			`  row ${row + 1}: ${set.manifest.size}x${set.manifest.size}  ${set.dir}`,
-		),
+	console.log(`tiles.png   ${NAMES.length} pictures`);
+	SETS.forEach((set) =>
+		console.log(`  ${set.manifest.size}x${set.manifest.size}  ${set.dir}`),
 	);
 }
 
@@ -193,7 +248,9 @@ const ground = sheetOf(W, H);
  * what is drawn.
  */
 function drawGround(set, spacing, buf, stride, ox, oy, width, height, turn6 = true, pick = true) {
-	const n = set.images.get("ground_top")[0].width;
+	const grassOf = set.manifest.blocks.GRASS ?? { top: "turf_top" };
+	const stoneOf = set.manifest.blocks.STONE ?? { top: "stone" };
+	const n = set.images.get(grassOf.top)[0].width;
 	const at = (px, py) => {
 		const [q, r, cx, cy] = cellOf(px, py, spacing);
 		// **A hexagon has six rotations that map it onto itself**, so one
@@ -207,7 +264,7 @@ function drawGround(set, spacing, buf, stride, ox, oy, width, height, turn6 = tr
 		[dx, dy] = [dx * c - dy * s, dx * s + dy * c];
 		const p = texel(
 			set,
-			isStone(q, r) ? "stone" : "ground_top",
+			isStone(q, r) ? stoneOf.top : grassOf.top,
 			Math.floor((dx * 0.5 + 0.5) * n),
 			Math.floor((dy * 0.5 + 0.5) * n),
 			undefined,

@@ -19,31 +19,50 @@ npm run textures -- --list            # what it can draw
 **Settle the size before painting.** An edit made at 32 does not survive being
 regenerated at 16, and nothing here converts between them.
 
-## What a picture is
+## One picture a block type
 
-A **tinted** one is drawn in grey and read as `tintScale x texel x the block's
-own registry colour`. Forty-four biome grounds and thirteen tree species share
-four pictures between them this way: they differ in colour and not in pattern,
-and the colour is already written down once in the registry. The grey is half,
-not white, so the bright end of a recipe's range is in the file rather than
-clipped.
+**A file is named for the block that wears it**, lowercased:
+`tundra_ground.png`, `steppe_ground.png`, `pine_leaf.png`, `birch_wood.png`.
+Every biome has a ground of its own and every species a wood and a leaf of its
+own, so a tundra and a steppe are different pictures rather than one picture in
+two colours. 110 files for 79 block types, the extra being the overlays.
 
-Everything else carries its own colours and is read as it is.
+**Nothing is tinted.** A file carries its own colours, so what an editor shows
+is what the world draws.
 
-A block's side is **two** pictures where it is two materials: `ground_side` is
-the dirt body, the same under every biome, and `ground_overlay` is the grass
-band alone, transparent below its own ragged join. One file tinted whole would
-paint a desert's dirt green.
+The noise only decides what a file *starts* as. Which recipe seeds one is read
+off the colour the block was given — a grey is broken rock, a pale blue is
+snow, a saturated yellow is sand, a dark green is dense growth — so a beach
+starts out sandy and a badlands starts out as fragments. Repaint any of them
+into anything.
 
-## Several pictures of one material
+A block's side is **two** pictures where it is two materials: the body is
+`dirt`, the same under every biome, and `<block>_ground_overlay` is the band of
+that ground alone, transparent below its own ragged join. Ground with nothing
+growing on it — sand, broken rock, snow — has no overlay, because a sand cliff
+is sand all the way down.
 
-A cell here is a hexagon and shows a whole picture, so one picture a material
-reads as a grid. Measured over a field of grass, the ground correlates with
-itself shifted one cell at **0.63**; the cell's own six-fold turn takes that to
-**0.12**, and four pictures take it to **0.03**
-([`tools/trial-tiles.mjs`](../../tools/trial-tiles.mjs)). Variants past the
-first are written `stone.2.png`, `stone.3.png` and are ordinary files -- paint
-them, or delete the ones not worth having.
+## Naming
+
+`<name>.png`, lowercase, underscores. **The dot is reserved**: the loader
+splits on the first one, so `stone.final.png` is read as a picture of `stone`.
+
+Variants are `<name>.2.png`, `<name>.3.png` — the same block, another picture
+of it, picked per cell. A cell here is a hexagon and shows a whole picture, so
+one picture a block reads as a grid: measured over a field of grass, the ground
+correlates with itself shifted one cell at **0.70**, the cell's own six-fold
+turn takes that to **0.08**, and more pictures take it to **0.03**
+([`tools/trial-tiles.mjs`](../../tools/trial-tiles.mjs)).
+
+**Variants are what the layer count binds on.** WebGPU guarantees 256 array
+layers and 110 pictures fit; four of each is 440 and does not. Give the
+variants to the ground a player walks over and leave the rest at one.
+
+## Alpha
+
+Alpha is a **cutout**, not translucency — keep it at 0 or 255. A leaf's darkest
+level is a hole rather than a shade, which is what makes a canopy read as
+leaves; an overlay is clear below its own join.
 
 ## Looking at them
 
@@ -51,5 +70,8 @@ them, or delete the ones not worth having.
 node tools/trial-tiles.mjs <out-dir> assets/blocks
 ```
 
-Draws every picture magnified, and a patch of the real hexagonal grid at the
-size a 1080p screen gives at 5, 12 and 30 m.
+`tiles.png` is every picture with its name under it, drawn two by two so the
+wrap shows, over a checkerboard where it is transparent. An overlay is drawn on
+the dirt it drapes over, which is the only place it means anything.
+`ground.png` is a patch of the real hexagonal grid at the size a 1080p screen
+gives at 5, 12 and 30 m.
