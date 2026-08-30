@@ -74,6 +74,13 @@ function texel(set, name, x, y, tint, variant = 0) {
 	];
 }
 
+/** One texel exactly as the file holds it, with no tint and no scale. */
+function rawTexel(img, x, y) {
+	const n = img.width;
+	const at = ((((y % n) + n) % n) * n + (((x % n) + n) % n)) * 4;
+	return [img.rgba[at], img.rgba[at + 1], img.rgba[at + 2], img.rgba[at + 3]];
+}
+
 const PAD = 8;
 const BACK = [24, 26, 30];
 function sheetOf(width, height) {
@@ -87,51 +94,80 @@ function sheetOf(width, height) {
 	return buf;
 }
 
-// ---- every image, magnified -------------------------------------------------
+// ---- every image, magnified ------------------------------------------------
+//
+// Two rows a directory: the file as it sits on disk, and the same file as the
+// world reads it. They differ for the four grey ones, which is the thing that
+// catches somebody painting: `ground_top.png` is grey and comes out green,
+// and painting it green would come out green twice over. The disk row sits on
+// a checkerboard so a hole reads as a hole rather than as a colour.
 {
 	const NAMES = [...SETS[0].images.keys()].sort();
 	const CELL = 112;
+	const CHECK = [
+		[46, 48, 54],
+		[62, 64, 72],
+	];
 	const W = NAMES.length * (CELL + PAD) + PAD;
-	const H = SETS.length * (CELL + PAD) + PAD;
+	const H = SETS.length * 2 * (CELL + PAD) + PAD;
 	const sheet = sheetOf(W, H);
-	SETS.forEach((set, row) => {
-		NAMES.forEach((name, col) => {
-			if (!set.images.has(name)) return;
-			const n = set.images.get(name)[0].width;
-			const ox = PAD + col * (CELL + PAD);
-			const oy = PAD + row * (CELL + PAD);
-			const scale = CELL / (n * 2);
-			for (let y = 0; y < CELL; y++)
-				for (let x = 0; x < CELL; x++) {
-					const tx = Math.floor(x / scale);
-					const ty = Math.floor(y / scale);
-					const p = texel(set, name, tx, ty);
-					const d = ((oy + y) * W + ox + x) * 4;
-					const a = p[3] / 255;
-					for (let c = 0; c < 3; c++)
-						sheet[d + c] = Math.round(p[c] * a + BACK[c] * (1 - a));
-					// A ground side is the dirt with the grass band composited
-					// over it, which is what two files buy: the band takes the
-					// biome's colour and the dirt stays dirt.
-					if (name === "ground_side" && set.images.has("ground_overlay")) {
-						const o = texel(set, "ground_overlay", tx, ty);
-						const oa = o[3] / 255;
+	SETS.forEach((set, which) => {
+		for (const asWorld of [false, true]) {
+			const row = which * 2 + (asWorld ? 1 : 0);
+			NAMES.forEach((name, col) => {
+				if (!set.images.has(name)) return;
+				const img = set.images.get(name)[0];
+				const n = img.width;
+				const ox = PAD + col * (CELL + PAD);
+				const oy = PAD + row * (CELL + PAD);
+				const scale = CELL / (n * 2);
+				for (let y = 0; y < CELL; y++)
+					for (let x = 0; x < CELL; x++) {
+						const tx = Math.floor(x / scale);
+						const ty = Math.floor(y / scale);
+						const under = asWorld
+							? BACK
+							: CHECK[
+									((x >> 3) + (y >> 3)) % 2
+								];
+						const p = asWorld
+							? texel(set, name, tx, ty)
+							: rawTexel(img, tx, ty);
+						const d = ((oy + y) * W + ox + x) * 4;
+						const a = p[3] / 255;
 						for (let c = 0; c < 3; c++)
 							sheet[d + c] = Math.round(
-								o[c] * oa + sheet[d + c] * (1 - oa),
+								p[c] * a + under[c] * (1 - a),
 							);
+						// A ground side is the dirt with the grass band over
+						// it, which is what two files buy: the band takes the
+						// biome's colour and the dirt stays dirt.
+						if (
+							asWorld &&
+							name === "ground_side" &&
+							set.images.has("ground_overlay")
+						) {
+							const o = texel(set, "ground_overlay", tx, ty);
+							const oa = o[3] / 255;
+							for (let c = 0; c < 3; c++)
+								sheet[d + c] = Math.round(
+									o[c] * oa + sheet[d + c] * (1 - oa),
+								);
+						}
+						sheet[d + 3] = 255;
 					}
-					sheet[d + 3] = 255;
-				}
-		});
+			});
+		}
 	});
 	writePng(join(OUT, "tiles.png"), W, H, sheet);
 	console.log(`tiles.png   ${NAMES.join(", ")}`);
-	SETS.forEach((set, row) =>
+	SETS.forEach((set, which) => {
 		console.log(
-			`  row ${row + 1}: ${set.manifest.size}x${set.manifest.size}  ${set.dir}`,
-		),
-	);
+			`  rows ${which * 2 + 1}-${which * 2 + 2}: ` +
+				`${set.manifest.size}x${set.manifest.size}  ${set.dir}` +
+				"\n    on disk, over a checkerboard, then as the world reads it",
+		);
+	});
 }
 
 // ---- the same images on the grid, at the size they will be seen -------------
