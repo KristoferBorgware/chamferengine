@@ -16,6 +16,7 @@ import {
 	flatCoarseMap,
 	horizonAngle,
 	isBreakable,
+	makeBiomeSample,
 	seedFromString,
 	selectChunks,
 	selectionId,
@@ -670,6 +671,10 @@ async function main(): Promise<void> {
 	// place rather than a mesh resolution -- built once here, the way it is
 	// built once per worker.
 	let biomeField = biomeFieldFor(seed, shape, map, settings);
+	// **Held rather than allocated per report.** The readout re-reads it ten
+	// times a second at most, but there is no reason for that to be ten
+	// short-lived objects a second when one held record does the job.
+	const biomeSample = makeBiomeSample();
 	const byLod: TerrainGenerator[] = [];
 	for (let lod = 0; lod <= CHUNK_LEVEL; lod++)
 		byLod.push(
@@ -2388,6 +2393,46 @@ async function main(): Promise<void> {
 	/** When the status readout was last rebuilt. */
 	let reportedAt = 0;
 	const timer = new FrameTimer();
+
+	/**
+	 * The biome the player stands over, and which of the world's own
+	 * vegetation layers would grow there -- read from the player's own
+	 * direction, the same lookup a chunk's terrain generator makes, so this
+	 * names exactly the ground already drawn underfoot rather than a
+	 * different question about a different point.
+	 *
+	 * Empty on a plain planet, which has no coarse map for a biome to be read
+	 * from. A layer with no `.biomes` of its own grows in every biome a world
+	 * has, so it counts as present everywhere rather than nowhere.
+	 */
+	function biomeReadout(): string[] {
+		if (!biomeField) return [];
+		const dir = player.position.normalize();
+		const at = biomeField.readAt(dir.x, dir.y, dir.z, biomeSample);
+		if (at < 0) return ["biome: sea"];
+		const name = biomeField.biomes[at]!.name;
+		if (!current.knobs.vegetation)
+			return [`biome: ${name} · vegetation off`];
+		const species = [
+			...new Set(
+				current.plantLayers
+					.filter((layer) => layer.on)
+					.filter(
+						(layer) =>
+							layer.biomes.length === 0 ||
+							layer.biomes.includes(name),
+					)
+					.map((layer) => layer.species),
+			),
+		];
+		return [
+			`biome: ${name}`,
+			species.length > 0
+				? `grows: ${species.join(", ")}`
+				: "grows: nothing here",
+		];
+	}
+
 	const draw = (now: number) => {
 		// **A page that has been given up draws nothing.** Every buffer this
 		// frame would write to has been destroyed, and the browser reports one
@@ -2820,6 +2865,7 @@ async function main(): Promise<void> {
 				// What a click would do, and how much of this world is a
 				// player's rather than the seed's.
 				`${aimingSays(aimed)} · ${edits.count} changed`,
+				...biomeReadout(),
 				...(bounds.boxes.length > 0
 					? [
 							`${bounds.boxes.length} of ${boundsHeld} bounds drawn, nearest first`,
