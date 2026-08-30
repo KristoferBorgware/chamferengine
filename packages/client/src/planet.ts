@@ -82,6 +82,7 @@ import {
 	windRotation,
 } from "chamfer/sky";
 import { MapPreview } from "./MapPreview.js";
+import { BlockTextures } from "chamfer/render";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { PlantCellStore } from "./PlantCellStore.js";
 import { plantLayerOf } from "./PlantDraft.js";
@@ -442,9 +443,29 @@ if (params.get("panel") === "1") {
 	teardown.push(() => preview.dispose());
 }
 
+/**
+ * The block pictures, once they have been fetched, or `null` until then.
+ *
+ * **The world draws without them.** Every vertex carries a layer of `-1` while
+ * this is null and the mesh is the untextured one, so a slow fetch is a world
+ * that starts flat and gains its pictures rather than a world that waits.
+ */
+let blockTextures: BlockTextures | null = null;
+
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
 	const renderer = new ChunkRenderer(ctx);
+	try {
+		const baked = await BlockTextures.load(
+			`${import.meta.env.BASE_URL}blocks/`,
+		);
+		blockTextures = new BlockTextures(ctx, baked.atlas, baked.levels);
+		renderer.setBlockTextures(blockTextures);
+	} catch (whatever) {
+		// A world with no pictures is the world this engine drew before there
+		// were any, which is worth having over a page that does not open.
+		console.warn("no block pictures loaded", whatever);
+	}
 
 	report([
 		`seed "${seedText}"`,
@@ -898,6 +919,10 @@ async function main(): Promise<void> {
 			crustDepth: builtShape.crustDepth,
 			apron: APRON,
 			debugSeams: live.knobs.seamOverlay,
+			// **Which picture each block wears.** Absent until the bake has
+			// been fetched, and then a chunk is meshed with a layer of `-1` on
+			// every vertex and drawn in the registry's own colours.
+			textureLayers: blockTextures?.table,
 			// The grid: the same selection and the same levels, built as a
 			// flat shell of hexagons at the world's highest point.
 			grid: live.knobs.gridMode

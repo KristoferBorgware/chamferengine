@@ -10,6 +10,46 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-125 — The overlay slot is baked into every table and nothing ever samples it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, wiring the block textures into the engine
+**Where:** `packages/engine/src/mesh/meshChunk.ts`,
+`packages/engine/src/render/terrain/TERRAIN_SHADER.ts`,
+`tools/bake-textures.ts`
+
+**What happens.** A ground block is two materials seen at once -- the dirt the
+column is made of, and the grass, snow or ash lying on top of it -- and one
+picture cannot be half of each, which is why the seeding splits them: the side
+carries the dirt and a separate `_overlay` picture carries the band that hangs
+over the brink, with alpha where the dirt shows through. **31 of the 110
+pictures on disk are that second half.** The bake files them: `SLOT_OVERLAY`
+is slot 3 of every table row, and a block with no overlay gets `-1` there.
+Nothing reads it. `meshChunk` emits one layer per face, from `SLOT[0]`,
+`SLOT[1]` or `SLOT[2]`, and the shader takes one `textureSample`.
+
+So a wall of grassy ground is dirt to its top edge with nothing over it, and
+every one of those 31 pictures is a file the engine loads into the array,
+carries in memory at all six levels, and draws nowhere.
+
+**Why it matters.** It is the difference between a hillside reading as ground
+with grass on it and reading as a stack of dirt bricks -- the brink is where a
+voxel world shows what it is made of, and the overlay is the only thing that
+covers that seam. It is also paid for already: the layers are baked and
+resident, so what is left to spend is one more sample and one more number on
+the vertex.
+
+**What would fix it.** A second layer index per vertex and a second
+`textureSample` composited over the first by its own alpha, on side faces
+only -- an overlay index of `-1` selects past the sample the way `pictureOn`
+already selects past a missing picture, so a block without one costs the
+sample and nothing else. The band's own height wants to be part of the
+picture rather than a uniform: the mesher merges a run of layers into one
+quad and a v running 0 to `runs` would stretch the band down the whole wall.
+
 ### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
 
 **Kind:** bug
@@ -38,43 +78,27 @@ stands between the textures on disk and leaves that read as leaves. It is also
 two decisions rather than one: a leaf must stop occluding, and the shadow pass
 has to alpha-test too or a tree throws a solid cube's shadow.
 
+> **[measured]** `tools/trial-leaf-cutout.ts`, four chunks in biomes the
+> shipped layers plant in: 146 plants, 19,835 leaf cells, every one of their
+> eight neighbours counted.
+>
+> | A leaf face | | |
+> |---|---|---|
+> | against air, drawn today | 34,032 | **23.5%** |
+> | against another leaf, culled | 95,340 | **65.8%** |
+> | against wood or ground, culled | 15,548 | 10.7% |
+>
+> A canopy that stops occluding draws **4.26x** the leaf faces it draws now,
+> and **5,938 of the 19,835 leaf cells have no face at all today** -- 30% of a
+> canopy is geometry that does not exist, and that is what a hole in the
+> texture would look into.
+
 **What would fix it.** A third opacity level for a cutout material, and a
 second condition beside the comparison: draw a face when the neighbour is less
-opaque **or** when either side is a cutout. That is Minecraft's fancy leaves,
-and it costs every hidden face in every canopy -- unmeasured here, because
-F-124 stops a trial from growing a tree to count. The mip chain needs care as
+opaque **or** when either side is a cutout. At 4.26x the leaf faces that wants
+a switch rather than one answer for every world. The mip chain needs care as
 well: averaging alpha down a chain dissolves distant leaves, so the levels want
 their coverage rescaled at bake time.
-
-### F-124 — Plants cannot be grown outside the worker, and the plant trial measures nothing
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-30, trying to count the faces a canopy hides
-**Where:** `tools/trial-plant-chunk.ts`,
-`packages/engine/src/generation/chunk/plantChunk.ts`
-
-**What happens.** `tools/trial-plant-chunk.ts` reports **0 plants and 0.0%
-canopy at every level of detail**, and prints the cost of growing them as
-though that were a measurement. Trees plainly do grow -- the client draws them,
-and a frame taken from under one is how the carried light was judged.
-
-A plant layer now names the biomes it grows in, and `plantChunk` builds the
-masks from the `BiomeField` it is handed. The trial hands it `null`, so no
-layer matches anything. Passing a field built by `biomeFieldFor` is not enough
-either: over 900 chunks spread across the planet, not one grew a leaf.
-
-**Why it matters.** Two things are unmeasurable until it is understood. The
-trial's own subject -- what a chunk's plants cost against its ground -- is
-being reported as a timing of doing nothing, and it reads as a real number.
-And anything wanting a canopy to count, F-123 included, has no way to make one.
-
-**What would fix it.** Find what the chunk worker does that these two do not,
-which is one read of the worker's setup path against `plantChunk`'s arguments.
-Then either the trial gains the missing step, or `plantChunk` refuses a layer
-set it cannot satisfy instead of quietly growing nothing.
 
 ### F-120 — A light standing at a pentagon reads its own chart twice over
 
@@ -2633,6 +2657,49 @@ same planet.
 ---
 
 ## Closed
+
+### F-124 — A plant template carries its biome restriction onto a patch that has no biomes
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, trying to count the faces a canopy hides
+**Closed:** 2026-08-30 on `master` by "Give ten more species a biome to grow
+in, and fix the bug that hid them", found independently here the same day. The
+layer `buildPlantTemplate` grows its reference plant with clears `biomes` the
+same way it already clears `density` and `curve`.
+
+**What happened.** A plant layer names the biomes it grows in, and a layer that
+names biomes with no resolved mask grows **nowhere** -- deliberately, so a
+dropped mask reads as an empty forest rather than as a silently ignored
+restriction. `buildPlantTemplate` grows one reference plant per variant on a
+synthetic flat patch, through the same `growStand` every other plant goes
+through, and overrides the layer's `density` and `curve` so the single root on
+that patch always takes it. It did not override `biomes`. The patch has no
+biome model, so every restricted species rasterised to nothing: 32 variants,
+`reach 0`, not one cell.
+
+**What it cost.** Everything downstream read that as a plant too small to draw.
+Measured on one chunk in a biome the shipped layers plant in, with the store
+and without it, every other argument the same:
+
+| | plants | wood cells | leaf cells | cover |
+|---|---|---|---|---|
+| with a `PlantTemplateStore` | 33 | **0** | **0** | 38 |
+| with none | 33 | 6,230 | 10,839 | 0 |
+
+`MeshWorkerCore` passes a store, so this was the path the world drew: every
+tree in every chunk fell to the "under half a block" rule and left its colour
+on the ground instead of any geometry. `tools/trial-plant-chunk.ts` reported
+**0 plants and 0.0% canopy at every level** while printing the cost of growing
+them, which is how it went unnoticed -- a trial measuring nothing reads the
+same as a trial measuring something cheap.
+
+**What is left.** The trial still hands `plantChunk` no `BiomeField` and so
+still grows nothing; it wants the field the way `tools/trial-leaf-cutout.ts`
+builds one, and a chunk chosen in a biome its layers actually plant in rather
+than the one under the bench's patch.
 
 ### F-078 — The cave function in the engine is not the cave function the corpus measured
 

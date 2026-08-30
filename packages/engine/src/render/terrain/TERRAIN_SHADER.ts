@@ -77,6 +77,18 @@ struct Chunk {
 };
 @group(0) @binding(0) var<uniform> frame : Frame;
 @group(1) @binding(0) var<uniform> chunk : Chunk;
+
+/**
+ * Every block picture, one layer apiece.
+ *
+ * **An array rather than an atlas**, so a layer mips down to one texel with
+ * nothing beside it to bleed in, and a wall merged over several layers repeats
+ * its picture by asking the sampler. A vertex carries the layer it reads as a
+ * float holding a whole number, and \`-1\` where nothing has loaded a bake --
+ * which draws the color alone, the way this shader always did.
+ */
+@group(3) @binding(0) var blockMap : texture_2d_array<f32>;
+@group(3) @binding(1) var blockSample : sampler;
 struct VertexOut {
 	@builtin(position) clip  : vec4f,
 	@location(0)       color : vec3f,
@@ -84,6 +96,8 @@ struct VertexOut {
 	@location(2)       up    : vec3f,
 	@location(3)       depth : f32,
 	@location(4)       sky   : f32,
+	@location(5)       uv    : vec2f,
+	@location(6) @interpolate(flat) layer : i32,
 };
 
 @vertex
@@ -91,6 +105,8 @@ fn vertexMain(
 	@location(0) position : vec3f,
 	@location(1) color    : vec3f,
 	@location(2) sky      : f32,
+	@location(3) uv       : vec2f,
+	@location(4) layer    : f32,
 ) -> VertexOut {
 	let world = position + chunk.origin.xyz;
 	var out : VertexOut;
@@ -112,6 +128,11 @@ fn vertexMain(
 	// reading instead, which is what stops a cave being held at the 12% a
 	// cell shut in on every side is given.
 	out.sky = mix(sky, 1.0, frame.sun.w);
+	out.uv = uv;
+	// **Flat, not interpolated.** Every corner of a face reads one picture,
+	// and a layer averaged between two would be a third picture that is not
+	// either of them.
+	out.layer = i32(layer);
 	return out;
 }
 
@@ -277,6 +298,27 @@ fn lightOn(
 	return (max(night, fromSky) + fromSun + fromMoon) * sky + lamp;
 }
 
+/**
+ * The picture a face wears, which is the block's own color where there is one.
+ *
+ * **The picture IS the albedo, and the vertex color is what modulates it.**
+ * With a bake loaded the mesher writes the corner occlusion and the speckle
+ * alone into a vertex, so this multiplies out to color times shading; with no
+ * bake it writes the registry color the way it always did and this returns 1.
+ * Either way one multiply, and the world before the pictures arrive is the
+ * world this engine already drew.
+ */
+fn pictureOn(uv : vec2f, layer : i32) -> vec3f {
+	// **Sampled before it is chosen, never inside the test.** A layer is a
+	// per-vertex number, so a branch on it is not uniform across the draw, and
+	// \`textureSample\` picks its own mip from how the coordinate changes
+	// between neighbouring pixels -- which only exists where every pixel took
+	// the same path. The index is clamped for the same reason: the read
+	// happens whether or not its answer is wanted.
+	let picked = textureSample(blockMap, blockSample, uv, max(layer, 0)).rgb;
+	return select(vec3f(1.0), picked, layer >= 0);
+}
+
 @fragment
 fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	let world = in.local + chunk.origin.xyz;
@@ -291,7 +333,7 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// moves.
 	let direct = SUN_SHARE;
 	let lit =
-		in.color *
+		in.color * pictureOn(in.uv, in.layer) *
 		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 
 	// Under water the view fades toward the water's own color over the distance
@@ -311,7 +353,7 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
 	let lit =
-		in.color *
+		in.color * pictureOn(in.uv, in.layer) *
 		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);
