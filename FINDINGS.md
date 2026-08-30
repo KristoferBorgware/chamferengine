@@ -85,12 +85,43 @@ switches to Holdridge, then tunes the coastline to get a beach, will
 conclude the knob is broken rather than that it was never wired to this
 table.
 
-**What would fix it.** Cheapest: gate the section, or add one note, on
-whether every biome in the live table is still `ANY_LANDFORM` -- the same
-test `untouched()` in `BiomeDraft.ts` could expose. Larger: give the
-Holdridge biomes real landform restrictions of their own -- real Holdridge
-has no shore concept, so a world using it still could, and this would be
-inventing rather than porting, so it needs a decision first.
+**This is also why Holdridge reads as the calmer map.** Being gated by
+`ANY_LANDFORM` is not only a dead-knob problem -- it is the reason
+Holdridge's biome borders look deliberate where Plain's look speckled.
+
+> **[measured]** Same seed, same terrain, a 0.5-degree lat/lon grid between
+> 60 S and 60 N: Plain's adjacent land samples disagree on the biome name
+> **4.55%** of the time (15,752 of 346,320 pairs); Holdridge disagrees
+> **0.97%** of the time (3,359 of 346,320) -- **4.7x** fewer edges on the
+> identical ground. Of Plain's edges, **83.9%** land exactly where the
+> terrain's own landform classification also changes; only **16.1%** are a
+> pure climate reshuffle within one landform, which is the only kind of edge
+> Holdridge's map can have at all.
+
+The mechanism: each of Plain's six landforms draws from a different,
+mostly-disjoint 3-to-6-biome subset with its own dot positions, so crossing
+a landform boundary swaps the nearest dot almost every time, independent of
+how far the climate itself moved. `landformAt`'s own "swing" term reads the
+peaks/relief field at its default one octave (`formDetail`), whose feature
+size (600 m, `COARSE_MAP_DEFAULTS.peaks.metres`) is far narrower than the
+climate fields deciding temperature and humidity (3,000 m and 2,200 m), so
+the landform grid changes several times over the distance climate changes
+once. Holdridge, having no landform-gated subsets, is a pure Voronoi diagram
+over the smooth, region-averaged climate field alone.
+
+**What would fix it.** This reframes the fix. Giving Holdridge real
+landform restrictions (the "larger" option below) would make it noisier in
+exactly the way that currently reads as better -- so it is likely the wrong
+direction unless a landform-aware Holdridge is what is wanted for other
+reasons. Two options worth weighing instead of it: gate the shore and
+landform-grid controls (or add one note) on whether every biome in the live
+table is still `ANY_LANDFORM`, the same test `untouched()` in
+`BiomeDraft.ts` could expose; or take the finding the other way and soften
+Plain's own landform gate -- letting adjacent landforms share part of their
+biome list, or blending across the boundary -- so Plain's map calms down
+without giving up landform-driven variety altogether. Either changes Plain,
+not Holdridge, and both need a decision on how much of Plain's character is
+supposed to come from the landform grid before either is worth building.
 
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
