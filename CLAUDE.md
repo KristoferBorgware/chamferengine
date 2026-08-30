@@ -2320,7 +2320,7 @@ Violating any of these breaks the design. They are not tunable.
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
 - **A QUAD'S TWO TRIANGLES CANNOT CARRY A SHADING THAT IS A PRODUCT**
-  (`emitSide`, `emitCap`, F-130 closed). A vertex carries the block's colour
+  (`emitSide`, `emitCap`, F-132 closed). A vertex carries the block's colour
   with the corner occlusion multiplied in and, **separately**, how much sky its
   cell stands under; the fragment multiplies them. Each is interpolated
   affinely across a triangle and the **product of two affine functions is

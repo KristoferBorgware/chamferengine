@@ -6081,7 +6081,7 @@ with no owner afterwards is the bug.
 
 ---
 
-### F-130 — A quad's two triangles cannot carry a shading that is a product
+### F-132 — A quad's two triangles cannot carry a shading that is a product
 
 **Kind:** bug
 **Milestone:** 0.5.0
