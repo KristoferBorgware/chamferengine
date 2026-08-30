@@ -154,6 +154,39 @@ describe("BiomeField", () => {
 		expect(out.region).toBe(-1);
 	});
 
+	it("dries the humidity with elevation when humLapse is set, and leaves temperature alone", () => {
+		// **Unfitted, as well as regionless.** The fit measures its own span
+		// from the land the layers generate, and `humLapse` moves every
+		// land sample it reads -- fitted, the two fields below would answer
+		// through two different squares and even a sea reading would move,
+		// for a reason that has nothing to do with this term.
+		const base = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humLapse: 0,
+		});
+		const dried = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humLapse: 0.6,
+		});
+		const a = makeBiomeSample();
+		const b = makeBiomeSample();
+		let checked = 0;
+		for (const [x, y, z] of directions()) {
+			base.sampleAt(x, y, z, a);
+			dried.sampleAt(x, y, z, b);
+			expect(b.t).toBe(a.t);
+			if (a.metres > 0) {
+				expect(b.h).toBeLessThan(a.h);
+				checked++;
+			} else expect(b.h).toBe(a.h);
+		}
+		// The default layers put land at a spread of heights, so the test saw
+		// at least one point the term actually moves.
+		expect(checked).toBeGreaterThan(0);
+	});
+
 	it("hands back the biome's own block, and nothing for the sea", () => {
 		const out = makeBiomeSample();
 		for (const [x, y, z] of directions()) {

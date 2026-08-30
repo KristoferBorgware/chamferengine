@@ -20,9 +20,9 @@ describe("biomeOf", () => {
 			const form = LANDFORMS.findIndex(
 				(f) => f.key === biomes[b]!.landform,
 			);
-			expect(biomeOf(biomes[b]!.t, biomes[b]!.h, allowed[form], biomes)).toBe(
-				b,
-			);
+			expect(
+				biomeOf(biomes[b]!.t, biomes[b]!.h, allowed[form], biomes),
+			).toBe(b);
 		}
 	});
 
@@ -38,9 +38,14 @@ describe("biomeOf", () => {
 	it("keeps a lowland desert off a summit however hot the summit is", () => {
 		const desert = biomes.findIndex((b) => b.name === "Desert");
 		const peaks = LANDFORMS.findIndex((f) => f.key === "peaks");
-		expect(biomeOf(biomes[desert]!.t, biomes[desert]!.h, allowed[peaks], biomes)).not.toBe(
-			desert,
-		);
+		expect(
+			biomeOf(
+				biomes[desert]!.t,
+				biomes[desert]!.h,
+				allowed[peaks],
+				biomes,
+			),
+		).not.toBe(desert);
 	});
 
 	it("returns -1 only for a landform with no biome at all", () => {
@@ -63,10 +68,13 @@ describe("the presets", () => {
 
 	it("give every biome its own block, registered and colored", () => {
 		const seen = new Set<number>();
-		for (const set of Object.values(BIOME_PRESETS))
+		// Deduplicated by array identity, not by preset key: `elevation`
+		// reads `holdridge`'s own dots, so the two share every block on
+		// purpose and would otherwise fail this on the first repeat.
+		for (const set of new Set(Object.values(BIOME_PRESETS)))
 			for (const biome of set) {
-				// Unique across both presets: a world painted by one and
-				// reopened under the other must not rename its ground.
+				// Unique across every distinct set: a world painted by one and
+				// reopened under another must not rename its ground.
 				expect(seen.has(biome.block)).toBe(false);
 				seen.add(biome.block);
 				expect(BLOCK_NAMES[biome.block]).toMatch(/^chamfer:.*_ground$/);
@@ -78,7 +86,10 @@ describe("the presets", () => {
 		for (const biome of DEFAULT_BIOMES) {
 			const n = parseInt(biome.hex, 16);
 			const color = BIOME_GROUNDS[biome.block]!;
-			expect(color[0]).toBeCloseTo(Math.pow(((n >> 16) & 255) / 255, 2.2), 10);
+			expect(color[0]).toBeCloseTo(
+				Math.pow(((n >> 16) & 255) / 255, 2.2),
+				10,
+			);
 			expect(color[2]).toBeCloseTo(Math.pow((n & 255) / 255, 2.2), 10);
 		}
 	});

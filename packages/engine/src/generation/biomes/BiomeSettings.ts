@@ -41,6 +41,17 @@ export interface BiomeSettings {
 	readonly humOctaves?: number;
 
 	/**
+	 * Units of humidity the air loses per kilometre of elevation.
+	 *
+	 * **The one climate term the landform grid has no equivalent for.**
+	 * Temperature already cools with height (`tempLapse`); nothing dried the
+	 * air the same way, so a cold, wet reading could still land on a summit.
+	 * Zero leaves humidity exactly as it reads at sea level, whatever the
+	 * ground stands on.
+	 */
+	readonly humLapse?: number;
+
+	/**
 	 * Whether the biome lookup is pushed off the climate it was handed.
 	 *
 	 * The push frays every border in the diagram; without it each border is
@@ -123,6 +134,7 @@ export const BIOME_DEFAULTS = {
 	humNoise: 0.5,
 	humFeature: 2200,
 	humOctaves: 3,
+	humLapse: 0,
 	warp: true,
 	warpStrength: 0.12,
 	warpFeature: 700,

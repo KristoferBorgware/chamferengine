@@ -10,6 +10,31 @@ describe("the biome table in a query string", () => {
 	it("writes an untouched preset as its name alone", () => {
 		expect(biomeTableToText(biomeTableOf("plain"))).toBe("plain");
 		expect(biomeTableToText(biomeTableOf("holdridge"))).toBe("holdridge");
+		expect(biomeTableToText(biomeTableOf("elevation"))).toBe("elevation");
+	});
+
+	it("reads holdridge's own dots under the elevation preset, dried by default", () => {
+		const elevation = biomeTableOf("elevation");
+		expect(elevation.humLapse).toBeGreaterThan(0);
+		expect(elevation.biomes.map((b) => b.name)).toEqual(
+			biomeTableOf("holdridge").biomes.map((b) => b.name),
+		);
+		// plain and holdridge open with no elevation pull, so a link naming
+		// either travels exactly as it did before this field existed.
+		expect(biomeTableOf("plain").humLapse).toBe(0);
+		expect(biomeTableOf("holdridge").humLapse).toBe(0);
+	});
+
+	it("round-trips a hand-set humLapse", () => {
+		const draft = biomeTableOf("plain");
+		draft.humLapse = 1.25;
+		const back = biomeTableFromText(biomeTableToText(draft));
+		expect(back.humLapse).toBeCloseTo(1.25, 3);
+	});
+
+	it("falls back to the preset's own humLapse when a link omits it", () => {
+		const back = biomeTableFromText("elevation|" + DEFAULT_LANDFORM_GRID);
+		expect(back.humLapse).toBe(biomeTableOf("elevation").humLapse);
 	});
 
 	it("round-trips an edited table dot for dot", () => {
