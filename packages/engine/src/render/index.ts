@@ -24,6 +24,7 @@ export {
 	SLOT_SIDE,
 	SLOT_TOP,
 	BlockTextures,
+	unpackGrid,
 } from "./terrain/BlockTextures.js";
 export { SEA_CLARITY, SEA_COLORS } from "./sea/SEA_COLORS.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";

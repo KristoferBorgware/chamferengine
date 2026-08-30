@@ -2699,48 +2699,6 @@ same planet.
 
 ---
 
-### F-134 — The texture strip is decoded through a canvas, which silently truncates past a height no error reports
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-30, working out how the block pictures scale to a larger set
-**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`load`),
-`tools/bake-textures.ts`
-
-**What happens.** A bake writes one PNG a mip level holding every layer stacked,
-and the client decodes it by drawing it into an `OffscreenCanvas` one tile wide
-and one tile tall per layer, then reading it back with `getImageData`. A canvas
-has a maximum side, and past it the browser **does not throw**: the context is
-created, the draw is accepted, and the read comes back wrong.
-
-Measured in headless Chromium, filling the last rows and reading them back:
-a strip `32,768` tall works at both 32 and 64 pixel tiles; a strip `65,536`
-tall comes back wrong at 32, 64 and 128 pixel tiles alike, with no exception
-raised. So the decode path caps the set at roughly `2,047` pictures at the
-current tile size, **`1,023` at 64 pixels** and `511` at 128 -- and the cap
-halves every time the tile size doubles.
-
-**Why it matters.** It is under the GPU's own array-layer limit, which is 256
-guaranteed and commonly `2,048`, so the transport format binds before the
-hardware does and the two limits move in opposite directions as the tile size
-grows. Worse, it is a **silent** failure: nothing reports it, and what reaches
-the GPU is a texture array whose upper layers hold whatever the truncated read
-returned. Somebody raising the tile size or adding pictures would see blocks
-come out wrong with no error anywhere to point at.
-
-**What would fix it.** The canvas is only in the way because the strip is one
-tall column. Either split each level into several PNGs and upload each with a
-base array layer, or lay the transport image out as a grid and repack the rows
-into layer order before the upload, or bake raw bytes and skip the image
-decoder entirely. All three keep the GPU object exactly as it is -- an array
-texture, one write a level -- because the file's shape and the texture's shape
-were never required to match. A guard that refuses a strip taller than the
-canvas can carry belongs in the bake either way, so this can never again be
-discovered by looking at the pictures.
-
----
 
 ### F-135 — A texture variant can be drawn and baked, and nothing can ever wear it
 
@@ -6347,3 +6305,53 @@ records where the generator put the surface and no plant moves it, and
 gives up is a forest floor being dimmer than open ground, which is a look worth
 having and belongs in a canopy term of its own rather than falling out of a
 heuristic written for valleys and cliffs.
+
+### F-134 — The texture strip is decoded through a canvas, which silently truncates past a height no error reports
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, working out how the block pictures scale to a larger set
+**Closed:** 2026-08-30, fixed. A level is written as a grid rather than a tall
+column and the client walks the rows back into layer order before the upload,
+so both sides of the transport image stay small whatever the set grows to. The
+bake refuses an image over a side it knows a canvas carries, and reads its own
+grid straight back before writing it -- the failure this replaces was silent,
+so the guard had to be a comparison against the bytes that went in rather than
+a look at the picture. **Tiles sit edge to edge with no gutters**, which costs
+nothing because the GPU never samples the file: it is unpacked into the same
+array texture as before, where every layer still mips down alone.
+**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`load`),
+`tools/bake-textures.ts`
+
+**What happens.** A bake writes one PNG a mip level holding every layer stacked,
+and the client decodes it by drawing it into an `OffscreenCanvas` one tile wide
+and one tile tall per layer, then reading it back with `getImageData`. A canvas
+has a maximum side, and past it the browser **does not throw**: the context is
+created, the draw is accepted, and the read comes back wrong.
+
+Measured in headless Chromium, filling the last rows and reading them back:
+a strip `32,768` tall works at both 32 and 64 pixel tiles; a strip `65,536`
+tall comes back wrong at 32, 64 and 128 pixel tiles alike, with no exception
+raised. So the decode path caps the set at roughly `2,047` pictures at the
+current tile size, **`1,023` at 64 pixels** and `511` at 128 -- and the cap
+halves every time the tile size doubles.
+
+**Why it matters.** It is under the GPU's own array-layer limit, which is 256
+guaranteed and commonly `2,048`, so the transport format binds before the
+hardware does and the two limits move in opposite directions as the tile size
+grows. Worse, it is a **silent** failure: nothing reports it, and what reaches
+the GPU is a texture array whose upper layers hold whatever the truncated read
+returned. Somebody raising the tile size or adding pictures would see blocks
+come out wrong with no error anywhere to point at.
+
+**What would fix it.** The canvas is only in the way because the strip is one
+tall column. Either split each level into several PNGs and upload each with a
+base array layer, or lay the transport image out as a grid and repack the rows
+into layer order before the upload, or bake raw bytes and skip the image
+decoder entirely. All three keep the GPU object exactly as it is -- an array
+texture, one write a level -- because the file's shape and the texture's shape
+were never required to match. A guard that refuses a strip taller than the
+canvas can carry belongs in the bake either way, so this can never again be
+discovered by looking at the pictures.

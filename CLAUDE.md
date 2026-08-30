@@ -2319,6 +2319,27 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **THE FILE'S SHAPE AND THE TEXTURE'S SHAPE WERE NEVER REQUIRED TO MATCH**
+  (`toGrid` in `bake-textures`, `unpackGrid`, F-134 closed). A bake writes one
+  PNG a mip level and the client decodes it through an `OffscreenCanvas`. The
+  layers were stacked in one tall column because that is already the byte order
+  `writeTexture` wants and so needs no unpacking -- but a column's height is
+  the tile size times the layer count, and **a canvas past a maximum side
+  returns wrong data without raising anything**. Measured in headless Chromium,
+  filling the last rows and reading them back: `32,768` tall is fine at 32 and
+  64 pixel tiles, `65,536` comes back wrong at 32, 64 and 128 alike. So the
+  transport capped the set at about `2,047` pictures, **`1,023` at 64 pixels**
+  and `511` at 128 -- **halving every time the tile size doubles**, under the
+  array-layer limit the hardware gives (256 guaranteed, commonly `2,048`) and
+  moving the wrong way. A level is a **grid** now, roughly square, walked back
+  into layer order on load: the same single upload, and `128` pixel tiles over
+  `2,048` layers come to under `6,000` a side. **Tiles sit edge to edge with no
+  gutters and cannot bleed**, because the GPU never samples the file -- it is
+  unpacked into the same array texture, where every layer still mips down
+  alone. **The guard has to be a comparison, not a look at the picture**: the
+  bake refuses an image over a side it knows a canvas carries, and reads its
+  own grid straight back before writing it. Verified byte for byte against the
+  strip it replaces -- all six levels upload identical bytes.
 - **A CANOPY IS NOT A CLIFF, AND SKY EXPOSURE MUST ASK THE TERRAIN RATHER THAN
   THE BAND** (`skyTopOf` in `meshChunk`, F-133 closed). `skyExposure` asks each
   of a cell's six neighbours how much taller its ground stands and darkens the

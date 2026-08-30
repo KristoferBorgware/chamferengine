@@ -1,11 +1,21 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 
-/** What a bake writes beside its strips: the layer order and the block table. */
+/** What a bake writes beside its grids: the layer order and the block table. */
 export interface BlockAtlas {
 	/** Texels a side, at the finest level. */
 	readonly size: number;
 
-	/** Mip levels the bake wrote, one strip apiece. */
+	/**
+	 * How many tiles across the transport image holds.
+	 *
+	 * The file is a grid and the texture is an array, and the two were never
+	 * required to have the same shape -- this is what turns one into the
+	 * other. A bake from before the grid says nothing, and one tile across is
+	 * the tall column those wrote.
+	 */
+	readonly columns?: number;
+
+	/** Mip levels the bake wrote, one image apiece. */
 	readonly levels: number;
 
 	/** Every picture, in the order the layers are numbered. */
@@ -65,7 +75,7 @@ export class BlockTextures {
 	constructor(
 		ctx: GpuContext,
 		atlas: BlockAtlas,
-		levels: readonly ImageData[],
+		levels: readonly Uint8Array[],
 	) {
 		this.atlas = atlas;
 		this.table = Int32Array.from(atlas.table);
@@ -77,13 +87,14 @@ export class BlockTextures {
 			mipLevelCount: atlas.levels,
 			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
 		});
-		// One write a level: the strip a bake wrote is already the byte order
-		// an array wants, layer 0's rows and then layer 1's.
-		levels.forEach((image, level) => {
+		// One write a level. {@link load} has already turned the grid the bake
+		// wrote into the order an array wants -- layer 0's rows, then layer
+		// 1's -- so this is the same single upload it always was.
+		levels.forEach((bytes, level) => {
 			const wide = atlas.size >> level;
 			device.queue.writeTexture(
 				{ texture: this.texture, mipLevel: level },
-				image.data,
+				bytes,
 				{ bytesPerRow: wide * 4, rowsPerImage: wide },
 				[wide, wide, atlas.layers.length],
 			);
@@ -112,36 +123,76 @@ export class BlockTextures {
 	}
 
 	/**
-	 * Fetch a bake and decode every level.
+	 * Fetch a bake and decode every level into the order an array texture wants.
 	 *
 	 * Decoded through a canvas rather than uploaded as an image, because
-	 * `copyExternalImageToTexture` writes one layer at a time and the strips
-	 * are already stacked for a single write.
+	 * `copyExternalImageToTexture` writes one layer at a time.
+	 *
+	 * **The image is a grid and the upload is layer-major**, so the rows are
+	 * walked once on the way through. That indirection is the whole fix for
+	 * F-134: a tall column of layers is already the byte order the upload
+	 * wants and needs no walk, but its height is the tile size times the layer
+	 * count, and a canvas past a maximum side returns wrong data with nothing
+	 * raised. A grid keeps both sides small whatever the set grows to.
 	 */
 	static async load(base: string): Promise<{
 		atlas: BlockAtlas;
-		levels: ImageData[];
+		levels: Uint8Array[];
 	}> {
 		const atlas = (await (
 			await fetch(`${base}blocks.json`)
 		).json()) as BlockAtlas;
-		const levels: ImageData[] = [];
+		// A bake from before the grid wrote one tile across, which walks
+		// through the same code as a straight copy.
+		const columns = Math.max(1, atlas.columns ?? 1);
+		const rows = Math.ceil(atlas.layers.length / columns);
+		const levels: Uint8Array[] = [];
 		for (let level = 0; level < atlas.levels; level++) {
 			const wide = atlas.size >> level;
 			const blob = await (
 				await fetch(`${base}blocks-${level}.png`)
 			).blob();
 			const bitmap = await createImageBitmap(blob);
-			const canvas = new OffscreenCanvas(
-				wide,
-				wide * atlas.layers.length,
-			);
+			const canvas = new OffscreenCanvas(columns * wide, rows * wide);
 			const flat = canvas.getContext("2d", { willReadFrequently: true })!;
 			flat.drawImage(bitmap, 0, 0);
-			levels.push(
-				flat.getImageData(0, 0, wide, wide * atlas.layers.length),
-			);
+			const grid = flat.getImageData(
+				0,
+				0,
+				columns * wide,
+				rows * wide,
+			).data;
+			levels.push(unpackGrid(grid, wide, columns, atlas.layers.length));
 		}
 		return { atlas, levels };
 	}
+}
+
+/**
+ * A grid of tiles read out in layer order, which is what the upload wants.
+ *
+ * Layer `n` sits at column `n % columns` and row `n / columns`, the order the
+ * bake writes. Exported so a test can hold it to that on its own, rather than
+ * only through a picture nobody can check by looking.
+ */
+export function unpackGrid(
+	grid: Uint8ClampedArray | Uint8Array,
+	wide: number,
+	columns: number,
+	layers: number,
+): Uint8Array {
+	const out = new Uint8Array(layers * wide * wide * 4);
+	const pitch = columns * wide * 4;
+	for (let at = 0; at < layers; at++) {
+		const x = (at % columns) * wide * 4;
+		const y = Math.floor(at / columns) * wide;
+		for (let row = 0; row < wide; row++) {
+			const from = (y + row) * pitch + x;
+			out.set(
+				grid.subarray(from, from + wide * 4),
+				(at * wide + row) * wide * 4,
+			);
+		}
+	}
+	return out;
 }
