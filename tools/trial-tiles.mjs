@@ -16,7 +16,15 @@
 // turn makes better.
 import { readFileSync, readdirSync, mkdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { hash2, linearOf, readPng, srgb, writePng } from "./blockTiles.mjs";
+import {
+	hash2,
+	label,
+	labelWidth,
+	linearOf,
+	readPng,
+	srgb,
+	writePng,
+} from "./blockTiles.mjs";
 
 const args = process.argv.slice(2);
 const OUT = args[0] ?? ".";
@@ -109,72 +117,76 @@ function sheetOf(width, height) {
 	return buf;
 }
 
-// ---- every image, magnified ------------------------------------------------
+// ---- every image, in a grid with its name under it -------------------------
 //
-// Two rows a directory: the file as it sits on disk, and the same file as the
-// world reads it. They differ for the four grey ones, which is the thing that
-// catches somebody painting: `ground_top.png` is grey and comes out green,
-// and painting it green would come out green twice over. The disk row sits on
-// a checkerboard so a hole reads as a hole rather than as a colour.
+// A hundred and ten pictures, so a row is no use and a name is not optional.
+// An overlay is drawn over the dirt it drapes on, because that is the only
+// place it means anything; everything else sits on a checkerboard, which is
+// what makes a leaf's holes read as holes.
 {
 	const NAMES = [...SETS[0].images.keys()].sort();
-	const CELL = 112;
+	const TILE = 96;
+	const TEXT = 14;
+	const COLS = 10;
 	const CHECK = [
 		[46, 48, 54],
 		[62, 64, 72],
 	];
-	const W = NAMES.length * (CELL + PAD) + PAD;
-	const H = SETS.length * 2 * (CELL + PAD) + PAD;
+	const rows = Math.ceil(NAMES.length / COLS) * SETS.length;
+	const W = COLS * (TILE + PAD) + PAD;
+	const H = rows * (TILE + TEXT + PAD) + PAD;
 	const sheet = sheetOf(W, H);
 	SETS.forEach((set, which) => {
-		for (const asWorld of [false, true]) {
-			const row = which * 2 + (asWorld ? 1 : 0);
-			NAMES.forEach((name, col) => {
-				if (!set.images.has(name)) return;
-				const img = set.images.get(name)[0];
-				const n = img.width;
-				const ox = PAD + col * (CELL + PAD);
-				const oy = PAD + row * (CELL + PAD);
-				const scale = CELL / (n * 2);
-				for (let y = 0; y < CELL; y++)
-					for (let x = 0; x < CELL; x++) {
-						const tx = Math.floor(x / scale);
-						const ty = Math.floor(y / scale);
-						const under = asWorld
-							? BACK
-							: CHECK[
-									((x >> 3) + (y >> 3)) % 2
-								];
-						// **An overlay is a band over the side of a block**,
-						// so what the world shows is dirt with the band on
-						// it rather than a band over nothing.
-						const over = asWorld && name.endsWith("_overlay");
-						const p = over
-							? texel(set, "dirt", tx, ty)
-							: asWorld
-								? texel(set, name, tx, ty)
-								: rawTexel(img, tx, ty);
-						const d = ((oy + y) * W + ox + x) * 4;
-						const a = p[3] / 255;
+		const base = which * Math.ceil(NAMES.length / COLS);
+		NAMES.forEach((name, index) => {
+			if (!set.images.has(name)) return;
+			const img = set.images.get(name)[0];
+			const n = img.width;
+			const ox = PAD + (index % COLS) * (TILE + PAD);
+			const oy = PAD + (base + Math.floor(index / COLS)) * (TILE + TEXT + PAD);
+			const scale = TILE / (n * 2);
+			// An overlay means nothing on its own: what it is, is a band over
+			// the side of a block, and the side is dirt.
+			const over = name.endsWith("_overlay") && set.images.has("dirt");
+			for (let y = 0; y < TILE; y++)
+				for (let x = 0; x < TILE; x++) {
+					const tx = Math.floor(x / scale);
+					const ty = Math.floor(y / scale);
+					const under = CHECK[((x >> 3) + (y >> 3)) % 2];
+					const d = ((oy + y) * W + ox + x) * 4;
+					const p = over ? texel(set, "dirt", tx, ty) : texel(set, name, tx, ty);
+					const a = p[3] / 255;
+					for (let c = 0; c < 3; c++)
+						sheet[d + c] = Math.round(p[c] * a + under[c] * (1 - a));
+					if (over) {
+						const band = texel(set, name, tx, ty);
+						const ba = band[3] / 255;
 						for (let c = 0; c < 3; c++)
 							sheet[d + c] = Math.round(
-								p[c] * a + under[c] * (1 - a),
+								band[c] * ba + sheet[d + c] * (1 - ba),
 							);
-
-						sheet[d + 3] = 255;
 					}
-			});
-		}
+					sheet[d + 3] = 255;
+				}
+			// Two lines of it, because a Holdridge zone's own name is longer
+			// than a tile is wide.
+			const fits = Math.floor(TILE / 4);
+			for (let line = 0; line * fits < name.length && line < 2; line++)
+				label(
+					sheet,
+					W,
+					ox,
+					oy + TILE + 2 + line * 6,
+					name.slice(line * fits, (line + 1) * fits),
+				);
+			void labelWidth;
+		});
 	});
 	writePng(join(OUT, "tiles.png"), W, H, sheet);
-	console.log(`tiles.png   ${NAMES.join(", ")}`);
-	SETS.forEach((set, which) => {
-		console.log(
-			`  rows ${which * 2 + 1}-${which * 2 + 2}: ` +
-				`${set.manifest.size}x${set.manifest.size}  ${set.dir}` +
-				"\n    on disk, over a checkerboard, then as the world reads it",
-		);
-	});
+	console.log(`tiles.png   ${NAMES.length} pictures`);
+	SETS.forEach((set) =>
+		console.log(`  ${set.manifest.size}x${set.manifest.size}  ${set.dir}`),
+	);
 }
 
 // ---- the same images on the grid, at the size they will be seen -------------

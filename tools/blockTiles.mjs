@@ -343,3 +343,77 @@ export function readPng(path) {
 	}
 	return { width, height, rgba: out };
 }
+
+// ---- a label, because a sheet of a hundred pictures needs one --------------
+
+/**
+ * A three by five pixel face, one glyph a number: bit `y * 3 + x` is lit.
+ *
+ * Lowercase, digits and the three marks a file name uses. Small enough to
+ * write out and large enough to read at one pixel a texel, which is what a
+ * label under a tile has room for.
+ */
+const GLYPHS = {
+	" ": 0,
+	"-": 448,
+	".": 8192,
+	"0": 11114,
+	"1": 29850,
+	"2": 29347,
+	"3": 14499,
+	"4": 18925,
+	"5": 14543,
+	"6": 10958,
+	"7": 4775,
+	"8": 10922,
+	"9": 14762,
+	"_": 28672,
+	"a": 24400,
+	"b": 14168,
+	"c": 25200,
+	"d": 27504,
+	"e": 25552,
+	"f": 9684,
+	"g": 15728,
+	"h": 23241,
+	"i": 29890,
+	"j": 11012,
+	"k": 23273,
+	"l": 29843,
+	"m": 24552,
+	"n": 23384,
+	"o": 11088,
+	"p": 5976,
+	"q": 19824,
+	"r": 4840,
+	"s": 14576,
+	"t": 17594,
+	"u": 27496,
+	"v": 11112,
+	"w": 24552,
+	"x": 21672,
+	"y": 15720,
+	"z": 30008,
+};
+
+/** Draw `text` into RGBA `buf`, top-left at `ox, oy`. Returns its width. */
+export function label(buf, stride, ox, oy, text, rgb = [150, 154, 162]) {
+	let at = ox;
+	for (const ch of text.toLowerCase()) {
+		const bits = GLYPHS[ch] ?? GLYPHS["-"];
+		for (let y = 0; y < 5; y++)
+			for (let x = 0; x < 3; x++) {
+				if (!(bits & (1 << (y * 3 + x)))) continue;
+				const d = ((oy + y) * stride + at + x) * 4;
+				buf[d] = rgb[0];
+				buf[d + 1] = rgb[1];
+				buf[d + 2] = rgb[2];
+				buf[d + 3] = 255;
+			}
+		at += 4;
+	}
+	return at - ox;
+}
+
+/** How wide `text` will be, in pixels. */
+export const labelWidth = (text) => text.length * 4;
