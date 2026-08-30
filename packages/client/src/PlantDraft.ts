@@ -322,33 +322,60 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
  * What a world with nothing said about its plants grows.
  *
  * **Twelve layers, one per species, each restricted to the biomes it
- * actually stands in** -- eighteen of the default table's twenty-one biomes
- * end up with something growing in them. The three left bare on purpose are
- * Icy shore, Stony shore and Frozen plateau: real shoreline and high rock,
- * not a gap. Two species carry hand-drawn curves from when this default held
- * only them (Pine, Oak); the other ten are flat -- uniform density across
- * whichever biomes they are allowed in -- because the biome list is already
- * doing the work of saying *where*, and a curve on top of that is a second
- * answer to the same question rather than a different one. Several biomes
- * carry two species deliberately -- Tundra's birch and heather, Steppe's
- * baobab and bush, Dry basin's baobab and deadwood, Badlands' deadwood and
- * cactus -- because that pairing is what the mix actually looks like on the
- * ground: scattered giants over scrub, not one species owning a biome.
+ * actually stands in, under both shipped presets.** Every layer's `.biomes`
+ * carries the "plain" preset's name or names alongside the matching
+ * "Holdridge life zones" name or names -- Pine, say, is Taiga and Alpine
+ * forest under one table and Boreal moist/wet forest under the other, one
+ * flat list checked against whichever table is actually live. Between the
+ * two tables that reaches twenty-one of the plain preset's twenty-one and
+ * twenty-one of Holdridge's twenty-three. Left bare on purpose: Icy shore,
+ * Stony shore and Frozen plateau (real shoreline and high rock), and Polar
+ * desert and Boreal desert (the coldest, most barren end of Holdridge's own
+ * range) -- not a gap, the extreme a biome model is supposed to have one.
+ *
+ * **Density is a quarter to a third of what a first pass shipped with.**
+ * Every default here read as a closed-canopy forest regardless of species --
+ * cactus included -- because "plants per 100 blocks" was tuned once, for
+ * Pine, and then copied. These are scaled to roughly 40% of that first pass,
+ * which is what turns "forest everywhere" into stands with ground between
+ * them; a desert or tundra species is lower still; Heather is a spreading
+ * ground shrub, so it stays the one that reads busiest at over 1.
+ *
+ * **Every curve is a low hill, not a flat line, and sits at roughly half of
+ * the previous 0.5.** A flat line, even a low one, answers only "how much";
+ * it throws away the other question a curve can answer, which is "where
+ * within the range this layer's own noise reads best" -- so a flat curve on
+ * top of a biome mask is a second answer to the question the mask already
+ * settled. Each of the ten that used to be flat now carries five points
+ * rising from near `0` at one edge of its noise reading, cresting somewhere
+ * inside its range, and falling away toward the other edge, so a stand
+ * thins toward clearings at the margins of its own biome rather than
+ * snapping uniformly on and off. Peaks run `0.1` to `0.3` by species --
+ * Heather crests highest, because it is a spreading ground shrub meant to
+ * read as near-continuous cover; Cactus and Baobab crest lowest, because a
+ * desert stand and a scattered savanna giant are sparse by nature and a
+ * hill barely off the floor is the point, not a shortfall. Pine and Oak
+ * keep the hand-drawn shapes from when this default held only them, each
+ * lowered by the same half rather than redrawn. Several biomes carry two
+ * species deliberately -- Tundra's birch and heather, Steppe's baobab and
+ * bush, Dry basin's baobab and deadwood, Badlands' deadwood and cactus --
+ * because that pairing is what the mix actually looks like on the ground:
+ * scattered giants over scrub, not one species owning a biome.
  *
  * A world with no biome table at all (the "Plain planet" mode, or a custom
  * table missing these names) grows nothing from any of these twelve -- see
  * {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
-	"Pine|density=2.5|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1|biomes=Taiga,Alpine forest;" +
-	"Spruce|density=2.2|feature=220|biomes=Taiga,Snowy slopes;" +
-	"Birch|density=0.8|feature=300|biomes=Tundra,Frozen valley;" +
-	"Heather|density=3|feature=140|biomes=Tundra,Stony peaks,Jagged peaks;" +
-	"Oak|density=1.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland;" +
-	"Willow|density=1.4|feature=200|biomes=Swamp;" +
-	"Baobab|density=0.3|feature=500|biomes=Steppe,Highland steppe,Dry basin;" +
-	"Bush|density=2.5|feature=180|biomes=Steppe,Dry slope;" +
-	"Redwood|density=2|feature=280|biomes=Rainforest;" +
-	"Palm|density=0.7|feature=150|biomes=Beach;" +
-	"Deadwood|density=0.4|feature=260|biomes=Badlands,Dry basin;" +
-	"Cactus|density=1|feature=200|biomes=Desert,Badlands,Dry slope";
+	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.22,0.65:0.28,1:0.18|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
+	"Spruce|density=0.9|feature=220|curve=-1:0.05,-0.4:0.15,0.2:0.28,0.7:0.15,1:0.05|biomes=Taiga,Snowy slopes,Boreal wet forest,Boreal rain forest;" +
+	"Birch|density=0.3|feature=300|curve=-1:0.03,-0.5:0.12,0:0.22,0.5:0.1,1:0.03|biomes=Tundra,Frozen valley,Moist tundra,Wet tundra;" +
+	"Heather|density=1.2|feature=140|curve=-1:0.08,-0.3:0.2,0.2:0.3,0.6:0.18,1:0.06|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
+	"Oak|density=0.6|feature=380|curve=-1:0.5,-0.2:0.425,0.2:0,1:0|biomes=Grove,Grassland,Moist forest,Wet forest;" +
+	"Willow|density=0.6|feature=200|curve=-1:0.05,-0.4:0.15,0.1:0.25,0.6:0.14,1:0.04|biomes=Swamp,Wet forest;" +
+	"Baobab|density=0.1|feature=500|curve=-1:0.05,-0.3:0.18,0.3:0.26,0.7:0.12,1:0.03|biomes=Steppe,Highland steppe,Dry basin,Dry forest,Thorn woodland;" +
+	"Bush|density=1|feature=180|curve=-1:0.06,-0.4:0.16,0.1:0.27,0.5:0.16,1:0.05|biomes=Steppe,Dry slope,Desert scrub,Dry scrub;" +
+	"Redwood|density=0.8|feature=280|curve=-1:0.04,-0.4:0.14,0.2:0.28,0.6:0.16,1:0.05|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
+	"Palm|density=0.3|feature=150|curve=-1:0.03,-0.3:0.12,0.2:0.22,0.6:0.11,1:0.03|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
+	"Deadwood|density=0.2|feature=260|curve=-1:0.03,-0.4:0.14,0.1:0.24,0.5:0.12,1:0.03|biomes=Badlands,Dry basin,Subtropical desert,Tropical desert;" +
+	"Cactus|density=0.4|feature=200|curve=-1:0.02,-0.3:0.1,0.3:0.24,0.7:0.1,1:0.02|biomes=Desert,Badlands,Dry slope,Tropical desert,Desert scrub";
