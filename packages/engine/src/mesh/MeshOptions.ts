@@ -139,10 +139,12 @@ export interface MeshOptions {
 	 * no face where it meets the trunk, which is right while the picture has
 	 * no holes in it and shows the sky through the tree the moment it does.
 	 *
-	 * **It is a switch because it is not free.** Measured over four chunks of
-	 * planted forest, a canopy that stops occluding draws **4.26x** the leaf
-	 * faces, and **5,938 of 19,835** leaf cells gain a face they did not have
-	 * (`tools/trial-leaf-cutout.ts`).
+	 * **It is a switch because it is not free.** A canopy that stops occluding
+	 * draws **3.51x** the leaf faces a solid one does, and **5,938 of 19,835**
+	 * leaf cells gain a face they did not have -- **1.20x** the triangles over
+	 * a whole view (`tools/trial-texture-cost.ts`). Each of those faces is
+	 * emitted **once** and drawn from both sides; a pair, one per cell, would
+	 * cost twice the vertices to rasterise exactly as many fragments.
 	 *
 	 * **This says nothing about which level of detail is asking.** A mesher
 	 * takes a face and a lattice offset and is never told; the caller that

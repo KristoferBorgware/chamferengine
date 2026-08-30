@@ -22,11 +22,11 @@
  * | | triangles | | uploaded |
  * |---|---|---|---|
  * | solid leaves | 2,393,834 | `1.00x` | 204.7 MB |
- * | **holes at the finest level** | **3,289,810** | **`1.37x`** | 277.2 MB |
- * | holes at every level | 4,005,324 | `1.67x` | 336.2 MB |
+ * | **holes at the finest level** | **2,882,618** | **`1.20x`** | 244.7 MB |
+ * | holes at every level | 3,245,598 | `1.36x` | 274.7 MB |
  *
- * So stopping at the finest level is **17.9%** fewer triangles in view than
- * cutting out everywhere, and it keeps **55.6%** of what the holes cost --
+ * So stopping at the finest level is **11.2%** fewer triangles in view than
+ * cutting out everywhere, and it keeps **57.4%** of what the holes cost --
  * which is the near canopy, the only one whose holes are wider than a pixel.
  * The picture pays almost nothing: a standing view moves by **0.00 of 255**
  * over 511,707 pixels, and from 280 m up over a forest by **1.00 of 255**
