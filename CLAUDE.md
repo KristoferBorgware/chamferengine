@@ -2319,23 +2319,6 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
-- **A WRAPPED COORDINATE HAS A DERIVATIVE THAT SPIKES, AND THE MIP FOLLOWS IT**
-  (`samplePicture` in `PICTURE_WGSL`). A wall merged down a column runs its
-  coordinate **past one** and lets the sampler tile -- free while a picture owns
-  a whole layer, because the sampler's own repeat does it. Once several
-  pictures share a layer the repeat has to be arithmetic, and the derivative of
-  a wrapped coordinate jumps from just under one back to zero between two
-  neighbouring pixels. A sampler picking its own mip from that reads the jump
-  as an enormous rate of change and takes the coarsest level it has, so **a
-  merged wall grows a blurred dark line along every block boundary** -- a
-  one-pixel band, at every seam, that no amount of padding reaches because it
-  is not a bleed. Gradients are taken from the coordinate **before** the wrap
-  and handed to the sampler, which is what the surface actually deserves.
-  **Exact today and needed later**: the transform is the identity, so these are
-  the numbers the sampler would have computed for itself, and the frame does
-  not move. Done before any packing exists rather than after, because it is
-  invisible now and would otherwise arrive as a regression nobody could
-  attribute.
 - **A VERTEX NAMES A PICTURE, NOT A LAYER** (`PICTURE_WGSL`, `BlockTextures.places`).
   Those are the same number while every picture has a layer to itself, and they
   stop being the same the moment several share one -- which is what a device
