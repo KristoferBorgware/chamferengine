@@ -10,6 +10,94 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, pricing what the pictures cost to draw
+**Where:** `ChunkRenderer.castShadow`,
+`packages/engine/src/render/light/CascadeShadow.ts`
+
+**What happens.** The sun's own pass was the cheapest draw in the engine: a
+vertex stage, a depth attachment, and **no fragment stage at all**. A canopy
+drawn with holes has to alpha-test there too or a see-through tree throws a
+solid cube's shadow, so a second pipeline samples the leaf picture and
+discards. `castShadow` uses it for the cutout buffers in **every cascade**, and
+there are three.
+
+The near cascade needs it: at the shipped reach its texel is 2 cm against a 1 m
+block, so a hole in a leaf is many texels across. The far two are 23 cm a texel
+over 260 m, where the light-space derivatives land on a mip the coverage
+rescale has made nearly solid.
+
+> **[measured]** One view of a canopy about twenty metres off, at a low sun,
+> with the leaves cast by the alpha-testing pipeline and then by the plain
+> depth-only one: **bit-identical over 511,707 pixels**. The same view with the
+> threshold moved past every alpha is bit-identical to drawing no canopy into
+> the cascades at all, so the stage does run and does gate the depth write --
+> it simply changes nothing at that distance.
+
+**Why it matters.** A fragment stage in a depth-only pass is what stops the
+hardware writing depth before it runs, in the one pass where rejecting early
+matters most, and it is paid three times over. Over a real view of 301 chunks
+the canopy is 22 draw calls, so this is 44 draws a frame carrying a texture
+fetch and a discard for a result two of the three cascades were measured not to
+show.
+
+**What would fix it.** Draw the cutout buffers with the alpha-testing pipeline
+in the nearest cascade and with the plain depth-only one in the rest -- the
+caster already knows which cascade it is filling, because it is handed the
+number. Where the cut sits is a measurement rather than a guess: it is the
+cascade whose texel first grows past a hole in a leaf, and the reach and the
+map size both move it. **A shadow is not what the eye is on**, so this can be
+checked with a frame in a way the near cascade's own dappling cannot: the test
+is whether the ground under a tree changes.
+
+
+### F-126 — Every fragment in the world samples the band, and most blocks have none
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, pricing what the pictures cost to draw
+**Where:** `pictureOn` in
+`packages/engine/src/render/terrain/TERRAIN_SHADER.ts`
+
+**What happens.** A ground block wears a second picture over its side -- the
+grass, snow or ash hanging over the brink -- and `pictureOn` reads it with a
+second `textureSample`, then multiplies it in by an alpha that is zero where
+the block has no band. So the read happens for **every fragment of every face
+of every block in the world**: the sky-facing cap of a stone slab, the floor of
+a cave, the sea bed. **32 of the 80 rows** in the shipped table name a band at
+all, and only a face's *side* can wear one, so the great majority of the reads
+are thrown away.
+
+It is written that way for a reason and the reason is real: a per-vertex layer
+index is not uniform across a draw, and `textureSample` picks its own mip from
+how the coordinate changes between neighbouring pixels, which only exists where
+every pixel of a quad took the same path. Sampling first and selecting after is
+what makes the shader legal at all -- the branch-first version is refused by the
+device and draws a black window (see the entry in `CLAUDE.md`).
+
+**Why it matters.** It is the one cost in the whole texturing change that
+falls on *every pixel of the screen* rather than on canopy or on ground with a
+brink. How much it costs has to be read off a real adapter: a software
+rasteriser settles what is drawn and never how fast
+(`HOW-TO-TAKE-A-FRAME.md`), so no measurement here can price it.
+
+**What would fix it.** `textureSampleGrad` **is** allowed in non-uniform
+control flow -- it is handed the gradients rather than deriving them. Take
+`dpdx(uv)` and `dpdy(uv)` once, outside any branch, then read the band inside
+`if (band >= 0)`. A wave whose lanes all sit on blocks with no band then skips
+the read entirely, and screen regions are coherent by block type, so most
+waves would. **It is not certainly a win**: explicit gradients cost more per
+call than implicit ones on some hardware, and a divergent branch costs both
+sides. Measure on a real adapter before and after; do not take it on faith.
+
+
 ### F-120 — A light standing at a pentagon reads its own chart twice over
 
 **Kind:** bug
@@ -2584,10 +2672,10 @@ default. The mip chain is rescaled at bake time to hold each level's own
 coverage, one-sidedly: trimming an over-covering level back means scaling a
 texel down onto the threshold, where one rounding step drops it out, which is
 the failure the rescale exists to prevent. `CUTOUT_REACH` then holds the
-holes to the nearest level of detail: that level is 30.6% of a standing
-player's chunks and 70.2% of what the holes cost, so stopping there is 12.9%
-off the whole selection's geometry and does not move a standing view by one
-part in 255.
+holes to the nearest level of detail, where a hole is still wider than a
+pixel. Over a real view of 301 chunks that is **17.9% fewer triangles** than
+cutting out everywhere while keeping **55.6%** of what the holes buy, and it
+does not move a standing view by one part in 255.
 **Where:** `packages/engine/src/mesh/opacityOf.ts`,
 `packages/engine/src/mesh/meshChunk.ts`
 

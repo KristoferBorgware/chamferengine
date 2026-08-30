@@ -964,9 +964,9 @@ export interface PlanetKnobs {
 	 * **On, it reaches the nearest level of detail and no further.** A level
 	 * out is a block twice as wide, twice as far off, wearing a picture the
 	 * same size -- and the plant pass has already turned two thirds of that
-	 * level's leaves into the colour of the ground. Measured, stopping there
-	 * keeps 70.2% of what the holes buy for 12.9% less geometry over the
-	 * whole selection, and a standing view does not move by one part in 255.
+	 * level's leaves into the colour of the ground. Measured over a real view,
+	 * stopping there keeps 55.6% of what the holes buy for 17.9% fewer
+	 * triangles, and a standing view does not move by one part in 255.
 	 */
 	cutoutLeaves: boolean;
 

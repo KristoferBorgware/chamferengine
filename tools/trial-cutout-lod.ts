@@ -174,9 +174,12 @@ for (let lod = 0; lod < LEVELS; lod++) {
 /**
  * How many chunks a standing player holds at each level.
  *
- * The bill is per chunk and the levels are not drawn in equal numbers: a level
- * covers four times the ground of the one below it, so the far field is most
- * of the selection and the near field is most of the detail.
+ * The table above is the same ground at every level, which is what says how a
+ * hole's cost changes with the block it is drawn on. It is **not** a view:
+ * these are three patches chosen for having trees in them, and weighting them
+ * by the chunks at each level would model a planet that is forest everywhere.
+ * `tools/trial-texture-cost.ts` builds the real chunks of a real selection and
+ * owns the per-view figures.
  */
 const eye = forested().normalize();
 const peaks = new ChunkPeaks(map, settings.knobs.blockSize, settings.chunkLevel);
@@ -200,38 +203,13 @@ for (const one of selection)
 console.log(
 	`\na standing player holds ${selection.length.toLocaleString("en-US")} chunks:`,
 );
-let base = 0;
-const byReach = [0, 0, 0];
-for (const [lod, count] of [...perLod].sort((a, b) => a[0] - b[0])) {
-	const at = Math.min(lod, LEVELS - 1);
-	const each = (extra[at] ?? 0) / spots.length;
-	const flat = (solidAt[at] ?? 0) / spots.length;
-	base += flat * count;
-	byReach.forEach((_, reach) => {
-		if (lod <= reach) byReach[reach] = byReach[reach]! + each * count;
-	});
+for (const [lod, count] of [...perLod].sort((a, b) => a[0] - b[0]))
 	console.log(
 		`  lod ${lod}: ${String(count).padStart(4)} chunks` +
 			`${`${((100 * count) / selection.length).toFixed(1)}%`.padStart(8)}` +
-			`  ${Math.round(flat).toLocaleString("en-US").padStart(9)} solid` +
-			`  ${`+${Math.round(each).toLocaleString("en-US")}`.padStart(9)} for the holes, each`,
+			`  a block is ${(settings.knobs.blockSize * 2 ** lod).toFixed(0)} m there`,
 	);
-}
-const all = [...perLod].reduce(
-	(sum, [lod, count]) =>
-		sum + ((extra[Math.min(lod, LEVELS - 1)] ?? 0) / spots.length) * count,
-	0,
-);
 console.log(
-	`\ntriangles over the whole selection, and what the holes add to them`,
+	`\nwhat that costs over a real view -- forest, rock, ocean and all --` +
+		` is tools/trial-texture-cost.ts`,
 );
-const line = (what: string, add: number) =>
-	console.log(
-		`  ${what.padEnd(22)}${Math.round(base + add).toLocaleString("en-US").padStart(12)}` +
-			`${`${(1 + add / base).toFixed(3)}x`.padStart(9)}` +
-			`${`${((100 * add) / all).toFixed(1)}% of the holes kept`.padStart(28)}`,
-	);
-line("solid leaves", 0);
-line("holes at lod 0 only", byReach[0]!);
-line("holes to lod 1", byReach[1]!);
-line("holes at every level", all);

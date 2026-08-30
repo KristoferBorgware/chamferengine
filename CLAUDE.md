@@ -2178,17 +2178,18 @@ Violating any of these breaks the design. They are not tunable.
   (`CUTOUT_REACH`, `MeshWorkerCore.run`, `tools/trial-cutout-lod.ts`). A hole
   in a leaf is texels, and a level out is a block **twice as wide, twice as far
   off, wearing a picture the same size** -- so what a hole is worth falls away
-  much faster than what it costs. It is not close: over a standing player's
-  whole selection at the shipped detail, 301 chunks, the finest level is
-  **30.6%** of them and **70.2%** of everything the holes cost, because it is
-  where the leaves are -- one level out the plant pass has already turned two
-  thirds of them into the **colour of the ground** under them (21,255 leaf
-  cells at 1 m blocks against 7,227 at 2 m and 252 at 32 m). Over the
-  selection: **12,484,664** triangles with solid leaves, **19,184,104**
-  (`1.537x`) with the holes at the finest level alone, **22,025,996**
-  (`1.764x`) with them everywhere. So stopping at the finest level is
-  **12.9%** off the whole selection's geometry, and the picture pays almost
-  nothing for it -- a standing view moves by **0.00 of 255** (0.1% spread),
+  much faster than what it costs. On the same ground at every level the holes
+  cost **`2.45x`** the triangles at a 1 m block, `1.45x` at 2 m, `1.32x` at
+  4 m and `1.05x` at 32 m -- and the leaves thin out as fast, 21,255 cells at
+  1 m against 7,227 at 2 m and 252 at 32 m, because the plant pass turns a
+  plant under half a block into the **colour of the ground** under it. Over a
+  real view of 301 chunks -- forest, bare rock and ocean, **built rather than
+  extrapolated from forest** (`tools/trial-texture-cost.ts`):
+  **2,393,834** triangles with solid leaves, **3,289,810** (`1.37x`) with the
+  holes at the finest level, **4,005,324** (`1.67x`) with them everywhere. So
+  stopping at the finest level is **17.9%** fewer triangles in view and keeps
+  **55.6%** of what the holes cost, and the picture pays almost nothing for it
+  -- a standing view moves by **0.00 of 255** (0.1% spread),
   and from 280 m up over a forest by **1.00 of 255** (5.9% spread, 5th
   percentile 0.887), only ever darker, because the far canopy stops showing
   what is behind it. **A coarse leaf is a solid block wearing the leaf
