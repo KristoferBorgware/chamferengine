@@ -2174,6 +2174,29 @@ Violating any of these breaks the design. They are not tunable.
   A switch, on by default, and it is a **re-mesh** knob and not a world one --
   drawing a face is not placing a block, so a player's buildings stay filed
   under the same world when it is turned.
+- **THE HOLES ARE WORTH PAYING FOR AT ONE LEVEL OF DETAIL AND NOT AT THE REST**
+  (`CUTOUT_REACH`, `MeshWorkerCore.run`, `tools/trial-cutout-lod.ts`). A hole
+  in a leaf is texels, and a level out is a block **twice as wide, twice as far
+  off, wearing a picture the same size** -- so what a hole is worth falls away
+  much faster than what it costs. It is not close: over a standing player's
+  whole selection at the shipped detail, 301 chunks, the finest level is
+  **30.6%** of them and **70.2%** of everything the holes cost, because it is
+  where the leaves are -- one level out the plant pass has already turned two
+  thirds of them into the **colour of the ground** under them (21,255 leaf
+  cells at 1 m blocks against 7,227 at 2 m and 252 at 32 m). Over the
+  selection: **12,484,664** triangles with solid leaves, **19,184,104**
+  (`1.537x`) with the holes at the finest level alone, **22,025,996**
+  (`1.764x`) with them everywhere. So stopping at the finest level is
+  **12.9%** off the whole selection's geometry, and the picture pays almost
+  nothing for it -- a standing view moves by **0.00 of 255** (0.1% spread),
+  and from 280 m up over a forest by **1.00 of 255** (5.9% spread, 5th
+  percentile 0.887), only ever darker, because the far canopy stops showing
+  what is behind it. **A coarse leaf is a solid block wearing the leaf
+  picture**, and it reads as foliage rather than as a checkerboard only
+  because the bake bleeds the drawn colour into the texels alpha leaves empty.
+  **The mesher is never told which level is asking** and must not be (doc 14,
+  F-032): it takes a face and a lattice offset, `cutoutLeaves` says nothing
+  about detail, and the gate lives in the one place that knows.
 - **SKY EXPOSURE IS A NUMBER OF ITS OWN ON THE VERTEX, NOT A FACTOR IN ITS
   COLOUR** (`CHUNK_VERTEX_FLOATS`, `MeshSink.vertex`, `TERRAIN_SHADER`). A
   shader cannot divide a number back out of a colour it was handed, so with the

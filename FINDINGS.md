@@ -2583,7 +2583,11 @@ throws a solid cube's shadow. **See-through leaves** is the switch, on by
 default. The mip chain is rescaled at bake time to hold each level's own
 coverage, one-sidedly: trimming an over-covering level back means scaling a
 texel down onto the threshold, where one rounding step drops it out, which is
-the failure the rescale exists to prevent.
+the failure the rescale exists to prevent. `CUTOUT_REACH` then holds the
+holes to the nearest level of detail: that level is 30.6% of a standing
+player's chunks and 70.2% of what the holes cost, so stopping there is 12.9%
+off the whole selection's geometry and does not move a standing view by one
+part in 255.
 **Where:** `packages/engine/src/mesh/opacityOf.ts`,
 `packages/engine/src/mesh/meshChunk.ts`
 
