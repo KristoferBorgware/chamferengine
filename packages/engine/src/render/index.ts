@@ -16,6 +16,14 @@ export { MarkerRenderer } from "./marker/MarkerRenderer.js";
 export type { MarkerGeometry } from "./marker/markerGeometry.js";
 export { markerGeometry } from "./marker/markerGeometry.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
+export type { BlockAtlas } from "./terrain/BlockTextures.js";
+export {
+	SLOT_BOTTOM,
+	SLOT_OVERLAY,
+	SLOT_SIDE,
+	SLOT_TOP,
+	BlockTextures,
+} from "./terrain/BlockTextures.js";
 export { SEA_CLARITY, SEA_COLORS } from "./sea/SEA_COLORS.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";
 export { SeaRenderer } from "./sea/SeaRenderer.js";

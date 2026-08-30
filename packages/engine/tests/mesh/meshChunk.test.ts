@@ -163,7 +163,8 @@ describe("opacityOf", () => {
 describe("ArrayMeshSink", () => {
 	it("grows past its starting capacity", () => {
 		const sink = new ArrayMeshSink(2);
-		for (let n = 0; n < 100; n++) sink.vertex(n, n, n, 1, 1, 1, 1);
+		for (let n = 0; n < 100; n++)
+			sink.vertex(n, n, n, 1, 1, 1, 1, 0, 0, 0);
 		for (let n = 0; n + 2 < 100; n += 3) sink.triangle(n, n + 1, n + 2);
 		const geometry = sink.build(1);
 		expect(sink.vertices).toBe(100);

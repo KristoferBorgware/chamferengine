@@ -14,6 +14,10 @@ export interface MeshSink {
 	 * corner already in it; `sky` is how much of the sky the cell stands
 	 * under, kept apart because a light standing in the world is not reduced
 	 * by it and a shader cannot divide it back out of a color.
+	 *
+	 * `u` and `v` are where in its picture this corner sits, and `layer` is
+	 * which picture. `v` runs past 1 down a wall merged over several layers,
+	 * so the sampler repeats rather than the mesher cutting the run up.
 	 */
 	vertex(
 		x: number,
@@ -23,6 +27,9 @@ export interface MeshSink {
 		g: number,
 		b: number,
 		sky: number,
+		u: number,
+		v: number,
+		layer: number,
 	): number;
 
 	/** Join three vertices, counter-clockwise seen from outside. */

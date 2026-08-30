@@ -15,6 +15,7 @@ import { AtmospherePass } from "../sky/AtmospherePass.js";
 import { BloomPass } from "../bloom/BloomPass.js";
 import { CloudShadow } from "../light/CloudShadow.js";
 import { BlockLightMap } from "../light/BlockLightMap.js";
+import type { BlockTextures } from "./BlockTextures.js";
 import { LightViews } from "../light/LightViews.js";
 import { TonePass } from "../tone/TonePass.js";
 import { TERRAIN_SHADER } from "./TERRAIN_SHADER.js";
@@ -109,6 +110,47 @@ export class ChunkRenderer implements ShadowCaster {
 	 * outside: what stands where is the world's business, not the renderer's.
 	 */
 	readonly blockLight: BlockLightMap;
+
+	/** What a pipeline declares as its group 3: the block pictures. */
+	private readonly blockLayout: GPUBindGroupLayout;
+
+	/**
+	 * One texel of nothing, bound until a bake arrives.
+	 *
+	 * A pipeline layout names group 3 whether or not there are pictures yet,
+	 * and a draw with a group unset is refused -- taking the whole command
+	 * buffer with it. Every vertex carries a layer of `-1` until then, so
+	 * nothing is ever read out of this.
+	 */
+	private readonly blankBlocks: GPUBindGroup;
+
+	private blocks: GPUBindGroup | null = null;
+
+	/**
+	 * The pictures every chunk reads, or nothing until a bake has loaded.
+	 *
+	 * Handed in rather than loaded here: fetching is the client's business and
+	 * a renderer that fetches is a renderer that cannot be built without a
+	 * server.
+	 */
+	setBlockTextures(textures: BlockTextures | null): void {
+		this.blocks = textures
+			? this.blockGroup(textures.view, textures.sampler)
+			: null;
+	}
+
+	private blockGroup(
+		view: GPUTextureView,
+		sampler: GPUSampler,
+	): GPUBindGroup {
+		return this.ctx.device.createBindGroup({
+			layout: this.blockLayout,
+			entries: [
+				{ binding: 0, resource: view },
+				{ binding: 1, resource: sampler },
+			],
+		});
+	}
 
 	/**
 	 * The air, marched over the finished frame.
@@ -220,6 +262,33 @@ export class ChunkRenderer implements ShadowCaster {
 		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
 		this.cloudShadow = new CloudShadow(ctx, 1024);
 		this.blockLight = new BlockLightMap(ctx);
+		// **A group of its own, and there was one free.** The frame, the chunk
+		// and what lights it spend three; the pictures are the fourth, set
+		// once for the pass because every chunk reads the same array.
+		this.blockLayout = device.createBindGroupLayout({
+			entries: [
+				{
+					binding: 0,
+					visibility: GPUShaderStage.FRAGMENT,
+					texture: { sampleType: "float", viewDimension: "2d-array" },
+				},
+				{
+					binding: 1,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "filtering" },
+				},
+			],
+		});
+		this.blankBlocks = this.blockGroup(
+			device
+				.createTexture({
+					size: [1, 1, 1],
+					format: "rgba8unorm-srgb",
+					usage: GPUTextureUsage.TEXTURE_BINDING,
+				})
+				.createView({ dimension: "2d-array" }),
+			device.createSampler(),
+		);
 		this.lightViews = new LightViews(
 			ctx,
 			this.cascades,
@@ -234,6 +303,7 @@ export class ChunkRenderer implements ShadowCaster {
 					this.frameLayout,
 					this.chunkLayout,
 					this.lightViews.layout,
+					this.blockLayout,
 				],
 			}),
 			vertex: {
@@ -256,6 +326,16 @@ export class ChunkRenderer implements ShadowCaster {
 							{
 								shaderLocation: 2,
 								offset: 24,
+								format: "float32",
+							},
+							{
+								shaderLocation: 3,
+								offset: 28,
+								format: "float32x2",
+							},
+							{
+								shaderLocation: 4,
+								offset: 36,
 								format: "float32",
 							},
 						],
@@ -501,12 +581,14 @@ export class ChunkRenderer implements ShadowCaster {
 		// terrain draw is refused, taking the whole command buffer with it.
 		// The water pass sets it again for the same reason.
 		pass.setBindGroup(2, this.lightViews.bindGroup);
+		pass.setBindGroup(3, this.blocks ?? this.blankBlocks);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
 		pass.setBindGroup(0, this.frameBindGroup);
 		pass.setBindGroup(2, this.lightViews.bindGroup);
+		pass.setBindGroup(3, this.blocks ?? this.blankBlocks);
 		pass.setPipeline(this.waterPipeline);
 		for (const chunk of this.byDistance(visible, frame.eye))
 			draw(pass, chunk, chunk.water);
