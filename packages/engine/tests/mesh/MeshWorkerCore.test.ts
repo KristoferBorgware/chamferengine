@@ -203,7 +203,7 @@ describe("MeshWorkerCore", () => {
 		expect(result.opaque.vertices).toEqual(mine.opaque.vertices);
 	});
 
-	it("hands back exactly the four buffers a caller transfers", () => {
+	it("hands back exactly the six buffers a caller transfers", () => {
 		const core = new MeshWorkerCore(setup());
 		const result = core.run({
 			kind: "chunk",
@@ -213,10 +213,11 @@ describe("MeshWorkerCore", () => {
 			lod: 0,
 		});
 		const buffers = MeshWorkerCore.buffers(result);
-		expect(buffers.length).toBe(4);
+		// Vertices and indices for each of opaque, cutout and translucent.
+		expect(buffers.length).toBe(6);
 		// Blocks never cross back. A chunk is 478 KB of them at the worked
 		// planet's crust and the thread that draws has no use for any of it.
-		expect(new Set(buffers).size).toBe(4);
+		expect(new Set(buffers).size).toBe(6);
 	});
 });
 
@@ -328,6 +329,7 @@ describe("retuning the switches baked into a vertex colour", () => {
 		speckle: 0,
 		ambientOcclusion: false,
 		skyExposure: false,
+		cutoutLeaves: false,
 	} as const;
 	const ON = { ...OFF, speckle: 0.2 } as const;
 

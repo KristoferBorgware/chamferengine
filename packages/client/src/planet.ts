@@ -898,6 +898,7 @@ async function main(): Promise<void> {
 			speckle: live.knobs.speckle ? SPECKLE : 0,
 			ambientOcclusion: live.knobs.ambientOcclusion,
 			skyExposure: live.knobs.skyExposure,
+			cutoutLeaves: live.knobs.cutoutLeaves,
 		};
 	}
 
@@ -907,7 +908,7 @@ async function main(): Promise<void> {
 		live: PlanetSettings,
 	) {
 		return {
-			// The three baked switches, taken from the one place that spells
+			// The four re-mesh switches, taken from the one place that spells
 			// them out, so a setup and a retune can never disagree about what
 			// the same draft means. First, so `kind` below overrides theirs.
 			...meshRetune(live),

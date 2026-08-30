@@ -100,6 +100,7 @@ class FakeWorker implements MeshWorkerHandle {
 						halves: [20, 20, 20],
 					},
 					opaque: geometry(),
+					cutout: geometry(),
 					translucent: geometry(),
 					tally: { cells: 0, faces: 0, merged: 0, apron: 0 },
 				},
@@ -340,6 +341,7 @@ describe("WorkerMeshSource", () => {
 			speckle: 0,
 			ambientOcclusion: false,
 			skyExposure: false,
+			cutoutLeaves: false,
 		} satisfies MeshRetune;
 
 		it("tells every worker and posts no map", () => {

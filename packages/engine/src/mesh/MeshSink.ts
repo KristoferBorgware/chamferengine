@@ -18,6 +18,11 @@ export interface MeshSink {
 	 * `u` and `v` are where in its picture this corner sits, and `layer` is
 	 * which picture. `v` runs past 1 down a wall merged over several layers,
 	 * so the sampler repeats rather than the mesher cutting the run up.
+	 *
+	 * `overlay` is a second picture drawn over the first at the same place,
+	 * by its own alpha, or `-1` where there is none. It is what puts the
+	 * grass over the brink of a dirt wall, and it is read without the repeat
+	 * so a wall three layers tall wears one band rather than three.
 	 */
 	vertex(
 		x: number,
@@ -30,6 +35,7 @@ export interface MeshSink {
 		u: number,
 		v: number,
 		layer: number,
+		overlay: number,
 	): number;
 
 	/** Join three vertices, counter-clockwise seen from outside. */

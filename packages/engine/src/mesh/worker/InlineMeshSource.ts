@@ -34,6 +34,7 @@ export class InlineMeshSource implements MeshSource {
 			origin: new Vec3(...result.origin),
 			bound: result.bound,
 			opaque: result.opaque,
+			cutout: result.cutout,
 			translucent: result.translucent,
 			tally: result.tally,
 			...(result.plants ? { plants: result.plants } : {}),

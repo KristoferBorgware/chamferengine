@@ -17,6 +17,7 @@ export type { MarkerGeometry } from "./marker/markerGeometry.js";
 export { markerGeometry } from "./marker/markerGeometry.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
 export type { BlockAtlas } from "./terrain/BlockTextures.js";
+export { ALPHA_CUT } from "./terrain/ALPHA_CUT.js";
 export {
 	SLOT_BOTTOM,
 	SLOT_OVERLAY,

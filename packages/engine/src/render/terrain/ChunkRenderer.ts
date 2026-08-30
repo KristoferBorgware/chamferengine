@@ -35,6 +35,7 @@ interface Resident {
 	readonly uniform: GPUBuffer;
 	readonly bindGroup: GPUBindGroup;
 	readonly opaque: Buffers | null;
+	readonly cutout: Buffers | null;
 	readonly water: Buffers | null;
 }
 
@@ -55,6 +56,7 @@ const CHUNK_BYTES = 256;
 export class ChunkRenderer implements ShadowCaster {
 	private readonly ctx: GpuContext;
 	private readonly opaquePipeline: GPURenderPipeline;
+	private readonly cutoutPipeline: GPURenderPipeline;
 	private readonly waterPipeline: GPURenderPipeline;
 	private readonly frameLayout: GPUBindGroupLayout;
 	private readonly chunkLayout: GPUBindGroupLayout;
@@ -135,19 +137,25 @@ export class ChunkRenderer implements ShadowCaster {
 	 */
 	setBlockTextures(textures: BlockTextures | null): void {
 		this.blocks = textures
-			? this.blockGroup(textures.view, textures.sampler)
+			? this.blockGroup(
+					textures.view,
+					textures.sampler,
+					textures.bandSampler,
+				)
 			: null;
 	}
 
 	private blockGroup(
 		view: GPUTextureView,
 		sampler: GPUSampler,
+		band: GPUSampler,
 	): GPUBindGroup {
 		return this.ctx.device.createBindGroup({
 			layout: this.blockLayout,
 			entries: [
 				{ binding: 0, resource: view },
 				{ binding: 1, resource: sampler },
+				{ binding: 2, resource: band },
 			],
 		});
 	}
@@ -259,9 +267,6 @@ export class ChunkRenderer implements ShadowCaster {
 		this.chunkLayout = device.createBindGroupLayout({
 			entries: [uniformEntry],
 		});
-		this.cascades = new CascadeShadow(ctx, this.chunkLayout, 1024);
-		this.cloudShadow = new CloudShadow(ctx, 1024);
-		this.blockLight = new BlockLightMap(ctx);
 		// **A group of its own, and there was one free.** The frame, the chunk
 		// and what lights it spend three; the pictures are the fourth, set
 		// once for the pass because every chunk reads the same array.
@@ -277,8 +282,27 @@ export class ChunkRenderer implements ShadowCaster {
 					visibility: GPUShaderStage.FRAGMENT,
 					sampler: { type: "filtering" },
 				},
+				// The same array read without the repeat, for the band over a
+				// wall's brink: one brink a wall, however many layers it
+				// merged.
+				{
+					binding: 2,
+					visibility: GPUShaderStage.FRAGMENT,
+					sampler: { type: "filtering" },
+				},
 			],
 		});
+		// **Before the cascades, which need it.** A leaf shadows through the
+		// holes in its own picture or a tree throws a solid cube, so the sun's
+		// own pass reads the same array the world pass does.
+		this.cascades = new CascadeShadow(
+			ctx,
+			this.chunkLayout,
+			this.blockLayout,
+			1024,
+		);
+		this.cloudShadow = new CloudShadow(ctx, 1024);
+		this.blockLight = new BlockLightMap(ctx);
 		this.blankBlocks = this.blockGroup(
 			device
 				.createTexture({
@@ -287,6 +311,7 @@ export class ChunkRenderer implements ShadowCaster {
 					usage: GPUTextureUsage.TEXTURE_BINDING,
 				})
 				.createView({ dimension: "2d-array" }),
+			device.createSampler(),
 			device.createSampler(),
 		);
 		this.lightViews = new LightViews(
@@ -336,7 +361,7 @@ export class ChunkRenderer implements ShadowCaster {
 							{
 								shaderLocation: 4,
 								offset: 36,
-								format: "float32",
+								format: "float32x2",
 							},
 						],
 					},
@@ -350,6 +375,33 @@ export class ChunkRenderer implements ShadowCaster {
 			fragment: {
 				module,
 				entryPoint: "fragmentMain",
+				targets: [{ format }],
+			},
+			depthStencil: {
+				format: "depth32float",
+				depthWriteEnabled: true,
+				depthCompare: "less",
+			},
+		});
+
+		// **Depth like the opaque pass, a fragment stage like no other pass.**
+		// A leaf is either there or it is not, so the pixels its picture has
+		// holes in are thrown away whole and everything left writes depth --
+		// which is what lets a canopy shadow, occlude and sort the way stone
+		// does, with no back-to-front order to keep.
+		//
+		// **And both sides, because a leaf's face is drawn once.** Two cells
+		// sharing a boundary would each draw it and culling would throw one
+		// away from any given eye -- two sets of vertices to rasterise
+		// exactly as many fragments. The mesher emits one and this shows it
+		// from either side, which is why the canopy costs what it does and
+		// not twice that.
+		this.cutoutPipeline = device.createRenderPipeline({
+			...common,
+			primitive: { topology: "triangle-list", cullMode: "none" },
+			fragment: {
+				module,
+				entryPoint: "cutoutMain",
 				targets: [{ format }],
 			},
 			depthStencil: {
@@ -438,6 +490,7 @@ export class ChunkRenderer implements ShadowCaster {
 				entries: [{ binding: 0, resource: { buffer: uniform } }],
 			}),
 			opaque: this.uploadGeometry(mesh.opaque),
+			cutout: this.uploadGeometry(mesh.cutout),
 			water: this.uploadGeometry(mesh.translucent),
 		});
 	}
@@ -449,6 +502,8 @@ export class ChunkRenderer implements ShadowCaster {
 		held.uniform.destroy();
 		held.opaque?.vertices.destroy();
 		held.opaque?.indices.destroy();
+		held.cutout?.vertices.destroy();
+		held.cutout?.indices.destroy();
 		held.water?.vertices.destroy();
 		held.water?.indices.destroy();
 		this.resident.delete(key);
@@ -468,14 +523,26 @@ export class ChunkRenderer implements ShadowCaster {
 	 */
 	castShadow(pass: GPURenderPassEncoder, cascade: number): void {
 		const box = this.cascades.boxOf(cascade);
-		for (const chunk of this.resident.values()) {
-			if (!chunk.opaque) continue;
-			if (!box.holds(chunk.bound)) continue;
-			pass.setBindGroup(1, chunk.bindGroup);
-			pass.setVertexBuffer(0, chunk.opaque.vertices);
-			pass.setIndexBuffer(chunk.opaque.indices, "uint32");
-			pass.drawIndexed(chunk.opaque.count);
+		const lit: Resident[] = [];
+		for (const chunk of this.resident.values())
+			if (box.holds(chunk.bound)) lit.push(chunk);
+		for (const chunk of lit) draw(pass, chunk, chunk.opaque);
+
+		// The canopy, through the holes in its own picture. The pictures are
+		// bound here rather than by the pass, because this is the only caster
+		// that reads them -- and the plain pipeline goes back on afterwards so
+		// a caster drawn after this one still finds what the pass set.
+		let any = false;
+		for (const chunk of lit) {
+			if (!chunk.cutout) continue;
+			if (!any) {
+				pass.setPipeline(this.cascades.cutoutPipeline);
+				pass.setBindGroup(2, this.blocks ?? this.blankBlocks);
+				any = true;
+			}
+			draw(pass, chunk, chunk.cutout);
 		}
+		if (any) pass.setPipeline(this.cascades.pipeline);
 	}
 
 	render(frame: Frame): void {
@@ -583,6 +650,12 @@ export class ChunkRenderer implements ShadowCaster {
 		pass.setBindGroup(2, this.lightViews.bindGroup);
 		pass.setBindGroup(3, this.blocks ?? this.blankBlocks);
 		for (const chunk of visible) draw(pass, chunk, chunk.opaque);
+
+		// Cutout after opaque and before water. It writes depth, so the order
+		// against the opaque pass changes nothing but how much of it is drawn
+		// over; the water pass reads that depth and needs both already in it.
+		pass.setPipeline(this.cutoutPipeline);
+		for (const chunk of visible) draw(pass, chunk, chunk.cutout);
 
 		// Water back to front. Sorting per chunk is enough: generated water has
 		// no vertical sides, so two chunks' surfaces never cross each other.
@@ -709,7 +782,7 @@ export class ChunkRenderer implements ShadowCaster {
 	}
 }
 
-/** Draw one of a chunk's two buffers. */
+/** Draw one of a chunk's three buffers, under whatever pipeline is set. */
 function draw(
 	pass: GPURenderPassEncoder,
 	chunk: Resident,

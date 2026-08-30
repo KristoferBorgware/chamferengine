@@ -54,7 +54,17 @@ const SPLIT_GROWTH = 4;
  */
 export class CascadeShadow {
 	private readonly ctx: GpuContext;
-	private readonly pipeline: GPURenderPipeline;
+	/** The depth-only pass every caster draws its solid geometry with. */
+	readonly pipeline: GPURenderPipeline;
+
+	/**
+	 * The same depth pass with an alpha test, for geometry drawn with holes.
+	 *
+	 * Set by a caster for its own cutout buffers and put back afterwards. Its
+	 * layout is this one's with the pictures appended, so groups 0 and 1 stay
+	 * bound across the switch either way.
+	 */
+	readonly cutoutPipeline: GPURenderPipeline;
 	private readonly slotLayout: GPUBindGroupLayout;
 
 	/** One light matrix per cascade, each in its own aligned slot. */
@@ -97,6 +107,7 @@ export class CascadeShadow {
 	constructor(
 		ctx: GpuContext,
 		chunkLayout: GPUBindGroupLayout,
+		blockLayout: GPUBindGroupLayout,
 		size: number,
 	) {
 		this.ctx = ctx;
@@ -162,6 +173,47 @@ export class CascadeShadow {
 			// culling by which way a face turns from the sun would drop the
 			// faces turned away from it -- which are exactly the ones whose
 			// own shadow this is meant to record.
+			primitive: { topology: "triangle-list", cullMode: "none" },
+			depthStencil: {
+				format: "depth32float",
+				depthWriteEnabled: true,
+				depthCompare: "less",
+			},
+		});
+
+		this.cutoutPipeline = device.createRenderPipeline({
+			layout: device.createPipelineLayout({
+				bindGroupLayouts: [this.slotLayout, chunkLayout, blockLayout],
+			}),
+			vertex: {
+				module,
+				entryPoint: "cutoutVertex",
+				buffers: [
+					{
+						arrayStride: CHUNK_VERTEX_FLOATS * 4,
+						attributes: [
+							{
+								shaderLocation: 0,
+								offset: 0,
+								format: "float32x3",
+							},
+							{
+								shaderLocation: 3,
+								offset: 28,
+								format: "float32x2",
+							},
+							{
+								shaderLocation: 4,
+								offset: 36,
+								format: "float32x2",
+							},
+						],
+					},
+				],
+			},
+			// A fragment stage that writes no colour: the whole of it is
+			// whether the depth is written at all.
+			fragment: { module, entryPoint: "cutoutFragment", targets: [] },
 			primitive: { topology: "triangle-list", cullMode: "none" },
 			depthStencil: {
 				format: "depth32float",
@@ -353,6 +405,8 @@ export class CascadeShadow {
 					depthStoreOp: "store",
 				},
 			});
+			// Bound for every caster, and a caster that changes it puts it
+			// back: the cutout pipeline below is the only one that does.
 			pass.setPipeline(this.pipeline);
 			pass.setBindGroup(0, this.slotGroups[at]!);
 			for (const caster of casters) caster.castShadow(pass, at);

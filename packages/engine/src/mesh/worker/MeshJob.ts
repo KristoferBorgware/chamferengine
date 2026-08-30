@@ -49,6 +49,9 @@ export interface MeshWorkerSetup {
 	/** Whether a face darkens by how much sky the ground around it leaves it. */
 	readonly skyExposure?: boolean;
 
+	/** Whether a leaf is drawn with the holes its own picture has in it. */
+	readonly cutoutLeaves?: boolean;
+
 	/**
 	 * Draw the world as its own grid: a flat shell of hexagons at the crust
 	 * top, painted by these switches, in place of the terrain. The selection
@@ -150,6 +153,7 @@ export interface MeshRetune {
 	readonly speckle: number;
 	readonly ambientOcclusion: boolean;
 	readonly skyExposure: boolean;
+	readonly cutoutLeaves: boolean;
 }
 
 export type MeshWorkerMessage = MeshWorkerSetup | MeshJob | MeshRetune;
@@ -175,6 +179,7 @@ export interface MeshResult {
 	readonly bound: Box;
 
 	readonly opaque: Geometry;
+	readonly cutout: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
 

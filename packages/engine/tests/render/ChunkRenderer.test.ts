@@ -53,6 +53,7 @@ function mesh(key: number): ChunkMesh {
 		origin: new Vec3(0, 0, 1700),
 		bound: ball([0, 0, 1700], 20),
 		opaque: geometry(),
+		cutout: geometry(),
 		translucent: geometry(),
 		tally: { cells: 1, faces: 2, merged: 0, apron: 0 },
 	};
@@ -146,9 +147,9 @@ describe("what a frame encodes", () => {
 
 		expect(renderer.count).toBe(2);
 		expect(renderer.drawn).toBe(1);
-		// One opaque and one water buffer, from the one chunk in view, and
-		// the air and the tone curve over the screen after them.
-		expect(gpu.draws().length).toBe(4);
+		// One opaque, one cutout and one water buffer, from the one chunk in
+		// view, and the air and the tone curve over the screen after them.
+		expect(gpu.draws().length).toBe(5);
 	});
 
 	it("culls against a frozen matrix while drawing with the live one", () => {

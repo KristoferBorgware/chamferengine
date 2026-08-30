@@ -2103,6 +2103,113 @@ Violating any of these breaks the design. They are not tunable.
   normal**, into the air the light crossed, which is what gives a lit room its
   shape with no direction in the light at all. **The fill asks `blockAt` per
   cell and so regenerates one column five to eleven times over** (F-121).
+- **A BLOCK WEARS A PICTURE, AND A GROUND BLOCK WEARS TWO** (`BlockTextures`,
+  `pictureOn` in `TERRAIN_SHADER`, `tools/bake-textures.ts`, F-125 closed).
+  The 110 seeded tiles are baked into one `rgba8unorm-srgb`
+  `texture_2d_array` -- **an array and not an atlas**, so a layer mips down to
+  one texel with nothing beside it to bleed in, and a wall merged over several
+  layers repeats its picture by asking the sampler. A vertex carries a uv and
+  **two** layer indices; `-1` means no picture and the world is then
+  bit-identical to the untextured one. **The picture IS the albedo**, so with
+  a bake loaded the vertex colour carries the speckle and the corner occlusion
+  alone -- writing the registry colour there as well multiplies the block's
+  own colour into itself. The tile is turned by the cell's own six-fold index,
+  which takes the repeat at one cell from `0.70` to `0.08`.
+  **A ground block is two materials seen at once** -- the dirt a column is
+  made of and the grass, snow or ash lying on top of it -- and one picture
+  cannot be half of each, so the side carries the dirt and a second picture
+  carries the band that hangs over the brink. It is composited by its own
+  alpha at the same uv, which costs an index on the vertex and no coordinate,
+  and it is read through a sampler that **clamps rather than repeats**: a wall
+  three layers tall tiles the dirt three times and has **one** brink.
+  **The bake bleeds the drawn colour into the texels alpha leaves empty**, or
+  every filter downstream mixes in the black that was under them -- measured,
+  the grass band's own holes carried `0,0,0` and now carry `141,179,122`, and
+  without it the brink darkens toward black at every level down. A cap wears
+  no band: the top of a grass block is already grass.
+  Two things the GPU **refuses rather than warns about**, both drawing a black
+  window with the readout still ticking over the top, both found by
+  `tools/probe-shaders.mjs`: `textureSample` inside `if (layer < 0)` is
+  non-uniform control flow and invalidates the whole pipeline -- sample
+  unconditionally at `max(layer, 0)` and `select` past it -- and
+  `maxAnisotropy` above 1 is only legal where all three filters are linear,
+  which rules it out here because magnifying is **nearest** and that is the
+  whole look.
+- **A LEAF IS NEITHER SOLID NOR TRANSPARENT, SO IT NEEDS A LEVEL OFF THE END
+  OF THE SCALE** (`opacityOf`, `showsFace`, `cutoutMain`, `cutoutFragment`,
+  F-123 closed). Air, water and stone are ordered by how much they hide and a
+  face is drawn where one cell hides more than the next -- one comparison,
+  which puts a seabed under the ocean and never draws water against water. A
+  cutout does not fit that order **at all**: against another cutout it must
+  draw and against stone it must draw, and no value on the same scale gives
+  both. So `CUTOUT` sits off the end and `showsFace` names it. Measured over
+  four chunks of real forest, a leaf against a leaf is **65.8%** of all leaf
+  faces and a leaf against wood or ground another **10.7%**, so a solid canopy
+  is a hollow shell: **5,938 of 19,835** leaf cells have no face at all, which
+  is exactly what a hole in the picture would look into.
+  **ONE FACE A BOUNDARY, DRAWN FROM BOTH SIDES.** The comparison breaks and
+  the *exactly one* does not: a coincident pair, one face per cell, is two
+  sets of vertices to rasterise exactly as many fragments, because culling
+  throws one of them away from any eye. So the cutout pipeline is
+  `cullMode: "none"` and one of the two cells emits. Which one is not free
+  either: **a cutout against solid gives it to the solid**, whose face has no
+  holes in it, because a look through a leaf at a trunk has to find something
+  it cannot see through; **a cutout against a cutout** is settled on the lower
+  **canonical** name, canonical because a cell on a face edge has several and
+  two chunks comparing different names would both draw it or neither would.
+  Measured over a real view: **1.20x** the triangles rather than **1.37x**,
+  244.7 MB rather than 277.2, and the picture is the same to **0.01 of 255**
+  outdoors and moves no percentile from 5th to 95th inside a canopy.
+  **Three buffers, not two**: the cutout writes depth like stone -- so a
+  canopy shadows, occludes and sorts with no back-to-front order to keep --
+  and throws pixels away, which is a fragment stage the opaque pass would run
+  over the whole world for nothing. **The sun's pass needs its own second
+  pipeline** or a see-through tree throws a solid cube's shadow, and both read
+  the **same** `ALPHA_CUT`: two thresholds would light a tree through gaps its
+  shadow does not have. That stage really does gate the depth write -- with
+  its threshold moved past every alpha the frame is **bit-identical over
+  511,707 pixels** to one where the canopy is not drawn into the cascades at
+  all. **And at the shipped threshold a canopy twenty metres off dapples
+  nothing**: the same frame with the leaves cast by the plain depth pipeline
+  is bit-identical too, because the light-space derivatives put that canopy on
+  a mip the coverage rescale has made nearly solid. Dappling is a close-up
+  effect, and a distant canopy shadowing as a canopy rather than dissolving is
+  what the rescale is for.
+  **The mip chain is rescaled to hold each level's own
+  coverage** -- a box filter preserves mean alpha and destroys coverage, which
+  is what the shader reads, so a canopy dissolves from its outer leaves inward
+  as it recedes -- and the rescale is **one-sided**, because trimming an
+  over-covering level back scales a texel down onto the threshold where one
+  rounding step erases the whole picture (measured: a 1x1 leaf level came out
+  at 127 of the 128 the test wants). The real bill from the mesher, over the
+  worst four chunks anywhere: **1.83x** the faces, **1.92x** the triangles,
+  **1.88x** the vertex bytes, **59.8%** of the geometry in the cutout buffer.
+  A switch, on by default, and it is a **re-mesh** knob and not a world one --
+  drawing a face is not placing a block, so a player's buildings stay filed
+  under the same world when it is turned.
+- **THE HOLES ARE WORTH PAYING FOR AT ONE LEVEL OF DETAIL AND NOT AT THE REST**
+  (`CUTOUT_REACH`, `MeshWorkerCore.run`, `tools/trial-cutout-lod.ts`). A hole
+  in a leaf is texels, and a level out is a block **twice as wide, twice as far
+  off, wearing a picture the same size** -- so what a hole is worth falls away
+  much faster than what it costs. The leaves thin out as fast as the holes
+  shrink -- 21,255 cells at a 1 m block against 7,227 at 2 m and 252 at 32 m,
+  because the plant pass turns a plant under half a block into the **colour of
+  the ground** under it. Over a real view of 301 chunks -- forest, bare rock
+  and ocean, **built rather than extrapolated from forest**
+  (`tools/trial-texture-cost.ts`): **2,393,834** triangles with solid leaves,
+  **2,882,618** (`1.20x`) with the holes at the finest level, **3,245,598**
+  (`1.36x`) with them everywhere. So stopping at the finest level is
+  **11.2%** fewer triangles in view and keeps **57.4%** of what the holes
+  cost, and the picture pays almost nothing for it
+  -- a standing view moves by **0.00 of 255** (0.1% spread),
+  and from 280 m up over a forest by **1.00 of 255** (5.9% spread, 5th
+  percentile 0.887), only ever darker, because the far canopy stops showing
+  what is behind it. **A coarse leaf is a solid block wearing the leaf
+  picture**, and it reads as foliage rather than as a checkerboard only
+  because the bake bleeds the drawn colour into the texels alpha leaves empty.
+  **The mesher is never told which level is asking** and must not be (doc 14,
+  F-032): it takes a face and a lattice offset, `cutoutLeaves` says nothing
+  about detail, and the gate lives in the one place that knows.
 - **SKY EXPOSURE IS A NUMBER OF ITS OWN ON THE VERTEX, NOT A FACTOR IN ITS
   COLOUR** (`CHUNK_VERTEX_FLOATS`, `MeshSink.vertex`, `TERRAIN_SHADER`). A
   shader cannot divide a number back out of a colour it was handed, so with the

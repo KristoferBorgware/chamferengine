@@ -48,6 +48,17 @@ export class BlockTextures {
 	readonly view: GPUTextureView;
 	readonly sampler: GPUSampler;
 
+	/**
+	 * The same filtering without the repeat, for the band over a wall's brink.
+	 *
+	 * A wall merged down a column runs its picture past 1 in `v` so the block
+	 * tiles down it. The band must not tile -- a wall has one brink, at the
+	 * top -- so it is read through a sampler that clamps instead, and the
+	 * rows below the band, which the picture leaves transparent, are what the
+	 * rest of the wall gets.
+	 */
+	readonly bandSampler: GPUSampler;
+
 	/** Which layer each block wears, flat, for the mesher to index. */
 	readonly table: Int32Array;
 
@@ -90,6 +101,13 @@ export class BlockTextures {
 			// filters are linear and magnifying is nearest here. Blurring a
 			// texel to gain it would give up the whole look for a sharper
 			// grazing angle.
+		});
+		this.bandSampler = device.createSampler({
+			magFilter: "nearest",
+			minFilter: "linear",
+			mipmapFilter: "linear",
+			addressModeU: "clamp-to-edge",
+			addressModeV: "clamp-to-edge",
 		});
 	}
 

@@ -40,6 +40,9 @@ export function buildChunkMesh(
 	const axes = boxAxes(up.x, up.y, up.z);
 	const opaque = new ArrayMeshSink(4096, axes);
 	const translucent = new ArrayMeshSink(256, axes);
+	// A chunk with no plants in it never writes here, and most do not, so this
+	// starts small and grows the way the water buffer does.
+	const cutout = new ArrayMeshSink(256, axes);
 	const tally = meshChunk(
 		chunk,
 		sampler,
@@ -48,11 +51,15 @@ export function buildChunkMesh(
 		origin,
 		opaque,
 		translucent,
+		cutout,
 		options,
 	);
-	// The box everything drawn falls inside, over both buffers, moved back
+	// The box everything drawn falls inside, over all three buffers, moved back
 	// into world space from the origin the vertices are written against.
-	const box = merge(opaque.bounds(), translucent.bounds());
+	const box = merge(
+		merge(opaque.bounds(), cutout.bounds()),
+		translucent.bounds(),
+	);
 	return {
 		key: chunk.address.key,
 		origin: new Vec3(origin.x, origin.y, origin.z),
@@ -66,6 +73,7 @@ export function buildChunkMesh(
 			halves: box.halves,
 		},
 		opaque: opaque.build(tally.cells),
+		cutout: cutout.build(tally.cells),
 		translucent: translucent.build(tally.cells),
 		tally,
 	};

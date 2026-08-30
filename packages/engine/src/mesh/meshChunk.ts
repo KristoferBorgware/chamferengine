@@ -20,7 +20,8 @@ import { coarseCell } from "../edit/coarseCell.js";
 import { joinPath } from "../addressing/lattice/joinPath.js";
 import { latticeWeights } from "../addressing/lattice/latticeWeights.js";
 import { neighbour } from "../addressing/neighbours/neighbour.js";
-import { opacityOf } from "./opacityOf.js";
+import { CUTOUT, opacityOf } from "./opacityOf.js";
+import { showsFace } from "./showsFace.js";
 import { splitPath } from "../addressing/lattice/splitPath.js";
 
 /** What one chunk's mesh cost, for a caller that wants to report it. */
@@ -56,17 +57,50 @@ function nameOf(cell: Cell): number {
 	return (cell.face * 262144 + cell.i) * 262144 + cell.j;
 }
 
+/**
+ * Which of two neighbouring cells emits the one face they share.
+ *
+ * **A boundary two cells would both draw needs an owner, and the two have to
+ * agree from either side.** Nothing about a pair of leaves distinguishes them,
+ * so the tie is settled on the lower **canonical** name -- canonical because a
+ * cell on a face edge has several, and two chunks comparing different names for
+ * one point would both draw the face or neither would.
+ */
+function owner(here: Cell, there: Cell, n: number): boolean {
+	return (
+		nameOf(canonicalCell(here.face, n, here.i, here.j)) <
+		nameOf(canonicalCell(there.face, n, there.i, there.j))
+	);
+}
+
 /** Scratch color, refilled per face rather than allocated per vertex. */
 const COLOR = new Float32Array(3);
 
 /**
- * Scratch pictures for the cell being drawn: its cap, its side, its underside.
+ * Scratch pictures for the cell being drawn: its cap, its side, its underside,
+ * and the band drawn over the side.
  *
  * Refilled beside {@link COLOR} and for the same reason -- a face needs to know
  * which layer it reads, and threading it through every emit would be one more
  * argument on calls that already take nine.
  */
-const SLOT = new Int32Array(3);
+const SLOT = new Int32Array(4);
+
+/**
+ * Whether a leaf is drawn with the holes its picture has in it.
+ *
+ * Set once per {@link meshChunk} call and read by {@link opacity}, beside the
+ * other per-call scratch above, because it reaches every emission test in this
+ * file and threading it would put one more argument on calls that already take
+ * twenty. It is a property of the whole mesh rather than of one face: a chunk
+ * is meshed start to finish before the next one begins.
+ */
+let SEE_THROUGH = false;
+
+/** {@link opacityOf} under this mesh's own cutout switch. */
+function opacity(block: number): number {
+	return opacityOf(block, SEE_THROUGH);
+}
 
 /**
  * How far round its own ring this cell's picture is turned.
@@ -255,6 +289,22 @@ function debugTint(color: Float32Array, tint: number, mix: number): void {
 	color[2] = color[2]! * (1 - mix) + mark[2] * mix;
 }
 
+/**
+ * Which of the three buffers a face hiding this much is drawn into.
+ *
+ * Three rather than two because a cutout is neither: it writes depth the way
+ * stone does, so it cannot go in the water pass, and it throws pixels away, so
+ * it cannot go in the pass that draws every pixel it covers.
+ */
+function chooseSink(
+	opaque: MeshSink,
+	translucent: MeshSink,
+	cutout: MeshSink,
+): (hides: number) => MeshSink {
+	return (hides) =>
+		hides === 1 ? translucent : hides === CUTOUT ? cutout : opaque;
+}
+
 /** A column's block at a layer, air outside the crust. */
 function at(column: Column, layer: number): number {
 	const blocks = column.blocks;
@@ -264,9 +314,12 @@ function at(column: Column, layer: number): number {
 /**
  * Turn one chunk into triangles.
  *
- * A face is emitted where a cell is more opaque than what is next to it, across
- * all six sides plus up and down. Opaque and translucent geometry go to
- * separate sinks, because they are drawn in separate passes.
+ * A face is emitted where a cell hides more than what is next to it, across all
+ * six sides plus up and down -- or where either of the two is a cutout, which
+ * a look reaches through and so needs a face on both sides. Opaque, cutout and
+ * translucent geometry go to three sinks, because they are drawn in three
+ * passes: one writing depth, one writing depth and throwing pixels away, and
+ * one reading depth without writing it.
  *
  * Positions are written relative to `origin` so they stay inside `float32`'s
  * useful range whatever the planet's radius. Nothing here mentions a device, a
@@ -280,9 +333,11 @@ export function meshChunk(
 	origin: Vec3,
 	opaque: MeshSink,
 	translucent: MeshSink,
+	cutout: MeshSink,
 	options: MeshOptions = {},
 ): MeshTally {
 	const settings = { ...MESH_DEFAULTS, ...options };
+	SEE_THROUGH = settings.cutoutLeaves;
 	const light = settings.ambientOcclusion ? AMBIENT_OCCLUSION : FLAT_LIGHT;
 	const exposed = settings.skyExposure;
 	const depth = chunk.depth;
@@ -301,12 +356,14 @@ export function meshChunk(
 			SLOT[0] = -1;
 			SLOT[1] = -1;
 			SLOT[2] = -1;
+			SLOT[3] = -1;
 			return;
 		}
 		const at = block * 4;
 		SLOT[0] = pictures[at] ?? -1;
 		SLOT[1] = pictures[at + 1] ?? -1;
 		SLOT[2] = pictures[at + 2] ?? -1;
+		SLOT[3] = pictures[at + 3] ?? -1;
 		TURN = Math.floor(hash3(cellFace * 8191 + i, j, i ^ j, seed + 17) * 6);
 	};
 	const paint: CellPaint = gridPaint
@@ -360,6 +417,9 @@ export function meshChunk(
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const ringCells: (Cell | null)[] = new Array<Cell | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
+	// Which of a cell's six shared boundaries this cell emits, where the two
+	// sides would otherwise both emit one. See {@link owner}.
+	const mine: boolean[] = new Array<boolean>(6).fill(true);
 
 	// Where a cell's ground cap lands once snapped to the shared fine grid,
 	// remembered by cell. The seam floor below asks for the same handful of
@@ -451,6 +511,7 @@ export function meshChunk(
 			for (let k = 0; k < 6; k++) {
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+				mine[k] = nb ? owner({ face, i, j }, nb, n) : true;
 				outward[k] =
 					nb !== null &&
 					!(
@@ -489,9 +550,11 @@ export function meshChunk(
 				degree,
 				own,
 				ring,
+				mine,
 				layers,
 				opaque,
 				translucent,
+				cutout,
 				tally,
 				settings.crustFloor,
 				grid,
@@ -564,9 +627,11 @@ export function meshChunk(
 			cell,
 			ring,
 			ringCells,
+			mine,
 			layers,
 			opaque,
 			translucent,
+			cutout,
 			tally,
 			grid,
 			apronTint,
@@ -641,9 +706,11 @@ function meshCell(
 	degree: number,
 	own: Column,
 	ring: readonly (Column | null)[],
+	mine: readonly boolean[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
+	cutout: MeshSink,
 	tally: MeshTally,
 	crustFloor: boolean,
 	grid: number,
@@ -653,6 +720,7 @@ function meshCell(
 	exposed: boolean,
 	canopy: number,
 ): void {
+	const sinkFor = chooseSink(opaque, translucent, cutout);
 	// The band anything can happen in: from the highest layer that is not air
 	// in the cell or any neighbour, to the lowest that is not solid in any of
 	// them. Outside it every cell is air, or every cell is solid, and neither
@@ -707,13 +775,16 @@ function meshCell(
 	// the layer under it, because there is a different block there.
 	for (let layer = from; layer <= to; layer++) {
 		const block = at(own, layer);
-		const here = opacityOf(block);
+		const here = opacity(block);
 		if (here === 0) continue;
-		const sink = here === 1 ? translucent : opaque;
+		const sink = sinkFor(here);
 		paint(block, face, i, j);
 		debugTint(COLOR, tint, mix);
 
-		if (opacityOf(at(own, layer - 1)) < here) {
+		// **The lower cell owns a boundary between two cutouts.** A pair of
+		// leaves stacked would otherwise draw a top cap and a bottom cap in
+		// the same plane; this is the top cap, so it is the one that survives.
+		if (showsFace(here, opacity(at(own, layer - 1)), true)) {
 			// **Only the cap, and only the ground's own.** A cliff face under
 			// a forest is still rock, and so is the underside of a ledge.
 			const covered = canopy !== 0 && layer === groundCap;
@@ -739,8 +810,10 @@ function meshCell(
 				debugTint(COLOR, tint, mix);
 			}
 		}
-		const below = layer + 1 >= layers ? 0 : opacityOf(at(own, layer + 1));
-		if (below < here) {
+		const below = layer + 1 >= layers ? 0 : opacity(at(own, layer + 1));
+		// ...and this is the bottom cap of the upper cell of such a pair,
+		// which is the one that goes.
+		if (showsFace(here, below, false)) {
 			emitCap(
 				sink,
 				corners,
@@ -761,11 +834,11 @@ function meshCell(
 	const floor = layers - 1;
 	if (crustFloor && floor > to) {
 		const block = at(own, floor);
-		if (opacityOf(block) > 0) {
+		if (opacity(block) > 0) {
 			paint(block, face, i, j);
 			debugTint(COLOR, tint, mix);
 			emitCap(
-				opacityOf(block) === 1 ? translucent : opaque,
+				sinkFor(opacity(block)),
 				corners,
 				degree,
 				shape.radiusOfLayer(floor + 1),
@@ -784,13 +857,13 @@ function meshCell(
 	// and the side runs never cover that span: at the chunk's own resolution
 	// the two columns are the same height, so no run exists there at all. The
 	// wall between the two snapped caps is what a terrace brink shows.
-	if (groundCap >= 0 && opacityOf(at(own, groundCap)) === 2) {
+	if (groundCap >= 0 && opacity(at(own, groundCap)) === 2) {
 		for (let k = 0; k < degree; k++) {
 			const other = ring[k];
 			if (!other || other.groundRadius <= 0) continue;
 			// A neighbour open at the cap layer already has a run whose top
 			// is this cap; only a level neighbour leaves the span bare.
-			if (opacityOf(at(other, groundCap)) !== 2) continue;
+			if (opacity(at(other, groundCap)) !== 2) continue;
 			const otherTop = snappedSurface(
 				shape.crustTopRadius,
 				other.groundRadius,
@@ -827,11 +900,12 @@ function meshCell(
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
 		if (!other) continue;
+		const owned = mine[k] ?? true;
 		let layer = from;
 		while (layer <= to) {
 			const block = at(own, layer);
-			const here = opacityOf(block);
-			if (here === 0 || opacityOf(at(other, layer)) >= here) {
+			const here = opacity(block);
+			if (!showsFace(here, opacity(at(other, layer)), owned)) {
 				layer++;
 				continue;
 			}
@@ -839,26 +913,30 @@ function meshCell(
 			while (
 				end + 1 <= to &&
 				at(own, end + 1) === block &&
-				opacityOf(at(other, end + 1)) < here
+				showsFace(here, opacity(at(other, end + 1)), owned)
 			)
 				end++;
 
 			// Whether another run of this same wall continues past either
 			// end -- the one place the weld must not reach past, or two
 			// coplanar runs of different colors overlap and fight.
-			const aboveOpacity = opacityOf(at(own, layer - 1));
-			const belowOpacity = opacityOf(at(own, end + 1));
-			const wallAbove =
-				aboveOpacity > 0 &&
-				opacityOf(at(other, layer - 1)) < aboveOpacity;
-			const wallBelow =
-				belowOpacity > 0 &&
-				opacityOf(at(other, end + 1)) < belowOpacity;
+			const aboveOpacity = opacity(at(own, layer - 1));
+			const belowOpacity = opacity(at(own, end + 1));
+			const wallAbove = showsFace(
+				aboveOpacity,
+				opacity(at(other, layer - 1)),
+				owned,
+			);
+			const wallBelow = showsFace(
+				belowOpacity,
+				opacity(at(other, end + 1)),
+				owned,
+			);
 
 			paint(block, face, i, j);
 			debugTint(COLOR, tint, mix);
 			emitSide(
-				here === 1 ? translucent : opaque,
+				sinkFor(here),
 				corners,
 				degree,
 				k,
@@ -902,9 +980,11 @@ function meshApronCell(
 	cell: Cell,
 	ring: (Column | null)[],
 	ringCells: (Cell | null)[],
+	mine: boolean[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
+	cutout: MeshSink,
 	tally: MeshTally,
 	grid: number,
 	tint: number,
@@ -916,6 +996,7 @@ function meshApronCell(
 	exposed: boolean,
 	canopy: number,
 ): void {
+	const sinkFor = chooseSink(opaque, translucent, cutout);
 	const n = 1 << chunk.depth;
 	const { face, i, j } = cell;
 	const corners = cellCorners(face, n, i, j);
@@ -929,6 +1010,7 @@ function meshApronCell(
 		const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 		ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
 		ringCells[k] = nb;
+		mine[k] = nb ? owner(cell, nb, n) : true;
 	}
 
 	let bandTop = own.first;
@@ -970,15 +1052,14 @@ function meshApronCell(
 	// The caps, to be looked down at.
 	for (let layer = from; layer <= to; layer++) {
 		const block = at(own, layer);
-		const here = opacityOf(block);
-		if (here === 0) continue;
-		if (opacityOf(at(own, layer - 1)) >= here) continue;
+		const here = opacity(block);
+		if (!showsFace(here, opacity(at(own, layer - 1)), true)) continue;
 		// A plant too small for this grid to build is the colour of the
 		// ground it stands on, and the apron draws that ground too.
 		paint(canopy !== 0 && layer === groundCap ? canopy : block, face, i, j);
 		debugTint(COLOR, tint, mix);
 		emitCap(
-			here === 1 ? translucent : opaque,
+			sinkFor(here),
 			corners,
 			degree,
 			capRadius(layer) - drop,
@@ -993,11 +1074,11 @@ function meshApronCell(
 
 	// The same cap step the owned cells draw: a level neighbour whose cap
 	// snapped lower leaves a bare span no run covers.
-	if (groundCap >= 0 && opacityOf(at(own, groundCap)) === 2) {
+	if (groundCap >= 0 && opacity(at(own, groundCap)) === 2) {
 		for (let k = 0; k < degree; k++) {
 			const other = ring[k];
 			if (!other || other.groundRadius <= 0) continue;
-			if (opacityOf(at(other, groundCap)) !== 2) continue;
+			if (opacity(at(other, groundCap)) !== 2) continue;
 			const otherTop = snappedSurface(
 				shape.crustTopRadius,
 				other.groundRadius,
@@ -1048,11 +1129,12 @@ function meshApronCell(
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
 		if (!other) continue;
+		const owned = mine[k] ?? true;
 		let layer = from;
 		while (layer <= to) {
 			const block = at(own, layer);
-			const here = opacityOf(block);
-			if (here === 0 || opacityOf(at(other, layer)) >= here) {
+			const here = opacity(block);
+			if (!showsFace(here, opacity(at(other, layer)), owned)) {
 				layer++;
 				continue;
 			}
@@ -1060,26 +1142,30 @@ function meshApronCell(
 			while (
 				end + 1 <= to &&
 				at(own, end + 1) === block &&
-				opacityOf(at(other, end + 1)) < here
+				showsFace(here, opacity(at(other, end + 1)), owned)
 			)
 				end++;
 
 			// Whether another run of this same wall continues past either
 			// end -- the one place the weld must not reach past, or two
 			// coplanar runs of different colors overlap and fight.
-			const aboveOpacity = opacityOf(at(own, layer - 1));
-			const belowOpacity = opacityOf(at(own, end + 1));
-			const wallAbove =
-				aboveOpacity > 0 &&
-				opacityOf(at(other, layer - 1)) < aboveOpacity;
-			const wallBelow =
-				belowOpacity > 0 &&
-				opacityOf(at(other, end + 1)) < belowOpacity;
+			const aboveOpacity = opacity(at(own, layer - 1));
+			const belowOpacity = opacity(at(own, end + 1));
+			const wallAbove = showsFace(
+				aboveOpacity,
+				opacity(at(other, layer - 1)),
+				owned,
+			);
+			const wallBelow = showsFace(
+				belowOpacity,
+				opacity(at(other, end + 1)),
+				owned,
+			);
 
 			paint(block, face, i, j);
 			debugTint(COLOR, tint, mix);
 			emitSide(
-				here === 1 ? translucent : opaque,
+				sinkFor(here),
 				corners,
 				degree,
 				k,
@@ -1175,7 +1261,7 @@ function meshApronCell(
 		if (
 			groundCap >= 0 &&
 			groundTop > 0 &&
-			opacityOf(at(own, groundCap)) === 2
+			opacity(at(own, groundCap)) === 2
 		) {
 			const otherTop =
 				other.groundRadius > 0
@@ -1255,8 +1341,16 @@ function meshApronCell(
 				: Math.max(from, shape.layerOfRadius(sealed));
 		while (layer <= to) {
 			const block = at(own, layer);
-			const here = opacityOf(block);
-			const theirs = opacityOf(at(other, layer));
+			const here = opacity(block);
+			const theirs = opacity(at(other, layer));
+			// **A cutout needs no seam copy.** The rule that draws a leaf
+			// against a leaf has already put a face on both sides at their
+			// own levels, and a duplicate of one here would be a wall of
+			// leaves standing across the neighbour's open air.
+			if (here === CUTOUT || theirs === CUTOUT) {
+				layer++;
+				continue;
+			}
 			if (here > theirs || (here === 0 && theirs === 0)) {
 				// More opaque here: the run loop above already drew it.
 				layer++;
@@ -1282,7 +1376,7 @@ function meshApronCell(
 				while (
 					end + 1 <= to &&
 					at(own, end + 1) === block &&
-					opacityOf(at(other, end + 1)) === here
+					opacity(at(other, end + 1)) === here
 				)
 					end++;
 				const top = Math.min(capRadius(layer), sealed);
@@ -1301,8 +1395,8 @@ function meshApronCell(
 						ring,
 						layer,
 						end,
-						opacityOf(at(own, layer - 1)) === 0,
-						opacityOf(at(own, end + 1)) === 0,
+						opacity(at(own, layer - 1)) === 0,
+						opacity(at(own, end + 1)) === 0,
 						light,
 						skyAt(exposed, layer, around),
 						skyAt(exposed, end, around),
@@ -1320,7 +1414,7 @@ function meshApronCell(
 			while (
 				end + 1 <= to &&
 				at(other, end + 1) === theirBlock &&
-				opacityOf(at(own, end + 1)) < theirs
+				opacity(at(own, end + 1)) < theirs
 			)
 				end++;
 			const top = Math.min(shape.radiusOfLayer(layer), sealed);
@@ -1333,7 +1427,7 @@ function meshApronCell(
 				paint(theirBlock, named.face, named.i, named.j);
 				debugTint(COLOR, tint, mix);
 				emitSide(
-					theirs === 1 ? translucent : opaque,
+					sinkFor(theirs),
 					pushedCorners(),
 					degree,
 					k,
@@ -1343,8 +1437,8 @@ function meshApronCell(
 					mirror,
 					layer,
 					end,
-					opacityOf(at(other, layer - 1)) === 0,
-					opacityOf(at(other, end + 1)) === 0,
+					opacity(at(other, layer - 1)) === 0,
+					opacity(at(other, end + 1)) === 0,
 					light,
 					skyAt(exposed, layer, around),
 					skyAt(exposed, end, around),
@@ -1399,6 +1493,9 @@ function emitCap(
 			// different picture wherever a block has one -- a grass block seen
 			// from under an overhang is dirt.
 			upward ? SLOT[0]! : SLOT[2]!,
+			// **No band on a cap.** The overlay is the grass hanging over the
+			// brink of a wall; the top of a grass block is already grass.
+			-1,
 		);
 	}
 	for (let c = 1; c + 1 < degree; c++)
@@ -1470,11 +1567,10 @@ function emitSide(
 	const beyond = ring[k]!;
 	const leftSide = ring[(k + (inward ? 1 : degree - 1)) % degree];
 	const rightSide = ring[(k + (inward ? degree - 1 : 1)) % degree];
-	const above = opacityOf(at(beyond, topLayer - 1)) === 2 ? 1 : 0;
-	const under = opacityOf(at(beyond, bottomLayer + 1)) === 2 ? 1 : 0;
-	const byLeft = leftSide && opacityOf(at(leftSide, topLayer)) === 2 ? 1 : 0;
-	const byRight =
-		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
+	const above = opacity(at(beyond, topLayer - 1)) === 2 ? 1 : 0;
+	const under = opacity(at(beyond, bottomLayer + 1)) === 2 ? 1 : 0;
+	const byLeft = leftSide && opacity(at(leftSide, topLayer)) === 2 ? 1 : 0;
+	const byRight = rightSide && opacity(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
 	// **A wall merged down a column is that many pictures tall.** The run's own
 	// length is what `v` reaches, and the sampler repeats -- so merging stays
@@ -1501,6 +1597,7 @@ function emitSide(
 			u,
 			v,
 			SLOT[1]!,
+			SLOT[3]!,
 		);
 	};
 
@@ -1538,7 +1635,7 @@ function occlusion(
 	const first = ring[a % degree];
 	const second = ring[b % degree];
 	let count = 0;
-	if (first && opacityOf(at(first, layer)) === 2) count++;
-	if (second && opacityOf(at(second, layer)) === 2) count++;
+	if (first && opacity(at(first, layer)) === 2) count++;
+	if (second && opacity(at(second, layer)) === 2) count++;
 	return count;
 }

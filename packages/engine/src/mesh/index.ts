@@ -16,7 +16,9 @@ export type { ChunkMesh } from "./ChunkMesh.js";
 export type { MeshTally } from "./meshChunk.js";
 export { meshChunk } from "./meshChunk.js";
 export { buildChunkMesh } from "./buildChunkMesh.js";
-export { opacityOf } from "./opacityOf.js";
+export { CUTOUT, opacityOf } from "./opacityOf.js";
+export { CUTOUT_REACH } from "./CUTOUT_REACH.js";
+export { showsFace } from "./showsFace.js";
 export { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 export type {
 	MeshJob,
