@@ -957,15 +957,16 @@ export interface PlanetKnobs {
 	 * a hole in it.
 	 *
 	 * **It is a switch because it is not free.** A canopy that stops
-	 * occluding draws 4.26x the leaf faces, and 5,938 of 19,835 leaf cells
-	 * gain a face they did not have. Baked into the geometry, so it needs
-	 * every chunk built again to change.
+	 * occluding draws 3.51x the leaf faces, and 5,938 of 19,835 leaf cells
+	 * gain a face they did not have -- 1.20x the triangles over a whole view.
+	 * Baked into the geometry, so it needs every chunk built again to
+	 * change.
 	 *
 	 * **On, it reaches the nearest level of detail and no further.** A level
 	 * out is a block twice as wide, twice as far off, wearing a picture the
 	 * same size -- and the plant pass has already turned two thirds of that
 	 * level's leaves into the colour of the ground. Measured over a real view,
-	 * stopping there keeps 55.6% of what the holes buy for 17.9% fewer
+	 * stopping there keeps 57.4% of what the holes buy for 11.2% fewer
 	 * triangles, and a standing view does not move by one part in 255.
 	 */
 	cutoutLeaves: boolean;

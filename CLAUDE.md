@@ -2165,6 +2165,19 @@ Violating any of these breaks the design. They are not tunable.
   faces and a leaf against wood or ground another **10.7%**, so a solid canopy
   is a hollow shell: **5,938 of 19,835** leaf cells have no face at all, which
   is exactly what a hole in the picture would look into.
+  **ONE FACE A BOUNDARY, DRAWN FROM BOTH SIDES.** The comparison breaks and
+  the *exactly one* does not: a coincident pair, one face per cell, is two
+  sets of vertices to rasterise exactly as many fragments, because culling
+  throws one of them away from any eye. So the cutout pipeline is
+  `cullMode: "none"` and one of the two cells emits. Which one is not free
+  either: **a cutout against solid gives it to the solid**, whose face has no
+  holes in it, because a look through a leaf at a trunk has to find something
+  it cannot see through; **a cutout against a cutout** is settled on the lower
+  **canonical** name, canonical because a cell on a face edge has several and
+  two chunks comparing different names would both draw it or neither would.
+  Measured over a real view: **1.20x** the triangles rather than **1.37x**,
+  244.7 MB rather than 277.2, and the picture is the same to **0.01 of 255**
+  outdoors and moves no percentile from 5th to 95th inside a canopy.
   **Three buffers, not two**: the cutout writes depth like stone -- so a
   canopy shadows, occludes and sorts with no back-to-front order to keep --
   and throws pixels away, which is a fragment stage the opaque pass would run
@@ -2196,17 +2209,16 @@ Violating any of these breaks the design. They are not tunable.
   (`CUTOUT_REACH`, `MeshWorkerCore.run`, `tools/trial-cutout-lod.ts`). A hole
   in a leaf is texels, and a level out is a block **twice as wide, twice as far
   off, wearing a picture the same size** -- so what a hole is worth falls away
-  much faster than what it costs. On the same ground at every level the holes
-  cost **`2.45x`** the triangles at a 1 m block, `1.45x` at 2 m, `1.32x` at
-  4 m and `1.05x` at 32 m -- and the leaves thin out as fast, 21,255 cells at
-  1 m against 7,227 at 2 m and 252 at 32 m, because the plant pass turns a
-  plant under half a block into the **colour of the ground** under it. Over a
-  real view of 301 chunks -- forest, bare rock and ocean, **built rather than
-  extrapolated from forest** (`tools/trial-texture-cost.ts`):
-  **2,393,834** triangles with solid leaves, **3,289,810** (`1.37x`) with the
-  holes at the finest level, **4,005,324** (`1.67x`) with them everywhere. So
-  stopping at the finest level is **17.9%** fewer triangles in view and keeps
-  **55.6%** of what the holes cost, and the picture pays almost nothing for it
+  much faster than what it costs. The leaves thin out as fast as the holes
+  shrink -- 21,255 cells at a 1 m block against 7,227 at 2 m and 252 at 32 m,
+  because the plant pass turns a plant under half a block into the **colour of
+  the ground** under it. Over a real view of 301 chunks -- forest, bare rock
+  and ocean, **built rather than extrapolated from forest**
+  (`tools/trial-texture-cost.ts`): **2,393,834** triangles with solid leaves,
+  **2,882,618** (`1.20x`) with the holes at the finest level, **3,245,598**
+  (`1.36x`) with them everywhere. So stopping at the finest level is
+  **11.2%** fewer triangles in view and keeps **57.4%** of what the holes
+  cost, and the picture pays almost nothing for it
   -- a standing view moves by **0.00 of 255** (0.1% spread),
   and from 280 m up over a forest by **1.00 of 255** (5.9% spread, 5th
   percentile 0.887), only ever darker, because the far canopy stops showing

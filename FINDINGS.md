@@ -10,70 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-128 — A canopy drawn as a shell seen from both sides costs a fifth of what it costs now
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** high
-**Effort:** medium
-**Found:** 2026-08-30, asking whether the geometry behind a hole is needed
-**Where:** `packages/engine/src/mesh/showsFace.ts`,
-`ChunkRenderer`'s cutout pipeline
-
-**What happens.** A leaf draws a face against another leaf, so a canopy is
-geometry all the way through and a look through a hole in the near leaf finds
-the far one. That is what the holes cost: **5.59x** the triangles a solid
-canopy draws, **1.37x** over a whole view.
-
-There is a second way to answer the same question. Keep the canopy as a
-**shell** -- a leaf draws only against air, the way a solid one does, plus the
-wood's own face toward a leaf so a trunk is not see-through -- and draw it with
-`cullMode: "none"`. A look through a hole then meets the **far side of the
-canopy**, whose outward face is back-facing from here and was being culled.
-`faceNormal` already turns a face's normal toward the eye, so that far side
-lights correctly rather than reading black.
-
-> **[measured]** The same standing view, the same chunk selection, the two
-> rules built and drawn (`tools/trial-texture-cost.ts`, `tools/frame-diff.mjs`):
->
-> | | triangles | | uploaded |
-> |---|---|---|---|
-> | solid leaves | 2,393,834 | `1.00x` | 204.7 MB |
-> | shell, seen from both sides | 2,540,654 | **`1.06x`** | 217.1 MB |
-> | geometry all the way through | 3,289,810 | `1.37x` | 277.2 MB |
->
-> The canopy's own geometry is **1.75x** a solid one's rather than **5.59x**,
-> and it is **13.5%** of the triangles in view rather than 33.2%.
->
-> From outside, the two are **indistinguishable**: 447,470 pixels, mean move
-> **0.03 of 255**, fifth and ninety-fifth percentiles of the ratio both
-> `1.000`. Standing **inside** a canopy they part: 740,365 pixels, mean move
-> **1.20 of 255**, 34.0% spread, fifth percentile **0.840** -- the holes read
-> darker, because what is behind one is the far side of the canopy several
-> metres off rather than a leaf a metre in, and the far side takes less light.
-
-**Why it matters.** It is the largest single saving anywhere near the frame:
-**23%** fewer triangles in view, and the part it removes is the part that also
-carries a `discard`, which is what stops the hardware writing depth before the
-shader runs.
-
-**What it costs, and it is not nothing.** A ray through a hole meets the far
-shell unless it passes a hole there too. The pictures are `85.4%` covered, so
-that is about `2%` of hole pixels -- roughly `0.3%` of a canopy -- reading
-through to whatever stands beyond the tree. Sparse, and it is the same failure
-F-123 named, at a fiftieth of the rate.
-
-**A third answer, cheaper than either and with no change to the picture at
-all.** Every leaf-to-leaf boundary is drawn **twice** today, once from each
-side, and back-face culling shows exactly one of the two. Emitting one face
-per boundary and drawing it from both sides gives the same picture for half
-the interior geometry -- about `1.21x` rather than `1.37x` -- and it needs no
-choice about how a canopy looks, only a rule for which of the two cells owns
-the face. What it gives up is that a face carries its owner's corner shading
-and sky exposure, which the cell on the other side would have written slightly
-differently.
-
-
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2755,6 +2691,91 @@ with no owner afterwards is the bug.
 ---
 
 ## Closed
+
+### F-128 — A canopy drawn as a shell seen from both sides costs a fifth of what it costs now
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-30, asking whether the geometry behind a hole is needed
+**Closed:** 2026-08-30 by the third answer below rather than by the shell.
+One face a boundary, `cullMode: "none"` on the cutout pipeline, and the owner
+settled on the lower canonical name -- except against solid, where the solid
+owns it, because a look through a leaf at a trunk has to find something it
+cannot see through. **1.37x to 1.20x** over a real view, 277.2 MB to 244.7,
+and the picture is the same to **0.01 of 255** outdoors with no percentile
+from 5th to 95th moving inside a canopy. The shell is left unbuilt: it reaches
+`1.06x` and gives up a canopy's depth from inside, and this takes half of that
+saving for nothing at all.
+**Where:** `packages/engine/src/mesh/showsFace.ts`,
+`ChunkRenderer`'s cutout pipeline
+
+**What happens.** A leaf draws a face against another leaf, so a canopy is
+geometry all the way through and a look through a hole in the near leaf finds
+the far one. That is what the holes cost: **5.59x** the triangles a solid
+canopy draws, **1.37x** over a whole view.
+
+There is a second way to answer the same question. Keep the canopy as a
+**shell** -- a leaf draws only against air, the way a solid one does, plus the
+wood's own face toward a leaf so a trunk is not see-through -- and draw it with
+`cullMode: "none"`. A look through a hole then meets the **far side of the
+canopy**, whose outward face is back-facing from here and was being culled.
+`faceNormal` already turns a face's normal toward the eye, so that far side
+lights correctly rather than reading black.
+
+> **[measured]** The same standing view, the same chunk selection, the two
+> rules built and drawn (`tools/trial-texture-cost.ts`, `tools/frame-diff.mjs`):
+>
+> | | triangles | | uploaded |
+> |---|---|---|---|
+> | solid leaves | 2,393,834 | `1.00x` | 204.7 MB |
+> | shell, seen from both sides | 2,540,654 | **`1.06x`** | 217.1 MB |
+> | geometry all the way through | 3,289,810 | `1.37x` | 277.2 MB |
+>
+> The canopy's own geometry is **1.75x** a solid one's rather than **5.59x**,
+> and it is **13.5%** of the triangles in view rather than 33.2%.
+>
+> From outside, the two are **indistinguishable**: 447,470 pixels, mean move
+> **0.03 of 255**, fifth and ninety-fifth percentiles of the ratio both
+> `1.000`. Standing **inside** a canopy they part: 740,365 pixels, mean move
+> **1.20 of 255**, 34.0% spread, fifth percentile **0.840** -- the holes read
+> darker, because what is behind one is the far side of the canopy several
+> metres off rather than a leaf a metre in, and the far side takes less light.
+
+**Why it matters.** It is the largest single saving anywhere near the frame:
+**23%** fewer triangles in view, and the part it removes is the part that also
+carries a `discard`, which is what stops the hardware writing depth before the
+shader runs.
+
+**What it costs, and it is not nothing.** A ray through a hole meets the far
+shell unless it passes a hole there too. The pictures are `85.4%` covered, so
+that is about `2%` of hole pixels -- roughly `0.3%` of a canopy -- reading
+through to whatever stands beyond the tree. Sparse, and it is the same failure
+F-123 named, at a fiftieth of the rate.
+
+**A third answer, cheaper than either and with no change to the picture at
+all -- and the one that shipped.** Every leaf-to-leaf boundary was drawn
+**twice**, once from each side, and back-face culling showed exactly one of
+the two: two sets of vertices to rasterise exactly as many fragments. One face
+per boundary, drawn from both sides, is the same picture for half the interior
+geometry.
+
+> **[measured]** Over the same view, **1.20x** the triangles rather than
+> `1.37x` and **244.7 MB** rather than 277.2. Outdoors the two are the same to
+> **0.01 of 255** over 447,495 pixels, fifth and ninety-fifth percentiles both
+> `1.000`; inside a canopy the mean moves **0.78 of 255** with both those
+> percentiles still `1.000`, so nine pixels in ten do not move at all.
+
+What it gives up is that a face carries its owner's corner shading and sky
+exposure rather than each side's own, which is the tail that moves inside a
+canopy. **The owner cannot be arbitrary**: against solid it has to be the
+solid, whose face has no holes in it, or a look through a leaf at a trunk sees
+through the trunk. Between two cutouts it is the lower **canonical** name --
+canonical because a cell on a face edge has several, and two chunks comparing
+different names for one point would both draw the face or neither would.
+
+
 
 ### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
 

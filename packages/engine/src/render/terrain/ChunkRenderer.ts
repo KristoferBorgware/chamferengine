@@ -389,8 +389,16 @@ export class ChunkRenderer implements ShadowCaster {
 		// holes in are thrown away whole and everything left writes depth --
 		// which is what lets a canopy shadow, occlude and sort the way stone
 		// does, with no back-to-front order to keep.
+		//
+		// **And both sides, because a leaf's face is drawn once.** Two cells
+		// sharing a boundary would each draw it and culling would throw one
+		// away from any given eye -- two sets of vertices to rasterise
+		// exactly as many fragments. The mesher emits one and this shows it
+		// from either side, which is why the canopy costs what it does and
+		// not twice that.
 		this.cutoutPipeline = device.createRenderPipeline({
 			...common,
+			primitive: { topology: "triangle-list", cullMode: "none" },
 			fragment: {
 				module,
 				entryPoint: "cutoutMain",

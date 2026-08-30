@@ -44,12 +44,26 @@ describe("showsFace", () => {
 		expect(showsFace(0, 0)).toBe(false);
 	});
 
-	it("draws on both sides where either is a cutout", () => {
-		// A look through a hole in the near leaf reaches the far one, so the
-		// far one needs a face or the sky behind the tree shows through.
-		expect(showsFace(CUTOUT, CUTOUT)).toBe(true);
-		expect(showsFace(CUTOUT, 2)).toBe(true);
+	it("gives a boundary between two cutouts to exactly one of them", () => {
+		// A look through a hole in the near leaf reaches the far one, so that
+		// boundary needs a face -- one face, shown from both sides, because
+		// culling would throw one of a coincident pair away anyway.
+		expect(showsFace(CUTOUT, CUTOUT, true)).toBe(true);
+		expect(showsFace(CUTOUT, CUTOUT, false)).toBe(false);
+	});
+
+	it("gives a boundary between a cutout and solid to the solid one", () => {
+		// The solid face has no holes in it, which is what a look through a
+		// leaf at a trunk has to find; the leaf's own face there would be
+		// see-through with nothing behind it.
 		expect(showsFace(2, CUTOUT)).toBe(true);
+		expect(showsFace(CUTOUT, 2)).toBe(false);
+	});
+
+	it("leaves a cutout drawing against what hides less than it does", () => {
+		expect(showsFace(CUTOUT, 0)).toBe(true);
+		expect(showsFace(CUTOUT, 1)).toBe(true);
+		expect(showsFace(1, CUTOUT)).toBe(false);
 	});
 
 	it("still draws nothing from air, whatever is next to it", () => {
@@ -68,6 +82,9 @@ function pair(
 	here: number,
 	there: number,
 	layer = 16,
+	q = 2,
+	r = 2,
+	k = 0,
 ): {
 	columnAt: (
 		face: number,
@@ -76,8 +93,8 @@ function pair(
 	) => ReturnType<typeof columnBand>;
 } {
 	const n = 1 << chunk.depth;
-	const [i, j] = joinPath(chunk.address.path, 2, 2, chunk.depth);
-	const beside = neighbour(chunk.address.face, n, i, j, 0)!;
+	const [i, j] = joinPath(chunk.address.path, q, r, chunk.depth);
+	const beside = neighbour(chunk.address.face, n, i, j, k)!;
 	const one = (block: number) => {
 		const blocks = new Uint16Array(LAYERS);
 		blocks[layer] = block;
@@ -97,7 +114,14 @@ function pair(
 }
 
 /** Mesh the pair and report what each of the three sinks got. */
-function meshPair(here: number, there: number, cutoutLeaves: boolean) {
+function meshPair(
+	here: number,
+	there: number,
+	cutoutLeaves: boolean,
+	q = 2,
+	r = 2,
+	k = 0,
+) {
 	const chunk = new Chunk(
 		ChunkAddress.fromKey(0, CHUNK_LEVEL),
 		DEPTH,
@@ -109,7 +133,7 @@ function meshPair(here: number, there: number, cutoutLeaves: boolean) {
 	const cutout = new ArrayMeshSink();
 	const tally = meshChunk(
 		chunk,
-		pair(chunk, here, there),
+		pair(chunk, here, there, 16, q, r, k),
 		shape,
 		1,
 		new Vec3(0, 0, 0),
@@ -135,26 +159,70 @@ describe("a leaf drawn with holes in it", () => {
 		expect(solid.cutout).toBe(0);
 	});
 
-	it("draws it from both sides once they are cutouts", () => {
+	it("draws the wall between them once they are cutouts", () => {
 		const holed = meshPair(BlockType.PINE_LEAF, BlockType.PINE_LEAF, true);
-		// The same faces plus one apiece: the shared wall, once from each
-		// side, so a look through a hole in the near leaf finds the far one.
-		expect(holed.tally.faces).toBe(2 * (2 + 6));
+		// The same faces plus **one**, not two: the shared wall, emitted by
+		// whichever of the pair owns it and drawn from both sides. A look
+		// through a hole in the near leaf finds the far one either way, and
+		// the pair would have cost two sets of vertices to rasterise the same
+		// fragments.
+		expect(holed.tally.faces).toBe(2 * (2 + 5) + 1);
 		// And all of it in the cutout buffer, none in the opaque one.
 		expect(holed.opaque).toBe(0);
 		expect(holed.translucent).toBe(0);
 		expect(holed.cutout).toBeGreaterThan(0);
 	});
 
-	it("draws the trunk's own face behind a leaf as well", () => {
+	it("draws the trunk's own face behind a leaf, and only the trunk's", () => {
 		const solid = meshPair(BlockType.PINE_LEAF, BlockType.PINE_WOOD, false);
 		const holed = meshPair(BlockType.PINE_LEAF, BlockType.PINE_WOOD, true);
 		expect(solid.tally.faces).toBe(2 * (2 + 5));
-		expect(holed.tally.faces).toBe(2 * (2 + 6));
+		// One more face than a solid pair, not two: the wood owns the wall
+		// they share, because a look through the leaf's holes has to find
+		// something without holes in it.
+		expect(holed.tally.faces).toBe(2 * (2 + 5) + 1);
 		// The wood is not a cutout, so its faces stay in the opaque buffer
 		// and only the leaf's go to the one that throws pixels away.
 		expect(holed.opaque).toBeGreaterThan(0);
 		expect(holed.cutout).toBeGreaterThan(0);
+	});
+
+	it("draws it once across a face edge too, where a cell has two names", () => {
+		// **Where the tie-break earns its keep.** Five faces meet at an
+		// icosahedron vertex and two along every edge, so a cell on one has
+		// several names -- and two chunks comparing different names for the
+		// same point would both draw the shared face or neither would. `r = 0`
+		// puts the pair on the face's own edge, where `k = 4` steps across it.
+		//
+		// Asserted rather than assumed: a step that stayed on one face would
+		// make this a copy of the test above and nothing would say so.
+		const chunk = new Chunk(
+			ChunkAddress.fromKey(0, CHUNK_LEVEL),
+			DEPTH,
+			CHUNK_LEVEL,
+			LAYERS,
+		);
+		const [i, j] = joinPath(chunk.address.path, 3, 0, chunk.depth);
+		const across = neighbour(chunk.address.face, 1 << chunk.depth, i, j, 4);
+		expect(across?.face).not.toBe(chunk.address.face);
+
+		const holed = meshPair(
+			BlockType.PINE_LEAF,
+			BlockType.PINE_LEAF,
+			true,
+			3,
+			0,
+			4,
+		);
+		const solid = meshPair(
+			BlockType.PINE_LEAF,
+			BlockType.PINE_LEAF,
+			false,
+			3,
+			0,
+			4,
+		);
+		expect(holed.tally.faces).toBe(solid.tally.faces + 1);
 	});
 
 	it("leaves stone against stone exactly where it was", () => {

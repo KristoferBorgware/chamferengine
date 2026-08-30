@@ -57,6 +57,22 @@ function nameOf(cell: Cell): number {
 	return (cell.face * 262144 + cell.i) * 262144 + cell.j;
 }
 
+/**
+ * Which of two neighbouring cells emits the one face they share.
+ *
+ * **A boundary two cells would both draw needs an owner, and the two have to
+ * agree from either side.** Nothing about a pair of leaves distinguishes them,
+ * so the tie is settled on the lower **canonical** name -- canonical because a
+ * cell on a face edge has several, and two chunks comparing different names for
+ * one point would both draw the face or neither would.
+ */
+function owner(here: Cell, there: Cell, n: number): boolean {
+	return (
+		nameOf(canonicalCell(here.face, n, here.i, here.j)) <
+		nameOf(canonicalCell(there.face, n, there.i, there.j))
+	);
+}
+
 /** Scratch color, refilled per face rather than allocated per vertex. */
 const COLOR = new Float32Array(3);
 
@@ -401,6 +417,9 @@ export function meshChunk(
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const ringCells: (Cell | null)[] = new Array<Cell | null>(6);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
+	// Which of a cell's six shared boundaries this cell emits, where the two
+	// sides would otherwise both emit one. See {@link owner}.
+	const mine: boolean[] = new Array<boolean>(6).fill(true);
 
 	// Where a cell's ground cap lands once snapped to the shared fine grid,
 	// remembered by cell. The seam floor below asks for the same handful of
@@ -492,6 +511,7 @@ export function meshChunk(
 			for (let k = 0; k < 6; k++) {
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
+				mine[k] = nb ? owner({ face, i, j }, nb, n) : true;
 				outward[k] =
 					nb !== null &&
 					!(
@@ -530,6 +550,7 @@ export function meshChunk(
 				degree,
 				own,
 				ring,
+				mine,
 				layers,
 				opaque,
 				translucent,
@@ -606,6 +627,7 @@ export function meshChunk(
 			cell,
 			ring,
 			ringCells,
+			mine,
 			layers,
 			opaque,
 			translucent,
@@ -684,6 +706,7 @@ function meshCell(
 	degree: number,
 	own: Column,
 	ring: readonly (Column | null)[],
+	mine: readonly boolean[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
@@ -758,7 +781,10 @@ function meshCell(
 		paint(block, face, i, j);
 		debugTint(COLOR, tint, mix);
 
-		if (showsFace(here, opacity(at(own, layer - 1)))) {
+		// **The lower cell owns a boundary between two cutouts.** A pair of
+		// leaves stacked would otherwise draw a top cap and a bottom cap in
+		// the same plane; this is the top cap, so it is the one that survives.
+		if (showsFace(here, opacity(at(own, layer - 1)), true)) {
 			// **Only the cap, and only the ground's own.** A cliff face under
 			// a forest is still rock, and so is the underside of a ledge.
 			const covered = canopy !== 0 && layer === groundCap;
@@ -785,7 +811,9 @@ function meshCell(
 			}
 		}
 		const below = layer + 1 >= layers ? 0 : opacity(at(own, layer + 1));
-		if (showsFace(here, below)) {
+		// ...and this is the bottom cap of the upper cell of such a pair,
+		// which is the one that goes.
+		if (showsFace(here, below, false)) {
 			emitCap(
 				sink,
 				corners,
@@ -872,11 +900,12 @@ function meshCell(
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
 		if (!other) continue;
+		const owned = mine[k] ?? true;
 		let layer = from;
 		while (layer <= to) {
 			const block = at(own, layer);
 			const here = opacity(block);
-			if (!showsFace(here, opacity(at(other, layer)))) {
+			if (!showsFace(here, opacity(at(other, layer)), owned)) {
 				layer++;
 				continue;
 			}
@@ -884,7 +913,7 @@ function meshCell(
 			while (
 				end + 1 <= to &&
 				at(own, end + 1) === block &&
-				showsFace(here, opacity(at(other, end + 1)))
+				showsFace(here, opacity(at(other, end + 1)), owned)
 			)
 				end++;
 
@@ -896,10 +925,12 @@ function meshCell(
 			const wallAbove = showsFace(
 				aboveOpacity,
 				opacity(at(other, layer - 1)),
+				owned,
 			);
 			const wallBelow = showsFace(
 				belowOpacity,
 				opacity(at(other, end + 1)),
+				owned,
 			);
 
 			paint(block, face, i, j);
@@ -949,6 +980,7 @@ function meshApronCell(
 	cell: Cell,
 	ring: (Column | null)[],
 	ringCells: (Cell | null)[],
+	mine: boolean[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
@@ -978,6 +1010,7 @@ function meshApronCell(
 		const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 		ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
 		ringCells[k] = nb;
+		mine[k] = nb ? owner(cell, nb, n) : true;
 	}
 
 	let bandTop = own.first;
@@ -1020,7 +1053,7 @@ function meshApronCell(
 	for (let layer = from; layer <= to; layer++) {
 		const block = at(own, layer);
 		const here = opacity(block);
-		if (!showsFace(here, opacity(at(own, layer - 1)))) continue;
+		if (!showsFace(here, opacity(at(own, layer - 1)), true)) continue;
 		// A plant too small for this grid to build is the colour of the
 		// ground it stands on, and the apron draws that ground too.
 		paint(canopy !== 0 && layer === groundCap ? canopy : block, face, i, j);
@@ -1096,11 +1129,12 @@ function meshApronCell(
 	for (let k = 0; k < degree; k++) {
 		const other = ring[k];
 		if (!other) continue;
+		const owned = mine[k] ?? true;
 		let layer = from;
 		while (layer <= to) {
 			const block = at(own, layer);
 			const here = opacity(block);
-			if (!showsFace(here, opacity(at(other, layer)))) {
+			if (!showsFace(here, opacity(at(other, layer)), owned)) {
 				layer++;
 				continue;
 			}
@@ -1108,7 +1142,7 @@ function meshApronCell(
 			while (
 				end + 1 <= to &&
 				at(own, end + 1) === block &&
-				showsFace(here, opacity(at(other, end + 1)))
+				showsFace(here, opacity(at(other, end + 1)), owned)
 			)
 				end++;
 
@@ -1120,10 +1154,12 @@ function meshApronCell(
 			const wallAbove = showsFace(
 				aboveOpacity,
 				opacity(at(other, layer - 1)),
+				owned,
 			);
 			const wallBelow = showsFace(
 				belowOpacity,
 				opacity(at(other, end + 1)),
+				owned,
 			);
 
 			paint(block, face, i, j);

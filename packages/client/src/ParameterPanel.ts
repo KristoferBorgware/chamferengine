@@ -1519,7 +1519,7 @@ const GROUPS: Group[] = [
 			{
 				// A leaf that lets a look through has to have geometry behind
 				// it to find, so this is a mesh switch and not a shader one:
-				// it draws 4.26x the leaf faces a solid canopy does. Only at
+				// it draws 3.51x the leaf faces a solid canopy does. Only at
 				// the nearest level, where a hole is wider than a pixel.
 				key: "cutoutLeaves",
 				label: "See-through leaves",

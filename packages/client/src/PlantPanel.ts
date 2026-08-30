@@ -41,6 +41,9 @@ interface Drawn {
 	readonly tallies: readonly PlantTally[];
 	readonly metres: Float32Array;
 	readonly grown: ReadonlyMap<number, number>;
+
+	/** The biomes an actual column of the drawn patch reads as, by name. */
+	readonly presentBiomes: readonly string[];
 }
 
 /**
@@ -372,13 +375,13 @@ export class PlantPanel {
 	 * Which biomes this layer is restricted to, typed by name rather than
 	 * chosen from a list.
 	 *
-	 * **The bench has no biome table of its own to offer.** It grows plants
-	 * over their own noise field, independent of the terrain and biome
-	 * generators the walkable world runs -- so a name typed here is taken on
-	 * trust, the same way a hand-edited link already is, rather than checked
-	 * against a live list. {@link PlantLayer.biomes} spells out what an
-	 * unmatched name does once the layer reaches a world that does have one:
-	 * grows nowhere, rather than falling back to unrestricted.
+	 * **The bench builds its own biome model now** ({@link VegetationWorkerCore}),
+	 * the same way `BiomesWorkerCore` already does, so a name typed here is
+	 * checked against what the drawn patch actually reads as, not taken on
+	 * trust. {@link PlantLayer.biomes} spells out what an unmatched name does:
+	 * grows nowhere, rather than falling back to unrestricted -- {@link warnOf}
+	 * is what says so here, in the one place a reader would otherwise have to
+	 * guess why a species they typed a name for never turns up.
 	 */
 	private biomesOf(layer: PlantLayerDraft, row: PlantRow): HTMLElement {
 		const wrap = document.createElement("div");
@@ -390,6 +393,9 @@ export class PlantPanel {
 		const input = document.createElement("input");
 		input.type = "text";
 		input.placeholder = "any biome";
+		const warn = document.createElement("p");
+		warn.className = "knob-warn";
+		warn.hidden = true;
 
 		const redraw = (): void => {
 			tags.textContent = "";
@@ -410,6 +416,7 @@ export class PlantPanel {
 				tag.append(drop);
 				tags.append(tag);
 			}
+			this.warnOf(layer, warn);
 		};
 		const commit = (): void => {
 			const name = input.value.trim();
@@ -430,9 +437,33 @@ export class PlantPanel {
 		const note = document.createElement("p");
 		note.className = "knob-note";
 		if (row.note) note.innerHTML = row.note(layer);
-		wrap.append(label, tags, input, note);
+		wrap.append(label, tags, input, warn, note);
 		this.built.push({ row, layer, wrap, input, note, redraw });
 		return wrap;
+	}
+
+	/**
+	 * Says, in the panel's one warning colour, when a layer's own biomes are
+	 * not among what the drawn patch actually reads as.
+	 *
+	 * **Checked against the patch, not the planet.** A species can be correct
+	 * for the world and still be the wrong card to look at right now -- the
+	 * question this answers is "why does nothing of this stand here", which
+	 * is a fact about the view, not about the layer.
+	 */
+	private warnOf(layer: PlantLayerDraft, warn: HTMLElement): void {
+		const present = this.drawn?.presentBiomes;
+		if (!present || layer.biomes.length === 0) {
+			warn.hidden = true;
+			return;
+		}
+		const matches = layer.biomes.some((name) => present.includes(name));
+		warn.hidden = matches;
+		if (!matches)
+			warn.textContent =
+				present.length > 0
+					? `not part of the biomes here — this patch reads as ${present.join(", ")}`
+					: "not part of the biomes here — this patch has no biome reading at all";
 	}
 
 	/** One slider, its readout and the words under it. */

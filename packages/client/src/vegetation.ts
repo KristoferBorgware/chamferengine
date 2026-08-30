@@ -419,6 +419,7 @@ worker.onmessage = (event: MessageEvent<VegetationReply>) => {
 		tallies: reply.tallies,
 		metres: reply.shot.noise,
 		grown: new Map(reply.facts.grown.map((one) => [one.id, one.count])),
+		presentBiomes: reply.facts.presentBiomes,
 	});
 	show();
 	if (pending) ask(pendingSettled);
