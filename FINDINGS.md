@@ -10,96 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-125 — The overlay slot is baked into every table and nothing ever samples it
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-30, wiring the block textures into the engine
-**Where:** `packages/engine/src/mesh/meshChunk.ts`,
-`packages/engine/src/render/terrain/TERRAIN_SHADER.ts`,
-`tools/bake-textures.ts`
-
-**What happens.** A ground block is two materials seen at once -- the dirt the
-column is made of, and the grass, snow or ash lying on top of it -- and one
-picture cannot be half of each, which is why the seeding splits them: the side
-carries the dirt and a separate `_overlay` picture carries the band that hangs
-over the brink, with alpha where the dirt shows through. **31 of the 110
-pictures on disk are that second half.** The bake files them: `SLOT_OVERLAY`
-is slot 3 of every table row, and a block with no overlay gets `-1` there.
-Nothing reads it. `meshChunk` emits one layer per face, from `SLOT[0]`,
-`SLOT[1]` or `SLOT[2]`, and the shader takes one `textureSample`.
-
-So a wall of grassy ground is dirt to its top edge with nothing over it, and
-every one of those 31 pictures is a file the engine loads into the array,
-carries in memory at all six levels, and draws nowhere.
-
-**Why it matters.** It is the difference between a hillside reading as ground
-with grass on it and reading as a stack of dirt bricks -- the brink is where a
-voxel world shows what it is made of, and the overlay is the only thing that
-covers that seam. It is also paid for already: the layers are baked and
-resident, so what is left to spend is one more sample and one more number on
-the vertex.
-
-**What would fix it.** A second layer index per vertex and a second
-`textureSample` composited over the first by its own alpha, on side faces
-only -- an overlay index of `-1` selects past the sample the way `pictureOn`
-already selects past a missing picture, so a block without one costs the
-sample and nothing else. The band's own height wants to be part of the
-picture rather than a uniform: the mesher merges a run of layers into one
-quad and a v running 0 to `runs` would stretch the band down the whole wall.
-
-### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-30, seeding the block textures
-**Where:** `packages/engine/src/mesh/opacityOf.ts`,
-`packages/engine/src/mesh/meshChunk.ts`
-
-**What happens.** `opacityOf` answers 2 for everything that is not air or
-water, leaves included, and a face is drawn between two cells only when the
-first is more opaque than the second. So a leaf against a leaf draws nothing
-and a leaf against its own trunk draws nothing: a canopy is a hollow shell with
-no geometry inside it and no face where it meets the wood.
-
-That is right while a leaf is a solid green cube, which is what one is today.
-It stops being right the moment the leaf texture is alpha-tested: a look
-through a hole in the outer face reaches cells whose faces were never emitted,
-and what shows there is the sky behind the tree. Looking at a trunk through a
-hole shows the sky through the trunk as well.
-
-**Why it matters.** The leaf pictures already carry the holes -- the darkest
-level of the recipe is alpha 0, about a fifth of the tile -- so this is what
-stands between the textures on disk and leaves that read as leaves. It is also
-two decisions rather than one: a leaf must stop occluding, and the shadow pass
-has to alpha-test too or a tree throws a solid cube's shadow.
-
-> **[measured]** `tools/trial-leaf-cutout.ts`, four chunks in biomes the
-> shipped layers plant in: 146 plants, 19,835 leaf cells, every one of their
-> eight neighbours counted.
->
-> | A leaf face | | |
-> |---|---|---|
-> | against air, drawn today | 34,032 | **23.5%** |
-> | against another leaf, culled | 95,340 | **65.8%** |
-> | against wood or ground, culled | 15,548 | 10.7% |
->
-> A canopy that stops occluding draws **4.26x** the leaf faces it draws now,
-> and **5,938 of the 19,835 leaf cells have no face at all today** -- 30% of a
-> canopy is geometry that does not exist, and that is what a hole in the
-> texture would look into.
-
-**What would fix it.** A third opacity level for a cutout material, and a
-second condition beside the comparison: draw a face when the neighbour is less
-opaque **or** when either side is a cutout. At 4.26x the leaf faces that wants
-a switch rather than one answer for every world. The mip chain needs care as
-well: averaging alpha down a chain dissolves distant leaves, so the levels want
-their coverage rescaled at bake time.
-
 ### F-120 — A light standing at a pentagon reads its own chart twice over
 
 **Kind:** bug
@@ -2657,6 +2567,126 @@ same planet.
 ---
 
 ## Closed
+
+### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, seeding the block textures
+**Closed:** 2026-08-30. `opacityOf` gained a fourth level off the end of its
+own scale and `showsFace` names it rather than comparing it, cutout geometry
+goes to a third buffer drawn by a third pipeline, and the sun's own pass got a
+second pipeline that alpha-tests at the same threshold -- or a see-through tree
+throws a solid cube's shadow. **See-through leaves** is the switch, on by
+default. The mip chain is rescaled at bake time to hold each level's own
+coverage, one-sidedly: trimming an over-covering level back means scaling a
+texel down onto the threshold, where one rounding step drops it out, which is
+the failure the rescale exists to prevent.
+**Where:** `packages/engine/src/mesh/opacityOf.ts`,
+`packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** `opacityOf` answers 2 for everything that is not air or
+water, leaves included, and a face is drawn between two cells only when the
+first is more opaque than the second. So a leaf against a leaf draws nothing
+and a leaf against its own trunk draws nothing: a canopy is a hollow shell with
+no geometry inside it and no face where it meets the wood.
+
+That is right while a leaf is a solid green cube, which is what one is today.
+It stops being right the moment the leaf texture is alpha-tested: a look
+through a hole in the outer face reaches cells whose faces were never emitted,
+and what shows there is the sky behind the tree. Looking at a trunk through a
+hole shows the sky through the trunk as well.
+
+**Why it matters.** The leaf pictures already carry the holes -- the darkest
+level of the recipe is alpha 0, about a fifth of the tile -- so this is what
+stands between the textures on disk and leaves that read as leaves. It is also
+two decisions rather than one: a leaf must stop occluding, and the shadow pass
+has to alpha-test too or a tree throws a solid cube's shadow.
+
+> **[measured]** `tools/trial-leaf-cutout.ts`, four chunks in biomes the
+> shipped layers plant in: 146 plants, 19,835 leaf cells, every one of their
+> eight neighbours counted.
+>
+> | A leaf face | | |
+> |---|---|---|
+> | against air, drawn today | 34,032 | **23.5%** |
+> | against another leaf, culled | 95,340 | **65.8%** |
+> | against wood or ground, culled | 15,548 | 10.7% |
+>
+> A canopy that stops occluding draws **4.26x** the leaf faces it draws now,
+> and **5,938 of the 19,835 leaf cells have no face at all today** -- 30% of a
+> canopy is geometry that does not exist, and that is what a hole in the
+> texture would look into.
+
+**What it cost, from the engine rather than from the model.** The 4.26x above
+counts every neighbour pair of every leaf cell. The mesher merges runs, draws
+an apron and carries ground as well as canopy, so over the same four chunks the
+real bill is smaller:
+
+> **[measured]** `tools/trial-leaf-cutout.ts`, the same four chunks through
+> `buildChunkMesh` with the switch off and on.
+>
+> | | solid | cutout | |
+> |---|---|---|---|
+> | faces emitted | 75,084 | 137,079 | **1.83x** |
+> | triangles | 206,856 | 396,680 | **1.92x** |
+> | vertex bytes | 15.7 MB | 29.5 MB | **1.88x** |
+>
+> **59.8%** of the triangles are in the cutout buffer, and that share is the
+> only part paying for a fragment stage: everything else still draws with no
+> fragment work at all in the shadow pass and no discard in the world pass.
+> These are four chunks chosen for having trees in them, so this is the worst
+> the switch costs anywhere, not the average.
+
+### F-125 — The overlay slot is baked into every table and nothing ever samples it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, wiring the block textures into the engine
+**Closed:** 2026-08-30. A vertex carries two layer indices rather than one and
+`pictureOn` composites the second over the first by its own alpha, read
+through a sampler that clamps rather than repeats -- so a wall merged over
+three layers wears one band at its brink and three copies of the dirt under
+it. The bake bleeds the band's own colour into the texels its alpha leaves
+empty, or every filter downstream mixes in the black that was under them and
+the brink darkens toward it at every level down.
+**Where:** `packages/engine/src/mesh/meshChunk.ts`,
+`packages/engine/src/render/terrain/TERRAIN_SHADER.ts`,
+`tools/bake-textures.ts`
+
+**What happens.** A ground block is two materials seen at once -- the dirt the
+column is made of, and the grass, snow or ash lying on top of it -- and one
+picture cannot be half of each, which is why the seeding splits them: the side
+carries the dirt and a separate `_overlay` picture carries the band that hangs
+over the brink, with alpha where the dirt shows through. **31 of the 110
+pictures on disk are that second half.** The bake files them: `SLOT_OVERLAY`
+is slot 3 of every table row, and a block with no overlay gets `-1` there.
+Nothing reads it. `meshChunk` emits one layer per face, from `SLOT[0]`,
+`SLOT[1]` or `SLOT[2]`, and the shader takes one `textureSample`.
+
+So a wall of grassy ground is dirt to its top edge with nothing over it, and
+every one of those 31 pictures is a file the engine loads into the array,
+carries in memory at all six levels, and draws nowhere.
+
+**Why it matters.** It is the difference between a hillside reading as ground
+with grass on it and reading as a stack of dirt bricks -- the brink is where a
+voxel world shows what it is made of, and the overlay is the only thing that
+covers that seam. It is also paid for already: the layers are baked and
+resident, so what is left to spend is one more sample and one more number on
+the vertex.
+
+**What would fix it.** A second layer index per vertex and a second
+`textureSample` composited over the first by its own alpha, on side faces
+only -- an overlay index of `-1` selects past the sample the way `pictureOn`
+already selects past a missing picture, so a block without one costs the
+sample and nothing else. The band's own height wants to be part of the
+picture rather than a uniform: the mesher merges a run of layers into one
+quad and a v running 0 to `runs` would stretch the band down the whole wall.
+
 
 ### F-124 — A plant template carries its biome restriction onto a patch that has no biomes
 

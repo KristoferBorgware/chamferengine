@@ -49,6 +49,7 @@ export class MeshWorkerCore {
 	private textureLayers: Int32Array | null;
 	private ambientOcclusion: boolean;
 	private skyExposure: boolean;
+	private cutoutLeaves: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
 
 	/**
@@ -109,6 +110,7 @@ export class MeshWorkerCore {
 		this.textureLayers = setup.textureLayers ?? null;
 		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.skyExposure = setup.skyExposure ?? true;
+		this.cutoutLeaves = setup.cutoutLeaves ?? true;
 		this.options = setup.terrain;
 		this.plants = setup.plants ?? [];
 		this.grid = setup.grid ?? null;
@@ -155,6 +157,7 @@ export class MeshWorkerCore {
 		this.speckle = message.speckle;
 		this.ambientOcclusion = message.ambientOcclusion;
 		this.skyExposure = message.skyExposure;
+		this.cutoutLeaves = message.cutoutLeaves;
 	}
 
 	run(job: MeshJob): MeshResult {
@@ -228,6 +231,7 @@ export class MeshWorkerCore {
 				textureLayers: this.textureLayers ?? undefined,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
+				cutoutLeaves: this.cutoutLeaves,
 				// The canopy that is a colour rather than a block: what a
 				// plant becomes once this level's grid is more than twice as
 				// wide as it is.
@@ -251,6 +255,7 @@ export class MeshWorkerCore {
 			origin: [mesh.origin.x, mesh.origin.y, mesh.origin.z],
 			bound: mesh.bound,
 			opaque: mesh.opaque,
+			cutout: mesh.cutout,
 			translucent: mesh.translucent,
 			tally: mesh.tally,
 			...(grown && job.lod === 0
@@ -290,6 +295,8 @@ export class MeshWorkerCore {
 		return [
 			result.opaque.vertices.buffer,
 			result.opaque.indices.buffer,
+			result.cutout.vertices.buffer,
+			result.cutout.indices.buffer,
 			result.translucent.vertices.buffer,
 			result.translucent.indices.buffer,
 		];

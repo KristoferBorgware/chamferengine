@@ -596,13 +596,19 @@ describe("how deep the crust may be asked to run", () => {
 
 describe("what a live rebuild can show", () => {
 	/**
-	 * The knobs whose whole effect is baked into the vertex colours, so
-	 * nothing on screen moves until every chunk is meshed again -- and none of
-	 * which moves a block.
+	 * The knobs baked into the mesh, so nothing on screen moves until every
+	 * chunk is built again -- and none of which moves a block. Three are baked
+	 * into the vertex colours; `cutoutLeaves` is baked into which faces exist,
+	 * which is geometry and still not a block.
 	 */
-	const BAKED = ["speckle", "ambientOcclusion", "skyExposure"] as const;
+	const BAKED = [
+		"speckle",
+		"ambientOcclusion",
+		"skyExposure",
+		"cutoutLeaves",
+	] as const;
 
-	it("names the same three the client routes on", () => {
+	it("names the same four the client routes on", () => {
 		// `BAKED_KNOBS` is what decides a knob takes the cheap path -- the
 		// meshes again and not the map. A key listed here and missing there
 		// would quietly go on rebuilding the coarse map it cannot move.

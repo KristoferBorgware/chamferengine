@@ -2103,6 +2103,77 @@ Violating any of these breaks the design. They are not tunable.
   normal**, into the air the light crossed, which is what gives a lit room its
   shape with no direction in the light at all. **The fill asks `blockAt` per
   cell and so regenerates one column five to eleven times over** (F-121).
+- **A BLOCK WEARS A PICTURE, AND A GROUND BLOCK WEARS TWO** (`BlockTextures`,
+  `pictureOn` in `TERRAIN_SHADER`, `tools/bake-textures.ts`, F-125 closed).
+  The 110 seeded tiles are baked into one `rgba8unorm-srgb`
+  `texture_2d_array` -- **an array and not an atlas**, so a layer mips down to
+  one texel with nothing beside it to bleed in, and a wall merged over several
+  layers repeats its picture by asking the sampler. A vertex carries a uv and
+  **two** layer indices; `-1` means no picture and the world is then
+  bit-identical to the untextured one. **The picture IS the albedo**, so with
+  a bake loaded the vertex colour carries the speckle and the corner occlusion
+  alone -- writing the registry colour there as well multiplies the block's
+  own colour into itself. The tile is turned by the cell's own six-fold index,
+  which takes the repeat at one cell from `0.70` to `0.08`.
+  **A ground block is two materials seen at once** -- the dirt a column is
+  made of and the grass, snow or ash lying on top of it -- and one picture
+  cannot be half of each, so the side carries the dirt and a second picture
+  carries the band that hangs over the brink. It is composited by its own
+  alpha at the same uv, which costs an index on the vertex and no coordinate,
+  and it is read through a sampler that **clamps rather than repeats**: a wall
+  three layers tall tiles the dirt three times and has **one** brink.
+  **The bake bleeds the drawn colour into the texels alpha leaves empty**, or
+  every filter downstream mixes in the black that was under them -- measured,
+  the grass band's own holes carried `0,0,0` and now carry `141,179,122`, and
+  without it the brink darkens toward black at every level down. A cap wears
+  no band: the top of a grass block is already grass.
+  Two things the GPU **refuses rather than warns about**, both drawing a black
+  window with the readout still ticking over the top, both found by
+  `tools/probe-shaders.mjs`: `textureSample` inside `if (layer < 0)` is
+  non-uniform control flow and invalidates the whole pipeline -- sample
+  unconditionally at `max(layer, 0)` and `select` past it -- and
+  `maxAnisotropy` above 1 is only legal where all three filters are linear,
+  which rules it out here because magnifying is **nearest** and that is the
+  whole look.
+- **A LEAF IS NEITHER SOLID NOR TRANSPARENT, SO IT NEEDS A LEVEL OFF THE END
+  OF THE SCALE** (`opacityOf`, `showsFace`, `cutoutMain`, `cutoutFragment`,
+  F-123 closed). Air, water and stone are ordered by how much they hide and a
+  face is drawn where one cell hides more than the next -- one comparison,
+  which puts a seabed under the ocean and never draws water against water. A
+  cutout does not fit that order **at all**: against another cutout it must
+  draw and against stone it must draw, and no value on the same scale gives
+  both. So `CUTOUT` sits off the end and `showsFace` names it. Measured over
+  four chunks of real forest, a leaf against a leaf is **65.8%** of all leaf
+  faces and a leaf against wood or ground another **10.7%**, so a solid canopy
+  is a hollow shell: **5,938 of 19,835** leaf cells have no face at all, which
+  is exactly what a hole in the picture would look into.
+  **Three buffers, not two**: the cutout writes depth like stone -- so a
+  canopy shadows, occludes and sorts with no back-to-front order to keep --
+  and throws pixels away, which is a fragment stage the opaque pass would run
+  over the whole world for nothing. **The sun's pass needs its own second
+  pipeline** or a see-through tree throws a solid cube's shadow, and both read
+  the **same** `ALPHA_CUT`: two thresholds would light a tree through gaps its
+  shadow does not have. That stage really does gate the depth write -- with
+  its threshold moved past every alpha the frame is **bit-identical over
+  511,707 pixels** to one where the canopy is not drawn into the cascades at
+  all. **And at the shipped threshold a canopy twenty metres off dapples
+  nothing**: the same frame with the leaves cast by the plain depth pipeline
+  is bit-identical too, because the light-space derivatives put that canopy on
+  a mip the coverage rescale has made nearly solid. Dappling is a close-up
+  effect, and a distant canopy shadowing as a canopy rather than dissolving is
+  what the rescale is for.
+  **The mip chain is rescaled to hold each level's own
+  coverage** -- a box filter preserves mean alpha and destroys coverage, which
+  is what the shader reads, so a canopy dissolves from its outer leaves inward
+  as it recedes -- and the rescale is **one-sided**, because trimming an
+  over-covering level back scales a texel down onto the threshold where one
+  rounding step erases the whole picture (measured: a 1x1 leaf level came out
+  at 127 of the 128 the test wants). The real bill from the mesher, over the
+  worst four chunks anywhere: **1.83x** the faces, **1.92x** the triangles,
+  **1.88x** the vertex bytes, **59.8%** of the geometry in the cutout buffer.
+  A switch, on by default, and it is a **re-mesh** knob and not a world one --
+  drawing a face is not placing a block, so a player's buildings stay filed
+  under the same world when it is turned.
 - **SKY EXPOSURE IS A NUMBER OF ITS OWN ON THE VERTEX, NOT A FACTOR IN ITS
   COLOUR** (`CHUNK_VERTEX_FLOATS`, `MeshSink.vertex`, `TERRAIN_SHADER`). A
   shader cannot divide a number back out of a colour it was handed, so with the

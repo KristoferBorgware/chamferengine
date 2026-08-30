@@ -9,7 +9,10 @@
 // has holes in it: a look through a hole reaches cells whose faces were never
 // emitted, and what shows there is the sky behind the tree.
 //
-// So cutout leaves have to stop occluding, and this is the bill for that.
+// So cutout leaves have to stop occluding, and this is the bill for that --
+// counted twice over. First from the blocks alone, which is what the question
+// looked like before anything was built; then from the real mesher run over the
+// same chunks with the switch off and on, which is what it actually costs.
 import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
 import { plantLayerOf } from "../packages/client/src/PlantDraft.js";
 import { biomeFieldFor } from "../packages/client/src/biomeFieldFor.js";
@@ -32,6 +35,8 @@ import {
 	splitPath,
 } from "chamfer/addressing";
 import { Vec3 } from "chamfer/math";
+import { ChunkColumnSampler } from "chamfer/generation";
+import { buildChunkMesh } from "chamfer/mesh";
 
 const settings = new PlanetSettings({ plain: false });
 const seed = seedFromString(settings.knobs.seed);
@@ -188,4 +193,62 @@ console.log(
 console.log(
 	`  ${buried.toLocaleString("en-US")} leaf cells have no face at all today, ` +
 		`which is what a hole would look into`,
+);
+
+/**
+ * The same chunks through the real mesher, both ways.
+ *
+ * The count above is over blocks and their neighbours; this is over what the
+ * engine emits, which merges runs, draws an apron, and puts the cutout faces in
+ * a buffer of their own. The two answer the same question and only the second
+ * is the bill.
+ */
+function meshed(cutoutLeaves: boolean) {
+	let faces = 0;
+	let opaque = 0;
+	let cutout = 0;
+	let bytes = 0;
+	for (const { chunk } of found) {
+		const built = buildChunkMesh(
+			chunk,
+			new ChunkColumnSampler(chunk, terrain),
+			shape,
+			seed,
+			{ apron: true, cutoutLeaves },
+		);
+		faces += built.tally.faces;
+		opaque += built.opaque.triangleCount;
+		cutout += built.cutout.triangleCount;
+		bytes +=
+			built.opaque.vertices.byteLength +
+			built.cutout.vertices.byteLength +
+			built.translucent.vertices.byteLength;
+	}
+	return { faces, opaque, cutout, bytes };
+}
+
+const solid = meshed(false);
+const holed = meshed(true);
+console.log(`\nthe same ${found.length} chunks through the mesher`);
+const bill = (what: string, off: number, on: number) =>
+	console.log(
+		`  ${what.padEnd(24)}${off.toLocaleString("en-US").padStart(12)}` +
+			`${on.toLocaleString("en-US").padStart(12)}` +
+			`${`${(on / off).toFixed(2)}x`.padStart(9)}`,
+	);
+console.log(
+	`  ${"".padEnd(24)}${"solid".padStart(12)}${"cutout".padStart(12)}`,
+);
+bill("faces emitted", solid.faces, holed.faces);
+bill(
+	"triangles",
+	solid.opaque + solid.cutout,
+	holed.opaque + holed.cutout,
+);
+bill("vertex bytes", solid.bytes, holed.bytes);
+console.log(
+	`  of which ${holed.cutout.toLocaleString("en-US")} triangles are in the ` +
+		`cutout buffer, which is ` +
+		`${((100 * holed.cutout) / (holed.opaque + holed.cutout)).toFixed(1)}% ` +
+		`of the geometry and the only part that pays for a fragment stage`,
 );

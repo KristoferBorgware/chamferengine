@@ -164,7 +164,7 @@ describe("ArrayMeshSink", () => {
 	it("grows past its starting capacity", () => {
 		const sink = new ArrayMeshSink(2);
 		for (let n = 0; n < 100; n++)
-			sink.vertex(n, n, n, 1, 1, 1, 1, 0, 0, 0);
+			sink.vertex(n, n, n, 1, 1, 1, 1, 0, 0, 0, -1);
 		for (let n = 0; n + 2 < 100; n += 3) sink.triangle(n, n + 1, n + 2);
 		const geometry = sink.build(1);
 		expect(sink.vertices).toBe(100);
@@ -362,6 +362,7 @@ describe("vertical run-length merging", () => {
 			new Vec3(0, 0, 0),
 			opaque,
 			new ArrayMeshSink(),
+			new ArrayMeshSink(),
 		);
 
 		// Six walls, one top and one bottom. Each wall is 20 layers tall and
@@ -385,6 +386,7 @@ describe("vertical run-length merging", () => {
 			shape,
 			1,
 			new Vec3(0, 0, 0),
+			new ArrayMeshSink(),
 			new ArrayMeshSink(),
 			new ArrayMeshSink(),
 		);
@@ -1275,6 +1277,7 @@ describe("the speckle", () => {
 				map.seed,
 				new Vec3(0, 0, 0),
 				sink,
+				new ArrayMeshSink(),
 				new ArrayMeshSink(),
 				{ speckle },
 			);

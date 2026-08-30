@@ -1,5 +1,6 @@
 import { BLOCK_LIGHT_WGSL } from "../light/BLOCK_LIGHT_WGSL.js";
 import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
+import { ALPHA_CUT } from "./ALPHA_CUT.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 
 /**
@@ -89,6 +90,21 @@ struct Chunk {
  */
 @group(3) @binding(0) var blockMap : texture_2d_array<f32>;
 @group(3) @binding(1) var blockSample : sampler;
+
+/**
+ * The same array read without the repeat, for the band over a wall.
+ *
+ * A wall merged down a column runs its v from 0 to the number of layers, so the
+ * block's own picture tiles down it and a three-layer wall is three pictures
+ * rather than one stretched over three metres. The band hanging over its brink
+ * must NOT tile: there is one brink, and it is at the top. Clamping the
+ * coordinate is what says so, and it costs a sampler rather than a second
+ * coordinate on every vertex in the world.
+ */
+@group(3) @binding(2) var bandSample : sampler;
+
+/** How much of a picture has to be there for its pixel to be drawn. */
+const ALPHA_CUT : f32 = ${ALPHA_CUT};
 struct VertexOut {
 	@builtin(position) clip  : vec4f,
 	@location(0)       color : vec3f,
@@ -98,6 +114,7 @@ struct VertexOut {
 	@location(4)       sky   : f32,
 	@location(5)       uv    : vec2f,
 	@location(6) @interpolate(flat) layer : i32,
+	@location(7) @interpolate(flat) band  : i32,
 };
 
 @vertex
@@ -106,7 +123,7 @@ fn vertexMain(
 	@location(1) color    : vec3f,
 	@location(2) sky      : f32,
 	@location(3) uv       : vec2f,
-	@location(4) layer    : f32,
+	@location(4) layers   : vec2f,
 ) -> VertexOut {
 	let world = position + chunk.origin.xyz;
 	var out : VertexOut;
@@ -132,7 +149,8 @@ fn vertexMain(
 	// **Flat, not interpolated.** Every corner of a face reads one picture,
 	// and a layer averaged between two would be a third picture that is not
 	// either of them.
-	out.layer = i32(layer);
+	out.layer = i32(layers.x);
+	out.band = i32(layers.y);
 	return out;
 }
 
@@ -308,19 +326,31 @@ fn lightOn(
  * Either way one multiply, and the world before the pictures arrive is the
  * world this engine already drew.
  */
-fn pictureOn(uv : vec2f, layer : i32) -> vec3f {
+fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// **Sampled before it is chosen, never inside the test.** A layer is a
 	// per-vertex number, so a branch on it is not uniform across the draw, and
 	// \`textureSample\` picks its own mip from how the coordinate changes
 	// between neighbouring pixels -- which only exists where every pixel took
 	// the same path. The index is clamped for the same reason: the read
 	// happens whether or not its answer is wanted.
-	let picked = textureSample(blockMap, blockSample, uv, max(layer, 0)).rgb;
-	return select(vec3f(1.0), picked, layer >= 0);
+	let picked = textureSample(blockMap, blockSample, uv, max(layer, 0));
+	// The band over the brink, composited by its own alpha. A block carrying
+	// \`-1\` for it takes none of the sample, which happens either way.
+	let over = textureSample(blockMap, bandSample, uv, max(band, 0));
+	let cover = select(0.0, over.a, band >= 0);
+	let color = mix(picked.rgb, over.rgb, cover);
+	return select(vec4f(1.0), vec4f(color, picked.a), layer >= 0);
 }
 
-@fragment
-fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
+/**
+ * A face of ground, lit and fogged, with the picture it wears still in front.
+ *
+ * The whole of what the opaque pass and the cutout pass have in common, which
+ * is everything but what the cutout does with the picture's alpha. Written
+ * once so the two can never drift into shading a leaf differently from the
+ * trunk beside it.
+ */
+fn groundColor(in : VertexOut) -> vec4f {
 	let world = in.local + chunk.origin.xyz;
 	let up = normalize(in.up);
 	// Turned toward the column's own up as a step stops fitting inside a
@@ -332,15 +362,46 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
 	// whatever the balance is and only what stands at an angle to the sun
 	// moves.
 	let direct = SUN_SHARE;
+	let picture = pictureOn(in.uv, in.layer, in.band);
 	let lit =
-		in.color * pictureOn(in.uv, in.layer) *
+		in.color * picture.rgb *
 		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 
 	// Under water the view fades toward the water's own color over the distance
 	// in fog.w. Above the surface that distance is set far past the horizon,
 	// so the same expression leaves the color alone.
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
-	return vec4f(mix(lit, frame.fog.rgb, murk), 1.0);
+	return vec4f(mix(lit, frame.fog.rgb, murk), picture.a);
+}
+
+@fragment
+fn fragmentMain(in : VertexOut) -> @location(0) vec4f {
+	// Alpha 1 whatever the picture holds: a block in this pass covers every
+	// pixel it reaches, and the air pass reads that alpha as coverage.
+	return vec4f(groundColor(in).rgb, 1.0);
+}
+
+/**
+ * The same face, with the pixels its picture is transparent at thrown away.
+ *
+ * **A test, not a blend.** A leaf is either there or it is not, so the pixel
+ * is kept whole or dropped whole -- which means this pass can still write
+ * depth, and a leaf therefore shadows, occludes and sorts exactly the way
+ * stone does. Blending instead would need the whole canopy sorted back to
+ * front per triangle, which nothing here can do.
+ *
+ * The sample is taken inside {@link groundColor}, before anything is thrown
+ * away, because a discarded pixel still has neighbours that need it: the mip
+ * level and the face normal both come from how a value changes across two
+ * pixels, and dropping one first is how a canopy edge loses its shading.
+ */
+@fragment
+fn cutoutMain(in : VertexOut) -> @location(0) vec4f {
+	let ground = groundColor(in);
+	if (ground.a < ALPHA_CUT) {
+		discard;
+	}
+	return vec4f(ground.rgb, 1.0);
 }
 
 @fragment
@@ -353,7 +414,7 @@ fn waterMain(in : VertexOut) -> @location(0) vec4f {
 	// reaches through it to whatever is under, and that is lit from the sky.
 	let direct = SUN_SHARE * 0.78;
 	let lit =
-		in.color * pictureOn(in.uv, in.layer) *
+		in.color * pictureOn(in.uv, in.layer, in.band).rgb *
 		lightOn(normal, up, world, in.depth, 1.0 - direct, direct, in.sky);
 	let murk = clamp(in.depth / frame.fog.w, 0.0, 1.0);
 	return vec4f(mix(lit, frame.fog.rgb, murk), 0.62);

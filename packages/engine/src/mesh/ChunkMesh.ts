@@ -7,9 +7,12 @@ import type { Vec3 } from "../math/Vec3.js";
 /**
  * One chunk's triangles, split by how they are drawn.
  *
- * Two buffers rather than one, because the opaque pass writes depth and the
- * translucent pass reads it without writing. Sorting one back to front is only
- * possible if it is separate from the other.
+ * Three buffers rather than one, because the three are drawn three ways. The
+ * opaque pass writes depth. The cutout pass writes depth too and throws away
+ * the pixels its picture has holes in, which is a fragment stage the opaque
+ * pass would run over the whole world to no purpose. The translucent pass
+ * reads depth without writing it, and sorting it back to front is only
+ * possible if it is separate from the other two.
  *
  * `origin` is the point positions are written relative to. Identity is integer
  * and world positions are `float64`, and this is where a position becomes
@@ -32,6 +35,7 @@ export interface ChunkMesh {
 	readonly origin: Vec3;
 	readonly bound: Box;
 	readonly opaque: Geometry;
+	readonly cutout: Geometry;
 	readonly translucent: Geometry;
 	readonly tally: MeshTally;
 

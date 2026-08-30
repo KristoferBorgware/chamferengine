@@ -945,6 +945,25 @@ export interface PlanetKnobs {
 	skyExposure: boolean;
 
 	/**
+	 * Whether a leaf is drawn with the holes its own picture has in it.
+	 *
+	 * A face is drawn between two cells where the first hides more than the
+	 * second, which is right for anything that is either solid or not. A leaf
+	 * is neither: it hides most of what is behind it and lets a fifth of it
+	 * through, so a look through a hole in the near leaf has to find geometry
+	 * on the far one. Off, a leaf is exactly as opaque as stone -- a canopy is
+	 * a hollow shell with nothing inside it and no face where it meets the
+	 * trunk, which shows the sky through the tree the moment the picture has
+	 * a hole in it.
+	 *
+	 * **It is a switch because it is not free.** A canopy that stops
+	 * occluding draws 4.26x the leaf faces, and 5,938 of 19,835 leaf cells
+	 * gain a face they did not have. Baked into the geometry, so it needs
+	 * every chunk built again to change.
+	 */
+	cutoutLeaves: boolean;
+
+	/**
 	 * Whether the world is drawn as its own grid.
 	 *
 	 * On, every chunk is selected and levelled exactly as the terrain would
@@ -1402,6 +1421,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	speckle: true,
 	ambientOcclusion: true,
 	skyExposure: true,
+	cutoutLeaves: true,
 	gridMode: false,
 	gridLevels: true,
 	gridCells: true,
@@ -1545,13 +1565,18 @@ export const LIVE_TERRAIN_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 /**
  * The knobs that need the chunks built again and move no block doing it.
  *
- * What they change is **baked into the vertex colours** rather than read by a
- * shader, so nothing on screen moves until each chunk is meshed again -- and
- * the map, the shape, the peaks and the generators are all exactly what they
- * were, because the terrain reads a face and a lattice offset and never sees
- * one of these. That is what lets them take a cheaper path than a terrain
- * knob: the pool is retuned in place rather than replaced, which skips the
- * coarse map.
+ * What they change is **baked into the mesh** rather than read by a shader --
+ * three of them into the vertex colours and one into which faces exist at all
+ * -- so nothing on screen moves until each chunk is meshed again. The map,
+ * the shape, the peaks and the generators are all exactly what they were,
+ * because the terrain reads a face and a lattice offset and never sees one of
+ * these. That is what lets them take a cheaper path than a terrain knob: the
+ * pool is retuned in place rather than replaced, which skips the coarse map.
+ *
+ * **Drawing a face is not placing a block.** `cutoutLeaves` decides whether a
+ * leaf shows the face it has toward another leaf, and the leaves themselves
+ * are in the same cells either way -- so a player's buildings stay filed under
+ * the same world when it is turned, which is the whole test for this set.
  *
  * **They are deliberately not in {@link LIVE_TERRAIN_KNOBS}**, which
  * {@link WORLD_SHAPE_KNOBS} spreads: a world's stored edits are named by that
@@ -1568,6 +1593,7 @@ export const BAKED_KNOBS: ReadonlySet<keyof PlanetKnobs> = new Set([
 	"speckle",
 	"ambientOcclusion",
 	"skyExposure",
+	"cutoutLeaves",
 ] satisfies (keyof PlanetKnobs)[]);
 
 /**
@@ -1999,6 +2025,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	speckle: { ...TOGGLE, rebuilds: true },
 	ambientOcclusion: { ...TOGGLE, rebuilds: true },
 	skyExposure: { ...TOGGLE, rebuilds: true },
+	cutoutLeaves: { ...TOGGLE, rebuilds: true },
 	gridMode: { ...TOGGLE, rebuilds: true },
 	gridLevels: { ...TOGGLE, rebuilds: true },
 	gridCells: { ...TOGGLE, rebuilds: true },

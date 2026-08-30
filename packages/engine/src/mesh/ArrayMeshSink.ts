@@ -62,6 +62,7 @@ export class ArrayMeshSink implements MeshSink {
 		u: number,
 		v: number,
 		layer: number,
+		overlay: number,
 	): number {
 		if (
 			(this.vertexCount + 1) * CHUNK_VERTEX_FLOATS >
@@ -86,6 +87,7 @@ export class ArrayMeshSink implements MeshSink {
 		this.positions[at + 7] = u;
 		this.positions[at + 8] = v;
 		this.positions[at + 9] = layer;
+		this.positions[at + 10] = overlay;
 		return this.vertexCount++;
 	}
 

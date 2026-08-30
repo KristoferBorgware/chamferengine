@@ -1517,6 +1517,13 @@ const GROUPS: Group[] = [
 				label: "Sky exposure",
 			},
 			{
+				// A leaf that lets a look through has to have geometry behind
+				// it to find, so this is a mesh switch and not a shader one:
+				// it draws 4.26x the leaf faces a solid canopy does.
+				key: "cutoutLeaves",
+				label: "See-through leaves",
+			},
+			{
 				key: "seamOverlay",
 				label: "Seam overlay",
 			},

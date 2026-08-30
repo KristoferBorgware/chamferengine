@@ -128,6 +128,25 @@ export interface MeshOptions {
 	readonly textureLayers?: Int32Array | undefined;
 
 	/**
+	 * Whether a leaf is drawn with the holes its own picture has in it.
+	 *
+	 * A face is drawn between two cells where the first hides more than the
+	 * second, which is one comparison and is right for everything that is
+	 * either solid or not. A leaf is neither: it hides most of what is behind
+	 * it and lets a fifth of it through, so a look through a hole in the near
+	 * leaf has to find geometry on the far one. Off, a leaf is exactly as
+	 * opaque as stone -- a canopy is a hollow shell with nothing inside it and
+	 * no face where it meets the trunk, which is right while the picture has
+	 * no holes in it and shows the sky through the tree the moment it does.
+	 *
+	 * **It is a switch because it is not free.** Measured over four chunks of
+	 * planted forest, a canopy that stops occluding draws **4.26x** the leaf
+	 * faces, and **5,938 of 19,835** leaf cells gain a face they did not have
+	 * (`tools/trial-leaf-cutout.ts`).
+	 */
+	readonly cutoutLeaves?: boolean;
+
+	/**
 	 * Per cell, a block whose colour its ground cap takes instead of its own.
 	 *
 	 * **Under half a block a plant stops being a shape and becomes the colour
@@ -153,4 +172,5 @@ export const MESH_DEFAULTS = {
 	speckle: SPECKLE,
 	ambientOcclusion: true,
 	skyExposure: true,
+	cutoutLeaves: true,
 } as const satisfies MeshOptions;
