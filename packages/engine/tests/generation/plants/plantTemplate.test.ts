@@ -213,6 +213,36 @@ describe("buildPlantTemplate", () => {
 		expect(seen.size).toBeGreaterThan(PLANT_VARIANTS / 2);
 	});
 
+	// **A biome restriction says where a layer may stand, never what its own
+	// reference plant looks like.** The template is built on a private,
+	// synthetic patch with no biome reading of its own, so a species
+	// restricted to named biomes has to come back exactly as full as the
+	// same species with no restriction -- not silently empty because
+	// `growStand`'s own "no biome data, no match" rule leaked into a place
+	// that never had biome data to begin with.
+	it("grows the same plant whether or not the layer names biomes", () => {
+		const restricted = { ...layer, biomes: ["Taiga"] };
+		const plain = buildPlantTemplate(
+			reference(),
+			layer,
+			0,
+			fine.blockSize,
+			RADIUS,
+			map.seed,
+		);
+		const withBiomes = buildPlantTemplate(
+			reference(),
+			restricted,
+			0,
+			fine.blockSize,
+			RADIUS,
+			map.seed,
+		);
+		expect(withBiomes.count).toBe(plain.count);
+		expect(withBiomes.height).toBe(plain.height);
+		expect(withBiomes.count).toBeGreaterThan(0);
+	});
+
 	it("builds the same set from the same world, every time", () => {
 		const first = store().forLayer(layer)[3]!;
 		const again = store().forLayer(layer)[3]!;

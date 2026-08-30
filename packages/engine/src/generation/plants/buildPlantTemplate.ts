@@ -54,13 +54,14 @@ export function buildPlantTemplate(
 	// **A layer that always plants**, so the one root on the patch takes it:
 	// the curve is flat at one and the density is the whole of what the curve
 	// can ask for, which makes the chance exactly one and the hash irrelevant.
-	//
-	// **And it names no biomes**, for the same reason it names no curve. A
-	// layer restricted to biomes grows nowhere when nothing resolves a mask
-	// for it, which is right for a chunk and wrong here: this patch is not a
-	// place in the world, and what is being asked of it is what the species
-	// looks like rather than whether it grows. Left in, every variant of every
-	// restricted species comes back empty and the world draws no tree at all.
+	// **And a layer with nowhere it may not stand** -- this patch is a private,
+	// synthetic scrap of flat ground with no biome reading of its own, so a
+	// species restricted to named biomes must not carry the restriction in
+	// here: `growStand` is called below with no `biomeMasks` at all, and its
+	// own rule for that case is "grows nowhere", which would make every
+	// variant of a biome-restricted species come back empty -- counted as
+	// planted by the caller, since the count and the template are two
+	// different things, but drawing nothing.
 	const always: PlantLayer = {
 		...layer,
 		density: 100,
