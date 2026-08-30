@@ -12,6 +12,7 @@ import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
+import { CUTOUT_REACH } from "../CUTOUT_REACH.js";
 import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
 import { WorldShape } from "../../world/WorldShape.js";
@@ -231,7 +232,12 @@ export class MeshWorkerCore {
 				textureLayers: this.textureLayers ?? undefined,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
-				cutoutLeaves: this.cutoutLeaves,
+				// **Only where a hole is worth its faces.** A level out is a
+				// block twice as wide, twice as far off, wearing the same
+				// picture -- and the plant pass has already turned two thirds
+				// of that level's leaves into the colour of the ground. See
+				// {@link CUTOUT_REACH}.
+				cutoutLeaves: this.cutoutLeaves && job.lod <= CUTOUT_REACH,
 				// The canopy that is a colour rather than a block: what a
 				// plant becomes once this level's grid is more than twice as
 				// wide as it is.

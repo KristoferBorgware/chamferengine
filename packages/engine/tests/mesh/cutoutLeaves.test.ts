@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	BlockType,
-	Chunk,
-	ChunkAddress,
-	columnBand,
-} from "chamfer/generation";
+import { BlockType, Chunk, ChunkAddress, columnBand } from "chamfer/generation";
 import {
 	ArrayMeshSink,
 	CHUNK_VERTEX_FLOATS,
@@ -74,9 +69,11 @@ function pair(
 	there: number,
 	layer = 16,
 ): {
-	columnAt: (face: number, i: number, j: number) => ReturnType<
-		typeof columnBand
-	>;
+	columnAt: (
+		face: number,
+		i: number,
+		j: number,
+	) => ReturnType<typeof columnBand>;
 } {
 	const n = 1 << chunk.depth;
 	const [i, j] = joinPath(chunk.address.path, 2, 2, chunk.depth);
@@ -131,11 +128,7 @@ function meshPair(here: number, there: number, cutoutLeaves: boolean) {
 
 describe("a leaf drawn with holes in it", () => {
 	it("draws no face where two leaves meet while they are solid", () => {
-		const solid = meshPair(
-			BlockType.PINE_LEAF,
-			BlockType.PINE_LEAF,
-			false,
-		);
+		const solid = meshPair(BlockType.PINE_LEAF, BlockType.PINE_LEAF, false);
 		// Two hexagons, each a cap above and below plus five of its six walls:
 		// the wall they share is drawn by neither.
 		expect(solid.tally.faces).toBe(2 * (2 + 5));

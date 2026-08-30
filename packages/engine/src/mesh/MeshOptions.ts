@@ -143,6 +143,11 @@ export interface MeshOptions {
 	 * planted forest, a canopy that stops occluding draws **4.26x** the leaf
 	 * faces, and **5,938 of 19,835** leaf cells gain a face they did not have
 	 * (`tools/trial-leaf-cutout.ts`).
+	 *
+	 * **This says nothing about which level of detail is asking.** A mesher
+	 * takes a face and a lattice offset and is never told; the caller that
+	 * knows is the one that decides, and it does -- `MeshWorkerCore` gates
+	 * this on `CUTOUT_REACH`, so a chunk drawn coarse gets `false` here.
 	 */
 	readonly cutoutLeaves?: boolean;
 

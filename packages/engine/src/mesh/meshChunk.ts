@@ -1534,8 +1534,7 @@ function emitSide(
 	const above = opacity(at(beyond, topLayer - 1)) === 2 ? 1 : 0;
 	const under = opacity(at(beyond, bottomLayer + 1)) === 2 ? 1 : 0;
 	const byLeft = leftSide && opacity(at(leftSide, topLayer)) === 2 ? 1 : 0;
-	const byRight =
-		rightSide && opacity(at(rightSide, topLayer)) === 2 ? 1 : 0;
+	const byRight = rightSide && opacity(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
 	// **A wall merged down a column is that many pictures tall.** The run's own
 	// length is what `v` reaches, and the sampler repeats -- so merging stays

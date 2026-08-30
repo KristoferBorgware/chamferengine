@@ -56,7 +56,10 @@ export function buildChunkMesh(
 	);
 	// The box everything drawn falls inside, over all three buffers, moved back
 	// into world space from the origin the vertices are written against.
-	const box = merge(merge(opaque.bounds(), cutout.bounds()), translucent.bounds());
+	const box = merge(
+		merge(opaque.bounds(), cutout.bounds()),
+		translucent.bounds(),
+	);
 	return {
 		key: chunk.address.key,
 		origin: new Vec3(origin.x, origin.y, origin.z),
