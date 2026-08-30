@@ -342,29 +342,35 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
  * ground shrub, so it stays the one that reads busiest at over 1.
  *
  * Two species carry hand-drawn curves from when this default held only them
- * (Pine, Oak); the other ten are flat -- uniform density across whichever
- * biomes they are allowed in -- because the biome list is already doing the
- * work of saying *where*, and a curve on top of that is a second answer to
- * the same question rather than a different one. Several biomes carry two
- * species deliberately -- Tundra's birch and heather, Steppe's baobab and
- * bush, Dry basin's baobab and deadwood, Badlands' deadwood and cactus --
- * because that pairing is what the mix actually looks like on the ground:
- * scattered giants over scrub, not one species owning a biome.
+ * (Pine, Oak); the other ten are flat, because the biome list is already
+ * doing the work of saying *where*, and a curve on top of that is a second
+ * answer to the same question rather than a different one. **Flat means
+ * uniform, never means maximum** -- a flat line pinned to the top of the
+ * chart reads as "every one of these places gets the densest this layer can
+ * ask for", which is a stronger claim than "moderate but even", so the ten
+ * flat curves sit at `0.5` rather than `1`, and Pine's own plateau (the
+ * stretch its hand-drawn curve is flat over) is lowered to match. Oak's
+ * curve already falls away rather than sitting at the ceiling and is left
+ * as drawn. Several biomes carry two species deliberately -- Tundra's birch
+ * and heather, Steppe's baobab and bush, Dry basin's baobab and deadwood,
+ * Badlands' deadwood and cactus -- because that pairing is what the mix
+ * actually looks like on the ground: scattered giants over scrub, not one
+ * species owning a biome.
  *
  * A world with no biome table at all (the "Plain planet" mode, or a custom
  * table missing these names) grows nothing from any of these twelve -- see
  * {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
-	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:1,1:1|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
-	"Spruce|density=0.9|feature=220|biomes=Taiga,Snowy slopes,Boreal wet forest,Boreal rain forest;" +
-	"Birch|density=0.3|feature=300|biomes=Tundra,Frozen valley,Moist tundra,Wet tundra;" +
-	"Heather|density=1.2|feature=140|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
+	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.5,1:0.5|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
+	"Spruce|density=0.9|feature=220|curve=-1:0.5,1:0.5|biomes=Taiga,Snowy slopes,Boreal wet forest,Boreal rain forest;" +
+	"Birch|density=0.3|feature=300|curve=-1:0.5,1:0.5|biomes=Tundra,Frozen valley,Moist tundra,Wet tundra;" +
+	"Heather|density=1.2|feature=140|curve=-1:0.5,1:0.5|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
 	"Oak|density=0.6|feature=380|curve=-1:1,-0.2:0.85,0.2:0,1:0|biomes=Grove,Grassland,Moist forest,Wet forest;" +
-	"Willow|density=0.6|feature=200|biomes=Swamp,Wet forest;" +
-	"Baobab|density=0.1|feature=500|biomes=Steppe,Highland steppe,Dry basin,Dry forest,Thorn woodland;" +
-	"Bush|density=1|feature=180|biomes=Steppe,Dry slope,Desert scrub,Dry scrub;" +
-	"Redwood|density=0.8|feature=280|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
-	"Palm|density=0.3|feature=150|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
-	"Deadwood|density=0.2|feature=260|biomes=Badlands,Dry basin,Subtropical desert,Tropical desert;" +
-	"Cactus|density=0.4|feature=200|biomes=Desert,Badlands,Dry slope,Tropical desert,Desert scrub";
+	"Willow|density=0.6|feature=200|curve=-1:0.5,1:0.5|biomes=Swamp,Wet forest;" +
+	"Baobab|density=0.1|feature=500|curve=-1:0.5,1:0.5|biomes=Steppe,Highland steppe,Dry basin,Dry forest,Thorn woodland;" +
+	"Bush|density=1|feature=180|curve=-1:0.5,1:0.5|biomes=Steppe,Dry slope,Desert scrub,Dry scrub;" +
+	"Redwood|density=0.8|feature=280|curve=-1:0.5,1:0.5|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
+	"Palm|density=0.3|feature=150|curve=-1:0.5,1:0.5|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
+	"Deadwood|density=0.2|feature=260|curve=-1:0.5,1:0.5|biomes=Badlands,Dry basin,Subtropical desert,Tropical desert;" +
+	"Cactus|density=0.4|feature=200|curve=-1:0.5,1:0.5|biomes=Desert,Badlands,Dry slope,Tropical desert,Desert scrub";
