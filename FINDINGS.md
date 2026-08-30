@@ -10,6 +10,46 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-125 — The overlay slot is baked into every table and nothing ever samples it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, wiring the block textures into the engine
+**Where:** `packages/engine/src/mesh/meshChunk.ts`,
+`packages/engine/src/render/terrain/TERRAIN_SHADER.ts`,
+`tools/bake-textures.ts`
+
+**What happens.** A ground block is two materials seen at once -- the dirt the
+column is made of, and the grass, snow or ash lying on top of it -- and one
+picture cannot be half of each, which is why the seeding splits them: the side
+carries the dirt and a separate `_overlay` picture carries the band that hangs
+over the brink, with alpha where the dirt shows through. **31 of the 110
+pictures on disk are that second half.** The bake files them: `SLOT_OVERLAY`
+is slot 3 of every table row, and a block with no overlay gets `-1` there.
+Nothing reads it. `meshChunk` emits one layer per face, from `SLOT[0]`,
+`SLOT[1]` or `SLOT[2]`, and the shader takes one `textureSample`.
+
+So a wall of grassy ground is dirt to its top edge with nothing over it, and
+every one of those 31 pictures is a file the engine loads into the array,
+carries in memory at all six levels, and draws nowhere.
+
+**Why it matters.** It is the difference between a hillside reading as ground
+with grass on it and reading as a stack of dirt bricks -- the brink is where a
+voxel world shows what it is made of, and the overlay is the only thing that
+covers that seam. It is also paid for already: the layers are baked and
+resident, so what is left to spend is one more sample and one more number on
+the vertex.
+
+**What would fix it.** A second layer index per vertex and a second
+`textureSample` composited over the first by its own alpha, on side faces
+only -- an overlay index of `-1` selects past the sample the way `pictureOn`
+already selects past a missing picture, so a block without one costs the
+sample and nothing else. The band's own height wants to be part of the
+picture rather than a uniform: the mesher merges a run of layers into one
+quad and a v running 0 to `runs` would stretch the band down the whole wall.
+
 ### F-123 — A leaf is as opaque as stone, so a cutout would see through the canopy
 
 **Kind:** bug
@@ -55,10 +95,10 @@ has to alpha-test too or a tree throws a solid cube's shadow.
 
 **What would fix it.** A third opacity level for a cutout material, and a
 second condition beside the comparison: draw a face when the neighbour is less
-opaque **or** when either side is a cutout. That is Minecraft's fancy leaves,
-and at 4.26x the leaf faces it is worth a switch rather than a decision. The mip
-chain needs care as well: averaging alpha down a chain dissolves distant
-leaves, so the levels want their coverage rescaled at bake time.
+opaque **or** when either side is a cutout. At 4.26x the leaf faces that wants
+a switch rather than one answer for every world. The mip chain needs care as
+well: averaging alpha down a chain dissolves distant leaves, so the levels want
+their coverage rescaled at bake time.
 
 ### F-120 — A light standing at a pentagon reads its own chart twice over
 

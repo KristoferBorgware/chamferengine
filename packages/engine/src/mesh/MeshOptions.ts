@@ -117,6 +117,17 @@ export interface MeshOptions {
 	readonly skyExposure?: boolean;
 
 	/**
+	 * Which picture each block wears, `block * 4 + slot`, where the slots are
+	 * its cap, its side, its underside and the band over the side.
+	 *
+	 * Absent while nothing has loaded a bake, and then every vertex is written
+	 * with a layer of `-1` and the shader draws the colour alone. So a mesh
+	 * built before the pictures arrive is the mesh this engine always drew,
+	 * rather than a mesh of whatever layer zero happens to be.
+	 */
+	readonly textureLayers?: Int32Array | undefined;
+
+	/**
 	 * Per cell, a block whose colour its ground cap takes instead of its own.
 	 *
 	 * **Under half a block a plant stops being a shape and becomes the colour

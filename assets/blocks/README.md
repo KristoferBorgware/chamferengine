@@ -19,6 +19,16 @@ npm run textures -- --list            # what it can draw
 **Settle the size before painting.** An edit made at 32 does not survive being
 regenerated at 16, and nothing here converts between them.
 
+**Painting is not enough on its own.** The engine reads a bake rather than
+these files -- one strip a mip level plus a table of which layer each block
+wears -- so a change here reaches the world on the next
+
+```
+npm run textures:bake
+```
+
+which writes `packages/client/public/blocks/`.
+
 ## One picture a block type
 
 **A file is named for the block that wears it**, lowercased:

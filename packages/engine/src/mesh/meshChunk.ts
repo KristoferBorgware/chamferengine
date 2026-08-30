@@ -1,3 +1,4 @@
+import { hash3 } from "../generation/noise/hash3.js";
 import type { Chunk } from "../generation/chunk/Chunk.js";
 import type { Column } from "../generation/chunk/Column.js";
 import type { ColumnSampler } from "../generation/chunk/ColumnSampler.js";
@@ -10,7 +11,7 @@ import { AMBIENT_OCCLUSION } from "./AMBIENT_OCCLUSION.js";
 /** Every corner at full light -- the geometry {@link AMBIENT_OCCLUSION} shares. */
 const FLAT_LIGHT: readonly number[] = [1, 1, 1];
 import { MESH_DEFAULTS } from "./MeshOptions.js";
-import { blockColor } from "../generation/terrain/blockColor.js";
+import { blockColor, speckleShade } from "../generation/terrain/blockColor.js";
 import { gridCellColor } from "./gridCellColor.js";
 import { skyExposure } from "../light/skyExposure.js";
 import { canonicalCell } from "../addressing/neighbours/canonicalCell.js";
@@ -57,6 +58,36 @@ function nameOf(cell: Cell): number {
 
 /** Scratch color, refilled per face rather than allocated per vertex. */
 const COLOR = new Float32Array(3);
+
+/**
+ * Scratch pictures for the cell being drawn: its cap, its side, its underside.
+ *
+ * Refilled beside {@link COLOR} and for the same reason -- a face needs to know
+ * which layer it reads, and threading it through every emit would be one more
+ * argument on calls that already take nine.
+ */
+const SLOT = new Int32Array(3);
+
+/**
+ * How far round its own ring this cell's picture is turned.
+ *
+ * **A cell here is a hexagon and shows a whole picture**, so one picture a
+ * block reads as a grid laid over the world. A hexagon has six rotations that
+ * map it onto itself where a square face has four, so the turn costs nothing
+ * but which corner gets which corner of the picture. Measured over a field of
+ * grass, it takes the repeat at one cell from `0.70` to `0.08`
+ * (`tools/trial-tiles.mjs`).
+ */
+let TURN = 0;
+
+/** How much of the picture a cap's corner sits at, for a polygon of `degree`. */
+function capU(at: number, degree: number): number {
+	return 0.5 + 0.5 * Math.cos(((at + TURN) * 2 * Math.PI) / degree);
+}
+
+function capV(at: number, degree: number): number {
+	return 0.5 + 0.5 * Math.sin(((at + TURN) * 2 * Math.PI) / degree);
+}
 
 /** Fills {@link COLOR} for one cell: the block's color, or the grid's. */
 type CellPaint = (block: number, face: number, i: number, j: number) => void;
@@ -262,20 +293,57 @@ export function meshChunk(
 	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
 	const gridPaint = settings.grid;
 	const mix = gridPaint ? 0.45 : 0.7;
+	// **Not under the grid**, which draws its own colours and is a picture of
+	// the addressing rather than of the world.
+	const pictures = gridPaint ? null : (settings.textureLayers ?? null);
+	const wearing: CellPaint = (block, cellFace, i, j) => {
+		if (!pictures) {
+			SLOT[0] = -1;
+			SLOT[1] = -1;
+			SLOT[2] = -1;
+			return;
+		}
+		const at = block * 4;
+		SLOT[0] = pictures[at] ?? -1;
+		SLOT[1] = pictures[at + 1] ?? -1;
+		SLOT[2] = pictures[at + 2] ?? -1;
+		TURN = Math.floor(hash3(cellFace * 8191 + i, j, i ^ j, seed + 17) * 6);
+	};
 	const paint: CellPaint = gridPaint
-		? (_block, cellFace, i, j) =>
-				gridCellColor(gridPaint, cellFace, i, j, seed, COLOR, 0)
-		: (block, cellFace, i, j) =>
-				blockColor(
-					block,
-					cellFace,
-					i,
-					j,
-					seed,
-					COLOR,
-					0,
-					settings.speckle,
-				);
+		? (block, cellFace, i, j) => {
+				gridCellColor(gridPaint, cellFace, i, j, seed, COLOR, 0);
+				wearing(block, cellFace, i, j);
+			}
+		: pictures
+			? // **The picture carries the colour, so the vertex carries only
+				// what shades it.** Writing the registry colour here as well
+				// would multiply the block's own colour into itself.
+				(block, cellFace, i, j) => {
+					const shade = speckleShade(
+						cellFace,
+						i,
+						j,
+						seed,
+						settings.speckle,
+					);
+					COLOR[0] = shade;
+					COLOR[1] = shade;
+					COLOR[2] = shade;
+					wearing(block, cellFace, i, j);
+				}
+			: (block, cellFace, i, j) => {
+					blockColor(
+						block,
+						cellFace,
+						i,
+						j,
+						seed,
+						COLOR,
+						0,
+						settings.speckle,
+					);
+					wearing(block, cellFace, i, j);
+				};
 
 	/**
 	 * The canopy colour a cell's ground cap takes, or `0` for its own.
@@ -1325,6 +1393,12 @@ function emitCap(
 			COLOR[1]! * lit,
 			COLOR[2]! * lit,
 			sky,
+			capU(at, degree),
+			capV(at, degree),
+			// A cap seen from below is the block's underside, which is a
+			// different picture wherever a block has one -- a grass block seen
+			// from under an overhang is dirt.
+			upward ? SLOT[0]! : SLOT[2]!,
 		);
 	}
 	for (let c = 1; c + 1 < degree; c++)
@@ -1402,7 +1476,19 @@ function emitSide(
 	const byRight =
 		rightSide && opacityOf(at(rightSide, topLayer)) === 2 ? 1 : 0;
 
-	const put = (p: Vec3, radius: number, occ: number, sky: number) => {
+	// **A wall merged down a column is that many pictures tall.** The run's own
+	// length is what `v` reaches, and the sampler repeats -- so merging stays
+	// exactly as free as it was and a three-layer wall is not one picture
+	// stretched over three metres.
+	const runs = Math.max(1, bottomLayer - topLayer + 1);
+	const put = (
+		p: Vec3,
+		radius: number,
+		occ: number,
+		sky: number,
+		u: number,
+		v: number,
+	) => {
 		const lit = light[occ]!;
 		return sink.vertex(
 			p.x * radius - origin.x,
@@ -1412,13 +1498,30 @@ function emitSide(
 			COLOR[1]! * lit,
 			COLOR[2]! * lit,
 			sky,
+			u,
+			v,
+			SLOT[1]!,
 		);
 	};
 
-	const topLeft = put(left, topRadius, above + byLeft, topSky);
-	const topRight = put(right, topRadius, above + byRight, topSky);
-	const bottomRight = put(right, bottomRadius, under + byRight, bottomSky);
-	const bottomLeft = put(left, bottomRadius, under + byLeft, bottomSky);
+	const topLeft = put(left, topRadius, above + byLeft, topSky, 0, 0);
+	const topRight = put(right, topRadius, above + byRight, topSky, 1, 0);
+	const bottomRight = put(
+		right,
+		bottomRadius,
+		under + byRight,
+		bottomSky,
+		1,
+		runs,
+	);
+	const bottomLeft = put(
+		left,
+		bottomRadius,
+		under + byLeft,
+		bottomSky,
+		0,
+		runs,
+	);
 
 	sink.triangle(topLeft, bottomLeft, bottomRight);
 	sink.triangle(topLeft, bottomRight, topRight);

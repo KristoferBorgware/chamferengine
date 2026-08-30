@@ -46,6 +46,7 @@ export class MeshWorkerCore {
 	// and read nothing else, so changing one needs the meshes again and needs
 	// the map, the shape and the generators exactly as they are.
 	private speckle: number;
+	private textureLayers: Int32Array | null;
 	private ambientOcclusion: boolean;
 	private skyExposure: boolean;
 	private readonly options: MeshWorkerSetup["terrain"];
@@ -105,6 +106,7 @@ export class MeshWorkerCore {
 		this.apron = setup.apron;
 		this.debugSeams = setup.debugSeams ?? false;
 		this.speckle = setup.speckle ?? SPECKLE;
+		this.textureLayers = setup.textureLayers ?? null;
 		this.ambientOcclusion = setup.ambientOcclusion ?? true;
 		this.skyExposure = setup.skyExposure ?? true;
 		this.options = setup.terrain;
@@ -223,6 +225,7 @@ export class MeshWorkerCore {
 				surfaceGrid: this.shape.blockSize,
 				debugSeams: this.debugSeams,
 				speckle: this.speckle,
+				textureLayers: this.textureLayers ?? undefined,
 				ambientOcclusion: this.ambientOcclusion,
 				skyExposure: this.skyExposure,
 				// The canopy that is a colour rather than a block: what a

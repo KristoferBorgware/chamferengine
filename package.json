@@ -22,6 +22,7 @@
 		"docs": "node tools/build-docs.js",
 		"figures": "node tools/make-figures.js",
 		"textures": "vite-node tools/make-textures.ts --",
+		"textures:bake": "vite-node tools/bake-textures.ts --",
 		"reference": "node tools/make-reference.js",
 		"coverage": "node tools/check-coverage.js",
 		"style": "node tools/check-style.js",

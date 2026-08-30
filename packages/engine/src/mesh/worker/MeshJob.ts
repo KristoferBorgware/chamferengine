@@ -33,6 +33,16 @@ export interface MeshWorkerSetup {
 	/** How far a cell's color may drift from its type's base. Zero is off. */
 	readonly speckle?: number;
 
+	/**
+	 * Which picture each block wears, `block * 4 + slot`.
+	 *
+	 * Absent until a bake has loaded, and then every vertex carries a layer of
+	 * `-1` and the mesh is the untextured one this engine always built. It
+	 * travels once with the setup rather than with a job, because it is a
+	 * property of the world and not of a chunk.
+	 */
+	readonly textureLayers?: Int32Array | undefined;
+
 	/** Whether a corner darkens by how many of its neighbours are solid. */
 	readonly ambientOcclusion?: boolean;
 
