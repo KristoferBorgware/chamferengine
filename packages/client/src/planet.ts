@@ -382,6 +382,24 @@ const teardown: (() => void)[] = [];
  * when the page hides is the last one drawn.
  */
 let given = false;
+
+/**
+ * Hand back every thread and every byte this page holds.
+ *
+ * **Called before a rebuild navigates, not only when the browser says the page
+ * is going.** A page the browser freezes for the back button is a page that
+ * gives nothing up, and `Rebuild` reaches the next world through
+ * `location.href` -- an ordinary navigation, which the browser is free to
+ * freeze the old page for. Whichever it decides, the world is already gone by
+ * the time it decides it.
+ */
+function giveUp(): void {
+	if (given) return;
+	given = true;
+	for (const give of teardown) give();
+	teardown.length = 0;
+}
+
 window.addEventListener("pagehide", (event) => {
 	// **A page frozen for the back button is coming back with everything it
 	// had.** `pagehide` fires for both, and giving the world up on the frozen
@@ -392,9 +410,7 @@ window.addEventListener("pagehide", (event) => {
 	// which is what the pool leak above is about -- a rebuild goes through
 	// `location.href` and is never persisted.
 	if (event.persisted) return;
-	given = true;
-	for (const give of teardown) give();
-	teardown.length = 0;
+	giveUp();
 });
 window.addEventListener("pageshow", (event) => {
 	// **And if one comes back anyway, it is built again rather than resumed.**
@@ -415,6 +431,7 @@ if (params.get("panel") === "1") {
 		},
 		(draft) => maps?.changed(draft),
 		(live, terrain) => onLiveRebuild(live, terrain),
+		{ onGiveUp: giveUp },
 	);
 	onPanelSet = (values) => panel.set(values);
 	// **The picture of the planet lives in the panel, in a fold of its own.**
@@ -455,6 +472,17 @@ let blockTextures: BlockTextures | null = null;
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
 	const renderer = new ChunkRenderer(ctx);
+	// **The chunks are the biggest thing this page holds, and they are not on
+	// this side of the wire.** A worker's heap goes when its thread does, but
+	// a chunk's vertices are GPU memory the browser keeps for as long as
+	// anything can still name them -- and nothing here named them at all until
+	// now, so a page walked away from carried its whole world with it. Half a
+	// gigabyte on the traced session, still held while the next world
+	// allocated its own.
+	teardown.push(() => {
+		renderer.clear();
+		ctx.device.destroy();
+	});
 	try {
 		const baked = await BlockTextures.load(
 			`${import.meta.env.BASE_URL}blocks/`,
@@ -1886,9 +1914,13 @@ async function main(): Promise<void> {
 	 * patchwork of the old until the selection caught up on its own.
 	 */
 	function dropEveryChunk(): void {
-		for (const id of drawn) renderer.drop(id);
+		// **Everything the renderer holds, not everything this file knows
+		// about.** A chunk an edit invalidated leaves `drawn` without leaving
+		// the GPU -- it keeps drawing until its replacement lands, which is
+		// the point -- so a rebuild that walked these two sets alone left
+		// whatever was between them resident forever.
+		renderer.clear();
 		drawn.clear();
-		for (const id of retiring) renderer.drop(id);
 		retiring.clear();
 		plantCells.forget();
 		building.clear();

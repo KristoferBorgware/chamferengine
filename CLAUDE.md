@@ -599,6 +599,24 @@ Violating any of these breaks the design. They are not tunable.
   lifted to where the ground's surface was and **the ground's own wall was drawn
   inside the block**. Clear both radii whenever the column's top moves -- in the
   held column and in the generated one alike, or the two disagree.
+- **A PAGE THAT LEAVES IS NOT A PAGE WHOSE MEMORY HAS GONE** (`giveUp`,
+  `teardown`, `ParameterPanel.rebuild`, F-129 open). **Rebuild** reaches the
+  next world through `location.href`, which is an ordinary navigation the
+  browser is free to **freeze the old page for** -- and a frozen page keeps
+  every worker thread and every byte of GPU memory its chunks are in. Traced
+  on a real session: **28** `DedicatedWorker` threads in one renderer against
+  the **8** this build asks for, and **486-582 MB** of GPU memory held while
+  the GPU process ran `9.7 s` of work in a `10 s` trace and dropped **536 of
+  707** frames -- with the page's own thread doing `319 ms`, so the wall was
+  the GPU process and not JavaScript. Two things were wrong and both are the
+  same mistake. The teardown gave back the worker pool, the map preview and
+  the sea, and **not the chunk buffers or the device**, which are all of the
+  memory. And it ran only on a `pagehide` the browser said was final, so a
+  page kept for the back button gave up nothing at all. **The world is handed
+  back before the navigation starts** now, from the button itself, so what the
+  browser then decides cannot keep it. A rebuild is also `renderer.clear()`
+  rather than a walk of `drawn` and `retiring`: those two sets are what this
+  file knows about, and the renderer is what actually holds the memory.
 - **A LIVE REBUILD REPLACES THE WHOLE WORLD, AND EVERYTHING HOLDING A PIECE OF
   IT MUST FOLLOW** (`flushTerrain`, `worldBlocks`, `Player.shape`). Moving a
   terrain knob makes a new map, shape, generator and worker pool. The delta hook
