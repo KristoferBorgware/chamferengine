@@ -1175,6 +1175,46 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
+		// **What the block pictures cost, and what happens when they do not
+		// fit.** A world draws a fraction of the pictures that exist, so only
+		// that fraction is uploaded -- and the arrangements a smaller device
+		// gets are the ones nobody with a large one ever sees fail, which is
+		// why they can be asked for here.
+		title: "Pictures",
+		folded: true,
+		knobs: [
+			{
+				// Room for pictures rather than the size of the set. Below
+				// what a world needs, what did not fit draws as its own
+				// average colour: a worse picture, never a wrong one.
+				key: "texturePool",
+				label: "Pictures held",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				// **A device that gives every picture a layer of its own is
+				// the arrangement with nothing wrong with it**, and it is what
+				// nearly every machine does -- so the one where pictures share
+				// a layer is the one nobody ever sees fail.
+				key: "layerCapOn",
+				label: "Cap texture layers",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				// Below the size of the set this forces pictures to share a
+				// layer: folded into their own tile, the band clamped to that
+				// tile rather than the layer, and the mip chain stopped before
+				// a tile is too small to filter inside.
+				key: "textureLayers",
+				label: "Texture layers",
+				digits: 0,
+				shownWhen: (k) => k.layerCapOn,
+				enabledWhen: (k) => !k.plain,
+			},
+		],
+	},
+	{
 		title: "Light",
 		folded: true,
 		knobs: [
@@ -1212,36 +1252,6 @@ const GROUPS: Group[] = [
 				digits: 0,
 				enabledWhen: (k) =>
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
-			},
-			{
-				// **A device that gives every picture a layer of its own is
-				// the arrangement with nothing wrong with it**, and it is what
-				// nearly every machine does -- so the one where pictures share
-				// a layer is the one nobody ever sees fail. This pretends the
-				// device is smaller than it is.
-				key: "layerCapOn",
-				label: "Cap texture layers",
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				// Below the size of the set this forces pictures to share a
-				// layer: folded into their own tile, the band clamped to that
-				// tile rather than the layer, and the mip chain stopped before
-				// a tile is too small to filter inside.
-				key: "textureLayers",
-				label: "Texture layers",
-				digits: 0,
-				shownWhen: (k) => k.layerCapOn,
-				enabledWhen: (k) => !k.plain,
-			},
-			{
-				// Room for pictures rather than the size of the set. Below
-				// what a world needs, what did not fit draws as its own
-				// average colour: a worse picture, never a wrong one.
-				key: "texturePool",
-				label: "Pictures held",
-				digits: 0,
-				enabledWhen: (k) => !k.plain,
 			},
 			{
 				// **The sun as though no block stood in its way**, so a cave
