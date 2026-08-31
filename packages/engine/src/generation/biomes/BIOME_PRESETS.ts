@@ -281,6 +281,19 @@ const SUBSTRATE: readonly BiomeDef[] = [
 /**
  * The twenty-one grounds `plain` names, in the order they were written.
  *
+ * **Every name here says a climate, and none says a landform.** Ice sheet,
+ * Permafrost, Snowfield, Prairie, Scrubland and Savanna could each have
+ * been named for the ground they stand on instead, because under `plain`
+ * each is filed to one landform and only ever appears there.
+ * {@link PLAIN_BANDED} files sixteen of them nowhere, so a name carrying a
+ * landform would tell a player something untrue as soon as that ground
+ * turned up in a valley. A climate name is right under both.
+ *
+ * **The block identifiers did not move with them.** A block's number is its
+ * identity in the save's registry (doc 27), the name beside it is a label,
+ * and renaming a slot to match a display name is churn a save would have to
+ * carry forever. So `FROZEN_PLATEAU_GROUND` is what Ice sheet is built from.
+ *
  * Pulled out of {@link BIOME_PRESETS} so that {@link PLAIN_BANDED} can read
  * its colors, blocks and underlays rather than repeating them: the two sets
  * are the same materials laid out two ways, and a material described twice
@@ -312,7 +325,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.BEACH_GROUND,
 	},
 	{
-		name: "Frozen valley",
+		name: "Permafrost",
 		hex: "cfdce6",
 		t: 0.17,
 		h: 0.49,
@@ -328,7 +341,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.SWAMP_GROUND,
 	},
 	{
-		name: "Dry basin",
+		name: "Savanna",
 		hex: "c9b06a",
 		t: 0.7,
 		h: 0.25,
@@ -385,7 +398,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.RAINFOREST_GROUND,
 	},
 	{
-		name: "Snowy slopes",
+		name: "Snowfield",
 		hex: "dce6ee",
 		t: 0.15,
 		h: 0.63,
@@ -401,7 +414,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.GROVE_GROUND,
 	},
 	{
-		name: "Dry slope",
+		name: "Scrubland",
 		hex: "b08a55",
 		t: 0.79,
 		h: 0.32,
@@ -409,7 +422,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.DRY_SLOPE_GROUND,
 	},
 	{
-		name: "Frozen plateau",
+		name: "Ice sheet",
 		hex: "e2eaf2",
 		t: 0.25,
 		h: 0.45,
@@ -417,7 +430,7 @@ const PLAIN: readonly BiomeDef[] = [
 		block: BlockType.FROZEN_PLATEAU_GROUND,
 	},
 	{
-		name: "Highland steppe",
+		name: "Prairie",
 		hex: "b0ab6a",
 		t: 0.57,
 		h: 0.55,
@@ -496,8 +509,8 @@ function respaced(
  *
  * **They had to be respaced, not merely unfiled.** `plain` placed its dots
  * inside each landform's own measured cloud, so two filed under different
- * ground sit almost on top of each other -- Frozen valley and Frozen plateau
- * are `0.089` apart, Desert and Dry slope `0.064`. Thrown into one square
+ * ground sit almost on top of each other -- Permafrost and Ice sheet
+ * are `0.089` apart, Desert and Scrubland `0.064`. Thrown into one square
  * they would split their neighbourhood along a line no reading is stable
  * across, which is the speckle again by another route.
  *
@@ -528,7 +541,7 @@ function respaced(
  * more, no two dots share a humidity, and no four biomes meet at a point.
  *
  * **The driest ground on the planet is warm rather than hot**, which is why
- * Desert sits in the fourth band and Dry slope in the fifth. That is the dry
+ * Desert sits in the fourth band and Scrubland in the fifth. That is the dry
  * belts arriving: the equator is where the air rises wet, and it comes back
  * down a little way off it, so the arid latitude is not the hottest one.
  * Earth's is not either.
@@ -541,7 +554,13 @@ function respaced(
  * rather than reasoned about, and the two peak dots take `14%` and `18%` of
  * the peaks between them. Jagged peaks is the colder and wetter of the two
  * and Stony peaks the warmer and drier, which is the right way round --
- * snow needs water and bare rock does not. The three shore grounds take the
+ * snow needs water and bare rock does not.
+ *
+ * **And a peak has to stand high as well as sharp** ({@link BiomeSettings}'s
+ * `peakHeight`). The landform grid reads the relief curve, which says how
+ * sharp a place is and never how high it stands, so without that rule the
+ * same reading named a summit and a small steep butte -- and bare rock and
+ * snow are not what a hot low hummock is made of. The three shore grounds take the
  * coast outright, by the rule in `allowedBiomes`.
  *
  * **Badlands is not among them, and used to be.** Red rock reads like a
@@ -556,9 +575,9 @@ function respaced(
 const PLAIN_BANDED: readonly BiomeDef[] = [
 	// The coldest band. Ice at every humidity: what changes across it is how
 	// much snow lies on the ice, not whether the ground is frozen.
-	respaced("Frozen plateau", 0.08, 0.26),
-	respaced("Frozen valley", 0.12, 0.55),
-	respaced("Snowy slopes", 0.22, 0.74),
+	respaced("Ice sheet", 0.08, 0.26),
+	respaced("Permafrost", 0.12, 0.55),
+	respaced("Snowfield", 0.22, 0.74),
 
 	// Cold, and something grows. It sits poleward of the dry belts, where
 	// the air has not descended, so it is the wettest band on the planet.
@@ -568,7 +587,7 @@ const PLAIN_BANDED: readonly BiomeDef[] = [
 
 	// Temperate.
 	respaced("Steppe", 0.58, 0.4),
-	respaced("Highland steppe", 0.46, 0.77),
+	respaced("Prairie", 0.46, 0.77),
 	respaced("Grove", 0.49, 0.95),
 
 	// Warm, and the arid one. This is the dry belt itself, which is why the
@@ -584,8 +603,8 @@ const PLAIN_BANDED: readonly BiomeDef[] = [
 	// to stone, and filed to a relief reading it drew the shoulders of every
 	// ridge as a red ribbon instead of a place.
 	respaced("Badlands", 0.82, 0.18),
-	respaced("Dry slope", 0.85, 0.44),
-	respaced("Dry basin", 0.97, 0.62),
+	respaced("Scrubland", 0.85, 0.44),
+	respaced("Savanna", 0.97, 0.62),
 	respaced("Rainforest", 0.94, 0.85),
 
 	// The five that name a material rather than a plant community, each
@@ -597,7 +616,7 @@ const PLAIN_BANDED: readonly BiomeDef[] = [
 	respaced("Stony shore", 0.57, 0.82, "shore"),
 	respaced("Beach", 0.85, 0.9, "shore"),
 	respaced("Jagged peaks", 0.12, 0.25, "peaks"),
-	respaced("Stony peaks", 0.28, 0.2, "peaks"),
+	respaced("Stony peaks", 0.3, 0.1, "peaks"),
 ];
 
 /**

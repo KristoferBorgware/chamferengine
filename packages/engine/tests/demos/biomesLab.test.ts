@@ -115,7 +115,7 @@ describe("the biomes lab's copy of the engine", () => {
 		// three terrain layers name the ground first, and the diagram then
 		// only chooses which kind of that ground this one is.
 		expect(lab).toContain(
-			"function landformAt(\n\t\t\t\tlevel,\n\t\t\t\tcut,\n\t\t\t\tswing,\n\t\t\t\tmetres,\n\t\t\t\troom,\n\t\t\t\tshoreHeight = knobs.shoreHeight,\n\t\t\t) {",
+			"function landformAt(\n\t\t\t\tlevel,\n\t\t\t\tcut,\n\t\t\t\tswing,\n\t\t\t\tmetres,\n\t\t\t\troom,\n\t\t\t\tshoreHeight = knobs.shoreHeight,\n\t\t\t\tpeakHeight = knobs.peakShare * TERRAIN.relief,\n\t\t\t) {",
 		);
 		expect(lab).toContain("const set = allowedSets[form];");
 	});
@@ -373,6 +373,7 @@ interface LabModel {
 		metres: number,
 		room: number,
 		shoreHeight?: number,
+		peakHeight?: number,
 	): number;
 	biomeOf(
 		t: number,
@@ -632,6 +633,7 @@ describe("the biomes lab's model against the engine's", () => {
 								metres,
 								room,
 								BIOME_DEFAULTS.shoreHeight,
+								BIOME_DEFAULTS.peakHeight,
 							);
 							const there = landformAt(
 								level,
@@ -640,6 +642,7 @@ describe("the biomes lab's model against the engine's", () => {
 								metres,
 								room,
 								BIOME_DEFAULTS.shoreHeight,
+								BIOME_DEFAULTS.peakHeight,
 								DEFAULT_LANDFORM_GRID,
 							);
 							expect(here).toBe(there);

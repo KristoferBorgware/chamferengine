@@ -745,6 +745,12 @@ const GROUPS: Group[] = [
 				digits: 0,
 				says: "low ground is a beach only where two of six points this far out are low land too",
 			},
+			{
+				key: "peakShare",
+				label: "Peaks stand above",
+				digits: 2,
+				says: "the relief curve says how sharp a place is and never how high, so sharp ground under this share of the tallest land is a slope instead; at zero any sharp place is a peak however low",
+			},
 		],
 	},
 	{

@@ -20,7 +20,12 @@ function build(
 	const k = knobs();
 	edit(k);
 	let ready: BiomesReady | null = null;
-	for (const step of core.steps({ kind: "build", token, knobs: k, cells: 12 }))
+	for (const step of core.steps({
+		kind: "build",
+		token,
+		knobs: k,
+		cells: 12,
+	}))
 		if (step.kind === "ready") ready = step;
 	expect(ready).not.toBeNull();
 	return ready!;
@@ -37,9 +42,7 @@ describe("BiomesWorkerCore", () => {
 		const total = facts.planetShares.reduce((a, b) => a + b, 0);
 		expect(total).toBeGreaterThan(0.99);
 		expect(total).toBeLessThan(1.01);
-		expect(facts.planetShares.length).toBe(
-			BIOME_PRESETS["plain"]!.length,
-		);
+		expect(facts.planetShares.length).toBe(BIOME_PRESETS["plain"]!.length);
 		expect(facts.formPlanet.length).toBe(LANDFORMS.length);
 		expect(facts.built).toBeGreaterThan(0);
 		expect(facts.fit.fitted).toBe(true);

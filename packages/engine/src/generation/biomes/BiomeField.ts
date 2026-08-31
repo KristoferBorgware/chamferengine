@@ -654,6 +654,7 @@ export class BiomeField {
 			out.metres,
 			out.room,
 			this.settings.shoreHeight,
+			this.settings.peakHeight,
 			this.grid,
 		);
 		out.biome =

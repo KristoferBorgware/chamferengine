@@ -168,7 +168,13 @@ export { standPieces } from "./plants/standPieces.js";
 export { standWalkable } from "./plants/standWalkable.js";
 
 export type { Landform } from "./biomes/Landform.js";
-export { ANY_LANDFORM, LANDFORMS, SHORE } from "./biomes/Landform.js";
+export {
+	ANY_LANDFORM,
+	LANDFORMS,
+	PEAKS,
+	SHORE,
+	SLOPES,
+} from "./biomes/Landform.js";
 export type { LandformGrid } from "./biomes/LandformGrid.js";
 export {
 	CONT_BANDS,

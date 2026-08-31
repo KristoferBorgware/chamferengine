@@ -35,7 +35,7 @@ const STEP = 1;
 const SEEDS = ["chamfer", "otherworld", "atlas"];
 
 /** The three grounds made of ice or bare stone, left bare on purpose. */
-const BARE = ["Frozen plateau", "Icy shore", "Stony shore"];
+const BARE = ["Ice sheet", "Icy shore", "Stony shore"];
 
 describe("plain's grounds, banded by elevation", () => {
 	let sample: BiomeSample;

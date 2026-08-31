@@ -10,6 +10,46 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-144 — The landform grid reads how sharp a place is and calls it how high
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-31, gating the peak grounds on height
+**Where:** `packages/engine/src/generation/biomes/landformAt.ts`,
+`LandformGrid.ts`
+
+**What happens.** The grid is indexed by continentalness, erosion and the
+peaks-and-valleys reading. All three are shape rather than size: the third
+says how far the relief swings, not how far above the sea the ground ends
+up. So `peaks` means *sharp*, and the two grounds filed to it are bare rock
+and snow.
+
+The `peakHeight` rule now refuses a peak to sharp ground that does not also
+stand high, and it turns out to be nearly a no-op at the shipped grid:
+
+> **[measured]** Over four seeds at three reliefs, the tenth percentile of
+> peak ground already sits at `0.46` to `0.50` of the tallest land. At the
+> shipped share of `0.45` the rule moves `0.1%` of the land from peaks to
+> slopes, and what it takes is the bottom: the lowest peak rises from
+> `217 m` to `274 m` at relief 600, and `102 m` to `135 m` at relief 300.
+
+**Why it matters.** Nothing is wrong today, and that is the point: the grid
+happens to correlate sharpness with height on the **default** grid, and
+nothing makes it. The grid is a knob -- a reader can put `peaks` in a low
+erosion band and get snow-capped hummocks at sea level, and the only thing
+standing in the way is a rule added afterwards. The same holds for
+`plateau`, which is why Badlands drew the shoulders of ridges as ribbons
+before it was unfiled.
+
+**What would fix it.** Give the grid a fourth axis that is height, or say
+plainly in {@link LandformGrid} that the three axes are shape and that any
+landform whose meaning includes size needs its own rule beside the grid --
+`shoreHeight` and `peakHeight` being the two that already exist. The second
+is a paragraph; the first is a `3 x 3 x 3` table becoming `3 x 3 x 3 x 3`
+and every shipped grid string with it.
+
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
