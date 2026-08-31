@@ -470,6 +470,7 @@ export class BiomesWorkerCore {
 		biome: Int16Array,
 	): void {
 		const shoreHeight = this.field!.settings.shoreHeight;
+		const peakHeight = this.field!.settings.peakHeight;
 		for (let n = 0; n < form.length; n++) {
 			const at = landformAt(
 				held.level[n]!,
@@ -478,6 +479,7 @@ export class BiomesWorkerCore {
 				held.metres[n]!,
 				held.room[n]!,
 				shoreHeight,
+				peakHeight,
 				table.grid,
 			);
 			form[n] = at;

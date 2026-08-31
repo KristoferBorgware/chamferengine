@@ -1813,6 +1813,8 @@
 				{ key: "peaks", name: "Peaks", short: "pk", hex: "e4ebf2" },
 			];
 			const SHORE = 0;
+			const SLOPES = 3;
+			const PEAKS = 5;
 			/** The one a biome carries when the landform does not decide it. */
 			const ANY = "any";
 
@@ -1962,16 +1964,26 @@
 				metres,
 				room,
 				shoreHeight = knobs.shoreHeight,
+				peakHeight = knobs.peakShare * TERRAIN.relief,
 			) {
 				if (metres <= TERRAIN.seaLevel) return -1;
 				if (metres <= shoreHeight && room >= SHORE_ROOM) return SHORE;
-				return grid[
+				const form = grid[
 					gridAt(
 						bucket(level, CONT_EDGES),
 						bucket(cut, ERO_EDGES),
 						bucket(swing, PV_EDGES),
 					)
 				];
+				// **The mirror of the shore rule, at the other end of the
+				// ground.** The grid reads the relief curve, which says how
+				// sharp a place is and never how high it stands, so the same
+				// reading names a summit and a small steep butte -- and what
+				// is filed to peaks is bare rock and snow. High is necessary
+				// here the way low is necessary for a beach; a steep place
+				// that is not high enough is a slope.
+				if (form === PEAKS && metres < peakHeight) return SLOPES;
+				return form;
 			}
 
 
@@ -2192,9 +2204,9 @@
 					{ name: "Stony shore", hex: "8e9298", t: 0.62, h: 0.45, landform: "shore" },
 					{ name: "Beach", hex: "e6d9a8", t: 0.9, h: 0.8, landform: "shore" },
 
-					{ name: "Frozen valley", hex: "cfdce6", t: 0.17, h: 0.49, landform: "valleys" },
+					{ name: "Permafrost", hex: "cfdce6", t: 0.17, h: 0.49, landform: "valleys" },
 					{ name: "Swamp", hex: "4e5f33", t: 0.45, h: 0.78, landform: "valleys" },
-					{ name: "Dry basin", hex: "c9b06a", t: 0.7, h: 0.25, landform: "valleys" },
+					{ name: "Savanna", hex: "c9b06a", t: 0.7, h: 0.25, landform: "valleys" },
 
 					{ name: "Tundra", hex: "9fae95", t: 0.3, h: 0.28, landform: "lowlands" },
 					{ name: "Taiga", hex: "3d6b63", t: 0.3, h: 0.78, landform: "lowlands" },
@@ -2203,12 +2215,12 @@
 					{ name: "Desert", hex: "e8c44a", t: 0.84, h: 0.28, landform: "lowlands" },
 					{ name: "Rainforest", hex: "2f9e2f", t: 0.84, h: 0.78, landform: "lowlands" },
 
-					{ name: "Snowy slopes", hex: "dce6ee", t: 0.15, h: 0.63, landform: "slopes" },
+					{ name: "Snowfield", hex: "dce6ee", t: 0.15, h: 0.63, landform: "slopes" },
 					{ name: "Grove", hex: "5f8a5c", t: 0.42, h: 0.87, landform: "slopes" },
-					{ name: "Dry slope", hex: "b08a55", t: 0.79, h: 0.32, landform: "slopes" },
+					{ name: "Scrubland", hex: "b08a55", t: 0.79, h: 0.32, landform: "slopes" },
 
-					{ name: "Frozen plateau", hex: "e2eaf2", t: 0.25, h: 0.45, landform: "plateau" },
-					{ name: "Highland steppe", hex: "b0ab6a", t: 0.57, h: 0.55, landform: "plateau" },
+					{ name: "Ice sheet", hex: "e2eaf2", t: 0.25, h: 0.45, landform: "plateau" },
+					{ name: "Prairie", hex: "b0ab6a", t: 0.57, h: 0.55, landform: "plateau" },
 					{ name: "Badlands", hex: "c06a3a", t: 0.81, h: 0.18, landform: "plateau" },
 
 					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.05, h: 0.45, landform: "peaks" },
@@ -2511,6 +2523,23 @@
 											1,
 										)}%</b> of the planet's land`
 									: "",
+						},
+						{
+							key: "peakShare",
+							label: "Peaks stand above",
+							low: 0,
+							high: 0.9,
+							step: 0.05,
+							value: 0.45,
+							digits: 2,
+							unit: "of the tallest ground",
+							note: () =>
+								knobs.peakShare === 0
+									? "off: the relief curve alone names a peak, so a small " +
+										"steep butte a hundred metres up is one"
+									: "the relief curve says how sharp a place is and never " +
+										"how high, so sharp ground under this share of the " +
+										"tallest land is a slope instead",
 						},
 						{
 							key: "shoreReach",

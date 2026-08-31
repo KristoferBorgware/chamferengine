@@ -1,6 +1,6 @@
 import type { LandformGrid } from "./LandformGrid.js";
 import { CONT_EDGES, ERO_EDGES, PV_EDGES } from "./LandformGrid.js";
-import { SHORE } from "./Landform.js";
+import { PEAKS, SHORE, SLOPES } from "./Landform.js";
 import { bucket } from "./bucket.js";
 import { gridAt } from "./gridAt.js";
 
@@ -36,11 +36,12 @@ export function landformAt(
 	metres: number,
 	room: number,
 	shoreHeight: number,
+	peakHeight: number,
 	grid: LandformGrid,
 ): number {
 	if (metres <= 0) return -1;
 	if (metres <= shoreHeight && room >= SHORE_ROOM) return SHORE;
-	return Number(
+	const form = Number(
 		grid[
 			gridAt(
 				bucket(level, CONT_EDGES),
@@ -49,4 +50,14 @@ export function landformAt(
 			)
 		],
 	);
+	// **The mirror of the shore rule, at the other end of the ground.** The
+	// grid reads the relief curve, which says how *sharp* a place is and
+	// never how high it stands -- so a small steep butte near the equator is
+	// named a peak, and the two grounds filed to peaks are bare rock and
+	// snow, which is not what a hot low hummock is made of. High is
+	// necessary here in the same way low is necessary for a beach; the grid
+	// still says whether it is sharp enough. What it is not is a peak, and
+	// what a steep place that is not a peak is, is a slope.
+	if (form === PEAKS && metres < peakHeight) return SLOPES;
+	return form;
 }

@@ -443,6 +443,7 @@ export interface PlanetKnobs {
 
 	/** Metres above the sea under which land can be shore. */
 	shoreHeight: number;
+	peakShare: number;
 
 	/** Metres to the six points the shore rule asks for room. */
 	shoreReach: number;
@@ -1362,6 +1363,7 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	regionClimate: 1,
 	regionWarp: 400,
 	shoreHeight: 12,
+	peakShare: 0.45,
 	shoreReach: 32,
 	formDetail: 1,
 	patchOcclusion: 1,
@@ -1951,6 +1953,13 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 		unit: "m above the sea",
 	},
 	shoreReach: { low: 8, high: 200, step: 4, rebuilds: false, unit: "m" },
+	peakShare: {
+		low: 0,
+		high: 0.9,
+		step: 0.05,
+		rebuilds: false,
+		unit: "of the tallest ground",
+	},
 	formDetail: { low: 1, high: 4, step: 1, rebuilds: false, unit: "octaves" },
 	patchPicture: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
 	patchSurface: { low: 0, high: 0, step: 1, rebuilds: false, unit: "" },
@@ -2489,6 +2498,12 @@ export class PlanetSettings {
 			regionClimate: k.regionClimate,
 			regionWarp: k.regionWarp,
 			shoreHeight: k.shoreHeight,
+			// **A share of this world's own tallest ground, not a number of
+			// metres.** A fixed metre line keeps 95% of the peaks on a tall
+			// world and 1% on a low one; the tenth percentile of peak ground
+			// sits at 0.46 to 0.50 of the maximum at every relief measured, so
+			// a share behaves the same on all of them.
+			peakHeight: k.peakShare * this.maxElevation,
 			shoreReach: k.shoreReach,
 			formDetail: k.formDetail,
 		};

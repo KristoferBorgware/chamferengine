@@ -38,5 +38,11 @@ export const LANDFORMS: readonly Landform[] = [
 /** The landform index the shore rule returns, ahead of anything in the grid. */
 export const SHORE = 0;
 
+/** The landform a peak too low to be one falls back to. */
+export const SLOPES = 3;
+
+/** The landform the peak rule refuses when the ground is not high enough. */
+export const PEAKS = 5;
+
 /** The landform key a biome carries when the landform does not restrict it. */
 export const ANY_LANDFORM = "any";
