@@ -83,7 +83,7 @@ import {
 	windRotation,
 } from "chamfer/sky";
 import { MapPreview } from "./MapPreview.js";
-import { BlockTextures } from "chamfer/render";
+import { type BlockAtlas, BlockTextures } from "chamfer/render";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { PlantCellStore } from "./PlantCellStore.js";
 import { plantLayerOf } from "./PlantDraft.js";
@@ -470,6 +470,99 @@ if (params.get("panel") === "1") {
  */
 let blockTextures: BlockTextures | null = null;
 
+/**
+ * The decoded bake, held so the layer cap can be moved without fetching again.
+ *
+ * Laying the same pictures onto fewer layers is a re-upload: the pictures do
+ * not change, only which layer each sits on and where inside it.
+ */
+let bakedPictures: {
+	atlas: BlockAtlas;
+	levels: Uint8Array<ArrayBuffer>[];
+} | null = null;
+
+/**
+ * The resident set a texture starts with, which is none of them.
+ *
+ * **A prediction can only be wrong, and the demand path cannot.** A world was
+ * going to be asked which pictures it might hold -- its biomes name the ground
+ * and its plant layers name the wood and the leaves -- and then a player puts
+ * down a block out of a chest and the guess is wrong anyway. Since a chunk
+ * reports what it drew and the pictures are taken in **before** that chunk is
+ * uploaded, the first frame each block appears in is already right without any
+ * guess at all. So there is no guess.
+ */
+const NOTHING_YET: ReadonlySet<number> = new Set<number>();
+
+/**
+ * Which block types each chunk on the GPU draws.
+ *
+ * Kept so a picture can be taken back without taking one somebody is looking
+ * at. It follows the meshes rather than the selection: a chunk that is still
+ * drawing while its replacement builds is still drawing.
+ */
+const chunkBlocks = new Map<number, readonly number[]>();
+
+/** What the texture on screen was built with, so a change is noticed. */
+let shownCap: number | undefined;
+let shownPool = 0;
+
+/**
+ * Put the pictures a chunk turned out to need onto the GPU.
+ *
+ * A block names up to four pictures -- its cap, its side, its underside and
+ * the band over the brink -- and the table the bake wrote says which. Asking
+ * for one already held costs a map lookup and nothing else, which is what
+ * every chunk after the first few is.
+ */
+function admitPictures(blocks: readonly number[], device: GPUDevice): void {
+	const textures = blockTextures;
+	if (!textures || blocks.length === 0) return;
+	const { table, slots } = textures.atlas;
+	// **What is on screen is only worked out when the pool is full**, which is
+	// never in the arrangement nearly every machine gets. Until then this is a
+	// map lookup a picture and nothing else.
+	let keep: ReadonlySet<number> | null = null;
+	for (const block of blocks)
+		for (let which = 0; which < slots; which++) {
+			const picture = table[block * slots + which] ?? -1;
+			if (picture < 0 || textures.holds(picture)) continue;
+			if (textures.room === 0) keep ??= picturesOnScreen();
+			textures.admit(picture, device, keep ?? EMPTY);
+		}
+}
+
+/** Nothing to protect, for the case where there was room anyway. */
+const EMPTY: ReadonlySet<number> = new Set<number>();
+
+/**
+ * Every picture a chunk now on the GPU draws.
+ *
+ * **Drawn rather than recently admitted.** A chunk uploaded an hour ago and
+ * still on screen has not named its pictures since, so recency alone would
+ * take one back while somebody is looking at it. What each chunk draws is
+ * recorded when it is meshed and thrown away when it leaves, so this is a walk
+ * of what is actually there.
+ */
+function picturesOnScreen(): ReadonlySet<number> {
+	const textures = blockTextures;
+	const wanted = new Set<number>();
+	if (!textures) return wanted;
+	const { table, slots } = textures.atlas;
+	for (const blocks of chunkBlocks.values())
+		for (const block of blocks)
+			for (let which = 0; which < slots; which++) {
+				const picture = table[block * slots + which] ?? -1;
+				if (picture >= 0) wanted.add(picture);
+			}
+	return wanted;
+}
+
+/** How many layers to pretend the device has, or nothing for all of them. */
+function layerCapOf(from: PlanetSettings): number | undefined {
+	return from.knobs.layerCapOn ? from.knobs.textureLayers : undefined;
+}
+
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
 	const renderer = new ChunkRenderer(ctx);
@@ -488,7 +581,19 @@ async function main(): Promise<void> {
 		const baked = await BlockTextures.load(
 			`${import.meta.env.BASE_URL}blocks/`,
 		);
-		blockTextures = new BlockTextures(ctx, baked.atlas, baked.levels);
+		// Held, because the cap is a live knob: laying the same pictures onto
+		// fewer layers is a re-upload and not a re-fetch.
+		bakedPictures = baked;
+		shownCap = layerCapOf(settings);
+		shownPool = settings.knobs.texturePool;
+		blockTextures = new BlockTextures(
+			ctx,
+			baked.atlas,
+			baked.levels,
+			shownCap,
+			NOTHING_YET,
+			shownPool,
+		);
 		renderer.setBlockTextures(blockTextures);
 	} catch (whatever) {
 		// A world with no pictures is the world this engine drew before there
@@ -1147,6 +1252,8 @@ async function main(): Promise<void> {
 	function forget(id: number): void {
 		const at = selectionOf(id);
 		if (at.chunkLevel === CHUNK_LEVEL) plantCells.drop(at.key);
+		// What it drew stops protecting a picture the moment it stops drawing.
+		chunkBlocks.delete(id);
 	}
 
 	/** Give up the furthest retired chunks once too many are being held. */
@@ -1950,6 +2057,7 @@ async function main(): Promise<void> {
 		renderer.clear();
 		drawn.clear();
 		retiring.clear();
+		chunkBlocks.clear();
 		plantCells.forget();
 		building.clear();
 		arrived.length = 0;
@@ -2032,6 +2140,31 @@ async function main(): Promise<void> {
 			sea.visible = live.knobs.seaDrawn;
 			sea.wireframe = live.knobs.seaWireframe;
 			sea.look = seaLook(live);
+		}
+		// **Re-laid, not re-fetched.** The pictures are the same; what moves is
+		// which layer each sits on. The old texture is handed back explicitly,
+		// because a device does not free one just because nothing refers to it
+		// and this is a knob a person moves repeatedly.
+		const wantedCap = layerCapOf(live);
+		const wantedPool = live.knobs.texturePool;
+		if (
+			bakedPictures &&
+			(wantedCap !== shownCap || wantedPool !== shownPool)
+		) {
+			shownCap = wantedCap;
+			shownPool = wantedPool;
+			const next = new BlockTextures(
+				ctx,
+				bakedPictures.atlas,
+				bakedPictures.levels,
+				wantedCap,
+				NOTHING_YET,
+				wantedPool,
+			);
+			const gone = blockTextures;
+			blockTextures = next;
+			renderer.setBlockTextures(next);
+			gone?.destroy();
 		}
 		CULL_MARGIN = (live.knobs.cullMargin * Math.PI) / 180;
 		source.nearestFirst = live.knobs.nearestFirst;
@@ -2466,6 +2599,14 @@ async function main(): Promise<void> {
 			const at = selectionOf(mesh.key);
 			if (at.chunkLevel === CHUNK_LEVEL)
 				plantCells.put(at.key, mesh.plants);
+			// **Before the mesh is drawn, not after it is seen to be wrong.**
+			// A chunk reports the block types it actually drew, so a picture
+			// nobody predicted -- a block out of a chest, a biome the guess
+			// missed -- is taken in while this mesh is still being uploaded
+			// rather than a frame later. Anything that will not fit goes on
+			// drawing as its own average colour.
+			admitPictures(mesh.tally.blocks, ctx.device);
+			chunkBlocks.set(mesh.key, mesh.tally.blocks);
 			renderer.upload(mesh);
 			uploaded = true;
 		}
@@ -2859,6 +3000,9 @@ async function main(): Promise<void> {
 				`seed "${seedText}"`,
 				`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
 				`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
+					(blockTextures
+						? ` · ${blockTextures.held} of ${blockTextures.packing.slots} pictures`
+						: "") +
 					(building.size > 0 ? ` · ${building.size} building` : ""),
 				`${clock(day)} · ${flying ? "flying" : player.swimming(probe) ? "swimming" : "walking"}` +
 					(submerged ? " · under water" : ""),

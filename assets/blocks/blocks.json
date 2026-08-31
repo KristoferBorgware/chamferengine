@@ -1,8 +1,5 @@
 {
-	"size": 32,
-	"variants": 1,
-	"tintScale": 2,
-	"tinted": [],
+	"size": 64,
 	"blocks": {
 		"STONE": {
 			"top": "stone",

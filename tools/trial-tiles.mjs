@@ -51,11 +51,6 @@ function load(dir) {
 }
 const SETS = DIRS.map(load);
 
-/**
- * The colour a tinted image is read through, from the manifest the generator
- * wrote. One of however many biomes wear the picture -- enough to show what
- * the grey becomes, and not a second copy of the registry kept here.
- */
 function tintFor(set, name) {
 	const hex = set.manifest.tints?.[name];
 	if (!hex) return [255, 255, 255];
@@ -81,7 +76,7 @@ function texel(set, name, x, y, tint, variant = 0) {
 		img.rgba[at + 2],
 		img.rgba[at + 3],
 	];
-	if (!set.manifest.tinted.includes(name)) return rgba;
+	if (!(set.manifest.tinted ?? []).includes(name)) return rgba;
 	// **In linear light, not in bytes.** A byte is sRGB-encoded, so
 	// multiplying two of them is not multiplying two quantities of light: a
 	// grey of 188 against a near-white tint came to 363 and clipped, which

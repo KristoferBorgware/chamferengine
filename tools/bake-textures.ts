@@ -9,9 +9,21 @@
  * layers is the sampler's own job rather than arithmetic in the shader. 256
  * layers are guaranteed everywhere and the set is well under that.
  *
- * A level is written as one PNG holding every layer stacked, which is exactly
- * the byte order `writeTexture` wants for an array: layer 0's rows, then layer
- * 1's. So the client decodes one image a level and uploads it in one call.
+ * A level is written as one PNG holding every layer in a **grid**, roughly
+ * square, and the client unpacks it into layer order before the upload.
+ *
+ * **The file's shape and the texture's shape were never required to match.**
+ * Stacking the layers in one tall column is the byte order `writeTexture`
+ * wants, so it needs no unpacking -- but a column's height is the tile size
+ * times the layer count, and the canvas the client decodes through silently
+ * returns wrong data past a maximum side. That put a ceiling on the set which
+ * *halves* every time the tile size doubles, well under the array-layer limit
+ * the hardware gives (F-134). A grid keeps both sides small, so the ceiling is
+ * gone rather than raised.
+ *
+ * **Tiles sitting edge to edge in the file cannot bleed**, because the GPU
+ * never samples the file: it is unpacked into a real array texture first, and
+ * every layer there mips down alone. No gutters, no wasted corner.
  */
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -195,6 +207,58 @@ function holdCoverage(src: Buffer, want: number): Buffer {
 	return out;
 }
 
+/**
+ * The widest a transport image may be on either side.
+ *
+ * The client decodes through a canvas, which past a maximum side returns wrong
+ * data **without raising anything** -- measured, a strip 65,536 tall comes back
+ * wrong at every tile size while 32,768 is fine. This is well under that, and a
+ * grid stays far under this: the whole set at 64 pixels, filling every layer a
+ * common adapter allows, is under 3,000 a side.
+ */
+const MAX_SIDE = 16384;
+
+/** How many tiles across, chosen to make the image about square. */
+const columns = Math.max(1, Math.ceil(Math.sqrt(names.length)));
+const rows = Math.ceil(names.length / columns);
+
+/**
+ * Every layer laid into a grid, left to right and then down.
+ *
+ * Layer `n` sits at column `n % columns`, row `n / columns` -- the order the
+ * client reverses. Cells past the last layer are left transparent; they are
+ * never read.
+ */
+function toGrid(level: readonly Buffer[], wide: number): Buffer {
+	const grid = Buffer.alloc(columns * wide * rows * wide * 4);
+	const pitch = columns * wide * 4;
+	level.forEach((tile, at) => {
+		const x = (at % columns) * wide * 4;
+		const y = Math.floor(at / columns) * wide;
+		for (let row = 0; row < wide; row++)
+			tile.copy(grid, (y + row) * pitch + x, row * wide * 4, (row + 1) * wide * 4);
+	});
+	return grid;
+}
+
+/** The grid read back the way the client reads it, for the round trip below. */
+function fromGrid(grid: Buffer, wide: number, count: number): Buffer {
+	const out = Buffer.alloc(count * wide * wide * 4);
+	const pitch = columns * wide * 4;
+	for (let at = 0; at < count; at++) {
+		const x = (at % columns) * wide * 4;
+		const y = Math.floor(at / columns) * wide;
+		for (let row = 0; row < wide; row++)
+			grid.copy(
+				out,
+				(at * wide + row) * wide * 4,
+				(y + row) * pitch + x,
+				(y + row) * pitch + x + wide * 4,
+			);
+	}
+	return out;
+}
+
 mkdirSync(out, { recursive: true });
 const levels = Math.log2(size) + 1;
 /** What each picture draws at the finest level, for every level to hold to. */
@@ -203,10 +267,20 @@ let level: Buffer[] = images;
 let wide = size;
 let held = 0;
 for (let n = 0; n < levels; n++) {
-	// Every layer stacked into one strip, which is the byte order an array
-	// texture is written in.
-	const strip = Buffer.concat(level);
-	writePng(join(out, `blocks-${n}.png`), wide, wide * names.length, strip);
+	// Every layer laid into a grid. **Checked by reading it straight back**,
+	// because the failure this replaces was silent: the guard has to be a
+	// comparison against the bytes that went in, not a look at the picture.
+	const grid = toGrid(level, wide);
+	const across = columns * wide;
+	const down = rows * wide;
+	if (across > MAX_SIDE || down > MAX_SIDE)
+		throw new Error(
+			`level ${n} would be ${across}x${down}, over the ${MAX_SIDE} a ` +
+				`transport image may be. Reduce the tile size or the set.`,
+		);
+	if (!fromGrid(grid, wide, names.length).equals(Buffer.concat(level)))
+		throw new Error(`level ${n} does not survive the grid round trip`);
+	writePng(join(out, `blocks-${n}.png`), across, down, grid);
 	if (wide === 1) break;
 	level = level.map((one, at) => {
 		const smaller = halve(one, wide);
@@ -247,6 +321,7 @@ writeFileSync(
 	`${JSON.stringify(
 		{
 			size,
+			columns,
 			levels: Math.min(levels, Math.log2(size) + 1),
 			layers: names,
 			slots: SLOTS,

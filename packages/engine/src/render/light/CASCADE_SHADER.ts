@@ -1,4 +1,5 @@
 import { ALPHA_CUT } from "../terrain/ALPHA_CUT.js";
+import { PICTURE_WGSL } from "../terrain/PICTURE_WGSL.js";
 
 /**
  * What a chunk looks like from the sun: a depth and nothing else.
@@ -38,6 +39,7 @@ fn vertexMain(@location(0) position : vec3f) -> @builtin(position) vec4f {
 
 @group(2) @binding(0) var blockMap : texture_2d_array<f32>;
 @group(2) @binding(1) var blockSample : sampler;
+${PICTURE_WGSL(2)}
 
 /** How much of a picture has to be there for its pixel to cast a shadow. */
 const ALPHA_CUT : f32 = ${ALPHA_CUT};
@@ -69,7 +71,13 @@ fn cutoutFragment(in : CutoutOut) {
 	// Unconditionally, and clamped, for the reason the world pass gives: a
 	// per-vertex layer is not uniform across the draw, and a sample picks its
 	// own mip from how the coordinate changes between neighbouring pixels.
-	let there = textureSample(blockMap, blockSample, in.uv, max(in.layer, 0)).a;
+	let place = placeOf(in.layer);
+	// A picture that is not stored shadows as a solid block: a flat colour has
+	// no holes, so guessing it has any would light a canopy through gaps that
+	// are not there.
+	let sampled = samplePicture(
+		blockMap, blockSample, in.uv, place, dpdx(in.uv), dpdy(in.uv));
+	let there = select(1.0, sampled.a, isStored(place));
 	if (in.layer >= 0 && there < ALPHA_CUT) {
 		discard;
 	}

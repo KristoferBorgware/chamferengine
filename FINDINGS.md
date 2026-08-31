@@ -2718,6 +2718,43 @@ same planet.
 
 ---
 
+
+
+
+### F-137 — Every decoded picture is held in RAM, whether or not anything draws it
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** medium
+**Found:** 2026-08-31, building the demand path for block pictures
+**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`decoded`),
+`BlockTextures.load`
+
+**What happens.** A picture is uploaded when something first draws it, which
+means its texels have to be somewhere to upload *from*. They are in RAM: the
+whole bake is decoded at load and held for the life of the page, every mip
+level of every picture, resident or not.
+
+**Why it matters.** It puts a floor under what the residency saves. Video
+memory now scales with what a world draws, which is the point -- but system
+memory still scales with the **whole library**, so the machine that cannot
+afford the pictures is still asked to hold all of them. At the shipped set it
+is `2.3 MB` and beneath notice. At a couple of thousand pictures it is around
+`45 MB` of RAM that a weak device carries to draw a few hundred of them, and
+the arithmetic gets worse exactly as the library grows.
+
+**What would fix it.** Decode a picture from the transport image when it is
+admitted rather than all of them at load. The grid the bake writes makes this
+cheap to reach -- a picture is a known rectangle at every level -- so the fetch
+can stay one request while the decode becomes per-picture. What it costs is
+that admission stops being synchronous, which the caller currently assumes: a
+chunk admits its pictures and uploads its mesh in the same breath, and a
+picture that has to be decoded first would draw flat for a frame or two. That
+is the same fallback the pool already relies on, so the shape is there.
+
+---
+
 ## Closed
 
 ### F-131 — Holdridge's climate square is fit to each planet's own land, not held fixed
@@ -6285,3 +6322,144 @@ records where the generator put the surface and no plant moves it, and
 gives up is a forest floor being dimmer than open ground, which is a look worth
 having and belongs in a canopy term of its own rather than falling out of a
 heuristic written for valleys and cliffs.
+
+### F-134 — The texture strip is decoded through a canvas, which silently truncates past a height no error reports
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-30, working out how the block pictures scale to a larger set
+**Closed:** 2026-08-30, fixed. A level is written as a grid rather than a tall
+column and the client walks the rows back into layer order before the upload,
+so both sides of the transport image stay small whatever the set grows to. The
+bake refuses an image over a side it knows a canvas carries, and reads its own
+grid straight back before writing it -- the failure this replaces was silent,
+so the guard had to be a comparison against the bytes that went in rather than
+a look at the picture. **Tiles sit edge to edge with no gutters**, which costs
+nothing because the GPU never samples the file: it is unpacked into the same
+array texture as before, where every layer still mips down alone.
+**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`load`),
+`tools/bake-textures.ts`
+
+**What happens.** A bake writes one PNG a mip level holding every layer stacked,
+and the client decodes it by drawing it into an `OffscreenCanvas` one tile wide
+and one tile tall per layer, then reading it back with `getImageData`. A canvas
+has a maximum side, and past it the browser **does not throw**: the context is
+created, the draw is accepted, and the read comes back wrong.
+
+Measured in headless Chromium, filling the last rows and reading them back:
+a strip `32,768` tall works at both 32 and 64 pixel tiles; a strip `65,536`
+tall comes back wrong at 32, 64 and 128 pixel tiles alike, with no exception
+raised. So the decode path caps the set at roughly `2,047` pictures at the
+current tile size, **`1,023` at 64 pixels** and `511` at 128 -- and the cap
+halves every time the tile size doubles.
+
+**Why it matters.** It is under the GPU's own array-layer limit, which is 256
+guaranteed and commonly `2,048`, so the transport format binds before the
+hardware does and the two limits move in opposite directions as the tile size
+grows. Worse, it is a **silent** failure: nothing reports it, and what reaches
+the GPU is a texture array whose upper layers hold whatever the truncated read
+returned. Somebody raising the tile size or adding pictures would see blocks
+come out wrong with no error anywhere to point at.
+
+**What would fix it.** The canvas is only in the way because the strip is one
+tall column. Either split each level into several PNGs and upload each with a
+base array layer, or lay the transport image out as a grid and repack the rows
+into layer order before the upload, or bake raw bytes and skip the image
+decoder entirely. All three keep the GPU object exactly as it is -- an array
+texture, one write a level -- because the file's shape and the texture's shape
+were never required to match. A guard that refuses a strip taller than the
+canvas can carry belongs in the bake either way, so this can never again be
+discovered by looking at the pictures.
+
+### F-135 — A texture variant can be drawn and baked, and nothing can ever wear it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, describing the texture authoring workflow
+**Closed:** 2026-08-31, taken out rather than wired up. A variation is a block
+type of its own now, which is the owner's decision: the generator writes one
+picture a name, and the variant count, the tint list and the tint scale are
+gone from the manifest along with it. All three were read by no part of the
+bake or the runtime, so the file had been describing mechanisms the engine does
+not have -- which is what made the setup look like it carried a tint path.
+**The six-fold tile rotation is what does this job**, and measurably: it takes
+the repeat at one cell from `0.70` to `0.08`.
+**Where:** `tools/make-textures.ts`, `tools/bake-textures.ts` (`SLOTS`),
+`packages/engine/src/render/terrain/BlockTextures.ts` (`BlockAtlas.table`)
+
+**What happens.** The generator takes a variant count and writes numbered
+pictures for it. The bake turns every picture file into a layer of its own, and
+its header comment says which one a cell wears is the shader's business. It is
+nobody's business: the block table is `block * slots + which` with four slots --
+cap, side, underside, band -- so a block names **one** picture per face and
+there is nowhere to put a second. Nothing in the mesher or the shader reads a
+variant, and the manifest ships with the count at one, so the whole path is
+untravelled rather than broken.
+
+**Why it matters.** It reads as a feature that exists. Anyone adding
+`stone.2.png` gets a successful bake, a layer spent on it, and no change on
+screen -- and the layer budget is the scarce resource, so the cost is real
+while the benefit is zero. It also makes the layer arithmetic misleading when
+planning how far the set can grow, because variants look like they multiply the
+requirement and today they cannot.
+
+**What would fix it.** Either wire it up or take it out, and the choice is worth
+making deliberately. Wiring it up means a variant count per block in the table,
+the extra pictures contiguous behind the first, and the shader picking one from
+the cell's own hash -- the same number the six-fold tile rotation already uses,
+so a cell would keep its picture as steadily as it keeps its rotation. Taking it
+out means dropping the count from the generator and the manifest. **The
+rotation is doing this job today** and measurably: it takes the repeat at one
+cell from `0.70` to `0.08`, which is why nobody has noticed the variants are
+inert.
+
+### F-136 — A picture pool smaller than a world needs never recovers, because nothing is ever evicted
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-31, verifying the picture pool by starving it
+**Closed:** 2026-08-31, fixed. A full pool takes back the picture **nobody is
+drawing** that was named longest ago. What is on screen is worked out from what
+each resident chunk drew rather than from what was admitted recently -- a chunk
+uploaded an hour ago and still visible has not named its pictures since, so
+recency alone would take one back while somebody is looking at it. Where every
+slot holds something visible it gives up instead, and the picture draws as its
+own average colour, which is what happened before there was any eviction. **The
+walk only happens when the pool is full**, which is never in the arrangement
+nearly every machine gets.
+**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`admit`),
+`packages/engine/src/render/terrain/packPictures.ts`
+
+**What happens.** Pictures are taken onto the GPU when a chunk turns out to
+draw them, into the first free slot. Nothing ever leaves. When the slots are
+gone `admit` refuses, and every picture that did not get one goes on drawing as
+its own average colour **for the life of the page** -- so a pool that fills
+early decides what the rest of the session looks like, and what fills it is
+whatever the player happened to be standing near when the world opened.
+
+**Why it matters.** It makes the pool's size a cliff rather than a budget. Walk
+into a biome nobody has been to and its ground, its trees and its stone all
+draw flat, permanently, while slots sit occupied by pictures from a beach
+half a planet away that nothing on screen has drawn for an hour. A pool that
+is merely *tight* behaves as badly as one that is far too small, which is the
+opposite of what a cache should do.
+
+It costs nothing today: the shipped set is 110 pictures against a pool of 512,
+so nothing is ever refused. It binds the moment the library outgrows the pool,
+which is the case the pool exists for.
+
+**What would fix it.** Least-recently-drawn eviction over the slots, with the
+recency taken from the same per-chunk report that drives admission -- a chunk
+says which pictures it drew, so a slot nothing has named for a while is the one
+to take. Two things need care. **Thrash**: a player walking a biome boundary
+could evict and re-admit the same pictures every few seconds, which wants
+hysteresis or a generous pool rather than exact recency. And **eviction is
+visible**: taking a picture back turns a textured block flat, so it must never
+touch a picture something on screen is drawing this frame. The safe version
+evicts only what has not been named since some number of selections ago.

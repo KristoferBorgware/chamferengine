@@ -1,6 +1,7 @@
 import { BLOCK_LIGHT_WGSL } from "../light/BLOCK_LIGHT_WGSL.js";
 import { SHADOW_WGSL } from "../light/SHADOW_WGSL.js";
 import { ALPHA_CUT } from "./ALPHA_CUT.js";
+import { PICTURE_WGSL } from "./PICTURE_WGSL.js";
 import { SUN_SHARE } from "../../light/SUN_SHARE.js";
 
 /**
@@ -102,6 +103,7 @@ struct Chunk {
  * coordinate on every vertex in the world.
  */
 @group(3) @binding(2) var bandSample : sampler;
+${PICTURE_WGSL(3)}
 
 /** How much of a picture has to be there for its pixel to be drawn. */
 const ALPHA_CUT : f32 = ${ALPHA_CUT};
@@ -333,13 +335,27 @@ fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// between neighbouring pixels -- which only exists where every pixel took
 	// the same path. The index is clamped for the same reason: the read
 	// happens whether or not its answer is wanted.
-	let picked = textureSample(blockMap, blockSample, uv, max(layer, 0));
+	let place = placeOf(layer);
+	// Taken here rather than inside {@link samplePicture}: a derivative is a
+	// difference across the pixel quad, and this is where the quad is.
+	let ddx = dpdx(uv);
+	let ddy = dpdy(uv);
+	let picked = samplePicture(blockMap, blockSample, uv, place, ddx, ddy);
 	// The band over the brink, composited by its own alpha. A block carrying
 	// \`-1\` for it takes none of the sample, which happens either way.
-	let over = textureSample(blockMap, bandSample, uv, max(band, 0));
-	let cover = select(0.0, over.a, band >= 0);
-	let color = mix(picked.rgb, over.rgb, cover);
-	return select(vec4f(1.0), vec4f(color, picked.a), layer >= 0);
+	//
+	// **Its sampler clamps rather than repeats**, so a wall has one brink
+	// however many layers it merged. When several pictures share a layer that
+	// clamp has to reach the picture's own edge and not the layer's, which is
+	// the one thing about the band a packing has to solve.
+	let overPlace = placeOf(band);
+	let over = sampleBand(blockMap, bandSample, uv, overPlace, ddx, ddy);
+	// A picture that is not stored takes its own average colour, and its band
+	// takes none: a flat colour has no brink drawn over it.
+	let body = select(unstoredColor(place), picked, isStored(place));
+	let cover = select(0.0, over.a, band >= 0 && isStored(overPlace));
+	let color = mix(body.rgb, over.rgb, cover);
+	return select(vec4f(1.0), vec4f(color, body.a), layer >= 0);
 }
 
 /**

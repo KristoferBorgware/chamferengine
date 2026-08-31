@@ -23,32 +23,18 @@ import { RECIPES, bandOf, srgb, writePng } from "./blockTiles.mjs";
 /**
  * An image the generator can draw, and how a block wears it.
  *
- * `tint` marks an image drawn in grey, to be multiplied by the block's own
- * registry colour when it is read. That is what lets the forty-four biome
- * grounds and the thirteen species share one picture apiece: they differ in
- * colour and not in pattern, and a colour is already written down once in the
- * registry. An untinted image carries its own colours and is read as it is.
+ * Every picture carries its own colours and is read exactly as it is.
  */
 interface Image {
 	readonly name: string;
 	readonly recipe: keyof typeof RECIPES;
 	/** Drawn as the band that drapes over a side, and clear below it. */
 	readonly band?: boolean;
-	readonly tint: boolean;
-	/** The colour it is drawn in. Grey for a tinted one, so grey x colour is colour. */
+	/** The colour it is drawn in. A picture carries its own; nothing is shared. */
 	readonly color: readonly [number, number, number];
 }
 
-/**
- * The grey a tinted image is drawn in, and what a reader multiplies back.
- *
- * **Half, not white.** A recipe returns a shade around 1 and reaches 1.28 at
- * its brightest, so an image drawn at white clips every bright texel to white
- * and the top of the range is gone from the file. Drawn at half, the whole
- * range fits and the reader takes `2 * texel * the block's colour`.
- */
 const NEUTRAL: readonly [number, number, number] = [0.5, 0.5, 0.5];
-const TINT_SCALE = 2;
 
 /**
  * The six kinds of ground, and whether anything grows on one.
@@ -147,7 +133,7 @@ const fileOf = (name: string): string => name.toLowerCase();
  * **One a block type, not one a family.** A tundra and a steppe are different
  * places and get different pictures; the family only decides which recipe
  * seeds one, so a beach starts out sandy and a badlands starts out as broken
- * rock. Nothing is shared and nothing is tinted -- a file carries its own
+ * rock. Nothing is shared -- a file carries its own
  * colours, so what an editor shows is what the world draws.
  */
 const IMAGES: readonly Image[] = [
@@ -167,7 +153,6 @@ const IMAGES: readonly Image[] = [
 		([name, recipe]): Image => ({
 			name,
 			recipe,
-			tint: false,
 			color: colorOf(name.toUpperCase()),
 		}),
 	),
@@ -179,7 +164,6 @@ const IMAGES: readonly Image[] = [
 			const base: Image = {
 				name: fileOf(n),
 				recipe: family,
-				tint: false,
 				color: colorOf(n),
 			};
 			if (!FAMILIES[family].grows) return [base];
@@ -195,7 +179,6 @@ const IMAGES: readonly Image[] = [
 			(n): Image => ({
 				name: fileOf(n),
 				recipe: n.endsWith("_WOOD") ? "wood" : "leaf",
-				tint: false,
 				color: colorOf(n),
 			}),
 		),
@@ -213,7 +196,7 @@ interface Slots {
 	readonly top: string;
 	readonly side: string;
 	readonly bottom: string;
-	/** Drawn over the side and tinted, where a block's side is two materials. */
+	/** Drawn over the side, where a block's side is two materials. */
 	readonly overlay?: string;
 }
 
@@ -268,11 +251,10 @@ const force = args.includes("--force");
  * `stone.2.png` and are ordinary files: paint them, or delete the ones that
  * are not worth having and the reader falls back to what is left.
  */
-const variants = Math.max(1, Number(flag("--variants", "1")));
 
 if (args.includes("--list")) {
 	for (const image of IMAGES)
-		console.log(`${image.name.padEnd(14)} ${image.tint ? "tinted" : "own colour"}`);
+		console.log(image.name);
 	process.exit(0);
 }
 if (!Number.isInteger(Math.log2(size)) || size < 8 || size > 128)
@@ -282,10 +264,11 @@ if (!Number.isInteger(Math.log2(size)) || size < 8 || size > 128)
 mkdirSync(out, { recursive: true });
 
 /** One image as RGBA bytes at `n` texels a side. */
-function draw(image: Image, n: number, variant: number): Buffer {
-	const seed =
-		[...image.name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7) +
-		variant * 7919;
+function draw(image: Image, n: number): Buffer {
+	const seed = [...image.name].reduce(
+		(h, c) => (h * 31 + c.charCodeAt(0)) | 0,
+		7,
+	);
 	const rgba = Buffer.alloc(n * n * 4);
 	for (let y = 0; y < n; y++)
 		for (let x = 0; x < n; x++) {
@@ -312,20 +295,21 @@ function draw(image: Image, n: number, variant: number): Buffer {
 	return rgba;
 }
 
+// **One picture a name, and a variation is a block type of its own.** A second
+// picture for one block was drawable here and wearable nowhere: a block names
+// exactly one picture a face, so an extra file spent a layer and changed no
+// pixel. Layers are the scarce thing, so that is a cost with no benefit.
 const wrote: string[] = [];
 const kept: string[] = [];
-for (const image of IMAGES)
-	for (let variant = 1; variant <= variants; variant++) {
-		const name =
-			variant === 1 ? image.name : `${image.name}.${variant}`;
-		const path = join(out, `${name}.png`);
-		if (existsSync(path) && !force) {
-			kept.push(name);
-			continue;
-		}
-		writePng(path, size, size, draw(image, size, variant));
-		wrote.push(name);
+for (const image of IMAGES) {
+	const path = join(out, `${image.name}.png`);
+	if (existsSync(path) && !force) {
+		kept.push(image.name);
+		continue;
 	}
+	writePng(path, size, size, draw(image, size));
+	wrote.push(image.name);
+}
 
 // ---- the manifest ----------------------------------------------------------
 //
@@ -339,15 +323,11 @@ for (const name of Object.keys(BlockType)) {
 	if (name === "AIR") continue;
 	slots[name] = slotsFor(name);
 }
+// **Only what something reads.** A variant count, a tint list and a tint scale
+// were written here and read by no part of the bake or the runtime, which made
+// the file describe mechanisms the engine does not have.
 const manifest = {
 	size,
-	variants,
-	// **Nothing is tinted.** A picture carries its own colours, so an editor
-	// shows what the world draws. The mechanism stays for anyone who wants
-	// several blocks to share one grey picture again: name it here and a
-	// reader multiplies it by the block's own registry colour.
-	tintScale: TINT_SCALE,
-	tinted: IMAGES.filter((i) => i.tint).map((i) => i.name),
 	blocks: slots,
 };
 let manifestSays = "wrote";
@@ -365,7 +345,7 @@ const bytes = readdirSync(out)
 	.reduce((sum, f) => sum + statSync(join(out, f)).size, 0);
 console.log(
 	`${out}: ${wrote.length} written, ${kept.length} kept, ` +
-		`${size}x${size}, ${variants} of each, ` +
+		`${size}x${size}, ` +
 		`${(bytes / 1024).toFixed(1)} KB on disk`,
 );
 if (wrote.length > 0) console.log(`  written: ${wrote.join(", ")}`);

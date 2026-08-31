@@ -17,6 +17,9 @@ export type { MarkerGeometry } from "./marker/markerGeometry.js";
 export { markerGeometry } from "./marker/markerGeometry.js";
 export { BillboardClouds } from "./clouds/BillboardClouds.js";
 export type { BlockAtlas } from "./terrain/BlockTextures.js";
+export type { Packing } from "./terrain/packPictures.js";
+export { packPictures } from "./terrain/packPictures.js";
+export { slotToReuse } from "./terrain/slotToReuse.js";
 export { ALPHA_CUT } from "./terrain/ALPHA_CUT.js";
 export {
 	SLOT_BOTTOM,
@@ -24,6 +27,7 @@ export {
 	SLOT_SIDE,
 	SLOT_TOP,
 	BlockTextures,
+	unpackGrid,
 } from "./terrain/BlockTextures.js";
 export { SEA_CLARITY, SEA_COLORS } from "./sea/SEA_COLORS.js";
 export type { SeaLook } from "./sea/SeaRenderer.js";

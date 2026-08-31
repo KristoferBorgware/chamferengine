@@ -2319,6 +2319,69 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A DERIVATIVE IS TAKEN WHERE THE PIXEL QUAD IS, NEVER INSIDE A HELPER**
+  (`samplePicture` in `PICTURE_WGSL`, F-136). A wall merged down a column runs
+  its coordinate **past one** and lets the sampler tile -- free while a picture
+  owns a whole layer. Once several share a layer the repeat is arithmetic, and
+  the derivative of a wrapped coordinate jumps from just under one back to zero
+  between two neighbouring pixels; a sampler picking its own mip from that
+  takes the coarsest level it has, so **a merged wall grows a blurred dark line
+  along every block boundary**, which no padding reaches because it is not a
+  bleed. So the gradients are taken before the wrap and handed to
+  `textureSampleGrad`.
+  **Where they are taken is not a style choice.** `dpdx` called **inside**
+  `samplePicture`, on a value that arrived as a parameter, **blacks the ground
+  out entirely** while leaving the sky untouched -- mean brightness `69.1` to
+  `56.7` over a daylight frame. The same arithmetic at the **call site**, passed
+  down as two more arguments, is **`0.00` of 255 over `884,561` pixels**. That
+  it is the gradient *values* and not `textureSampleGrad` is what constant
+  gradients settle: they render correctly either way. A derivative is a
+  difference across the pixel quad, and the quad is the fragment's own body.
+  **`probe-shaders` cannot catch this**: it reports whether the page presents a
+  frame at all -- a black world presents perfectly well, with a normal frame
+  rate and a normal gpu figure. The check that catches it is a frame diff
+  against a baseline, which needs **daylight, clouds off and a settled build
+  queue** to have the `0%` noise floor that makes a no-op provable.
+- **A VERTEX NAMES A PICTURE, NOT A LAYER** (`PICTURE_WGSL`, `BlockTextures.places`).
+  Those are the same number while every picture has a layer to itself, and they
+  stop being the same the moment several share one -- which is what a device
+  whose array-layer limit is under the size of the set needs. The shader asks
+  **where is picture P** and gets back `(layer, offsetU, offsetV, scale)` from
+  a table, rather than treating the number on the vertex as a layer index. So
+  packing several pictures onto a layer becomes a table the client fills
+  differently: **no new pipeline, no new bind group, no extra draw call, and
+  nothing the mesher or the vertex format knows about.** The table is the
+  identity today -- picture `n` is layer `n`, offset zero, scale one -- so the
+  arithmetic is `uv * 1 + 0` and the frame does not move. **The world pass and
+  the sun's own pass read the same table from the same bind group layout**, for
+  the reason they already share `ALPHA_CUT`: a leaf lit through a hole its
+  shadow does not have is what happens when the two disagree about which texels
+  a picture occupies. They bind it at different group indices, which is the only
+  thing that varies, so the source is written once and takes the index as an
+  argument. **The band's clamping sampler is the one thing a packing still has
+  to solve** -- it must clamp to the picture's own edge rather than the layer's,
+  or a wall merged down a column grows a second brink.
+- **THE FILE'S SHAPE AND THE TEXTURE'S SHAPE WERE NEVER REQUIRED TO MATCH**
+  (`toGrid` in `bake-textures`, `unpackGrid`, F-134 closed). A bake writes one
+  PNG a mip level and the client decodes it through an `OffscreenCanvas`. The
+  layers were stacked in one tall column because that is already the byte order
+  `writeTexture` wants and so needs no unpacking -- but a column's height is
+  the tile size times the layer count, and **a canvas past a maximum side
+  returns wrong data without raising anything**. Measured in headless Chromium,
+  filling the last rows and reading them back: `32,768` tall is fine at 32 and
+  64 pixel tiles, `65,536` comes back wrong at 32, 64 and 128 alike. So the
+  transport capped the set at about `2,047` pictures, **`1,023` at 64 pixels**
+  and `511` at 128 -- **halving every time the tile size doubles**, under the
+  array-layer limit the hardware gives (256 guaranteed, commonly `2,048`) and
+  moving the wrong way. A level is a **grid** now, roughly square, walked back
+  into layer order on load: the same single upload, and `128` pixel tiles over
+  `2,048` layers come to under `6,000` a side. **Tiles sit edge to edge with no
+  gutters and cannot bleed**, because the GPU never samples the file -- it is
+  unpacked into the same array texture, where every layer still mips down
+  alone. **The guard has to be a comparison, not a look at the picture**: the
+  bake refuses an image over a side it knows a canvas carries, and reads its
+  own grid straight back before writing it. Verified byte for byte against the
+  strip it replaces -- all six levels upload identical bytes.
 - **A CANOPY IS NOT A CLIFF, AND SKY EXPOSURE MUST ASK THE TERRAIN RATHER THAN
   THE BAND** (`skyTopOf` in `meshChunk`, F-133 closed). `skyExposure` asks each
   of a cell's six neighbours how much taller its ground stands and darkens the

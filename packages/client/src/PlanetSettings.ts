@@ -1134,6 +1134,34 @@ export interface PlanetKnobs {
 	fullbright: boolean;
 
 	/**
+	 * Whether to pretend the device gives fewer texture array layers than it
+	 * does.
+	 *
+	 * Most adapters give every block picture a layer of its own, so the
+	 * arrangement a capped device gets -- pictures sharing a layer, folded
+	 * into their own tile, the mip chain stopping early -- would otherwise
+	 * never be looked at on the machine doing the work. This stands on it
+	 * deliberately.
+	 */
+	layerCapOn: boolean;
+
+	/** How many layers to pretend the device has, when {@link layerCapOn}. */
+	textureLayers: number;
+
+	/**
+	 * How many block pictures the GPU holds at once.
+	 *
+	 * **Room for pictures, not the size of the set.** A world draws a fraction
+	 * of the pictures that exist and only that fraction is uploaded, so this
+	 * is how many it can take in before it runs out. Below what a world turns
+	 * out to need, the ones that did not fit draw as their own average colour
+	 * -- which is what makes the crowded case something a person can stand in
+	 * and look at rather than something only a device with less memory ever
+	 * sees.
+	 */
+	texturePool: number;
+
+	/**
 	 * Whether the player carries a light.
 	 *
 	 * There is no torch to place yet, so the player is one: a source standing
@@ -1459,6 +1487,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	skyShading: 1,
 	skyStrength: 1,
 	fullbright: false,
+	layerCapOn: false,
+	textureLayers: 16,
+	texturePool: 512,
 	torchOn: true,
 	torchRange: 10,
 	torchStrength: 1,
@@ -2066,6 +2097,9 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	skyShading: { low: 0, high: 2, step: 0.05, rebuilds: false, unit: "" },
 	skyStrength: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "x" },
 	fullbright: { ...TOGGLE, rebuilds: false },
+	layerCapOn: { ...TOGGLE, rebuilds: false },
+	textureLayers: { low: 1, high: 512, step: 1, rebuilds: false, unit: "" },
+	texturePool: { low: 4, high: 2048, step: 4, rebuilds: false, unit: "" },
 	torchOn: { ...TOGGLE, rebuilds: false },
 	torchRange: {
 		low: 0,
