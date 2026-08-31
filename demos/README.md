@@ -808,7 +808,7 @@ setting between the two. **Rock kept over the roof** is that constant, and the
 ceiling here **dips** below it where a second field clears a rarity you set, so
 a mouth opens where the ground allows one **and** the sheet happens to be there — two conditions rather than one, and
 the cave stays one system with holes in its roof rather than gaining
-disconnected pockets. Set **Ceiling dips by up to** to zero to get the constant
+disconnected pockets. Set **Roof lifts by up to** to zero to get the constant
 back.
 
 **Where the rarity starts has to be set rather than assumed.** A borrowed figure

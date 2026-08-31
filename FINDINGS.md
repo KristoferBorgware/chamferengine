@@ -438,7 +438,8 @@ this rather than leave the two disagreeing.
 **Found:** 2026-08-28, translating the lab's ceiling trial onto the sphere
 **Where:** `demos/cave-lab.html`, the `mouthRare` row and `sheetCeilingAt`
 
-**What happens.** **Only where the field clears** is a rarity, and a rarity is
+**What happens.** **Mouth rarity** (**Only where the field clears** when this
+was written) is a rarity, and a rarity is
 a share of a field's own range -- which a patch a hundred metres across never
 sees. The lab says so in its own comment: at a `60 m` feature over `95 m` of
 ground the median reading is `0.461`, so `0.7` there is a little over the
