@@ -10,7 +10,7 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-138 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
+### F-140 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
 
 **Kind:** gap
 **Milestone:** 0.5.0
@@ -47,7 +47,7 @@ the two readings where it matters and put the arid ground where a player
 expects it. A cheaper stopgap is a plain world-wetness offset, which moves
 the whole planet along one axis and cannot put a desert next to a jungle.
 
-### F-139 — Two benches mount their picture inside the rows, so it scrolls away
+### F-141 — Two benches mount their picture inside the rows, so it scrolls away
 
 **Kind:** bug
 **Milestone:** 0.5.0
@@ -2794,13 +2794,15 @@ is the only place a decrement would go.
 
 ## Closed
 
-### F-133 — The shipped climate reads cold and dry, so a third of the land is two biomes
+### F-142 — The shipped climate reads cold and dry, so a third of the land is two biomes
 
 **Kind:** tuning
 **Milestone:** 0.5.0
 **Priority:** medium
 **Effort:** medium
 **Found:** 2026-08-30, measuring which biomes the merged table actually builds
+**Renumbered:** written as `F-133`, which the canopy-lighting entry already
+held. A number is never reused, so this one took the next free instead.
 **Closed:** 2026-08-31 on `master` by "Correct the climate fit for a world
 whose air dries with height." It was not tuning: the fit was measured
 against a climate model that no longer existed. `FIXED_FIT` was taken
@@ -2829,7 +2831,7 @@ Widening the humidity model would have papered over a fit that was simply
 measuring the wrong world; respacing Holdridge's dots would have moved a
 published classification off its own chart. What is left of the symptom is
 the thin hot, dry corner, which is a property of the climate model rather
-than of the reading, and that is **F-138**.
+than of the reading, and that is **F-140**.
 **Where:** `packages/engine/src/generation/biomes/ClimateFit.ts`
 (`LAPSED_FIT`), `fitForPreset.ts`, `BiomeField.ts` (`measureFit`)
 
