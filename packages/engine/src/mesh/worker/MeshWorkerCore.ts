@@ -12,6 +12,7 @@ import { ChunkDeltas } from "../../edit/ChunkDeltas.js";
 import { ChunkAddress } from "../../generation/chunk/ChunkAddress.js";
 import { ChunkColumnSampler } from "../../generation/chunk/ChunkColumnSampler.js";
 import { CoarseMap } from "../../generation/coarse/CoarseMap.js";
+import { CAVE_DETAIL_REACH } from "../CAVE_DETAIL_REACH.js";
 import { CUTOUT_REACH } from "../CUTOUT_REACH.js";
 import { SPECKLE } from "../../generation/terrain/blockColor.js";
 import { TerrainGenerator } from "../../generation/terrain/TerrainGenerator.js";
@@ -326,11 +327,18 @@ export class MeshWorkerCore {
 	private generator(lod: number): TerrainGenerator {
 		const already = this.byLod.get(lod);
 		if (already) return already;
+		// **A coarse chunk's generator has the cave pass off.** The generator
+		// itself stays level-blind (doc 14, F-032 -- heights must not move
+		// with the level); whether the sheet is carved at all is gated here,
+		// in the one place that knows the level, the way {@link CUTOUT_REACH}
+		// gates the leaf holes. See {@link CAVE_DETAIL_REACH}.
 		const made = new TerrainGenerator(
 			this.seed,
 			this.shape.atLod(lod),
 			this.map,
-			this.options,
+			lod <= CAVE_DETAIL_REACH
+				? this.options
+				: { ...this.options, caves: false },
 			this.biomeField,
 		);
 		this.byLod.set(lod, made);
