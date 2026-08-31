@@ -54,6 +54,37 @@ export interface BiomeSettings {
 	readonly humLapse?: number;
 
 	/**
+	 * How hard a belt of latitude either side of the equator is dried.
+	 *
+	 * **The one term that says *be arid here*.** Every other humidity term
+	 * reads the ground: how far inland a place is, how high it stands, and
+	 * noise. None of them can put a desert at a latitude, and Earth's sit in
+	 * belts because air that rises wet over the equator comes back down dry a
+	 * little way off it.
+	 *
+	 * **It moves moisture rather than removing it**, which is what that
+	 * circulation actually does and what keeps this from being a second
+	 * wetness knob: the belt is dried and everywhere else is wetted by the
+	 * belt's own share of the sphere, so the planet's mean humidity does not
+	 * move and turning it up cannot dry the whole world. Zero is bit-for-bit
+	 * the world without it.
+	 */
+	readonly humBelt?: number;
+
+	/**
+	 * Where the dry belts sit, as the sine of their latitude.
+	 *
+	 * The sine rather than the angle because area on a sphere is uniform in
+	 * it -- half the world lies inside `0.5` -- so a belt of a given width
+	 * here covers the same amount of ground wherever it is put. `0` is the
+	 * equator and `1` is a pole.
+	 */
+	readonly humBeltAt?: number;
+
+	/** How far either side of {@link humBeltAt} the drying reaches, in the same units. */
+	readonly humBeltWidth?: number;
+
+	/**
 	 * Whether the biome lookup is pushed off the climate it was handed.
 	 *
 	 * The push frays every border in the diagram; without it each border is
@@ -153,6 +184,9 @@ export const BIOME_DEFAULTS = {
 	humFeature: 2200,
 	humOctaves: 3,
 	humLapse: 0,
+	humBelt: 0.4,
+	humBeltAt: 0.25,
+	humBeltWidth: 0.24,
 	warp: true,
 	warpStrength: 0.12,
 	warpFeature: 700,

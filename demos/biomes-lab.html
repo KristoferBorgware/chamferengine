@@ -1694,7 +1694,36 @@
 					lapse;
 				out[1] =
 					-k.humOcean * said[0] +
-					k.humNoise * octaveNoise(x, y, z, seed + SEED_OFFSET.hum, s.hum);
+					k.humNoise * octaveNoise(x, y, z, seed + SEED_OFFSET.hum, s.hum) +
+					beltAt(away, k);
+			}
+
+			/**
+			 * How much the dry belts move humidity at one latitude, on average
+			 * zero.
+			 *
+			 * **A bump, and then its own share taken back off.** The belt is
+			 * dried by up to `humBelt` and everywhere else is wetted by what
+			 * the belt removed, so the term redistributes moisture rather than
+			 * removing it -- which is what the circulation it stands in for
+			 * does, and what keeps this from doubling as a wetness knob.
+			 *
+			 * The bump is `(1 - d²)²` rather than `1 - d²`, because the plain
+			 * parabola meets zero with a slope still on it and that kink draws
+			 * as a line of its own at both edges of the belt. The share taken
+			 * back is exact: area on a sphere is uniform in `away`, so the
+			 * bump's mean over the planet is its integral over what of it
+			 * lands inside `[0, 1]`.
+			 */
+			function beltAt(away, k) {
+				if (!k.humBelt || k.humBeltWidth <= 0) return 0;
+				const edge = (v) => v - (2 * v * v * v) / 3 + (v * v * v * v * v) / 5;
+				const lo = Math.max(-1, -k.humBeltAt / k.humBeltWidth);
+				const hi = Math.min(1, (1 - k.humBeltAt) / k.humBeltWidth);
+				const mean = hi > lo ? k.humBeltWidth * (edge(hi) - edge(lo)) : 0;
+				const d = (away - k.humBeltAt) / k.humBeltWidth;
+				const under = 1 - d * d;
+				return k.humBelt * (mean - (under > 0 ? under * under : 0));
 			}
 
 			/**
@@ -2735,6 +2764,44 @@
 										"says how far inland a place is. A true distance to the " +
 										"nearest ocean is a flood fill, and terrain generated a " +
 										"chunk at a time cannot run one",
+						},
+						{
+							key: "humBelt",
+							label: "Dry belts",
+							low: 0,
+							high: 1.5,
+							step: 0.05,
+							value: 0.4,
+							digits: 2,
+							note: () =>
+								knobs.humBelt === 0
+									? "off: nothing says be arid at this latitude, and a desert " +
+										"is whatever the noise happens to leave dry"
+									: "a band either side of the equator, dried; the moisture " +
+										"goes to the rest of the world rather than away, so this " +
+										"cannot dry the whole planet",
+						},
+						{
+							key: "humBeltAt",
+							label: "Belt latitude",
+							low: 0,
+							high: 1,
+							step: 0.02,
+							value: 0.25,
+							digits: 2,
+							note: () =>
+								"as the sine of the latitude, because area on a sphere is " +
+								"uniform in it: 0 is the equator, 1 a pole, and half the " +
+								"world lies inside 0.5",
+						},
+						{
+							key: "humBeltWidth",
+							label: "Belt width",
+							low: 0.05,
+							high: 0.6,
+							step: 0.02,
+							value: 0.24,
+							digits: 2,
 						},
 						{
 							key: "humNoise",

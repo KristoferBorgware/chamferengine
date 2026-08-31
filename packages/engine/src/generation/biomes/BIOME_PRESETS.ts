@@ -501,62 +501,79 @@ function respaced(
  * they would split their neighbourhood along a line no reading is stable
  * across, which is the speckle again by another route.
  *
- * **The fifteen sit on a five-by-three grid, and every dot is placed where
- * the readings are.** An even grid is the obvious layout and it is not a
- * balanced one: the readings are noise stacks summed and divided, so they
- * pile in the middle and thin toward every edge. The five temperature bands
- * sit at the `10`, `30`, `50`, `70` and `90`th percentiles of temperature
- * over the land -- which come out at `0.11`, `0.33`, `0.51`, `0.69` and
- * `0.91`, so temperature really is close to even -- and each band's three
- * dots sit at that band's **own** `17`, `50` and `83`rd of humidity.
+ * **The fifteen are placed where the readings are, and the placement was
+ * solved rather than chosen.** An even grid is the obvious layout and it is
+ * not a balanced one: the readings are noise stacks summed and divided, so
+ * they pile in the middle and thin toward every edge. Three ways of placing
+ * them were measured against the share of land each ground takes, over four
+ * seeds at one-degree steps:
  *
- * **Per band, and not per column, because the two readings are correlated.**
- * They read `+0.27` together over the land: high ground is both colder and
- * drier, so a warm place is a wetter place. Balancing each axis on its own
- * therefore leaves the two opposite corners starved -- measured, one set of
- * columns for the whole table gives the fifteen a `6.3 : 1` spread, and each
- * band on its own gives **`2.4 : 1`**, running `9.24%` down to `3.80%` of the
- * land. It is also what stops the diagram reading as graph paper: the cold
- * band is far drier than the hot one, so the rows stagger, and no four
- * biomes meet at a point.
+ * | placed by | widest : narrowest |
+ * |---|---|
+ * | an even grid | `5.4 : 1` |
+ * | each axis at its own quantiles | `6.3 : 1` |
+ * | each temperature band at its own | `2.4 : 1` |
+ * | relaxed until the shares agree | **`1.49 : 1`** |
+ *
+ * The last is what ships. A cell of a plain Voronoi grows when its dot moves
+ * **toward** a crowded neighbour, so the fifteen were stepped that way until
+ * the counts stopped separating -- with two orderings held so no name loses
+ * its meaning: the bands stay ordered by temperature, and inside a band the
+ * three stay ordered dry to wet. Lloyd relaxation was tried first and is the
+ * wrong tool, at `5.6 : 1`: it equalises a cell's spread, not its share, and
+ * left the same ground starved.
+ *
+ * **What that leaves is a layout with no grid left in it**, which is the
+ * second thing it had to fix. Nothing is a row of equal temperature any
+ * more, no two dots share a humidity, and no four biomes meet at a point.
+ *
+ * **The driest ground on the planet is warm rather than hot**, which is why
+ * Desert sits in the fourth band and Dry slope in the fifth. That is the dry
+ * belts arriving: the equator is where the air rises wet, and it comes back
+ * down a little way off it, so the arid latitude is not the hottest one.
+ * Earth's is not either.
  *
  * **The other six stay filed, because they name a material.** Sand, shingle,
  * sea ice, red rock and bare grey stone are what a place is made of rather
  * than what grows on it, and no reading of the air puts them anywhere. Each
- * is placed inside its own landform's cloud rather than on the grid, swept
- * over that cloud rather than reasoned about: the two peak dots take `9%`
- * and `21%` of the peaks between them, and Badlands `12%` of the plateau.
- * Jagged peaks is the wetter of the two and Stony peaks the drier, which is
- * the right way round -- snow needs water and bare rock does not. The three
- * shore grounds take the coast outright, by the rule in `allowedBiomes`.
+ * is placed inside its own landform's cloud rather than among the fifteen,
+ * swept over that cloud rather than reasoned about: the two peak dots take
+ * `13%` and `15%` of the peaks between them, and Badlands `15%` of the
+ * plateau. Jagged peaks is the wetter of the two and Stony peaks the drier,
+ * which is the right way round -- snow needs water and bare rock does not.
+ * The three shore grounds take the coast outright, by the rule in
+ * `allowedBiomes`.
  */
 const PLAIN_BANDED: readonly BiomeDef[] = [
-	// The coldest band, and the driest: cold air carries little water, so
-	// this row sits further left than any other.
-	respaced("Frozen plateau", 0.11, 0.1),
-	respaced("Frozen valley", 0.11, 0.43),
-	respaced("Snowy slopes", 0.11, 0.71),
+	// The coldest band. Ice at every humidity: what changes across it is how
+	// much snow lies on the ice, not whether the ground is frozen.
+	respaced("Frozen plateau", 0.08, 0.26),
+	respaced("Frozen valley", 0.09, 0.55),
+	respaced("Snowy slopes", 0.21, 0.75),
 
-	// Cold, and something grows.
-	respaced("Tundra", 0.33, 0.31),
-	respaced("Alpine forest", 0.33, 0.62),
-	respaced("Taiga", 0.33, 0.9),
+	// Cold, and something grows. It sits poleward of the dry belts, where
+	// the air has not descended, so it is the wettest band on the planet.
+	respaced("Tundra", 0.28, 0.47),
+	respaced("Alpine forest", 0.31, 0.71),
+	respaced("Taiga", 0.33, 0.94),
 
 	// Temperate.
-	respaced("Steppe", 0.51, 0.35),
-	respaced("Highland steppe", 0.51, 0.65),
-	respaced("Grove", 0.51, 0.9),
+	respaced("Steppe", 0.6, 0.31),
+	respaced("Highland steppe", 0.51, 0.77),
+	respaced("Grove", 0.51, 0.96),
 
-	// Warm, and the driest band above the ice: this is where a world puts
-	// its arid belt.
-	respaced("Dry slope", 0.69, 0.29),
-	respaced("Grassland", 0.69, 0.5),
-	respaced("Swamp", 0.69, 0.82),
+	// Warm, and the arid one. This is the dry belt itself, which is why the
+	// driest ground on the planet is warm rather than hot -- the equator is
+	// where the air rises wet, and it comes back down a little way off it.
+	respaced("Desert", 0.7, 0.0),
+	respaced("Grassland", 0.73, 0.39),
+	respaced("Swamp", 0.59, 0.75),
 
-	// Hot, where the dry end is a desert rather than a steppe.
-	respaced("Desert", 0.91, 0.45),
-	respaced("Dry basin", 0.91, 0.73),
-	respaced("Rainforest", 0.91, 0.91),
+	// Hot, on the equator's own side of the belt, so wetter than the band
+	// under it at every humidity.
+	respaced("Dry slope", 0.86, 0.38),
+	respaced("Dry basin", 0.98, 0.6),
+	respaced("Rainforest", 0.94, 0.81),
 
 	// The six materials, each placed inside its own landform's measured
 	// cloud rather than on the grid. The shore trio is read against itself
@@ -565,10 +582,12 @@ const PLAIN_BANDED: readonly BiomeDef[] = [
 	respaced("Icy shore", 0.3, 0.75, "shore"),
 	respaced("Stony shore", 0.57, 0.82, "shore"),
 	respaced("Beach", 0.85, 0.9, "shore"),
-	respaced("Badlands", 0.76, 0.24, "plateau"),
-	respaced("Jagged peaks", 0.14, 0.35, "peaks"),
-	respaced("Stony peaks", 0.14, 0.02, "peaks"),
-]; /**
+	respaced("Badlands", 0.65, 0.12, "plateau"),
+	respaced("Jagged peaks", 0.18, 0.3, "peaks"),
+	respaced("Stony peaks", 0.08, 0.02, "peaks"),
+];
+
+/**
  * The biome sets a world can start from.
  *
  * **`plain` is the shipped set: each landform's dots sit inside that ground's

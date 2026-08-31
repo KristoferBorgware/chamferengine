@@ -282,6 +282,9 @@ interface LabKnobs {
 	readonly tempFeature: number;
 	readonly tempOctaves: number;
 	readonly humOcean: number;
+	readonly humBelt: number;
+	readonly humBeltAt: number;
+	readonly humBeltWidth: number;
 	readonly humNoise: number;
 	readonly humFeature: number;
 	readonly humOctaves: number;
@@ -484,6 +487,9 @@ describe("the biomes lab's model against the engine's", () => {
 		tempFeature: BIOME_DEFAULTS.tempFeature,
 		tempOctaves: BIOME_DEFAULTS.tempOctaves,
 		humOcean: BIOME_DEFAULTS.humOcean,
+		humBelt: BIOME_DEFAULTS.humBelt,
+		humBeltAt: BIOME_DEFAULTS.humBeltAt,
+		humBeltWidth: BIOME_DEFAULTS.humBeltWidth,
 		humNoise: BIOME_DEFAULTS.humNoise,
 		humFeature: BIOME_DEFAULTS.humFeature,
 		humOctaves: BIOME_DEFAULTS.humOctaves,

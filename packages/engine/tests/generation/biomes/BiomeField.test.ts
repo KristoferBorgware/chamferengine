@@ -187,6 +187,73 @@ describe("BiomeField", () => {
 		expect(checked).toBeGreaterThan(0);
 	});
 
+	// **The property the term is built around, and the one a reader would
+	// not guess.** Every other humidity knob shifts the planet's own mean as
+	// a side effect -- `humOcean` turned up dries the whole world rather than
+	// wetting the shore, which is what made it read backwards from its label.
+	// The belts give back exactly what they take, so the knob cannot be used
+	// as a wetness slider by accident.
+	it("moves moisture into the rest of the world rather than removing it", () => {
+		const flat = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humBelt: 0,
+		});
+		const belted = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humBelt: 0.8,
+		});
+		const a = makeBiomeSample();
+		const b = makeBiomeSample();
+		let sumFlat = 0;
+		let sumBelted = 0;
+		let n = 0;
+		let drier = 0;
+		let wetter = 0;
+		for (const [x, y, z] of directions()) {
+			flat.sampleAt(x, y, z, a);
+			belted.sampleAt(x, y, z, b);
+			// Temperature is not a humidity term's business.
+			expect(b.t).toBe(a.t);
+			sumFlat += a.h;
+			sumBelted += b.h;
+			n++;
+			if (b.h < a.h - 1e-9) drier++;
+			if (b.h > a.h + 1e-9) wetter++;
+		}
+		// Both happen, or it is a wetness knob with extra steps.
+		expect(drier).toBeGreaterThan(0);
+		expect(wetter).toBeGreaterThan(0);
+		// The lattice samples the sphere evenly enough that the give and the
+		// take cancel to well inside what one belt takes at its own centre.
+		expect(Math.abs(sumBelted - sumFlat) / n).toBeLessThan(0.05);
+	});
+
+	// Zero is the whole of the old world, not nearly it: a default that
+	// changed every planet would be one nobody could turn back off.
+	it("is bit-for-bit the world without it at zero", () => {
+		const off = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humBelt: 0,
+		});
+		const also = new BiomeField(world, DEFAULT_BIOMES, undefined, {
+			regions: false,
+			fit: false,
+			humBelt: 0,
+			humBeltAt: 0.7,
+			humBeltWidth: 0.5,
+		});
+		const a = makeBiomeSample();
+		const b = makeBiomeSample();
+		for (const [x, y, z] of directions()) {
+			off.sampleAt(x, y, z, a);
+			also.sampleAt(x, y, z, b);
+			expect(b.h).toBe(a.h);
+		}
+	});
+
 	it("hands back the biome's own block, and nothing for the sea", () => {
 		const out = makeBiomeSample();
 		for (const [x, y, z] of directions()) {

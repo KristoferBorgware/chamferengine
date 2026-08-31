@@ -39,16 +39,21 @@ export const UNFITTED: ClimateFit = {
  * every zone above it was unreachable -- eight of Holdridge's twenty-three,
  * the whole wet half of its chart.
  *
- * These are the mean of those 24 worlds' own measured spans. Each world's
- * fit sits within about a sixth of the mean (`tSpan` 1.41 to 1.68, `hSpan`
- * 0.77 to 1.03), so one constant is close to what any of them would have
- * measured, and being a constant it maps a reading the same way on all of
- * them.
+ * These are the land's 2nd and 98th percentiles over six seeds, the rule a
+ * measured fit uses, taken on a world with no humidity lapse. Each world's
+ * own fit sits within about a sixth of it, so one constant is close to what
+ * any of them would have measured, and being a constant it maps a reading
+ * the same way on all of them.
+ *
+ * **It is re-measured whenever a term is added to the climate**, which is
+ * what a fit being measured *against a model* means: the dry belts changed
+ * it last, and {@link LAPSED_FIT} exists because the humidity lapse changed
+ * it before that.
  */
 export const FIXED_FIT: ClimateFit = {
-	tLo: -0.91,
-	tSpan: 1.52,
-	hLo: -0.54,
+	tLo: -1.04,
+	tSpan: 1.62,
+	hLo: -0.67,
 	hSpan: 0.87,
 	fitted: true,
 };
@@ -68,15 +73,16 @@ export const FIXED_FIT: ClimateFit = {
  * said, and what pushed every dot into the left of the chart.
  *
  * These are the land's 2nd and 98th percentiles over six seeds, the same
- * rule a measured fit uses, taken with the lapse on. Both tables that set
- * one measure the identical span, which is what says this belongs to the
- * lapse rather than to either table. The same sweep then reads `0.00` to
- * `0.99` with a median of `0.57`, and `2.6%` clamped.
+ * rule a measured fit uses, taken with the lapse on and the dry belts at
+ * their own default. Both tables that set the lapse measure the identical
+ * span, which is what says this belongs to the lapse rather than to either
+ * table. The same sweep then reads `0.00` to `0.99` with a median of
+ * `0.57`, and `2.6%` clamped.
  */
 export const LAPSED_FIT: ClimateFit = {
 	tLo: -1.04,
-	tSpan: 1.6,
-	hLo: -0.81,
-	hSpan: 0.9,
+	tSpan: 1.62,
+	hLo: -0.88,
+	hSpan: 1.04,
 	fitted: true,
 };

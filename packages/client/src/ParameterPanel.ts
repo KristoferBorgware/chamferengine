@@ -837,6 +837,28 @@ const GROUPS: Group[] = [
 				says: "how far apart a coast and a deep interior read; it is the contrast, so turning it up dries the inland rather than wetting the shore",
 			},
 			{
+				key: "humBelt",
+				label: "Dry belts",
+				digits: 2,
+				says: "a band of latitude either side of the equator, dried; it moves the moisture to the rest of the world rather than removing it, so this cannot dry the whole planet",
+			},
+			// **Nothing to decide while the belts are off.** Where a belt is
+			// and how wide it runs are questions about a belt, and at zero
+			// there is none.
+			{
+				key: "humBeltAt",
+				label: "Belt latitude",
+				digits: 2,
+				says: "as the sine of the latitude, because area on a sphere is uniform in it: 0 is the equator, 1 a pole, and half the world lies inside 0.5",
+				shownWhen: (k) => k.humBelt > 0,
+			},
+			{
+				key: "humBeltWidth",
+				label: "Belt width",
+				digits: 2,
+				shownWhen: (k) => k.humBelt > 0,
+			},
+			{
 				key: "humNoise",
 				label: "Wander",
 				digits: 2,

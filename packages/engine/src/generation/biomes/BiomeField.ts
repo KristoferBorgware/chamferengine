@@ -173,6 +173,9 @@ export class BiomeField {
 	readonly grid: LandformGrid;
 	readonly settings: Required<BiomeSettings>;
 
+	/** The dry belts' own share of the sphere, which is what they give back. */
+	private readonly beltMean: number;
+
 	/** Where the climate square starts and stops, measured over the land. */
 	readonly fit: ClimateFit;
 
@@ -229,6 +232,20 @@ export class BiomeField {
 			{ ...world.peaks, octaves: Math.round(s.formDetail) },
 			world.radius,
 		);
+		// The bump's own mean over the sphere, taken exactly. Area is uniform
+		// in `away`, so this is the integral of `(1 - d²)²` over the part of
+		// the belt that lands inside `[0, 1]`, times the half-width.
+		const edge = (at: number): number =>
+			at - (2 * at * at * at) / 3 + (at * at * at * at * at) / 5;
+		const lo = Math.max(
+			-1,
+			(0 - s.humBeltAt) / Math.max(1e-9, s.humBeltWidth),
+		);
+		const hi = Math.min(
+			1,
+			(1 - s.humBeltAt) / Math.max(1e-9, s.humBeltWidth),
+		);
+		this.beltMean = hi > lo ? s.humBeltWidth * (edge(hi) - edge(lo)) : 0;
 		this.regionLevel = Math.max(
 			0,
 			Math.min(
@@ -285,7 +302,43 @@ export class BiomeField {
 			-s.humOcean * rawContinent +
 			s.humNoise *
 				octaveNoise(x, y, z, seed + HUM_SEED_OFFSET, this.humNoise) -
-			humLapse;
+			humLapse +
+			this.beltAt(away);
+	}
+
+	/**
+	 * How much the dry belts move humidity at one latitude, on average zero.
+	 *
+	 * **A bump, and then its own share taken back off.** The belt is dried by
+	 * up to `humBelt` and everywhere else is wetted by what the belt removed,
+	 * so the term redistributes moisture instead of removing it -- the belt
+	 * gets drier as the knob rises and the rest of the world gets slightly
+	 * wetter, which is what the circulation it stands in for does and what
+	 * keeps this from doubling as a wetness slider.
+	 *
+	 * **The bump is `(1 - d²)²` rather than `1 - d²`**, because the plain
+	 * parabola meets zero with a slope still on it and that kink draws as a
+	 * line of its own across the map at both edges of the belt. Squaring it
+	 * brings the slope to zero as well. It is polynomial throughout: a
+	 * transcendental here would be read by two clients that have to agree on
+	 * the ground to the bit (doc 23).
+	 *
+	 * **The share taken back is exact rather than sampled**, because area on
+	 * a sphere is uniform in `away` -- the sine of the latitude -- so the
+	 * bump's mean over the whole planet is its integral over `[0, 1]`, and
+	 * `(1 - d²)²` integrates to `16/15` of its half-width. A belt running off
+	 * either end of that range is clipped, so the integral is taken over what
+	 * is left.
+	 */
+	private beltAt(away: number): number {
+		const s = this.settings;
+		if (!s.humBelt) return 0;
+		const width = s.humBeltWidth;
+		if (width <= 0) return 0;
+		const d = (away - s.humBeltAt) / width;
+		const under = 1 - d * d;
+		const bump = under > 0 ? under * under : 0;
+		return s.humBelt * (this.beltMean - bump);
 	}
 
 	/** The two-field push, `-1` to `1` per axis. */

@@ -420,6 +420,9 @@ export interface PlanetKnobs {
 
 	/** How much distance from the coast dries the air, off the continent field. */
 	humOcean: number;
+	humBelt: number;
+	humBeltAt: number;
+	humBeltWidth: number;
 	humNoise: number;
 	humFeature: number;
 	humOctaves: number;
@@ -1344,6 +1347,9 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	tempFeature: 3000,
 	tempOctaves: 3,
 	humOcean: 0.6,
+	humBelt: 0.4,
+	humBeltAt: 0.25,
+	humBeltWidth: 0.24,
 	humNoise: 0.5,
 	humFeature: 2200,
 	humOctaves: 3,
@@ -1911,6 +1917,15 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	tempOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
 	humOcean: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	humBelt: { low: 0, high: 1.5, step: 0.05, rebuilds: false, unit: "" },
+	humBeltAt: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
+	humBeltWidth: {
+		low: 0.05,
+		high: 0.6,
+		step: 0.02,
+		rebuilds: false,
+		unit: "",
+	},
 	humNoise: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
 	humFeature: { low: 200, high: 8000, step: 100, rebuilds: false, unit: "m" },
 	humOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
@@ -2467,6 +2482,9 @@ export class PlanetSettings {
 			tempFeature: k.tempFeature,
 			tempOctaves: k.tempOctaves,
 			humOcean: k.humOcean,
+			humBelt: k.humBelt,
+			humBeltAt: k.humBeltAt,
+			humBeltWidth: k.humBeltWidth,
 			humNoise: k.humNoise,
 			humFeature: k.humFeature,
 			humOctaves: k.humOctaves,

@@ -10,43 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-140 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-31, rebalancing the biome tables after correcting the climate fit
-**Where:** `packages/engine/src/generation/biomes/BiomeField.ts`
-(`climateAt`), `BiomeSettings.ts` (`humOcean`, `humLapse`)
-
-**What happens.** Temperature and humidity are read from two terms that
-share one input: height. The air cools as it rises and, with `humLapse` set,
-dries as it rises too. So the two readings move together.
-
-> **[measured]** Over four seeds at one-degree steps, temperature and
-> humidity read `+0.269` correlated across the land. Warm ground is wetter
-> ground and cold ground is drier, so the hot, arid corner of the diagram is
-> the thinnest part of it.
-
-Over eight seeds, `elevation`'s Tropical desert is built by **one** of them
-and Subtropical desert by **two**. Neither is unreachable; both are luck.
-
-**Why it matters.** A desert is one of the few biomes a player would name
-without prompting, and there is no knob that asks for one -- the two
-humidity knobs decide the contrast between a coast and an interior and how
-far a place may wander, and neither says *be arid at this latitude*. Earth's
-deserts sit in belts at a fixed latitude for a reason the model has no term
-for. The correlation is also a modelling artifact rather than physics: it
-comes from both lapses reading the same height, not from anything about air.
-
-**What would fix it.** A latitude term in humidity, the shape of
-`tempEquator`'s own term but with two dry belts rather than one warm middle
--- one number, read at the same place the lapse is. That would decorrelate
-the two readings where it matters and put the arid ground where a player
-expects it. A cheaper stopgap is a plain world-wetness offset, which moves
-the whole planet along one axis and cannot put a desert next to a jungle.
-
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2766,6 +2729,74 @@ is the only place a decrement would go.
 ---
 
 ## Closed
+
+### F-140 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-31, rebalancing the biome tables after correcting the climate fit
+**Closed:** 2026-08-31 on `master` by "Give the climate a dry latitude, and
+balance the tables against it." The route this entry named is the one that
+worked, and the belt is one polynomial term read off the same latitude the
+temperature already uses.
+
+**It moves moisture rather than removing it**, which is what kept it from
+becoming a second wetness knob: the belt is dried and the rest of the world
+is wetted by the belt's own share of the sphere, taken exactly rather than
+sampled, because area on a sphere is uniform in the sine of the latitude.
+Turning it up cannot dry the planet.
+
+> **[measured]** Over six seeds, the correlation between temperature and
+> humidity goes from `+0.262` to **`-0.065`** at the shipped setting. In
+> `plainElevation`, Desert goes from ground no seed reliably had to `5.68%`
+> of the land on **`6/6`** seeds. In `elevation`, whose dots are Holdridge's
+> published positions and did not move, Subtropical desert goes `0.44%` to
+> `1.43%` and Tropical desert `0.20%` to `1.29%`.
+
+The belt changed the readings, so both fit constants were measured again
+with it on, and `plainElevation`'s fifteen dots were placed again against
+it -- relaxed until their shares agreed rather than set on a grid, which
+takes that table from `2.4 : 1` to **`1.49 : 1`** across the fifteen.
+
+**What is left is `elevation` alone, and it is the chart rather than the
+model.** Holdridge puts Tropical desert at `(0.95, 0.04)` and Subtropical
+desert at `(0.78, 0.05)` -- both in the extreme corner of the square -- while
+this world's driest ground is *warm* rather than hot, because the equator is
+where air rises wet and it comes back down a little way off it. So the two
+land between those dots and split. That is a published classification being
+wider than any one planet's climate, which is the trade that table already
+accepts.
+**Where:** `packages/engine/src/generation/biomes/BiomeField.ts`
+(`climateAt`), `BiomeSettings.ts` (`humOcean`, `humLapse`)
+
+**What happens.** Temperature and humidity are read from two terms that
+share one input: height. The air cools as it rises and, with `humLapse` set,
+dries as it rises too. So the two readings move together.
+
+> **[measured]** Over four seeds at one-degree steps, temperature and
+> humidity read `+0.269` correlated across the land. Warm ground is wetter
+> ground and cold ground is drier, so the hot, arid corner of the diagram is
+> the thinnest part of it.
+
+Over eight seeds, `elevation`'s Tropical desert is built by **one** of them
+and Subtropical desert by **two**. Neither is unreachable; both are luck.
+
+**Why it matters.** A desert is one of the few biomes a player would name
+without prompting, and there is no knob that asks for one -- the two
+humidity knobs decide the contrast between a coast and an interior and how
+far a place may wander, and neither says *be arid at this latitude*. Earth's
+deserts sit in belts at a fixed latitude for a reason the model has no term
+for. The correlation is also a modelling artifact rather than physics: it
+comes from both lapses reading the same height, not from anything about air.
+
+**What would fix it.** A latitude term in humidity, the shape of
+`tempEquator`'s own term but with two dry belts rather than one warm middle
+-- one number, read at the same place the lapse is. That would decorrelate
+the two readings where it matters and put the arid ground where a player
+expects it. A cheaper stopgap is a plain world-wetness offset, which moves
+the whole planet along one axis and cannot put a desert next to a jungle.
 
 ### F-141 — Two benches mount their picture inside the rows, so it scrolls away
 
