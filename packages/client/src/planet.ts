@@ -2956,6 +2956,9 @@ async function main(): Promise<void> {
 				`seed "${seedText}"`,
 				`${degrees(at.latitude, "NS")} ${degrees(at.longitude, "EW")} · ${height(at.altitude)}`,
 				`${shareCode({ planet: 0, face: cell.face, i: cell.i, j: cell.j, layer: Math.max(0, Math.min(shape.crustDepth - 1, shape.layerOfRadius(player.position.length()))) }, DEPTH)} · ${renderer.drawn} of ${renderer.count} chunks drawn, ${wantedNow} held` +
+					(blockTextures
+						? ` · ${blockTextures.held} of ${blockTextures.packing.slots} pictures`
+						: "") +
 					(building.size > 0 ? ` · ${building.size} building` : ""),
 				`${clock(day)} · ${flying ? "flying" : player.swimming(probe) ? "swimming" : "walking"}` +
 					(submerged ? " · under water" : ""),

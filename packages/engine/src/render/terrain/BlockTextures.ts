@@ -208,6 +208,11 @@ export class BlockTextures {
 		return this.slotOf.has(picture);
 	}
 
+	/** Pictures actually on the GPU, against the room there is for them. */
+	get held(): number {
+		return this.filled;
+	}
+
 	/** Slots left for pictures nobody expected. */
 	get room(): number {
 		return this.packing.slots - this.filled;
