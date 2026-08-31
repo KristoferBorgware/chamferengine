@@ -70,9 +70,10 @@ model:
 
 So respacing does reach the symptom, and cheaply. What it does **not** do is
 answer the question the entry closes on: `plainElevation`'s names are this
-project's own, so moving them is free, while Holdridge's are a published
-classification and a zone moved off its chart position stops meaning what it
-says. That is why `elevation` is left alone here.
+project's own and answerable to nothing outside this repository, so a dot may
+go wherever the measurement puts it. Holdridge's names are a published
+classification, and a zone moved off its chart position stops meaning what it
+says. `elevation` is left alone for that reason.
 
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
