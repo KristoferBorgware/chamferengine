@@ -18,6 +18,7 @@ import {
 	carveStep,
 } from "./carveDensity.js";
 import { caveCeilingAt } from "./caveCeilingAt.js";
+import { CAVE_OCTAVES } from "./caveField.js";
 import { caveDensity } from "./caveDensity.js";
 import { layerNoiseSettings } from "../coarse/layeredHeight.js";
 import { fbm } from "../noise/fbm.js";
@@ -71,6 +72,17 @@ export class TerrainGenerator {
 	private readonly carveCorners: NoiseCorners;
 
 	/**
+	 * The cave field's last lattice cells, one slot per octave.
+	 *
+	 * The same walk-down-a-ray fact the carve's memo rests on, at a feature
+	 * five times finer: at a 24 m scale over 1 m blocks the widest octave sits
+	 * in one cell for a couple of dozen readings. A memo and never an answer
+	 * -- the cell and the seed are checked -- so the point query a collision
+	 * or a validator makes simply misses and pays what it always paid.
+	 */
+	private readonly caveCorners: NoiseCorners;
+
+	/**
 	 * The most the cliffs layer's margin can move between one block and the
 	 * next, and room to hold one column's worth of its answers.
 	 *
@@ -112,6 +124,7 @@ export class TerrainGenerator {
 		this.carveCorners = new NoiseCorners(
 			Math.max(1, this.settings.carve.octaves),
 		);
+		this.caveCorners = new NoiseCorners(CAVE_OCTAVES);
 		this.carveMask = new Uint8Array(this.shape.crustDepth);
 		this.carveNoise = layerNoiseSettings(
 			this.settings.carve,
@@ -249,6 +262,7 @@ export class TerrainGenerator {
 				this.settings.caveThreshold,
 				column.caveCeiling,
 				this.settings.caveDepth,
+				this.caveCorners,
 			);
 			// A cave below the water table stays dry. Water is written by the
 			// generator and never flows, so a passage under a lake is a passage,

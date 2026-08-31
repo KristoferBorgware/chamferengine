@@ -154,6 +154,19 @@ export interface MeshOptions {
 	readonly cutoutLeaves?: boolean;
 
 	/**
+	 * Whether the faces of sealed pockets are left out of the mesh.
+	 *
+	 * **A face is only worth drawing if somebody can be on the other side of
+	 * it**, and a cave with no way through to the sky or to the chunk's edge
+	 * has nobody there until a player digs in -- which rebuilds the chunk, so
+	 * the walls appear with the hole. See `sealedRuns` for the flood that
+	 * decides it and the conservatism at the rim that makes it safe. Off is
+	 * for measuring what the cull buys; nothing a viewer can see changes
+	 * either way, which is the whole claim and is what the frame diff checks.
+	 */
+	readonly cullSealed?: boolean;
+
+	/**
 	 * Per cell, a block whose colour its ground cap takes instead of its own.
 	 *
 	 * **Under half a block a plant stops being a shape and becomes the colour
@@ -180,4 +193,5 @@ export const MESH_DEFAULTS = {
 	ambientOcclusion: true,
 	skyExposure: true,
 	cutoutLeaves: true,
+	cullSealed: true,
 } as const satisfies MeshOptions;

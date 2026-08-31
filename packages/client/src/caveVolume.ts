@@ -11,6 +11,8 @@ import {
 } from "./CaveBlock.js";
 import {
 	CARVE_LAYER_DEFAULT,
+	CAVE_OCTAVES as CAVE_SLOTS,
+	NoiseCorners,
 	carveDepth,
 	carveIsRock,
 	carveSeed,
@@ -166,6 +168,12 @@ export function caveVolume(
 	let mouthReads = 0;
 
 	const blend = makeBlend();
+	// One memo per field for the whole walk: a column is a line through each,
+	// so the lattice hashes -- which are most of a reading -- are reused for
+	// every block that stays inside a cell. A memo and never an answer; the
+	// engine's own fill walks with the same two.
+	const caveCorners = new NoiseCorners(CAVE_SLOTS);
+	const carveCorners = new NoiseCorners(Math.max(1, carveNoise.octaves));
 	for (let c = 0; c < count; c++) {
 		// A `Vec3` a column rather than one refilled: it is immutable, and an
 		// allocation here is one per column against a walk of hundreds of
@@ -226,6 +234,9 @@ export function caveVolume(
 						carve,
 						carveNoise,
 						terrain.carveHold,
+						undefined,
+						undefined,
+						carveCorners,
 					)
 				) {
 					kind[base + L] = CUT;
@@ -246,6 +257,7 @@ export function caveVolume(
 						caveThreshold,
 						ceiling,
 						reach,
+						caveCorners,
 					)
 				) {
 					kind[base + L] = VOID;

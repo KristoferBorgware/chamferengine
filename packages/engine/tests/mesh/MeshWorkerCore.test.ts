@@ -18,7 +18,7 @@ import {
 	cellSlot,
 	packBlockState,
 } from "chamfer/edit";
-import { joinPath } from "chamfer/addressing";
+import { joinPath, neighbour } from "chamfer/addressing";
 import {
 	CAVE_DETAIL_REACH,
 	CHUNK_VERTEX_FLOATS,
@@ -343,6 +343,102 @@ describe("a change carried into a chunk drawn coarse", () => {
 				`the same geometry at lod ${lod}`,
 			).not.toEqual([...plain.opaque.vertices]);
 		}
+	});
+});
+
+// The mesher leaves out the faces of air nothing can reach (`sealedRuns`), and
+// the two claims that make that safe are testable from here: a sealed room
+// changes no vertex of the mesh, and the same room with a shaft to the surface
+// changes it -- the second is also what proves the deltas actually landed, so
+// the first cannot pass by the room never having been dug at all.
+describe("a sealed pocket is not drawn", () => {
+	const FINEST = CHUNK_LEVEL;
+	const address = new ChunkAddress(3, [1, 2, 0, 3]);
+
+	/** A room three blocks tall under three blocks of rock, and its shaft. */
+	function dug(shaft: boolean) {
+		const at = new DeltaStore({
+			version: STORE_VERSION,
+			subdivisionDepth: DEPTH,
+			chunkLevel: FINEST,
+			registry: ["chamfer:air", "chamfer:stone"],
+		});
+		const terrain = new TerrainGenerator(SEED, shape, map);
+		const chunk = generateChunk(terrain, address, FINEST, LAYERS);
+
+		// An interior cell whose ring stands on ground no more than two
+		// layers looser than its own: the room sits three layers under this
+		// column's surface, so every neighbouring column is rock beside it
+		// and the only way in is the shaft.
+		let found: { i: number; j: number; ground: number } | null = null;
+		for (let q = 2; q < chunk.m - 2 && !found; q++)
+			for (let r = 2; q + r < chunk.m - 2 && !found; r++) {
+				const [i, j] = joinPath(address.path, q, r, DEPTH);
+				const ground = chunk.columnOf(
+					cellSlot({ face: 3, i, j, layer: 0 }, DEPTH, FINEST).slot,
+				).first;
+				if (ground < 0 || ground >= LAYERS - 9) continue;
+				let solidRing = true;
+				for (let k = 0; k < 6 && solidRing; k++) {
+					const nb = neighbour(3, 1 << DEPTH, i, j, k);
+					if (!nb || nb.face !== 3) {
+						solidRing = false;
+						break;
+					}
+					const theirs = chunk.columnOf(
+						cellSlot(
+							{ face: 3, i: nb.i, j: nb.j, layer: 0 },
+							DEPTH,
+							FINEST,
+						).slot,
+					).first;
+					if (theirs < 0 || theirs > ground + 2) solidRing = false;
+				}
+				if (solidRing) found = { i, j, ground };
+			}
+		expect(found, "no buriable cell in the fixture").not.toBeNull();
+
+		const { i, j, ground } = found!;
+		const air = packBlockState(BlockType.AIR);
+		for (let down = 3; down <= 5; down++)
+			at.write({ face: 3, i, j, layer: ground + down }, air);
+		if (shaft)
+			for (let down = 0; down <= 2; down++)
+				at.write({ face: 3, i, j, layer: ground + down }, air);
+		return at;
+	}
+
+	function meshed(edits: DeltaStore | null) {
+		const core = new MeshWorkerCore(setup());
+		const rows = edits
+			? edits.rowsUnder(address.key, FINEST).map((row) => ({
+					chunkKey: row.chunkKey,
+					...row.deltas.pack(),
+				}))
+			: undefined;
+		if (edits) expect(rows!.length).toBeGreaterThan(0);
+		return core.run({
+			kind: "chunk",
+			id: 1,
+			key: address.key,
+			chunkLevel: FINEST,
+			lod: 0,
+			...(rows ? { deltas: rows } : {}),
+		});
+	}
+
+	it("leaves the mesh of a hidden room byte-identical to no room at all", () => {
+		const plain = meshed(null);
+		const buried = meshed(dug(false));
+		expect(buried.opaque.vertices).toEqual(plain.opaque.vertices);
+		expect(buried.opaque.indices).toEqual(plain.opaque.indices);
+		expect(buried.tally.faces).toBe(plain.tally.faces);
+	});
+
+	it("draws the room the moment a shaft reaches the surface", () => {
+		const plain = meshed(null);
+		const opened = meshed(dug(true));
+		expect(opened.tally.faces).toBeGreaterThan(plain.tally.faces);
 	});
 });
 

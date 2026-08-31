@@ -21,6 +21,7 @@ import { joinPath } from "../addressing/lattice/joinPath.js";
 import { latticeWeights } from "../addressing/lattice/latticeWeights.js";
 import { neighbour } from "../addressing/neighbours/neighbour.js";
 import { CUTOUT, opacityOf } from "./opacityOf.js";
+import { sealedRuns } from "./sealedRuns.js";
 import { showsFace } from "./showsFace.js";
 import { splitPath } from "../addressing/lattice/splitPath.js";
 
@@ -120,6 +121,25 @@ const DRAWN = new Uint8Array(4096);
  * is meshed start to finish before the next one begins.
  */
 let SEE_THROUGH = false;
+
+/**
+ * The sealed stretches of air in the chunk being meshed, or `null` for none.
+ *
+ * Set per {@link meshChunk} call the way {@link SEE_THROUGH} is. Null for
+ * every chunk of a caveless world, and then {@link openAt} is one comparison
+ * and the hot path is exactly what it was.
+ */
+let SEALED: Map<number, number[]> | null = null;
+
+/** Whether a cell's layer is air anybody can ever see. See {@link sealedRuns}. */
+function openAt(name: number, layer: number): boolean {
+	if (!SEALED) return true;
+	const runs = SEALED.get(name);
+	if (!runs) return true;
+	for (let at = 0; at < runs.length; at += 2)
+		if (layer >= runs[at]! && layer <= runs[at + 1]!) return false;
+	return true;
+}
 
 /** {@link opacityOf} under this mesh's own cutout switch. */
 function opacity(block: number): number {
@@ -387,6 +407,15 @@ export function meshChunk(
 ): MeshTally {
 	const settings = { ...MESH_DEFAULTS, ...options };
 	SEE_THROUGH = settings.cutoutLeaves;
+	// **What nobody can see is found before anything is drawn.** Null on a
+	// world with nothing sealed, which keeps the fast path untouched; the
+	// naming is this file's own, so the query and the flood agree about which
+	// of a border cell's names a stretch is filed under.
+	SEALED = settings.cullSealed
+		? sealedRuns(chunk, sampler, (cf, ci, cj) =>
+				nameOf(canonicalCell(cf, 1 << chunk.depth, ci, cj)),
+			)
+		: null;
 	const light = settings.ambientOcclusion ? AMBIENT_OCCLUSION : FLAT_LIGHT;
 	const exposed = settings.skyExposure;
 	const depth = chunk.depth;
@@ -478,6 +507,9 @@ export function meshChunk(
 
 	const ring: (Column | null)[] = new Array<Column | null>(6);
 	const ringCells: (Cell | null)[] = new Array<Cell | null>(6);
+	// Canonical names for the sealed-air lookups, filled only when there is
+	// anything sealed to look up. `-1` reads as open.
+	const ringNames: number[] = new Array<number>(6).fill(-1);
 	const outward: boolean[] = new Array<boolean>(6).fill(false);
 	// Which of a cell's six shared boundaries this cell emits, where the two
 	// sides would otherwise both emit one. See {@link owner}.
@@ -574,6 +606,10 @@ export function meshChunk(
 				const nb = k < degree ? neighbour(face, n, i, j, k) : null;
 				ring[k] = nb ? sampler.columnAt(nb.face, nb.i, nb.j) : null;
 				mine[k] = nb ? owner({ face, i, j }, nb, n) : true;
+				ringNames[k] =
+					SEALED && nb
+						? nameOf(canonicalCell(nb.face, n, nb.i, nb.j))
+						: -1;
 				outward[k] =
 					nb !== null &&
 					!(
@@ -608,11 +644,13 @@ export function meshChunk(
 				face,
 				i,
 				j,
+				SEALED ? nameOf(canonicalCell(face, n, i, j)) : -1,
 				corners,
 				degree,
 				own,
 				ring,
 				mine,
+				ringNames,
 				layers,
 				opaque,
 				translucent,
@@ -764,11 +802,13 @@ function meshCell(
 	face: number,
 	i: number,
 	j: number,
+	ownName: number,
 	corners: readonly Vec3[],
 	degree: number,
 	own: Column,
 	ring: readonly (Column | null)[],
 	mine: readonly boolean[],
+	ringNames: readonly number[],
 	layers: number,
 	opaque: MeshSink,
 	translucent: MeshSink,
@@ -846,7 +886,13 @@ function meshCell(
 		// **The lower cell owns a boundary between two cutouts.** A pair of
 		// leaves stacked would otherwise draw a top cap and a bottom cap in
 		// the same plane; this is the top cap, so it is the one that survives.
-		if (showsFace(here, opacity(at(own, layer - 1)), true)) {
+		// **A face against air nobody can reach is not drawn** -- the cap
+		// over a sealed stretch, the floor under one, the wall beside one.
+		// See {@link sealedRuns}; every query is open when nothing is sealed.
+		if (
+			showsFace(here, opacity(at(own, layer - 1)), true) &&
+			openAt(ownName, layer - 1)
+		) {
 			// **Only the cap, and only the ground's own.** A cliff face under
 			// a forest is still rock, and so is the underside of a ledge.
 			const covered = canopy !== 0 && layer === groundCap;
@@ -875,7 +921,7 @@ function meshCell(
 		const below = layer + 1 >= layers ? 0 : opacity(at(own, layer + 1));
 		// ...and this is the bottom cap of the upper cell of such a pair,
 		// which is the one that goes.
-		if (showsFace(here, below, false)) {
+		if (showsFace(here, below, false) && openAt(ownName, layer + 1)) {
 			emitCap(
 				sink,
 				corners,
@@ -967,7 +1013,10 @@ function meshCell(
 		while (layer <= to) {
 			const block = at(own, layer);
 			const here = opacity(block);
-			if (!showsFace(here, opacity(at(other, layer)), owned)) {
+			if (
+				!showsFace(here, opacity(at(other, layer)), owned) ||
+				!openAt(ringNames[k] ?? -1, layer)
+			) {
 				layer++;
 				continue;
 			}
@@ -975,7 +1024,8 @@ function meshCell(
 			while (
 				end + 1 <= to &&
 				at(own, end + 1) === block &&
-				showsFace(here, opacity(at(other, end + 1)), owned)
+				showsFace(here, opacity(at(other, end + 1)), owned) &&
+				openAt(ringNames[k] ?? -1, end + 1)
 			)
 				end++;
 

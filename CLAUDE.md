@@ -743,8 +743,13 @@ Violating any of these breaks the design. They are not tunable.
   costs 51× the height term over a full crust, so **far chunks run the height
   field alone**: a coarse mesh cannot represent a cave anyway (a 3 m cave is gone
   by level 10). That makes a LOD-2 chunk ~330× cheaper to generate.
-- Cave geometry is culled **by enclosure, never by simplification**. It costs
-  build time and memory, not draw time.
+- Cave geometry is culled **by enclosure, never by simplification** — and at
+  the shipped knobs enclosure catches **~1%** of a caved chunk's triangles
+  (`sealedRuns`, `tools/trial-cave-lod.ts`), because the cave rule is one
+  connected sheet and a chunk must treat its own rim as open. A pocket sealed
+  inside one chunk — an isolated system, or a room a player walls off — is
+  left out of the mesh to the byte and appears the moment a dig reaches it;
+  the connected void is drawn, and costs draw time as well as build time.
 - The density term only carves **enclosed** voids when its noise gradient
   (amplitude / feature size) exceeds 1 — the bias grows 1 per metre of depth
   (`volume.js`). Raising `strength` without raising frequency buys a rougher

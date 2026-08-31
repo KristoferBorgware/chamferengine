@@ -10,38 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-146 — "Cave geometry is culled by enclosure" is designed and not built, so sealed caves are meshed and drawn
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** large
-**Found:** 2026-08-31, asked why deep caves kill the planet view
-**Where:** `packages/engine/src/mesh/meshChunk.ts`
-
-**What happens.** `CLAUDE.md` and doc 14 state that cave geometry is culled by
-enclosure and costs build time and memory rather than draw time. No such cull
-exists: the mesher emits a face wherever solidity differs, reachable or not,
-and the only `sealed` in `meshChunk` is a seam radius. A pocket with no opening
-anywhere near the player still gets every wall, floor and roof meshed, uploaded,
-and pushed through the main pass and all three shadow cascades, forever unseen.
-The cave bench measured the whole-column face bill at 1.7x to 5x its caveless
-figure depending on resolution, and the buried share of that is what this is.
-
-**Why it matters.** It is the draw-side half of the deep-cave bill -- mesh
-memory and per-frame vertex work that scales with the reach knob -- and it is a
-standing false claim in the compact reference, which is worse than an open
-question because a reader plans against it.
-
-**What would fix it.** A flood over the chunk's air from the open sky and the
-apron, marking reachable air; emit faces only against it. A pocket opened by a
-player's break already rebuilds the chunk, so the walls appear with the hole. A
-pocket whose only opening is in a neighbouring chunk is the case to design for
--- being conservative near the rim is the likely shape. Until it is built,
-the line in `CLAUDE.md` should say *designed, not built*.
-
----
-
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2810,6 +2778,57 @@ a bench sweep for the edges.
 ---
 
 ## Closed
+
+### F-146 — "Cave geometry is culled by enclosure" is designed and not built, so sealed caves are meshed and drawn
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-31, asked why deep caves kill the planet view
+**Closed:** 2026-08-31, built -- and the measurement refutes most of the
+premise. `sealedRuns` floods the chunk's air from the sky and the rim, the
+mesher leaves out every face against air the flood never reached, and a
+sealed room changes no byte of the mesh (`MeshWorkerCore.test.ts`) while a
+frame of a caved mountainside is pixel-identical with the cull on and off
+(0.00 of 255 over 586,794 pixels). But the entry's claim that the buried
+share is most of the bill is wrong at the shipped knobs: the cave rule is
+one connected sheet -- the largest system holds `99%` of the void -- so
+nearly every stretch reaches the chunk's rim, the rim must count as open
+with no knowledge of the neighbours, and the cull removes about **1%** of a
+caved chunk's triangles: exactly the isolated systems that fit inside one
+chunk. It earns its keep where the band is squeezed until the sheet
+shatters, and on any chunk carrying edits, where a walled-off room is culled
+to the byte. The flood costs about a tenth of a chunk's mesh time, so the
+worker runs it only where the caves are carved at all or a delta rides the
+job. The deep-cave draw bill that remains is *connected* cave surface,
+which enclosure cannot touch -- reaching it is occlusion, a different
+question. `CLAUDE.md`'s line now states what is true today.
+**Where:** `packages/engine/src/mesh/meshChunk.ts`,
+`packages/engine/src/mesh/sealedRuns.ts`
+
+**What happens.** `CLAUDE.md` and doc 14 state that cave geometry is culled by
+enclosure and costs build time and memory rather than draw time. No such cull
+exists: the mesher emits a face wherever solidity differs, reachable or not,
+and the only `sealed` in `meshChunk` is a seam radius. A pocket with no opening
+anywhere near the player still gets every wall, floor and roof meshed, uploaded,
+and pushed through the main pass and all three shadow cascades, forever unseen.
+The cave bench measured the whole-column face bill at 1.7x to 5x its caveless
+figure depending on resolution, and the buried share of that is what this is.
+
+**Why it matters.** It is the draw-side half of the deep-cave bill -- mesh
+memory and per-frame vertex work that scales with the reach knob -- and it is a
+standing false claim in the compact reference, which is worse than an open
+question because a reader plans against it.
+
+**What would fix it.** A flood over the chunk's air from the open sky and the
+apron, marking reachable air; emit faces only against it. A pocket opened by a
+player's break already rebuilds the chunk, so the walls appear with the hole. A
+pocket whose only opening is in a neighbouring chunk is the case to design for
+-- being conservative near the rim is the likely shape. Until it is built,
+the line in `CLAUDE.md` should say *designed, not built*.
+
+---
 
 ### F-145 — Every level of detail walks and draws the cave field, and only the nearest can show a cave
 
