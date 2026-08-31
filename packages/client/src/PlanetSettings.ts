@@ -24,7 +24,6 @@ import type {
 	TerrainOptions,
 	BiomeSettings,
 } from "chamfer/generation";
-import { MAX_CAVE_BLOCKS } from "./CaveBlock.js";
 import {
 	CARVE_LAYER_DEFAULT,
 	CONTINENT_LAYER_DEFAULT,
@@ -2186,16 +2185,6 @@ function patchColumns(across: number): number {
 	return 3 * rings * (rings + 1) + 1;
 }
 
-/**
- * How many layers a patch of this many columns may be walked.
- *
- * The cap is on the product; this is the half of it a reach slider is measured
- * against. See `MAX_CAVE_BLOCKS`, which is where the number comes from.
- */
-function MAX_CAVE_BLOCKS_PER_PATCH(columns: number): number {
-	return Math.max(2, Math.floor(MAX_CAVE_BLOCKS / Math.max(1, columns)));
-}
-
 /** The widest patch, in map cells across, that stays inside that count. */
 function widestPatch(detail: number, range: KnobRange): number {
 	let across = range.low;
@@ -2787,18 +2776,6 @@ export class PlanetSettings {
 			// of them -- and the mesh they make, rather than the walk, is what
 			// runs out of memory. The reach gives way, because the patch is
 			// where the reader is standing.
-			case "caveDepth":
-				return narrowed({
-					high: down(
-						MAX_CAVE_BLOCKS_PER_PATCH(
-							patchColumns(
-								k.patchCells <<
-									(this.patchLevel - this.coarseLevel),
-							),
-						) * k.blockSize,
-					),
-				});
-
 			case "patchCells":
 				return narrowed({
 					high: down(
@@ -2933,7 +2910,6 @@ export class PlanetSettings {
 			// same way a hand moving them one at a time would be.
 			"patchCells",
 			"patchDetail",
-			"caveDepth",
 		];
 		const out = { ...knobs };
 		const values = out as unknown as Record<string, number>;
