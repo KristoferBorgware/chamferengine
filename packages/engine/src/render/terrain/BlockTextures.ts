@@ -88,6 +88,19 @@ export class BlockTextures {
 	/** How the set was laid out, which says whether layers are shared. */
 	readonly packing: Packing;
 
+	/**
+	 * The decoded pictures, held so one can be taken in later.
+	 *
+	 * **In RAM rather than on the GPU**, which is the trade this whole thing
+	 * makes: video memory is the scarce one, and a picture nothing draws costs
+	 * nothing there while still being ready the moment something does.
+	 */
+	private readonly decoded: readonly Uint8Array<ArrayBuffer>[];
+
+	/** Which slot each stored picture sits in, and where the free ones start. */
+	private readonly slotOf = new Map<number, number>();
+	private filled = 0;
+
 	constructor(
 		ctx: GpuContext,
 		atlas: BlockAtlas,
@@ -153,6 +166,11 @@ export class BlockTextures {
 				[side, side, packing.layers],
 			);
 		});
+		this.decoded = levels;
+		packing.order.forEach((picture, slot) =>
+			this.slotOf.set(picture, slot),
+		);
+		this.filled = packing.order.length;
 		this.places = device.createBuffer({
 			size: Math.max(16, packing.places.byteLength),
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -179,6 +197,71 @@ export class BlockTextures {
 			addressModeU: "clamp-to-edge",
 			addressModeV: "clamp-to-edge",
 		});
+	}
+
+	/** Whether a picture is on the GPU rather than drawing as a flat colour. */
+	holds(picture: number): boolean {
+		return this.slotOf.has(picture);
+	}
+
+	/** Slots left for pictures nobody expected. */
+	get room(): number {
+		return this.packing.slots - this.filled;
+	}
+
+	/**
+	 * Put a picture the world turned out to need into a free slot.
+	 *
+	 * **One tile written, not the whole texture.** A world finds out what it
+	 * needs by drawing itself, so this runs while somebody is walking around:
+	 * re-laying every picture to take one in would be a hitch every time a
+	 * block nobody predicted came on screen. A tile is a sub-rectangle of one
+	 * layer at each level, which is a handful of small copies, and the table
+	 * entry is sixteen bytes.
+	 *
+	 * Returns false when there is no room, and the picture goes on drawing as
+	 * its own average colour -- which is a worse picture and never a wrong one.
+	 */
+	admit(picture: number, device: GPUDevice): boolean {
+		if (this.slotOf.has(picture)) return true;
+		if (this.filled >= this.packing.slots) return false;
+		const slot = this.filled++;
+		this.slotOf.set(picture, slot);
+		const { perSide } = this.packing;
+		const each = perSide * perSide;
+		const layer = Math.floor(slot / each);
+		const within = slot % each;
+		for (let level = 0; level < this.packing.levels; level++) {
+			const wide = this.atlas.size >> level;
+			const bytes = this.decoded[level];
+			if (!bytes) break;
+			const from = picture * wide * wide * 4;
+			device.queue.writeTexture(
+				{
+					texture: this.texture,
+					mipLevel: level,
+					origin: {
+						x: (within % perSide) * wide,
+						y: Math.floor(within / perSide) * wide,
+						z: layer,
+					},
+				},
+				bytes.subarray(from, from + wide * wide * 4),
+				{ bytesPerRow: wide * 4, rowsPerImage: wide },
+				[wide, wide, 1],
+			);
+		}
+		// The table entry alone: where it now is, rather than the colour it
+		// was standing in for.
+		const place = new Float32Array([
+			layer,
+			(within % perSide) / perSide,
+			Math.floor(within / perSide) / perSide,
+			1 / perSide,
+		]);
+		device.queue.writeBuffer(this.places, picture * 16, place);
+		this.packing.places.set(place, picture * 4);
+		return true;
 	}
 
 	/**

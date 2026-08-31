@@ -484,6 +484,26 @@ let bakedPictures: {
 /** The cap the texture on screen was built with, so a change is noticed. */
 let shownCap: number | undefined;
 
+/**
+ * Put the pictures a chunk turned out to need onto the GPU.
+ *
+ * A block names up to four pictures -- its cap, its side, its underside and
+ * the band over the brink -- and the table the bake wrote says which. Asking
+ * for one already held costs a map lookup and nothing else, which is what
+ * every chunk after the first few is.
+ */
+function admitPictures(blocks: readonly number[], device: GPUDevice): void {
+	const textures = blockTextures;
+	if (!textures || blocks.length === 0) return;
+	const { table, slots } = textures.atlas;
+	for (const block of blocks)
+		for (let which = 0; which < slots; which++) {
+			const picture = table[block * slots + which] ?? -1;
+			if (picture >= 0 && !textures.holds(picture))
+				textures.admit(picture, device);
+		}
+}
+
 /** How many layers to pretend the device has, or nothing for all of them. */
 function layerCapOf(from: PlanetSettings): number | undefined {
 	return from.knobs.layerCapOn ? from.knobs.textureLayers : undefined;
@@ -2512,6 +2532,13 @@ async function main(): Promise<void> {
 			const at = selectionOf(mesh.key);
 			if (at.chunkLevel === CHUNK_LEVEL)
 				plantCells.put(at.key, mesh.plants);
+			// **Before the mesh is drawn, not after it is seen to be wrong.**
+			// A chunk reports the block types it actually drew, so a picture
+			// nobody predicted -- a block out of a chest, a biome the guess
+			// missed -- is taken in while this mesh is still being uploaded
+			// rather than a frame later. Anything that will not fit goes on
+			// drawing as its own average colour.
+			admitPictures(mesh.tally.blocks, ctx.device);
 			renderer.upload(mesh);
 			uploaded = true;
 		}

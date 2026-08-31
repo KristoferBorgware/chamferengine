@@ -35,6 +35,9 @@ export interface Packing {
 	 */
 	readonly places: Float32Array<ArrayBuffer>;
 
+	/** Slots the texture holds, filled and free together. */
+	readonly slots: number;
+
 	/**
 	 * Which picture is stored in each slot, in slot order.
 	 *
@@ -83,12 +86,22 @@ export function packPictures(
 	 * picture IS its average.
 	 */
 	colorOf?: (picture: number) => readonly [number, number, number],
+	/**
+	 * Slots to lay out, when more are wanted than are filled now.
+	 *
+	 * **A world finds out what it needs by drawing itself**, so the set is
+	 * never quite right at the start: a player places a block from a chest,
+	 * walks into a biome the prediction missed, and a picture nothing expected
+	 * is suddenly on screen. Spare slots are what let one be taken in without
+	 * laying the whole texture out again.
+	 */
+	capacity?: number,
 ): Packing {
 	const pictures = Math.max(1, count);
 	const order: number[] = [];
 	for (let at = 0; at < pictures; at++)
 		if (!resident || resident.has(at)) order.push(at);
-	const stored = Math.max(1, order.length);
+	const stored = Math.max(1, capacity ?? order.length);
 	// A picture to a layer whenever the device allows it, which is the
 	// arrangement with nothing wrong with it.
 	let perSide = 1;
@@ -125,5 +138,13 @@ export function packPictures(
 		keep = 1;
 		while (keep < levels && tile >> keep >= SMALLEST_TILE) keep++;
 	}
-	return { layers, perSide, side, places, order, levels: keep };
+	return {
+		layers,
+		perSide,
+		side,
+		places,
+		order,
+		slots: layers * each,
+		levels: keep,
+	};
 }

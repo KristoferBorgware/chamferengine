@@ -37,6 +37,21 @@ export interface MeshTally {
 
 	/** Cells drawn beyond the rim, closing the tiling gap at a level join. */
 	apron: number;
+
+	/**
+	 * The distinct block types this chunk actually drew.
+	 *
+	 * **A world finds out what it holds by drawing itself.** A set predicted
+	 * from the biomes and the plant layers misses whatever a player puts down
+	 * out of a chest, and there is no predicting that -- so the pictures a
+	 * chunk turns out to need are reported with it, and the ones nobody
+	 * expected are taken in when they first appear rather than being uploaded
+	 * against the chance that they might.
+	 *
+	 * Distinct rather than counted: this is a question about which pictures
+	 * exist on screen, not about how much of each there is.
+	 */
+	blocks: number[];
 }
 
 /** A lattice point, named by the face whose coordinates it is written in. */
@@ -85,6 +100,15 @@ const COLOR = new Float32Array(3);
  * argument on calls that already take nine.
  */
 const SLOT = new Int32Array(4);
+
+/**
+ * A flag per block type, for collecting the distinct ones a chunk drew.
+ *
+ * Held rather than allocated, like the rest of the scratch above: a chunk is
+ * meshed start to finish before the next one begins, and the type field is
+ * twelve bits, so this is the whole range of it.
+ */
+const DRAWN = new Uint8Array(4096);
 
 /**
  * Whether a leaf is drawn with the holes its picture has in it.
@@ -370,7 +394,16 @@ export function meshChunk(
 	const face = chunk.address.face;
 	const layers = chunk.layerCount;
 	const grid = settings.surfaceGrid || shape.blockSize;
-	const tally: MeshTally = { cells: 0, faces: 0, merged: 0, apron: 0 };
+	const tally: MeshTally = {
+		cells: 0,
+		faces: 0,
+		merged: 0,
+		apron: 0,
+		blocks: [],
+	};
+	// Distinct block types, kept as a flag apiece rather than a Set: this is
+	// touched once per drawn cell, which is the hottest thing in the file.
+	DRAWN.fill(0);
 	const gridPaint = settings.grid;
 	const mix = gridPaint ? 0.45 : 0.7;
 	// **Not under the grid**, which draws its own colours and is a picture of
@@ -383,6 +416,10 @@ export function meshChunk(
 			SLOT[2] = -1;
 			SLOT[3] = -1;
 			return;
+		}
+		if (block < DRAWN.length && DRAWN[block] === 0) {
+			DRAWN[block] = 1;
+			tally.blocks.push(block);
 		}
 		const at = block * 4;
 		SLOT[0] = pictures[at] ?? -1;

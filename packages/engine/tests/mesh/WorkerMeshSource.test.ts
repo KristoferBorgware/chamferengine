@@ -102,7 +102,7 @@ class FakeWorker implements MeshWorkerHandle {
 					opaque: geometry(),
 					cutout: geometry(),
 					translucent: geometry(),
-					tally: { cells: 0, faces: 0, merged: 0, apron: 0 },
+					tally: { cells: 0, faces: 0, merged: 0, apron: 0, blocks: [] },
 				},
 			}),
 		);
