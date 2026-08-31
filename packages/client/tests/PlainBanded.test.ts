@@ -26,7 +26,7 @@ import {
  * readings, and a boundary is quiet or noisy depending on how steady those
  * readings are from one place to the next. Both are measured here.
  */
-const PRESET = "plainElevation";
+const PRESET = "plain";
 
 /** One degree either way: fine enough to find a coastline, coarse enough to stay quick. */
 const STEP = 1;

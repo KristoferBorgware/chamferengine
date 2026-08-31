@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { BiomeDef } from "chamfer/generation";
 import {
 	BIOME_PRESETS,
+	DEFAULT_PRESET,
 	BiomeField,
 	COARSE_MAP_DEFAULTS,
 	ChunkAddress,
@@ -172,10 +173,10 @@ function describeAgainstPreset(
 
 		for (const layer of LAYERS) {
 			if (!layer.biomes || layer.biomes.length === 0) continue;
-			// **Only the names this preset actually has.** A layer's list
-			// mixes names from both tables on purpose; asking for a chunk
-			// matching a name the other preset owns would always come back
-			// empty here and say nothing about this preset at all.
+			// **Only the names this table actually has.** A layer may name a
+			// ground this build no longer carries, and asking for a chunk
+			// matching one would come back empty and say nothing about the
+			// species.
 			const known = new Set(table.map((biome) => biome.name));
 			const biomes = layer.biomes.filter((name) => known.has(name));
 			if (biomes.length === 0) continue;
@@ -247,5 +248,4 @@ function describeAgainstPreset(
 	});
 }
 
-describeAgainstPreset("plain", BIOME_PRESETS["plain"]!);
-describeAgainstPreset("holdridge", BIOME_PRESETS["holdridge"]!);
+describeAgainstPreset(DEFAULT_PRESET, BIOME_PRESETS[DEFAULT_PRESET]!);
