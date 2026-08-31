@@ -13,3 +13,10 @@ dist/
 dist-types/
 node_modules/
 package-lock.json
+
+# The two block manifests are written by tools/make-textures.ts and
+# tools/bake-textures.ts. Both already indent what they write, and prettier
+# rewraps their arrays differently -- so a bake left a dirty tree behind every
+# time and the diff said the pictures had changed when only the whitespace had.
+assets/blocks/blocks.json
+packages/client/public/blocks/blocks.json
