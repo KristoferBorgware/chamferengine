@@ -2672,6 +2672,21 @@ export class PlanetSettings {
 		};
 	}
 
+	/**
+	 * The terrain options a **world** is built with, which is the bench's set
+	 * plus what only a world decides.
+	 *
+	 * **The benches keep the bands and the planet does not.** A bench draws one
+	 * patch to be read -- its whole subject is the shape of the ground, and a
+	 * grey slab says nothing about where the soil ran out -- while the planet
+	 * is the thing being played, where a surface nothing named has to look
+	 * unnamed. So this is the planet's own call rather than a change to
+	 * {@link terrainOptions}, which four bench workers also read.
+	 */
+	worldTerrainOptions(): TerrainOptions {
+		return { ...this.terrainOptions(), bareRock: !this.biomesRun };
+	}
+
 	terrainOptions(): TerrainOptions {
 		// The two lines are absolute metres, the same metres the Ground map's
 		// bands are drawn on, so a colour on the map is the block the world

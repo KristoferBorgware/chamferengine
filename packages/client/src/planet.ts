@@ -817,7 +817,7 @@ async function main(): Promise<void> {
 				seed,
 				shape.atLod(lod),
 				map,
-				settings.terrainOptions(),
+				settings.worldTerrainOptions(),
 				biomeField,
 			),
 		);
@@ -1102,7 +1102,7 @@ async function main(): Promise<void> {
 						faces: live.knobs.gridFaces,
 					}
 				: undefined,
-			terrain: live.terrainOptions(),
+			terrain: live.worldTerrainOptions(),
 			// **The world's own forest, out of the world's own link.** Which
 			// kinds of plant it grows is part of the definition a link
 			// carries, the same way its relief is -- the vegetation bench is
@@ -2018,7 +2018,7 @@ async function main(): Promise<void> {
 					nextSeed,
 					shape.atLod(lod),
 					map,
-					live.terrainOptions(),
+					live.worldTerrainOptions(),
 					biomeField,
 				),
 			);
