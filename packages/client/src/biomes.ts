@@ -314,13 +314,6 @@ worker.onmessage = (event: MessageEvent<BiomesReply>) => {
 		`rounded to the level ${reply.facts.regionLevel} lattice: regions ` +
 			`${Math.round(reply.facts.regionMetres).toLocaleString("en-US")} m across`,
 	);
-	panel.note(
-		"biomeFit",
-		reply.facts.fit.fitted
-			? `temperature spans ${reply.facts.fit.tSpan.toFixed(2)}, ` +
-					`humidity ${reply.facts.fit.hSpan.toFixed(2)} of the raw range`
-			: "off: the readings go in as they come and bunch in the middle",
-	);
 	biomes.show(reply.facts, reply.planet, reply.patch);
 	show();
 	if (pending) ask(pendingSettled);

@@ -101,26 +101,12 @@ export interface BiomeSettings {
 	readonly warpOctaves?: number;
 
 	/**
-	 * Whether the climate square is stretched onto the land the planet has.
-	 *
-	 * Every climate term is a noise stack or a weighted sum of them, and a
-	 * stack normalized to its own peak has a standard deviation of about a
-	 * quarter of it -- so raw readings cluster in the middle of the square and
-	 * the corners name climates no ground is in. The fit measures the land's
-	 * own 2nd and 98th percentiles and stretches the square onto them.
-	 *
-	 * Read only when {@link climateFit} is absent, which is what names a
-	 * span rather than measuring one.
-	 */
-	readonly fit?: boolean;
-
-	/**
 	 * The spans to read every climate through, in place of measuring this
 	 * planet's own.
 	 *
 	 * **A span that is a constant maps one reading to one dot on every
 	 * world**, which is what a table naming a real classification promises
-	 * and a per-planet measurement cannot keep. {@link FIXED_FIT} is the one
+	 * and a per-planet measurement cannot keep. {@link LAPSED_FIT} is the one
 	 * measured for the shipped climate model; a table whose dots were placed
 	 * against this planet's own land leaves this absent and sets
 	 * {@link fit} instead.
@@ -203,7 +189,6 @@ export const BIOME_DEFAULTS = {
 	warpStrength: 0.12,
 	warpFeature: 700,
 	warpOctaves: 3,
-	fit: true,
 	climateFit: null,
 	regions: true,
 	regionSpan: 1600,

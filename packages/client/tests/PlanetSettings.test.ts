@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeCell, encodeCell, wordBits } from "chamfer/addressing";
 import {
 	BlockType,
-	FIXED_FIT,
+	DEFAULT_LANDFORM_GRID,
 	LAPSED_FIT,
 	TerrainGenerator,
 	flatCoarseMap,
@@ -709,56 +709,35 @@ describe("the biome model's fit", () => {
 	// A fit is measured against a climate model, and drying the air with
 	// height makes a different one; `holdridge` leaves the air alone, and
 	// the two tables that do not both measure the same span.
-	it("measures a span only for plain, and names a constant one otherwise", () => {
-		for (const biomeFit of [true, false]) {
-			const plain = new PlanetSettings({
-				biomes: "plain",
-				biomeFit,
-			}).biomeOptions();
-			expect(plain.climateFit ?? null).toBe(null);
-			expect(plain.fit).toBe(biomeFit);
-
-			const held: Record<string, unknown> = {};
-			for (const biomes of ["holdridge", "elevation", "plainElevation"])
-				held[biomes] = new PlanetSettings({
-					biomes,
-					biomeFit,
-				}).biomeOptions().climateFit;
-			expect(held).toEqual({
-				holdridge: FIXED_FIT,
-				elevation: LAPSED_FIT,
-				plainElevation: LAPSED_FIT,
-			});
-		}
+	// **One constant span, and every world reads it.** A stretch measured
+	// from each planet's own land means two worlds name one raw reading two
+	// different biomes; mapping the raw range straight through leaves the
+	// corners of the square as ground nobody stands on. The constant keeps
+	// both, and there is no knob that can disagree with it.
+	it("names one constant span, whatever the table says", () => {
+		expect(new PlanetSettings().biomeOptions().climateFit).toBe(LAPSED_FIT);
+		expect(
+			new PlanetSettings({ biomes: "no-such-preset" }).biomeOptions()
+				.climateFit,
+		).toBe(LAPSED_FIT);
 	});
 
-	// The lapse is what picks the span, so a table opening with one opens on
-	// the fit measured with it -- and the tables that set it are exactly the
-	// tables that do not read `FIXED_FIT`.
-	it("names the lapsed span for exactly the tables that dry with height", () => {
-		for (const biomes of [
-			"plain",
-			"holdridge",
-			"elevation",
-			"plainElevation",
-		]) {
-			const at = new PlanetSettings({ biomes }).biomeOptions();
-			expect([biomes, (at.humLapse ?? 0) > 0]).toEqual([
-				biomes,
-				at.climateFit === LAPSED_FIT,
-			]);
-		}
-	});
-
-	it("reads humLapse from the table, never from a knob of its own", () => {
+	// **The elevation lapse is a world knob now, not a term of the table.**
+	// With one table there is nothing for it to be a property *of*, and it
+	// reads the terrain exactly as its temperature twin does -- so it lives
+	// beside that twin and travels in the query string like any other knob.
+	it("reads humLapse from the knobs, beside the temperature lapse", () => {
+		expect(new PlanetSettings().biomeOptions().humLapse).toBe(
+			PLANET_DEFAULTS.humLapse,
+		);
 		expect(
-			new PlanetSettings({ biomes: "plain" }).biomeOptions().humLapse,
-		).toBe(0);
-		expect(
-			new PlanetSettings({ biomes: "holdridge" }).biomeOptions().humLapse,
-		).toBe(0);
-		expect(
-			new PlanetSettings({ biomes: "elevation" }).biomeOptions().humLapse,
-		).toBeGreaterThan(0);
+			new PlanetSettings({ humLapse: 1.5 }).biomeOptions().humLapse,
+		).toBe(1.5);
+		// A link written while it was a term of the table carries a third
+		// field there; it is stepped over rather than refused.
+		const params = new URLSearchParams();
+		params.set("biomes", "plainElevation|" + DEFAULT_LANDFORM_GRID + "|2");
+		const back = PlanetSettings.fromParams(params);
+		expect(back.biomeOptions().humLapse).toBe(PLANET_DEFAULTS.humLapse);
 	});
 });

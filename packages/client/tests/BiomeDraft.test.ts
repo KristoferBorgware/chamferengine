@@ -4,50 +4,21 @@ import {
 	biomeTableOf,
 	biomeTableToText,
 } from "../src/BiomeDraft.js";
-import { BIOME_PRESETS, DEFAULT_LANDFORM_GRID } from "chamfer/generation";
+import {
+	BIOME_PRESETS,
+	DEFAULT_LANDFORM_GRID,
+	DEFAULT_PRESET,
+} from "chamfer/generation";
 
 describe("the biome table in a query string", () => {
 	it("writes an untouched preset as its name alone", () => {
-		expect(biomeTableToText(biomeTableOf("plain"))).toBe("plain");
-		expect(biomeTableToText(biomeTableOf("holdridge"))).toBe("holdridge");
-		expect(biomeTableToText(biomeTableOf("elevation"))).toBe("elevation");
-	});
-
-	it("opens elevation as holdridge's zones plus the substrate, dried by default", () => {
-		const elevation = biomeTableOf("elevation");
-		expect(elevation.humLapse).toBeGreaterThan(0);
-		// Every life zone is carried over in order, and what follows them is
-		// the substrate the merge brought across from `plain`.
-		const zones = biomeTableOf("holdridge").biomes.map((b) => b.name);
-		const names = elevation.biomes.map((b) => b.name);
-		expect(names.slice(0, zones.length)).toEqual(zones);
-		expect(names.slice(zones.length)).toEqual([
-			"Icy shore",
-			"Stony shore",
-			"Beach",
-			"Badlands",
-			"Stony peaks",
-		]);
-		// plain and holdridge open with no elevation pull, so a link naming
-		// either travels exactly as it did before this field existed.
-		expect(biomeTableOf("plain").humLapse).toBe(0);
-		expect(biomeTableOf("holdridge").humLapse).toBe(0);
-	});
-
-	it("round-trips a hand-set humLapse", () => {
-		const draft = biomeTableOf("plain");
-		draft.humLapse = 1.25;
-		const back = biomeTableFromText(biomeTableToText(draft));
-		expect(back.humLapse).toBeCloseTo(1.25, 3);
-	});
-
-	it("falls back to the preset's own humLapse when a link omits it", () => {
-		const back = biomeTableFromText("elevation|" + DEFAULT_LANDFORM_GRID);
-		expect(back.humLapse).toBe(biomeTableOf("elevation").humLapse);
+		expect(biomeTableToText(biomeTableOf(DEFAULT_PRESET))).toBe(
+			DEFAULT_PRESET,
+		);
 	});
 
 	it("round-trips an edited table dot for dot", () => {
-		const draft = biomeTableOf("plain");
+		const draft = biomeTableOf(DEFAULT_PRESET);
 		draft.biomes[0]!.t = 0.123;
 		draft.biomes[2]!.name = "Warm sand";
 		draft.grid = draft.grid.slice(0, 3) + "4" + draft.grid.slice(4);
@@ -60,12 +31,12 @@ describe("the biome table in a query string", () => {
 	});
 
 	it("keeps every preset block through a round trip", () => {
-		const draft = biomeTableOf("plain");
+		const draft = biomeTableOf(DEFAULT_PRESET);
 		draft.biomes[0]!.h = 0.5;
 		const back = biomeTableFromText(biomeTableToText(draft));
 		for (let n = 0; n < back.biomes.length; n++)
 			expect(back.biomes[n]!.block).toBe(
-				BIOME_PRESETS["plain"]![n]!.block,
+				BIOME_PRESETS[DEFAULT_PRESET]![n]!.block,
 			);
 	});
 
@@ -73,36 +44,51 @@ describe("the biome table in a query string", () => {
 	// it is absent on most rows, so a row format that forgot the field would
 	// still round-trip every other one and hide the loss.
 	it("keeps every preset's underlay through a round trip, present or absent", () => {
-		const draft = biomeTableOf("plain");
+		const draft = biomeTableOf(DEFAULT_PRESET);
 		draft.biomes[0]!.h = 0.5;
 		const back = biomeTableFromText(biomeTableToText(draft));
 		let checked = 0;
 		for (let n = 0; n < back.biomes.length; n++) {
 			expect(back.biomes[n]!.underlay).toBe(
-				BIOME_PRESETS["plain"]![n]!.underlay,
+				BIOME_PRESETS[DEFAULT_PRESET]![n]!.underlay,
 			);
-			if (BIOME_PRESETS["plain"]![n]!.underlay !== undefined) checked++;
+			if (BIOME_PRESETS[DEFAULT_PRESET]![n]!.underlay !== undefined)
+				checked++;
 		}
 		// Desert and Badlands are the two the preset actually sets one on --
 		// if neither ran, the assertions above never exercised the field at all.
 		expect(checked).toBeGreaterThan(0);
 	});
 
+	// A link written while the elevation lapse was a term of the table has a
+	// third field in its header. It is a world knob now, so the field is
+	// stepped over and the rest of the table still reads.
+	it("steps over a third header field a link written earlier carries", () => {
+		const back = biomeTableFromText(
+			`${DEFAULT_PRESET}|${DEFAULT_LANDFORM_GRID}|0.6`,
+		);
+		expect(back.preset).toBe(DEFAULT_PRESET);
+		expect(back.grid).toBe(DEFAULT_LANDFORM_GRID);
+		expect(back.biomes.length).toBe(BIOME_PRESETS[DEFAULT_PRESET]!.length);
+	});
+
 	it("carries a hand-set underlay through a round trip", () => {
-		const draft = biomeTableOf("plain");
+		const draft = biomeTableOf(DEFAULT_PRESET);
 		draft.biomes[0]!.underlay = draft.biomes[0]!.block;
 		const back = biomeTableFromText(biomeTableToText(draft));
 		expect(back.biomes[0]!.underlay).toBe(draft.biomes[0]!.block);
 	});
 
-	it("falls back to the plain preset when a link says nonsense", () => {
+	// **A link may name a set this build no longer carries**, and the world
+	// it named should open on the one that is here rather than refuse.
+	it("falls back to the one preset when a link says nonsense", () => {
 		const back = biomeTableFromText("no-such-preset|???;bad~row");
-		expect(back.biomes.length).toBe(BIOME_PRESETS["plain"]!.length);
+		expect(back.biomes.length).toBe(BIOME_PRESETS[DEFAULT_PRESET]!.length);
 		expect(back.grid).toBe(DEFAULT_LANDFORM_GRID);
 	});
 
 	it("refuses a grid digit that names no landform", () => {
-		const draft = biomeTableOf("plain");
+		const draft = biomeTableOf(DEFAULT_PRESET);
 		const bad = "9".repeat(DEFAULT_LANDFORM_GRID.length);
 		const back = biomeTableFromText(
 			biomeTableToText(draft).replace(draft.grid, bad),

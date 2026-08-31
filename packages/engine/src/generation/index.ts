@@ -192,14 +192,17 @@ export { gridAt } from "./biomes/gridAt.js";
 export { riseGrid } from "./biomes/riseGrid.js";
 export { SHORE_ROOM, landformAt } from "./biomes/landformAt.js";
 export type { BiomeDef } from "./biomes/BiomeDef.js";
-export { BIOME_PRESETS, DEFAULT_BIOMES } from "./biomes/BIOME_PRESETS.js";
+export {
+	BIOME_PRESETS,
+	DEFAULT_BIOMES,
+	DEFAULT_PRESET,
+} from "./biomes/BIOME_PRESETS.js";
 export { BIOME_GROUNDS } from "./biomes/BIOME_GROUNDS.js";
 export type { BiomeSettings } from "./biomes/BiomeSettings.js";
 export { BIOME_DEFAULTS } from "./biomes/BiomeSettings.js";
 export type { BiomeWorld } from "./biomes/BiomeWorld.js";
 export type { ClimateFit } from "./biomes/ClimateFit.js";
-export { FIXED_FIT, LAPSED_FIT, UNFITTED } from "./biomes/ClimateFit.js";
-export { fitForPreset } from "./biomes/fitForPreset.js";
+export { LAPSED_FIT, UNFITTED } from "./biomes/ClimateFit.js";
 export { allowedBiomes } from "./biomes/allowedBiomes.js";
 export { biomeOf } from "./biomes/biomeOf.js";
 export type { BiomeSample } from "./biomes/BiomeField.js";

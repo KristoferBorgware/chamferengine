@@ -13,14 +13,20 @@ import {
 
 describe("biomeOf", () => {
 	const biomes = DEFAULT_BIOMES;
+
+	/** Any landform that is not the shore, for a climate that may sit anywhere. */
+	const LOWLANDS = LANDFORMS.findIndex((f) => f.key === "lowlands");
 	const allowed = allowedBiomes(biomes);
 
 	it("answers with the nearest dot among the allowed set alone", () => {
-		// Right on a dot, the answer is that dot.
+		// Right on a dot, the answer is that dot -- asked on a landform that
+		// allows it, which for a filed ground is the one it is filed to and
+		// for a climate is any of them.
 		for (let b = 0; b < biomes.length; b++) {
-			const form = LANDFORMS.findIndex(
-				(f) => f.key === biomes[b]!.landform,
-			);
+			const form =
+				biomes[b]!.landform === ANY_LANDFORM
+					? LOWLANDS
+					: LANDFORMS.findIndex((f) => f.key === biomes[b]!.landform);
 			expect(
 				biomeOf(biomes[b]!.t, biomes[b]!.h, allowed[form], biomes),
 			).toBe(b);
@@ -36,17 +42,28 @@ describe("biomeOf", () => {
 					).toBeGreaterThanOrEqual(0);
 	});
 
-	it("keeps a lowland desert off a summit however hot the summit is", () => {
-		const desert = biomes.findIndex((b) => b.name === "Desert");
-		const peaks = LANDFORMS.findIndex((f) => f.key === "peaks");
-		expect(
-			biomeOf(
-				biomes[desert]!.t,
-				biomes[desert]!.h,
-				allowed[peaks],
-				biomes,
-			),
-		).not.toBe(desert);
+	// **The shore is the one landform a filed biome takes outright**, and it
+	// is what keeps a beach reachable: a coast reads the most crowded corner
+	// of the square, so a beach merely added to that crowd never wins.
+	it("hands the shore to its own grounds and shares every other landform", () => {
+		const shore = new Set(
+			biomes
+				.map((b, i) => [b, i] as const)
+				.filter(([b]) => b.landform === "shore")
+				.map(([, i]) => i),
+		);
+		expect(shore.size).toBeGreaterThan(0);
+		expect(new Set(allowed[SHORE])).toEqual(shore);
+		const climates = biomes.filter(
+			(b) => b.landform === ANY_LANDFORM,
+		).length;
+		for (let form = 0; form < LANDFORMS.length; form++) {
+			if (form === SHORE) continue;
+			const here = allowed[form]!.filter(
+				(i) => biomes[i]!.landform === ANY_LANDFORM,
+			);
+			expect(here.length).toBe(climates);
+		}
 	});
 
 	it("returns -1 only for a landform with no biome at all", () => {
@@ -64,44 +81,21 @@ describe("the presets", () => {
 		}
 	});
 
-	it("files every life zone under no landform, in both Holdridge tables", () => {
-		for (const biome of BIOME_PRESETS["holdridge"]!)
-			expect(biome.landform).toBe(ANY_LANDFORM);
-		// `elevation` is those same zones plus the substrate, and the
-		// substrate is the only part of it filed to real ground.
-		const merged = BIOME_PRESETS["elevation"]!;
-		const zones = merged.filter((b) => b.landform === ANY_LANDFORM);
-		const substrate = merged.filter((b) => b.landform !== ANY_LANDFORM);
-		expect(zones.map((b) => b.name)).toEqual(
-			BIOME_PRESETS["holdridge"]!.map((b) => b.name),
-		);
-		expect(substrate.length).toBeGreaterThan(0);
-		for (const biome of substrate)
-			expect(LANDFORMS.some((f) => f.key === biome.landform)).toBe(true);
-	});
-
-	// **The shore is the one landform a filed biome takes outright.** Every
-	// other keeps its life zones and gains a dot; a coast reads the most
-	// crowded corner of the square, so a beach merely added never wins.
-	it("hands the shore to its own biomes, and shares every other landform", () => {
-		const merged = BIOME_PRESETS["elevation"]!;
-		const allowed = allowedBiomes(merged);
-		const zones = new Set(
-			merged
-				.map((b, i) => [b, i] as const)
-				.filter(([b]) => b.landform === ANY_LANDFORM)
-				.map(([, i]) => i),
-		);
-		for (let form = 0; form < LANDFORMS.length; form++) {
-			const here = allowed[form]!;
-			const fromZones = here.filter((i) => zones.has(i)).length;
-			if (LANDFORMS[form]!.key === "shore") expect(fromZones).toBe(0);
-			else expect(fromZones).toBe(zones.size);
+	// **Sixteen name a climate and five name a place.** A climate is filed
+	// under no landform, because a rainforest on a hillside is still a
+	// rainforest and filing it draws the relief curve as colour; a shoreline
+	// and a summit are the landform itself, and no reading of the air says
+	// where the land meets the water.
+	it("files a ground to a landform only where the landform is what it is", () => {
+		for (const set of Object.values(BIOME_PRESETS)) {
+			const filed = set.filter((b) => b.landform !== ANY_LANDFORM);
+			const climates = set.filter((b) => b.landform === ANY_LANDFORM);
+			expect(climates.length).toBeGreaterThan(filed.length);
+			for (const biome of filed)
+				expect(LANDFORMS.some((f) => f.key === biome.landform)).toBe(
+					true,
+				);
 		}
-		// And a table filing nothing to the shore is untouched by the rule.
-		expect(allowedBiomes(BIOME_PRESETS["holdridge"]!)[SHORE]!.length).toBe(
-			BIOME_PRESETS["holdridge"]!.length,
-		);
 	});
 
 	it("gives every biome its own block, and never renames one shared on purpose", () => {

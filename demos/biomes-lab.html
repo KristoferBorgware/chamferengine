@@ -2212,84 +2212,38 @@
 			 * appear on a summit however hot and dry the summit is.
 			 */
 			const PRESETS = {
-				plain: [
-					// **Each landform's dots sit inside that ground's own
-					// measured climate**, not spread evenly over a square most
-					// of it never reaches. Peaks run 0.00 to 0.49 in
-					// temperature because the ground cools as it rises, so a
-					// hot peak is not a rare biome, it is no biome at all; a
-					// dot placed out there would never be built and the two
-					// that were left would split the cloud between them.
-					{ name: "Icy shore", hex: "d8e4ec", t: 0.3, h: 0.6, landform: "shore" },
-					{ name: "Stony shore", hex: "8e9298", t: 0.62, h: 0.45, landform: "shore" },
-					{ name: "Beach", hex: "e6d9a8", t: 0.9, h: 0.8, landform: "shore" },
-
-					{ name: "Permafrost", hex: "cfdce6", t: 0.17, h: 0.49, landform: "valleys" },
-					{ name: "Swamp", hex: "4e5f33", t: 0.45, h: 0.78, landform: "valleys" },
-					{ name: "Savanna", hex: "c9b06a", t: 0.7, h: 0.25, landform: "valleys" },
-
-					{ name: "Tundra", hex: "9fae95", t: 0.3, h: 0.28, landform: "lowlands" },
-					{ name: "Taiga", hex: "3d6b63", t: 0.3, h: 0.78, landform: "lowlands" },
-					{ name: "Steppe", hex: "a8a05e", t: 0.58, h: 0.28, landform: "lowlands" },
-					{ name: "Grassland", hex: "93a95e", t: 0.58, h: 0.78, landform: "lowlands" },
-					{ name: "Desert", hex: "e8c44a", t: 0.84, h: 0.28, landform: "lowlands" },
-					{ name: "Rainforest", hex: "2f9e2f", t: 0.84, h: 0.78, landform: "lowlands" },
-
-					{ name: "Snowfield", hex: "dce6ee", t: 0.15, h: 0.63, landform: "slopes" },
-					{ name: "Grove", hex: "5f8a5c", t: 0.42, h: 0.87, landform: "slopes" },
-					{ name: "Scrubland", hex: "b08a55", t: 0.79, h: 0.32, landform: "slopes" },
-
-					{ name: "Ice sheet", hex: "e2eaf2", t: 0.25, h: 0.45, landform: "plateau" },
-					{ name: "Prairie", hex: "b0ab6a", t: 0.57, h: 0.55, landform: "plateau" },
-					{ name: "Badlands", hex: "c06a3a", t: 0.81, h: 0.18, landform: "plateau" },
-
-					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.05, h: 0.45, landform: "peaks" },
-					{ name: "Stony peaks", hex: "8d8f94", t: 0.21, h: 0.18, landform: "peaks" },
-					{ name: "Alpine forest", hex: "46705a", t: 0.41, h: 0.62, landform: "peaks" },
-				],
-				// **Holdridge's life zones, which are the climate square
-				// already.** A real classification of the world's vegetation by
-				// temperature and rainfall, with a name for every pair -- so it
-				// drops onto a set of dots without being reshaped. It says
-				// nothing about landforms, and that is exactly what `any` is
-				// for: every zone is allowed on every kind of ground, and the
-				// page is back to one diagram read everywhere. Two things come
-				// with it. Its own chart is a **triangle**, not a square: cold
-				// air holds little water, so the cold-and-soaking corner has no
-				// zone in it, and here the polar dot simply owns that whole end.
-				// And it is banded by **altitude as well as latitude** -- the
-				// same zones stack up a mountain in the tropics as run toward
-				// the pole at sea level, which is what the temperature field's
-				// altitude term does.
-				Holdridge: [
-					{ name: "Polar desert", hex: "f2f4f6", t: 0.06, h: 0.5 },
-					{ name: "Dry tundra", hex: "8d8f86", t: 0.24, h: 0.25 },
-					{ name: "Moist tundra", hex: "6f8c86", t: 0.24, h: 0.47 },
-					{ name: "Wet tundra", hex: "43809b", t: 0.24, h: 0.65 },
-					{ name: "Rain tundra", hex: "2a76c0", t: 0.24, h: 0.85 },
-					{ name: "Boreal desert", hex: "b9a878", t: 0.4, h: 0.06 },
-					{ name: "Dry scrub", hex: "9aa46a", t: 0.4, h: 0.24 },
-					{ name: "Boreal moist forest", hex: "7fae7a", t: 0.4, h: 0.48 },
-					{ name: "Boreal wet forest", hex: "57a89a", t: 0.4, h: 0.68 },
-					{ name: "Boreal rain forest", hex: "35a2b8", t: 0.4, h: 0.88 },
-					{ name: "Desert scrub", hex: "c3c07a", t: 0.58, h: 0.14 },
-					{ name: "Steppe", hex: "b6c46f", t: 0.58, h: 0.34 },
-					{ name: "Moist forest", hex: "86c07a", t: 0.58, h: 0.55 },
-					{ name: "Wet forest", hex: "5fbf94", t: 0.58, h: 0.75 },
-					{ name: "Temperate rain forest", hex: "46c2ae", t: 0.58, h: 0.93 },
-					{ name: "Subtropical desert", hex: "e8dc7a", t: 0.78, h: 0.05 },
-					{ name: "Thorn woodland", hex: "cfd96f", t: 0.78, h: 0.25 },
-					{ name: "Dry forest", hex: "a5d772", t: 0.78, h: 0.45 },
-					{ name: "Subtropical moist forest", hex: "78d67f", t: 0.78, h: 0.68 },
-					{ name: "Tropical desert", hex: "f4ef7a", t: 0.95, h: 0.04 },
-					{ name: "Tropical dry forest", hex: "c9ee72", t: 0.95, h: 0.35 },
-					{ name: "Tropical wet forest", hex: "63ec8e", t: 0.95, h: 0.66 },
-					{ name: "Tropical rain forest", hex: "3aecb0", t: 0.95, h: 0.9 },
+				// **One set.** Climate names the biome and the terrain reaches
+				// it only through the air getting colder and drier with
+				// height; sixteen of these are filed under no landform at all,
+				// and the five that are filed name a shoreline or a summit,
+				// which is a thing no reading of the air can say.
+				plainElevation: [
+					{ name: "Ice sheet", hex: "e2eaf2", t: 0.08, h: 0.26 },
+					{ name: "Permafrost", hex: "cfdce6", t: 0.12, h: 0.55 },
+					{ name: "Snowfield", hex: "dce6ee", t: 0.22, h: 0.74 },
+					{ name: "Tundra", hex: "9fae95", t: 0.23, h: 0.45 },
+					{ name: "Alpine forest", hex: "46705a", t: 0.27, h: 0.71 },
+					{ name: "Taiga", hex: "3d6b63", t: 0.32, h: 0.95 },
+					{ name: "Steppe", hex: "a8a05e", t: 0.58, h: 0.4 },
+					{ name: "Prairie", hex: "b0ab6a", t: 0.46, h: 0.77 },
+					{ name: "Grove", hex: "5f8a5c", t: 0.49, h: 0.95 },
+					{ name: "Desert", hex: "e8c44a", t: 0.68, h: 0 },
+					{ name: "Grassland", hex: "93a95e", t: 0.71, h: 0.44 },
+					{ name: "Swamp", hex: "4e5f33", t: 0.55, h: 0.78 },
+					{ name: "Badlands", hex: "c06a3a", t: 0.82, h: 0.18 },
+					{ name: "Scrubland", hex: "b08a55", t: 0.85, h: 0.44 },
+					{ name: "Savanna", hex: "c9b06a", t: 0.97, h: 0.62 },
+					{ name: "Rainforest", hex: "2f9e2f", t: 0.94, h: 0.85 },
+					{ name: "Icy shore", hex: "d8e4ec", t: 0.3, h: 0.75, landform: "shore" },
+					{ name: "Stony shore", hex: "8e9298", t: 0.57, h: 0.82, landform: "shore" },
+					{ name: "Beach", hex: "e6d9a8", t: 0.85, h: 0.9, landform: "shore" },
+					{ name: "Jagged peaks", hex: "e4ebf2", t: 0.12, h: 0.25, landform: "peaks" },
+					{ name: "Stony peaks", hex: "8d8f94", t: 0.3, h: 0.1, landform: "peaks" },
 				],
 			};
 
 			/** The set the page opens with, and the one the URL is measured against. */
-			const DEFAULT_BIOMES = PRESETS.plain;
+			const DEFAULT_BIOMES = PRESETS.plainElevation;
 
 			/** The live table, which the diagram edits and the URL carries. */
 			let biomes = DEFAULT_BIOMES.map((b) => ({ landform: ANY, ...b }));
@@ -2323,10 +2277,19 @@
 			let allowed = [];
 
 			function regroup() {
+				// **The shore is the one landform a filed biome takes
+				// outright.** Every other keeps the climates and gains a dot;
+				// a coast reads the most crowded corner of the square, so a
+				// beach merely added to that crowd never wins.
+				const ownShore = biomes.some((b) => b.landform === "shore");
 				allowed = LANDFORMS.map((form, n) => {
+					const only = n === SHORE && ownShore;
 					const out = [];
 					for (let b = 0; b < biomes.length; b++)
-						if (biomes[b].landform === form.key || biomes[b].landform === ANY)
+						if (
+							biomes[b].landform === form.key ||
+							(!only && biomes[b].landform === ANY)
+						)
 							out.push(b);
 					return out;
 				});

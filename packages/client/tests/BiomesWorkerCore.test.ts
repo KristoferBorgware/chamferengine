@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { BiomesReady } from "../src/BiomesMessage.js";
+import { biomeTableOf, biomeTableToText } from "../src/BiomeDraft.js";
 import { BiomesWorkerCore } from "../src/BiomesWorkerCore.js";
 import { PLANET_DEFAULTS, copyKnobs } from "../src/PlanetSettings.js";
-import { BIOME_PRESETS, LANDFORMS } from "chamfer/generation";
+import { BIOME_PRESETS, DEFAULT_PRESET, LANDFORMS } from "chamfer/generation";
 
 /** A small world, so a whole build runs in a test. */
 function knobs(): ReturnType<typeof copyKnobs> {
@@ -42,7 +43,9 @@ describe("BiomesWorkerCore", () => {
 		const total = facts.planetShares.reduce((a, b) => a + b, 0);
 		expect(total).toBeGreaterThan(0.99);
 		expect(total).toBeLessThan(1.01);
-		expect(facts.planetShares.length).toBe(BIOME_PRESETS["plain"]!.length);
+		expect(facts.planetShares.length).toBe(
+			BIOME_PRESETS[DEFAULT_PRESET]!.length,
+		);
 		expect(facts.formPlanet.length).toBe(LANDFORMS.length);
 		expect(facts.built).toBeGreaterThan(0);
 		expect(facts.fit.fitted).toBe(true);
@@ -99,16 +102,19 @@ describe("BiomesWorkerCore", () => {
 		const core = new BiomesWorkerCore();
 		const first = build(core, 1);
 		const started = performance.now();
+		// **A table edit rather than another preset**, because there is one
+		// preset: a dot moved is the same question -- name the held samples
+		// again without resampling anything.
+		const moved = biomeTableOf(DEFAULT_PRESET);
+		moved.biomes[0]!.t = 0.42;
 		const second = build(core, 2, (k) => {
-			k.biomes = "holdridge";
+			k.biomes = biomeTableToText(moved);
 		});
 		const again = performance.now() - started;
 		// The whole second build is naming over held samples: no map, no
 		// noise, no climate. It comes back an order of magnitude faster than
 		// the first, which had to build all three.
 		expect(again).toBeLessThan(first.facts.ms / 2);
-		expect(second.facts.planetShares.length).toBe(
-			BIOME_PRESETS["holdridge"]!.length,
-		);
+		expect(second.facts.planetShares.length).toBe(moved.biomes.length);
 	});
 });
