@@ -109,6 +109,8 @@ export class BlockTextures {
 		limit?: number,
 		/** Pictures to store, or nothing for all of them. */
 		resident?: ReadonlySet<number>,
+		/** Slots to lay out, when more are wanted than are filled now. */
+		capacity?: number,
 	) {
 		this.atlas = atlas;
 		this.table = Int32Array.from(atlas.table);
@@ -137,6 +139,7 @@ export class BlockTextures {
 			Math.max(1, limit ?? device.limits.maxTextureArrayLayers),
 			resident,
 			averageOf,
+			capacity,
 		);
 		this.packing = packing;
 		this.texture = device.createTexture({
@@ -149,23 +152,24 @@ export class BlockTextures {
 		// One write a level. {@link load} has already turned the grid the bake
 		// wrote into the order an array wants -- layer 0's rows, then layer
 		// 1's -- so this is the same single upload it always was.
-		levels.slice(0, packing.levels).forEach((bytes, level) => {
-			const wide = atlas.size >> level;
-			const side = packing.side >> level;
-			// Unpacked this is the bytes as they came; packed it is the same
-			// tiles laid into shared layers, level by level, so a tile's mips
-			// stay its own rather than being averaged with its neighbours'.
-			const whole =
-				packing.perSide === 1 &&
-				packing.order.length === atlas.layers.length;
-			const laid = whole ? bytes : intoLayers(bytes, wide, packing);
-			device.queue.writeTexture(
-				{ texture: this.texture, mipLevel: level },
-				laid,
-				{ bytesPerRow: side * 4, rowsPerImage: side },
-				[side, side, packing.layers],
-			);
-		});
+		if (packing.order.length > 0)
+			levels.slice(0, packing.levels).forEach((bytes, level) => {
+				const wide = atlas.size >> level;
+				const side = packing.side >> level;
+				// Unpacked this is the bytes as they came; packed it is the same
+				// tiles laid into shared layers, level by level, so a tile's mips
+				// stay its own rather than being averaged with its neighbours'.
+				const whole =
+					packing.perSide === 1 &&
+					packing.order.length === atlas.layers.length;
+				const laid = whole ? bytes : intoLayers(bytes, wide, packing);
+				device.queue.writeTexture(
+					{ texture: this.texture, mipLevel: level },
+					laid,
+					{ bytesPerRow: side * 4, rowsPerImage: side },
+					[side, side, packing.layers],
+				);
+			});
 		this.decoded = levels;
 		packing.order.forEach((picture, slot) =>
 			this.slotOf.set(picture, slot),

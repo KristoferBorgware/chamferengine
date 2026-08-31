@@ -481,8 +481,22 @@ let bakedPictures: {
 	levels: Uint8Array<ArrayBuffer>[];
 } | null = null;
 
-/** The cap the texture on screen was built with, so a change is noticed. */
+/**
+ * The resident set a texture starts with, which is none of them.
+ *
+ * **A prediction can only be wrong, and the demand path cannot.** A world was
+ * going to be asked which pictures it might hold -- its biomes name the ground
+ * and its plant layers name the wood and the leaves -- and then a player puts
+ * down a block out of a chest and the guess is wrong anyway. Since a chunk
+ * reports what it drew and the pictures are taken in **before** that chunk is
+ * uploaded, the first frame each block appears in is already right without any
+ * guess at all. So there is no guess.
+ */
+const NOTHING_YET: ReadonlySet<number> = new Set<number>();
+
+/** What the texture on screen was built with, so a change is noticed. */
 let shownCap: number | undefined;
+let shownPool = 0;
 
 /**
  * Put the pictures a chunk turned out to need onto the GPU.
@@ -531,11 +545,14 @@ async function main(): Promise<void> {
 		// fewer layers is a re-upload and not a re-fetch.
 		bakedPictures = baked;
 		shownCap = layerCapOf(settings);
+		shownPool = settings.knobs.texturePool;
 		blockTextures = new BlockTextures(
 			ctx,
 			baked.atlas,
 			baked.levels,
 			shownCap,
+			NOTHING_YET,
+			shownPool,
 		);
 		renderer.setBlockTextures(blockTextures);
 	} catch (whatever) {
@@ -2086,13 +2103,20 @@ async function main(): Promise<void> {
 		// because a device does not free one just because nothing refers to it
 		// and this is a knob a person moves repeatedly.
 		const wantedCap = layerCapOf(live);
-		if (bakedPictures && wantedCap !== shownCap) {
+		const wantedPool = live.knobs.texturePool;
+		if (
+			bakedPictures &&
+			(wantedCap !== shownCap || wantedPool !== shownPool)
+		) {
 			shownCap = wantedCap;
+			shownPool = wantedPool;
 			const next = new BlockTextures(
 				ctx,
 				bakedPictures.atlas,
 				bakedPictures.levels,
 				wantedCap,
+				NOTHING_YET,
+				wantedPool,
 			);
 			const gone = blockTextures;
 			blockTextures = next;

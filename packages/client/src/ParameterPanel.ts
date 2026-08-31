@@ -1235,6 +1235,15 @@ const GROUPS: Group[] = [
 				enabledWhen: (k) => !k.plain,
 			},
 			{
+				// Room for pictures rather than the size of the set. Below
+				// what a world needs, what did not fit draws as its own
+				// average colour: a worse picture, never a wrong one.
+				key: "texturePool",
+				label: "Pictures held",
+				digits: 0,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				// **The sun as though no block stood in its way**, so a cave
 				// can be looked into before there is anything to carry down
 				// it. Not a flat light: the face's own angle to the sun still
