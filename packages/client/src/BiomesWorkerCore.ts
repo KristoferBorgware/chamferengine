@@ -395,6 +395,11 @@ export class BiomesWorkerCore {
 				cellsDrawn: layout.count,
 				columnMetres: cellMetres,
 				span: mesh.span,
+				patchAt: {
+					latitude: k.patchLatitude,
+					longitude: k.patchLongitude,
+					radius: settings.radius,
+				},
 				ms: performance.now() - started,
 				land: this.world.land,
 				lowest: mesh.lowest,

@@ -13,6 +13,7 @@ import { PlanetSettings } from "./PlanetSettings.js";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { BiomePanel } from "./BiomePanel.js";
 import { biomeTableToText } from "./BiomeDraft.js";
+import { busyLine } from "./busyLine.js";
 import {
 	PatchRenderer,
 	createGpuContext,
@@ -346,7 +347,7 @@ function say(): void {
 		: "";
 
 	facts.innerHTML =
-		(says ? line(`<span class="bench-busy">${says}</span>`) : "") +
+		busyLine(says) +
 		line(
 			`radius <b>${metres(settings.radius)}</b> · map cell ` +
 				`<b>${settings.coarseCell.toFixed(0)} m</b> at level ` +

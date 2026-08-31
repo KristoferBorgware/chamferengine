@@ -20,6 +20,7 @@ import { PlantPanel } from "./PlantPanel.js";
 import { plantLayersToText } from "./PlantDraft.js";
 import { outlinePatch } from "./outlinePatch.js";
 import { paintSheet } from "./paintSheet.js";
+import { busyLine } from "./busyLine.js";
 import {
 	PatchRenderer,
 	createGpuContext,
@@ -479,7 +480,7 @@ function say(): void {
 		: "";
 
 	facts.innerHTML =
-		(says ? line(`<span class="bench-busy">${says}</span>`) : "") +
+		busyLine(says) +
 		line(
 			`radius <b>${metres(settings.radius)}</b> · ` +
 				`depth <b>${settings.depth}</b> · ` +

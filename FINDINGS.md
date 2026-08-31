@@ -10,37 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-143 — A biome filed to a landform is invisible on every other landform's tab
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** small
-**Found:** 2026-08-31, after a report that Badlands could not be found in the table it is in
-**Where:** `packages/client/src/BiomePanel.ts` (`buildList`, `paintChart`,
-`allowedNow`)
-
-**What happens.** Both the biome list and the diagram draw
-`allowedNow()[shown]` -- the biomes allowed on the landform chip that is
-currently selected. That is right for the diagram, which is a picture of one
-landform's own Voronoi, and it silently hides a biome from the **list**: six
-of `plainElevation`'s twenty-one are filed to a landform, and each appears
-under one chip only. On Lowlands, which is `56%` of the land and the chip a
-reader is most likely to be on, Badlands, Beach, both shores and both peak
-grounds are all absent from the table with nothing saying they exist.
-
-**Why it matters.** A reader who can see a biome on the planet and cannot
-find it in the panel has no way to tune it, and no way to tell whether it is
-in the table at all. It reads as a bug in the table rather than a filter on
-the view. It also hides the count: the readout says twenty-one biomes and
-the list shows fifteen.
-
-**What would fix it.** Show the filed biomes in the list whatever chip is
-selected, greyed and grouped under a line saying which landform each is on,
-and leave the diagram alone -- it is a picture of one landform and a dot that
-is not in it would be a lie. Clicking one could switch the chip to the
-landform that owns it, which is also how a reader learns the rule.
-
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2760,6 +2729,46 @@ is the only place a decrement would go.
 ---
 
 ## Closed
+
+### F-143 — A biome filed to a landform is invisible on every other landform's tab
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** small
+**Found:** 2026-08-31, after a report that Badlands could not be found in the table it is in
+**Closed:** 2026-08-31 on `master` by "Show every ground in the table, and
+keep a bench's own busy line in a row." The list shows all twenty-one
+whatever chip is selected: the ones this landform can build first, then a
+rule reading `on other ground` and the rest dimmed, each with the landform
+that owns it where its share would be. Clicking one moves to that landform
+rather than picking a dot the diagram beside it does not draw, which is
+also how a reader learns the rule. The diagram is untouched -- it is a
+picture of one landform's own Voronoi, and a dot that is not in it would be
+a lie.
+**Where:** `packages/client/src/BiomePanel.ts` (`buildList`, `paintChart`,
+`allowedNow`)
+
+**What happens.** Both the biome list and the diagram draw
+`allowedNow()[shown]` -- the biomes allowed on the landform chip that is
+currently selected. That is right for the diagram, which is a picture of one
+landform's own Voronoi, and it silently hides a biome from the **list**: six
+of `plainElevation`'s twenty-one are filed to a landform, and each appears
+under one chip only. On Lowlands, which is `56%` of the land and the chip a
+reader is most likely to be on, Badlands, Beach, both shores and both peak
+grounds are all absent from the table with nothing saying they exist.
+
+**Why it matters.** A reader who can see a biome on the planet and cannot
+find it in the panel has no way to tune it, and no way to tell whether it is
+in the table at all. It reads as a bug in the table rather than a filter on
+the view. It also hides the count: the readout says twenty-one biomes and
+the list shows fifteen.
+
+**What would fix it.** Show the filed biomes in the list whatever chip is
+selected, greyed and grouped under a line saying which landform each is on,
+and leave the diagram alone -- it is a picture of one landform and a dot that
+is not in it would be a lie. Clicking one could switch the chip to the
+landform that owns it, which is also how a reader learns the rule.
 
 ### F-140 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
 

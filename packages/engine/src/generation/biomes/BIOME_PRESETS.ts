@@ -501,10 +501,10 @@ function respaced(
  * they would split their neighbourhood along a line no reading is stable
  * across, which is the speckle again by another route.
  *
- * **The fifteen are placed where the readings are, and the placement was
+ * **The sixteen are placed where the readings are, and the placement was
  * solved rather than chosen.** An even grid is the obvious layout and it is
  * not a balanced one: the readings are noise stacks summed and divided, so
- * they pile in the middle and thin toward every edge. Three ways of placing
+ * they pile in the middle and thin toward every edge. Four ways of placing
  * them were measured against the share of land each ground takes, over four
  * seeds at one-degree steps:
  *
@@ -513,13 +513,13 @@ function respaced(
  * | an even grid | `5.4 : 1` |
  * | each axis at its own quantiles | `6.3 : 1` |
  * | each temperature band at its own | `2.4 : 1` |
- * | relaxed until the shares agree | **`1.49 : 1`** |
+ * | relaxed until the shares agree | **`1.26 : 1`** |
  *
  * The last is what ships. A cell of a plain Voronoi grows when its dot moves
- * **toward** a crowded neighbour, so the fifteen were stepped that way until
+ * **toward** a crowded neighbour, so the sixteen were stepped that way until
  * the counts stopped separating -- with two orderings held so no name loses
  * its meaning: the bands stay ordered by temperature, and inside a band the
- * three stay ordered dry to wet. Lloyd relaxation was tried first and is the
+ * dots stay ordered dry to wet. Lloyd relaxation was tried first and is the
  * wrong tool, at `5.6 : 1`: it equalises a cell's spread, not its share, and
  * left the same ground starved.
  *
@@ -533,58 +533,71 @@ function respaced(
  * down a little way off it, so the arid latitude is not the hottest one.
  * Earth's is not either.
  *
- * **The other six stay filed, because they name a material.** Sand, shingle,
- * sea ice, red rock and bare grey stone are what a place is made of rather
- * than what grows on it, and no reading of the air puts them anywhere. Each
- * is placed inside its own landform's cloud rather than among the fifteen,
- * swept over that cloud rather than reasoned about: the two peak dots take
- * `13%` and `15%` of the peaks between them, and Badlands `15%` of the
- * plateau. Jagged peaks is the wetter of the two and Stony peaks the drier,
- * which is the right way round -- snow needs water and bare rock does not.
- * The three shore grounds take the coast outright, by the rule in
- * `allowedBiomes`.
+ * **The other five stay filed, because a landform is the whole of what they
+ * are.** Sand, shingle, sea ice and bare grey stone are a shoreline and a
+ * summit rather than a climate: a beach is where the land meets the water,
+ * and no reading of the air can say that. Each is placed inside its own
+ * landform's cloud rather than among the sixteen, swept over that cloud
+ * rather than reasoned about, and the two peak dots take `14%` and `18%` of
+ * the peaks between them. Jagged peaks is the colder and wetter of the two
+ * and Stony peaks the warmer and drier, which is the right way round --
+ * snow needs water and bare rock does not. The three shore grounds take the
+ * coast outright, by the rule in `allowedBiomes`.
+ *
+ * **Badlands is not among them, and used to be.** Red rock reads like a
+ * material and is not one: it is what an arid climate does to stone, which
+ * makes it a climate the same way a desert is. Filed to the plateau it drew
+ * the shoulders of every ridge as a red ribbon rather than a place --
+ * `plateau` is a reading of the relief curve, so anything filed to it traces
+ * relief instead of naming ground. Unfiled it is the hot, very dry corner of
+ * the chart, and the sixteen balance better with it than the fifteen did
+ * without.
  */
 const PLAIN_BANDED: readonly BiomeDef[] = [
 	// The coldest band. Ice at every humidity: what changes across it is how
 	// much snow lies on the ice, not whether the ground is frozen.
 	respaced("Frozen plateau", 0.08, 0.26),
-	respaced("Frozen valley", 0.09, 0.55),
-	respaced("Snowy slopes", 0.21, 0.75),
+	respaced("Frozen valley", 0.12, 0.55),
+	respaced("Snowy slopes", 0.22, 0.74),
 
 	// Cold, and something grows. It sits poleward of the dry belts, where
 	// the air has not descended, so it is the wettest band on the planet.
-	respaced("Tundra", 0.28, 0.47),
-	respaced("Alpine forest", 0.31, 0.71),
-	respaced("Taiga", 0.33, 0.94),
+	respaced("Tundra", 0.23, 0.45),
+	respaced("Alpine forest", 0.27, 0.71),
+	respaced("Taiga", 0.32, 0.95),
 
 	// Temperate.
-	respaced("Steppe", 0.6, 0.31),
-	respaced("Highland steppe", 0.51, 0.77),
-	respaced("Grove", 0.51, 0.96),
+	respaced("Steppe", 0.58, 0.4),
+	respaced("Highland steppe", 0.46, 0.77),
+	respaced("Grove", 0.49, 0.95),
 
 	// Warm, and the arid one. This is the dry belt itself, which is why the
 	// driest ground on the planet is warm rather than hot -- the equator is
 	// where the air rises wet, and it comes back down a little way off it.
-	respaced("Desert", 0.7, 0.0),
-	respaced("Grassland", 0.73, 0.39),
-	respaced("Swamp", 0.59, 0.75),
+	respaced("Desert", 0.68, 0.0),
+	respaced("Grassland", 0.71, 0.44),
+	respaced("Swamp", 0.55, 0.78),
 
 	// Hot, on the equator's own side of the belt, so wetter than the band
-	// under it at every humidity.
-	respaced("Dry slope", 0.86, 0.38),
-	respaced("Dry basin", 0.98, 0.6),
-	respaced("Rainforest", 0.94, 0.81),
+	// under it at every humidity. Badlands is here rather than on the
+	// plateau it used to be filed to: red rock is what an arid climate does
+	// to stone, and filed to a relief reading it drew the shoulders of every
+	// ridge as a red ribbon instead of a place.
+	respaced("Badlands", 0.82, 0.18),
+	respaced("Dry slope", 0.85, 0.44),
+	respaced("Dry basin", 0.97, 0.62),
+	respaced("Rainforest", 0.94, 0.85),
 
-	// The six materials, each placed inside its own landform's measured
-	// cloud rather than on the grid. The shore trio is read against itself
-	// alone, so its three dots only have to separate a cold coast from a
-	// temperate one from a hot one.
+	// The five that name a material rather than a plant community, each
+	// placed inside its own landform's measured cloud rather than among the
+	// sixteen. The shore trio is read against itself alone, so its three
+	// dots only have to separate a cold coast from a temperate one from a
+	// hot one.
 	respaced("Icy shore", 0.3, 0.75, "shore"),
 	respaced("Stony shore", 0.57, 0.82, "shore"),
 	respaced("Beach", 0.85, 0.9, "shore"),
-	respaced("Badlands", 0.65, 0.12, "plateau"),
-	respaced("Jagged peaks", 0.18, 0.3, "peaks"),
-	respaced("Stony peaks", 0.08, 0.02, "peaks"),
+	respaced("Jagged peaks", 0.12, 0.25, "peaks"),
+	respaced("Stony peaks", 0.28, 0.2, "peaks"),
 ];
 
 /**

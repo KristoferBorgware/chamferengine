@@ -24,6 +24,7 @@ import { SEA_COLORS } from "chamfer/render";
 import { drawCavePlan } from "./drawCavePlan.js";
 import { outlinePatch } from "./outlinePatch.js";
 import { paintSheet } from "./paintSheet.js";
+import { busyLine } from "./busyLine.js";
 
 /**
  * The cave bench: one patch of a planet, opened up, and the rule that hollowed
@@ -554,7 +555,7 @@ function say(): void {
 	const count = (v: number): string => v.toLocaleString("en-US");
 
 	facts.innerHTML =
-		(says ? line(`<span class="bench-busy">${says}</span>`) : "") +
+		busyLine(says) +
 		(f
 			? line(
 					`<b>${count(Math.round(f.span))} m</b> of ground, ` +

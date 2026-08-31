@@ -24,6 +24,7 @@ import { outlinePatch } from "./outlinePatch.js";
 import type { PatchPicture } from "./PatchLook.js";
 import { LAYER_PICTURES } from "./PatchLook.js";
 import { paintSheet } from "./paintSheet.js";
+import { busyLine } from "./busyLine.js";
 import {
 	PatchRenderer,
 	createGpuContext,
@@ -548,7 +549,7 @@ function say(): void {
 	const line = (text: string): string => `<p>${text}</p>`;
 
 	facts.innerHTML =
-		(says ? line(`<span class="bench-busy">${says}</span>`) : "") +
+		busyLine(says) +
 		// **The world, in the numbers that describe a place rather than a
 		// build.** Radius, depth and the crust say how big it is and how far
 		// down it goes; the map cell says how finely the ground is drawn. What
