@@ -2319,6 +2319,29 @@ Violating any of these breaks the design. They are not tunable.
   clouds off: mean **74.9 to 76.7** of 255, fifth percentile of the ratio
   **1.000** -- it only ever gives light back. **Nearly a no-op above ground is
   the point**: almost nothing up there was blocked.
+- **A DERIVATIVE IS TAKEN WHERE THE PIXEL QUAD IS, NEVER INSIDE A HELPER**
+  (`samplePicture` in `PICTURE_WGSL`, F-136). A wall merged down a column runs
+  its coordinate **past one** and lets the sampler tile -- free while a picture
+  owns a whole layer. Once several share a layer the repeat is arithmetic, and
+  the derivative of a wrapped coordinate jumps from just under one back to zero
+  between two neighbouring pixels; a sampler picking its own mip from that
+  takes the coarsest level it has, so **a merged wall grows a blurred dark line
+  along every block boundary**, which no padding reaches because it is not a
+  bleed. So the gradients are taken before the wrap and handed to
+  `textureSampleGrad`.
+  **Where they are taken is not a style choice.** `dpdx` called **inside**
+  `samplePicture`, on a value that arrived as a parameter, **blacks the ground
+  out entirely** while leaving the sky untouched -- mean brightness `69.1` to
+  `56.7` over a daylight frame. The same arithmetic at the **call site**, passed
+  down as two more arguments, is **`0.00` of 255 over `884,561` pixels**. That
+  it is the gradient *values* and not `textureSampleGrad` is what constant
+  gradients settle: they render correctly either way. A derivative is a
+  difference across the pixel quad, and the quad is the fragment's own body.
+  **`probe-shaders` cannot catch this**: it reports whether the page presents a
+  frame at all -- a black world presents perfectly well, with a normal frame
+  rate and a normal gpu figure. The check that catches it is a frame diff
+  against a baseline, which needs **daylight, clouds off and a settled build
+  queue** to have the `0%` noise floor that makes a no-op provable.
 - **A VERTEX NAMES A PICTURE, NOT A LAYER** (`PICTURE_WGSL`, `BlockTextures.places`).
   Those are the same number while every picture has a layer to itself, and they
   stop being the same the moment several share one -- which is what a device

@@ -36,4 +36,46 @@ fn onPicture(uv : vec2f, place : vec4f) -> vec2f {
 fn layerOf(place : vec4f) -> i32 {
 	return i32(place.x);
 }
+
+/**
+ * A picture sampled with the gradients of its own **unwrapped** coordinate.
+ *
+ * **A wall merged down a column runs its coordinate past one and lets the
+ * sampler tile.** That is free while a picture owns a whole layer, because the
+ * sampler's own repeat does it. Once several pictures share a layer the repeat
+ * has to be arithmetic -- and the derivative of a wrapped coordinate **spikes
+ * at every wrap**, jumping from just under one back to zero between two
+ * neighbouring pixels. A sampler choosing its own mip from that reads the jump
+ * as an enormous rate of change and takes the coarsest level it has, so a
+ * merged wall grows a blurred dark line along every block boundary. Gradients
+ * taken before the wrap say what the rate actually is.
+ *
+ * **The gradients are taken by the CALLER and handed in, never worked out in
+ * here.** A derivative is a difference across the pixel quad, and taking one
+ * inside a called function -- of a value that arrived as a parameter -- does
+ * not survive this toolchain: measured, \`dpdx\` moved in here blacks the ground
+ * out entirely while the sky is untouched, and the same arithmetic at the call
+ * site is bit-identical to letting the sampler work the mip out for itself,
+ * \`0.00\` of 255 over 884,561 pixels. Constant gradients render correctly
+ * either way, which is what says the values are what break rather than
+ * \`textureSampleGrad\`. **Take a derivative where the pixel quad is, which is
+ * the fragment's own body.**
+ */
+fn samplePicture(
+	pictures : texture_2d_array<f32>,
+	how : sampler,
+	uv : vec2f,
+	place : vec4f,
+	ddx : vec2f,
+	ddy : vec2f,
+) -> vec4f {
+	return textureSampleGrad(
+		pictures,
+		how,
+		onPicture(uv, place),
+		layerOf(place),
+		ddx * place.w,
+		ddy * place.w,
+	);
+}
 `;

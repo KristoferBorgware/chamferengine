@@ -72,8 +72,8 @@ fn cutoutFragment(in : CutoutOut) {
 	// per-vertex layer is not uniform across the draw, and a sample picks its
 	// own mip from how the coordinate changes between neighbouring pixels.
 	let place = placeOf(in.layer);
-	let there = textureSample(
-		blockMap, blockSample, onPicture(in.uv, place), layerOf(place)).a;
+	let there = samplePicture(
+		blockMap, blockSample, in.uv, place, dpdx(in.uv), dpdy(in.uv)).a;
 	if (in.layer >= 0 && there < ALPHA_CUT) {
 		discard;
 	}
