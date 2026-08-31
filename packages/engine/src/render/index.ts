@@ -19,6 +19,7 @@ export { BillboardClouds } from "./clouds/BillboardClouds.js";
 export type { BlockAtlas } from "./terrain/BlockTextures.js";
 export type { Packing } from "./terrain/packPictures.js";
 export { packPictures } from "./terrain/packPictures.js";
+export { slotToReuse } from "./terrain/slotToReuse.js";
 export { ALPHA_CUT } from "./terrain/ALPHA_CUT.js";
 export {
 	SLOT_BOTTOM,

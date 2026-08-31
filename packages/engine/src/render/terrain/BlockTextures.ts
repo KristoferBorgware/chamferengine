@@ -1,5 +1,6 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
 import { type Packing, packPictures } from "./packPictures.js";
+import { slotToReuse } from "./slotToReuse.js";
 
 /** What a bake writes beside its grids: the layer order and the block table. */
 export interface BlockAtlas {
@@ -99,7 +100,12 @@ export class BlockTextures {
 
 	/** Which slot each stored picture sits in, and where the free ones start. */
 	private readonly slotOf = new Map<number, number>();
+	private readonly pictureAt: number[] = [];
+	private readonly usedAt: number[] = [];
 	private filled = 0;
+
+	/** Ticks up per admission, which is all the recency this needs. */
+	private clock = 0;
 
 	constructor(
 		ctx: GpuContext,
@@ -171,9 +177,11 @@ export class BlockTextures {
 				);
 			});
 		this.decoded = levels;
-		packing.order.forEach((picture, slot) =>
-			this.slotOf.set(picture, slot),
-		);
+		packing.order.forEach((picture, slot) => {
+			this.slotOf.set(picture, slot);
+			this.pictureAt[slot] = picture;
+			this.usedAt[slot] = 0;
+		});
 		this.filled = packing.order.length;
 		this.places = device.createBuffer({
 			size: Math.max(16, packing.places.byteLength),
@@ -231,11 +239,37 @@ export class BlockTextures {
 	 * Returns false when there is no room, and the picture goes on drawing as
 	 * its own average colour -- which is a worse picture and never a wrong one.
 	 */
-	admit(picture: number, device: GPUDevice): boolean {
-		if (this.slotOf.has(picture)) return true;
-		if (this.filled >= this.packing.slots) return false;
-		const slot = this.filled++;
+	admit(
+		picture: number,
+		device: GPUDevice,
+		/**
+		 * Pictures something is drawing, which must not be taken back.
+		 *
+		 * **Required rather than optional**, because the safe default is not
+		 * writable: forgetting it would have to mean protecting everything,
+		 * and a caller who meant to protect nothing would then silently get a
+		 * pool that never evicts. Saying what is on screen is the caller's
+		 * job, and it is the only thing it has to get right.
+		 */
+		keep: ReadonlySet<number>,
+	): boolean {
+		const already = this.slotOf.get(picture);
+		if (already !== undefined) {
+			this.usedAt[already] = ++this.clock;
+			return true;
+		}
+		let slot: number;
+		if (this.filled < this.packing.slots) slot = this.filled++;
+		else {
+			// Full. Take back the picture nobody is drawing that was named
+			// longest ago, or give up and draw flat if they are all on screen.
+			slot = slotToReuse(this.usedAt, this.pictureAt, keep);
+			if (slot < 0) return false;
+			this.release(slot, device);
+		}
 		this.slotOf.set(picture, slot);
+		this.pictureAt[slot] = picture;
+		this.usedAt[slot] = ++this.clock;
 		const { perSide } = this.packing;
 		const each = perSide * perSide;
 		const layer = Math.floor(slot / each);
@@ -271,6 +305,40 @@ export class BlockTextures {
 		device.queue.writeBuffer(this.places, picture * 16, place);
 		this.packing.places.set(place, picture * 4);
 		return true;
+	}
+
+	/**
+	 * Hand a slot's picture back, so it draws as its own colour again.
+	 *
+	 * The texels are left where they are: nothing reads them once the table
+	 * stops pointing at them, and the picture taking the slot overwrites them
+	 * immediately.
+	 */
+	private release(slot: number, device: GPUDevice): void {
+		const picture = this.pictureAt[slot];
+		if (picture === undefined) return;
+		this.slotOf.delete(picture);
+		const colour = this.averageOf(picture);
+		const place = new Float32Array([-1, colour[0], colour[1], colour[2]]);
+		device.queue.writeBuffer(this.places, picture * 16, place);
+		this.packing.places.set(place, picture * 4);
+	}
+
+	/**
+	 * A picture's own average colour, which is its coarsest mip level.
+	 *
+	 * One texel a picture at that level, so this is a read rather than a sum.
+	 */
+	private averageOf(picture: number): [number, number, number] {
+		const flattest = this.decoded[this.atlas.levels - 1];
+		const at = picture * 4;
+		return flattest
+			? [
+					(flattest[at] ?? 255) / 255,
+					(flattest[at + 1] ?? 255) / 255,
+					(flattest[at + 2] ?? 255) / 255,
+				]
+			: [1, 1, 1];
 	}
 
 	/**

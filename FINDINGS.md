@@ -2701,45 +2701,6 @@ same planet.
 
 
 
-### F-136 — A picture pool smaller than a world needs never recovers, because nothing is ever evicted
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-31, verifying the picture pool by starving it
-**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`admit`),
-`packages/engine/src/render/terrain/packPictures.ts`
-
-**What happens.** Pictures are taken onto the GPU when a chunk turns out to
-draw them, into the first free slot. Nothing ever leaves. When the slots are
-gone `admit` refuses, and every picture that did not get one goes on drawing as
-its own average colour **for the life of the page** -- so a pool that fills
-early decides what the rest of the session looks like, and what fills it is
-whatever the player happened to be standing near when the world opened.
-
-**Why it matters.** It makes the pool's size a cliff rather than a budget. Walk
-into a biome nobody has been to and its ground, its trees and its stone all
-draw flat, permanently, while slots sit occupied by pictures from a beach
-half a planet away that nothing on screen has drawn for an hour. A pool that
-is merely *tight* behaves as badly as one that is far too small, which is the
-opposite of what a cache should do.
-
-It costs nothing today: the shipped set is 110 pictures against a pool of 512,
-so nothing is ever refused. It binds the moment the library outgrows the pool,
-which is the case the pool exists for.
-
-**What would fix it.** Least-recently-drawn eviction over the slots, with the
-recency taken from the same per-chunk report that drives admission -- a chunk
-says which pictures it drew, so a slot nothing has named for a while is the one
-to take. Two things need care. **Thrash**: a player walking a biome boundary
-could evict and re-admit the same pictures every few seconds, which wants
-hysteresis or a generous pool rather than exact recency. And **eviction is
-visible**: taking a picture back turns a textured block flat, so it must never
-touch a picture something on screen is drawing this frame. The safe version
-evicts only what has not been named since some number of selections ago.
-
----
 
 ### F-137 — Every decoded picture is held in RAM, whether or not anything draws it
 
@@ -6436,3 +6397,50 @@ out means dropping the count from the generator and the manifest. **The
 rotation is doing this job today** and measurably: it takes the repeat at one
 cell from `0.70` to `0.08`, which is why nobody has noticed the variants are
 inert.
+
+### F-136 — A picture pool smaller than a world needs never recovers, because nothing is ever evicted
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-31, verifying the picture pool by starving it
+**Closed:** 2026-08-31, fixed. A full pool takes back the picture **nobody is
+drawing** that was named longest ago. What is on screen is worked out from what
+each resident chunk drew rather than from what was admitted recently -- a chunk
+uploaded an hour ago and still visible has not named its pictures since, so
+recency alone would take one back while somebody is looking at it. Where every
+slot holds something visible it gives up instead, and the picture draws as its
+own average colour, which is what happened before there was any eviction. **The
+walk only happens when the pool is full**, which is never in the arrangement
+nearly every machine gets.
+**Where:** `packages/engine/src/render/terrain/BlockTextures.ts` (`admit`),
+`packages/engine/src/render/terrain/packPictures.ts`
+
+**What happens.** Pictures are taken onto the GPU when a chunk turns out to
+draw them, into the first free slot. Nothing ever leaves. When the slots are
+gone `admit` refuses, and every picture that did not get one goes on drawing as
+its own average colour **for the life of the page** -- so a pool that fills
+early decides what the rest of the session looks like, and what fills it is
+whatever the player happened to be standing near when the world opened.
+
+**Why it matters.** It makes the pool's size a cliff rather than a budget. Walk
+into a biome nobody has been to and its ground, its trees and its stone all
+draw flat, permanently, while slots sit occupied by pictures from a beach
+half a planet away that nothing on screen has drawn for an hour. A pool that
+is merely *tight* behaves as badly as one that is far too small, which is the
+opposite of what a cache should do.
+
+It costs nothing today: the shipped set is 110 pictures against a pool of 512,
+so nothing is ever refused. It binds the moment the library outgrows the pool,
+which is the case the pool exists for.
+
+**What would fix it.** Least-recently-drawn eviction over the slots, with the
+recency taken from the same per-chunk report that drives admission -- a chunk
+says which pictures it drew, so a slot nothing has named for a while is the one
+to take. Two things need care. **Thrash**: a player walking a biome boundary
+could evict and re-admit the same pictures every few seconds, which wants
+hysteresis or a generous pool rather than exact recency. And **eviction is
+visible**: taking a picture back turns a textured block flat, so it must never
+touch a picture something on screen is drawing this frame. The safe version
+evicts only what has not been named since some number of selections ago.

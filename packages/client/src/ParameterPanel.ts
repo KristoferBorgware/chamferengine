@@ -1180,7 +1180,7 @@ const GROUPS: Group[] = [
 		// that fraction is uploaded -- and the arrangements a smaller device
 		// gets are the ones nobody with a large one ever sees fail, which is
 		// why they can be asked for here.
-		title: "Pictures",
+		title: "Textures",
 		folded: true,
 		knobs: [
 			{

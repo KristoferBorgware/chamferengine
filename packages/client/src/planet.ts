@@ -494,6 +494,15 @@ let bakedPictures: {
  */
 const NOTHING_YET: ReadonlySet<number> = new Set<number>();
 
+/**
+ * Which block types each chunk on the GPU draws.
+ *
+ * Kept so a picture can be taken back without taking one somebody is looking
+ * at. It follows the meshes rather than the selection: a chunk that is still
+ * drawing while its replacement builds is still drawing.
+ */
+const chunkBlocks = new Map<number, readonly number[]>();
+
 /** What the texture on screen was built with, so a change is noticed. */
 let shownCap: number | undefined;
 let shownPool = 0;
@@ -510,12 +519,43 @@ function admitPictures(blocks: readonly number[], device: GPUDevice): void {
 	const textures = blockTextures;
 	if (!textures || blocks.length === 0) return;
 	const { table, slots } = textures.atlas;
+	// **What is on screen is only worked out when the pool is full**, which is
+	// never in the arrangement nearly every machine gets. Until then this is a
+	// map lookup a picture and nothing else.
+	let keep: ReadonlySet<number> | null = null;
 	for (const block of blocks)
 		for (let which = 0; which < slots; which++) {
 			const picture = table[block * slots + which] ?? -1;
-			if (picture >= 0 && !textures.holds(picture))
-				textures.admit(picture, device);
+			if (picture < 0 || textures.holds(picture)) continue;
+			if (textures.room === 0) keep ??= picturesOnScreen();
+			textures.admit(picture, device, keep ?? EMPTY);
 		}
+}
+
+/** Nothing to protect, for the case where there was room anyway. */
+const EMPTY: ReadonlySet<number> = new Set<number>();
+
+/**
+ * Every picture a chunk now on the GPU draws.
+ *
+ * **Drawn rather than recently admitted.** A chunk uploaded an hour ago and
+ * still on screen has not named its pictures since, so recency alone would
+ * take one back while somebody is looking at it. What each chunk draws is
+ * recorded when it is meshed and thrown away when it leaves, so this is a walk
+ * of what is actually there.
+ */
+function picturesOnScreen(): ReadonlySet<number> {
+	const textures = blockTextures;
+	const wanted = new Set<number>();
+	if (!textures) return wanted;
+	const { table, slots } = textures.atlas;
+	for (const blocks of chunkBlocks.values())
+		for (const block of blocks)
+			for (let which = 0; which < slots; which++) {
+				const picture = table[block * slots + which] ?? -1;
+				if (picture >= 0) wanted.add(picture);
+			}
+	return wanted;
 }
 
 /** How many layers to pretend the device has, or nothing for all of them. */
@@ -1212,6 +1252,8 @@ async function main(): Promise<void> {
 	function forget(id: number): void {
 		const at = selectionOf(id);
 		if (at.chunkLevel === CHUNK_LEVEL) plantCells.drop(at.key);
+		// What it drew stops protecting a picture the moment it stops drawing.
+		chunkBlocks.delete(id);
 	}
 
 	/** Give up the furthest retired chunks once too many are being held. */
@@ -2015,6 +2057,7 @@ async function main(): Promise<void> {
 		renderer.clear();
 		drawn.clear();
 		retiring.clear();
+		chunkBlocks.clear();
 		plantCells.forget();
 		building.clear();
 		arrived.length = 0;
@@ -2563,6 +2606,7 @@ async function main(): Promise<void> {
 			// rather than a frame later. Anything that will not fit goes on
 			// drawing as its own average colour.
 			admitPictures(mesh.tally.blocks, ctx.device);
+			chunkBlocks.set(mesh.key, mesh.tally.blocks);
 			renderer.upload(mesh);
 			uploaded = true;
 		}
