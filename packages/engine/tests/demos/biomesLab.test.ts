@@ -115,7 +115,7 @@ describe("the biomes lab's copy of the engine", () => {
 		// three terrain layers name the ground first, and the diagram then
 		// only chooses which kind of that ground this one is.
 		expect(lab).toContain(
-			"function landformAt(\n\t\t\t\tlevel,\n\t\t\t\tcut,\n\t\t\t\tswing,\n\t\t\t\tmetres,\n\t\t\t\troom,\n\t\t\t\tshoreHeight = knobs.shoreHeight,\n\t\t\t\tpeakHeight = knobs.peakShare * TERRAIN.relief,\n\t\t\t) {",
+			"function landformAt(\n\t\t\t\tlevel,\n\t\t\t\tcut,\n\t\t\t\tswing,\n\t\t\t\trise,\n\t\t\t\tmetres,\n\t\t\t\troom,\n\t\t\t\tshoreHeight = knobs.shoreHeight,\n\t\t\t) {",
 		);
 		expect(lab).toContain("const set = allowedSets[form];");
 	});
@@ -285,6 +285,7 @@ interface LabKnobs {
 	readonly humBelt: number;
 	readonly humBeltAt: number;
 	readonly humBeltWidth: number;
+	readonly groundTop: number;
 	readonly humNoise: number;
 	readonly humFeature: number;
 	readonly humOctaves: number;
@@ -370,10 +371,10 @@ interface LabModel {
 		level: number,
 		cut: number,
 		swing: number,
+		rise: number,
 		metres: number,
 		room: number,
 		shoreHeight?: number,
-		peakHeight?: number,
 	): number;
 	biomeOf(
 		t: number,
@@ -394,7 +395,7 @@ interface LabModel {
 		fit?: boolean,
 	): ClimateFit;
 	bucket(v: number, edges: readonly number[]): number;
-	gridAt(c: number, e: number, p: number): number;
+	gridAt(c: number, r: number, e: number, p: number): number;
 }
 
 /** One marked block of the page, as source -- the same helper the file opens with. */
@@ -491,6 +492,7 @@ describe("the biomes lab's model against the engine's", () => {
 		humBelt: BIOME_DEFAULTS.humBelt,
 		humBeltAt: BIOME_DEFAULTS.humBeltAt,
 		humBeltWidth: BIOME_DEFAULTS.humBeltWidth,
+		groundTop: BIOME_DEFAULTS.groundTop,
 		humNoise: BIOME_DEFAULTS.humNoise,
 		humFeature: BIOME_DEFAULTS.humFeature,
 		humOctaves: BIOME_DEFAULTS.humOctaves,
@@ -550,7 +552,15 @@ describe("the biomes lab's model against the engine's", () => {
 		const at = region.at(x, y, z);
 		const pulled: Pair = [0, 0];
 		lab.withRegion(square, at, k, pulled);
-		const landform = lab.landformAt(level, cut, swing, metres, room, k.shoreHeight);
+		const landform = lab.landformAt(
+			level,
+			cut,
+			swing,
+			Math.min(1, Math.max(0, metres / k.groundTop)),
+			metres,
+			room,
+			k.shoreHeight,
+		);
 		const biome =
 			landform < 0
 				? -1
@@ -612,40 +622,45 @@ describe("the biomes lab's model against the engine's", () => {
 
 	it("indexes the landform grid the same way as the engine's gridAt", () => {
 		for (let c = 0; c < 2; c++)
-			for (let e = 0; e < 3; e++)
-				for (let p = 0; p < 3; p++)
-					expect(lab.gridAt(c, e, p)).toBe(gridAt(c, e, p));
+			for (let r = 0; r < 3; r++)
+				for (let e = 0; e < 3; e++)
+					for (let p = 0; p < 3; p++)
+						expect(lab.gridAt(c, r, e, p)).toBe(
+							gridAt(c, r, e, p),
+						);
 	});
 
 	it("chooses the same landform as the engine's standalone landformAt, at the grid's own edges", () => {
 		// Every corner of the grid the lattice comparison above does not
-		// reach on its own: three bands on each of three axes, plus the sea
+		// reach on its own: three bands on each of four axes, plus the sea
 		// and the shore.
 		for (const metres of [-5, 0, 6, 12, 40]) {
-			for (const level of [0.2, 0.5, 0.8]) {
-				for (const cut of [0.1, 0.5, 0.9]) {
-					for (const swing of [0.1, 0.5, 0.9]) {
-						for (const room of [0, 2]) {
-							const here = lab.landformAt(
-								level,
-								cut,
-								swing,
-								metres,
-								room,
-								BIOME_DEFAULTS.shoreHeight,
-								BIOME_DEFAULTS.peakHeight,
-							);
-							const there = landformAt(
-								level,
-								cut,
-								swing,
-								metres,
-								room,
-								BIOME_DEFAULTS.shoreHeight,
-								BIOME_DEFAULTS.peakHeight,
-								DEFAULT_LANDFORM_GRID,
-							);
-							expect(here).toBe(there);
+			for (const rise of [0.05, 0.25, 0.9]) {
+				for (const level of [0.2, 0.5, 0.8]) {
+					for (const cut of [0.1, 0.5, 0.9]) {
+						for (const swing of [0.1, 0.5, 0.9]) {
+							for (const room of [0, 2]) {
+								const here = lab.landformAt(
+									level,
+									cut,
+									swing,
+									rise,
+									metres,
+									room,
+									BIOME_DEFAULTS.shoreHeight,
+								);
+								const there = landformAt(
+									level,
+									cut,
+									swing,
+									rise,
+									metres,
+									room,
+									BIOME_DEFAULTS.shoreHeight,
+									DEFAULT_LANDFORM_GRID,
+								);
+								expect(here).toBe(there);
+							}
 						}
 					}
 				}

@@ -20,6 +20,7 @@ import {
 	bucket,
 	gridAt,
 	CONT_EDGES,
+	RISE_EDGES,
 	ERO_EDGES,
 	PV_EDGES,
 	landformAt,
@@ -101,6 +102,18 @@ function sharePoints(): Float64Array {
  * columns, planet readings and shares alike -- without touching a noise stack,
  * which is what keeps the diagram live under the finger.
  */
+/**
+ * The grid's height axis: how far up this place stands, as a share of the
+ * ground the world reaches.
+ *
+ * One place rather than four, because the shares a bench reads back and the
+ * landform a column is given have to be cut on the same reading or the
+ * picture disagrees with the table beside it.
+ */
+function riseOf(metres: number, groundTop: number): number {
+	return Math.min(1, Math.max(0, metres / groundTop));
+}
+
 export class BiomesWorkerCore {
 	private readonly world = new BenchWorld();
 
@@ -315,6 +328,7 @@ export class BiomesWorkerCore {
 		const gridShares = new Array<number>(table.grid.length).fill(0);
 		let landCells = 0;
 		const held = this.shares!;
+		const top = this.field!.settings.groundTop;
 		for (let n = 0; n < shareBiome.length; n++) {
 			if (shareForm[n]! < 0) continue;
 			landCells++;
@@ -323,6 +337,7 @@ export class BiomesWorkerCore {
 			gridShares[
 				gridAt(
 					bucket(held.level[n]!, CONT_EDGES),
+					bucket(riseOf(held.metres[n]!, top), RISE_EDGES),
 					bucket(held.cut[n]!, ERO_EDGES),
 					bucket(held.swing[n]!, PV_EDGES),
 				)
@@ -341,6 +356,7 @@ export class BiomesWorkerCore {
 			gridPatch[
 				gridAt(
 					bucket(columns.level[c]!, CONT_EDGES),
+					bucket(riseOf(columns.metres[c]!, top), RISE_EDGES),
 					bucket(columns.cut[c]!, ERO_EDGES),
 					bucket(columns.swing[c]!, PV_EDGES),
 				)
@@ -470,16 +486,16 @@ export class BiomesWorkerCore {
 		biome: Int16Array,
 	): void {
 		const shoreHeight = this.field!.settings.shoreHeight;
-		const peakHeight = this.field!.settings.peakHeight;
+		const groundTop = this.field!.settings.groundTop;
 		for (let n = 0; n < form.length; n++) {
 			const at = landformAt(
 				held.level[n]!,
 				held.cut[n]!,
 				held.swing[n]!,
+				riseOf(held.metres[n]!, groundTop),
 				held.metres[n]!,
 				held.room[n]!,
 				shoreHeight,
-				peakHeight,
 				table.grid,
 			);
 			form[n] = at;

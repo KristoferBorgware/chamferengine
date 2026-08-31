@@ -1813,8 +1813,6 @@
 				{ key: "peaks", name: "Peaks", short: "pk", hex: "e4ebf2" },
 			];
 			const SHORE = 0;
-			const SLOPES = 3;
-			const PEAKS = 5;
 			/** The one a biome carries when the landform does not decide it. */
 			const ANY = "any";
 
@@ -1837,12 +1835,30 @@
 			const CONT_EDGES = [0.69];
 			const ERO_EDGES = [0.3, 0.68];
 			const PV_EDGES = [0.38, 0.76];
+			// **A share of the ground the world reaches, not metres.** The
+			// other three axes are curves' answers and mean the same thing on
+			// every planet; a height does not.
+			const RISE_EDGES = [0.15, 0.35];
 			const CONT_NAMES = ["near the sea", "inland"];
 			const ERO_NAMES = ["sharp", "middling", "worn"];
 			const PV_NAMES = ["valley", "middling", "peak"];
+			const RISE_NAMES = ["low", "middling", "high"];
 			const CONT_BANDS = CONT_EDGES.length + 1;
 			const ERO_BANDS = ERO_EDGES.length + 1;
 			const PV_BANDS = PV_EDGES.length + 1;
+			const RISE_BANDS = RISE_EDGES.length + 1;
+
+			/**
+			 * The grid's height axis: how far up a place stands, as a share
+			 * of the ground the world reaches.
+			 *
+			 * One place rather than six, because the pictures, the tally and
+			 * the patch all have to cut the reading the same way or a picture
+			 * disagrees with the table beside it.
+			 */
+			function riseOf(metres) {
+				return Math.min(1, Math.max(0, metres / TERRAIN.relief));
+			}
 
 			/** Which bucket a value falls in, given the edges between them. */
 			function bucket(v, edges) {
@@ -1852,32 +1868,44 @@
 			}
 
 			/**
-			 * The grid: a landform for every combination of the three indices.
+			 * The grid: a landform for every combination of the four indices.
 			 *
-			 * Two sheets, one per continentalness band; three erosion rows,
+			 * A sheet per continentalness *and* height; three erosion rows,
 			 * sharp at the top; three peaks-and-valleys columns, valley on the
 			 * left. **Sharp and high is a peak, worn and high is a plateau**,
-			 * and low relief is low ground wherever it is -- which is the whole
-			 * of the rule, written where it can be read and changed rather than
-			 * buried in a condition.
+			 * and the same sharpness low down is a hillside -- which is the
+			 * whole of the rule, written where it can be read and changed
+			 * rather than buried in a condition.
 			 *
-			 * **Every edge between two bands is a place the landform flips**, so
-			 * the count of bands is the count of chances to flip. Cut from five
-			 * rows and five columns to three and three, the twelve internal
-			 * edges become four.
+			 * **Three of the four axes are shape and the fourth is size.** How
+			 * far inland, how worn and how far the relief swings all say what
+			 * a place is like and none says how far above the sea it ends up,
+			 * so without the height axis a landform whose meaning includes
+			 * height had to be faked somewhere else.
 			 */
 			const DEFAULT_GRID = [
-				// near the sea: low ground, and no room for a range
+				// near the sea, low
 				"133" + "223" + "222",
-				// inland
+				// near the sea, middling
+				"133" + "223" + "222",
+				// near the sea, high: worn ground this high is a plateau, and
+				// the sharp column still tops out at slopes -- a coast is
+				// usually low, and turning that 3 into a 5 is how a high
+				// coast gets its range.
+				"133" + "223" + "224",
+				// inland, low
+				"133" + "122" + "222",
+				// inland, middling
+				"133" + "124" + "224",
+				// inland, high
 				"135" + "124" + "224",
 			].join("");
 
 			let grid = DEFAULT_GRID.split("").map(Number);
 
 			/** Where one sheet's cell sits in the flat grid. */
-			function gridAt(c, e, p) {
-				return (c * ERO_BANDS + e) * PV_BANDS + p;
+			function gridAt(c, r, e, p) {
+				return ((c * RISE_BANDS + r) * ERO_BANDS + e) * PV_BANDS + p;
 			}
 
 			/**
@@ -1961,29 +1989,21 @@
 				level,
 				cut,
 				swing,
+				rise,
 				metres,
 				room,
 				shoreHeight = knobs.shoreHeight,
-				peakHeight = knobs.peakShare * TERRAIN.relief,
 			) {
 				if (metres <= TERRAIN.seaLevel) return -1;
 				if (metres <= shoreHeight && room >= SHORE_ROOM) return SHORE;
-				const form = grid[
+				return grid[
 					gridAt(
 						bucket(level, CONT_EDGES),
+						bucket(rise, RISE_EDGES),
 						bucket(cut, ERO_EDGES),
 						bucket(swing, PV_EDGES),
 					)
 				];
-				// **The mirror of the shore rule, at the other end of the
-				// ground.** The grid reads the relief curve, which says how
-				// sharp a place is and never how high it stands, so the same
-				// reading names a summit and a small steep butte -- and what
-				// is filed to peaks is bare rock and snow. High is necessary
-				// here the way low is necessary for a beach; a steep place
-				// that is not high enough is a slope.
-				if (form === PEAKS && metres < peakHeight) return SLOPES;
-				return form;
 			}
 
 
@@ -2276,7 +2296,7 @@
 			let picked = 0;
 			/** Which landform's diagram is on screen, and which grid cell was last touched. */
 			let shown = 2;
-			let cellPicked = gridAt(1, 1, 1);
+			let cellPicked = gridAt(1, 1, 1, 1);
 
 			const RGB_OF = new Map();
 
@@ -3447,6 +3467,7 @@
 						world.level[n],
 						world.cut[n],
 						world.swing[n],
+						riseOf(world.metres[n]),
 						world.metres[n],
 						world.room[n],
 					);
@@ -3455,6 +3476,7 @@
 						inCell[
 							gridAt(
 								bucket(world.level[n], CONT_EDGES),
+								bucket(riseOf(world.metres[n]), RISE_EDGES),
 								bucket(world.cut[n], ERO_EDGES),
 								bucket(world.swing[n], PV_EDGES),
 							)
@@ -3647,6 +3669,7 @@
 						level[c],
 						cut[c],
 						swing[c],
+						riseOf(height[c]),
 						height[c],
 						room[c],
 					);
@@ -3660,6 +3683,7 @@
 						inCell[
 							gridAt(
 								bucket(level[c], CONT_EDGES),
+								bucket(riseOf(height[c]), RISE_EDGES),
 								bucket(cut[c], ERO_EDGES),
 								bucket(swing[c], PV_EDGES),
 							)
@@ -3991,6 +4015,7 @@
 							level[n],
 							cut[n],
 							swing[n],
+							riseOf(metres[n]),
 							metres[n],
 							room[n],
 						);
@@ -4003,6 +4028,7 @@
 							level[n],
 							cut[n],
 							swing[n],
+							riseOf(metres[n]),
 							metres[n],
 							room[n],
 						);
@@ -4291,6 +4317,7 @@
 									world.level[n],
 									world.cut[n],
 									world.swing[n],
+									riseOf(world.metres[n]),
 									world.metres[n],
 									world.room[n],
 								)
@@ -5205,6 +5232,7 @@
 			 * points the select below at the cell, which is what changes it.
 			 */
 			let sheetShown = 1;
+			let riseShown = 1;
 
 			function refreshGrid() {
 				gridHost.textContent = "";
@@ -5217,13 +5245,21 @@
 
 				const band = document.createElement("div");
 				band.id = "tabs";
-				for (let c = 0; c < CONT_BANDS; c++) {
+				// **Two rows, because the grid has four axes and a table has
+				// two.** How far inland picks one sheet and how high picks
+				// the other; erosion and relief are read across whichever
+				// sheet the two name.
+				for (let c = 0; c < CONT_BANDS + RISE_BANDS; c++) {
+					const rise = c >= CONT_BANDS;
+					const n = rise ? c - CONT_BANDS : c;
 					const button = document.createElement("button");
 					button.type = "button";
-					button.textContent = CONT_NAMES[c];
-					button.className = c === sheetShown ? "picked" : "";
+					button.textContent = rise ? RISE_NAMES[n] : CONT_NAMES[n];
+					button.className =
+						n === (rise ? riseShown : sheetShown) ? "picked" : "";
 					button.addEventListener("click", () => {
-						sheetShown = c;
+						if (rise) riseShown = n;
+						else sheetShown = n;
 						refreshGrid();
 					});
 					band.append(button);
@@ -5248,7 +5284,7 @@
 					edge.textContent = ERO_NAMES[e];
 					sheet.append(edge);
 					for (let p = 0; p < PV_BANDS; p++) {
-						const at = gridAt(sheetShown, e, p);
+						const at = gridAt(sheetShown, riseShown, e, p);
 						const form = LANDFORMS[grid[at]];
 						const button = document.createElement("button");
 						button.type = "button";
@@ -5258,7 +5294,8 @@
 						const share = read.inCell ? asShare(read.inCell[at]) : "";
 						button.innerHTML = form.short + "<small>" + share + "</small>";
 						button.title =
-							`${CONT_NAMES[sheetShown]}, ${ERO_NAMES[e]} erosion, ` +
+							`${CONT_NAMES[sheetShown]}, ${RISE_NAMES[riseShown]} ` +
+							`ground, ${ERO_NAMES[e]} erosion, ` +
 							`${PV_NAMES[p]} relief → ${form.name}`;
 						button.addEventListener("click", () => {
 							cellPicked = at;

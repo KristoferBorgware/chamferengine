@@ -1,6 +1,6 @@
 import type { LandformGrid } from "./LandformGrid.js";
-import { CONT_EDGES, ERO_EDGES, PV_EDGES } from "./LandformGrid.js";
-import { PEAKS, SHORE, SLOPES } from "./Landform.js";
+import { CONT_EDGES, ERO_EDGES, PV_EDGES, RISE_EDGES } from "./LandformGrid.js";
+import { SHORE } from "./Landform.js";
 import { bucket } from "./bucket.js";
 import { gridAt } from "./gridAt.js";
 
@@ -28,36 +28,35 @@ export const SHORE_ROOM = 2;
  * foot of a cliff is low ground with the sea on one side and a hillside on
  * the other, and it is not a beach. The count comes from the room rule, which
  * asks six points a fixed distance out.
+ *
+ * **The shore is the only rule left beside the grid.** How high the ground
+ * stands is one of the grid's own four axes now (`rise`, a share of the
+ * world's tallest ground), so a landform whose meaning includes height is
+ * written down rather than corrected afterwards -- a peak is sharp *and*
+ * high because the cell that names it is in the high sheet. The shore stays
+ * outside because it is a rule about the sea rather than about the ground:
+ * it needs the room count, which no reading of a curve carries.
  */
 export function landformAt(
 	level: number,
 	cut: number,
 	swing: number,
+	rise: number,
 	metres: number,
 	room: number,
 	shoreHeight: number,
-	peakHeight: number,
 	grid: LandformGrid,
 ): number {
 	if (metres <= 0) return -1;
 	if (metres <= shoreHeight && room >= SHORE_ROOM) return SHORE;
-	const form = Number(
+	return Number(
 		grid[
 			gridAt(
 				bucket(level, CONT_EDGES),
+				bucket(rise, RISE_EDGES),
 				bucket(cut, ERO_EDGES),
 				bucket(swing, PV_EDGES),
 			)
 		],
 	);
-	// **The mirror of the shore rule, at the other end of the ground.** The
-	// grid reads the relief curve, which says how *sharp* a place is and
-	// never how high it stands -- so a small steep butte near the equator is
-	// named a peak, and the two grounds filed to peaks are bare rock and
-	// snow, which is not what a hot low hummock is made of. High is
-	// necessary here in the same way low is necessary for a beach; the grid
-	// still says whether it is sharp enough. What it is not is a peak, and
-	// what a steep place that is not a peak is, is a slope.
-	if (form === PEAKS && metres < peakHeight) return SLOPES;
-	return form;
 }
