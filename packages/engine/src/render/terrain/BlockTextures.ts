@@ -164,6 +164,19 @@ export class BlockTextures {
 	}
 
 	/**
+	 * Give back the texture and the table.
+	 *
+	 * **A rebuild replaces this whole object**, so what it held has to go with
+	 * it: a device does not free a texture because nothing refers to it any
+	 * more, and moving a knob that rebuilds this is something a person does
+	 * repeatedly.
+	 */
+	destroy(): void {
+		this.texture.destroy();
+		this.places.destroy();
+	}
+
+	/**
 	 * Fetch a bake and decode every level into the order an array texture wants.
 	 *
 	 * Decoded through a canvas rather than uploaded as an image, because

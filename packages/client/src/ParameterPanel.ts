@@ -1214,6 +1214,27 @@ const GROUPS: Group[] = [
 					!k.plain && (k.cascadeShadows || k.cloudShadows),
 			},
 			{
+				// **A device that gives every picture a layer of its own is
+				// the arrangement with nothing wrong with it**, and it is what
+				// nearly every machine does -- so the one where pictures share
+				// a layer is the one nobody ever sees fail. This pretends the
+				// device is smaller than it is.
+				key: "layerCapOn",
+				label: "Cap texture layers",
+				enabledWhen: (k) => !k.plain,
+			},
+			{
+				// Below the size of the set this forces pictures to share a
+				// layer: folded into their own tile, the band clamped to that
+				// tile rather than the layer, and the mip chain stopped before
+				// a tile is too small to filter inside.
+				key: "textureLayers",
+				label: "Texture layers",
+				digits: 0,
+				shownWhen: (k) => k.layerCapOn,
+				enabledWhen: (k) => !k.plain,
+			},
+			{
 				// **The sun as though no block stood in its way**, so a cave
 				// can be looked into before there is anything to carry down
 				// it. Not a flat light: the face's own angle to the sun still

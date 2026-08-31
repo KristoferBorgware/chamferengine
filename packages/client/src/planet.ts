@@ -83,7 +83,7 @@ import {
 	windRotation,
 } from "chamfer/sky";
 import { MapPreview } from "./MapPreview.js";
-import { BlockTextures } from "chamfer/render";
+import { type BlockAtlas, BlockTextures } from "chamfer/render";
 import { ParameterPanel } from "./ParameterPanel.js";
 import { PlantCellStore } from "./PlantCellStore.js";
 import { plantLayerOf } from "./PlantDraft.js";
@@ -470,6 +470,25 @@ if (params.get("panel") === "1") {
  */
 let blockTextures: BlockTextures | null = null;
 
+/**
+ * The decoded bake, held so the layer cap can be moved without fetching again.
+ *
+ * Laying the same pictures onto fewer layers is a re-upload: the pictures do
+ * not change, only which layer each sits on and where inside it.
+ */
+let bakedPictures: {
+	atlas: BlockAtlas;
+	levels: Uint8Array<ArrayBuffer>[];
+} | null = null;
+
+/** The cap the texture on screen was built with, so a change is noticed. */
+let shownCap: number | undefined;
+
+/** How many layers to pretend the device has, or nothing for all of them. */
+function layerCapOf(from: PlanetSettings): number | undefined {
+	return from.knobs.layerCapOn ? from.knobs.textureLayers : undefined;
+}
+
 async function main(): Promise<void> {
 	const ctx = await createGpuContext(canvas);
 	const renderer = new ChunkRenderer(ctx);
@@ -488,18 +507,15 @@ async function main(): Promise<void> {
 		const baked = await BlockTextures.load(
 			`${import.meta.env.BASE_URL}blocks/`,
 		);
-		// **A way to stand on the packed path without the hardware that needs
-		// it.** Most adapters give every picture a layer of its own, so the
-		// arrangement a capped device gets would otherwise never be looked at
-		// here. `?textureLayers=16` caps it by hand.
-		const capped = Number(
-			new URLSearchParams(location.search).get("textureLayers"),
-		);
+		// Held, because the cap is a live knob: laying the same pictures onto
+		// fewer layers is a re-upload and not a re-fetch.
+		bakedPictures = baked;
+		shownCap = layerCapOf(settings);
 		blockTextures = new BlockTextures(
 			ctx,
 			baked.atlas,
 			baked.levels,
-			Number.isFinite(capped) && capped > 0 ? capped : undefined,
+			shownCap,
 		);
 		renderer.setBlockTextures(blockTextures);
 	} catch (whatever) {
@@ -2044,6 +2060,24 @@ async function main(): Promise<void> {
 			sea.visible = live.knobs.seaDrawn;
 			sea.wireframe = live.knobs.seaWireframe;
 			sea.look = seaLook(live);
+		}
+		// **Re-laid, not re-fetched.** The pictures are the same; what moves is
+		// which layer each sits on. The old texture is handed back explicitly,
+		// because a device does not free one just because nothing refers to it
+		// and this is a knob a person moves repeatedly.
+		const wantedCap = layerCapOf(live);
+		if (bakedPictures && wantedCap !== shownCap) {
+			shownCap = wantedCap;
+			const next = new BlockTextures(
+				ctx,
+				bakedPictures.atlas,
+				bakedPictures.levels,
+				wantedCap,
+			);
+			const gone = blockTextures;
+			blockTextures = next;
+			renderer.setBlockTextures(next);
+			gone?.destroy();
 		}
 		CULL_MARGIN = (live.knobs.cullMargin * Math.PI) / 180;
 		source.nearestFirst = live.knobs.nearestFirst;
