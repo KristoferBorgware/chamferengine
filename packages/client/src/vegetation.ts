@@ -135,7 +135,7 @@ legend.innerHTML = [
 	.join("");
 head.appendChild(legend);
 
-panel.mount(head);
+panel.pin(head);
 
 const facts = document.createElement("div");
 facts.className = "bench-facts";
@@ -143,6 +143,11 @@ const recipe = document.createElement("div");
 recipe.className = "bench-recipe";
 const general = panel.section("General");
 general?.append(recipe, facts);
+// **Above the rows, not the first of them.** What the last build grew is
+// what every row below is judged against, so it is held still while they
+// scroll rather than being carried off the top by the first knob a reader
+// reaches for.
+if (general) panel.pin(general);
 
 // ---------------------------------------------------------------------------
 // The right panel: the plants.

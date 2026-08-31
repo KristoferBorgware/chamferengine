@@ -243,7 +243,7 @@ const world = document.createElement("div");
 world.className = "bench-facts";
 left.appendChild(world);
 
-panel.mount(left, "left");
+panel.pin(left);
 
 mapCanvas.addEventListener("click", (event) => {
 	if (settings.knobs.patchMap !== "planet") return;

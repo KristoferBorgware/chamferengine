@@ -143,14 +143,20 @@ legend.innerHTML = [
 	.join("");
 head.appendChild(legend);
 
-panel.mount(head);
+panel.pin(head);
 
 // **What the world came out as, on the other side of the window.** The knobs
 // that decide the ground are on the right and what they came to is on the
 // left, so reading an answer never means scrolling past the question.
 const facts = document.createElement("div");
 facts.className = "bench-facts";
-panel.section("General")?.appendChild(facts);
+const general = panel.section("General");
+general?.appendChild(facts);
+// **Above the rows, not the first of them.** What the world came out as is
+// what every row below is judged against, so it is held still while they
+// scroll rather than being carried off the top by the first knob a reader
+// reaches for.
+if (general) panel.pin(general);
 
 const profile = document.createElement("details");
 profile.className = "bench-profile";

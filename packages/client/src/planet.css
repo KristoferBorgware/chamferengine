@@ -663,6 +663,14 @@ body.bench .knobs {
 	flex: 0 0 auto;
 	padding: 12px 12px 0;
 	border-bottom: 1px solid var(--edge);
+	/* **It yields before the rows do.** A pinned strip is sized by what it
+	   holds, and one bench holds a map, a legend and ten lines of facts --
+	   470 px of a 560 px window, which left 90 px of rows and made the panel
+	   unusable on a short screen. Past this share it scrolls inside itself
+	   instead of pushing the rows off the bottom, so the strip is always
+	   reachable and so is everything under it. */
+	max-height: 55%;
+	overflow-y: auto;
 }
 
 .knobs-pin .knobs-fold {

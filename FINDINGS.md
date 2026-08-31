@@ -47,33 +47,6 @@ the two readings where it matters and put the arid ground where a player
 expects it. A cheaper stopgap is a plain world-wetness offset, which moves
 the whole planet along one axis and cannot put a desert next to a jungle.
 
-### F-141 — Two benches mount their picture inside the rows, so it scrolls away
-
-**Kind:** bug
-**Milestone:** 0.5.0
-**Priority:** low
-**Effort:** small
-**Found:** 2026-08-31, pinning the biome bench's own preview
-**Where:** `packages/client/src/ParameterPanel.ts` (`mount`),
-`packages/client/src/landscape.ts`, `packages/client/src/vegetation.ts`
-
-**What happens.** `mount()` says it puts a node "at the top of the panel,
-above every row and fixed there". On a bench it does not: it inserts into
-`.knobs-body`, which is the element carrying `overflow-y: auto`, so the node
-is the first of the rows rather than a sibling of them and scrolls with
-them. `.bench-head`'s own `flex: 0 0 auto` is the leftover of the layout it
-was written for.
-
-**Why it matters.** The picture is what the rows are judged against, and the
-way out of the bench is in the same strip. Both leave the top of the panel
-as soon as a reader reaches a row twenty down. The biome bench now uses
-`pin()`, which is a real sibling strip; the landscape and vegetation benches
-still call `mount()`.
-
-**What would fix it.** `panel.pin(head)` in place of `panel.mount(head)` in
-both, and the same for whatever each hangs on its `General` section. The
-strip and its CSS already exist.
-
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
@@ -2793,6 +2766,49 @@ is the only place a decrement would go.
 ---
 
 ## Closed
+
+### F-141 — Two benches mount their picture inside the rows, so it scrolls away
+
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-31, pinning the biome bench's own preview
+**Closed:** 2026-08-31 on `master` by "Hold every bench's picture above its
+own rows." Three benches rather than the two this entry names -- the cave
+bench's left pane calls `mount(left, "left")` and takes the same branch,
+while its right-hand `mount(head, "right")` was already landing beside the
+rows rather than among them, which is what made the fault look like it
+belonged to two pages. All three call `pin()` now.
+
+The strip also had to be capped. It is sized by what it holds, and the
+landscape bench holds a map, a legend and ten lines of facts:
+
+> **[measured]** `470 px` of a `560 px` window, leaving `90 px` of rows.
+
+Past `55%` of the panel it scrolls inside itself instead of pushing the rows
+off the bottom -- `308 px` and `252 px` on that window -- so the strip is
+always reachable and so is everything under it. At `900 px` the four benches
+pin `381 / 470 / 495 / 311 px`.
+**Where:** `packages/client/src/ParameterPanel.ts` (`mount`),
+`packages/client/src/landscape.ts`, `packages/client/src/vegetation.ts`
+
+**What happens.** `mount()` says it puts a node "at the top of the panel,
+above every row and fixed there". On a bench it does not: it inserts into
+`.knobs-body`, which is the element carrying `overflow-y: auto`, so the node
+is the first of the rows rather than a sibling of them and scrolls with
+them. `.bench-head`'s own `flex: 0 0 auto` is the leftover of the layout it
+was written for.
+
+**Why it matters.** The picture is what the rows are judged against, and the
+way out of the bench is in the same strip. Both leave the top of the panel
+as soon as a reader reaches a row twenty down. The biome bench now uses
+`pin()`, which is a real sibling strip; the landscape and vegetation benches
+still call `mount()`.
+
+**What would fix it.** `panel.pin(head)` in place of `panel.mount(head)` in
+both, and the same for whatever each hangs on its `General` section. The
+strip and its CSS already exist.
 
 ### F-142 — The shipped climate reads cold and dry, so a third of the land is two biomes
 
