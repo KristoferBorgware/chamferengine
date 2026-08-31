@@ -563,6 +563,20 @@ function say(): void {
 						`${count(f.cellsDrawn)} columns of ` +
 						`<b>${f.columnMetres.toFixed(1)} m</b>`,
 				) +
+				// **A picture shallower than the reach asked for has to say so
+				// and say what to move.** The bill is columns times layers, so
+				// the depth is short because the patch is wide or finely cut --
+				// and neither of those knobs is anywhere near the reach slider,
+				// so a reader watching the reach go up and the picture stay
+				// flat has nothing to go on.
+				(f.crust < settings.knobs.caveDepth - f.columnMetres
+					? line(
+							`the reach asks for <b>${count(Math.round(settings.knobs.caveDepth))} m</b> ` +
+								`and this many columns can hold <b>${count(Math.round(f.crust))} m</b> — ` +
+								`narrow <b>Cells across</b> or drop <b>Block detail</b> to go deeper`,
+							true,
+						)
+					: "") +
 				line(
 					`passage in <b>${percent(f.caveColumns, f.cellsDrawn)}</b> of ` +
 						`columns · ${count(f.caveCells)} cave blocks`,

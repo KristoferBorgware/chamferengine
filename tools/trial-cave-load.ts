@@ -17,10 +17,16 @@ import { PlanetSettings } from "../packages/client/src/PlanetSettings.js";
 /** How many depth passes a frame records: two lights, two cascades each. */
 const SHADOW_PASSES = 4;
 
-const base = new PlanetSettings({ plain: false }).knobs;
+// The cave bench's own opening patch: 4 map cells at 5 levels under the map,
+// which is 128 m across at one metre a column.
+const base = new PlanetSettings({
+	plain: false,
+	patchCells: 4,
+	patchDetail: 5,
+}).knobs;
 
 /** The depths the sweep reports at, in metres of cave under the ground. */
-const DEPTHS = [8, 16, 28, 50, 80, 120, 160];
+const DEPTHS = [28, 50, 100, 150, 200, 300, 400, 512];
 
 console.log(
 	`patch ${base.patchCells} map cells across, detail ${base.patchDetail},` +

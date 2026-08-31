@@ -26,38 +26,46 @@ export const MAX_CAVE_LAYERS = 512;
 /**
  * The most blocks a patch is ever walked and drawn, columns times layers.
  *
+ * **This is a budget for the picture, and it bounds no knob.** How deep the
+ * planet's caves run is `caveDepth`, a world knob `TerrainGenerator` reads;
+ * how deep this bench can afford to draw is a separate question. Tying the
+ * slider's own end to this number made the second answer overwrite the first
+ * -- open the bench on a finely cut patch and the world you carried in came
+ * back with `8 m` caves in it, because the settle order let a view budget win
+ * against the planet. The walk now takes as many layers as this allows, the
+ * readout says how deep it got and what to move, and the knob keeps the range
+ * the world gives it.
+ *
  * **Two sliders multiply, and neither of them alone is the bill.** How wide the
  * patch is, how finely it is cut and how far the caves reach are three knobs
  * over one number, and a reader who moves them one at a time never sees the
- * product -- 60,000 columns at 512 layers is **thirty million** blocks, and the
- * mesh those blocks make is what runs out of memory rather than the walk.
+ * product. One step of **Block detail** is four times the columns, so it spends
+ * the budget four times faster than anything else on the page.
  *
- * **Measured at `0.30` triangles a block** over the shipped world, from the two
- * settings the bench has been photographed at: `12,481` columns of `28` layers
- * drew `113,460` triangles, and the same patch at `64` layers drew `235,086`.
+ * **Measured at the bench's own opening patch** of `12,481` columns
+ * (`tools/trial-cave-load.ts`), against the reach asked for:
+ *
+ * | reach | blocks | triangles | mesh |
+ * |---|---|---|---|
+ * | `28 m` | 349,468 | 114,574 | `179 ms` |
+ * | `100 m` | 1,248,100 | 391,716 | `670 ms` |
+ * | **`200 m`** | **2,496,200** | **708,356** | **`1,370 ms`** |
+ * | `300 m` | 3,744,300 | 1,047,094 | `3,390 ms` |
+ * | `512 m` | 6,390,272 | 1,753,920 | `5,029 ms` |
+ *
  * A triangle is three vertices of {@link PATCH_STRIDE} floats, so `180` bytes,
- * and the buffer doubles as it grows -- thirty million blocks is nine million
- * triangles, **1.6 GB**, and twice that while it is growing. Two million is
- * `600,000` triangles and about `108 MB`, which is the largest the page has
- * been seen to hold comfortably.
+ * and the buffer doubles as it grows: `512 m` is `315 MB` of mesh and `630 MB`
+ * while it is growing, which is the page that ran out of memory. `200 m` is
+ * `127 MB`, a second and a bit to build, and deep enough that a passage reads
+ * as a passage rather than as a pit -- so the budget is that row.
  *
- * **What binds is the frame, not the memory, and it binds three times sooner.**
- * A patch made of blocks is drawn five times a frame -- once for the picture
- * and **four** more times for the depth maps, two lights with two cascades
- * each. Measured (`tools/trial-cave-load.ts`) on the shipped patch of `12,481`
- * columns: a `50 m` reach is `624,050` blocks, `206,724` triangles and
- * `1,033,620` through the pipe a frame; `160 m` is `1,996,960` blocks and
- * `3,267,210` a frame, and the mesh alone takes `822 ms` to build against
- * `192 ms`. Both are inside the memory figure above and only the first is a
- * preview somebody can turn a camera in.
- *
- * So the budget is the `50 m` one. **The maps are recorded when something they
- * read moves rather than once a frame** (`PatchRenderer`), which takes the four
- * redraws off an orbit -- but a knob that moves the mesh still pays them, and
- * the mesh build is paid whatever the shadows do.
+ * **The frame is no longer what binds.** The mesh is drawn five times over,
+ * once for the picture and four more for the shadow maps, and those are
+ * recorded when something they read moves rather than once a frame
+ * (`PatchRenderer`). What is left is this one-off build.
  *
  * The cap is real rather than advisory: the walk takes as many layers as the
  * product allows and the readout says how deep it went, so a slider asking for
  * more than this gets less and says so.
  */
-export const MAX_CAVE_BLOCKS = 625_000;
+export const MAX_CAVE_BLOCKS = 2_500_000;
