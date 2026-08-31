@@ -488,7 +488,19 @@ async function main(): Promise<void> {
 		const baked = await BlockTextures.load(
 			`${import.meta.env.BASE_URL}blocks/`,
 		);
-		blockTextures = new BlockTextures(ctx, baked.atlas, baked.levels);
+		// **A way to stand on the packed path without the hardware that needs
+		// it.** Most adapters give every picture a layer of its own, so the
+		// arrangement a capped device gets would otherwise never be looked at
+		// here. `?textureLayers=16` caps it by hand.
+		const capped = Number(
+			new URLSearchParams(location.search).get("textureLayers"),
+		);
+		blockTextures = new BlockTextures(
+			ctx,
+			baked.atlas,
+			baked.levels,
+			Number.isFinite(capped) && capped > 0 ? capped : undefined,
+		);
 		renderer.setBlockTextures(blockTextures);
 	} catch (whatever) {
 		// A world with no pictures is the world this engine drew before there

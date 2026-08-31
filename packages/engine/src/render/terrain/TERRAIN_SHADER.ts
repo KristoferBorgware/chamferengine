@@ -349,7 +349,7 @@ fn pictureOn(uv : vec2f, layer : i32, band : i32) -> vec4f {
 	// clamp has to reach the picture's own edge and not the layer's, which is
 	// the one thing about the band a packing has to solve.
 	let overPlace = placeOf(band);
-	let over = samplePicture(blockMap, bandSample, uv, overPlace, ddx, ddy);
+	let over = sampleBand(blockMap, bandSample, uv, overPlace, ddx, ddy);
 	let cover = select(0.0, over.a, band >= 0);
 	let color = mix(picked.rgb, over.rgb, cover);
 	return select(vec4f(1.0), vec4f(color, picked.a), layer >= 0);

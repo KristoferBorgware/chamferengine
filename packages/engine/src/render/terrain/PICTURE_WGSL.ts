@@ -27,9 +27,33 @@ fn placeOf(id : i32) -> vec4f {
 	return places[max(id, 0)];
 }
 
-/** A coordinate in a picture, moved onto the layer that picture lives on. */
+/**
+ * A coordinate in a picture, moved onto the layer that picture lives on.
+ *
+ * **The repeat is the sampler's while a picture owns a layer, and ours when it
+ * does not.** A wall merged down a column runs \`v\` past one so the block tiles
+ * down it; with a layer to itself the sampler's own repeat does that, and the
+ * scale is 1 so this is \`uv\` unchanged and the frame is what it always was.
+ * Sharing a layer, a coordinate past one would walk into the picture stored
+ * beside it, so it is folded back into its own tile first.
+ */
 fn onPicture(uv : vec2f, place : vec4f) -> vec2f {
-	return uv * place.w + place.yz;
+	let own = select(uv, fract(uv), place.w < 1.0);
+	return own * place.w + place.yz;
+}
+
+/**
+ * The same, for a coordinate the sampler would have clamped rather than
+ * repeated.
+ *
+ * **A wall has one brink and it is at the top**, which is what the band's own
+ * sampler says by clamping. Clamping is to the LAYER's edge, so once several
+ * pictures share a layer that reaches the picture stored below and a merged
+ * wall grows a second brink. Held inside its own tile here instead.
+ */
+fn onBand(uv : vec2f, place : vec4f) -> vec2f {
+	let own = select(uv, clamp(uv, vec2f(0.0), vec2f(1.0)), place.w < 1.0);
+	return own * place.w + place.yz;
 }
 
 /** The layer a place names. */
@@ -73,6 +97,25 @@ fn samplePicture(
 		pictures,
 		how,
 		onPicture(uv, place),
+		layerOf(place),
+		ddx * place.w,
+		ddy * place.w,
+	);
+}
+
+/** A band sampled the same way, held inside its own tile rather than wrapped. */
+fn sampleBand(
+	pictures : texture_2d_array<f32>,
+	how : sampler,
+	uv : vec2f,
+	place : vec4f,
+	ddx : vec2f,
+	ddy : vec2f,
+) -> vec4f {
+	return textureSampleGrad(
+		pictures,
+		how,
+		onBand(uv, place),
 		layerOf(place),
 		ddx * place.w,
 		ddy * place.w,

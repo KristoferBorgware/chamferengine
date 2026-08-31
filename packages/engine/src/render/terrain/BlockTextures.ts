@@ -1,4 +1,5 @@
 import type { GpuContext } from "../gpu/GpuContext.js";
+import { type Packing, packPictures } from "./packPictures.js";
 
 /** What a bake writes beside its grids: the layer order and the block table. */
 export interface BlockAtlas {
@@ -84,43 +85,61 @@ export class BlockTextures {
 	/** Which layer each block wears, flat, for the mesher to index. */
 	readonly table: Int32Array;
 
+	/** How the set was laid out, which says whether layers are shared. */
+	readonly packing: Packing;
+
 	constructor(
 		ctx: GpuContext,
 		atlas: BlockAtlas,
 		levels: readonly Uint8Array<ArrayBuffer>[],
+		/** Layers to fit into, for a test that wants the packed path. */
+		limit?: number,
 	) {
 		this.atlas = atlas;
 		this.table = Int32Array.from(atlas.table);
 		const { device } = ctx;
+		// **Asked of the device, not assumed.** 256 array layers are
+		// guaranteed everywhere and 2,048 is common, so most machines give
+		// every picture a layer of its own and this is the identity.
+		const packing = packPictures(
+			atlas.layers.length,
+			atlas.size,
+			atlas.levels,
+			Math.max(1, limit ?? device.limits.maxTextureArrayLayers),
+		);
+		this.packing = packing;
 		this.texture = device.createTexture({
-			size: [atlas.size, atlas.size, atlas.layers.length],
+			size: [packing.side, packing.side, packing.layers],
 			dimension: "2d",
 			format: "rgba8unorm-srgb",
-			mipLevelCount: atlas.levels,
+			mipLevelCount: packing.levels,
 			usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
 		});
 		// One write a level. {@link load} has already turned the grid the bake
 		// wrote into the order an array wants -- layer 0's rows, then layer
 		// 1's -- so this is the same single upload it always was.
-		levels.forEach((bytes, level) => {
+		levels.slice(0, packing.levels).forEach((bytes, level) => {
 			const wide = atlas.size >> level;
+			const side = packing.side >> level;
+			// Unpacked this is the bytes as they came; packed it is the same
+			// tiles laid into shared layers, level by level, so a tile's mips
+			// stay its own rather than being averaged with its neighbours'.
+			const laid =
+				packing.perSide === 1
+					? bytes
+					: intoLayers(bytes, wide, packing, atlas.layers.length);
 			device.queue.writeTexture(
 				{ texture: this.texture, mipLevel: level },
-				bytes,
-				{ bytesPerRow: wide * 4, rowsPerImage: wide },
-				[wide, wide, atlas.layers.length],
+				laid,
+				{ bytesPerRow: side * 4, rowsPerImage: side },
+				[side, side, packing.layers],
 			);
 		});
-		const places = new Float32Array(atlas.layers.length * 4);
-		for (let at = 0; at < atlas.layers.length; at++) {
-			places[at * 4] = at;
-			places[at * 4 + 3] = 1;
-		}
 		this.places = device.createBuffer({
-			size: Math.max(16, places.byteLength),
+			size: Math.max(16, packing.places.byteLength),
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 		});
-		device.queue.writeBuffer(this.places, 0, places);
+		device.queue.writeBuffer(this.places, 0, packing.places);
 		this.view = this.texture.createView({ dimension: "2d-array" });
 		this.sampler = device.createSampler({
 			magFilter: "nearest",
@@ -188,6 +207,43 @@ export class BlockTextures {
 		}
 		return { atlas, levels };
 	}
+}
+
+/**
+ * Layer-order tiles laid into shared array layers, `perSide` across and down.
+ *
+ * **Every level is packed from that level's own tiles**, so a picture's mips
+ * are still the ones the bake computed for it and never an average with the
+ * picture beside it. What sharing a layer really costs is filtering at a
+ * tile's edge, which is why the chain stops before tiles get small.
+ *
+ * Cells past the last picture are left transparent and never read.
+ */
+function intoLayers(
+	tiles: Uint8Array<ArrayBuffer>,
+	wide: number,
+	packing: Packing,
+	count: number,
+): Uint8Array<ArrayBuffer> {
+	const side = packing.perSide * wide;
+	const out = new Uint8Array<ArrayBuffer>(
+		new ArrayBuffer(packing.layers * side * side * 4),
+	);
+	const each = packing.perSide * packing.perSide;
+	for (let at = 0; at < count; at++) {
+		const layer = Math.floor(at / each);
+		const within = at % each;
+		const x = (within % packing.perSide) * wide * 4;
+		const y = Math.floor(within / packing.perSide) * wide;
+		for (let row = 0; row < wide; row++) {
+			const from = (at * wide + row) * wide * 4;
+			out.set(
+				tiles.subarray(from, from + wide * 4),
+				(layer * side + y + row) * side * 4 + x,
+			);
+		}
+	}
+	return out;
 }
 
 /**
