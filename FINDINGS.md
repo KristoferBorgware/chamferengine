@@ -10,42 +10,6 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-145 — Every level of detail walks and draws the cave field, and only the nearest can show a cave
-
-**Kind:** performance
-**Milestone:** 0.5.0
-**Priority:** high
-**Effort:** medium
-**Found:** 2026-08-31, asked why deep caves kill the planet view
-**Where:** `packages/engine/src/mesh/worker/MeshWorkerCore.ts`,
-`packages/engine/src/generation/terrain/TerrainGenerator.ts`
-
-**What happens.** Nothing between the chunk selection and the generator gates
-the cave term by level of detail: a chunk four levels out runs the same
-`caves: true` options as the one underfoot, so every column of every chunk in
-view pays the per-block cave walk down the whole reach -- the walk that takes a
-chunk to about three times its caveless cost at a deep setting
-(`tools/trial-caves.ts`) -- and then draws whatever swiss cheese it finds. A
-coarse cell is 2 to 32 m wide against a passage about 10 m wide at the shipped
-knobs, so what a far chunk buys with that work is not caves but a ragged
-surface and extra faces.
-
-**Why it matters.** Most chunks in view are coarse. The deep-reach cost lands
-on all of them, and the extra faces land in the chunks with the most ground a
-frame -- which is where both the build stall and the frame cost come from when
-the reach is turned up.
-
-**What would fix it.** The same gate the leaf cutouts use: the generator stays
-level-blind (doc 14, F-032 -- that rule is about heights), and the mesh worker,
-the one place that knows the chunk's level, hands coarse chunks options with
-caves off -- the way `CUTOUT_REACH` already switches the leaf holes off past
-the finest level. Which level to cut at is a frames-and-counts measurement,
-like the one that chose `CUTOUT_REACH`. The seam machinery already closes
-solidity disagreements at level joins; F-116's mouth-at-a-seam gap is the one
-case to re-check.
-
----
-
 ### F-146 — "Cave geometry is culled by enclosure" is designed and not built, so sealed caves are meshed and drawn
 
 **Kind:** performance
@@ -2798,6 +2762,54 @@ is the only place a decrement would go.
 ---
 
 ## Closed
+
+### F-145 — Every level of detail walks and draws the cave field, and only the nearest can show a cave
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-31, asked why deep caves kill the planet view
+**Closed:** 2026-08-31. `CAVE_DETAIL_REACH` is `1`: the mesh worker hands its
+coarse generators options with `caves` off, the seat `CUTOUT_REACH` already
+gates the leaf holes from, and the generator itself stays level-blind.
+Measured on the same land at every level with caves to 200 m
+(`tools/trial-cave-lod.ts`): generation runs about `2x` a caveless chunk at
+every level, and triangles run `15x` at the finest level down to `2.9x` at
+32 m blocks -- so the three quarters of a standing player's 358 chunks that
+are coarser than the finest two levels were paying the full walk to draw
+noise. Frames of one mountainside both ways: the near caves stay, the
+mid-distance slopes lose their swiss-cheese pocking, and no seam opens at a
+level join. What is left of the deep-cave bill is the finest levels' own
+sealed pockets, which is F-146.
+**Where:** `packages/engine/src/mesh/worker/MeshWorkerCore.ts`,
+`packages/engine/src/mesh/CAVE_DETAIL_REACH.ts`
+
+**What happens.** Nothing between the chunk selection and the generator gates
+the cave term by level of detail: a chunk four levels out runs the same
+`caves: true` options as the one underfoot, so every column of every chunk in
+view pays the per-block cave walk down the whole reach -- the walk that takes a
+chunk to about three times its caveless cost at a deep setting
+(`tools/trial-caves.ts`) -- and then draws whatever swiss cheese it finds. A
+coarse cell is 2 to 32 m wide against a passage about 10 m wide at the shipped
+knobs, so what a far chunk buys with that work is not caves but a ragged
+surface and extra faces.
+
+**Why it matters.** Most chunks in view are coarse. The deep-reach cost lands
+on all of them, and the extra faces land in the chunks with the most ground a
+frame -- which is where both the build stall and the frame cost come from when
+the reach is turned up.
+
+**What would fix it.** The same gate the leaf cutouts use: the generator stays
+level-blind (doc 14, F-032 -- that rule is about heights), and the mesh worker,
+the one place that knows the chunk's level, hands coarse chunks options with
+caves off -- the way `CUTOUT_REACH` already switches the leaf holes off past
+the finest level. Which level to cut at is a frames-and-counts measurement,
+like the one that chose `CUTOUT_REACH`. The seam machinery already closes
+solidity disagreements at level joins; F-116's mouth-at-a-seam gap is the one
+case to re-check.
+
+---
 
 ### F-144 — The landform grid reads how sharp a place is and calls it how high
 

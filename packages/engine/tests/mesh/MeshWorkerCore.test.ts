@@ -20,6 +20,7 @@ import {
 } from "chamfer/edit";
 import { joinPath } from "chamfer/addressing";
 import {
+	CAVE_DETAIL_REACH,
 	CHUNK_VERTEX_FLOATS,
 	InlineMeshSource,
 	MeshWorkerCore,
@@ -201,6 +202,43 @@ describe("MeshWorkerCore", () => {
 		const mine = here(12, CHUNK_LEVEL - 2, 2);
 		expect(result.tally).toEqual(mine.tally);
 		expect(result.opaque.vertices).toEqual(mine.opaque.vertices);
+	});
+
+	it("carves the caves at the finest levels and not past them", () => {
+		// **The gate sits where the per-level generator is made**, so the one
+		// observable is the mesh: a chunk inside {@link CAVE_DETAIL_REACH}
+		// differs from a caveless world's, and a chunk past it is that
+		// caveless chunk to the bit -- the walk was never run for it.
+		const caved = {
+			caves: true,
+			caveThreshold: 0.3,
+			caveCeiling: 4,
+			caveDepth: 100,
+		};
+		const withCaves = new MeshWorkerCore({
+			...setup(),
+			terrain: caved,
+		});
+		const without = new MeshWorkerCore(setup());
+		const job = (id: number, lod: number) =>
+			({
+				kind: "chunk",
+				id,
+				key: 12,
+				chunkLevel: CHUNK_LEVEL - lod,
+				lod,
+			}) as const;
+		for (const lod of [0, CAVE_DETAIL_REACH]) {
+			const on = withCaves.run(job(1, lod));
+			const off = without.run(job(2, lod));
+			expect(on.opaque.vertices).not.toEqual(off.opaque.vertices);
+		}
+		const past = CAVE_DETAIL_REACH + 1;
+		const on = withCaves.run(job(3, past));
+		const off = without.run(job(4, past));
+		expect(on.opaque.vertices).toEqual(off.opaque.vertices);
+		expect(on.opaque.indices).toEqual(off.opaque.indices);
+		expect(on.tally).toEqual(off.tally);
 	});
 
 	it("hands back exactly the six buffers a caller transfers", () => {
