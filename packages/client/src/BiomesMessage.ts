@@ -90,6 +90,21 @@ export interface BiomesFacts {
 	/** Metres from one side of the patch to the other. */
 	readonly span: number;
 
+	/**
+	 * Where the patch stands, and on what size of planet.
+	 *
+	 * **The picture cannot draw the box from `span` alone.** Where a patch is
+	 * on the map is a latitude and a longitude, and how big it looks is that
+	 * span against the planet's own radius -- all three read from the build
+	 * rather than from the draft, so the box is around the ground the sheet
+	 * beside it was actually generated for.
+	 */
+	readonly patchAt: {
+		readonly latitude: number;
+		readonly longitude: number;
+		readonly radius: number;
+	};
+
 	readonly ms: number;
 
 	/** How much of the planet stands above sea level, `0` to `1`. */

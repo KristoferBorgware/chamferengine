@@ -17,6 +17,7 @@ import {
 	hash3,
 } from "chamfer/generation";
 import { biomeTableOf } from "./BiomeDraft.js";
+import { outlinePatch } from "./outlinePatch.js";
 import { paintPatch } from "./paintPatch.js";
 
 /** What the "Start from" select reads for a preset, by key. */
@@ -945,10 +946,50 @@ export class BiomePanel {
 				? this.facts?.patchShares
 				: this.facts?.planetShares;
 		const allowed = this.allowedNow()[this.shown] ?? [];
-		for (const b of allowed) {
+		// **Everything the table holds, whichever ground is being looked
+		// at.** The diagram is a picture of one landform and a dot that is
+		// not in it would be a lie, but the list is the table -- and a biome
+		// filed to a landform showed under that landform's chip alone, so on
+		// Lowlands six of twenty-one were absent with nothing saying they
+		// exist. A reader who can see a ground on the planet and cannot find
+		// it here has no way to tune it and no way to tell it is in the
+		// table at all.
+		const here = new Set(allowed);
+		const elsewhere = this.table.biomes
+			.map((_, b) => b)
+			.filter((b) => !here.has(b));
+		for (const b of allowed)
+			this.list.append(this.listRow(b, shares, true));
+		if (elsewhere.length === 0) return;
+		const note = document.createElement("div");
+		note.className = "biomes-elsewhere";
+		note.textContent = "on other ground";
+		this.list.append(note);
+		for (const b of elsewhere)
+			this.list.append(this.listRow(b, shares, false));
+	}
+
+	/**
+	 * One biome's row.
+	 *
+	 * `here` is whether this ground is one the landform being shown can
+	 * actually build. A row for another landform's ground is dimmed and says
+	 * which landform that is, and clicking it moves to that landform rather
+	 * than picking a dot the diagram beside it does not draw -- which is
+	 * also how a reader learns the rule.
+	 */
+	private listRow(
+		b: number,
+		shares: readonly number[] | undefined,
+		here: boolean,
+	): HTMLElement {
+		{
 			const biome = this.table.biomes[b]!;
 			const row = document.createElement("div");
-			row.className = "biomes-row" + (b === this.picked ? " picked" : "");
+			row.className =
+				"biomes-row" +
+				(here && b === this.picked ? " picked" : "") +
+				(here ? "" : " away");
 			const chip = document.createElement("span");
 			chip.className = "chip";
 			chip.style.background = `#${biome.hex}`;
@@ -958,7 +999,12 @@ export class BiomePanel {
 			const share = document.createElement("span");
 			share.className = "biomes-share";
 			const of = shares?.[b] ?? 0;
-			share.textContent = of > 0 ? `${(of * 100).toFixed(1)}%` : "—";
+			const form = LANDFORMS.findIndex((f) => f.key === biome.landform);
+			share.textContent = here
+				? of > 0
+					? `${(of * 100).toFixed(1)}%`
+					: "—"
+				: (LANDFORMS[form]?.name ?? biome.landform);
 			const drop = document.createElement("button");
 			drop.type = "button";
 			drop.className = "drop";
@@ -969,10 +1015,11 @@ export class BiomePanel {
 			};
 			row.append(chip, name, share, drop);
 			row.onclick = () => {
+				if (!here && form >= 0) this.shown = form;
 				this.picked = b;
 				this.build();
 			};
-			this.list.append(row);
+			return row;
 		}
 	}
 
@@ -1323,6 +1370,19 @@ export class BiomePanel {
 					px[at + 1] = 14;
 					px[at + 2] = 18;
 				}
+		// **Where the patch beside this picture is standing.** Every sheet
+		// here is the whole planet, and the diagram, the shares and the
+		// three-dimensional patch are all readings taken somewhere on it --
+		// without the box a reader has the answer and not the place. The
+		// other three benches have drawn it since they had a map; this one
+		// was the exception.
+		if (this.facts)
+			outlinePatch(px, sheet.width, sheet.height, {
+				latitude: this.facts.patchAt.latitude,
+				longitude: this.facts.patchAt.longitude,
+				span: this.facts.span,
+				radius: this.facts.patchAt.radius,
+			});
 		ink.putImageData(image, 0, 0);
 	}
 }

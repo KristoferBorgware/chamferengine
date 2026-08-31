@@ -868,6 +868,13 @@ body.bench .knobs-head {
 	color: var(--warn);
 }
 
+/* Quiet, and still a row: see `busyLine`. Hidden rather than dropped, so
+   the map and the facts under it do not step down and back up on every
+   drag of a slider. */
+.bench-busy.bench-quiet {
+	visibility: hidden;
+}
+
 .bench-profile {
 	margin: 10px 14px 16px;
 	border-top: 1px solid var(--edge);
@@ -1738,6 +1745,27 @@ body.cave .knob label b {
 	border-radius: 5px;
 	font-size: 12px;
 	cursor: pointer;
+}
+
+/* **A ground this landform cannot build, shown so it can be found.** The
+   diagram beside the list draws one landform's own Voronoi, so a filed
+   biome has no dot in it -- but the list is the table, and a ground missing
+   from the table reads as a ground missing from the world. Dimmed, and its
+   share column says which landform owns it instead. */
+.biomes-elsewhere {
+	margin: 10px 0 2px;
+	color: var(--dim);
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.biomes-row.away {
+	opacity: 0.55;
+}
+
+.biomes-row.away .biomes-share {
+	font-style: italic;
 }
 
 .biomes-row.picked {
