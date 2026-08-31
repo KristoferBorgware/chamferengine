@@ -2700,43 +2700,6 @@ same planet.
 ---
 
 
-### F-135 — A texture variant can be drawn and baked, and nothing can ever wear it
-
-**Kind:** gap
-**Milestone:** 0.5.0
-**Priority:** medium
-**Effort:** medium
-**Found:** 2026-08-30, describing the texture authoring workflow
-**Where:** `tools/make-textures.ts`, `tools/bake-textures.ts` (`SLOTS`),
-`packages/engine/src/render/terrain/BlockTextures.ts` (`BlockAtlas.table`)
-
-**What happens.** The generator takes a variant count and writes numbered
-pictures for it. The bake turns every picture file into a layer of its own, and
-its header comment says which one a cell wears is the shader's business. It is
-nobody's business: the block table is `block * slots + which` with four slots --
-cap, side, underside, band -- so a block names **one** picture per face and
-there is nowhere to put a second. Nothing in the mesher or the shader reads a
-variant, and the manifest ships with the count at one, so the whole path is
-untravelled rather than broken.
-
-**Why it matters.** It reads as a feature that exists. Anyone adding
-`stone.2.png` gets a successful bake, a layer spent on it, and no change on
-screen -- and the layer budget is the scarce resource, so the cost is real
-while the benefit is zero. It also makes the layer arithmetic misleading when
-planning how far the set can grow, because variants look like they multiply the
-requirement and today they cannot.
-
-**What would fix it.** Either wire it up or take it out, and the choice is worth
-making deliberately. Wiring it up means a variant count per block in the table,
-the extra pictures contiguous behind the first, and the shader picking one from
-the cell's own hash -- the same number the six-fold tile rotation already uses,
-so a cell would keep its picture as steadily as it keeps its rotation. Taking it
-out means dropping the count from the generator and the manifest. **The
-rotation is doing this job today** and measurably: it takes the repeat at one
-cell from `0.70` to `0.08`, which is why nobody has noticed the variants are
-inert.
-
----
 
 ## Closed
 
@@ -6355,3 +6318,47 @@ texture, one write a level -- because the file's shape and the texture's shape
 were never required to match. A guard that refuses a strip taller than the
 canvas can carry belongs in the bake either way, so this can never again be
 discovered by looking at the pictures.
+
+### F-135 — A texture variant can be drawn and baked, and nothing can ever wear it
+
+**Kind:** gap
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, describing the texture authoring workflow
+**Closed:** 2026-08-31, taken out rather than wired up. A variation is a block
+type of its own now, which is the owner's decision: the generator writes one
+picture a name, and the variant count, the tint list and the tint scale are
+gone from the manifest along with it. All three were read by no part of the
+bake or the runtime, so the file had been describing mechanisms the engine does
+not have -- which is what made the setup look like it carried a tint path.
+**The six-fold tile rotation is what does this job**, and measurably: it takes
+the repeat at one cell from `0.70` to `0.08`.
+**Where:** `tools/make-textures.ts`, `tools/bake-textures.ts` (`SLOTS`),
+`packages/engine/src/render/terrain/BlockTextures.ts` (`BlockAtlas.table`)
+
+**What happens.** The generator takes a variant count and writes numbered
+pictures for it. The bake turns every picture file into a layer of its own, and
+its header comment says which one a cell wears is the shader's business. It is
+nobody's business: the block table is `block * slots + which` with four slots --
+cap, side, underside, band -- so a block names **one** picture per face and
+there is nowhere to put a second. Nothing in the mesher or the shader reads a
+variant, and the manifest ships with the count at one, so the whole path is
+untravelled rather than broken.
+
+**Why it matters.** It reads as a feature that exists. Anyone adding
+`stone.2.png` gets a successful bake, a layer spent on it, and no change on
+screen -- and the layer budget is the scarce resource, so the cost is real
+while the benefit is zero. It also makes the layer arithmetic misleading when
+planning how far the set can grow, because variants look like they multiply the
+requirement and today they cannot.
+
+**What would fix it.** Either wire it up or take it out, and the choice is worth
+making deliberately. Wiring it up means a variant count per block in the table,
+the extra pictures contiguous behind the first, and the shader picking one from
+the cell's own hash -- the same number the six-fold tile rotation already uses,
+so a cell would keep its picture as steadily as it keeps its rotation. Taking it
+out means dropping the count from the generator and the manifest. **The
+rotation is doing this job today** and measurably: it takes the repeat at one
+cell from `0.70` to `0.08`, which is why nobody has noticed the variants are
+inert.
