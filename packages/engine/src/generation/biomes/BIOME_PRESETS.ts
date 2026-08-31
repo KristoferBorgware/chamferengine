@@ -279,6 +279,289 @@ const SUBSTRATE: readonly BiomeDef[] = [
 ];
 
 /**
+ * The twenty-one grounds `plain` names, in the order they were written.
+ *
+ * Pulled out of {@link BIOME_PRESETS} so that {@link PLAIN_BANDED} can read
+ * its colors, blocks and underlays rather than repeating them: the two sets
+ * are the same materials laid out two ways, and a material described twice
+ * is a material that drifts.
+ */
+const PLAIN: readonly BiomeDef[] = [
+	{
+		name: "Icy shore",
+		hex: "d8e4ec",
+		t: 0.3,
+		h: 0.6,
+		landform: "shore",
+		block: BlockType.ICY_SHORE_GROUND,
+	},
+	{
+		name: "Stony shore",
+		hex: "8e9298",
+		t: 0.62,
+		h: 0.45,
+		landform: "shore",
+		block: BlockType.STONY_SHORE_GROUND,
+	},
+	{
+		name: "Beach",
+		hex: "e6d9a8",
+		t: 0.9,
+		h: 0.8,
+		landform: "shore",
+		block: BlockType.BEACH_GROUND,
+	},
+	{
+		name: "Frozen valley",
+		hex: "cfdce6",
+		t: 0.17,
+		h: 0.49,
+		landform: "valleys",
+		block: BlockType.FROZEN_VALLEY_GROUND,
+	},
+	{
+		name: "Swamp",
+		hex: "4e5f33",
+		t: 0.45,
+		h: 0.78,
+		landform: "valleys",
+		block: BlockType.SWAMP_GROUND,
+	},
+	{
+		name: "Dry basin",
+		hex: "c9b06a",
+		t: 0.7,
+		h: 0.25,
+		landform: "valleys",
+		block: BlockType.DRY_BASIN_GROUND,
+	},
+	{
+		name: "Tundra",
+		hex: "9fae95",
+		t: 0.3,
+		h: 0.28,
+		landform: "lowlands",
+		block: BlockType.TUNDRA_GROUND,
+	},
+	{
+		name: "Taiga",
+		hex: "3d6b63",
+		t: 0.3,
+		h: 0.78,
+		landform: "lowlands",
+		block: BlockType.TAIGA_GROUND,
+	},
+	{
+		name: "Steppe",
+		hex: "a8a05e",
+		t: 0.58,
+		h: 0.28,
+		landform: "lowlands",
+		block: BlockType.STEPPE_GROUND,
+	},
+	{
+		name: "Grassland",
+		hex: "93a95e",
+		t: 0.58,
+		h: 0.78,
+		landform: "lowlands",
+		block: BlockType.GRASSLAND_GROUND,
+	},
+	{
+		name: "Desert",
+		hex: "e8c44a",
+		t: 0.84,
+		h: 0.28,
+		landform: "lowlands",
+		block: BlockType.DESERT_GROUND,
+		underlay: BlockType.SANDSTONE,
+	},
+	{
+		name: "Rainforest",
+		hex: "2f9e2f",
+		t: 0.84,
+		h: 0.78,
+		landform: "lowlands",
+		block: BlockType.RAINFOREST_GROUND,
+	},
+	{
+		name: "Snowy slopes",
+		hex: "dce6ee",
+		t: 0.15,
+		h: 0.63,
+		landform: "slopes",
+		block: BlockType.SNOWY_SLOPES_GROUND,
+	},
+	{
+		name: "Grove",
+		hex: "5f8a5c",
+		t: 0.42,
+		h: 0.87,
+		landform: "slopes",
+		block: BlockType.GROVE_GROUND,
+	},
+	{
+		name: "Dry slope",
+		hex: "b08a55",
+		t: 0.79,
+		h: 0.32,
+		landform: "slopes",
+		block: BlockType.DRY_SLOPE_GROUND,
+	},
+	{
+		name: "Frozen plateau",
+		hex: "e2eaf2",
+		t: 0.25,
+		h: 0.45,
+		landform: "plateau",
+		block: BlockType.FROZEN_PLATEAU_GROUND,
+	},
+	{
+		name: "Highland steppe",
+		hex: "b0ab6a",
+		t: 0.57,
+		h: 0.55,
+		landform: "plateau",
+		block: BlockType.HIGHLAND_STEPPE_GROUND,
+	},
+	{
+		name: "Badlands",
+		hex: "c06a3a",
+		t: 0.81,
+		h: 0.18,
+		landform: "plateau",
+		block: BlockType.BADLANDS_GROUND,
+		underlay: BlockType.TERRACOTTA,
+	},
+	{
+		name: "Jagged peaks",
+		hex: "e4ebf2",
+		t: 0.05,
+		h: 0.45,
+		landform: "peaks",
+		block: BlockType.JAGGED_PEAKS_GROUND,
+	},
+	{
+		name: "Stony peaks",
+		hex: "8d8f94",
+		t: 0.21,
+		h: 0.18,
+		landform: "peaks",
+		block: BlockType.STONY_PEAKS_GROUND,
+	},
+	{
+		name: "Alpine forest",
+		hex: "46705a",
+		t: 0.41,
+		h: 0.62,
+		landform: "peaks",
+		block: BlockType.ALPINE_FOREST_GROUND,
+	},
+];
+
+/**
+ * One of `plain`'s grounds, moved to the climate {@link PLAIN_BANDED} wants
+ * it at.
+ *
+ * Only `t`, `h` and `landform` are given here. Everything that says what the
+ * ground **is** -- its name, its color, its block and its underlay -- comes
+ * from {@link PLAIN} untouched, so the two tables can never disagree about
+ * what a Beach is made of.
+ */
+function respaced(
+	name: string,
+	t: number,
+	h: number,
+	landform: string = ANY_LANDFORM,
+): BiomeDef {
+	const from = PLAIN.find((biome) => biome.name === name);
+	if (!from) throw new Error(`no plain biome is named ${name}`);
+	return { ...from, t, h, landform };
+}
+
+/**
+ * **`plain`'s twenty-one grounds, laid out the way Holdridge lays its own
+ * out**: climate names the biome, and the terrain reaches it only through the
+ * air getting colder and drier with height.
+ *
+ * `plain` files each of its dots under one landform and asks the terrain
+ * which ground a place is before it asks the climate anything, so a boundary
+ * is drawn wherever the relief curve crosses a threshold -- and the relief
+ * curve changes hillside to hillside. That is what makes its map read as
+ * speckle: measured over four seeds at one-degree steps, `20.17%` of
+ * neighbouring land samples disagree about which biome they are in, against
+ * `7.87%` for the Holdridge table this one is laid out after. Fifteen of
+ * `plain`'s grounds name a climate rather than a material, and those fifteen
+ * are filed under no landform here. The same sweep reads **`7.43%`**.
+ *
+ * **They had to be respaced, not merely unfiled.** `plain` placed its dots
+ * inside each landform's own measured cloud, so two filed under different
+ * ground sit almost on top of each other -- Frozen valley and Frozen plateau
+ * are `0.089` apart, Desert and Dry slope `0.064`. Thrown into one square
+ * they would split their neighbourhood along a line no reading is stable
+ * across, which is the speckle again by another route.
+ *
+ * **The fifteen sit on a five-by-three grid, and the grid is placed where the
+ * readings actually are.** Temperature spreads fairly evenly over the square
+ * and humidity does not -- read through {@link FIXED_FIT} with the elevation
+ * lapses on, half the land is drier than `0.30` and a tenth of it reads `0`
+ * outright. So the rows sit at the `10`, `30`, `50`, `70` and `90`th
+ * percentiles of temperature (`0.05`, `0.26`, `0.46`, `0.64`, `0.87`) and the
+ * columns at the `17`, `50` and `83`rd of humidity (`0.04`, `0.30`, `0.58`).
+ * Even columns at `0.18 / 0.50 / 0.82` were tried first and left the wettest
+ * five zones at `0.52-2.22%` of the land each while Frozen plateau took
+ * `19.88%`; on the measured grid the fifteen run `11.25%` down to `2.79%`, a
+ * `4.0 : 1` spread against `plain`'s own `7.8 : 1`.
+ *
+ * **The other six stay filed, because they name a material.** Sand, shingle,
+ * sea ice, red rock and bare grey stone are what a place is made of rather
+ * than what grows on it, and no reading of the air puts them anywhere. Each
+ * is placed inside its own landform's cloud rather than on the grid: peaks
+ * run a median `0.18` in temperature and `0.04` in humidity, which is the one
+ * corner the grid is already crowded in, so the two peak dots were swept over
+ * that corner and take `12%` and `20%` of the peaks between them. The three
+ * shore grounds take the coast outright, by the rule in `allowedBiomes`.
+ */
+const PLAIN_BANDED: readonly BiomeDef[] = [
+	// The coldest band. Ice at every humidity: what changes across it is how
+	// much snow lies on the ice, not whether the ground is frozen.
+	respaced("Frozen plateau", 0.05, 0.04),
+	respaced("Frozen valley", 0.05, 0.3),
+	respaced("Snowy slopes", 0.05, 0.58),
+
+	// Cold, and something grows.
+	respaced("Tundra", 0.26, 0.04),
+	respaced("Alpine forest", 0.26, 0.3),
+	respaced("Taiga", 0.26, 0.58),
+
+	// Temperate.
+	respaced("Steppe", 0.46, 0.04),
+	respaced("Highland steppe", 0.46, 0.3),
+	respaced("Grove", 0.46, 0.58),
+
+	// Warm.
+	respaced("Dry slope", 0.64, 0.04),
+	respaced("Grassland", 0.64, 0.3),
+	respaced("Swamp", 0.64, 0.58),
+
+	// Hot, where the dry end is a desert rather than a steppe.
+	respaced("Desert", 0.87, 0.04),
+	respaced("Dry basin", 0.87, 0.3),
+	respaced("Rainforest", 0.87, 0.58),
+
+	// The six materials, each placed inside its own landform's measured
+	// cloud rather than on the grid above. The shore trio is read against
+	// itself alone, so its three dots only have to separate a cold coast
+	// from a temperate one from a hot one.
+	respaced("Icy shore", 0.28, 0.52, "shore"),
+	respaced("Stony shore", 0.52, 0.48, "shore"),
+	respaced("Beach", 0.8, 0.62, "shore"),
+	respaced("Badlands", 0.82, 0.06, "plateau"),
+	respaced("Jagged peaks", 0.06, 0.1, "peaks"),
+	respaced("Stony peaks", 0.12, 0.0, "peaks"),
+];
+
+/**
  * The biome sets a world can start from.
  *
  * **`plain` is the shipped set: each landform's dots sit inside that ground's
@@ -287,6 +570,12 @@ const SUBSTRATE: readonly BiomeDef[] = [
  * it rises, so a hot peak is not a rare biome, it is no biome at all; a dot
  * placed out there would never be built and the ones left would split the
  * cloud between them.
+ *
+ * **`plainElevation` is those same twenty-one grounds with the terrain rule
+ * taken off fifteen of them** ({@link PLAIN_BANDED}): climate names the
+ * biome, and the terrain reaches it only through the air getting colder and
+ * drier with height. Same names, same colors, same blocks, a map with
+ * regions in it rather than speckle.
  *
  * **`holdridge` is Holdridge's life zones on their own**: a real
  * classification of the world's vegetation by temperature and rainfall,
@@ -309,7 +598,7 @@ const SUBSTRATE: readonly BiomeDef[] = [
  * than plant communities. `plain`'s two underlays come across with them,
  * and Holdridge's own two deserts gain the sandstone they were missing.
  *
- * **Both Holdridge tables read one constant span** ({@link FIXED_FIT})
+ * **Every set but `plain` reads one constant span** ({@link FIXED_FIT})
  * rather than the stretch `plain` measures from each planet's own land:
  * `plain`'s dots are placed assuming that stretch, but a real
  * classification promises the same absolute reading the same name
@@ -318,178 +607,8 @@ const SUBSTRATE: readonly BiomeDef[] = [
  * against eighteen when the raw range is read straight through.
  */
 export const BIOME_PRESETS: Record<string, readonly BiomeDef[]> = {
-	plain: [
-		{
-			name: "Icy shore",
-			hex: "d8e4ec",
-			t: 0.3,
-			h: 0.6,
-			landform: "shore",
-			block: BlockType.ICY_SHORE_GROUND,
-		},
-		{
-			name: "Stony shore",
-			hex: "8e9298",
-			t: 0.62,
-			h: 0.45,
-			landform: "shore",
-			block: BlockType.STONY_SHORE_GROUND,
-		},
-		{
-			name: "Beach",
-			hex: "e6d9a8",
-			t: 0.9,
-			h: 0.8,
-			landform: "shore",
-			block: BlockType.BEACH_GROUND,
-		},
-		{
-			name: "Frozen valley",
-			hex: "cfdce6",
-			t: 0.17,
-			h: 0.49,
-			landform: "valleys",
-			block: BlockType.FROZEN_VALLEY_GROUND,
-		},
-		{
-			name: "Swamp",
-			hex: "4e5f33",
-			t: 0.45,
-			h: 0.78,
-			landform: "valleys",
-			block: BlockType.SWAMP_GROUND,
-		},
-		{
-			name: "Dry basin",
-			hex: "c9b06a",
-			t: 0.7,
-			h: 0.25,
-			landform: "valleys",
-			block: BlockType.DRY_BASIN_GROUND,
-		},
-		{
-			name: "Tundra",
-			hex: "9fae95",
-			t: 0.3,
-			h: 0.28,
-			landform: "lowlands",
-			block: BlockType.TUNDRA_GROUND,
-		},
-		{
-			name: "Taiga",
-			hex: "3d6b63",
-			t: 0.3,
-			h: 0.78,
-			landform: "lowlands",
-			block: BlockType.TAIGA_GROUND,
-		},
-		{
-			name: "Steppe",
-			hex: "a8a05e",
-			t: 0.58,
-			h: 0.28,
-			landform: "lowlands",
-			block: BlockType.STEPPE_GROUND,
-		},
-		{
-			name: "Grassland",
-			hex: "93a95e",
-			t: 0.58,
-			h: 0.78,
-			landform: "lowlands",
-			block: BlockType.GRASSLAND_GROUND,
-		},
-		{
-			name: "Desert",
-			hex: "e8c44a",
-			t: 0.84,
-			h: 0.28,
-			landform: "lowlands",
-			block: BlockType.DESERT_GROUND,
-			underlay: BlockType.SANDSTONE,
-		},
-		{
-			name: "Rainforest",
-			hex: "2f9e2f",
-			t: 0.84,
-			h: 0.78,
-			landform: "lowlands",
-			block: BlockType.RAINFOREST_GROUND,
-		},
-		{
-			name: "Snowy slopes",
-			hex: "dce6ee",
-			t: 0.15,
-			h: 0.63,
-			landform: "slopes",
-			block: BlockType.SNOWY_SLOPES_GROUND,
-		},
-		{
-			name: "Grove",
-			hex: "5f8a5c",
-			t: 0.42,
-			h: 0.87,
-			landform: "slopes",
-			block: BlockType.GROVE_GROUND,
-		},
-		{
-			name: "Dry slope",
-			hex: "b08a55",
-			t: 0.79,
-			h: 0.32,
-			landform: "slopes",
-			block: BlockType.DRY_SLOPE_GROUND,
-		},
-		{
-			name: "Frozen plateau",
-			hex: "e2eaf2",
-			t: 0.25,
-			h: 0.45,
-			landform: "plateau",
-			block: BlockType.FROZEN_PLATEAU_GROUND,
-		},
-		{
-			name: "Highland steppe",
-			hex: "b0ab6a",
-			t: 0.57,
-			h: 0.55,
-			landform: "plateau",
-			block: BlockType.HIGHLAND_STEPPE_GROUND,
-		},
-		{
-			name: "Badlands",
-			hex: "c06a3a",
-			t: 0.81,
-			h: 0.18,
-			landform: "plateau",
-			block: BlockType.BADLANDS_GROUND,
-			underlay: BlockType.TERRACOTTA,
-		},
-		{
-			name: "Jagged peaks",
-			hex: "e4ebf2",
-			t: 0.05,
-			h: 0.45,
-			landform: "peaks",
-			block: BlockType.JAGGED_PEAKS_GROUND,
-		},
-		{
-			name: "Stony peaks",
-			hex: "8d8f94",
-			t: 0.21,
-			h: 0.18,
-			landform: "peaks",
-			block: BlockType.STONY_PEAKS_GROUND,
-		},
-		{
-			name: "Alpine forest",
-			hex: "46705a",
-			t: 0.41,
-			h: 0.62,
-			landform: "peaks",
-			block: BlockType.ALPINE_FOREST_GROUND,
-		},
-	],
+	plain: PLAIN,
+	plainElevation: PLAIN_BANDED,
 	holdridge: HOLDRIDGE,
 	elevation: [...HOLDRIDGE, ...SUBSTRATE],
 };

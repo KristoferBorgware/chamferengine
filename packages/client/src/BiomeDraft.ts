@@ -46,7 +46,10 @@ export interface BiomeTableDraft {
 }
 
 /** How high `humLapse` opens for a freshly chosen preset. */
-const PRESET_HUM_LAPSE: Record<string, number> = { elevation: 0.6 };
+const PRESET_HUM_LAPSE: Record<string, number> = {
+	elevation: 0.6,
+	plainElevation: 0.6,
+};
 
 /** `humLapse`'s own default for one preset, `0` for any preset without one. */
 function defaultHumLapse(preset: string): number {

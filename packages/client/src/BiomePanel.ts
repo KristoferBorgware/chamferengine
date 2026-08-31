@@ -22,6 +22,7 @@ import { paintPatch } from "./paintPatch.js";
 /** What the "Start from" select reads for a preset, by key. */
 const PRESET_LABELS: Record<string, string> = {
 	plain: "Plain",
+	plainElevation: "Plain, banded by elevation",
 	holdridge: "Holdridge life zones",
 	elevation: "Holdridge, banded by elevation",
 };
