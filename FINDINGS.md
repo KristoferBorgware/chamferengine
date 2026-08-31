@@ -10,6 +10,74 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
+### F-145 — Every level of detail walks and draws the cave field, and only the nearest can show a cave
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** high
+**Effort:** medium
+**Found:** 2026-08-31, asked why deep caves kill the planet view
+**Where:** `packages/engine/src/mesh/worker/MeshWorkerCore.ts`,
+`packages/engine/src/generation/terrain/TerrainGenerator.ts`
+
+**What happens.** Nothing between the chunk selection and the generator gates
+the cave term by level of detail: a chunk four levels out runs the same
+`caves: true` options as the one underfoot, so every column of every chunk in
+view pays the per-block cave walk down the whole reach -- the walk that takes a
+chunk to about three times its caveless cost at a deep setting
+(`tools/trial-caves.ts`) -- and then draws whatever swiss cheese it finds. A
+coarse cell is 2 to 32 m wide against a passage about 10 m wide at the shipped
+knobs, so what a far chunk buys with that work is not caves but a ragged
+surface and extra faces.
+
+**Why it matters.** Most chunks in view are coarse. The deep-reach cost lands
+on all of them, and the extra faces land in the chunks with the most ground a
+frame -- which is where both the build stall and the frame cost come from when
+the reach is turned up.
+
+**What would fix it.** The same gate the leaf cutouts use: the generator stays
+level-blind (doc 14, F-032 -- that rule is about heights), and the mesh worker,
+the one place that knows the chunk's level, hands coarse chunks options with
+caves off -- the way `CUTOUT_REACH` already switches the leaf holes off past
+the finest level. Which level to cut at is a frames-and-counts measurement,
+like the one that chose `CUTOUT_REACH`. The seam machinery already closes
+solidity disagreements at level joins; F-116's mouth-at-a-seam gap is the one
+case to re-check.
+
+---
+
+### F-146 — "Cave geometry is culled by enclosure" is designed and not built, so sealed caves are meshed and drawn
+
+**Kind:** performance
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** large
+**Found:** 2026-08-31, asked why deep caves kill the planet view
+**Where:** `packages/engine/src/mesh/meshChunk.ts`
+
+**What happens.** `CLAUDE.md` and doc 14 state that cave geometry is culled by
+enclosure and costs build time and memory rather than draw time. No such cull
+exists: the mesher emits a face wherever solidity differs, reachable or not,
+and the only `sealed` in `meshChunk` is a seam radius. A pocket with no opening
+anywhere near the player still gets every wall, floor and roof meshed, uploaded,
+and pushed through the main pass and all three shadow cascades, forever unseen.
+The cave bench measured the whole-column face bill at 1.7x to 5x its caveless
+figure depending on resolution, and the buried share of that is what this is.
+
+**Why it matters.** It is the draw-side half of the deep-cave bill -- mesh
+memory and per-frame vertex work that scales with the reach knob -- and it is a
+standing false claim in the compact reference, which is worse than an open
+question because a reader plans against it.
+
+**What would fix it.** A flood over the chunk's air from the open sky and the
+apron, marking reachable air; emit faces only against it. A pocket opened by a
+player's break already rebuilds the chunk, so the walls appear with the hole. A
+pocket whose only opening is in a neighbouring chunk is the case to design for
+-- being conservative near the rim is the likely shape. Until it is built,
+the line in `CLAUDE.md` should say *designed, not built*.
+
+---
+
 ### F-144 — The landform grid reads how sharp a place is and calls it how high
 
 **Kind:** risk
