@@ -501,67 +501,74 @@ function respaced(
  * they would split their neighbourhood along a line no reading is stable
  * across, which is the speckle again by another route.
  *
- * **The fifteen sit on a five-by-three grid, and the grid is placed where the
- * readings actually are.** Temperature spreads fairly evenly over the square
- * and humidity does not -- read through {@link FIXED_FIT} with the elevation
- * lapses on, half the land is drier than `0.30` and a tenth of it reads `0`
- * outright. So the rows sit at the `10`, `30`, `50`, `70` and `90`th
- * percentiles of temperature (`0.05`, `0.26`, `0.46`, `0.64`, `0.87`) and the
- * columns at the `17`, `50` and `83`rd of humidity (`0.04`, `0.30`, `0.58`).
- * Even columns at `0.18 / 0.50 / 0.82` were tried first and left the wettest
- * five zones at `0.52-2.22%` of the land each while Frozen plateau took
- * `19.88%`; on the measured grid the fifteen run `11.25%` down to `2.79%`, a
- * `4.0 : 1` spread against `plain`'s own `7.8 : 1`.
+ * **The fifteen sit on a five-by-three grid, and every dot is placed where
+ * the readings are.** An even grid is the obvious layout and it is not a
+ * balanced one: the readings are noise stacks summed and divided, so they
+ * pile in the middle and thin toward every edge. The five temperature bands
+ * sit at the `10`, `30`, `50`, `70` and `90`th percentiles of temperature
+ * over the land -- which come out at `0.11`, `0.33`, `0.51`, `0.69` and
+ * `0.91`, so temperature really is close to even -- and each band's three
+ * dots sit at that band's **own** `17`, `50` and `83`rd of humidity.
+ *
+ * **Per band, and not per column, because the two readings are correlated.**
+ * They read `+0.27` together over the land: high ground is both colder and
+ * drier, so a warm place is a wetter place. Balancing each axis on its own
+ * therefore leaves the two opposite corners starved -- measured, one set of
+ * columns for the whole table gives the fifteen a `6.3 : 1` spread, and each
+ * band on its own gives **`2.4 : 1`**, running `9.24%` down to `3.80%` of the
+ * land. It is also what stops the diagram reading as graph paper: the cold
+ * band is far drier than the hot one, so the rows stagger, and no four
+ * biomes meet at a point.
  *
  * **The other six stay filed, because they name a material.** Sand, shingle,
  * sea ice, red rock and bare grey stone are what a place is made of rather
  * than what grows on it, and no reading of the air puts them anywhere. Each
- * is placed inside its own landform's cloud rather than on the grid: peaks
- * run a median `0.18` in temperature and `0.04` in humidity, which is the one
- * corner the grid is already crowded in, so the two peak dots were swept over
- * that corner and take `12%` and `20%` of the peaks between them. The three
+ * is placed inside its own landform's cloud rather than on the grid, swept
+ * over that cloud rather than reasoned about: the two peak dots take `9%`
+ * and `21%` of the peaks between them, and Badlands `12%` of the plateau.
+ * Jagged peaks is the wetter of the two and Stony peaks the drier, which is
+ * the right way round -- snow needs water and bare rock does not. The three
  * shore grounds take the coast outright, by the rule in `allowedBiomes`.
  */
 const PLAIN_BANDED: readonly BiomeDef[] = [
-	// The coldest band. Ice at every humidity: what changes across it is how
-	// much snow lies on the ice, not whether the ground is frozen.
-	respaced("Frozen plateau", 0.05, 0.04),
-	respaced("Frozen valley", 0.05, 0.3),
-	respaced("Snowy slopes", 0.05, 0.58),
+	// The coldest band, and the driest: cold air carries little water, so
+	// this row sits further left than any other.
+	respaced("Frozen plateau", 0.11, 0.1),
+	respaced("Frozen valley", 0.11, 0.43),
+	respaced("Snowy slopes", 0.11, 0.71),
 
 	// Cold, and something grows.
-	respaced("Tundra", 0.26, 0.04),
-	respaced("Alpine forest", 0.26, 0.3),
-	respaced("Taiga", 0.26, 0.58),
+	respaced("Tundra", 0.33, 0.31),
+	respaced("Alpine forest", 0.33, 0.62),
+	respaced("Taiga", 0.33, 0.9),
 
 	// Temperate.
-	respaced("Steppe", 0.46, 0.04),
-	respaced("Highland steppe", 0.46, 0.3),
-	respaced("Grove", 0.46, 0.58),
+	respaced("Steppe", 0.51, 0.35),
+	respaced("Highland steppe", 0.51, 0.65),
+	respaced("Grove", 0.51, 0.9),
 
-	// Warm.
-	respaced("Dry slope", 0.64, 0.04),
-	respaced("Grassland", 0.64, 0.3),
-	respaced("Swamp", 0.64, 0.58),
+	// Warm, and the driest band above the ice: this is where a world puts
+	// its arid belt.
+	respaced("Dry slope", 0.69, 0.29),
+	respaced("Grassland", 0.69, 0.5),
+	respaced("Swamp", 0.69, 0.82),
 
 	// Hot, where the dry end is a desert rather than a steppe.
-	respaced("Desert", 0.87, 0.04),
-	respaced("Dry basin", 0.87, 0.3),
-	respaced("Rainforest", 0.87, 0.58),
+	respaced("Desert", 0.91, 0.45),
+	respaced("Dry basin", 0.91, 0.73),
+	respaced("Rainforest", 0.91, 0.91),
 
 	// The six materials, each placed inside its own landform's measured
-	// cloud rather than on the grid above. The shore trio is read against
-	// itself alone, so its three dots only have to separate a cold coast
-	// from a temperate one from a hot one.
-	respaced("Icy shore", 0.28, 0.52, "shore"),
-	respaced("Stony shore", 0.52, 0.48, "shore"),
-	respaced("Beach", 0.8, 0.62, "shore"),
-	respaced("Badlands", 0.82, 0.06, "plateau"),
-	respaced("Jagged peaks", 0.06, 0.1, "peaks"),
-	respaced("Stony peaks", 0.12, 0.0, "peaks"),
-];
-
-/**
+	// cloud rather than on the grid. The shore trio is read against itself
+	// alone, so its three dots only have to separate a cold coast from a
+	// temperate one from a hot one.
+	respaced("Icy shore", 0.3, 0.75, "shore"),
+	respaced("Stony shore", 0.57, 0.82, "shore"),
+	respaced("Beach", 0.85, 0.9, "shore"),
+	respaced("Badlands", 0.76, 0.24, "plateau"),
+	respaced("Jagged peaks", 0.14, 0.35, "peaks"),
+	respaced("Stony peaks", 0.14, 0.02, "peaks"),
+]; /**
  * The biome sets a world can start from.
  *
  * **`plain` is the shipped set: each landform's dots sit inside that ground's
@@ -598,13 +605,17 @@ const PLAIN_BANDED: readonly BiomeDef[] = [
  * than plant communities. `plain`'s two underlays come across with them,
  * and Holdridge's own two deserts gain the sandstone they were missing.
  *
- * **Every set but `plain` reads one constant span** ({@link FIXED_FIT})
- * rather than the stretch `plain` measures from each planet's own land:
+ * **Every set but `plain` reads one constant span** rather than the stretch
+ * `plain` measures from each planet's own land, and
+ * {@link fitForPreset} is which one:
  * `plain`'s dots are placed assuming that stretch, but a real
  * classification promises the same absolute reading the same name
  * everywhere, and one constant keeps that while still reaching the whole
  * chart. Measured over four seeds, all twenty-three life zones are built,
- * against eighteen when the raw range is read straight through.
+ * against eighteen when the raw range is read straight through. **Which
+ * constant a table reads is decided by its humidity lapse**, because a fit
+ * is measured against a climate model and drying the air with height makes
+ * a different one.
  */
 export const BIOME_PRESETS: Record<string, readonly BiomeDef[]> = {
 	plain: PLAIN,

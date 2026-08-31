@@ -10,70 +10,69 @@ and how to write one. The open list stays in the order things were found.
 
 ## Open
 
-### F-133 — The shipped climate reads cold and dry, so a third of the land is two biomes
+### F-138 — Hot and dry is the rarest pair on the chart, so a desert is a seed's luck
 
-**Kind:** tuning
+**Kind:** gap
 **Milestone:** 0.5.0
 **Priority:** medium
 **Effort:** medium
-**Found:** 2026-08-30, measuring which biomes the merged table actually builds
+**Found:** 2026-08-31, rebalancing the biome tables after correcting the climate fit
 **Where:** `packages/engine/src/generation/biomes/BiomeField.ts`
-(`climateAt`), `BiomeSettings.ts` (`tempEquator`, `humOcean`, `humNoise`,
-`humLapse`), `ClimateFit.ts` (`FIXED_FIT`)
+(`climateAt`), `BiomeSettings.ts` (`humOcean`, `humLapse`)
 
-**What happens.** With the merged table read through `FIXED_FIT`, the
-shares of land the 28 biomes take are very uneven at the cold, dry end.
-Measured over four seeds of the shipped world:
+**What happens.** Temperature and humidity are read from two terms that
+share one input: height. The air cools as it rises and, with `humLapse` set,
+dries as it rises too. So the two readings move together.
 
-> **[measured]** Dry tundra `19.1%` and Boreal desert `11.9%` -- `31%` of
-> all land between two biomes. The next is Moist tundra at `7.2%`, and the
-> median biome takes `3.3%`. At the other end Boreal rain forest takes
-> `0.05%`, Rain tundra `0.28%` and Tropical rain forest `0.41%`.
+> **[measured]** Over four seeds at one-degree steps, temperature and
+> humidity read `+0.269` correlated across the land. Warm ground is wetter
+> ground and cold ground is drier, so the hot, arid corner of the diagram is
+> the thinnest part of it.
 
-The cause is the raw climate's own distribution rather than the table:
-before any fit, humidity spans `0.05` to `0.60` of the square at the 1st
-and 99th percentiles and temperature reaches `0.84`. `FIXED_FIT` stretches
-that onto the whole square so every zone is reachable, but stretching does
-not change the *shape* -- the readings still pile up below the middle of
-both axes, and the cold, dry corner is where the pile sits.
+Over eight seeds, `elevation`'s Tropical desert is built by **one** of them
+and Subtropical desert by **two**. Neither is unreachable; both are luck.
 
-**Why it matters.** Nobody is hurt today: every zone builds, the vegetation
-reaches all of it, and a cold planet is a legitimate planet. It matters
-because it is not a *choice* anyone made -- no knob says "this world is
-cold", the shape simply falls out of a sum of noise stacks -- and because
-it means a player walking a long way meets tundra and cold desert far more
-often than anything else. It also makes the wettest four zones landmarks
-rather than regions, which may or may not be wanted.
+**Why it matters.** A desert is one of the few biomes a player would name
+without prompting, and there is no knob that asks for one -- the two
+humidity knobs decide the contrast between a coast and an interior and how
+far a place may wander, and neither says *be arid at this latitude*. Earth's
+deserts sit in belts at a fixed latitude for a reason the model has no term
+for. The correlation is also a modelling artifact rather than physics: it
+comes from both lapses reading the same height, not from anything about air.
 
-**What would fix it.** Two routes, and the first is much cheaper. Either
-**widen the humidity model** so its raw readings span more of their own
-range -- `humOcean` and `humNoise` are the two terms, and the measurement
-to make is the raw spread rather than the finished picture -- or **respace
-the dots** so the crowded corner is cut more finely and the empty corner
-more coarsely, which keeps the climate model untouched and costs only
-constants in `BIOME_PRESETS`. Deciding between them needs a view on
-whether the planet *should* read cold; if it should, the second is right,
-and if the cold is an accident of the noise, the first is.
+**What would fix it.** A latitude term in humidity, the shape of
+`tempEquator`'s own term but with two dry belts rather than one warm middle
+-- one number, read at the same place the lapse is. That would decorrelate
+the two readings where it matters and put the arid ground where a player
+expects it. A cheaper stopgap is a plain world-wetness offset, which moves
+the whole planet along one axis and cannot put a desert next to a jungle.
 
-**The second route has now been walked once, on a different table.** The
-`plainElevation` preset lays `plain`'s own fifteen climate grounds on a grid
-placed at percentiles of the measured readings rather than at even spacings,
-which is exactly the respacing above and touches no part of the climate
-model:
+### F-139 — Two benches mount their picture inside the rows, so it scrolls away
 
-> **[measured]** Over four seeds, evenly spaced columns at `0.18 / 0.50 /
-> 0.82` gave the coldest, driest ground `19.88%` of the land and left the
-> wettest five between `0.52%` and `2.22%` each. Moved onto the readings'
-> own quantiles -- rows at the 10th to 90th percentiles of temperature,
-> columns at the 17th, 50th and 83rd of humidity -- the fifteen run `11.25%`
-> down to `2.79%`, a `4.0 : 1` spread.
+**Kind:** bug
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-31, pinning the biome bench's own preview
+**Where:** `packages/client/src/ParameterPanel.ts` (`mount`),
+`packages/client/src/landscape.ts`, `packages/client/src/vegetation.ts`
 
-So respacing does reach the symptom, and cheaply. What it does **not** do is
-answer the question the entry closes on: `plainElevation`'s names are this
-project's own and answerable to nothing outside this repository, so a dot may
-go wherever the measurement puts it. Holdridge's names are a published
-classification, and a zone moved off its chart position stops meaning what it
-says. `elevation` is left alone for that reason.
+**What happens.** `mount()` says it puts a node "at the top of the panel,
+above every row and fixed there". On a bench it does not: it inserts into
+`.knobs-body`, which is the element carrying `overflow-y: auto`, so the node
+is the first of the rows rather than a sibling of them and scrolls with
+them. `.bench-head`'s own `flex: 0 0 auto` is the leftover of the layout it
+was written for.
+
+**Why it matters.** The picture is what the rows are judged against, and the
+way out of the bench is in the same strip. Both leave the top of the panel
+as soon as a reader reaches a row twenty down. The biome bench now uses
+`pin()`, which is a real sibling strip; the landscape and vegetation benches
+still call `mount()`.
+
+**What would fix it.** `panel.pin(head)` in place of `panel.mount(head)` in
+both, and the same for whatever each hangs on its `General` section. The
+strip and its CSS already exist.
 
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
@@ -2757,6 +2756,62 @@ is the same fallback the pool already relies on, so the shape is there.
 ---
 
 ## Closed
+
+### F-133 — The shipped climate reads cold and dry, so a third of the land is two biomes
+
+**Kind:** tuning
+**Milestone:** 0.5.0
+**Priority:** medium
+**Effort:** medium
+**Found:** 2026-08-30, measuring which biomes the merged table actually builds
+**Closed:** 2026-08-31 on `master` by "Correct the climate fit for a world
+whose air dries with height." It was not tuning: the fit was measured
+against a climate model that no longer existed. `FIXED_FIT` was taken
+before the humidity lapse was added, over worlds whose air only cooled as
+it rose. `elevation` sets that lapse, so every reading it takes has
+dropped, and the span it read started `0.27` too high.
+
+> **[measured]** Over six seeds at one-degree steps, `elevation`'s humidity
+> reached `0.00` to `0.77` of the square with a median of `0.34`, and
+> **`17.1%` of all land was clamped flat against the dry edge** -- a sixth
+> of the planet pinned onto one column of the diagram, which is what fed the
+> two cold, dry zones. `holdridge`, which sets no lapse, clamped `2.0%`, so
+> the constant was right for the world it was measured on.
+
+`LAPSED_FIT` is the land's 2nd and 98th percentiles measured with the lapse
+on, and `fitForPreset` is which constant a table reads -- decided by the
+lapse rather than by the table, and both tables that set one measure the
+identical span. The same sweep then reads `0.00` to `0.99`, median `0.57`,
+`2.6%` clamped, and `elevation`'s shares go from `18.70%` down to `0.10%`
+(**187 : 1**) to `8.59%` down to `0.31%` (**28 : 1**): Dry tundra `18.70%`
+to `6.10%`, Boreal rain forest `0.10%` to `4.36%`, Tropical rain forest
+`0.47%` to `8.59%`.
+
+**Neither route this entry named was the answer**, and both are struck.
+Widening the humidity model would have papered over a fit that was simply
+measuring the wrong world; respacing Holdridge's dots would have moved a
+published classification off its own chart. What is left of the symptom is
+the thin hot, dry corner, which is a property of the climate model rather
+than of the reading, and that is **F-138**.
+**Where:** `packages/engine/src/generation/biomes/ClimateFit.ts`
+(`LAPSED_FIT`), `fitForPreset.ts`, `BiomeField.ts` (`measureFit`)
+
+**What happens.** With the merged table read through `FIXED_FIT`, the
+shares of land the 28 biomes take are very uneven at the cold, dry end.
+Measured over four seeds of the shipped world:
+
+> **[measured]** Dry tundra `19.1%` and Boreal desert `11.9%` -- `31%` of
+> all land between two biomes. The next is Moist tundra at `7.2%`, and the
+> median biome takes `3.3%`. At the other end Boreal rain forest takes
+> `0.05%`, Rain tundra `0.28%` and Tropical rain forest `0.41%`.
+
+**Why it matters.** It is not a *choice* anyone made -- no knob says "this
+world is cold", the shape simply falls out of a sum of noise stacks -- and
+a player walking a long way meets tundra and cold desert far more often
+than anything else. It also makes the wettest four zones landmarks rather
+than regions.
+
+**What would fix it.** Struck; see the closing note above.
 
 ### F-131 — Holdridge's climate square is fit to each planet's own land, not held fixed
 

@@ -653,6 +653,26 @@ body.bench .knobs {
 	padding-top: 12px;
 }
 
+/* **The reference, held still while the work moves.** A bench's picture is
+   what its rows are judged against, so it sits in a strip of its own above
+   them rather than as the first of them -- the rows scroll under it and it
+   stays. `min-height: 0` is what lets the rows beside it shrink and scroll
+   at all: a flex item defaults to its content's height and would push the
+   panel past the bottom of the window instead. */
+.knobs-pin {
+	flex: 0 0 auto;
+	padding: 12px 12px 0;
+	border-bottom: 1px solid var(--edge);
+}
+
+.knobs-pin .knobs-fold {
+	margin-top: 0;
+}
+
+.knobs-body {
+	min-height: 0;
+}
+
 /* **A layer's heading is its curve's colour**, and the same four the bench's
    pictures are named by: four curves with one colour between them are four
    curves a reader has to keep track of by position. */

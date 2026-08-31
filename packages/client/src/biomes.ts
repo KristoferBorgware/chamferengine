@@ -72,13 +72,25 @@ back.className = "bench-back";
 back.textContent = "← The planet";
 head.appendChild(back);
 
-panel.mount(head);
+panel.pin(head);
 
 const facts = document.createElement("div");
 facts.className = "bench-facts";
 const recipe = document.createElement("div");
 recipe.className = "bench-recipe";
+
+// **The one picture the whole bench is judged against, held above the
+// scroll.** Every other section keeps its picture with the rows that tune
+// it, which is right for a field being turned; this one is the finished
+// map, and a reader reaching for a row twenty down still needs to see what
+// it did. The group is the panel's shared empty one -- it is named for what
+// it holds here rather than for being first.
 const general = panel.section("General");
+if (general) {
+	const heading = general.querySelector(".knobs-fold");
+	if (heading) heading.textContent = "Biomes";
+	panel.pin(general);
+}
 
 // ---------------------------------------------------------------------------
 // The right panel: the biomes.

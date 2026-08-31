@@ -30,7 +30,7 @@ import {
 	CONTINENT_LAYER_DEFAULT,
 	CoarseMap,
 	EROSION_LAYER_DEFAULT,
-	FIXED_FIT,
+	fitForPreset,
 	GROUND_LINES,
 	PEAKS_LAYER_DEFAULT,
 	maxElevationFor,
@@ -2451,9 +2451,12 @@ export class PlanetSettings {
 	 * different Holdridge zones on a third of a small sample. Mapping the
 	 * raw range straight through keeps the promise and empties the table --
 	 * humidity then spans `0.05` to `0.60` of the square and the eight
-	 * zones above it are unreachable. {@link FIXED_FIT} is the span 24
-	 * worlds measured on average, held as a constant, which keeps both.
-	 * The `biomeFit` knob still reaches `plain`.
+	 * zones above it are unreachable. A constant span measured over many
+	 * worlds keeps both, and {@link fitForPreset} is which constant each
+	 * table reads -- the two Holdridge tables share one and
+	 * `plainElevation` has its own, because a fit is a property of the
+	 * climate model a table was placed against. The `biomeFit` knob still
+	 * reaches `plain`, the one table that measures.
 	 */
 	biomeOptions(): BiomeSettings {
 		const k = this.knobs;
@@ -2473,7 +2476,7 @@ export class PlanetSettings {
 			warpFeature: k.warpFeature,
 			warpOctaves: k.warpOctaves,
 			fit: k.biomeFit,
-			climateFit: this.biomeTable.preset === "plain" ? null : FIXED_FIT,
+			climateFit: fitForPreset(this.biomeTable.preset),
 			regions: k.biomeRegions,
 			regionSpan: k.regionSpan,
 			regionClimate: k.regionClimate,

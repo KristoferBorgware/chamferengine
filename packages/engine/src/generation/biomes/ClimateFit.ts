@@ -52,3 +52,31 @@ export const FIXED_FIT: ClimateFit = {
 	hSpan: 0.87,
 	fitted: true,
 };
+
+/**
+ * The fit a table reads when the air dries as it rises.
+ *
+ * **A fit is measured against a climate model, and turning on the humidity
+ * lapse makes a different one.** {@link FIXED_FIT} was measured before that
+ * lapse existed, over worlds whose air only cooled with height. Every table
+ * that sets `humLapse` then reads a span that starts too high, because every
+ * reading it takes has dropped: measured over six seeds at one-degree steps,
+ * humidity reached only `0.00` to `0.77` of the square with a median of
+ * `0.34`, and **`17.1%` of all land was clamped flat against the dry
+ * edge** -- a sixth of the planet pinned onto one column of the diagram.
+ * That is what made a world read as tundra and cold desert whatever its dots
+ * said, and what pushed every dot into the left of the chart.
+ *
+ * These are the land's 2nd and 98th percentiles over six seeds, the same
+ * rule a measured fit uses, taken with the lapse on. Both tables that set
+ * one measure the identical span, which is what says this belongs to the
+ * lapse rather than to either table. The same sweep then reads `0.00` to
+ * `0.99` with a median of `0.57`, and `2.6%` clamped.
+ */
+export const LAPSED_FIT: ClimateFit = {
+	tLo: -1.04,
+	tSpan: 1.6,
+	hLo: -0.81,
+	hSpan: 0.9,
+	fitted: true,
+};

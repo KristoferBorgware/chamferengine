@@ -32,15 +32,23 @@ const PRESET = "elevation";
 const STEP = 1;
 
 /**
- * Three worlds rather than one.
+ * Four worlds rather than one.
  *
  * The thinnest zones this table keeps run a few tenths of a percent of the
  * land -- Tropical rain forest is `0.41%` measured over four seeds -- and a
  * single planet can miss one outright: whether a seed grows a hot, soaking
  * lowland at all is a property of that seed. Pooling is what makes
  * "reachable" a statement about the table rather than about one world.
+ *
+ * **Four rather than three, because the hot, dry corner is the thinnest of
+ * all.** Temperature and humidity read `+0.27` correlated over this world's
+ * land -- high ground is both colder and drier, so warm ground is wetter --
+ * which leaves hot and arid the rarest pair on the chart. Measured over
+ * eight seeds, Tropical desert is built by one of them and Subtropical
+ * desert by two, and every seed builds somewhere between 17 and 25 of the
+ * 28. Four is the pool every measurement behind this table was taken over.
  */
-const SEEDS = ["chamfer", "otherworld", "atlas"];
+const SEEDS = ["chamfer", "otherworld", "atlas", "borgware"];
 
 /** A hot desert has no business on a summit, and this is the list of them. */
 const HOT_DESERTS = ["Subtropical desert", "Tropical desert", "Badlands"];

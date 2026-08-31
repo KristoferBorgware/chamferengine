@@ -13,6 +13,7 @@ import {
 	CONTINENT_SEED_OFFSET,
 	EROSION_SEED_OFFSET,
 	PEAKS_SEED_OFFSET,
+	fitForPreset,
 	layerNoiseSettings,
 	octaveNoise,
 	seedFromString,
@@ -790,9 +791,10 @@ const GROUPS: Group[] = [
 				// **Only `plain`'s own dots are placed assuming the stretch.**
 				// A table naming a real classification promises the same
 				// reading the same name on every planet, which the stretch
-				// itself would break.
+				// itself would break, so every other preset names a constant
+				// span instead and this row has nothing left to decide.
 				enabledWhen: (k) =>
-					biomeTableFromText(k.biomes).preset === "plain",
+					fitForPreset(biomeTableFromText(k.biomes).preset) === null,
 			},
 		],
 	},
@@ -801,7 +803,12 @@ const GROUPS: Group[] = [
 		where: "biome",
 		tint: "heat",
 		knobs: [
-			{ key: "tempEquator", label: "Equator to pole", digits: 2 },
+			{
+				key: "tempEquator",
+				label: "Equator to pole",
+				digits: 2,
+				says: "how far apart the warmest and coldest latitudes read; at nothing, latitude stops mattering and there are no polar caps",
+			},
 			{
 				key: "tempLapse",
 				label: "Altitude cools",
@@ -827,7 +834,7 @@ const GROUPS: Group[] = [
 				key: "humOcean",
 				label: "The coast wets it",
 				digits: 2,
-				says: "humidity reads the continent field, because that is already the distance from the coast",
+				says: "how far apart a coast and a deep interior read; it is the contrast, so turning it up dries the inland rather than wetting the shore",
 			},
 			{
 				key: "humNoise",
@@ -1796,6 +1803,28 @@ export class ParameterPanel {
 			return;
 		}
 		this.root.insertBefore(element, this.root.children[1] ?? null);
+	}
+
+	/**
+	 * Put an element in the strip above the rows, which never scrolls.
+	 *
+	 * {@link mount} puts a node at the top of the **rows**, and the rows are
+	 * what scrolls -- so a picture mounted there is carried off the top as
+	 * soon as a reader reaches for a knob twenty rows down. That is the one
+	 * thing a panel must not do to the thing it is a panel of. This strip is
+	 * a sibling of the rows rather than the first of them, so the panel's own
+	 * column layout holds it still while everything under it moves.
+	 */
+	pin(element: HTMLElement): void {
+		const host = this.leftBody ?? this.root.querySelector(".knobs-body");
+		if (!host?.parentElement) return;
+		let strip = host.parentElement.querySelector<HTMLElement>(".knobs-pin");
+		if (!strip) {
+			strip = document.createElement("div");
+			strip.className = "knobs-pin";
+			host.parentElement.insertBefore(strip, host);
+		}
+		strip.appendChild(element);
 	}
 
 	/** Put an element at the bottom of the scrolling rows. */

@@ -3,6 +3,7 @@ import { decodeCell, encodeCell, wordBits } from "chamfer/addressing";
 import {
 	BlockType,
 	FIXED_FIT,
+	LAPSED_FIT,
 	TerrainGenerator,
 	flatCoarseMap,
 	seedFromString,
@@ -699,10 +700,15 @@ describe("what a live rebuild can show", () => {
 
 describe("the biome model's fit", () => {
 	// **Only `plain` measures its own planet.** Its dots were placed
-	// assuming that stretch; the two Holdridge tables name a real
-	// classification, so they read one constant span instead -- which is
-	// what makes the same reading name the same zone on every world while
-	// still reaching the whole chart.
+	// assuming that stretch; every other table names a real classification
+	// or a measured layout, so each reads one constant span instead -- which
+	// is what makes the same reading name the same biome on every world
+	// while still reaching the whole chart.
+	//
+	// **Which constant is decided by the humidity lapse, not by the table.**
+	// A fit is measured against a climate model, and drying the air with
+	// height makes a different one; `holdridge` leaves the air alone, and
+	// the two tables that do not both measure the same span.
 	it("measures a span only for plain, and names a constant one otherwise", () => {
 		for (const biomeFit of [true, false]) {
 			const plain = new PlanetSettings({
@@ -712,13 +718,35 @@ describe("the biome model's fit", () => {
 			expect(plain.climateFit ?? null).toBe(null);
 			expect(plain.fit).toBe(biomeFit);
 
-			for (const biomes of ["holdridge", "elevation"]) {
-				const held = new PlanetSettings({
+			const held: Record<string, unknown> = {};
+			for (const biomes of ["holdridge", "elevation", "plainElevation"])
+				held[biomes] = new PlanetSettings({
 					biomes,
 					biomeFit,
-				}).biomeOptions();
-				expect([biomes, held.climateFit]).toEqual([biomes, FIXED_FIT]);
-			}
+				}).biomeOptions().climateFit;
+			expect(held).toEqual({
+				holdridge: FIXED_FIT,
+				elevation: LAPSED_FIT,
+				plainElevation: LAPSED_FIT,
+			});
+		}
+	});
+
+	// The lapse is what picks the span, so a table opening with one opens on
+	// the fit measured with it -- and the tables that set it are exactly the
+	// tables that do not read `FIXED_FIT`.
+	it("names the lapsed span for exactly the tables that dry with height", () => {
+		for (const biomes of [
+			"plain",
+			"holdridge",
+			"elevation",
+			"plainElevation",
+		]) {
+			const at = new PlanetSettings({ biomes }).biomeOptions();
+			expect([biomes, (at.humLapse ?? 0) > 0]).toEqual([
+				biomes,
+				at.climateFit === LAPSED_FIT,
+			]);
 		}
 	});
 
