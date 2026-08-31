@@ -2755,6 +2755,43 @@ is the same fallback the pool already relies on, so the shape is there.
 
 ---
 
+### F-138 — What is on screen is walked again for every chunk uploaded, once the picture pool is full
+
+**Kind:** risk
+**Milestone:** 0.5.0
+**Priority:** low
+**Effort:** small
+**Found:** 2026-08-31, verifying eviction by starving the pool to four pictures
+**Where:** `packages/client/src/planet.ts` (`picturesOnScreen`, `admitPictures`)
+
+**What happens.** A picture is only taken back from a slot nothing is drawing,
+so admission has to know what is on screen. That set is built by walking every
+resident chunk's list of block types and expanding each through the picture
+table. It is built **once per chunk upload** whenever the pool is full, and
+thrown away again immediately.
+
+Measured with the pool starved to four pictures over one flight: `3` pictures
+taken back and **`7,490`** admissions refused, over roughly 371 chunk uploads
+against 371 resident chunks. So the walk ran a few hundred times, each time
+over every chunk and every block type in it.
+
+**Why it matters.** It is `O(chunks x block types)` per chunk upload, and both
+grow: the chunk count with the view distance, the block types with the library.
+Nothing showed at the size measured -- the frame held 74 fps and upload stayed
+at `2.0 ms` -- and **it does not run at all in the arrangement nearly every
+machine gets**, because a pool of 512 against 110 pictures never fills. It is
+a cost that appears only where the pool is genuinely too small, which is the
+case that is already drawing flat colours and already the worst one.
+
+**What would fix it.** Build it once a frame rather than once an upload, or
+keep it as a running count per picture -- incremented when a chunk starts
+drawing and decremented when it stops -- so that "is anything drawing this"
+is a lookup rather than a walk. The count is the better shape and is not much
+more code: `forget` already marks the one place a chunk stops drawing, which
+is the only place a decrement would go.
+
+---
+
 ## Closed
 
 ### F-133 — The shipped climate reads cold and dry, so a third of the land is two biomes

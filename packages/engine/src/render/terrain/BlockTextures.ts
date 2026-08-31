@@ -107,6 +107,18 @@ export class BlockTextures {
 	/** Ticks up per admission, which is all the recency this needs. */
 	private clock = 0;
 
+	/**
+	 * How many pictures have been taken back, and how often that was refused.
+	 *
+	 * **Reported because a pool that thrashes and a pool that never fills look
+	 * the same from outside**: both draw the right picture. Taken back climbing
+	 * steadily while somebody walks is the first sign the pool is too small for
+	 * the way the world is being played, and refused climbing means slots are
+	 * all holding something visible.
+	 */
+	private takenBack = 0;
+	private refused = 0;
+
 	constructor(
 		ctx: GpuContext,
 		atlas: BlockAtlas,
@@ -221,6 +233,11 @@ export class BlockTextures {
 		return this.filled;
 	}
 
+	/** Pictures taken back to make room, and times there was nothing to take. */
+	get churn(): { taken: number; refused: number } {
+		return { taken: this.takenBack, refused: this.refused };
+	}
+
 	/** Slots left for pictures nobody expected. */
 	get room(): number {
 		return this.packing.slots - this.filled;
@@ -264,7 +281,11 @@ export class BlockTextures {
 			// Full. Take back the picture nobody is drawing that was named
 			// longest ago, or give up and draw flat if they are all on screen.
 			slot = slotToReuse(this.usedAt, this.pictureAt, keep);
-			if (slot < 0) return false;
+			if (slot < 0) {
+				this.refused++;
+				return false;
+			}
+			this.takenBack++;
 			this.release(slot, device);
 		}
 		this.slotOf.set(picture, slot);
