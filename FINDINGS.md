@@ -55,6 +55,26 @@ constants in `BIOME_PRESETS`. Deciding between them needs a view on
 whether the planet *should* read cold; if it should, the second is right,
 and if the cold is an accident of the noise, the first is.
 
+**The second route has now been walked once, on a different table.** The
+`plainElevation` preset lays `plain`'s own fifteen climate grounds on a grid
+placed at percentiles of the measured readings rather than at even spacings,
+which is exactly the respacing above and touches no part of the climate
+model:
+
+> **[measured]** Over four seeds, evenly spaced columns at `0.18 / 0.50 /
+> 0.82` gave the coldest, driest ground `19.88%` of the land and left the
+> wettest five between `0.52%` and `2.22%` each. Moved onto the readings'
+> own quantiles -- rows at the 10th to 90th percentiles of temperature,
+> columns at the 17th, 50th and 83rd of humidity -- the fifteen run `11.25%`
+> down to `2.79%`, a `4.0 : 1` spread.
+
+So respacing does reach the symptom, and cheaply. What it does **not** do is
+answer the question the entry closes on: `plainElevation`'s names are this
+project's own and answerable to nothing outside this repository, so a dot may
+go wherever the measurement puts it. Holdridge's names are a published
+classification, and a zone moved off its chart position stops meaning what it
+says. `elevation` is left alone for that reason.
+
 ### F-127 — The canopy alpha-tests in all three cascades, and two of them were measured to gain nothing
 
 **Kind:** performance
