@@ -168,13 +168,7 @@ export { standPieces } from "./plants/standPieces.js";
 export { standWalkable } from "./plants/standWalkable.js";
 
 export type { Landform } from "./biomes/Landform.js";
-export {
-	ANY_LANDFORM,
-	LANDFORMS,
-	PEAKS,
-	SHORE,
-	SLOPES,
-} from "./biomes/Landform.js";
+export { ANY_LANDFORM, LANDFORMS, SHORE } from "./biomes/Landform.js";
 export type { LandformGrid } from "./biomes/LandformGrid.js";
 export {
 	CONT_BANDS,
@@ -184,12 +178,18 @@ export {
 	ERO_BANDS,
 	ERO_EDGES,
 	ERO_NAMES,
+	GRID_CELLS,
+	GRID_CELLS_FLAT,
 	PV_BANDS,
 	PV_EDGES,
 	PV_NAMES,
+	RISE_BANDS,
+	RISE_EDGES,
+	RISE_NAMES,
 } from "./biomes/LandformGrid.js";
 export { bucket } from "./biomes/bucket.js";
 export { gridAt } from "./biomes/gridAt.js";
+export { riseGrid } from "./biomes/riseGrid.js";
 export { SHORE_ROOM, landformAt } from "./biomes/landformAt.js";
 export type { BiomeDef } from "./biomes/BiomeDef.js";
 export { BIOME_PRESETS, DEFAULT_BIOMES } from "./biomes/BIOME_PRESETS.js";

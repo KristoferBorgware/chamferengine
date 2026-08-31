@@ -3,6 +3,7 @@ import {
 	ANY_LANDFORM,
 	BIOME_PRESETS,
 	DEFAULT_LANDFORM_GRID,
+	riseGrid,
 	LANDFORMS,
 } from "chamfer/generation";
 
@@ -130,16 +131,20 @@ export function biomeTableFromText(text: string): BiomeTableDraft {
 		"|",
 	);
 	const out = biomeTableOf(preset);
+	// **A grid written before the height axis is still a grid**, and
+	// `riseGrid` spreads it across the new one so the world it named is
+	// unchanged. Anything of neither length is not a grid at all.
+	const spread = riseGrid(grid);
 	if (
-		grid.length === DEFAULT_LANDFORM_GRID.length &&
-		[...grid].every((digit) => {
+		spread !== null &&
+		[...spread].every((digit) => {
 			const form = Number(digit);
 			return (
 				Number.isInteger(form) && form >= 0 && form < LANDFORMS.length
 			);
 		})
 	)
-		out.grid = grid;
+		out.grid = spread;
 	if (humLapse !== "") {
 		const humLapseAt = Number(humLapse);
 		if (Number.isFinite(humLapseAt))

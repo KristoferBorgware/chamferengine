@@ -651,10 +651,14 @@ export class BiomeField {
 			out.level,
 			out.cut,
 			out.swing,
+			// **A share of the ground this world reaches.** The other three
+			// readings are curves' answers and already run `0` to `1`; a
+			// height is metres, and metres mean a different thing on a world
+			// with a 300 m relief than on one with 900.
+			Math.min(1, Math.max(0, out.metres / this.settings.groundTop)),
 			out.metres,
 			out.room,
 			this.settings.shoreHeight,
-			this.settings.peakHeight,
 			this.grid,
 		);
 		out.biome =

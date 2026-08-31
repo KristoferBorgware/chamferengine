@@ -151,25 +151,16 @@ export interface BiomeSettings {
 	readonly shoreHeight?: number;
 
 	/**
-	 * How high the ground must stand before sharp relief is called a peak,
-	 * in metres.
+	 * The metres of ground the world reaches, which the height axis is read
+	 * against.
 	 *
-	 * **The grid reads the relief curve, and a relief curve says sharp
-	 * rather than high.** So the same reading names a summit and a small
-	 * steep butte a hundred metres up, and the grounds filed to peaks are
-	 * bare rock and snow -- which is not what a hot low hummock is made of.
-	 * This is the mirror of {@link shoreHeight}: high is necessary and the
-	 * grid still decides whether it is sharp enough.
-	 *
-	 * **A world sets it from its own ground rather than from a number a
-	 * person picked.** Measured over four seeds at three reliefs, the tenth
-	 * percentile of the ground the grid names a peak sits at `0.46` to
-	 * `0.50` of the tallest land, whatever the relief -- so a fixed metre
-	 * line keeps `95%` of the peaks on a tall world and `1%` on a low one,
-	 * and a share of the world's own maximum keeps about nine in ten on all
-	 * of them. Zero turns the rule off.
+	 * **The grid's fourth axis is a share rather than a height**, because
+	 * the other three are curves' answers and mean the same thing on every
+	 * planet while a metre does not. This is what a share is a share of: a
+	 * place standing at `groundTop` reads `1`, and one at sea level reads
+	 * `0`. A world sets it from its own relief.
 	 */
-	readonly peakHeight?: number;
+	readonly groundTop?: number;
 
 	/**
 	 * Metres to the six points the shore rule asks for room.
@@ -219,7 +210,7 @@ export const BIOME_DEFAULTS = {
 	regionClimate: 1,
 	regionWarp: 400,
 	shoreHeight: 12,
-	peakHeight: 0,
+	groundTop: 600,
 	shoreReach: 32,
 	formDetail: 1,
 } as const satisfies Required<BiomeSettings>;

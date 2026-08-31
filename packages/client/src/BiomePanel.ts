@@ -11,6 +11,7 @@ import {
 	LANDFORMS,
 	PV_BANDS,
 	PV_NAMES,
+	RISE_NAMES,
 	allowedBiomes,
 	biomeOf,
 	gridAt,
@@ -236,8 +237,18 @@ export class BiomePanel {
 	/** The continentalness band {@link buildGrid} is showing. */
 	gridBand = 1;
 
+	/**
+	 * The height sheet on show.
+	 *
+	 * **A second selector rather than a fourth dimension drawn flat.** The
+	 * grid is four axes and a table is two, so two of them pick the sheet
+	 * and two are read across it -- and the pair that picks is the pair a
+	 * reader switches between rather than compares side by side.
+	 */
+	gridRise = 1;
+
 	/** The grid cell last clicked, for its outline and the select below it. */
-	cellPicked = gridAt(1, 1, 1);
+	cellPicked = gridAt(1, 1, 1, 1);
 
 	/**
 	 * The finished biome map, always this one picture.
@@ -483,9 +494,11 @@ export class BiomePanel {
 		const gridPickNote = document.createElement("p");
 		gridPickNote.className = "knob-note";
 		gridPickNote.textContent =
-			"the three curves' answers, cut into indices -- Shore is not in " +
-			"the grid, because it is a height rather than a combination of " +
-			"the three";
+			"three curves' answers and how high the ground stands, each cut " +
+			"into bands -- how far inland and how high pick the sheet, " +
+			"erosion and relief the cell. Shore is not in the grid, because " +
+			"it needs to know how much room the low ground has, which no " +
+			"reading here carries";
 		gridPickRow.append(gridPickLabel, this.gridPick, gridPickNote);
 		gridSection.append(gridPickRow);
 		scroller.append(gridSection);
@@ -1052,17 +1065,32 @@ export class BiomePanel {
 
 	private buildGrid(): void {
 		this.gridTabs.textContent = "";
-		for (let cont = 0; cont < CONT_BANDS; cont++) {
-			const button = document.createElement("button");
-			button.type = "button";
-			button.textContent = CONT_NAMES[cont]!;
-			button.className = cont === this.gridBand ? "picked" : "";
-			button.onclick = () => {
-				this.gridBand = cont;
-				this.buildGrid();
-			};
-			this.gridTabs.append(button);
-		}
+		// **Two rows of tabs, because the grid has four axes and a table
+		// has two.** How far inland picks one sheet and how high picks the
+		// other; erosion and relief are read across whichever sheet the two
+		// name.
+		const tabs = (
+			names: readonly string[],
+			at: number,
+			pick: (n: number) => void,
+		): void => {
+			const row = document.createElement("div");
+			row.className = "biomes-grid-row";
+			names.forEach((name, n) => {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = name;
+				button.className = n === at ? "picked" : "";
+				button.onclick = () => {
+					pick(n);
+					this.buildGrid();
+				};
+				row.append(button);
+			});
+			this.gridTabs.append(row);
+		};
+		tabs(CONT_NAMES, this.gridBand, (n) => (this.gridBand = n));
+		tabs(RISE_NAMES, this.gridRise, (n) => (this.gridRise = n));
 
 		this.gridHost.textContent = "";
 		this.gridHost.className = "biomes-sheet";
@@ -1086,7 +1114,7 @@ export class BiomePanel {
 			edge.textContent = ERO_NAMES[ero]!;
 			this.gridHost.append(edge);
 			for (let pv = 0; pv < PV_BANDS; pv++) {
-				const at = gridAt(this.gridBand, ero, pv);
+				const at = gridAt(this.gridBand, this.gridRise, ero, pv);
 				const form = Number(this.table.grid[at]);
 				const cell = document.createElement("button");
 				cell.type = "button";
@@ -1100,7 +1128,8 @@ export class BiomePanel {
 					`${LANDFORMS[form]!.short}` +
 					`<small>${of > 0 ? `${(of * 100).toFixed(1)}%` : "—"}</small>`;
 				cell.title =
-					`${CONT_NAMES[this.gridBand]}, ${ERO_NAMES[ero]} erosion, ` +
+					`${CONT_NAMES[this.gridBand]}, ${RISE_NAMES[this.gridRise]} ` +
+					`ground, ${ERO_NAMES[ero]} erosion, ` +
 					`${PV_NAMES[pv]} relief → ${LANDFORMS[form]!.name}`;
 				// **A click only selects the cell.** Naming a colour by eye
 				// against five others is not a decision to make blind on
