@@ -1049,8 +1049,10 @@ const GROUPS: Group[] = [
 					"off is the elevation bands the world had before biomes " +
 					"-- grass, then bare stone over the rock line, then snow " +
 					"-- so no height moves and no cave closes, only what the " +
-					"surface is made of. Which biomes, and where, is the " +
-					"biome bench.",
+					"surface is made of. It takes the plants with it, " +
+					"because a biome is what decides which of them grows " +
+					"where and there is nothing else that does. Which " +
+					"biomes, and where, is the biome bench.",
 			},
 		],
 	},
@@ -1066,10 +1068,17 @@ const GROUPS: Group[] = [
 			{
 				key: "vegetation",
 				label: "Grow the plants",
+				// **Still a knob, and turned off from somewhere else**, which
+				// is what greys a row rather than taking it away: a reader
+				// who wants the forest back needs to be shown that the switch
+				// exists and that this is not where it is refusing.
+				enabledWhen: (k) => k.biomeGround,
 				says:
 					"a plant is blocks, so a chunk grows its own -- which adds " +
 					"a pass about as long as the one that makes its ground. " +
-					"Which plants, and where, is the vegetation bench.",
+					"Nothing grows with the biomes off, because a biome is " +
+					"what decides which plant stands where. Which plants, " +
+					"and where, is the vegetation bench.",
 			},
 		],
 	},

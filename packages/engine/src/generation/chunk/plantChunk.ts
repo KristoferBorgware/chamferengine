@@ -369,7 +369,7 @@ export function plantChunk(
 			// out and a sixteenth two.
 			rootSpread: 1 << lift,
 			biomeAt,
-			biomeMasks: plantBiomeMasks(layers, biomes?.biomes ?? null),
+			biomeMasks: biomes ? plantBiomeMasks(layers, biomes.biomes) : null,
 		},
 	);
 
