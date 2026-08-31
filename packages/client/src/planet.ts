@@ -264,6 +264,8 @@ const REPORT_INTERVAL = 100;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#viewport")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
+const body = document.querySelector<HTMLDivElement>("#status-body")!;
+const work = document.querySelector<HTMLDivElement>("#status-work")!;
 const readout = document.querySelector<HTMLDivElement>("#readout")!;
 const crosshair = document.querySelector<HTMLDivElement>("#crosshair")!;
 
@@ -279,8 +281,36 @@ readoutOpen.onclick = () => {
 };
 
 function report(lines: string[]): void {
-	status.textContent = lines.join("\n");
+	body.textContent = lines.join("\n");
 }
+
+/**
+ * A blank of exactly one line, so an empty row is still a row.
+ *
+ * An element with no text has no line box and no height at all, which is the
+ * layout shift back again by another route.
+ */
+const ONE_BLANK_LINE = "\u00a0";
+
+/**
+ * Say what the world is busy doing, in the one row kept for saying it.
+ *
+ * **The row is allocated whether or not there is anything to put in it.**
+ * A rebuild used to be written by replacing the whole readout with two
+ * lines, so every drag of a live knob collapsed a ten-line box to two and
+ * then grew it back -- the readout jumping under the cursor of the person
+ * reading it. Written here instead, the message costs the height it already
+ * had: nothing above it moves, and the row holds a blank line when there is
+ * nothing to say. Hidden rather than emptied, so the space is kept and a
+ * screen reader is not handed a stray blank.
+ */
+function working(says: string): void {
+	work.textContent = says === "" ? ONE_BLANK_LINE : says;
+	work.classList.toggle("status-quiet", says === "");
+}
+
+// The row is a row from the first frame, not from the first message.
+working("");
 
 /** Let the browser paint before a long synchronous stretch. */
 function paint(): Promise<void> {
@@ -1960,7 +1990,7 @@ async function main(): Promise<void> {
 	 */
 	async function flushTerrain(live: PlanetSettings): Promise<void> {
 		if (live.problems().length > 0) return;
-		report([`seed "${live.knobs.seed}"`, "rebuilding the terrain..."]);
+		working("rebuilding the terrain...");
 		// A synchronous rebuild never yields to the browser on its own, so the
 		// line above would never actually reach the screen without this.
 		await paint();
@@ -2036,7 +2066,7 @@ async function main(): Promise<void> {
 		// **The readout must not claim a terrain rebuild here.** Nothing
 		// about the ground moved, and a status line saying it did is how the
 		// two paths become impossible to tell apart from outside.
-		report([`seed "${live.knobs.seed}"`, "rebuilding the meshes..."]);
+		working("rebuilding the meshes...");
 		source.retune(meshRetune(live));
 		dropEveryChunk();
 	}
@@ -2994,6 +3024,13 @@ async function main(): Promise<void> {
 		// tenth of that.
 		if (now - reportedAt >= REPORT_INTERVAL) {
 			reportedAt = now;
+			// **The message goes when the work does, not when the call
+			// returns.** Both rebuild paths end by dropping every chunk, so
+			// what says a rebuild is over is the queue emptying again --
+			// clearing it on the last line of `flushMeshes` would take it off
+			// screen in the same synchronous block that put it there, and
+			// nobody would ever read it.
+			if (building.size === 0) working("");
 			const at = geographicOf(player.position, RADIUS);
 			const cell = standing;
 			report([

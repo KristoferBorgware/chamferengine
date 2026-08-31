@@ -19,7 +19,12 @@
 			>
 				i
 			</button>
-			<div id="status" class="status"></div>
+			<div id="status" class="status">
+				<div id="status-body" class="status-body"></div>
+				<!-- A row of its own, always here, so what the world is busy
+				     doing cannot resize the box it is written in. -->
+				<div id="status-work" class="status-work"></div>
+			</div>
 		</div>
 		<div id="crosshair" class="crosshair" aria-hidden="true"></div>
 		<script type="module" src="./src/planet.ts"></script>

@@ -114,6 +114,19 @@ body {
 	display: block;
 }
 
+/* **The row that is always there.** What the world is busy doing is written
+   in a row of its own rather than over the readout, so a message costs the
+   height it already had and nothing above it moves. Quiet, it is hidden
+   rather than emptied: an element with no text has no line box, which is the
+   same jump by another route. */
+.status-work {
+	color: var(--dim);
+}
+
+.status-work.status-quiet {
+	visibility: hidden;
+}
+
 .status {
 	max-width: min(32rem, calc(100vw - 2rem));
 	white-space: pre-line;
