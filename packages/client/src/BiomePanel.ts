@@ -23,7 +23,7 @@ import { paintPatch } from "./paintPatch.js";
 
 /** What the "Start from" select reads for a preset, by key. */
 const PRESET_LABELS: Record<string, string> = {
-	plainElevation: "Plain, banded by elevation",
+	plain: "Plain",
 };
 
 /** What one of the panel's pictures shows. */

@@ -736,7 +736,7 @@ describe("the biome model's fit", () => {
 		// A link written while it was a term of the table carries a third
 		// field there; it is stepped over rather than refused.
 		const params = new URLSearchParams();
-		params.set("biomes", "plainElevation|" + DEFAULT_LANDFORM_GRID + "|2");
+		params.set("biomes", "plain|" + DEFAULT_LANDFORM_GRID + "|2");
 		const back = PlanetSettings.fromParams(params);
 		expect(back.biomeOptions().humLapse).toBe(PLANET_DEFAULTS.humLapse);
 	});

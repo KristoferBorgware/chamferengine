@@ -65,7 +65,7 @@ import { BlockType } from "../terrain/BlockType.js";
  * ridge as a red ribbon rather than a place, because `plateau` is a reading
  * of the relief curve and anything filed to it traces relief.
  */
-export const PLAIN_BANDED: readonly BiomeDef[] = [
+export const PLAIN: readonly BiomeDef[] = [
 	{
 		name: "Ice sheet",
 		hex: "e2eaf2",
@@ -253,11 +253,11 @@ export const PLAIN_BANDED: readonly BiomeDef[] = [
  * measured over many worlds keeps both.
  */
 export const BIOME_PRESETS: Record<string, readonly BiomeDef[]> = {
-	plainElevation: PLAIN_BANDED,
+	plain: PLAIN,
 };
 
 /** The one a link falls back to, and the one a fresh world opens on. */
-export const DEFAULT_PRESET = "plainElevation";
+export const DEFAULT_PRESET = "plain";
 
 /** The set a world starts with when nothing chooses one. */
-export const DEFAULT_BIOMES: readonly BiomeDef[] = PLAIN_BANDED;
+export const DEFAULT_BIOMES: readonly BiomeDef[] = PLAIN;

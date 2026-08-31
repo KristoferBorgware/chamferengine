@@ -2217,7 +2217,7 @@
 				// height; sixteen of these are filed under no landform at all,
 				// and the five that are filed name a shoreline or a summit,
 				// which is a thing no reading of the air can say.
-				plainElevation: [
+				plain: [
 					{ name: "Ice sheet", hex: "e2eaf2", t: 0.08, h: 0.26 },
 					{ name: "Permafrost", hex: "cfdce6", t: 0.12, h: 0.55 },
 					{ name: "Snowfield", hex: "dce6ee", t: 0.22, h: 0.74 },
@@ -2243,7 +2243,7 @@
 			};
 
 			/** The set the page opens with, and the one the URL is measured against. */
-			const DEFAULT_BIOMES = PRESETS.plainElevation;
+			const DEFAULT_BIOMES = PRESETS.plain;
 
 			/** The live table, which the diagram edits and the URL carries. */
 			let biomes = DEFAULT_BIOMES.map((b) => ({ landform: ANY, ...b }));
