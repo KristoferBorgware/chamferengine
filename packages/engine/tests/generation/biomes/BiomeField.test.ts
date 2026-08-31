@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BiomeSample, BiomeWorld } from "chamfer/generation";
 import {
+	UNFITTED,
 	BiomeField,
 	CONTINENT_LAYER_DEFAULT,
 	CONTINENT_SEED_OFFSET,
@@ -121,7 +122,7 @@ describe("BiomeField", () => {
 
 	it("leaves the square unfitted when the fit is off", () => {
 		const off = new BiomeField(world, DEFAULT_BIOMES, undefined, {
-			fit: false,
+			climateFit: UNFITTED,
 		});
 		expect(off.fit.fitted).toBe(false);
 		expect(off.fit.tSpan).toBe(2);
@@ -162,12 +163,12 @@ describe("BiomeField", () => {
 		// for a reason that has nothing to do with this term.
 		const base = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humLapse: 0,
 		});
 		const dried = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humLapse: 0.6,
 		});
 		const a = makeBiomeSample();
@@ -196,12 +197,12 @@ describe("BiomeField", () => {
 	it("moves moisture into the rest of the world rather than removing it", () => {
 		const flat = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humBelt: 0,
 		});
 		const belted = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humBelt: 0.8,
 		});
 		const a = makeBiomeSample();
@@ -235,12 +236,12 @@ describe("BiomeField", () => {
 	it("is bit-for-bit the world without it at zero", () => {
 		const off = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humBelt: 0,
 		});
 		const also = new BiomeField(world, DEFAULT_BIOMES, undefined, {
 			regions: false,
-			fit: false,
+			climateFit: UNFITTED,
 			humBelt: 0,
 			humBeltAt: 0.7,
 			humBeltWidth: 0.5,

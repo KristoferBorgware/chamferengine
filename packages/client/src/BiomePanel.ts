@@ -23,10 +23,7 @@ import { paintPatch } from "./paintPatch.js";
 
 /** What the "Start from" select reads for a preset, by key. */
 const PRESET_LABELS: Record<string, string> = {
-	plain: "Plain",
 	plainElevation: "Plain, banded by elevation",
-	holdridge: "Holdridge life zones",
-	elevation: "Holdridge, banded by elevation",
 };
 
 /** What one of the panel's pictures shows. */
@@ -94,8 +91,7 @@ function groundOptions(): readonly GroupedOption[] {
 	for (const [preset, set] of Object.entries(BIOME_PRESETS))
 		for (const biome of set)
 			out.push({
-				group:
-					preset === "holdridge" ? "Holdridge life zones" : "Plain",
+				group: PRESET_LABELS[preset] ?? preset,
 				value: biome.block,
 				label: biome.name,
 			});
@@ -309,8 +305,6 @@ export class BiomePanel {
 	private readonly shot: HTMLCanvasElement;
 	private readonly shotInk: CanvasRenderingContext2D;
 	private readonly presetPick: HTMLSelectElement;
-	private readonly humInput: HTMLInputElement;
-	private readonly humValue: HTMLElement;
 
 	/**
 	 * One picture, large.
@@ -383,7 +377,6 @@ export class BiomePanel {
 			this.table.preset = fresh.preset;
 			this.table.biomes = fresh.biomes;
 			this.table.grid = fresh.grid;
-			this.table.humLapse = fresh.humLapse;
 			this.picked = 0;
 			this.settle();
 		};
@@ -526,31 +519,6 @@ export class BiomePanel {
 		// the same reason `grid` is edited here rather than in the parameter
 		// panel. `elevation` opens with this turned on; `plain` and
 		// `holdridge` open with it off.
-		const humRow = document.createElement("div");
-		humRow.className = "knob";
-		const humLabel = document.createElement("label");
-		humLabel.textContent = "Drier with elevation ";
-		this.humValue = document.createElement("b");
-		humLabel.append(this.humValue);
-		this.humInput = document.createElement("input");
-		this.humInput.type = "range";
-		this.humInput.min = "0";
-		this.humInput.max = "3";
-		this.humInput.step = "0.05";
-		const humNote = document.createElement("p");
-		humNote.className = "knob-note";
-		humNote.textContent =
-			"how much humidity drops per kilometre of elevation, on top of " +
-			"how much colder it gets -- a summit reads drier as well as " +
-			"colder, with no landform rule needed to keep a desert off of it";
-		this.writeHum();
-		this.humInput.oninput = () => {
-			this.table.humLapse = Number(this.humInput.value);
-			this.writeHum();
-			this.settle();
-		};
-		humRow.append(humLabel, this.humInput, humNote);
-		diagramSection.append(humRow);
 
 		// **One flag for the cloud of dots and every count on the panel.**
 		// Both answer "where", and asking a reader to set the same answer
@@ -1241,18 +1209,11 @@ export class BiomePanel {
 
 	private build(): void {
 		this.presetPick.value = this.table.preset;
-		this.writeHum();
 		this.buildChips();
 		this.paintChart();
 		this.saySelf();
 		this.buildList();
 		this.buildGrid();
-	}
-
-	/** The elevation-humidity slider, read back from the table. */
-	private writeHum(): void {
-		this.humInput.value = String(this.table.humLapse);
-		this.humValue.textContent = `${this.table.humLapse.toFixed(2)} per km`;
 	}
 
 	private settle(): void {

@@ -77,32 +77,12 @@ export const BlockType = {
 	STONY_PEAKS_GROUND: 53,
 	ALPINE_FOREST_GROUND: 54,
 
-	// The Holdridge life-zone set, its own blocks for the same reason. Two
-	// presets may not share a number: a world painted by one and reopened
-	// under the other would silently rename its ground.
-	HOLDRIDGE_POLAR_DESERT_GROUND: 55,
-	HOLDRIDGE_DRY_TUNDRA_GROUND: 56,
-	HOLDRIDGE_MOIST_TUNDRA_GROUND: 57,
-	HOLDRIDGE_WET_TUNDRA_GROUND: 58,
-	HOLDRIDGE_RAIN_TUNDRA_GROUND: 59,
-	HOLDRIDGE_BOREAL_DESERT_GROUND: 60,
-	HOLDRIDGE_DRY_SCRUB_GROUND: 61,
-	HOLDRIDGE_BOREAL_MOIST_FOREST_GROUND: 62,
-	HOLDRIDGE_BOREAL_WET_FOREST_GROUND: 63,
-	HOLDRIDGE_BOREAL_RAIN_FOREST_GROUND: 64,
-	HOLDRIDGE_DESERT_SCRUB_GROUND: 65,
-	HOLDRIDGE_STEPPE_GROUND: 66,
-	HOLDRIDGE_MOIST_FOREST_GROUND: 67,
-	HOLDRIDGE_WET_FOREST_GROUND: 68,
-	HOLDRIDGE_TEMPERATE_RAIN_FOREST_GROUND: 69,
-	HOLDRIDGE_SUBTROPICAL_DESERT_GROUND: 70,
-	HOLDRIDGE_THORN_WOODLAND_GROUND: 71,
-	HOLDRIDGE_DRY_FOREST_GROUND: 72,
-	HOLDRIDGE_SUBTROPICAL_MOIST_FOREST_GROUND: 73,
-	HOLDRIDGE_TROPICAL_DESERT_GROUND: 74,
-	HOLDRIDGE_TROPICAL_DRY_FOREST_GROUND: 75,
-	HOLDRIDGE_TROPICAL_WET_FOREST_GROUND: 76,
-	HOLDRIDGE_TROPICAL_RAIN_FOREST_GROUND: 77,
+	// **Numbers 55 to 77 are retired and stay retired.** They were the
+	// Holdridge life-zone set, which this build no longer carries. A number
+	// is a block's identity in a save's registry, so a retired one is never
+	// handed to something else: a world written when they meant a life zone
+	// would silently rename its ground. `BLOCK_NAMES` still says what each
+	// of them was, which is the whole reason that list exists.
 
 	// **A biome may name what lies under its own surface, too.** Most stay with
 	// plain dirt; a biome whose ground reads as one thing and cuts as another

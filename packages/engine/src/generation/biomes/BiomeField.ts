@@ -389,11 +389,12 @@ export class BiomeField {
 	 * desert a region rather than a rim.
 	 */
 	private measureFit(): ClimateFit {
-		// A span named outright is read as it stands: it is a constant so
+		// **A span named outright is read as it stands.** It is a constant so
 		// that one reading names one dot on every world, which is the whole
-		// reason a caller supplies one rather than letting this measure.
+		// reason a caller supplies one rather than letting this measure --
+		// and every world this engine ships does. Measuring is what is left
+		// for a caller that names none, which is a bench isolating one term.
 		if (this.settings.climateFit) return this.settings.climateFit;
-		if (!this.settings.fit) return UNFITTED;
 		const n = 1 << TALLY_LEVEL;
 		const t: number[] = [];
 		const h: number[] = [];

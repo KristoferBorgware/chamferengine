@@ -531,7 +531,7 @@ describe("the biomes lab's model against the engine's", () => {
 	};
 	const field = new BiomeField(engineWorld, DEFAULT_BIOMES, DEFAULT_LANDFORM_GRID, {
 		...BIOME_DEFAULTS,
-		fit: false,
+		climateFit: UNFITTED,
 	});
 
 	/** One point run through the lab's own pipeline, the way `sampleAt` runs it. */

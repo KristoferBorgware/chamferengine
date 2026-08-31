@@ -374,15 +374,15 @@ export function plantLayersFromText(text: string): PlantLayerDraft[] {
  * {@link PlantLayer.biomes}.
  */
 export const PLANT_LAYERS_DEFAULT =
-	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.22,0.65:0.28,1:0.18|biomes=Taiga,Alpine forest,Boreal moist forest,Boreal wet forest;" +
-	"Spruce|density=0.9|feature=220|curve=-1:0.05,-0.4:0.15,0.2:0.28,0.7:0.15,1:0.05|biomes=Taiga,Snowfield,Boreal moist forest,Boreal wet forest,Boreal rain forest;" +
-	"Birch|density=0.3|feature=300|curve=-1:0.03,-0.5:0.12,0:0.22,0.5:0.1,1:0.03|biomes=Tundra,Permafrost,Moist tundra,Wet tundra;" +
-	"Heather|density=1.2|feature=140|curve=-1:0.08,-0.3:0.2,0.2:0.3,0.6:0.18,1:0.06|biomes=Tundra,Stony peaks,Jagged peaks,Dry tundra,Rain tundra;" +
-	"Oak|density=0.6|feature=380|curve=-1:0.5,-0.2:0.425,0.2:0,1:0|biomes=Grove,Grassland,Moist forest,Wet forest;" +
-	"Willow|density=0.6|feature=200|curve=-1:0.05,-0.4:0.15,0.1:0.25,0.6:0.14,1:0.04|biomes=Swamp,Wet forest,Boreal wet forest;" +
-	"Baobab|density=0.1|feature=500|curve=-1:0.05,-0.3:0.18,0.3:0.26,0.7:0.12,1:0.03|biomes=Steppe,Prairie,Savanna,Dry forest,Thorn woodland;" +
-	"Bush|density=1|feature=180|curve=-1:0.06,-0.4:0.16,0.1:0.27,0.5:0.16,1:0.05|biomes=Steppe,Scrubland,Desert scrub,Dry scrub;" +
-	"Redwood|density=0.8|feature=280|curve=-1:0.04,-0.4:0.14,0.2:0.28,0.6:0.16,1:0.05|biomes=Rainforest,Temperate rain forest,Tropical wet forest,Tropical rain forest;" +
-	"Palm|density=0.3|feature=150|curve=-1:0.03,-0.3:0.12,0.2:0.22,0.6:0.11,1:0.03|biomes=Beach,Subtropical moist forest,Tropical dry forest;" +
-	"Deadwood|density=0.2|feature=260|curve=-1:0.03,-0.4:0.14,0.1:0.24,0.5:0.12,1:0.03|biomes=Badlands,Savanna,Boreal desert,Subtropical desert,Tropical desert;" +
-	"Cactus|density=0.4|feature=200|curve=-1:0.02,-0.3:0.1,0.3:0.24,0.7:0.1,1:0.02|biomes=Desert,Badlands,Scrubland,Tropical desert,Desert scrub";
+	"Pine|density=1|feature=260|featureScale=5|curve=-1:0,-0.05:0,0.35:0.22,0.65:0.28,1:0.18|biomes=Taiga,Alpine forest;" +
+	"Spruce|density=0.9|feature=220|curve=-1:0.05,-0.4:0.15,0.2:0.28,0.7:0.15,1:0.05|biomes=Taiga,Snowfield;" +
+	"Birch|density=0.3|feature=300|curve=-1:0.03,-0.5:0.12,0:0.22,0.5:0.1,1:0.03|biomes=Tundra,Permafrost;" +
+	"Heather|density=1.2|feature=140|curve=-1:0.08,-0.3:0.2,0.2:0.3,0.6:0.18,1:0.06|biomes=Tundra,Stony peaks,Jagged peaks;" +
+	"Oak|density=0.6|feature=380|curve=-1:0.5,-0.2:0.425,0.2:0,1:0|biomes=Grove,Grassland;" +
+	"Willow|density=0.6|feature=200|curve=-1:0.05,-0.4:0.15,0.1:0.25,0.6:0.14,1:0.04|biomes=Swamp;" +
+	"Baobab|density=0.1|feature=500|curve=-1:0.05,-0.3:0.18,0.3:0.26,0.7:0.12,1:0.03|biomes=Steppe,Prairie,Savanna;" +
+	"Bush|density=1|feature=180|curve=-1:0.06,-0.4:0.16,0.1:0.27,0.5:0.16,1:0.05|biomes=Steppe,Scrubland;" +
+	"Redwood|density=0.8|feature=280|curve=-1:0.04,-0.4:0.14,0.2:0.28,0.6:0.16,1:0.05|biomes=Rainforest;" +
+	"Palm|density=0.3|feature=150|curve=-1:0.03,-0.3:0.12,0.2:0.22,0.6:0.11,1:0.03|biomes=Beach;" +
+	"Deadwood|density=0.2|feature=260|curve=-1:0.03,-0.4:0.14,0.1:0.24,0.5:0.12,1:0.03|biomes=Badlands,Savanna;" +
+	"Cactus|density=0.4|feature=200|curve=-1:0.02,-0.3:0.1,0.3:0.24,0.7:0.1,1:0.02|biomes=Desert,Badlands,Scrubland";

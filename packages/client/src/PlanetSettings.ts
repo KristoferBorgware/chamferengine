@@ -29,7 +29,8 @@ import {
 	CONTINENT_LAYER_DEFAULT,
 	CoarseMap,
 	EROSION_LAYER_DEFAULT,
-	fitForPreset,
+	DEFAULT_PRESET,
+	LAPSED_FIT,
 	GROUND_LINES,
 	PEAKS_LAYER_DEFAULT,
 	maxElevationFor,
@@ -419,6 +420,7 @@ export interface PlanetKnobs {
 
 	/** How much distance from the coast dries the air, off the continent field. */
 	humOcean: number;
+	humLapse: number;
 	humBelt: number;
 	humBeltAt: number;
 	humBeltWidth: number;
@@ -433,7 +435,6 @@ export interface PlanetKnobs {
 	warpOctaves: number;
 
 	/** Whether the climate square is stretched onto the land the planet has. */
-	biomeFit: boolean;
 
 	/** Whether biomes belong to regions, each reading one climate across it. */
 	biomeRegions: boolean;
@@ -1339,13 +1340,14 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	leavesCollide: true,
 	plants: PLANT_LAYERS_DEFAULT,
 	vegetation: true,
-	biomes: "plain",
+	biomes: DEFAULT_PRESET,
 	tempEquator: 0.7,
 	tempLapse: 0.9,
 	tempNoise: 0.35,
 	tempFeature: 3000,
 	tempOctaves: 3,
 	humOcean: 0.6,
+	humLapse: 0.6,
 	humBelt: 0.4,
 	humBeltAt: 0.25,
 	humBeltWidth: 0.24,
@@ -1356,7 +1358,6 @@ export const PLANET_DEFAULTS: PlanetKnobs = {
 	warpStrength: 0.12,
 	warpFeature: 700,
 	warpOctaves: 3,
-	biomeFit: true,
 	biomeRegions: true,
 	regionSpan: 1600,
 	regionClimate: 1,
@@ -1916,6 +1917,7 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	},
 	tempOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
 	humOcean: { low: 0, high: 1, step: 0.05, rebuilds: false, unit: "" },
+	humLapse: { low: 0, high: 3, step: 0.05, rebuilds: false, unit: "per km" },
 	humBelt: { low: 0, high: 1.5, step: 0.05, rebuilds: false, unit: "" },
 	humBeltAt: { low: 0, high: 1, step: 0.02, rebuilds: false, unit: "" },
 	humBeltWidth: {
@@ -1932,7 +1934,6 @@ export const KNOB_RANGES: Record<string, KnobRange> = {
 	warpStrength: { low: 0, high: 0.5, step: 0.01, rebuilds: false, unit: "" },
 	warpFeature: { low: 100, high: 4000, step: 50, rebuilds: false, unit: "m" },
 	warpOctaves: { low: 1, high: 6, step: 1, rebuilds: false, unit: "octaves" },
-	biomeFit: { ...TOGGLE, rebuilds: false },
 	biomeRegions: { ...TOGGLE, rebuilds: false },
 	regionSpan: {
 		low: 200,
@@ -2440,27 +2441,15 @@ export class PlanetSettings {
 	/**
 	 * The biome model's knobs, as the engine takes them.
 	 *
-	 * **`humLapse` comes from the table, not from `knobs`.** It reads the
-	 * terrain the same way `grid` does -- part of how this table is read
-	 * rather than a setting shared by every table -- so it lives on
-	 * {@link biomeTable} and travels inside `biomes=` rather than as a knob
-	 * of its own.
-	 *
-	 * **Every table but `plain` reads its climate through one constant
-	 * span.** `plain`'s own dots are placed assuming the per-planet stretch
-	 * -- its own comment says so -- but a table naming a real
-	 * classification promises the same absolute reading the same name, and
-	 * a stretch measured from this planet's land cannot keep that: fitted,
-	 * two planets built from different seeds named the same raw reading two
-	 * different Holdridge zones on a third of a small sample. Mapping the
-	 * raw range straight through keeps the promise and empties the table --
-	 * humidity then spans `0.05` to `0.60` of the square and the eight
-	 * zones above it are unreachable. A constant span measured over many
-	 * worlds keeps both, and {@link fitForPreset} is which constant each
-	 * table reads -- the two Holdridge tables share one and
-	 * `plainElevation` has its own, because a fit is a property of the
-	 * climate model a table was placed against. The `biomeFit` knob still
-	 * reaches `plain`, the one table that measures.
+	 * **The climate square is one constant span, not a stretch measured from
+	 * each planet's own land.** A measured stretch means two worlds name one
+	 * raw reading two different biomes -- fitted, two planets built from
+	 * different seeds disagreed about a third of a small sample. Mapping the
+	 * raw range straight through keeps that promise and empties the table
+	 * instead, because the climate terms are noise stacks summed and divided
+	 * and their readings cluster in the middle. {@link LAPSED_FIT} is the
+	 * land's own 2nd and 98th percentiles measured over six seeds and then
+	 * held, which keeps both.
 	 */
 	biomeOptions(): BiomeSettings {
 		const k = this.knobs;
@@ -2477,13 +2466,12 @@ export class PlanetSettings {
 			humNoise: k.humNoise,
 			humFeature: k.humFeature,
 			humOctaves: k.humOctaves,
-			humLapse: this.biomeTable.humLapse,
+			humLapse: k.humLapse,
 			warp: k.biomeWarp,
 			warpStrength: k.warpStrength,
 			warpFeature: k.warpFeature,
 			warpOctaves: k.warpOctaves,
-			fit: k.biomeFit,
-			climateFit: fitForPreset(this.biomeTable.preset),
+			climateFit: LAPSED_FIT,
 			regions: k.biomeRegions,
 			regionSpan: k.regionSpan,
 			regionClimate: k.regionClimate,

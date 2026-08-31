@@ -3,6 +3,7 @@ import {
 	ANY_LANDFORM,
 	BIOME_PRESETS,
 	DEFAULT_LANDFORM_GRID,
+	DEFAULT_PRESET,
 	riseGrid,
 	LANDFORMS,
 } from "chamfer/generation";
@@ -30,54 +31,28 @@ export interface BiomeTableDraft {
 
 	/** The landform grid, one digit per band combination. */
 	grid: LandformGrid;
-
-	/**
-	 * Units of humidity the air loses per kilometre of elevation, read by
-	 * {@link BiomeSettings.humLapse}.
-	 *
-	 * **A term of the table, not a knob shared by every table.** `grid`
-	 * already lives here rather than among the numeric climate knobs, for the
-	 * same reason: it is part of how this table reads the terrain, not a
-	 * setting that means the same thing under every one of them. `elevation`
-	 * ships with this turned on; `plain` and `holdridge` ship with it off, so
-	 * a link naming either travels exactly as it did before this field
-	 * existed.
-	 */
-	humLapse: number;
-}
-
-/** How high `humLapse` opens for a freshly chosen preset. */
-const PRESET_HUM_LAPSE: Record<string, number> = {
-	elevation: 0.6,
-	plainElevation: 0.6,
-};
-
-/** `humLapse`'s own default for one preset, `0` for any preset without one. */
-function defaultHumLapse(preset: string): number {
-	return PRESET_HUM_LAPSE[preset] ?? 0;
 }
 
 /** A fresh copy of one preset's table. */
 export function biomeTableOf(preset: string): BiomeTableDraft {
-	const set = BIOME_PRESETS[preset] ?? BIOME_PRESETS["plain"]!;
-	const named = BIOME_PRESETS[preset] ? preset : "plain";
+	// **One preset, and a link may still name one that is gone.** A world
+	// written under a set this build no longer carries opens on the set it
+	// does carry rather than refusing: the grid and the dots that follow in
+	// the link are read over it, so as much of that world survives as still
+	// means anything.
+	const named = BIOME_PRESETS[preset] ? preset : DEFAULT_PRESET;
+	const set = BIOME_PRESETS[named]!;
 	return {
 		preset: named,
 		biomes: set.map((biome) => ({ ...biome })),
 		grid: DEFAULT_LANDFORM_GRID,
-		humLapse: defaultHumLapse(named),
 	};
 }
 
 /** Whether a table still is its preset, dot for dot and digit for digit. */
 function untouched(draft: BiomeTableDraft): boolean {
 	const set = BIOME_PRESETS[draft.preset];
-	if (
-		!set ||
-		draft.grid !== DEFAULT_LANDFORM_GRID ||
-		draft.humLapse !== defaultHumLapse(draft.preset)
-	)
-		return false;
+	if (!set || draft.grid !== DEFAULT_LANDFORM_GRID) return false;
 	if (draft.biomes.length !== set.length) return false;
 	return draft.biomes.every((biome, at) => {
 		const fresh = set[at]!;
@@ -102,7 +77,7 @@ function untouched(draft: BiomeTableDraft): boolean {
  * still equal to its preset travels as the preset's name alone.
  *
  * A biome reads `name~hex~t~h~landform~block~underlay`, biomes are separated
- * by `;`, and the first field names the preset with the grid and `humLapse`
+ * by `;`, and the first field names the preset with the grid
  * beside it. The underlay field is empty for plain dirt, not the string
  * `undefined` -- empty is what an older link before this field existed also
  * reads as.
@@ -116,10 +91,7 @@ export function biomeTableToText(draft: BiomeTableDraft): string {
 			`${biome.landform}~${biome.block}~` +
 			`${biome.underlay ?? ""}`,
 	);
-	return [
-		`${draft.preset}|${draft.grid}|${+draft.humLapse.toFixed(3)}`,
-		...rows,
-	].join(";");
+	return [`${draft.preset}|${draft.grid}`, ...rows].join(";");
 }
 
 /** The table a world's own string carries, tolerant of anything a link can say. */
@@ -127,9 +99,10 @@ export function biomeTableFromText(text: string): BiomeTableDraft {
 	const trimmed = text.trim();
 	if (trimmed === "" || BIOME_PRESETS[trimmed]) return biomeTableOf(trimmed);
 	const parts = trimmed.split(";");
-	const [preset = "plain", grid = "", humLapse = ""] = (parts[0] ?? "").split(
-		"|",
-	);
+	// **A third field is a link written while the elevation lapse was a term
+	// of the table.** It is a world knob now, read off the query string like
+	// every other one, so the field is stepped over rather than refused.
+	const [preset = DEFAULT_PRESET, grid = ""] = (parts[0] ?? "").split("|");
 	const out = biomeTableOf(preset);
 	// **A grid written before the height axis is still a grid**, and
 	// `riseGrid` spreads it across the new one so the world it named is
@@ -145,11 +118,6 @@ export function biomeTableFromText(text: string): BiomeTableDraft {
 		})
 	)
 		out.grid = spread;
-	if (humLapse !== "") {
-		const humLapseAt = Number(humLapse);
-		if (Number.isFinite(humLapseAt))
-			out.humLapse = Math.max(0, Math.min(3, humLapseAt));
-	}
 	const biomes: BiomeDraftDef[] = [];
 	for (const row of parts.slice(1)) {
 		const [name, hex, t, h, landform, block, underlay] = row.split("~");

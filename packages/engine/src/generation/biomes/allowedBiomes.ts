@@ -25,7 +25,7 @@ import { ANY_LANDFORM, LANDFORMS, SHORE } from "./Landform.js";
  * the temperate, damp corner a coast reads is the most crowded part of the
  * square; taking the shore outright is what makes a beach a beach. A table
  * that files nothing under `shore` is unaffected and falls back to the
- * zones, as `plain` and `holdridge` both do.
+ * zones.
  */
 export function allowedBiomes(biomes: readonly BiomeDef[]): number[][] {
 	const ownShore = biomes.some((biome) => biome.landform === "shore");

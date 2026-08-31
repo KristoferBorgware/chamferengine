@@ -13,7 +13,6 @@ import {
 	CONTINENT_SEED_OFFSET,
 	EROSION_SEED_OFFSET,
 	PEAKS_SEED_OFFSET,
-	fitForPreset,
 	layerNoiseSettings,
 	octaveNoise,
 	seedFromString,
@@ -781,24 +780,6 @@ const GROUPS: Group[] = [
 		],
 	},
 	{
-		title: "The climate",
-		where: "biome",
-		knobs: [
-			{
-				key: "biomeFit",
-				label: "Fit all biomes on the planet",
-				says: "stretches the diagram onto the land's own 2nd to 98th percentiles, so every corner is weather that exists somewhere",
-				// **Only `plain`'s own dots are placed assuming the stretch.**
-				// A table naming a real classification promises the same
-				// reading the same name on every planet, which the stretch
-				// itself would break, so every other preset names a constant
-				// span instead and this row has nothing left to decide.
-				enabledWhen: (k) =>
-					fitForPreset(biomeTableFromText(k.biomes).preset) === null,
-			},
-		],
-	},
-	{
 		title: "Temperature",
 		where: "biome",
 		tint: "heat",
@@ -835,6 +816,12 @@ const GROUPS: Group[] = [
 				label: "The coast wets it",
 				digits: 2,
 				says: "how far apart a coast and a deep interior read; it is the contrast, so turning it up dries the inland rather than wetting the shore",
+			},
+			{
+				key: "humLapse",
+				label: "Drier with elevation",
+				digits: 2,
+				says: "the twin of Altitude cools: how much humidity drops per kilometre of elevation, so a summit reads drier as well as colder and no landform rule is needed to keep a desert off one",
 			},
 			{
 				key: "humBelt",
