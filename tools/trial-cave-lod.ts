@@ -78,7 +78,7 @@ function measure(dir: Vec3, lod: number) {
 	const cell = directionToCell(dir, n);
 	const home = canonicalCell(cell.face, n, cell.i, cell.j);
 	const split = splitPath(home.i, home.j, level.subdivisionDepth, chunkLevel);
-	const build = (caves: boolean) => {
+	const build = (caves: boolean, cullSealed = true) => {
 		const generator = generatorAt(lod, caves);
 		const at = performance.now();
 		const chunk = generateChunk(
@@ -88,19 +88,28 @@ function measure(dir: Vec3, lod: number) {
 			level.crustDepth,
 		);
 		const generated = performance.now() - at;
+		const meshedAt = performance.now();
 		const mesh = buildChunkMesh(
 			chunk,
 			new ChunkColumnSampler(chunk, generator),
 			level,
 			seed,
-			{ apron: true, surfaceGrid: shape.blockSize },
+			{ apron: true, surfaceGrid: shape.blockSize, cullSealed },
 		);
 		return {
 			generated,
+			meshed: performance.now() - meshedAt,
 			triangles: mesh.opaque.triangleCount + mesh.cutout.triangleCount,
 		};
 	};
-	return { block: level.blockSize, on: build(true), off: build(false) };
+	return {
+		block: level.blockSize,
+		on: build(true),
+		off: build(false),
+		// The same caves with the sealed pockets meshed anyway, which is what
+		// every build was before the cull existed.
+		all: build(true, false),
+	};
 }
 
 const spots = [landward(), landward(), landward()];
@@ -117,26 +126,31 @@ const genOn: number[] = [];
 const genOff: number[] = [];
 const triOn: number[] = [];
 const triOff: number[] = [];
+interface Cost {
+	generated: number;
+	meshed: number;
+	triangles: number;
+}
+const sums: { on: Cost; all: Cost }[] = [];
 for (let lod = 0; lod < LEVELS; lod++) {
-	let on = { generated: 0, triangles: 0 };
-	let off = { generated: 0, triangles: 0 };
+	const on: Cost = { generated: 0, meshed: 0, triangles: 0 };
+	const off: Cost = { generated: 0, meshed: 0, triangles: 0 };
+	const all: Cost = { generated: 0, meshed: 0, triangles: 0 };
 	let block = 0;
 	for (const dir of spots) {
 		const one = measure(dir, lod);
-		on = {
-			generated: on.generated + one.on.generated,
-			triangles: on.triangles + one.on.triangles,
-		};
-		off = {
-			generated: off.generated + one.off.generated,
-			triangles: off.triangles + one.off.triangles,
-		};
+		for (const key of ["generated", "meshed", "triangles"] as const) {
+			on[key] += one.on[key];
+			off[key] += one.off[key];
+			all[key] += one.all[key];
+		}
 		block = one.block;
 	}
 	genOn.push(on.generated);
 	genOff.push(off.generated);
 	triOn.push(on.triangles);
 	triOff.push(off.triangles);
+	sums.push({ on, all });
 	console.log(
 		`  ${String(lod).padEnd(5)}${`${block.toFixed(0)} m`.padStart(7)}` +
 			`${`${off.generated.toFixed(0)} ms`.padStart(10)}` +
@@ -145,6 +159,24 @@ for (let lod = 0; lod < LEVELS; lod++) {
 			`${off.triangles.toLocaleString("en-US").padStart(11)}` +
 			`${on.triangles.toLocaleString("en-US").padStart(11)}` +
 			`${`${(on.triangles / Math.max(1, off.triangles)).toFixed(2)}x`.padStart(7)}`,
+	);
+}
+
+// **What the sealed-air cull is worth, on the levels that carve caves.** The
+// caves column above is with the cull on, which is how the mesher ships; this
+// is the same chunk meshed with the sealed pockets kept, which is what every
+// build was before the cull existed. The flood's own cost is inside the mesh
+// time, so the two times answer whether it pays for itself.
+console.log(
+	"\nthe sealed-air cull, same chunks: triangles and mesh time, kept against culled",
+);
+for (let lod = 0; lod < 2; lod++) {
+	const { on, all } = sums[lod]!;
+	console.log(
+		`  lod ${lod}: ${all.triangles.toLocaleString("en-US")} triangles kept` +
+			` against ${on.triangles.toLocaleString("en-US")} culled -- ` +
+			`x${(all.triangles / Math.max(1, on.triangles)).toFixed(2)}; ` +
+			`mesh ${all.meshed.toFixed(0)} ms against ${on.meshed.toFixed(0)} ms`,
 	);
 }
 
