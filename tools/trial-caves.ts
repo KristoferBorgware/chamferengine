@@ -98,3 +98,19 @@ for (const carve of [false, true]) {
 			` -- x${(unbounded.ms / bounded.ms).toFixed(2)} of what ships`,
 	);
 }
+
+// **What the reach costs the planet, now that it is a knob with a world's
+// range on it.** The cave bench's own budget used to bound this slider, which
+// meant nobody could ask for a reach the planet would feel. It does not any
+// more, so the curve a reader is buying is worth having on the page: every
+// extra metre of reach is another block of every column walked, in the world
+// as well as in the bench.
+console.log("\nwhat a chunk costs against the reach, cliffs and overhangs on");
+const shipped = timed(true, true, settings.knobs.caveDepth);
+for (const reach of [28, 50, 100, 200, 300, 512]) {
+	const found = timed(true, true, reach);
+	console.log(
+		`  caves to ${`${reach} m`.padStart(5)}  ${found.ms.toFixed(0).padStart(5)} ms` +
+			`   x${(found.ms / shipped.ms).toFixed(2)} of the shipped ${settings.knobs.caveDepth} m`,
+	);
+}
